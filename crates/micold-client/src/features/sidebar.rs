@@ -891,6 +891,26 @@ impl crate::app::State {
         }
     }
 
+    /// What a row shows in place of its daemon chip given the live connections (feature 491, T028):
+    /// the contract's unavailable / version-mismatch / paths-mapped text when its daemon is not
+    /// plainly connected, and [`Self::daemon_label_of`] otherwise, so rows on healthy daemons are
+    /// unchanged. Computed from `links` on every call and never cached, so a state change reaches
+    /// the row in the step that applied it.
+    pub fn daemon_status_label_of(
+        &self,
+        key: &str,
+        links: &crate::links::DaemonLinks,
+        facts: crate::links::LabelFacts,
+    ) -> String {
+        crate::links::unavailable_label(
+            &self.settings.daemons,
+            links,
+            self.daemon_binding(key),
+            facts,
+        )
+        .unwrap_or_else(|| self.daemon_label_of(key))
+    }
+
     /// Where the current session lives, if the panel can point at it (feature 024, contract §1.2).
     ///
     /// `None` in three cases, all of which reduce [`Self::location_open`] to the user's own

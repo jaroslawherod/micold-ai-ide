@@ -653,7 +653,8 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         // ---- Feature 010: daemon connection lifecycle (binary-owned runtime state) ----
         // Twelve arms until T011. All twelve were effects, so all twelve are `shell/connection.rs`
         // now (contract M2) and the routing decision is stated once, next to them.
-        Message::Connection(msg) => shell::connection::update(app, msg),
+        // One connection until the shell holds one per daemon: the id is not yet consulted.
+        Message::Connection(msg) | Message::Daemon(_, msg) => shell::connection::update(app, msg),
         // ---- Feature 027: the session service inside a container ----
         // Six arms until T011, and the same story as the twelve above: every one of them was an
         // effect or a write to the binary-owned `app.sandbox`, so all six are

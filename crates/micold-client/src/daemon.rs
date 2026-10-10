@@ -11,6 +11,7 @@
 //! the whole re-architecture rests on.
 
 use crate::features::connection::Msg as ConnectionMsg;
+use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use iced::futures::channel::mpsc;
@@ -18,6 +19,7 @@ use iced::futures::{SinkExt, Stream, StreamExt};
 use iced::Subscription;
 
 use micold_core::connect::{connect_at, connect_or_spawn, Connected, Credentials, SPAWN_TIMEOUT};
+use micold_core::daemons::{DaemonId, DaemonRegistry, DaemonRuntime, DaemonState, DaemonStates};
 use micold_core::endpoint::{self, DialAddress};
 use micold_core::protocol::codec::{CodecError, Frame};
 use micold_core::protocol::keepalive::{self, Keepalive, KeepaliveAction};
@@ -52,14 +54,11 @@ pub struct Placement {
 /// remembered in memory, so a sandbox started by a previous run of this client is still reachable
 /// by this one. A missing token file is not fixed up here: the handshake refuses, which is the
 /// honest outcome, and the remedy is to restart the sandbox so a new token is issued.
-fn sandbox_credentials(placement: &Placement) -> Credentials {
-    let token = micold_core::protocol::auth::Token::read_from(
-        &micold_core::protocol::auth::host_token_path(&placement.state_dir),
-    )
-    .ok();
+fn sandbox_credentials(token_path: &Path, strict_fingerprint: bool) -> Credentials {
+    let token = micold_core::protocol::auth::Token::read_from(token_path).ok();
     Credentials {
         auth_token: token.map(|t| micold_core::protocol::messages::PresentedToken::new(t.as_str())),
-        require_fingerprint_match: placement.strict_fingerprint,
+        require_fingerprint_match: strict_fingerprint,
     }
 }
 
@@ -108,16 +107,154 @@ impl PartialEq for Outbox {
 }
 impl Eq for Outbox {}
 
-/// The connection subscription. Add it to the app's subscription set; iced keeps one instance alive
-/// for the app's lifetime.
+/// What identifies one daemon's actor: the daemon and the settings its connection is made from.
 ///
-/// `run_with` rather than `run`: feature 027 gave this subscription a parameter, and the builder
-/// still has to be a plain `fn` for its identity to be stable — a capturing closure would make iced
-/// restart it every frame. `run_with` identifies the subscription by the *data* plus the function
-/// pointer, which is exactly right here: the placement is read once at boot and does not change
-/// while the app runs, so the identity is as stable as it was before.
+/// The fingerprint is the runtime alone. A rename and an `auto_start` change are not in it, so
+/// they restart nothing; a changed container name, port or profile is, so editing a daemon's
+/// runtime restarts that daemon's actor and no other (contract: Actor).
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ActorKey {
+    /// The daemon.
+    pub id: DaemonId,
+    /// Its runtime settings, serialised (the registry's own file form), so any edit shows.
+    pub fingerprint: String,
+}
+
+/// How an actor reaches its daemon.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum Dial {
+    /// Connect to the host daemon, spawning it on a cold start.
+    Host,
+    /// Dial a container's published loopback port with this daemon's own token. Never spawns.
+    Container {
+        /// The port from the daemon's own entry, not the default sandbox port.
+        port: u16,
+        /// Where this daemon's token lives on the host.
+        token_path: PathBuf,
+    },
+}
+
+/// Everything one actor needs, and its subscription identity (it is hashed whole). A change to any
+/// field restarts that actor only.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ActorSpec {
+    /// The daemon and runtime fingerprint.
+    pub key: ActorKey,
+    /// How to reach it.
+    pub dial: Dial,
+    /// Whether a build-fingerprint mismatch refuses the connection (a locally built image, R8).
+    pub strict_fingerprint: bool,
+}
+
+/// The key of every daemon this build can run, one per entry. An `Unsupported` runtime has none.
+pub fn actor_keys(registry: &DaemonRegistry) -> Vec<ActorKey> {
+    registry
+        .entries()
+        .iter()
+        .filter(|e| e.runtime.is_startable())
+        .map(|e| ActorKey {
+            id: e.id,
+            fingerprint: serde_json::to_string(&e.runtime).unwrap_or_default(),
+        })
+        .collect()
+}
+
+/// The actors that should be running: one per startable entry the client should be dialling, so a
+/// stopped daemon has none and is neither spawned nor reconnected until it is started.
+///
+/// `state_dir` and `legacy_default` locate each container daemon's token
+/// ([`micold_core::daemons::DaemonEntry::token_path`]).
+pub fn actor_specs(
+    registry: &DaemonRegistry,
+    states: &DaemonStates,
+    state_dir: &Path,
+    legacy_default: Option<DaemonId>,
+    strict_fingerprint: bool,
+) -> Vec<ActorSpec> {
+    let keys = actor_keys(registry);
+    registry
+        .entries()
+        .iter()
+        .filter(|e| states.should_dial(e.id))
+        .filter_map(|entry| {
+            let key = keys.iter().find(|k| k.id == entry.id)?.clone();
+            let dial = match &entry.runtime {
+                DaemonRuntime::Host => Dial::Host,
+                DaemonRuntime::Container(c) => Dial::Container {
+                    port: c.port,
+                    token_path: entry.token_path(state_dir, legacy_default)?,
+                },
+                _ => return None,
+            };
+            Some(ActorSpec {
+                key,
+                dial,
+                strict_fingerprint,
+            })
+        })
+        .collect()
+}
+
+/// The connection subscriptions: one actor per daemon, each with its own socket, [`Outbox`],
+/// failure streak and reconnect backoff, every message tagged with its daemon
+/// ([`Message::Daemon`]). Add it to the app's subscription set.
+///
+/// `run_with` rather than `run`: the builder has to be a plain `fn` for its identity to be stable,
+/// and `run_with` identifies each subscription by the *data* ([`ActorSpec`]) plus the function
+/// pointer. So an edited daemon restarts its own actor only; a rename changes no spec.
+pub fn connections(
+    registry: &DaemonRegistry,
+    states: &DaemonStates,
+    state_dir: &Path,
+    legacy_default: Option<DaemonId>,
+    strict_fingerprint: bool,
+) -> Subscription<Message> {
+    Subscription::batch(
+        actor_specs(
+            registry,
+            states,
+            state_dir,
+            legacy_default,
+            strict_fingerprint,
+        )
+        .into_iter()
+        .map(|spec| Subscription::run_with(spec, |spec| actor(spec.clone()))),
+    )
+}
+
+/// The single-daemon connection the shell still holds: one actor for the daemon `placement`
+/// stands for, id 1, as a migrated settings file reads (R5). Until the shell keeps a registry
+/// this is how the one connection is made; it is [`connections`] over that registry.
 pub fn connection(placement: Placement) -> Subscription<Message> {
-    Subscription::run_with(placement, |p| actor(p.clone()))
+    use micold_core::daemons::{ContainerSettings, DaemonEntry, DaemonName};
+    let id = DaemonId(1);
+    let (name, runtime) = match placement.kind {
+        PlacementKind::HostProcess => ("Host", DaemonRuntime::Host),
+        PlacementKind::LocalSandbox => (
+            "Container",
+            DaemonRuntime::Container(ContainerSettings {
+                profile: Default::default(),
+                container_name: micold_core::sandbox::CONTAINER_NAME.to_string(),
+                port: micold_core::endpoint::DEFAULT_SANDBOX_PORT,
+            }),
+        ),
+    };
+    let entry = DaemonEntry {
+        id,
+        name: DaemonName::new(name).expect("a fixed name is not blank"),
+        runtime,
+        auto_start: true,
+    };
+    let registry = DaemonRegistry::new(vec![entry], 2);
+    let mut states = DaemonStates::default();
+    states.insert(id, DaemonState::Starting);
+    connections(
+        &registry,
+        &states,
+        &placement.state_dir,
+        Some(id),
+        placement.strict_fingerprint,
+    )
 }
 
 /// How long to wait after a lost connection before trying to re-establish it. Short enough that a
@@ -184,23 +321,29 @@ enum PumpEnd {
     AppGone,
 }
 
-fn actor(placement: Placement) -> impl Stream<Item = Message> {
+fn actor(spec: ActorSpec) -> impl Stream<Item = Message> {
+    let id = spec.key.id;
     // iced 0.14 takes an `AsyncFnOnce` here (0.13 took an `FnOnce` returning a future), so the
     // sender's type no longer falls out of inference and has to be named.
     iced::stream::channel(
         CHANNEL_CAPACITY,
-        |mut output: mpsc::Sender<Message>| async move {
-            // Resolve the endpoint once; it does not change over the app's life.
-            let endpoint = match endpoint::resolve() {
-                Ok(e) => e,
-                Err(err) => {
-                    let _ = output
-                        .send(Message::Connection(ConnectionMsg::ConnectFailed(
-                            err.to_string(),
-                        )))
-                        .await;
-                    return;
-                }
+        move |mut output: mpsc::Sender<Message>| async move {
+            // Resolve the host endpoint once; it does not change over the app's life. A container
+            // daemon dials its own port and needs none.
+            let endpoint = match spec.dial {
+                Dial::Host => match endpoint::resolve() {
+                    Ok(e) => Some(e),
+                    Err(err) => {
+                        let _ = output
+                            .send(Message::Daemon(
+                                id,
+                                ConnectionMsg::ConnectFailed(err.to_string()),
+                            ))
+                            .await;
+                        return;
+                    }
+                },
+                Dial::Container { .. } => None,
             };
 
             // Reconnect loop: connect, pump until the link drops, surface it, back off, repeat. A
@@ -210,11 +353,13 @@ fn actor(placement: Placement) -> impl Stream<Item = Message> {
             // *previous* attempt did.
             let mut failures = ConnectFailures::default();
             loop {
-                match connect_and_pump(&placement, &endpoint, &mut output, &mut failures).await {
+                match connect_and_pump(id, &spec, endpoint.as_ref(), &mut output, &mut failures)
+                    .await
+                {
                     PumpEnd::AppGone => return,
                     PumpEnd::Disconnected => {
                         if output
-                            .send(Message::Connection(ConnectionMsg::Disconnected))
+                            .send(Message::Daemon(id, ConnectionMsg::Disconnected))
                             .await
                             .is_err()
                         {
@@ -232,23 +377,29 @@ fn actor(placement: Placement) -> impl Stream<Item = Message> {
 /// directions with a keepalive until the connection ends. A connect failure is surfaced as
 /// `DaemonConnectFailed` and reported as a disconnect so the outer loop retries.
 async fn connect_and_pump(
-    placement: &Placement,
-    endpoint: &endpoint::Endpoint,
+    id: DaemonId,
+    spec: &ActorSpec,
+    endpoint: Option<&endpoint::Endpoint>,
     output: &mut mpsc::Sender<Message>,
     failures: &mut ConnectFailures,
 ) -> PumpEnd {
-    let attempt = match placement.kind {
-        // Unchanged: auto-spawn a detached host process and poll until it accepts.
-        PlacementKind::HostProcess => connect_or_spawn(endpoint, CLIENT_BUILD, SPAWN_TIMEOUT).await,
+    let attempt = match (&spec.dial, endpoint) {
+        // Unchanged: auto-spawn a detached host process and poll until it accepts. Only the host
+        // entry ever reaches here; a container daemon is never spawned by the client.
+        (Dial::Host, Some(endpoint)) => {
+            connect_or_spawn(endpoint, CLIENT_BUILD, SPAWN_TIMEOUT).await
+        }
+        (Dial::Host, None) => Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "no host endpoint",
+        )),
         // The sandbox is brought up by `shell::sandbox`, which the app drives so the user can watch
         // the image being acquired. All this loop does is dial it — and if nothing is listening,
         // say so. It does **not** fall back to a host process: that is FR-035, and this is the one
         // place it would be easiest to lose.
-        PlacementKind::LocalSandbox => {
-            let address = DialAddress::Loopback {
-                port: micold_core::endpoint::DEFAULT_SANDBOX_PORT,
-            };
-            let credentials = sandbox_credentials(placement);
+        (Dial::Container { port, token_path }, _) => {
+            let address = DialAddress::Loopback { port: *port };
+            let credentials = sandbox_credentials(token_path, spec.strict_fingerprint);
             match connect_at(&address, CLIENT_BUILD, &credentials).await {
                 Ok(Some(c)) => Ok(c),
                 Ok(None) => Err(std::io::Error::new(
@@ -263,7 +414,7 @@ async fn connect_and_pump(
     let connected = match attempt {
         Ok(c) => c,
         Err(err) => {
-            return report_transient_connect_failure(output, err.to_string(), failures).await;
+            return report_transient_connect_failure(id, output, err.to_string(), failures).await;
         }
     };
     // We reached *a* daemon. A refusal below is still a connection, and a connection is what the
@@ -280,11 +431,14 @@ async fn connect_and_pump(
             ..
         }) => {
             let sent = output
-                .send(Message::Connection(ConnectionMsg::VersionMismatch {
-                    client,
-                    daemon,
-                    daemon_build,
-                }))
+                .send(Message::Daemon(
+                    id,
+                    ConnectionMsg::VersionMismatch {
+                        client,
+                        daemon,
+                        daemon_build,
+                    },
+                ))
                 .await
                 .is_ok();
             return if sent {
@@ -302,10 +456,13 @@ async fn connect_and_pump(
             daemon_build,
         }) => {
             let sent = output
-                .send(Message::Connection(ConnectionMsg::BuildMismatch {
-                    client_build,
-                    daemon_build,
-                }))
+                .send(Message::Daemon(
+                    id,
+                    ConnectionMsg::BuildMismatch {
+                        client_build,
+                        daemon_build,
+                    },
+                ))
                 .await
                 .is_ok();
             return if sent {
@@ -325,14 +482,19 @@ async fn connect_and_pump(
             image,
         }) => {
             return report_refusal(
+                id,
                 output,
                 stale_dev_image_advice(&image, &daemon_fingerprint, &client_fingerprint),
             )
             .await;
         }
         Connected::Refused(reason) => {
-            return report_refusal(output, format!("daemon refused the connection: {reason:?}"))
-                .await;
+            return report_refusal(
+                id,
+                output,
+                format!("daemon refused the connection: {reason:?}"),
+            )
+            .await;
         }
     };
 
@@ -340,11 +502,14 @@ async fn connect_and_pump(
     let (mut sink, incoming) = conn.split();
     let (tx, rx) = mpsc::unbounded::<ClientMsg>();
     if output
-        .send(Message::Connection(ConnectionMsg::Connected {
-            outbox: Outbox::new(tx),
-            catalog: welcome.catalog,
-            settings: welcome.settings,
-        }))
+        .send(Message::Daemon(
+            id,
+            ConnectionMsg::Connected {
+                outbox: Outbox::new(tx),
+                catalog: welcome.catalog,
+                settings: welcome.settings,
+            },
+        ))
         .await
         .is_err()
     {
@@ -373,8 +538,8 @@ async fn connect_and_pump(
             Io::Incoming(Ok(frame)) => {
                 keepalive.on_daemon_frame(Instant::now());
                 let msg = match frame {
-                    Frame::Control(dm) => Message::Connection(ConnectionMsg::Event(dm)),
-                    Frame::Grid(frame) => Message::Connection(ConnectionMsg::GridFrame(frame)),
+                    Frame::Control(dm) => Message::Daemon(id, ConnectionMsg::Event(dm)),
+                    Frame::Grid(frame) => Message::Daemon(id, ConnectionMsg::GridFrame(frame)),
                 };
                 if output.send(msg).await.is_err() {
                     return PumpEnd::AppGone;
@@ -430,6 +595,7 @@ fn stale_dev_image_advice(
 /// Absorbing one of those would delay a banner that is already correct, for a condition that will
 /// not resolve itself.
 async fn report_transient_connect_failure(
+    id: DaemonId,
     output: &mut mpsc::Sender<Message>,
     reason: String,
     failures: &mut ConnectFailures,
@@ -440,23 +606,31 @@ async fn report_transient_connect_failure(
         // there was nothing to tell — or reports this same reason itself.
         return PumpEnd::Disconnected;
     }
-    report_connect_failure(output, reason).await
+    report_connect_failure(id, output, reason).await
 }
 
 /// Report a connect failure to the app and map it to a disconnect (so the outer loop retries). If the
 /// app is gone, that surfaces as `AppGone` instead.
-async fn report_connect_failure(output: &mut mpsc::Sender<Message>, reason: String) -> PumpEnd {
-    report(output, ConnectionMsg::ConnectFailed(reason)).await
+async fn report_connect_failure(
+    id: DaemonId,
+    output: &mut mpsc::Sender<Message>,
+    reason: String,
+) -> PumpEnd {
+    report(id, output, ConnectionMsg::ConnectFailed(reason)).await
 }
 
 /// Report a daemon's refusal, as [`report_connect_failure`] does a failure — but as its own
 /// message, so the app does not mistake a daemon that said no for one not listening yet (#370).
-async fn report_refusal(output: &mut mpsc::Sender<Message>, reason: String) -> PumpEnd {
-    report(output, ConnectionMsg::Refused(reason)).await
+async fn report_refusal(
+    id: DaemonId,
+    output: &mut mpsc::Sender<Message>,
+    reason: String,
+) -> PumpEnd {
+    report(id, output, ConnectionMsg::Refused(reason)).await
 }
 
-async fn report(output: &mut mpsc::Sender<Message>, msg: ConnectionMsg) -> PumpEnd {
-    if output.send(Message::Connection(msg)).await.is_err() {
+async fn report(id: DaemonId, output: &mut mpsc::Sender<Message>, msg: ConnectionMsg) -> PumpEnd {
+    if output.send(Message::Daemon(id, msg)).await.is_err() {
         PumpEnd::AppGone
     } else {
         PumpEnd::Disconnected

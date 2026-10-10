@@ -599,6 +599,15 @@ pub fn refresh_cli_availability(app: &mut App) {
 /// The environment-include settings in force, as the availability store compares them (feature
 /// 033, research R6). One mapping for both the baseline `on_connected` records and the comparison
 /// the `SettingsChanged` arm makes, so a new field cannot reach one and not the other.
+/// The daemon the single connection reaches: the legacy default, which is id 1 until the shell
+/// holds one connection per daemon (feature 491, M3).
+fn connected_daemon(app: &App) -> micold_core::daemons::DaemonId {
+    app.core
+        .settings
+        .legacy_default_daemon
+        .unwrap_or(micold_core::daemons::DaemonId(1))
+}
+
 fn env_include_settings(app: &App) -> EnvIncludeSettings {
     EnvIncludeSettings {
         enabled: app.env_include_enabled,
@@ -764,7 +773,8 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
     let mut follow_up = Task::none();
     match event {
         DaemonMsg::CatalogChanged { catalog } => {
-            reconcile_catalog(&mut app.core, &catalog, true);
+            let daemon = connected_daemon(app);
+            reconcile_catalog(&mut app.core, daemon, &catalog, true);
             // The worktree list may have gained a row (created, discovered, included, or valid
             // again): ask about it (feature 033, contract C1 A5).
             sync_cli_availability(app);
@@ -1575,7 +1585,8 @@ pub fn on_connected(
     let _ = crate::shell::pr_status::enabled_changed(app, pr_status_enabled);
     // Another window may have saved while this one was disconnected (BUG-475, FR-026b).
     refresh_open_settings(app);
-    reconcile_catalog(&mut app.core, &catalog, false);
+    let daemon = connected_daemon(app);
+    reconcile_catalog(&mut app.core, daemon, &catalog, false);
     // The boot-time foreground resolve ran before this catalog existed, so for a client that has
     // just started it answered `NoSessionsForKey` against a project whose sessions were still on
     // the wire. Ask again now that they are here (`010` BUG-013) — before `active_session` is read
@@ -3726,6 +3737,7 @@ pub(crate) mod tests {
 
         reconcile_catalog(
             &mut core,
+            micold_core::daemons::DaemonId(1),
             &snapshot_with(
                 path,
                 vec![
@@ -3765,6 +3777,7 @@ pub(crate) mod tests {
 
         reconcile_catalog(
             &mut core,
+            micold_core::daemons::DaemonId(1),
             &snapshot_with(
                 path,
                 vec![summary_on(id, "A", WireLifecycle::Running, AiCli::Copilot)],
@@ -3775,6 +3788,7 @@ pub(crate) mod tests {
         // A snapshot that disagrees — the shape a re-derivation bug would take.
         reconcile_catalog(
             &mut core,
+            micold_core::daemons::DaemonId(1),
             &snapshot_with(
                 path,
                 vec![summary_on(id, "A", WireLifecycle::Idle, AiCli::ClaudeCode)],
@@ -3827,6 +3841,7 @@ pub(crate) mod tests {
         // The client owns the instances: it allocates the ids and creates them locally.
         reconcile_catalog(
             &mut core,
+            micold_core::daemons::DaemonId(1),
             &snapshot_with(path, vec![summary(id, "S", WireLifecycle::Running)]),
             false,
         );
@@ -3851,6 +3866,7 @@ pub(crate) mod tests {
         // The daemon reports `a` live and says nothing about `b`.
         reconcile_catalog(
             &mut core,
+            micold_core::daemons::DaemonId(1),
             &snapshot_with(
                 path,
                 vec![summary_with_live_shells(
@@ -3874,6 +3890,7 @@ pub(crate) mod tests {
         // make, because no frames is indistinguishable from a quiet shell.
         reconcile_catalog(
             &mut core,
+            micold_core::daemons::DaemonId(1),
             &snapshot_with(
                 path,
                 vec![summary_with_live_shells(
@@ -3896,6 +3913,7 @@ pub(crate) mod tests {
         // creates nothing.
         reconcile_catalog(
             &mut core,
+            micold_core::daemons::DaemonId(1),
             &snapshot_with(
                 path,
                 vec![summary_with_live_shells(
@@ -3931,6 +3949,7 @@ pub(crate) mod tests {
         let a = SessionId::new();
         reconcile_catalog(
             &mut core,
+            micold_core::daemons::DaemonId(1),
             &snapshot_with(path, vec![summary(a, "A", WireLifecycle::Running)]),
             false,
         );
@@ -3943,6 +3962,7 @@ pub(crate) mod tests {
         let b = SessionId::new();
         reconcile_catalog(
             &mut core,
+            micold_core::daemons::DaemonId(1),
             &snapshot_with(
                 path,
                 vec![
@@ -3965,6 +3985,7 @@ pub(crate) mod tests {
         core.session.active = Some(a);
         reconcile_catalog(
             &mut core,
+            micold_core::daemons::DaemonId(1),
             &snapshot_with(path, vec![summary(b, "B", WireLifecycle::Running)]),
             false,
         );
@@ -3988,6 +4009,7 @@ pub(crate) mod tests {
         let a = SessionId::new();
         reconcile_catalog(
             &mut core,
+            micold_core::daemons::DaemonId(1),
             &snapshot_with("/a", vec![summary(a, "A", WireLifecycle::Running)]),
             false,
         );
@@ -3996,6 +4018,7 @@ pub(crate) mod tests {
         // /a's session crashes and the daemon starts restarting it, while /a is still inactive.
         reconcile_catalog(
             &mut core,
+            micold_core::daemons::DaemonId(1),
             &snapshot_with(
                 "/a",
                 vec![summary(a, "A", WireLifecycle::Restarting { attempts: 1 })],
@@ -4010,6 +4033,7 @@ pub(crate) mod tests {
         // A further Restarting snapshot (still retrying) must not re-mark or duplicate anything.
         reconcile_catalog(
             &mut core,
+            micold_core::daemons::DaemonId(1),
             &snapshot_with(
                 "/a",
                 vec![summary(a, "A", WireLifecycle::Restarting { attempts: 2 })],

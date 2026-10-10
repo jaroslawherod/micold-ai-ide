@@ -455,6 +455,7 @@ fn a_catalog_update_raises_and_lowers_the_count() {
 
     reconcile_catalog(
         &mut state,
+        micold_core::daemons::DaemonId(1),
         &catalog(&[(a, Some(FEATURE_X), true), (b, Some(FEATURE_X), false)]),
         false,
     );
@@ -466,6 +467,7 @@ fn a_catalog_update_raises_and_lowers_the_count() {
 
     reconcile_catalog(
         &mut state,
+        micold_core::daemons::DaemonId(1),
         &catalog(&[(a, Some(FEATURE_X), false), (b, Some(FEATURE_X), false)]),
         false,
     );
@@ -483,6 +485,7 @@ fn selecting_a_session_drops_the_count_before_any_catalog_update() {
     let (mut state, a, b) = two_read_sessions_in_feature_x();
     reconcile_catalog(
         &mut state,
+        micold_core::daemons::DaemonId(1),
         &catalog(&[(a, Some(FEATURE_X), true), (b, Some(FEATURE_X), true)]),
         false,
     );
@@ -507,6 +510,7 @@ fn a_closed_or_removed_session_lowers_the_count() {
     let (mut state, a, b) = two_read_sessions_in_feature_x();
     reconcile_catalog(
         &mut state,
+        micold_core::daemons::DaemonId(1),
         &catalog(&[(a, Some(FEATURE_X), true), (b, Some(FEATURE_X), true)]),
         false,
     );
@@ -516,7 +520,12 @@ fn a_closed_or_removed_session_lowers_the_count() {
         "the snapshot marked both sessions unread"
     );
 
-    reconcile_catalog(&mut state, &catalog(&[(a, Some(FEATURE_X), true)]), false);
+    reconcile_catalog(
+        &mut state,
+        micold_core::daemons::DaemonId(1),
+        &catalog(&[(a, Some(FEATURE_X), true)]),
+        false,
+    );
 
     assert_eq!(
         count_of(&state, FEATURE_X),
@@ -535,7 +544,12 @@ fn a_burst_of_updates_settles_on_the_right_count() {
         catalog(&[(a, Some(FEATURE_X), false), (b, Some(FEATURE_X), true)]),
         catalog(&[(a, Some(FEATURE_X), true), (b, Some(FEATURE_X), true)]),
     ] {
-        reconcile_catalog(&mut state, &snapshot, false);
+        reconcile_catalog(
+            &mut state,
+            micold_core::daemons::DaemonId(1),
+            &snapshot,
+            false,
+        );
     }
 
     assert_eq!(
@@ -551,6 +565,7 @@ fn rows_toggled_and_hovered() -> (State, State) {
     let (mut state, a, b) = two_read_sessions_in_feature_x();
     reconcile_catalog(
         &mut state,
+        micold_core::daemons::DaemonId(1),
         &catalog(&[(a, Some(FEATURE_X), true), (b, Some(FEATURE_X), true)]),
         false,
     );

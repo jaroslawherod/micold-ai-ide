@@ -129,7 +129,12 @@ fn client_lifecycle_after_reconcile(
     instance: ShellInstanceId,
 ) -> ShellLifecycle {
     // `welcome_payload` is the snapshot a client receives on attach — taken, not constructed.
-    reconcile_catalog(core, &state.welcome_payload().0, false);
+    reconcile_catalog(
+        core,
+        micold_core::daemons::DaemonId(1),
+        &state.welcome_payload().0,
+        false,
+    );
     core.workspace
         .sessions
         .values()
@@ -175,7 +180,12 @@ fn a_shell_the_daemon_hosts_reaches_the_clients_state_alive_and_then_exited() {
     // Both sides must independently arrive at the same id for the join to mean anything, so this
     // takes the client's id and hands *that* to the daemon rather than agreeing on a literal.
     let mut core = State::default();
-    reconcile_catalog(&mut core, &state.welcome_payload().0, false);
+    reconcile_catalog(
+        &mut core,
+        micold_core::daemons::DaemonId(1),
+        &state.welcome_payload().0,
+        false,
+    );
     let instance = {
         let (_, session) = core
             .workspace
@@ -255,7 +265,12 @@ fn a_session_the_daemon_starts_reaches_the_clients_state_as_running() {
     };
 
     let mut core = State::default();
-    reconcile_catalog(&mut core, &state.welcome_payload().0, false);
+    reconcile_catalog(
+        &mut core,
+        micold_core::daemons::DaemonId(1),
+        &state.welcome_payload().0,
+        false,
+    );
     assert_ne!(
         lifecycle_of(&core),
         SessionLifecycle::Running,
@@ -271,7 +286,12 @@ fn a_session_the_daemon_starts_reaches_the_clients_state_as_running() {
         "the process must actually start for this test to be testing anything"
     );
 
-    reconcile_catalog(&mut core, &state.welcome_payload().0, false);
+    reconcile_catalog(
+        &mut core,
+        micold_core::daemons::DaemonId(1),
+        &state.welcome_payload().0,
+        false,
+    );
     assert_eq!(
         lifecycle_of(&core),
         SessionLifecycle::Running,
@@ -350,7 +370,12 @@ fn the_reason_a_start_failed_reaches_the_client_as_something_to_read() {
 
     // Nothing said yet — otherwise the assertion below could be satisfied by a banner that was
     // already there.
-    reconcile_catalog(&mut core, &state.welcome_payload().0, false);
+    reconcile_catalog(
+        &mut core,
+        micold_core::daemons::DaemonId(1),
+        &state.welcome_payload().0,
+        false,
+    );
     assert_eq!(
         core.notifications.queue.visible(),
         None,
@@ -360,7 +385,12 @@ fn the_reason_a_start_failed_reaches_the_client_as_something_to_read() {
     state
         .start_session(id, micold_core::terminal::LaunchMode::Resume)
         .expect_err("the CLI is not installed, so the start must refuse");
-    reconcile_catalog(&mut core, &state.welcome_payload().0, false);
+    reconcile_catalog(
+        &mut core,
+        micold_core::daemons::DaemonId(1),
+        &state.welcome_payload().0,
+        false,
+    );
 
     let shown = core
         .notifications
@@ -393,8 +423,18 @@ fn the_reason_a_start_failed_reaches_the_client_as_something_to_read() {
     // badge moving is one — a level-triggered banner would be a new one every few seconds for as
     // long as the session stays failed.
     core.notifications.queue.dismiss();
-    reconcile_catalog(&mut core, &state.welcome_payload().0, false);
-    reconcile_catalog(&mut core, &state.welcome_payload().0, false);
+    reconcile_catalog(
+        &mut core,
+        micold_core::daemons::DaemonId(1),
+        &state.welcome_payload().0,
+        false,
+    );
+    reconcile_catalog(
+        &mut core,
+        micold_core::daemons::DaemonId(1),
+        &state.welcome_payload().0,
+        false,
+    );
     assert_eq!(
         core.notifications.queue.visible(),
         None,

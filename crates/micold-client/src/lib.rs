@@ -18,6 +18,9 @@ pub mod grid;
 pub mod icons;
 pub mod input;
 pub mod keymap;
+/// Per-daemon connection state and the routing, registration and label decisions made from it
+/// (feature 491).
+pub mod links;
 pub mod notification_icon;
 pub mod overlay;
 pub mod reveal_trace;
