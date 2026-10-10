@@ -17,7 +17,7 @@ interfaces in [contracts/](./contracts/); how to prove it in [quickstart.md](./q
 
 **Language**: Rust (stable, `rust-toolchain.toml`); iced for the Settings section.
 **Dependencies**: no new crates (`serde`, `serde_json`, `tokio`, `iced` exist).
-**Storage**: local only. Daemon list in `settings.json` (`Settings.daemons` plus `Settings.legacy_default_daemon`, additive defaulted fields; `settings_version` does not move, per the convention in `settings.rs`);
+**Storage**: local only. Daemon list in `settings.json` (`Settings.daemons`, `Settings.next_daemon_id` and `Settings.legacy_default_daemon` (a `DaemonId`), additive defaulted fields; `settings_version` does not move, per the convention in `settings.rs`);
 bindings in each project's own state file (`projects/<id>.json`, new optional field), both written
 through the existing atomic `write_then_rename` path. Nothing remote.
 **Testing**: `mise run test-core` (registry, migration, binding, naming rules, state machine),
@@ -40,7 +40,7 @@ subscription); no concrete placement named outside the seams checked by
 | II Multi-Session | PASS: sessions stay addressable by (daemon, session id); per-daemon actors, outboxes, catalogs; no shared state between daemons (FR-017, SC-006 test). |
 | III Worktree Integration | PASS: worktrees stay app-managed; binding is app-owned; "no daemon" worktrees start nothing; Default (project root) location binds like a worktree (R4). |
 | IV Local-First (NON-NEGOTIABLE) | PASS: registry and bindings are local files; endpoints are loopback/UDS only; no remote runtime shipped. |
-| V Rust + iced | PASS: `DaemonRuntime` enum and `Binding` make "worktree on two daemons" and "session on an unknown daemon" unrepresentable (`Binding::{Bound(DaemonName), NoDaemon}`, newtype `DaemonName`). |
+| V Rust + iced | PASS: `DaemonRuntime` enum and `Binding` make "worktree on two daemons" and "session on an unknown daemon" unrepresentable (`Binding::{Bound(DaemonId), NoDaemon}`, newtypes `DaemonId` and `DaemonName`). |
 | VI Cross-Platform | PASS: same code path on all three; Windows path-mapping difference surfaced in daemon state (R7); CI matrix unchanged plus the new sandbox job step. |
 | VII Documentation | PASS: `docs/user-guide/settings.md`, `sandboxed-daemon.md`, `worktrees-and-sessions.md`, `agent-tools.md` updated in the same change (tasks). |
 | VIII UI Components | PASS: Daemons rows built from existing settings-section and list-row components; new pieces (state badge, confirm dialog) reuse `ui/confirm_placement.rs` shape and the shared badge builder; any new widget goes to the shared library with a builder `.into()` API. |
@@ -51,10 +51,10 @@ No constitution violations; one deviation from the spec (host singleton) is reco
 
 | FR | Where |
 |---|---|
-| FR-001 | `micold-core/src/daemons.rs` (new): `DaemonRegistry`, `DaemonEntry`, `DaemonName`, `DaemonRuntime`; uniqueness in `DaemonRegistry::add/rename` |
+| FR-001 | `micold-core/src/daemons.rs` (new): `DaemonRegistry`, `DaemonEntry`, `DaemonId`, `DaemonName`, `DaemonRuntime`; uniqueness in `DaemonRegistry::add/rename` |
 | FR-002, FR-007 (merge) | `catalog_sync.rs::reconcile_catalog` per daemon, R11; core tests: two snapshots for one project, A's sessions survive B's snapshot |
-| FR-002, FR-007 (connection) | `micold-client/src/daemon.rs`: `connection(placement)` becomes one subscription per `DaemonEntry` (`Subscription::batch`), keyed by `DaemonName`; `RECONNECT_BACKOFF` per actor |
-| FR-003, FR-006, FR-014 | `micold-core/src/store.rs` project state gains `bindings: BTreeMap<location key, DaemonName>`; absent key = "no daemon"; `Binding` in `daemons.rs` |
+| FR-002, FR-007 (connection) | `micold-client/src/daemon.rs`: `connection(placement)` becomes one subscription per `DaemonEntry` (`Subscription::batch`), keyed by `DaemonId`; `RECONNECT_BACKOFF` per actor |
+| FR-003, FR-006, FR-014 | `micold-core/src/store.rs` project state gains `bindings: BTreeMap<location key, DaemonId>`; absent key = "no daemon"; `Binding` in `daemons.rs` |
 | FR-004 | `shell/daemon_sync.rs::send_op` resolves target outbox from the op's binding; `Outbox` per daemon in `features/connection.rs`; terminals exec through `ui/terminal.rs` using the bound daemon's container name (test: terminal target resolved by binding); catalog merge per R11 |
 | FR-005 | sidebar worktree row label (`features/sidebar.rs`, `ui/`) shows daemon name; no-daemon and unavailable states |
 | FR-008, FR-009 | `micold-core/src/daemons.rs` `DaemonState` (starting, connected, unreachable, version mismatch, stopped) folded from the per-daemon `ConnectionStatus`; mismatch from the existing handshake refusal (`connect.rs`) |
@@ -84,7 +84,7 @@ specs/491-multi-session-daemons/
 
 ```text
 crates/micold-core/src/
-├── daemons.rs            # NEW registry, DaemonName, DaemonRuntime, DaemonState, Binding
+├── daemons.rs            # NEW registry, DaemonId, DaemonName, DaemonRuntime, DaemonState, Binding
 ├── settings.rs           # Settings.daemons + legacy_default_daemon, migration from DaemonConfig
 ├── store.rs              # per-project bindings in StoredProjectState
 ├── sandbox/mod.rs        # container name / port / state dir become per-daemon inputs (MountSet, host_token_path, with_history callers)

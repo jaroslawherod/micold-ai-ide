@@ -12,7 +12,7 @@ each daemon's catalog (a removed daemon would take its bindings with it, FR-014)
 
 ## R2. One connection actor per daemon
 **Decision**: `connection(placement)` (one `Subscription::run_with`) becomes a batch keyed by
-`DaemonName`; each actor owns its backoff, handshake, `Outbox` and status.
+`DaemonId`; each actor owns its backoff, handshake, `Outbox` and status.
 **Rationale**: the actor is already self-contained (`daemon.rs` `actor`, `connect_and_pump`);
 isolation falls out of independence.
 **Rejected**: multiplexing several daemons through one connection (no such wire concept; breaks
@@ -41,7 +41,7 @@ only non-worktree location.
 ## R5. Migration
 **Decision**: on load of a pre-feature `settings.json` (single `daemon` block), synthesise
 `daemons = [DaemonEntry{ name: "Host" | "Container", runtime from placement kind + profile }]` and set
-`legacy_default_daemon` to its name; a missing binding resolves to it, so no per-project rewrite is
+`legacy_default_daemon` to its id (1); a missing binding resolves to it, so no per-project rewrite is
 needed and legacy worktrees stay bound when more daemons are added.
 **Rejected**: inferring "the only daemon" (breaks on the second add); rewriting every project's
 bindings at migration (a failed partial write leaves projects half migrated). The old `daemon` key is still written for one
@@ -75,8 +75,7 @@ Branch/worktree uniqueness already holds project-wide in `core/worktree.rs` beca
 share one repository; the only addition is naming the holder's daemon in the refusal.
 
 ## Risks to confirm during tasks
-- Whether a project must be registered in each daemon's catalog before a session can start there
-  (assumed: client issues the existing add-project op on first bind).
+- Resolved: a project must be in a daemon's catalog before a session can start there. The client sends the existing `ClientMsg::ProjectAdd` to the bound daemon on first bind and again on each (re)connect when the daemon's catalog lacks it; while the daemon is down the bind is kept and registration happens on connect (contract, Routing).
 - Client-side git routing for a bound project when its daemon is down (read-only views degrade to
   the "unavailable" state, no fall back to another daemon, per rule P-2).
 
