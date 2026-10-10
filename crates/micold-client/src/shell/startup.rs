@@ -340,6 +340,8 @@ fn boot() -> (App, Task<Message>) {
         let outcomes = core.restore_after_activation(&repo);
         micold_client::app::drain(outcomes, |o| micold_client::app::interpret(&mut core, o));
     }
+    let activation = crate::shell::window_raise::Activation::default();
+    let learn_window = crate::shell::window_raise::learn_window(&activation);
     (
         App {
             core,
@@ -364,7 +366,7 @@ fn boot() -> (App, Task<Message>) {
             scrollback_lines,
             dismissing: None,
             window_focused: true,
-            activation: Default::default(),
+            activation,
             last_grid: None,
             env_include_enabled,
             env_include_script_path,
@@ -403,6 +405,9 @@ fn boot() -> (App, Task<Message>) {
                         height: size.height.max(0.0) as u16,
                     })
                 }),
+            // Which window this is, so that a click on a notification raises it without a wait
+            // for the event loop per question (issue #565).
+            learn_window,
             // And, when the daemon is sandboxed, start bringing it up. Batched rather than
             // sequenced: the window has no reason to wait on a container image.
             boot,
