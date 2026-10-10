@@ -684,6 +684,9 @@ fn build_items(
         if node.shown_for_current_session {
             tags.push(("current session".to_string(), r.secondary));
         }
+        // Feature 491 (FR-005): the daemon the worktree runs on, or "no daemon" after its daemon
+        // was removed. A label-only chip in the same slot, like the two around it.
+        tags.push((node.daemon.clone(), r.secondary));
         // 016 BUG-002 (FR-029): a worktree shown because the user asked for it does not live where
         // the others do, and its folder name says nothing about where it does live. The chip is the
         // always-visible half of that; the row tooltip below carries the full path, which for these
