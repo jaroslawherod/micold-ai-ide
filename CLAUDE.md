@@ -11,6 +11,13 @@ make the change and report only what changed and any follow-up the user needs to
 without wrapping explanation unless the user asks how or why. Prefer one line over a paragraph, and
 a paragraph over a bulleted essay, when either communicates the same information.
 
+## "Start work on issue": worktree and autopilot session
+
+When the user says to start work on an issue (`#<issue>`), do not work on it in the current
+session. Create a worktree for the issue with `create_worktree` (`github_issue: <issue>`), then
+`create_session` in that worktree with the prompt `/speckit-autopilot #<issue>`. Report the
+worktree and session id.
+
 ## Keep the context small: read with Read, wait without polling
 
 Every tool call re-reads the whole conversation, so call count and output size are what cost.
