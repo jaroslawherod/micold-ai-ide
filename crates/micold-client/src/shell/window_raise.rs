@@ -39,6 +39,41 @@ pub struct Activation {
     pub watch: ActivationWatch,
     /// Written by the raise's task when a request goes out, read when its wait is over.
     sent: Arc<Mutex<Sent>>,
+    /// The window and whether it is a Wayland surface, once known ([`learn_window`]).
+    window: Arc<Mutex<Option<(Id, bool)>>>,
+}
+
+impl Activation {
+    /// The window and whether it is a Wayland surface, when known.
+    fn known(&self) -> Option<(Id, bool)> {
+        *self.window.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// The window is `window`, and is a Wayland surface when `wayland`.
+    #[cfg(test)]
+    fn know(&self, window: Id, wayland: bool) {
+        remember(&self.window, window, wayland);
+    }
+}
+
+/// Record the window in `cell`.
+fn remember(cell: &Mutex<Option<(Id, bool)>>, window: Id, wayland: bool) {
+    *cell.lock().unwrap_or_else(PoisonError::into_inner) = Some((window, wayland));
+}
+
+/// Find out which window this is and whether it is a Wayland surface, so that a raise does not
+/// have to ask. Issue #565: a minimised X11 window's event loop turns once per throttled frame
+/// (about 1 s on Xwayland), and each task that waits for the loop's answer (`window::latest`,
+/// `window::run`) costs a turn: a raise that asks first restores the window seconds late.
+pub fn learn_window(requests: &Activation) -> Task<Message> {
+    let window = Arc::clone(&requests.window);
+    window::latest().and_then(move |id| {
+        let window = Arc::clone(&window);
+        on_wayland(id).then(move |wayland| {
+            remember(&window, id, wayland);
+            Task::none()
+        })
+    })
 }
 
 /// The requests that went out and whose wait is not over.
@@ -64,17 +99,36 @@ impl Sent {
 /// when the last request is sent: it does not wait for the compositor.
 pub fn raise(activation: Option<String>, requests: &Activation) -> Task<Message> {
     let sent = Arc::clone(&requests.sent);
+    if let Some((id, wayland)) = requests.known() {
+        return raise_steps(id, wayland, activation, &sent);
+    }
+    // Not learnt yet (the raise came before `learn_window` ended): ask, at a turn of the event
+    // loop each.
+    let known = Arc::clone(&requests.window);
     window::latest().and_then(move |id| {
         let activation = activation.clone();
         let sent = Arc::clone(&sent);
+        let known = Arc::clone(&known);
         on_wayland(id).then(move |wayland| {
-            raise_plan(wayland, activation.clone())
-                .into_iter()
-                .fold(Task::none(), |done, next| {
-                    done.chain(step(id, next, Arc::clone(&sent)))
-                })
+            remember(&known, id, wayland);
+            raise_steps(id, wayland, activation.clone(), &sent)
         })
     })
+}
+
+/// The steps of [`raise_plan`] for the window `id`, in order, one task: none of them waits for an
+/// answer of the event loop before the next goes out.
+fn raise_steps(
+    id: Id,
+    wayland: bool,
+    activation: Option<String>,
+    sent: &Arc<Mutex<Sent>>,
+) -> Task<Message> {
+    raise_plan(wayland, activation)
+        .into_iter()
+        .fold(Task::none(), |done, next| {
+            done.chain(step(id, next, Arc::clone(sent)))
+        })
 }
 
 /// The wait that follows the activation request numbered `check`.
@@ -252,6 +306,45 @@ mod wayland {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Issue #565: on a minimised X11 window the event loop turns once per throttled frame (about
+    /// 1 s on Xwayland), and a task that waits for the loop's answer (`window::latest`,
+    /// `window::run`) costs a turn. With the window known, the raise asks for no answer: its steps
+    /// are issued at once, so the window is not restored a second per request late.
+    #[test]
+    fn a_raise_of_a_known_x11_window_waits_for_no_answer_of_the_event_loop() {
+        use iced::futures::StreamExt;
+        use iced_runtime::window::Action as W;
+        use iced_runtime::Action;
+
+        let requests = Activation::default();
+        let id = Id::unique();
+        requests.know(id, false);
+
+        let mut seen = Vec::new();
+        let mut stream =
+            Box::pin(iced_runtime::task::into_stream(raise(None, &requests)).expect("a stream"));
+        let runtime = tokio::runtime::Runtime::new().expect("a tokio runtime");
+        runtime.block_on(async {
+            // Each action is dropped as it is read: a request for an answer then ends its
+            // task, as it would never be answered here.
+            while let Some(action) = stream.next().await {
+                seen.push(match action {
+                    Action::Window(W::GetLatest(_) | W::GetOldest(_)) => "asks the loop who",
+                    Action::Window(W::Run(..)) => "asks the loop to run",
+                    Action::Window(W::Minimize(window, false)) if window == id => "restore",
+                    Action::Window(W::GainFocus(window)) if window == id => "focus",
+                    _ => "other",
+                });
+            }
+        });
+
+        assert_eq!(
+            seen,
+            ["restore", "focus"],
+            "the window is restored, then focused, with no wait for the loop between"
+        );
+    }
 
     /// The windows the requests whose wait is not over were sent for.
     fn waiting(requests: &Activation) -> HashMap<u64, Id> {
