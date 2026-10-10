@@ -345,6 +345,7 @@ fn boot() -> (App, Task<Message>) {
     }
     let activation = crate::shell::window_raise::Activation::default();
     let learn_window = crate::shell::window_raise::learn_window(&activation);
+    let links = micold_client::links::DaemonLinks::at_launch(&core.settings.daemons);
     (
         App {
             core,
@@ -376,20 +377,21 @@ fn boot() -> (App, Task<Message>) {
             env_include_timeout_secs,
             env_include_cache,
             env_include_last_outcome,
-            daemon: None,
-            daemon_catalog: None,
+            links,
+            daemon_catalogs: Default::default(),
             displaced: HashMap::new(),
-            disconnected: false,
+            disconnected: Default::default(),
             placement: resolved_placement,
             sandbox: sandbox_state,
             composer: iced::widget::text_editor::Content::new(),
             sandbox_boot: boot_plan.clone(),
             sandbox_bring_up,
-            version_mismatch: None,
-            build_mismatch: None,
+            version_mismatch: Default::default(),
+            build_mismatch: Default::default(),
             next_req: 0,
             scrollback_inflight: HashMap::new(),
             pending_ops: HashMap::new(),
+            pending_daemon: HashMap::new(),
             probe: probe_config().map(|config| RefCell::new(config.probe())),
             scene_ready: false,
             scene_frames: 0,

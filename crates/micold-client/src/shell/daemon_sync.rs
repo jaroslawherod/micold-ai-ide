@@ -45,6 +45,7 @@ use micold_client::features::project::Msg as ProjectMsg;
 use micold_client::features::session::Msg as SessionMsg;
 use micold_client::features::worktree::Msg as WorktreeMsg;
 use micold_core::attach::{AttachItem, AttachOutcome};
+use micold_core::daemons::{DaemonEvent, DaemonId};
 use std::path::{Path, PathBuf};
 
 use iced::Task;
@@ -254,18 +255,51 @@ impl PendingOp {
 /// Send a correlated mutating RPC to the daemon: allocate a `req`, record the pending op (so the
 /// reply can be matched and a disconnect can resolve it as unknown), and send the message `build`s.
 /// A no-op that notifies the user when there is no daemon connection (T055).
+///
+/// Routed by the active location's binding (feature 491, T026): the op goes to the daemon that
+/// location is bound to and to no other. Ops addressed at something else (a session, a named
+/// project) use [`send_op_bound`] with that thing's binding.
 pub fn send_op(app: &mut App, op: PendingOp, build: impl FnOnce(u64) -> ClientMsg) {
-    let Some(daemon) = &app.daemon else {
-        app.core.notify_error(format!(
-            "Not connected to the session service — can't {} right now.",
-            op.describe()
-        ));
-        return;
-    };
-    let req = app.next_req;
-    app.next_req += 1;
-    daemon.send(build(req));
+    let binding = app.active_binding();
+    send_op_bound(app, binding, op, build);
+}
+
+/// [`send_op`] for an op bound by `binding`. A daemon that is down, or no daemon, notifies the user
+/// with the route's message and sends nothing (contract rule P-2).
+pub fn send_op_bound(
+    app: &mut App,
+    binding: micold_core::daemons::Binding,
+    op: PendingOp,
+    build: impl FnOnce(u64) -> ClientMsg,
+) {
+    use micold_client::links::Route;
+    match app.route(binding) {
+        Route::To(id) => {
+            let Some(daemon) = app.outbox_for(id) else {
+                return;
+            };
+            let req = app.next_req;
+            app.next_req += 1;
+            daemon.send(build(req));
+            register_pending(app, id, req, op);
+        }
+        Route::Unavailable { message } | Route::NoDaemon { message } => {
+            app.core
+                .notify_error(format!("{message} — can't {} right now.", op.describe()));
+        }
+    }
+}
+
+/// Record `op` as in flight on `req` to `daemon`, so a reply can be matched and only that daemon's
+/// disconnect resolves it as unknown.
+pub fn register_pending(
+    app: &mut App,
+    daemon: micold_core::daemons::DaemonId,
+    req: u64,
+    op: PendingOp,
+) {
     app.pending_ops.insert(req, op);
+    app.pending_daemon.insert(req, daemon);
 }
 
 /// Move this client's daemon attachment from `old` to `new` on a project switch: release the old
@@ -281,14 +315,19 @@ pub fn switch_daemon_attachment(app: &mut App, old: Option<PathBuf>, new: &Path)
         let _ =
             crate::shell::pr_status::update(app, micold_client::features::pr_status::Msg::Released);
     }
-    let Some(daemon) = app.daemon.clone() else {
-        return;
-    };
+    // The project being left detaches from its own daemon, the one entered attaches to its: they
+    // may be two different daemons, and a down one is skipped rather than replaced (rule P-2).
     if let Some(old) = old {
         if old != new {
-            daemon.send(ClientMsg::Detach { project: old });
+            let binding = app.binding_of(&old, "");
+            if let Some(from) = app.outbox_of(binding) {
+                from.send(ClientMsg::Detach { project: old });
+            }
         }
     }
+    let Some(daemon) = app.active_outbox() else {
+        return;
+    };
     daemon.send(ClientMsg::Attach {
         project: new.to_path_buf(),
         force: false,
@@ -350,16 +389,26 @@ pub fn on_grid_frame(
     Task::none()
 }
 
-pub fn on_disconnected(app: &mut App) -> Task<Message> {
+pub fn on_disconnected(app: &mut App, daemon: DaemonId) -> Task<Message> {
     crate::log_line("attach: disconnected");
-    app.daemon = None;
+    // Only this daemon's link is dropped: the others keep their outbox, state and pending ops
+    // (feature 491, FR-007). `Lost` is folded here; a daemon that never connected was folded by
+    // `on_connect_failed`, so a `Disconnected` that follows is the same dial failing again.
+    let _ = app.links.lost(daemon, "connection lost");
+    app.daemon_catalogs.remove(&daemon);
+    let was_active = app.active_daemon() == Some(daemon);
+    // Content on screen is now stale; the banner says so (FR-027). The subscription is
+    // already auto-reconnecting with backoff.
+    app.disconnected.insert(daemon);
+    if !was_active {
+        // A daemon the window is not looking at: its own pending requests are resolved below and
+        // nothing about what is on screen changes.
+        return resolve_pending_of(app, daemon);
+    }
     // The next connection may be to a restarted daemon that was never told (`006` BUG-007).
     app.reported_scheme = None;
     // Nor what this window has in view (feature 039, FR-006).
     app.core.view_report_forgotten();
-    // Content on screen is now stale; the banner says so (FR-027). The subscription is
-    // already auto-reconnecting with backoff.
-    app.disconnected = true;
     // Nor does this window hold its project any more: what it read is removed, and the reading
     // under way is forgotten (feature 040, data-model §3 invariant 4). `Released` starts nothing.
     let _ = crate::shell::pr_status::update(app, micold_client::features::pr_status::Msg::Released);
@@ -371,12 +420,44 @@ pub fn on_disconnected(app: &mut App) -> Task<Message> {
     // Same reasoning, no message: a scrollback fetch is advisory, and the rows it would have
     // filled are re-requested by the next scroll. Keeping the entries would suppress exactly
     // that request (`010` BUG-021).
-    app.scrollback_inflight.clear();
+    let dropped: Vec<u64> = app
+        .scrollback_inflight
+        .iter()
+        // A session no project knows cannot be shown to be another daemon's: it is dropped.
+        .filter(|(_, (session, _))| {
+            app.daemon_of_session(*session)
+                .is_none_or(|owner| owner == daemon)
+        })
+        .map(|(req, _)| *req)
+        .collect();
+    for req in dropped {
+        app.scrollback_inflight.remove(&req);
+    }
     // An agent's prompt is answered on the connection that asked it; the service has already
     // dropped this window's prompts, and a restarted service reuses their ids (feature 034).
     app.core
         .update(Message::AgentConfirm(AgentConfirmMsg::Disconnected));
-    for (_req, op) in app.pending_ops.drain() {
+    resolve_pending_of(app, daemon)
+}
+
+/// Resolve the in-flight requests of `daemon` as *unknown* — and only its: another daemon's
+/// requests are still on a live connection (feature 491, FR-007) — then ask, once, whether the
+/// sandbox this daemon is the legacy default of is still alive.
+fn resolve_pending_of(app: &mut App, daemon: DaemonId) -> Task<Message> {
+    let reqs: Vec<u64> = app
+        .pending_daemon
+        .iter()
+        .filter(|(_, d)| **d == daemon)
+        .map(|(req, _)| *req)
+        .collect();
+    let mut resolved = Vec::new();
+    for req in reqs {
+        app.pending_daemon.remove(&req);
+        if let Some(op) = app.pending_ops.remove(&req) {
+            resolved.push(op);
+        }
+    }
+    for op in resolved {
         let text = format!(
             "The session service disconnected before confirming the request to {} — \
              it may or may not have taken effect; reconnecting will show the current state.",
@@ -437,12 +518,65 @@ pub fn on_disconnected(app: &mut App) -> Task<Message> {
     // once, on the disconnect, rather than polled: the answer only changes when the connection
     // does.
     match (app.sandbox.state.accepts_sessions(), &app.sandbox_boot) {
-        (true, Some(plan)) => crate::shell::sandbox::check_alive(plan),
+        (true, Some(plan)) if is_sandbox_daemon(app, daemon) => {
+            crate::shell::sandbox::check_alive(plan)
+        }
         _ => Task::none(),
     }
 }
 
-pub fn on_connect_failed(app: &mut App, reason: String) -> Task<Message> {
+/// Send `ProjectAdd` to `daemon` for each project that has a location bound to it and that its
+/// catalog does not hold (feature 491, T026): on the first bind and on every (re)connect, before
+/// any session starts there. Idempotent, so a connect that finds everything registered sends
+/// nothing; a project bound to a daemon that is down waits for that daemon's own connect.
+pub fn register_projects(app: &mut App, daemon: DaemonId) {
+    let catalogs: std::collections::BTreeMap<DaemonId, std::collections::BTreeSet<PathBuf>> = app
+        .daemon_catalogs
+        .iter()
+        .map(|(id, c)| (*id, c.projects.iter().map(|p| p.path.clone()).collect()))
+        .collect();
+    let wanted = micold_client::links::registrations(
+        &app.links,
+        &app.core.settings.daemons,
+        &app.all_bindings(),
+        &catalogs,
+    );
+    for (to, path) in wanted.into_iter().filter(|(to, _)| *to == daemon) {
+        send_op_bound(
+            app,
+            micold_core::daemons::Binding::Bound(to),
+            PendingOp::ProjectAdd,
+            move |req| ClientMsg::ProjectAdd { req, path },
+        );
+    }
+}
+
+/// Whether `daemon` is the one the binary's sandbox state and boot plan describe: the legacy
+/// default, which is what a pre-feature `placement` migrated to (R5).
+fn is_sandbox_daemon(app: &App, daemon: DaemonId) -> bool {
+    app.core
+        .settings
+        .legacy_default_daemon
+        .unwrap_or(DaemonId(1))
+        == daemon
+}
+
+pub fn on_connect_failed(app: &mut App, daemon: DaemonId, reason: String) -> Task<Message> {
+    // The dial failed: folded for this daemon alone, debounced by the state machine so a first
+    // transient failure is not shown (feature 491, FR-007).
+    let _ = app
+        .links
+        .apply(daemon, DaemonEvent::DialFailed(reason.clone()));
+    app.disconnected.insert(daemon);
+    if !is_sandbox_daemon(app, daemon) {
+        // Another daemon's dial: its state and the sidebar row say so. The sandbox's refused-dial
+        // machinery (bring-up, grace) is the legacy daemon's.
+        crate::log_line(&format!(
+            "attach: daemon {} failed reason={reason}",
+            daemon.0
+        ));
+        return Task::none();
+    }
     match refused_dial(app, &reason) {
         Some(bring_up) => bring_up.run(&mut app.sandbox_bring_up),
         None => Task::none(),
@@ -452,9 +586,12 @@ pub fn on_connect_failed(app: &mut App, reason: String) -> Task<Message> {
 /// A daemon answered and said no (#370). Reported on this dial: none of [`refused_dial`]'s grace
 /// applies, because that grace is for a service not listening yet, and this one is listening. Nor
 /// is a bring-up started — the service is there, and a new container would meet the same answer.
-pub fn on_refused(app: &mut App, reason: String) -> Task<Message> {
+pub fn on_refused(app: &mut App, daemon: DaemonId, reason: String) -> Task<Message> {
     crate::log_line(&format!("attach: refused reason={reason}"));
-    app.disconnected = true;
+    let _ = app
+        .links
+        .apply(daemon, DaemonEvent::DialFailed(reason.clone()));
+    app.disconnected.insert(daemon);
     app.core
         .notify_error(format!("Could not connect to the session daemon: {reason}"));
     Task::none()
@@ -467,7 +604,6 @@ pub fn refused_dial(app: &mut App, reason: &str) -> Option<crate::shell::sandbox
     // The other half of `attach_log_line`'s job (`010` BUG-013): "never attached" and "attached and
     // got nothing" are different bugs, so the log has to be able to say the first one too.
     crate::log_line(&format!("attach: failed reason={reason}"));
-    app.disconnected = true;
     app.sandbox.service_refused();
     if let Some(bring_up) = bring_up_again(app) {
         return Some(bring_up);
@@ -512,7 +648,7 @@ pub fn bring_up_again(app: &mut App) -> Option<crate::shell::sandbox::BringUp> {
 /// with force, which displaces the current holder, and re-view its active session.
 pub fn on_takeover_requested(app: &mut App) -> Task<Message> {
     app.viewed_dirty = true;
-    if let (Some(project), Some(d)) = (app.core.workspace.active.clone(), app.daemon.clone()) {
+    if let (Some(project), Some(d)) = (app.core.workspace.active.clone(), app.active_outbox()) {
         app.displaced.remove(&project);
         d.send(ClientMsg::Attach {
             project: project.clone(),
@@ -549,7 +685,7 @@ pub fn on_takeover_requested(app: &mut App) -> Task<Message> {
 /// environment-include script can put a CLI on one directory's `PATH` and not another's. The
 /// request is recorded before it is sent, so its reply can only land under the key it named.
 pub fn ask_cli_availability(app: &mut App, key: AvailabilityKey) {
-    let Some(d) = app.daemon.clone() else {
+    let Some(d) = app.active_outbox() else {
         return;
     };
     let req = app.next_req;
@@ -601,6 +737,36 @@ pub fn refresh_cli_availability(app: &mut App) {
 /// the `SettingsChanged` arm makes, so a new field cannot reach one and not the other.
 /// The daemon the single connection reaches: the legacy default, which is id 1 until the shell
 /// holds one connection per daemon (feature 491, M3).
+pub(crate) fn on_version_mismatch(
+    app: &mut App,
+    daemon: DaemonId,
+    client: u32,
+    server: u32,
+    server_build: String,
+) {
+    let _ = app.links.apply(
+        daemon,
+        micold_client::links::refused(client.to_string(), server.to_string()),
+    );
+    app.version_mismatch
+        .insert(daemon, (client, server, server_build));
+}
+
+/// A same-contract build mismatch from `daemon`: recorded for it alone.
+pub(crate) fn on_build_mismatch(
+    app: &mut App,
+    daemon: DaemonId,
+    client_build: String,
+    daemon_build: String,
+) {
+    let _ = app.links.apply(
+        daemon,
+        micold_client::links::refused(client_build.clone(), daemon_build.clone()),
+    );
+    app.build_mismatch
+        .insert(daemon, (client_build, daemon_build));
+}
+
 fn connected_daemon(app: &App) -> micold_core::daemons::DaemonId {
     app.core
         .settings
@@ -636,7 +802,7 @@ fn availability_source(app: &App) -> AvailabilitySource {
 /// arrive as `LogLocation`/`RecentErrors` events, shown as notices. Uncorrelated: only the
 /// latest answer matters, so no pending-op bookkeeping is needed.
 pub fn on_diagnostics_requested(app: &mut App) -> Task<Message> {
-    if let Some(d) = &app.daemon {
+    if let Some(d) = app.active_outbox() {
         let req = app.next_req;
         app.next_req += 2;
         d.send(ClientMsg::LogLocationRequest { req });
@@ -766,14 +932,13 @@ fn recheck_open_settings(app: &mut App) -> Option<crate::shell::env_include::Scr
     ))
 }
 
-pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
+pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Task<Message> {
     // Almost every arm here resolves entirely into `app`, which is why this function returned
     // `Task::none()` unconditionally for its whole life. The open-project gate is the first reply
     // that continues an interaction the user started, so one arm can hand work back.
     let mut follow_up = Task::none();
     match event {
         DaemonMsg::CatalogChanged { catalog } => {
-            let daemon = connected_daemon(app);
             reconcile_catalog(&mut app.core, daemon, &catalog, true);
             // The worktree list may have gained a row (created, discovered, included, or valid
             // again): ask about it (feature 033, contract C1 A5).
@@ -783,8 +948,11 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
             // client is already driving.
             app.stamper.seed_from_catalog(&catalog);
             adopt_mount_set(app, &catalog);
-            claim_attention_events(app, &catalog, false);
-            app.daemon_catalog = Some(catalog);
+            claim_attention_events(app, daemon, &catalog, false);
+            app.daemon_catalogs.insert(daemon, catalog);
+            // A project bound to this daemon that its catalog no longer holds (forgotten from
+            // another window) is registered again only on connect, not on every push.
+
             // Feature 040, S1: the first listing after `Attached` starts the reading; the reducer
             // turns every other one into nothing.
             follow_up = crate::shell::pr_status::listing_arrived(app);
@@ -1445,7 +1613,7 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
             // taken over by forcing here: the only holder is a connection this process has already
             // replaced, and the user was never asked because there is nobody to ask about.
             if holder.is(&ClientInstance::current()) {
-                if let Some(d) = &app.daemon {
+                if let Some(d) = app.outbox_for(daemon) {
                     d.send(ClientMsg::Attach {
                         project,
                         force: true,
@@ -1558,34 +1726,55 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
 
 pub fn on_connected(
     app: &mut App,
+    daemon: DaemonId,
     outbox: micold_client::daemon::Outbox,
     catalog: CatalogSnapshot,
     settings: micold_core::protocol::messages::DaemonSettings,
 ) -> Task<Message> {
     // A fresh connection resyncs from authoritative state (FR-028): clear the transient
-    // disconnected/displaced flags. If a project is still held by another window, the
-    // re-attach below is refused and the displaced state is re-established from that reply.
-    app.disconnected = false;
-    app.sandbox.answered();
-    app.displaced.clear();
-    app.version_mismatch = None;
-    app.build_mismatch = None;
+    // disconnected/displaced flags of what this daemon serves. If a project is still held by
+    // another window, the re-attach below is refused and the displaced state is re-established
+    // from that reply. Another daemon's flags and mismatch are not this connection's to clear.
+    // The outbox is stored before anything below sends, because the sends read it.
+    app.sync_links();
+    app.links.connected(daemon, outbox);
+    app.disconnected.remove(&daemon);
+    if is_sandbox_daemon(app, daemon) {
+        app.sandbox.answered();
+    }
+    let served: Vec<PathBuf> = app
+        .displaced
+        .keys()
+        .filter(|project| app.project_uses(project, daemon))
+        .cloned()
+        .collect();
+    for project in served {
+        app.displaced.remove(&project);
+    }
+    app.version_mismatch.remove(&daemon);
+    app.build_mismatch.remove(&daemon);
     // The daemon is the single writer of settings + sessions; adopt what it reports
     // (FR-012a/FR-012b) — including environment-include, which this client's own
     // boot-time local read may predate (e.g. another window changed it while this one was
     // still starting up). Re-source env-include under the now-authoritative values.
-    let pr_status_enabled = settings.pr_status_enabled;
-    adopt_daemon_settings(app, settings);
-    // The path may have changed while this window was disconnected: an open Settings page shows
-    // the answer for the path it now holds, as after `SettingsChanged`.
-    let script_check =
-        recheck_open_settings(app).map(crate::shell::env_include::run_script_path_check);
-    // Feature 040: the switch's live value. Nothing is held yet (the disconnect released it), so
-    // this starts no reading; the `Attached` and listing that follow do (S1).
-    let _ = crate::shell::pr_status::enabled_changed(app, pr_status_enabled);
-    // Another window may have saved while this one was disconnected (BUG-475, FR-026b).
-    refresh_open_settings(app);
-    let daemon = connected_daemon(app);
+    // Settings are adopted from the daemon the window is working with (the active location's, else
+    // the legacy default): each daemon owns its own copy, and adopting all of them in turn would
+    // make the last to connect win.
+    let owns_settings = app.active_daemon().unwrap_or_else(|| connected_daemon(app)) == daemon;
+    let mut script_check = None;
+    if owns_settings {
+        let pr_status_enabled = settings.pr_status_enabled;
+        adopt_daemon_settings(app, settings);
+        // The path may have changed while this window was disconnected: an open Settings page
+        // shows the answer for the path it now holds, as after `SettingsChanged`.
+        script_check =
+            recheck_open_settings(app).map(crate::shell::env_include::run_script_path_check);
+        // Feature 040: the switch's live value. Nothing is held yet (the disconnect released it),
+        // so this starts no reading; the `Attached` and listing that follow do (S1).
+        let _ = crate::shell::pr_status::enabled_changed(app, pr_status_enabled);
+        // Another window may have saved while this one was disconnected (BUG-475, FR-026b).
+        refresh_open_settings(app);
+    }
     reconcile_catalog(&mut app.core, daemon, &catalog, false);
     // The boot-time foreground resolve ran before this catalog existed, so for a client that has
     // just started it answered `NoSessionsForKey` against a project whose sessions were still on
@@ -1613,8 +1802,13 @@ pub fn on_connected(
     // Feature 484 (FR-013): the stored panes, before the active session is viewed below, so the
     // restored focused pane decides which session that is.
     crate::shell::panes::restore(app, &catalog);
-    adopt_mount_set(app, &catalog);
-    app.daemon_catalog = Some(catalog);
+    if is_sandbox_daemon(app, daemon) {
+        adopt_mount_set(app, &catalog);
+    }
+    app.daemon_catalogs.insert(daemon, catalog.clone());
+    // First bind and each (re)connect (feature 491, T026): the projects with a location bound to
+    // this daemon that its catalog does not hold are added before anything starts on it.
+    register_projects(app, daemon);
     // Attach to the active project and view its active session so the daemon starts
     // streaming grid frames for it (FR-011/FR-016).
     //
@@ -1625,7 +1819,9 @@ pub fn on_connected(
     // takes its own disconnected early-return and the request is silently never made, which is the
     // bug that put this sentence in the plural.
     let project = app.core.workspace.active_project().map(|p| p.path.clone());
-    app.daemon = Some(outbox);
+    // Attached and viewed only on the daemon the active location is bound to: the window shows one
+    // project, and a connection to another daemon changes what it views not at all.
+    let project = project.filter(|_| app.active_daemon() == Some(daemon));
     // Before the attach and its starts: a program in a session started below asks for the
     // background as it launches, and is answered from whatever the daemon knows by then (`006`
     // FR-003a, BUG-007). Cleared first, because this connection has been told nothing yet.
@@ -1639,8 +1835,8 @@ pub fn on_connected(
     // After the view report, so the service knows what this window has in view before it is asked
     // to grant anything (feature 039, research R3). The first snapshot of a connection is compared
     // as one after a lost connection (FR-006); on the process's first, nothing is claimed (FR-005).
-    if let Some(catalog) = app.daemon_catalog.clone() {
-        claim_attention_events(app, &catalog, true);
+    if let Some(catalog) = app.daemon_catalogs.get(&daemon).cloned() {
+        claim_attention_events(app, daemon, &catalog, true);
     }
     // Ask the authority whose settings were just adopted above which CLIs it can actually run
     // (feature 027, FR-023c), for the home directory and then for every row on screen (feature
@@ -1658,7 +1854,7 @@ pub fn on_connected(
         .env_include_changed(&env_include_settings(app));
     ask_cli_availability(app, AvailabilityKey::Home);
     sync_cli_availability(app);
-    if let (Some(project), Some(daemon)) = (project, app.daemon.clone()) {
+    if let (Some(project), Some(daemon)) = (project, app.outbox_for(daemon)) {
         let offer_for = project.clone();
         daemon.send(ClientMsg::Attach {
             project: project.clone(),
@@ -1701,8 +1897,19 @@ pub fn report_color_scheme(app: &mut App) {
     if app.reported_scheme == Some(scheme) {
         return;
     }
-    if let Some(daemon) = &app.daemon {
-        daemon.send(ClientMsg::TerminalColorScheme { scheme });
+    // Every connected daemon answers its programs' queries, so each is told (feature 491); a
+    // connect of any one clears the record, and the others hear the same scheme again.
+    let connected: Vec<_> = app
+        .links
+        .states()
+        .ids()
+        .into_iter()
+        .filter_map(|id| app.outbox_for(id))
+        .collect();
+    if !connected.is_empty() {
+        for daemon in connected {
+            daemon.send(ClientMsg::TerminalColorScheme { scheme });
+        }
         app.reported_scheme = Some(scheme);
     }
 }
@@ -1716,7 +1923,7 @@ pub fn report_color_scheme(app: &mut App) {
 /// Asked only while there is a connection: a report handed back is recorded as sent, so asking
 /// without anywhere to send it would mark a report sent that never left.
 pub fn report_window_view(app: &mut App) {
-    let Some(daemon) = &app.daemon else {
+    let Some(daemon) = app.active_outbox() else {
         return;
     };
     let window = window_facts(app);
@@ -1766,7 +1973,7 @@ pub fn on_notifier_reported(
     app: &mut App,
     event: micold_client::features::attention::NotifierEvent,
 ) -> Task<Message> {
-    if let Some(daemon) = &app.daemon {
+    if let Some(daemon) = app.active_outbox() {
         daemon.send(micold_client::features::attention::notifier_event(event));
     }
     Task::none()
@@ -1784,14 +1991,15 @@ fn window_facts(app: &App) -> micold_client::app::WindowFacts {
 /// Send the attention claims a catalog snapshot gives rise to (feature 039, research R3): every
 /// window sees the same change and claims it, and the service grants it to one. `welcome` is the
 /// snapshot a `Welcome` carried.
-fn claim_attention_events(app: &mut App, catalog: &CatalogSnapshot, welcome: bool) {
+fn claim_attention_events(app: &mut App, from: DaemonId, catalog: &CatalogSnapshot, welcome: bool) {
     let window = window_facts(app);
     let claims = if welcome {
         app.core.attention_on_welcome(catalog, window)
     } else {
         app.core.attention_on_catalog_changed(catalog, window)
     };
-    if let Some(daemon) = &app.daemon {
+    // Claims answer the daemon whose snapshot raised them.
+    if let Some(daemon) = app.outbox_for(from) {
         for claim in claims {
             daemon.send(claim);
         }
@@ -1815,7 +2023,8 @@ pub fn on_rename_confirmed(app: &mut App) -> Task<Message> {
     if app.core.project.rename_draft.is_none() {
         if let Some((path, display_name)) = draft {
             if !display_name.is_empty() {
-                send_op(app, PendingOp::ProjectRename, move |req| {
+                let binding = app.binding_of(&path, "");
+                send_op_bound(app, binding, PendingOp::ProjectRename, move |req| {
                     ClientMsg::ProjectRename {
                         req,
                         path,
@@ -1845,13 +2054,17 @@ pub fn on_project_forget_confirmed(app: &mut App) -> Task<Message> {
         app.pane_restored.remove(&path);
         app.scrollback_inflight
             .retain(|_, (session, _)| app.grids.keys().any(|t| t.session == *session));
-        let remove_path = path.clone();
-        send_op(app, PendingOp::ProjectRemove, move |req| {
-            ClientMsg::ProjectRemove {
-                req,
-                path: remove_path,
-            }
-        });
+        // Each daemon that holds a location of the project forgets it; one that is down is
+        // told nothing (it is reported by the route), and no other daemon stands in for it.
+        for binding in app.project_bindings(&path) {
+            let remove_path = path.clone();
+            send_op_bound(app, binding, PendingOp::ProjectRemove, move |req| {
+                ClientMsg::ProjectRemove {
+                    req,
+                    path: remove_path,
+                }
+            });
+        }
         // A forgotten project is no longer held, nor shown (feature 040).
         if app.core.workspace.active.as_deref() == Some(path.as_path()) {
             let _ = crate::shell::pr_status::update(
@@ -1860,7 +2073,7 @@ pub fn on_project_forget_confirmed(app: &mut App) -> Task<Message> {
             );
         }
         // Release this client's attachment on the project it is forgetting.
-        if let Some(d) = &app.daemon {
+        if let Some(d) = app.active_outbox() {
             d.send(ClientMsg::Detach { project: path });
         }
     }
@@ -2114,7 +2327,9 @@ pub fn on_session_close_requested(app: &mut App, id: SessionId) -> Task<Message>
     // and a session being archived will take no more input. Never on a mere detach — the
     // counter must survive a reconnect for loss detection to hold.
     app.stamper.forget(id);
-    send_op(app, PendingOp::DeleteSession, move |req| {
+    // Addressed to the daemon the session runs on, whichever location is in view.
+    let binding = app.session_binding_of(id);
+    send_op_bound(app, binding, PendingOp::DeleteSession, move |req| {
         ClientMsg::SessionDelete { req, session: id }
     });
     app.core
@@ -2130,7 +2345,7 @@ pub fn on_session_close_requested(app: &mut App, id: SessionId) -> Task<Message>
 /// ignore it, and saying nothing is the honest account of a click that decided nothing.
 pub fn on_agent_confirm_answered(app: &mut App, id: u64, allow: bool) -> Task<Message> {
     if app.core.agent_confirm.is_pending(id) {
-        if let Some(d) = &app.daemon {
+        if let Some(d) = app.active_outbox() {
             d.send(ClientMsg::ConfirmationAnswer { id, allow });
         }
     }
@@ -2147,7 +2362,7 @@ pub fn on_agent_confirm_answered(app: &mut App, id: u64, allow: bool) -> Task<Me
 /// every message, because a dismissal reaches the pure core by several routes, none through here.
 pub fn send_agent_confirm_declines(app: &mut App) {
     let declined = std::mem::take(&mut app.core.agent_confirm.declined);
-    if let Some(d) = &app.daemon {
+    if let Some(d) = app.active_outbox() {
         for id in declined {
             d.send(ClientMsg::ConfirmationAnswer { id, allow: false });
         }
@@ -2163,7 +2378,8 @@ pub fn on_session_remove_confirmed(app: &mut App) -> Task<Message> {
         app.scrollback_inflight
             .retain(|_, (session, _)| *session != id);
         app.stamper.forget(id); // T114, as in the close path above.
-        send_op(app, PendingOp::DeleteSession, move |req| {
+        let binding = app.session_binding_of(id);
+        send_op_bound(app, binding, PendingOp::DeleteSession, move |req| {
             ClientMsg::SessionDelete { req, session: id }
         });
     }
@@ -2233,7 +2449,7 @@ pub fn on_shell_instance_restart_requested(
     id: SessionId,
     shell_id: ShellInstanceId,
 ) -> Task<Message> {
-    if let Some(d) = &app.daemon {
+    if let Some(d) = app.active_outbox() {
         d.send(ClientMsg::SessionRestartShell {
             session: id,
             instance: shell_id,
@@ -2267,7 +2483,7 @@ pub fn on_shell_instance_open_requested(app: &mut App) -> Task<Message> {
             session.set_mode(TerminalMode::Regular);
             session.open_shell_instance()
         };
-        if let Some(d) = &app.daemon {
+        if let Some(d) = app.active_outbox() {
             d.send(ClientMsg::SessionOpenShell {
                 session: id,
                 instance: shell_id,
@@ -2321,7 +2537,7 @@ pub fn on_shell_instance_close_requested(
     id: SessionId,
     shell_id: ShellInstanceId,
 ) -> Task<Message> {
-    if let Some(d) = &app.daemon {
+    if let Some(d) = app.active_outbox() {
         d.send(ClientMsg::SessionCloseShell {
             session: id,
             instance: shell_id,
@@ -2364,7 +2580,7 @@ pub fn send_to_terminal(app: &mut App, terminal: TerminalRef, bytes: Vec<u8>) {
     if let ClientMsg::SessionInput { process, .. } = &mut msg {
         *process = Some(terminal.process);
     }
-    if let Some(d) = &app.daemon {
+    if let Some(d) = app.active_outbox() {
         d.send(msg);
     }
     if app.displayed_terminal() == Some(terminal) {
@@ -2400,7 +2616,7 @@ pub fn on_terminal_bytes(app: &mut App, bytes: Vec<u8>) -> Task<Message> {
                 *process = Some(t.process);
             }
         }
-        if let Some(d) = &app.daemon {
+        if let Some(d) = app.active_outbox() {
             d.send(msg);
         }
         // Any live keystroke means the view is at the live bottom again.
@@ -2413,7 +2629,7 @@ pub fn on_terminal_bytes(app: &mut App, bytes: Vec<u8>) -> Task<Message> {
 pub fn on_terminal_resized(app: &mut App, cols: u16, rows: u16) -> Task<Message> {
     // Remember the pane's live size so the next started session starts at it too.
     app.last_grid = Some((cols, rows));
-    if let (Some(id), Some(d)) = (app.core.session.active, &app.daemon) {
+    if let (Some(id), Some(d)) = (app.core.session.active, app.active_outbox()) {
         d.send(ClientMsg::SessionResize {
             process: None,
             session: id,
@@ -2478,7 +2694,7 @@ pub fn on_attach_opened(app: &mut App) -> Task<Message> {
 /// start-up banner, which decides for itself whether to show. Silent while disconnected: no daemon
 /// to ask, and no error worth raising for an offer.
 pub fn request_attach_offer(app: &mut App, project: &Path) {
-    if app.daemon.is_none() {
+    if app.active_outbox().is_none() {
         return;
     }
     let asked = project.to_path_buf();
@@ -2700,7 +2916,7 @@ fn view_and_send(app: &mut App, id: SessionId, start: ClientMsg) {
     app.viewed_dirty = true;
     app.selection = None;
     app.display_offset = 0;
-    if let (Some(project), Some(d)) = (app.core.workspace.active.clone(), &app.daemon) {
+    if let (Some(project), Some(d)) = (app.core.workspace.active.clone(), app.active_outbox()) {
         send_pane_size(app, id);
         d.send(start);
         d.send(ClientMsg::SetViewedSession {
@@ -2723,7 +2939,7 @@ fn view_and_send(app: &mut App, id: SessionId, start: ClientMsg) {
 /// A no-op before the first frame has laid out a pane (`last_grid` is `None`), where the daemon's
 /// own default correctly applies.
 pub fn send_pane_size(app: &App, id: SessionId) {
-    if let (Some((cols, rows)), Some(d)) = (app.last_grid, &app.daemon) {
+    if let (Some((cols, rows)), Some(d)) = (app.last_grid, app.active_outbox()) {
         d.send(ClientMsg::SessionResize {
             process: None,
             session: id,
@@ -2780,7 +2996,7 @@ pub fn attach_current_process(app: &mut App, id: SessionId) {
         .map(|(_, s)| session_process(s));
     app.selection = None;
     app.display_offset = 0;
-    if let (Some(process), Some(d)) = (process, &app.daemon) {
+    if let (Some(process), Some(d)) = (process, app.active_outbox()) {
         d.send(ClientMsg::SessionAttachProcess {
             session: id,
             process,
@@ -3115,7 +3331,7 @@ pub(crate) mod tests {
     ) {
         let (tx, rx) = iced::futures::channel::mpsc::unbounded();
         let mut app = base_app();
-        app.daemon = Some(micold_client::daemon::Outbox::new(tx));
+        app.connect_test_daemon(micold_client::daemon::Outbox::new(tx));
         (app, rx)
     }
 
@@ -3209,6 +3425,7 @@ pub(crate) mod tests {
 
             let _ = on_daemon_event(
                 &mut app,
+                micold_core::daemons::DaemonId(1),
                 attach_answer(req, vec![session_result(uuid, outcome)]),
             );
 
@@ -3237,6 +3454,7 @@ pub(crate) mod tests {
 
         let _ = on_daemon_event(
             &mut app,
+            micold_core::daemons::DaemonId(1),
             attach_answer(
                 req,
                 vec![session_result(
@@ -3288,6 +3506,7 @@ pub(crate) mod tests {
         };
         let _ = on_daemon_event(
             &mut app,
+            micold_core::daemons::DaemonId(1),
             DaemonMsg::AttachReport {
                 req,
                 report: report.clone(),
@@ -3332,6 +3551,7 @@ pub(crate) mod tests {
 
         let _ = on_daemon_event(
             &mut app,
+            micold_core::daemons::DaemonId(1),
             attach_answer(
                 req,
                 vec![AttachResult {
@@ -3386,6 +3606,7 @@ pub(crate) mod tests {
 
         let _ = on_daemon_event(
             &mut app,
+            micold_core::daemons::DaemonId(1),
             attach_answer(
                 req,
                 vec![AttachResult {
@@ -3471,6 +3692,7 @@ pub(crate) mod tests {
 
         let _ = on_daemon_event(
             &mut app,
+            micold_core::daemons::DaemonId(1),
             DaemonMsg::RevealSession {
                 project: gone,
                 session: id,
@@ -3527,7 +3749,7 @@ pub(crate) mod tests {
     #[test]
     fn an_op_attempted_while_disconnected_names_what_it_could_not_do() {
         let mut app = base_app();
-        assert!(app.daemon.is_none());
+        assert!(app.active_outbox().is_none());
 
         send_op(
             &mut app,
@@ -3675,7 +3897,7 @@ pub(crate) mod tests {
     #[test]
     fn a_switch_while_disconnected_says_nothing_to_the_user() {
         let mut app = base_app();
-        assert!(app.daemon.is_none());
+        assert!(app.active_outbox().is_none());
 
         switch_daemon_attachment(&mut app, Some(PathBuf::from("/a")), Path::new("/b"));
         assert!(
@@ -4124,6 +4346,7 @@ pub(crate) mod tests {
 
         let _ = on_daemon_event(
             &mut app,
+            micold_core::daemons::DaemonId(1),
             DaemonMsg::OperationOk {
                 req,
                 result: OperationResult::Ack,
@@ -4143,7 +4366,7 @@ pub(crate) mod tests {
     #[test]
     fn asking_for_a_refresh_while_disconnected_reuses_the_existing_notice() {
         let mut app = base_app();
-        app.daemon = None;
+        app.disconnect_test_daemon();
         app.core.workspace.active = Some(PathBuf::from("/repo/here"));
 
         let _ = on_worktree_refresh_requested(&mut app);
@@ -4156,7 +4379,7 @@ pub(crate) mod tests {
             .expect("the user is told why nothing happened");
         assert_eq!(
             visible.message,
-            "Not connected to the session service — can't refresh the worktree list right now."
+            "daemon Host unavailable — can't refresh the worktree list right now."
         );
         assert!(
             app.pending_ops.is_empty(),
@@ -4211,6 +4434,7 @@ pub(crate) mod tests {
 
         let _ = on_daemon_event(
             &mut app,
+            micold_core::daemons::DaemonId(1),
             DaemonMsg::OperationOk {
                 req: stale,
                 result: OperationResult::Ack,
@@ -4239,6 +4463,7 @@ pub(crate) mod tests {
         let first = *app.pending_ops.keys().next().expect("the op was recorded");
         let _ = on_daemon_event(
             &mut app,
+            micold_core::daemons::DaemonId(1),
             DaemonMsg::OperationOk {
                 req: first,
                 result: OperationResult::Ack,
@@ -4430,6 +4655,7 @@ pub(crate) mod tests {
 
         let _ = on_daemon_event(
             &mut app,
+            micold_core::daemons::DaemonId(1),
             DaemonMsg::ShellOpenFailed {
                 session: id,
                 instance: shell,
@@ -4499,6 +4725,7 @@ pub(crate) mod tests {
 
         let _ = on_daemon_event(
             &mut app,
+            micold_core::daemons::DaemonId(1),
             DaemonMsg::ShellOpenFailed {
                 session: id,
                 instance: shell,
@@ -4562,7 +4789,11 @@ pub(crate) mod tests {
     fn an_answer_sends_exactly_one_confirmation_answer_and_closes_the_prompt() {
         for allow in [true, false] {
             let (mut app, mut rx) = connected_app();
-            let _ = on_daemon_event(&mut app, confirmation_requested(41));
+            let _ = on_daemon_event(
+                &mut app,
+                micold_core::daemons::DaemonId(1),
+                confirmation_requested(41),
+            );
             assert!(
                 app.core.agent_confirm.is_pending(41),
                 "the request is shown"
@@ -4587,7 +4818,11 @@ pub(crate) mod tests {
     #[test]
     fn dismissing_the_prompt_sends_one_decline() {
         let (mut app, mut rx) = connected_app();
-        let _ = on_daemon_event(&mut app, confirmation_requested(41));
+        let _ = on_daemon_event(
+            &mut app,
+            micold_core::daemons::DaemonId(1),
+            confirmation_requested(41),
+        );
         let _ = drain_sent(&mut rx);
 
         app.core.update(Message::EscapePressed);
@@ -4609,8 +4844,16 @@ pub(crate) mod tests {
     #[test]
     fn answering_a_withdrawn_prompt_sends_nothing() {
         let (mut app, mut rx) = connected_app();
-        let _ = on_daemon_event(&mut app, confirmation_requested(41));
-        let _ = on_daemon_event(&mut app, DaemonMsg::ConfirmationWithdrawn { id: 41 });
+        let _ = on_daemon_event(
+            &mut app,
+            micold_core::daemons::DaemonId(1),
+            confirmation_requested(41),
+        );
+        let _ = on_daemon_event(
+            &mut app,
+            micold_core::daemons::DaemonId(1),
+            DaemonMsg::ConfirmationWithdrawn { id: 41 },
+        );
         assert!(
             app.core.agent_confirm.pending.is_empty(),
             "withdrawn closes it"
@@ -4681,7 +4924,7 @@ pub(crate) mod tests {
         use iced::futures::StreamExt;
         let notifier = std::sync::Arc::new(RecordingNotifier::default());
         let (mut app, b) = app_with_session_b(std::sync::Arc::clone(&notifier));
-        let task = on_daemon_event(&mut app, event(b));
+        let task = on_daemon_event(&mut app, micold_core::daemons::DaemonId(1), event(b));
         if let Some(stream) = iced_runtime::task::into_stream(task) {
             let runtime = tokio::runtime::Runtime::new().expect("a tokio runtime");
             let _: Vec<_> = runtime.block_on(stream.collect());

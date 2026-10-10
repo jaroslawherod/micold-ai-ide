@@ -342,6 +342,11 @@ impl DaemonStates {
         self.states.remove(&id);
     }
 
+    /// Every tracked daemon, in id order.
+    pub fn ids(&self) -> Vec<DaemonId> {
+        self.states.keys().copied().collect()
+    }
+
     /// The daemon's state, when tracked.
     pub fn state(&self, id: DaemonId) -> Option<&DaemonState> {
         self.states.get(&id).map(|(state, _)| state)

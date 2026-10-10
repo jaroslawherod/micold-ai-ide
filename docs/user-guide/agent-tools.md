@@ -211,6 +211,14 @@ Settings → Environment ([Settings](settings.md#let-ai-sessions-manage-worktree
 applies to sessions started afterwards; running sessions keep their connection, and each new session
 logs `no tool server: disabled in settings`.
 
+## One tool server per daemon
+
+Each session service (daemon) runs its own tool server over its own worktrees and sessions. When
+you run a host daemon and container daemons together, the AI in a session sees and manages only the
+worktrees and sessions of the daemon that session runs on. It cannot list, create or read sessions
+on another daemon, and there is no cross-daemon tool. See [Running a host daemon and container
+daemons together](sandboxed-daemon.md#running-a-host-daemon-and-container-daemons-together).
+
 ## Your configuration is left alone
 
 The application never writes to your own Claude Code or Copilot configuration. Each session is

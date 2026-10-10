@@ -114,20 +114,21 @@ fn update_inner_applies_window_focus_changed() {
         env_include_timeout_secs: micold_core::settings::DEFAULT_ENV_INCLUDE_TIMEOUT_SECS,
         env_include_cache: HashMap::new(),
         env_include_last_outcome: EnvIncludeOutcome::Disabled,
-        daemon: None,
-        daemon_catalog: None,
+        links: Default::default(),
+        daemon_catalogs: Default::default(),
         displaced: HashMap::new(),
-        disconnected: false,
+        disconnected: Default::default(),
         placement: micold_client::daemon::Placement::default(),
         sandbox: micold_client::features::sandbox::Sandbox::default(),
         composer: iced::widget::text_editor::Content::new(),
         sandbox_boot: None,
         sandbox_bring_up: None,
-        version_mismatch: None,
-        build_mismatch: None,
+        version_mismatch: Default::default(),
+        build_mismatch: Default::default(),
         next_req: 0,
         scrollback_inflight: HashMap::new(),
         pending_ops: HashMap::new(),
+        pending_daemon: HashMap::new(),
         probe: None,
         scene_ready: false,
         scene_frames: 0,
@@ -183,20 +184,21 @@ fn terminal_resized_remembers_the_pane_size_for_future_spawns() {
         env_include_timeout_secs: micold_core::settings::DEFAULT_ENV_INCLUDE_TIMEOUT_SECS,
         env_include_cache: HashMap::new(),
         env_include_last_outcome: EnvIncludeOutcome::Disabled,
-        daemon: None,
-        daemon_catalog: None,
+        links: Default::default(),
+        daemon_catalogs: Default::default(),
         displaced: HashMap::new(),
-        disconnected: false,
+        disconnected: Default::default(),
         placement: micold_client::daemon::Placement::default(),
         sandbox: micold_client::features::sandbox::Sandbox::default(),
         composer: iced::widget::text_editor::Content::new(),
         sandbox_boot: None,
         sandbox_bring_up: None,
-        version_mismatch: None,
-        build_mismatch: None,
+        version_mismatch: Default::default(),
+        build_mismatch: Default::default(),
         next_req: 0,
         scrollback_inflight: HashMap::new(),
         pending_ops: HashMap::new(),
+        pending_daemon: HashMap::new(),
         probe: None,
         scene_ready: false,
         scene_frames: 0,
@@ -237,7 +239,7 @@ fn terminal_resized_remembers_the_pane_size_for_future_spawns() {
 fn displaying_a_session_states_the_pane_size_before_starting_it() {
     let (tx, mut rx) = iced::futures::channel::mpsc::unbounded();
     let mut app = base_app();
-    app.daemon = Some(micold_client::daemon::Outbox::new(tx));
+    app.connect_test_daemon(micold_client::daemon::Outbox::new(tx));
     app.core.workspace.active = Some(std::path::PathBuf::from("/tmp/project"));
     let id = SessionId::new();
     app.last_grid = Some((220, 60));
@@ -271,7 +273,7 @@ fn displaying_a_session_states_the_pane_size_before_starting_it() {
 fn displaying_a_session_before_the_pane_has_a_size_sends_only_the_start() {
     let (tx, mut rx) = iced::futures::channel::mpsc::unbounded();
     let mut app = base_app();
-    app.daemon = Some(micold_client::daemon::Outbox::new(tx));
+    app.connect_test_daemon(micold_client::daemon::Outbox::new(tx));
     app.core.workspace.active = Some(std::path::PathBuf::from("/tmp/project"));
     let id = SessionId::new();
     assert_eq!(app.last_grid, None);
@@ -304,7 +306,7 @@ fn the_ai_cli_restart_control_sends_a_restart_and_selecting_sends_a_start() {
         ),
     );
     let (tx, mut rx) = iced::futures::channel::mpsc::unbounded();
-    app.daemon = Some(micold_client::daemon::Outbox::new(tx));
+    app.connect_test_daemon(micold_client::daemon::Outbox::new(tx));
     app.core.session.active = Some(id);
 
     let _ = update_inner(
@@ -783,6 +785,12 @@ fn a_drained_reveal_records_where_it_sent_the_list() {
 /// No settings store: a test that saves must never write the developer's own `settings.json`
 /// (#368). A test that needs to read a save back gives itself a store in a temp dir.
 pub(crate) fn base_app() -> App {
+    let mut app = base_app_fields();
+    app.ensure_test_registry();
+    app
+}
+
+fn base_app_fields() -> App {
     App {
         caps: Capabilities::real()
             .without_settings()
@@ -830,20 +838,21 @@ pub(crate) fn base_app() -> App {
         env_include_timeout_secs: micold_core::settings::DEFAULT_ENV_INCLUDE_TIMEOUT_SECS,
         env_include_cache: HashMap::new(),
         env_include_last_outcome: EnvIncludeOutcome::Disabled,
-        daemon: None,
-        daemon_catalog: None,
+        links: Default::default(),
+        daemon_catalogs: Default::default(),
         displaced: HashMap::new(),
-        disconnected: false,
+        disconnected: Default::default(),
         placement: micold_client::daemon::Placement::default(),
         sandbox: micold_client::features::sandbox::Sandbox::default(),
         composer: iced::widget::text_editor::Content::new(),
         sandbox_boot: None,
         sandbox_bring_up: None,
-        version_mismatch: None,
-        build_mismatch: None,
+        version_mismatch: Default::default(),
+        build_mismatch: Default::default(),
         next_req: 0,
         scrollback_inflight: HashMap::new(),
         pending_ops: HashMap::new(),
+        pending_daemon: HashMap::new(),
         probe: None,
         scene_ready: false,
         scene_frames: 0,
@@ -1054,7 +1063,7 @@ fn app_at_the_tail() -> (
 ) {
     let (tx, rx) = iced::futures::channel::mpsc::unbounded();
     let mut app = base_app();
-    app.daemon = Some(micold_client::daemon::Outbox::new(tx));
+    app.connect_test_daemon(micold_client::daemon::Outbox::new(tx));
     let id = SessionId::new();
     app.core.session.active = Some(id);
     app.grids.insert(
@@ -1187,7 +1196,7 @@ fn a_disconnect_releases_the_ranges_that_will_never_be_answered() {
         "the gesture must have left a request outstanding for this to be about anything"
     );
 
-    let _ = shell::daemon_sync::on_disconnected(&mut app);
+    let _ = shell::daemon_sync::on_disconnected(&mut app, micold_core::daemons::DaemonId(1));
 
     assert!(
         app.scrollback_inflight.is_empty(),
@@ -1205,7 +1214,7 @@ fn app_creating_a_worktree() -> (
 ) {
     let (tx, rx) = iced::futures::channel::mpsc::unbounded();
     let mut app = base_app();
-    app.daemon = Some(micold_client::daemon::Outbox::new(tx));
+    app.connect_test_daemon(micold_client::daemon::Outbox::new(tx));
     let project = PathBuf::from("/repo/demo");
     app.core.workspace.active = Some(project.clone());
     app.core.update(Message::WorktreeForm(FormMsg::Opened));
@@ -1245,7 +1254,7 @@ fn a_create_whose_connection_drops_stops_claiming_to_be_running() {
         "the fixture must have a create in flight for this to be about anything"
     );
 
-    let _ = shell::daemon_sync::on_disconnected(&mut app);
+    let _ = shell::daemon_sync::on_disconnected(&mut app, micold_core::daemons::DaemonId(1));
 
     assert_eq!(
         form_status(&app),
@@ -1272,7 +1281,7 @@ fn a_create_whose_connection_drops_stops_claiming_to_be_running() {
 #[test]
 fn the_unknown_outcome_survives_the_list_refresh_it_points_at() {
     let (mut app, _rx) = app_creating_a_worktree();
-    let _ = shell::daemon_sync::on_disconnected(&mut app);
+    let _ = shell::daemon_sync::on_disconnected(&mut app, micold_core::daemons::DaemonId(1));
     assert!(
         form_notice(&app).is_some(),
         "precondition: the notice is up"
@@ -1300,12 +1309,12 @@ fn the_unknown_outcome_survives_the_list_refresh_it_points_at() {
 fn a_disconnect_with_no_create_in_flight_leaves_the_form_alone() {
     let (tx, _rx) = iced::futures::channel::mpsc::unbounded();
     let mut app = base_app();
-    app.daemon = Some(micold_client::daemon::Outbox::new(tx));
+    app.connect_test_daemon(micold_client::daemon::Outbox::new(tx));
     app.core.update(Message::WorktreeForm(FormMsg::Opened));
     app.core
         .update(Message::WorktreeForm(FormMsg::NameChanged("probe".into())));
 
-    let _ = shell::daemon_sync::on_disconnected(&mut app);
+    let _ = shell::daemon_sync::on_disconnected(&mut app, micold_core::daemons::DaemonId(1));
 
     assert_eq!(
         form_status(&app),
@@ -1335,7 +1344,7 @@ fn a_create_with_no_form_open_is_still_reported() {
         "nothing said yet"
     );
 
-    let _ = shell::daemon_sync::on_disconnected(&mut app);
+    let _ = shell::daemon_sync::on_disconnected(&mut app, micold_core::daemons::DaemonId(1));
 
     let said = app
         .core
@@ -1408,6 +1417,7 @@ fn a_create_failing_after_cancel_reaches_the_user_as_a_notification() {
 
     let _ = shell::daemon_sync::on_daemon_event(
         &mut app,
+        micold_core::daemons::DaemonId(1),
         DaemonMsg::OperationError {
             req,
             kind: micold_core::protocol::messages::ErrorKind::GitFailed,
@@ -1445,6 +1455,7 @@ fn a_success_after_cancel_is_announced_even_with_no_project_open() {
 
     let _ = shell::daemon_sync::on_daemon_event(
         &mut app,
+        micold_core::daemons::DaemonId(1),
         DaemonMsg::OperationOk {
             req,
             result: micold_core::protocol::messages::OperationResult::WorktreeCreated {
@@ -1675,7 +1686,7 @@ fn a_refusal_by_this_windows_own_dead_connection_is_reclaimed_not_offered() {
     let project = PathBuf::from("/repo/demo");
     let (tx, mut rx) = iced::futures::channel::mpsc::unbounded();
     let mut app = app_on_project(&project);
-    app.daemon = Some(micold_client::daemon::Outbox::new(tx));
+    app.connect_test_daemon(micold_client::daemon::Outbox::new(tx));
 
     feed(
         &mut app,
@@ -1714,7 +1725,7 @@ fn a_refusal_by_another_window_is_still_offered_never_forced() {
     let project = PathBuf::from("/repo/demo");
     let (tx, mut rx) = iced::futures::channel::mpsc::unbounded();
     let mut app = app_on_project(&project);
-    app.daemon = Some(micold_client::daemon::Outbox::new(tx));
+    app.connect_test_daemon(micold_client::daemon::Outbox::new(tx));
 
     feed(
         &mut app,
@@ -1864,7 +1875,7 @@ fn the_test_app_cannot_reach_the_real_settings_file() {
 fn settings_saved_sends_settings_set_to_a_connected_daemon() {
     let (tx, mut rx) = iced::futures::channel::mpsc::unbounded();
     let mut app = base_app();
-    app.daemon = Some(micold_client::daemon::Outbox::new(tx));
+    app.connect_test_daemon(micold_client::daemon::Outbox::new(tx));
     app.core.settings.settings_draft = Some(SettingsDraft {
         terminal: TerminalDraft {
             scrollback_lines: "20000".into(),
@@ -1915,7 +1926,7 @@ fn settings_saved_sends_settings_set_to_a_connected_daemon() {
 fn turning_the_binding_toggle_off_and_saving_tells_the_service() {
     let (tx, mut rx) = iced::futures::channel::mpsc::unbounded();
     let mut app = base_app();
-    app.daemon = Some(micold_client::daemon::Outbox::new(tx));
+    app.connect_test_daemon(micold_client::daemon::Outbox::new(tx));
     feed(
         &mut app,
         DaemonMsg::SettingsChanged {
@@ -2018,7 +2029,7 @@ fn the_desktop_notifications_message_changes_the_draft() {
 fn turning_desktop_notifications_off_and_saving_tells_the_service() {
     let (tx, mut rx) = iced::futures::channel::mpsc::unbounded();
     let mut app = base_app();
-    app.daemon = Some(micold_client::daemon::Outbox::new(tx));
+    app.connect_test_daemon(micold_client::daemon::Outbox::new(tx));
     feed(
         &mut app,
         DaemonMsg::SettingsChanged {
@@ -2053,7 +2064,7 @@ fn turning_desktop_notifications_off_and_saving_tells_the_service() {
 fn saving_without_touching_desktop_notifications_does_not_name_them() {
     let (tx, mut rx) = iced::futures::channel::mpsc::unbounded();
     let mut app = base_app();
-    app.daemon = Some(micold_client::daemon::Outbox::new(tx));
+    app.connect_test_daemon(micold_client::daemon::Outbox::new(tx));
     feed(
         &mut app,
         DaemonMsg::SettingsChanged {
@@ -2228,7 +2239,7 @@ fn a_stale_settings_page_saves_only_what_its_user_changed() {
     ));
     let mut app = base_app();
     app.caps = app.caps.clone().with_settings(store.clone());
-    app.daemon = Some(micold_client::daemon::Outbox::new(tx));
+    app.connect_test_daemon(micold_client::daemon::Outbox::new(tx));
     feed(
         &mut app,
         DaemonMsg::SettingsChanged {
@@ -2317,7 +2328,7 @@ fn pr_status_told(
 fn turning_the_pr_status_switch_on_and_saving_tells_the_service() {
     let (tx, mut rx) = iced::futures::channel::mpsc::unbounded();
     let mut app = base_app();
-    app.daemon = Some(micold_client::daemon::Outbox::new(tx));
+    app.connect_test_daemon(micold_client::daemon::Outbox::new(tx));
     feed(
         &mut app,
         DaemonMsg::SettingsChanged {
@@ -2340,7 +2351,7 @@ fn turning_the_pr_status_switch_on_and_saving_tells_the_service() {
 fn a_save_that_leaves_the_pr_status_switch_alone_does_not_send_it() {
     let (tx, mut rx) = iced::futures::channel::mpsc::unbounded();
     let mut app = base_app();
-    app.daemon = Some(micold_client::daemon::Outbox::new(tx));
+    app.connect_test_daemon(micold_client::daemon::Outbox::new(tx));
     feed(
         &mut app,
         DaemonMsg::SettingsChanged {
@@ -2359,7 +2370,7 @@ fn a_save_that_leaves_the_pr_status_switch_alone_does_not_send_it() {
 fn turning_the_pr_status_switch_off_and_saving_tells_the_service() {
     let (tx, mut rx) = iced::futures::channel::mpsc::unbounded();
     let mut app = base_app();
-    app.daemon = Some(micold_client::daemon::Outbox::new(tx));
+    app.connect_test_daemon(micold_client::daemon::Outbox::new(tx));
     feed(
         &mut app,
         DaemonMsg::SettingsChanged {
@@ -2426,7 +2437,7 @@ fn choosing_a_cross_session_value_and_saving_tells_the_service() {
     ] {
         let (tx, mut rx) = iced::futures::channel::mpsc::unbounded();
         let mut app = base_app();
-        app.daemon = Some(micold_client::daemon::Outbox::new(tx));
+        app.connect_test_daemon(micold_client::daemon::Outbox::new(tx));
         // The window holds another value, so choosing this one is a change to save.
         app.core.session.cross_session_access = if chosen == CrossSessionAccess::Off {
             CrossSessionAccess::Auto
@@ -2499,7 +2510,7 @@ fn the_cross_session_select_opens_with_the_value_the_service_reported() {
 #[test]
 fn settings_saved_is_a_silent_no_op_toward_the_daemon_when_disconnected() {
     let mut app = base_app();
-    assert!(app.daemon.is_none());
+    assert!(app.active_outbox().is_none());
     app.core.settings.settings_draft = Some(SettingsDraft {
         terminal: TerminalDraft {
             scrollback_lines: "20000".into(),
@@ -2576,7 +2587,7 @@ fn app_saving_a_placement(in_force: PlacementKind, chosen: PlacementKind) -> App
 fn saving_a_changed_placement_applies_nothing_until_it_is_confirmed() {
     let (tx, mut rx) = iced::futures::channel::mpsc::unbounded();
     let mut app = app_saving_a_placement(PlacementKind::HostProcess, PlacementKind::LocalSandbox);
-    app.daemon = Some(micold_client::daemon::Outbox::new(tx));
+    app.connect_test_daemon(micold_client::daemon::Outbox::new(tx));
 
     let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Saved));
 
@@ -2842,20 +2853,21 @@ fn connection_status_orders_mismatch_over_displaced_over_disconnected() {
         env_include_timeout_secs: micold_core::settings::DEFAULT_ENV_INCLUDE_TIMEOUT_SECS,
         env_include_cache: HashMap::new(),
         env_include_last_outcome: EnvIncludeOutcome::Disabled,
-        daemon: None,
-        daemon_catalog: None,
+        links: Default::default(),
+        daemon_catalogs: Default::default(),
         displaced: HashMap::new(),
-        disconnected: false,
+        disconnected: Default::default(),
         placement: micold_client::daemon::Placement::default(),
         sandbox: micold_client::features::sandbox::Sandbox::default(),
         composer: iced::widget::text_editor::Content::new(),
         sandbox_boot: None,
         sandbox_bring_up: None,
-        version_mismatch: None,
-        build_mismatch: None,
+        version_mismatch: Default::default(),
+        build_mismatch: Default::default(),
         next_req: 0,
         scrollback_inflight: HashMap::new(),
         pending_ops: HashMap::new(),
+        pending_daemon: HashMap::new(),
         probe: None,
         scene_ready: false,
         scene_frames: 0,
@@ -2863,9 +2875,10 @@ fn connection_status_orders_mismatch_over_displaced_over_disconnected() {
         scene_ripple_frames: std::cell::Cell::new(0),
     };
 
+    app.ensure_test_registry();
     assert_eq!(connection_status(&app), ConnectionStatus::Connected);
 
-    app.disconnected = true;
+    app.disconnected.insert(micold_core::daemons::DaemonId(1));
     assert_eq!(connection_status(&app), ConnectionStatus::Disconnected);
 
     let project = PathBuf::from("/repo/demo");
@@ -2882,7 +2895,10 @@ fn connection_status_orders_mismatch_over_displaced_over_disconnected() {
         "a takeover must win over a plain disconnect"
     );
 
-    app.build_mismatch = Some(("client-1".into(), "daemon-0".into()));
+    app.build_mismatch.insert(
+        micold_core::daemons::DaemonId(1),
+        ("client-1".into(), "daemon-0".into()),
+    );
     assert_eq!(
         connection_status(&app),
         ConnectionStatus::BuildMismatch {
@@ -2892,7 +2908,8 @@ fn connection_status_orders_mismatch_over_displaced_over_disconnected() {
         "a same-contract build mismatch must win over a takeover"
     );
 
-    app.version_mismatch = Some((2, 1, "daemon-0".into()));
+    app.version_mismatch
+        .insert(micold_core::daemons::DaemonId(1), (2, 1, "daemon-0".into()));
     assert_eq!(
         connection_status(&app),
         ConnectionStatus::VersionMismatch {
@@ -4939,7 +4956,7 @@ mod script_path_report {
         let resolver = Arc::new(FakeEnvIncludeResolver::default());
         app.caps = app.caps.clone().with_env_include(resolver.clone());
         let (tx, mut rx) = iced::futures::channel::mpsc::unbounded();
-        app.daemon = Some(micold_client::daemon::Outbox::new(tx));
+        app.connect_test_daemon(micold_client::daemon::Outbox::new(tx));
         app.core.workspace.active = Some(std::env::temp_dir());
         let id = SessionId::new();
 
@@ -5192,7 +5209,7 @@ mod script_path_report {
     ) {
         let (mut app, _probe, store) = saving_app(path, store);
         let (tx, rx) = iced::futures::channel::mpsc::unbounded();
-        app.daemon = Some(micold_client::daemon::Outbox::new(tx));
+        app.connect_test_daemon(micold_client::daemon::Outbox::new(tx));
         (app, store, rx)
     }
 
@@ -5649,6 +5666,7 @@ mod script_path_report {
         let (tx, _rx) = iced::futures::channel::mpsc::unbounded();
         let _ = crate::shell::daemon_sync::on_connected(
             &mut app,
+            micold_core::daemons::DaemonId(1),
             micold_client::daemon::Outbox::new(tx),
             micold_core::protocol::messages::CatalogSnapshot::default(),
             settings_saved_elsewhere(&new_path),
@@ -5675,6 +5693,7 @@ mod script_path_report {
         let (tx, _rx) = iced::futures::channel::mpsc::unbounded();
         let _ = crate::shell::daemon_sync::on_connected(
             &mut app,
+            micold_core::daemons::DaemonId(1),
             micold_client::daemon::Outbox::new(tx),
             micold_core::protocol::messages::CatalogSnapshot::default(),
             settings_saved_elsewhere(&stored_path()),
@@ -6034,6 +6053,7 @@ mod script_path_report {
 
         let work = crate::shell::daemon_sync::on_daemon_event(
             &mut app,
+            micold_core::daemons::DaemonId(1),
             DaemonMsg::SettingsChanged {
                 settings: settings_saved_elsewhere(&new_path),
             },
@@ -6168,7 +6188,7 @@ mod issue_source {
         };
         let mut app = base_app();
         app.caps = app.caps.clone().with_issue_tooling(tooling);
-        app.daemon = Some(micold_client::daemon::Outbox::new(tx));
+        app.connect_test_daemon(micold_client::daemon::Outbox::new(tx));
         app.core.workspace.active = Some(PathBuf::from(PROJECT));
         IssueRig {
             app,
@@ -6223,6 +6243,7 @@ mod issue_source {
     fn answer_remotes(app: &mut App, req: u64, remotes: Vec<GitRemote>) {
         let work = shell::daemon_sync::on_daemon_event(
             app,
+            micold_core::daemons::DaemonId(1),
             DaemonMsg::OperationOk {
                 req,
                 result: OperationResult::RemoteList { remotes },
@@ -6291,6 +6312,7 @@ mod issue_source {
         let (req, _) = remote_lists_sent(&mut rig.rx)[0];
         let work = shell::daemon_sync::on_daemon_event(
             &mut rig.app,
+            micold_core::daemons::DaemonId(1),
             DaemonMsg::OperationError {
                 req,
                 kind: ErrorKind::GitFailed,
@@ -6329,7 +6351,7 @@ mod issue_source {
             "Couldn't read this repository's remotes: not connected to the session service".into(),
         );
         let mut rig = issue_rig(Some(FAKE_GH), FakeIssueSource::new());
-        rig.app.daemon = None;
+        rig.app.disconnect_test_daemon();
         send(&mut rig.app, FormMsg::Opened);
         assert_eq!(form(&rig.app).github, unreachable);
         assert!(
@@ -6339,7 +6361,8 @@ mod issue_source {
 
         let mut rig = issue_rig(Some(FAKE_GH), FakeIssueSource::new());
         send(&mut rig.app, FormMsg::Opened);
-        let work = shell::daemon_sync::on_disconnected(&mut rig.app);
+        let work =
+            shell::daemon_sync::on_disconnected(&mut rig.app, micold_core::daemons::DaemonId(1));
         settle(&mut rig.app, work);
         assert_eq!(form(&rig.app).github, unreachable);
         assert!(
@@ -6744,6 +6767,7 @@ mod issue_source {
         let branch = "fix/42_crash-when-opening-empty-project".to_string();
         let work = shell::daemon_sync::on_daemon_event(
             &mut rig.app,
+            micold_core::daemons::DaemonId(1),
             DaemonMsg::OperationOk {
                 req,
                 result: OperationResult::BranchPreflight {
@@ -8413,7 +8437,7 @@ mod pr_status {
         };
         let mut app = base_app();
         app.caps = app.caps.clone().with_issue_tooling(tooling);
-        app.daemon = Some(micold_client::daemon::Outbox::new(tx));
+        app.connect_test_daemon(micold_client::daemon::Outbox::new(tx));
         app.core.workspace.active = Some(PathBuf::from(DEMO));
         let _ = shell::pr_status::enabled_changed(&mut app, true);
         (app, rx)
@@ -8476,7 +8500,7 @@ mod pr_status {
 
     /// A daemon message whose follow-up is dropped: for a reading that is the 10-second timer.
     fn daemon(app: &mut App, event: DaemonMsg) {
-        let _ = shell::daemon_sync::on_daemon_event(app, event);
+        let _ = shell::daemon_sync::on_daemon_event(app, micold_core::daemons::DaemonId(1), event);
     }
 
     fn attached(app: &mut App) {
@@ -8516,6 +8540,7 @@ mod pr_status {
     fn answer_remotes(app: &mut App, req: u64, remotes: Vec<GitRemote>) {
         let work = shell::daemon_sync::on_daemon_event(
             app,
+            micold_core::daemons::DaemonId(1),
             DaemonMsg::OperationOk {
                 req,
                 result: OperationResult::RemoteList { remotes },
@@ -8856,6 +8881,7 @@ mod pr_status {
 
         let work = shell::daemon_sync::on_daemon_event(
             &mut app,
+            micold_core::daemons::DaemonId(1),
             DaemonMsg::OperationOk {
                 req,
                 result: OperationResult::RemoteList {
@@ -9056,6 +9082,7 @@ mod pr_status {
         let req = read_again(&mut rig);
         let work = shell::daemon_sync::on_daemon_event(
             &mut rig.app,
+            micold_core::daemons::DaemonId(1),
             DaemonMsg::OperationError {
                 req,
                 kind: micold_core::protocol::messages::ErrorKind::Internal,
@@ -9145,7 +9172,8 @@ mod pr_status {
     fn pr_status_a_disconnect_clears_and_reads_nothing() {
         let mut rig = holding();
         let _ = read_again(&mut rig);
-        let _ = shell::daemon_sync::on_disconnected(&mut rig.app);
+        let _ =
+            shell::daemon_sync::on_disconnected(&mut rig.app, micold_core::daemons::DaemonId(1));
         assert!(rig.app.core.pr_status.statuses.is_empty());
         assert_eq!(rig.app.core.pr_status.phase, Phase::Idle);
         assert!(!rig.app.core.pr_status.held);
@@ -9322,6 +9350,7 @@ mod pr_status {
     fn read_to_source_end(rig: &mut Rig, req: u64) {
         let work = shell::daemon_sync::on_daemon_event(
             &mut rig.app,
+            micold_core::daemons::DaemonId(1),
             DaemonMsg::OperationOk {
                 req,
                 result: OperationResult::RemoteList {
@@ -9371,6 +9400,7 @@ mod pr_status {
     fn answer_check(rig: &mut Rig, req: u64, answers: Vec<BranchContainment>) {
         let work = shell::daemon_sync::on_daemon_event(
             &mut rig.app,
+            micold_core::daemons::DaemonId(1),
             DaemonMsg::OperationOk {
                 req,
                 result: OperationResult::MergedBranchCheck { answers },
@@ -9527,6 +9557,7 @@ mod pr_status {
         let (req, _) = check.expect("asked");
         let work = shell::daemon_sync::on_daemon_event(
             &mut rig.app,
+            micold_core::daemons::DaemonId(1),
             DaemonMsg::OperationError {
                 req,
                 kind: ErrorKind::InvalidInput,
@@ -9578,7 +9609,7 @@ fn toggling_a_kind_changes_only_it_and_saving_sends_the_whole_value() {
     use micold_core::attention::{NotificationKind, NotificationKinds};
     let (tx, mut rx) = iced::futures::channel::mpsc::unbounded();
     let mut app = base_app();
-    app.daemon = Some(micold_client::daemon::Outbox::new(tx));
+    app.connect_test_daemon(micold_client::daemon::Outbox::new(tx));
     feed(
         &mut app,
         DaemonMsg::SettingsChanged {
@@ -9622,7 +9653,7 @@ fn toggling_a_kind_changes_only_it_and_saving_sends_the_whole_value() {
 fn the_threshold_is_edited_as_text_and_saved_as_a_number() {
     let (tx, mut rx) = iced::futures::channel::mpsc::unbounded();
     let mut app = base_app();
-    app.daemon = Some(micold_client::daemon::Outbox::new(tx));
+    app.connect_test_daemon(micold_client::daemon::Outbox::new(tx));
     feed(
         &mut app,
         DaemonMsg::SettingsChanged {
@@ -9777,6 +9808,7 @@ mod attention_glue {
 
         let work = crate::shell::daemon_sync::on_daemon_event(
             &mut app,
+            micold_core::daemons::DaemonId(1),
             DaemonMsg::AttentionGranted {
                 session,
                 seq: 1,
@@ -9814,6 +9846,7 @@ mod attention_glue {
 
         let work = crate::shell::daemon_sync::on_daemon_event(
             &mut app,
+            micold_core::daemons::DaemonId(1),
             DaemonMsg::AttentionGranted {
                 session,
                 seq: 1,
@@ -9865,6 +9898,7 @@ mod attention_glue {
 
         let work = crate::shell::daemon_sync::on_daemon_event(
             &mut app,
+            micold_core::daemons::DaemonId(1),
             DaemonMsg::RevealSession {
                 project: folder.path().to_path_buf(),
                 session,
@@ -10195,7 +10229,7 @@ mod panes {
     ) {
         let (tx, rx) = iced::futures::channel::mpsc::unbounded();
         let mut app = base_app();
-        app.daemon = Some(micold_client::daemon::Outbox::new(tx));
+        app.connect_test_daemon(micold_client::daemon::Outbox::new(tx));
         let project = PathBuf::from("/repo/panes");
         app.core.workspace.projects.push(Project::new(
             project.clone(),

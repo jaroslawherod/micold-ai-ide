@@ -88,6 +88,11 @@ impl DaemonLinks {
         }
     }
 
+    /// Every daemon's state, as the connection subscription reads it.
+    pub fn states(&self) -> &DaemonStates {
+        &self.states
+    }
+
     /// `id`'s state, when tracked.
     pub fn state(&self, id: DaemonId) -> Option<&DaemonState> {
         self.states.state(id)
@@ -202,7 +207,7 @@ pub fn refusal_event(reason: &RefusalReason) -> Option<DaemonEvent> {
 }
 
 /// The version-mismatch event for the two version strings.
-pub(crate) fn refused(client: String, daemon: String) -> DaemonEvent {
+pub fn refused(client: String, daemon: String) -> DaemonEvent {
     DaemonEvent::Refused { client, daemon }
 }
 

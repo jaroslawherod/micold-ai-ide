@@ -72,7 +72,7 @@ pub fn on_form_opened(app: &mut App) -> Task<Message> {
             ))));
         return Task::none();
     };
-    if app.daemon.is_none() {
+    if app.active_outbox().is_none() {
         app.core
             .update(Message::WorktreeForm(FormMsg::RemotesListed(Err(
                 NOT_CONNECTED.to_string(),

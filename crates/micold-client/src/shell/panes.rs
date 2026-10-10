@@ -82,7 +82,7 @@ pub fn sync(app: &mut App) {
     let dirty = std::mem::take(&mut app.viewed_dirty);
     let changed = now != previous && (multi || previous.len() > 1);
     if changed || (dirty && multi) {
-        if let Some(d) = &app.daemon {
+        if let Some(d) = app.active_outbox() {
             d.send(ClientMsg::SetViewedTerminals {
                 project: project.clone(),
                 terminals: now.clone(),
@@ -144,7 +144,7 @@ fn save(app: &mut App) {
         None if layout.len() < 2 => return,
         _ => {}
     }
-    let Some(d) = &app.daemon else {
+    let Some(d) = app.active_outbox() else {
         return;
     };
     d.send(ClientMsg::SetPaneLayout {
@@ -178,7 +178,7 @@ fn send_pane_sizes(app: &mut App) {
         .filter(|(t, size)| app.pane_sent.get(t) != Some(size))
         .collect();
     for (t, (cols, rows)) in due {
-        if let Some(d) = &app.daemon {
+        if let Some(d) = app.active_outbox() {
             d.send(ClientMsg::SessionResize {
                 session: t.session,
                 process: Some(t.process),

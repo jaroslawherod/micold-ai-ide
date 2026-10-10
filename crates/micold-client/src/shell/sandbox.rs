@@ -916,9 +916,14 @@ pub fn update(app: &mut crate::App, msg: SandboxMsg) -> Task<Message> {
         // against the last catalog. Nothing restarts (R9).
         Msg::Replaced(found) => {
             let (id, locations) = *found;
+            let legacy = app
+                .core
+                .settings
+                .legacy_default_daemon
+                .unwrap_or(micold_core::daemons::DaemonId(1));
             let registered: Option<Vec<PathBuf>> = app
-                .daemon_catalog
-                .as_ref()
+                .daemon_catalogs
+                .get(&legacy)
                 .map(|c| c.projects.iter().map(|p| p.path.clone()).collect());
             app.sandbox.replaced(id, locations, registered.as_deref());
             iced::Task::none()

@@ -137,7 +137,7 @@ mod tests {
     fn app_with_terminal(bracketed: bool) -> (crate::App, TerminalRef, Sent) {
         let (tx, rx) = iced::futures::channel::mpsc::unbounded();
         let mut app = crate::tests::base_app();
-        app.daemon = Some(micold_client::daemon::Outbox::new(tx));
+        app.connect_test_daemon(micold_client::daemon::Outbox::new(tx));
         let t = TerminalRef {
             session: SessionId::new(),
             process: SessionProcess::Primary,

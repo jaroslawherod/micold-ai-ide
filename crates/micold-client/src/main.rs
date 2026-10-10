@@ -41,7 +41,7 @@ use micold_core::session::{SessionId, SessionLocation, ShellInstanceId, Terminal
 
 use micold_core::theme::observe_system_scheme;
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -142,13 +142,13 @@ struct App {
     /// a single "last attempt" status in Settings, independent of the per-directory `vars` cache
     /// used for merging into a session's own spawn call site.
     env_include_last_outcome: EnvIncludeOutcome,
-    /// Handle for sending `ClientMsg`s to the daemon while connected (feature 010). `None` before
-    /// the first connect and after a disconnect. The connection itself lives in the
-    /// [`micold_client::daemon::connection`] subscription; this is only the send side.
-    daemon: Option<micold_client::daemon::Outbox>,
-    /// The last catalog snapshot the daemon sent (welcome or `CatalogChanged`). Not yet rendered —
-    /// the sidebar/session-list retarget onto it lands with the render switch (T042).
-    daemon_catalog: Option<micold_core::protocol::messages::CatalogSnapshot>,
+    /// What this window knows of each daemon's connection (feature 491): its state, and while
+    /// connected the handle that sends to it. One daemon failing changes no other's entry. Ops are
+    /// routed by binding through [`shell::routing`]; nothing falls back to another daemon.
+    links: micold_client::links::DaemonLinks,
+    /// The last catalog snapshot each daemon sent (welcome or `CatalogChanged`), by daemon.
+    daemon_catalogs:
+        BTreeMap<micold_core::daemons::DaemonId, micold_core::protocol::messages::CatalogSnapshot>,
     /// Projects this window may not write to because another window holds them, keyed by project
     /// path → who holds it and which of the two events said so (US5, FR-023/FR-024): a takeover
     /// this window lost, or an attach it was refused. Read-only here (input suppressed, a banner
@@ -159,10 +159,9 @@ struct App {
     /// banner would otherwise have to describe one event in the words of the other, which is what
     /// it did (`010` BUG-023).
     displaced: HashMap<PathBuf, micold_client::features::connection::Hold>,
-    /// Whether the daemon connection is currently down (between a `DaemonDisconnected` and the next
-    /// `DaemonConnected`). Drives the stale-content banner (FR-027). `daemon.is_none()` also implies
-    /// this, but the flag is explicit for clarity at the render site.
-    disconnected: bool,
+    /// The daemons whose connection is currently down (between a disconnect and the next
+    /// connect). Drives the stale-content banner (FR-027) for the active worktree's daemon.
+    disconnected: BTreeSet<micold_core::daemons::DaemonId>,
     /// Where the daemon runs, resolved once at boot from the settings the shell loaded.
     ///
     /// Held here rather than read by the connection subscription, because the shell is the single
@@ -184,23 +183,22 @@ struct App {
     /// still waiting its delay (FR-036a), and one under way creates no container (#369). Finished ones
     /// are left here; cancelling them does nothing.
     sandbox_bring_up: Option<shell::sandbox::InFlight>,
-    /// A pending contract-version mismatch (US6, FR-021/022): `(client_version, daemon_version,
-    /// daemon_build)`. `Some` while the running daemon's contract differs from ours — drives the
-    /// version-mismatch banner and its "restart service" action. Cleared on a successful connect.
-    version_mismatch: Option<(u32, u32, String)>,
-    /// A pending same-contract build mismatch (US6, FR-022a, BUG-002): `(client_build,
-    /// daemon_build)`. `Some` while the running daemon's package version differs from ours despite a
-    /// matching wire contract — drives the build-mismatch banner and its "restart service" action.
-    /// Cleared on a successful connect. Mutually exclusive with `version_mismatch` in practice (the
-    /// handshake reports at most one refusal reason per attempt), but kept as its own field rather
-    /// than folded into one enum so each clears independently of the other's precedence in
-    /// `connection_status`.
-    build_mismatch: Option<(String, String)>,
+    /// Pending contract-version mismatches by daemon (US6, FR-021/022): `(client_version,
+    /// daemon_version, daemon_build)`. Present while that daemon's contract differs from ours;
+    /// drives the version-mismatch banner and its "restart service" action. Cleared on that
+    /// daemon's successful connect.
+    version_mismatch: BTreeMap<micold_core::daemons::DaemonId, (u32, u32, String)>,
+    /// Pending same-contract build mismatches by daemon (US6, FR-022a, BUG-002): `(client_build,
+    /// daemon_build)`. Cleared on that daemon's successful connect.
+    build_mismatch: BTreeMap<micold_core::daemons::DaemonId, (String, String)>,
     /// Correlation-id counter for the client's mutating RPCs (FR-009).
     next_req: u64,
     /// In-flight mutating RPCs keyed by `req` (T055). Lets a reply be matched, a duplicate
     /// submission suppressed, and an in-flight op resolved as *unknown* if the connection drops.
     pending_ops: HashMap<u64, PendingOp>,
+    /// The daemon each in-flight request was sent to, by `req`: a disconnect resolves only the
+    /// requests of the daemon that dropped (feature 491, FR-007).
+    pending_daemon: HashMap<u64, micold_core::daemons::DaemonId>,
     /// Scrollback ranges asked for and not yet answered, keyed by `req` (`010` BUG-021).
     ///
     /// A scroll gesture computes the same un-cached run on every wheel notch, because nothing it
@@ -353,7 +351,7 @@ fn compose_scene(app: &mut App) -> Task<Message> {
             .any(|op| matches!(op, PendingOp::CreateSession));
         // Guarded, unlike the other two: a session create is not idempotent, and an unguarded one
         // here would start a fresh session on every frame.
-        if !creating && app.daemon.is_some() {
+        if !creating && app.active_outbox().is_some() {
             steps.push(Task::done(Message::Session(SessionMsg::StartRequested {
                 location: SessionLocation::Default,
                 provider: app.core.session.provider_for_start(None),
@@ -409,8 +407,10 @@ impl Drop for App {
     /// On shutdown, disconnect cleanly (`Goodbye`) — the daemon keeps every session running so it
     /// survives the UI closing (FR-001). The client owns no process to kill.
     fn drop(&mut self) {
-        if let Some(d) = &self.daemon {
-            d.send(ClientMsg::Goodbye);
+        for id in self.links.states().ids() {
+            if let Some(d) = self.links.outbox(id) {
+                d.send(ClientMsg::Goodbye);
+            }
         }
     }
 }
@@ -470,6 +470,9 @@ fn update(app: &mut App, message: Message) -> Task<Message> {
     let dialog_before = snapshot_before.as_ref().map(Closing::id);
 
     let task = update_inner(app, message);
+    // A daemon added to or removed from the registry by this message is tracked (or forgotten) in
+    // the same step, so the subscription that follows dials exactly the registry (feature 491).
+    app.sync_links();
 
     // `006` BUG-007: whichever message changed the resolved scheme — a desktop switch, a saved
     // preference — the daemon has to hear of it, and only here sees every message.
@@ -654,7 +657,15 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         // Twelve arms until T011. All twelve were effects, so all twelve are `shell/connection.rs`
         // now (contract M2) and the routing decision is stated once, next to them.
         // One connection until the shell holds one per daemon: the id is not yet consulted.
-        Message::Connection(msg) | Message::Daemon(_, msg) => shell::connection::update(app, msg),
+        Message::Connection(msg) => {
+            let id = app
+                .core
+                .settings
+                .legacy_default_daemon
+                .unwrap_or(micold_core::daemons::DaemonId(1));
+            shell::connection::update(app, id, msg)
+        }
+        Message::Daemon(id, msg) => shell::connection::update(app, id, msg),
         // ---- Feature 027: the session service inside a container ----
         // Six arms until T011, and the same story as the twelve above: every one of them was an
         // effect or a write to the binary-owned `app.sandbox`, so all six are
@@ -1098,13 +1109,16 @@ fn connection_status(app: &App) -> micold_client::features::connection::Connecti
         .as_ref()
         .and_then(|project| app.displaced.get(project));
 
+    // The banner is the active worktree's daemon's alone: another daemon being down or in
+    // mismatch changes nothing here (feature 491, FR-007, T028).
+    let daemon = app.active_daemon();
     micold_client::features::connection::connection_status(
-        app.version_mismatch.as_ref(),
-        app.build_mismatch.as_ref(),
+        daemon.and_then(|id| app.version_mismatch.get(&id)),
+        daemon.and_then(|id| app.build_mismatch.get(&id)),
         hold,
         // Not listening *yet* is not disconnected: the sandbox view shows the stage, and a banner
         // saying the service is gone would call a working bring-up broken (FR-036b).
-        app.disconnected && !app.sandbox.is_coming_up(),
+        daemon.is_some_and(|id| app.disconnected.contains(&id)) && !app.sandbox.is_coming_up(),
     )
 }
 
@@ -1150,7 +1164,7 @@ fn scroll_view(app: &mut App, f: impl FnOnce(usize, usize) -> usize) {
     if let Some(range) = needed {
         let req = app.next_req;
         app.next_req += 1;
-        if let Some(d) = &app.daemon {
+        if let Some(d) = app.active_outbox() {
             d.send(ClientMsg::ScrollbackRequest {
                 session: id,
                 req,

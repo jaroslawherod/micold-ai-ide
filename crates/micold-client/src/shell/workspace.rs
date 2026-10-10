@@ -244,7 +244,7 @@ pub(crate) fn on_known_project_reopened(app: &mut App, path: PathBuf) -> Task<Me
         // whichever project was last opened by browsing (002 BUG-003, FR-010/FR-011). Without a
         // connection there is nobody to tell; the switch itself stands, as it always has.
         switch_daemon_attachment(app, previous, &path);
-        if app.daemon.is_some() {
+        if app.active_outbox().is_some() {
             let activated = path.clone();
             send_op(app, PendingOp::ProjectActivate, move |req| {
                 ClientMsg::ProjectActivate {
@@ -291,7 +291,7 @@ mod tests {
     ) {
         let (tx, rx) = iced::futures::channel::mpsc::unbounded();
         let mut app = base_app();
-        app.daemon = Some(micold_client::daemon::Outbox::new(tx));
+        app.connect_test_daemon(micold_client::daemon::Outbox::new(tx));
         app.caps = std::mem::replace(
             &mut app.caps,
             crate::shell::capabilities::Capabilities::real(),
@@ -341,6 +341,7 @@ mod tests {
 
         let _ = crate::shell::daemon_sync::on_daemon_event(
             &mut app,
+            micold_core::daemons::DaemonId(1),
             DaemonMsg::OperationOk {
                 req,
                 result: OperationResult::RepoRoot {
@@ -365,6 +366,7 @@ mod tests {
 
         let _ = crate::shell::daemon_sync::on_daemon_event(
             &mut app,
+            micold_core::daemons::DaemonId(1),
             DaemonMsg::OperationOk {
                 req,
                 result: OperationResult::RepoRoot {
@@ -402,6 +404,7 @@ mod tests {
 
         let _ = crate::shell::daemon_sync::on_daemon_event(
             &mut app,
+            micold_core::daemons::DaemonId(1),
             DaemonMsg::OperationOk {
                 req,
                 result: OperationResult::RepoRoot {
@@ -563,7 +566,7 @@ mod tests {
     ) {
         let (tx, rx) = iced::futures::channel::mpsc::unbounded();
         let mut app = base_app();
-        app.daemon = Some(micold_client::daemon::Outbox::new(tx));
+        app.connect_test_daemon(micold_client::daemon::Outbox::new(tx));
         let scanner = FakeFolderScanner::new();
         app.core
             .workspace
