@@ -18,8 +18,9 @@ Expected:
 - `crates/micold-daemon/tests/session_start.rs` covers U4, and `tests/mcp_create_session.rs` U5.
 - `crates/micold-client/tests/missing_cli_is_reported_where_it_is_chosen.rs` covers U1, U2 and W5.
 - `crates/micold-client/tests/unavailable_default_says_so.rs` covers U3.
-- `crates/micold-client/tests/directory_availability.rs` covers C2, C3 and U6's rule.
-- `crates/micold-client/src/ui/material/menu_anatomy.rs` covers W7.
+- `crates/micold-client/tests/directory_availability.rs` covers C2, C3 and U6's entries (U93).
+- `crates/micold-client/src/ui/material/menu_anatomy.rs` covers W7 (U92).
+- `crates/micold-client/src/main_tests.rs` (`a_rows_cli_list_shows_every_cli_and_says_why_one_is_disabled`) covers A15-A24.
 
 ## Part B: visual pass (run with the `visual-pass` skill)
 
@@ -46,13 +47,14 @@ Seed `settings.json` per step, start the client, and open Settings → Environme
 | B8 | every CLI on the login `PATH` | no note. US1 scenario 6 |
 | B9 | B1's seed, stored default Pi Coding Agent, a project open; press start on its row | a notification with `start_refusal`'s `IncludeOff` sentence, the list of available CLIs opens, nothing starts. US2 scenario 1 |
 | B10 | a session on Pi started under B2's settings; then B6's script, Save; restart the session | one banner gives the `ScriptTimedOut` reason, says to restart afterwards, and does not say "install"; the pane gives the same sentence when it has no terminal content to keep (after a restart in place it keeps the terminal and the bar reads "failed restart"). US2 scenario 2 |
-| B11 | two available CLIs and Pi missing for a project's directory; press the row's chevron | the list shows the two CLIs, a divider, and the note naming Pi Coding Agent with the reason and action for that directory. Pressing the note does nothing. US3 scenarios 1 and 4 |
+| B11 | two available CLIs and Pi missing for a project's directory; press the row's chevron | the list shows every supported CLI; the available ones are pressable and Pi Coding Agent is a disabled item with a red icon. Hovering the icon shows the reason and action for that directory in a tooltip. Pressing the item does nothing and starts nothing. US3 scenarios 1 and 4 |
 | B12 | one available CLI | the row has no chevron and nothing new. US3 scenario 1a |
-| B13 | every CLI available for the row | the list has no divider and no note. US3 scenario 2 |
+| B12a | one available CLI that is not the default (A22); press the row's primary button | the list opens with Story 2's message and shows every CLI; the unavailable ones are disabled items with their reason on hover. US3 scenario 1b |
+| B13 | every CLI available for the row | every item is pressable, with no red icon and no tooltip. US3 scenario 2 |
 
 Also check: the Settings note wraps inside the field's column and does not overflow the page; the
-menu note wraps inside the panel, the panel stays inside the window when opened from the lowest
-row, and both read correctly in the light and dark themes.
+disabled item's tooltip wraps inside its bounds, the panel stays inside the window when opened
+from the lowest row, and both read correctly in the light and dark themes.
 
 Container placement (B14, needs a container runtime and `mise run image`): with the `:dev` image
 and environment-include off, the notes under *Image reference* and **Default AI CLI** give the

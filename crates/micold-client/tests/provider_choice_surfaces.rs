@@ -176,26 +176,34 @@ fn the_settings_select_lists_only_the_installed_clis() {
     );
 }
 
+/// What the start list lets a session start on at `PROJECT`: the CLIs it draws as pressable items.
+fn startable(state: &State) -> Vec<AiCli> {
+    state
+        .session
+        .offered_providers(Some(std::path::Path::new(PROJECT)))
+}
+
+/// BUG-753: the list draws every supported CLI, and only the installed ones are pressable.
 #[test]
-fn the_session_start_list_offers_only_the_installed_clis() {
-    let only_claude = painted(&start_menu_state(&[AiCli::ClaudeCode]), None);
+fn the_session_start_list_draws_every_cli_and_offers_only_the_installed_ones() {
+    let state = start_menu_state(&[AiCli::ClaudeCode]);
+    let only_claude = painted(&state, None);
     assert!(
         only_claude.iter().any(|s| s == "Claude Code"),
         "the per-session override list must offer the installed CLI — painted: {only_claude:?}"
     );
     assert!(
-        !only_claude.iter().any(|s| s.contains("Copilot")),
-        "…and must not offer the one that is not installed — painted: {only_claude:?}"
+        only_claude.iter().any(|s| s == "GitHub Copilot"),
+        "…and draws the one that is not installed, as a disabled item — painted: {only_claude:?}"
+    );
+    assert_eq!(
+        startable(&state),
+        [AiCli::ClaudeCode],
+        "…but only the installed one can be started (FR-006)"
     );
 
-    let both = painted(
-        &start_menu_state(&[AiCli::ClaudeCode, AiCli::Copilot]),
-        None,
-    );
-    assert!(
-        both.iter().any(|s| s == "GitHub Copilot"),
-        "with both installed the same list offers both — painted: {both:?}"
-    );
+    let state = start_menu_state(&[AiCli::ClaudeCode, AiCli::Copilot]);
+    assert_eq!(startable(&state), [AiCli::ClaudeCode, AiCli::Copilot]);
 }
 
 /// The two surfaces cannot disagree about what exists (FR-006).
@@ -211,13 +219,18 @@ fn the_settings_select_and_the_start_list_name_the_same_clis() {
     let settings = painted(&settings_state(&available), Some(SETTINGS_SELECT));
     let start = painted(&start_menu_state(&available), None);
 
+    let startable = startable(&start_menu_state(&available));
     for which in AiCli::ALL {
         let name = which.provider().display_name();
         assert_eq!(
             settings.iter().any(|s| s == name),
-            start.iter().any(|s| s == name),
+            startable.contains(&which),
             "the Settings select and the start list disagree about {name} — settings: \
-             {settings:?}, start: {start:?}"
+             {settings:?}, startable: {startable:?}"
+        );
+        assert!(
+            start.iter().any(|s| s == name),
+            "the start list draws every CLI, {name} too — painted: {start:?}"
         );
     }
     assert!(
@@ -275,10 +288,10 @@ fn pi_is_offered_by_its_display_name_on_both_surfaces() {
         );
     }
 
-    let without = painted(&start_menu_state(&[AiCli::ClaudeCode]), None);
+    let without = start_menu_state(&[AiCli::ClaudeCode]);
     assert!(
-        !without.iter().any(|s| s == display),
-        "…and the start list does not offer Pi when `pi` is not installed — painted: {without:?}"
+        !startable(&without).contains(&AiCli::Pi),
+        "…and the start list does not offer Pi when `pi` is not installed"
     );
 }
 

@@ -38,9 +38,9 @@ pub enum Floating {
     /// The project switcher's list — the same `material::MenuOverlay`, carrying the switcher's
     /// rows (018 FR-029c).
     ProjectSwitcher,
-    /// A start list with a note under its items: the same `material::MenuOverlay`, built with
-    /// `note` (037 contract W7).
-    MenuWithNote,
+    /// A start list with a disabled item: the same `material::MenuOverlay`, carrying an item
+    /// with no message, a red icon and a tooltip for its reason (037 contract W7, BUG-753).
+    MenuWithDisabledItem,
 }
 
 /// Everything a developer can ask the showcase to do.

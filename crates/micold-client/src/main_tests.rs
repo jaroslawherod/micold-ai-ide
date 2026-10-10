@@ -7914,12 +7914,12 @@ mod a_missing_default_says_why_the_list_opened {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Feature 037, Story 3: a row's CLI list names what is not offered there, and why
+// Feature 037, Story 3: a row's CLI list shows every CLI, and says why one is disabled
 // ---------------------------------------------------------------------------------------------
 
-mod a_rows_cli_list_names_what_is_not_offered {
+mod a_rows_cli_list_shows_every_cli_and_says_why_one_is_disabled {
     use super::*;
-    use micold_client::features::session::StartMenu;
+    use micold_client::features::session::{CliEntryAvailability, StartMenu, StartMenuEntry};
     use micold_core::cli_reason::{explain, start_refusal, AttemptDir, Place, SpawnEnv};
     use micold_core::terminal::LaunchMode;
 
@@ -7935,7 +7935,7 @@ mod a_rows_cli_list_names_what_is_not_offered {
     type Answer<'a> = (&'a str, &'a [AiCli], Option<SpawnEnv>);
 
     /// Answer each request in `asked` with its directory's entry of `dirs`. The home directory
-    /// has every CLI and an applied script, so a note can only come from a row's own answer.
+    /// has every CLI and an applied script, so a reason can only come from a row's own answer.
     fn answer_rows(app: &mut App, asked: &[(u64, Option<PathBuf>)], dirs: &[Answer<'_>]) {
         for (req, cwd) in asked {
             let (available, env) = match cwd {
@@ -7973,8 +7973,19 @@ mod a_rows_cli_list_names_what_is_not_offered {
         (app, sent)
     }
 
-    fn note(app: &App, dir: &str) -> Option<String> {
-        app.core.session.start_menu_note(Path::new(dir))
+    fn entries(app: &App, dir: &str) -> Vec<StartMenuEntry> {
+        app.core.session.start_menu_entries(Path::new(dir))
+    }
+
+    /// The reason `cli`'s entry gives, `None` for an available entry.
+    fn reason(app: &App, dir: &str, cli: AiCli) -> Option<String> {
+        entries(app, dir)
+            .into_iter()
+            .find(|entry| entry.cli == cli)
+            .and_then(|entry| match entry.availability {
+                CliEntryAvailability::Available => None,
+                CliEntryAvailability::Unavailable { reason } => Some(reason),
+            })
     }
 
     fn offered(app: &App, dir: &str) -> Vec<AiCli> {
@@ -7997,11 +8008,12 @@ mod a_rows_cli_list_names_what_is_not_offered {
         matches!(&app.core.session.start_menu, Some(StartMenu { location: open, .. }) if open == location)
     }
 
-    /// A15 (US3-AS1, FR-010, SC-007): the row's directory provides two CLIs and no Pi, and the
-    /// startup script failed there. With the list open, its note names Pi, the reason, the action
-    /// and the row's own directory, and the two CLIs are still offered.
+    /// A15, A21 (US3-AS1, FR-010, SC-007): the row's directory provides four CLIs and no Pi, and
+    /// the startup script failed there. With the list open, it has an entry per supported CLI in
+    /// supported order, Pi's carries the reason, the action and the row's own directory, and the
+    /// four CLIs are still offered.
     #[test]
-    fn a_list_of_two_names_the_missing_cli_with_the_reason_and_action_for_the_rows_directory() {
+    fn a_list_shows_every_cli_and_the_missing_one_carries_the_reason_for_the_rows_directory() {
         let (mut app, _sent) = app_with_rows(&[
             (DEMO, EVERY, Some(SpawnEnv::Applied)),
             (FEAT_A, WITHOUT_PI, Some(SpawnEnv::ScriptFailed)),
@@ -8014,7 +8026,9 @@ mod a_rows_cli_list_names_what_is_not_offered {
             "fixture check: the list opened"
         );
 
-        let said = note(&app, FEAT_A).expect("a list of two that lacks a third says so");
+        let clis: Vec<AiCli> = entries(&app, FEAT_A).iter().map(|e| e.cli).collect();
+        assert_eq!(clis, AiCli::ALL, "an entry per supported CLI, in order");
+        let said = reason(&app, FEAT_A, AiCli::Pi).expect("Pi is unavailable there");
         assert_eq!(said, pi_missing(SpawnEnv::ScriptFailed, FEAT_A));
         for part in [
             "Pi Coding Agent",
@@ -8022,14 +8036,15 @@ mod a_rows_cli_list_names_what_is_not_offered {
             "Fix the script named in \"Script path\".",
             FEAT_A,
         ] {
-            assert!(said.contains(part), "the note lacks {part:?}: {said}");
+            assert!(said.contains(part), "the reason lacks {part:?}: {said}");
         }
         assert_eq!(offered(&app, FEAT_A), WITHOUT_PI);
     }
 
-    /// A16 (US3-AS1a, FR-010, SC-007): a row with one CLI has no chevron and no note.
+    /// A16 (US3-AS1a, FR-010, SC-007): a row with one CLI has no chevron, and its entries still
+    /// show the other CLIs as unavailable.
     #[test]
-    fn a_row_with_one_cli_has_no_chevron_and_no_note() {
+    fn a_row_with_one_cli_has_no_chevron_and_its_entries_mark_the_rest_unavailable() {
         let (app, _sent) = app_with_rows(&[
             (DEMO, EVERY, Some(SpawnEnv::Applied)),
             (FEAT_A, CLAUDE, Some(SpawnEnv::ScriptFailed)),
@@ -8040,13 +8055,14 @@ mod a_rows_cli_list_names_what_is_not_offered {
             !offers_a_choice(&app, FEAT_A),
             "one CLI: no chevron (026 FR-006)"
         );
-        assert_eq!(note(&app, FEAT_A), None);
+        assert_eq!(reason(&app, FEAT_A, AiCli::ClaudeCode), None);
+        assert!(reason(&app, FEAT_A, AiCli::Pi).is_some());
     }
 
-    /// A17 (US3-AS1b, FR-010, FR-008, D6): one CLI, and it is not the stored default. The primary
-    /// press opens the list with Story 2's message; the list itself has no note.
+    /// A17, A22 (US3-AS1b, FR-010, FR-008, D6): one CLI, and it is not the stored default. The
+    /// primary press opens the list with Story 2's message, and the list has every entry.
     #[test]
-    fn a_missing_default_on_a_row_with_one_cli_is_explained_by_the_message_and_not_by_a_note() {
+    fn a_missing_default_on_a_row_with_one_cli_opens_the_list_with_the_message_and_every_entry() {
         let (mut app, _sent) = app_with_rows(&[
             (DEMO, EVERY, Some(SpawnEnv::Applied)),
             (FEAT_A, CLAUDE, Some(SpawnEnv::ScriptFailed)),
@@ -8086,12 +8102,18 @@ mod a_rows_cli_list_names_what_is_not_offered {
             )),
             "the message carries the reason there (FR-008)"
         );
-        assert_eq!(note(&app, FEAT_A), None, "and the list adds nothing (D6)");
+        assert_eq!(entries(&app, FEAT_A).len(), AiCli::ALL.len());
+        assert_eq!(
+            reason(&app, FEAT_A, AiCli::Pi),
+            Some(pi_missing(SpawnEnv::ScriptFailed, FEAT_A)),
+            "and Pi is a disabled entry with the same reason"
+        );
     }
 
-    /// A18 (US3-AS2, FR-011, SC-005): every CLI is offered, so nothing is said.
+    /// A18, A23 (US3-AS2, FR-011, SC-005): every CLI is offered, so every entry is available and
+    /// none has a reason.
     #[test]
-    fn a_row_with_every_cli_has_no_note() {
+    fn a_row_with_every_cli_has_every_entry_available() {
         let (mut app, _sent) = app_with_rows(&[
             (DEMO, EVERY, Some(SpawnEnv::Applied)),
             (FEAT_A, EVERY, Some(SpawnEnv::Applied)),
@@ -8100,13 +8122,15 @@ mod a_rows_cli_list_names_what_is_not_offered {
         open_start_list(&mut app, SessionLocation::Worktree("feat-a".into()));
 
         assert_eq!(offered(&app, FEAT_A), EVERY);
-        assert_eq!(note(&app, FEAT_A), None);
+        assert!(entries(&app, FEAT_A)
+            .iter()
+            .all(|e| e.availability == CliEntryAvailability::Available));
     }
 
-    /// A19 (US3-AS3, FR-012): two rows whose answers differ each say their own directory's, and
-    /// opening, answering and closing one row's list leaves the other's note and offer alone.
+    /// A19 (US3-AS3, FR-012): two rows whose answers differ each carry their own directory's
+    /// reasons, and opening, answering and closing one row's list leaves the other's alone.
     #[test]
-    fn each_row_keeps_its_own_note_while_another_rows_list_is_opened_answered_and_closed() {
+    fn each_row_keeps_its_own_reasons_while_another_rows_list_is_opened_answered_and_closed() {
         const WITHOUT_COPILOT: &[AiCli] = &[AiCli::ClaudeCode, AiCli::Pi];
         let (mut app, mut sent) = app_with_rows(&[
             (DEMO, EVERY, Some(SpawnEnv::Applied)),
@@ -8114,11 +8138,11 @@ mod a_rows_cli_list_names_what_is_not_offered {
             (FEAT_B, WITHOUT_COPILOT, Some(SpawnEnv::IncludeOff)),
         ]);
         let a_says = pi_missing(SpawnEnv::ScriptFailed, FEAT_A);
-        let b_says = note(&app, FEAT_B).expect("feat-b lacks Copilot");
-        assert_eq!(note(&app, FEAT_A), Some(a_says.clone()));
+        let b_says = reason(&app, FEAT_B, AiCli::Copilot).expect("feat-b lacks Copilot");
+        assert_eq!(reason(&app, FEAT_A, AiCli::Pi), Some(a_says.clone()));
         assert!(
             b_says.contains("GitHub Copilot") && !b_says.contains("Pi Coding Agent"),
-            "feat-b's note is about what feat-b lacks: {b_says}"
+            "feat-b's reason is about what feat-b lacks: {b_says}"
         );
         assert_ne!(a_says, b_says);
 
@@ -8130,27 +8154,32 @@ mod a_rows_cli_list_names_what_is_not_offered {
             matches!(&asked[..], [(_, Some(dir))] if dir == Path::new(FEAT_B)),
             "fixture check: opening feat-b's list asks about feat-b only: {asked:?}"
         );
-        assert_eq!(note(&app, FEAT_A), Some(a_says.clone()), "while it is open");
+        assert_eq!(
+            reason(&app, FEAT_A, AiCli::Pi),
+            Some(a_says.clone()),
+            "while it is open"
+        );
         answer_rows(
             &mut app,
             &asked,
             &[(FEAT_B, WITHOUT_PI, Some(SpawnEnv::ScriptTimedOut))],
         );
         assert_eq!(
-            note(&app, FEAT_B),
+            reason(&app, FEAT_B, AiCli::Pi),
             Some(pi_missing(SpawnEnv::ScriptTimedOut, FEAT_B)),
-            "feat-b's note follows feat-b's newer answer (contract W6)"
+            "feat-b's reason follows feat-b's newer answer (contract W6)"
         );
         let _ = update_inner(&mut app, Message::Session(SessionMsg::StartMenuDismissed));
 
-        assert_eq!(note(&app, FEAT_A), Some(a_says));
+        assert_eq!(reason(&app, FEAT_A, AiCli::Pi), Some(a_says));
         assert_eq!(offered(&app, FEAT_A), WITHOUT_PI);
     }
 
-    /// A20 (US3-AS4, FR-010, FR-015): the list names Pi and has no item for it, and opening the
-    /// list started nothing.
+    /// A20, A24 (US3-AS4, FR-010, FR-015): the list has an entry for Pi that is not among the
+    /// ones offered, and opening the list started nothing. The item that entry draws has no
+    /// message (`menu_anatomy::start_list_items`).
     #[test]
-    fn the_cli_the_note_names_is_not_among_the_ones_offered_and_nothing_starts() {
+    fn the_unavailable_cli_is_shown_but_not_offered_and_nothing_starts() {
         let (mut app, mut sent) = app_with_rows(&[
             (DEMO, EVERY, Some(SpawnEnv::Applied)),
             (FEAT_A, WITHOUT_PI, Some(SpawnEnv::ScriptFailed)),
@@ -8158,11 +8187,11 @@ mod a_rows_cli_list_names_what_is_not_offered {
         ]);
         open_start_list(&mut app, SessionLocation::Worktree("feat-a".into()));
 
-        let said = note(&app, FEAT_A).expect("the list says what it does not offer");
+        let said = reason(&app, FEAT_A, AiCli::Pi).expect("the list says why Pi is disabled");
         assert!(said.contains(&AiCli::Pi.to_string()), "{said}");
         assert!(
             !offered(&app, FEAT_A).contains(&AiCli::Pi),
-            "a CLI that is named as not offered has no item to press"
+            "a disabled entry is not among the CLIs a session can start on"
         );
 
         let mut after = Vec::new();
