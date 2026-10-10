@@ -9,22 +9,22 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #491
 - **Worktree branch**: feat/491_support-multiple-session-daemons-host-container
 - **Started**: 2026-10-09
-- **Phase**: milestone M1
-- **Next step**: wait for CI and merge the M1 PR, then M2
+- **Phase**: milestone M2
+- **Next step**: implement M2 (T018-T029, T048-T049)
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #695 | Design | merged | 52c691b8fd00540bcf027f60e779003368266214 |
-| #752 | M1 registry, bindings, labels | open | - |
+| #752 | M1 registry, bindings, labels | merged | 3787994d7fe1807844ddfa485d51333227e5a66e |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T017 | full | Upgraded install runs on a one-daemon registry, worktrees bound and labelled, daemon choice persists | #752 | in review |
-| M2 | T018–T029, T048–T049 | full | Host and container daemons concurrent and failure-isolated | - | pending |
+| M1 | T001–T017 | full | Upgraded install runs on a one-daemon registry, worktrees bound and labelled, daemon choice persists | #752 | merged |
+| M2 | T018–T029, T048–T049 | full | Host and container daemons concurrent and failure-isolated | - | in progress |
 | M3 | T030–T039 | full | Settings Daemons section with removal and rebind | - | pending |
 | M4 | T040–T045 | full | Real-runtime multi-daemon e2e in CI | - | pending |
 
