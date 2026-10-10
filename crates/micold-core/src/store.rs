@@ -17,6 +17,7 @@
 //! new-style state file does not exist yet; the next `save` writes that data out to the
 //! project's own state file and stops carrying it in the catalog.
 
+use crate::daemons::DaemonId;
 use crate::pane_layout::PaneLayout;
 use crate::project::{Availability, Project};
 use crate::review::store::ReviewFile;
@@ -469,6 +470,8 @@ impl StoredCatalog {
             unreadable_projects: BTreeSet::new(),
             // Feature 484: per project, filled in by `load` from each project's own state file.
             pane_layouts: BTreeMap::new(),
+            // Feature 491: per project, filled in by `load` from each project's own state file.
+            bindings: BTreeMap::new(),
         }
     }
 }
@@ -533,6 +536,15 @@ struct StoredProjectState {
     /// would fail the whole file and mark the project unreadable.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pane_layout: Option<serde_json::Value>,
+    /// Which daemon each worktree runs on (feature 491, FR-003, FR-006): worktree `dir_name` to
+    /// daemon id, with the reserved key `""` for the Default location.
+    ///
+    /// `#[serde(default)]` and no `schema_version` bump, for the reason `last_session` records;
+    /// omitted when empty so a file nobody bound anything in stays byte-for-byte what it was.
+    /// Entries naming an id the registry no longer holds are kept: they read as "no daemon" and are
+    /// never rewritten (FR-014).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    bindings: BTreeMap<String, DaemonId>,
 }
 
 impl StoredProjectState {
@@ -565,6 +577,7 @@ impl StoredProjectState {
                 .pane_layouts
                 .get(project_path)
                 .map(PaneLayout::to_json_value),
+            bindings: ws.bindings.get(project_path).cloned().unwrap_or_default(),
         }
     }
 }
@@ -1005,6 +1018,13 @@ impl ProjectStore for JsonFileStore {
                             workspace.pane_layouts.remove(&project.path);
                         }
                     }
+                    if state.bindings.is_empty() {
+                        workspace.bindings.remove(&project.path);
+                    } else {
+                        workspace
+                            .bindings
+                            .insert(project.path.clone(), state.bindings);
+                    }
                     match state.last_session {
                         Some(id) => {
                             workspace
@@ -1043,6 +1063,7 @@ impl ProjectStore for JsonFileStore {
                     // (feature 025, FR-010).
                     workspace.foreground_by_project.remove(&project.path);
                     workspace.pane_layouts.remove(&project.path);
+                    workspace.bindings.remove(&project.path);
                 }
             }
         }

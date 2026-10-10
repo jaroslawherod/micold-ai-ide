@@ -99,6 +99,13 @@ pub struct Workspace {
     /// gives. Terminals a layout names are not checked against [`Self::sessions`] here: one that
     /// no longer exists is kept and shown as an empty pane (FR-014).
     pub pane_layouts: BTreeMap<PathBuf, crate::pane_layout::PaneLayout>,
+    /// Which daemon each worktree runs on (feature 491, FR-003, FR-006). Keyed by project path,
+    /// then by worktree `dir_name`, with the reserved key `""` for the Default location.
+    ///
+    /// Persisted in the project's own state file and resolved through
+    /// [`crate::daemons::Binding::resolve`]: an absent key is not "no daemon" but the legacy
+    /// default's, and a key naming an unknown id reads as no daemon without being rewritten.
+    pub bindings: BTreeMap<PathBuf, BTreeMap<String, crate::daemons::DaemonId>>,
 }
 
 impl Workspace {
@@ -181,6 +188,8 @@ impl Workspace {
         self.unreadable_projects.remove(&path);
         // Feature 484 (FR-013): the panes go with the project.
         self.pane_layouts.remove(&path);
+        // Feature 491: so do its daemon bindings.
+        self.bindings.remove(&path);
         if self.active.as_ref() == Some(&path) {
             self.active = None;
         }

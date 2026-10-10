@@ -157,6 +157,16 @@ pub struct Settings {
     /// Where the session daemon runs, and its sandbox profile (feature 027).
     #[serde(default)]
     pub daemon: DaemonConfig,
+    /// The registry of session daemons (feature 491, FR-001). Authoritative when stored; a
+    /// document without it is migrated once from [`Self::daemon`].
+    #[serde(default)]
+    pub daemons: Vec<crate::daemons::DaemonEntry>,
+    /// The id the next added daemon receives; never reused.
+    #[serde(default)]
+    pub next_daemon_id: u32,
+    /// The daemon a worktree with no stored binding runs on. Written once by the migration.
+    #[serde(default)]
+    pub legacy_default_daemon: Option<crate::daemons::DaemonId>,
     /// Which AI CLI a new session runs when nothing is chosen for it (feature 026, FR-003).
     ///
     /// **Not validated against availability.** A default naming an uninstalled CLI is kept, not
@@ -259,6 +269,9 @@ impl Default for Settings {
             env_include_script_path: default_env_include_script_path_string(),
             env_include_timeout_secs: DEFAULT_ENV_INCLUDE_TIMEOUT_SECS,
             daemon: DaemonConfig::default(),
+            daemons: migrated_registry(&DaemonConfig::default()).0,
+            next_daemon_id: 2,
+            legacy_default_daemon: Some(crate::daemons::DaemonId(1)),
             default_ai_cli: AiCli::default(),
             pi_activity_component: default_pi_activity_component(),
             save_terminal_history: default_save_terminal_history(),
@@ -271,6 +284,66 @@ impl Default for Settings {
             long_task_threshold_secs: default_long_task_threshold_secs(),
             diff_layout: DiffLayout::default(),
         }
+    }
+}
+
+/// The registry a pre-feature `daemon` block migrates to: one daemon, the legacy default.
+fn migrated_registry(
+    config: &DaemonConfig,
+) -> (
+    Vec<crate::daemons::DaemonEntry>,
+    u32,
+    Option<crate::daemons::DaemonId>,
+) {
+    let entry = crate::daemons::migrated_entry(config);
+    let id = entry.id;
+    (vec![entry], id.0 + 1, Some(id))
+}
+
+impl Settings {
+    /// The registry these settings hold.
+    pub fn registry(&self) -> crate::daemons::DaemonRegistry {
+        crate::daemons::DaemonRegistry::new(self.daemons.clone(), self.next_daemon_id)
+    }
+
+    /// Store a registry back (its entries and the id counter).
+    pub fn set_registry(&mut self, registry: crate::daemons::DaemonRegistry) {
+        self.next_daemon_id = registry.next_id();
+        self.daemons = registry.entries().to_vec();
+    }
+
+    /// Set the single-daemon `daemon` block and keep the registry entry that stands for it
+    /// (the legacy default, else the first) in step, so the block still written for rollback
+    /// never disagrees with the registry. The container name and port of an entry that already is
+    /// a container are kept.
+    pub fn set_single_daemon(&mut self, config: DaemonConfig) {
+        use crate::daemons::{ContainerSettings, DaemonRuntime};
+        let target = self
+            .legacy_default_daemon
+            .filter(|id| self.daemons.iter().any(|d| d.id == *id))
+            .or_else(|| self.daemons.first().map(|d| d.id));
+        if let Some(entry) = target.and_then(|id| self.daemons.iter_mut().find(|d| d.id == id)) {
+            if entry.runtime.is_startable() {
+                entry.runtime = match config.placement {
+                    PlacementKind::HostProcess => DaemonRuntime::Host,
+                    PlacementKind::LocalSandbox => {
+                        let (container_name, port) = match &entry.runtime {
+                            DaemonRuntime::Container(c) => (c.container_name.clone(), c.port),
+                            _ => (
+                                crate::sandbox::CONTAINER_NAME.to_string(),
+                                crate::endpoint::DEFAULT_SANDBOX_PORT,
+                            ),
+                        };
+                        DaemonRuntime::Container(ContainerSettings {
+                            profile: config.sandbox.clone(),
+                            container_name,
+                            port,
+                        })
+                    }
+                };
+            }
+        }
+        self.daemon = config;
     }
 }
 
@@ -463,6 +536,15 @@ struct StoredSettings {
     /// Missing in pre-027 (v3) files → the host placement with a default sandbox profile.
     #[serde(default)]
     daemon: DaemonConfig,
+    /// Feature 491: absent in every file written before it, which is the migration's gate: a
+    /// document that has the key (even an empty list) is authoritative and never migrated again.
+    /// `settings_version` does not move, by the argument the other additive fields record.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    daemons: Option<Vec<crate::daemons::DaemonEntry>>,
+    #[serde(default)]
+    next_daemon_id: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    legacy_default_daemon: Option<crate::daemons::DaemonId>,
     /// Missing in pre-026 files → defaults to `ClaudeCode`, which is the right answer for every
     /// settings file written before this feature (feature 026, FR-003).
     ///
@@ -544,6 +626,9 @@ impl StoredSettings {
             env_include_script_path: settings.env_include_script_path.clone(),
             env_include_timeout_secs: settings.env_include_timeout_secs,
             daemon: settings.daemon.clone(),
+            daemons: Some(settings.daemons.clone()),
+            next_daemon_id: settings.next_daemon_id,
+            legacy_default_daemon: settings.legacy_default_daemon,
             default_ai_cli: settings.default_ai_cli,
             pi_activity_component: settings.pi_activity_component,
             save_terminal_history: settings.save_terminal_history,
@@ -559,6 +644,18 @@ impl StoredSettings {
     }
 
     fn into_settings(self) -> Settings {
+        let (daemons, next_daemon_id, legacy_default_daemon) = match self.daemons {
+            Some(daemons) => {
+                let floor = daemons.iter().map(|d| d.id.0 + 1).max().unwrap_or(1);
+                (
+                    daemons,
+                    self.next_daemon_id.max(floor).max(1),
+                    self.legacy_default_daemon,
+                )
+            }
+            // R5: a pre-feature document becomes a registry of one daemon, once.
+            None => migrated_registry(&self.daemon),
+        };
         Settings {
             theme: self.theme,
             scrollback_lines: clamp_scrollback(self.scrollback_lines),
@@ -578,6 +675,9 @@ impl StoredSettings {
                 daemon.sandbox.image.repair_retired_namespace();
                 daemon
             },
+            daemons,
+            next_daemon_id,
+            legacy_default_daemon,
             // Not clamped, and not checked against availability: unlike the two numbers above,
             // there is no invalid value to repair — only a CLI that may not be installed today,
             // which is the user's choice to keep (research R11).

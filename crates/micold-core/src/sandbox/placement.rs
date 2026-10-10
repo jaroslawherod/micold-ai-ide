@@ -83,6 +83,17 @@ impl Placement {
         }
     }
 
+    /// The placement a registry daemon's runtime stands for; `None` for a runtime this build
+    /// cannot start. Pure, like [`Self::resolve`], and independent of the global placement choice.
+    pub fn from_runtime(runtime: &crate::daemons::DaemonRuntime) -> Option<Self> {
+        use crate::daemons::DaemonRuntime;
+        match runtime {
+            DaemonRuntime::Host => Some(Placement::HostProcess),
+            DaemonRuntime::Container(c) => Some(Placement::LocalSandbox(Box::new(c.profile.clone()))),
+            DaemonRuntime::Unsupported { .. } => None,
+        }
+    }
+
     /// Which stored choice this placement came from.
     pub fn kind(&self) -> PlacementKind {
         match self {
