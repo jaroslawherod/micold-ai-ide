@@ -30,96 +30,20 @@
 //! restated version still used to *say which dialog*. The nine rows now carry the name and the way
 //! to open the dialog instead of a variant. No property changed.
 
-use std::path::PathBuf;
-
 use micold_client::app::State;
 use micold_client::features::help;
-use micold_client::features::project::RenameDraft;
-use micold_client::features::session::PendingLinkOpen;
-use micold_client::features::worktree::WorktreeRenameDraft;
 use micold_client::overlay::registry::Closing;
 use micold_client::overlay::SurfaceId;
-use micold_core::selector::Selector;
-use micold_core::session::SessionId;
 
-/// Every dialog, with the name its snapshot must report and how to open it.
-///
-/// Written out rather than derived, so this is an independent statement of the set instead of a
-/// second copy of the implementation agreeing with itself. Kept honest by
-/// `every_variant_is_covered`. Before T037 the two columns were one — a dialog *was* an `Overlay`
-/// variant, so naming it and opening it were the same act; a dialog now says it is open by holding
-/// the state it draws from, so the row has to build that state.
-#[allow(clippy::type_complexity)]
-const DIALOGS: &[(&str, fn(&mut State))] = &[
-    ("about", |state| state.help.about_open = true),
-    ("project_selector", |state| {
-        state.project.selector = Some(Selector::open_at(PathBuf::from("/tmp")))
-    }),
-    ("rename_project", |state| {
-        state.project.rename_draft = Some(RenameDraft {
-            path: PathBuf::from("/tmp"),
-            text: String::new(),
-            error: None,
-        })
-    }),
-    ("add_worktree", |state| {
-        state.worktree_form.form = Some(Default::default())
-    }),
-    ("confirm_worktree_delete", |state| {
-        state.worktree.delete_target = Some("wt".to_string())
-    }),
-    ("rename_worktree", |state| {
-        state.worktree.rename_draft = Some(WorktreeRenameDraft {
-            dir_name: "wt".to_string(),
-            text: String::new(),
-            error: None,
-        })
-    }),
-    ("confirm_session_remove", |state| {
-        state.session.remove_target = Some(SessionId::new())
-    }),
-    ("confirm_discard_pending", open_discard_pending),
-    ("confirm_forget_project", |state| {
-        state.project.forget_target = Some(PathBuf::from("/p"))
-    }),
-    ("confirm_link_open", |state| {
-        state.session.pending_link_open = Some(PendingLinkOpen {
-            session: SessionId::new(),
-            link: a_sandboxed_link(),
-        })
-    }),
-    ("confirm_agent_request", |state| {
-        state.agent_confirm.pending = vec![an_agent_request()]
-    }),
-];
-
-/// A resolved sandboxed file link: one that translated to a host path and so needs a confirmation.
-fn a_sandboxed_link() -> micold_core::link::ResolvedLink {
-    micold_core::link::ResolvedLink {
-        link: micold_core::link::Link {
-            address: "file:///work/p/a.md".to_string(),
-            origin: micold_core::link::LinkOrigin::Detected,
-            cells: Vec::new(),
-        },
-        display: "/home/u/p/a.md".to_string(),
-        target: micold_core::link::Target::HostPath("/home/u/p/a.md".to_string()),
-        needs_confirmation: true,
-    }
-}
-
-/// A state with just that dialog open.
-fn opened(open: fn(&mut State)) -> State {
-    let mut state = State::default();
-    open(&mut state);
-    state
-}
+mod support;
+use support::modals::{modals, opened, Modal};
 
 /// One snapshot of every kind, with the dialog each is a snapshot *of* — taken the way the binary
 /// takes them, so a snapshot the real code could not produce cannot pass these tests.
 fn every_snapshot() -> Vec<(&'static str, Closing)> {
-    DIALOGS
+    modals()
         .iter()
-        .map(|(name, open)| {
+        .map(|Modal { id: name, open, .. }| {
             let closing = Closing::of(&opened(*open))
                 .unwrap_or_else(|| panic!("{name} is open but no snapshot was taken of it"));
             (*name, closing)
@@ -147,7 +71,7 @@ fn a_snapshot_reports_the_dialog_it_was_taken_of() {
 /// a dialog is open leaves the renderer with nothing to draw, which is the same instant vanish.
 #[test]
 fn no_snapshot_reports_itself_as_nothing_open() {
-    for (name, open) in DIALOGS {
+    for Modal { id: name, open, .. } in &modals() {
         assert!(
             Closing::of(&opened(*open)).is_some(),
             "{name} must keep a real identity while it animates out"
@@ -180,16 +104,16 @@ fn no_two_snapshots_share_an_identity() {
 /// leave all three tests above passing on a stale set.
 ///
 /// Nine until feature 027 turned Settings into a view (FR-026): a surface that does not float has
-/// no exit transition to remember, so it leaves `DIALOGS` and the count comes down with it. Nine
+/// no exit transition to remember, so it leaves `modals()` and the count comes down with it. Nine
 /// again with `confirm_link_open`, the question a sandboxed file link asks before it opens
 /// (FR-018a). Eleven with the Changes view's discard confirmation (feature 482).
 #[test]
 fn every_variant_is_covered() {
-    // Bump deliberately: a new dialog needs a row in `DIALOGS`.
+    // Bump deliberately: a new dialog needs a row in `modals()`.
     assert_eq!(
         every_snapshot().len(),
         11,
-        "a dialog was added or removed — update DIALOGS"
+        "a dialog was added or removed — update modals()"
     );
 }
 
@@ -231,49 +155,4 @@ fn a_snapshot_does_not_follow_the_state_it_came_from() {
         closing.state().help.about_open,
         "the snapshot must keep the state as it was, not track the live one"
     );
-}
-
-/// An agent's destructive request, pending an answer (feature 034, FR-014).
-fn an_agent_request() -> micold_client::features::agent_confirm::Prompt {
-    micold_client::features::agent_confirm::Prompt {
-        id: 1,
-        project: PathBuf::from("/p"),
-        caller_label: "planner".to_string(),
-        operation: micold_core::protocol::messages::ConfirmOperation::DeleteSession,
-        target_label: "reviewer".to_string(),
-    }
-}
-
-/// Open the Changes view's **Discard pending…** confirmation (feature 482, S3): a view with one
-/// pending comment, then the press.
-fn open_discard_pending(state: &mut State) {
-    use micold_client::features::changes::{self, Msg as ChangesMsg};
-    use micold_core::review::comment::{CommentId, CommentState, ReviewComment};
-    let project = PathBuf::from("/p");
-    let _ = changes::update(
-        &mut state.changes,
-        ChangesMsg::Opened {
-            project: project.clone(),
-            entry: micold_core::session::SessionLocation::Default,
-        },
-    );
-    let _ = changes::update(
-        &mut state.changes,
-        ChangesMsg::ReviewChanged {
-            project,
-            worktree_dir: String::new(),
-            comments: vec![ReviewComment {
-                id: CommentId::new(),
-                path: micold_core::review::RelPath::from_native("a.rs").unwrap(),
-                side: micold_core::review::Side::New,
-                range: micold_core::review::LineRange::new(1, 1).unwrap(),
-                quote: vec!["a".into()],
-                text: "t".into(),
-                state: CommentState::Pending,
-                created: 1,
-            }],
-            sending: false,
-        },
-    );
-    let _ = changes::update(&mut state.changes, ChangesMsg::DiscardPendingPressed);
 }

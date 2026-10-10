@@ -43,101 +43,32 @@ use micold_client::features::help::Msg as HelpMsg;
 use micold_client::features::project;
 use micold_client::features::project::Msg as ProjectMsg;
 use micold_client::features::session;
-use micold_client::features::session::Msg as SessionMsg;
-use micold_client::features::session::PendingLinkOpen;
 use micold_client::features::settings::Msg as SettingsMsg;
 use micold_client::features::settings::PendingPlacementChange;
 use micold_client::features::sidebar;
 use micold_client::features::sidebar::Msg as SidebarMsg;
 use micold_client::features::worktree::Msg as WorktreeMsg;
-use std::path::PathBuf;
 
 use micold_client::app::{on_escape, Message, State};
-use micold_client::features::project::RenameDraft;
-use micold_client::features::worktree::WorktreeRenameDraft;
 use micold_client::overlay::registry::{self, Probe};
 use micold_core::overlay::{Layer, Trigger};
 use micold_core::sandbox::placement::PlacementKind;
-use micold_core::selector::Selector;
-use micold_core::session::SessionId;
 
-/// Every dialog, with the three facts this file states about it: the name it registers under, the
+mod support;
+use support::modals::{an_agent_request, modals, Modal as Dialog};
+
+/// Every dialog, shared (`support::modals`) and this file's own: the name it registers under, the
 /// message that cancels it, and how to put the state into "this dialog is open".
 ///
-/// Until T037 the first two lived in an `expected(Overlay)` match and the third was
-/// `state.overlay = variant` — the enum was a slot, so opening a dialog *was* naming it. The enum
-/// is gone: a dialog is open when the state it draws from is there, so saying which dialog to open
-/// means building that state, and the three facts belong on one row.
-///
 /// Written out rather than derived from the registry, which is the whole point — this is the
-/// test's own statement of the nine facts, not a second reading of the code under test. What the
-/// enum's exhaustiveness used to catch (a dialog added with no expectation) is caught instead by
+/// test's own statement of the facts, not a second reading of the code under test. What the enum's
+/// exhaustiveness used to catch (a dialog added with no expectation) is caught instead by
 /// `every_dialog_is_in_the_list`, which holds this list against the registry's own count.
-struct Dialog {
-    id: &'static str,
-    cancel: Message,
-    open: fn(&mut State),
-}
-
 fn dialogs() -> Vec<Dialog> {
-    vec![
-        Dialog {
-            id: "about",
-            cancel: Message::Help(HelpMsg::AboutClosed),
-            open: |state| state.help.about_open = true,
-        },
-        Dialog {
-            id: "project_selector",
-            cancel: Message::Project(ProjectMsg::SelectorClosed),
-            open: |state| state.project.selector = Some(Selector::open_at(PathBuf::from("/tmp"))),
-        },
-        Dialog {
-            id: "rename_project",
-            cancel: Message::Project(ProjectMsg::RenameCancelled),
-            open: |state| {
-                state.project.rename_draft = Some(RenameDraft {
-                    path: PathBuf::from("/tmp"),
-                    text: String::new(),
-                    error: None,
-                })
-            },
-        },
-        Dialog {
-            id: "add_worktree",
-            cancel: Message::WorktreeForm(micold_client::features::worktree_form::Msg::Cancelled),
-            open: |state| state.worktree_form.form = Some(Default::default()),
-        },
-        Dialog {
-            id: "confirm_worktree_delete",
-            cancel: Message::Worktree(WorktreeMsg::DeleteCancelled),
-            open: |state| state.worktree.delete_target = Some("wt".to_string()),
-        },
-        Dialog {
-            id: "rename_worktree",
-            cancel: Message::Worktree(WorktreeMsg::RenameCancelled),
-            open: |state| {
-                state.worktree.rename_draft = Some(WorktreeRenameDraft {
-                    dir_name: "wt".to_string(),
-                    text: String::new(),
-                    error: None,
-                })
-            },
-        },
-        Dialog {
-            id: "confirm_session_remove",
-            cancel: Message::Session(SessionMsg::RemoveCancelled),
-            open: |state| state.session.remove_target = Some(SessionId::new()),
-        },
-        Dialog {
-            id: "confirm_discard_pending",
-            cancel: Message::Changes(micold_client::features::changes::Msg::DiscardCancelled),
-            open: open_discard_pending,
-        },
-        Dialog {
-            id: "confirm_forget_project",
-            cancel: Message::Project(ProjectMsg::ForgetCancelled),
-            open: |state| state.project.forget_target = Some(PathBuf::from("/p")),
-        },
+    // The dialogs every overlay test shares, then the ones this file also states, whose state is
+    // bespoke to the registry's own view checks.
+    let mut all = modals();
+    all.extend([
         // Settings itself is not here and will not be — it is a view (FR-026). This is the one
         // question it asks before applying a change that ends processes (BUG-003, FR-032), and a
         // question with no way past it but an answer is exactly what this registry is a list of.
@@ -148,18 +79,6 @@ fn dialogs() -> Vec<Dialog> {
                 state.settings.pending_placement = Some(PendingPlacementChange {
                     from: PlacementKind::HostProcess,
                     to: PlacementKind::LocalSandbox,
-                })
-            },
-        },
-        // The one question a sandboxed file link asks before it opens (FR-018a): the path came out
-        // of the sandbox, and the answer decides whether this machine opens it at all.
-        Dialog {
-            id: "confirm_link_open",
-            cancel: Message::Session(SessionMsg::LinkOpenDeclined),
-            open: |state| {
-                state.session.pending_link_open = Some(PendingLinkOpen {
-                    session: SessionId::new(),
-                    link: a_sandboxed_link(),
                 })
             },
         },
@@ -235,28 +154,8 @@ fn dialogs() -> Vec<Dialog> {
             cancel: Message::Runs(micold_client::features::runs::Msg::CleanupDismissed),
             open: |state| state.runs.cleanup = Some(a_cleanup_offer(Some(vec![1]))),
         },
-        // An agent's destructive request (feature 034, FR-014). Escape dismisses it in this window
-        // without answering; the daemon keeps waiting for another window or times out.
-        Dialog {
-            id: "confirm_agent_request",
-            cancel: Message::AgentConfirm(micold_client::features::agent_confirm::Msg::Dismissed),
-            open: |state| state.agent_confirm.pending = vec![an_agent_request()],
-        },
-    ]
-}
-
-/// A resolved sandboxed file link: one that translated to a host path and so needs a confirmation.
-fn a_sandboxed_link() -> micold_core::link::ResolvedLink {
-    micold_core::link::ResolvedLink {
-        link: micold_core::link::Link {
-            address: "file:///work/p/a.md".to_string(),
-            origin: micold_core::link::LinkOrigin::Detected,
-            cells: Vec::new(),
-        },
-        display: "/home/u/p/a.md".to_string(),
-        target: micold_core::link::Target::HostPath("/home/u/p/a.md".to_string()),
-        needs_confirmation: true,
-    }
+    ]);
+    all
 }
 
 /// A state with `dialog` open (or nothing open, for `None`) and the filter panel as asked.
@@ -876,51 +775,6 @@ fn the_registry_is_actually_looking_at_something() {
         "the default state has nothing open; a registry that reports a surface there is matching \
          on something other than what it was asked"
     );
-}
-
-/// An agent's destructive request, pending an answer (feature 034, FR-014).
-fn an_agent_request() -> micold_client::features::agent_confirm::Prompt {
-    micold_client::features::agent_confirm::Prompt {
-        id: 1,
-        project: PathBuf::from("/p"),
-        caller_label: "planner".to_string(),
-        operation: micold_core::protocol::messages::ConfirmOperation::DeleteSession,
-        target_label: "reviewer".to_string(),
-    }
-}
-
-/// Open the Changes view's **Discard pending…** confirmation (feature 482, S3): a view with one
-/// pending comment, then the press.
-fn open_discard_pending(state: &mut State) {
-    use micold_client::features::changes::{self, Msg as ChangesMsg};
-    use micold_core::review::comment::{CommentId, CommentState, ReviewComment};
-    let project = PathBuf::from("/p");
-    let _ = changes::update(
-        &mut state.changes,
-        ChangesMsg::Opened {
-            project: project.clone(),
-            entry: micold_core::session::SessionLocation::Default,
-        },
-    );
-    let _ = changes::update(
-        &mut state.changes,
-        ChangesMsg::ReviewChanged {
-            project,
-            worktree_dir: String::new(),
-            comments: vec![ReviewComment {
-                id: CommentId::new(),
-                path: micold_core::review::RelPath::from_native("a.rs").unwrap(),
-                side: micold_core::review::Side::New,
-                range: micold_core::review::LineRange::new(1, 1).unwrap(),
-                quote: vec!["a".into()],
-                text: "t".into(),
-                state: CommentState::Pending,
-                created: 1,
-            }],
-            sending: false,
-        },
-    );
-    let _ = changes::update(&mut state.changes, ChangesMsg::DiscardPendingPressed);
 }
 
 fn a_cleanup_offer(confirming: Option<Vec<u8>>) -> micold_client::features::runs::CleanupOffer {
