@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #488
 - **Worktree branch**: claude/project-thread-wysm57
 - **Started**: 2026-10-09
-- **Phase**: done
+- **Phase**: done (close PR pending merge)
 - **Next step**: handoff
 
 ## Pull requests

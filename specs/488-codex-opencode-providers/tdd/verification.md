@@ -1,6 +1,7 @@
 ---
 feature: 488-codex-opencode-providers
 verdict: FAIL
+verdict_after_close: CONDITIONAL — blocking findings TDD-1 and TDD-2 fixed in the close PR (not re-audited from cold); mutation score unmeasured (T044 open)
 standard: .specify/extensions/tdd/templates/tdd-test-quality-rubric.md # resolved: no overrides/ or presets/ in this repo
 verified_at: aac20577
 range: 96f85d69^..HEAD, 488 commits only (040/041 commits eefb2f51, 75691338, 82437f91 excluded as other features)
@@ -119,3 +120,5 @@ Criteria with no test through a real entry point: US3 AS3, US3 AS4, US6 AS1, US5
 ## Close addendum (2026-10-10)
 
 Mutation testing was not measured: cargo-mutants hit ENOSPC on a cold workspace build (25 GB) in the container; T044 stays open for a host with disk and a non-root user. Findings TDD-1 (spec amended: sign-in mount is writable; test predicate now derived from `sandbox_auth_file`), TDD-2 (test-list.md and retrospective reds for the core behaviours), TDD-3, 4, 5, 8, 9, 10, 11 are fixed in the close PR. TDD-6/7 partly: the `Env` guard is shared; two fixed sleeps stay because they assert absence. Quickstart Part C (real CLIs) is not run: no Codex/OpenCode installed here.
+
+Windows: the Windows-only availability path (`.cmd`/`.exe` via PATHEXT) is covered by an un-gated test; the `#!/bin/sh` stand-in resume tests are unix-only because no shell script runs on Windows, and `cargo check --target x86_64-pc-windows-msvc --tests` is left to CI (target not installed here). `mise run duplication` was not run (no mise, npx offline).
