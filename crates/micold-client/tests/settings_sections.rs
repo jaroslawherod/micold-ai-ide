@@ -45,7 +45,12 @@ use std::path::{Path, PathBuf};
 ///
 /// Feature 040's pull request switch was stored from its milestone M2 (protocol 22) and got its
 /// checkbox in the GitHub section with M4 (T038), so it left this list the same way.
-const DEFERRED: &[(&str, &str)] = &[];
+///
+/// Feature 490's plan-usage switch and threshold land in Settings → Environment with T044.
+const DEFERRED: &[(&str, &str)] = &[
+    ("plan_usage_enabled", "490 T044"),
+    ("plan_usage_warn_percent", "490 T044"),
+];
 
 /// Settings stored with the others but chosen outside the Settings screen, each with the client
 /// source that holds its control and the message that control sends. No Settings section will ever
