@@ -13,8 +13,8 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain (2 remain: FR-014, FR-016; for the clarify unit)
-- [ ] Requirements are testable and unambiguous (FR-014 and FR-016 open until clarify)
+- [x] No [NEEDS CLARIFICATION] markers remain (FR-014, FR-016 resolved in clarify)
+- [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
 - [x] All acceptance scenarios are defined
@@ -24,11 +24,11 @@
 
 ## Feature Readiness
 
-- [ ] All functional requirements have clear acceptance criteria (FR-014, FR-016 pending clarify)
+- [x] All functional requirements have clear acceptance criteria
 - [x] User scenarios cover primary flows
 - [x] Feature meets measurable outcomes defined in Success Criteria
 - [x] No implementation details leak into specification (the stand-in AI CLI and CI are the issue's own testing requirement)
 
 ## Notes
 
-- Two open markers are deliberate and go to the clarify unit.
+- The two markers were resolved by clarify round 1 and 2.

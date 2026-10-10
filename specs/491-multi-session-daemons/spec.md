@@ -20,6 +20,10 @@
 - Q: May a user add several daemons of one runtime (for example two container daemons)? → A: Yes.
   The issue defines the list as name, runtime, settings and state per daemon, with no per-runtime cap;
   names are the unique key (FR-001). _(agent-resolved: GitHub issue #491, "Multi-daemon model")_
+- Q: May a user add several host daemons? → A: No. The host daemon is a per-user singleton (one
+  endpoint and lock file per user), so at most one host daemon exists; several daemons of one runtime
+  apply to containers. Narrows the answer above for host only. _(agent-resolved: plan.md Complexity
+  Tracking, research R3)_
 - Q: What happens to worktrees bound to a removed daemon? → A: Kept, sessions stopped, shown as "no
   daemon" until the user binds them; nothing deleted on disk; the confirmation gives the worktree and
   running-session counts; FR-003 becomes "at most one". _(decided by user)_
@@ -180,6 +184,7 @@ scenarios pass with no sign-in, network access to AI providers, or cost.
 
 - **No daemons configured / all removed**: the app shows an empty state explaining that worktrees need
   a daemon, with a way to add one; it does not crash and a worktree creation offers no runtime to pick.
+- **Second host daemon**: adding a host daemon while one exists is refused with a message naming it.
 - **Same name twice**: adding or renaming a daemon to an existing name is refused with a message.
 - **Blank or invalid fields**: a blank name, or a missing or invalid container image or endpoint, on
   add or edit is refused with a message naming the field; nothing is saved.
@@ -209,7 +214,7 @@ scenarios pass with no sign-in, network access to AI providers, or cost.
 ### Functional Requirements
 
 - **FR-001**: The system MUST maintain a list of daemons, each with a unique name, a runtime (host or
-  container), runtime-specific settings and a connection state.
+  container), runtime-specific settings and a connection state. At most one daemon has the host runtime.
 - **FR-002**: The system MUST allow a host daemon and a container daemon to be running and connected
   at the same time.
 - **FR-003**: The system MUST bind each worktree to at most one daemon at a time (none only after its daemon was removed, FR-014), and MUST allow worktrees of
@@ -287,8 +292,8 @@ scenarios pass with no sign-in, network access to AI providers, or cost.
 
 ## Assumptions
 
-- A user may add more than one daemon of the same runtime (for example two container daemons with
-  different images); names, not runtimes, are unique.
+- A user may add more than one container daemon (for example two with different images); names, not
+  runtimes, are unique. At most one host daemon exists (per-user singleton endpoint).
 - The existing host and container placement settings become the settings of the migrated daemon;
   their meaning does not change.
 - The container runtime, Docker or Podman, is installed by the user; the app does not install it.
