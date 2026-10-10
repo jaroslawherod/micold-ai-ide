@@ -82,7 +82,7 @@ fn a_legacy_state_file_without_bindings_loads_with_none() {
     .unwrap();
     let loaded = store.load().workspace;
     assert!(
-        loaded.bindings.get(&PathBuf::from(PROJECT)).is_none(),
+        !loaded.bindings.contains_key(&PathBuf::from(PROJECT)),
         "no bindings are invented for a file written before the feature"
     );
     let json: serde_json::Value =

@@ -642,8 +642,6 @@ fn backup_path_for(path: &Path) -> PathBuf {
     path.with_extension("json.bak")
 }
 
-/// Write `state` to `path` atomically (temp file in the same directory, then rename), creating
-/// the parent directory if needed. Shared by every per-project state write.
 /// Hold the exclusive lock that serialises read-modify-write cycles on one project's state file
 /// (feature 491): the daemon's `save` and the client's `save_binding` both rewrite it. A sidecar,
 /// because the write replaces the file by rename, so a lock on it would be on a dead inode.
@@ -661,6 +659,8 @@ fn lock_project_state(path: &Path) -> io::Result<std::fs::File> {
     Ok(lock)
 }
 
+/// Write `state` to `path` atomically (temp file in the same directory, then rename), creating
+/// the parent directory if needed. Shared by every per-project state write.
 fn write_project_state(path: &Path, state: &StoredProjectState) -> io::Result<()> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
@@ -890,7 +890,10 @@ impl JsonFileStore {
     /// linger and could be reloaded if the folder were re-opened (FR-012). This file lives in the
     /// application's own data directory, never inside the project folder (so FR-006 is untouched).
     pub fn remove_project_state(&self, project_path: &Path) -> io::Result<()> {
-        match std::fs::remove_file(self.project_state_path(project_path)) {
+        let path = self.project_state_path(project_path);
+        // The lock sidecar (feature 491) goes with it; best effort, it holds nothing.
+        let _ = std::fs::remove_file(path.with_extension("json.lock"));
+        match std::fs::remove_file(path) {
             Ok(()) => Ok(()),
             Err(err) if err.kind() == io::ErrorKind::NotFound => Ok(()),
             Err(err) => Err(err),
