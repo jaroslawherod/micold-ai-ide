@@ -1005,6 +1005,8 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
         // env-include, exactly like the local-save path below does for its own change
         // (T100): the enabled/path/timeout settings may have changed, so every previously
         // cached directory's snapshot is stale.
+        // Feature 490: the plan's usage is not shown yet (T034 keeps it).
+        DaemonMsg::PlanUsageChanged { .. } => {}
         DaemonMsg::SettingsChanged { settings } => {
             let pr_status_enabled = settings.pr_status_enabled;
             if let Some(job) = on_settings_changed(app, settings) {

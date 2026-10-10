@@ -123,6 +123,8 @@ async fn a_settings_mutation_reaches_a_second_connected_client() {
 
     // Client A changes a service-owned setting.
     a.send(Frame::Control(ClientMsg::SettingsSet {
+        plan_usage_enabled: None,
+        plan_usage_warn_percent: None,
         req: 1,
         scrollback_lines: Some(5_000),
         env_include_enabled: None,
@@ -161,6 +163,8 @@ async fn turning_the_tool_server_binding_off_over_the_wire_reaches_every_client(
     wait_until(|| state.client_count() == 2).await;
 
     a.send(Frame::Control(ClientMsg::SettingsSet {
+        plan_usage_enabled: None,
+        plan_usage_warn_percent: None,
         req: 1,
         scrollback_lines: None,
         env_include_enabled: None,
@@ -216,6 +220,8 @@ async fn setting_the_cross_session_option_over_the_wire_reaches_every_client_and
         (3, None, Some(7_000)),
     ] {
         a.send(Frame::Control(ClientMsg::SettingsSet {
+            plan_usage_enabled: None,
+            plan_usage_warn_percent: None,
             req,
             scrollback_lines: scrollback,
             env_include_enabled: None,

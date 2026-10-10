@@ -195,6 +195,8 @@ async fn sets(
     let answers = sends(
         window,
         ClientMsg::SettingsSet {
+            plan_usage_enabled: None,
+            plan_usage_warn_percent: None,
             req: 1,
             scrollback_lines,
             env_include_enabled: None,

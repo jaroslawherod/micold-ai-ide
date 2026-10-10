@@ -131,7 +131,10 @@ async fn only_a_post_is_a_route() {
     let rx = Receiver::with_sessions(&[session_id(A)]).await;
     let token = rx.receiver.token_for(session_id(A));
     let path = format!("/status/{}", session_id(A).0);
-    assert_eq!(request(&rx.addr, "GET", &path, Some(&token), 0, "").await, 405);
+    assert_eq!(
+        request(&rx.addr, "GET", &path, Some(&token), 0, "").await,
+        405
+    );
 }
 
 #[tokio::test]
@@ -159,13 +162,24 @@ async fn a_missing_or_wrong_token_is_forbidden_before_the_body_is_read() {
     let _ = rx.receiver.token_for(session_id(A));
     let path = format!("/status/{}", session_id(A).0);
     let body = rate_limits(42.0, 3600);
-    assert_eq!(request(&rx.addr, "POST", &path, None, body.len(), &body).await, 403);
+    assert_eq!(
+        request(&rx.addr, "POST", &path, None, body.len(), &body).await,
+        403
+    );
     assert_eq!(
         request(&rx.addr, "POST", &path, Some("wrong"), body.len(), &body).await,
         403
     );
     assert_eq!(
-        request(&rx.addr, "POST", &path, Some("wrong"), MAX_STATUS_BODY + 1, "").await,
+        request(
+            &rx.addr,
+            "POST",
+            &path,
+            Some("wrong"),
+            MAX_STATUS_BODY + 1,
+            ""
+        )
+        .await,
         403,
         "an over-bound body is not read before the token is checked"
     );
@@ -179,7 +193,15 @@ async fn a_body_over_16_kib_is_too_large() {
     let token = rx.receiver.token_for(session_id(A));
     let path = format!("/status/{}", session_id(A).0);
     assert_eq!(
-        request(&rx.addr, "POST", &path, Some(&token), MAX_STATUS_BODY + 1, "").await,
+        request(
+            &rx.addr,
+            "POST",
+            &path,
+            Some(&token),
+            MAX_STATUS_BODY + 1,
+            ""
+        )
+        .await,
         413
     );
 }
@@ -196,7 +218,11 @@ async fn a_body_that_is_not_a_json_object_is_a_bad_request() {
 async fn an_object_with_no_usable_window_is_accepted_and_stores_nothing() {
     let rx = Receiver::with_sessions(&[session_id(A)]).await;
     let (mut window, _) = rx.window().await;
-    for body in ["{}", r#"{"spend_limit":{"used_percentage":3}}"#, r#"{"five_hour":{"used_percentage":-1}}"#] {
+    for body in [
+        "{}",
+        r#"{"spend_limit":{"used_percentage":3}}"#,
+        r#"{"five_hour":{"used_percentage":-1}}"#,
+    ] {
         assert_eq!(rx.status(session_id(A), body).await, 200, "{body}");
     }
     assert_eq!(usage_changes(&received(&mut window).await), vec![]);
@@ -210,7 +236,10 @@ async fn a_usable_reading_is_stored_and_pushed_to_every_window_stamped_by_the_se
     let (mut one, _) = rx.window().await;
     let (mut two, _) = rx.window().await;
     let before = now();
-    assert_eq!(rx.status(session_id(A), &rate_limits(42.04, 3600)).await, 200);
+    assert_eq!(
+        rx.status(session_id(A), &rate_limits(42.04, 3600)).await,
+        200
+    );
     let after = now();
     for window in [&mut one, &mut two] {
         let changes = usage_changes(&received(window).await);
@@ -223,15 +252,25 @@ async fn a_usable_reading_is_stored_and_pushed_to_every_window_stamped_by_the_se
         );
     }
     let (_late, stored) = rx.window().await;
-    assert_eq!(stored.map(|r| five_hour_tenths(&r)), Some(420), "W1: Welcome carries it");
+    assert_eq!(
+        stored.map(|r| five_hour_tenths(&r)),
+        Some(420),
+        "W1: Welcome carries it"
+    );
 }
 
 #[tokio::test]
 async fn the_newest_reading_from_any_session_wins() {
     let rx = Receiver::with_sessions(&[session_id(A), session_id(B)]).await;
     let (mut window, _) = rx.window().await;
-    assert_eq!(rx.status(session_id(A), &rate_limits(42.0, 3600)).await, 200);
-    assert_eq!(rx.status(session_id(B), &rate_limits(30.0, 3600)).await, 200);
+    assert_eq!(
+        rx.status(session_id(A), &rate_limits(42.0, 3600)).await,
+        200
+    );
+    assert_eq!(
+        rx.status(session_id(B), &rate_limits(30.0, 3600)).await,
+        200
+    );
     let changes = usage_changes(&received(&mut window).await);
     let tenths: Vec<u32> = changes.iter().flatten().map(five_hour_tenths).collect();
     assert_eq!(tenths, vec![420, 300], "FR-019");
@@ -284,7 +323,11 @@ async fn with_the_switch_off_a_reading_is_accepted_and_dropped() {
     rx.service.state.set_plan_usage_enabled(false).unwrap();
     let (mut window, stored) = rx.window().await;
     assert_eq!(stored, None);
-    assert_eq!(rx.status(session_id(A), &rate_limits(42.0, 3600)).await, 200, "S3.2");
+    assert_eq!(
+        rx.status(session_id(A), &rate_limits(42.0, 3600)).await,
+        200,
+        "S3.2"
+    );
     assert_eq!(usage_changes(&received(&mut window).await), vec![]);
     let (_late, stored) = rx.window().await;
     assert_eq!(stored, None);
@@ -360,7 +403,10 @@ async fn rejections_are_logged_at_debug_once_and_never_with_the_body() {
     assert_eq!(lines.len(), 2, "once per (session, answer): {lines:#?}");
     assert!(lines.iter().all(|l| l.contains("DEBUG")), "{lines:#?}");
 
-    assert_eq!(rx.status(session_id(A), &rate_limits(42.0, 3600)).await, 200);
+    assert_eq!(
+        rx.status(session_id(A), &rate_limits(42.0, 3600)).await,
+        200
+    );
     assert_eq!(rx.status(session_id(A), &bad).await, 400);
     assert_eq!(
         status_lines(&captured).len(),

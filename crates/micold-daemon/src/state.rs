@@ -20,6 +20,7 @@ use micold_core::git::GitCli;
 use micold_core::input::{InputOutcome, InputReceiver};
 use micold_core::mcp::binding::{self as mcp_binding, ConfigLocations, SkipReason};
 use micold_core::mcp::policy::CrossSessionAccess;
+use micold_core::plan_usage::UsageReading;
 use micold_core::protocol::codec::Frame;
 use micold_core::protocol::messages::{
     ActivitySignal, CatalogSnapshot, ClientIdentity, ClientInstance, DaemonMsg, DaemonSettings,
@@ -37,6 +38,17 @@ use tokio::sync::mpsc;
 use uuid::Uuid;
 
 use crate::activity::{turn_change, Activity, ActivityEvent, HookKind};
+
+/// How long a reading with unchanged windows goes without being pushed again (feature 490, R6).
+const PLAN_USAGE_UNCHANGED_SECS: i64 = 60;
+
+/// The wall clock in Unix seconds: when a plan-usage reading was obtained, and whether its windows
+/// have reset (feature 490, R5, R7).
+pub fn unix_secs() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| i64::try_from(d.as_secs()).unwrap_or(i64::MAX))
+}
 use crate::attention::Views;
 use crate::catalog::Catalog;
 use crate::framer::Framer;
@@ -269,6 +281,9 @@ struct Inner {
     turn_clock_ahead: std::time::Duration,
     /// When the attention write last failed, when it may be tried again (BUG-567).
     attention_retry: AttentionRetry,
+    /// The Claude plan's usage, the newest accepted reading from any session (feature 490,
+    /// FR-019, research R6). Memory only (FR-014): a restart starts with none.
+    plan_usage: Option<UsageReading>,
 }
 
 impl Inner {
@@ -669,6 +684,7 @@ impl DaemonState {
                 reviews: crate::review::Reviews::default(),
                 runs: crate::runs::Runs::default(),
                 attention_retry: AttentionRetry::default(),
+                plan_usage: None,
             }),
             next_id: AtomicU64::new(1),
             // Armed from construction: a daemon spawned by a client that dies before handshaking
@@ -1301,6 +1317,74 @@ impl DaemonState {
     pub fn welcome_payload(&self) -> (CatalogSnapshot, DaemonSettings) {
         let inner = self.lock();
         (Self::snapshot_locked(&inner), inner.catalog.settings_wire())
+    }
+
+    /// The plan usage a freshly-handshaked client is given: the reading held, dropped first if
+    /// every window of it has reset (feature 490, W1, R7).
+    pub fn welcome_plan_usage(&self) -> Option<UsageReading> {
+        let mut inner = self.lock();
+        let now = unix_secs();
+        if inner
+            .plan_usage
+            .as_ref()
+            .is_some_and(|reading| reading.current(now).is_none())
+        {
+            inner.plan_usage = None;
+        }
+        inner.plan_usage.clone()
+    }
+
+    /// Whether plan usage is on (feature 490, FR-001).
+    pub fn plan_usage_enabled(&self) -> bool {
+        self.lock().catalog.plan_usage_enabled()
+    }
+
+    /// Keep `reading`, reported by `session`, as the plan's usage (feature 490, FR-019, R6).
+    /// Returns whether every window is to be told: `false` while plan usage is off (S3.2), for a
+    /// session this service does not run, and for a reading with the same windows as the one held
+    /// that is less than a minute newer — so ten idle sessions do not push on every turn.
+    pub fn note_plan_usage(&self, session: SessionId, reading: UsageReading) -> bool {
+        let mut inner = self.lock();
+        if !inner.catalog.plan_usage_enabled() || !inner.sessions.contains_key(&session) {
+            return false;
+        }
+        if inner.plan_usage.as_ref().is_some_and(|held| {
+            held.same_windows(&reading)
+                && reading.obtained_at - held.obtained_at < PLAN_USAGE_UNCHANGED_SECS
+        }) {
+            return false;
+        }
+        inner.plan_usage = Some(reading);
+        true
+    }
+
+    /// Turn plan usage on or off (feature 490, FR-002) and push `SettingsChanged` to every
+    /// client; turning it off also drops the reading held and pushes `PlanUsageChanged { None }`.
+    pub fn set_plan_usage_enabled(&self, on: bool) -> std::io::Result<()> {
+        let (settings, cleared) = {
+            let mut inner = self.lock();
+            inner.catalog.set_plan_usage_enabled(on)?;
+            let cleared = !on && inner.plan_usage.take().is_some();
+            (inner.catalog.settings_wire(), cleared)
+        };
+        self.broadcast(DaemonMsg::SettingsChanged { settings });
+        if cleared {
+            self.broadcast(DaemonMsg::PlanUsageChanged { reading: None });
+        }
+        Ok(())
+    }
+
+    /// Set the plan-usage warning threshold, clamped into 50–100 (feature 490, FR-005), and push
+    /// `SettingsChanged` to every client. Each window recomputes the warning look from the reading
+    /// it holds.
+    pub fn set_plan_usage_warn_percent(&self, percent: u8) -> std::io::Result<()> {
+        let settings = {
+            let mut inner = self.lock();
+            inner.catalog.set_plan_usage_warn_percent(percent)?;
+            inner.catalog.settings_wire()
+        };
+        self.broadcast(DaemonMsg::SettingsChanged { settings });
+        Ok(())
     }
 
     /// A full catalog snapshot with each project's worktrees overlaid from the live git+fs discovery

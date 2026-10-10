@@ -38,6 +38,8 @@ fn service(store_dir: &Path) -> Arc<DaemonState> {
 /// A `SettingsSet` that names only the diff layout.
 fn set_layout(req: u64, layout: DiffLayout) -> ClientMsg {
     ClientMsg::SettingsSet {
+        plan_usage_enabled: None,
+        plan_usage_warn_percent: None,
         req,
         scrollback_lines: None,
         env_include_enabled: None,

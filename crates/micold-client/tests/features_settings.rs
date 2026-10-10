@@ -1849,6 +1849,8 @@ fn choosing_a_layout_tells_the_service_that_layout_and_nothing_else() {
             notification_kinds,
             long_task_threshold_secs,
             diff_layout,
+            plan_usage_enabled,
+            plan_usage_warn_percent,
         } => {
             assert_eq!((req, diff_layout), (7, Some(DiffLayout::SideBySide)));
             assert!(
@@ -1864,7 +1866,9 @@ fn choosing_a_layout_tells_the_service_that_layout_and_nothing_else() {
                     && pr_status_enabled.is_none()
                     && desktop_notifications.is_none()
                     && notification_kinds.is_none()
-                    && long_task_threshold_secs.is_none(),
+                    && long_task_threshold_secs.is_none()
+                    && plan_usage_enabled.is_none()
+                    && plan_usage_warn_percent.is_none(),
                 "every other setting is left as it is"
             );
         }

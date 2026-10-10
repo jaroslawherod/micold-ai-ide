@@ -46,6 +46,8 @@ async fn set(
 ) {
     client
         .send(Frame::Control(ClientMsg::SettingsSet {
+            plan_usage_enabled: None,
+            plan_usage_warn_percent: None,
             req,
             scrollback_lines: scrollback,
             env_include_enabled: None,
@@ -152,6 +154,8 @@ async fn turning_pull_request_status_on_is_broadcast_to_two_connected_clients() 
     both_registered(&state).await;
 
     a.send(Frame::Control(ClientMsg::SettingsSet {
+        plan_usage_enabled: None,
+        plan_usage_warn_percent: None,
         req: 1,
         scrollback_lines: None,
         env_include_enabled: None,

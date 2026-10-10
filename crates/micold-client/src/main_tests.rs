@@ -351,6 +351,8 @@ fn the_ai_cli_restart_control_sends_a_restart_and_selecting_sends_a_start() {
 /// session messages go out, and env-include would reach for the filesystem on the way.
 pub(crate) fn quiet_settings() -> micold_core::protocol::messages::DaemonSettings {
     micold_core::protocol::messages::DaemonSettings {
+        plan_usage_enabled: true,
+        plan_usage_warn_percent: 80,
         scrollback_lines: micold_core::settings::DEFAULT_SCROLLBACK_LINES,
         env_include_enabled: false,
         env_include_script_path: String::new(),
@@ -2819,6 +2821,8 @@ fn daemon_connected_adopts_the_authoritative_env_include_settings() {
             outbox: micold_client::daemon::Outbox::new(tx),
             catalog: snapshot_with("/repo/demo", Vec::new()),
             settings: micold_core::protocol::messages::DaemonSettings {
+                plan_usage_enabled: true,
+                plan_usage_warn_percent: 80,
                 default_ai_cli: AiCli::ClaudeCode,
                 scrollback_lines: 12_345,
                 env_include_enabled: false,
@@ -2857,6 +2861,8 @@ fn settings_changed_event_syncs_env_include_fields() {
         &mut app,
         Message::Connection(ConnectionMsg::Event(DaemonMsg::SettingsChanged {
             settings: micold_core::protocol::messages::DaemonSettings {
+                plan_usage_enabled: true,
+                plan_usage_warn_percent: 80,
                 default_ai_cli: AiCli::ClaudeCode,
                 scrollback_lines: 5_000,
                 env_include_enabled: false,
@@ -3354,6 +3360,8 @@ fn the_service_answers_with(
             outbox: micold_client::daemon::Outbox::new(tx),
             catalog,
             settings: micold_core::protocol::messages::DaemonSettings {
+                plan_usage_enabled: true,
+                plan_usage_warn_percent: 80,
                 default_ai_cli: AiCli::ClaudeCode,
                 scrollback_lines: 10_000,
                 env_include_enabled: false,
@@ -5642,6 +5650,8 @@ mod script_path_report {
     /// What another window saved: environment include on, `path` stored (spec 035 T3).
     fn settings_saved_elsewhere(path: &str) -> micold_core::protocol::messages::DaemonSettings {
         micold_core::protocol::messages::DaemonSettings {
+            plan_usage_enabled: true,
+            plan_usage_warn_percent: 80,
             default_ai_cli: AiCli::ClaudeCode,
             scrollback_lines: 5_000,
             env_include_enabled: true,
