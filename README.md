@@ -1,5 +1,9 @@
 # Micold AI IDE
 
+[![CI](https://github.com/jaroslawherod/micold-ai-ide/actions/workflows/ci.yml/badge.svg)](https://github.com/jaroslawherod/micold-ai-ide/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/jaroslawherod/micold-ai-ide)](https://github.com/jaroslawherod/micold-ai-ide/releases/latest)
+[![License](https://img.shields.io/github/license/jaroslawherod/micold-ai-ide)](LICENSE)
+
 **Run several AI coding agents side by side, each in its own git worktree, in one native desktop app.**
 
 <!-- TODO: add a screenshot or demo GIF here, e.g. ![Micold AI IDE](docs/media/hero.png) -->
