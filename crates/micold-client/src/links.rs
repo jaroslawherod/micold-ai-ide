@@ -36,7 +36,7 @@ pub const PATHS_MAPPED: &str = "paths are mapped";
 /// Each daemon's entry is independent: [`apply`](Self::apply), [`connected`](Self::connected) and
 /// [`lost`](Self::lost) take an id and touch only that id's state and outbox, so one transport
 /// failing changes no other daemon's status or outbox (FR-007).
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct DaemonLinks {
     states: DaemonStates,
     outboxes: BTreeMap<DaemonId, Outbox>,

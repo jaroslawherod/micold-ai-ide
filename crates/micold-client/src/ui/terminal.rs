@@ -384,6 +384,23 @@ pub fn link_context(
         | SandboxState::Starting
         | SandboxState::Failed(_) => None,
     };
+    // The container the view's session is bound to: the bound daemon's own name (feature 491, T026),
+    // the fixed single-sandbox name only for a daemon with no container entry of its own.
+    let container_name = state
+        .session
+        .active
+        .and_then(|id| state.active_sessions().iter().find(|s| s.id == id))
+        .map(|s| match &s.location {
+            micold_core::session::SessionLocation::Worktree(dir) => dir.as_str(),
+            micold_core::session::SessionLocation::Default => "",
+        })
+        .and_then(|key| match state.daemon_binding(key) {
+            micold_core::daemons::Binding::Bound(id) => {
+                crate::links::terminal_container(&state.settings.daemons, id)
+            }
+            micold_core::daemons::Binding::NoDaemon => None,
+        })
+        .unwrap_or(micold_core::sandbox::CONTAINER_NAME);
     micold_core::link::LinkContext {
         host_names: state.session.host_names.clone(),
         windows_host: cfg!(windows),
@@ -393,10 +410,7 @@ pub fn link_context(
         // file of the same name (C12, C16c).
         sandbox: container.zip(sandbox.locations()).map(|(id, locations)| {
             micold_core::link::SandboxLinkContext {
-                host_names: micold_core::link::container_host_names(
-                    id,
-                    micold_core::sandbox::CONTAINER_NAME,
-                ),
+                host_names: micold_core::link::container_host_names(id, container_name),
                 locations: locations.shared.clone(),
                 denied: locations.denied.clone(),
             }

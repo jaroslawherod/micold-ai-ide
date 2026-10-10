@@ -274,12 +274,19 @@ fn boot() -> (App, Task<Message>) {
     // Kept for the whole run, not consumed by boot: a restart needs the same three inputs and has
     // no way to re-derive them (R9). `None` for the host placement, which is what makes "restart
     // the sandbox" unreachable when there is no sandbox.
-    let boot_plan =
-        (placement == PlacementKind::LocalSandbox).then(|| crate::shell::sandbox::BootPlan {
+    let boot_plan = (placement == PlacementKind::LocalSandbox).then(|| {
+        let (container_name, port) = crate::shell::sandbox::BootPlan::identity_of(
+            &core.settings.daemons,
+            core.settings.legacy_default_daemon,
+        );
+        crate::shell::sandbox::BootPlan {
             profile: sandbox_profile.clone(),
             state_dir: state_dir.clone(),
             projects: projects_for_sandbox,
-        });
+            container_name,
+            port,
+        }
+    });
 
     // Started here rather than beside the window request below, so the handle that cancels it is
     // on `App` from the first update (FR-036a).
@@ -345,7 +352,7 @@ fn boot() -> (App, Task<Message>) {
     }
     let activation = crate::shell::window_raise::Activation::default();
     let learn_window = crate::shell::window_raise::learn_window(&activation);
-    let links = micold_client::links::DaemonLinks::at_launch(&core.settings.daemons);
+    core.settings.links = micold_client::links::DaemonLinks::at_launch(&core.settings.daemons);
     (
         App {
             core,
@@ -377,7 +384,6 @@ fn boot() -> (App, Task<Message>) {
             env_include_timeout_secs,
             env_include_cache,
             env_include_last_outcome,
-            links,
             daemon_catalogs: Default::default(),
             displaced: HashMap::new(),
             disconnected: Default::default(),

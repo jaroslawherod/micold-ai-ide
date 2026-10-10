@@ -207,6 +207,9 @@ pub fn connection_status(
 /// instead of eleven.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Msg {
+    /// Another variant of this enum, reported by the actor of the daemon `.0` (feature 491). The
+    /// id says which daemon's socket it came from; an untagged one is the legacy default's.
+    OfDaemon(micold_core::daemons::DaemonId, Box<Msg>),
     /// The daemon connection is up: the binary stores the `Outbox` to drive sessions and adopts
     /// the welcome catalog/settings.
     Connected {
@@ -297,6 +300,7 @@ impl Msg {
     pub fn daemon_event(&self) -> Option<micold_core::daemons::DaemonEvent> {
         use micold_core::daemons::DaemonEvent;
         match self {
+            Msg::OfDaemon(_, inner) => inner.daemon_event(),
             Msg::Connected { .. } => Some(DaemonEvent::Connected),
             Msg::Disconnected => Some(DaemonEvent::Lost("connection lost".to_string())),
             Msg::ConnectFailed(reason) | Msg::Refused(reason) => {

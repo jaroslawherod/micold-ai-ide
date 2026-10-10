@@ -394,7 +394,7 @@ pub fn on_disconnected(app: &mut App, daemon: DaemonId) -> Task<Message> {
     // Only this daemon's link is dropped: the others keep their outbox, state and pending ops
     // (feature 491, FR-007). `Lost` is folded here; a daemon that never connected was folded by
     // `on_connect_failed`, so a `Disconnected` that follows is the same dial failing again.
-    let _ = app.links.lost(daemon, "connection lost");
+    let _ = app.core.settings.links.lost(daemon, "connection lost");
     app.daemon_catalogs.remove(&daemon);
     let was_active = app.active_daemon() == Some(daemon);
     // Content on screen is now stale; the banner says so (FR-027). The subscription is
@@ -536,7 +536,7 @@ pub fn register_projects(app: &mut App, daemon: DaemonId) {
         .map(|(id, c)| (*id, c.projects.iter().map(|p| p.path.clone()).collect()))
         .collect();
     let wanted = micold_client::links::registrations(
-        &app.links,
+        &app.core.settings.links,
         &app.core.settings.daemons,
         &app.all_bindings(),
         &catalogs,
@@ -565,6 +565,8 @@ pub fn on_connect_failed(app: &mut App, daemon: DaemonId, reason: String) -> Tas
     // The dial failed: folded for this daemon alone, debounced by the state machine so a first
     // transient failure is not shown (feature 491, FR-007).
     let _ = app
+        .core
+        .settings
         .links
         .apply(daemon, DaemonEvent::DialFailed(reason.clone()));
     app.disconnected.insert(daemon);
@@ -589,6 +591,8 @@ pub fn on_connect_failed(app: &mut App, daemon: DaemonId, reason: String) -> Tas
 pub fn on_refused(app: &mut App, daemon: DaemonId, reason: String) -> Task<Message> {
     crate::log_line(&format!("attach: refused reason={reason}"));
     let _ = app
+        .core
+        .settings
         .links
         .apply(daemon, DaemonEvent::DialFailed(reason.clone()));
     app.disconnected.insert(daemon);
@@ -744,7 +748,7 @@ pub(crate) fn on_version_mismatch(
     server: u32,
     server_build: String,
 ) {
-    let _ = app.links.apply(
+    let _ = app.core.settings.links.apply(
         daemon,
         micold_client::links::refused(client.to_string(), server.to_string()),
     );
@@ -759,7 +763,7 @@ pub(crate) fn on_build_mismatch(
     client_build: String,
     daemon_build: String,
 ) {
-    let _ = app.links.apply(
+    let _ = app.core.settings.links.apply(
         daemon,
         micold_client::links::refused(client_build.clone(), daemon_build.clone()),
     );
@@ -1737,7 +1741,7 @@ pub fn on_connected(
     // from that reply. Another daemon's flags and mismatch are not this connection's to clear.
     // The outbox is stored before anything below sends, because the sends read it.
     app.sync_links();
-    app.links.connected(daemon, outbox);
+    app.core.settings.links.connected(daemon, outbox);
     app.disconnected.remove(&daemon);
     if is_sandbox_daemon(app, daemon) {
         app.sandbox.answered();
@@ -1900,6 +1904,8 @@ pub fn report_color_scheme(app: &mut App) {
     // Every connected daemon answers its programs' queries, so each is told (feature 491); a
     // connect of any one clears the record, and the others hear the same scheme again.
     let connected: Vec<_> = app
+        .core
+        .settings
         .links
         .states()
         .ids()

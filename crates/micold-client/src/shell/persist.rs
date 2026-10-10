@@ -769,7 +769,13 @@ fn apply_placement(app: &mut App, kind: PlacementKind, daemon: &DaemonConfig) ->
 
     match kind {
         PlacementKind::LocalSandbox => {
+            let (container_name, port) = crate::shell::sandbox::BootPlan::identity_of(
+                &app.core.settings.daemons,
+                app.core.settings.legacy_default_daemon,
+            );
             let plan = crate::shell::sandbox::BootPlan {
+                container_name,
+                port,
                 profile: daemon.sandbox.clone(),
                 state_dir: app.placement.state_dir.clone(),
                 projects: app

@@ -79,6 +79,13 @@ use micold_core::typeahead::Direction;
 /// spell the root's type `crate::app::State` now that `State` here means this struct.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct State {
+    /// What this window knows of each daemon's connection (feature 491): its state and, while
+    /// connected, the handle that sends to it. One daemon failing changes no other's entry; ops are
+    /// routed by binding and nothing falls back to another daemon. Rows read their daemon status
+    /// from here, so a state change reaches them in the reducer step that applied it (SC-002).
+    pub links: crate::links::DaemonLinks,
+    /// The container runtime is not installed on this machine (set by the sandbox probe).
+    pub runtime_missing: bool,
     /// In-progress Settings edit, present only while the Settings view is shown (feature 006).
     pub settings_draft: Option<SettingsDraft>,
     /// Whether the Settings rail is showing icons alone (feature 027, FR-026c).

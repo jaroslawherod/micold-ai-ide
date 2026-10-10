@@ -126,6 +126,8 @@ mod tests {
             profile: micold_core::sandbox::SandboxProfile::default(),
             state_dir: std::path::PathBuf::from("/tmp/micold-test"),
             projects: Vec::new(),
+            container_name: micold_core::sandbox::CONTAINER_NAME.to_string(),
+            port: micold_core::endpoint::DEFAULT_SANDBOX_PORT,
         });
 
         let _ = on_restart_service_requested(&mut app);

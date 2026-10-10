@@ -82,13 +82,17 @@ impl App {
 
     /// Where an op bound by `binding` goes.
     pub(crate) fn route(&self, binding: Binding) -> Route {
-        links::route(&self.links, &self.core.settings.daemons, binding)
+        links::route(
+            &self.core.settings.links,
+            &self.core.settings.daemons,
+            binding,
+        )
     }
 
     /// The outbox of the daemon `binding` names, only while it is connected.
     pub(crate) fn outbox_of(&self, binding: Binding) -> Option<Outbox> {
         match self.route(binding) {
-            Route::To(id) => self.links.outbox(id).cloned(),
+            Route::To(id) => self.core.settings.links.outbox(id).cloned(),
             _ => None,
         }
     }
@@ -101,7 +105,7 @@ impl App {
 
     /// The outbox of `id`, while connected.
     pub(crate) fn outbox_for(&self, id: DaemonId) -> Option<Outbox> {
-        self.links.outbox(id).cloned()
+        self.core.settings.links.outbox(id).cloned()
     }
 
     /// The binding of a session by its id, in whichever project holds it. `NoDaemon` for a
@@ -151,13 +155,15 @@ impl App {
         let registry = &self.core.settings.daemons;
         let launch = micold_core::daemons::DaemonStates::at_launch(registry);
         for entry in registry.entries() {
-            if self.links.state(entry.id).is_none() {
+            if self.core.settings.links.state(entry.id).is_none() {
                 if let Some(state) = launch.state(entry.id) {
-                    self.links.insert(entry.id, state.clone());
+                    self.core.settings.links.insert(entry.id, state.clone());
                 }
             }
         }
         let stale: Vec<DaemonId> = self
+            .core
+            .settings
             .links
             .states()
             .ids()
@@ -165,7 +171,7 @@ impl App {
             .filter(|id| registry.get(*id).is_none())
             .collect();
         for id in stale {
-            self.links.remove(id);
+            self.core.settings.links.remove(id);
             self.daemon_catalogs.remove(&id);
         }
     }
@@ -224,8 +230,10 @@ impl App {
             self.core.settings.daemons = micold_core::daemons::DaemonRegistry::new(vec![entry], 2);
         }
         self.core.settings.legacy_default_daemon.get_or_insert(id);
-        if self.links.state(id).is_none() {
-            self.links
+        if self.core.settings.links.state(id).is_none() {
+            self.core
+                .settings
+                .links
                 .insert(id, micold_core::daemons::DaemonState::Starting);
         }
         id
@@ -234,12 +242,12 @@ impl App {
     /// Test seam: the legacy default daemon is connected over `outbox`.
     pub(crate) fn connect_test_daemon(&mut self, outbox: Outbox) {
         let id = self.ensure_test_registry();
-        self.links.connected(id, outbox);
+        self.core.settings.links.connected(id, outbox);
     }
 
     /// Test seam: the legacy default daemon's connection is gone.
     pub(crate) fn disconnect_test_daemon(&mut self) {
         let id = self.ensure_test_registry();
-        let _ = self.links.lost(id, "test");
+        let _ = self.core.settings.links.lost(id, "test");
     }
 }

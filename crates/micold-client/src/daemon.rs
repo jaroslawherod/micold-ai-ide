@@ -197,7 +197,7 @@ pub fn actor_specs(
 
 /// The connection subscriptions: one actor per daemon, each with its own socket, [`Outbox`],
 /// failure streak and reconnect backoff, every message tagged with its daemon
-/// ([`Message::Daemon`]). Add it to the app's subscription set.
+/// ([`Message::daemon`]). Add it to the app's subscription set.
 ///
 /// `run_with` rather than `run`: the builder has to be a plain `fn` for its identity to be stable,
 /// and `run_with` identifies each subscription by the *data* ([`ActorSpec`]) plus the function
@@ -335,7 +335,7 @@ fn actor(spec: ActorSpec) -> impl Stream<Item = Message> {
                     Ok(e) => Some(e),
                     Err(err) => {
                         let _ = output
-                            .send(Message::Daemon(
+                            .send(Message::daemon(
                                 id,
                                 ConnectionMsg::ConnectFailed(err.to_string()),
                             ))
@@ -359,7 +359,7 @@ fn actor(spec: ActorSpec) -> impl Stream<Item = Message> {
                     PumpEnd::AppGone => return,
                     PumpEnd::Disconnected => {
                         if output
-                            .send(Message::Daemon(id, ConnectionMsg::Disconnected))
+                            .send(Message::daemon(id, ConnectionMsg::Disconnected))
                             .await
                             .is_err()
                         {
@@ -431,7 +431,7 @@ async fn connect_and_pump(
             ..
         }) => {
             let sent = output
-                .send(Message::Daemon(
+                .send(Message::daemon(
                     id,
                     ConnectionMsg::VersionMismatch {
                         client,
@@ -456,7 +456,7 @@ async fn connect_and_pump(
             daemon_build,
         }) => {
             let sent = output
-                .send(Message::Daemon(
+                .send(Message::daemon(
                     id,
                     ConnectionMsg::BuildMismatch {
                         client_build,
@@ -502,7 +502,7 @@ async fn connect_and_pump(
     let (mut sink, incoming) = conn.split();
     let (tx, rx) = mpsc::unbounded::<ClientMsg>();
     if output
-        .send(Message::Daemon(
+        .send(Message::daemon(
             id,
             ConnectionMsg::Connected {
                 outbox: Outbox::new(tx),
@@ -538,8 +538,8 @@ async fn connect_and_pump(
             Io::Incoming(Ok(frame)) => {
                 keepalive.on_daemon_frame(Instant::now());
                 let msg = match frame {
-                    Frame::Control(dm) => Message::Daemon(id, ConnectionMsg::Event(dm)),
-                    Frame::Grid(frame) => Message::Daemon(id, ConnectionMsg::GridFrame(frame)),
+                    Frame::Control(dm) => Message::daemon(id, ConnectionMsg::Event(dm)),
+                    Frame::Grid(frame) => Message::daemon(id, ConnectionMsg::GridFrame(frame)),
                 };
                 if output.send(msg).await.is_err() {
                     return PumpEnd::AppGone;
@@ -630,7 +630,7 @@ async fn report_refusal(
 }
 
 async fn report(id: DaemonId, output: &mut mpsc::Sender<Message>, msg: ConnectionMsg) -> PumpEnd {
-    if output.send(Message::Daemon(id, msg)).await.is_err() {
+    if output.send(Message::daemon(id, msg)).await.is_err() {
         PumpEnd::AppGone
     } else {
         PumpEnd::Disconnected

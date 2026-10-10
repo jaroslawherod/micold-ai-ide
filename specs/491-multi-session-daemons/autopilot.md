@@ -64,18 +64,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M2 in progress, unit 1 stopped for context. Commits: 9982de68 (T018, T023 core state machine, tests green), 86b4e8f0 (lib half: links.rs, daemon.rs connections, catalog_sync per daemon, labels; six new test files, crate green at that commit). Uncommitted-then-WIP-committed on top: binary wiring (App.links: DaemonLinks, shell/routing.rs, per-daemon handlers, send_op by binding), docs T029 (docs/user-guide sandboxed-daemon, settings, agent-tools; check the example `profile` against SandboxProfile and the `daemons` array shape against settings.rs).
-
-State of the wip commit: NOT verified. Last known: binary unit tests 3 failures were fixed but not re-run; `tests/root_vocabulary_is_cross_cutting` (`no_root_variant_belongs_to_one_feature`, 2 fail, likely the new `Message::Daemon` variant needing a cross-cutting entry); six named M2 targets and workspace clippy not run. Use `scripts/build-lock.sh cargo test -p micold-client --no-fail-fast`, output to a file.
-
-Next steps:
-1. Fix the above and get crate + clippy green.
-2. T028: thread DaemonLinks/LabelFacts into the sidebar row model (sidebar.rs ~1077/1126 still call `daemon_label_of`; `State::daemon_status_label_of` is ready); layout snapshot fixture may need regeneration.
-3. T026 terminal: ui/terminal.rs `link_context` still uses CONTAINER_NAME; use the active binding's `links::terminal_container`.
-4. T025 per-daemon sandbox: still one `app.sandbox`/`sandbox_boot`/`sandbox_bring_up` as the legacy default; make BootPlan take container name/port/state dir from each entry, gate with `links::bring_up`, map by DaemonId, daemon-tagged sandbox message (shell/sandbox.rs uses CONTAINER_NAME / control_port()).
-5. Add binary tests in main_tests.rs: two daemons connected, op routed to bound one; one disconnect leaves the other's outbox and pending ops.
-6. Known simplifications to review or fix: ConfirmationAnswer, settings sends and CLI-availability asks go to the active daemon only; `Message::Connection(..)` uses legacy default id; agent-confirm Disconnected only on active daemon drop.
-7. Tick T019-T022, T024-T029, T048-T049 in tasks.md once true; then verify.md flow (scoped gate with review A, review B, full gate with MICOLD_SKIP_GH_LAUNCH_TEST=1, PR). Review B findings deferred from M1 (T010 production wiring: callers use per-daemon inputs; binding outliving worktree) belong here.
+None.
 
 ## Open escalation
 

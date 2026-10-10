@@ -911,6 +911,40 @@ impl crate::app::State {
         .unwrap_or_else(|| self.daemon_label_of(key))
     }
 
+    /// The row's daemon text from this window's own links and the facts it holds (feature 491,
+    /// T028): what [`worktree_tree`](Self::worktree_tree) puts on each row.
+    pub fn daemon_row_label(&self, key: &str) -> String {
+        use micold_core::daemons::{Binding, DaemonRuntime};
+        let container = match self.daemon_binding(key) {
+            Binding::Bound(id) => self
+                .settings
+                .daemons
+                .get(id)
+                .is_some_and(|e| matches!(e.runtime, DaemonRuntime::Container(_))),
+            Binding::NoDaemon => false,
+        };
+        let facts = crate::links::LabelFacts {
+            runtime_missing: container && self.settings.runtime_missing,
+            paths_mapped: container && cfg!(windows),
+            lost_sessions: self.active_sessions().iter().any(|s| {
+                s.location.is_worktree(key)
+                    && !s.archived
+                    && matches!(
+                        s.lifecycle,
+                        micold_core::session::SessionLifecycle::Running
+                            | micold_core::session::SessionLifecycle::Starting
+                    )
+            }),
+        };
+        // A daemon this window holds no link for has nothing to report: its plain name.
+        match self.daemon_binding(key) {
+            Binding::Bound(id) if self.settings.links.state(id).is_none() => {
+                self.daemon_label_of(key)
+            }
+            _ => self.daemon_status_label_of(key, &self.settings.links, facts),
+        }
+    }
+
     /// Where the current session lives, if the panel can point at it (feature 024, contract §1.2).
     ///
     /// `None` in three cases, all of which reduce [`Self::location_open`] to the user's own
@@ -1074,7 +1108,7 @@ impl crate::app::State {
                     .filter(|s| s.location.is_worktree(&worktree.dir_name) && !s.archived)
                     .cloned()
                     .collect(),
-                daemon: self.daemon_label_of(&worktree.dir_name),
+                daemon: self.daemon_row_label(&worktree.dir_name),
                 worktree: worktree.clone(),
                 shown_for_current_session: false,
             })
@@ -1123,7 +1157,7 @@ impl crate::app::State {
                 .filter(|s| s.location.is_worktree(&dir) && !s.archived)
                 .cloned()
                 .collect(),
-            daemon: self.daemon_label_of(&worktree.dir_name),
+            daemon: self.daemon_row_label(&worktree.dir_name),
             worktree: worktree.clone(),
             shown_for_current_session: true,
         };

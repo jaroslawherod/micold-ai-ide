@@ -276,6 +276,7 @@ pub fn start<R: CommandRunner>(
     profile: &SandboxProfile,
     projects: &[PathBuf],
     facts: &HostFacts,
+    container_name: &str,
     port: u16,
     runner: R,
     observe: &mut dyn FnMut(SandboxState),
@@ -366,7 +367,7 @@ pub fn start<R: CommandRunner>(
 
     let runtime = CliRuntime::new(profile.runtime, runner);
     let build_spec = |_caps: &RuntimeCapabilities| SandboxSpec {
-        name: CONTAINER_NAME.to_string(),
+        name: container_name.to_string(),
         profile: profile.clone(),
         mounts: mounts.clone(),
         uid: facts.uid,
@@ -501,7 +502,7 @@ pub fn reread<R: CommandRunner>(
 ) -> Option<(micold_core::sandbox::runtime::ContainerId, SandboxLocations)> {
     use micold_core::sandbox::runtime::{ContainerId, ContainerRuntime};
     let found = CliRuntime::new(plan.profile.runtime, runner)
-        .find(CONTAINER_NAME)
+        .find(&plan.container_name)
         .ok()??;
     if !found.running || found.id == held.0 {
         return None;
@@ -553,6 +554,31 @@ pub struct BootPlan {
     /// The projects to share. Replaced when the daemon's catalog changes, which is what makes the
     /// *next* restart pick up a project registered since boot (M-4).
     pub projects: Vec<PathBuf>,
+    /// The container the plan brings up; from the bound daemon entry (feature 491).
+    pub container_name: String,
+    /// The loopback port its control channel is published on; from the bound daemon entry
+    /// (feature 491).
+    pub port: u16,
+}
+
+impl BootPlan {
+    /// The container name and control port a plan brings up: those of the legacy default daemon
+    /// when it is a container, else of the first container entry, else the built-in defaults.
+    pub fn identity_of(
+        registry: &micold_core::daemons::DaemonRegistry,
+        legacy_default: Option<micold_core::daemons::DaemonId>,
+    ) -> (String, u16) {
+        use micold_core::daemons::DaemonRuntime;
+        let container = |entry: &micold_core::daemons::DaemonEntry| match &entry.runtime {
+            DaemonRuntime::Container(c) => Some((c.container_name.clone(), c.port)),
+            _ => None,
+        };
+        legacy_default
+            .and_then(|id| registry.get(id))
+            .and_then(container)
+            .or_else(|| registry.entries().iter().find_map(container))
+            .unwrap_or_else(|| (CONTAINER_NAME.to_string(), DEFAULT_SANDBOX_PORT))
+    }
 }
 
 /// Run a bring-up off the render thread and report how it ended.
@@ -619,11 +645,11 @@ impl<R: CommandRunner> Cancellable<R> {
 
     /// Remove the container, if this bring-up was cancelled after it began making one. By name,
     /// because a `create` interrupted mid-way never reported an id.
-    fn clean_up(&self, runtime: micold_core::sandbox::runtime::RuntimeKind) {
+    fn clean_up(&self, runtime: micold_core::sandbox::runtime::RuntimeKind, container_name: &str) {
         use micold_core::sandbox::runtime::{ContainerId, ContainerRuntime};
         if self.cancelled.load(Ordering::SeqCst) && self.launched.load(Ordering::SeqCst) {
             let _ = CliRuntime::new(runtime, &self.runner)
-                .remove(&ContainerId(CONTAINER_NAME.to_string()));
+                .remove(&ContainerId(container_name.to_string()));
         }
     }
 }
@@ -732,12 +758,13 @@ impl BringUp {
                 &plan.profile,
                 &plan.projects,
                 &facts,
-                control_port(),
+                &plan.container_name,
+                plan.port,
                 &runner,
                 observe,
             )
             .map(|ready| (ready.started, ready.locations));
-            runner.clean_up(plan.profile.runtime);
+            runner.clean_up(plan.profile.runtime, &plan.container_name);
             outcome
         })
     }
@@ -807,11 +834,12 @@ fn finished(
 /// transient reconnect with a banner and a restart the user did not need.
 pub fn check_alive(plan: &BootPlan) -> iced::Task<micold_client::app::Message> {
     let runtime = plan.profile.runtime;
+    let container_name = plan.container_name.clone();
     iced::Task::future(async move {
         let gone = tokio::task::spawn_blocking(move || {
             use micold_core::sandbox::runtime::ContainerRuntime;
             CliRuntime::new(runtime, SystemRunner)
-                .find(CONTAINER_NAME)
+                .find(&container_name)
                 .map(|found| found.is_none_or(|facts| !facts.running))
                 .unwrap_or(false)
         })
@@ -837,11 +865,12 @@ pub fn check_alive(plan: &BootPlan) -> iced::Task<micold_client::app::Message> {
 /// user looking for a problem with the log rather than with the service.
 pub fn diagnostics(plan: &BootPlan) -> iced::Task<micold_client::app::Message> {
     let runtime = plan.profile.runtime;
+    let container_name = plan.container_name.clone();
     iced::Task::future(async move {
         let lines = tokio::task::spawn_blocking(move || {
             use micold_core::sandbox::runtime::ContainerRuntime;
             let rt = CliRuntime::new(runtime, SystemRunner);
-            let facts = rt.find(CONTAINER_NAME).ok().flatten()?;
+            let facts = rt.find(&container_name).ok().flatten()?;
             rt.logs(&micold_core::sandbox::runtime::ContainerId(facts.id), 50)
                 .ok()
         })
@@ -865,11 +894,12 @@ pub fn diagnostics(plan: &BootPlan) -> iced::Task<micold_client::app::Message> {
 /// is the whole reason the service is a separate process in the first place.
 pub fn stop(plan: &BootPlan) -> iced::Task<micold_client::app::Message> {
     let runtime = plan.profile.runtime;
+    let container_name = plan.container_name.clone();
     iced::Task::future(async move {
         let _ = tokio::task::spawn_blocking(move || {
             use micold_core::sandbox::runtime::ContainerRuntime;
             let rt = CliRuntime::new(runtime, SystemRunner);
-            if let Ok(Some(facts)) = rt.find(CONTAINER_NAME) {
+            if let Ok(Some(facts)) = rt.find(&container_name) {
                 let id = micold_core::sandbox::runtime::ContainerId(facts.id);
                 let _ = rt.stop(&id);
                 let _ = rt.remove(&id);
@@ -881,6 +911,7 @@ pub fn stop(plan: &BootPlan) -> iced::Task<micold_client::app::Message> {
 }
 
 /// The port the sandbox publishes its control channel on.
+#[cfg_attr(not(test), allow(dead_code))]
 pub fn control_port() -> u16 {
     DEFAULT_SANDBOX_PORT
 }
@@ -893,6 +924,17 @@ pub fn control_port() -> u16 {
 /// the routing decision stated once next to them instead of interleaved with the overlay and
 /// session arms that surrounded them.
 pub fn update(app: &mut crate::App, msg: SandboxMsg) -> Task<Message> {
+    let task = apply(app, msg);
+    // The rows' "container runtime not found" text reads this (feature 491, T028).
+    app.core.settings.runtime_missing = matches!(
+        &app.sandbox.state,
+        micold_core::sandbox::lifecycle::SandboxState::Failed(f)
+            if matches!(f.error, micold_core::sandbox::runtime::RuntimeError::NotInstalled { .. })
+    );
+    task
+}
+
+fn apply(app: &mut crate::App, msg: SandboxMsg) -> Task<Message> {
     use micold_client::features::sandbox::Msg;
 
     match msg {
@@ -953,7 +995,11 @@ pub fn update(app: &mut crate::App, msg: SandboxMsg) -> Task<Message> {
         Msg::Lost => {
             // Brought back in the same update, so `Failed` is never drawn: the card and its
             // fallback would otherwise stand for as long as the next refused dial took (FR-036b).
-            if app.sandbox.container_lost(CONTAINER_NAME) {
+            let name = app
+                .sandbox_boot
+                .as_ref()
+                .map_or_else(|| CONTAINER_NAME.to_string(), |p| p.container_name.clone());
+            if app.sandbox.container_lost(&name) {
                 if let Some(bring_up) = crate::shell::daemon_sync::bring_up_again(app) {
                     return bring_up.run(&mut app.sandbox_bring_up);
                 }
@@ -1097,6 +1143,8 @@ mod tests {
             profile: SandboxProfile::default(),
             state_dir: state_dir.path().to_path_buf(),
             projects: Vec::new(),
+            container_name: CONTAINER_NAME.to_string(),
+            port: DEFAULT_SANDBOX_PORT,
         };
 
         let messages: Vec<Message> = BringUp::now(plan)
@@ -1196,6 +1244,8 @@ mod tests {
             profile: SandboxProfile::default(),
             state_dir: state_dir.path().to_path_buf(),
             projects: Vec::new(),
+            container_name: CONTAINER_NAME.to_string(),
+            port: DEFAULT_SANDBOX_PORT,
         };
         let runtime = CancelledDuring::new(cancel_on);
         let (runtime_log, cancelled) = (runtime.runtime.clone(), runtime.cancelled.clone());
@@ -1265,6 +1315,7 @@ mod tests {
             &profile,
             &[],
             &facts,
+            CONTAINER_NAME,
             DEFAULT_SANDBOX_PORT,
             RecordingRunner::new(),
             &mut |_| {},
@@ -1512,6 +1563,7 @@ mod tests {
             &SandboxProfile::default(),
             &[],
             &facts,
+            CONTAINER_NAME,
             DEFAULT_SANDBOX_PORT,
             runner,
             &mut |_| {},
@@ -1545,6 +1597,7 @@ mod tests {
                 &SandboxProfile::default(),
                 &[],
                 &facts,
+                CONTAINER_NAME,
                 DEFAULT_SANDBOX_PORT,
                 &calls,
                 &mut |_| {},
@@ -1605,6 +1658,7 @@ mod tests {
             &profile,
             &[],
             &facts,
+            CONTAINER_NAME,
             DEFAULT_SANDBOX_PORT,
             RecordingRunner::new(),
             &mut |_| {},
@@ -1653,6 +1707,7 @@ mod tests {
             &profile,
             &[],
             &facts,
+            CONTAINER_NAME,
             DEFAULT_SANDBOX_PORT,
             micold_core::sandbox::exec::RecordingRunner::new(),
             &mut |_| {},
@@ -1873,6 +1928,7 @@ mod tests {
             &profile,
             &[],
             &facts,
+            CONTAINER_NAME,
             DEFAULT_SANDBOX_PORT,
             a_runtime_that_creates_the_sandbox(),
             &mut |_| {},
@@ -1931,6 +1987,8 @@ mod tests {
             profile: SandboxProfile::default(),
             state_dir: state_dir.to_path_buf(),
             projects: vec![PathBuf::from("/proj/P")],
+            container_name: CONTAINER_NAME.to_string(),
+            port: DEFAULT_SANDBOX_PORT,
         }
     }
 

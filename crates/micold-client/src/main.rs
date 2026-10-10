@@ -142,10 +142,6 @@ struct App {
     /// a single "last attempt" status in Settings, independent of the per-directory `vars` cache
     /// used for merging into a session's own spawn call site.
     env_include_last_outcome: EnvIncludeOutcome,
-    /// What this window knows of each daemon's connection (feature 491): its state, and while
-    /// connected the handle that sends to it. One daemon failing changes no other's entry. Ops are
-    /// routed by binding through [`shell::routing`]; nothing falls back to another daemon.
-    links: micold_client::links::DaemonLinks,
     /// The last catalog snapshot each daemon sent (welcome or `CatalogChanged`), by daemon.
     daemon_catalogs:
         BTreeMap<micold_core::daemons::DaemonId, micold_core::protocol::messages::CatalogSnapshot>,
@@ -407,8 +403,8 @@ impl Drop for App {
     /// On shutdown, disconnect cleanly (`Goodbye`) — the daemon keeps every session running so it
     /// survives the UI closing (FR-001). The client owns no process to kill.
     fn drop(&mut self) {
-        for id in self.links.states().ids() {
-            if let Some(d) = self.links.outbox(id) {
+        for id in self.core.settings.links.states().ids() {
+            if let Some(d) = self.core.settings.links.outbox(id) {
                 d.send(ClientMsg::Goodbye);
             }
         }
@@ -657,6 +653,9 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         // Twelve arms until T011. All twelve were effects, so all twelve are `shell/connection.rs`
         // now (contract M2) and the routing decision is stated once, next to them.
         // One connection until the shell holds one per daemon: the id is not yet consulted.
+        Message::Connection(micold_client::features::connection::Msg::OfDaemon(id, msg)) => {
+            shell::connection::update(app, id, *msg)
+        }
         Message::Connection(msg) => {
             let id = app
                 .core
@@ -665,7 +664,6 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                 .unwrap_or(micold_core::daemons::DaemonId(1));
             shell::connection::update(app, id, msg)
         }
-        Message::Daemon(id, msg) => shell::connection::update(app, id, msg),
         // ---- Feature 027: the session service inside a container ----
         // Six arms until T011, and the same story as the twelve above: every one of them was an
         // effect or a write to the binary-owned `app.sandbox`, so all six are
