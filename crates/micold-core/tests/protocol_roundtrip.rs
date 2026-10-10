@@ -1494,3 +1494,126 @@ fn a_grid_frame_carries_its_process_under_postcard() {
     frame.process = SessionProcess::Shell(ShellInstanceId(3));
     postcard_roundtrip(&frame);
 }
+
+fn plan_usage_settings_set(
+    plan_usage_enabled: Option<bool>,
+    plan_usage_warn_percent: Option<u8>,
+) -> ClientMsg {
+    ClientMsg::SettingsSet {
+        req: 1,
+        scrollback_lines: None,
+        env_include_enabled: None,
+        env_include_script_path: None,
+        env_include_timeout_secs: None,
+        default_ai_cli: None,
+        pi_activity_component: None,
+        save_terminal_history: None,
+        tool_server_enabled: None,
+        cross_session_access: None,
+        pr_status_enabled: None,
+        desktop_notifications: None,
+        notification_kinds: None,
+        long_task_threshold_secs: None,
+        diff_layout: None,
+        plan_usage_enabled,
+        plan_usage_warn_percent,
+    }
+}
+
+fn sample_usage_reading() -> micold_core::plan_usage::UsageReading {
+    use micold_core::plan_usage::{LimitWindow, UsageReading};
+    UsageReading {
+        windows: vec![
+            LimitWindow {
+                key: "five_hour".into(),
+                used_tenths: 420,
+                resets_at: Some(1_791_552_600),
+            },
+            LimitWindow {
+                key: "seven_day".into(),
+                used_tenths: 180,
+                resets_at: Some(1_791_849_600),
+            },
+        ],
+        obtained_at: 1_791_547_320,
+    }
+}
+
+/// Feature 490 (contracts/plan-usage-wire.md W1, W2, W4): the stored reading rides `Welcome`,
+/// and `PlanUsageChanged` carries a reading or `None`, on both wires.
+#[test]
+fn the_plan_usage_messages_round_trip_on_both_wires() {
+    let DaemonMsg::Welcome {
+        daemon_build,
+        catalog,
+        settings,
+        ..
+    } = sample_daemon_msgs().remove(0)
+    else {
+        panic!("the first sample is Welcome");
+    };
+    for plan_usage in [Some(sample_usage_reading()), None] {
+        let welcome = DaemonMsg::Welcome {
+            daemon_build: daemon_build.clone(),
+            catalog: catalog.clone(),
+            settings: settings.clone(),
+            plan_usage,
+        };
+        json_roundtrip(&welcome);
+        postcard_roundtrip(&welcome);
+    }
+    for reading in [Some(sample_usage_reading()), None] {
+        let changed = DaemonMsg::PlanUsageChanged { reading };
+        json_roundtrip(&changed);
+        postcard_roundtrip(&changed);
+    }
+}
+
+/// W4: the contract's example decodes verbatim.
+#[test]
+fn the_plan_usage_contract_example_decodes_as_written() {
+    let example = r#"{"PlanUsageChanged":{"reading":{"windows":[
+  {"key":"five_hour","used_tenths":420,"resets_at":1791552600},
+  {"key":"seven_day","used_tenths":180,"resets_at":1791849600}],
+  "obtained_at":1791547320}}}"#;
+    assert_eq!(
+        serde_json::from_str::<DaemonMsg>(example).unwrap(),
+        DaemonMsg::PlanUsageChanged {
+            reading: Some(sample_usage_reading())
+        }
+    );
+}
+
+/// W3: the service settings carry both fields, and `SettingsSet` carries a choice or `None`.
+#[test]
+fn the_plan_usage_settings_round_trip_in_daemon_settings_and_settings_set() {
+    let DaemonMsg::Welcome { settings, .. } = sample_daemon_msgs().remove(0) else {
+        panic!("the first sample is Welcome");
+    };
+    for (enabled, percent) in [(true, 80), (false, 50)] {
+        let pushed = DaemonMsg::SettingsChanged {
+            settings: DaemonSettings {
+                plan_usage_enabled: enabled,
+                plan_usage_warn_percent: percent,
+                ..settings.clone()
+            },
+        };
+        json_roundtrip(&pushed);
+        postcard_roundtrip(&pushed);
+    }
+    for (enabled, percent) in [(Some(false), Some(65)), (Some(true), None), (None, None)] {
+        let asked = plan_usage_settings_set(enabled, percent);
+        json_roundtrip(&asked);
+        match serde_json::from_str::<ClientMsg>(&serde_json::to_string(&asked).unwrap()).unwrap() {
+            ClientMsg::SettingsSet {
+                plan_usage_enabled,
+                plan_usage_warn_percent,
+                ..
+            } => {
+                assert_eq!(plan_usage_enabled, enabled);
+                assert_eq!(plan_usage_warn_percent, percent);
+            }
+            other => panic!("expected SettingsSet, got {other:?}"),
+        }
+    }
+}

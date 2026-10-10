@@ -169,3 +169,25 @@ fn every_settings_contract_example_loads_as_written() {
     }
     assert!(failures.is_empty(), "{}", failures.join("\n\n"));
 }
+
+/// Feature 490 (contracts/plan-usage-wire.md W3, W4): a stored document with both plan-usage
+/// fields loads them as written, and one written before the feature loads the defaults.
+#[test]
+fn the_plan_usage_settings_load_as_written_and_default_when_absent() {
+    for (example, enabled, percent) in [
+        (
+            r#"{"settings_version":4,"theme":"dark","plan_usage_enabled":false,"plan_usage_warn_percent":65}"#,
+            false,
+            65,
+        ),
+        (r#"{"settings_version":4,"theme":"dark"}"#, true, 80),
+    ] {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("settings.json");
+        fs::write(&file, example).unwrap();
+        let outcome = JsonFileSettingsStore::at(file).load();
+        assert_eq!(outcome.status, LoadStatus::Loaded, "{example}");
+        assert_eq!(outcome.settings.plan_usage_enabled, enabled, "{example}");
+        assert_eq!(outcome.settings.plan_usage_warn_percent, percent, "{example}");
+    }
+}

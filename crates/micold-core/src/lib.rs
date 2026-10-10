@@ -39,6 +39,7 @@ pub mod owner_only;
 pub mod pane_layout;
 pub mod path_insert;
 pub mod permission_failure;
+pub mod plan_usage;
 pub mod process;
 pub mod project;
 pub mod protocol;
