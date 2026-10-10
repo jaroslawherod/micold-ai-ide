@@ -45,8 +45,10 @@ fn legacy_install(settings_document: &str) -> (TempDir, JsonFileSettingsStore, J
 
 /// The client state as a launch builds it from the two stores.
 fn launch(settings: &JsonFileSettingsStore, projects: &JsonFileStore) -> State {
-    let mut state = State::default();
-    state.workspace = projects.load().workspace;
+    let mut state = State {
+        workspace: projects.load().workspace,
+        ..State::default()
+    };
     state.workspace.active = Some(PathBuf::from(PROJECT));
     state
         .workspace
