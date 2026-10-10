@@ -36,7 +36,30 @@ use micold_core::session::{
     TerminalMode,
 };
 
+use micold_core::daemons::DaemonId;
+
 use crate::app::State;
+
+/// The daemon a location is bound to, when the project records one. `None` is "no record", which
+/// the fold reads as the snapshot's own (the legacy default).
+fn bound_daemon(core: &State, project: &Path, key: &str) -> Option<DaemonId> {
+    core.workspace.bindings.get(project)?.get(key).copied()
+}
+
+/// The daemon whose sessions and worktrees `key` belongs to, in a project's binding map.
+fn bound_elsewhere(core: &State, project: &Path, key: &str, daemon: DaemonId) -> bool {
+    bound_daemon(core, project, key).is_some_and(|d| d != daemon)
+}
+
+/// The daemon a session runs on, from where it is: its location's binding in its project. `None`
+/// when no binding is recorded (the legacy default's).
+pub fn session_daemon(core: &State, project: &Path, session: &Session) -> Option<DaemonId> {
+    let key = match &session.location {
+        SessionLocation::Worktree(dir) => dir.as_str(),
+        SessionLocation::Default => "",
+    };
+    bound_daemon(core, project, key)
+}
 
 /// Map a wire lifecycle back to the domain one (inverse of the daemon's `wire_lifecycle`).
 /// `InterruptedResumable` — a session the daemon found durably-running after a restart, never
@@ -63,7 +86,20 @@ pub fn wire_to_lifecycle(w: &WireLifecycle) -> SessionLifecycle {
 /// snapshot: existing sessions have their lifecycle + label updated; sessions the daemon reports
 /// but the client lacks are added; sessions the daemon no longer reports (archived/removed) are
 /// dropped. A dangling `active_session` pointer is cleared.
-pub fn reconcile_catalog(core: &mut State, snapshot: &CatalogSnapshot, sync_worktrees: bool) {
+///
+/// # Per daemon (feature 491, R11)
+///
+/// `daemon` is the daemon the snapshot came from, and the fold touches only what is that daemon's:
+/// a session whose location is bound to another daemon survives this snapshot's omission of it, a
+/// worktree bound to another daemon keeps the record (and status) its own daemon reported, and the
+/// provenance and display-name records of other daemons' worktrees are left alone. A location with
+/// no recorded binding is the snapshot's, which is the single-daemon behaviour unchanged.
+pub fn reconcile_catalog(
+    core: &mut State,
+    daemon: DaemonId,
+    snapshot: &CatalogSnapshot,
+    sync_worktrees: bool,
+) {
     // Mirror the daemon's project list into the client (T055). Add projects the daemon reports that
     // the client lacks (e.g. opened in another window), and adopt the daemon's display name for known
     // ones. Deliberately NOT a full mirror: projects are not *removed* here — a `CatalogChanged` that
@@ -170,8 +206,19 @@ pub fn reconcile_catalog(core: &mut State, snapshot: &CatalogSnapshot, sync_work
                 list.push(s);
             }
         }
-        // Drop sessions the daemon no longer reports (archived/removed on its side).
-        list.retain(|s| snap_ids.contains(&s.id));
+        // Drop sessions the daemon no longer reports (archived/removed on its side), but only its
+        // own: a session on a location bound to another daemon is that daemon's to report (R11).
+        let bindings = core.workspace.bindings.get(&project.path);
+        list.retain(|s| {
+            let key = match &s.location {
+                SessionLocation::Worktree(dir) => dir.as_str(),
+                SessionLocation::Default => "",
+            };
+            snap_ids.contains(&s.id)
+                || bindings
+                    .and_then(|b| b.get(key))
+                    .is_some_and(|d| *d != daemon)
+        });
     }
     for id in newly_restarting {
         core.note_background_restart(id);
@@ -190,23 +237,43 @@ pub fn reconcile_catalog(core: &mut State, snapshot: &CatalogSnapshot, sync_work
                 // the sidebar prunes its own expansion set (T066, and T067a-4 for the form's
                 // error line). Dropping the outcomes here would leave the sidebar expanded on
                 // worktrees this snapshot has just removed.
-                let outcomes = core.set_worktrees(
-                    project
-                        .worktrees
-                        .iter()
-                        .map(|w| micold_core::worktree::Worktree {
-                            dir_name: w.dir_name.clone(),
-                            // The daemon's path, not one rebuilt from the app's own worktree root:
-                            // an included worktree is not under that root, and reconstructing the
-                            // location would put every one of them somewhere they are not
-                            // (016 BUG-002, FR-029).
-                            path: w.path.clone(),
-                            branch: w.branch.clone(),
-                            status: wire_to_worktree_status(w.status),
-                            included: w.included,
-                        })
-                        .collect(),
-                );
+                //
+                // A union across daemons (R11): a worktree bound to another daemon keeps the
+                // record that daemon reported, since each daemon discovers every worktree of the
+                // repository and only the bound one's status is the truth. One this snapshot does
+                // not list is kept too, and one no daemon has reported yet is taken provisionally.
+                let existing = core.worktree.worktrees.clone();
+                let mut merged: Vec<micold_core::worktree::Worktree> = project
+                    .worktrees
+                    .iter()
+                    .map(|w| {
+                        let held = existing.iter().find(|e| e.dir_name == w.dir_name);
+                        match held {
+                            Some(held) if bound_elsewhere(core, &active, &w.dir_name, daemon) => {
+                                held.clone()
+                            }
+                            _ => micold_core::worktree::Worktree {
+                                dir_name: w.dir_name.clone(),
+                                // The daemon's path, not one rebuilt from the app's own worktree root:
+                                // an included worktree is not under that root, and reconstructing the
+                                // location would put every one of them somewhere they are not
+                                // (016 BUG-002, FR-029).
+                                path: w.path.clone(),
+                                branch: w.branch.clone(),
+                                status: wire_to_worktree_status(w.status),
+                                included: w.included,
+                            },
+                        }
+                    })
+                    .collect();
+                for held in existing {
+                    if bound_elsewhere(core, &active, &held.dir_name, daemon)
+                        && !merged.iter().any(|m| m.dir_name == held.dir_name)
+                    {
+                        merged.push(held);
+                    }
+                }
+                let outcomes = core.set_worktrees(merged);
                 crate::app::drain(outcomes, |o| crate::app::interpret(core, o));
                 // Mirror the provenance record (feature 029, FR-001). Rebuilt from the snapshot
                 // rather than merged into, exactly as the display names below are: the daemon is
@@ -215,12 +282,25 @@ pub fn reconcile_catalog(core: &mut State, snapshot: &CatalogSnapshot, sync_work
                 // by this client's own create (FR-010) is safe: the very next snapshot carries
                 // the durable one back, and if persistence failed the row simply reverts to
                 // hidden rather than lying about being the user's forever.
-                let created: std::collections::BTreeSet<String> = project
-                    .worktrees
-                    .iter()
-                    .filter(|w| w.user_created)
-                    .map(|w| w.dir_name.clone())
+                //
+                // Scoped to this daemon: another daemon's worktrees keep the records it reported.
+                let mut created: std::collections::BTreeSet<String> = core
+                    .workspace
+                    .worktree_provenance
+                    .get(&active)
+                    .into_iter()
+                    .flatten()
+                    .filter(|d| bound_elsewhere(core, &active, d, daemon))
+                    .cloned()
                     .collect();
+                created.extend(
+                    project
+                        .worktrees
+                        .iter()
+                        .filter(|w| w.user_created)
+                        .filter(|w| !bound_elsewhere(core, &active, &w.dir_name, daemon))
+                        .map(|w| w.dir_name.clone()),
+                );
                 if created.is_empty() {
                     core.workspace.worktree_provenance.remove(&active);
                 } else {
@@ -229,12 +309,23 @@ pub fn reconcile_catalog(core: &mut State, snapshot: &CatalogSnapshot, sync_work
                         .insert(active.clone(), created);
                 }
                 // Mirror display-name overrides from the catalog (a second window sees a rename).
-                let names: std::collections::BTreeMap<String, String> = project
-                    .worktrees
-                    .iter()
-                    .filter(|w| w.display_name != w.dir_name)
-                    .map(|w| (w.dir_name.clone(), w.display_name.clone()))
+                let mut names: std::collections::BTreeMap<String, String> = core
+                    .workspace
+                    .worktree_names
+                    .get(&active)
+                    .into_iter()
+                    .flatten()
+                    .filter(|(d, _)| bound_elsewhere(core, &active, d, daemon))
+                    .map(|(d, n)| (d.clone(), n.clone()))
                     .collect();
+                names.extend(
+                    project
+                        .worktrees
+                        .iter()
+                        .filter(|w| w.display_name != w.dir_name)
+                        .filter(|w| !bound_elsewhere(core, &active, &w.dir_name, daemon))
+                        .map(|w| (w.dir_name.clone(), w.display_name.clone())),
+                );
                 if names.is_empty() {
                     core.workspace.worktree_names.remove(&active);
                 } else {
@@ -449,7 +540,12 @@ mod tests {
         let mut core = State::default();
         let mut welcome = snapshot(vec![("/a", 0)]);
         welcome.env_include_failures = vec![failure("/a"), failure("/b")];
-        reconcile_catalog(&mut core, &welcome, false);
+        reconcile_catalog(
+            &mut core,
+            micold_core::daemons::DaemonId(1),
+            &welcome,
+            false,
+        );
         assert_eq!(
             core.settings.env_include_failures,
             welcome.env_include_failures
@@ -457,13 +553,18 @@ mod tests {
 
         let mut changed = snapshot(vec![("/a", 0)]);
         changed.env_include_failures = vec![failure("/b")];
-        reconcile_catalog(&mut core, &changed, true);
+        reconcile_catalog(&mut core, micold_core::daemons::DaemonId(1), &changed, true);
         assert_eq!(
             core.settings.env_include_failures, changed.env_include_failures,
             "a directory the service stopped reporting must leave the list"
         );
 
-        reconcile_catalog(&mut core, &snapshot(vec![("/a", 0)]), true);
+        reconcile_catalog(
+            &mut core,
+            micold_core::daemons::DaemonId(1),
+            &snapshot(vec![("/a", 0)]),
+            true,
+        );
         assert!(core.settings.env_include_failures.is_empty());
     }
 
@@ -477,14 +578,24 @@ mod tests {
         catalog.projects[0].sessions[0].attention_seq = 7;
         let mut core = State::default();
 
-        reconcile_catalog(&mut core, &catalog, false);
+        reconcile_catalog(
+            &mut core,
+            micold_core::daemons::DaemonId(1),
+            &catalog,
+            false,
+        );
         assert_eq!(
             core.workspace.sessions[&project][0].attention_seq, 7,
             "a session first seen in a snapshot arrives with the snapshot's count"
         );
 
         catalog.projects[0].sessions[0].attention_seq = 9;
-        reconcile_catalog(&mut core, &catalog, false);
+        reconcile_catalog(
+            &mut core,
+            micold_core::daemons::DaemonId(1),
+            &catalog,
+            false,
+        );
         assert_eq!(
             core.workspace.sessions[&project][0].attention_seq, 9,
             "a later snapshot's count replaces the one held"

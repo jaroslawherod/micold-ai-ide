@@ -80,7 +80,12 @@ fn failed() -> WireLifecycle {
 fn an_unchanged_failure_is_said_once_however_many_snapshots_carry_it() {
     let mut core = State::default();
 
-    reconcile_catalog(&mut core, &snapshot(failed()), false);
+    reconcile_catalog(
+        &mut core,
+        micold_core::daemons::DaemonId(1),
+        &snapshot(failed()),
+        false,
+    );
     assert_eq!(
         core.notifications
             .queue
@@ -95,7 +100,12 @@ fn an_unchanged_failure_is_said_once_however_many_snapshots_carry_it() {
     // and the record under test would never be exercised.
     core.notifications.queue.dismiss();
     for _ in 0..5 {
-        reconcile_catalog(&mut core, &snapshot(failed()), false);
+        reconcile_catalog(
+            &mut core,
+            micold_core::daemons::DaemonId(1),
+            &snapshot(failed()),
+            false,
+        );
     }
     assert_eq!(
         core.notifications.queue.visible(),
@@ -110,18 +120,33 @@ fn an_unchanged_failure_is_said_once_however_many_snapshots_carry_it() {
 fn a_failure_after_the_session_has_been_something_else_is_said_again() {
     let mut core = State::default();
 
-    reconcile_catalog(&mut core, &snapshot(failed()), false);
+    reconcile_catalog(
+        &mut core,
+        micold_core::daemons::DaemonId(1),
+        &snapshot(failed()),
+        false,
+    );
     core.notifications.queue.dismiss();
 
     // The user installs the CLI and the session comes up.
-    reconcile_catalog(&mut core, &snapshot(WireLifecycle::Running), false);
+    reconcile_catalog(
+        &mut core,
+        micold_core::daemons::DaemonId(1),
+        &snapshot(WireLifecycle::Running),
+        false,
+    );
     assert!(
         !core.session.announced_start_failures.contains_key(&id()),
         "a session that is no longer failed has no failure outstanding to have been reported"
     );
 
     // …and later it fails again, for the same reason.
-    reconcile_catalog(&mut core, &snapshot(failed()), false);
+    reconcile_catalog(
+        &mut core,
+        micold_core::daemons::DaemonId(1),
+        &snapshot(failed()),
+        false,
+    );
     assert_eq!(
         core.notifications.queue.visible().map(|n| n.message.clone()),
         Some(reason()),
@@ -134,13 +159,19 @@ fn a_failure_after_the_session_has_been_something_else_is_said_again() {
 fn a_different_reason_for_the_same_session_is_news() {
     let mut core = State::default();
 
-    reconcile_catalog(&mut core, &snapshot(failed()), false);
+    reconcile_catalog(
+        &mut core,
+        micold_core::daemons::DaemonId(1),
+        &snapshot(failed()),
+        false,
+    );
     core.notifications.queue.dismiss();
 
     let gone =
         "GitHub Copilot no longer has this conversation. Close this session, or start a new one.";
     reconcile_catalog(
         &mut core,
+        micold_core::daemons::DaemonId(1),
         &snapshot(WireLifecycle::Failed {
             reason: gone.to_string(),
             attempts: 0,
@@ -164,6 +195,7 @@ fn a_failure_with_nothing_to_say_says_nothing() {
 
     reconcile_catalog(
         &mut core,
+        micold_core::daemons::DaemonId(1),
         &snapshot(WireLifecycle::Failed {
             reason: String::new(),
             attempts: 3,

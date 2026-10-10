@@ -141,19 +141,34 @@ fn reconciling_a_catalog_copies_unread() {
     let id = SessionId::new();
     let mut state = State::default();
 
-    reconcile_catalog(&mut state, &catalog(id, true), false);
+    reconcile_catalog(
+        &mut state,
+        micold_core::daemons::DaemonId(1),
+        &catalog(id, true),
+        false,
+    );
     assert!(
         state.workspace.sessions[&project][0].unread,
         "a session first seen in a snapshot arrives unread when the snapshot says so"
     );
 
-    reconcile_catalog(&mut state, &catalog(id, false), false);
+    reconcile_catalog(
+        &mut state,
+        micold_core::daemons::DaemonId(1),
+        &catalog(id, false),
+        false,
+    );
     assert!(
         !state.workspace.sessions[&project][0].unread,
         "a later snapshot in which the session is read replaces the state held"
     );
 
-    reconcile_catalog(&mut state, &catalog(id, true), false);
+    reconcile_catalog(
+        &mut state,
+        micold_core::daemons::DaemonId(1),
+        &catalog(id, true),
+        false,
+    );
     assert!(
         state.workspace.sessions[&project][0].unread,
         "a later snapshot in which the session is unread again replaces the state held"

@@ -285,3 +285,35 @@ pub enum Msg {
     /// for — it asks for the user's attention when the compositor did not give the focus.
     ActivationSettled { check: u64 },
 }
+
+impl Msg {
+    /// The per-daemon state event this report is, when it is one (feature 491, contract
+    /// `client-daemon-routing.md`). Folded by [`micold_core::daemons::DaemonStates::apply`], so the
+    /// 3-failure debounce and the "mismatch is not cured by a failing dial" rule live there.
+    ///
+    /// A failed connect is reported as `ConnectFailed` (from the second consecutive one) and, every
+    /// time, as `Disconnected`; both count as a dial failure, so a daemon that never connected is
+    /// shown unreachable after at most two attempts, well inside the 5 s budget of SC-002.
+    pub fn daemon_event(&self) -> Option<micold_core::daemons::DaemonEvent> {
+        use micold_core::daemons::DaemonEvent;
+        match self {
+            Msg::Connected { .. } => Some(DaemonEvent::Connected),
+            Msg::Disconnected => Some(DaemonEvent::Lost("connection lost".to_string())),
+            Msg::ConnectFailed(reason) | Msg::Refused(reason) => {
+                Some(DaemonEvent::DialFailed(reason.clone()))
+            }
+            Msg::VersionMismatch { client, daemon, .. } => Some(crate::links::refused(
+                client.to_string(),
+                daemon.to_string(),
+            )),
+            Msg::BuildMismatch {
+                client_build,
+                daemon_build,
+            } => Some(crate::links::refused(
+                client_build.clone(),
+                daemon_build.clone(),
+            )),
+            _ => None,
+        }
+    }
+}

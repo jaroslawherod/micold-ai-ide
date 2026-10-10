@@ -171,7 +171,12 @@ fn a_crash_loop_settles_failed_and_drops_the_session() {
     // the half neither side can fail on its own — `announce_start_failures` reads the wire reason,
     // so a give-up the daemon words correctly and the wire flattens reaches the user as nothing.
     let mut core = State::default();
-    reconcile_catalog(&mut core, &state.welcome_payload().0, false);
+    reconcile_catalog(
+        &mut core,
+        micold_core::daemons::DaemonId(1),
+        &state.welcome_payload().0,
+        false,
+    );
     assert_eq!(
         core.notifications
             .queue

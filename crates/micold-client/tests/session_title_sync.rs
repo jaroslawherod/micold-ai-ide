@@ -249,11 +249,17 @@ mod derived_labels {
     #[test]
     fn a_derived_label_is_adopted_onto_a_pending_row() {
         let mut core = State::default();
-        reconcile_catalog(&mut core, &snapshot(SessionLabel::Pending), false);
+        reconcile_catalog(
+            &mut core,
+            micold_core::daemons::DaemonId(1),
+            &snapshot(SessionLabel::Pending),
+            false,
+        );
         assert_eq!(label_shown(&core), SessionLabel::Pending);
 
         reconcile_catalog(
             &mut core,
+            micold_core::daemons::DaemonId(1),
             &snapshot(SessionLabel::Derived(FIRST_TURN.into())),
             false,
         );
@@ -270,11 +276,13 @@ mod derived_labels {
         let mut core = State::default();
         reconcile_catalog(
             &mut core,
+            micold_core::daemons::DaemonId(1),
             &snapshot(SessionLabel::Derived(FIRST_TURN.into())),
             false,
         );
         reconcile_catalog(
             &mut core,
+            micold_core::daemons::DaemonId(1),
             &snapshot(SessionLabel::Named("Autopilot the spec flow".into())),
             false,
         );
@@ -288,13 +296,24 @@ mod derived_labels {
     #[test]
     fn a_pending_summary_never_clears_a_derived_label() {
         let mut core = State::default();
-        reconcile_catalog(&mut core, &snapshot(SessionLabel::Pending), false);
         reconcile_catalog(
             &mut core,
+            micold_core::daemons::DaemonId(1),
+            &snapshot(SessionLabel::Pending),
+            false,
+        );
+        reconcile_catalog(
+            &mut core,
+            micold_core::daemons::DaemonId(1),
             &snapshot(SessionLabel::Derived(FIRST_TURN.into())),
             false,
         );
-        reconcile_catalog(&mut core, &snapshot(SessionLabel::Pending), false);
+        reconcile_catalog(
+            &mut core,
+            micold_core::daemons::DaemonId(1),
+            &snapshot(SessionLabel::Pending),
+            false,
+        );
         assert_eq!(
             label_shown(&core),
             SessionLabel::Derived(FIRST_TURN.into()),

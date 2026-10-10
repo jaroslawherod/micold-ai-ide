@@ -130,6 +130,15 @@ pub enum Message {
     /// All twelve are effects, so this is the one feature whose reducer entry is only in the shell
     /// (data-model §1.1, shape B). `State::update` declines it, as it declined each of the twelve.
     Connection(crate::features::connection::Msg),
+    /// What one daemon's connection actor reports, tagged with that daemon (feature 491). The
+    /// payload is the same vocabulary as [`Message::Connection`]; the id says which daemon's
+    /// socket it came from, so no daemon's report can be taken for another's. Shape B like
+    /// [`Message::Connection`]; fold the state change with
+    /// [`crate::features::connection::Msg::daemon_event`].
+    Daemon(
+        micold_core::daemons::DaemonId,
+        crate::features::connection::Msg,
+    ),
 
     // ---- Feature 027: the session service inside a container ----
     /// Everything the sandbox reports or is asked to do (feature 027; wrapped by 028's FR-001).
@@ -754,6 +763,7 @@ impl State {
             // the same reason: it is runtime, not pure state.
             // A pull request reading is the shell's to start (feature 040, shape B).
             Message::Connection(_)
+            | Message::Daemon(..)
             | Message::Sandbox(_)
             | Message::PrStatus(_)
             | Message::Changes(_)
