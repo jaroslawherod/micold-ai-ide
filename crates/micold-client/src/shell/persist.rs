@@ -1340,11 +1340,16 @@ mod catalog_recovery_tests {
         registry
             .add("Host", DaemonRuntime::Host, true)
             .expect("one host");
-        let mut target = Settings::default();
-        target.daemons = registry.entries().to_vec();
-        target.next_daemon_id = registry.next_id();
-        target.legacy_default_daemon = registry.entries().first().map(|e| e.id);
-        target.daemon.placement = micold_core::sandbox::placement::PlacementKind::LocalSandbox;
+        let mut target = Settings {
+            daemons: registry.entries().to_vec(),
+            next_daemon_id: registry.next_id(),
+            legacy_default_daemon: registry.entries().first().map(|e| e.id),
+            daemon: micold_core::settings::DaemonConfig {
+                placement: micold_core::sandbox::placement::PlacementKind::LocalSandbox,
+                ..Default::default()
+            },
+            ..Settings::default()
+        };
         let mut saved = target.clone();
         saved.theme = micold_core::theme::ThemePreference::Light;
         let baseline = target.clone();
