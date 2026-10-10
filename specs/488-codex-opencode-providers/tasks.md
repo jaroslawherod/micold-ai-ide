@@ -68,7 +68,7 @@ description: "Task list for #488 Codex CLI and OpenCode as session providers"
 
 ## Polish (left to the close unit — changes no code)
 
-- [x] T035 Grep the user guide for each provider and topic (SC-006, US6); run quickstart Parts A and C and record results; `speckit-converge`.
+- [x] T035 (user guide grepped per provider; converge CONVERGED apart from the FR-003 gap in autopilot.md; Part A is the automated gate, green below; Part C real CLIs NOT run: none installed here) Grep the user guide for each provider and topic (SC-006, US6); run quickstart Parts A and C and record results; `speckit-converge`.
 
 ## Dependencies
 

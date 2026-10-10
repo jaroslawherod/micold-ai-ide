@@ -77,3 +77,10 @@ T041 pins, each failing when its constant or filter is mutated (provider.rs line
 | Fallback skips `# AGENTS.md` item | drop that filter | same test |
 
 Note: in the first mutation run (dropped `<` filter) `the_seam_answers_for_activity_tools_readiness_and_trust` also failed once; it passes unmutated and in every other run, and was not reproduced.
+
+## Close remediation (T038-T040, T042)
+
+- T038 `only_a_provider_with_an_activity_source_is_wired_for_activity`: red with `Codex::activity_source` returning `Hooks` ("codex was wired for activity hooks"); restored, green.
+- T039 `a_bound_codex_session_is_named_from_its_first_turn` / `..opencode..`: new tests over existing behaviour, green (retrospective, not red-first).
+- T040 `the_app_start_of_a_session_whose_provider_is_unavailable_fails_naming_it`: rewritten to call `ops::start_session`; green.
+- T042: `Env` guard moved to `tests/support/env.rs`; `mise run duplication` not run here.
