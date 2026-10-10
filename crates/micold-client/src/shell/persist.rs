@@ -407,7 +407,11 @@ fn set_changed(target: &mut Settings, saved: &Settings, baseline: Option<&Settin
     set!(pr_status_enabled);
     // The placement and profile live in the registry's single entry too (feature 491, FR-005):
     // move it with the block still written for rollback.
-    target.set_single_daemon(target.daemon.clone());
+    // Only when the page changed the daemon block: a theme save must not rewrite an entry the
+    // registry holds authoritatively.
+    if changed_value(&saved.daemon, baseline.map(|b| &b.daemon)).is_some() {
+        target.set_single_daemon(target.daemon.clone());
+    }
 }
 
 /// The service-owned fields a save changed: what its `SettingsSet` carries as `Some` (W4.1).
@@ -1325,5 +1329,26 @@ mod catalog_recovery_tests {
 
             assert!(visible(&core).is_none(), "{status:?} was reported");
         }
+    }
+
+    /// Review A F2 (feature 491): a save that did not touch the daemon block leaves the registry's
+    /// entry alone, even when it differs from the rollback block.
+    #[test]
+    fn a_theme_save_does_not_rewrite_the_registry_entry() {
+        use micold_core::daemons::{DaemonRegistry, DaemonRuntime};
+        let mut registry = DaemonRegistry::new(Vec::new(), 1);
+        registry
+            .add("Host", DaemonRuntime::Host, true)
+            .expect("one host");
+        let mut target = Settings::default();
+        target.daemons = registry.entries().to_vec();
+        target.next_daemon_id = registry.next_id();
+        target.legacy_default_daemon = registry.entries().first().map(|e| e.id);
+        target.daemon.placement = micold_core::sandbox::placement::PlacementKind::LocalSandbox;
+        let mut saved = target.clone();
+        saved.theme = ThemePreference::Light;
+        let baseline = target.clone();
+        set_changed(&mut target, &saved, Some(&baseline));
+        assert_eq!(target.daemons, registry.entries().to_vec());
     }
 }

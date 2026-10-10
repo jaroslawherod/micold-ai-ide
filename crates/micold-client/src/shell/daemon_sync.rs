@@ -91,6 +91,9 @@ pub enum PendingOp {
         dir_name: String,
         /// The repository the create was sent for.
         project: PathBuf,
+        /// The daemon chosen when the create was submitted (feature 491, FR-006); the form's
+        /// picker may move while the create runs.
+        daemon: Option<micold_core::daemons::DaemonId>,
     },
     WorktreeDelete(String),
     /// A read-only `BranchPreflight` (feature 016). Carries what the reply needs to continue:
@@ -946,10 +949,13 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
             // A worktree create succeeded: close the form. The worktree itself arrives via
             // the `CatalogChanged` push (reconcile), so the constructed value here is only to
             // reuse `WorktreeCreated`'s form-closing logic (it dedups by dir_name).
-            Some(PendingOp::WorktreeCreate { dir_name, project }) => {
-                // The daemon chosen in the form is the worktree's binding (feature 491, FR-006).
-                // Read before `Created` closes the form.
-                if let Some(id) = app.core.worktree_form.form.as_ref().and_then(|f| f.daemon) {
+            Some(PendingOp::WorktreeCreate {
+                dir_name,
+                project,
+                daemon,
+            }) => {
+                // The daemon chosen at submit is the worktree's binding (feature 491, FR-006).
+                if let Some(id) = daemon {
                     bind_created_worktree(app, &project, &dir_name, id);
                 }
                 let path = project.join(".claude/worktrees").join(&dir_name);
@@ -2818,6 +2824,7 @@ pub fn send_worktree_create(
         PendingOp::WorktreeCreate {
             dir_name: dir_name.clone(),
             project: project.clone(),
+            daemon: app.core.worktree_form.form.as_ref().and_then(|f| f.daemon),
         },
         move |req| ClientMsg::WorktreeCreate {
             req,
@@ -3516,6 +3523,7 @@ pub(crate) mod tests {
             PendingOp::WorktreeCreate {
                 dir_name: "feat-x".into(),
                 project: PathBuf::from("/repo"),
+                daemon: None,
             },
             |req| ClientMsg::ProjectAdd {
                 req,

@@ -644,6 +644,23 @@ fn backup_path_for(path: &Path) -> PathBuf {
 
 /// Write `state` to `path` atomically (temp file in the same directory, then rename), creating
 /// the parent directory if needed. Shared by every per-project state write.
+/// Hold the exclusive lock that serialises read-modify-write cycles on one project's state file
+/// (feature 491): the daemon's `save` and the client's `save_binding` both rewrite it. A sidecar,
+/// because the write replaces the file by rename, so a lock on it would be on a dead inode.
+fn lock_project_state(path: &Path) -> io::Result<std::fs::File> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let lock = std::fs::OpenOptions::new()
+        .create(true)
+        .read(true)
+        .write(true)
+        .truncate(false)
+        .open(path.with_extension("json.lock"))?;
+    lock.lock()?;
+    Ok(lock)
+}
+
 fn write_project_state(path: &Path, state: &StoredProjectState) -> io::Result<()> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
@@ -917,6 +934,7 @@ impl ProjectStore for JsonFileStore {
 
     fn save_binding(&self, project_path: &Path, key: &str, daemon: DaemonId) -> io::Result<()> {
         let path = self.project_state_path(project_path);
+        let _lock = lock_project_state(&path)?;
         // A missing file is refused rather than created: a state file with only bindings in it
         // would be authoritative on the next load and hide the sessions a pre-split catalog still
         // carries. A corrupt one is refused for the reason `save` skips it.
@@ -1130,6 +1148,17 @@ impl ProjectStore for JsonFileStore {
             let path = self.project_state_path(&project.path);
             // Feature 491: bindings are written by the client alone (`save_binding`), so what is
             // on disk wins over this snapshot, which may predate it.
+            // The read and the write are one critical section with `save_binding`'s, so a binding
+            // written between this save's load and its write is not lost. A binding is never
+            // removed here: one outliving its worktree is dropped by nobody yet (follow-up).
+            let _lock = match lock_project_state(&path) {
+                Ok(lock) => lock,
+                Err(err) => {
+                    first_err.get_or_insert(err);
+                    state_write_failed[i] = true;
+                    continue;
+                }
+            };
             if let ProjectStateLoad::Found(on_disk) = load_project_state(&path) {
                 state.bindings.extend(on_disk.bindings);
             }
