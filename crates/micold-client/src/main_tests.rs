@@ -235,9 +235,7 @@ fn terminal_resized_remembers_the_pane_size_for_future_spawns() {
 /// asserting the message order on the wire.
 #[test]
 fn displaying_a_session_states_the_pane_size_before_starting_it() {
-    let (tx, mut rx) = iced::futures::channel::mpsc::unbounded();
-    let mut app = base_app();
-    app.connect_test_daemon(micold_client::daemon::Outbox::new(tx));
+    let (mut app, mut rx) = connected_app();
     app.core.workspace.active = Some(std::path::PathBuf::from("/tmp/project"));
     let id = SessionId::new();
     app.last_grid = Some((220, 60));
@@ -269,9 +267,7 @@ fn displaying_a_session_states_the_pane_size_before_starting_it() {
 /// and the daemon's own default applies. A zero-size guess here would be worse than no guess.
 #[test]
 fn displaying_a_session_before_the_pane_has_a_size_sends_only_the_start() {
-    let (tx, mut rx) = iced::futures::channel::mpsc::unbounded();
-    let mut app = base_app();
-    app.connect_test_daemon(micold_client::daemon::Outbox::new(tx));
+    let (mut app, mut rx) = connected_app();
     app.core.workspace.active = Some(std::path::PathBuf::from("/tmp/project"));
     let id = SessionId::new();
     assert_eq!(app.last_grid, None);
@@ -311,7 +307,7 @@ fn the_ai_cli_restart_control_sends_a_restart_and_selecting_sends_a_start() {
         &mut app,
         Message::Session(SessionMsg::TerminalRestartRequested),
     );
-    let sent: Vec<ClientMsg> = std::iter::from_fn(|| rx.try_recv().ok()).collect();
+    let sent: Vec<ClientMsg> = drain(&mut rx);
     assert!(
         sent.iter()
             .any(|m| matches!(m, ClientMsg::SessionRestart { session } if *session == id)),
@@ -327,7 +323,7 @@ fn the_ai_cli_restart_control_sends_a_restart_and_selecting_sends_a_start() {
     );
 
     let _ = update_inner(&mut app, Message::Session(SessionMsg::Selected(id)));
-    let sent: Vec<ClientMsg> = std::iter::from_fn(|| rx.try_recv().ok()).collect();
+    let sent: Vec<ClientMsg> = drain(&mut rx);
     assert!(
         sent.iter()
             .any(|m| matches!(m, ClientMsg::SessionStart { session } if *session == id))
@@ -386,11 +382,7 @@ fn connect(
             settings: quiet_settings(),
         }),
     );
-    let mut sent = Vec::new();
-    while let Ok(msg) = rx.try_recv() {
-        sent.push(msg);
-    }
-    sent
+    drain(&mut rx)
 }
 
 /// The container's log is an *answer*, and an empty one is an answer too (FR-038).
@@ -858,6 +850,51 @@ fn base_app_fields() -> App {
     }
 }
 
+type SentRx = iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg>;
+
+/// A window already connected to a daemon: `base_app()` with an outbox, and the receiver that reads
+/// what the app sent.
+pub(crate) fn connected_app() -> (App, SentRx) {
+    let (tx, rx) = iced::futures::channel::mpsc::unbounded();
+    let mut app = base_app();
+    app.connect_test_daemon(micold_client::daemon::Outbox::new(tx));
+    (app, rx)
+}
+
+/// Everything sent to the daemon since the last drain.
+pub(crate) fn drain(rx: &mut SentRx) -> Vec<ClientMsg> {
+    std::iter::from_fn(|| rx.try_recv().ok()).collect()
+}
+
+/// What `pick` makes of each message sent since the last drain, in order, skipping the `None`s.
+pub(crate) fn sent_matching<T>(
+    rx: &mut SentRx,
+    pick: impl FnMut(ClientMsg) -> Option<T>,
+) -> Vec<T> {
+    drain(rx).into_iter().filter_map(pick).collect()
+}
+
+/// Run `work` and every message it produces back through the shell until nothing is left.
+pub(crate) fn settle(app: &mut App, work: Task<Message>) {
+    let mut queue: std::collections::VecDeque<Message> = messages(work).into();
+    while let Some(message) = queue.pop_front() {
+        queue.extend(messages(update_inner(app, message)));
+    }
+}
+
+/// Answer the `RemoteList` request `req` with `remotes`.
+pub(crate) fn answer_remotes(app: &mut App, req: u64, remotes: Vec<micold_core::git::GitRemote>) {
+    let work = shell::daemon_sync::on_daemon_event(
+        app,
+        micold_core::daemons::DaemonId(1),
+        DaemonMsg::OperationOk {
+            req,
+            result: micold_core::protocol::messages::OperationResult::RemoteList { remotes },
+        },
+    );
+    settle(app, work);
+}
+
 // --- FR-035a: an accepted fallback has to reach the connection, not only the banner --------
 
 /// The failure [`app_with_a_failed_sandbox`] starts from: the runtime is not installed.
@@ -1060,9 +1097,7 @@ fn app_at_the_tail() -> (
     App,
     iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg>,
 ) {
-    let (tx, rx) = iced::futures::channel::mpsc::unbounded();
-    let mut app = base_app();
-    app.connect_test_daemon(micold_client::daemon::Outbox::new(tx));
+    let (mut app, rx) = connected_app();
     let id = SessionId::new();
     app.core.session.active = Some(id);
     app.grids.insert(
@@ -1075,16 +1110,14 @@ fn app_at_the_tail() -> (
     (app, rx)
 }
 
-fn scrollback_ranges(
-    rx: &mut iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg>,
-) -> Vec<Range<LineId>> {
-    let mut out = Vec::new();
-    while let Ok(msg) = rx.try_recv() {
-        if let ClientMsg::ScrollbackRequest { ranges, .. } = msg {
-            out.extend(ranges);
-        }
-    }
-    out
+fn scrollback_ranges(rx: &mut SentRx) -> Vec<Range<LineId>> {
+    sent_matching(rx, |msg| match msg {
+        ClientMsg::ScrollbackRequest { ranges, .. } => Some(ranges),
+        _ => None,
+    })
+    .into_iter()
+    .flatten()
+    .collect()
 }
 
 /// `010` BUG-021, measured the way the report measured it: not one request, but a gesture.
@@ -1211,9 +1244,7 @@ fn app_creating_a_worktree() -> (
     App,
     iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg>,
 ) {
-    let (tx, rx) = iced::futures::channel::mpsc::unbounded();
-    let mut app = base_app();
-    app.connect_test_daemon(micold_client::daemon::Outbox::new(tx));
+    let (mut app, rx) = connected_app();
     let project = PathBuf::from("/repo/demo");
     app.core.workspace.active = Some(project.clone());
     app.core.update(Message::WorktreeForm(FormMsg::Opened));
@@ -1306,9 +1337,7 @@ fn the_unknown_outcome_survives_the_list_refresh_it_points_at() {
 /// nothing to do with it (FR-007 keeps the inputs even across a cancel).
 #[test]
 fn a_disconnect_with_no_create_in_flight_leaves_the_form_alone() {
-    let (tx, _rx) = iced::futures::channel::mpsc::unbounded();
-    let mut app = base_app();
-    app.connect_test_daemon(micold_client::daemon::Outbox::new(tx));
+    let (mut app, _rx) = connected_app();
     app.core.update(Message::WorktreeForm(FormMsg::Opened));
     app.core
         .update(Message::WorktreeForm(FormMsg::NameChanged("probe".into())));
@@ -1872,9 +1901,7 @@ fn the_test_app_cannot_reach_the_real_settings_file() {
 /// only after its next restart.
 #[test]
 fn settings_saved_sends_settings_set_to_a_connected_daemon() {
-    let (tx, mut rx) = iced::futures::channel::mpsc::unbounded();
-    let mut app = base_app();
-    app.connect_test_daemon(micold_client::daemon::Outbox::new(tx));
+    let (mut app, mut rx) = connected_app();
     app.core.settings.settings_draft = Some(SettingsDraft {
         terminal: TerminalDraft {
             scrollback_lines: "20000".into(),
@@ -1923,9 +1950,7 @@ fn settings_saved_sends_settings_set_to_a_connected_daemon() {
 /// saving tells the connected service, which is what reads it at the next spawn.
 #[test]
 fn turning_the_binding_toggle_off_and_saving_tells_the_service() {
-    let (tx, mut rx) = iced::futures::channel::mpsc::unbounded();
-    let mut app = base_app();
-    app.connect_test_daemon(micold_client::daemon::Outbox::new(tx));
+    let (mut app, mut rx) = connected_app();
     feed(
         &mut app,
         DaemonMsg::SettingsChanged {
@@ -1939,7 +1964,7 @@ fn turning_the_binding_toggle_off_and_saving_tells_the_service() {
     );
     let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Saved));
 
-    let sent: Vec<ClientMsg> = std::iter::from_fn(|| rx.try_recv().ok()).collect();
+    let sent: Vec<ClientMsg> = drain(&mut rx);
     let told = sent.iter().find_map(|msg| match msg {
         ClientMsg::SettingsSet {
             tool_server_enabled,
@@ -2026,9 +2051,7 @@ fn the_desktop_notifications_message_changes_the_draft() {
 /// connected service, which is what refuses the claims of every window.
 #[test]
 fn turning_desktop_notifications_off_and_saving_tells_the_service() {
-    let (tx, mut rx) = iced::futures::channel::mpsc::unbounded();
-    let mut app = base_app();
-    app.connect_test_daemon(micold_client::daemon::Outbox::new(tx));
+    let (mut app, mut rx) = connected_app();
     feed(
         &mut app,
         DaemonMsg::SettingsChanged {
@@ -2042,7 +2065,7 @@ fn turning_desktop_notifications_off_and_saving_tells_the_service() {
     );
     let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Saved));
 
-    let sent: Vec<ClientMsg> = std::iter::from_fn(|| rx.try_recv().ok()).collect();
+    let sent: Vec<ClientMsg> = drain(&mut rx);
     let told = sent.iter().find_map(|msg| match msg {
         ClientMsg::SettingsSet {
             desktop_notifications,
@@ -2061,9 +2084,7 @@ fn turning_desktop_notifications_off_and_saving_tells_the_service() {
 /// does not name it, so it cannot undo another window's change.
 #[test]
 fn saving_without_touching_desktop_notifications_does_not_name_them() {
-    let (tx, mut rx) = iced::futures::channel::mpsc::unbounded();
-    let mut app = base_app();
-    app.connect_test_daemon(micold_client::daemon::Outbox::new(tx));
+    let (mut app, mut rx) = connected_app();
     feed(
         &mut app,
         DaemonMsg::SettingsChanged {
@@ -2073,7 +2094,7 @@ fn saving_without_touching_desktop_notifications_does_not_name_them() {
     let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Opened));
     let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Saved));
 
-    let sent: Vec<ClientMsg> = std::iter::from_fn(|| rx.try_recv().ok()).collect();
+    let sent: Vec<ClientMsg> = drain(&mut rx);
     let told = sent.iter().find_map(|msg| match msg {
         ClientMsg::SettingsSet {
             desktop_notifications,
@@ -2265,7 +2286,7 @@ fn a_stale_settings_page_saves_only_what_its_user_changed() {
             ..store.load().settings
         })
         .expect("the fake store saves");
-    let _ = std::iter::from_fn(|| rx.try_recv().ok()).count();
+    drain(&mut rx);
 
     let _ = update_inner(
         &mut app,
@@ -2273,7 +2294,7 @@ fn a_stale_settings_page_saves_only_what_its_user_changed() {
     );
     let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Saved));
 
-    let sent: Vec<ClientMsg> = std::iter::from_fn(|| rx.try_recv().ok()).collect();
+    let sent: Vec<ClientMsg> = drain(&mut rx);
     let told = sent.iter().find_map(|msg| match msg {
         ClientMsg::SettingsSet {
             pi_activity_component,
@@ -2310,10 +2331,8 @@ fn a_stale_settings_page_saves_only_what_its_user_changed() {
 
 /// What a save told the service about the pull request switch: `None` when no `SettingsSet` went
 /// out, `Some(None)` when one went out without the field, `Some(Some(v))` when it carried `v`.
-fn pr_status_told(
-    rx: &mut iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg>,
-) -> Option<Option<bool>> {
-    std::iter::from_fn(|| rx.try_recv().ok()).find_map(|msg| match msg {
+fn pr_status_told(rx: &mut SentRx) -> Option<Option<bool>> {
+    drain(rx).into_iter().find_map(|msg| match msg {
         ClientMsg::SettingsSet {
             pr_status_enabled, ..
         } => Some(pr_status_enabled),
@@ -2325,9 +2344,7 @@ fn pr_status_told(
 /// saving tells the connected service, which stores it and tells every window.
 #[test]
 fn turning_the_pr_status_switch_on_and_saving_tells_the_service() {
-    let (tx, mut rx) = iced::futures::channel::mpsc::unbounded();
-    let mut app = base_app();
-    app.connect_test_daemon(micold_client::daemon::Outbox::new(tx));
+    let (mut app, mut rx) = connected_app();
     feed(
         &mut app,
         DaemonMsg::SettingsChanged {
@@ -2348,9 +2365,7 @@ fn turning_the_pr_status_switch_on_and_saving_tells_the_service() {
 /// writes over another window's change to it.
 #[test]
 fn a_save_that_leaves_the_pr_status_switch_alone_does_not_send_it() {
-    let (tx, mut rx) = iced::futures::channel::mpsc::unbounded();
-    let mut app = base_app();
-    app.connect_test_daemon(micold_client::daemon::Outbox::new(tx));
+    let (mut app, mut rx) = connected_app();
     feed(
         &mut app,
         DaemonMsg::SettingsChanged {
@@ -2367,9 +2382,7 @@ fn a_save_that_leaves_the_pr_status_switch_alone_does_not_send_it() {
 /// U105: turning it off when the service has it on is a change, and is sent as `Some(false)`.
 #[test]
 fn turning_the_pr_status_switch_off_and_saving_tells_the_service() {
-    let (tx, mut rx) = iced::futures::channel::mpsc::unbounded();
-    let mut app = base_app();
-    app.connect_test_daemon(micold_client::daemon::Outbox::new(tx));
+    let (mut app, mut rx) = connected_app();
     feed(
         &mut app,
         DaemonMsg::SettingsChanged {
@@ -2434,9 +2447,7 @@ fn choosing_a_cross_session_value_and_saving_tells_the_service() {
         CrossSessionAccess::Off,
         CrossSessionAccess::Auto,
     ] {
-        let (tx, mut rx) = iced::futures::channel::mpsc::unbounded();
-        let mut app = base_app();
-        app.connect_test_daemon(micold_client::daemon::Outbox::new(tx));
+        let (mut app, mut rx) = connected_app();
         // The window holds another value, so choosing this one is a change to save.
         app.core.session.cross_session_access = if chosen == CrossSessionAccess::Off {
             CrossSessionAccess::Auto
@@ -2450,7 +2461,7 @@ fn choosing_a_cross_session_value_and_saving_tells_the_service() {
         );
         let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Saved));
 
-        let sent: Vec<ClientMsg> = std::iter::from_fn(|| rx.try_recv().ok()).collect();
+        let sent: Vec<ClientMsg> = drain(&mut rx);
         let told = sent.iter().find_map(|msg| match msg {
             ClientMsg::SettingsSet {
                 cross_session_access,
@@ -3814,21 +3825,16 @@ fn connected_with_outbox(
             settings: quiet_settings(),
         }),
     );
-    while rx.try_recv().is_ok() {}
+    drain(&mut rx);
     rx
 }
 
 /// Every directory an availability request sent since the last drain named.
-fn availability_asked_for(
-    rx: &mut iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg>,
-) -> Vec<Option<PathBuf>> {
-    let mut asked = Vec::new();
-    while let Ok(msg) = rx.try_recv() {
-        if let ClientMsg::AiCliAvailabilityRequest { cwd, .. } = msg {
-            asked.push(cwd);
-        }
-    }
-    asked
+fn availability_asked_for(rx: &mut SentRx) -> Vec<Option<PathBuf>> {
+    sent_matching(rx, |msg| match msg {
+        ClientMsg::AiCliAvailabilityRequest { cwd, .. } => Some(cwd),
+        _ => None,
+    })
 }
 
 /// U11: the per-session start menu for a worktree asks which CLIs a session *there* would find —
@@ -3894,12 +3900,10 @@ fn an_answer_to_an_earlier_question_does_not_replace_a_later_one() {
             unavailable_default: None,
         }),
     );
-    let mut asked = Vec::new();
-    while let Ok(msg) = rx.try_recv() {
-        if let ClientMsg::AiCliAvailabilityRequest { req, .. } = msg {
-            asked.push(req);
-        }
-    }
+    let asked = sent_matching(&mut rx, |msg| match msg {
+        ClientMsg::AiCliAvailabilityRequest { req, .. } => Some(req),
+        _ => None,
+    });
     let [earlier, later] = asked[..] else {
         panic!("fixture check: Settings and the menu each ask once, got {asked:?}");
     };
@@ -4019,16 +4023,11 @@ fn connect_with_settings_keeping_outbox(
 }
 
 /// Every availability request sent since the last drain, as `(req, cwd)`.
-fn availability_requests(
-    rx: &mut iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg>,
-) -> Vec<(u64, Option<PathBuf>)> {
-    let mut asked = Vec::new();
-    while let Ok(msg) = rx.try_recv() {
-        if let ClientMsg::AiCliAvailabilityRequest { req, cwd } = msg {
-            asked.push((req, cwd));
-        }
-    }
-    asked
+fn availability_requests(rx: &mut SentRx) -> Vec<(u64, Option<PathBuf>)> {
+    sent_matching(rx, |msg| match msg {
+        ClientMsg::AiCliAvailabilityRequest { req, cwd } => Some((req, cwd)),
+        _ => None,
+    })
 }
 
 /// The service's reply to `req`.
@@ -5217,11 +5216,11 @@ mod script_path_report {
     /// sent, or `None` when it sent none.
     fn save_edited(
         app: &mut App,
-        rx: &mut iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg>,
+        rx: &mut SentRx,
         edit: impl FnOnce(&mut SettingsDraft),
     ) -> Option<Told> {
         let _ = open_and_check(app);
-        let _ = std::iter::from_fn(|| rx.try_recv().ok()).count();
+        drain(rx);
         edit(
             app.core
                 .settings
@@ -5230,7 +5229,7 @@ mod script_path_report {
                 .expect("Settings is open"),
         );
         save_and_check(app);
-        std::iter::from_fn(|| rx.try_recv().ok()).find_map(|msg| match msg {
+        drain(rx).into_iter().find_map(|msg| match msg {
             ClientMsg::SettingsSet {
                 scrollback_lines,
                 env_include_enabled,
@@ -5420,7 +5419,7 @@ mod script_path_report {
         // Another limit of the same sandbox profile (review A, F1).
         draft.daemon.memory_mib = "1234".into();
         save_and_check(&mut app);
-        let _ = std::iter::from_fn(|| rx.try_recv().ok()).count();
+        drain(&mut rx);
 
         let saved = store.saves().last().cloned().expect("the save is written");
         let mut expected = micold_core::settings::Settings {
@@ -6118,7 +6117,6 @@ mod issue_source {
     use micold_core::naming::ConventionalType;
     use micold_core::protocol::messages::{ErrorKind, OperationResult};
     use micold_core::typeahead::Direction;
-    use std::collections::VecDeque;
     use std::sync::Mutex;
 
     const PROJECT: &str = "/repo/demo";
@@ -6199,14 +6197,6 @@ mod issue_source {
         }
     }
 
-    /// Run `work` and every message it produces back through the shell until nothing is left.
-    fn settle(app: &mut App, work: Task<Message>) {
-        let mut queue: VecDeque<Message> = messages(work).into();
-        while let Some(message) = queue.pop_front() {
-            queue.extend(messages(update_inner(app, message)));
-        }
-    }
-
     fn send(app: &mut App, msg: FormMsg) {
         let work = update_inner(app, Message::WorktreeForm(msg));
         settle(app, work);
@@ -6221,16 +6211,11 @@ mod issue_source {
     }
 
     /// Every `RemoteList` sent so far, drained from the outbox.
-    fn remote_lists_sent(
-        rx: &mut iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg>,
-    ) -> Vec<(u64, PathBuf)> {
-        let mut sent = Vec::new();
-        while let Ok(msg) = rx.try_recv() {
-            if let ClientMsg::RemoteList { req, project } = msg {
-                sent.push((req, project));
-            }
-        }
-        sent
+    fn remote_lists_sent(rx: &mut SentRx) -> Vec<(u64, PathBuf)> {
+        sent_matching(rx, |msg| match msg {
+            ClientMsg::RemoteList { req, project } => Some((req, project)),
+            _ => None,
+        })
     }
 
     fn github_remote() -> Vec<GitRemote> {
@@ -6238,18 +6223,6 @@ mod issue_source {
             name: "origin".into(),
             url: "git@github.com:o/r.git".into(),
         }]
-    }
-
-    fn answer_remotes(app: &mut App, req: u64, remotes: Vec<GitRemote>) {
-        let work = shell::daemon_sync::on_daemon_event(
-            app,
-            micold_core::daemons::DaemonId(1),
-            DaemonMsg::OperationOk {
-                req,
-                result: OperationResult::RemoteList { remotes },
-            },
-        );
-        settle(app, work);
     }
 
     /// Open the form and answer its `RemoteList` with `remotes`.
@@ -6730,16 +6703,11 @@ mod issue_source {
     }
 
     /// The branch each `BranchPreflight` in the outbox asked about.
-    fn preflights_sent(
-        rx: &mut iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg>,
-    ) -> Vec<String> {
-        let mut sent = Vec::new();
-        while let Ok(msg) = rx.try_recv() {
-            if let ClientMsg::BranchPreflight { branch, .. } = msg {
-                sent.push(branch);
-            }
-        }
-        sent
+    fn preflights_sent(rx: &mut SentRx) -> Vec<String> {
+        sent_matching(rx, |msg| match msg {
+            ClientMsg::BranchPreflight { branch, .. } => Some(branch),
+            _ => None,
+        })
     }
 
     /// A6 — submitting after a pick sends what a new-branch submit sends, and a taken name raises
@@ -7543,12 +7511,10 @@ mod the_settings_note_explains_a_missing_cli {
         env: Option<SpawnEnv>,
     ) {
         let _ = update_inner(app, Message::Settings(SettingsMsg::Opened));
-        let mut asked = Vec::new();
-        while let Ok(msg) = sent.try_recv() {
-            if let ClientMsg::AiCliAvailabilityRequest { req, cwd: None } = msg {
-                asked.push(req);
-            }
-        }
+        let asked = sent_matching(sent, |msg| match msg {
+            ClientMsg::AiCliAvailabilityRequest { req, cwd: None } => Some(req),
+            _ => None,
+        });
         let [req] = asked[..] else {
             panic!(
                 "fixture check: opening Settings asks about the home directory once, got {asked:?}"
@@ -7893,10 +7859,7 @@ mod a_missing_default_says_why_the_list_opened {
             "and it offers what a session there finds"
         );
 
-        let mut after = Vec::new();
-        while let Ok(msg) = sent.try_recv() {
-            after.push(msg);
-        }
+        let after = drain(&mut sent);
         assert!(
             matches!(
                 &after[..],
@@ -8194,10 +8157,7 @@ mod a_rows_cli_list_shows_every_cli_and_says_why_one_is_disabled {
             "a disabled entry is not among the CLIs a session can start on"
         );
 
-        let mut after = Vec::new();
-        while let Ok(msg) = sent.try_recv() {
-            after.push(msg);
-        }
+        let after = drain(&mut sent);
         assert!(
             after
                 .iter()
@@ -8427,7 +8387,7 @@ mod pr_status {
         CheckStatus, FakePullRequestSource, PrState, PullRequestSource, PullRequestStatus,
         ReadingFailure, ReviewState,
     };
-    use std::collections::{BTreeMap, VecDeque};
+    use std::collections::BTreeMap;
 
     const FAKE_GH: &str = "/fake/bin/gh";
 
@@ -8519,14 +8479,6 @@ mod pr_status {
         listing(&[("a", Some("feat/a"))])
     }
 
-    /// Run `work` and every message it produces back through the shell until nothing is left.
-    fn settle(app: &mut App, work: Task<Message>) {
-        let mut queue: VecDeque<Message> = messages(work).into();
-        while let Some(message) = queue.pop_front() {
-            queue.extend(messages(update_inner(app, message)));
-        }
-    }
-
     /// A daemon message whose follow-up is dropped: for a reading that is the 10-second timer.
     fn daemon(app: &mut App, event: DaemonMsg) {
         let _ = shell::daemon_sync::on_daemon_event(app, micold_core::daemons::DaemonId(1), event);
@@ -8548,11 +8500,7 @@ mod pr_status {
 
     /// Everything sent to the daemon so far, drained from the outbox.
     fn sent(rig: &mut Rig) -> Vec<ClientMsg> {
-        let mut sent = Vec::new();
-        while let Ok(msg) = rig.rx.try_recv() {
-            sent.push(msg);
-        }
-        sent
+        drain(&mut rig.rx)
     }
 
     /// The `req` of every `RemoteList` sent so far.
@@ -8564,18 +8512,6 @@ mod pr_status {
                 _ => None,
             })
             .collect()
-    }
-
-    fn answer_remotes(app: &mut App, req: u64, remotes: Vec<GitRemote>) {
-        let work = shell::daemon_sync::on_daemon_event(
-            app,
-            micold_core::daemons::DaemonId(1),
-            DaemonMsg::OperationOk {
-                req,
-                result: OperationResult::RemoteList { remotes },
-            },
-        );
-        settle(app, work);
     }
 
     /// `Attached`, the listing, and the remotes answered with a GitHub remote: one whole reading.
@@ -8891,13 +8827,7 @@ mod pr_status {
             release: std::sync::Mutex::new(release_rx),
         });
         let (mut app, mut rx) = app_over(Some(FAKE_GH), source);
-        let mut rig_sent = || {
-            let mut all = Vec::new();
-            while let Ok(msg) = rx.try_recv() {
-                all.push(msg);
-            }
-            all
-        };
+        let mut rig_sent = || drain(&mut rx);
         attached(&mut app);
         listed(&mut app, one_worktree());
         let req = rig_sent()
@@ -9639,9 +9569,7 @@ mod pr_status {
 #[test]
 fn toggling_a_kind_changes_only_it_and_saving_sends_the_whole_value() {
     use micold_core::attention::{NotificationKind, NotificationKinds};
-    let (tx, mut rx) = iced::futures::channel::mpsc::unbounded();
-    let mut app = base_app();
-    app.connect_test_daemon(micold_client::daemon::Outbox::new(tx));
+    let (mut app, mut rx) = connected_app();
     feed(
         &mut app,
         DaemonMsg::SettingsChanged {
@@ -9669,7 +9597,7 @@ fn toggling_a_kind_changes_only_it_and_saving_sends_the_whole_value() {
         expected
     );
     let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Saved));
-    let sent: Vec<ClientMsg> = std::iter::from_fn(|| rx.try_recv().ok()).collect();
+    let sent: Vec<ClientMsg> = drain(&mut rx);
     let told = sent.iter().find_map(|msg| match msg {
         ClientMsg::SettingsSet {
             notification_kinds, ..
@@ -9683,9 +9611,7 @@ fn toggling_a_kind_changes_only_it_and_saving_sends_the_whole_value() {
 /// sends 20; a bad value sends nothing and names the field.
 #[test]
 fn the_threshold_is_edited_as_text_and_saved_as_a_number() {
-    let (tx, mut rx) = iced::futures::channel::mpsc::unbounded();
-    let mut app = base_app();
-    app.connect_test_daemon(micold_client::daemon::Outbox::new(tx));
+    let (mut app, mut rx) = connected_app();
     feed(
         &mut app,
         DaemonMsg::SettingsChanged {
@@ -9711,7 +9637,7 @@ fn the_threshold_is_edited_as_text_and_saved_as_a_number() {
     assert_eq!(draft(&app).environment, expected);
 
     let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Saved));
-    let sent: Vec<ClientMsg> = std::iter::from_fn(|| rx.try_recv().ok()).collect();
+    let sent: Vec<ClientMsg> = drain(&mut rx);
     assert!(
         !sent
             .iter()
@@ -9724,7 +9650,7 @@ fn the_threshold_is_edited_as_text_and_saved_as_a_number() {
         Message::Settings(SettingsMsg::LongTaskThresholdChanged("20".into())),
     );
     let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Saved));
-    let sent: Vec<ClientMsg> = std::iter::from_fn(|| rx.try_recv().ok()).collect();
+    let sent: Vec<ClientMsg> = drain(&mut rx);
     let told = sent.iter().find_map(|msg| match msg {
         ClientMsg::SettingsSet {
             long_task_threshold_secs,
@@ -9981,16 +9907,11 @@ fn focused_on_a_session_of(
 }
 
 /// Every `WindowView` on the wire since the last drain, as `(focused, in_view)`.
-fn window_views(
-    rx: &mut iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg>,
-) -> Vec<(bool, Option<SessionId>)> {
-    let mut views = Vec::new();
-    while let Ok(msg) = rx.try_recv() {
-        if let ClientMsg::WindowView { focused, in_view } = msg {
-            views.push((focused, in_view));
-        }
-    }
-    views
+fn window_views(rx: &mut SentRx) -> Vec<(bool, Option<SessionId>)> {
+    sent_matching(rx, |msg| match msg {
+        ClientMsg::WindowView { focused, in_view } => Some((focused, in_view)),
+        _ => None,
+    })
 }
 
 /// The reported defect (#568): another window takes the project over, and this one keeps telling
@@ -10259,9 +10180,7 @@ mod panes {
         Vec<SessionId>,
         iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg>,
     ) {
-        let (tx, rx) = iced::futures::channel::mpsc::unbounded();
-        let mut app = base_app();
-        app.connect_test_daemon(micold_client::daemon::Outbox::new(tx));
+        let (mut app, rx) = connected_app();
         let project = PathBuf::from("/repo/panes");
         app.core.workspace.projects.push(Project::new(
             project.clone(),
@@ -10277,16 +10196,6 @@ mod panes {
         app.core.session.active = Some(ids[0]);
         crate::shell::panes::sync(&mut app);
         (app, ids, rx)
-    }
-
-    fn drain(
-        rx: &mut iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg>,
-    ) -> Vec<ClientMsg> {
-        let mut sent = Vec::new();
-        while let Ok(m) = rx.try_recv() {
-            sent.push(m);
-        }
-        sent
     }
 
     fn layout_of(app: &App) -> PaneLayout {
@@ -10720,7 +10629,7 @@ mod panes {
         size_pane(&mut app, first, 80, 24);
         size_pane(&mut app, second, 60, 20);
         let _ = drain(&mut rx);
-        let resizes = |rx: &mut iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg>| {
+        let resizes = |rx: &mut SentRx| {
             drain(rx)
                 .into_iter()
                 .filter_map(|m| match m {
@@ -10756,10 +10665,6 @@ mod panes {
 
     use micold_core::pane_layout::SplitEvent;
 
-    fn wire(rx: &mut iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg>) -> Vec<ClientMsg> {
-        drain(rx)
-    }
-
     /// FR-007, SC-005: closing a pane sends nothing that stops, restarts or detaches a session, and
     /// the session stays in the workspace (tab strip and sidebar read it from there).
     #[test]
@@ -10768,12 +10673,12 @@ mod panes {
         let first = layout_of(&app).focused();
         let second = split_focused(&mut app, Axis::Vertical);
         assert_eq!(layout_of(&app).focused(), second);
-        let _ = wire(&mut rx);
+        let _ = drain(&mut rx);
         pane_msg(&mut app, PaneMsg::Close(second));
         let l = layout_of(&app);
         assert_eq!(l.len(), 1);
         assert_eq!(l.focused(), first, "focus moves to the surviving pane");
-        for m in wire(&mut rx) {
+        for m in drain(&mut rx) {
             assert!(
                 !matches!(
                     m,
@@ -10804,7 +10709,7 @@ mod panes {
         let (mut app, ids, mut rx) = app_with_sessions(2);
         let first = layout_of(&app).focused();
         let second = split_focused(&mut app, Axis::Vertical);
-        let _ = wire(&mut rx);
+        let _ = drain(&mut rx);
         pane_msg(&mut app, PaneMsg::Gesture(SplitEvent::Swap(first, second)));
         let l = layout_of(&app);
         assert_eq!(
@@ -10817,7 +10722,7 @@ mod panes {
         );
         assert_eq!(l.focused(), second, "focus follows the moved terminal");
         assert_eq!(app.core.session.active, Some(ids[0]));
-        for m in wire(&mut rx) {
+        for m in drain(&mut rx) {
             assert!(
                 !matches!(
                     m,
@@ -10915,7 +10820,7 @@ mod panes {
         let second = split_focused(&mut app, Axis::Vertical);
         size_pane(&mut app, first, 100, 40);
         size_pane(&mut app, second, 100, 40);
-        let _ = wire(&mut rx);
+        let _ = drain(&mut rx);
         for (bp, cols) in [(3000u16, 60u16), (3500, 70), (4000, 80)] {
             pane_msg(
                 &mut app,
@@ -10929,14 +10834,14 @@ mod panes {
             size_pane(&mut app, second, 200 - cols, 40);
         }
         assert!(
-            wire(&mut rx)
+            drain(&mut rx)
                 .iter()
                 .all(|m| !matches!(m, ClientMsg::SessionResize { .. })),
             "nothing is sent mid-drag"
         );
         assert_eq!(layout_of(&app).ratio(0), Some(0.4));
         pane_msg(&mut app, PaneMsg::Gesture(SplitEvent::Release));
-        let sent: Vec<_> = wire(&mut rx)
+        let sent: Vec<_> = drain(&mut rx)
             .into_iter()
             .filter_map(|m| match m {
                 ClientMsg::SessionResize {
@@ -10991,9 +10896,7 @@ mod panes {
         }
     }
 
-    fn sent_layouts(
-        rx: &mut iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg>,
-    ) -> Vec<String> {
+    fn sent_layouts(rx: &mut SentRx) -> Vec<String> {
         drain(rx)
             .into_iter()
             .filter_map(|m| match m {
@@ -11196,9 +11099,7 @@ mod panes {
         (first, second)
     }
 
-    fn inputs(
-        rx: &mut iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg>,
-    ) -> Vec<(SessionId, Option<SessionProcess>, Vec<u8>)> {
+    fn inputs(rx: &mut SentRx) -> Vec<(SessionId, Option<SessionProcess>, Vec<u8>)> {
         drain(rx)
             .into_iter()
             .filter_map(|m| match m {
@@ -11361,8 +11262,9 @@ mod two_daemons {
         app.core.workspace.bind(&project, "w", DaemonId(2));
         app.core.project.forget_target = Some(project.clone());
         let _ = crate::shell::daemon_sync::on_project_forget_confirmed(&mut app);
-        let detached = |rx: &mut iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg>| {
-            std::iter::from_fn(|| rx.try_recv().ok())
+        let detached = |rx: &mut SentRx| {
+            drain(rx)
+                .into_iter()
                 .any(|m| matches!(m, ClientMsg::Detach { project: p } if p == project))
         };
         assert!(detached(&mut rx1), "daemon 1 released the project");
@@ -11382,7 +11284,8 @@ mod two_daemons {
             rx2.try_recv(),
             Ok(ClientMsg::Detach { project }) if project == old
         ));
-        assert!(!std::iter::from_fn(|| rx1.try_recv().ok())
+        assert!(!drain(&mut rx1)
+            .into_iter()
             .any(|m| matches!(m, ClientMsg::Detach { .. })));
     }
 
