@@ -12,6 +12,10 @@
 #[path = "support/mcp.rs"]
 mod mcp_support;
 
+#[path = "support/conn.rs"]
+mod conn;
+
+use conn::{connect, Client};
 use std::ffi::OsString;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
@@ -20,12 +24,9 @@ use std::time::{Duration, Instant};
 
 use futures_util::{SinkExt, StreamExt};
 use mcp_support::{add_worktree, init_repo, session, sid, state_over};
-use micold_core::protocol::codec::{ClientCodec, Frame};
+use micold_core::protocol::codec::Frame;
 use micold_core::protocol::messages::{
     ClientMsg, DaemonMsg, ErrorKind, OperationResult, ReviewEditOp,
-};
-use micold_core::protocol::version::{
-    BUILD_FINGERPRINT, PACKAGE_VERSION, PROTOCOL_VERSION, SCHEMA_HASH,
 };
 use micold_core::review::comment::{CommentState, ReviewComment};
 use micold_core::review::prompt::{self, EntryKind};
@@ -34,7 +35,6 @@ use micold_core::session::{AiCli, SessionId, TerminalMode};
 use micold_core::terminal::LaunchMode;
 use micold_daemon::activity::{ActivityEvent, HookKind};
 use micold_daemon::state::DaemonState;
-use tokio_util::codec::Framed;
 
 /// The tests change process-wide variables (`PATH`, `HOME`); one at a time.
 static ENV: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
@@ -43,8 +43,6 @@ static ENV: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 const BOUND: Duration = Duration::from_secs(30);
 /// How long a test waits to be sure something does not come.
 const QUIET: Duration = Duration::from_millis(500);
-
-type Client = Framed<tokio::io::DuplexStream, ClientCodec>;
 
 /// Every variable a test changes, restored on drop.
 struct Env {
@@ -247,25 +245,7 @@ fn install_claude(bin: &Path) {
 
 /// Connect, complete the handshake and attach to `project`.
 async fn window(state: &Arc<DaemonState>, project: &Path) -> Client {
-    let (server_io, client_io) = tokio::io::duplex(1024 * 1024);
-    tokio::spawn(micold_daemon::server::serve_connection(
-        Arc::clone(state),
-        server_io,
-    ));
-    let mut client = Framed::new(client_io, ClientCodec::new());
-    client
-        .send(Frame::Control(ClientMsg::Hello {
-            protocol_version: PROTOCOL_VERSION,
-            schema_hash: SCHEMA_HASH,
-            client_build: "test".into(),
-            client_instance: micold_core::protocol::messages::ClientInstance::current(),
-            client_package_version: PACKAGE_VERSION.into(),
-            auth_token: None,
-            client_fingerprint: BUILD_FINGERPRINT.into(),
-            require_fingerprint_match: false,
-        }))
-        .await
-        .unwrap();
+    let mut client = connect(state).await;
     client
         .send(Frame::Control(ClientMsg::Attach {
             project: project.to_path_buf(),

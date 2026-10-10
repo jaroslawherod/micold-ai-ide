@@ -4,20 +4,18 @@
 //! in-memory duplexes, and the processes those sessions run.
 #![allow(dead_code)]
 
+#[path = "conn.rs"]
+mod conn;
+
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
-use futures_util::{SinkExt, StreamExt};
+use futures_util::StreamExt;
 use micold_core::project::{Availability, Project};
-use micold_core::protocol::codec::{ClientCodec, Frame};
-use micold_core::protocol::messages::{
-    CatalogSnapshot, ClientInstance, ClientMsg, DaemonMsg, DaemonSettings, SessionSummary,
-};
-use micold_core::protocol::version::{
-    BUILD_FINGERPRINT, PACKAGE_VERSION, PROTOCOL_VERSION, SCHEMA_HASH,
-};
+use micold_core::protocol::codec::Frame;
+use micold_core::protocol::messages::{CatalogSnapshot, DaemonMsg, DaemonSettings, SessionSummary};
 use micold_core::session::{
     AiCli, Session, SessionId, SessionLabel, SessionLocation, TerminalMode,
 };
@@ -29,10 +27,9 @@ use micold_daemon::catalog::Catalog;
 use micold_daemon::state::DaemonState;
 use micold_daemon::supervisor::PtySession;
 use portable_pty::CommandBuilder;
-use tokio_util::codec::Framed;
 use uuid::Uuid;
 
-pub type Window = Framed<tokio::io::DuplexStream, ClientCodec>;
+pub use conn::Client as Window;
 
 /// How long a window waits for a message the service owes it.
 pub const OWED: Duration = Duration::from_secs(10);
@@ -256,7 +253,7 @@ pub fn find_summary(snapshot: &CatalogSnapshot, id: SessionId) -> Option<Session
 
 /// Connect a window and take its `Welcome`. It attaches to no project.
 pub async fn connect(state: &Arc<DaemonState>, build: &str) -> Window {
-    connect_with_welcome(state, build).await.0
+    conn::connect_with_welcome(state, build).await.0
 }
 
 /// As [`connect`], also returning the settings the `Welcome` reported.
@@ -264,41 +261,14 @@ pub async fn connect_with_settings(
     state: &Arc<DaemonState>,
     build: &str,
 ) -> (Window, DaemonSettings) {
-    match connect_with_welcome(state, build).await {
+    match conn::connect_with_welcome(state, build).await {
         (window, DaemonMsg::Welcome { settings, .. }) => (window, settings),
         (_, other) => unreachable!("connect_with_welcome returns a Welcome, not {other:?}"),
     }
 }
 
-/// As [`connect`], also returning the `Welcome` itself.
-pub async fn connect_with_welcome(state: &Arc<DaemonState>, build: &str) -> (Window, DaemonMsg) {
-    let (server_io, client_io) = tokio::io::duplex(64 * 1024);
-    tokio::spawn(micold_daemon::server::serve_connection(
-        Arc::clone(state),
-        server_io,
-    ));
-    let mut window = Framed::new(client_io, ClientCodec::new());
-    window
-        .send(Frame::Control(ClientMsg::Hello {
-            protocol_version: PROTOCOL_VERSION,
-            schema_hash: SCHEMA_HASH,
-            client_build: build.into(),
-            client_instance: ClientInstance {
-                pid: 0,
-                nonce: build.into(),
-            },
-            client_package_version: PACKAGE_VERSION.into(),
-            auth_token: None,
-            client_fingerprint: BUILD_FINGERPRINT.into(),
-            require_fingerprint_match: false,
-        }))
-        .await
-        .expect("the hello is sent");
-    match next_frame(&mut window).await {
-        Some(Frame::Control(welcome @ DaemonMsg::Welcome { .. })) => (window, welcome),
-        other => panic!("expected Welcome, got {other:?}"),
-    }
-}
+#[allow(unused_imports)]
+pub use conn::connect_with_welcome;
 
 /// The window's next frame, or `None` once the service closed the connection.
 pub async fn next_frame(window: &mut Window) -> Option<Frame<DaemonMsg>> {

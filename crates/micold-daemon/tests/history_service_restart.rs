@@ -10,6 +10,8 @@
 //! platform and the rest on Unix.
 #![cfg_attr(not(unix), allow(dead_code, unused_imports))]
 
+#[path = "support/conn.rs"]
+mod conn;
 #[path = "support/history.rs"]
 mod history;
 
@@ -18,6 +20,7 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use conn::connect_as;
 use futures_util::{SinkExt, StreamExt};
 use history::{
     ai_session, at, fake_cli, history_file, history_showing, script, separators, service,
@@ -25,9 +28,6 @@ use history::{
 };
 use micold_core::protocol::codec::{ClientCodec, Frame};
 use micold_core::protocol::messages::ClientMsg;
-use micold_core::protocol::version::{
-    BUILD_FINGERPRINT, PACKAGE_VERSION, PROTOCOL_VERSION, SCHEMA_HASH,
-};
 use micold_core::session::{SessionId, TerminalMode};
 use micold_core::terminal::LaunchMode;
 use micold_core::terminal_history::{HistoryColor, HistoryStore, LoadOutcome};
@@ -543,25 +543,7 @@ async fn a_stop_then_a_start_over_a_connection_saves_and_restores_in_that_order(
     let id = session.id;
     let state = service_saving(project.path(), vec![session], saved.path());
 
-    let (server_io, client_io) = tokio::io::duplex(1024 * 1024);
-    tokio::spawn(micold_daemon::server::serve_connection(
-        Arc::clone(&state),
-        server_io,
-    ));
-    let mut client = Framed::new(client_io, ClientCodec::new());
-    client
-        .send(Frame::Control(ClientMsg::Hello {
-            protocol_version: PROTOCOL_VERSION,
-            schema_hash: SCHEMA_HASH,
-            client_build: "test-client".into(),
-            client_instance: micold_core::protocol::messages::ClientInstance::current(),
-            client_package_version: PACKAGE_VERSION.into(),
-            auth_token: None,
-            client_fingerprint: BUILD_FINGERPRINT.into(),
-            require_fingerprint_match: false,
-        }))
-        .await
-        .unwrap();
+    let mut client = connect_as(&state, "test-client").await;
 
     let printed = project.path().join("printed");
     script(project.path(), "print first run\ntouch printed\nwait\n");

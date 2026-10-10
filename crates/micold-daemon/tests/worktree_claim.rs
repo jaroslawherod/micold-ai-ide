@@ -15,24 +15,24 @@
 //! 3. **It does nothing on disk** (FR-003). Directory contents and branch, unchanged.
 //! 4. **A persistence failure is reported as `IoFailed`** — the one error this message has.
 
+#[path = "support/conn.rs"]
+mod conn;
+
+use conn::{connect, connect_and_attach, Client};
 use std::path::Path;
 use std::process::Command;
 
 use futures_util::{SinkExt, StreamExt};
 use micold_core::project::{Availability, Project};
-use micold_core::protocol::codec::{ClientCodec, Frame};
+use micold_core::protocol::codec::Frame;
 use micold_core::protocol::messages::{
     CatalogSnapshot, ClientMsg, DaemonMsg, ErrorKind, OperationResult, WorktreeSnapshot,
-};
-use micold_core::protocol::version::{
-    BUILD_FINGERPRINT, PACKAGE_VERSION, PROTOCOL_VERSION, SCHEMA_HASH,
 };
 use micold_core::settings::JsonFileSettingsStore;
 use micold_core::store::{FakeProjectStore, JsonFileStore, ProjectStore};
 use micold_core::workspace::Workspace;
 use micold_daemon::catalog::Catalog;
 use micold_daemon::state::DaemonState;
-use tokio_util::codec::Framed;
 
 // --- git fixtures -----------------------------------------------------------
 
@@ -122,66 +122,6 @@ fn recorded(store_dir: &Path, project: &Path) -> Vec<String> {
         .iter()
         .cloned()
         .collect()
-}
-
-type Client = Framed<tokio::io::DuplexStream, ClientCodec>;
-
-async fn connect(state: &std::sync::Arc<DaemonState>) -> Client {
-    let (server_io, client_io) = tokio::io::duplex(256 * 1024);
-    tokio::spawn(micold_daemon::server::serve_connection(
-        std::sync::Arc::clone(state),
-        server_io,
-    ));
-    let mut client = Framed::new(client_io, ClientCodec::new());
-    client
-        .send(Frame::Control(ClientMsg::Hello {
-            protocol_version: PROTOCOL_VERSION,
-            schema_hash: SCHEMA_HASH,
-            client_build: "test".into(),
-            client_instance: micold_core::protocol::messages::ClientInstance::current(),
-            client_package_version: PACKAGE_VERSION.into(),
-            auth_token: None,
-            client_fingerprint: BUILD_FINGERPRINT.into(),
-            require_fingerprint_match: false,
-        }))
-        .await
-        .unwrap();
-    match client.next().await.unwrap().unwrap() {
-        Frame::Control(DaemonMsg::Welcome { .. }) => {}
-        other => panic!("expected Welcome, got {other:?}"),
-    }
-    client
-}
-
-/// Attach as a real client does, so the connection is registered for catalog pushes.
-///
-/// Attaching also runs the one-time FR-006 backfill for the project. That is deliberate: every
-/// worktree here is made by hand with no session and no rename behind it, so the backfill has no
-/// evidence to act on and records nothing — which is precisely the state a claim exists for.
-async fn connect_and_attach(state: &std::sync::Arc<DaemonState>, project: &Path) -> Client {
-    let mut client = connect(state).await;
-    client
-        .send(Frame::Control(ClientMsg::Attach {
-            project: project.to_path_buf(),
-            force: false,
-        }))
-        .await
-        .unwrap();
-    expect_control(&mut client, |m| matches!(m, DaemonMsg::Attached { .. })).await;
-    expect_control(&mut client, |m| {
-        matches!(m, DaemonMsg::CatalogChanged { .. })
-    })
-    .await;
-    client
-}
-
-async fn expect_control(client: &mut Client, pred: impl Fn(&DaemonMsg) -> bool) -> DaemonMsg {
-    loop {
-        match client.next().await.expect("stream open").unwrap() {
-            Frame::Control(m) if pred(&m) => return m,
-            Frame::Control(_) | Frame::Grid(_) => continue,
-        }
-    }
 }
 
 fn worktrees_in(snapshot: &CatalogSnapshot, project: &Path) -> Vec<WorktreeSnapshot> {

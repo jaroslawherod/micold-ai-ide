@@ -5,6 +5,10 @@
 //! applies to a turn already running (FR-013). No test override is set here except where a test
 //! says so: the setting is what decides.
 
+#[path = "support/conn.rs"]
+mod conn;
+
+use conn::{connect_with_welcome, Client as Window};
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::Arc;
@@ -13,11 +17,8 @@ use std::time::Duration;
 use futures_util::{SinkExt, StreamExt};
 use micold_core::attention::NotificationKind;
 use micold_core::project::{Availability, Project};
-use micold_core::protocol::codec::{ClientCodec, Frame};
-use micold_core::protocol::messages::{ClientInstance, ClientMsg, DaemonMsg, DaemonSettings};
-use micold_core::protocol::version::{
-    BUILD_FINGERPRINT, PACKAGE_VERSION, PROTOCOL_VERSION, SCHEMA_HASH,
-};
+use micold_core::protocol::codec::Frame;
+use micold_core::protocol::messages::{ClientMsg, DaemonMsg, DaemonSettings};
 use micold_core::session::{
     AiCli, Session, SessionId, SessionLabel, SessionLocation, TerminalMode,
 };
@@ -29,10 +30,7 @@ use micold_daemon::catalog::Catalog;
 use micold_daemon::state::DaemonState;
 use micold_daemon::supervisor::PtySession;
 use portable_pty::CommandBuilder;
-use tokio_util::codec::Framed;
 use uuid::Uuid;
-
-type Window = Framed<tokio::io::DuplexStream, ClientCodec>;
 
 /// How long a window waits for a message the service owes it.
 const OWED: Duration = Duration::from_secs(10);
@@ -187,31 +185,9 @@ fn idle_process(id: SessionId) -> PtySession {
 /// Connect a window and take its `Welcome`. It attaches to no project. Returns the window and the
 /// settings the `Welcome` reported.
 async fn connect(state: &Arc<DaemonState>, build: &str) -> (Window, DaemonSettings) {
-    let (server_io, client_io) = tokio::io::duplex(64 * 1024);
-    tokio::spawn(micold_daemon::server::serve_connection(
-        Arc::clone(state),
-        server_io,
-    ));
-    let mut window = Framed::new(client_io, ClientCodec::new());
-    window
-        .send(Frame::Control(ClientMsg::Hello {
-            protocol_version: PROTOCOL_VERSION,
-            schema_hash: SCHEMA_HASH,
-            client_build: build.into(),
-            client_instance: ClientInstance {
-                pid: 0,
-                nonce: build.into(),
-            },
-            client_package_version: PACKAGE_VERSION.into(),
-            auth_token: None,
-            client_fingerprint: BUILD_FINGERPRINT.into(),
-            require_fingerprint_match: false,
-        }))
-        .await
-        .expect("the hello is sent");
-    match next_frame(&mut window).await {
-        Some(Frame::Control(DaemonMsg::Welcome { settings, .. })) => (window, settings),
-        other => panic!("expected Welcome, got {other:?}"),
+    match connect_with_welcome(state, build).await {
+        (window, DaemonMsg::Welcome { settings, .. }) => (window, settings),
+        (_, other) => unreachable!("handshake returns a Welcome, not {other:?}"),
     }
 }
 

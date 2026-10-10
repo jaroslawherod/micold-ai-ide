@@ -11,25 +11,25 @@
 #[path = "support/mcp.rs"]
 mod mcp_support;
 
+#[path = "support/conn.rs"]
+mod conn;
+
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
+use conn::{connect, Client};
 use futures_util::{SinkExt, StreamExt};
 use mcp_support::{sid, state_over};
 use micold_core::mcp::errors::ErrorCategory;
-use micold_core::protocol::codec::{ClientCodec, Frame};
+use micold_core::protocol::codec::Frame;
 use micold_core::protocol::messages::{
     ClientIdentity, ClientInstance, ClientMsg, ConfirmOperation, DaemonMsg,
-};
-use micold_core::protocol::version::{
-    BUILD_FINGERPRINT, PACKAGE_VERSION, PROTOCOL_VERSION, SCHEMA_HASH,
 };
 use micold_core::session::SessionId;
 use micold_daemon::mcp::confirm::{ConfirmOutcome, ConfirmRequest, ConfirmTarget};
 use micold_daemon::state::DaemonState;
 use tokio::sync::mpsc::UnboundedReceiver;
-use tokio_util::codec::Framed;
 
 const CALLER: u128 = 1;
 const TARGET: u128 = 2;
@@ -340,35 +340,6 @@ async fn a_request_whose_waiter_is_dropped_is_abandoned_and_withdrawn() {
     // And the id is dead: a late answer does nothing.
     state.answer_confirmation(id, true);
     quiet(&mut a).await;
-}
-
-type Client = Framed<tokio::io::DuplexStream, ClientCodec>;
-
-async fn connect(state: &Arc<DaemonState>) -> Client {
-    let (server_io, client_io) = tokio::io::duplex(256 * 1024);
-    tokio::spawn(micold_daemon::server::serve_connection(
-        Arc::clone(state),
-        server_io,
-    ));
-    let mut client = Framed::new(client_io, ClientCodec::new());
-    client
-        .send(Frame::Control(ClientMsg::Hello {
-            protocol_version: PROTOCOL_VERSION,
-            schema_hash: SCHEMA_HASH,
-            client_build: "test".into(),
-            client_instance: ClientInstance::current(),
-            client_package_version: PACKAGE_VERSION.into(),
-            auth_token: None,
-            client_fingerprint: BUILD_FINGERPRINT.into(),
-            require_fingerprint_match: false,
-        }))
-        .await
-        .unwrap();
-    match client.next().await.unwrap().unwrap() {
-        Frame::Control(DaemonMsg::Welcome { .. }) => {}
-        other => panic!("expected Welcome, got {other:?}"),
-    }
-    client
 }
 
 async fn next_on_wire(client: &mut Client) -> DaemonMsg {

@@ -15,23 +15,23 @@
 //! so the whole `route()` path is under test — including the `spawn_blocking` git hop — rather than
 //! a hand-rolled stand-in.
 
+#[path = "support/conn.rs"]
+mod conn;
+
+use conn::{connect_and_attach, Client};
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::process::Command;
 
 use futures_util::{SinkExt, StreamExt};
 use micold_core::project::{Availability, Project};
-use micold_core::protocol::codec::{ClientCodec, Frame};
+use micold_core::protocol::codec::Frame;
 use micold_core::protocol::messages::{CatalogSnapshot, ClientMsg, DaemonMsg, OperationResult};
-use micold_core::protocol::version::{
-    BUILD_FINGERPRINT, PACKAGE_VERSION, PROTOCOL_VERSION, SCHEMA_HASH,
-};
 use micold_core::settings::JsonFileSettingsStore;
 use micold_core::store::{JsonFileStore, ProjectStore};
 use micold_core::workspace::Workspace;
 use micold_daemon::catalog::Catalog;
 use micold_daemon::state::DaemonState;
-use tokio_util::codec::Framed;
 
 /// Init a real git repo with one commit (so `HEAD` exists for `git worktree add`).
 fn init_git_repo(dir: &Path) {
@@ -92,55 +92,6 @@ fn catalog_with_project(project_dir: &Path, store_dir: &Path) -> Catalog {
         Box::new(JsonFileStore::at(projects_path)),
         Box::new(JsonFileSettingsStore::at(store_dir.join("settings.json"))),
     )
-}
-
-type Client = Framed<tokio::io::DuplexStream, ClientCodec>;
-
-/// Handshake a fresh client against `state`, draining the `Welcome`.
-async fn connect(state: &std::sync::Arc<DaemonState>) -> Client {
-    let (server_io, client_io) = tokio::io::duplex(256 * 1024);
-    tokio::spawn(micold_daemon::server::serve_connection(
-        std::sync::Arc::clone(state),
-        server_io,
-    ));
-    let mut client = Framed::new(client_io, ClientCodec::new());
-    client
-        .send(Frame::Control(ClientMsg::Hello {
-            protocol_version: PROTOCOL_VERSION,
-            schema_hash: SCHEMA_HASH,
-            client_build: "test".into(),
-            client_instance: micold_core::protocol::messages::ClientInstance::current(),
-            client_package_version: PACKAGE_VERSION.into(),
-            auth_token: None,
-            client_fingerprint: BUILD_FINGERPRINT.into(),
-            require_fingerprint_match: false,
-        }))
-        .await
-        .unwrap();
-    match client.next().await.unwrap().unwrap() {
-        Frame::Control(DaemonMsg::Welcome { .. }) => {}
-        other => panic!("expected Welcome, got {other:?}"),
-    }
-    client
-}
-
-/// Handshake, then attach `project`, draining the `Attached` + `CatalogChanged` the attach
-/// produces so later reads see only what the refresh caused.
-async fn connect_and_attach(state: &std::sync::Arc<DaemonState>, project: &Path) -> Client {
-    let mut client = connect(state).await;
-    client
-        .send(Frame::Control(ClientMsg::Attach {
-            project: project.to_path_buf(),
-            force: false,
-        }))
-        .await
-        .unwrap();
-    expect_control(&mut client, |m| matches!(m, DaemonMsg::Attached { .. })).await;
-    expect_control(&mut client, |m| {
-        matches!(m, DaemonMsg::CatalogChanged { .. })
-    })
-    .await;
-    client
 }
 
 /// Read control frames until one matches `pred` (grid frames are skipped).

@@ -3,6 +3,10 @@
 //! records what is typed into it, and windows connected over in-memory duplexes.
 #![allow(dead_code)]
 
+#[path = "conn.rs"]
+mod conn;
+
+pub use conn::{connect, Client};
 use std::ffi::OsString;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
@@ -13,11 +17,8 @@ use std::time::{Duration, Instant};
 use futures_util::{SinkExt, StreamExt};
 use micold_core::naming::{ConventionalType, WorktreeNaming};
 use micold_core::project::{Availability, Project};
-use micold_core::protocol::codec::{ClientCodec, Frame};
+use micold_core::protocol::codec::Frame;
 use micold_core::protocol::messages::{ClientMsg, DaemonMsg, ErrorKind, OperationResult};
-use micold_core::protocol::version::{
-    BUILD_FINGERPRINT, PACKAGE_VERSION, PROTOCOL_VERSION, SCHEMA_HASH,
-};
 use micold_core::runs::store::RunsFile;
 use micold_core::runs::{GroupId, RunGroup, RunStatus};
 use micold_core::session::{AiCli, SessionId};
@@ -26,7 +27,6 @@ use micold_core::store::{JsonFileStore, ProjectStore};
 use micold_core::workspace::Workspace;
 use micold_daemon::catalog::Catalog;
 use micold_daemon::state::DaemonState;
-use tokio_util::codec::Framed;
 
 /// The tests change process-wide variables (`PATH`, `HOME`); one at a time.
 pub static ENV: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
@@ -38,8 +38,6 @@ pub const QUIET: Duration = Duration::from_millis(500);
 
 /// The prompt every test sends. Distinctive, so a log line holding it is easy to find.
 pub const PROMPT: &str = "Add a login page with secret-sauce-483";
-
-pub type Client = Framed<tokio::io::DuplexStream, ClientCodec>;
 
 /// Run `git -C repo args…`, asserting success; its trimmed standard output.
 pub fn git(repo: &Path, args: &[&str]) -> String {
@@ -278,30 +276,6 @@ fn install_claude(bin: &Path) {
 /// The bytes a submission of `prompt` types into a terminal with bracketed paste on.
 pub fn submitted(prompt: &str) -> String {
     format!("\u{1b}[200~{prompt}\u{1b}[201~\n")
-}
-
-/// Connect and complete the handshake.
-pub async fn connect(state: &Arc<DaemonState>) -> Client {
-    let (server_io, client_io) = tokio::io::duplex(1024 * 1024);
-    tokio::spawn(micold_daemon::server::serve_connection(
-        Arc::clone(state),
-        server_io,
-    ));
-    let mut client = Framed::new(client_io, ClientCodec::new());
-    client
-        .send(Frame::Control(ClientMsg::Hello {
-            protocol_version: PROTOCOL_VERSION,
-            schema_hash: SCHEMA_HASH,
-            client_build: "test".into(),
-            client_instance: micold_core::protocol::messages::ClientInstance::current(),
-            client_package_version: PACKAGE_VERSION.into(),
-            auth_token: None,
-            client_fingerprint: BUILD_FINGERPRINT.into(),
-            require_fingerprint_match: false,
-        }))
-        .await
-        .unwrap();
-    client
 }
 
 /// Attach to `project`; the frames up to and including the attach's `CatalogChanged`.

@@ -5,7 +5,7 @@
 
 | Tool | Finds | Budget | Measured 2026-10-10 |
 |---|---|---|---|
-| `jscpd` (`--min-lines 8 --min-tokens 80`) | exact token clones | 2.9 % duplicated lines | 2.84 % (373 clones) |
+| `jscpd` (`--min-lines 8 --min-tokens 80`) | exact token clones | 2.4 % duplicated lines | 2.36 % (325 clones, after #698) |
 | `similarity-rs` (`-t 0.85 -m 8 --skip-test`) | near-duplicate functions | 750 pairs | 747 pairs |
 
 The budgets are in `mise.toml`, just above the measurement. Lower them when a refactor lowers the

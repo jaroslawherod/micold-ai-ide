@@ -10,16 +10,14 @@
 use std::sync::Arc;
 
 use futures_util::{SinkExt, StreamExt};
-use micold_core::protocol::codec::{ClientCodec, Frame};
+use micold_core::protocol::codec::Frame;
 use micold_core::protocol::messages::{ClientMsg, DaemonMsg, RefusalReason};
-use micold_core::protocol::version::{
-    BUILD_FINGERPRINT, PACKAGE_VERSION, PROTOCOL_VERSION, SCHEMA_HASH,
-};
 use micold_daemon::catalog::Catalog;
 use micold_daemon::state::DaemonState;
-use tokio_util::codec::Framed;
 
-type Client = Framed<tokio::io::DuplexStream, ClientCodec>;
+#[path = "support/conn.rs"]
+mod conn;
+use conn::{connect_with_welcome, Client};
 
 /// The instance a simulated window presents. Derived from its build name so that each window in a
 /// test is a *distinct* process, which is what these tests are simulating — `ClientInstance::current()`
@@ -32,36 +30,9 @@ fn instance_of(build: &str) -> micold_core::protocol::messages::ClientInstance {
     }
 }
 
-/// Handshake a fresh client against `state`, consuming its `Welcome`. Returns the framed stream; the
-/// server task is detached but kept alive as long as the returned stream (its socket) is held.
-async fn connect(state: &Arc<DaemonState>, build: &str) -> Client {
-    let (server_io, client_io) = tokio::io::duplex(64 * 1024);
-    tokio::spawn(micold_daemon::server::serve_connection(
-        Arc::clone(state),
-        server_io,
-    ));
-    let mut client = Framed::new(client_io, ClientCodec::new());
-    client
-        .send(Frame::Control(ClientMsg::Hello {
-            protocol_version: PROTOCOL_VERSION,
-            schema_hash: SCHEMA_HASH,
-            client_build: build.into(),
-            client_instance: instance_of(build),
-            client_package_version: PACKAGE_VERSION.into(),
-            // Feature 027: the host-process placement presents no token, and a fingerprint
-            // mismatch is not a refusal there. `BUILD_FINGERPRINT` because these tests compile
-            // against the same core as the daemon they drive.
-            auth_token: None,
-            client_fingerprint: BUILD_FINGERPRINT.into(),
-            require_fingerprint_match: false,
-        }))
-        .await
-        .unwrap();
-    match client.next().await.unwrap().unwrap() {
-        Frame::Control(DaemonMsg::Welcome { .. }) => {}
-        other => panic!("expected Welcome, got {other:?}"),
-    }
-    client
+/// A fresh client of build `build` against `state`, its `Welcome` consumed.
+async fn connect_as_window(state: &Arc<DaemonState>, build: &str) -> Client {
+    connect_with_welcome(state, build).await.0
 }
 
 /// The next control message, skipping the unsolicited `CatalogChanged` pushes an attach triggers
@@ -99,8 +70,8 @@ fn state() -> Arc<DaemonState> {
 #[tokio::test]
 async fn a_second_attach_is_refused_then_force_displaces_the_holder() {
     let state = state();
-    let mut a = connect(&state, "window-A").await;
-    let mut b = connect(&state, "window-B").await;
+    let mut a = connect_as_window(&state, "window-A").await;
+    let mut b = connect_as_window(&state, "window-B").await;
 
     // A takes the project.
     match attach(&mut a, "/proj", false).await {
@@ -146,8 +117,8 @@ async fn a_second_attach_is_refused_then_force_displaces_the_holder() {
 #[tokio::test]
 async fn the_holder_is_named_by_window_not_only_by_build() {
     let state = state();
-    let mut a = connect(&state, "same-build").await;
-    let mut b = connect(&state, "same-build").await;
+    let mut a = connect_as_window(&state, "same-build").await;
+    let mut b = connect_as_window(&state, "same-build").await;
 
     attach(&mut a, "/proj", false).await;
 
@@ -181,8 +152,8 @@ async fn a_displaced_client_is_not_terminated() {
     // FR-024: the displaced window MUST NOT exit — its connection stays open and responsive. We prove
     // liveness by a post-displacement Ping/Pong round-trip.
     let state = state();
-    let mut a = connect(&state, "window-A").await;
-    let mut b = connect(&state, "window-B").await;
+    let mut a = connect_as_window(&state, "window-A").await;
+    let mut b = connect_as_window(&state, "window-B").await;
 
     attach(&mut a, "/proj", false).await;
     attach(&mut b, "/proj", true).await;
@@ -217,7 +188,7 @@ async fn a_crashed_holder_frees_the_project_without_a_restart() {
     // FR-025 (Edge: holder dies): a holder that just disconnects — no clean Detach, the crash case —
     // frees the project so the next attach succeeds by default, no `force`, no daemon restart.
     let state = state();
-    let mut a = connect(&state, "window-A").await;
+    let mut a = connect_as_window(&state, "window-A").await;
     match attach(&mut a, "/proj", false).await {
         DaemonMsg::Attached { .. } => {}
         other => panic!("A expected Attached, got {other:?}"),
@@ -228,7 +199,7 @@ async fn a_crashed_holder_frees_the_project_without_a_restart() {
 
     // The same shared daemon frees the project once the disconnect is observed. A fresh window then
     // attaches by default. Retry briefly — the peer's deregister races the new attach.
-    let mut b = connect(&state, "window-B").await;
+    let mut b = connect_as_window(&state, "window-B").await;
     let mut last = None;
     for _ in 0..50 {
         match attach(&mut b, "/proj", false).await {
@@ -247,8 +218,8 @@ async fn two_clients_on_two_projects_do_not_interfere() {
     // FR-024 scenario 4: exclusivity is per-project, so two windows on two different projects both
     // attach cleanly and neither refuses the other.
     let state = state();
-    let mut a = connect(&state, "window-A").await;
-    let mut b = connect(&state, "window-B").await;
+    let mut a = connect_as_window(&state, "window-A").await;
+    let mut b = connect_as_window(&state, "window-B").await;
 
     match attach(&mut a, "/proj-1", false).await {
         DaemonMsg::Attached { project, .. } => assert_eq!(project, std::path::Path::new("/proj-1")),
@@ -455,7 +426,7 @@ mod one_conversation_one_session {
         )));
 
         // Window A opens the conversation.
-        let mut a = connect(&state, "window-A").await;
+        let mut a = connect_as_window(&state, "window-A").await;
         a.send(Frame::Control(ClientMsg::SessionStart {
             session: session_id(),
         }))
@@ -472,7 +443,7 @@ mod one_conversation_one_session {
         // Window B asks for the same conversation. It never attaches to the project — the
         // guarantee is about the conversation, not about who is asking, and a client that was
         // refused the project could otherwise still reach this.
-        let mut b = connect(&state, "window-B").await;
+        let mut b = connect_as_window(&state, "window-B").await;
         b.send(Frame::Control(ClientMsg::SessionStart {
             session: session_id(),
         }))

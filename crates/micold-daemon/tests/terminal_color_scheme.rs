@@ -7,6 +7,10 @@
 // unix-only: the shell probe below is POSIX `stty`/`dd`
 #![cfg(unix)]
 
+#[path = "support/conn.rs"]
+mod conn;
+
+use conn::{connect, Client};
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::Arc;
@@ -16,11 +20,8 @@ use alacritty_terminal::grid::Dimensions;
 use alacritty_terminal::index::{Column, Line};
 use futures_util::{SinkExt, StreamExt};
 use micold_core::project::{Availability, Project};
-use micold_core::protocol::codec::{ClientCodec, Frame};
-use micold_core::protocol::messages::{ClientInstance, ClientMsg, DaemonMsg};
-use micold_core::protocol::version::{
-    BUILD_FINGERPRINT, PACKAGE_VERSION, PROTOCOL_VERSION, SCHEMA_HASH,
-};
+use micold_core::protocol::codec::Frame;
+use micold_core::protocol::messages::{ClientMsg, DaemonMsg};
 use micold_core::session::{AiCli, Session, SessionId, SessionLocation, TerminalMode};
 use micold_core::settings::FakeSettingsStore;
 use micold_core::store::FakeProjectStore;
@@ -31,38 +32,6 @@ use micold_core::workspace::Workspace;
 use micold_daemon::catalog::Catalog;
 use micold_daemon::state::DaemonState;
 use micold_daemon::supervisor::PtySession;
-use tokio::io::DuplexStream;
-use tokio_util::codec::Framed;
-
-type Client = Framed<DuplexStream, ClientCodec>;
-
-/// A client that has shaken hands with a `serve_connection` over `state`.
-async fn connect(state: &Arc<DaemonState>) -> Client {
-    let (server_io, client_io) = tokio::io::duplex(64 * 1024);
-    tokio::spawn(micold_daemon::server::serve_connection(
-        Arc::clone(state),
-        server_io,
-    ));
-    let mut client = Framed::new(client_io, ClientCodec::new());
-    client
-        .send(Frame::Control(ClientMsg::Hello {
-            protocol_version: PROTOCOL_VERSION,
-            schema_hash: SCHEMA_HASH,
-            client_build: "test-client".into(),
-            client_instance: ClientInstance::current(),
-            client_package_version: PACKAGE_VERSION.into(),
-            auth_token: None,
-            client_fingerprint: BUILD_FINGERPRINT.into(),
-            require_fingerprint_match: false,
-        }))
-        .await
-        .unwrap();
-    match client.next().await.unwrap().unwrap() {
-        Frame::Control(DaemonMsg::Welcome { .. }) => {}
-        other => panic!("expected Welcome, got {other:?}"),
-    }
-    client
-}
 
 /// Send `scheme` and wait until the daemon has handled it: the message is never acknowledged, so a
 /// `Ping` sent after it is answered only once it has been read.

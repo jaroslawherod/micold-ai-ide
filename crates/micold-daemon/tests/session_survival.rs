@@ -11,6 +11,10 @@
 //! CLI. The first test is survival with nothing watching; the second is survival with nothing
 //! *running*, where the only thing that crosses the gap is what was written to disk.
 
+#[path = "support/conn.rs"]
+mod conn;
+
+use conn::connect_as;
 use std::time::{Duration, Instant};
 
 use alacritty_terminal::grid::Dimensions;
@@ -307,20 +311,14 @@ async fn a_session_outlives_the_client_that_was_connected_when_it_started() {
     use std::path::PathBuf;
     use std::sync::Arc;
 
-    use futures_util::{SinkExt, StreamExt};
     use micold_core::project::{Availability, Project};
-    use micold_core::protocol::codec::{ClientCodec, Frame};
-    use micold_core::protocol::messages::{ClientInstance, ClientMsg, DaemonMsg};
-    use micold_core::protocol::version::{
-        BUILD_FINGERPRINT, PACKAGE_VERSION, PROTOCOL_VERSION, SCHEMA_HASH,
-    };
+
     use micold_core::session::AiCli;
     use micold_core::settings::JsonFileSettingsStore;
     use micold_core::store::{JsonFileStore, ProjectStore};
     use micold_core::workspace::Workspace;
     use micold_daemon::catalog::Catalog;
     use micold_daemon::state::DaemonState;
-    use tokio_util::codec::Framed;
 
     let project = PathBuf::from("/repo/alpha");
     let store = tempfile::tempdir().unwrap();
@@ -342,29 +340,7 @@ async fn a_session_outlives_the_client_that_was_connected_when_it_started() {
     )));
 
     // A client connects through the real accept path…
-    let (server_io, client_io) = tokio::io::duplex(64 * 1024);
-    tokio::spawn(micold_daemon::server::serve_connection(
-        Arc::clone(&state),
-        server_io,
-    ));
-    let mut client = Framed::new(client_io, ClientCodec::new());
-    client
-        .send(Frame::Control(ClientMsg::Hello {
-            protocol_version: PROTOCOL_VERSION,
-            schema_hash: SCHEMA_HASH,
-            client_build: "client-a".into(),
-            client_instance: ClientInstance::current(),
-            client_package_version: PACKAGE_VERSION.into(),
-            auth_token: None,
-            client_fingerprint: BUILD_FINGERPRINT.into(),
-            require_fingerprint_match: false,
-        }))
-        .await
-        .unwrap();
-    match client.next().await.unwrap().unwrap() {
-        Frame::Control(DaemonMsg::Welcome { .. }) => {}
-        other => panic!("expected Welcome, got {other:?}"),
-    }
+    let client = connect_as(&state, "client-a").await;
 
     // …and a session exists while it is connected.
     let session = state

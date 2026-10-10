@@ -17,6 +17,10 @@
 //! - **Unclean drop** (§2.6) — the peer vanishes with no warning, which is what a crash or a
 //!   `SIGKILL`ed window looks like from here. Counted gone on EOF, with no keepalive (research R6).
 
+#[path = "support/conn.rs"]
+mod conn;
+
+use conn::connect_as;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -28,10 +32,7 @@ use micold_core::protocol::version::{
 };
 use micold_daemon::catalog::Catalog;
 use micold_daemon::state::DaemonState;
-use tokio::io::DuplexStream;
 use tokio_util::codec::Framed;
-
-type Client = Framed<DuplexStream, ClientCodec>;
 
 fn new_state() -> Arc<DaemonState> {
     Arc::new(DaemonState::new(Catalog::ephemeral()))
@@ -51,25 +52,6 @@ fn hello(build: &str, protocol_version: u32) -> ClientMsg {
         client_fingerprint: BUILD_FINGERPRINT.into(),
         require_fingerprint_match: false,
     }
-}
-
-/// Connect through the real `serve_connection` and complete the handshake.
-async fn connect(state: &Arc<DaemonState>, build: &str) -> Client {
-    let (server_io, client_io) = tokio::io::duplex(64 * 1024);
-    tokio::spawn(micold_daemon::server::serve_connection(
-        Arc::clone(state),
-        server_io,
-    ));
-    let mut client = Framed::new(client_io, ClientCodec::new());
-    client
-        .send(Frame::Control(hello(build, PROTOCOL_VERSION)))
-        .await
-        .unwrap();
-    match client.next().await.unwrap().unwrap() {
-        Frame::Control(DaemonMsg::Welcome { .. }) => {}
-        other => panic!("expected Welcome, got {other:?}"),
-    }
-    client
 }
 
 /// Poll until `cond` holds, returning how long it took. Panics past `timeout`.
@@ -141,7 +123,7 @@ async fn a_refused_handshake_never_increments_the_count() {
 async fn a_completed_handshake_increments_the_count_once() {
     let state = new_state();
 
-    let mut a = connect(&state, "client-a").await;
+    let mut a = connect_as(&state, "client-a").await;
     wait_until(Duration::from_secs(2), || state.presence().connected() == 1).await;
     assert_eq!(
         state.presence().alone_since(),
@@ -149,7 +131,7 @@ async fn a_completed_handshake_increments_the_count_once() {
         "the idle deadline must be disarmed while a client is connected"
     );
 
-    let _b = connect(&state, "client-b").await;
+    let _b = connect_as(&state, "client-b").await;
     wait_until(Duration::from_secs(2), || state.presence().connected() == 2).await;
 
     // Traffic on an already-counted connection must not count again.
@@ -171,8 +153,8 @@ async fn a_completed_handshake_increments_the_count_once() {
 #[tokio::test]
 async fn a_clean_close_decrements_the_count() {
     let state = new_state();
-    let mut a = connect(&state, "client-a").await;
-    let b = connect(&state, "client-b").await;
+    let mut a = connect_as(&state, "client-a").await;
+    let b = connect_as(&state, "client-b").await;
     wait_until(Duration::from_secs(2), || state.presence().connected() == 2).await;
 
     // A says goodbye and goes. One left, so the window stays disarmed.
@@ -205,7 +187,7 @@ async fn a_clean_close_decrements_the_count() {
 #[tokio::test]
 async fn an_unclean_drop_is_counted_gone_within_sixty_seconds() {
     let state = new_state();
-    let client = connect(&state, "client-a").await;
+    let client = connect_as(&state, "client-a").await;
     wait_until(Duration::from_secs(2), || state.presence().connected() == 1).await;
 
     // The peer vanishes. Nothing is sent, and nothing is closed in an orderly way.
@@ -235,8 +217,8 @@ async fn the_reported_client_count_is_the_presence_count() {
     let state = new_state();
     assert_eq!(state.client_count(), state.presence().connected());
 
-    let a = connect(&state, "client-a").await;
-    let b = connect(&state, "client-b").await;
+    let a = connect_as(&state, "client-a").await;
+    let b = connect_as(&state, "client-b").await;
     wait_until(Duration::from_secs(2), || state.presence().connected() == 2).await;
     assert_eq!(state.client_count(), 2);
     assert_eq!(state.client_count(), state.presence().connected());

@@ -17,18 +17,13 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use futures_util::{SinkExt, StreamExt};
-use micold_core::protocol::codec::{ClientCodec, Frame};
+use micold_core::protocol::codec::Frame;
 use micold_core::protocol::grid::GridFrame;
 use micold_core::protocol::messages::{ClientMsg, DaemonMsg};
-use micold_core::protocol::version::{
-    BUILD_FINGERPRINT, PACKAGE_VERSION, PROTOCOL_VERSION, SCHEMA_HASH,
-};
 use micold_core::session::{SessionId, TerminalMode};
 use micold_core::terminal::LaunchMode;
 use micold_core::terminal_history::HistoryColor;
 use micold_daemon::state::DaemonState;
-use tokio::io::DuplexStream;
-use tokio_util::codec::Framed;
 
 #[path = "support/history.rs"]
 mod history;
@@ -37,7 +32,9 @@ use history::{
     texts, wait_exited, wait_file,
 };
 
-type Client = Framed<DuplexStream, ClientCodec>;
+#[path = "support/conn.rs"]
+mod conn;
+use conn::{connect_as, Client};
 
 /// A window connected to `state` over an in-memory stream, viewing `id`, and its first full frame.
 async fn viewing_client(
@@ -45,25 +42,7 @@ async fn viewing_client(
     project: &Path,
     id: SessionId,
 ) -> (Client, GridFrame) {
-    let (server_io, client_io) = tokio::io::duplex(1024 * 1024);
-    tokio::spawn(micold_daemon::server::serve_connection(
-        Arc::clone(state),
-        server_io,
-    ));
-    let mut client = Framed::new(client_io, ClientCodec::new());
-    client
-        .send(Frame::Control(ClientMsg::Hello {
-            protocol_version: PROTOCOL_VERSION,
-            schema_hash: SCHEMA_HASH,
-            client_build: "test-client".into(),
-            client_instance: micold_core::protocol::messages::ClientInstance::current(),
-            client_package_version: PACKAGE_VERSION.into(),
-            auth_token: None,
-            client_fingerprint: BUILD_FINGERPRINT.into(),
-            require_fingerprint_match: false,
-        }))
-        .await
-        .unwrap();
+    let mut client = connect_as(state, "test-client").await;
     client
         .send(Frame::Control(ClientMsg::SetViewedSession {
             project: project.to_path_buf(),
