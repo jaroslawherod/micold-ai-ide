@@ -111,6 +111,9 @@ const OWNERS: &[(&str, &str)] = &[
     ("workspace.worktree_provenance", "worktree"),
     ("workspace.provenance_migrated", "worktree"),
     ("workspace.unreadable_projects", "project"),
+    // Feature 491: which daemon each worktree runs on. Written only by the shell
+    // (`Workspace::bind`, after a create); read for the sidebar label and the form.
+    ("workspace.bindings", "worktree"),
 ];
 
 /// Cross-feature writes that exist today, each with the feature that performs it and the path it
