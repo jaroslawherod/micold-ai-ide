@@ -128,7 +128,7 @@ fn hand_shows(state: &State, grid: &GridCache, area: Option<&PaneArea<'_>>) -> b
                 )),
             ] {
                 let mut ui = UserInterface::build(
-                    build_view(&state, &grid, &outcome, &connection, &sandbox, area),
+                    build_view(state, grid, &outcome, &connection, &sandbox, area),
                     WINDOW,
                     std::mem::take(&mut cache),
                     &mut renderer,
@@ -169,13 +169,13 @@ fn hand_shows(state: &State, grid: &GridCache, area: Option<&PaneArea<'_>>) -> b
     let mut candidates = Vec::new();
     {
         let mut ui = UserInterface::build(
-            build_view(&state, &grid, &outcome, &connection, &sandbox, area),
+            build_view(state, grid, &outcome, &connection, &sandbox, area),
             WINDOW,
             std::mem::take(&mut cache),
             &mut renderer,
         );
         // Draw once so the layout is in the interface; read it through a scratch element tree.
-        let _ = ui.draw(
+        ui.draw(
             &mut renderer,
             &iced::Theme::Dark,
             &iced::advanced::renderer::Style {
@@ -186,7 +186,7 @@ fn hand_shows(state: &State, grid: &GridCache, area: Option<&PaneArea<'_>>) -> b
         cache = ui.into_cache();
     }
     {
-        let mut element = build_view(&state, &grid, &outcome, &connection, &sandbox, area);
+        let mut element = build_view(state, grid, &outcome, &connection, &sandbox, area);
         let mut tree = Tree::new(&element);
         let node = element.as_widget_mut().layout(
             &mut tree,
