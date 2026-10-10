@@ -1,0 +1,8 @@
+{
+  "settings_version": 4,
+  "theme": "dark",
+  "daemon": {
+    "placement": "local_sandbox",
+    "sandbox": { "survive_logout": true }
+  }
+}

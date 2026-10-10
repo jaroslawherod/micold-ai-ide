@@ -16,6 +16,7 @@ pub mod attention;
 pub mod cli_reason;
 pub mod clock;
 pub mod connect;
+pub mod daemons;
 pub mod endpoint;
 pub mod env_include;
 pub mod first_turn;

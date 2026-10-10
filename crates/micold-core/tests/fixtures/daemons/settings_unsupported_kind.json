@@ -1,0 +1,9 @@
+{
+  "settings_version": 4,
+  "daemons": [
+    { "id": 1, "name": "Host", "runtime": { "kind": "host" }, "auto_start": true },
+    { "id": 2, "name": "Far away", "runtime": { "kind": "ssh", "host": "box.example", "user": "dev" }, "auto_start": false }
+  ],
+  "legacy_default_daemon": 1,
+  "next_daemon_id": 3
+}
