@@ -1,13 +1,25 @@
 # Micold AI IDE
 
-A local-first, AI-assisted desktop IDE for managing git worktrees and AI coding sessions with an
-embedded, real terminal. A session runs [Claude Code](https://www.anthropic.com/claude-code),
-[GitHub Copilot CLI](https://github.com/features/copilot/cli), [Pi Coding Agent](https://pi.dev/),
-[Codex](https://github.com/openai/codex) or [OpenCode](https://opencode.ai/),
-whichever you pick when you start it.
+**Run several AI coding agents side by side, each in its own git worktree, in one native desktop app.**
 
-Built in **Rust** with the **iced** GUI framework. All state lives on your machine — the app is
-fully functional offline (Constitution Principle IV).
+<!-- TODO: add a screenshot or demo GIF here, e.g. ![Micold AI IDE](docs/media/hero.png) -->
+
+Micold gives every line of work its own branch, worktree and real terminal, and keeps the agent
+session running in the background — close the window, or crash it, and the sessions are still there
+when you come back.
+
+- **Any agent, your choice per session** — [Claude Code](https://www.anthropic.com/claude-code),
+  [GitHub Copilot CLI](https://github.com/features/copilot/cli),
+  [Pi Coding Agent](https://pi.dev/), [Codex](https://github.com/openai/codex) or
+  [OpenCode](https://opencode.ai/). Mix them in the same project.
+- **One worktree per task** — start from a new branch or pick up an existing one; parallel agents
+  never trample each other's files.
+- **Sessions that survive** — a background session service owns the terminals; the window just
+  attaches.
+- **Sandboxable** — run the session service in a container so agents see only the projects and
+  credentials you allow.
+- **Native and local-first** — Rust and [iced](https://iced.rs), no Electron, no account;
+  all state stays on your machine and the app is fully functional offline.
 
 **Documentation: <https://jaroslawherod.github.io/micold-ai-ide/>** — the user guide with
 screenshots of the running application, published from this repository on every release.
