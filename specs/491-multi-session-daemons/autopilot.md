@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/491_support-multiple-session-daemons-host-container
 - **Started**: 2026-10-09
 - **Phase**: milestone M2
-- **Next step**: continue M2 from Handover
+- **Next step**: wait on CI for #758, merge, then start M3
 
 ## Pull requests
 
@@ -18,13 +18,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #695 | Design | merged | 52c691b8fd00540bcf027f60e779003368266214 |
 | #752 | M1 registry, bindings, labels | merged | 3787994d7fe1807844ddfa485d51333227e5a66e |
+| #758 | M2 concurrent host and container daemons | open | - |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T017 | full | Upgraded install runs on a one-daemon registry, worktrees bound and labelled, daemon choice persists | #752 | merged |
-| M2 | T018–T029, T048–T049 | full | Host and container daemons concurrent and failure-isolated | - | in progress |
+| M2 | T018–T029, T048–T049 | full | Host and container daemons concurrent and failure-isolated | #758 | in review |
 | M3 | T030–T039 | full | Settings Daemons section with removal and rebind | - | pending |
 | M4 | T040–T045 | full | Real-runtime multi-daemon e2e in CI | - | pending |
 
@@ -68,11 +69,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M2 rebased onto origin/main (clean), full gate green after the rebase (MICOLD_SKIP_GH_LAUNCH_TEST=1). NOT pushed: the remote branch does not exist (deleted after M1 merge) and the local tracking ref refs/remotes/origin/feat/491_... is stale, so `--force-with-lease` is rejected (stale info); deleting that ref and pushing was denied by the permission classifier. Next: user runs `git update-ref -d refs/remotes/origin/feat/491_support-multiple-session-daemons-host-container && git push -u origin HEAD` (or `git push --force -u origin HEAD`), then open PR: title `feat(491): run host and container daemons concurrently with per-daemon state (#491)`, body per pr.md ending `Refs #491`.
+None: M2 PR #758 is open.
 
 ## Open escalation
 
-Push of the M2 branch needs the user (permission classifier denied it twice); see Handover.
+None.
 
 ## Follow-ups not done
 
