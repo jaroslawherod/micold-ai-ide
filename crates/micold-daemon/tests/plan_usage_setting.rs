@@ -108,7 +108,10 @@ async fn an_out_of_range_threshold_is_clamped_persisted_and_pushed_to_every_wind
         "FR-018: the other window too"
     );
     assert_eq!(stored(&service).plan_usage_warn_percent, 50, "persisted");
-    assert!(stored(&service).plan_usage_enabled, "the other field is left alone");
+    assert!(
+        stored(&service).plan_usage_enabled,
+        "the other field is left alone"
+    );
 }
 
 #[tokio::test]

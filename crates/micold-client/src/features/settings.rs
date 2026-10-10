@@ -536,6 +536,9 @@ impl ValidSettings {
             daemons: Vec::new(),
             next_daemon_id: 0,
             legacy_default_daemon: None,
+            // Not in the form until T044 (feature 490): service-owned, as above.
+            plan_usage_enabled: micold_core::plan_usage::DEFAULT_PLAN_USAGE_ENABLED,
+            plan_usage_warn_percent: micold_core::plan_usage::WarnPercent::DEFAULT,
         }
     }
 }
@@ -2009,5 +2012,7 @@ pub fn diff_layout_set(
         notification_kinds: None,
         long_task_threshold_secs: None,
         diff_layout: Some(layout),
+        plan_usage_enabled: None,
+        plan_usage_warn_percent: None,
     }
 }

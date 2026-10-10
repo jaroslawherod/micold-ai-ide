@@ -597,11 +597,13 @@ where
 
     // --- Welcome (sent synchronously, so it is unambiguously the first frame the client sees). ---
     let (catalog, settings) = state.welcome_payload();
+    let plan_usage = state.welcome_plan_usage();
     framed
         .send(Frame::Control(DaemonMsg::Welcome {
             daemon_build: daemon_build(),
             catalog,
             settings,
+            plan_usage,
         }))
         .await
         .map_err(io::Error::other)?;
@@ -1195,6 +1197,8 @@ where
                 notification_kinds,
                 long_task_threshold_secs,
                 diff_layout,
+                plan_usage_enabled,
+                plan_usage_warn_percent,
             } => {
                 let result = match scrollback_lines {
                     Some(lines) => state.set_scrollback(lines),
@@ -1252,6 +1256,14 @@ where
                 })
                 .and_then(|()| match diff_layout {
                     Some(layout) => state.set_diff_layout(layout),
+                    None => Ok(()),
+                })
+                .and_then(|()| match plan_usage_enabled {
+                    Some(on) => state.set_plan_usage_enabled(on),
+                    None => Ok(()),
+                })
+                .and_then(|()| match plan_usage_warn_percent {
+                    Some(percent) => state.set_plan_usage_warn_percent(percent),
                     None => Ok(()),
                 });
                 match result {

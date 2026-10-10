@@ -8,8 +8,10 @@
 //! 1. Binds **loopback only** (`127.0.0.1`), on an **ephemeral** port chosen at daemon start.
 //! 2. Requires a **per-session bearer token**; a mismatch is a bare `403` that never reveals whether
 //!    the session exists.
-//! 3. Exposes **no capability** beyond reporting one session's activity — it is not a route to the
-//!    catalog, session input, or project state. A leaked token can lie about one activity signal.
+//! 3. Exposes **no capability** beyond reporting one session's activity, and (feature 490,
+//!    `/status/<session-uuid>`) the plan usage that session's status line was given — it is not a
+//!    route to the catalog, session input, or project state. A leaked token can lie about one
+//!    activity signal, or about the plan's usage.
 //! 4. **Bounds** the request head and body and rejects anything larger.
 //! 5. **Never logs the body** (it carries transcript paths + prompt metadata — FR-047).
 //!
@@ -17,7 +19,7 @@
 //! `http://127.0.0.1:<port>/hook/<session-uuid>` with the token in an `Authorization: Bearer` header,
 //! so **user configuration is never modified**.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io;
 use std::net::{Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
@@ -28,7 +30,9 @@ use uuid::Uuid;
 
 use crate::activity::{ActivityEvent, HookKind};
 use crate::http::{self, respond, Body, HeadRead};
-use crate::state::DaemonState;
+use crate::state::{unix_secs, DaemonState};
+use micold_core::plan_usage::status_line;
+use micold_core::protocol::messages::DaemonMsg;
 use micold_core::session::SessionId;
 
 /// Maximum request-body size accepted (contracts/hooks.md §5). Anything larger is rejected with
@@ -49,8 +53,16 @@ use micold_core::session::SessionId;
 /// `hook_event_name` — a few dozen bytes — is ever read out of the body.
 pub const MAX_BODY: usize = 4 * 1024 * 1024;
 
+/// The bound on a `/status` body (feature 490, contracts/status-line-relay.md S3). The relay posts
+/// only the status line's `rate_limits` object, a few hundred bytes.
+pub const MAX_STATUS_BODY: usize = 16 * 1024;
+
 /// The shared token registry: session uuid → its per-session bearer secret.
 type Tokens = Arc<Mutex<HashMap<Uuid, String>>>;
+
+/// The `/status` answers already logged, per session, since its last accepted reading (feature
+/// 490, S3.1, FR-016): an unchanged failure is logged once.
+type Rejections = Arc<Mutex<HashSet<(Uuid, &'static str)>>>;
 
 /// The loopback hook receiver: the bound address, the per-session token registry, and the directory
 /// the per-session `--settings` files are written to.
@@ -125,6 +137,7 @@ impl HookReceiver {
 /// lifetime. An accept error is transient (a peer that vanished mid-handshake) and is skipped rather
 /// than tearing the loop down.
 pub async fn serve(listener: TcpListener, tokens: Tokens, state: Arc<DaemonState>) {
+    let rejections = Rejections::default();
     loop {
         let stream = match listener.accept().await {
             Ok((stream, _peer)) => stream,
@@ -132,11 +145,21 @@ pub async fn serve(listener: TcpListener, tokens: Tokens, state: Arc<DaemonState
         };
         let tokens = Arc::clone(&tokens);
         let state = Arc::clone(&state);
+        let rejections = Arc::clone(&rejections);
         tokio::spawn(async move {
             // A handler error is a malformed/hostile request; it never propagates.
-            let _ = handle_connection(stream, tokens, state).await;
+            let _ = handle_connection(stream, tokens, state, rejections).await;
         });
     }
+}
+
+/// The two routes: lifecycle hooks, and (feature 490) the plan usage of a session's status line.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Route {
+    /// `/hook/<session-uuid>`: an activity hook.
+    Hook,
+    /// `/status/<session-uuid>`: a status line's `rate_limits` (contracts/status-line-relay.md S3).
+    Status,
 }
 
 /// The classification of a hook payload's `hook_event_name`.
@@ -150,12 +173,14 @@ enum HookClass {
     Invalid,
 }
 
-/// Handle one connection: read a bounded head + body, authenticate the per-session token, map the
-/// hook to an [`ActivityEvent`], and apply it. Writes exactly one HTTP response, then closes.
+/// Handle one connection: read a bounded head + body, authenticate the per-session token, and
+/// apply it — a hook to the session's activity, a status body to the plan's usage. Writes exactly
+/// one HTTP response, then closes.
 async fn handle_connection(
     mut stream: TcpStream,
     tokens: Tokens,
     state: Arc<DaemonState>,
+    rejections: Rejections,
 ) -> io::Result<()> {
     // 1. Read the head, bounded, up to the blank line that terminates it.
     let (head, rest) = match http::read_head(&mut stream).await? {
@@ -168,11 +193,12 @@ async fn handle_connection(
         HeadRead::Closed => return Ok(()),
     };
 
-    // 2. Only POST /hook/<uuid> is a route; anything else is a flat 404 (no capability surface).
+    // 2. Only POST /hook/<uuid> and POST /status/<uuid> are routes; anything else is a flat 404
+    //    (no capability surface).
     if head.method != "POST" {
         return respond(&mut stream, 405, "Method Not Allowed").await;
     }
-    let Some(session_uuid) = session_id_from_path(&head.path) else {
+    let Some((route, session_uuid)) = route_from_path(&head.path) else {
         return respond(&mut stream, 404, "Not Found").await;
     };
 
@@ -184,21 +210,42 @@ async fn handle_connection(
         matches!((tokens.get(&session_uuid), &head.bearer), (Some(expected), Some(got)) if expected == got)
     };
     if !authorized {
+        if route == Route::Status {
+            rejected(&rejections, session_uuid, "forbidden");
+        }
         return respond(&mut stream, 403, "Forbidden").await;
     }
 
     // 4. Bound and read the body — after authentication, but still before a byte of an over-bound
     //    body is buffered (it is drained, never kept).
-    let body = match http::read_body(&mut stream, rest, head.content_length, MAX_BODY).await? {
-        Body::Complete(body) => body,
-        Body::TooLarge => return respond(&mut stream, 413, "Payload Too Large").await,
+    let limit = match route {
+        Route::Hook => MAX_BODY,
+        Route::Status => MAX_STATUS_BODY,
     };
+    let body = match http::read_body(&mut stream, rest, head.content_length, limit).await? {
+        Body::Complete(body) => body,
+        Body::TooLarge => {
+            if route == Route::Status {
+                rejected(&rejections, session_uuid, "too large");
+            }
+            return respond(&mut stream, 413, "Payload Too Large").await;
+        }
+    };
+    let session = SessionId::from_uuid(session_uuid);
+    if route == Route::Status {
+        let answer = plan_usage(&state, &rejections, session, &body);
+        return respond(
+            &mut stream,
+            answer,
+            if answer == 200 { "OK" } else { "Bad Request" },
+        )
+        .await;
+    }
 
     // 6. Map the hook to an activity transition. The body is NEVER logged (contract §6).
     let body_str = std::str::from_utf8(&body).unwrap_or("");
     match classify_hook(body_str) {
         HookClass::Event(kind) => {
-            let session = SessionId::from_uuid(session_uuid);
             if state.note_activity(session, ActivityEvent::Hook(kind)) {
                 state.broadcast_catalog();
             }
@@ -209,16 +256,71 @@ async fn handle_connection(
     }
 }
 
-/// Extract the session uuid from a `/hook/<uuid>` path (ignoring any query string). `None` if the
-/// path is not a hook route or the segment is not a uuid.
-fn session_id_from_path(path: &str) -> Option<Uuid> {
+/// Apply a `/status` body to the plan's usage (feature 490, S3) and return the status code: `400`
+/// for a body that is not a JSON object, else `200`, with the reading kept only when it has a
+/// usable window and plan usage is on (S3.2). Every window is told of a reading the service keeps
+/// (W2). The body is never logged (S3.1).
+fn plan_usage(
+    state: &DaemonState,
+    rejections: &Rejections,
+    session: SessionId,
+    body: &[u8],
+) -> u16 {
+    let body: serde_json::Value = match serde_json::from_slice(body) {
+        Ok(object @ serde_json::Value::Object(_)) => object,
+        _ => {
+            rejected(rejections, session.0, "malformed");
+            return 400;
+        }
+    };
+    let Some(reading) = status_line::parse(&body, unix_secs()) else {
+        rejected(rejections, session.0, "no usable window");
+        return 200;
+    };
+    if !state.plan_usage_enabled() {
+        rejected(rejections, session.0, "plan usage is off");
+        return 200;
+    }
+    // An accepted reading: the next failure of this session is news again (FR-016).
+    rejections
+        .lock()
+        .expect("status rejections lock poisoned")
+        .retain(|(uuid, _)| *uuid != session.0);
+    if state.note_plan_usage(session, reading.clone()) {
+        state.broadcast(DaemonMsg::PlanUsageChanged {
+            reading: Some(reading),
+        });
+    }
+    200
+}
+
+/// Log a `/status` request the service did not use, at debug and once per (session, answer) until
+/// that session's next accepted reading (S3.1, FR-016). Nothing about it is a warning: plan usage
+/// that cannot be read is simply not shown (FR-015).
+fn rejected(rejections: &Rejections, session: Uuid, answer: &'static str) {
+    let first = rejections
+        .lock()
+        .expect("status rejections lock poisoned")
+        .insert((session, answer));
+    if first {
+        tracing::debug!(%session, answer, "plan usage reading not used");
+    }
+}
+
+/// Extract the route and session uuid from a `/hook/<uuid>` or `/status/<uuid>` path (ignoring any
+/// query string). `None` if the path is neither or the segment is not a uuid.
+fn route_from_path(path: &str) -> Option<(Route, Uuid)> {
     let path = path.split('?').next().unwrap_or(path);
-    let rest = path.strip_prefix("/hook/")?;
+    let (route, rest) = if let Some(rest) = path.strip_prefix("/hook/") {
+        (Route::Hook, rest)
+    } else {
+        (Route::Status, path.strip_prefix("/status/")?)
+    };
     // Exactly one path segment — no deeper routes exist.
     if rest.is_empty() || rest.contains('/') {
         return None;
     }
-    Uuid::parse_str(rest).ok()
+    Some((route, Uuid::parse_str(rest).ok()?))
 }
 
 /// Classify a hook payload by its `hook_event_name` (contracts/hooks.md state table). Uses a tolerant
@@ -339,6 +441,10 @@ pub fn default_settings_dir() -> PathBuf {
 mod tests {
     use super::*;
 
+    fn session_id_from_path(path: &str) -> Option<Uuid> {
+        route_from_path(path).map(|(_, uuid)| uuid)
+    }
+
     #[test]
     fn extracts_the_session_uuid_from_the_path() {
         let uuid = Uuid::from_u128(0x1234);
@@ -347,6 +453,22 @@ mod tests {
         // A query string is ignored.
         let with_query = format!("/hook/{uuid}?x=1");
         assert_eq!(session_id_from_path(&with_query), Some(uuid));
+    }
+
+    #[test]
+    fn names_the_route_of_the_path() {
+        let uuid = Uuid::from_u128(0x490);
+        assert_eq!(
+            route_from_path(&format!("/hook/{uuid}")),
+            Some((Route::Hook, uuid))
+        );
+        assert_eq!(
+            route_from_path(&format!("/status/{uuid}")),
+            Some((Route::Status, uuid))
+        );
+        assert_eq!(route_from_path("/status/"), None);
+        assert_eq!(route_from_path(&format!("/status/{uuid}/extra")), None);
+        assert_eq!(route_from_path(&format!("/usage/{uuid}")), None);
     }
 
     #[test]

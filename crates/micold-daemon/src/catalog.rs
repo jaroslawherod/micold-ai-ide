@@ -32,8 +32,8 @@ use micold_core::session::{
 
 use crate::supervision::{supervise_exit, ExitOutcome, SupervisionAction};
 use micold_core::settings::{
-    clamp_env_include_timeout, clamp_long_task_threshold, clamp_scrollback, JsonFileSettingsStore,
-    Settings, SettingsStore,
+    clamp_env_include_timeout, clamp_long_task_threshold, clamp_plan_usage_warn_percent,
+    clamp_scrollback, JsonFileSettingsStore, Settings, SettingsStore,
 };
 use micold_core::store::{JsonFileStore, LoadStatus, ProjectStore};
 use micold_core::workspace::Workspace;
@@ -180,6 +180,8 @@ impl Catalog {
             notification_kinds: self.settings.notification_kinds,
             long_task_threshold_secs: self.settings.long_task_threshold_secs,
             diff_layout: self.settings.diff_layout,
+            plan_usage_enabled: self.settings.plan_usage_enabled,
+            plan_usage_warn_percent: self.settings.plan_usage_warn_percent,
         }
     }
 
@@ -335,6 +337,8 @@ impl Catalog {
                 on_disk.notification_kinds = self.settings.notification_kinds;
                 on_disk.long_task_threshold_secs = self.settings.long_task_threshold_secs;
                 on_disk.diff_layout = self.settings.diff_layout;
+                on_disk.plan_usage_enabled = self.settings.plan_usage_enabled;
+                on_disk.plan_usage_warn_percent = self.settings.plan_usage_warn_percent;
             });
             // T162: the line that was missing when BUG-025 had to be attributed from the bytes on
             // disk. Written for a refused write too — a save that did not happen is exactly the
@@ -529,6 +533,24 @@ impl Catalog {
     /// atomically (feature 613, T063).
     pub fn set_long_task_threshold(&mut self, secs: u64) -> io::Result<()> {
         self.settings.long_task_threshold_secs = clamp_long_task_threshold(secs);
+        self.persist_service_settings()
+    }
+
+    /// Whether the Claude plan's usage is read and shown (feature 490, FR-001).
+    pub fn plan_usage_enabled(&self) -> bool {
+        self.settings.plan_usage_enabled
+    }
+
+    /// Turn plan usage on or off, persisting atomically (feature 490, FR-002).
+    pub fn set_plan_usage_enabled(&mut self, on: bool) -> io::Result<()> {
+        self.settings.plan_usage_enabled = on;
+        self.persist_service_settings()
+    }
+
+    /// Set the plan-usage warning threshold, clamped into 50–100 (FR-005), persisting atomically
+    /// (feature 490).
+    pub fn set_plan_usage_warn_percent(&mut self, percent: u8) -> io::Result<()> {
+        self.settings.plan_usage_warn_percent = clamp_plan_usage_warn_percent(u64::from(percent));
         self.persist_service_settings()
     }
 

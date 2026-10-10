@@ -325,6 +325,8 @@ fn changed_value<T: PartialEq + Clone>(saved: &T, opened_with: Option<&T>) -> Op
 /// opened with, and leave every other field as `target` has it (BUG-570, FR-026a).
 ///
 /// The diff layout is never set: the form does not hold it (feature 482, which the service owns).
+/// Nor are the plan-usage settings: the service owns them, and they reach it as `SettingsSet`
+/// (feature 490, W3).
 /// The destructuring is there so that a field added to `Settings` fails to compile here until a save
 /// says what it does with it.
 fn set_changed(target: &mut Settings, saved: &Settings, baseline: Option<&Settings>) {
@@ -368,6 +370,8 @@ fn set_changed(target: &mut Settings, saved: &Settings, baseline: Option<&Settin
         daemons: _,
         next_daemon_id: _,
         legacy_default_daemon: _,
+        plan_usage_enabled: _,
+        plan_usage_warn_percent: _,
     } = saved;
     macro_rules! set {
         ($($field:ident).+) => {
@@ -450,6 +454,9 @@ impl ServiceChanges {
             pr_status_enabled: self.pr_status_enabled,
             notification_kinds: self.notification_kinds,
             long_task_threshold_secs: self.long_task_threshold_secs,
+            // Not in the form until T044 (feature 490).
+            plan_usage_enabled: None,
+            plan_usage_warn_percent: None,
         }
     }
 }
@@ -1079,6 +1086,8 @@ mod tests {
     #[test]
     fn saving_a_theme_keeps_every_other_setting() {
         let stored = Settings {
+            plan_usage_enabled: false,
+            plan_usage_warn_percent: 65,
             theme: ThemePreference::Light,
             scrollback_lines: 12_345,
             env_include_enabled: false,

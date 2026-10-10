@@ -400,6 +400,8 @@ async fn a_settings_set_deletes_the_files_before_it_is_answered_and_is_broadcast
 
     window
         .send(Frame::Control(ClientMsg::SettingsSet {
+            plan_usage_enabled: None,
+            plan_usage_warn_percent: None,
             req: 5,
             scrollback_lines: None,
             env_include_enabled: None,
