@@ -317,6 +317,7 @@ Copilot or Pi recorded for this project (in its folder or one of its worktrees) 
 does not show yet, newest first with their title. Press **Resume** on one to add it to the sidebar
 and continue it where you left off; the assistant is started with its own resume option, so the
 conversation carries on from what it stored.
+Codex and OpenCode sessions are not listed here: the app does not read their conversation stores.
 
 - A session that ran in a worktree the app has not attached yet resumes by attaching that worktree
   first, as the row says.

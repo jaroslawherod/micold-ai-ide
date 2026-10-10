@@ -1,4 +1,5 @@
-//! `OpenCodeProvider` — the OpenCode profile of the AI CLI seam, fresh start only (feature 488, M1, T003).
+//! `OpenCodeProvider` — the OpenCode profile of the AI CLI seam, start, resume, naming and
+//! store (feature 488, M1 and M3).
 //!
 //! Every derivation is pure, so the provider is testable without the CLI installed.
 
@@ -38,6 +39,40 @@ fn availability_follows_the_path_it_is_given() {
     std::fs::write(dir.path().join("opencode"), "").unwrap();
     assert!(OpenCodeProvider.is_available(&path));
     assert!(!OpenCodeProvider.is_available(std::ffi::OsStr::new("")));
+}
+
+/// `PATHEXT` is process-wide; the tests that set it run one at a time.
+static PATHEXT_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// T043: on Windows the CLI is a `.cmd` shim or an `.exe`, found through `PATHEXT`. The lookup is
+/// the same code on every host, so setting `PATHEXT` here covers it without a Windows target (none
+/// is installed in the sandbox, so `cargo check --target x86_64-pc-windows-msvc` is out of reach;
+/// the `resume` module below needs a `#!/bin/sh` stand-in and stays unix-only).
+#[test]
+fn a_cmd_shim_or_exe_on_the_path_counts_when_pathext_lists_it() {
+    let _lock = PATHEXT_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+    let saved = std::env::var_os("PATHEXT");
+    let dir = tempfile::tempdir().unwrap();
+    let path = std::env::join_paths([dir.path()]).unwrap();
+
+    std::env::set_var("PATHEXT", ".EXE;.CMD");
+    let bare = OpenCodeProvider.is_available(&path);
+    std::fs::write(dir.path().join("opencode.CMD"), "").unwrap();
+    let cmd = OpenCodeProvider.is_available(&path);
+    std::fs::remove_file(dir.path().join("opencode.CMD")).unwrap();
+    std::fs::write(dir.path().join("opencode.EXE"), "").unwrap();
+    let exe = OpenCodeProvider.is_available(&path);
+    std::env::set_var("PATHEXT", "");
+    let unlisted = OpenCodeProvider.is_available(&path);
+
+    match saved {
+        Some(value) => std::env::set_var("PATHEXT", value),
+        None => std::env::remove_var("PATHEXT"),
+    }
+    assert!(!bare, "an empty directory has no opencode");
+    assert!(cmd, ".CMD is listed");
+    assert!(exe, ".EXE is listed");
+    assert!(!unlisted, "an extension PATHEXT does not list is not tried");
 }
 
 #[test]
@@ -237,6 +272,20 @@ mod resume {
         ]);
         let ids: Vec<String> = cli.found(since).into_iter().map(|c| c.id).collect();
         assert_eq!(ids, vec!["ses_new".to_string()]);
+    }
+
+    /// T041: a conversation created 1 s before the spawn is inside the 2 s clock allowance, one
+    /// created 3 s before is outside it.
+    #[test]
+    fn the_clock_allowance_is_two_seconds() {
+        let cli = Cli::new();
+        let since = SystemTime::now();
+        cli.list(&[
+            cli.entry("ses_inside", &cli.cwd, ms(since) - 1_000),
+            cli.entry("ses_outside", &cli.cwd, ms(since) - 3_000),
+        ]);
+        let ids: Vec<String> = cli.found(since).into_iter().map(|c| c.id).collect();
+        assert_eq!(ids, vec!["ses_inside".to_string()]);
     }
 
     #[test]

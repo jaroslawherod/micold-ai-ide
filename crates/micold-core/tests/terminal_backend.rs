@@ -118,6 +118,9 @@ fn handle_records_input_resize_kill() {
     // No panic; the fake handle accepted the calls (recorded internally).
 }
 
+/// Tests that change `CODEX_HOME` run one at a time: the variable is process-wide.
+static CODEX_HOME_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 /// Feature 488, M3 (T017): `launch_args` resolves the provider's own store, so a Codex session
 /// with a bound conversation resumes it and one without starts fresh.
 #[test]
@@ -139,6 +142,7 @@ fn a_codex_launch_resumes_the_conversation_bound_in_its_store() {
     )
     .unwrap();
 
+    let _lock = CODEX_HOME_LOCK.lock().unwrap_or_else(|p| p.into_inner());
     let previous = std::env::var_os("CODEX_HOME");
     std::env::set_var("CODEX_HOME", home.path());
     let bound = launch_args(&spec_for(AiCli::Codex, LaunchMode::Resume, id));

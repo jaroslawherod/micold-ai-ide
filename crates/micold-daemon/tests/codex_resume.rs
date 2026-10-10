@@ -8,18 +8,20 @@
 // unix-only: the stand-in CLI is a `#!/bin/sh` script.
 #![cfg(unix)]
 
+#[path = "support/env.rs"]
+mod env_support;
 #[path = "support/mcp.rs"]
 mod mcp_support;
 
-use std::ffi::OsString;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use env_support::Env;
 use mcp_support::*;
 use micold_core::project::{Availability, Project};
-use micold_core::session::{AiCli, TerminalMode};
+use micold_core::session::{AiCli, SessionLabel, TerminalMode};
 use micold_core::settings::JsonFileSettingsStore;
 use micold_core::store::{JsonFileStore, ProjectStore};
 use micold_core::terminal::LaunchMode;
@@ -29,38 +31,6 @@ use micold_daemon::state::DaemonState;
 
 /// The tests change process-wide variables (`PATH`, `HOME`, …); one at a time.
 static ENV: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
-
-struct Env {
-    saved: Vec<(&'static str, Option<OsString>)>,
-}
-
-impl Env {
-    fn set(vars: &[(&'static str, Option<OsString>)]) -> Self {
-        let saved = vars
-            .iter()
-            .map(|(name, value)| {
-                let previous = std::env::var_os(name);
-                match value {
-                    Some(value) => std::env::set_var(name, value),
-                    None => std::env::remove_var(name),
-                }
-                (*name, previous)
-            })
-            .collect();
-        Self { saved }
-    }
-}
-
-impl Drop for Env {
-    fn drop(&mut self) {
-        for (name, previous) in self.saved.drain(..) {
-            match previous {
-                Some(value) => std::env::set_var(name, value),
-                None => std::env::remove_var(name),
-            }
-        }
-    }
-}
 
 /// A `codex` that logs its arguments and, when not resuming, records a conversation for its
 /// working directory the way Codex does: `sessions/Y/M/D/rollout-<ts>-<id>.jsonl`.
@@ -130,6 +100,7 @@ struct Fixture {
     _env: Env,
     bin: PathBuf,
     config_dir: PathBuf,
+    project: PathBuf,
     store: PathBuf,
     state: Arc<DaemonState>,
     _dirs: Vec<tempfile::TempDir>,
@@ -188,7 +159,7 @@ impl Fixture {
             .save(&Workspace {
                 projects: vec![Project::new(project.clone(), true, Availability::Available)],
                 active: Some(project.clone()),
-                sessions: [(project, sessions)].into(),
+                sessions: [(project.clone(), sessions)].into(),
                 ..Default::default()
             })
             .unwrap();
@@ -198,6 +169,7 @@ impl Fixture {
             _env: env,
             bin,
             config_dir,
+            project,
             store,
             state,
             _dirs: dirs,
@@ -290,6 +262,40 @@ async fn restart_resumes(cli: AiCli) {
         .await;
     assert_eq!(f.argument_lines()[1], f.resume_line(bound.trim()));
     f.stop(&restarted, &[1]);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_bound_codex_session_is_named_from_its_first_turn() {
+    named_from_first_turn(AiCli::Codex, "hello codex").await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_bound_opencode_session_is_named_from_its_first_turn() {
+    named_from_first_turn(AiCli::OpenCode, "hello opencode").await;
+}
+
+/// The stand-in's first turn is the only place the name can come from: the session is unnamed
+/// until the daemon has bound the conversation and asked the provider for its label.
+async fn named_from_first_turn(cli: AiCli, first_turn: &str) {
+    let _guard = ENV.lock().await;
+    let f = Fixture::new(cli, &[1]).await;
+    let label = |f: &Fixture| {
+        f.state
+            .sessions_for(&f.project)
+            .into_iter()
+            .find(|s| s.id == sid(1))
+            .map(|s| s.title)
+            .expect("the session is listed")
+    };
+    assert!(!matches!(
+        label(&f),
+        SessionLabel::Derived(_) | SessionLabel::Named(_)
+    ));
+    f.start(&f.state, 1, LaunchMode::Fresh).await;
+    f.until("the binding", |f| f.binding(1).exists()).await;
+    assert_eq!(f.state.recover_session_names(&f.project), 1);
+    assert_eq!(label(&f), SessionLabel::Named(first_turn.to_string()));
+    f.stop(&f.state, &[1]);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]

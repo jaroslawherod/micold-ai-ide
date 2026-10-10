@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #488
 - **Worktree branch**: claude/project-thread-wysm57
 - **Started**: 2026-10-09
-- **Phase**: milestone M6
-- **Next step**: orchestrator pushes and opens the M6 PR from scratchpad/pr-488-m6.md, waits for CI, merges, then the close unit
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -22,7 +22,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #684 | M3 | MERGED (rebase) | e9abd92efe2c7d8ad097ff82d4a7073477349524 |
 | #690 | M4 | MERGED (rebase) | 26dbd73670583e4e4826b0c80f972359072deaf2 |
 | #691 | M5 | MERGED (rebase) | 314405a5bc0b249ea033e6dfc1a21d0aef2d2872 |
-| (orchestrator opens) | M6 | pending | |
+| #692 | M6 | MERGED (rebase) | aac20577969fbc2568a8db3554df4681da32a40d |
+| (orchestrator opens) | Close | pending | |
 
 ## Milestones
 
@@ -33,7 +34,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 | T016–T022 | full | Codex resume + naming (seam) | #684 | merged |
 | M4 | T023–T026 | full | OpenCode resume + naming | #690 | merged |
 | M5 | T027–T030 | light | Honest activity, tool-server, first prompt | #691 | merged |
-| M6 | T031–T034 | full | Sandbox image + sign-in | pending (orchestrator opens) | in progress |
+| M6 | T031–T034 | full | Sandbox image + sign-in | #692 | merged |
 
 ## Decisions
 
@@ -103,5 +104,7 @@ None. <or: the banner as sent, and when>
 
 ## Follow-ups not done
 
-None yet.
+- FR-003 gap: Settings dropdown and chooser list only available providers; a missing provider is not explained there (existing 037 behaviour). Not built.
+- T044 mutation testing not run (disk); quickstart Part C with real CLIs not run.
+- Codex/OpenCode stored sessions are not listed in the attach dialog (documented).
 - M2 gap vs FR-003 wording / plan.md:68: Settings dropdown lists only available providers, the others named in the note; with a single installed CLI the chooser has no chevron and no note, so a missing provider is not explained there. Existing 037 behaviour; decide whether a later milestone or the close unit should list unavailable entries.

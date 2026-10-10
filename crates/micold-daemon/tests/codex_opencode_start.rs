@@ -7,15 +7,17 @@
 // unix-only: the stand-in CLIs are `#!/bin/sh` scripts.
 #![cfg(unix)]
 
+#[path = "support/env.rs"]
+mod env_support;
 #[path = "support/mcp.rs"]
 mod mcp_support;
 
-use std::ffi::OsString;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use env_support::Env;
 use mcp_support::*;
 use micold_core::project::{Availability, Project};
 use micold_core::session::{AiCli, SessionId, TerminalMode};
@@ -30,38 +32,6 @@ use serde_json::{json, Value};
 static ENV: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 const PROVIDERS: [(AiCli, &str); 2] = [(AiCli::Codex, "codex"), (AiCli::OpenCode, "opencode")];
-
-struct Env {
-    saved: Vec<(&'static str, Option<OsString>)>,
-}
-
-impl Env {
-    fn set(vars: &[(&'static str, Option<OsString>)]) -> Self {
-        let saved = vars
-            .iter()
-            .map(|(name, value)| {
-                let previous = std::env::var_os(name);
-                match value {
-                    Some(value) => std::env::set_var(name, value),
-                    None => std::env::remove_var(name),
-                }
-                (*name, previous)
-            })
-            .collect();
-        Self { saved }
-    }
-}
-
-impl Drop for Env {
-    fn drop(&mut self) {
-        for (name, previous) in self.saved.drain(..) {
-            match previous {
-                Some(value) => std::env::set_var(name, value),
-                None => std::env::remove_var(name),
-            }
-        }
-    }
-}
 
 /// A stand-in CLI that records the directory it was started in and then idles.
 fn install_cli(bin: &Path, command: &str) {
@@ -130,12 +100,11 @@ impl Fixture {
                 active: Some(project.path().to_path_buf()),
                 sessions: [(
                     project.path().to_path_buf(),
-                    vec![session(
-                        sid(3),
-                        Some("b"),
-                        TerminalMode::AiCli,
-                        AiCli::ClaudeCode,
-                    )],
+                    vec![
+                        session(sid(3), Some("b"), TerminalMode::AiCli, AiCli::ClaudeCode),
+                        session(sid(4), Some("b"), TerminalMode::AiCli, AiCli::Codex),
+                        session(sid(5), Some("b"), TerminalMode::AiCli, AiCli::OpenCode),
+                    ],
                 )]
                 .into(),
                 ..Default::default()
@@ -268,7 +237,7 @@ fn listed(state: &DaemonState, cwd: &Path) -> Vec<AiCli> {
     state.availability_in(cwd).0
 }
 
-/// How many session records the catalog holds (the fixture starts with one, session 3).
+/// How many session records the catalog holds (the fixture starts with three: 3 Claude Code, 4 Codex, 5 OpenCode).
 fn session_count(f: &Fixture) -> usize {
     f.state
         .catalog_snapshot()
@@ -325,15 +294,36 @@ async fn starting_an_unavailable_provider_over_mcp_is_refused_naming_it_and_crea
     }
 }
 
+/// The app starts a session through `ops::start_session`: with its CLI off `PATH` that start fails,
+/// the session reads `Failed` with a reason naming the CLI, and no process was ever live for it.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn the_app_start_path_gives_the_same_reason_before_any_terminal() {
+async fn the_app_start_of_a_session_whose_provider_is_unavailable_fails_naming_it() {
+    use micold_core::protocol::messages::WireLifecycle;
+    use micold_core::terminal::LaunchMode;
     let _guard = ENV.lock().await;
-    for (cli, command) in PROVIDERS {
+    for (cli, command, n) in [(AiCli::Codex, "codex", 4), (AiCli::OpenCode, "opencode", 5)] {
         let f = Fixture::installed(&[]).await;
-        let why = micold_daemon::ops::cli_unavailable(&f.state, f.project.path(), cli)
+        let started = micold_daemon::ops::start_session(&f.state, sid(n), LaunchMode::Fresh)
             .await
-            .expect("unavailable");
-        assert!(why.to_lowercase().contains(command), "{command}: {why}");
+            .unwrap();
+        assert!(!started, "{cli:?} started with nothing on PATH");
+        assert!(f.state.live_session(sid(n)).is_none(), "{command} is live");
+        let lifecycle = f
+            .state
+            .catalog_snapshot()
+            .projects
+            .into_iter()
+            .flat_map(|p| p.sessions)
+            .find(|s| s.id == sid(n))
+            .expect("the session is listed")
+            .lifecycle;
+        let WireLifecycle::Failed { reason, .. } = lifecycle else {
+            panic!("{command}: expected a failed start, got {lifecycle:?}");
+        };
+        assert!(
+            reason.to_lowercase().contains(command),
+            "{command}: {reason}"
+        );
     }
 }
 
@@ -411,37 +401,42 @@ fn badge(f: &Fixture, id: SessionId) -> micold_core::protocol::messages::Activit
         .activity
 }
 
-/// FR-009, AS1: Codex and OpenCode have no reliable activity signal, so the badge reads `Unknown`
-/// while the CLI prints and after it goes quiet. AS2 (a provider with a source follows busy/idle)
-/// is pinned by `activity_pipeline::hooks_drive_the_projected_activity_signal`; here only that
-/// Claude Code still has a source while these two have none.
+/// FR-009, AS1: Codex and OpenCode have no reliable activity signal, so the daemon wires nothing
+/// for one: no hook settings or token is minted for the session, which is what a wrongly added
+/// `ActivitySource::Hooks` would do, and the badge reads `Unknown`. AS2 (a provider with a source
+/// follows busy/idle) is pinned by `activity_pipeline::hooks_drive_the_projected_activity_signal`.
+/// Claude Code is the control: the same receiver does mint it a token.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn the_badge_stays_unknown_through_output_and_silence() {
+async fn only_a_provider_with_an_activity_source_is_wired_for_activity() {
     use micold_core::protocol::messages::ActivitySignal;
-    use micold_core::provider::ActivitySource;
+    use micold_daemon::hooks::HookReceiver;
     let _guard = ENV.lock().await;
-    let (dir, id) = (Path::new("/tmp"), uuid::Uuid::nil());
-    assert!(!matches!(
-        AiCli::ClaudeCode.provider().activity_source(dir, dir, id),
-        ActivitySource::None
-    ));
+    let f = Fixture::new().await;
+    install_cli(f.bin.path(), "claude");
+    let (receiver, _listener) = HookReceiver::bind(f.store.path().join("hooks"))
+        .await
+        .unwrap();
+    let tokens = receiver.tokens();
+    f.state.set_hooks(receiver);
+    let minted = |id: SessionId| tokens.lock().unwrap().contains_key(&id.0);
+
+    let claude = created(
+        &f.create(json!({"worktree": "b", "ai_cli": "claude_code"}))
+            .await,
+    );
+    f.started_in("claude").await;
+    assert!(
+        minted(claude),
+        "the control: Claude Code is wired for hooks"
+    );
     for (cli, command) in PROVIDERS {
-        assert!(matches!(
-            cli.provider().activity_source(dir, dir, id),
-            ActivitySource::None
-        ));
-        let f = Fixture::new().await;
-        install_typing_cli(f.bin.path(), command);
-        let session = created(
+        let id = created(
             &f.create(json!({"worktree": "b", "ai_cli": cli.tool_name()}))
                 .await,
         );
-        // Output now, then a stretch of silence longer than the output-settle window.
-        let until = Instant::now() + Duration::from_secs(3);
-        while Instant::now() < until {
-            assert_eq!(badge(&f, session), ActivitySignal::Unknown, "{command}");
-            tokio::time::sleep(Duration::from_millis(100)).await;
-        }
+        f.started_in(command).await;
+        assert!(!minted(id), "{command} was wired for activity hooks");
+        assert_eq!(badge(&f, id), ActivitySignal::Unknown, "{command}");
     }
 }
 

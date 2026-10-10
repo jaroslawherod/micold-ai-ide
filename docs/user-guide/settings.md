@@ -414,7 +414,7 @@ it up again.
 - **Image reference** — a digest or an exact tag. A moving tag like `:latest` can't be named in a
   bug report, so the app will tell you when you're on one. Sessions run in this image, so it has to
   provide every AI CLI you want to use. The image this app publishes, and one built from this
-  checkout, ships Claude Code, GitHub Copilot and Pi Coding Agent. If the running image lacks one, a
+  checkout, ships Claude Code, GitHub Copilot, Pi Coding Agent, Codex and OpenCode. If the running image lacks one, a
   note under the field names it. That note describes the image the service is running now, not an
   unsaved or not-yet-started reference: a new image is used from the next time the service starts.
 - **Image file** — the archive to load, when the image comes from a file.
