@@ -55,7 +55,7 @@ use crate::app::Message;
 use crate::overlay::registry::Registered;
 use crate::overlay::{DismissalRules, FloatingSurface, SurfaceId};
 use micold_core::cli_reason::{
-    explain, start_refusal, start_refusal_unknown, AttemptDir, Explanation, Place, SpawnEnv,
+    explain_one, start_refusal, start_refusal_unknown, AttemptDir, Explanation, Place, SpawnEnv,
 };
 use micold_core::overlay::Layer;
 use micold_core::project::canonicalize_best_effort;
@@ -2233,31 +2233,42 @@ impl State {
         self.known_clis(Some(dir)).len() >= 2
     }
 
-    /// What the start list of the row for `dir` says about the CLIs it does not offer: the reason
-    /// and its action, for the directory the answer in use was asked for (037 FR-010, contract W4
-    /// surface U6). `None` when the list has nothing to add.
+    /// What the start list of the row for `dir` shows: every supported CLI in [`AiCli::ALL`]
+    /// order, each available or unavailable with its reason (037 FR-010, contract W4 surface U6;
+    /// BUG-753).
     ///
-    /// It says something only on a row whose list already opens by its chevron, which takes two
-    /// or more available CLIs (026 FR-006). A row with fewer keeps the control it had, and the
-    /// list a missing default opens there is explained by that press's message (ledger D5, D6).
-    /// It also says nothing when no CLI is missing, when no answer is in use, and when the answer
-    /// carries no environment state: a reason made up here could send the user to the wrong
-    /// setting (FR-011, contract W5).
+    /// An unavailable CLI is drawn as a disabled item whose tooltip is `explain`'s reason and
+    /// action for that one CLI, about the directory the answer in use was asked for. With an
+    /// answer that carries no environment state the reason is the one sentence that is true
+    /// without a cause: a reason made up here could send the user to the wrong setting (FR-011,
+    /// contract W5). Empty while no answer is in use.
     ///
-    /// Read on every draw from the answer [`Self::offered_providers`] reads, so the note and the
-    /// items cannot describe different answers, and both follow a newer one (FR-012, W6).
-    pub fn start_menu_note(&self, dir: &Path) -> Option<String> {
-        let answer = self.answer_in_use(Some(dir))?;
-        if answer.available.len() < 2 {
-            return None;
-        }
-        let Explanation { reason, action } = explain(
-            &answer.missing(),
-            answer.env?,
-            answer.place(),
-            answer.attempt_dir(),
-        )?;
-        Some(format!("{reason} {action}"))
+    /// Read on every draw from the answer [`Self::offered_providers`] reads, so the available
+    /// items and the reasons cannot describe different answers, and both follow a newer one
+    /// (FR-012, W6).
+    pub fn start_menu_entries(&self, dir: &Path) -> Vec<StartMenuEntry> {
+        let Some(answer) = self.answer_in_use(Some(dir)) else {
+            return Vec::new();
+        };
+        AiCli::ALL
+            .into_iter()
+            .map(|cli| {
+                let availability = if answer.available.contains(&cli) {
+                    CliEntryAvailability::Available
+                } else {
+                    let reason = match answer.env {
+                        Some(env) => {
+                            let Explanation { reason, action } =
+                                explain_one(cli, env, answer.place(), answer.attempt_dir());
+                            format!("{reason} {action}")
+                        }
+                        None => format!("{cli} would not be found by a session here."),
+                    };
+                    CliEntryAvailability::Unavailable { reason }
+                };
+                StartMenuEntry { cli, availability }
+            })
+            .collect()
     }
 
     /// Resolve a press into what should happen (T032a).
@@ -2286,6 +2297,28 @@ impl State {
             },
         }
     }
+}
+
+/// One supported AI CLI in a row's start list, and whether it can be chosen there (037 FR-010).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StartMenuEntry {
+    /// The CLI the entry stands for.
+    pub cli: AiCli,
+    /// Whether a session can start on it where the row's sessions would run.
+    pub availability: CliEntryAvailability,
+}
+
+/// Whether a [`StartMenuEntry`] can be chosen.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CliEntryAvailability {
+    /// A session can start on it: a pressable item.
+    Available,
+    /// A session would not find it: a disabled item, with `reason` (and the action) as its
+    /// tooltip.
+    Unavailable {
+        /// `{reason} {action}`, for this one CLI.
+        reason: String,
+    },
 }
 
 /// The "start a session on…" list, and where it hangs from (feature 026, FR-004).

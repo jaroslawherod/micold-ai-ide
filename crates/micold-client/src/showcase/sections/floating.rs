@@ -55,6 +55,7 @@ fn project_rows(roles: Roles) -> Vec<material::MenuItem<Message>> {
                     Icon::Unavailable,
                     icon_role(IconSurface::Unavailable, roles),
                 )),
+                trailing_tooltip: None,
                 on_context: Some(Box::new(|_| Message::NoOp)),
             },
         )
@@ -129,12 +130,11 @@ pub fn surfaces<'a>(
         );
     }
 
-    // The row's start list with a CLI it does not offer: the same `MenuOverlay` again, with the
-    // note `ui::view` gives it (037 FR-010).
-    if open == Some(Floating::MenuWithNote) {
+    // The row's start list with a CLI it cannot start: the same `MenuOverlay` again, with the
+    // disabled item `ui::view` gives it (037 FR-010, BUG-753).
+    if open == Some(Floating::MenuWithDisabledItem) {
         out.push(
-            material::MenuOverlay::new(start_list_items(), Message::Dismissed, roles)
-                .note(start_list_note())
+            material::MenuOverlay::new(start_list_items(roles), Message::Dismissed, roles)
                 .open(true)
                 .into(),
         );
@@ -147,26 +147,33 @@ pub fn surfaces<'a>(
     out
 }
 
-/// The CLIs a row's start list offers when its directory lacks Pi.
-fn start_list_items() -> Vec<material::MenuItem<Message>> {
-    [AiCli::ClaudeCode, AiCli::Copilot]
-        .into_iter()
-        .map(|cli| material::MenuItem::labeled(cli.to_string(), Message::NoOp))
-        .collect()
-}
-
-/// The note that list carries: `cli_reason`'s own sentence for a startup script that failed in an
-/// invented directory. The real text and not a stand-in, because how a sentence of that length
-/// and a path wrap in the panel is what this pose is for.
-fn start_list_note() -> String {
-    let said = cli_reason::explain(
-        &[AiCli::Pi],
+/// The items of a row's start list whose directory lacks Pi: two pressable CLIs and Pi as a
+/// disabled item, with a red icon and `cli_reason`'s own sentence for a startup script that
+/// failed in an invented directory as its tooltip. The real text and not a stand-in, because how
+/// a sentence of that length and a path wrap in the tooltip is what this pose is for.
+fn start_list_items(roles: Roles) -> Vec<material::MenuItem<Message>> {
+    let said = cli_reason::explain_one(
+        AiCli::Pi,
         cli_reason::SpawnEnv::ScriptFailed,
         cli_reason::Place::ThisComputer,
         cli_reason::AttemptDir::Dir(Path::new(samples::PROJECT_DIR)),
-    )
-    .expect("one CLI is missing");
-    format!("{} {}", said.reason, said.action)
+    );
+    let mut items: Vec<material::MenuItem<Message>> = [AiCli::ClaudeCode, AiCli::Copilot]
+        .into_iter()
+        .map(|cli| material::MenuItem::labeled(cli.to_string(), Message::NoOp))
+        .collect();
+    items.push(
+        material::MenuItem {
+            message: None,
+            trailing_icon: Some((
+                Icon::Unavailable,
+                icon_role(IconSurface::Unavailable, roles),
+            )),
+            ..material::MenuItem::labeled(AiCli::Pi.to_string(), Message::NoOp)
+        }
+        .trailing_tooltip(format!("{} {}", said.reason, said.action)),
+    );
+    items
 }
 
 /// The dialog the modal entry opens.
@@ -228,10 +235,10 @@ pub fn menu_overlay<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a
                 roles,
             ),
             posed(
-                "with a note under its items",
+                "with a disabled item and its reason on hover",
                 opener(
-                    "Open a start list with a note",
-                    Floating::MenuWithNote,
+                    "Open a start list with a disabled item",
+                    Floating::MenuWithDisabledItem,
                     roles,
                 ),
                 roles,

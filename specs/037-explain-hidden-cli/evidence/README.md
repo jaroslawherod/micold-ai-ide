@@ -2,7 +2,7 @@
 
 Date 2026-10-01. Ran on Xvfb :87 + lavapipe (software Vulkan), not a real display; private HOME, XDG dirs and PATH (stub claude/copilot, pi only via the include script). Binaries built from HEAD b205f81d and pinned in ~/vp037/bin. Window 1200x900; crops show Settings > Environment from the Default AI CLI field down.
 Geometry (all rows): note's left edge aligns with the select's text inset, wraps inside the column, ends before the select's right edge, no overlap with the next control. Legible in both themes.
-B9-B13 were run with their milestones (rows below). Mid-flight animation not covered.
+B9-B13 were run with their milestones (rows below). B11 to B13 were recorded against the note under the list, which BUG-753 replaced with disabled items and a tooltip; they are history, not a pass of the current list (re-run under M5). Mid-flight animation not covered.
 
 | Step | Seed | Sentence seen | Result | Screenshot |
 |---|---|---|---|---|

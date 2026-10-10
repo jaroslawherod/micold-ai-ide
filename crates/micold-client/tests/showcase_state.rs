@@ -473,7 +473,7 @@ fn each_opener_opens_exactly_one_panel() {
         Floating::ContextMenu,
         Floating::ContextMenuBottom,
         Floating::ProjectSwitcher,
-        Floating::MenuWithNote,
+        Floating::MenuWithDisabledItem,
     ] {
         let mut s = showcase();
         s.update(Message::Opened(open));

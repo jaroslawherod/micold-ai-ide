@@ -9,7 +9,7 @@
 use micold_client::app::{drain, interpret, State};
 use micold_client::features::session::{
     start_menu_toggled, wanted_availability_dirs, AvailabilityAnswers, AvailabilityKey,
-    AvailabilitySource, CliAvailability, EnvIncludeSettings,
+    AvailabilitySource, CliAvailability, CliEntryAvailability, EnvIncludeSettings, StartMenuEntry,
 };
 use micold_core::cli_reason::{start_refusal, AttemptDir, Place, SpawnEnv};
 use micold_core::project::{Availability, Project};
@@ -579,10 +579,10 @@ fn no_project_no_wanted_directories() {
 }
 
 // ---------------------------------------------------------------------------------------------
-// 037 surface U6: the note in a row's CLI list (U78–U85)
+// 037 surface U6: the entries of a row's CLI list (U93; BUG-753 superseded U78-U85)
 // ---------------------------------------------------------------------------------------------
 
-/// Everything but Pi, so the one CLI the notes name is Pi.
+/// Everything but Pi, so the one CLI the entries mark unavailable is Pi.
 const WITHOUT_PI: &[AiCli] = &[
     AiCli::ClaudeCode,
     AiCli::Copilot,
@@ -591,9 +591,9 @@ const WITHOUT_PI: &[AiCli] = &[
 ];
 const HOME_KEY: u64 = 1;
 
-/// `explain`'s `{reason} {action}` for `missing` on this computer (contract W4, surface U6).
-fn explained(missing: &[AiCli], env: SpawnEnv, dir: AttemptDir<'_>) -> String {
-    let said = micold_core::cli_reason::explain(missing, env, Place::ThisComputer, dir)
+/// `explain`'s `{reason} {action}` for `cli` on this computer (contract W4, surface U6).
+fn explained(cli: AiCli, env: SpawnEnv, dir: AttemptDir<'_>) -> String {
+    let said = micold_core::cli_reason::explain(&[cli], env, Place::ThisComputer, dir)
         .expect("something is missing");
     format!("{} {}", said.reason, said.action)
 }
@@ -609,67 +609,82 @@ fn row_answered(available: &[AiCli], env: Option<SpawnEnv>) -> State {
     state
 }
 
-fn note(state: &State, path: &str) -> Option<String> {
-    state.session.start_menu_note(Path::new(path))
+fn entries(state: &State, path: &str) -> Vec<StartMenuEntry> {
+    state.session.start_menu_entries(Path::new(path))
 }
 
-/// 037 U78 (FR-010, US3-AS1, SC-007, R6).
+/// The reason of `cli`'s entry in `path`'s list, `None` when it is available.
+fn reason_of(state: &State, path: &str, cli: AiCli) -> Option<String> {
+    entries(state, path)
+        .into_iter()
+        .find(|entry| entry.cli == cli)
+        .and_then(|entry| match entry.availability {
+            CliEntryAvailability::Available => None,
+            CliEntryAvailability::Unavailable { reason } => Some(reason),
+        })
+}
+
+/// 037 U93 (FR-010, SC-007, BUG-753): every supported CLI, in `AiCli::ALL` order.
 #[test]
-fn a_list_of_two_says_which_cli_is_missing_and_why_for_the_directory_asked_about() {
+fn a_list_has_an_entry_for_every_cli_in_supported_order_whatever_the_answer() {
+    for available in [&AiCli::ALL[..], WITHOUT_PI, &[AiCli::ClaudeCode], &[]] {
+        let state = row_answered(available, Some(SpawnEnv::ScriptFailed));
+        let clis: Vec<AiCli> = entries(&state, P).iter().map(|e| e.cli).collect();
+        assert_eq!(clis, AiCli::ALL, "answer {available:?}");
+    }
+}
+
+/// 037 U93 (FR-010, US3-AS1, R6): a missing CLI's reason is `explain`'s for that one CLI and the
+/// directory the answer was asked for; an available one has none.
+#[test]
+fn a_missing_cli_is_unavailable_with_the_reason_for_the_directory_asked_about() {
     let state = row_answered(WITHOUT_PI, Some(SpawnEnv::ScriptFailed));
 
     assert_eq!(
-        note(&state, P),
+        reason_of(&state, P, AiCli::Pi),
         Some(explained(
-            &[AiCli::Pi],
+            AiCli::Pi,
             SpawnEnv::ScriptFailed,
             AttemptDir::Dir(Path::new(P))
-        )),
-        "the note is `explain`'s reason and action for what the answer lacks, about the \
-         directory the answer was asked for"
+        ))
     );
+    assert_eq!(reason_of(&state, P, AiCli::ClaudeCode), None);
 }
 
-/// 037 U79 (FR-011, US3-AS2, W5).
+/// 037 U93 (FR-004): several missing CLIs each carry their own reason, naming only themselves.
 #[test]
-fn a_list_of_every_cli_has_no_note() {
-    let state = row_answered(&AiCli::ALL, Some(SpawnEnv::Applied));
-    assert_eq!(note(&state, P), None);
+fn each_missing_cli_has_its_own_reason() {
+    let state = row_answered(&[AiCli::ClaudeCode], Some(SpawnEnv::IncludeOff));
+
+    for cli in [AiCli::Copilot, AiCli::Pi] {
+        assert_eq!(
+            reason_of(&state, P, cli),
+            Some(explained(
+                cli,
+                SpawnEnv::IncludeOff,
+                AttemptDir::Dir(Path::new(P))
+            ))
+        );
+    }
 }
 
-/// 037 U80 (FR-010, US3-AS1a, US3-AS1b, D5, D6): the other side of U78's "two or more".
+/// 037 U93 (FR-011, W5): a CLI is missing and the answer does not say why.
 #[test]
-fn a_list_of_one_has_no_note() {
-    let state = row_answered(&[AiCli::ClaudeCode], Some(SpawnEnv::ScriptFailed));
-    assert_eq!(
-        note(&state, P),
-        None,
-        "a row with one CLI has no chevron, and the list a missing default opens there is \
-         explained by its message (D6)"
-    );
-}
-
-/// 037 U81 (FR-010, Edge Cases nothing is available).
-#[test]
-fn a_list_of_none_has_no_note() {
-    let state = row_answered(&[], Some(SpawnEnv::ScriptFailed));
-    assert_eq!(note(&state, P), None);
-}
-
-/// 037 U82 (FR-011, W5): a CLI is missing and the answer does not say why.
-#[test]
-fn an_answer_without_a_state_has_no_note() {
+fn an_answer_without_a_state_gives_the_reason_without_a_cause() {
     let state = row_answered(WITHOUT_PI, None);
-    assert_eq!(note(&state, P), None);
+    assert_eq!(
+        reason_of(&state, P, AiCli::Pi),
+        Some("Pi Coding Agent would not be found by a session here.".to_string())
+    );
 }
 
-/// 037 U83 (FR-011, Edge Cases not answered yet).
+/// 037 U93 (FR-011, Edge Cases not answered yet).
 #[test]
-fn no_answer_in_use_has_no_note() {
-    assert_eq!(note(&State::default(), P), None);
+fn no_answer_in_use_gives_no_entries() {
+    assert_eq!(entries(&State::default(), P), Vec::new());
 }
 
-/// 037 U84 (FR-004a, FR-012, D7): the reason and the offer come from one answer.
+/// 037 U93 (FR-004a, FR-012, D7): the reason and the offer come from one answer.
 #[test]
 fn a_row_on_the_home_answer_names_the_home_directory_until_its_own_answer_is_filed() {
     let mut state = State::default();
@@ -682,10 +697,10 @@ fn a_row_on_the_home_answer_names_the_home_directory_until_its_own_answer_is_fil
         answer_in(WITHOUT_PI, Some(SpawnEnv::ScriptTimedOut)),
     );
 
-    let on_home = note(&state, P).expect("the home answer is in use for the row");
+    let on_home = reason_of(&state, P, AiCli::Pi).expect("the home answer is in use for the row");
     assert_eq!(
         on_home,
-        explained(&[AiCli::Pi], SpawnEnv::ScriptTimedOut, AttemptDir::Home)
+        explained(AiCli::Pi, SpawnEnv::ScriptTimedOut, AttemptDir::Home)
     );
     assert!(on_home.contains("your home directory"), "{on_home}");
 
@@ -696,9 +711,9 @@ fn a_row_on_the_home_answer_names_the_home_directory_until_its_own_answer_is_fil
         .answered(2, answer_in(WITHOUT_PI, Some(SpawnEnv::ScriptFailed)));
 
     assert_eq!(
-        note(&state, P),
+        reason_of(&state, P, AiCli::Pi),
         Some(explained(
-            &[AiCli::Pi],
+            AiCli::Pi,
             SpawnEnv::ScriptFailed,
             AttemptDir::Dir(Path::new(P))
         )),
@@ -706,9 +721,9 @@ fn a_row_on_the_home_answer_names_the_home_directory_until_its_own_answer_is_fil
     );
 }
 
-/// 037 U85 (US3-AS3, FR-012, Edge Cases several rows at once).
+/// 037 U93 (US3-AS3, FR-012, Edge Cases several rows at once).
 #[test]
-fn two_rows_each_get_their_own_note_and_filing_one_does_not_change_the_other() {
+fn two_rows_each_get_their_own_entries_and_filing_one_does_not_change_the_other() {
     let mut state = row_answered(WITHOUT_PI, Some(SpawnEnv::ScriptFailed));
     state.session.availability.asked(3, dir(Q));
     state.session.availability.answered(
@@ -719,19 +734,20 @@ fn two_rows_each_get_their_own_note_and_filing_one_does_not_change_the_other() {
         ),
     );
     let p_says = explained(
-        &[AiCli::Pi],
+        AiCli::Pi,
         SpawnEnv::ScriptFailed,
         AttemptDir::Dir(Path::new(P)),
     );
-    assert_eq!(note(&state, P), Some(p_says.clone()));
+    assert_eq!(reason_of(&state, P, AiCli::Pi), Some(p_says.clone()));
     assert_eq!(
-        note(&state, Q),
+        reason_of(&state, Q, AiCli::Copilot),
         Some(explained(
-            &[AiCli::Copilot],
+            AiCli::Copilot,
             SpawnEnv::IncludeOff,
             AttemptDir::Dir(Path::new(Q))
         ))
     );
+    assert_eq!(reason_of(&state, Q, AiCli::Pi), None);
 
     state.session.availability.asked(4, dir(Q));
     state
@@ -739,6 +755,14 @@ fn two_rows_each_get_their_own_note_and_filing_one_does_not_change_the_other() {
         .availability
         .answered(4, answer_in(&AiCli::ALL, Some(SpawnEnv::Applied)));
 
-    assert_eq!(note(&state, Q), None, "Q's newer answer lacks nothing");
-    assert_eq!(note(&state, P), Some(p_says), "and P's note is still P's");
+    assert_eq!(
+        reason_of(&state, Q, AiCli::Copilot),
+        None,
+        "Q's newer answer lacks nothing"
+    );
+    assert_eq!(
+        reason_of(&state, P, AiCli::Pi),
+        Some(p_says),
+        "and P's is still P's"
+    );
 }

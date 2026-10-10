@@ -471,6 +471,7 @@ pub fn view_with<'a>(
                 Icon::Unavailable,
                 icon_role(IconSurface::Unavailable, roles),
             )),
+            trailing_tooltip: None,
             // Right-click a project row to reach its "Forget project" menu (feature 015). Offered
             // even for unavailable projects — those are precisely the ones a user wants to forget.
             on_context: Some(Box::new(move |point| {
@@ -682,34 +683,24 @@ pub fn view_with<'a>(
         });
 
     // The "start a session on…" list (feature 026, FR-004). Anchored at the chevron that opened it
-    // and clamped like every other menu here; its items are the *available* CLIs, named the
-    // human-readable way, because a menu entry is a sentence and not a label in a width budget.
+    // and clamped like every other menu here; its items are every supported CLI, the unavailable
+    // ones disabled, named the human-readable way, because a menu entry is a sentence and not a
+    // label in a width budget.
     let session_start_menu: Option<cdk::overlay::Surface<'a, Message>> =
         state.session.start_menu.as_ref().map(|menu| {
-            let items = session_start_menu_items(state, &menu.location);
-            // What the list does not offer for this row's directory, and why (037 FR-010). Read
-            // from the answer the items above were read from, on every draw, so it follows a
-            // newer answer as they do. The clamp counts its lines: opened from the lowest row, a
-            // panel sized for its items alone would run its note off the window.
-            let note = state
-                .location_dir(&menu.location)
-                .and_then(|dir| state.session.start_menu_note(&dir));
+            let items = session_start_menu_items(state, &menu.location, roles);
             let (x, y) = crate::features::project::clamp_menu_anchor(
                 menu.anchor,
-                material::menu_panel_size_with_note(items.len(), note.as_deref()),
+                material::menu_panel_size(items.len()),
                 state.window.window_size,
             );
-            let list = material::MenuOverlay::new(
+            material::MenuOverlay::new(
                 items,
                 Message::Session(SessionMsg::StartMenuDismissed),
                 roles,
             )
-            .anchor(iced::Point::new(x as f32, y as f32));
-            let list = match note {
-                Some(note) => list.note(note),
-                None => list,
-            };
-            list.into()
+            .anchor(iced::Point::new(x as f32, y as f32))
+            .into()
         });
 
     // The dialog body for whatever is open — or, if one has just closed, the snapshot it left
@@ -964,28 +955,44 @@ pub(crate) fn strip_tab_menu_labels(
 /// The items in a session's right-click context menu (bugfix BUG-003): "Close" archives (kept,
 /// hidden, never resurrected by reconciliation — FR-015a/FR-020c); "Remove" permanently deletes,
 /// behind a confirm dialog (FR-015c).
-/// The AI CLIs a session can be started on, for one location (feature 026, T033).
+/// The AI CLIs a session can be started on, for one location (feature 026, T033; 037 FR-010,
+/// BUG-753).
 ///
-/// Named by `display_name()` — through `Display`, which is a menu's register — and **only** the
-/// ones available where a session at `location` would run: an uninstalled CLI is never offered
-/// (FR-006), and the answer is this row's directory's (feature 033, FR-001, FR-008). The list is
-/// `State::offered_providers`, the same function the Settings select reads for home.
-fn session_start_menu_items(
+/// Every supported CLI, named by `display_name()` — through `Display`, which is a menu's
+/// register. An available one is pressable as ever (FR-006 of 026: an uninstalled CLI is never
+/// *selectable*). An unavailable one is a disabled item with a red icon whose tooltip is the
+/// reason (`State::start_menu_entries`, which reads the same answer `offered_providers` does,
+/// feature 033 FR-001, FR-008).
+pub(crate) fn session_start_menu_items(
     state: &State,
     location: &micold_core::session::SessionLocation,
+    roles: Roles,
 ) -> Vec<material::MenuItem<Message>> {
+    use crate::features::session::{CliEntryAvailability, StartMenuEntry};
+    let Some(dir) = state.location_dir(location) else {
+        return Vec::new();
+    };
     state
         .session
-        .offered_providers(state.location_dir(location).as_deref())
+        .start_menu_entries(&dir)
         .into_iter()
-        .map(|provider| {
-            material::MenuItem::labeled(
-                provider.to_string(),
+        .map(|StartMenuEntry { cli, availability }| match availability {
+            CliEntryAvailability::Available => material::MenuItem::labeled(
+                cli.to_string(),
                 Message::Session(SessionMsg::StartRequested {
                     location: location.clone(),
-                    provider,
+                    provider: cli,
                 }),
-            )
+            ),
+            CliEntryAvailability::Unavailable { reason } => material::MenuItem {
+                message: None,
+                trailing_icon: Some((
+                    Icon::Unavailable,
+                    icon_role(IconSurface::Unavailable, roles),
+                )),
+                ..material::MenuItem::labeled(cli.to_string(), Message::NoOp)
+            }
+            .trailing_tooltip(reason),
         })
         .collect()
 }
