@@ -17,9 +17,9 @@ environment once and caches the variables. It now keeps the attempt's outcome in
 cell and classifies it into a six-variant `SpawnEnv`. The availability answer carries that state
 in one new field (`PROTOCOL_VERSION` 19 → 20). A new pure module `micold_core::cli_reason` writes
 every sentence, and both the service (start failure, reply to an AI session) and the client
-(Settings notes, missing-default message, a note in a row's CLI list) call it, so the surfaces
+(Settings notes, missing-default message, a disabled item's tooltip in a row's CLI list, BUG-753) call it, so the surfaces
 cannot disagree. The client stamps each answer with the key it was asked for, which gives the
-directory a reason names. The row list's note is a new builder method on the shared
+directory a reason names. The row list's note (superseded by BUG-753: a tooltip on a disabled item, `MenuItem::trailing_tooltip`) is a new builder method on the shared
 `material::MenuOverlay`. No script run is added, nothing is persisted, and what is offered does not
 change.
 
@@ -118,11 +118,11 @@ crates/micold-daemon/
 
 crates/micold-client/
 ├── src/features/session.rs             # CliAvailability + env, asked_for; answered() stamps it;
-│                                       #   start_menu_toggled uses start_refusal; start_menu_note
+│                                       #   start_menu_toggled uses start_refusal; start_menu_note (BUG-753: start_menu_entries)
 ├── src/features/settings.rs            # missing_cli_notice uses explain; name_list moves to core
 ├── src/shell/daemon_sync.rs            # the AiCliAvailability arm passes env
 ├── src/ui/settings/environment.rs      # labels from the core constants
-├── src/ui/material/menu.rs             # MenuOverlay::note, menu_panel_size_with_note
+├── src/ui/material/menu.rs             # MenuOverlay::note, menu_panel_size_with_note (BUG-753: replaced by MenuItem::trailing_tooltip)
 ├── src/ui/material/menu_anatomy.rs     # the note's layout and the size estimate
 ├── src/ui/material/mod.rs              # re-export menu_panel_size_with_note
 ├── src/ui/mod.rs                       # the start list passes its note and clamps with it
@@ -141,7 +141,7 @@ docs/daemon.md                          # the stale "version 10 today" sentence 
 ```
 
 Paths marked NEW do not exist yet. `spawn_env_for`, `availability_in`, `ResolvedEnv`,
-`start_menu_note`, `MenuOverlay::note` and `menu_panel_size_with_note` are new names in existing
+(BUG-753: removed again, see the note below) `start_menu_note`, `MenuOverlay::note` and `menu_panel_size_with_note` are new names in existing
 files. Every other path and type exists today.
 
 **Structure Decision**: Existing workspace layout. Classification and wording go to `micold-core`
@@ -163,7 +163,7 @@ shared menu component.
 | FR-008 (missing-default message) | client reducer + core unit | `tests/unavailable_default_says_so.rs`: U3 per state, the list still opens, nothing starts, and `start_refusal_unknown`'s sentence (R8) when `env` is `None`. `cli_reason.rs`: W3e |
 | FR-009 (start and restart failure) | service integration | `micold-daemon/tests/session_start.rs`: U4 for Fresh and Resume in an off, a failed and an applied state; W3a–W3c |
 | FR-009a (reply to an AI session) | service integration (unix) + core unit | `micold-daemon/tests/mcp_create_session.rs`: U5, by rewriting `a_cli_that_is_not_installed_fails_naming_it_and_leaves_no_record`, which asserts the binary name today. The sentence itself is `explain`'s, tested on every platform in `cli_reason.rs` |
-| FR-010 (row list note; nothing on a row with fewer than two) | client unit + geometry gate | `tests/directory_availability.rs`: `start_menu_note` for 3/2/1/0 available. `ui/material/menu_anatomy.rs`: the note is laid out, is not pressable, and the size estimate matches |
+| FR-010 (every CLI an item, unavailable ones disabled with a tooltip; BUG-753) | client unit + geometry gate + outer | `tests/directory_availability.rs`: `start_menu_entries` for 3/2/1/0 available, `env: None`. `ui/material/menu_anatomy.rs`: a tooltip item is not pressable and its icon carries the text. `main_tests.rs` A21–A24 |
 | FR-011, SC-005 (silence) | client unit | `missing_cli_is_reported_where_it_is_chosen.rs` and `directory_availability.rs`: no answer, nothing missing, `env` `None` (W5) |
 | FR-012, SC-004 (one answer, all surfaces agree; event messages not rewritten) | core unit + client reducer | one function writes all sentences (R4), and `cli_reason.rs` asserts W3d: in every state and place except `Applied`/image, `start_refusal` begins with `explain`'s reason and action, and the `Applied`/image row equals today's `missing_cli_reason` text (W3b). `directory_availability.rs`: a newer answer changes U1 and U6's value and posts no second notification |
 | FR-013 (follows a save or a new resolution, no restart) | service integration + shell | `ai_cli_availability.rs`: after `set_env_include` the next answer carries the new state. `main_tests.rs`: the `AiCliAvailability` arm files `env` on the occasions 033 contract C1 lists |
@@ -177,3 +177,5 @@ shared menu component.
 ## Complexity Tracking
 
 No Constitution Check violations.
+
+**Bugfix**: 2026-10-10 — BUG-753 FR-010 row of the verification table replaced. The row's list is drawn from one per-CLI value, `State::start_menu_entries(dir)`, which replaces `start_menu_note`; `MenuItem` gains `trailing_tooltip`, after `trailing_icon` (the unavailable project row) and `Tooltip::new` (picker rows); `MenuOverlay::note` and `menu_panel_size_with_note` go (Constitution VIII (row VIII, I and VII above are read with this): the shared component gains one field, still shown in the showcase and covered by `menu_anatomy`).

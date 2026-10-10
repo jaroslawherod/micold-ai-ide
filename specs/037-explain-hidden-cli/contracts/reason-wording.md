@@ -82,7 +82,7 @@ Rules the table obeys, each asserted by a test over all rows × both places:
 | U3 | Missing-default message as the list opens (FR-008) | client `features::session::start_menu_toggled` | `start_refusal(cli, .., Fresh)`, or `start_refusal_unknown(cli)` when `env` is `None` | the answer in use for the row: `asked_for` |
 | U4 | Start or restart failure: pane text and banner (FR-009) | service, the launch gate in `state.rs` (replaces `missing_cli_reason`) | `start_refusal(cli, .., launch)` | `Dir(plan.cwd)`, place from `MICOLD_IMAGE_REFERENCE` |
 | U5 | Reply to an AI session's `create_session` (FR-009a) | service `mcp/tools.rs` | `{reason} {action}` | `Dir(cwd)` |
-| U6 | Note in a row's CLI list (FR-010) | client `features::session::State::start_menu_note(dir)`, drawn by `MenuOverlay::note` | `{reason} {action}` | the answer in use for the row: `asked_for` |
+| U6 | ~~Note in a row's CLI list~~ Tooltip on the red icon of a disabled item in a row's CLI list (FR-010, BUG-753) | client `features::session::State::start_menu_entries(dir)`, drawn by `MenuItem::trailing_tooltip` | `explain(&[cli], ..)`'s `{reason} {action}` for that one CLI; with `env` `None`, `{name} would not be found by a session here.` | the answer in use for the row: `asked_for` |
 
 ## W5 — When a surface says nothing (FR-011)
 
@@ -90,28 +90,27 @@ Rules the table obeys, each asserted by a test over all rows × both places:
 |---|---|---|---|
 | No answer in use | nothing | not reached: with no answer the press goes to the session service, and U4 answers | nothing |
 | Answer in use, nothing missing | nothing | nothing (the default is available) | nothing |
-| Answer in use, `env` is `None` | nothing | `start_refusal_unknown(cli)`: `{name} would not be found by a session here. Start this session on another AI CLI.` (R8) | nothing |
-| Row's answer offers fewer than two CLIs | — | said, as above | nothing (FR-010, D5, D6) |
+| Answer in use, `env` is `None` | nothing | `start_refusal_unknown(cli)`: `{name} would not be found by a session here. Start this session on another AI CLI.` (R8) | the item is disabled; its tooltip says `{name} would not be found by a session here.` and no cause (BUG-753) |
+| Row's answer offers fewer than two CLIs | — | said, as above | the list opened by a missing default shows the disabled items too (BUG-753; supersedes D5, D6 here) |
 
 U4 and U5 are said only when the service has resolved the directory, so they always have a state.
 
 ## W6 — Standing and event surfaces (FR-012, FR-013)
 
-- U1, U2 and U6 are computed from state on every draw, so they follow a newer answer with no
+- U1, U2 and U6 (the entries and their tooltips) are computed from state on every draw, so they follow a newer answer with no
   further code.
 - U3 is a notification posted once by `start_menu_toggled`. U4 is stored in `start_failures` and
   shipped in `WireLifecycle::Failed`. U5 is one reply. None is recomputed afterwards.
 
-## W7 — The menu note (U6)
+## W7 — The disabled item's tooltip (U6; BUG-753)
 
-`material::MenuOverlay::note(text: impl Into<String>) -> Self` (`ui/material/menu.rs`):
+~~The menu note: `MenuOverlay::note`, drawn under a divider, with `menu_panel_size_with_note`.~~
+Superseded 2026-10-10 by BUG-753; both names are removed with `start_menu_note`.
 
-- drawn under the items, after a `material::Divider`;
-- text wraps at the panel's width less the item padding at both sides; `TypeRole::Label`, muted;
-- not a button: no `on_press`, no ripple, no state layer;
-- `material::menu_panel_size_with_note(items, note) -> (u16, u16)` is the size the start list's
-  anchor clamping uses. `menu_anatomy` holds it to the laid-out panel, as it holds
-  `menu_panel_size` today;
-- shown in the component showcase (`crates/micold-client/src/showcase/sections/floating.rs`, the `MenuOverlay` entry).
+`material::MenuItem::trailing_tooltip(text: impl Into<String>) -> Self` (`ui/material/menu.rs`):
 
-A menu without a note is laid out exactly as before.
+- the item's trailing icon (`Icon::Unavailable`, the error role) is wrapped in `material::Tooltip`
+  carrying `text`;
+- the item has no message: no `on_press`, no ripple, no state layer, and its press stops there;
+- a list without such an item is laid out exactly as before, with no divider and no note;
+- shown in the component showcase's `MenuOverlay` entry and held by `menu_anatomy`.

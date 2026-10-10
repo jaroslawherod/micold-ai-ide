@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-01
 
-**Status**: Closed 2026-10-03 — shipped in PRs #520, #530, #535, #537
+**Status**: Closed 2026-10-03 — shipped in PRs #520, #530, #535, #537; amended by BUG-753 (2026-10-10)
 
 **Input**: GitHub issue #434, "A CLI that is not installed where sessions run is hidden with no
 explanation". An AI CLI that cannot be found in the environment sessions are spawned with is absent
@@ -36,6 +36,11 @@ that would change it, said wherever the application names a missing CLI.
 ## Clarifications
 
 ### Session 2026-10-01
+
+> **Bugfix**: 2026-10-10 — [BUG-753](bugs/BUG-753.md) The first two answers below (no note, and
+> a list that "names nothing", on a row with fewer than two available CLIs) are superseded by
+> FR-010 as amended: that list shows every supported CLI with the unavailable ones disabled. The
+> chevron rule they protect is unchanged.
 
 - Q: On a sidebar row where fewer than two CLIs are available, so the row has no chevron (026
   FR-006), where is a CLI that is not offered there explained? → A: Not at the row. The chevron
@@ -234,6 +239,19 @@ nothing. A third row whose directory provides one CLI has no chevron, as today.
    starts and the list offers no way to choose it: an unavailable CLI can never be chosen by
    accident.
 
+**Bugfix**: 2026-10-10 — [BUG-753](bugs/BUG-753.md) Scenarios 1, 1a, 1b and 4 are read with FR-010
+as amended: "names the CLI and gives the reason" is a disabled item with a red icon whose tooltip
+carries the reason and action; "the list itself says nothing" in 1b is superseded.
+
+5. **Given** a row whose directory provides two or more supported CLIs and does not provide
+   another, **When** I open its CLI choice, **Then** every supported CLI is an item, the missing
+   one is disabled with a red icon, and hovering the icon shows that CLI's reason and action for
+   that directory (BUG-753).
+6. **Given** a row whose directory provides one supported CLI and my stored default is not that
+   one, **When** I press start on the row, **Then** its list opens with the message of Story 2
+   scenario 1 and shows every supported CLI, the unavailable ones disabled with their tooltips
+   (BUG-753; supersedes the second half of 1b).
+
 ---
 
 ### Edge Cases
@@ -357,13 +375,26 @@ nothing. A third row whose directory provides one CLI has no chevron, as today.
 - **FR-009a**: The reply an AI session receives when it asks the application to start a session on
   a CLI that would not be found (feature 034) MUST carry the reason and action for the target
   directory, under FR-002's limits.
-- **FR-010**: When a sidebar row's per-session CLI list opens and a supported CLI is not offered
+- ~~**FR-010**: When a sidebar row's per-session CLI list opens and a supported CLI is not offered
   for that row's directory, the list MUST name that CLI and give the reason and action of FR-001
   for that directory. An unavailable CLI MUST NOT be selectable. The rule for when the row has a
   chevron is unchanged (026 FR-006, 033 FR-001): a row with fewer than two available CLIs MUST stay
   without one, and this feature MUST add nothing to that row. That includes the list such a row opens when the stored
   default is missing (033 FR-010): it MUST NOT name the CLIs that are not offered, and the message
-  of FR-008 is what carries the reason there.
+  of FR-008 is what carries the reason there.~~ Superseded by BUG-753 (issue #753): the CLI was
+  named in a note under a list of available CLIs only.
+- **FR-010** (BUG-753): When a sidebar row's per-session CLI list opens, it MUST list every
+  supported CLI, in the order of the supported-CLI list. An available CLI is an item that starts a
+  session on it, as before. A CLI that is not offered for that row's directory is a disabled item:
+  it MUST NOT be selectable (no press starts, chooses or closes anything), it carries a red
+  unavailable icon, and hovering that icon MUST show a tooltip with that CLI's reason and action
+  of FR-001 for that directory. Each tooltip gives the reason for its own CLI alone (FR-004's
+  "together, once" is for the notes). There is no note under the list. When the answer in use does
+  not say why (no environment state), the tooltip says only that a session here would not find
+  the CLI (FR-002, FR-011), claiming no cause. The rule for when a row has a chevron is unchanged
+  (026 FR-006, 033 FR-001): a row with fewer than two available CLIs MUST stay without one. The
+  list such a row opens when the stored default is missing (033 FR-010) is the same list, with the
+  disabled items, and the message of FR-008 is still posted as it opens.
 
 **When it is said**
 
@@ -433,8 +464,9 @@ nothing. A third row whose directory provides one CLI has no chevron, as today.
 - **SC-006**: Showing a reason causes no additional run of the startup script and no additional
   search of the computer: the number of script runs with the note shown equals the number without.
 - **SC-007**: On a row whose directory provides two or more supported CLIs and lacks another, the
-  reason and its action for that directory are reachable in one interaction from that row (opening
-  its CLI list), without opening Settings. On a row with fewer than two available CLIs the start
+  reason and its action for that directory are reachable from that row (opening its CLI list and
+  hovering the missing CLI's red icon; BUG-753), without opening Settings. Every supported CLI is
+  an item of that list, and zero unavailable items are pressable. On a row with fewer than two available CLIs the start
   control is the same as before this feature: zero added controls.
 
 ## Assumptions

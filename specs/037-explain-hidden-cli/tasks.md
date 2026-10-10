@@ -124,7 +124,7 @@ CI's order).
 
 ## Phase 5: User Story 3 — A row's CLI list tells me a CLI is hidden (Priority: P3)
 
-**Goal**: a row's CLI list that already opens (two or more available CLIs) names the CLIs not offered there, with the reason and action for that row's directory, in a note that cannot be pressed. A row with fewer than two available CLIs is unchanged (D5, 026 FR-006).
+**Goal** (superseded by BUG-753, Phase 8: every CLI is an item, the unavailable ones disabled with a tooltip): a row's CLI list that already opens (two or more available CLIs) names the CLIs not offered there, with the reason and action for that row's directory, in a note that cannot be pressed. A row with fewer than two available CLIs is unchanged (D5, 026 FR-006).
 
 **Independent Test**: with two available CLIs and Pi missing for a project's directory, press the row's chevron: the list shows the two CLIs, a divider, and the note (quickstart §B B11). A row with one available CLI has no chevron (B12). A row with every CLI available has no note (B13).
 
@@ -262,4 +262,29 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - [X] T048 [US2] [U69] [A9] (finding 4, MED, test-strength, client half) Add independent literal fragments beside the `start_refusal(..)` equality in `crates/micold-client/tests/unavailable_default_says_so.rs` (U69) and `crates/micold-client/src/main_tests.rs` (`pressing_start_says_include_is_off_opens_the_list_and_starts_nothing`).
 - [X] T049 (finding 6, MED, smell) Give every assertion in `crates/micold-core/tests/cli_reason.rs` a message naming the state, place and CLI set it checks.
 - [X] T050 (finding 8, LOW, docs) Make the module doc of `crates/micold-client/tests/missing_cli_is_reported_where_it_is_chosen.rs` say how the 037 tests assert the wording.
+
+## Phase 8: Bugfix BUG-753 (issue #753)
+
+**Goal**: a row's CLI list shows every supported CLI; an unavailable one is a disabled item with a red icon whose tooltip carries that CLI's reason and action (FR-010 as amended). Supersedes the shipped note (T028 to T032, T043): those tasks stay complete and describe what shipped.
+
+**Bugfix**: 2026-10-10 — [BUG-753](bugs/BUG-753.md) Added from bugfix patch.
+
+- [ ] T051 [US3] [A21] [A22] [A23] [A24] Write the outer-loop acceptance tests A21–A24 in `crates/micold-client/src/main_tests.rs`, at T043's entry point, reading `app.core.session.start_menu_entries(dir)`: A21 two CLIs offered, Pi missing, `ScriptFailed` → three entries in supported-CLI order, Pi unavailable with that state's reason and action and the row's directory; A22 one CLI offered and not the default → the primary press opens the list with T040's message and all three entries; A23 every CLI → three available entries and no reason; A24 pressing an unavailable entry's message is impossible (it carries none) and nothing starts. Red until T056.
+- [ ] T052 [P] [US3] [U87] Write the anatomy test in `crates/micold-client/src/ui/material/menu_anatomy.rs`: an item with no message and a `trailing_tooltip` is not pressable, draws its trailing icon, and the icon is wrapped in a `Tooltip` carrying the text; a list without one lays out exactly as before. Red until T054.
+- [ ] T053 [P] [US3] [U78] [U79] [U80] [U81] [U82] [U83] [U84] [U85] Replace T028's `start_menu_note` tests in `crates/micold-client/tests/directory_availability.rs` with `start_menu_entries` tests: three entries in `AiCli::ALL` order for any answer in use; each missing entry's reason is `explain(&[cli], env, place, attempt_dir)`'s `{reason} {action}` for that one CLI; `env: None` gives `{name} would not be found by a session here.`; no answer in use gives no entries; a row on the home answer says "your home directory" and switches on its own answer; two rows keep their own entries. Red until T055.
+- [ ] T054 [US3] [U87] Add `MenuItem::trailing_tooltip: Option<String>` (builder `.trailing_tooltip(text)`) in `crates/micold-client/src/ui/material/menu.rs`: the trailing icon is wrapped in `material::Tooltip` when set. Additive only: `MenuOverlay::note` stays until T056, so the tree builds between tasks (makes T052 green).
+- [ ] T055 [US3] [A21] [A22] [A23] [A24] [U78] [U79] [U80] [U81] [U82] [U83] [U84] [U85] Add `State::start_menu_entries(dir) -> Vec<StartMenuEntry>` in `crates/micold-client/src/features/session.rs`, `StartMenuEntry { cli, availability: Available | Unavailable { reason: String } }`, drawn from the answer in use, so the offer and the reason agree (FR-012). Wording per contracts/reason-wording.md U6. `start_menu_note` stays until T056 (makes T051's core half and T053 green).
+- [ ] T056 [US3] [A21] [A22] [A23] [A24] Switch the drawing and remove the note, in one task so the tree never has a caller of a removed name: `session_start_menu_items` in `crates/micold-client/src/ui/mod.rs` maps the entries to `MenuItem`s, available ones as today, unavailable ones with `message: None`, `Icon::Unavailable` in the error role as `trailing_icon` and `trailing_tooltip(reason)`; delete `start_menu_note`, `MenuOverlay::note`, `menu_panel_size_with_note`, the re-export, the note's `menu_anatomy.rs` tests (U88–U91) and the note in the showcase's `MenuOverlay` entry, which gains a disabled item with a tooltip. Update the A15–A20 assertions in `main_tests.rs` to read the entries (makes T051 green).
+- [ ] T057 [US3] Docs: `quickstart.md` Part A lines 21–22 ("U6's rule", W7) and "Also check" (the menu note), B11–B13 to the disabled items and tooltip hover, plus a step for A22 (one CLI, not the default); `evidence/README.md`'s note that B11 to B13 were recorded against the note; `docs/user-guide/worktrees-and-sessions.md` (the note "below a divider" and "the note under the list names it") to disabled entries with a red icon and a tooltip; `tdd/test-list.md` marks U87–U91 superseded and adds U92 (item tooltip), U93 (entries per CLI) and A21–A24. Then run `mise run gate`.
+
+### M5 — Full CLI list with disabled items (BUG-753)
+
+- **Tasks**: T051–T057
+- **Deliverable**: a row's CLI list shows every supported CLI; unavailable ones are disabled with a red icon and a reason tooltip, and the note is gone
+- **Satisfies**: US3 acceptance scenarios 1, 4, 5, 6; FR-010 (amended), SC-007 (amended)
+- **Verify**: `mise run test-core`; `cargo test -p micold-client --test directory_availability`; `mise run gate`
+- **Depends on**: M4
+- **Tier**: full
+
+Order: T051, T052, T053 first (red). T054 after T052. T055 after T053. T056 after T054 and T055 (makes T051 green). T057 last.
 
