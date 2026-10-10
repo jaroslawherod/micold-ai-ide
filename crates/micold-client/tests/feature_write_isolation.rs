@@ -257,6 +257,13 @@ const CORE_MEDIATED: &[(&str, &str, &str, &str)] = &[
         "features/project.rs::forget_confirmed",
         "Workspace::forget",
     ),
+    // Feature 491: so do the daemon bindings held against it (FR-014).
+    (
+        "project",
+        "workspace.bindings",
+        "features/project.rs::forget_confirmed",
+        "Workspace::forget",
+    ),
     // Feature 484: the panes held against the path go with it (FR-013).
     (
         "project",
