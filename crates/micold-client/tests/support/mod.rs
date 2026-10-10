@@ -10,6 +10,8 @@
 /// while everything else here is render-free core scaffolding.
 pub mod covered_states;
 pub mod layout;
+/// The modal table the overlay tests share (issue #700).
+pub mod modals;
 /// A `cdk` tooltip driven event by event (feature 038).
 pub mod tooltip;
 

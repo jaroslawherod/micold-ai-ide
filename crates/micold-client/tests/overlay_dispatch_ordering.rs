@@ -17,121 +17,14 @@
 //! code got right.
 
 use micold_client::features::help;
-use micold_client::features::help::Msg as HelpMsg;
 use micold_client::features::project;
-use micold_client::features::project::Msg as ProjectMsg;
-use micold_client::features::session::Msg as SessionMsg;
-use micold_client::features::session::PendingLinkOpen;
 use micold_client::features::sidebar;
 use micold_client::features::sidebar::Msg as SidebarMsg;
-use micold_client::features::worktree::Msg as WorktreeMsg;
-use std::path::PathBuf;
 
 use micold_client::app::{on_escape, Message, State};
-use micold_client::features::project::RenameDraft;
-use micold_client::features::worktree::WorktreeRenameDraft;
-use micold_core::selector::Selector;
-use micold_core::session::SessionId;
 
-/// Every modal surface: how to open it, and the message its cancellation produces.
-///
-/// No "nothing open" row — that is the absence of a surface, and Tier 2 stops representing it as
-/// one. Until T037 the first column was an `Overlay` variant, which both named the modal and
-/// opened it; the enum is gone, so opening one means building the state it draws from.
-#[allow(clippy::type_complexity)]
-const MODALS: &[(&str, fn(&mut State), Message)] = &[
-    (
-        "about",
-        |s| s.help.about_open = true,
-        Message::Help(HelpMsg::AboutClosed),
-    ),
-    (
-        "project_selector",
-        |s| s.project.selector = Some(Selector::open_at(PathBuf::from("/tmp"))),
-        Message::Project(ProjectMsg::SelectorClosed),
-    ),
-    (
-        "rename_project",
-        |s| {
-            s.project.rename_draft = Some(RenameDraft {
-                path: PathBuf::from("/tmp"),
-                text: String::new(),
-                error: None,
-            })
-        },
-        Message::Project(ProjectMsg::RenameCancelled),
-    ),
-    (
-        "add_worktree",
-        |s| s.worktree_form.form = Some(Default::default()),
-        Message::WorktreeForm(micold_client::features::worktree_form::Msg::Cancelled),
-    ),
-    (
-        "confirm_worktree_delete",
-        |s| s.worktree.delete_target = Some("wt".to_string()),
-        Message::Worktree(WorktreeMsg::DeleteCancelled),
-    ),
-    (
-        "rename_worktree",
-        |s| {
-            s.worktree.rename_draft = Some(WorktreeRenameDraft {
-                dir_name: "wt".to_string(),
-                text: String::new(),
-                error: None,
-            })
-        },
-        Message::Worktree(WorktreeMsg::RenameCancelled),
-    ),
-    (
-        "confirm_session_remove",
-        |s| s.session.remove_target = Some(SessionId::new()),
-        Message::Session(SessionMsg::RemoveCancelled),
-    ),
-    (
-        "confirm_discard_pending",
-        open_discard_pending,
-        Message::Changes(micold_client::features::changes::Msg::DiscardCancelled),
-    ),
-    (
-        "confirm_forget_project",
-        |s| s.project.forget_target = Some(PathBuf::from("/p")),
-        Message::Project(ProjectMsg::ForgetCancelled),
-    ),
-    (
-        "confirm_link_open",
-        |s| {
-            s.session.pending_link_open = Some(PendingLinkOpen {
-                session: SessionId::new(),
-                link: a_sandboxed_link(),
-            })
-        },
-        Message::Session(SessionMsg::LinkOpenDeclined),
-    ),
-    (
-        "confirm_agent_request",
-        |s| s.agent_confirm.pending = vec![an_agent_request()],
-        Message::AgentConfirm(micold_client::features::agent_confirm::Msg::Dismissed),
-    ),
-];
-
-/// A resolved sandboxed file link: one that translated to a host path and so needs a confirmation.
-fn a_sandboxed_link() -> micold_core::link::ResolvedLink {
-    micold_core::link::ResolvedLink {
-        link: micold_core::link::Link {
-            address: "file:///work/p/a.md".to_string(),
-            origin: micold_core::link::LinkOrigin::Detected,
-            cells: Vec::new(),
-        },
-        display: "/home/u/p/a.md".to_string(),
-        target: micold_core::link::Target::HostPath("/home/u/p/a.md".to_string()),
-        needs_confirmation: true,
-    }
-}
-
-/// Which dialog is open, by name — the question `state.overlay` answered before T037.
-fn open_dialog(state: &State) -> Option<&'static str> {
-    micold_client::overlay::registry::open_dialog(state).map(|open| open.id().as_str())
-}
+mod support;
+use support::modals::{modals, open_dialog, Modal};
 
 // ---------------------------------------------------------------------------
 // D1 — which surface Escape belongs to when more than one is open.
@@ -183,7 +76,12 @@ fn escape_belongs_to_the_popover_when_nothing_modal_is_open() {
 
 #[test]
 fn escape_belongs_to_the_modal_when_a_popover_is_open_over_it() {
-    for (name, open, modal_cancel) in MODALS {
+    for Modal {
+        id: name,
+        open,
+        cancel: modal_cancel,
+    } in &modals()
+    {
         let state = modal_and_popover(*open);
 
         assert_eq!(
@@ -244,7 +142,7 @@ fn every_dismissible_popover_open() -> State {
 
 #[test]
 fn opening_a_modal_closes_the_popovers_floating_above_it() {
-    for (name, open, _) in MODALS {
+    for Modal { id: name, open, .. } in &modals() {
         let mut state = every_dismissible_popover_open();
 
         state.clear_for_dialog();
@@ -322,7 +220,12 @@ fn closing_the_filter_panel_leaves_the_active_filters_alone() {
 fn dismissing_a_modal_leaves_the_filters_it_never_owned_alone() {
     use micold_client::features::sidebar::TagFilter;
 
-    for (name, open, cancel) in MODALS {
+    for Modal {
+        id: name,
+        open,
+        cancel,
+    } in &modals()
+    {
         let mut state = State::default();
         state.update(Message::Sidebar(SidebarMsg::FilterToggled(
             TagFilter::Untyped,
@@ -338,49 +241,4 @@ fn dismissing_a_modal_leaves_the_filters_it_never_owned_alone() {
             "cancelling {name} reached into the sidebar's filters, which it does not own"
         );
     }
-}
-
-/// An agent's destructive request, pending an answer (feature 034, FR-014).
-fn an_agent_request() -> micold_client::features::agent_confirm::Prompt {
-    micold_client::features::agent_confirm::Prompt {
-        id: 1,
-        project: PathBuf::from("/p"),
-        caller_label: "planner".to_string(),
-        operation: micold_core::protocol::messages::ConfirmOperation::DeleteSession,
-        target_label: "reviewer".to_string(),
-    }
-}
-
-/// Open the Changes view's **Discard pending…** confirmation (feature 482, S3): a view with one
-/// pending comment, then the press.
-fn open_discard_pending(state: &mut State) {
-    use micold_client::features::changes::{self, Msg as ChangesMsg};
-    use micold_core::review::comment::{CommentId, CommentState, ReviewComment};
-    let project = PathBuf::from("/p");
-    let _ = changes::update(
-        &mut state.changes,
-        ChangesMsg::Opened {
-            project: project.clone(),
-            entry: micold_core::session::SessionLocation::Default,
-        },
-    );
-    let _ = changes::update(
-        &mut state.changes,
-        ChangesMsg::ReviewChanged {
-            project,
-            worktree_dir: String::new(),
-            comments: vec![ReviewComment {
-                id: CommentId::new(),
-                path: micold_core::review::RelPath::from_native("a.rs").unwrap(),
-                side: micold_core::review::Side::New,
-                range: micold_core::review::LineRange::new(1, 1).unwrap(),
-                quote: vec!["a".into()],
-                text: "t".into(),
-                state: CommentState::Pending,
-                created: 1,
-            }],
-            sending: false,
-        },
-    );
-    let _ = changes::update(&mut state.changes, ChangesMsg::DiscardPendingPressed);
 }
