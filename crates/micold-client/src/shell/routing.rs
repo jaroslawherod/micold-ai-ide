@@ -198,6 +198,47 @@ impl App {
         }
     }
 
+    /// Interpret what the Daemons feature reported (feature 491, M3): a registry change is kept in
+    /// the window's settings, written to the settings file and brought into `links`; a binding is
+    /// kept in the workspace and in the project's state file. Sessions ended by a removal are the
+    /// session feature's to close, and are not handled here.
+    // Called by the Daemons view's message arm, which arrives with the M3 view tasks.
+    #[allow(dead_code)]
+    pub(crate) fn apply_daemon_outcome(&mut self, outcome: &micold_client::features::Outcome) {
+        use micold_client::features::Outcome;
+        match outcome {
+            Outcome::DaemonRegistryChanged(registry) => {
+                self.core.settings.daemons = registry.clone();
+                self.sync_links();
+                if let Some(store) = self.caps.settings() {
+                    let write = store.update_reporting(&mut |settings| {
+                        settings.set_registry(registry.clone());
+                    });
+                    crate::log_line(&write.log_line("client"));
+                    if let Err(err) = write.result {
+                        self.core
+                            .notify_error(format!("Couldn't save your daemons: {err}"));
+                    }
+                }
+            }
+            Outcome::DaemonBound {
+                project,
+                worktree,
+                daemon,
+            } => {
+                self.core.workspace.bind(project, worktree, *daemon);
+                if let Some(store) = self.caps.projects() {
+                    if let Err(err) = store.save_binding(project, worktree, *daemon) {
+                        self.core.notify_error(format!(
+                            "Couldn't remember which daemon \"{worktree}\" runs on: {err}"
+                        ));
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
     /// Whether any location of `project` is bound to `daemon`: the project is one it serves.
     pub(crate) fn project_uses(&self, project: &Path, daemon: DaemonId) -> bool {
         self.binding_of(project, "") == Binding::Bound(daemon)

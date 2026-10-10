@@ -1030,6 +1030,11 @@ pub fn interpret(
         Outcome::RevealSuppressed(suppressed) => state.reveal_suppression_set(suppressed),
         Outcome::FieldFocusCleared => crate::features::window::field_focus_cleared(state),
         Outcome::ClipboardWrite(_) | Outcome::OpenLink(_) | Outcome::Insert { .. } => {}
+        // The shell's: it persists the registry and the binding and acts on the sessions
+        // (`App::apply_daemon_outcome`).
+        Outcome::DaemonRegistryChanged(_)
+        | Outcome::DaemonSessionsEnded { .. }
+        | Outcome::DaemonBound { .. } => {}
     }
     Vec::new()
 }
