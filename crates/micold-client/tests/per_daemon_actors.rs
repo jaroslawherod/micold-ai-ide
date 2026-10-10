@@ -144,3 +144,16 @@ fn one_transport_failing_changes_no_other_daemons_status_or_outbox() {
     }
     assert_eq!(links.state(host), Some(&DaemonState::Connected));
 }
+
+#[test]
+fn a_stopped_daemon_ignores_a_connection_and_keeps_no_outbox() {
+    let (registry, host, _) = registry();
+    let mut links = DaemonLinks::at_launch(&registry);
+    links.insert(host, DaemonState::Stopped);
+    assert!(!links.connected(host, outbox()), "refused");
+    assert_eq!(links.state(host), Some(&DaemonState::Stopped));
+    assert!(links.outbox(host).is_none());
+    links.apply(host, DaemonEvent::Start);
+    assert!(links.connected(host, outbox()), "accepted once started");
+    assert!(links.outbox(host).is_some());
+}

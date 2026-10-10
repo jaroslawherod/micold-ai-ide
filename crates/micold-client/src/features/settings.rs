@@ -535,6 +535,15 @@ impl ValidSettings {
     }
 }
 
+impl State {
+    /// The daemon a location without a stored binding runs on: the legacy default, else id 1 (what
+    /// a pre-feature `daemon` block migrated to).
+    pub fn legacy_daemon(&self) -> micold_core::daemons::DaemonId {
+        self.legacy_default_daemon
+            .unwrap_or(micold_core::daemons::DaemonId(1))
+    }
+}
+
 /// In-progress Settings state, present only while the Settings view is shown.
 ///
 /// **One draft, four views of it.** The sections are pages over this single value, not four forms:

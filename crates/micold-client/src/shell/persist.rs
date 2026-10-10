@@ -743,7 +743,7 @@ pub fn on_placement_change_confirmed(app: &mut App) -> Task<Message> {
 ///
 /// The four things that have to move together, and the reason each is here:
 ///
-/// - `app.placement.kind`, because `daemon::connection` dials from it and its hash is the
+/// - `app.placement.kind`, because `daemon::connections` dials from it and its hash is the
 ///   subscription's identity — assigning it is what tears the old connection down and dials the
 ///   new one. This alone is what the bug was missing.
 /// - `app.sandbox`, back to the start of the lifecycle for the new placement, so the banner stops

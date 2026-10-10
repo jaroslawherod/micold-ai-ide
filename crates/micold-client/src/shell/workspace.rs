@@ -185,7 +185,7 @@ fn open_verified_project(app: &mut App, path: PathBuf) -> Task<Message> {
     // foreground FIRST (I1), then finish the switch bookkeeping for the new project. The
     // in-memory `open_or_activate` gives instant UI; local git discovery seeds the worktree
     // list until the daemon's post-attach refresh reconciles it (T055).
-    let previous = app.core.workspace.active.clone();
+    let previous = app.departing_location();
     app.core.record_foreground();
     app.core
         .workspace
@@ -222,7 +222,7 @@ pub(crate) fn on_known_project_reopened(app: &mut App, path: PathBuf) -> Task<Me
     app.core.workspace.refresh_availability(app.caps.scanner());
     // Non-destructive switch: keep the outgoing project's sessions running in the
     // background and restore the target project's foreground (feature 008, BS-1/BS-3).
-    let previous = app.core.workspace.active.clone();
+    let previous = app.departing_location();
     if let Some(arrival) = app.core.switch_active(&path) {
         // The top-bar switcher closes on an accepted pick ("Panel closes.", 008 BUG-002). Only
         // then: a refused pick is what raises the row's unavailable badge, and the panel stays up

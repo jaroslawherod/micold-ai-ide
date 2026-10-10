@@ -52,6 +52,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Code A (M1) | 2 | 04d99a7c02f2a93e14989a54da51dd9a81d48350:b30131c92e14b55a61593dbee7c55d3fb3fd14fd | CLEAN (2 MINOR, fixed) |
 | Code B (M1) | 1 | 04d99a7c02f2a93e14989a54da51dd9a81d48350:b30131c92e14b55a61593dbee7c55d3fb3fd14fd | CHANGES: 1 MAJOR declined (attach is the same create path), 3 MINOR declined/deferred, see Declined |
 | Code A (M1) | 1 | ab3af6818291bc68e24c3e183b22d60a78446c4f:30ccfce93a158c7bda37cfdb0b4a8920fb55396f | CHANGES: 2 MAJOR, 2 MINOR (F1 lock around state read-modify-write, F2 set_single_daemon only on daemon change, F3 daemon taken at submit fixed; F4 binding outliving its worktree left, noted) |
+| Code A (M2) | 1 | ef9ab0bb89cdd8fb66bb269b68a797d0de782674:3242febfcc63ac47a42b06e5ca4afeae79012555 | CHANGES: 5 MAJOR (F1 detach binding, F2 on_connected gating, F3 sandbox daemon id, F4 outbox on refused connect fixed; F5 declined), 3 MINOR (fixed) |
+| Code B (M2) | 1 | ef9ab0bb89cdd8fb66bb269b68a797d0de782674:3242febfcc63ac47a42b06e5ca4afeae79012555 | CHANGES: 1 MAJOR (cycle-log entry, added), 3 MINOR (fixed); Verify green |
 
 ## Declined review findings
 
@@ -61,6 +63,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | B r1 F1 | attach flow has no daemon choice | "Attach" in US1-4 is the form's existing-branch source, which goes through the same `WorktreeCreate` and binds. `AttachApply` (assistant-made worktrees) is a different flow whose rows take the legacy default until rebound (M3). |
 | M1 | B r1 F2 | Default location never bound | The `""` key resolves to the legacy default; an explicit write needs the rebind action (M3, T034). Test A1 covers resolution. |
 | M1 | B r1 F4 | T010 production wiring | Per-daemon inputs exist and are tested; callers switch in M2 with the actor (T018+), as T014 keeps the single path. |
+| M2 | A r1 F5 | dial failure inserts into `disconnected` before the debounce | The stale-content banner on the first dial failure is the pre-existing single-connection behaviour; the per-daemon state (debounced) drives the row labels, which is what FR-009 asks. |
 
 ## Handover
 

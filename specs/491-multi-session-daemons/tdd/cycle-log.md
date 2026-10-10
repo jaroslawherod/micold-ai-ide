@@ -19,3 +19,9 @@ Deviation: tests and implementation were written in one pass without a separate 
 - Green: `cargo test -p micold-client --test worktree_daemon_label --test upgrade_single_daemon --test worktree_form_daemon_choice --test features_sidebar --test sidebar_tree`: exit 0.
 - Core: `mise run test-core` green apart from `github_locate_desktop_launch` (environment: `gh` only on the mise path, #696 / PR #750; skipped locally with `MICOLD_SKIP_GH_LAUNCH_TEST=1`).
 - Refactor: none needed.
+
+## M2, batched (T018-T029, T048-T049)
+
+Deviation: as M1 client, tests and implementation were written in one pass across two units without a separate recorded red run; the test files were written before the code they exercise (`daemon_state.rs` first, against `DaemonState`/`DaemonStates`, then the client targets) and each asserts behaviour absent on `origin/main` (no per-daemon links, routing by binding, labels or state machine existed there; the files do not compile against it).
+- Green: `cargo test -p micold-core --test daemon_state` (11) and `cargo test -p micold-client --test per_daemon_actors --test daemon_routing --test catalog_two_daemons --test daemon_version_mismatch --test worktree_unavailable_label --test daemon_adopt_on_restart`, exit 0 (review B reran them); binary tests `two_daemons` (op routed to the bound daemon only; one daemon dropping leaves the other's connection and pending ops).
+- Refactor: `links` and `runtime_missing` live in `settings::State`; `Message::Daemon` folded into `connection::Msg::OfDaemon` so the root vocabulary stays cross-cutting (`root_vocabulary_is_cross_cutting`).

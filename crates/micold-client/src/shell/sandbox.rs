@@ -562,22 +562,37 @@ pub struct BootPlan {
 }
 
 impl BootPlan {
-    /// The container name and control port a plan brings up: those of the legacy default daemon
-    /// when it is a container, else of the first container entry, else the built-in defaults.
+    /// The daemon the sandbox state and boot plan describe: the legacy default when it is a
+    /// container, else the first container entry, else `None`.
+    pub fn sandbox_daemon(
+        registry: &micold_core::daemons::DaemonRegistry,
+        legacy_default: Option<micold_core::daemons::DaemonId>,
+    ) -> Option<micold_core::daemons::DaemonId> {
+        use micold_core::daemons::DaemonRuntime;
+        let is_container = |entry: &&micold_core::daemons::DaemonEntry| {
+            matches!(entry.runtime, DaemonRuntime::Container(_))
+        };
+        legacy_default
+            .and_then(|id| registry.get(id))
+            .filter(is_container)
+            .or_else(|| registry.entries().iter().find(is_container))
+            .map(|entry| entry.id)
+    }
+
+    /// The container name and control port a plan brings up: those of [`Self::sandbox_daemon`],
+    /// else the built-in defaults.
     pub fn identity_of(
         registry: &micold_core::daemons::DaemonRegistry,
         legacy_default: Option<micold_core::daemons::DaemonId>,
     ) -> (String, u16) {
         use micold_core::daemons::DaemonRuntime;
-        let container = |entry: &micold_core::daemons::DaemonEntry| match &entry.runtime {
-            DaemonRuntime::Container(c) => Some((c.container_name.clone(), c.port)),
-            _ => None,
-        };
-        legacy_default
+        match Self::sandbox_daemon(registry, legacy_default)
             .and_then(|id| registry.get(id))
-            .and_then(container)
-            .or_else(|| registry.entries().iter().find_map(container))
-            .unwrap_or_else(|| (CONTAINER_NAME.to_string(), DEFAULT_SANDBOX_PORT))
+            .map(|entry| &entry.runtime)
+        {
+            Some(DaemonRuntime::Container(c)) => (c.container_name.clone(), c.port),
+            _ => (CONTAINER_NAME.to_string(), DEFAULT_SANDBOX_PORT),
+        }
     }
 }
 
@@ -910,12 +925,6 @@ pub fn stop(plan: &BootPlan) -> iced::Task<micold_client::app::Message> {
     })
 }
 
-/// The port the sandbox publishes its control channel on.
-#[cfg_attr(not(test), allow(dead_code))]
-pub fn control_port() -> u16 {
-    DEFAULT_SANDBOX_PORT
-}
-
 /// This feature's entry point: one arm in `main.rs` routes here (feature 028, contract M2).
 ///
 /// Shape **B** with no pure half, like `shell/connection.rs` beside it: every arm returns a
@@ -958,11 +967,7 @@ fn apply(app: &mut crate::App, msg: SandboxMsg) -> Task<Message> {
         // against the last catalog. Nothing restarts (R9).
         Msg::Replaced(found) => {
             let (id, locations) = *found;
-            let legacy = app
-                .core
-                .settings
-                .legacy_default_daemon
-                .unwrap_or(micold_core::daemons::DaemonId(1));
+            let legacy = app.sandbox_daemon();
             let registered: Option<Vec<PathBuf>> = app
                 .daemon_catalogs
                 .get(&legacy)
@@ -995,10 +1000,10 @@ fn apply(app: &mut crate::App, msg: SandboxMsg) -> Task<Message> {
         Msg::Lost => {
             // Brought back in the same update, so `Failed` is never drawn: the card and its
             // fallback would otherwise stand for as long as the next refused dial took (FR-036b).
-            let name = app
-                .sandbox_boot
-                .as_ref()
-                .map_or_else(|| CONTAINER_NAME.to_string(), |p| p.container_name.clone());
+            let (name, _) = BootPlan::identity_of(
+                &app.core.settings.daemons,
+                app.core.settings.legacy_default_daemon,
+            );
             if app.sandbox.container_lost(&name) {
                 if let Some(bring_up) = crate::shell::daemon_sync::bring_up_again(app) {
                     return bring_up.run(&mut app.sandbox_bring_up);
@@ -1039,7 +1044,7 @@ fn apply(app: &mut crate::App, msg: SandboxMsg) -> Task<Message> {
         }
         Msg::FallbackAccepted => {
             if let Some(offer) = app.sandbox.fallback_offer() {
-                // Consent is not the whole of it. `daemon::connection` dials from `app.placement`,
+                // Consent is not the whole of it. `daemon::connections` dials from `app.placement`,
                 // and for `LocalSandbox` it deliberately never falls back to a host process
                 // (FR-035, and the comment in `daemon.rs` says so). So the *only* thing that can
                 // turn accepted consent into a working service is moving the placement here —
@@ -1866,11 +1871,6 @@ mod tests {
         let json: serde_json::Value =
             serde_json::from_str(&std::fs::read_to_string(&record).unwrap()).expect("JSON");
         assert_eq!(json, serde_json::json!({ "hasCompletedOnboarding": true }));
-    }
-
-    #[test]
-    fn the_control_port_is_the_documented_default() {
-        assert_eq!(control_port(), DEFAULT_SANDBOX_PORT);
     }
 
     /// A runtime scripted as far as a created and started sandbox, with no container there before:

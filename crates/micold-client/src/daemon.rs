@@ -19,7 +19,7 @@ use iced::futures::{SinkExt, Stream, StreamExt};
 use iced::Subscription;
 
 use micold_core::connect::{connect_at, connect_or_spawn, Connected, Credentials, SPAWN_TIMEOUT};
-use micold_core::daemons::{DaemonId, DaemonRegistry, DaemonRuntime, DaemonState, DaemonStates};
+use micold_core::daemons::{DaemonId, DaemonRegistry, DaemonRuntime, DaemonStates};
 use micold_core::endpoint::{self, DialAddress};
 use micold_core::protocol::codec::{CodecError, Frame};
 use micold_core::protocol::keepalive::{self, Keepalive, KeepaliveAction};
@@ -219,41 +219,6 @@ pub fn connections(
         )
         .into_iter()
         .map(|spec| Subscription::run_with(spec, |spec| actor(spec.clone()))),
-    )
-}
-
-/// The single-daemon connection the shell still holds: one actor for the daemon `placement`
-/// stands for, id 1, as a migrated settings file reads (R5). Until the shell keeps a registry
-/// this is how the one connection is made; it is [`connections`] over that registry.
-pub fn connection(placement: Placement) -> Subscription<Message> {
-    use micold_core::daemons::{ContainerSettings, DaemonEntry, DaemonName};
-    let id = DaemonId(1);
-    let (name, runtime) = match placement.kind {
-        PlacementKind::HostProcess => ("Host", DaemonRuntime::Host),
-        PlacementKind::LocalSandbox => (
-            "Container",
-            DaemonRuntime::Container(ContainerSettings {
-                profile: Default::default(),
-                container_name: micold_core::sandbox::CONTAINER_NAME.to_string(),
-                port: micold_core::endpoint::DEFAULT_SANDBOX_PORT,
-            }),
-        ),
-    };
-    let entry = DaemonEntry {
-        id,
-        name: DaemonName::new(name).expect("a fixed name is not blank"),
-        runtime,
-        auto_start: true,
-    };
-    let registry = DaemonRegistry::new(vec![entry], 2);
-    let mut states = DaemonStates::default();
-    states.insert(id, DaemonState::Starting);
-    connections(
-        &registry,
-        &states,
-        &placement.state_dir,
-        Some(id),
-        placement.strict_fingerprint,
     )
 }
 

@@ -100,6 +100,14 @@ pub trait ProjectStore {
         Ok(())
     }
 
+    /// Drop the binding of `key` from the project's state file (feature 491): the location it
+    /// named was deleted, so a later worktree reusing the name does not inherit it. Idempotent; a
+    /// missing or unreadable file has no binding to drop and is success. The default, for stores
+    /// that persist nothing, succeeds without writing.
+    fn remove_binding(&self, _project_path: &Path, _key: &str) -> io::Result<()> {
+        Ok(())
+    }
+
     /// Whether the catalog file is absent right now (002 BUG-007). The daemon asks this when a
     /// client connects: a launch that met a damaged file has just moved it aside, and a daemon
     /// that is already running holds the list in memory and would otherwise not write it back
@@ -954,6 +962,18 @@ impl ProjectStore for JsonFileStore {
         write_project_state(&path, &state)
     }
 
+    fn remove_binding(&self, project_path: &Path, key: &str) -> io::Result<()> {
+        let path = self.project_state_path(project_path);
+        let _lock = lock_project_state(&path)?;
+        let ProjectStateLoad::Found(mut state) = load_project_state(&path) else {
+            return Ok(());
+        };
+        if state.bindings.remove(key).is_none() {
+            return Ok(());
+        }
+        write_project_state(&path, &state)
+    }
+
     fn load(&self) -> LoadOutcome {
         let mut preserved = None;
         let (status, stored) = match std::fs::read_to_string(&self.path) {
@@ -1314,6 +1334,15 @@ impl ProjectStore for FakeProjectStore {
             .entry(project_path.to_path_buf())
             .or_default()
             .insert(key.to_string(), daemon);
+        Ok(())
+    }
+
+    fn remove_binding(&self, project_path: &Path, key: &str) -> io::Result<()> {
+        self.inner
+            .lock()
+            .expect("fake lock")
+            .workspace
+            .unbind(project_path, key);
         Ok(())
     }
 

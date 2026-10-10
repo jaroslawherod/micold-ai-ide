@@ -892,7 +892,7 @@ fn app_with_a_failed_sandbox() -> App {
 #[test]
 fn accepting_the_fallback_moves_the_connection_to_a_host_process() {
     // The defect this was written for: `SandboxFallbackAccepted` used to record consent and
-    // return `Task::none()`, and nothing else changed. But `daemon::connection` dials from
+    // return `Task::none()`, and nothing else changed. But `daemon::connections` dials from
     // `app.placement`, and its `LocalSandbox` arm never falls back to a host process by design
     // (FR-035) — so the user pressed "Run without it for now", the banner said they were
     // running unsandboxed, and the client kept dialling a port nothing was listening on. The
@@ -2636,7 +2636,7 @@ fn confirming_a_placement_change_moves_the_running_service() {
     assert_eq!(
         app.placement.kind,
         PlacementKind::LocalSandbox,
-        "`daemon::connection` dials from `app.placement`, and its identity is what tears the \
+        "`daemon::connections` dials from `app.placement`, and its identity is what tears the \
              old connection down — leaving it is the whole of BUG-003 (FR-033a)"
     );
     assert_eq!(
@@ -9161,7 +9161,10 @@ mod pr_status {
         let mut rig = holding();
         shell::daemon_sync::switch_daemon_attachment(
             &mut rig.app,
-            Some(PathBuf::from(DEMO)),
+            Some((
+                PathBuf::from(DEMO),
+                micold_core::daemons::Binding::Bound(micold_core::daemons::DaemonId(1)),
+            )),
             Path::new("/repo/other"),
         );
         assert_released(&mut rig);
@@ -11319,6 +11322,61 @@ mod two_daemons {
         assert!(rx2.try_recv().is_ok(), "the bound daemon got the op");
         assert!(rx1.try_recv().is_err(), "the other daemon heard nothing");
         assert_eq!(app.pending_daemon.values().next(), Some(&DaemonId(2)));
+    }
+
+    #[test]
+    fn forgetting_a_project_detaches_from_each_daemon_its_locations_are_bound_to() {
+        let (mut app, mut rx1, mut rx2) = two_connected();
+        let project = PathBuf::from("/repo/p");
+        // Default resolves to the legacy default (daemon 1); the worktree is bound to daemon 2.
+        app.core.workspace.bind(&project, "w", DaemonId(2));
+        app.core.project.forget_target = Some(project.clone());
+        let _ = crate::shell::daemon_sync::on_project_forget_confirmed(&mut app);
+        let detached = |rx: &mut iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg>| {
+            std::iter::from_fn(|| rx.try_recv().ok())
+                .any(|m| matches!(m, ClientMsg::Detach { project: p } if p == project))
+        };
+        assert!(detached(&mut rx1), "daemon 1 released the project");
+        assert!(detached(&mut rx2), "daemon 2 released the project");
+    }
+
+    #[test]
+    fn leaving_a_project_detaches_from_the_daemon_of_the_location_that_was_active() {
+        let (mut app, mut rx1, mut rx2) = two_connected();
+        let old = PathBuf::from("/repo/old");
+        crate::shell::daemon_sync::switch_daemon_attachment(
+            &mut app,
+            Some((old.clone(), Binding::Bound(DaemonId(2)))),
+            Path::new("/repo/new"),
+        );
+        assert!(matches!(
+            rx2.try_recv(),
+            Ok(ClientMsg::Detach { project }) if project == old
+        ));
+        assert!(!std::iter::from_fn(|| rx1.try_recv().ok())
+            .any(|m| matches!(m, ClientMsg::Detach { .. })));
+    }
+
+    #[test]
+    fn a_connection_to_a_stopped_daemon_is_dropped_without_adopting_anything() {
+        let (mut app, _rx1, _rx2) = two_connected();
+        let _ = app
+            .core
+            .settings
+            .links
+            .apply(DaemonId(2), micold_core::daemons::DaemonEvent::Stop);
+        app.disconnected.insert(DaemonId(2));
+        let (tx, _rx) = iced::futures::channel::mpsc::unbounded();
+        let _ = crate::shell::daemon_sync::on_connected(
+            &mut app,
+            DaemonId(2),
+            micold_client::daemon::Outbox::new(tx),
+            micold_core::protocol::messages::CatalogSnapshot::default(),
+            quiet_settings(),
+        );
+        assert!(app.disconnected.contains(&DaemonId(2)));
+        assert!(!app.daemon_catalogs.contains_key(&DaemonId(2)));
+        assert!(app.core.settings.links.outbox(DaemonId(2)).is_none());
     }
 
     #[test]

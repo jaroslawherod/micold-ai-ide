@@ -56,13 +56,16 @@ impl DaemonLinks {
         self.states.insert(id, state);
     }
 
-    /// The handshake with `id` succeeded and `outbox` reaches it.
-    pub fn connected(&mut self, id: DaemonId, outbox: Outbox) -> Option<StateChange> {
-        let change = self.states.apply(id, DaemonEvent::Connected);
-        if self.states.state(id).is_some() {
+    /// The handshake with `id` succeeded and `outbox` reaches it. Returns whether the link
+    /// accepted it: a stopped (or untracked) daemon ignores `Connected`, and then the outbox is not
+    /// stored, so a refused connection never looks usable.
+    pub fn connected(&mut self, id: DaemonId, outbox: Outbox) -> bool {
+        self.states.apply(id, DaemonEvent::Connected);
+        let accepted = self.states.state(id) == Some(&DaemonState::Connected);
+        if accepted {
             self.outboxes.insert(id, outbox);
         }
-        change
+        accepted
     }
 
     /// The established transport to `id` ended.
@@ -277,7 +280,9 @@ pub fn unavailable_label(
         Some(DaemonState::VersionMismatch { client, daemon }) => {
             Some(mismatch_message(name, client, daemon))
         }
-        _ if facts.runtime_missing => Some(RUNTIME_NOT_FOUND.to_string()),
+        _ if facts.runtime_missing && matches!(entry.runtime, DaemonRuntime::Container(_)) => {
+            Some(RUNTIME_NOT_FOUND.to_string())
+        }
         Some(DaemonState::Unreachable { .. }) if facts.lost_sessions => {
             Some(format!("lost to daemon {name}"))
         }
