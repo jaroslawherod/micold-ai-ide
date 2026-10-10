@@ -95,7 +95,10 @@ fn parse_keeps_an_unknown_window() {
 #[test]
 fn parse_is_none_when_no_window_survives() {
     assert_eq!(parse(&json!({}), OBTAINED), None);
-    assert_eq!(parse(&json!({"spend_limit": {"used_percentage": 1}}), OBTAINED), None);
+    assert_eq!(
+        parse(&json!({"spend_limit": {"used_percentage": 1}}), OBTAINED),
+        None
+    );
     assert_eq!(parse(&json!([1, 2]), OBTAINED), None);
     assert_eq!(parse(&json!("five_hour"), OBTAINED), None);
 }

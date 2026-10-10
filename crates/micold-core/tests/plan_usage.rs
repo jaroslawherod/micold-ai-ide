@@ -39,7 +39,11 @@ fn the_two_documented_windows_have_plain_names() {
 
 #[test]
 fn an_unknown_window_is_named_after_its_key() {
-    assert_eq!(window("seven_day_opus", 0, None).name(), "Seven day opus", "R12");
+    assert_eq!(
+        window("seven_day_opus", 0, None).name(),
+        "Seven day opus",
+        "R12"
+    );
 }
 
 #[test]
@@ -68,14 +72,25 @@ fn current_drops_windows_whose_reset_has_passed() {
     ])
     .current(NOW)
     .expect("one window is still current");
-    assert_eq!(usage.windows, vec![window("seven_day", 180, Some(NOW + HOUR))], "FR-009");
-    assert_eq!(usage.headline().key, "seven_day", "the highest still-current window");
+    assert_eq!(
+        usage.windows,
+        vec![window("seven_day", 180, Some(NOW + HOUR))],
+        "FR-009"
+    );
+    assert_eq!(
+        usage.headline().key,
+        "seven_day",
+        "the highest still-current window"
+    );
 }
 
 #[test]
 fn a_window_with_no_reset_stays_current() {
     let usage = reading(vec![window("five_hour", 420, None)]).current(NOW + 365 * 24 * HOUR);
-    assert!(usage.is_some(), "FR-009: current until a newer reading replaces it");
+    assert!(
+        usage.is_some(),
+        "FR-009: current until a newer reading replaces it"
+    );
 }
 
 #[test]
@@ -106,7 +121,11 @@ fn a_tie_goes_to_the_earliest_reset_then_the_first() {
     ])
     .current(NOW)
     .unwrap();
-    assert_eq!(earliest.headline().key, "five_hour", "earliest reset wins a tie");
+    assert_eq!(
+        earliest.headline().key,
+        "five_hour",
+        "earliest reset wins a tie"
+    );
 
     let absent_last = reading(vec![
         window("other", 500, None),
@@ -114,7 +133,11 @@ fn a_tie_goes_to_the_earliest_reset_then_the_first() {
     ])
     .current(NOW)
     .unwrap();
-    assert_eq!(absent_last.headline().key, "seven_day", "no reset sorts last");
+    assert_eq!(
+        absent_last.headline().key,
+        "seven_day",
+        "no reset sorts last"
+    );
 
     let first = reading(vec![window("a_one", 500, None), window("b_two", 500, None)])
         .current(NOW)
@@ -147,7 +170,9 @@ fn the_label_is_the_headline_percent_and_its_reset() {
 
 #[test]
 fn the_label_has_no_time_when_the_headline_has_no_reset() {
-    let usage = reading(vec![window("five_hour", 420, None)]).current(NOW).unwrap();
+    let usage = reading(vec![window("five_hour", 420, None)])
+        .current(NOW)
+        .unwrap();
     assert_eq!(usage.label(NOW, utc()), "42%");
 }
 

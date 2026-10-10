@@ -107,6 +107,8 @@ pub struct Welcome {
     pub catalog: CatalogSnapshot,
     /// The service-owned settings.
     pub settings: DaemonSettings,
+    /// The Claude plan's usage the service holds (feature 490, W1).
+    pub plan_usage: Option<crate::plan_usage::UsageReading>,
 }
 
 /// The outcome of a connect attempt.
@@ -381,12 +383,14 @@ pub async fn handshake_with(
             daemon_build,
             catalog,
             settings,
+            plan_usage,
         }))) => Ok(Connected::Ready(
             Box::new(framed),
             Welcome {
                 daemon_build,
                 catalog,
                 settings,
+                plan_usage,
             },
         )),
         Some(Ok(Frame::Control(DaemonMsg::Refused { reason }))) => Ok(Connected::Refused(reason)),

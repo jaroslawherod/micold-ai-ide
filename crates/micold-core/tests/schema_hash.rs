@@ -256,7 +256,11 @@ fn the_build_fingerprint_is_a_separate_mechanism_from_the_schema_hash() {
 /// window. An older peer cannot decode either.
 ///
 /// And 38 → 39 for feature 488's `AiCli::{Codex, OpenCode}`: an older peer cannot decode either.
-const FEATURE_026_PROTOCOL_VERSION: u32 = 39;
+///
+/// And 39 → 40 for feature 490's plan usage (contracts/plan-usage-wire.md): `plan_usage` on
+/// `Welcome`, `PlanUsageChanged`, and the two plan-usage settings on `DaemonSettings` and
+/// `SettingsSet`, in one edit.
+const FEATURE_026_PROTOCOL_VERSION: u32 = 40;
 
 #[test]
 fn the_wire_changes_for_this_feature_cost_exactly_one_version_bump() {

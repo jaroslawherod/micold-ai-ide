@@ -105,6 +105,24 @@ pub fn clamp_long_task_threshold(secs: u64) -> u64 {
     secs.clamp(MIN_LONG_TASK_THRESHOLD_SECS, MAX_LONG_TASK_THRESHOLD_SECS)
 }
 
+fn default_plan_usage_enabled() -> bool {
+    crate::plan_usage::DEFAULT_PLAN_USAGE_ENABLED
+}
+
+fn default_warn_percent() -> u8 {
+    crate::plan_usage::WarnPercent::DEFAULT
+}
+
+fn default_plan_usage_warn_percent() -> u64 {
+    u64::from(crate::plan_usage::WarnPercent::DEFAULT)
+}
+
+/// Clamp a plan-usage warning threshold into 50–100 percent (feature 490, FR-005): read from the
+/// file, or sent to the service. Settings refuses an out-of-range value on save instead.
+pub fn clamp_plan_usage_warn_percent(percent: u64) -> u8 {
+    crate::plan_usage::WarnPercent::clamped(percent).get()
+}
+
 /// Everything about the session daemon: where it runs, and how the sandbox is configured when it
 /// runs there (feature 027).
 ///
@@ -226,6 +244,13 @@ pub struct Settings {
     /// window and the next start keep the last choice.
     #[serde(default)]
     pub diff_layout: DiffLayout,
+    /// Whether the Claude plan's usage is read from the sessions the app runs and shown (feature
+    /// 490, FR-001, FR-002). Service-owned: the daemon writes each session's settings file from it.
+    #[serde(default = "default_plan_usage_enabled")]
+    pub plan_usage_enabled: bool,
+    /// The plan-usage warning threshold, a whole percent from 50 to 100 (feature 490, FR-005).
+    #[serde(default = "default_warn_percent")]
+    pub plan_usage_warn_percent: u8,
 }
 
 /// Reads the stored cross-session option. A value this build does not know (a mistyped hand edit,
@@ -283,6 +308,8 @@ impl Default for Settings {
             notification_kinds: NotificationKinds::default(),
             long_task_threshold_secs: default_long_task_threshold_secs(),
             diff_layout: DiffLayout::default(),
+            plan_usage_enabled: default_plan_usage_enabled(),
+            plan_usage_warn_percent: crate::plan_usage::WarnPercent::DEFAULT,
         }
     }
 }
@@ -598,6 +625,14 @@ struct StoredSettings {
     /// `settings_version` does not move for it either.
     #[serde(default)]
     diff_layout: DiffLayout,
+    /// Missing in files written before feature 490 → on (FR-001). Additive and defaulted, so
+    /// `settings_version` does not move.
+    #[serde(default = "default_plan_usage_enabled")]
+    plan_usage_enabled: bool,
+    /// Missing → 80; out of 50–100 → clamped on read (FR-005). Wide on disk so a hand-edited
+    /// 300 is clamped rather than failing the whole document.
+    #[serde(default = "default_plan_usage_warn_percent")]
+    plan_usage_warn_percent: u64,
 }
 
 /// The mapping's entries that parse, in order; an entry with an unknown `type` token is skipped
@@ -640,6 +675,8 @@ impl StoredSettings {
             notification_kinds: settings.notification_kinds,
             long_task_threshold_secs: settings.long_task_threshold_secs,
             diff_layout: settings.diff_layout,
+            plan_usage_enabled: settings.plan_usage_enabled,
+            plan_usage_warn_percent: u64::from(settings.plan_usage_warn_percent),
         }
     }
 
@@ -692,6 +729,8 @@ impl StoredSettings {
             notification_kinds: self.notification_kinds,
             long_task_threshold_secs: clamp_long_task_threshold(self.long_task_threshold_secs),
             diff_layout: self.diff_layout,
+            plan_usage_enabled: self.plan_usage_enabled,
+            plan_usage_warn_percent: clamp_plan_usage_warn_percent(self.plan_usage_warn_percent),
         }
     }
 }

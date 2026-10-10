@@ -303,6 +303,8 @@ fn sample_client_msgs() -> Vec<ClientMsg> {
             session: sid(),
         },
         ClientMsg::SettingsSet {
+            plan_usage_enabled: None,
+            plan_usage_warn_percent: None,
             req: 9,
             scrollback_lines: Some(50_000),
             env_include_enabled: Some(false),
@@ -330,6 +332,8 @@ fn sample_client_msgs() -> Vec<ClientMsg> {
         // And the "leave it unchanged" form, which is what every settings save that is not about
         // the AI CLI sends.
         ClientMsg::SettingsSet {
+            plan_usage_enabled: None,
+            plan_usage_warn_percent: None,
             req: 91,
             scrollback_lines: Some(50_000),
             env_include_enabled: None,
@@ -467,6 +471,8 @@ fn sample_daemon_msgs() -> Vec<DaemonMsg> {
             daemon_build: "daemon-abc".into(),
             catalog: sample_catalog(),
             settings: DaemonSettings {
+                plan_usage_enabled: true,
+                plan_usage_warn_percent: 80,
                 scrollback_lines: 10_000,
                 env_include_enabled: true,
                 env_include_script_path: "/home/user/.bashrc".into(),
@@ -485,6 +491,7 @@ fn sample_daemon_msgs() -> Vec<DaemonMsg> {
                 long_task_threshold_secs: 120,
                 diff_layout: Default::default(),
             },
+            plan_usage: Some(sample_usage_reading()),
         },
         DaemonMsg::Refused {
             reason: RefusalReason::ProjectBusy {
@@ -535,6 +542,8 @@ fn sample_daemon_msgs() -> Vec<DaemonMsg> {
         },
         DaemonMsg::SettingsChanged {
             settings: DaemonSettings {
+                plan_usage_enabled: true,
+                plan_usage_warn_percent: 80,
                 scrollback_lines: 1_000,
                 env_include_enabled: false,
                 env_include_script_path: String::new(),
@@ -872,6 +881,8 @@ fn a_session_error_notice_round_trips_without_a_req() {
 fn the_cross_session_option_round_trips_in_daemon_settings_and_settings_set() {
     for access in CrossSessionAccess::ALL {
         let settings = DaemonSettings {
+            plan_usage_enabled: true,
+            plan_usage_warn_percent: 80,
             scrollback_lines: 10_000,
             env_include_enabled: true,
             env_include_script_path: String::new(),
@@ -894,6 +905,8 @@ fn the_cross_session_option_round_trips_in_daemon_settings_and_settings_set() {
             settings: settings.clone(),
         });
         let set = ClientMsg::SettingsSet {
+            plan_usage_enabled: None,
+            plan_usage_warn_percent: None,
             req: 3,
             scrollback_lines: None,
             env_include_enabled: None,
@@ -938,6 +951,8 @@ fn the_cross_session_option_round_trips_in_daemon_settings_and_settings_set() {
 fn the_pull_request_switch_round_trips_in_daemon_settings_and_settings_set() {
     for on in [true, false] {
         let settings = DaemonSettings {
+            plan_usage_enabled: true,
+            plan_usage_warn_percent: 80,
             scrollback_lines: 10_000,
             env_include_enabled: true,
             env_include_script_path: String::new(),
@@ -964,6 +979,8 @@ fn the_pull_request_switch_round_trips_in_daemon_settings_and_settings_set() {
     }
     for chosen in [Some(true), Some(false), None] {
         let set = ClientMsg::SettingsSet {
+            plan_usage_enabled: None,
+            plan_usage_warn_percent: None,
             req: 3,
             scrollback_lines: None,
             env_include_enabled: None,
@@ -1277,6 +1294,8 @@ fn the_review_messages_and_the_diff_layout_round_trip_on_both_wires() {
 
     for layout in [DiffLayout::Unified, DiffLayout::SideBySide] {
         let settings = DaemonSettings {
+            plan_usage_enabled: true,
+            plan_usage_warn_percent: 80,
             scrollback_lines: 10_000,
             env_include_enabled: true,
             env_include_script_path: String::new(),
@@ -1302,6 +1321,8 @@ fn the_review_messages_and_the_diff_layout_round_trip_on_both_wires() {
         None,
     ] {
         let set = ClientMsg::SettingsSet {
+            plan_usage_enabled: None,
+            plan_usage_warn_percent: None,
             req: 3,
             scrollback_lines: None,
             env_include_enabled: None,
@@ -1460,6 +1481,8 @@ fn the_run_group_messages_round_trip_on_both_wires() {
 fn the_save_terminal_history_setting_round_trips_on_the_wire() {
     for chosen in [Some(false), Some(true), None] {
         let asked = ClientMsg::SettingsSet {
+            plan_usage_enabled: None,
+            plan_usage_warn_percent: None,
             req: 1,
             scrollback_lines: None,
             env_include_enabled: None,
@@ -1540,7 +1563,7 @@ fn sample_usage_reading() -> micold_core::plan_usage::UsageReading {
 }
 
 /// Feature 490 (contracts/plan-usage-wire.md W1, W2, W4): the stored reading rides `Welcome`,
-/// and `PlanUsageChanged` carries a reading or `None`, on both wires.
+/// and `PlanUsageChanged` carries a reading or `None`.
 #[test]
 fn the_plan_usage_messages_round_trip_on_both_wires() {
     let DaemonMsg::Welcome {
@@ -1559,8 +1582,8 @@ fn the_plan_usage_messages_round_trip_on_both_wires() {
             settings: settings.clone(),
             plan_usage,
         };
+        // The catalog's defaulted fields are JSON-only, as every control message is.
         json_roundtrip(&welcome);
-        postcard_roundtrip(&welcome);
     }
     for reading in [Some(sample_usage_reading()), None] {
         let changed = DaemonMsg::PlanUsageChanged { reading };

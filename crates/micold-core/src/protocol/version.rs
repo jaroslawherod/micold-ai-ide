@@ -133,7 +133,12 @@
 ///
 /// And 38 → 39 for feature 488's `AiCli::{Codex, OpenCode}`, once for the whole feature: an older
 /// peer would fail to decode a session, a default or a `create_session` naming either provider.
-pub const PROTOCOL_VERSION: u32 = 39;
+///
+/// And 39 → 40 for feature 490's plan usage in one edit (contracts/plan-usage-wire.md):
+/// `plan_usage` on `DaemonMsg::Welcome`, `DaemonMsg::PlanUsageChanged`, and `plan_usage_enabled`
+/// and `plan_usage_warn_percent` on `DaemonSettings` and `ClientMsg::SettingsSet`. An older peer
+/// would fail to decode any of them.
+pub const PROTOCOL_VERSION: u32 = 40;
 
 // `build.rs` emits `pub const SCHEMA_HASH: [u8; 32] = [...];` into this file.
 include!(concat!(env!("OUT_DIR"), "/schema_hash.rs"));
