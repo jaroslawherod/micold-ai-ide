@@ -51,14 +51,14 @@ No constitution violations; one deviation from the spec (host singleton) is reco
 
 | FR | Where |
 |---|---|
-| FR-001 | `micold-core/src/daemons.rs` (new): `DaemonRegistry`, `DaemonEntry`, `DaemonId`, `DaemonName`, `DaemonRuntime`; uniqueness in `DaemonRegistry::add/rename` |
+| FR-001 | `micold-core/src/daemons.rs` (new): `DaemonRegistry`, `DaemonEntry`, `DaemonId`, `DaemonName`, `DaemonRuntime`; uniqueness in `DaemonRegistry::add/edit` |
 | FR-002, FR-007 (merge) | `catalog_sync.rs::reconcile_catalog` per daemon, R11; core tests: two snapshots for one project, A's sessions survive B's snapshot |
 | FR-002, FR-007 (connection) | `micold-client/src/daemon.rs`: `connection(placement)` becomes one subscription per `DaemonEntry` (`Subscription::batch`), keyed by `DaemonId`; `RECONNECT_BACKOFF` per actor |
-| FR-003, FR-006, FR-014 | `micold-core/src/store.rs` project state gains `bindings: BTreeMap<location key, DaemonId>`; absent key = "no daemon"; `Binding` in `daemons.rs` |
+| FR-003, FR-006, FR-014 | `micold-core/src/store.rs` project state gains `bindings: BTreeMap<location key, DaemonId>`; absent key resolves to `legacy_default_daemon` while that daemon is registered, else `NoDaemon`; `Binding` in `daemons.rs` |
 | FR-004 | `shell/daemon_sync.rs::send_op` resolves target outbox from the op's binding; `Outbox` per daemon in `features/connection.rs`; terminals exec through `ui/terminal.rs` using the bound daemon's container name (test: terminal target resolved by binding); catalog merge per R11 |
 | FR-005 | sidebar worktree row label (`features/sidebar.rs`, `ui/`) shows daemon name; no-daemon and unavailable states |
 | FR-008, FR-009 | `micold-core/src/daemons.rs` `DaemonState` (starting, connected, unreachable, version mismatch, stopped) folded from the per-daemon `ConnectionStatus`; mismatch from the existing handshake refusal (`connect.rs`) |
-| FR-010, FR-011 | `ui/settings/daemons.rs` (new), `features/daemons.rs` (new reducer), live via `Message::DaemonState(name, ..)`; logs/errors ring buffer per daemon |
+| FR-010, FR-011 | `ui/settings/daemons.rs` (new), `features/daemons.rs` (new reducer), live via `Message::Daemon(DaemonId, ..)`; logs/errors ring buffer per daemon |
 | FR-012, FR-014 | `ui/confirm_daemon_removal.rs` (new, modelled on `confirm_placement.rs`); counts from bindings + running sessions |
 | FR-013 | `settings.rs`: when `daemons` is absent, synthesise a registry of one daemon from `DaemonConfig` and set `legacy_default_daemon` to it; unbound legacy worktrees resolve to it even after more daemons are added (R5, test: legacy file, add second daemon, legacy worktrees still bound) |
 | FR-015 | `DaemonView` projection has only name/runtime/endpoint/version/state/bound; runtime-specific fields live in `DaemonRuntime` payload, never read by list/binding code |
