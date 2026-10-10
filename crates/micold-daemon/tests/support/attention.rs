@@ -332,3 +332,33 @@ pub fn kinds(msgs: &[DaemonMsg]) -> Vec<(SessionId, u64, NotificationKind)> {
         })
         .collect()
 }
+
+/// Everything the service has sent `window` up to now: the window pings, and reads to the pong.
+pub async fn received(window: &mut Window) -> Vec<DaemonMsg> {
+    const NONCE: u64 = 0x490b;
+    window
+        .send(Frame::Control(ClientMsg::Ping { nonce: NONCE }))
+        .await
+        .expect("the ping is sent");
+    let mut before_the_pong = Vec::new();
+    loop {
+        match next_frame(window).await {
+            Some(Frame::Control(DaemonMsg::Pong { nonce })) if nonce == NONCE => {
+                return before_the_pong;
+            }
+            Some(Frame::Control(msg)) => before_the_pong.push(msg),
+            Some(Frame::Grid(_)) => {}
+            None => panic!("the service closed the connection of a window that pinged"),
+        }
+    }
+}
+
+/// Send `msg`, then return every control message the service sent before the following pong. A
+/// connection's messages are handled in order, so `msg` has been applied by then.
+pub async fn sends(window: &mut Window, msg: ClientMsg) -> Vec<DaemonMsg> {
+    window
+        .send(Frame::Control(msg))
+        .await
+        .expect("the message is sent");
+    received(window).await
+}
