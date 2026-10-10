@@ -29,10 +29,25 @@ fn plan_usage_is_on_and_warns_at_80_by_default() {
 
 #[test]
 fn the_threshold_is_clamped_into_50_to_100() {
-    for (given, clamped) in [(0, 50), (49, 50), (50, 50), (80, 80), (100, 100), (101, 100), (u64::MAX, 100)]
-    {
-        assert_eq!(WarnPercent::clamped(given).get(), clamped, "clamped({given})");
-        assert_eq!(clamp_plan_usage_warn_percent(given), clamped, "clamp({given})");
+    for (given, clamped) in [
+        (0, 50),
+        (49, 50),
+        (50, 50),
+        (80, 80),
+        (100, 100),
+        (101, 100),
+        (u64::MAX, 100),
+    ] {
+        assert_eq!(
+            WarnPercent::clamped(given).get(),
+            clamped,
+            "clamped({given})"
+        );
+        assert_eq!(
+            clamp_plan_usage_warn_percent(given),
+            clamped,
+            "clamp({given})"
+        );
     }
 }
 
@@ -46,7 +61,11 @@ fn an_out_of_range_threshold_is_refused_with_the_range_named() {
         );
     }
     for (text, value) in [("50", 50), ("80", 80), ("100", 100), (" 90 ", 90)] {
-        assert_eq!(WarnPercent::parse(text).map(WarnPercent::get), Ok(value), "parse({text:?})");
+        assert_eq!(
+            WarnPercent::parse(text).map(WarnPercent::get),
+            Ok(value),
+            "parse({text:?})"
+        );
     }
 }
 

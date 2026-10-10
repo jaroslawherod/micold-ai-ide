@@ -25,6 +25,7 @@ use crate::attention::{NotificationKind, NotificationKinds};
 use crate::cli_reason::SpawnEnv;
 use crate::mcp::policy::CrossSessionAccess;
 use crate::naming::WorktreeNaming;
+use crate::plan_usage::UsageReading;
 use crate::protocol::grid::{LineId, WireLine, WireStyle};
 use crate::review::comment::{CommentId, ReviewComment};
 use crate::review::Side;
@@ -659,6 +660,11 @@ pub enum ClientMsg {
         long_task_threshold_secs: Option<u64>,
         /// The Changes view's diff layout, or `None` to leave unchanged (feature 482, R12).
         diff_layout: Option<DiffLayout>,
+        /// Show Claude plan usage, or `None` to leave unchanged (feature 490, W3).
+        plan_usage_enabled: Option<bool>,
+        /// The plan-usage warning threshold in percent, or `None` to leave it unchanged (feature
+        /// 490, W3). The service clamps it into 50–100 (FR-005).
+        plan_usage_warn_percent: Option<u8>,
     },
 
     // --- Review comments (feature 482, contracts/review-wire.md) ---
@@ -812,6 +818,13 @@ pub enum DaemonMsg {
         catalog: CatalogSnapshot,
         /// Current service settings.
         settings: DaemonSettings,
+        /// The Claude plan's usage the service holds, or `None` (feature 490, W1).
+        plan_usage: Option<UsageReading>,
+    },
+    /// The Claude plan's usage changed, or was cleared (feature 490, W2). Sent to every client.
+    PlanUsageChanged {
+        /// The new reading, or `None` once there is none.
+        reading: Option<UsageReading>,
     },
     /// The claim for this session's event `seq` is granted to this window: it raises the
     /// notification (feature 039, W1.3). Sent to the claimer only.
@@ -1431,6 +1444,10 @@ pub struct DaemonSettings {
     /// The Changes view's diff layout (feature 482, R12). Service-owned so every window and the
     /// next start keep the last choice.
     pub diff_layout: DiffLayout,
+    /// Whether the Claude plan's usage is read and shown (feature 490, FR-001, W3).
+    pub plan_usage_enabled: bool,
+    /// The plan-usage warning threshold, a whole percent from 50 to 100 (feature 490, FR-005).
+    pub plan_usage_warn_percent: u8,
 }
 
 /// One change to an entry's review comments (feature 482, contracts/review-wire.md W1–W4).
@@ -1820,6 +1837,8 @@ mod desktop_notifications_wire_tests {
 
     fn settings(desktop_notifications: bool) -> DaemonSettings {
         DaemonSettings {
+            plan_usage_enabled: true,
+            plan_usage_warn_percent: 80,
             scrollback_lines: 10_000,
             env_include_enabled: true,
             env_include_script_path: String::new(),
@@ -1859,6 +1878,8 @@ mod desktop_notifications_wire_tests {
     fn a_settings_change_carries_desktop_notifications_or_leaves_it() {
         for chosen in [Some(false), Some(true), None] {
             let asked = ClientMsg::SettingsSet {
+                plan_usage_enabled: None,
+                plan_usage_warn_percent: None,
                 req: 1,
                 scrollback_lines: None,
                 env_include_enabled: None,

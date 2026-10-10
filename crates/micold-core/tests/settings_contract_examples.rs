@@ -188,6 +188,9 @@ fn the_plan_usage_settings_load_as_written_and_default_when_absent() {
         let outcome = JsonFileSettingsStore::at(file).load();
         assert_eq!(outcome.status, LoadStatus::Loaded, "{example}");
         assert_eq!(outcome.settings.plan_usage_enabled, enabled, "{example}");
-        assert_eq!(outcome.settings.plan_usage_warn_percent, percent, "{example}");
+        assert_eq!(
+            outcome.settings.plan_usage_warn_percent, percent,
+            "{example}"
+        );
     }
 }
