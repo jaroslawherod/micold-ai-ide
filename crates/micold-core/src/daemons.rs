@@ -252,6 +252,145 @@ impl DaemonRegistry {
     }
 }
 
+/// Consecutive failed dials before a daemon that never connected is shown unreachable. With the
+/// client's one-second reconnect backoff this stays inside the 5 s budget of SC-002.
+pub const UNREACHABLE_AFTER_FAILURES: u32 = 3;
+
+/// Where one daemon's connection stands (FR-009).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DaemonState {
+    /// Being brought up or dialled; not yet connected.
+    Starting,
+    /// Handshake done; sessions can run.
+    Connected,
+    /// Not reachable now; the client keeps retrying.
+    Unreachable {
+        /// What the last attempt reported.
+        reason: String,
+    },
+    /// The daemon and the client disagree on version; retrying cannot help.
+    VersionMismatch {
+        /// The client's version.
+        client: String,
+        /// The daemon's version.
+        daemon: String,
+    },
+    /// Neither spawned nor reconnected until started.
+    Stopped,
+}
+
+/// Something that happened to one daemon's connection.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DaemonEvent {
+    /// The user, or the launch, asked it to run.
+    Start,
+    /// The handshake succeeded.
+    Connected,
+    /// A dial or bring-up attempt failed.
+    DialFailed(String),
+    /// An established connection ended.
+    Lost(String),
+    /// The daemon refused the handshake on a version difference.
+    Refused {
+        /// The client's version.
+        client: String,
+        /// The daemon's version.
+        daemon: String,
+    },
+    /// The user stopped it, or it was removed.
+    Stop,
+}
+
+/// A state change of exactly one daemon: the only thing a transition reports (FR-007).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StateChange {
+    /// The daemon that changed.
+    pub id: DaemonId,
+    /// What it is now.
+    pub to: DaemonState,
+}
+
+/// The state of every daemon, each folded independently of the others.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct DaemonStates {
+    states: BTreeMap<DaemonId, (DaemonState, u32)>,
+}
+
+impl DaemonStates {
+    /// States at app launch: `Starting` for an `auto_start` daemon this build can run, `Stopped`
+    /// otherwise, so a stopped daemon is neither spawned nor reconnected.
+    pub fn at_launch(registry: &DaemonRegistry) -> Self {
+        let mut states = Self::default();
+        for entry in registry.entries() {
+            let state = if entry.auto_start && entry.runtime.is_startable() {
+                DaemonState::Starting
+            } else {
+                DaemonState::Stopped
+            };
+            states.insert(entry.id, state);
+        }
+        states
+    }
+
+    /// Track `id` in `state`.
+    pub fn insert(&mut self, id: DaemonId, state: DaemonState) {
+        self.states.insert(id, (state, 0));
+    }
+
+    /// Forget `id`.
+    pub fn remove(&mut self, id: DaemonId) {
+        self.states.remove(&id);
+    }
+
+    /// The daemon's state, when tracked.
+    pub fn state(&self, id: DaemonId) -> Option<&DaemonState> {
+        self.states.get(&id).map(|(state, _)| state)
+    }
+
+    /// Whether the client should be dialling this daemon: tracked and not stopped.
+    pub fn should_dial(&self, id: DaemonId) -> bool {
+        matches!(self.state(id), Some(s) if *s != DaemonState::Stopped)
+    }
+
+    /// Fold `event` into `id`'s state, touching no other daemon. `None` when nothing changed.
+    pub fn apply(&mut self, id: DaemonId, event: DaemonEvent) -> Option<StateChange> {
+        let (state, failures) = self.states.get_mut(&id)?;
+        let next = match (&*state, event) {
+            (DaemonState::Stopped, DaemonEvent::Start) => Some(DaemonState::Starting),
+            (DaemonState::Stopped, _) => None,
+            (_, DaemonEvent::Stop) => Some(DaemonState::Stopped),
+            (DaemonState::Connected, DaemonEvent::Start) => None,
+            (_, DaemonEvent::Start) => {
+                *failures = 0;
+                Some(DaemonState::Starting)
+            }
+            (_, DaemonEvent::Connected) => {
+                *failures = 0;
+                Some(DaemonState::Connected)
+            }
+            (_, DaemonEvent::Refused { client, daemon }) => {
+                Some(DaemonState::VersionMismatch { client, daemon })
+            }
+            // A mismatch is not cured by a dial that fails again.
+            (DaemonState::VersionMismatch { .. }, _) => None,
+            (
+                DaemonState::Connected,
+                DaemonEvent::Lost(reason) | DaemonEvent::DialFailed(reason),
+            ) => Some(DaemonState::Unreachable { reason }),
+            (_, DaemonEvent::Lost(reason) | DaemonEvent::DialFailed(reason)) => {
+                *failures += 1;
+                match state {
+                    DaemonState::Starting if *failures < UNREACHABLE_AFTER_FAILURES => None,
+                    _ => Some(DaemonState::Unreachable { reason }),
+                }
+            }
+        };
+        let next = next.filter(|n| n != state)?;
+        *state = next.clone();
+        Some(StateChange { id, to: next })
+    }
+}
+
 /// The single daemon a pre-feature `daemon` block stands for (R5): id 1, named by its runtime,
 /// carrying the legacy container name and port so a running container is adopted, not recreated.
 pub fn migrated_entry(config: &crate::settings::DaemonConfig) -> DaemonEntry {
