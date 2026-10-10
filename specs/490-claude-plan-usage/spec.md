@@ -29,9 +29,9 @@ The application already has an opt-in pattern for information fetched with the u
 
 ### Session 2026-10-10
 
-- Q: Which usage source does the application read? (FR-012) → A: Claude Code's documented status-line input (`rate_limits`: a 5-hour and a 7-day window, each with a used percentage and a reset time), taken from the Claude Code sessions the application runs, with the user's own status line kept working. _(orchestrator default (recommended), awaiting user confirmation)_
-- Q: Is **Show Claude plan usage** on or off on a fresh installation? (FR-001) → A: On: the source reads no credential and sends nothing off the machine. _(orchestrator default (recommended), awaiting user confirmation)_
-- Q: The source has no polling, so when does a reading stop being current? (FR-009) → A: When the shown window's reset time passes, as Claude Code itself drops a window then; the details show the reading's time. _(agent-resolved: https://code.claude.com/docs/en/statusline#available-data, `rate_limits`)_
+- Q: Which usage source does the application read? (FR-012) → A: Claude Code's documented status-line input (`rate_limits`: a 5-hour and a 7-day window, each with a used percentage and a reset time), taken from the Claude Code sessions the application runs, with the user's own status line kept working. _(decided by user (jaro, 2026-10-10))_
+- Q: Is **Show Claude plan usage** on or off on a fresh installation? (FR-001) → A: On: the source reads no credential and sends nothing off the machine. _(decided by user (jaro, 2026-10-10))_
+- Q: The source has no polling, so when does a reading stop being current? (FR-009) → A: Each window stops being current when its own reset time passes, as Claude Code itself drops a window then; the indicator then shows the highest window still current and is hidden when none remains; the details show the reading's time. _(agent-resolved: https://code.claude.com/docs/en/statusline#available-data, `rate_limits`)_
 - Q: How does the application tell which account a reading is for? (FR-019) → A: It does not: the source has no account identity and reading Claude Code's private files is out of scope, so the newest reading wins. _(agent-resolved: specs/490-claude-plan-usage/spec.md#out-of-scope)_
 - Q: Does a running session pick up the switch being turned on or off? (FR-007) → A: Sessions started afterwards always do; running ones once Claude Code reloads the per-session settings file the application already passes it. _(agent-resolved: crates/micold-daemon/src/state.rs#activity_launch_for, `--settings`)_
 
@@ -50,7 +50,7 @@ A developer on a Claude subscription plan works with several Claude Code session
 1. **Given** plan usage is turned on and the usage source returns a reading with a short window at 42% resetting at 15:30 and a weekly window at 18% resetting on Monday, **When** the user looks at the application window, **Then** the usage indicator shows 42% and a reset at 15:30, in the user's local time.
 2. **Given** the same reading, **When** the user hovers or opens the usage indicator, **Then** they see both limit windows, each with its name, its percentage and its reset time, and the time the reading was obtained.
 3. **Given** the indicator is shown, **When** a Claude Code session in the application receives a response that reports new plan-usage values, **Then** the indicator shows the new values without the user doing anything, within 10 seconds (FR-007).
-4. **Given** the reset time of the shown window passes and no newer reading has been obtained, **When** the user looks at the indicator, **Then** it no longer presents the old percentage as current (FR-009).
+4. **Given** the reset time of the shown window passes and no newer reading has been obtained, **When** the user looks at the indicator, **Then** it no longer presents that window's old percentage as current: it shows the highest window still current, or nothing when none remains (FR-009).
 
 ---
 
@@ -139,7 +139,7 @@ The developer turns plan usage on or off and sets the warning threshold in Setti
 - **FR-006**: The usage indicator MUST offer details (on hover or press) listing every limit window of the reading with its name, percentage and reset time, and the time the reading was obtained.
 - **FR-007**: While the switch is on, the application MUST take a reading each time a Claude Code session it runs passes new plan-usage values to its status line, and show it within 10 seconds. Turning the switch on or off MUST apply to every Claude Code session started afterwards, and to running sessions once Claude Code picks up the change. The feature MUST NOT itself make any request, so the number of sessions or windows does not change how often anything is asked of the provider.
 - **FR-008**: Reset times MUST be shown in the user's local time zone, as a time of day when the reset is within 24 hours and with its day otherwise.
-- **FR-009**: A reading MUST stop being shown as current, and the indicator is then hidden until a newer reading arrives, when the reset time of the window it shows has passed (as Claude Code itself drops a window at its reset time). A window whose reset time has passed is dropped from the details. The details MUST show when the reading was obtained, so an older reading is recognisable as such.
+- **FR-009**: A limit window MUST stop being shown as current when its reset time has passed (as Claude Code itself drops a window at its reset time): it is dropped from the indicator and the details, the indicator then shows the highest window that is still current, and it is hidden until a newer reading arrives once no window is current. A window with no reset time stays current until a newer reading replaces it. The details MUST show when the reading was obtained, so an older reading is recognisable as such.
 
 **Warning**
 
