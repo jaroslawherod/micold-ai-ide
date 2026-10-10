@@ -108,15 +108,13 @@ pub fn run_pending(app: &mut App) -> Task<Message> {
                     ..
                 } = msg
                 {
-                    let dir = dir_name.clone();
-                    send_op(app, PendingOp::WorktreeDelete(dir), move |req| {
-                        ClientMsg::WorktreeDelete {
-                            req,
-                            project,
-                            dir_name,
-                            stop_sessions,
-                            delete_branch,
-                        }
+                    let op = PendingOp::WorktreeDelete(project.clone(), dir_name.clone());
+                    send_op(app, op, move |req| ClientMsg::WorktreeDelete {
+                        req,
+                        project,
+                        dir_name,
+                        stop_sessions,
+                        delete_branch,
                     });
                 }
             }

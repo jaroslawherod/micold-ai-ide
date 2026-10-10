@@ -221,6 +221,30 @@ fn os_theme_poll(interval: Duration) -> Subscription<Message> {
     })
 }
 
+/// One connection actor per daemon the registry names and the client should be dialling (feature
+/// 491, T024). A daemon that is `Stopped` has none; an edited entry restarts its own actor only
+/// (the actor's identity is the daemon and its runtime fingerprint).
+fn daemon_connections(app: &App) -> Subscription<Message> {
+    // A daemon added to the registry since the last update is dialled from its launch state.
+    let registry = &app.core.settings.daemons;
+    let mut states = app.core.settings.links.states().clone();
+    let launch = micold_core::daemons::DaemonStates::at_launch(registry);
+    for entry in registry.entries() {
+        if states.state(entry.id).is_none() {
+            if let Some(state) = launch.state(entry.id) {
+                states.insert(entry.id, state.clone());
+            }
+        }
+    }
+    micold_client::daemon::connections(
+        registry,
+        &states,
+        &app.placement.state_dir,
+        app.core.settings.legacy_default_daemon,
+        app.placement.strict_fingerprint,
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -310,28 +334,4 @@ mod tests {
             None
         );
     }
-}
-
-/// One connection actor per daemon the registry names and the client should be dialling (feature
-/// 491, T024). A daemon that is `Stopped` has none; an edited entry restarts its own actor only
-/// (the actor's identity is the daemon and its runtime fingerprint).
-fn daemon_connections(app: &App) -> Subscription<Message> {
-    // A daemon added to the registry since the last update is dialled from its launch state.
-    let registry = &app.core.settings.daemons;
-    let mut states = app.core.settings.links.states().clone();
-    let launch = micold_core::daemons::DaemonStates::at_launch(registry);
-    for entry in registry.entries() {
-        if states.state(entry.id).is_none() {
-            if let Some(state) = launch.state(entry.id) {
-                states.insert(entry.id, state.clone());
-            }
-        }
-    }
-    micold_client::daemon::connections(
-        registry,
-        &states,
-        &app.placement.state_dir,
-        app.core.settings.legacy_default_daemon,
-        app.placement.strict_fingerprint,
-    )
 }

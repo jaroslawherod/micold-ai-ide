@@ -96,7 +96,8 @@ pub enum PendingOp {
         /// picker may move while the create runs.
         daemon: Option<micold_core::daemons::DaemonId>,
     },
-    WorktreeDelete(String),
+    /// A worktree delete of `dir` in `project`, which names the binding to drop once it lands.
+    WorktreeDelete(PathBuf, String),
     /// A read-only `BranchPreflight` (feature 016). Carries what the reply needs to continue:
     /// the project it was asked about, the derived names, whether the branch came from the
     /// picker, and the remote the user named by picking that row — so nothing is recomputed when
@@ -229,7 +230,7 @@ impl PendingOp {
             PendingOp::RepoRootQuery(p) => {
                 format!("check whether {} is a repository", p.display())
             }
-            PendingOp::WorktreeDelete(d) => format!("delete the worktree \"{d}\""),
+            PendingOp::WorktreeDelete(_, d) => format!("delete the worktree \"{d}\""),
             PendingOp::WorktreeRename(d) => format!("rename the worktree \"{d}\""),
             PendingOp::WorktreeClaim(d) => format!("claim the worktree \"{d}\""),
             PendingOp::WorktreeInclude(p) => format!("include the worktree at {}", p.display()),
@@ -306,20 +307,27 @@ pub fn register_pending(
 /// (so another window can take it), attach the new, and set the viewed session — so the daemon
 /// streams grid frames and discovers worktrees for the project now in focus (T055). A no-op when
 /// disconnected; the initial attach on connect is handled by `DaemonConnected`.
-pub fn switch_daemon_attachment(app: &mut App, old: Option<PathBuf>, new: &Path) {
+///
+/// `old` is the project being left with the binding of the location that was active in it
+/// ([`App::departing_location`]), read before the switch: after it the active location is the new
+/// project's.
+pub fn switch_daemon_attachment(
+    app: &mut App,
+    old: Option<(PathBuf, micold_core::daemons::Binding)>,
+    new: &Path,
+) {
     app.viewed_dirty = true;
     // Feature 040: what was read describes the project being left, and the window does not hold
     // the new one until the daemon says so (data-model §3 invariant 4). Before the early return:
     // a switch made while disconnected leaves the old project all the same.
-    if old.as_deref() != Some(new) {
+    if old.as_ref().map(|(project, _)| project.as_path()) != Some(new) {
         let _ =
             crate::shell::pr_status::update(app, micold_client::features::pr_status::Msg::Released);
     }
     // The project being left detaches from its own daemon, the one entered attaches to its: they
     // may be two different daemons, and a down one is skipped rather than replaced (rule P-2).
-    if let Some(old) = old {
+    if let Some((old, binding)) = old {
         if old != new {
-            let binding = app.binding_of(&old, "");
             if let Some(from) = app.outbox_of(binding) {
                 from.send(ClientMsg::Detach { project: old });
             }
@@ -551,14 +559,12 @@ pub fn register_projects(app: &mut App, daemon: DaemonId) {
     }
 }
 
-/// Whether `daemon` is the one the binary's sandbox state and boot plan describe: the legacy
-/// default, which is what a pre-feature `placement` migrated to (R5).
+/// Whether `daemon` is the one the binary's sandbox state and boot plan describe: the same
+/// daemon [`BootPlan::identity_of`] names (R5).
+///
+/// [`BootPlan::identity_of`]: crate::shell::sandbox::BootPlan::identity_of
 fn is_sandbox_daemon(app: &App, daemon: DaemonId) -> bool {
-    app.core
-        .settings
-        .legacy_default_daemon
-        .unwrap_or(DaemonId(1))
-        == daemon
+    app.sandbox_daemon() == daemon
 }
 
 pub fn on_connect_failed(app: &mut App, daemon: DaemonId, reason: String) -> Task<Message> {
@@ -736,11 +742,7 @@ pub fn refresh_cli_availability(app: &mut App) {
     }
 }
 
-/// The environment-include settings in force, as the availability store compares them (feature
-/// 033, research R6). One mapping for both the baseline `on_connected` records and the comparison
-/// the `SettingsChanged` arm makes, so a new field cannot reach one and not the other.
-/// The daemon the single connection reaches: the legacy default, which is id 1 until the shell
-/// holds one connection per daemon (feature 491, M3).
+/// A version mismatch from `daemon`: recorded for it alone.
 pub(crate) fn on_version_mismatch(
     app: &mut App,
     daemon: DaemonId,
@@ -771,13 +773,9 @@ pub(crate) fn on_build_mismatch(
         .insert(daemon, (client_build, daemon_build));
 }
 
-fn connected_daemon(app: &App) -> micold_core::daemons::DaemonId {
-    app.core
-        .settings
-        .legacy_default_daemon
-        .unwrap_or(micold_core::daemons::DaemonId(1))
-}
-
+/// The environment-include settings in force, as the availability store compares them (feature
+/// 033, research R6). One mapping for both the baseline `on_connected` records and the comparison
+/// the `SettingsChanged` arm makes, so a new field cannot reach one and not the other.
 fn env_include_settings(app: &App) -> EnvIncludeSettings {
     EnvIncludeSettings {
         enabled: app.env_include_enabled,
@@ -951,12 +949,11 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
             // so seed here too (T111). Absent-only, so this never disturbs a counter this
             // client is already driving.
             app.stamper.seed_from_catalog(&catalog);
-            adopt_mount_set(app, &catalog);
+            if is_sandbox_daemon(app, daemon) {
+                adopt_mount_set(app, &catalog);
+            }
             claim_attention_events(app, daemon, &catalog, false);
             app.daemon_catalogs.insert(daemon, catalog);
-            // A project bound to this daemon that its catalog no longer holds (forgotten from
-            // another window) is registered again only on connect, not on every push.
-
             // Feature 040, S1: the first listing after `Attached` starts the reading; the reducer
             // turns every other one into nothing.
             follow_up = crate::shell::pr_status::listing_arrived(app);
@@ -1312,12 +1309,15 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
             // deletion is reported as a distinct, non-blocking notice rather than
             // silently discarded, so choosing "delete the branch" that git then refuses
             // (e.g. unreachable commits) doesn't look like it silently kept the branch.
-            Some(PendingOp::WorktreeDelete(dir)) => {
+            Some(PendingOp::WorktreeDelete(project, dir)) => {
                 if let OperationResult::WorktreeDeleted {
                     branch_delete_failed,
                     leftovers,
                 } = result
                 {
+                    // The location is gone, so is its daemon binding: a worktree later created
+                    // under the same directory name must not inherit it (feature 491).
+                    forget_worktree_binding(app, &project, &dir);
                     if branch_delete_failed {
                         app.core.notify_error(format!(
                             "The worktree \"{dir}\" was removed, but its branch could not \
@@ -1741,7 +1741,11 @@ pub fn on_connected(
     // from that reply. Another daemon's flags and mismatch are not this connection's to clear.
     // The outbox is stored before anything below sends, because the sends read it.
     app.sync_links();
-    app.core.settings.links.connected(daemon, outbox);
+    // A daemon the user stopped (or one no longer in the registry) ignores the handshake: the
+    // connection is dropped with the outbox, and nothing of it is adopted.
+    if !app.core.settings.links.connected(daemon, outbox) {
+        return Task::none();
+    }
     app.disconnected.remove(&daemon);
     if is_sandbox_daemon(app, daemon) {
         app.sandbox.answered();
@@ -1764,9 +1768,12 @@ pub fn on_connected(
     // Settings are adopted from the daemon the window is working with (the active location's, else
     // the legacy default): each daemon owns its own copy, and adopting all of them in turn would
     // make the last to connect win.
-    let owns_settings = app.active_daemon().unwrap_or_else(|| connected_daemon(app)) == daemon;
+    let is_active = app
+        .active_daemon()
+        .unwrap_or_else(|| app.core.settings.legacy_daemon())
+        == daemon;
     let mut script_check = None;
-    if owns_settings {
+    if is_active {
         let pr_status_enabled = settings.pr_status_enabled;
         adopt_daemon_settings(app, settings);
         // The path may have changed while this window was disconnected: an open Settings page
@@ -1785,10 +1792,14 @@ pub fn on_connected(
     // the wire. Ask again now that they are here (`010` BUG-013) — before `active_session` is read
     // below, so the attach that follows views the restored session rather than the overview.
     // Guarded to that one case; a mid-session reconnect changes nothing.
-    if let Some(outcomes) = app.core.resolve_foreground_after_catalog() {
-        micold_client::app::drain(outcomes, |o| {
-            micold_client::app::interpret(&mut app.core, o)
-        });
+    // Only for the daemon the active location is bound to: another daemon's connect is not the
+    // window's own restore.
+    if is_active {
+        if let Some(outcomes) = app.core.resolve_foreground_after_catalog() {
+            micold_client::app::drain(outcomes, |o| {
+                micold_client::app::interpret(&mut app.core, o)
+            });
+        }
     }
     // Record what this attach actually produced (`010` BUG-013). Written after the fold and the
     // re-resolve, so the counts describe the state the window is about to render from.
@@ -1805,7 +1816,9 @@ pub fn on_connected(
     app.stamper.seed_from_catalog(&catalog);
     // Feature 484 (FR-013): the stored panes, before the active session is viewed below, so the
     // restored focused pane decides which session that is.
-    crate::shell::panes::restore(app, &catalog);
+    if is_active {
+        crate::shell::panes::restore(app, &catalog);
+    }
     if is_sandbox_daemon(app, daemon) {
         adopt_mount_set(app, &catalog);
     }
@@ -1834,8 +1847,10 @@ pub fn on_connected(
     // The first view report of this connection, sent whatever it says — also "nothing in view" —
     // so the service never counts against a window it has not heard from (feature 039, W1.1,
     // FR-019). Here, inside the `Welcome` arm, so it follows `Welcome` and nothing precedes it.
-    app.core.view_report_forgotten();
-    report_window_view(app);
+    if is_active {
+        app.core.view_report_forgotten();
+        report_window_view(app);
+    }
     // After the view report, so the service knows what this window has in view before it is asked
     // to grant anything (feature 039, research R3). The first snapshot of a connection is compared
     // as one after a lost connection (FR-006); on the process's first, nothing is claimed (FR-005).
@@ -1848,16 +1863,19 @@ pub fn on_connected(
     // the user doing anything — a restarted sandbox may be a *different* image — so everything the
     // previous connection was told is forgotten first (FR-011), and replies to its requests are
     // dropped when they arrive.
-    app.core.session.availability.clear();
-    // Recorded, not compared: the store was just cleared, so there is nothing a change could
-    // invalidate. This only sets the baseline a later `SettingsChanged` compares against (C1 A7).
-    let _ = app
-        .core
-        .session
-        .availability
-        .env_include_changed(&env_include_settings(app));
-    ask_cli_availability(app, AvailabilityKey::Home);
-    sync_cli_availability(app);
+    if is_active {
+        app.core.session.availability.clear();
+        // Recorded, not compared: the store was just cleared, so there is nothing a change could
+        // invalidate. This only sets the baseline a later `SettingsChanged` compares against (C1
+        // A7).
+        let _ = app
+            .core
+            .session
+            .availability
+            .env_include_changed(&env_include_settings(app));
+        ask_cli_availability(app, AvailabilityKey::Home);
+        sync_cli_availability(app);
+    }
     if let (Some(project), Some(daemon)) = (project, app.outbox_for(daemon)) {
         let offer_for = project.clone();
         daemon.send(ClientMsg::Attach {
@@ -2062,7 +2080,16 @@ pub fn on_project_forget_confirmed(app: &mut App) -> Task<Message> {
             .retain(|_, (session, _)| app.grids.keys().any(|t| t.session == *session));
         // Each daemon that holds a location of the project forgets it; one that is down is
         // told nothing (it is reported by the route), and no other daemon stands in for it.
-        for binding in app.project_bindings(&path) {
+        let bindings = app.project_bindings(&path);
+        // Each bound daemon's own outbox releases the attachment too, not only the active one's.
+        for binding in &bindings {
+            if let Some(outbox) = app.outbox_of(*binding) {
+                outbox.send(ClientMsg::Detach {
+                    project: path.clone(),
+                });
+            }
+        }
+        for binding in bindings {
             let remove_path = path.clone();
             send_op_bound(app, binding, PendingOp::ProjectRemove, move |req| {
                 ClientMsg::ProjectRemove {
@@ -2077,10 +2104,6 @@ pub fn on_project_forget_confirmed(app: &mut App) -> Task<Message> {
                 app,
                 micold_client::features::pr_status::Msg::Released,
             );
-        }
-        // Release this client's attachment on the project it is forgetting.
-        if let Some(d) = app.active_outbox() {
-            d.send(ClientMsg::Detach { project: path });
         }
     }
     app.core
@@ -2874,19 +2897,18 @@ pub fn on_worktree_delete_confirmed(app: &mut App) -> Task<Message> {
         // the same branch reuses the exact path, and a stale snapshot would linger forever.
         let cwd = session_cwd_for_location(&project, &SessionLocation::Worktree(dir.clone()));
         app.env_include_cache.remove(&cwd);
-        let (p, d) = (project, dir.clone());
+        let op = PendingOp::WorktreeDelete(project.clone(), dir.clone());
+        let (p, d) = (project, dir);
         // Feature 013 (FR-011/FR-012): the user's explicit keep/delete choice from the
         // confirm dialog, defaulting to "delete the branch" (`delete_keep_branch`
         // defaults to `false`).
         let delete_branch = !app.core.worktree.delete_keep_branch;
-        send_op(app, PendingOp::WorktreeDelete(dir), move |req| {
-            ClientMsg::WorktreeDelete {
-                req,
-                project: p,
-                dir_name: d,
-                stop_sessions: true,
-                delete_branch,
-            }
+        send_op(app, op, move |req| ClientMsg::WorktreeDelete {
+            req,
+            project: p,
+            dir_name: d,
+            stop_sessions: true,
+            delete_branch,
         });
     }
     // Optimistically drop the records + dismiss the dialog; the daemon's `CatalogChanged`
@@ -3095,6 +3117,20 @@ fn bind_created_worktree(
         if let Err(err) = store.save_binding(project, dir_name, id) {
             app.core.notify_error(format!(
                 "Couldn't remember which daemon \"{dir_name}\" runs on: {err}"
+            ));
+        }
+    }
+}
+
+/// Drop the daemon binding of a deleted worktree, in this window's state and in the project's own
+/// state file (feature 491). A write that fails is reported: the stale entry would otherwise bind
+/// a worktree later created under the same name.
+fn forget_worktree_binding(app: &mut App, project: &std::path::Path, dir_name: &str) {
+    app.core.workspace.unbind(project, dir_name);
+    if let Some(store) = app.caps.projects() {
+        if let Err(err) = store.remove_binding(project, dir_name) {
+            app.core.notify_error(format!(
+                "Couldn't forget which daemon \"{dir_name}\" ran on: {err}"
             ));
         }
     }
@@ -3652,7 +3688,14 @@ pub(crate) mod tests {
         app.core.workspace.active = Some(new.clone());
         app.core.session.active = Some(id);
 
-        switch_daemon_attachment(&mut app, Some(old.clone()), &new);
+        switch_daemon_attachment(
+            &mut app,
+            Some((
+                old.clone(),
+                micold_core::daemons::Binding::Bound(DaemonId(1)),
+            )),
+            &new,
+        );
 
         let mut sent = Vec::new();
         while let Ok(msg) = rx.try_recv() {
@@ -3846,7 +3889,14 @@ pub(crate) mod tests {
         // about the session at all.
         app.core.workspace.active = Some(PathBuf::from("/b"));
 
-        switch_daemon_attachment(&mut app, Some(PathBuf::from("/a")), Path::new("/b"));
+        switch_daemon_attachment(
+            &mut app,
+            Some((
+                PathBuf::from("/a"),
+                micold_core::daemons::Binding::Bound(DaemonId(1)),
+            )),
+            Path::new("/b"),
+        );
 
         assert!(matches!(
             rx.try_recv(),
@@ -3879,7 +3929,14 @@ pub(crate) mod tests {
     fn re_entering_the_attached_project_does_not_release_it() {
         let (mut app, mut rx) = connected_app();
 
-        switch_daemon_attachment(&mut app, Some(PathBuf::from("/a")), Path::new("/a"));
+        switch_daemon_attachment(
+            &mut app,
+            Some((
+                PathBuf::from("/a"),
+                micold_core::daemons::Binding::Bound(DaemonId(1)),
+            )),
+            Path::new("/a"),
+        );
 
         assert!(
             matches!(rx.try_recv(), Ok(ClientMsg::Attach { .. })),
@@ -3905,7 +3962,14 @@ pub(crate) mod tests {
         let mut app = base_app();
         assert!(app.active_outbox().is_none());
 
-        switch_daemon_attachment(&mut app, Some(PathBuf::from("/a")), Path::new("/b"));
+        switch_daemon_attachment(
+            &mut app,
+            Some((
+                PathBuf::from("/a"),
+                micold_core::daemons::Binding::Bound(DaemonId(1)),
+            )),
+            Path::new("/b"),
+        );
         assert!(
             app.core.notifications.queue.visible().is_none(),
             "an ordinary project switch must not report the connection"

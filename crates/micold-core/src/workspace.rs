@@ -294,6 +294,18 @@ impl Workspace {
             .insert(key.to_string(), daemon);
     }
 
+    /// Drop the binding of `key` in `project` in memory (a worktree was deleted), pruning an
+    /// emptied project key. Persisting it is [`crate::store::ProjectStore::remove_binding`].
+    /// Idempotent.
+    pub fn unbind(&mut self, project: &Path, key: &str) {
+        if let Some(keys) = self.bindings.get_mut(project) {
+            keys.remove(key);
+            if keys.is_empty() {
+                self.bindings.remove(project);
+            }
+        }
+    }
+
     /// The worktrees this app created in `project` (feature 029). Empty when it created none —
     /// or when the project's state could not be read, which the caller must distinguish via
     /// [`Self::unreadable_projects`] before drawing any conclusion from the emptiness.

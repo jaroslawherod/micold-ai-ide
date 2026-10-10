@@ -657,11 +657,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             shell::connection::update(app, id, *msg)
         }
         Message::Connection(msg) => {
-            let id = app
-                .core
-                .settings
-                .legacy_default_daemon
-                .unwrap_or(micold_core::daemons::DaemonId(1));
+            let id = app.sandbox_daemon();
             shell::connection::update(app, id, msg)
         }
         // ---- Feature 027: the session service inside a container ----

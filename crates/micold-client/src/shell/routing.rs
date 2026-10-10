@@ -40,6 +40,18 @@ impl App {
         )
     }
 
+    /// The daemon the binary's sandbox state and boot plan describe ([`BootPlan::sandbox_daemon`]),
+    /// else the legacy default when the registry has no container.
+    ///
+    /// [`BootPlan::sandbox_daemon`]: crate::shell::sandbox::BootPlan::sandbox_daemon
+    pub(crate) fn sandbox_daemon(&self) -> DaemonId {
+        crate::shell::sandbox::BootPlan::sandbox_daemon(
+            &self.core.settings.daemons,
+            self.core.settings.legacy_default_daemon,
+        )
+        .unwrap_or_else(|| self.core.settings.legacy_daemon())
+    }
+
     /// The binding key of the location in view: the displayed session's worktree, else `""`.
     fn active_key(&self) -> String {
         self.core
@@ -48,6 +60,16 @@ impl App {
             .and_then(|id| self.core.active_sessions().iter().find(|s| s.id == id))
             .map(|s| location_key(&s.location).to_string())
             .unwrap_or_default()
+    }
+
+    /// The location about to be left on a project switch: the active project with the binding of
+    /// its active location, taken *before* the switch moves either (feature 491, FR-007).
+    pub(crate) fn departing_location(&self) -> Option<(std::path::PathBuf, Binding)> {
+        self.core
+            .workspace
+            .active
+            .clone()
+            .map(|project| (project, self.active_binding()))
     }
 
     /// The binding of the active project's active location. `NoDaemon` with no active project.
@@ -204,20 +226,6 @@ impl App {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn location_key_is_the_dir_or_empty() {
-        assert_eq!(location_key(&SessionLocation::Default), "");
-        assert_eq!(
-            location_key(&SessionLocation::Worktree("w".to_string())),
-            "w"
-        );
-    }
-}
-
-#[cfg(test)]
 impl App {
     /// Test seam: make daemon 1 the registry's one host daemon and the legacy default, when the
     /// test app has none (a bare `State` has an empty registry).
@@ -249,5 +257,19 @@ impl App {
     pub(crate) fn disconnect_test_daemon(&mut self) {
         let id = self.ensure_test_registry();
         let _ = self.core.settings.links.lost(id, "test");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn location_key_is_the_dir_or_empty() {
+        assert_eq!(location_key(&SessionLocation::Default), "");
+        assert_eq!(
+            location_key(&SessionLocation::Worktree("w".to_string())),
+            "w"
+        );
     }
 }

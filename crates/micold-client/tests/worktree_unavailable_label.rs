@@ -108,6 +108,14 @@ fn sessions_lost_runtime_missing_and_mapped_paths_have_their_own_strings() {
         label(&registry, &links, boxed, missing).as_deref(),
         Some("container runtime not found")
     );
+    // A host daemon has no container runtime to miss.
+    let (_, host_links, host, _) = fixture();
+    let mut host_links = host_links;
+    host_links.lost(host, "gone");
+    assert_eq!(
+        label(&registry, &host_links, host, missing).as_deref(),
+        Some("daemon Host unavailable")
+    );
     assert_eq!(
         unavailable_label(&registry, &links, Binding::NoDaemon, LabelFacts::default()).as_deref(),
         Some("no daemon")
