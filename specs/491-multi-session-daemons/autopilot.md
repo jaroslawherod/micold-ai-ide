@@ -68,7 +68,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M2 code complete, reviews A and B done (round 2 clean), full gate green at 3f7af08c with MICOLD_SKIP_GH_LAUNCH_TEST=1. NOT pushed: `git push --force-with-lease -u origin HEAD` was denied by the permission classifier. Branch is ahead 6, behind origin/main 3. Next: `scripts/autopilot/branch-start.sh 752` (rebase), rerun `mise run gate`, push, open PR (body at the unit's scratchpad pr-body.md; title `feat(491): run host and container daemons concurrently with per-daemon state (#491)`, ends `Refs #491`).
+None. M2 rebased onto origin/main (clean), full gate green after the rebase (MICOLD_SKIP_GH_LAUNCH_TEST=1). Pushed, PR opened (see Milestones table).
 
 ## Open escalation
 
