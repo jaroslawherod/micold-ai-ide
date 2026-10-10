@@ -22,7 +22,8 @@ pub fn extract(stdin: &[u8]) -> Option<Value> {
 
 /// The reading in a `rate_limits` body, stamped `obtained_at`; `None` when no window is usable
 /// (spec Edge Cases). A window is usable when its value is an object with a non-negative numeric
-/// `used_percentage` and a `resets_at`, if any, after `obtained_at`.
+/// `used_percentage` and a `resets_at`, if any, that is a time after `obtained_at`. Windows come in
+/// key order.
 pub fn parse(body: &Value, obtained_at: i64) -> Option<UsageReading> {
     let windows: Vec<LimitWindow> = body
         .as_object()?
@@ -41,13 +42,14 @@ fn window(key: &str, value: &Value, obtained_at: i64) -> Option<LimitWindow> {
     if !(percent >= 0.0 && percent.is_finite()) {
         return None;
     }
-    let resets_at = value
-        .get("resets_at")
-        .and_then(Value::as_f64)
-        .map(|at| at as i64);
-    if resets_at.is_some_and(|at| at <= obtained_at) {
-        return None;
-    }
+    let resets_at = match value.get("resets_at") {
+        None | Some(Value::Null) => None,
+        // A reset that is not a number, or not a time, is a window that cannot be read: kept, it
+        // would never stop being current (FR-009).
+        Some(at) => Some(at.as_f64().map(|at| at as i64).filter(|at| {
+            *at > obtained_at && chrono::DateTime::from_timestamp(*at, 0).is_some()
+        })?),
+    };
     Some(LimitWindow {
         key: key.to_owned(),
         // Non-negative and finite; `as` saturates a value beyond `u32`.

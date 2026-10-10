@@ -20,7 +20,7 @@ fn load_file(contents: &str) -> Settings {
 
 #[test]
 fn plan_usage_is_on_and_warns_at_80_by_default() {
-    assert!(DEFAULT_PLAN_USAGE_ENABLED, "FR-001: on by default");
+    const { assert!(DEFAULT_PLAN_USAGE_ENABLED, "FR-001: on by default") };
     let settings = Settings::default();
     assert_eq!(settings.plan_usage_enabled, DEFAULT_PLAN_USAGE_ENABLED);
     assert_eq!(settings.plan_usage_warn_percent, 80, "FR-005");

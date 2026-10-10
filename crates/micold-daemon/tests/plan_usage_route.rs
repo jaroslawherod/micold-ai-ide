@@ -279,6 +279,24 @@ async fn the_newest_reading_from_any_session_wins() {
 }
 
 #[tokio::test]
+async fn an_idle_session_repeating_its_reading_does_not_undo_a_newer_one() {
+    let rx = Receiver::with_sessions(&[session_id(A), session_id(B)]).await;
+    let (mut window, _) = rx.window().await;
+    let idle = rate_limits(42.0, 3600);
+    assert_eq!(rx.status(session_id(A), &idle).await, 200);
+    assert_eq!(
+        rx.status(session_id(B), &rate_limits(62.0, 3600)).await,
+        200
+    );
+    assert_eq!(rx.status(session_id(A), &idle).await, 200);
+    let changes = usage_changes(&received(&mut window).await);
+    let tenths: Vec<u32> = changes.iter().flatten().map(five_hour_tenths).collect();
+    assert_eq!(tenths, vec![420, 620], "FR-019: a repeat is not newer");
+    let (_late, stored) = rx.window().await;
+    assert_eq!(stored.map(|r| five_hour_tenths(&r)), Some(620));
+}
+
+#[tokio::test]
 async fn ten_sessions_reporting_the_same_windows_cause_one_push() {
     let sessions: Vec<SessionId> = (0..10).map(|n| session_id(0x4900 + n)).collect();
     let rx = Receiver::with_sessions(&sessions).await;

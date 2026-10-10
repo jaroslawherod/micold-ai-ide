@@ -74,6 +74,20 @@ fn parse_drops_unusable_windows() {
 }
 
 #[test]
+fn parse_drops_a_window_whose_reset_is_not_a_time() {
+    let body = json!({
+        "five_hour": {"used_percentage": 42, "resets_at": "2026-10-10T15:30:00Z"},
+        "seven_day": {"used_percentage": 18, "resets_at": 1e300},
+        "other": {"used_percentage": 5, "resets_at": null}
+    });
+    assert_eq!(
+        parse(&body, OBTAINED).unwrap().windows,
+        vec![window("other", 50, None)],
+        "FR-009: a reset that cannot be read would never pass"
+    );
+}
+
+#[test]
 fn parse_keeps_a_percentage_above_100_as_reported() {
     let body = json!({"five_hour": {"used_percentage": 105, "resets_at": OBTAINED + 60}});
     assert_eq!(
