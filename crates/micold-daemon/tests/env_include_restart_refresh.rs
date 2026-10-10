@@ -17,11 +17,8 @@ use std::time::{Duration, Instant};
 
 use futures_util::{SinkExt, StreamExt};
 use micold_core::project::{Availability, Project};
-use micold_core::protocol::codec::{ClientCodec, Frame};
+use micold_core::protocol::codec::Frame;
 use micold_core::protocol::messages::{ClientMsg, DaemonMsg, WireLifecycle};
-use micold_core::protocol::version::{
-    BUILD_FINGERPRINT, PACKAGE_VERSION, PROTOCOL_VERSION, SCHEMA_HASH,
-};
 use micold_core::session::{
     AiCli, Session, SessionId, SessionLabel, SessionLocation, ShellInstanceId, TerminalMode,
 };
@@ -30,8 +27,11 @@ use micold_core::store::{JsonFileStore, ProjectStore};
 use micold_core::workspace::Workspace;
 use micold_daemon::catalog::Catalog;
 use micold_daemon::state::DaemonState;
-use tokio_util::codec::Framed;
 use uuid::Uuid;
+
+#[path = "support/conn.rs"]
+mod conn;
+use conn::{connect, Client};
 
 /// How long a wait for the service to reach a state may take. It bounds a failure, not a pass.
 const PATIENCE: Duration = Duration::from_secs(30);
@@ -156,35 +156,6 @@ fn runs(log: &Path) -> usize {
     std::fs::read_to_string(log)
         .map(|s| s.lines().count())
         .unwrap_or(0)
-}
-
-type Client = Framed<tokio::io::DuplexStream, ClientCodec>;
-
-async fn connect(state: &Arc<DaemonState>) -> Client {
-    let (server_io, client_io) = tokio::io::duplex(256 * 1024);
-    tokio::spawn(micold_daemon::server::serve_connection(
-        Arc::clone(state),
-        server_io,
-    ));
-    let mut client = Framed::new(client_io, ClientCodec::new());
-    client
-        .send(Frame::Control(ClientMsg::Hello {
-            protocol_version: PROTOCOL_VERSION,
-            schema_hash: SCHEMA_HASH,
-            client_build: "test".into(),
-            client_instance: micold_core::protocol::messages::ClientInstance::current(),
-            client_package_version: PACKAGE_VERSION.into(),
-            auth_token: None,
-            client_fingerprint: BUILD_FINGERPRINT.into(),
-            require_fingerprint_match: false,
-        }))
-        .await
-        .unwrap();
-    match client.next().await.unwrap().unwrap() {
-        Frame::Control(DaemonMsg::Welcome { .. }) => {}
-        other => panic!("expected Welcome, got {other:?}"),
-    }
-    client
 }
 
 /// Send `request`, then a `Ping`, and read everything up to its `Pong`: the connection handles its

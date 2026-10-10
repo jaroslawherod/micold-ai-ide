@@ -20,12 +20,9 @@ use std::time::{Duration, Instant};
 
 use futures_util::{SinkExt, StreamExt};
 use micold_core::project::{Availability, Project};
-use micold_core::protocol::codec::{ClientCodec, Frame};
+use micold_core::protocol::codec::Frame;
 use micold_core::protocol::keepalive::LIVENESS_DEADLINE;
 use micold_core::protocol::messages::{ClientMsg, DaemonMsg};
-use micold_core::protocol::version::{
-    BUILD_FINGERPRINT, PACKAGE_VERSION, PROTOCOL_VERSION, SCHEMA_HASH,
-};
 use micold_core::session::{
     AiCli, Session, SessionId, SessionLabel, SessionLocation, TerminalMode,
 };
@@ -34,8 +31,11 @@ use micold_core::store::{JsonFileStore, ProjectStore};
 use micold_core::workspace::Workspace;
 use micold_daemon::catalog::Catalog;
 use micold_daemon::state::DaemonState;
-use tokio_util::codec::Framed;
 use uuid::Uuid;
+
+#[path = "support/conn.rs"]
+mod conn;
+use conn::{connect, Client};
 
 /// How long the environment-include script sleeps. Well short of the 60 s a user may configure —
 /// long enough that a parked loop is unambiguous, short enough to keep the suite quick.
@@ -120,38 +120,6 @@ fn catalog_with_slow_env(project_dir: &Path, store_dir: &Path, script: &Path) ->
         Box::new(JsonFileStore::at(projects_path)),
         Box::new(JsonFileSettingsStore::at(settings_path)),
     )
-}
-
-type Client = Framed<tokio::io::DuplexStream, ClientCodec>;
-
-async fn connect(state: &std::sync::Arc<DaemonState>) -> Client {
-    let (server_io, client_io) = tokio::io::duplex(256 * 1024);
-    tokio::spawn(micold_daemon::server::serve_connection(
-        std::sync::Arc::clone(state),
-        server_io,
-    ));
-    let mut client = Framed::new(client_io, ClientCodec::new());
-    client
-        .send(Frame::Control(ClientMsg::Hello {
-            protocol_version: PROTOCOL_VERSION,
-            schema_hash: SCHEMA_HASH,
-            client_build: "test".into(),
-            client_instance: micold_core::protocol::messages::ClientInstance::current(),
-            client_package_version: PACKAGE_VERSION.into(),
-            // Feature 027: the host-process placement presents no token, and a fingerprint
-            // mismatch is not a refusal there. `BUILD_FINGERPRINT` because these tests compile
-            // against the same core as the daemon they drive.
-            auth_token: None,
-            client_fingerprint: BUILD_FINGERPRINT.into(),
-            require_fingerprint_match: false,
-        }))
-        .await
-        .unwrap();
-    match client.next().await.unwrap().unwrap() {
-        Frame::Control(DaemonMsg::Welcome { .. }) => {}
-        other => panic!("expected Welcome, got {other:?}"),
-    }
-    client
 }
 
 async fn expect_control(client: &mut Client, pred: impl Fn(&DaemonMsg) -> bool) -> DaemonMsg {

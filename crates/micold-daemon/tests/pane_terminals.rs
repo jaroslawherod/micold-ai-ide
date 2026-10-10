@@ -5,6 +5,10 @@
 // unix-only: the stand-in processes are `cat`, which Windows lacks.
 #![cfg(unix)]
 
+#[path = "support/conn.rs"]
+mod conn;
+
+use conn::{connect_as, Client};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -14,14 +18,9 @@ use alacritty_terminal::grid::Dimensions;
 use alacritty_terminal::index::{Column, Line};
 use futures_util::{SinkExt, StreamExt};
 use micold_core::project::{Availability, Project};
-use micold_core::protocol::codec::{ClientCodec, Frame};
+use micold_core::protocol::codec::Frame;
 use micold_core::protocol::grid::GridFrame;
-use micold_core::protocol::messages::{
-    ClientInstance, ClientMsg, DaemonMsg, SessionProcess, TerminalRef,
-};
-use micold_core::protocol::version::{
-    BUILD_FINGERPRINT, PACKAGE_VERSION, PROTOCOL_VERSION, SCHEMA_HASH,
-};
+use micold_core::protocol::messages::{ClientMsg, SessionProcess, TerminalRef};
 use micold_core::session::{
     AiCli, Session, SessionId, SessionLabel, SessionLocation, ShellInstanceId, TerminalMode,
 };
@@ -32,9 +31,6 @@ use micold_daemon::catalog::Catalog;
 use micold_daemon::state::DaemonState;
 use micold_daemon::supervisor::PtySession;
 use portable_pty::CommandBuilder;
-use tokio_util::codec::Framed;
-
-type Client = Framed<tokio::io::DuplexStream, ClientCodec>;
 
 fn text(pty: &PtySession) -> String {
     let term = pty.term().lock();
@@ -120,33 +116,6 @@ fn shell(session: SessionId, n: u32) -> TerminalRef {
         session,
         process: SessionProcess::Shell(ShellInstanceId(n)),
     }
-}
-
-async fn connect(state: &Arc<DaemonState>) -> Client {
-    let (server_io, client_io) = tokio::io::duplex(256 * 1024);
-    tokio::spawn(micold_daemon::server::serve_connection(
-        Arc::clone(state),
-        server_io,
-    ));
-    let mut client = Framed::new(client_io, ClientCodec::new());
-    client
-        .send(Frame::Control(ClientMsg::Hello {
-            protocol_version: PROTOCOL_VERSION,
-            schema_hash: SCHEMA_HASH,
-            client_build: "test-client".into(),
-            client_instance: ClientInstance::current(),
-            client_package_version: PACKAGE_VERSION.into(),
-            auth_token: None,
-            client_fingerprint: BUILD_FINGERPRINT.into(),
-            require_fingerprint_match: false,
-        }))
-        .await
-        .unwrap();
-    match client.next().await.unwrap().unwrap() {
-        Frame::Control(DaemonMsg::Welcome { .. }) => {}
-        other => panic!("expected Welcome, got {other:?}"),
-    }
-    client
 }
 
 /// Grid frames that arrive within `window`, whatever they are.
@@ -244,7 +213,7 @@ async fn set_viewed_terminals_streams_exactly_the_named_terminals_and_replaces_t
     let pa = state.register_session(cat(a, (80, 24)));
     let _pb = state.register_session(cat(b, (80, 24)));
     state.open_shell(a, ShellInstanceId(1)).unwrap();
-    let mut client = connect(&state).await;
+    let mut client = connect_as(&state, "test-client").await;
 
     // Two processes of one session, and another session.
     view(&mut client, vec![primary(a), shell(a, 1), primary(b)]).await;
@@ -301,7 +270,7 @@ async fn at_most_six_terminals_stream_to_one_client() {
     for id in &ids {
         let _ = state.register_session(cat(*id, (80, 24)));
     }
-    let mut client = connect(&state).await;
+    let mut client = connect_as(&state, "test-client").await;
     view(&mut client, ids.iter().map(|i| primary(*i)).collect()).await;
     let frames = frames_within(&mut client, Duration::from_millis(800)).await;
     for (n, id) in ids.iter().enumerate() {
@@ -327,7 +296,7 @@ async fn a_restarted_terminal_streams_again_to_the_client_viewing_it() {
         &[a],
     )));
     let _old = state.register_session(cat(a, (80, 24)));
-    let mut client = connect(&state).await;
+    let mut client = connect_as(&state, "test-client").await;
     view(&mut client, vec![primary(a)]).await;
     let first = frames_within(&mut client, Duration::from_millis(600)).await;
     assert!(first.iter().any(|f| f.full && f.session == a));
@@ -363,7 +332,10 @@ async fn a_frame_reaches_only_clients_whose_set_contains_it() {
     )));
     let _pa = state.register_session(cat(a, (80, 24)));
     let _pb = state.register_session(cat(b, (80, 24)));
-    let (mut one, mut two) = (connect(&state).await, connect(&state).await);
+    let (mut one, mut two) = (
+        connect_as(&state, "test-client").await,
+        connect_as(&state, "test-client").await,
+    );
     view(&mut one, vec![primary(a)]).await;
     view(&mut two, vec![primary(b)]).await;
     state.session_input_to(a, 0, b"only_a\n", None);
@@ -398,7 +370,7 @@ async fn the_first_terminal_is_remembered_as_the_projects_foreground_session() {
     )));
     let _pa = state.register_session(cat(a, (80, 24)));
     let _pb = state.register_session(cat(b, (80, 24)));
-    let mut client = connect(&state).await;
+    let mut client = connect_as(&state, "test-client").await;
     client
         .send(Frame::Control(ClientMsg::SetViewedTerminals {
             project: project.path().to_path_buf(),
@@ -443,7 +415,7 @@ async fn sessions_of_different_worktrees_stay_isolated_and_one_ending_leaves_the
     };
     let _pa = state.register_session(spawn_in(a, wt_a.path()));
     let _pb = state.register_session(spawn_in(b, wt_b.path()));
-    let mut client = connect(&state).await;
+    let mut client = connect_as(&state, "test-client").await;
     view(&mut client, vec![primary(a), primary(b)]).await;
     let _ = frames_within(&mut client, Duration::from_millis(500)).await;
 

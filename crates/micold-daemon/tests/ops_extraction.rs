@@ -9,23 +9,21 @@
 #[path = "support/mcp.rs"]
 mod mcp_support;
 
+#[path = "support/conn.rs"]
+mod conn;
+
 use std::path::Path;
 use std::sync::Arc;
 
+use conn::connect;
 use futures_util::{SinkExt, StreamExt};
 use mcp_support::*;
 use micold_core::naming::DerivedNames;
-use micold_core::protocol::codec::{ClientCodec, Frame};
+use micold_core::protocol::codec::Frame;
 use micold_core::protocol::messages::{ClientMsg, DaemonMsg};
-use micold_core::protocol::version::{
-    BUILD_FINGERPRINT, PACKAGE_VERSION, PROTOCOL_VERSION, SCHEMA_HASH,
-};
 use micold_core::worktree::CreateMode;
 use micold_daemon::ops;
 use micold_daemon::state::DaemonState;
-use tokio_util::codec::Framed;
-
-type Client = Framed<tokio::io::DuplexStream, ClientCodec>;
 
 /// Worktree rows (dir, branch, display name), provenance records, and directories on disk.
 type Outcome = (
@@ -90,29 +88,6 @@ impl Side {
         on_disk.sort();
         (worktrees, records.into_iter().collect(), on_disk)
     }
-}
-
-async fn connect(state: &Arc<DaemonState>) -> Client {
-    let (server_io, client_io) = tokio::io::duplex(256 * 1024);
-    tokio::spawn(micold_daemon::server::serve_connection(
-        Arc::clone(state),
-        server_io,
-    ));
-    let mut client = Framed::new(client_io, ClientCodec::new());
-    client
-        .send(Frame::Control(ClientMsg::Hello {
-            protocol_version: PROTOCOL_VERSION,
-            schema_hash: SCHEMA_HASH,
-            client_build: "test".into(),
-            client_instance: micold_core::protocol::messages::ClientInstance::current(),
-            client_package_version: PACKAGE_VERSION.into(),
-            auth_token: None,
-            client_fingerprint: BUILD_FINGERPRINT.into(),
-            require_fingerprint_match: false,
-        }))
-        .await
-        .unwrap();
-    client
 }
 
 /// Send `msg` and wait for the reply to request `req`.

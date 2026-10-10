@@ -9,18 +9,18 @@
 //! autospawn, and supervision test suites; asserting them here too would need a second daemon process
 //! or a live PTY, so this test owns the connection subset it can drive deterministically.
 
+#[path = "support/conn.rs"]
+mod conn;
+
+use conn::{connect_as, Client};
 use std::io;
 use std::sync::{Arc, Mutex};
 
 use futures_util::{SinkExt, StreamExt};
-use micold_core::protocol::codec::{ClientCodec, Frame};
+use micold_core::protocol::codec::Frame;
 use micold_core::protocol::messages::{ClientMsg, DaemonMsg};
-use micold_core::protocol::version::{
-    BUILD_FINGERPRINT, PACKAGE_VERSION, PROTOCOL_VERSION, SCHEMA_HASH,
-};
 use micold_daemon::catalog::Catalog;
 use micold_daemon::state::DaemonState;
-use tokio_util::codec::Framed;
 use tracing_subscriber::fmt::MakeWriter;
 
 #[derive(Clone)]
@@ -40,38 +40,6 @@ impl<'a> MakeWriter<'a> for BufWriter {
     fn make_writer(&'a self) -> Self::Writer {
         self.clone()
     }
-}
-
-type Client = Framed<tokio::io::DuplexStream, ClientCodec>;
-
-async fn connect(state: &Arc<DaemonState>, build: &str) -> Client {
-    let (server_io, client_io) = tokio::io::duplex(64 * 1024);
-    tokio::spawn(micold_daemon::server::serve_connection(
-        Arc::clone(state),
-        server_io,
-    ));
-    let mut client = Framed::new(client_io, ClientCodec::new());
-    client
-        .send(Frame::Control(ClientMsg::Hello {
-            protocol_version: PROTOCOL_VERSION,
-            schema_hash: SCHEMA_HASH,
-            client_build: build.into(),
-            client_instance: micold_core::protocol::messages::ClientInstance::current(),
-            client_package_version: PACKAGE_VERSION.into(),
-            // Feature 027: the host-process placement presents no token, and a fingerprint
-            // mismatch is not a refusal there. `BUILD_FINGERPRINT` because these tests compile
-            // against the same core as the daemon they drive.
-            auth_token: None,
-            client_fingerprint: BUILD_FINGERPRINT.into(),
-            require_fingerprint_match: false,
-        }))
-        .await
-        .unwrap();
-    match client.next().await.unwrap().unwrap() {
-        Frame::Control(DaemonMsg::Welcome { .. }) => {}
-        other => panic!("expected Welcome, got {other:?}"),
-    }
-    client
 }
 
 /// Read the next control message, skipping catalog pushes.
@@ -98,7 +66,7 @@ async fn connection_lifecycle_events_are_logged_with_reason() {
     let state = Arc::new(DaemonState::new(Catalog::ephemeral()));
 
     // A attaches the project.
-    let mut a = connect(&state, "window-A").await;
+    let mut a = connect_as(&state, "window-A").await;
     a.send(Frame::Control(ClientMsg::Attach {
         project: "/proj".into(),
         force: false,
@@ -111,7 +79,7 @@ async fn connection_lifecycle_events_are_logged_with_reason() {
     }
 
     // B is refused (busy), then forces a takeover.
-    let mut b = connect(&state, "window-B").await;
+    let mut b = connect_as(&state, "window-B").await;
     b.send(Frame::Control(ClientMsg::Attach {
         project: "/proj".into(),
         force: false,

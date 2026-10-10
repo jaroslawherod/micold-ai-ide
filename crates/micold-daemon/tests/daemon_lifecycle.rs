@@ -24,52 +24,18 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use futures_util::{SinkExt, StreamExt};
-use micold_core::protocol::codec::{ClientCodec, Frame};
+use micold_core::protocol::codec::Frame;
 use micold_core::protocol::messages::{ClientMsg, DaemonMsg, RefusalReason};
-use micold_core::protocol::version::{
-    BUILD_FINGERPRINT, PACKAGE_VERSION, PROTOCOL_VERSION, SCHEMA_HASH,
-};
 use micold_daemon::catalog::Catalog;
 use micold_daemon::idle::{IdleWindow, Presence};
 use micold_daemon::state::DaemonState;
-use tokio::io::DuplexStream;
-use tokio_util::codec::Framed;
 
-type Client = Framed<DuplexStream, ClientCodec>;
+#[path = "support/conn.rs"]
+mod conn;
+use conn::connect_as;
 
 fn new_state() -> Arc<DaemonState> {
     Arc::new(DaemonState::new(Catalog::ephemeral()))
-}
-
-/// Connect a client through the real `serve_connection` path and complete the handshake.
-async fn connect(state: &Arc<DaemonState>, build: &str) -> Client {
-    let (server_io, client_io) = tokio::io::duplex(64 * 1024);
-    tokio::spawn(micold_daemon::server::serve_connection(
-        Arc::clone(state),
-        server_io,
-    ));
-    let mut client = Framed::new(client_io, ClientCodec::new());
-    client
-        .send(Frame::Control(ClientMsg::Hello {
-            protocol_version: PROTOCOL_VERSION,
-            schema_hash: SCHEMA_HASH,
-            client_build: build.into(),
-            client_instance: micold_core::protocol::messages::ClientInstance::current(),
-            client_package_version: PACKAGE_VERSION.into(),
-            // Feature 027: the host-process placement presents no token, and a fingerprint
-            // mismatch is not a refusal there. `BUILD_FINGERPRINT` because these tests compile
-            // against the same core as the daemon they drive.
-            auth_token: None,
-            client_fingerprint: BUILD_FINGERPRINT.into(),
-            require_fingerprint_match: false,
-        }))
-        .await
-        .unwrap();
-    match client.next().await.unwrap().unwrap() {
-        Frame::Control(DaemonMsg::Welcome { .. }) => {}
-        other => panic!("expected Welcome, got {other:?}"),
-    }
-    client
 }
 
 /// Poll until `cond` holds (the server task deregisters asynchronously).
@@ -92,7 +58,7 @@ async fn wait_until(mut cond: impl FnMut() -> bool) {
 #[tokio::test]
 async fn the_window_arms_when_the_last_client_leaves_and_expires_after_it() {
     let state = new_state();
-    let client = connect(&state, "client-a").await;
+    let client = connect_as(&state, "client-a").await;
     wait_until(|| state.client_count() == 1).await;
 
     let rule = IdleWindow::default();
@@ -135,7 +101,7 @@ async fn the_window_arms_when_the_last_client_leaves_and_expires_after_it() {
 #[tokio::test]
 async fn a_live_session_does_not_hold_the_service_up() {
     let state = new_state();
-    let client = connect(&state, "client-a").await;
+    let client = connect_as(&state, "client-a").await;
     wait_until(|| state.client_count() == 1).await;
     drop(client);
     wait_until(|| state.client_count() == 0).await;
@@ -151,8 +117,8 @@ async fn a_live_session_does_not_hold_the_service_up() {
 #[tokio::test]
 async fn a_settings_mutation_reaches_a_second_connected_client() {
     let state = new_state();
-    let mut a = connect(&state, "client-a").await;
-    let mut b = connect(&state, "client-b").await;
+    let mut a = connect_as(&state, "client-a").await;
+    let mut b = connect_as(&state, "client-b").await;
     wait_until(|| state.client_count() == 2).await;
 
     // Client A changes a service-owned setting.
@@ -190,8 +156,8 @@ async fn a_settings_mutation_reaches_a_second_connected_client() {
 #[tokio::test]
 async fn turning_the_tool_server_binding_off_over_the_wire_reaches_every_client() {
     let state = new_state();
-    let mut a = connect(&state, "client-a").await;
-    let mut b = connect(&state, "client-b").await;
+    let mut a = connect_as(&state, "client-a").await;
+    let mut b = connect_as(&state, "client-b").await;
     wait_until(|| state.client_count() == 2).await;
 
     a.send(Frame::Control(ClientMsg::SettingsSet {
@@ -234,8 +200,8 @@ async fn setting_the_cross_session_option_over_the_wire_reaches_every_client_and
     use micold_core::mcp::policy::CrossSessionAccess;
 
     let state = new_state();
-    let mut a = connect(&state, "client-a").await;
-    let mut b = connect(&state, "client-b").await;
+    let mut a = connect_as(&state, "client-a").await;
+    let mut b = connect_as(&state, "client-b").await;
     wait_until(|| state.client_count() == 2).await;
     assert_eq!(
         state.cross_session_access(),
@@ -286,8 +252,8 @@ async fn setting_the_cross_session_option_over_the_wire_reaches_every_client_and
 #[tokio::test]
 async fn attach_is_exclusive_and_a_forced_takeover_displaces_the_holder() {
     let state = new_state();
-    let mut a = connect(&state, "client-a").await;
-    let mut b = connect(&state, "client-b").await;
+    let mut a = connect_as(&state, "client-a").await;
+    let mut b = connect_as(&state, "client-b").await;
     wait_until(|| state.client_count() == 2).await;
 
     let project = PathBuf::from("/repo/alpha");
@@ -362,7 +328,7 @@ async fn attach_is_exclusive_and_a_forced_takeover_displaces_the_holder() {
 #[tokio::test]
 async fn a_disconnect_releases_the_attachment() {
     let state = new_state();
-    let mut a = connect(&state, "client-a").await;
+    let mut a = connect_as(&state, "client-a").await;
     let project = PathBuf::from("/repo/gamma");
 
     a.send(Frame::Control(ClientMsg::Attach {

@@ -15,19 +15,18 @@
 #[path = "support/mcp.rs"]
 mod mcp_support;
 
+#[path = "support/conn.rs"]
+mod conn;
+
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
+use conn::connect;
 use futures_util::SinkExt;
 use mcp_support::*;
-use micold_core::protocol::codec::{ClientCodec, Frame};
-use micold_core::protocol::messages::{
-    CatalogSnapshot, ClientInstance, ClientMsg, DaemonMsg, WireLifecycle,
-};
-use micold_core::protocol::version::{
-    BUILD_FINGERPRINT, PACKAGE_VERSION, PROTOCOL_VERSION, SCHEMA_HASH,
-};
+use micold_core::protocol::codec::Frame;
+use micold_core::protocol::messages::{CatalogSnapshot, ClientMsg, DaemonMsg, WireLifecycle};
 use micold_core::session::{AiCli, SessionId, SessionLifecycle, TerminalMode};
 use micold_daemon::state::DaemonState;
 use serde_json::{json, Value};
@@ -892,31 +891,6 @@ async fn an_unknown_target_is_not_found_without_a_prompt() {
         assert_eq!(error["category"], "not_found", "{tool}: {error}");
     }
     assert_eq!(asked.load(Ordering::SeqCst), 0);
-}
-
-type Client = tokio_util::codec::Framed<tokio::io::DuplexStream, ClientCodec>;
-
-async fn connect(state: &Arc<DaemonState>) -> Client {
-    let (server_io, client_io) = tokio::io::duplex(256 * 1024);
-    tokio::spawn(micold_daemon::server::serve_connection(
-        Arc::clone(state),
-        server_io,
-    ));
-    let mut client = tokio_util::codec::Framed::new(client_io, ClientCodec::new());
-    client
-        .send(Frame::Control(ClientMsg::Hello {
-            protocol_version: PROTOCOL_VERSION,
-            schema_hash: SCHEMA_HASH,
-            client_build: "test".into(),
-            client_instance: ClientInstance::current(),
-            client_package_version: PACKAGE_VERSION.into(),
-            auth_token: None,
-            client_fingerprint: BUILD_FINGERPRINT.into(),
-            require_fingerprint_match: false,
-        }))
-        .await
-        .unwrap();
-    client
 }
 
 /// U168, U171: the protocol's `SessionStop` ends the processes and now tells every window the

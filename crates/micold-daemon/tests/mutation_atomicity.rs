@@ -7,24 +7,24 @@
 //! daemon applies each mutation to its durable catalog **before** it replies, so whether or not the
 //! reply is delivered, the next connection's welcome snapshot reflects the true, completed outcome.
 
+#[path = "support/conn.rs"]
+mod conn;
+
+use conn::connect;
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::process::Command;
 
 use futures_util::{SinkExt, StreamExt};
 use micold_core::project::{Availability, Project};
-use micold_core::protocol::codec::{ClientCodec, Frame};
+use micold_core::protocol::codec::Frame;
 use micold_core::protocol::messages::{CatalogSnapshot, ClientMsg, DaemonMsg};
-use micold_core::protocol::version::{
-    BUILD_FINGERPRINT, PACKAGE_VERSION, PROTOCOL_VERSION, SCHEMA_HASH,
-};
 use micold_core::settings::JsonFileSettingsStore;
 use micold_core::store::{JsonFileStore, ProjectStore};
 use micold_core::workspace::Workspace;
 use micold_core::worktree::CreateMode;
 use micold_daemon::catalog::Catalog;
 use micold_daemon::state::DaemonState;
-use tokio_util::codec::Framed;
 
 fn init_git_repo(dir: &Path) {
     for args in [
@@ -66,42 +66,6 @@ fn catalog_with_project(project_dir: &Path, store_dir: &Path) -> Catalog {
     )
 }
 
-type Client = Framed<tokio::io::DuplexStream, ClientCodec>;
-
-async fn connect(state: &std::sync::Arc<DaemonState>) -> Client {
-    let (server_io, client_io) = tokio::io::duplex(256 * 1024);
-    tokio::spawn(micold_daemon::server::serve_connection(
-        std::sync::Arc::clone(state),
-        server_io,
-    ));
-    let mut client = Framed::new(client_io, ClientCodec::new());
-    client
-        .send(Frame::Control(ClientMsg::Hello {
-            protocol_version: PROTOCOL_VERSION,
-            schema_hash: SCHEMA_HASH,
-            client_build: "test".into(),
-            client_instance: micold_core::protocol::messages::ClientInstance::current(),
-            client_package_version: PACKAGE_VERSION.into(),
-            // Feature 027: the host-process placement presents no token, and a fingerprint
-            // mismatch is not a refusal there. `BUILD_FINGERPRINT` because these tests compile
-            // against the same core as the daemon they drive.
-            auth_token: None,
-            client_fingerprint: BUILD_FINGERPRINT.into(),
-            require_fingerprint_match: false,
-        }))
-        .await
-        .unwrap();
-    client
-}
-
-/// The first message must be the Welcome; return its catalog.
-async fn welcome_catalog(client: &mut Client) -> CatalogSnapshot {
-    match client.next().await.unwrap().unwrap() {
-        Frame::Control(DaemonMsg::Welcome { catalog, .. }) => catalog,
-        other => panic!("expected Welcome, got {other:?}"),
-    }
-}
-
 fn worktrees(snapshot: &CatalogSnapshot, project: &Path) -> Vec<String> {
     snapshot
         .projects
@@ -125,7 +89,6 @@ async fn a_mutation_whose_reply_is_lost_is_visible_to_the_next_connection() {
     // disconnect that loses the reply. (The client would resolve this `req` to "unknown".)
     {
         let mut a = connect(&state).await;
-        let _ = welcome_catalog(&mut a).await;
         a.send(Frame::Control(ClientMsg::WorktreeCreate {
             req: 1,
             project: project.path().to_path_buf(),
@@ -159,7 +122,6 @@ async fn a_mutation_whose_reply_is_lost_is_visible_to_the_next_connection() {
     }))
     .await
     .unwrap();
-    let _welcome = welcome_catalog(&mut b).await;
     // After attach the daemon refreshes worktrees from git and pushes a CatalogChanged; read until it
     // shows the created worktree (bounded).
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
