@@ -4,9 +4,7 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use micold_core::daemons::{
-    Binding, ContainerSettings, DaemonId, DaemonRegistry, DaemonRuntime,
-};
+use micold_core::daemons::{Binding, ContainerSettings, DaemonId, DaemonRegistry, DaemonRuntime};
 use micold_core::project::{Availability, Project};
 use micold_core::sandbox::SandboxProfile;
 use micold_core::store::{JsonFileStore, ProjectStore};
@@ -92,7 +90,10 @@ fn a_legacy_state_file_without_bindings_loads_with_none() {
     store.save(&loaded).unwrap();
     let after: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
-    assert!(after.get("bindings").is_none(), "empty bindings are omitted");
+    assert!(
+        after.get("bindings").is_none(),
+        "empty bindings are omitted"
+    );
     let _ = json;
 }
 
@@ -220,7 +221,10 @@ fn a_refusal_names_the_daemon_that_holds_the_worktree() {
         owner: WorktreeOwner::User,
     };
     let said = holder.explain_on("feat/x", Some("Sandbox"));
-    assert!(said.contains("feat-x") && said.contains("'Sandbox'"), "{said}");
+    assert!(
+        said.contains("feat-x") && said.contains("'Sandbox'"),
+        "{said}"
+    );
     assert_eq!(holder.explain_on("feat/x", None), holder.explain("feat/x"));
     let outside = BlockReason::CheckedOutOutsideApp {
         path: PathBuf::from("/elsewhere"),

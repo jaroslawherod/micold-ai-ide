@@ -240,6 +240,7 @@ fn boot() -> (App, Task<Message>) {
     // resolved placement the connection is about to dial, not from the file — an accepted
     // fallback (FR-035a) moves this without touching what the file says.
     core.settings.placement_in_force = placement;
+    micold_client::features::settings::registry_loaded(&mut core.settings, &loaded.settings);
     let sandbox_profile = loaded.settings.daemon.sandbox.clone();
     // Research R2 part 2: if the daemon will not see this machine's projects at the paths this
     // machine calls them by — a Linux container on a Windows host, and any remote daemon — then

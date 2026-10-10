@@ -21,7 +21,9 @@ fn entry(id: u32, name: &str, container: &str, port: u16) -> DaemonEntry {
 }
 
 fn mounts(state_dir: PathBuf, entry: &DaemonEntry) -> MountSet {
-    let token = entry.token_path(&state_dir, None).expect("container has a token");
+    let token = entry
+        .token_path(&state_dir, None)
+        .expect("container has a token");
     MountSet::build(
         &[PathBuf::from("/work/p")],
         &SandboxProfile::default(),
@@ -45,13 +47,23 @@ fn two_container_daemons_get_disjoint_state_tokens_and_names() {
         b.state_dir(base, None).unwrap(),
     );
     assert_ne!(da, db, "each daemon has its own state directory");
-    assert!(!da.starts_with(&db) && !db.starts_with(&da), "and they do not nest");
-    assert!(da.starts_with(base.join("daemons")), "under the daemons directory");
+    assert!(
+        !da.starts_with(&db) && !db.starts_with(&da),
+        "and they do not nest"
+    );
+    assert!(
+        da.starts_with(base.join("daemons")),
+        "under the daemons directory"
+    );
     let (ma, mb) = (mounts(da.clone(), &a), mounts(db.clone(), &b));
     assert_ne!(ma.state.host, mb.state.host, "disjoint state mounts");
     assert_ne!(ma.home.host, mb.home.host, "disjoint homes");
     assert_ne!(ma.secret.host, mb.secret.host, "distinct tokens");
-    assert_ne!(a.container_name(), b.container_name(), "distinct container names");
+    assert_ne!(
+        a.container_name(),
+        b.container_name(),
+        "distinct container names"
+    );
 }
 
 #[test]
@@ -87,5 +99,8 @@ fn a_runtime_resolves_to_a_placement_without_the_global_choice() {
         kind: "ssh".into(),
         raw: serde_json::json!({"kind":"ssh"}),
     };
-    assert!(Placement::from_runtime(&unsupported).is_none(), "cannot start");
+    assert!(
+        Placement::from_runtime(&unsupported).is_none(),
+        "cannot start"
+    );
 }

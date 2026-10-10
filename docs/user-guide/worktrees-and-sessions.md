@@ -26,6 +26,13 @@ choose a folder.
 
 <!-- media: worktree-sidebar-light -->
 
+### Which session service a worktree runs on
+
+Each worktree row names the session service (daemon) its sessions run on. After an upgrade there is
+exactly one — the host process or the container you already used — and every worktree, and the
+"Default" entry, runs on it; nothing is asked and nothing is shared that was not shared before. A
+worktree whose daemon was removed stays listed and says **no daemon** until it is moved to another.
+
 ### Refreshing the list
 
 The sidebar's worktree list is not live. It is rebuilt when you open or switch to a project, and
@@ -414,6 +421,10 @@ where the worktree's branch comes from:
 - **GitHub issue** — pick one of the repository's open GitHub issues, and its number and title
   fill in the ticket and the name. See [From a GitHub issue](#from-a-github-issue) below.
 
+When the app knows more than one daemon, a **Daemon** select in the form chooses where the new
+worktree runs; it starts on the daemon your existing setup used. The choice is remembered with the
+project, so it is the same after a restart. With no daemon registered the select is left out.
+
 ### Creating a new branch
 
 With **New branch** selected:
@@ -601,6 +612,10 @@ To send one prompt to several AI CLIs at once, each in its own new worktree, use
 parallel** beside **Add a worktree**; see [Running a prompt in parallel](parallel-runs.md).
 
 ## Working from an existing branch
+
+The **Daemon** select (see [Creating a worktree](#creating-a-worktree)) is on this form too. When a
+branch or a folder name is refused because another worktree holds it, the message also says which
+daemon that worktree runs on.
 
 Work doesn't always start in this app. You might have begun a branch in a terminal, pushed one
 from another machine, or been handed one by a colleague. Either route below brings it into a

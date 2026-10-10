@@ -947,6 +947,11 @@ pub fn on_daemon_event(app: &mut App, event: DaemonMsg) -> Task<Message> {
             // the `CatalogChanged` push (reconcile), so the constructed value here is only to
             // reuse `WorktreeCreated`'s form-closing logic (it dedups by dir_name).
             Some(PendingOp::WorktreeCreate { dir_name, project }) => {
+                // The daemon chosen in the form is the worktree's binding (feature 491, FR-006).
+                // Read before `Created` closes the form.
+                if let Some(id) = app.core.worktree_form.form.as_ref().and_then(|f| f.daemon) {
+                    bind_created_worktree(app, &project, &dir_name, id);
+                }
                 let path = project.join(".claude/worktrees").join(&dir_name);
                 app.core.update(Message::WorktreeForm(FormMsg::Created(
                     micold_core::worktree::Worktree {
@@ -2833,6 +2838,25 @@ pub fn worktree_create_error_text(message: String, detail: Option<String>) -> St
     match detail {
         Some(detail) if !detail.trim().is_empty() => format!("{message}: {}", detail.trim()),
         _ => message,
+    }
+}
+
+/// Remember which daemon a newly created worktree runs on (feature 491, FR-006): in this window's
+/// state and in the project's own state file. A write that fails leaves the worktree on the legacy
+/// default, which is where it would have been without a choice, and says so.
+fn bind_created_worktree(
+    app: &mut App,
+    project: &std::path::Path,
+    dir_name: &str,
+    id: micold_core::daemons::DaemonId,
+) {
+    app.core.workspace.bind(project, dir_name, id);
+    if let Some(store) = app.caps.projects() {
+        if let Err(err) = store.save_binding(project, dir_name, id) {
+            app.core.notify_error(format!(
+                "Couldn't remember which daemon \"{dir_name}\" runs on: {err}"
+            ));
+        }
     }
 }
 

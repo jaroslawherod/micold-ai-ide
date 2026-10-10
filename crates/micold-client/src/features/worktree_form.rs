@@ -331,9 +331,33 @@ impl ResolutionState {
     }
 }
 
+/// A daemon the form offers for the new worktree (feature 491, FR-006).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DaemonChoice {
+    /// The stored identity the binding is keyed by.
+    pub id: micold_core::daemons::DaemonId,
+    /// The name the picker shows.
+    pub name: String,
+}
+
+impl std::fmt::Display for DaemonChoice {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.name)
+    }
+}
+
 /// In-progress add-worktree form state, present only while the form overlay is open (FR-005).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct WorktreeForm {
+    /// The daemons the new worktree may run on: every registry entry, in registry order. Empty
+    /// when none is registered, and then no choice is offered (feature 491, FR-006).
+    pub daemons: Vec<DaemonChoice>,
+    /// The chosen daemon: the legacy default when registered, else the first. `None` only while
+    /// `daemons` is empty.
+    pub daemon: Option<micold_core::daemons::DaemonId>,
+    /// The daemon label of each worktree folder the project holds, by folder name, so a refusal
+    /// that names a holder can say where it runs (feature 491, FR-016). Fixed when the form opens.
+    pub holder_daemons: std::collections::BTreeMap<String, String>,
     /// Selected Conventional-Commits type (FR-005a).
     pub type_: Option<ConventionalType>,
     /// Optional ticket reference (FR-005b).
@@ -410,6 +434,31 @@ pub struct WorktreeForm {
 }
 
 impl WorktreeForm {
+    /// The daemon label of the worktree at `path`, when the app manages one there.
+    pub fn holder_daemon(&self, path: &std::path::Path) -> Option<&str> {
+        let folder = path.file_name()?.to_str()?;
+        self.holder_daemons.get(folder).map(String::as_str)
+    }
+
+    /// [`BlockReason::explain_on`] with the holder's daemon filled in (feature 491, FR-016).
+    pub fn explain_block(
+        &self,
+        reason: &micold_core::worktree::BlockReason,
+        branch: &str,
+    ) -> String {
+        use micold_core::worktree::BlockReason;
+        let holder = match reason {
+            BlockReason::CheckedOutAt { path, .. } => self.holder_daemon(path),
+            _ => None,
+        };
+        reason.explain_on(branch, holder)
+    }
+
+    /// [`explain_directory_taken_on`] with the holder's daemon filled in (feature 491, FR-016).
+    pub fn explain_taken(&self, dir: &std::path::Path) -> micold_core::worktree::DirectoryClash {
+        micold_core::worktree::explain_directory_taken_on(dir, self.holder_daemon(dir))
+    }
+
     /// The issue number of row `index` of `issue_matches`.
     pub fn issue_number_at(&self, index: usize) -> Option<u64> {
         let (held, _) = self.issue_matches.get(index)?;
@@ -697,7 +746,36 @@ impl Registered for AddWorktreeDialog {
 /// The Add Worktree form was opened (feature 005, FR-005).
 pub fn opened(state: &mut crate::app::State) {
     state.clear_for_dialog();
-    state.worktree_form.form = Some(WorktreeForm::default());
+    let daemons: Vec<DaemonChoice> = state
+        .settings
+        .daemons
+        .entries()
+        .iter()
+        .map(|entry| DaemonChoice {
+            id: entry.id,
+            name: entry.name.as_str().to_string(),
+        })
+        .collect();
+    let daemon = state
+        .settings
+        .legacy_default_daemon
+        .filter(|id| daemons.iter().any(|c| c.id == *id))
+        .or_else(|| daemons.first().map(|c| c.id));
+    let holder_daemons = state
+        .worktree
+        .worktrees
+        .iter()
+        .filter_map(|w| {
+            let folder = w.path.file_name()?.to_str()?.to_string();
+            Some((folder, state.daemon_label_of(&w.dir_name)))
+        })
+        .collect();
+    state.worktree_form.form = Some(WorktreeForm {
+        daemons,
+        daemon,
+        holder_daemons,
+        ..WorktreeForm::default()
+    });
     state.worktree_form.worktree_error = None;
 }
 
@@ -1342,6 +1420,8 @@ pub fn create_interrupted(state: &mut crate::app::State, message: String) {
 pub enum Msg {
     /// Open the add-worktree form (FR-005).
     Opened,
+    /// The daemon picker changed (feature 491, FR-006).
+    DaemonChosen(micold_core::daemons::DaemonId),
     /// The form's type selection changed.
     TypeSelected(ConventionalType),
     /// The form's ticket field changed.
@@ -1456,6 +1536,11 @@ pub enum Msg {
 pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::Outcome> {
     match msg {
         Msg::Opened => opened(state),
+        Msg::DaemonChosen(id) => with_form(state, |form| {
+            if form.daemons.iter().any(|c| c.id == id) {
+                form.daemon = Some(id);
+            }
+        }),
         Msg::TypeSelected(type_) => type_selected(state, type_),
         Msg::TicketChanged(text) => ticket_changed(state, text),
         Msg::NameChanged(text) => name_changed(state, text),

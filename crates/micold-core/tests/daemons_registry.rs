@@ -20,7 +20,9 @@ fn registry() -> DaemonRegistry {
 #[test]
 fn a_name_is_trimmed_before_it_is_stored() {
     let mut r = registry();
-    let id = r.add("  Untrusted  ", container("c1", 7728), false).unwrap();
+    let id = r
+        .add("  Untrusted  ", container("c1", 7728), false)
+        .unwrap();
     assert_eq!(
         r.get(id).unwrap().name.as_str(),
         "Untrusted",
@@ -57,7 +59,11 @@ fn ids_are_never_reused_after_removal() {
     r.remove(first).expect("present");
     let second = r.add("X", container("c1", 7728), false).unwrap();
     assert_ne!(first, second, "a re-added name must not inherit the old id");
-    assert_eq!(second, DaemonId(first.0 + 1), "ids count up from the counter");
+    assert_eq!(
+        second,
+        DaemonId(first.0 + 1),
+        "ids count up from the counter"
+    );
 }
 
 #[test]
@@ -66,7 +72,11 @@ fn renaming_keeps_the_id() {
     let id = r.add("Old", container("c1", 7728), false).unwrap();
     r.edit(id, "New", container("c1", 7728), true).unwrap();
     let e = r.get(id).unwrap();
-    assert_eq!((e.name.as_str(), e.auto_start), ("New", true), "edit applies");
+    assert_eq!(
+        (e.name.as_str(), e.auto_start),
+        ("New", true),
+        "edit applies"
+    );
     assert_eq!(r.entries().len(), 1, "an edit never adds an entry");
 }
 

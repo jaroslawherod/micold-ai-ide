@@ -313,6 +313,8 @@ pub struct WorktreeNode {
     /// rather than an implementation detail: the row carries a chip saying why it is there, and a
     /// row that would have been listed anyway must not claim an exemption it did not need.
     pub shown_for_current_session: bool,
+    /// The name of the daemon this worktree runs on, or [`NO_DAEMON_LABEL`] (feature 491, FR-005).
+    pub daemon: String,
 }
 
 impl SidebarEntry {
@@ -603,6 +605,10 @@ pub fn scroll_target(
 /// project root.
 pub const DEFAULT_LOCATION_LABEL: &str = "Project root";
 
+/// What a row says when its daemon was removed, or none was ever bound and no legacy default
+/// supplies one (feature 491, FR-014).
+pub const NO_DAEMON_LABEL: &str = "no daemon";
+
 /// Everything a worktree row's hover tooltip says, as one labelled line per fact
 /// (feature 029, contract `worktree-tooltip.md`).
 ///
@@ -853,6 +859,38 @@ pub fn with_unread_line(tooltip: String, n: usize) -> String {
 }
 
 impl crate::app::State {
+    /// The daemon an active-project location is bound to (feature 491, FR-003, FR-006): its stored
+    /// binding, else the legacy default, and `NoDaemon` when that id is not in the registry.
+    /// `key` is a worktree's `dir_name`, or `""` for the Default location.
+    pub fn daemon_binding(&self, key: &str) -> micold_core::daemons::Binding {
+        let stored = self
+            .workspace
+            .active
+            .as_ref()
+            .and_then(|project| self.workspace.bindings.get(project))
+            .cloned()
+            .unwrap_or_default();
+        micold_core::daemons::Binding::resolve(
+            &stored,
+            key,
+            &self.settings.daemons,
+            self.settings.legacy_default_daemon,
+        )
+    }
+
+    /// [`Self::daemon_binding`] as the text a row shows: the daemon's name, or [`NO_DAEMON_LABEL`].
+    pub fn daemon_label_of(&self, key: &str) -> String {
+        match self.daemon_binding(key) {
+            micold_core::daemons::Binding::Bound(id) => self
+                .settings
+                .daemons
+                .get(id)
+                .map(|entry| entry.name.as_str().to_string())
+                .unwrap_or_else(|| NO_DAEMON_LABEL.to_string()),
+            micold_core::daemons::Binding::NoDaemon => NO_DAEMON_LABEL.to_string(),
+        }
+    }
+
     /// Where the current session lives, if the panel can point at it (feature 024, contract §1.2).
     ///
     /// `None` in three cases, all of which reduce [`Self::location_open`] to the user's own
@@ -1016,6 +1054,7 @@ impl crate::app::State {
                     .filter(|s| s.location.is_worktree(&worktree.dir_name) && !s.archived)
                     .cloned()
                     .collect(),
+                daemon: self.daemon_label_of(&worktree.dir_name),
                 worktree: worktree.clone(),
                 shown_for_current_session: false,
             })
@@ -1064,6 +1103,7 @@ impl crate::app::State {
                 .filter(|s| s.location.is_worktree(&dir) && !s.archived)
                 .cloned()
                 .collect(),
+            daemon: self.daemon_label_of(&worktree.dir_name),
             worktree: worktree.clone(),
             shown_for_current_session: true,
         };

@@ -364,6 +364,10 @@ fn set_changed(target: &mut Settings, saved: &Settings, baseline: Option<&Settin
         notification_kinds: _,
         long_task_threshold_secs: _,
         diff_layout: _,
+        // The registry is not in the form; the daemon block is mirrored into it below.
+        daemons: _,
+        next_daemon_id: _,
+        legacy_default_daemon: _,
     } = saved;
     macro_rules! set {
         ($($field:ident).+) => {
@@ -401,6 +405,9 @@ fn set_changed(target: &mut Settings, saved: &Settings, baseline: Option<&Settin
     set!(notification_kinds);
     set!(long_task_threshold_secs);
     set!(pr_status_enabled);
+    // The placement and profile live in the registry's single entry too (feature 491, FR-005):
+    // move it with the block still written for rollback.
+    target.set_single_daemon(target.daemon.clone());
 }
 
 /// The service-owned fields a save changed: what its `SettingsSet` carries as `Some` (W4.1).
@@ -600,6 +607,11 @@ pub(crate) fn save_and_prepare_check(
                 .notify_error(format!("Couldn't save your settings: {err}"));
             written = false;
         }
+    }
+    // The registry's single entry moved with the placement (feature 491, FR-005): read it back.
+    if let Some(store) = app.caps.settings() {
+        let stored = store.load().settings;
+        micold_client::features::settings::registry_loaded(&mut app.core.settings, &stored);
     }
     // Also ask a connected daemon to apply the service-owned fields (scrollback,
     // FR-012a; environment-include, FR-012b) so the change takes effect immediately for
@@ -1076,6 +1088,9 @@ mod tests {
                 ..Default::default()
             },
             long_task_threshold_secs: 120,
+            daemons: Vec::new(),
+            next_daemon_id: 0,
+            legacy_default_daemon: None,
         };
         let store = FakeSettingsStore::loaded(stored.clone());
         let mut core = State {

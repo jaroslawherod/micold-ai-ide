@@ -379,6 +379,7 @@ fn a_sidebar_row_is_either_a_worktree_or_the_project_root_and_never_both() {
             expanded: false,
             sessions: Vec::new(),
             shown_for_current_session: false,
+            daemon: String::new(),
         }),
     ];
 
@@ -469,6 +470,7 @@ fn worktree_entry(dir: &str, tags: Vec<Tag>, sessions: Vec<Session>) -> SidebarE
         expanded: !sessions.is_empty(),
         sessions,
         shown_for_current_session: false,
+        daemon: String::new(),
     })
 }
 
@@ -522,6 +524,7 @@ fn an_open_locations_sessions_are_rows_and_a_closed_ones_are_not() {
         expanded: false,
         sessions: vec![session(SessionLocation::Worktree("feat-a".into()))],
         shown_for_current_session: false,
+        daemon: String::new(),
     })];
     assert_eq!(
         row_heights(&closed).len(),
@@ -981,6 +984,7 @@ fn a_detached_worktree_projects_none() {
         expanded: false,
         sessions: vec![],
         shown_for_current_session: false,
+        daemon: String::new(),
     });
     let held = statuses(&[("feat/a", 7), ("", 9)]);
     assert!(row_pull_request(&entry, &held, &BTreeSet::new(), Some(1), 2).is_none());
@@ -1308,6 +1312,7 @@ mod parallel_runs {
             expanded: false,
             sessions: vec![],
             shown_for_current_session: false,
+            daemon: String::new(),
         })
     }
 
@@ -1630,6 +1635,7 @@ fn row_state(fixture: &str, asked: &[&str], branch: &str) -> Option<PrState> {
         expanded: false,
         sessions: vec![],
         shown_for_current_session: false,
+        daemon: String::new(),
     });
     row_pull_request(&entry, &held, &BTreeSet::new(), Some(1), 2).map(|row| row.status.state)
 }
