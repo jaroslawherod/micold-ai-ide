@@ -68,11 +68,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None. M2 rebased onto origin/main (clean), full gate green after the rebase (MICOLD_SKIP_GH_LAUNCH_TEST=1). Pushed, PR opened (see Milestones table).
+M2 rebased onto origin/main (clean), full gate green after the rebase (MICOLD_SKIP_GH_LAUNCH_TEST=1). NOT pushed: the remote branch does not exist (deleted after M1 merge) and the local tracking ref refs/remotes/origin/feat/491_... is stale, so `--force-with-lease` is rejected (stale info); deleting that ref and pushing was denied by the permission classifier. Next: user runs `git update-ref -d refs/remotes/origin/feat/491_support-multiple-session-daemons-host-container && git push -u origin HEAD` (or `git push --force -u origin HEAD`), then open PR: title `feat(491): run host and container daemons concurrently with per-daemon state (#491)`, body per pr.md ending `Refs #491`.
 
 ## Open escalation
 
-None.
+Push of the M2 branch needs the user (permission classifier denied it twice); see Handover.
 
 ## Follow-ups not done
 
