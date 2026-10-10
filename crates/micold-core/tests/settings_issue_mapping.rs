@@ -193,6 +193,8 @@ fn other_writers_preserve_the_mapping() {
             "next_daemon_id",
             "notification_kinds",
             "pi_activity_component",
+            "plan_usage_enabled",
+            "plan_usage_warn_percent",
             "pr_status_enabled",
             "save_terminal_history",
             "scrollback_lines",
