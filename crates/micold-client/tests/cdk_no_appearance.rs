@@ -12,7 +12,11 @@
 //! It scans text rather than types deliberately: the point is that these *names* must not appear,
 //! which is a property of the source, not of what it compiles to.
 
-use std::fs;
+#[path = "support/source_scan.rs"]
+mod source_scan;
+
+use source_scan::{read_rs_under, strip_comments};
+
 use std::path::{Path, PathBuf};
 
 fn cdk_dir() -> PathBuf {
@@ -21,59 +25,7 @@ fn cdk_dir() -> PathBuf {
 
 /// Every `.rs` file under `ui/cdk/`, recursively, as `(display path, source)`.
 fn cdk_sources() -> Vec<(String, String)> {
-    fn walk(dir: &Path, out: &mut Vec<(String, String)>) {
-        let entries = fs::read_dir(dir).unwrap_or_else(|e| panic!("read {}: {e}", dir.display()));
-        for entry in entries {
-            let path = entry.expect("dir entry").path();
-            if path.is_dir() {
-                walk(&path, out);
-            } else if path.extension().is_some_and(|e| e == "rs") {
-                let name = path
-                    .strip_prefix(Path::new(env!("CARGO_MANIFEST_DIR")))
-                    .unwrap_or(&path)
-                    .display()
-                    .to_string();
-                out.push((name, fs::read_to_string(&path).expect("read source")));
-            }
-        }
-    }
-    let mut out = Vec::new();
-    walk(&cdk_dir(), &mut out);
-    out.sort();
-    out
-}
-
-/// Strips `//` line comments and `/* */` blocks, so prose *about* the rule ("carries no colour
-/// role") cannot trip the rule. Without this the module doc explaining the split would fail it.
-fn code_only(src: &str) -> String {
-    let mut out = String::with_capacity(src.len());
-    let mut chars = src.chars().peekable();
-    let mut in_block = false;
-    while let Some(c) = chars.next() {
-        if in_block {
-            if c == '*' && chars.peek() == Some(&'/') {
-                chars.next();
-                in_block = false;
-            }
-            continue;
-        }
-        match (c, chars.peek()) {
-            ('/', Some('/')) => {
-                for c in chars.by_ref() {
-                    if c == '\n' {
-                        out.push('\n');
-                        break;
-                    }
-                }
-            }
-            ('/', Some('*')) => {
-                chars.next();
-                in_block = true;
-            }
-            _ => out.push(c),
-        }
-    }
-    out
+    read_rs_under(&[cdk_dir()], Path::new(env!("CARGO_MANIFEST_DIR")))
 }
 
 /// The vocabulary of appearance. Each entry is `(needle, what it would mean)`.
@@ -97,7 +49,7 @@ const APPEARANCE: &[(&str, &str)] = &[
 fn the_cdk_layer_names_nothing_about_appearance() {
     let mut violations = Vec::new();
     for (path, src) in cdk_sources() {
-        let code = code_only(&src);
+        let code = strip_comments(&src);
         for (line_no, line) in code.lines().enumerate() {
             for (needle, meaning) in APPEARANCE {
                 if line.contains(needle) {
@@ -140,7 +92,7 @@ fn the_scan_actually_has_something_to_scan() {
 #[test]
 fn prose_about_appearance_does_not_count_as_appearance() {
     let src = "//! This module holds no Roles.\n/* not even tokens:: here */\nlet x = 1;\n";
-    let code = code_only(src);
+    let code = strip_comments(src);
     assert!(!code.contains("Roles"), "line comment survived stripping");
     assert!(
         !code.contains("tokens::"),

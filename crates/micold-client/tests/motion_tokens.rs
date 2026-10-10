@@ -18,37 +18,15 @@
 //! a made-up 200ms because it is asserting *drawing*, and holding a test's stand-in clock to the
 //! design system would be pedantry rather than a check.
 
-use std::fs;
-use std::path::Path;
+#[path = "support/source_scan.rs"]
+mod source_scan;
+
+use source_scan::{sources_under, src_dir, strip_comments};
 
 /// Everything that renders, and is therefore animated by the design system's clock.
 fn rendering_sources() -> Vec<(String, String)> {
-    fn walk(dir: &Path, out: &mut Vec<(String, String)>) {
-        let Ok(entries) = fs::read_dir(dir) else {
-            return;
-        };
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.is_dir() {
-                walk(&path, out);
-            } else if path.extension().is_some_and(|e| e == "rs") {
-                let name = path
-                    .strip_prefix(Path::new(env!("CARGO_MANIFEST_DIR")).join("src"))
-                    .unwrap_or(&path)
-                    .display()
-                    .to_string()
-                    .replace('\\', "/");
-                out.push((name, fs::read_to_string(&path).expect("read source")));
-            }
-        }
-    }
-    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
-    let mut out = Vec::new();
-    for dir in [src.join("ui"), src.join("showcase")] {
-        walk(&dir, &mut out);
-    }
-    out.sort();
-    out
+    let src = src_dir();
+    sources_under(&[src.join("ui"), src.join("showcase")])
 }
 
 /// In-crate test modules that drive the primitive with a stand-in clock.
@@ -72,37 +50,6 @@ const FRAME_PERIOD: &[&str] = &["ui/cdk/motion.rs"];
 /// what you cannot see. That is a *presentation* choice about the gallery, not a timing the
 /// application ships, so `sections/motion.rs` states its own duration.
 const GALLERY_PACING: &[&str] = &["showcase/sections/motion.rs"];
-
-fn code_only(src: &str) -> String {
-    let mut out = String::with_capacity(src.len());
-    let mut chars = src.chars().peekable();
-    let mut in_block = false;
-    while let Some(c) = chars.next() {
-        if in_block {
-            if c == '*' && chars.peek() == Some(&'/') {
-                chars.next();
-                in_block = false;
-            }
-            continue;
-        }
-        match (c, chars.peek()) {
-            ('/', Some('/')) => {
-                for c in chars.by_ref() {
-                    if c == '\n' {
-                        out.push('\n');
-                        break;
-                    }
-                }
-            }
-            ('/', Some('*')) => {
-                chars.next();
-                in_block = true;
-            }
-            _ => out.push(c),
-        }
-    }
-    out
-}
 
 /// The argument of each `from_millis(` on a line, up to the matching paren.
 fn millis_args(line: &str) -> Vec<&str> {
@@ -146,7 +93,7 @@ fn every_duration_is_a_named_token() {
         {
             continue;
         }
-        for (i, line) in code_only(&src).lines().enumerate() {
+        for (i, line) in strip_comments(&src).lines().enumerate() {
             for arg in millis_args(line) {
                 if is_bare_number(arg) {
                     offenders.push(format!("  {path}:{}  from_millis({arg})", i + 1));

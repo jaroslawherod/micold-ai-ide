@@ -32,6 +32,11 @@
 //! test-gated item above production code, so skipping "from the first `#[cfg(test)]` on" would
 //! hide production code (M2 review), and no inline test names a marker today.
 
+#[path = "support/source_scan.rs"]
+mod source_scan;
+
+use source_scan::rs_files;
+
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -142,25 +147,10 @@ fn repo_root() -> PathBuf {
 
 /// Every `.rs` file except `main_tests.rs` under `crates/micold-client/src/`.
 fn client_sources(root: &Path) -> Vec<PathBuf> {
-    fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
-        let Ok(entries) = fs::read_dir(dir) else {
-            return;
-        };
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.is_dir() {
-                walk(&path, out);
-            } else if path.extension().is_some_and(|e| e == "rs")
-                && path.file_name().is_some_and(|n| n != "main_tests.rs")
-            {
-                out.push(path);
-            }
-        }
-    }
-    let mut out = Vec::new();
-    walk(&root.join("crates/micold-client/src"), &mut out);
-    out.sort();
-    out
+    rs_files(&root.join("crates/micold-client/src"))
+        .into_iter()
+        .filter(|path| path.file_name().is_some_and(|n| n != "main_tests.rs"))
+        .collect()
 }
 
 /// A line that names a marker in code rather than in prose.

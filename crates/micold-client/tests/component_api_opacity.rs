@@ -9,6 +9,11 @@
 //! Enforced by reading the library's own public signatures. A rule that lives only in review
 //! decays between reviews.
 
+#[path = "support/source_scan.rs"]
+mod source_scan;
+
+use source_scan::strip_comments;
+
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -36,38 +41,6 @@ fn library_sources() -> BTreeMap<String, String> {
     out
 }
 
-/// Strips comments, so prose explaining the rule is not mistaken for breaking it.
-fn code_only(src: &str) -> String {
-    let mut out = String::with_capacity(src.len());
-    let mut chars = src.chars().peekable();
-    let mut in_block = false;
-    while let Some(c) = chars.next() {
-        if in_block {
-            if c == '*' && chars.peek() == Some(&'/') {
-                chars.next();
-                in_block = false;
-            }
-            continue;
-        }
-        match (c, chars.peek()) {
-            ('/', Some('/')) => {
-                for c in chars.by_ref() {
-                    if c == '\n' {
-                        out.push('\n');
-                        break;
-                    }
-                }
-            }
-            ('/', Some('*')) => {
-                chars.next();
-                in_block = true;
-            }
-            _ => out.push(c),
-        }
-    }
-    out
-}
-
 /// The styling layer, which is deliberately exempt.
 ///
 /// Contract §6: it is not a component and has no builder — it exists precisely to produce style
@@ -87,7 +60,7 @@ fn public_signatures() -> Vec<(String, String)> {
         if module == STYLE_MODULE {
             continue;
         }
-        let code = code_only(&src);
+        let code = strip_comments(&src);
         for (start, _) in code
             .match_indices("pub fn ")
             .chain(code.match_indices("pub const fn "))
@@ -213,7 +186,7 @@ fn the_remaining_leaks_are_exactly_these() {
 fn the_library_never_names_the_global_animation_machinery() {
     let mut violations = Vec::new();
     for (module, src) in library_sources() {
-        for (line_no, line) in code_only(&src).lines().enumerate() {
+        for (line_no, line) in strip_comments(&src).lines().enumerate() {
             for needle in ["MotionKey", "Animator<", "crate::motion::Animator"] {
                 if line.contains(needle) {
                     violations.push(format!("{module}:{} names `{needle}`", line_no + 1));

@@ -14,7 +14,11 @@
 //! alone would not have been a Red here, because the module skeleton already existed for the scan to
 //! find.
 
-use std::fs;
+#[path = "support/source_scan.rs"]
+mod source_scan;
+
+use source_scan::{sources_under, strip_comments};
+
 use std::path::{Path, PathBuf};
 
 fn showcase_dir() -> PathBuf {
@@ -23,60 +27,7 @@ fn showcase_dir() -> PathBuf {
 
 /// Every `.rs` file under `src/showcase/`, recursively, as `(path relative to src/, source)`.
 fn showcase_sources() -> Vec<(String, String)> {
-    fn walk(dir: &Path, out: &mut Vec<(String, String)>) {
-        let entries = fs::read_dir(dir).unwrap_or_else(|e| panic!("read {}: {e}", dir.display()));
-        for entry in entries {
-            let path = entry.expect("dir entry").path();
-            if path.is_dir() {
-                walk(&path, out);
-            } else if path.extension().is_some_and(|e| e == "rs") {
-                let name = path
-                    .strip_prefix(Path::new(env!("CARGO_MANIFEST_DIR")).join("src"))
-                    .unwrap_or(&path)
-                    .display()
-                    .to_string()
-                    .replace('\\', "/");
-                out.push((name, fs::read_to_string(&path).expect("read source")));
-            }
-        }
-    }
-    let mut out = Vec::new();
-    walk(&showcase_dir(), &mut out);
-    out.sort();
-    out
-}
-
-/// Strips `//` line comments and `/* */` blocks, so prose *about* the rule cannot trip it — this
-/// file's subject matter appears in the gallery's own module docs.
-fn code_only(src: &str) -> String {
-    let mut out = String::with_capacity(src.len());
-    let mut chars = src.chars().peekable();
-    let mut in_block = false;
-    while let Some(c) = chars.next() {
-        if in_block {
-            if c == '*' && chars.peek() == Some(&'/') {
-                chars.next();
-                in_block = false;
-            }
-            continue;
-        }
-        match (c, chars.peek()) {
-            ('/', Some('/')) => {
-                for c in chars.by_ref() {
-                    if c == '\n' {
-                        out.push('\n');
-                        break;
-                    }
-                }
-            }
-            ('/', Some('*')) => {
-                chars.next();
-                in_block = true;
-            }
-            _ => out.push(c),
-        }
-    }
-    out
+    sources_under(&[showcase_dir()])
 }
 
 /// The vocabulary of a page that could differ between two launches, and what each would mean.
@@ -97,7 +48,7 @@ const NONDETERMINISM: &[(&str, &str)] = &[
 fn offenders(sources: &[(String, String)]) -> Vec<String> {
     let mut out = Vec::new();
     for (path, src) in sources {
-        for (i, line) in code_only(src).lines().enumerate() {
+        for (i, line) in strip_comments(src).lines().enumerate() {
             for (needle, meaning) in NONDETERMINISM {
                 if line.contains(needle) {
                     out.push(format!(

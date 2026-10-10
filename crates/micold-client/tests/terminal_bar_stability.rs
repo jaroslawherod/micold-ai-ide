@@ -33,6 +33,11 @@
 //! the eighth assignment, and it reads the whole crate rather than `app.rs` alone, because the
 //! helpers are `pub(crate)` and `features/session.rs` calls one of them.
 
+#[path = "support/source_scan.rs"]
+mod source_scan;
+
+use source_scan::{read_rs_under, strip_comments};
+
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -40,63 +45,13 @@ fn src_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("src")
 }
 
-/// Strips `//` line comments and `/* */` blocks, so this file's subject matter — which the sources
-/// themselves discuss at length in their doc comments — cannot read as a violation.
-fn code_only(src: &str) -> String {
-    let mut out = String::with_capacity(src.len());
-    let mut chars = src.chars().peekable();
-    let mut in_block = false;
-    while let Some(c) = chars.next() {
-        if in_block {
-            if c == '*' && chars.peek() == Some(&'/') {
-                chars.next();
-                in_block = false;
-            }
-            continue;
-        }
-        match (c, chars.peek()) {
-            ('/', Some('/')) => {
-                for c in chars.by_ref() {
-                    if c == '\n' {
-                        out.push('\n');
-                        break;
-                    }
-                }
-            }
-            ('/', Some('*')) => {
-                chars.next();
-                in_block = true;
-            }
-            _ => out.push(c),
-        }
-    }
-    out
-}
-
 /// Every `.rs` file under `src/`, as `(path relative to src/, code with comments stripped)`.
 fn crate_sources() -> Vec<(String, String)> {
-    fn walk(dir: &Path, root: &Path, out: &mut Vec<(String, String)>) {
-        let entries = fs::read_dir(dir).unwrap_or_else(|e| panic!("read {}: {e}", dir.display()));
-        for entry in entries {
-            let path = entry.expect("dir entry").path();
-            if path.is_dir() {
-                walk(&path, root, out);
-            } else if path.extension().is_some_and(|e| e == "rs") {
-                let rel = path
-                    .strip_prefix(root)
-                    .expect("under src/")
-                    .to_string_lossy()
-                    .into_owned();
-                let src = fs::read_to_string(&path)
-                    .unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
-                out.push((rel, code_only(&src)));
-            }
-        }
-    }
     let root = src_dir();
-    let mut out = Vec::new();
-    walk(&root, &root, &mut out);
-    out.sort();
+    let out: Vec<(String, String)> = read_rs_under(std::slice::from_ref(&root), &root)
+        .into_iter()
+        .map(|(name, src)| (name, strip_comments(&src)))
+        .collect();
     assert!(!out.is_empty(), "found no sources under {}", root.display());
     out
 }
@@ -297,7 +252,7 @@ fn no_scattered_release_writes() {
 #[test]
 fn the_bars_restart_control_asks_which_process_it_is_restarting() {
     let src = fs::read_to_string(src_dir().join("ui").join("terminal.rs")).expect("terminal.rs");
-    let code = code_only(&src);
+    let code = strip_comments(&src);
 
     assert!(
         code.contains("on_press(restart_message("),
@@ -327,7 +282,7 @@ fn the_bars_restart_control_asks_which_process_it_is_restarting() {
 #[test]
 fn the_pinned_ai_tab_names_the_sessions_cli() {
     let src = fs::read_to_string(src_dir().join("ui").join("terminal.rs")).expect("terminal.rs");
-    let code = code_only(&src);
+    let code = strip_comments(&src);
     let tab = code
         .split_once("fn pinned_ai_tab")
         .expect(

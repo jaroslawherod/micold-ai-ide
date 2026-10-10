@@ -26,7 +26,11 @@
 //! delegation appears **and** when a sanctioned one disappears without being struck off, so the
 //! list cannot quietly drift out of step with the code it describes.
 
-use std::fs;
+#[path = "support/source_scan.rs"]
+mod source_scan;
+
+use source_scan::{sources_under, strip_comments};
+
 use std::path::{Path, PathBuf};
 
 fn ui_dir() -> PathBuf {
@@ -86,60 +90,7 @@ const CDK_OVERLAY_IMPLEMENTORS: &[(&str, &str)] = &[
 
 /// Every `.rs` file under `src/ui/`, recursively, as `(path relative to src/, source)`.
 fn ui_sources() -> Vec<(String, String)> {
-    fn walk(dir: &Path, out: &mut Vec<(String, String)>) {
-        let entries = fs::read_dir(dir).unwrap_or_else(|e| panic!("read {}: {e}", dir.display()));
-        for entry in entries {
-            let path = entry.expect("dir entry").path();
-            if path.is_dir() {
-                walk(&path, out);
-            } else if path.extension().is_some_and(|e| e == "rs") {
-                let name = path
-                    .strip_prefix(Path::new(env!("CARGO_MANIFEST_DIR")).join("src"))
-                    .unwrap_or(&path)
-                    .display()
-                    .to_string()
-                    .replace('\\', "/");
-                out.push((name, fs::read_to_string(&path).expect("read source")));
-            }
-        }
-    }
-    let mut out = Vec::new();
-    walk(&ui_dir(), &mut out);
-    out.sort();
-    out
-}
-
-/// Strips `//` line comments and `/* */` blocks. Load-bearing here: this file's subject is
-/// discussed at length in `select.rs`'s own module doc, which must not count as a use.
-fn code_only(src: &str) -> String {
-    let mut out = String::with_capacity(src.len());
-    let mut chars = src.chars().peekable();
-    let mut in_block = false;
-    while let Some(c) = chars.next() {
-        if in_block {
-            if c == '*' && chars.peek() == Some(&'/') {
-                chars.next();
-                in_block = false;
-            }
-            continue;
-        }
-        match (c, chars.peek()) {
-            ('/', Some('/')) => {
-                for c in chars.by_ref() {
-                    if c == '\n' {
-                        out.push('\n');
-                        break;
-                    }
-                }
-            }
-            ('/', Some('*')) => {
-                chars.next();
-                in_block = true;
-            }
-            _ => out.push(c),
-        }
-    }
-    out
+    sources_under(&[ui_dir()])
 }
 
 /// Whether `line` *calls* `widget`, as opposed to mentioning it.
@@ -175,7 +126,7 @@ fn calls(line: &str, widget: &str) -> bool {
 fn delegations() -> Vec<(String, String)> {
     let mut found = Vec::new();
     for (path, src) in ui_sources() {
-        let code = code_only(&src);
+        let code = strip_comments(&src);
         for widget in WIDGET_ATTACHED {
             if code.lines().any(|l| calls(l, widget)) {
                 found.push((path.clone(), (*widget).to_string()));
@@ -236,7 +187,7 @@ fn no_module_outside_the_cdk_implements_its_own_overlay() {
     let offenders: Vec<_> = ui_sources()
         .into_iter()
         .filter(|(path, _)| !path.starts_with("ui/cdk/"))
-        .filter(|(_, src)| constructs_an_overlay(&code_only(src)))
+        .filter(|(_, src)| constructs_an_overlay(&strip_comments(src)))
         .map(|(path, _)| format!("  {path}"))
         .collect();
 
@@ -297,7 +248,7 @@ fn cdk_overlay_implementors() -> Vec<String> {
     ui_sources()
         .into_iter()
         .filter(|(path, _)| path.starts_with("ui/cdk/"))
-        .filter(|(_, src)| constructs_an_overlay(&code_only(src)))
+        .filter(|(_, src)| constructs_an_overlay(&strip_comments(src)))
         .map(|(path, _)| path)
         .collect()
 }

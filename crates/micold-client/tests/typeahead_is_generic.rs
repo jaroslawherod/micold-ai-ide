@@ -14,6 +14,11 @@
 //! Text scanning, like its siblings, and for the same reason: the property is about what these
 //! *source files* are allowed to name.
 
+#[path = "support/source_scan.rs"]
+mod source_scan;
+
+use source_scan::strip_comments;
+
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -30,42 +35,6 @@ fn component_sources() -> Vec<(String, String)> {
         .collect()
 }
 
-/// Strips `//` line comments and `/* */` blocks.
-///
-/// Load-bearing here exactly as it is in `one_overlay_implementation.rs`: both module docs explain
-/// what the component is *for*, and the branch picker is the example that makes them readable. The
-/// prose must be allowed to say "branch" while the code may not.
-fn code_only(src: &str) -> String {
-    let mut out = String::with_capacity(src.len());
-    let mut chars = src.chars().peekable();
-    let mut in_block = false;
-    while let Some(c) = chars.next() {
-        if in_block {
-            if c == '*' && chars.peek() == Some(&'/') {
-                chars.next();
-                in_block = false;
-            }
-            continue;
-        }
-        match (c, chars.peek()) {
-            ('/', Some('/')) => {
-                for c in chars.by_ref() {
-                    if c == '\n' {
-                        out.push('\n');
-                        break;
-                    }
-                }
-            }
-            ('/', Some('*')) => {
-                chars.next();
-                in_block = true;
-            }
-            _ => out.push(c),
-        }
-    }
-    out
-}
-
 /// Vocabulary that belongs to the feature module, never to the component.
 const DOMAIN_WORDS: &[&str] = &["branch", "Branch", "worktree", "Worktree", "git", "Git"];
 
@@ -73,7 +42,7 @@ const DOMAIN_WORDS: &[&str] = &["branch", "Branch", "worktree", "Worktree", "git
 fn the_component_cannot_name_a_branch_a_worktree_or_git() {
     let mut violations = Vec::new();
     for (path, src) in component_sources() {
-        for (n, line) in code_only(&src).lines().enumerate() {
+        for (n, line) in strip_comments(&src).lines().enumerate() {
             for word in DOMAIN_WORDS {
                 if line.contains(word) {
                     violations.push(format!("  {path}:{} names `{word}`", n + 1));

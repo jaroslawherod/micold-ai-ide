@@ -27,42 +27,13 @@
 //! This deliberately does not check the message's wording. That is `empty_terminal_message`'s own
 //! tests' job, and pinning prose in two places makes the prose unchangeable rather than correct.
 
+#[path = "support/source_scan.rs"]
+mod source_scan;
+
+use source_scan::strip_comments;
+
 use std::fs;
 use std::path::Path;
-
-/// Strips `//` line comments and `/* */` blocks, so the doc comments in `ui/terminal.rs` — which
-/// discuss this bug at length, quoting the string — cannot read as violations. Same helper as
-/// `terminal_bar_stability.rs`, for the same reason.
-fn code_only(src: &str) -> String {
-    let mut out = String::with_capacity(src.len());
-    let mut chars = src.chars().peekable();
-    let mut in_block = false;
-    while let Some(c) = chars.next() {
-        if in_block {
-            if c == '*' && chars.peek() == Some(&'/') {
-                chars.next();
-                in_block = false;
-            }
-            continue;
-        }
-        match (c, chars.peek()) {
-            ('/', Some('/')) => {
-                for c in chars.by_ref() {
-                    if c == '\n' {
-                        out.push('\n');
-                        break;
-                    }
-                }
-            }
-            ('/', Some('*')) => {
-                chars.next();
-                in_block = true;
-            }
-            _ => out.push(c),
-        }
-    }
-    out
-}
 
 /// The pane source, comments stripped.
 fn terminal_code() -> String {
@@ -71,7 +42,7 @@ fn terminal_code() -> String {
         .join("ui")
         .join("terminal.rs");
     let src = fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
-    code_only(&src)
+    strip_comments(&src)
 }
 
 /// The name of the one function allowed to decide what an empty terminal says.

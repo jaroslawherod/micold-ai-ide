@@ -47,6 +47,11 @@
 //!   arms into shell modules by external system, which Phase 5 did; this file is about the pure
 //!   reducer only.
 
+#[path = "support/source_scan.rs"]
+mod source_scan;
+
+use source_scan::code_only;
+
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -59,55 +64,6 @@ const ROOT_DECISION_ARMS: usize = 0;
 
 fn app_rs() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("src/app.rs")
-}
-
-/// Strips comments and string literals, so prose about this rule cannot trip it.
-fn code_only(src: &str) -> String {
-    let mut out = String::with_capacity(src.len());
-    let mut chars = src.chars().peekable();
-    let (mut in_block, mut in_line, mut in_str) = (false, false, false);
-    while let Some(c) = chars.next() {
-        if in_block {
-            if c == '*' && chars.peek() == Some(&'/') {
-                chars.next();
-                in_block = false;
-            }
-            continue;
-        }
-        if in_line {
-            if c == '\n' {
-                in_line = false;
-                out.push('\n');
-            }
-            continue;
-        }
-        if in_str {
-            if c == '\\' {
-                chars.next();
-            } else if c == '"' {
-                in_str = false;
-            }
-            continue;
-        }
-        match c {
-            '"' => {
-                in_str = true;
-                continue;
-            }
-            '/' if chars.peek() == Some(&'/') => {
-                in_line = true;
-                continue;
-            }
-            '/' if chars.peek() == Some(&'*') => {
-                chars.next();
-                in_block = true;
-                continue;
-            }
-            _ => {}
-        }
-        out.push(c);
-    }
-    out
 }
 
 /// The body of the root reducer's `match message { … }`.
