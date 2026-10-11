@@ -1287,10 +1287,8 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
         Msg::DesktopNotificationsToggled(on) => desktop_notifications_toggled(state, on),
         Msg::NotificationKindToggled(kind, on) => notification_kind_toggled(state, kind, on),
         Msg::LongTaskThresholdChanged(text) => long_task_threshold_changed(state, text),
-        Msg::PlanUsageToggled(on) => edit(state, |draft| draft.environment.plan_usage_enabled = on),
-        Msg::PlanUsageWarnChanged(text) => edit(state, |draft| {
-            draft.environment.plan_usage_warn_percent = text
-        }),
+        Msg::PlanUsageToggled(on) => plan_usage_toggled(state, on),
+        Msg::PlanUsageWarnChanged(text) => plan_usage_warn_changed(state, text),
         Msg::CrossSessionAccessChanged(access) => cross_session_access_changed(state, access),
         Msg::PlacementChanged(placement) => placement_changed(state, placement),
         Msg::RuntimeChanged(runtime) => runtime_changed(state, runtime),
@@ -1491,6 +1489,18 @@ pub fn notification_kind_toggled(state: &mut crate::app::State, kind: Notificati
 pub fn long_task_threshold_changed(state: &mut crate::app::State, text: String) {
     edit(state, |draft| {
         draft.environment.long_task_threshold_secs = text
+    });
+}
+
+/// Environment: **Show Claude plan usage** was toggled (feature 490, FR-001).
+pub fn plan_usage_toggled(state: &mut crate::app::State, on: bool) {
+    edit(state, |draft| draft.environment.plan_usage_enabled = on);
+}
+
+/// Environment: the plan-usage warning threshold was edited (feature 490, FR-005).
+pub fn plan_usage_warn_changed(state: &mut crate::app::State, text: String) {
+    edit(state, |draft| {
+        draft.environment.plan_usage_warn_percent = text
     });
 }
 
