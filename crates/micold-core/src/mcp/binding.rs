@@ -126,6 +126,16 @@ impl ConfigLocations {
             None => self.home.as_ref().map(|home| home.join(".claude.json")),
         }
     }
+
+    /// The directory of Claude's user `settings.json`: `$CLAUDE_CONFIG_DIR` when that is set, else
+    /// `~/.claude`. Not the directory of [`claude_json`](Self::claude_json), which is the home
+    /// directory itself when the variable is unset.
+    pub fn claude_settings_dir(&self) -> Option<PathBuf> {
+        match &self.claude_config_dir {
+            Some(dir) => Some(dir.clone()),
+            None => self.home.as_ref().map(|home| home.join(".claude")),
+        }
+    }
 }
 
 /// The first user configuration file that already names a server `micold` for a session of a CLI
