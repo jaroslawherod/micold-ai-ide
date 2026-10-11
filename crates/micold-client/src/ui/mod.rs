@@ -8,7 +8,7 @@ pub mod cdk;
 pub(crate) mod changes;
 pub mod compare;
 pub(crate) mod confirm_agent_request;
-pub(crate) mod confirm_daemon_removal;
+pub mod confirm_daemon_removal;
 pub(crate) mod confirm_delete;
 pub(crate) mod confirm_dismiss_group;
 pub(crate) mod confirm_forget;

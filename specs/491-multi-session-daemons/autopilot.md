@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/491_support-multiple-session-daemons-host-container
 - **Started**: 2026-10-09
 - **Phase**: milestone M3
-- **Next step**: M3 implement (reducer worker, then UI worker), gates, reviews, PR
+- **Next step**: M3 scoped gate, review B, visual pass (T039), full gate, PR
 
 ## Pull requests
 
@@ -56,6 +56,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Code A (M2) | 1 | ef9ab0bb89cdd8fb66bb269b68a797d0de782674:3242febfcc63ac47a42b06e5ca4afeae79012555 | CHANGES: 5 MAJOR (F1 detach binding, F2 on_connected gating, F3 sandbox daemon id, F4 outbox on refused connect fixed; F5 declined), 3 MINOR (fixed) |
 | Code B (M2) | 1 | ef9ab0bb89cdd8fb66bb269b68a797d0de782674:3242febfcc63ac47a42b06e5ca4afeae79012555 | CHANGES: 1 MAJOR (cycle-log entry, added), 3 MINOR (fixed); Verify green |
 | Code A+B (M2) | 2 | a1af07f954ab05029a0c4d7608e1a36d1fc8e8c3:3f7af08c3e6d3e7147aee13d5dfdfc24d282e9d7 | CLEAN (3 MINOR, see Follow-ups) |
+| Code A (M3) | 1 | 4b52f6d7682f6f00ab06e2a8e2b23bc0e2ce9893:6731e8bb6222e07008a6821038dbc96d905f3075 | CHANGES: 2 MAJOR (F1 stopped daemon not torn down client-side, F2 edit of unsupported runtime; both fixed), 3 MINOR (F3 draft cleared on removal fixed; F4 inactive-project count, F5 route_for test seam: see Declined) |
 
 ## Declined review findings
 
@@ -66,6 +67,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | B r1 F2 | Default location never bound | The `""` key resolves to the legacy default; an explicit write needs the rebind action (M3, T034). Test A1 covers resolution. |
 | M1 | B r1 F4 | T010 production wiring | Per-daemon inputs exist and are tested; callers switch in M2 with the actor (T018+), as T014 keeps the single path. |
 | M2 | A r1 F5 | dial failure inserts into `disconnected` before the debounce | The stale-content banner on the first dial failure is the pre-existing single-connection behaviour; the per-daemon state (debounced) drives the row labels, which is what FR-009 asks. |
+| M3 | A r1 F4 | daemon_facts counts only the active project's worktrees | Recorded as follow-up: the confirmation count covers worktrees known to this window; the cross-project view needs the persisted per-project lists. |
+| M3 | A r1 F5 | route_for only called by tests | MINOR; kept as the reducer's documented resolution seam, the production path resolves through links::route. |
 
 ## Handover
 
