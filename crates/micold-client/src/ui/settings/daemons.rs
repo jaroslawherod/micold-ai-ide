@@ -249,6 +249,7 @@ fn form<'a>(
                 draft.auto_start,
                 roles,
             )
+            .track_focus(FieldId::DaemonAutoStart, focused)
             .on_toggle(|v| Message::Daemons(DaemonsMsg::AutoStartToggled(v))),
         )
         .push(
