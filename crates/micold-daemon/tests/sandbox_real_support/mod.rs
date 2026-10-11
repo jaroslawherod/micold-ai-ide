@@ -208,7 +208,7 @@ impl<'a> Terminal<'a> {
                      --- screen ---\n{}\n--- container processes ---\n{}\n--- daemon log ---\n{}",
                     self.screen.all(),
                     String::from_utf8_lossy(
-                        &Command::new(dialect().program)
+                        &runtime_cmd(dialect().program)
                             .args(["exec", &self.container, "ps", "-ef"])
                             .output()
                             .map(|o| o.stdout)
@@ -244,6 +244,35 @@ pub fn runtime_kind() -> RuntimeKind {
     }
 }
 
+/// The XDG variables a target overrides to give its host daemon a private endpoint and state, as
+/// the process started with them. A rootless runtime keeps its own state under both, so every
+/// runtime CLI call must see the original values (feature 491).
+const XDG_OVERRIDDEN: [&str; 2] = ["XDG_RUNTIME_DIR", "XDG_DATA_HOME"];
+
+static ORIGINAL_XDG: std::sync::OnceLock<Vec<(&'static str, Option<std::ffi::OsString>)>> =
+    std::sync::OnceLock::new();
+
+fn original_xdg() -> &'static Vec<(&'static str, Option<std::ffi::OsString>)> {
+    ORIGINAL_XDG.get_or_init(|| {
+        XDG_OVERRIDDEN
+            .iter()
+            .map(|k| (*k, std::env::var_os(k)))
+            .collect()
+    })
+}
+
+/// A command for the runtime CLI, with the original XDG variables.
+pub fn runtime_cmd(program: &str) -> Command {
+    let mut cmd = Command::new(program);
+    for (key, value) in original_xdg() {
+        match value {
+            Some(v) => cmd.env(key, v),
+            None => cmd.env_remove(key),
+        };
+    }
+    cmd
+}
+
 /// The selected runtime's dialect.
 pub fn dialect() -> Dialect {
     Dialect::for_kind(runtime_kind())
@@ -251,7 +280,7 @@ pub fn dialect() -> Dialect {
 
 pub fn cli(args: &[&str]) {
     let program = dialect().program;
-    let out = Command::new(program)
+    let out = runtime_cmd(program)
         .args(args)
         .output()
         .unwrap_or_else(|e| panic!("{program} {args:?}: {e}"));
@@ -265,7 +294,7 @@ pub fn cli(args: &[&str]) {
 /// The runtime CLI for a value you want back — `inspect -f`, mostly.
 pub fn cli_out(args: &[&str]) -> String {
     let program = dialect().program;
-    let out = Command::new(program)
+    let out = runtime_cmd(program)
         .args(args)
         .output()
         .unwrap_or_else(|e| panic!("{program} {args:?}: {e}"));
@@ -317,8 +346,8 @@ impl Drop for Sandbox {
 
 pub fn purge(container: &str, network: &str) {
     let program = dialect().program;
-    let _ = Command::new(program).args(["rm", "-f", container]).output();
-    let _ = Command::new(program)
+    let _ = runtime_cmd(program).args(["rm", "-f", container]).output();
+    let _ = runtime_cmd(program)
         .args(["network", "rm", network])
         .output();
     // Removal is not finished when `rm` returns — on podman.
@@ -338,7 +367,7 @@ fn wait_until_absent(program: &str, list: &[&str], key: &str, name: &str) {
     let filter = format!("{key}=^{name}$");
     let deadline = Instant::now() + Duration::from_secs(20);
     loop {
-        let out = Command::new(program)
+        let out = runtime_cmd(program)
             .args(list)
             .arg(&filter)
             .args(["--format", "{{.Name}}{{.Names}}"])
@@ -427,6 +456,12 @@ pub fn start_sandbox(spec: &SandboxSpec<'_>) -> Sandbox {
     // — actually tests. A harness that hardcoded `--user` would pass that box on podman by not
     // using podman's answer to it.
     args.extend(dialect().identity_args(uid, gid));
+    // SELinux-enforcing hosts (Fedora) deny a container the bind mounts above, and the daemon
+    // inside dies on its first write to the state directory. Docker on the CI runner has no such
+    // label, so this changes nothing there.
+    if runtime_kind() == RuntimeKind::Podman {
+        args.extend(["--security-opt".to_string(), "label=disable".to_string()]);
+    }
     // The opt-in's other half (feature 028, FR-022). From `argv::idle_stop_value` rather than
     // spelled here, for the reason `restart_policy` is read above: a harness carrying its own copy
     // of the decision would go on passing after the application stopped making it.
@@ -448,6 +483,17 @@ pub fn start_sandbox(spec: &SandboxSpec<'_>) -> Sandbox {
 
 /// Write the catalogue the containerised daemon will adopt, and return the session it may start.
 pub fn seed(data_home: &Path, project: &Path, label: &str) -> SessionId {
+    seed_with_mode(data_home, project, label, TerminalMode::Regular)
+}
+
+/// [`seed`] with the terminal mode named: `TerminalMode::AiCli` makes the daemon run `claude`,
+/// which is the stand-in on `PATH` (feature 491, R8).
+pub fn seed_with_mode(
+    data_home: &Path,
+    project: &Path,
+    label: &str,
+    mode: TerminalMode,
+) -> SessionId {
     let state = data_home.join("micold-ai-ide");
     std::fs::create_dir_all(&state).expect("state dir");
 
@@ -459,7 +505,7 @@ pub fn seed(data_home: &Path, project: &Path, label: &str) -> SessionId {
             id,
             SessionLocation::Default,
             SessionLabel::Named(label.into()),
-            TerminalMode::Regular,
+            mode,
             // Feature 026: a session records which AI CLI it runs. The default one, because these
             // probes are about the container boundary and never start an AI CLI at all.
             AiCli::default(),
@@ -565,4 +611,241 @@ pub async fn open_session(
         }
     }
     screen
+}
+
+// ---------------------------------------------------------------------------------------------
+// The scripted AI CLI and several daemons (feature 491, R8)
+// ---------------------------------------------------------------------------------------------
+
+/// What the stand-in prints when it starts.
+pub const FAKE_READY: &str = "FAKE-AI-READY";
+/// What it prefixes to each line it is given. Distinct from the typed text, so the terminal's own
+/// echo of the input never satisfies a wait for the answer.
+pub const FAKE_ECHO: &str = "FAKE-AI-ECHO:";
+
+/// Where the stand-in's directory is mounted inside a container.
+pub const FAKE_DIR_IN_CONTAINER: &str = "/opt/micold-fake";
+
+/// Write a `claude` script into `dir` and return `dir`, which goes first on `PATH`: no sign-in, no
+/// network, no cost. It is *not* the shipped image's CLI, which is why it is mounted rather than
+/// baked in.
+pub fn fake_ai_cli(dir: &Path) -> PathBuf {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::create_dir_all(dir).expect("fake cli dir");
+    let script = dir.join("claude");
+    std::fs::write(
+        &script,
+        format!(
+            "#!/bin/sh\necho \"{FAKE_READY} $*\"\nwhile IFS= read -r line; do\n  printf '%s%s\\n' \"{FAKE_ECHO}\" \"$line\"\ndone\n"
+        ),
+    )
+    .expect("write fake cli");
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).expect("chmod");
+    dir.to_path_buf()
+}
+
+/// Extra `create` arguments that put the stand-in first on the container's `PATH`.
+pub fn fake_ai_cli_args(dir: &Path) -> Vec<String> {
+    vec![
+        "-v".to_string(),
+        format!("{}:{FAKE_DIR_IN_CONTAINER}:ro", dir.display()),
+        "-e".to_string(),
+        format!(
+            "PATH={FAKE_DIR_IN_CONTAINER}:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+        ),
+    ]
+}
+
+impl Terminal<'_> {
+    /// Type `line` and wait until the screen shows `expect`. For a session whose foreground
+    /// process is the stand-in, which does not run the shell sentinel [`Terminal::run`] relies on.
+    pub async fn converse(&mut self, line: &str, expect: &str, budget: Duration) {
+        let serial = self.serial;
+        self.serial += 1;
+        self.conn
+            .send(Frame::Control(ClientMsg::SessionInput {
+                session: self.session,
+                serial,
+                bytes: format!("{line}\r").into_bytes(),
+                process: None,
+            }))
+            .await
+            .expect("send input");
+        self.wait_for(expect, budget).await;
+    }
+
+    /// Wait until the screen shows `expect`.
+    pub async fn wait_for(&mut self, expect: &str, budget: Duration) {
+        let deadline = Instant::now() + budget;
+        while !self.screen.all().contains(expect) {
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            match tokio::time::timeout(remaining, self.conn.next()).await {
+                Ok(Some(Ok(Frame::Grid(frame)))) if frame.session == self.session => {
+                    self.screen.apply(&frame)
+                }
+                Ok(Some(Ok(_))) => continue,
+                Ok(Some(Err(e))) => panic!("stream error while waiting for {expect:?}: {e}"),
+                Ok(None) => panic!("the daemon closed the connection waiting for {expect:?}"),
+                Err(_) => panic!(
+                    "{expect:?} did not appear within {budget:?}.\n--- screen ---\n{}\n\
+                     --- daemon log ---\n{}",
+                    self.screen.all(),
+                    std::fs::read_to_string(&self.log)
+                        .unwrap_or_else(|e| format!("<unreadable: {e}>"))
+                ),
+            }
+        }
+    }
+}
+
+/// One running container daemon with its own name, port, state directory and project.
+pub struct ContainerDaemon {
+    pub container: String,
+    pub port: u16,
+    pub token: Token,
+    pub project: PathBuf,
+    pub session: SessionId,
+    pub log: PathBuf,
+    sandbox: Option<Sandbox>,
+}
+
+impl ContainerDaemon {
+    /// Connect, with the welcome catalogue's input serial for the seeded session.
+    pub async fn connect(&self) -> (DaemonConnection, u64) {
+        let (conn, catalog) = wait_for_accept(self.port, &credentials(&self.token)).await;
+        let serial = input_serial(&catalog, self.session);
+        (conn, serial)
+    }
+
+    /// Stop and remove the container (the "daemon stopped" of US5 scenario 3).
+    pub fn stop(&mut self) {
+        cli(&["stop", "-t", "1", &self.container]);
+        self.sandbox = None;
+    }
+}
+
+/// Start `count` container daemons, each with its own container, network, port, state directory
+/// and project under `base`, all with the stand-in on `PATH` and an AI CLI session seeded.
+/// Names and ports derive from `tag` and `first_port`, so concurrent targets do not collide.
+pub fn start_container_daemons(
+    base: &Path,
+    tag: &str,
+    first_port: u16,
+    count: u16,
+    fake_dir: &Path,
+) -> Vec<ContainerDaemon> {
+    let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
+    let extra = fake_ai_cli_args(fake_dir);
+    (0..count)
+        .map(|i| {
+            let dir = base.join(format!("box{i}"));
+            let data = dir.join("data");
+            let project = dir.join("project");
+            std::fs::create_dir_all(&project).unwrap();
+            let session =
+                seed_with_mode(&data, &project, &format!("{tag}-{i}"), TerminalMode::AiCli);
+            let state = data.join("micold-ai-ide");
+            let token = Token::generate();
+            let token_path = state.join("sandbox.token");
+            token.write_to(&token_path).unwrap();
+            let container = format!("micold-{tag}-{i}");
+            let network = format!("{container}-net");
+            let port = first_port + i;
+            let sandbox = start_sandbox(&SandboxSpec {
+                container: &container,
+                network: &network,
+                port,
+                data_home: &data,
+                project: &project,
+                token_path: &token_path,
+                home: &home,
+                survive_logout: false,
+                extra: &extra,
+            });
+            ContainerDaemon {
+                container,
+                port,
+                token,
+                project,
+                session,
+                log: state.join("micold-daemon.log"),
+                sandbox: Some(sandbox),
+            }
+        })
+        .collect()
+}
+
+/// The host daemon, spawned the way the application spawns it, with the stand-in first on `PATH`.
+pub struct HostDaemon {
+    pub project: PathBuf,
+    pub session: SessionId,
+    pub log: PathBuf,
+    socket: PathBuf,
+}
+
+impl Drop for HostDaemon {
+    /// A spawned daemon outlives the test process, and each failed run would leave one resident
+    /// (the leak `client_restart_input.rs` documents): terminate whichever holds the socket.
+    fn drop(&mut self) {
+        let Ok(out) = Command::new("fuser").arg(&self.socket).output() else {
+            return;
+        };
+        let text = String::from_utf8_lossy(&out.stdout).to_string();
+        if let Some(pid) = text
+            .split_whitespace()
+            .find_map(|t| t.trim().parse::<u32>().ok())
+        {
+            let _ = Command::new("kill").arg(pid.to_string()).output();
+        }
+    }
+}
+
+/// Spawn a host daemon under `dir` and connect. Sets process-wide environment (the daemon inherits
+/// it), so a target calls this once.
+pub async fn start_host_daemon(
+    dir: &Path,
+    daemon_bin: &str,
+    fake_dir: &Path,
+    tag: &str,
+) -> (HostDaemon, DaemonConnection, u64) {
+    let data = dir.join("data");
+    let project = dir.join("project");
+    std::fs::create_dir_all(&project).unwrap();
+    let session = seed_with_mode(&data, &project, tag, TerminalMode::AiCli);
+    let log = data.join("micold-ai-ide").join("micold-daemon.log");
+    let path = format!(
+        "{}:{}",
+        fake_dir.display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+    // SAFETY: set before any spawn, in a target that holds one test.
+    let _ = original_xdg();
+    std::env::set_var(micold_core::spawn::DAEMON_BIN_ENV, daemon_bin);
+    std::env::set_var("XDG_RUNTIME_DIR", dir);
+    std::env::set_var("XDG_DATA_HOME", &data);
+    std::env::set_var("MICOLD_LOG", "warn");
+    std::env::set_var("SHELL", "/bin/sh");
+    std::env::set_var("PATH", path);
+    let endpoint = micold_core::endpoint::resolve().expect("endpoint");
+    // Built before the spawn, so a failed connect still terminates a daemon it started.
+    let guard = HostDaemon {
+        project,
+        session,
+        log,
+        socket: endpoint.socket_path.clone(),
+    };
+    match micold_core::connect::connect_or_spawn(
+        &endpoint,
+        "multi-daemon-client",
+        Duration::from_secs(30),
+    )
+    .await
+    {
+        Ok(Connected::Ready(conn, welcome)) => {
+            let serial = input_serial(&welcome.catalog, session);
+            (guard, *conn, serial)
+        }
+        Ok(Connected::Refused(reason)) => panic!("the host daemon refused: {reason:?}"),
+        Err(e) => panic!("could not spawn a host daemon: {e}"),
+    }
 }
