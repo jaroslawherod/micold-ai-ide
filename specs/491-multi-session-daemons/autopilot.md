@@ -20,6 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #752 | M1 registry, bindings, labels | merged | 3787994d7fe1807844ddfa485d51333227e5a66e |
 | #758 | M2 concurrent host and container daemons | merged | e0d9dd819951476b5f4a2ad94094401af243e601 |
 | #767 | M3 Settings Daemons section | merged | 678441fcc0e56eacf56b3005219257c67469d9d0 |
+| #768 | M4 real-runtime multi-daemon e2e | open | - |
 
 ## Milestones
 
@@ -28,7 +29,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T017 | full | Upgraded install runs on a one-daemon registry, worktrees bound and labelled, daemon choice persists | #752 | merged |
 | M2 | T018–T029, T048–T049 | full | Host and container daemons concurrent and failure-isolated | #758 | merged |
 | M3 | T030–T039 | full | Settings Daemons section with removal and rebind | #767 | merged |
-| M4 | T040–T045 | full | Real-runtime multi-daemon e2e in CI | - | in progress |
+| M4 | T040–T045 | full | Real-runtime multi-daemon e2e in CI | #768 | PR open |
 
 ## Decisions
 
