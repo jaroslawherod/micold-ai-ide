@@ -890,7 +890,7 @@ impl DaemonState {
         );
         match source {
             ActivitySource::Hooks => self
-                .hook_settings_file(id)
+                .hook_settings_file(id, spec)
                 .map(|path| vec!["--settings".into(), path.into_os_string()])
                 .unwrap_or_default(),
             // Pi (feature 029). Everything here is best-effort in the same way the hook file is: a
@@ -1004,9 +1004,19 @@ impl DaemonState {
         Ok(plan.args)
     }
 
-    fn hook_settings_file(&self, id: SessionId) -> Option<PathBuf> {
+    fn hook_settings_file(&self, id: SessionId, spec: &LaunchSpec) -> Option<PathBuf> {
         let receiver = self.hooks.get()?;
-        match receiver.prepare_settings(id) {
+        // Where the session's own status line is looked up (feature 490, research R4).
+        let status = crate::hooks::StatusContext {
+            cwd: spec.cwd.clone(),
+            locations: ConfigLocations {
+                home: directories::UserDirs::new().map(|dirs| dirs.home_dir().to_path_buf()),
+                claude_config_dir: session_dir_var(&spec.env, CLAUDE_CONFIG_DIR_VAR),
+                ..ConfigLocations::default()
+            },
+        };
+        let plan_usage = self.lock().catalog.plan_usage_enabled();
+        match receiver.prepare_settings(id, status, plan_usage) {
             Ok(path) => Some(path),
             Err(e) => {
                 tracing::warn!(session = %id.0, error = %e, "could not write hook settings; activity will be Unknown");
@@ -1383,6 +1393,11 @@ impl DaemonState {
             let cleared = !on && inner.plan_usage.take().is_some();
             (inner.catalog.settings_wire(), cleared)
         };
+        // Every live Claude Code session gets its settings file rewritten with or without the relay
+        // (research R9, FR-002); off the state lock, as it writes files.
+        if let Some(receiver) = self.hooks.get() {
+            receiver.set_plan_usage(on);
+        }
         self.broadcast(DaemonMsg::SettingsChanged { settings });
         if cleared {
             self.broadcast(DaemonMsg::PlanUsageChanged { reading: None });

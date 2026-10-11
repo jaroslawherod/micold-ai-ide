@@ -22,7 +22,7 @@
 use std::collections::{HashMap, HashSet};
 use std::io;
 use std::net::{Ipv4Addr, SocketAddr};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use tokio::net::{TcpListener, TcpStream};
@@ -31,7 +31,9 @@ use uuid::Uuid;
 use crate::activity::{ActivityEvent, HookKind};
 use crate::http::{self, respond, Body, HeadRead};
 use crate::state::{unix_secs, DaemonState};
+use micold_core::mcp::binding::ConfigLocations;
 use micold_core::plan_usage::status_line;
+use micold_core::plan_usage::user_status_line::{RelayConfig, UserStatusLine};
 use micold_core::protocol::messages::DaemonMsg;
 use micold_core::session::SessionId;
 
@@ -64,12 +66,27 @@ type Tokens = Arc<Mutex<HashMap<Uuid, String>>>;
 /// 490, S3.1, FR-016): an unchanged failure is logged once.
 type Rejections = Arc<Mutex<HashSet<(Uuid, &'static str)>>>;
 
+/// Where a session's own status line is looked up (feature 490, research R4): its working directory
+/// and the configuration locations it sees.
+#[derive(Debug, Clone)]
+pub struct StatusContext {
+    /// The session's working directory (its `.claude/settings*.json` come first).
+    pub cwd: PathBuf,
+    /// Home and `CLAUDE_CONFIG_DIR` as the session sees them.
+    pub locations: ConfigLocations,
+}
+
 /// The loopback hook receiver: the bound address, the per-session token registry, and the directory
 /// the per-session `--settings` files are written to.
 pub struct HookReceiver {
     addr: SocketAddr,
     tokens: Tokens,
     settings_dir: PathBuf,
+    /// The executable Claude Code runs as the status-line relay: this daemon (research R3).
+    relay_exe: PathBuf,
+    /// Each prepared session's status context, so turning the plan-usage switch can rewrite its
+    /// settings file (research R9).
+    prepared: Mutex<HashMap<Uuid, StatusContext>>,
 }
 
 impl HookReceiver {
@@ -83,6 +100,8 @@ impl HookReceiver {
             addr,
             tokens: Arc::new(Mutex::new(HashMap::new())),
             settings_dir,
+            relay_exe: std::env::current_exe().unwrap_or_else(|_| PathBuf::from("micold-daemon")),
+            prepared: Mutex::new(HashMap::new()),
         };
         Ok((receiver, listener))
     }
@@ -103,12 +122,18 @@ impl HookReceiver {
             .clone()
     }
 
-    /// Drop a session's token (on session end) so a stale token can no longer report activity.
+    /// Drop a session's token (on session end) so a stale token can no longer report activity, and
+    /// delete its status-line relay file, which holds that token (feature 490).
     pub fn forget(&self, session: SessionId) {
         self.tokens
             .lock()
             .expect("hook tokens lock poisoned")
             .remove(&session.0);
+        self.prepared
+            .lock()
+            .expect("hook contexts lock poisoned")
+            .remove(&session.0);
+        let _ = std::fs::remove_file(self.relay_file(session));
     }
 
     /// The hook URL for a session: `http://127.0.0.1:<port>/hook/<session-uuid>`.
@@ -116,21 +141,115 @@ impl HookReceiver {
         format!("http://{}/hook/{}", self.addr, session.0)
     }
 
+    /// The status route for a session: `http://127.0.0.1:<port>/status/<session-uuid>` (feature 490).
+    pub fn status_url(&self, session: SessionId) -> String {
+        format!("http://{}/status/{}", self.addr, session.0)
+    }
+
+    /// A session's `--settings` file.
+    pub fn settings_file(&self, session: SessionId) -> PathBuf {
+        self.settings_dir
+            .join(format!("{}.json", session.0.simple()))
+    }
+
+    /// A session's status-line relay file, beside its settings file (feature 490).
+    pub fn relay_file(&self, session: SessionId) -> PathBuf {
+        self.settings_dir
+            .join(format!("{}.status.json", session.0.simple()))
+    }
+
     /// Prepare a session's `--settings` file: register its token, write the settings JSON pointing
     /// `claude` at this receiver, and return the file path to pass as `--settings`. Returns the path
     /// so the spawn path can hand it to `claude`. Best-effort: a write failure is surfaced to the
     /// caller, which spawns without hooks rather than failing the session (activity degrades to
     /// `Unknown`, never wrong — H1).
-    pub fn prepare_settings(&self, session: SessionId) -> io::Result<PathBuf> {
+    ///
+    /// With `plan_usage` on (feature 490), the file also names the status-line relay, and the
+    /// relay file is written; off, neither is there (contract S1).
+    pub fn prepare_settings(
+        &self,
+        session: SessionId,
+        status: StatusContext,
+        plan_usage: bool,
+    ) -> io::Result<PathBuf> {
+        let path = self.write_settings(session, &status, plan_usage)?;
+        self.prepared
+            .lock()
+            .expect("hook contexts lock poisoned")
+            .insert(session.0, status);
+        Ok(path)
+    }
+
+    /// Rewrite the settings file of every prepared session for the switch's new state, writing or
+    /// deleting its relay file (feature 490, research R9). A session whose file cannot be written
+    /// keeps its old one; Claude Code picks up the change when it reloads its settings.
+    pub fn set_plan_usage(&self, on: bool) {
+        let prepared: Vec<(Uuid, StatusContext)> = self
+            .prepared
+            .lock()
+            .expect("hook contexts lock poisoned")
+            .iter()
+            .map(|(id, status)| (*id, status.clone()))
+            .collect();
+        for (id, status) in prepared {
+            if let Err(e) = self.write_settings(SessionId(id), &status, on) {
+                tracing::warn!(session = %id, error = %e, "could not rewrite hook settings for the plan-usage switch");
+            }
+        }
+    }
+
+    fn write_settings(
+        &self,
+        session: SessionId,
+        status: &StatusContext,
+        plan_usage: bool,
+    ) -> io::Result<PathBuf> {
         let token = self.token_for(session);
         let url = self.url(session);
         std::fs::create_dir_all(&self.settings_dir)?;
-        let path = self
-            .settings_dir
-            .join(format!("{}.json", session.0.simple()));
-        std::fs::write(&path, settings_json(&url, &token))?;
+        let relay_file = self.relay_file(session);
+        let block = if plan_usage {
+            let user = UserStatusLine::resolve(&status.locations, &status.cwd);
+            let config = RelayConfig {
+                url: self.status_url(session),
+                token: token.clone(),
+                user_command: user.as_ref().map(|line| line.command.clone()),
+            };
+            let name = relay_file
+                .file_name()
+                .and_then(|n| n.to_str())
+                .expect("the relay file name is ASCII");
+            micold_core::owner_only::write(
+                &self.settings_dir,
+                name,
+                &serde_json::to_vec(&config).expect("relay config is always serialisable"),
+            )?;
+            Some(StatusLineBlock {
+                kind: "command",
+                command: format!(
+                    "{} status-line {}",
+                    shell_quoted(&self.relay_exe),
+                    shell_quoted(&relay_file)
+                ),
+                padding: user.as_ref().and_then(|line| line.padding),
+                refresh_interval: user.as_ref().and_then(|line| line.refresh_interval),
+            })
+        } else {
+            match std::fs::remove_file(&relay_file) {
+                Err(e) if e.kind() != io::ErrorKind::NotFound => return Err(e),
+                _ => None,
+            }
+        };
+        let path = self.settings_file(session);
+        std::fs::write(&path, settings_json(&url, &token, block.as_ref()))?;
         Ok(path)
     }
+}
+
+/// A path for the status-line command: double-quoted, with `/` separators on every platform, as
+/// Claude Code runs the command through Git Bash on Windows (contract S1.2).
+fn shell_quoted(path: &Path) -> String {
+    format!("\"{}\"", path.to_string_lossy().replace('\\', "/"))
 }
 
 /// The accept loop: one bounded, token-checked request handler per connection. Runs for the daemon's
@@ -396,9 +515,23 @@ struct HooksMap<'a> {
     notification: [MatcherGroup<'a>; 1],
 }
 
+/// The `statusLine` block of the per-session settings (feature 490, contract S1).
+#[derive(Debug, serde::Serialize)]
+pub struct StatusLineBlock {
+    #[serde(rename = "type")]
+    kind: &'static str,
+    command: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    padding: Option<u32>,
+    #[serde(rename = "refreshInterval", skip_serializing_if = "Option::is_none")]
+    refresh_interval: Option<u32>,
+}
+
 #[derive(serde::Serialize)]
 struct SettingsDoc<'a> {
     hooks: HooksMap<'a>,
+    #[serde(rename = "statusLine", skip_serializing_if = "Option::is_none")]
+    status_line: Option<&'a StatusLineBlock>,
 }
 
 /// The per-session `--settings` JSON that points `claude` at this receiver (contracts/hooks.md
@@ -406,7 +539,7 @@ struct SettingsDoc<'a> {
 /// in a header, so **user configuration is never modified**. Built from typed structs rather than
 /// untyped `serde_json::json!` so a key typo is a compile error, not a silent shape mismatch caught
 /// only against a live `claude` binary (BUG-001).
-pub fn settings_json(url: &str, token: &str) -> String {
+pub fn settings_json(url: &str, token: &str, status_line: Option<&StatusLineBlock>) -> String {
     let group = || MatcherGroup {
         matcher: "",
         hooks: [HttpHook {
@@ -426,6 +559,7 @@ pub fn settings_json(url: &str, token: &str) -> String {
             stop: [group()],
             notification: [group()],
         },
+        status_line,
     };
     serde_json::to_string_pretty(&doc).expect("settings json is always serialisable")
 }
@@ -508,7 +642,7 @@ mod tests {
 
     #[test]
     fn settings_json_embeds_the_url_and_bearer_token() {
-        let json = settings_json("http://127.0.0.1:5000/hook/abc", "tok-123");
+        let json = settings_json("http://127.0.0.1:5000/hook/abc", "tok-123", None);
         let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
         // The event's array entry is a matcher-group wrapper (BUG-001) — the `http` hook itself is
         // nested under `hooks`, not placed directly in the top-level array.

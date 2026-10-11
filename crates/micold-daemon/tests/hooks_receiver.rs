@@ -448,7 +448,9 @@ mod status_line_block {
     #[tokio::test]
     async fn padding_and_refresh_interval_come_from_the_users_status_line() {
         let f = fixture().await;
-        f.user_line(r#"{"type": "command", "command": "mine.sh", "padding": 1, "refreshInterval": 7}"#);
+        f.user_line(
+            r#"{"type": "command", "command": "mine.sh", "padding": 1, "refreshInterval": 7}"#,
+        );
         let doc = f.prepare(true);
         assert_eq!(doc["statusLine"]["padding"], 1);
         assert_eq!(doc["statusLine"]["refreshInterval"], 7);
@@ -477,7 +479,10 @@ mod status_line_block {
         use std::os::unix::fs::PermissionsExt;
         let f = fixture().await;
         f.prepare(true);
-        let mode = std::fs::metadata(f.relay_file()).unwrap().permissions().mode();
+        let mode = std::fs::metadata(f.relay_file())
+            .unwrap()
+            .permissions()
+            .mode();
         assert_eq!(mode & 0o077, 0, "mode {mode:o}");
     }
 
@@ -487,7 +492,10 @@ mod status_line_block {
         let on = f.prepare(true);
         let off = f.prepare(false);
         assert!(off.get("statusLine").is_none());
-        assert!(!f.relay_file().exists(), "turning off deletes the relay file");
+        assert!(
+            !f.relay_file().exists(),
+            "turning off deletes the relay file"
+        );
         assert_eq!(on["hooks"], off["hooks"]);
         assert_eq!(off.as_object().unwrap().len(), 1, "only `hooks`: {off}");
     }
