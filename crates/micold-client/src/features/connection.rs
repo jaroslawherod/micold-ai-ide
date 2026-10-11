@@ -219,6 +219,8 @@ pub enum Msg {
         catalog: micold_core::protocol::messages::CatalogSnapshot,
         /// The service-owned settings.
         settings: micold_core::protocol::messages::DaemonSettings,
+        /// The Claude plan's usage the service holds, if any (feature 490).
+        plan_usage: Option<micold_core::plan_usage::UsageReading>,
     },
     /// A control message pushed by the daemon (catalog/settings changes, operation results, …).
     Event(micold_core::protocol::messages::DaemonMsg),

@@ -122,20 +122,20 @@ tooltip; hidden whenever there is no current reading.
 
 ### Tests (write first, see them fail)
 
-- [ ] T028 [P] [US1] Feature tests in `crates/micold-client/tests/features_plan_usage.rs` (data-model *Client state*; US1 s1–s4, US3 s1–s4, s6, s7): the reading is set from `Welcome.plan_usage` and from `PlanUsageChanged`, replaced by a newer one, and reset to `None` on disconnect; the view model is `None` when the switch is off, when there is no reading, and once every window's reset has passed; otherwise it yields the label (`"42% · 15:30"`) and the details lines of `CurrentUsage` for the given offset
-- [ ] T029 [P] [US1] Extend `crates/micold-client/tests/idle_subscriptions.rs` (R7): no plan-usage tick without a reading; a 30 s tick while one exists
-- [ ] T030 [P] [US1] Extend `crates/micold-client/tests/icons.rs` and `crates/micold-client/tests/icon_roles.rs`: `Icon::PlanUsage` is U+E1AF in the `on_surface_variant` role (U2)
-- [ ] T031 [P] [US1] Extend `crates/micold-client/tests/toolbar.rs` and `crates/micold-client/tests/gates/bar_controls_hold_their_size.rs` (U2.2, U3, U4): the indicator is the first trailing action, before the project switcher, only when the switch is on and a current reading exists; without it the bar is unchanged; with it, it is 40 px high like the project switcher and the bar's other actions keep their positions
+- [x] T028 [P] [US1] Feature tests in `crates/micold-client/tests/features_plan_usage.rs` (data-model *Client state*; US1 s1–s4, US3 s1–s4, s6, s7): the reading is set from `Welcome.plan_usage` and from `PlanUsageChanged`, replaced by a newer one, and reset to `None` on disconnect; the view model is `None` when the switch is off, when there is no reading, and once every window's reset has passed; otherwise it yields the label (`"42% · 15:30"`) and the details lines of `CurrentUsage` for the given offset
+- [x] T029 [P] [US1] Extend `crates/micold-client/tests/idle_subscriptions.rs` (R7): no plan-usage tick without a reading; a 30 s tick while one exists
+- [x] T030 [P] [US1] Extend `crates/micold-client/tests/icons.rs` and `crates/micold-client/tests/icon_roles.rs`: `Icon::PlanUsage` is U+E1AF in the `on_surface_variant` role (U2)
+- [x] T031 [P] [US1] Extend `crates/micold-client/tests/toolbar.rs` and `crates/micold-client/tests/gates/bar_controls_hold_their_size.rs` (U2.2, U3, U4): the indicator is the first trailing action, before the project switcher, only when the switch is on and a current reading exists; without it the bar is unchanged; with it, it is 40 px high like the project switcher and the bar's other actions keep their positions
 
 ### Implementation
 
-- [ ] T032 [US1] Create the render-free `crates/micold-client/src/features/plan_usage.rs` (reading state, view model from `UsageReading::current(now)` and the settings' threshold, tick decision) and register it in `crates/micold-client/src/features/mod.rs` until T028 passes
-- [ ] T033 [US1] Add `Icon::PlanUsage` (U+E1AF, `data_usage`) to `crates/micold-client/src/icons.rs` until T030 passes
-- [ ] T034 [US1] Route `Welcome.plan_usage` and `PlanUsageChanged` into the feature in `crates/micold-client/src/shell/daemon_sync.rs` (replacing T017's drop, clearing on disconnect), and add the 30 s `iced::time::every` tick while a reading exists in `crates/micold-client/src/shell/subscriptions.rs` until T029 passes
-- [ ] T035 [US1] Create the shared `UsageIndicator` (normal look; `new(label, roles)`, `.details(lines)`, `.into()`; 40 px, 8 px gap, 12 px ends; shared `Tooltip`; not pressable) in `crates/micold-client/src/ui/material/usage_indicator.rs` and export it from `crates/micold-client/src/ui/material/mod.rs` (contract U1, U2)
-- [ ] T036 [US1] Place the indicator as the first `Toolbar::action` in `crates/micold-client/src/ui/toolbar.rs`, mapping the feature's view model with the `chrono::Local` offset (U3), until T031 passes
-- [ ] T037 [P] [US1] Add a `UsageIndicator` showcase entry in `crates/micold-client/src/showcase/sections/atoms.rs` with a normal and a long-label sample in `crates/micold-client/src/showcase/samples.rs` (U4)
-- [ ] T038 [US1] Extend *Claude plan usage* in `docs/user-guide/worktrees-and-sessions.md` with the app-bar indicator: what the indicator shows, that it appears once a Claude session has had a response, its tooltip, and that it hides when there is no current reading (Principle VII)
+- [x] T032 [US1] Create the render-free `crates/micold-client/src/features/plan_usage.rs` (reading state, view model from `UsageReading::current(now)` and the settings' threshold, tick decision) and register it in `crates/micold-client/src/features/mod.rs` until T028 passes
+- [x] T033 [US1] Add `Icon::PlanUsage` (U+E1AF, `data_usage`) to `crates/micold-client/src/icons.rs` until T030 passes
+- [x] T034 [US1] Route `Welcome.plan_usage` and `PlanUsageChanged` into the feature in `crates/micold-client/src/shell/daemon_sync.rs` (replacing T017's drop, clearing on disconnect), and add the 30 s `iced::time::every` tick while a reading exists in `crates/micold-client/src/shell/subscriptions.rs` until T029 passes
+- [x] T035 [US1] Create the shared `UsageIndicator` (normal look; `new(label, roles)`, `.details(lines)`, `.into()`; 40 px, 8 px gap, 12 px ends; shared `Tooltip`; not pressable) in `crates/micold-client/src/ui/material/usage_indicator.rs` and export it from `crates/micold-client/src/ui/material/mod.rs` (contract U1, U2)
+- [x] T036 [US1] Place the indicator as the first `Toolbar::action` in `crates/micold-client/src/ui/toolbar.rs`, mapping the feature's view model with the `chrono::Local` offset (U3), until T031 passes
+- [x] T037 [P] [US1] Add a `UsageIndicator` showcase entry in `crates/micold-client/src/showcase/sections/atoms.rs` with a normal and a long-label sample in `crates/micold-client/src/showcase/samples.rs` (U4)
+- [x] T038 [US1] Extend *Claude plan usage* in `docs/user-guide/worktrees-and-sessions.md` with the app-bar indicator: what the indicator shows, that it appears once a Claude session has had a response, its tooltip, and that it hides when there is no current reading (Principle VII)
 
 **Checkpoint (M3)**: quickstart §B1 and §B5 pass; `mise run gate` green.
 

@@ -92,8 +92,9 @@ fn all_covers_every_variant_without_duplicates() {
     // `pan_tool`, `error`, `task_alt`, `chat_bubble`), +7 for feature 040's pull request indicator (`call_split`, `edit_note`, `call_merge`,
     // `block`, `check`, `schedule`, `cancel`; `edit` is `Rename`'s and `close` is `Close`'s), +1 for `OpenInBrowser`
     // (feature 040's **Open pull request** menu entry — `open_in_new`), +2 for feature 484's pane
-    // split buttons (`vertical_split`, `horizontal_split`).
-    assert_eq!(Icon::ALL.len(), 50, "curated set size");
+    // split buttons (`vertical_split`, `horizontal_split`), +1 for feature 490's plan-usage
+    // indicator (`data_usage`).
+    assert_eq!(Icon::ALL.len(), 51, "curated set size");
 
     // No duplicate variants.
     for (i, &a) in Icon::ALL.iter().enumerate() {

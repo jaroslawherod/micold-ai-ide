@@ -48,7 +48,11 @@ fn a_reading_from_the_service_is_kept_and_a_newer_one_replaces_it() {
     let mut newer = reading(NOON);
     newer.windows[0].used_tenths = 500;
     state.received(Some(newer.clone()));
-    assert_eq!(state.reading, Some(newer), "US1 s3, US3 s6: the newest wins");
+    assert_eq!(
+        state.reading,
+        Some(newer),
+        "US1 s3, US3 s6: the newest wins"
+    );
 }
 
 #[test]
@@ -60,14 +64,19 @@ fn the_service_saying_none_and_a_disconnect_both_clear_the_reading() {
 
     state.received(Some(reading(NOON)));
     state.disconnected();
-    assert_eq!(state.reading, None, "a restarted service starts empty (FR-014)");
+    assert_eq!(
+        state.reading, None,
+        "a restarted service starts empty (FR-014)"
+    );
 }
 
 #[test]
 fn the_view_is_the_headline_label_and_every_window_in_the_details() {
     let mut state = State::default();
     state.received(Some(reading(NOON - 120)));
-    let view = state.view(NOON, utc()).expect("a current reading is shown (FR-004)");
+    let view = state
+        .view(NOON, utc())
+        .expect("a current reading is shown (FR-004)");
     assert_eq!(view.label, "42% · 15:30", "US1 s1");
     assert_eq!(
         view.details,
@@ -85,7 +94,11 @@ fn reset_times_follow_the_given_offset() {
     let mut state = State::default();
     state.received(Some(reading(NOON)));
     let cest = FixedOffset::east_opt(2 * HOUR as i32).unwrap();
-    assert_eq!(state.view(NOON, cest).unwrap().label, "42% · 17:30", "FR-008");
+    assert_eq!(
+        state.view(NOON, cest).unwrap().label,
+        "42% · 17:30",
+        "FR-008"
+    );
 }
 
 #[test]
@@ -102,12 +115,15 @@ fn a_passed_window_drops_out_and_none_left_hides_the_indicator() {
 fn with_the_switch_off_nothing_is_shown_or_kept() {
     let mut state = State::default();
     state.received(Some(reading(NOON)));
-    state.settings(false, WarnPercent::DEFAULT);
+    state.settings(false, WarnPercent::default());
     assert!(state.view(NOON, utc()).is_none(), "US3 s5");
     assert_eq!(state.reading, None, "data-model: switch off → None");
 
     state.received(Some(reading(NOON)));
-    assert!(state.view(NOON, utc()).is_none(), "a late push while off is not shown");
+    assert!(
+        state.view(NOON, utc()).is_none(),
+        "a late push while off is not shown"
+    );
 }
 
 #[test]

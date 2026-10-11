@@ -62,6 +62,10 @@ const BACKGROUND_OS_THEME_POLL: Duration = Duration::from_secs(1);
 /// FR-018, SC-003, SC-006): at most 12 readings an hour, 30 requests at most each.
 const PR_STATUS_INTERVAL: Duration = Duration::from_secs(300);
 
+/// How often the app bar re-reads which plan-usage windows are still current while a reading is
+/// held (feature 490, research R7): a passed reset leaves the indicator within 30 s.
+const PLAN_USAGE_TICK: Duration = Duration::from_secs(30);
+
 /// How often the snackbar's countdown ticks while one is visible.
 ///
 /// Coarse on purpose: the durations it serves are 4s and 10s, so a quarter-second tick is
@@ -108,6 +112,11 @@ pub fn subscription(app: &App) -> Subscription<Message> {
     // and with the switch off nothing may be sent to GitHub or scheduled at all.
     if app.core.pr_status.enabled && app.core.pr_status.held {
         subs.push(every(PR_STATUS_INTERVAL).map(|_| Message::PrStatus(PrStatusMsg::Tick)));
+    }
+    // Feature 490 (R7): the plan-usage clock, **only while a reading is held**. It redraws so a
+    // window whose reset has passed drops out; with nothing held there is nothing to drop.
+    if app.core.plan_usage.ticks() {
+        subs.push(every(PLAN_USAGE_TICK).map(|_| Message::NoOp));
     }
     // The terminal output poll is gone — the daemon streams grid frames over the connection. Worktree
     // create now runs on the daemon too, so there is no local progress buffer to drain (T055).

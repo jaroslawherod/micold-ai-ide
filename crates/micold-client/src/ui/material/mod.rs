@@ -154,6 +154,7 @@ mod tree_view;
 mod type_role_mapping;
 mod typeahead;
 mod unread_mark;
+mod usage_indicator;
 mod virtual_rows;
 
 pub use accordion::Accordion;
@@ -205,6 +206,7 @@ pub use toolbar::Toolbar;
 pub use tree_view::{TreeItem, TreeView};
 pub use typeahead::Typeahead;
 pub use unread_mark::UnreadMark;
+pub use usage_indicator::UsageIndicator;
 pub use virtual_rows::VirtualRows;
 
 /// The application's theme, derived from the active colour scheme.

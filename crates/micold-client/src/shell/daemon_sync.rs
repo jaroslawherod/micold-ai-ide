@@ -424,6 +424,9 @@ pub fn on_disconnected(app: &mut App, daemon: DaemonId) -> Task<Message> {
     // Nor does this window hold its project any more: what it read is removed, and the reading
     // under way is forgotten (feature 040, data-model §3 invariant 4). `Released` starts nothing.
     let _ = crate::shell::pr_status::update(app, micold_client::features::pr_status::Msg::Released);
+    // Nor the plan's usage: a restarted service holds none, and the `Welcome` resends what it has
+    // (feature 490, FR-014).
+    app.core.plan_usage.disconnected();
     // Any request still in flight will never get a reply on this connection (`req`s are
     // per-connection). Resolve each to an explicit *unknown* outcome — never a silent
     // success or failure — and reconcile against authoritative state on reconnect
@@ -880,6 +883,11 @@ fn adopt_daemon_settings(app: &mut App, settings: micold_core::protocol::message
     app.core.session.notification_kinds = settings.notification_kinds;
     app.core.session.long_task_threshold_secs = settings.long_task_threshold_secs;
     app.core.session.cross_session_access = settings.cross_session_access;
+    // Feature 490: the switch and threshold in force; off forgets the reading (FR-002).
+    app.core.plan_usage.settings(
+        settings.plan_usage_enabled,
+        micold_core::plan_usage::WarnPercent::clamped(u64::from(settings.plan_usage_warn_percent)),
+    );
     // Feature 482 (R12): the diff layout in force, kept across files and restarts.
     let _ = app
         .core
@@ -1005,8 +1013,8 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
         // env-include, exactly like the local-save path below does for its own change
         // (T100): the enabled/path/timeout settings may have changed, so every previously
         // cached directory's snapshot is stale.
-        // Feature 490: the plan's usage is not shown yet (T034 keeps it).
-        DaemonMsg::PlanUsageChanged { .. } => {}
+        // Feature 490: the service's reading changed (a newer one, or none current).
+        DaemonMsg::PlanUsageChanged { reading } => app.core.plan_usage.received(reading),
         DaemonMsg::SettingsChanged { settings } => {
             let pr_status_enabled = settings.pr_status_enabled;
             if let Some(job) = on_settings_changed(app, settings) {
@@ -1742,6 +1750,7 @@ pub fn on_connected(
     outbox: micold_client::daemon::Outbox,
     catalog: CatalogSnapshot,
     settings: micold_core::protocol::messages::DaemonSettings,
+    plan_usage: Option<micold_core::plan_usage::UsageReading>,
 ) -> Task<Message> {
     // A fresh connection resyncs from authoritative state (FR-028): clear the transient
     // disconnected/displaced flags of what this daemon serves. If a project is still held by
@@ -1799,6 +1808,8 @@ pub fn on_connected(
     if is_active {
         let pr_status_enabled = settings.pr_status_enabled;
         adopt_daemon_settings(app, settings);
+        // Feature 490: the reading the service holds, under the switch just adopted.
+        app.core.plan_usage.received(plan_usage);
         // The path may have changed while this window was disconnected: an open Settings page
         // shows the answer for the path it now holds, as after `SettingsChanged`.
         script_check =
@@ -3277,6 +3288,7 @@ pub(crate) mod tests {
                 outbox: micold_client::daemon::Outbox::new(tx),
                 catalog: snapshot_with("/repo/demo", Vec::new()),
                 settings: crate::tests::quiet_settings(),
+                plan_usage: None,
             }),
         );
         (rx, sent)

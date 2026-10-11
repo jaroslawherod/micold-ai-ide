@@ -1440,6 +1440,17 @@ Claude session started by the app has had a response.
 
 Sessions on other AI CLIs, and Claude sessions you started outside the app, are not changed.
 
+Once a Claude session has had a response, the app bar shows the usage at its right-hand end,
+before the project switcher: the highest percentage among your plan's limits and when that limit
+resets, for example **42% · 15:30**. The reset is in your local time, with the day added when it is
+more than a day away. Hover the indicator to see every limit with its percentage and reset time,
+and when the values were last updated.
+
+When a limit's reset time passes, it drops out and the indicator shows the highest limit still
+running. When none is left, or no Claude session has had a response since the app's background
+service started, the indicator is hidden. There is no error or notice when the values are not
+available, for example offline, signed out, or with an API key instead of a plan.
+
 ## Colored, real-terminal output
 
 The embedded terminal renders the AI CLI's output like a real terminal, not as flat text:
