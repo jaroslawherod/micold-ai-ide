@@ -67,6 +67,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | B r1 F2 | Default location never bound | The `""` key resolves to the legacy default; an explicit write needs the rebind action (M3, T034). Test A1 covers resolution. |
 | M1 | B r1 F4 | T010 production wiring | Per-daemon inputs exist and are tested; callers switch in M2 with the actor (T018+), as T014 keeps the single path. |
 | M2 | A r1 F5 | dial failure inserts into `disconnected` before the debounce | The stale-content banner on the first dial failure is the pre-existing single-connection behaviour; the per-daemon state (debounced) drives the row labels, which is what FR-009 asks. |
+| M3 | B r1 F2 | old `settings/daemon.rs` not replaced (T034) | MINOR; it is the Session service section and carries the sandbox settings, which the Daemons list does not duplicate. |
 | M3 | A r1 F4 | daemon_facts counts only the active project's worktrees | Recorded as follow-up: the confirmation count covers worktrees known to this window; the cross-project view needs the persisted per-project lists. |
 | M3 | A r1 F5 | route_for only called by tests | MINOR; kept as the reducer's documented resolution seam, the production path resolves through links::route. |
 
