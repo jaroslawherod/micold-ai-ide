@@ -117,14 +117,15 @@ mod tests {
         }
     }
 
-    /// U2: `data_usage` is its own glyph, and `on_surface_variant` is legible on the bar.
+    /// U2: `data_usage` is its own glyph, and `on_surface_variant` is legible on the bar as text
+    /// (the label is `label_large`, not large text).
     #[test]
     fn the_glyph_is_data_usage_and_legible_on_the_bar() {
         assert_eq!(Icon::PlanUsage.glyph(), '\u{e1af}');
         for scheme in [ColorScheme::Light, ColorScheme::Dark] {
             let r = tokens::roles(scheme);
             assert!(
-                tokens::contrast(r.on_surface_variant, r.surface) >= tokens::AA_NON_TEXT,
+                tokens::contrast(r.on_surface_variant, r.surface) >= tokens::AA_TEXT,
                 "{scheme:?}"
             );
         }

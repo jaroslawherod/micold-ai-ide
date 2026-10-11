@@ -389,14 +389,12 @@ pub fn usage_indicator<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element
         vec![
             posed(
                 "normal",
-                UsageIndicator::<Message>::new(samples::USAGE_LABEL, &roles)
-                    .details(details())
-                    .into(),
+                UsageIndicator::<Message>::new(samples::USAGE_LABEL, &roles).details(details()),
                 roles,
             ),
             posed(
                 "long label",
-                UsageIndicator::<Message>::new(samples::USAGE_LONG_LABEL, &roles).into(),
+                UsageIndicator::<Message>::new(samples::USAGE_LONG_LABEL, &roles),
                 roles,
             ),
         ],
