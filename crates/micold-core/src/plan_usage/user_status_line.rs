@@ -48,9 +48,15 @@ struct StatusLineBlock {
     #[serde(rename = "type")]
     kind: String,
     command: String,
-    padding: Option<u32>,
+    // Kept loose: an odd optional value (a fraction, a string) must not cost the user their line.
+    padding: Option<serde_json::Value>,
     #[serde(rename = "refreshInterval")]
-    refresh_interval: Option<u32>,
+    refresh_interval: Option<serde_json::Value>,
+}
+
+/// A whole number that fits `u32`, else nothing.
+fn whole(value: Option<serde_json::Value>) -> Option<u32> {
+    value?.as_u64()?.try_into().ok()
 }
 
 impl UserStatusLine {
@@ -79,7 +85,7 @@ fn read(path: &Path) -> Option<UserStatusLine> {
     let block: StatusLineBlock = serde_json::from_value(file.status_line?).ok()?;
     (block.kind == "command" && !block.command.trim().is_empty()).then_some(UserStatusLine {
         command: block.command,
-        padding: block.padding,
-        refresh_interval: block.refresh_interval,
+        padding: whole(block.padding),
+        refresh_interval: whole(block.refresh_interval),
     })
 }

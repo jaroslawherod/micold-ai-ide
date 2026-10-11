@@ -176,9 +176,8 @@ async fn the_switch_rewrites_every_live_sessions_settings_and_relay_file() {
         cwd: dir.path().join("project"),
         locations: ConfigLocations::default(),
     };
-    let settings = receiver
-        .prepare_settings(session_id(A), context, true)
-        .unwrap();
+    receiver.set_plan_usage(true);
+    let settings = receiver.prepare_settings(session_id(A), context).unwrap();
     let relay = receiver.relay_file(session_id(A));
     service.state.set_hooks(receiver);
     let has_block = || {

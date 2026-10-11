@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-u1pay5
 - **Started**: 2026-10-10
 - **Phase**: M2
-- **Next step**: M2: T018–T021 red, then T022–T027
+- **Next step**: M2 PR: full gate, push, open, merge; then M3
 
 ## Pull requests
 
@@ -50,6 +50,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Tasks | 1 | f491c06f7c981feadd01b9f3fe232bba92085878:ce1baee44edcfdf64c10b86807c39f96ce42d697 | CLEAN |
 | M1 review A (high) | 1 | f2c8b438 | 10 findings: 6 fixed (403 log set bounded to known sessions; idle-session repeats ignored, FR-019; non-numeric or out-of-range `resets_at` drops the window; key-order doc; `unix_secs` reuses `unix_now`; rejections reset only on a kept reading), 3 declined (below), 1 taste |
 | M1 review B (conformance) | 1 | f2c8b438 | CHANGES: F1 MAJOR no `tdd/cycle-log.md` — fixed (backfilled with the red/green commits); F2 MINOR = review A's 403 set, fixed; F3 MINOR status/reason coupling, fixed |
+| M2 review A (high) | 1 | ac3fec9c:6e6f9ab2 | 10 findings: 4 fixed (`forget` now runs at session removal; one lock over switch, prepare and forget, the receiver owns the switch; odd `padding`/`refreshInterval` keep the command; shared `claude_locations` helper), 6 declined (below) |
+| M2 review B (conformance, sonnet) | 1 | ac3fec9c:6e6f9ab2 | CHANGES: F1 BLOCKER Windows shells not wrapped in `no_window` (console flash; `background_spawns_hide_console` red) — fixed |
 
 ## Declined review findings
 
@@ -59,6 +61,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| M2 | A | `shell_quoted` does not escape `$`, backtick, `"` | The paths are the daemon executable and the app's own data dir; contract S1.2 fixes double quotes (Claude Code's Git Bash rule) |
+| M2 | A | A higher-precedence `statusLine` that is not a usable command should win, not fall through | Spec/data-model *UserStatusLine* choose fall-through to the first usable command (T018 asserts it) |
+| M2 | A | Switch off deletes the relay file while a running session still calls it, blanking the user's line until reload | Contract S1.3/FR-002: no relay file while off; Decision 5 accepts the reload lag |
+| M2 | A | Feeder joined before `wait` can hang | Not reproducible: a child that never exits blocks `wait` either way; once it exits the write fails |
+| M2 | A | Joining the POST adds up to 500 ms when the daemon is down | Contract S2.3 bounds it at 500 ms; the user's line is already written |
+| M2 | A | Windows GUI-subsystem std handles may be invalid | Speculative; research R3 Windows note, quickstart §B4 checks it on Windows |
+| M2 | A | Two switch toggles in the same instant can apply out of order | Far-fetched (two windows within ms); the next toggle corrects it |
 
 ## Handover
 
