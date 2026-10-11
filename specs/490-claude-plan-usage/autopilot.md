@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #490
 - **Worktree branch**: claude/project-thread-u1pay5
 - **Started**: 2026-10-10
-- **Phase**: M2
-- **Next step**: M2 PR: full gate, push, open, merge; then M3
+- **Phase**: M3
+- **Next step**: M3: implement T028–T038, verify, PR
 
 ## Pull requests
 
@@ -18,13 +18,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #694 | design (spec, plan, tasks) | merged | 984ef002 |
 | #772 | M1 + gate runs permission tests as a normal user under root (jaro's pick) | merged | d9bd52e2 |
+| #777 | M2 status-line relay | merged | a0dbee58 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T017 | full | `/status` POST → daemon keeps reading, Welcome + PlanUsageChanged broadcast | #772 | merged |
-| M2 | T018–T027 | full | app-run Claude sessions post readings via `micold-daemon status-line`, user's status line kept | — | pending |
+| M2 | T018–T027 | full | app-run Claude sessions post readings via `micold-daemon status-line`, user's status line kept | #777 | merged |
 | M3 | T028–T038 | full | app bar shows `NN% · HH:MM` + tooltip; hidden without a current reading | — | pending |
 | M4 | T039–T046 | light | warning look at threshold; Settings → Environment switch, threshold, statement | — | pending |
 

@@ -155,6 +155,23 @@ fn the_pull_request_interval_is_subscribed_only_while_enabled_and_held() {
     );
 }
 
+/// The plan-usage clock (feature 490, research R7) runs only while a reading is held: it exists to
+/// drop a window whose reset has passed, and with nothing held there is nothing to drop.
+#[test]
+fn the_plan_usage_tick_is_subscribed_only_while_a_reading_is_held() {
+    let src = fs::read_to_string(subscriptions_rs()).expect("read src/shell/subscriptions.rs");
+    let guard = enclosing_block(&src, "every(PLAN_USAGE_TICK)")
+        .expect("the plan-usage tick is subscribed unconditionally — it must be in an `if`");
+    assert!(
+        guard.contains("plan_usage.ticks()"),
+        "the plan-usage tick is inside `{guard}`, which does not test for a held reading (490 R7)"
+    );
+    assert!(
+        src.contains("const PLAN_USAGE_TICK: Duration = Duration::from_secs(30);"),
+        "the plan-usage tick is every 30 s (490 R7)"
+    );
+}
+
 /// The OS theme poll is deliberately *not* conditional, and that is the assertion.
 ///
 /// This is the inverse failure and it has already happened once (003 FR-006 / SC-003): the poll

@@ -58,6 +58,7 @@ fn expected(icon: Icon) -> char {
         Icon::ChecksPending => '\u{e8b5}',
         Icon::ChecksFailing => '\u{e5c9}',
         Icon::OpenInBrowser => '\u{e89e}',
+        Icon::PlanUsage => '\u{e1af}',
     }
 }
 
