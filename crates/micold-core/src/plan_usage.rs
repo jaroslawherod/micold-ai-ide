@@ -6,9 +6,11 @@
 //! `rate_limits`.
 //!
 //! Render-free and I/O-free: times are Unix seconds, and the caller passes `now` and the local
-//! offset, so a test can pin both.
+//! offset, so a test can pin both. The one exception is [`user_status_line`], which reads the
+//! `statusLine` key of Claude Code's settings files so the relay can keep the user's own line.
 
 pub mod status_line;
+pub mod user_status_line;
 
 use chrono::{DateTime, FixedOffset};
 use serde::{Deserialize, Serialize};
