@@ -750,11 +750,11 @@ mod issue_mapping {
     #[test]
     fn the_section_is_fifth_and_named() {
         assert_eq!(
-            SettingsSection::ALL.get(4),
+            SettingsSection::ALL.get(5),
             Some(&SettingsSection::GithubIssues),
-            "GitHub is the fifth section in the rail (AS1)"
+            "GitHub is the last section in the rail, after Daemons and Session service (AS1)"
         );
-        assert_eq!(SettingsSection::ALL.len(), 5);
+        assert_eq!(SettingsSection::ALL.len(), 6);
         // Feature 040 (FR-029): the page also holds the pull request switch, so it is "GitHub".
         assert_eq!(SettingsSection::GithubIssues.label(), "GitHub");
         assert_eq!(

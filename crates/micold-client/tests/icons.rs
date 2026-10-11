@@ -41,6 +41,7 @@ fn expected(icon: Icon) -> char {
         Icon::ActivityEnded => '\u{e836}',
         Icon::SelectChevron => '\u{e5cf}',
         Icon::SessionService => '\u{e875}',
+        Icon::Daemons => '\u{eb2f}',
         Icon::Refresh => '\u{e5d5}',
         Icon::IssueMapping => '\u{e892}',
         Icon::MoveUp => '\u{e316}',
@@ -91,7 +92,7 @@ fn all_covers_every_variant_without_duplicates() {
     // `block`, `check`, `schedule`, `cancel`; `edit` is `Rename`'s and `close` is `Close`'s), +1 for `OpenInBrowser`
     // (feature 040's **Open pull request** menu entry — `open_in_new`), +2 for feature 484's pane
     // split buttons (`vertical_split`, `horizontal_split`).
-    assert_eq!(Icon::ALL.len(), 49, "curated set size");
+    assert_eq!(Icon::ALL.len(), 50, "curated set size");
 
     // No duplicate variants.
     for (i, &a) in Icon::ALL.iter().enumerate() {

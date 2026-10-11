@@ -264,6 +264,8 @@ pub enum SettingsSection {
     Terminal,
     /// The environment sourced into each session.
     Environment,
+    /// The configured daemons: their state, and add, edit and remove (feature 491, FR-010).
+    Daemons,
     /// Where the session service runs and what it may reach (FR-028).
     Daemon,
     /// How an issue's labels choose a worktree's type (feature 034, FR-018).
@@ -276,6 +278,7 @@ impl SettingsSection {
         SettingsSection::Appearance,
         SettingsSection::Terminal,
         SettingsSection::Environment,
+        SettingsSection::Daemons,
         SettingsSection::Daemon,
         SettingsSection::GithubIssues,
     ];
@@ -286,6 +289,7 @@ impl SettingsSection {
             SettingsSection::Appearance => "Appearance",
             SettingsSection::Terminal => "Terminal",
             SettingsSection::Environment => "Environment",
+            SettingsSection::Daemons => "Daemons",
             SettingsSection::Daemon => "Session service",
             SettingsSection::GithubIssues => "GitHub",
         }
@@ -306,6 +310,7 @@ impl SettingsSection {
             // The environment section is where the default agent is chosen, which is the part of it
             // a user is looking for when they come here.
             SettingsSection::Environment => Icon::AiCli,
+            SettingsSection::Daemons => Icon::Daemons,
             SettingsSection::Daemon => Icon::SessionService,
             SettingsSection::GithubIssues => Icon::IssueMapping,
         }

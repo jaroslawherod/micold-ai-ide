@@ -194,7 +194,8 @@ fn every_popover_is_in_the_table() {
     // Fifteen with `confirm_dismiss_run_group`, the question Dismiss group asks (feature 483).
     // Sixteen with `confirm_pick_run`, the question Pick this one asks (feature 483).
     // Eighteen with `run_cleanup_offer` and its `run_cleanup_second_confirm` (feature 483).
-    const DIALOGS: usize = 18;
+    // Twenty with `confirm_daemon_removal` and `bind_daemon` (feature 491).
+    const DIALOGS: usize = 20;
     assert_eq!(
         micold_client::overlay::registry::probes().len(),
         DIALOGS + DISPLACES.len(),

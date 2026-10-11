@@ -402,7 +402,11 @@ pub fn on_disconnected(app: &mut App, daemon: DaemonId) -> Task<Message> {
     // Only this daemon's link is dropped: the others keep their outbox, state and pending ops
     // (feature 491, FR-007). `Lost` is folded here; a daemon that never connected was folded by
     // `on_connect_failed`, so a `Disconnected` that follows is the same dial failing again.
-    let _ = app.core.settings.links.lost(daemon, "connection lost");
+    daemon_event(
+        app,
+        daemon,
+        DaemonEvent::Lost("connection lost".to_string()),
+    );
     app.daemon_catalogs.remove(&daemon);
     let was_active = app.active_daemon() == Some(daemon);
     // Content on screen is now stale; the banner says so (FR-027). The subscription is
@@ -570,11 +574,7 @@ fn is_sandbox_daemon(app: &App, daemon: DaemonId) -> bool {
 pub fn on_connect_failed(app: &mut App, daemon: DaemonId, reason: String) -> Task<Message> {
     // The dial failed: folded for this daemon alone, debounced by the state machine so a first
     // transient failure is not shown (feature 491, FR-007).
-    let _ = app
-        .core
-        .settings
-        .links
-        .apply(daemon, DaemonEvent::DialFailed(reason.clone()));
+    daemon_event(app, daemon, DaemonEvent::DialFailed(reason.clone()));
     app.disconnected.insert(daemon);
     if !is_sandbox_daemon(app, daemon) {
         // Another daemon's dial: its state and the sidebar row say so. The sandbox's refused-dial
@@ -596,11 +596,7 @@ pub fn on_connect_failed(app: &mut App, daemon: DaemonId, reason: String) -> Tas
 /// is a bring-up started — the service is there, and a new container would meet the same answer.
 pub fn on_refused(app: &mut App, daemon: DaemonId, reason: String) -> Task<Message> {
     crate::log_line(&format!("attach: refused reason={reason}"));
-    let _ = app
-        .core
-        .settings
-        .links
-        .apply(daemon, DaemonEvent::DialFailed(reason.clone()));
+    daemon_event(app, daemon, DaemonEvent::DialFailed(reason.clone()));
     app.disconnected.insert(daemon);
     app.core
         .notify_error(format!("Could not connect to the session daemon: {reason}"));
@@ -742,6 +738,14 @@ pub fn refresh_cli_availability(app: &mut App) {
     }
 }
 
+/// Fold `event` into `daemon`'s link and keep what it said for the Daemons section's details
+/// (feature 491, T034). Only `daemon`'s state and diagnostics change.
+fn daemon_event(app: &mut App, daemon: DaemonId, event: DaemonEvent) {
+    app.core.update(Message::Daemons(
+        micold_client::features::daemons::Msg::EventReported(daemon, event),
+    ));
+}
+
 /// A version mismatch from `daemon`: recorded for it alone.
 pub(crate) fn on_version_mismatch(
     app: &mut App,
@@ -750,7 +754,8 @@ pub(crate) fn on_version_mismatch(
     server: u32,
     server_build: String,
 ) {
-    let _ = app.core.settings.links.apply(
+    daemon_event(
+        app,
         daemon,
         micold_client::links::refused(client.to_string(), server.to_string()),
     );
@@ -765,7 +770,8 @@ pub(crate) fn on_build_mismatch(
     client_build: String,
     daemon_build: String,
 ) {
-    let _ = app.core.settings.links.apply(
+    daemon_event(
+        app,
         daemon,
         micold_client::links::refused(client_build.clone(), daemon_build.clone()),
     );
@@ -1746,6 +1752,21 @@ pub fn on_connected(
     if !app.core.settings.links.connected(daemon, outbox) {
         return Task::none();
     }
+    // The row's version and log tail (feature 491, T034). The handshake only succeeds between
+    // equal protocol versions, so that version is the one the daemon runs.
+    use micold_client::features::daemons::Msg as DaemonsMsg;
+    app.core
+        .update(Message::Daemons(DaemonsMsg::VersionReported(
+            daemon,
+            format!(
+                "protocol {}",
+                micold_core::protocol::version::PROTOCOL_VERSION
+            ),
+        )));
+    app.core.update(Message::Daemons(DaemonsMsg::LogLine(
+        daemon,
+        "connected".to_string(),
+    )));
     app.disconnected.remove(&daemon);
     if is_sandbox_daemon(app, daemon) {
         app.sandbox.answered();

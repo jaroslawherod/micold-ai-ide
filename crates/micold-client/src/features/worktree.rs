@@ -728,3 +728,10 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
     }
     Vec::new()
 }
+
+/// Whether a worktree's menu offers **Bind to daemon...**: its location resolves to no daemon
+/// (feature 491, T036, FR-014). Never offered for a bound one, which is rebound by editing the
+/// binding elsewhere, and never started on before the user has chosen.
+pub fn bind_offered(state: &crate::app::State, dir: &str) -> bool {
+    state.daemon_binding(dir) == micold_core::daemons::Binding::NoDaemon
+}

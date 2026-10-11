@@ -25,7 +25,7 @@ use crate::features::settings::Msg as SettingsMsg;
 use crate::features::settings::{ScriptCheck, SettingsDraft, SettingsSection};
 use crate::features::window::FieldId;
 use crate::ui::material::{self, Button, Scrollable, Section, SectionList, SurfaceKind};
-use crate::ui::settings::{appearance, daemon, environment, github, terminal};
+use crate::ui::settings::{appearance, daemon, daemons, environment, github, terminal};
 use iced::widget::{column, row, Space};
 use iced::{Element, Length};
 use micold_core::env_include::EnvIncludeOutcome;
@@ -57,6 +57,11 @@ pub fn view<'a>(
     availability: Option<&'a CliAvailability>,
     focused: Option<FieldId>,
     rail_collapsed: bool,
+    // The Daemons section's list and what its form remembers (feature 491, M3).
+    daemons: (
+        &'a crate::features::daemons::State,
+        crate::features::daemons::ViewModel,
+    ),
     scheme: ColorScheme,
 ) -> Element<'a, Message> {
     let r = tokens::roles(scheme);
@@ -98,6 +103,7 @@ pub fn view<'a>(
             focused,
             r,
         ),
+        SettingsSection::Daemons => daemons::view(daemons.0, daemons.1, focused, r),
         SettingsSection::Daemon => daemon::view(draft, in_force, availability, focused, r),
         SettingsSection::GithubIssues => github::view(draft, focused, r),
     };

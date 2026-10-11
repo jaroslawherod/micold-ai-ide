@@ -22,6 +22,7 @@ pub mod changes_watch;
 pub mod clipboard;
 pub mod connection;
 pub mod daemon_sync;
+pub mod daemons;
 pub mod desktop_notify;
 pub mod drops;
 pub mod env_include;

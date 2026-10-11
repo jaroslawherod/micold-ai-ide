@@ -200,10 +200,8 @@ impl App {
 
     /// Interpret what the Daemons feature reported (feature 491, M3): a registry change is kept in
     /// the window's settings, written to the settings file and brought into `links`; a binding is
-    /// kept in the workspace and in the project's state file. Sessions ended by a removal are the
-    /// session feature's to close, and are not handled here.
-    // Called by the Daemons view's message arm, which arrives with the M3 view tasks.
-    #[allow(dead_code)]
+    /// kept in the workspace and in the project's state file. Sessions ended by a removal are stopped by
+    /// `shell::daemons` and closed by the root's interpretation of the outcome.
     pub(crate) fn apply_daemon_outcome(&mut self, outcome: &micold_client::features::Outcome) {
         use micold_client::features::Outcome;
         match outcome {

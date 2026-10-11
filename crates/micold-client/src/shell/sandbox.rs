@@ -935,11 +935,22 @@ pub fn stop(plan: &BootPlan) -> iced::Task<micold_client::app::Message> {
 pub fn update(app: &mut crate::App, msg: SandboxMsg) -> Task<Message> {
     let task = apply(app, msg);
     // The rows' "container runtime not found" text reads this (feature 491, T028).
+    let was_missing = app.core.settings.runtime_missing;
     app.core.settings.runtime_missing = matches!(
         &app.sandbox.state,
         micold_core::sandbox::lifecycle::SandboxState::Failed(f)
             if matches!(f.error, micold_core::sandbox::runtime::RuntimeError::NotInstalled { .. })
     );
+    // And the sandbox daemon's details say why, once (T034).
+    if app.core.settings.runtime_missing && !was_missing {
+        let daemon = app.sandbox_daemon();
+        app.core.update(Message::Daemons(
+            micold_client::features::daemons::Msg::RuntimeMissing(
+                daemon,
+                "container runtime not found".to_string(),
+            ),
+        ));
+    }
     task
 }
 

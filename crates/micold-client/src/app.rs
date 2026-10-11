@@ -97,6 +97,9 @@ pub enum Message {
     /// 028, FR-001). Thirty-seven variants — the largest feature in the application — moved behind
     /// this one; see [`crate::features::session::Msg`].
     Session(crate::features::session::Msg),
+    /// Everything the user can do to the daemon list, its removal confirmation and the
+    /// `Bind to daemon...` picker (feature 491, M3); see [`crate::features::daemons::Msg`].
+    Daemons(crate::features::daemons::Msg),
     /// A dialog has finished animating out (feature 017, FR-011). Emitted by the `Modal` component
     /// itself, which owns the transition, so the binary can release the snapshot it was rendering
     /// from ([`crate::overlay::registry::Closing`]). The binary used to watch a central progress
@@ -266,6 +269,8 @@ pub struct State {
     pub sidebar: crate::features::sidebar::State,
     /// What the session feature remembers -- see [`crate::features::session::State`].
     pub session: crate::features::session::State,
+    /// What the daemons feature remembers -- see [`crate::features::daemons::State`].
+    pub daemon_list: crate::features::daemons::State,
     /// What the worktree_form feature remembers -- see [`crate::features::worktree_form::State`].
     pub worktree_form: crate::features::worktree_form::State,
     /// What the attach feature remembers -- see [`crate::features::attach::State`].
@@ -665,6 +670,109 @@ impl State {
                 .any(|open| open.id() != SurfaceId::new(Self::TERMINAL_CONTEXT_MENU))
     }
 
+    /// Every location the window knows and the live sessions of each daemon, which the Daemons
+    /// reducer and its list are worked out from (feature 491, M3).
+    fn daemon_facts(
+        &self,
+    ) -> (
+        Vec<micold_core::daemons::WorktreeRef>,
+        std::collections::BTreeMap<
+            micold_core::daemons::DaemonId,
+            Vec<micold_core::session::SessionId>,
+        >,
+    ) {
+        use micold_core::daemons::WorktreeRef;
+        use micold_core::session::SessionLifecycle;
+        let mut locations: Vec<WorktreeRef> = Vec::new();
+        for project in &self.workspace.projects {
+            locations.push(WorktreeRef {
+                project: project.path.clone(),
+                worktree: String::new(),
+            });
+        }
+        if let Some(active) = &self.workspace.active {
+            for wt in &self.worktree.worktrees {
+                locations.push(WorktreeRef {
+                    project: active.clone(),
+                    worktree: wt.dir_name.clone(),
+                });
+            }
+        }
+        let mut sessions: std::collections::BTreeMap<_, Vec<_>> = std::collections::BTreeMap::new();
+        for (project, list) in &self.workspace.sessions {
+            for session in list {
+                let key = match &session.location {
+                    micold_core::session::SessionLocation::Worktree(dir) => dir.clone(),
+                    micold_core::session::SessionLocation::Default => String::new(),
+                };
+                locations.push(WorktreeRef {
+                    project: project.clone(),
+                    worktree: key,
+                });
+                let live = !session.archived
+                    && matches!(
+                        session.lifecycle,
+                        SessionLifecycle::Running
+                            | SessionLifecycle::Starting
+                            | SessionLifecycle::Restarting { .. }
+                    );
+                let daemon = crate::catalog_sync::session_daemon(self, project, session)
+                    .or(self.settings.legacy_default_daemon);
+                if let (true, Some(daemon)) = (live, daemon) {
+                    if self.settings.daemons.get(daemon).is_some() {
+                        sessions.entry(daemon).or_default().push(session.id);
+                    }
+                }
+            }
+        }
+        locations.sort();
+        locations.dedup();
+        (locations, sessions)
+    }
+
+    /// The Daemons list as the Settings section and the bind picker draw it (feature 491, M3).
+    ///
+    /// Worked out on copies of the registry, links and bindings, because the reducer's model holds
+    /// them mutably; a view reads, and the copies are dropped with the call.
+    pub fn daemon_rows(&self) -> crate::features::daemons::ViewModel {
+        let (locations, sessions) = self.daemon_facts();
+        let mut registry = self.settings.daemons.clone();
+        let mut links = self.settings.links.clone();
+        let mut bindings = self.workspace.bindings.clone();
+        let model = crate::features::daemons::Model {
+            registry: &mut registry,
+            links: &mut links,
+            bindings: &mut bindings,
+            legacy_default: self.settings.legacy_default_daemon,
+            locations: &locations,
+            sessions: &sessions,
+        };
+        crate::features::daemons::views(&self.daemon_list, &model)
+    }
+
+    /// Apply a Daemons message and hand back what it asks the shell to persist or stop (feature
+    /// 491, M3). The model is built from the registry, the links and the bindings the window holds.
+    pub fn update_daemons(
+        &mut self,
+        msg: crate::features::daemons::Msg,
+    ) -> Vec<crate::features::Outcome> {
+        // The picker is opened from a row's menu, which a pick from it closes.
+        if matches!(msg, crate::features::daemons::Msg::BindRequested(_)) {
+            crate::features::worktree::close_menu(self);
+        }
+        let (locations, sessions) = self.daemon_facts();
+        let legacy_default = self.settings.legacy_default_daemon;
+        let mut model = crate::features::daemons::Model {
+            registry: &mut self.settings.daemons,
+            links: &mut self.settings.links,
+            bindings: &mut self.workspace.bindings,
+            legacy_default,
+            locations: &locations,
+            sessions: &sessions,
+        };
+        crate::features::daemons::update(&mut self.daemon_list, &mut model, msg)
+    }
+
     /// Apply a pull request status message and hand back what the shell must do (feature 040).
     ///
     /// The reading itself is the shell's (`shell/pr_status.rs`); it asks here so the root stays the
@@ -809,6 +917,10 @@ impl State {
             }
             Message::Session(msg) => {
                 let outcomes = crate::features::session::update(self, msg);
+                drain(outcomes, |outcome| interpret(self, outcome));
+            }
+            Message::Daemons(msg) => {
+                let outcomes = self.update_daemons(msg);
                 drain(outcomes, |outcome| interpret(self, outcome));
             }
             Message::EscapePressed => self.dismiss_topmost(),
@@ -1030,11 +1142,16 @@ pub fn interpret(
         Outcome::RevealSuppressed(suppressed) => state.reveal_suppression_set(suppressed),
         Outcome::FieldFocusCleared => crate::features::window::field_focus_cleared(state),
         Outcome::ClipboardWrite(_) | Outcome::OpenLink(_) | Outcome::Insert { .. } => {}
-        // The shell's: it persists the registry and the binding and acts on the sessions
-        // (`App::apply_daemon_outcome`).
-        Outcome::DaemonRegistryChanged(_)
-        | Outcome::DaemonSessionsEnded { .. }
-        | Outcome::DaemonBound { .. } => {}
+        // The shell's: it persists the registry and the binding (`App::apply_daemon_outcome`).
+        Outcome::DaemonRegistryChanged(_) | Outcome::DaemonBound { .. } => {}
+        // Sessions of a removed daemon are gone from the window; those of an edited one are
+        // stopped by the shell and stay, so the catalog's next report reconciles them. Nothing is
+        // deleted on disk either way.
+        Outcome::DaemonSessionsEnded { daemon, sessions } => {
+            if state.settings.daemons.get(daemon).is_none() {
+                return crate::features::session::closed(state, &sessions);
+            }
+        }
     }
     Vec::new()
 }

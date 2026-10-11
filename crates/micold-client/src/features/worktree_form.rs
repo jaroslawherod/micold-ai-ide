@@ -331,6 +331,10 @@ impl ResolutionState {
     }
 }
 
+/// What the form says when no daemon is configured (feature 491, T037): no runtime is offered, and
+/// the way to add one is named.
+pub const NO_DAEMONS_NOTICE: &str = "No daemon is set up. Add one in Settings, under Daemons.";
+
 /// A daemon the form offers for the new worktree (feature 491, FR-006).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DaemonChoice {

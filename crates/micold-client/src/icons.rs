@@ -96,6 +96,10 @@ pub enum Icon {
     /// the gear is what *opens* Settings, and a rail row inside Settings drawn with the gear reads
     /// as "settings" rather than as one section of them.
     SessionService,
+    /// The settings section that lists the configured daemons (feature 491, M3) — Material's
+    /// `lan`, the connected-nodes glyph. Distinct from [`Icon::SessionService`], which is the one
+    /// daemon's own settings.
+    Daemons,
     /// Re-read the project's worktree list on demand (feature 029, FR-001).
     ///
     /// Material's `refresh` — the open circular arrow. Chosen over two glyphs that look like
@@ -174,6 +178,7 @@ impl Icon {
         Icon::ActivityEnded,
         Icon::SelectChevron,
         Icon::SessionService,
+        Icon::Daemons,
         Icon::Refresh,
         Icon::IssueMapping,
         Icon::MoveUp,
@@ -237,6 +242,8 @@ impl Icon {
             Icon::SelectChevron => '\u{e5cf}',
             // `dns`.
             Icon::SessionService => '\u{e875}',
+            // `lan`.
+            Icon::Daemons => '\u{eb2f}',
             Icon::Refresh => '\u{e5d5}',
             // `label` — the tag glyph GitHub's own label chips echo.
             Icon::IssueMapping => '\u{e892}',

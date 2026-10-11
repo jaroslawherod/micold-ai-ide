@@ -145,6 +145,16 @@ pub enum FieldId {
     SettingsSaveTerminalHistory,
     /// The Settings → GitHub pull request status switch (feature 040).
     SettingsPrStatus,
+    /// Settings → Daemons: the form's name field (feature 491).
+    DaemonName,
+    /// Settings → Daemons: the form's container name field (feature 491).
+    DaemonContainerName,
+    /// Settings → Daemons: the form's port field (feature 491).
+    DaemonPort,
+    /// Settings → Daemons: the form's image field (feature 491).
+    DaemonImage,
+    /// Settings → Daemons: the form's connect-at-launch checkbox (feature 491).
+    DaemonAutoStart,
     /// Settings: the "let AI sessions manage worktrees and sessions" checkbox (feature 034, FR-004).
     SettingsToolServer,
     /// Settings: the "Desktop notifications" checkbox (feature 039, FR-026).
