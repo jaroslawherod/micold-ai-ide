@@ -665,6 +665,8 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         // effect or a write to the binary-owned `app.sandbox`, so all six are
         // `shell/sandbox.rs` now (contract M2).
         Message::Sandbox(msg) => shell::sandbox::update(app, msg),
+        // Feature 491, M3: the Daemons section's reducer, and what its outcomes ask of the shell.
+        Message::Daemons(msg) => shell::daemons::update(app, msg),
         Message::PrStatus(msg) => shell::pr_status::update(app, msg),
         Message::Changes(msg) => shell::changes::update(app, msg),
         // Feature 027, FR-030. The one thing the reducer cannot do: focus belongs to the widget

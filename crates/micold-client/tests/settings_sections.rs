@@ -45,12 +45,7 @@ use std::path::{Path, PathBuf};
 ///
 /// Feature 040's pull request switch was stored from its milestone M2 (protocol 22) and got its
 /// checkbox in the GitHub section with M4 (T038), so it left this list the same way.
-const DEFERRED: &[(&str, &str)] = &[
-    // Feature 491: the daemon registry has no editor until M3's Settings Daemons section.
-    ("daemons", "T031"),
-    ("next_daemon_id", "T031"),
-    ("legacy_default_daemon", "T031"),
-];
+const DEFERRED: &[(&str, &str)] = &[];
 
 /// Settings stored with the others but chosen outside the Settings screen, each with the client
 /// source that holds its control and the message that control sends. No Settings section will ever
@@ -58,8 +53,24 @@ const DEFERRED: &[(&str, &str)] = &[
 /// checks the control is where the entry says.
 ///
 /// Feature 482's diff layout is chosen in the Changes view's toolbar (FR-006).
-const CHOSEN_ELSEWHERE: &[(&str, &str, &str)] =
-    &[("diff_layout", "src/ui/changes.rs", "Msg::LayoutChosen(")];
+///
+/// Feature 491's daemon registry is edited in the Daemons section, which saves it with its own form
+/// and not through the settings draft, so the section declares no `SETTINGS`; the registry, its id
+/// counter and the legacy default it was migrated into are chosen there (T034).
+const CHOSEN_ELSEWHERE: &[(&str, &str, &str)] = &[
+    ("diff_layout", "src/ui/changes.rs", "Msg::LayoutChosen("),
+    ("daemons", "src/ui/settings/daemons.rs", "DaemonsMsg::Saved"),
+    (
+        "next_daemon_id",
+        "src/ui/settings/daemons.rs",
+        "DaemonsMsg::Saved",
+    ),
+    (
+        "legacy_default_daemon",
+        "src/ui/settings/daemons.rs",
+        "DaemonsMsg::Saved",
+    ),
+];
 
 fn client_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))

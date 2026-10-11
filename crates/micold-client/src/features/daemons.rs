@@ -21,6 +21,9 @@ use micold_core::session::SessionId;
 
 use super::Outcome;
 use crate::links::{route, DaemonLinks, Route};
+use crate::overlay::registry::Registered;
+use crate::overlay::{DismissalRules, FloatingSurface, SurfaceId};
+use micold_core::overlay::Layer;
 
 /// What the reducer acts on: the registry, the connection of each daemon, the bindings and what
 /// runs where. Borrowed from the app's settings and workspace for the length of one step.
@@ -130,6 +133,12 @@ pub struct ViewModel {
 pub struct State {
     /// The open add/edit form.
     pub draft: Option<Draft>,
+    /// The sentence beside the form field the last refused save was about.
+    pub form_error: Option<FormError>,
+    /// The daemons whose details (errors and log tail) are open.
+    pub details_shown: BTreeSet<DaemonId>,
+    /// The location the `Bind to daemon...` picker is open for.
+    pub bind_target: Option<WorktreeRef>,
     pending: Option<(Pending, RemovalPrompt)>,
     diagnostics: BTreeMap<DaemonId, DaemonDiagnostics>,
     versions: BTreeMap<DaemonId, String>,
@@ -593,4 +602,204 @@ pub fn bind_worktree(
         worktree: location.worktree.clone(),
         daemon,
     }])
+}
+
+/// Everything the user can do in the Daemons section, the removal confirmation and the
+/// `Bind to daemon...` picker (feature 491, M3).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Msg {
+    /// Open the form for a new daemon.
+    AddOpened,
+    /// Open the form for this daemon.
+    EditOpened(DaemonId),
+    /// Save the open form.
+    Saved,
+    /// Close the form without saving.
+    DraftDiscarded,
+    /// The name field changed.
+    NameEdited(String),
+    /// The runtime choice changed.
+    RuntimeChosen(DraftRuntime),
+    /// The container name field changed.
+    ContainerNameEdited(String),
+    /// The port field changed.
+    PortEdited(String),
+    /// The image reference field changed.
+    ImageEdited(String),
+    /// The connect-at-launch box changed.
+    AutoStartToggled(bool),
+    /// Start this daemon, and only it.
+    Started(DaemonId),
+    /// Stop this daemon, and only it.
+    Stopped(DaemonId),
+    /// Reconnect this daemon now.
+    Reconnected(DaemonId),
+    /// Ask to remove this daemon: opens the counted confirmation.
+    RemovalRequested(DaemonId),
+    /// Confirm the removal (or the counted edit).
+    RemovalConfirmed,
+    /// Decline it: nothing changes.
+    RemovalCancelled,
+    /// Show or hide this daemon's errors and log tail.
+    DetailsToggled(DaemonId),
+    /// What one daemon's connection reported (its state moves, and what it said is kept for the
+    /// details). Sent by the shell as the connection actor's messages arrive.
+    EventReported(DaemonId, DaemonEvent),
+    /// The version a connected daemon reported.
+    VersionReported(DaemonId, String),
+    /// A line of a daemon's log.
+    LogLine(DaemonId, String),
+    /// The container runtime of this daemon cannot be used, and why.
+    RuntimeMissing(DaemonId, String),
+    /// Open the `Bind to daemon...` picker for a location.
+    BindRequested(WorktreeRef),
+    /// The picker's choice.
+    BindChosen(DaemonId),
+    /// Close the picker without binding.
+    BindCancelled,
+    /// Bind a location to a daemon, with no picker.
+    BindWorktree {
+        /// The location.
+        location: WorktreeRef,
+        /// The daemon.
+        daemon: DaemonId,
+    },
+}
+
+/// Apply one message. The registry, the links and the bindings change through `model`; what the
+/// shell must persist or stop comes back as [`Outcome`]s.
+pub fn update(state: &mut State, model: &mut Model<'_>, msg: Msg) -> Vec<Outcome> {
+    let edit = |state: &mut State, f: &dyn Fn(&mut Draft)| {
+        if let Some(draft) = state.draft.as_mut() {
+            f(draft);
+        }
+        state.form_error = None;
+    };
+    match msg {
+        Msg::AddOpened => {
+            begin_add(state);
+            state.form_error = None;
+        }
+        Msg::EditOpened(id) => {
+            state.form_error = None;
+            begin_edit(state, model, id);
+        }
+        Msg::Saved => match save(state, model) {
+            Ok(out) => {
+                state.form_error = None;
+                return out;
+            }
+            Err(error) => state.form_error = Some(error),
+        },
+        Msg::DraftDiscarded => {
+            discard_draft(state);
+            state.form_error = None;
+        }
+        Msg::NameEdited(v) => edit(state, &|d| d.name = v.clone()),
+        Msg::RuntimeChosen(v) => edit(state, &|d| d.runtime = v),
+        Msg::ContainerNameEdited(v) => edit(state, &|d| d.container_name = v.clone()),
+        Msg::PortEdited(v) => edit(state, &|d| d.port = v.clone()),
+        Msg::ImageEdited(v) => edit(state, &|d| d.profile.image.reference = v.clone()),
+        Msg::AutoStartToggled(v) => edit(state, &|d| d.auto_start = v),
+        Msg::Started(id) => {
+            start(state, model, id);
+        }
+        Msg::Stopped(id) => {
+            stop(state, model, id);
+        }
+        Msg::Reconnected(id) => {
+            reconnect(state, model, id);
+        }
+        Msg::RemovalRequested(id) => {
+            request_removal(state, model, id);
+        }
+        Msg::RemovalConfirmed => {
+            let out = confirm(state, model);
+            state
+                .details_shown
+                .retain(|id| model.registry.get(*id).is_some());
+            return out;
+        }
+        Msg::RemovalCancelled => cancel(state),
+        Msg::DetailsToggled(id) => {
+            if !state.details_shown.remove(&id) {
+                state.details_shown.insert(id);
+            }
+        }
+        Msg::EventReported(id, event) => {
+            daemon_event(state, model.links, id, event);
+        }
+        Msg::VersionReported(id, version) => version_reported(state, id, &version),
+        Msg::LogLine(id, line) => log_line(state, id, line),
+        Msg::RuntimeMissing(id, reason) => runtime_missing(state, id, &reason),
+        Msg::BindRequested(location) => state.bind_target = Some(location),
+        Msg::BindChosen(daemon) => {
+            if let Some(location) = state.bind_target.take() {
+                return bind_worktree(model, &location, daemon).unwrap_or_default();
+            }
+        }
+        Msg::BindCancelled => state.bind_target = None,
+        Msg::BindWorktree { location, daemon } => {
+            return bind_worktree(model, &location, daemon).unwrap_or_default();
+        }
+    }
+    Vec::new()
+}
+
+/// The removal confirmation, as a floating surface (feature 491, T035). Declining is what Escape
+/// and the scrim do, so a removal is never half applied.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ConfirmDaemonRemovalDialog;
+
+impl FloatingSurface for ConfirmDaemonRemovalDialog {
+    fn id(&self) -> SurfaceId {
+        SurfaceId::new("confirm_daemon_removal")
+    }
+
+    fn layer(&self) -> Layer {
+        Layer::Dialog
+    }
+
+    fn dismissal(&self) -> DismissalRules {
+        DismissalRules::for_layer(Layer::Dialog)
+            .cancelled_by(crate::app::Message::Daemons(Msg::RemovalCancelled))
+    }
+}
+
+impl Registered for ConfirmDaemonRemovalDialog {
+    fn open_in(state: &crate::app::State) -> Option<Self> {
+        state
+            .daemon_list
+            .prompt()
+            .map(|_| ConfirmDaemonRemovalDialog)
+    }
+}
+
+/// The `Bind to daemon...` picker, as a floating surface (feature 491, T036).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BindDaemonDialog;
+
+impl FloatingSurface for BindDaemonDialog {
+    fn id(&self) -> SurfaceId {
+        SurfaceId::new("bind_daemon")
+    }
+
+    fn layer(&self) -> Layer {
+        Layer::Dialog
+    }
+
+    fn dismissal(&self) -> DismissalRules {
+        DismissalRules::for_layer(Layer::Dialog)
+            .cancelled_by(crate::app::Message::Daemons(Msg::BindCancelled))
+    }
+}
+
+impl Registered for BindDaemonDialog {
+    fn open_in(state: &crate::app::State) -> Option<Self> {
+        state
+            .daemon_list
+            .bind_target
+            .as_ref()
+            .map(|_| BindDaemonDialog)
+    }
 }

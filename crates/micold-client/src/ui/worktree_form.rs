@@ -80,9 +80,23 @@ pub fn modal<'a>(
             )
             .label("Daemon"),
         );
+    } else {
+        // No runtime is offered with none configured: say how to get one (feature 491, T037).
+        fields = fields.push(
+            Text::new(
+                crate::features::worktree_form::NO_DAEMONS_NOTICE,
+                TypeRole::Caption,
+                r,
+            )
+            .muted(),
+        );
     }
 
-    fields = fields.push(preview(form, r));
+    // With no daemon configured the notice above stands in for an empty preview rather than adding
+    // a row to it, so the tallest forms keep their height.
+    if !(form.daemons.is_empty() && form.preview().is_err()) {
+        fields = fields.push(preview(form, r));
+    }
 
     // Why a selected branch can't be used (FR-012). Feature 021 moved the refusal to the point of
     // choice — a blocked branch is a disabled row and can no longer become the selection — so this

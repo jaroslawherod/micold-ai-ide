@@ -41,21 +41,15 @@ another daemon because its own is down.
 - Each daemon has its own tool server, so the AI in a session only sees the worktrees of its own
   daemon; see [Tools for the AI in your sessions](agent-tools.md#one-tool-server-per-daemon).
 
-Until Settings gains a section for adding daemons, add a second one by editing the `daemons` array
-in `settings.json` ([where it is stored](settings.md#where-settings-are-stored)) with the
-application closed. Copy the existing container entry and give the copy a new `id`, a unique
-`name`, a unique `container_name` and a unique `port`:
+Add, edit, start, stop and remove daemons in **Settings, Daemons** ([the
+section](settings.md#daemons)). Names, container names and ports must be unique, and there can be
+only one host daemon; the form refuses a duplicate and names the field.
 
-```json
-{ "id": 2, "name": "Untrusted",
-  "runtime": { "kind": "container", "profile": { "survive_logout": true },
-               "container_name": "micold-sandbox-untrusted", "port": 7728 },
-  "auto_start": false }
-```
-
-Names, ids, container names and ports must be unique, ids are never reused, and there can be only
-one `"kind": "host"` entry. Removing an entry leaves worktrees on disk untouched; its worktrees show
-`no daemon` until you bind them elsewhere.
+**Removing a daemon** asks first and states how many worktrees are bound to it and how many sessions
+are running on it. Confirming stops those sessions and removes the entry. Its worktrees are kept
+and show `no daemon` until you bind each one again with **Bind to daemon...** in its right-click
+menu; no session starts there before you do. Nothing on disk is deleted and the container is not
+stopped or deleted by the application.
 
 ## Container runtimes
 

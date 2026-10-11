@@ -1,7 +1,7 @@
 # Settings
 
 Open **Settings** from the overflow menu (the three-dots button) in the top toolbar. It fills the
-main area, with a rail down the left listing five sections. The app bar and the connection strip
+main area, with a rail down the left listing six sections. The app bar and the connection strip
 stay where they are, so the way back out is always in view.
 
 **Collapse**, at the bottom of the rail, slides the rail in to its icons and gives the width to the
@@ -10,7 +10,7 @@ rail back out. Every section stays one press away while the rail is collapsed or
 section with something to report keeps marking its row throughout: by its badge while there is room
 for it, and by a tinted icon when there is not.
 
-Editing is one form across all five sections: switching sections never discards what you typed, and
+Editing is one form across all the sections except Daemons, which saves its own list as you go: switching sections never discards what you typed, and
 **Save** applies every section at once. If a value is rejected, Settings jumps to the section
 holding it and marks the field — press **Cancel**, or Esc, to leave without saving anything.
 
@@ -19,6 +19,7 @@ holding it and marks the field — press **Cancel**, or Esc, to leave without sa
 | [Appearance](#appearance) | The theme |
 | [Terminal](#terminal) | The embedded terminal's scrollback limit, and whether its history is saved to disk |
 | [Environment](#environment) | Which AI CLI a session runs, whether Pi sessions report activity, whether AI sessions get the app's tools, and the script sourced before it starts |
+| [Daemons](#daemons) | The session services you have set up: add, edit, start, stop and remove them |
 | [Session service](#session-service) | Where sessions run, and what that service can reach |
 | [GitHub](#github) | Whether worktrees show their pull request, and which worktree type an issue's labels choose |
 
@@ -390,6 +391,53 @@ fresh for that session's directory before the process starts again, without need
 whole app. The AI CLI's restart also clears the failure note. Saving Settings (even without
 changing any value) also triggers a fresh re-source. Selecting a session, reconnecting, or a
 session being started again automatically after a crash does not: those reuse the last result.
+
+## Daemons
+
+A daemon is a session service: the process your sessions and terminals actually run in, either on
+this computer (the *host* daemon, at most one) or in a container of its own. This section lists
+every daemon you have set up. Each row shows its name, what it runs in, where the app connects to
+it, the version it reported, a state badge (**Connected**, **Starting**, **Unreachable**,
+**Version mismatch** or **Stopped**) and the worktrees bound to it.
+
+| Action | What it does |
+| --- | --- |
+| **Start** | Connects to that daemon and no other. A stopped daemon is neither connected to nor reconnected until you start it |
+| **Stop** | Disconnects from that daemon and no other |
+| **Reconnect** | Tries an unreachable or mismatched daemon again now, instead of waiting for the next automatic try |
+| **Edit** | Opens the form below the list, filled in |
+| **Details** | Shows the recent connection errors and the log tail, and why a container runtime cannot be used when that is the reason |
+| **Remove** | Asks first, see below |
+
+**Add daemon** opens a form for a name, what it runs in (container or host), the container name,
+port and image, and whether to connect when the application starts. A form that cannot be saved
+says why beside the field at fault: a blank or repeated name, a port outside 1-65535, a container
+already used by another daemon, a second host daemon.
+
+Saving the Settings page does not save this section and cancelling the page does not undo it: a
+daemon you added or removed here is kept at once.
+
+### Removing a daemon
+
+Removal asks first and says how many worktrees are bound to the daemon and how many sessions are
+running on it. If you confirm:
+
+- the sessions running on it are stopped;
+- the daemon is removed from the list and its connection is dropped;
+- its worktrees are kept and show `no daemon` until you bind them yourself, with **Bind to
+  daemon...** in the worktree's right-click menu — nothing is bound for you, and no session or
+  terminal starts for a worktree with no daemon;
+- nothing on disk is deleted, and the container is not stopped or deleted — remove it with your
+  container runtime if you no longer want it.
+
+Choosing **Cancel**, or pressing Esc, changes nothing. Editing the runtime settings of a daemon that
+is running asks the same way, stops its sessions and then reconnects it; a change of name alone
+asks nothing and changes nothing else.
+
+### With no daemons
+
+The section explains what a daemon is and offers **Add daemon**. The new-worktree form offers no
+daemon either and says where to add one.
 
 ## Session service
 

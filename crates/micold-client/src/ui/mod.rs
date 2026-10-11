@@ -2,11 +2,13 @@
 
 pub(crate) mod about;
 pub(crate) mod attach_dialog;
+pub(crate) mod bind_daemon;
 pub mod cdk;
 /// The Changes view (feature 482): shown in place of the terminal pane while open.
 pub(crate) mod changes;
 pub mod compare;
 pub(crate) mod confirm_agent_request;
+pub(crate) mod confirm_daemon_removal;
 pub(crate) mod confirm_delete;
 pub(crate) mod confirm_dismiss_group;
 pub(crate) mod confirm_forget;
@@ -346,6 +348,7 @@ pub fn view_with<'a>(
                 state.session.availability.home(),
                 state.window.focused_field,
                 state.settings.settings_rail_collapsed,
+                (&state.daemon_list, state.daemon_rows()),
                 scheme,
             ),
             bg,
@@ -572,13 +575,33 @@ pub fn view_with<'a>(
                 dir,
             )
             .is_some();
-            let items = worktree_menu_items(
+            let mut items = worktree_menu_items(
                 dir,
                 &state.worktree_display_name(dir),
                 included,
                 claimable,
                 has_pull_request,
             );
+            // Feature 491 (T036): a worktree with no daemon offers the explicit bind, above Delete
+            // like the other non-destructive entries.
+            if let (Some(project), true) = (
+                state.workspace.active.clone(),
+                crate::features::worktree::bind_offered(state, dir),
+            ) {
+                items.insert(
+                    items.len() - 1,
+                    material::MenuItem::new(
+                        Icon::Daemons,
+                        "Bind to daemon...",
+                        Message::Daemons(crate::features::daemons::Msg::BindRequested(
+                            micold_core::daemons::WorktreeRef {
+                                project,
+                                worktree: dir.to_string(),
+                            },
+                        )),
+                    ),
+                );
+            }
             let (x, y) = crate::features::project::clamp_menu_anchor(
                 menu.anchor,
                 material::menu_panel_size(items.len()),

@@ -94,6 +94,7 @@ pyftsubset _static.ttf \
 | `ActivityEnded` | `radio_button_unchecked` | `E836`   |
 | `SelectChevron` | `expand_more`         | `E5CF`         |
 | `SessionService` | `dns`                | `E875`         |
+| `Daemons`        | `lan`                | `EB2F`         |
 | `Refresh`      | `refresh`              | `E5D5`         |
 | `IssueMapping` | `label`                | `E892`         |
 | `MoveUp`       | `keyboard_arrow_up`    | `E316`         |
