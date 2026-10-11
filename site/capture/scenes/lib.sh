@@ -388,12 +388,15 @@ scene_add_worktree_y=86
 # The New worktree form, which opens centred over the window. The type list overlays the form when
 # it is open, so its first row -- `feat` -- is below the closed control rather than beside it.
 scene_form_x=720
-scene_form_type_y=374
-scene_form_type_feat_y=433
-scene_form_ticket_y=446
-scene_form_name_y=538
-scene_form_create_x=528
-scene_form_create_y=656
+#
+# The dialog is centred, so every field it gains moves the others by half its height. The Daemon
+# picker (feature 491) sits below the name and adds one field and one gap (72), which lifts the three
+# fields above it by 36. Create is not clicked at all: the Name field submits on Return, which does
+# not depend on how tall the dialog is below the field the scene is typing in.
+scene_form_type_y=338
+scene_form_type_feat_y=397
+scene_form_ticket_y=410
+scene_form_name_y=502
 # The terminal's bottom bar, right to left: the AI tab, "open a new instance", and the numbered tab
 # each instance adds to the left of it.
 scene_tab_y=868
