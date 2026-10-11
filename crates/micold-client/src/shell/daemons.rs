@@ -54,6 +54,24 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
     }
     // A daemon added since launch is tracked, a removed one forgotten with its catalog.
     app.sync_links();
+    // A daemon stopped (or removed, or restarted by an edit) no longer has a link: its catalog,
+    // pending requests and "connected" standing go the way a lost connection's do, so its
+    // sessions are not shown as live (`Stopped` ignores the `Lost` this folds).
+    let gone: Vec<DaemonId> = app
+        .daemon_catalogs
+        .keys()
+        .copied()
+        .filter(|id| {
+            !matches!(
+                app.core.settings.links.state(*id),
+                Some(micold_core::daemons::DaemonState::Connected)
+                    | Some(micold_core::daemons::DaemonState::Starting)
+            )
+        })
+        .collect();
+    for id in gone {
+        let _ = crate::shell::daemon_sync::on_disconnected(app, id);
+    }
     // A project first bound to a connected daemon is registered there before a session starts.
     for daemon in bound {
         crate::shell::daemon_sync::register_projects(app, daemon);

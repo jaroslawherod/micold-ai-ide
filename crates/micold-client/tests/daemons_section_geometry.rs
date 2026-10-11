@@ -19,6 +19,7 @@ use micold_core::daemons::{
 };
 use micold_core::env_include::EnvIncludeOutcome;
 use micold_core::sandbox::SandboxProfile;
+use micold_core::theme::ColorScheme;
 use support::layout as lay;
 
 const TOLERANCE: f32 = 0.5;
@@ -144,6 +145,10 @@ fn the_add_form_shows_a_refusal_beside_its_field() {
     let (mut state, _) = with_daemons();
     state.update(Message::Daemons(DaemonsMsg::AddOpened));
     state.update(Message::Daemons(DaemonsMsg::NameEdited("Idle".into())));
+    state.update(Message::Daemons(DaemonsMsg::ContainerNameEdited(
+        "fresh".into(),
+    )));
+    state.update(Message::Daemons(DaemonsMsg::PortEdited("7003".into())));
     state.update(Message::Daemons(DaemonsMsg::Saved));
     let painted = painted(&state);
     assert!(
@@ -157,7 +162,17 @@ fn the_add_form_shows_a_refusal_beside_its_field() {
 fn the_removal_dialog_states_both_counts_and_fits() {
     let (mut state, [host, ..]) = with_daemons();
     state.update(Message::Daemons(DaemonsMsg::RemovalRequested(host)));
-    let painted = painted(&state);
+    // The dialog is a floating surface, not part of the page: it is laid out from its own body.
+    let outcome = EnvIncludeOutcome::Disabled;
+    let body = || {
+        micold_client::ui::confirm_daemon_removal::dialog(&state, ColorScheme::Dark, &outcome)
+            .expect("a removal is pending")
+    };
+    let mut renderer = lay::renderer();
+    let painted: Vec<String> = lay::painted_text(body(), &mut renderer)
+        .into_iter()
+        .map(|drawn| drawn.content)
+        .collect();
     assert!(has(&painted, "0 worktrees"), "{painted:?}");
     assert!(has(&painted, "0 running sessions"), "{painted:?}");
     assert!(has(&painted, "nothing on disk is deleted"), "{painted:?}");
@@ -165,5 +180,9 @@ fn the_removal_dialog_states_both_counts_and_fits() {
         has(&painted, "Continue") && has(&painted, "Cancel"),
         "{painted:?}"
     );
-    assert_no_text_overflows(&state, "removal dialog");
+    let overflows: Vec<_> = lay::text_overflows(body(), &mut renderer)
+        .into_iter()
+        .filter(|o| o.excess() > TOLERANCE)
+        .collect();
+    assert!(overflows.is_empty(), "removal dialog: {overflows:?}");
 }

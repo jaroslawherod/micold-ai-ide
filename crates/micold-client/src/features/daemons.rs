@@ -309,6 +309,13 @@ pub fn begin_add(state: &mut State) {
 /// Open the form for `id`, filled from its entry.
 pub fn begin_edit<'s>(state: &'s mut State, model: &Model<'_>, id: DaemonId) -> Option<&'s Draft> {
     let entry = model.registry.get(id)?;
+    // A runtime this build does not know is kept opaque: editing it as a host would replace it.
+    if !matches!(
+        entry.runtime,
+        DaemonRuntime::Container(_) | DaemonRuntime::Host
+    ) {
+        return None;
+    }
     let (runtime, container_name, port, profile) = match &entry.runtime {
         DaemonRuntime::Container(c) => (
             DraftRuntime::Container,
@@ -534,6 +541,9 @@ pub fn confirm(state: &mut State, model: &mut Model<'_>) -> Vec<Outcome> {
             model.links.apply(id, DaemonEvent::Stop);
             model.links.remove(id);
             model.registry.remove(id);
+            if state.draft.as_ref().and_then(|d| d.editing) == Some(id) {
+                state.draft = None;
+            }
             state.diagnostics.remove(&id);
             state.versions.remove(&id);
             state.runtime_missing.remove(&id);
