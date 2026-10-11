@@ -14,18 +14,15 @@ use iced::advanced::renderer::{Headless as _, Style};
 use iced::advanced::widget::Tree;
 use iced::advanced::{clipboard, layout, mouse, Layout, Renderer as _};
 use iced::{Color, Element, Event, Point, Rectangle, Size};
-use micold_core::tokens::{self, Roles};
+use micold_core::tokens::Roles;
 
+use super::test_support::dark_roles as roles;
 use crate::ui::cdk::ripple::Ripple as RippleState;
 
 const WINDOW: Size = Size::new(240.0, 60.0);
 
 /// One frame's spacing: the period the motion primitive itself assumes.
 const FRAME: Duration = crate::ui::cdk::motion::FRAME;
-
-fn roles() -> Roles {
-    tokens::roles(micold_core::theme::ColorScheme::Dark)
-}
 
 fn button<'a>(r: Roles) -> Element<'a, String> {
     super::Button::filled("Save", r)

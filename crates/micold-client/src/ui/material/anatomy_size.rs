@@ -47,12 +47,10 @@
 //! `material` is `pub(crate)`, so an `IconButton` cannot be constructed from `tests/` at all — the
 //! same reason `content_placement`, `form_field_anatomy` and `text_field_anatomy` live here.
 
-use iced::advanced::layout;
-use iced::advanced::widget::Tree;
 use iced::{Element, Length, Size};
-use micold_core::theme::ColorScheme;
-use micold_core::tokens::{self, anatomy, density, Roles};
+use micold_core::tokens::{anatomy, density};
 
+use super::test_support::roles;
 use super::{
     menu, Button, ButtonVariant, IconButton, MenuItem, Snackbar, Text, TextField, ToggleChip,
     Toolbar, TreeItem, TreeView, TypeRole,
@@ -69,10 +67,6 @@ const SNUG: Size = Size::new(400.0, 300.0);
 /// Layout arithmetic accumulates over a nested tree; this is well below anything a person could
 /// see and far below the defect being separated from correct (which is hundreds of pixels).
 const TOLERANCE: f32 = 0.5;
-
-fn roles() -> Roles {
-    tokens::roles(ColorScheme::Light)
-}
 
 /// `Snackbar` borrows its notification, so the specimens need ones that outlive the `Element`.
 ///
@@ -122,24 +116,7 @@ enum Extent {
 /// §7.5's item height inside a menu — and reading the root would measure the list instead of the
 /// thing the contract names.
 fn laid_out(element: Element<'_, Message>, bounds: Size, path: &[usize]) -> Size {
-    let mut element = element;
-    let renderer = super::test_support::renderer();
-    let mut tree = Tree::new(element.as_widget());
-    let limits = layout::Limits::new(Size::ZERO, bounds);
-    let node = element
-        .as_widget_mut()
-        .layout(&mut tree, &renderer, &limits);
-
-    let mut current = &node;
-    for (depth, &index) in path.iter().enumerate() {
-        current = current.children().get(index).unwrap_or_else(|| {
-            panic!(
-                "no child {index} at depth {depth} of {path:?} — the component's tree changed \
-                 shape, so this entry is measuring something other than what it names"
-            )
-        });
-    }
-    current.bounds().size()
+    super::test_support::bounds_at(element, bounds, path).size()
 }
 
 /// The **absolute x** of the node at `path`, accumulated down the walk.
@@ -147,23 +124,7 @@ fn laid_out(element: Element<'_, Message>, bounds: Size, path: &[usize]) -> Size
 /// [`laid_out`] returns a size and throws the position away, which is all an anatomy entry needs.
 /// BUG-006 is about two nodes agreeing on where they start, so it needs the other half.
 fn laid_out_x(element: Element<'_, Message>, bounds: Size, path: &[usize]) -> f32 {
-    let mut element = element;
-    let renderer = super::test_support::renderer();
-    let mut tree = Tree::new(element.as_widget());
-    let limits = layout::Limits::new(Size::ZERO, bounds);
-    let node = element
-        .as_widget_mut()
-        .layout(&mut tree, &renderer, &limits);
-
-    let mut current = &node;
-    let mut x = current.bounds().x;
-    for (depth, &index) in path.iter().enumerate() {
-        current = current.children().get(index).unwrap_or_else(|| {
-            panic!("no child {index} at depth {depth} of {path:?} — the row's shape changed")
-        });
-        x += current.bounds().x;
-    }
-    x
+    super::test_support::bounds_at(element, bounds, path).x
 }
 
 /// Why `measured` is wrong for an axis declared `expected`, or `None` if it is right.

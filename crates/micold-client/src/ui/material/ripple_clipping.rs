@@ -14,16 +14,11 @@
 //! The renderer is the CPU rasteriser, the same one feature 019's layout gate uses and for the same
 //! reason: it needs no GPU, so this runs in CI.
 
-use std::borrow::Cow;
-use std::future::Future;
-use std::pin::Pin;
-use std::sync::Once;
-use std::task::{Context, Poll, Waker};
-
-use iced::advanced::renderer::Headless;
+use iced::advanced::renderer::Headless as _;
 use iced::{Color, Element, Point, Size};
 use micold_core::tokens::{self, shape};
 
+use super::test_support::renderer;
 use super::{Ripple, Surface, SurfaceKind};
 use crate::showcase::state::Message;
 
@@ -39,40 +34,6 @@ const BACKDROP: Color = Color {
     b: 0.0,
     a: 1.0,
 };
-
-/// The CPU rasteriser, with the shipped faces loaded so text shaping does not reach for a system
-/// font. Mirrors `tests/support/layout.rs`'s constructor — see there for why the `"tiny-skia"` hint
-/// keeps `iced_wgpu` from probing for a GPU.
-fn renderer() -> iced::Renderer {
-    static LOADED: Once = Once::new();
-    LOADED.call_once(|| {
-        let mut fonts = iced::advanced::graphics::text::font_system()
-            .write()
-            .expect("the global font system lock was poisoned");
-        fonts.load_font(Cow::Borrowed(super::ROBOTO_REGULAR_BYTES));
-        fonts.load_font(Cow::Borrowed(super::ROBOTO_MEDIUM_BYTES));
-    });
-
-    block_on(<iced::Renderer as Headless>::new(
-        super::ROBOTO,
-        iced::Pixels(14.0),
-        Some("tiny-skia"),
-    ))
-    .expect("the tiny-skia headless renderer must construct without a GPU")
-}
-
-/// Poll a future that is known to be immediately ready — the tiny-skia headless constructor does
-/// no I/O, so one poll suffices and no executor need be pulled into the test scaffolding.
-fn block_on<F: Future>(f: F) -> F::Output {
-    let mut f = Box::pin(f);
-    let mut cx = Context::from_waker(Waker::noop());
-    loop {
-        if let Poll::Ready(v) = Pin::as_mut(&mut f).poll(&mut cx) {
-            return v;
-        }
-        std::hint::spin_loop();
-    }
-}
 
 /// Render a pressed, mid-expansion ripple over a pill and return the RGBA buffer.
 fn pressed_pill() -> Vec<u8> {

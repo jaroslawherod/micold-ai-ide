@@ -250,12 +250,9 @@ impl<'a, M: Clone + 'a> From<Scrollable<'a, M>> for Element<'a, M> {
 
 #[cfg(test)]
 mod tests {
+    use super::super::test_support::dark_roles as roles;
     use super::*;
     use iced::widget::Space;
-
-    fn roles() -> Roles {
-        micold_core::tokens::roles(micold_core::theme::ColorScheme::Dark)
-    }
 
     /// FR-002a needs a horizontally scrolling viewport, and this component only ever built a
     /// vertical one. Both halves are asserted, and the **default** is the half that matters most:

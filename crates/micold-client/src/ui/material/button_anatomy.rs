@@ -16,12 +16,10 @@
 //! In-crate for the same reason as `anatomy_size`, `content_placement` and `menu_anatomy`:
 //! `material` is `pub(crate)`, so none of this is constructible from `tests/`.
 
-use iced::advanced::layout::{self, Layout};
-use iced::advanced::widget::Tree;
 use iced::{Element, Rectangle, Size};
-use micold_core::theme::ColorScheme;
-use micold_core::tokens::{anatomy, spacing, Roles};
+use micold_core::tokens::{anatomy, spacing};
 
+use super::test_support::roles;
 use super::{Button, ButtonVariant, IconButton, Text, TypeRole};
 use crate::icons::Icon;
 use crate::showcase::state::Message;
@@ -33,35 +31,13 @@ const ROOM: Size = Size::new(400.0, 300.0);
 /// below every figure this module separates (10dp against 24, 4dp against 8, 14dp against 24).
 const TOLERANCE: f32 = 0.5;
 
-fn roles() -> Roles {
-    micold_core::tokens::roles(ColorScheme::Light)
-}
-
 /// The absolute bounds of the node at `path` once `element` is laid out in [`ROOM`].
 ///
 /// Absolute rather than parent-relative: an inset is the gap between two boxes, and subtracting two
 /// absolute boxes is the same arithmetic §7.3 states. `Layout` resolves the offsets, so the walk
 /// cannot get them wrong.
 fn bounds_at(element: Element<'_, Message>, path: &[usize]) -> Rectangle {
-    let mut element = element;
-    let renderer = super::test_support::renderer();
-    let mut tree = Tree::new(element.as_widget());
-    let node = element.as_widget_mut().layout(
-        &mut tree,
-        &renderer,
-        &layout::Limits::new(Size::ZERO, ROOM),
-    );
-
-    let mut layout = Layout::new(&node);
-    for (depth, &index) in path.iter().enumerate() {
-        layout = layout.children().nth(index).unwrap_or_else(|| {
-            panic!(
-                "no child {index} at depth {depth} of {path:?} — the button's tree changed shape, \
-                 so this test is measuring something other than what it names"
-            )
-        });
-    }
-    layout.bounds()
+    super::test_support::bounds_at(element, ROOM, path)
 }
 
 /// A labelled button of `variant`, pressable so it takes the shape the application ships.

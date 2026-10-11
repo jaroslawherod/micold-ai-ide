@@ -808,17 +808,13 @@ mod tests {
 
     // --- Feature 038: the wrapping label and the two-line row (contracts/picker-row.md §1–2) ---
 
+    use super::super::test_support::roles;
     use iced::advanced::layout::Limits;
-    use micold_core::theme::ColorScheme;
 
     /// Taller than any row here grows, so the limit never decides a height.
     const TALL: f32 = 4000.0;
     /// Layout arithmetic accumulates over a nested tree; far below a line of text.
     const TOLERANCE: f32 = 0.5;
-
-    fn roles() -> Roles {
-        micold_core::tokens::roles(ColorScheme::Light)
-    }
 
     /// The absolute bounds of the node at `path` with `element` laid out `width` wide.
     fn bounds_at(element: Element<'_, ()>, width: f32, path: &[usize]) -> Rectangle {

@@ -25,12 +25,9 @@ use iced::{Element, Length, Size};
 use micold_core::tokens::{self, anatomy, Roles};
 
 use super::style;
+use super::test_support::roles;
 use super::{FormField, Select};
 use crate::showcase::state::Message;
-
-fn roles() -> Roles {
-    tokens::roles(micold_core::theme::ColorScheme::Light)
-}
 
 /// A plain text input, the control a form field most often wraps.
 fn input<'a>() -> Element<'a, Message> {

@@ -28,11 +28,11 @@
 //! take?" answerable at all. `showcase::state::Message` maps every choice to `NoOp`.
 
 use iced::advanced::renderer::Headless as _;
-use iced::advanced::widget::Tree;
 use iced::advanced::{clipboard, layout, mouse, renderer, Layout, Renderer as _};
-use iced::{Color, Element, Event, Point, Rectangle, Size, Vector};
-use micold_core::tokens::{self, anatomy, Roles};
+use iced::{Color, Event, Point, Rectangle, Size, Vector};
+use micold_core::tokens::{anatomy, Roles};
 
+use super::test_support::{named_key, roles, Mounted, WINDOW};
 use super::{style, Select, TextField};
 /// One frame, named rather than restated — `cdk::motion` steps by exactly this, so a track ticked
 /// at any other interval would be asked about a moment the runtime never produces.
@@ -42,16 +42,11 @@ use crate::ui::cdk::motion::FRAME;
 const OPTIONS: &[&str] = &["one", "two", "three"];
 
 /// The width the field is laid out at, and the window it is laid out in.
-const WIDTH: f32 = 400.0;
-const WINDOW: Size = Size::new(WIDTH, 800.0);
+const WIDTH: f32 = WINDOW.width;
 
 /// One pixel of subpixel rounding, and nothing more. The indicator's two states differ by a whole
 /// device pixel, so this separates them with room to spare.
 const TOLERANCE: f32 = 0.6;
-
-fn roles() -> Roles {
-    tokens::roles(micold_core::theme::ColorScheme::Light)
-}
 
 /// A select over [`OPTIONS`], reporting the chosen option as its own text.
 fn select<'a>(selected: Option<&'a str>, r: Roles) -> Select<'a, &'a str, String> {
@@ -60,50 +55,10 @@ fn select<'a>(selected: Option<&'a str>, r: Roles) -> Select<'a, &'a str, String
         .label("Type")
 }
 
-/// A mounted element, its widget tree and its layout — the three things that have to stay in step
-/// for an event to land where the test thinks it does.
-///
-/// A select owns its openness, so a test cannot pose it: it has to be *driven*, the way a person
-/// drives it. That is the whole point of the design and it is what this harness exists for.
-struct Mounted<'a> {
-    element: Element<'a, String>,
-    tree: Tree,
-    node: layout::Node,
-    renderer: iced::Renderer,
-    /// The clock the frame ticks are stamped with. A track ignores a frame it has already seen, so
-    /// two ticks at the same instant advance it once and the counter is what keeps them apart.
-    origin: std::time::Instant,
-    frame: u32,
-}
-
 impl<'a> Mounted<'a> {
-    fn new(element: impl Into<Element<'a, String>>) -> Self {
-        let mut element = element.into();
-        let renderer = super::test_support::renderer();
-        let mut tree = Tree::new(element.as_widget());
-        let node = element.as_widget_mut().layout(
-            &mut tree,
-            &renderer,
-            &layout::Limits::new(Size::ZERO, WINDOW),
-        );
-        Self {
-            element,
-            tree,
-            node,
-            renderer,
-            origin: std::time::Instant::now(),
-            frame: 0,
-        }
-    }
-
     /// The whole field, including whatever sits beneath the container.
     fn bounds(&self) -> Rectangle {
         self.node.bounds()
-    }
-
-    /// The filled container alone — the first of `FormField`'s two bands.
-    fn container(&self) -> Rectangle {
-        self.node.children()[0].bounds()
     }
 
     /// The container's four slots: `[leading, control, trailing, label]`.
@@ -153,31 +108,6 @@ impl<'a> Mounted<'a> {
         self.relayout();
     }
 
-    /// One event, with no settling — the raw dispatch [`Self::dispatch`] is built from.
-    fn send(&mut self, event: Event, cursor: mouse::Cursor) -> Vec<String> {
-        let mut messages = Vec::new();
-        let mut shell = iced::advanced::Shell::new(&mut messages);
-        self.element.as_widget_mut().update(
-            &mut self.tree,
-            &event,
-            Layout::new(&self.node),
-            cursor,
-            &self.renderer,
-            &mut clipboard::Null,
-            &mut shell,
-            &Rectangle::with_size(WINDOW),
-        );
-        messages
-    }
-
-    fn relayout(&mut self) {
-        self.node = self.element.as_widget_mut().layout(
-            &mut self.tree,
-            &self.renderer,
-            &layout::Limits::new(Size::ZERO, WINDOW),
-        );
-    }
-
     /// Press the trigger, the way a person opens the list.
     fn press_trigger(&mut self) -> Vec<String> {
         let at = self.container().center();
@@ -188,20 +118,7 @@ impl<'a> Mounted<'a> {
     }
 
     fn key(&mut self, named: iced::keyboard::key::Named) -> Vec<String> {
-        self.dispatch(
-            Event::Keyboard(iced::keyboard::Event::KeyPressed {
-                key: iced::keyboard::Key::Named(named),
-                modified_key: iced::keyboard::Key::Named(named),
-                physical_key: iced::keyboard::key::Physical::Unidentified(
-                    iced::keyboard::key::NativeCode::Unidentified,
-                ),
-                location: iced::keyboard::Location::Standard,
-                modifiers: iced::keyboard::Modifiers::empty(),
-                text: None,
-                repeat: false,
-            }),
-            mouse::Cursor::Unavailable,
-        )
+        self.dispatch(named_key(named), mouse::Cursor::Unavailable)
     }
 
     /// Whether the field is floating a list beneath it.
@@ -442,18 +359,8 @@ fn the_trigger_carries_a_trailing_chevron_at_the_contracts_size() {
 
 /// Every node flush with `control`'s trailing edge, as bounds. Helper for the check above.
 fn square_nodes_at_the_trailing_edge(node: &layout::Node, control: Rectangle) -> Vec<Rectangle> {
-    fn walk(node: &layout::Node, offset: iced::Vector, out: &mut Vec<Rectangle>) {
-        // A node's own bounds are relative to its parent, so the parent's *absolute* origin is the
-        // offset its children carry — not the offset it was handed, which is already in `bounds`.
-        let bounds = node.bounds() + offset;
-        out.push(bounds);
-        for child in node.children() {
-            walk(child, iced::Vector::new(bounds.x, bounds.y), out);
-        }
-    }
-    let mut all = Vec::new();
-    walk(node, iced::Vector::ZERO, &mut all);
-    all.into_iter()
+    super::test_support::all_bounds(node)
+        .into_iter()
         .filter(|b| {
             b.width > 0.0
                 && (b.x + b.width - (control.x + control.width)).abs() < 1.0

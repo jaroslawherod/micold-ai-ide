@@ -43,9 +43,9 @@ use iced::advanced::widget::Tree;
 use iced::advanced::{clipboard, layout, mouse, Layout, Shell};
 use iced::{Element, Event, Point, Rectangle, Size, Vector};
 use micold_core::tokens::motion::duration;
-use micold_core::tokens::{self, Roles};
 
 use super::picker::{Row, EXIT};
+use super::test_support::roles;
 use super::{Select, Typeahead};
 use crate::ui::cdk::motion::FRAME;
 
@@ -55,10 +55,6 @@ const WINDOW: Size = Size::new(400.0, 800.0);
 /// Well past any exit this feature could reasonably introduce. A list still floating after this
 /// many frames is not leaving slowly, it is not leaving.
 const GIVE_UP_AFTER: u32 = 60;
-
-fn roles() -> Roles {
-    tokens::roles(micold_core::theme::ColorScheme::Light)
-}
 
 /// One picker, laid out, with a tree that survives across frames.
 ///

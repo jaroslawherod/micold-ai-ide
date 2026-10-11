@@ -20,9 +20,9 @@
 use iced::advanced::widget::Tree;
 use iced::advanced::{clipboard, layout, mouse, Layout};
 use iced::{Element, Event, Rectangle, Size, Vector};
-use micold_core::tokens::{self, Roles};
 
 use super::picker::Row;
+use super::test_support::roles;
 use super::{Select, Typeahead};
 /// One frame, named rather than restated — see `select_anatomy`'s copy of this import.
 use crate::ui::cdk::motion::FRAME;
@@ -34,10 +34,6 @@ const LABELS: &[&str] = &["one", "two", "three"];
 
 const WIDTH: f32 = 400.0;
 const WINDOW: Size = Size::new(WIDTH, 800.0);
-
-fn roles() -> Roles {
-    tokens::roles(micold_core::theme::ColorScheme::Light)
-}
 
 /// Lay `element` out, optionally press it at `press`, and return the node its floating list
 /// resolves to.
@@ -108,15 +104,7 @@ fn floating_list(element: impl Into<Element<'static, String>>, press: bool) -> l
 /// shaping resolves widths in floating point, and a comparison exact to the bit would fail on
 /// arithmetic rather than on anatomy.
 fn shape(list: &layout::Node) -> Vec<(f32, f32, f32, f32)> {
-    fn walk(node: &layout::Node, offset: Vector, out: &mut Vec<Rectangle>) {
-        let bounds = node.bounds() + offset;
-        out.push(bounds);
-        for child in node.children() {
-            walk(child, Vector::new(bounds.x, bounds.y), out);
-        }
-    }
-    let mut all = Vec::new();
-    walk(list, Vector::ZERO, &mut all);
+    let all = super::test_support::all_bounds(list);
     let origin = all[0];
     let round = |v: f32| (v * 10.0).round() / 10.0;
     all.into_iter()

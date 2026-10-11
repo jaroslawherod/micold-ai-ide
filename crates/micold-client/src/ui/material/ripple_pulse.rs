@@ -20,14 +20,11 @@ use iced::advanced::widget::{Operation, Tree};
 use iced::advanced::{layout, Layout};
 use iced::widget::{column, Space};
 use iced::{Element, Length, Size};
-use micold_core::tokens::{self, shape};
+use micold_core::tokens::shape;
 
+use super::test_support::roles;
 use super::Ripple;
 use crate::showcase::state::Message;
-
-fn roles() -> tokens::Roles {
-    tokens::roles(micold_core::theme::ColorScheme::Light)
-}
 
 /// A column of `n` rippling rows, laid out — the shape a sidebar or a menu presents.
 fn rippling_rows<'a>(n: usize) -> Element<'a, Message> {
