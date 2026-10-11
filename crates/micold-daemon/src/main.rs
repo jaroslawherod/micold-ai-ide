@@ -12,15 +12,23 @@
 //! stay on disk and each live session's process tree would be orphaned to the machine's init,
 //! turning a clean idle stop into exactly the residue the feature exists to avoid.
 //!
-//! The one `exit` below is on the fatal-error path, after `start` has already returned and its
-//! runtime has already been dropped. It sets a non-zero status for a daemon that could not start;
-//! it does not cut a shutdown short.
+//! The `exit` on the fatal-error path comes after `start` has already returned and its runtime has
+//! already been dropped. It sets a non-zero status for a daemon that could not start; it does not
+//! cut a shutdown short. The `status-line` relay exits before any runtime exists (feature 490).
 
 // A release build on Windows opens no console window of its own, for the app or for the daemon it
 // starts (feature 030, FR-005). Debug builds keep the console so `cargo run` output stays visible.
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
 fn main() {
+    // `status-line <relay-file>`: Claude Code's status-line command for a session the app started
+    // (feature 490, contract S2). Before the runtime, the log and the singleton: the relay is a
+    // short-lived child of Claude Code, not a daemon, and must stay silent.
+    let mut args = std::env::args_os().skip(1);
+    if args.next().as_deref() == Some(std::ffi::OsStr::new("status-line")) {
+        let file = args.next().unwrap_or_default();
+        std::process::exit(micold_daemon::status_relay::main(std::path::Path::new(&file)));
+    }
     // No `announce_running` here: the installer's `AppMutex` prompt asks the user to close the app,
     // and a windowless daemon cannot be closed, so setup would never get past it. Setup stops the
     // daemon itself instead, in `[Code] PrepareToInstall` (feature 030, research R12).

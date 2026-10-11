@@ -28,6 +28,7 @@ pub mod review;
 pub mod runs;
 pub mod server;
 pub mod singleton;
+pub mod status_relay;
 pub mod state;
 pub mod supervision;
 pub mod supervisor;
