@@ -21,7 +21,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #758 | M2 concurrent host and container daemons | merged | e0d9dd819951476b5f4a2ad94094401af243e601 |
 | #767 | M3 Settings Daemons section | merged | 678441fcc0e56eacf56b3005219257c67469d9d0 |
 | #768 | M4 real-runtime multi-daemon e2e | merged | 0a15aa9c53b71d564c1fc4d1b610e91bcf98c98c |
-| (close) | Close: docs T046, quickstart T047, test strength T050-T056, T058, T059, T061, T063 | open | - |
+| #769 | Close: docs T046, quickstart T047, test strength T050-T056, T058, T059, T061, T063 | open | - |
 
 ## Milestones
 
@@ -86,7 +86,7 @@ None. Visual pass M3 (T039) ran headless under sway, see specs/491-multi-session
 
 ## Open escalation
 
-Close PR not opened: the push of the rewritten branch (remote holds the merged M4 branch commits) was denied by the classifier. Run `git fetch origin feat/491_support-multiple-session-daemons-host-container && git push --force-with-lease -u origin HEAD`, then `gh pr create --base main --title "docs(491): close the spec (#491)" --body-file <scratchpad>/pr-body.md`.
+None.
 
 ## Follow-ups not done
 
