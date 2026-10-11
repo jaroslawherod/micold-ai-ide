@@ -1418,6 +1418,28 @@ nothing into it.
   This was seen on GNOME Shell 50; other Wayland desktops may do either. On X11, macOS and
   Windows the window takes the keyboard focus itself.
 
+### Claude plan usage
+
+On a Claude Pro or Max plan, the app keeps track of how much of your plan's usage limits you have
+used and when the next limit resets. The values come from Claude Code's own status-line data in
+the Claude sessions the app runs: after each response, Claude Code hands its status line the
+plan's `rate_limits`, and the app passes them to its background service. Nothing appears until a
+Claude session started by the app has had a response.
+
+- **No credential is read.** The app does not open your Claude login or call any web service.
+- **Nothing is sent anywhere.** The values go from the session to the app's service over the local
+  machine only.
+- **Your own status line keeps working.** To keep its own copy of the values, the app sets the
+  status line of the Claude sessions it starts. If you have a status line of your own, the app
+  finds it and runs it with the same input, so you see exactly what you saw before. It looks only
+  at the `statusLine` key of `.claude/settings.local.json` and `.claude/settings.json` in the
+  session's folder, then of `~/.claude/settings.json` (or `settings.json` in `CLAUDE_CONFIG_DIR`
+  when that is set), and reads nothing else from those files. The first one that has a status line
+  is used, the same order Claude Code uses. A change to that key takes effect in sessions started
+  afterwards; a change to your script itself takes effect at once.
+
+Sessions on other AI CLIs, and Claude sessions you started outside the app, are not changed.
+
 ## Colored, real-terminal output
 
 The embedded terminal renders the AI CLI's output like a real terminal, not as flat text:
