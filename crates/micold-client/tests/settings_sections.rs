@@ -47,10 +47,7 @@ use std::path::{Path, PathBuf};
 /// checkbox in the GitHub section with M4 (T038), so it left this list the same way.
 ///
 /// Feature 490's plan-usage switch and threshold land in Settings → Environment with T044.
-const DEFERRED: &[(&str, &str)] = &[
-    ("plan_usage_enabled", "490 T044"),
-    ("plan_usage_warn_percent", "490 T044"),
-];
+const DEFERRED: &[(&str, &str)] = &[];
 
 /// Settings stored with the others but chosen outside the Settings screen, each with the client
 /// source that holds its control and the message that control sends. No Settings section will ever
@@ -749,4 +746,25 @@ fn the_terminal_page_claims_the_save_terminal_history_switch() {
         Some(["terminal.rs".to_string()].as_slice()),
         "{claims:#?}"
     );
+}
+
+/// Feature 490, T043 (US4; FR-003): **Claude plan usage** follows the desktop notification rows,
+/// with its switch, its threshold and the statement of where the values come from.
+#[test]
+fn the_plan_usage_subsection_follows_desktop_notifications() {
+    let view = environment_view();
+    for needle in [
+        "\"Show Claude plan usage\"",
+        "FieldId::SettingsPlanUsageWarn",
+        "SettingsMsg::PlanUsageToggled",
+        "SettingsMsg::PlanUsageWarnChanged",
+        "Claude Code's status-line data",
+        "No credential is read",
+        "nothing is sent anywhere",
+    ] {
+        assert!(view.contains(needle), "the subsection needs `{needle}`");
+    }
+    let notifications = view.find("\"Desktop notifications\"").expect("switch");
+    let plan = view.find("\"Show Claude plan usage\"").expect("plan usage");
+    assert!(notifications < plan, "after Desktop notifications");
 }
