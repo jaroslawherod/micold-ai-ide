@@ -17,13 +17,11 @@
 //!
 //! In-crate for the same reason as its neighbours: `material` is `pub(crate)`.
 
-use iced::advanced::layout::{self, Layout};
-use iced::advanced::widget::Tree;
 use iced::widget::{column, row};
 use iced::{Element, Rectangle, Size};
-use micold_core::theme::ColorScheme;
-use micold_core::tokens::{anatomy, Roles};
+use micold_core::tokens::anatomy;
 
+use super::test_support::roles;
 use super::{dialog, Button, Surface, SurfaceKind, Text, TypeRole};
 use crate::showcase::state::Message;
 
@@ -35,31 +33,9 @@ const ROOM: Size = Size::new(520.0, 600.0);
 /// below the one gap this module separates (16dp against 24).
 const TOLERANCE: f32 = 0.5;
 
-fn roles() -> Roles {
-    micold_core::tokens::roles(ColorScheme::Light)
-}
-
 /// The absolute bounds of the node at `path` once `element` is laid out in [`ROOM`].
 fn bounds_at(element: Element<'_, Message>, path: &[usize]) -> Rectangle {
-    let mut element = element;
-    let renderer = super::test_support::renderer();
-    let mut tree = Tree::new(element.as_widget());
-    let node = element.as_widget_mut().layout(
-        &mut tree,
-        &renderer,
-        &layout::Limits::new(Size::ZERO, ROOM),
-    );
-
-    let mut layout = Layout::new(&node);
-    for (depth, &index) in path.iter().enumerate() {
-        layout = layout.children().nth(index).unwrap_or_else(|| {
-            panic!(
-                "no child {index} at depth {depth} of {path:?} — the dialog's tree changed shape, \
-                 so this test is measuring something other than what it names"
-            )
-        });
-    }
-    layout.bounds()
+    super::test_support::bounds_at(element, ROOM, path)
 }
 
 /// A dialog with a title, a body and two actions — the shape every confirm dialog in the

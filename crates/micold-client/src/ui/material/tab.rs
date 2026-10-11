@@ -414,16 +414,13 @@ impl<'a, M: Clone + 'a> From<Tab<'a, M>> for Element<'a, M> {
 
 #[cfg(test)]
 mod tests {
+    use super::super::test_support::dark_roles as roles;
     use super::*;
     use crate::ui::material::text::{Text, TypeRole};
     use iced::widget::Space;
     use iced::Element;
     use micold_core::theme::ColorScheme;
     use micold_core::tokens::{self, Roles};
-
-    fn roles() -> Roles {
-        tokens::roles(ColorScheme::Dark)
-    }
 
     fn label<'a>(r: Roles) -> Text<'a, ()> {
         Text::new("1", TypeRole::Label, r)

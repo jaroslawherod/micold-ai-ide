@@ -129,13 +129,12 @@ impl<'a, M: Clone + 'a> From<Snackbar<'a, M>> for Element<'a, M> {
 /// and the message starts at the container's padding (BUG-017).
 #[cfg(test)]
 mod tests {
+    use super::super::test_support::roles;
     use super::*;
     use iced::advanced::layout;
     use iced::advanced::widget::Tree;
     use iced::{Point, Rectangle, Size};
     use micold_core::notify::Level;
-    use micold_core::theme::ColorScheme;
-    use micold_core::tokens;
 
     /// Layout arithmetic accumulates over a nested tree; this is far below the defect, which
     /// squeezed a ~70dp button to under 2dp.
@@ -146,10 +145,6 @@ mod tests {
     const LONG: &str = "Couldn't reopen \"repo-gone\": its folder /home/someone/workspaces/\
                         clients/acme/monorepo/.claude/worktrees/feat-long-branch-name/nested/\
                         repo-gone is unavailable.";
-
-    fn roles() -> Roles {
-        tokens::roles(ColorScheme::Light)
-    }
 
     fn layout_of(mut element: Element<'_, ()>, width: f32) -> layout::Node {
         let renderer = super::super::test_support::renderer();

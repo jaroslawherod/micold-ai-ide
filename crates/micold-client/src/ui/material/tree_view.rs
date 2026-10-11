@@ -649,6 +649,7 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
 mod tests {
     //! Feature 039 (contract `unread-mark.md`, hosts table and U8): a row with the unread mark.
 
+    use super::super::test_support::roles;
     use super::*;
     use crate::ui::material::ActivityBadge;
     use iced::advanced::layout;
@@ -669,10 +670,6 @@ mod tests {
 
     const LONG_NAME: &str =
         "Refactor the session supervisor so that restarts keep their scrollback";
-
-    fn roles() -> Roles {
-        tokens::roles(ColorScheme::Light)
-    }
 
     /// A session row as the sidebar builds it: depth 1, with the activity badge.
     fn session_row(label: &str) -> TreeItem<'static, ()> {

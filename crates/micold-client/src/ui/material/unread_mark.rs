@@ -149,26 +149,14 @@ impl<'a, M: 'a> From<UnreadMark<'a, M>> for Element<'a, M> {
 
 #[cfg(test)]
 mod tests {
+    use super::super::test_support::roles;
     use super::*;
-    use iced::advanced::layout;
-    use iced::advanced::widget::Tree;
     use iced::{Background, Size};
     use micold_core::theme::ColorScheme;
     use micold_core::tokens;
 
-    fn roles() -> Roles {
-        tokens::roles(ColorScheme::Light)
-    }
-
-    fn size_of(mut element: Element<'_, ()>) -> Size {
-        let renderer = super::super::test_support::renderer();
-        let mut tree = Tree::new(element.as_widget());
-        let limits = layout::Limits::new(Size::ZERO, Size::new(400.0, 100.0));
-        element
-            .as_widget_mut()
-            .layout(&mut tree, &renderer, &limits)
-            .bounds()
-            .size()
+    fn size_of(element: Element<'_, ()>) -> Size {
+        super::super::test_support::size_of(element, Size::new(400.0, 100.0))
     }
 
     /// U145 (U1, FR-018).

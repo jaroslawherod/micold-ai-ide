@@ -17,9 +17,9 @@
 use iced::advanced::layout::{self, Layout};
 use iced::advanced::widget::Tree;
 use iced::{Element, Length, Rectangle, Size};
-use micold_core::theme::ColorScheme;
-use micold_core::tokens::{self, anatomy, density, Roles};
+use micold_core::tokens::{anatomy, density};
 
+use super::test_support::roles;
 use super::{menu, menu_panel, MenuItem};
 use crate::icons::Icon;
 use crate::showcase::state::Message;
@@ -30,10 +30,6 @@ const ROOM: Size = Size::new(400.0, 600.0);
 /// Layout arithmetic accumulates over a nested tree; far below anything a person could see, and far
 /// below every gap this module separates (4dp against 8, 8dp against 12, 14dp against 24).
 const TOLERANCE: f32 = 0.5;
-
-fn roles() -> Roles {
-    tokens::roles(ColorScheme::Light)
-}
 
 /// Two items, so "between the items" is a question that can be asked at all.
 fn two_items() -> Vec<MenuItem<Message>> {
@@ -49,25 +45,7 @@ fn two_items() -> Vec<MenuItem<Message>> {
 /// subtracting two absolute boxes is the same arithmetic the contract states. `Layout` resolves the
 /// offsets, so the walk cannot get them wrong.
 fn bounds_at(element: Element<'_, Message>, path: &[usize]) -> Rectangle {
-    let mut element = element;
-    let renderer = super::test_support::renderer();
-    let mut tree = Tree::new(element.as_widget());
-    let node = element.as_widget_mut().layout(
-        &mut tree,
-        &renderer,
-        &layout::Limits::new(Size::ZERO, ROOM),
-    );
-
-    let mut layout = Layout::new(&node);
-    for (depth, &index) in path.iter().enumerate() {
-        layout = layout.children().nth(index).unwrap_or_else(|| {
-            panic!(
-                "no child {index} at depth {depth} of {path:?} — the panel's tree changed shape, \
-                 so this test is measuring something other than what it names"
-            )
-        });
-    }
-    layout.bounds()
+    super::test_support::bounds_at(element, ROOM, path)
 }
 
 /// One switcher row, as `ui::view` builds them — a [`MenuItem`], which is the whole point: the

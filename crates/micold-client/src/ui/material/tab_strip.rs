@@ -58,16 +58,11 @@ impl<'a, M: Clone + 'a> From<TabStrip<'a, M>> for Element<'a, M> {
 
 #[cfg(test)]
 mod tests {
+    use super::super::test_support::dark_roles as roles;
     use super::*;
     use crate::ui::material::text::{Text, TypeRole};
     use crate::ui::material::{IndicatorEdge, Tab};
     use iced::Element;
-    use micold_core::theme::ColorScheme;
-    use micold_core::tokens::{self, Roles};
-
-    fn roles() -> Roles {
-        tokens::roles(ColorScheme::Dark)
-    }
 
     fn tabs<'a>(r: Roles) -> Vec<Tab<'a, ()>> {
         vec![

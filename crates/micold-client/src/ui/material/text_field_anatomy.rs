@@ -22,11 +22,8 @@ use iced::{Background, Color, Element, Rectangle, Size, Theme};
 use micold_core::tokens::{self, anatomy, shape, Roles};
 
 use super::style;
+use super::test_support::roles;
 use crate::icons::Icon;
-
-fn roles() -> Roles {
-    tokens::roles(micold_core::theme::ColorScheme::Light)
-}
 
 fn theme() -> Theme {
     super::theme(micold_core::theme::ColorScheme::Light)

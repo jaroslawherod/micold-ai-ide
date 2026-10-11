@@ -23,9 +23,10 @@
 use iced::advanced::widget::Tree;
 use iced::advanced::{clipboard, layout, mouse, Layout, Shell};
 use iced::{Element, Event, Point, Rectangle, Size, Vector};
-use micold_core::tokens::{self, density, Roles};
+use micold_core::tokens::density;
 
 use super::picker::Row;
+use super::test_support::roles;
 use super::Typeahead;
 
 const WINDOW: Size = Size::new(400.0, 800.0);
@@ -33,10 +34,6 @@ const WINDOW: Size = Size::new(400.0, 800.0);
 /// Frames to let the list's entrance finish before pressing anything. Generous — the entrance is a
 /// few hundred milliseconds and the point is only that it is over.
 const OPEN_FRAMES: u32 = 60;
-
-fn roles() -> Roles {
-    tokens::roles(micold_core::theme::ColorScheme::Light)
-}
 
 /// What one press on one row produced.
 struct Outcome {
@@ -170,17 +167,7 @@ fn press_row(rows: Vec<Row>, index: usize) -> Outcome {
 /// the one thing every row has and no wrapper around them does, so this keeps working when the
 /// panel gains or loses a container.
 fn row_centres(list: &layout::Node) -> Vec<Point> {
-    fn walk(node: &layout::Node, offset: Vector, out: &mut Vec<Rectangle>) {
-        let bounds = node.bounds() + offset;
-        out.push(bounds);
-        for child in node.children() {
-            walk(child, Vector::new(bounds.x, bounds.y), out);
-        }
-    }
-    let mut all = Vec::new();
-    walk(list, Vector::ZERO, &mut all);
-
-    let mut rows: Vec<Rectangle> = all
+    let mut rows: Vec<Rectangle> = super::test_support::all_bounds(list)
         .into_iter()
         .filter(|b| (b.height - density::MENU_ITEM_BASE).abs() < 0.5)
         .collect();

@@ -47,8 +47,9 @@ use iced::advanced::renderer::Headless;
 use iced::advanced::widget::Tree;
 use iced::advanced::{layout, mouse, renderer::Style, Layout, Renderer as _};
 use iced::{Color, Element, Length, Size};
-use micold_core::tokens::{self, anatomy, Roles};
+use micold_core::tokens::anatomy;
 
+use super::test_support::roles;
 use super::{style, Tag, Text, ToggleChip, TypeRole};
 use crate::showcase::state::Message;
 
@@ -64,10 +65,6 @@ const TOLERANCE: f32 = 1.0;
 /// How far a channel must move from the backdrop before a pixel counts as ink. Well above the
 /// rasteriser's noise, well below a glyph's antialiased edge.
 const INK: u8 = 24;
-
-fn roles() -> Roles {
-    tokens::roles(micold_core::theme::ColorScheme::Light)
-}
 
 /// The rows of `pixels` that carry ink, as `(first, last)`, or `None` if nothing was drawn.
 ///

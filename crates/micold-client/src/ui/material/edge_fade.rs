@@ -171,13 +171,8 @@ impl<'a, M: 'a> From<EdgeFade<'a, M>> for Element<'a, M> {
 
 #[cfg(test)]
 mod tests {
+    use super::super::test_support::dark_roles as roles;
     use super::*;
-    use micold_core::theme::ColorScheme;
-    use micold_core::tokens;
-
-    fn roles() -> Roles {
-        tokens::roles(ColorScheme::Dark)
-    }
 
     /// FR-002e: the accent is the *indicator's* colour, and it goes to exactly one edge.
     ///

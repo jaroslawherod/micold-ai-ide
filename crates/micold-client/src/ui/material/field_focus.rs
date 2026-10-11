@@ -28,14 +28,8 @@ use iced::advanced::{clipboard, layout, mouse, Layout};
 use iced::{Element, Event, Point, Rectangle, Size};
 use micold_core::tokens::{self, Roles};
 
+use super::test_support::{named_key, roles, Mounted, WINDOW};
 use super::TextField;
-
-/// The width the field is laid out at, and the window it is laid out in.
-const WINDOW: Size = Size::new(400.0, 800.0);
-
-fn roles() -> Roles {
-    tokens::roles(micold_core::theme::ColorScheme::Light)
-}
 
 /// An editable field that reports its focus as its own message.
 ///
@@ -48,34 +42,7 @@ fn field<'a>(value: &'a str, r: Roles) -> TextField<'a, String> {
         .on_focus_change(|focused| format!("focus={focused}"))
 }
 
-/// A mounted element with its tree and layout kept in step, so an event lands where the test
-/// thinks it does. The narrow cousin of `select_anatomy.rs`'s harness — no frame ticks are needed
-/// here, because focus is not animated.
-struct Mounted<'a> {
-    element: Element<'a, String>,
-    tree: Tree,
-    node: layout::Node,
-    renderer: iced::Renderer,
-}
-
 impl<'a> Mounted<'a> {
-    fn new(element: impl Into<Element<'a, String>>) -> Self {
-        let mut element = element.into();
-        let renderer = super::test_support::renderer();
-        let mut tree = Tree::new(element.as_widget());
-        let node = element.as_widget_mut().layout(
-            &mut tree,
-            &renderer,
-            &layout::Limits::new(Size::ZERO, WINDOW),
-        );
-        Self {
-            element,
-            tree,
-            node,
-            renderer,
-        }
-    }
-
     /// Rebuild the element over the **same** tree, the way a frame does after the application's
     /// state has moved on.
     ///
@@ -94,46 +61,9 @@ impl<'a> Mounted<'a> {
         self.element = element;
     }
 
-    /// The filled container — the first of the two bands `FormField` emits.
-    fn container(&self) -> Rectangle {
-        self.node.children()[0].bounds()
-    }
-
     /// The container's four slots: `[leading, control, trailing, label]`.
     fn slot(&self, index: usize) -> Rectangle {
         self.node.children()[0].children()[index].bounds()
-    }
-
-    fn send(&mut self, event: Event, cursor: mouse::Cursor) -> Vec<String> {
-        let mut messages = Vec::new();
-        let mut shell = iced::advanced::Shell::new(&mut messages);
-        self.element.as_widget_mut().update(
-            &mut self.tree,
-            &event,
-            Layout::new(&self.node),
-            cursor,
-            &self.renderer,
-            &mut clipboard::Null,
-            &mut shell,
-            &Rectangle::with_size(WINDOW),
-        );
-        messages
-    }
-
-    /// Press the left button at `at`.
-    fn press(&mut self, at: Point) -> Vec<String> {
-        self.send(
-            Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
-            mouse::Cursor::Available(at),
-        )
-    }
-
-    /// Move the pointer to `at` without pressing.
-    fn hover(&mut self, at: Point) -> Vec<String> {
-        self.send(
-            Event::Mouse(mouse::Event::CursorMoved { position: at }),
-            mouse::Cursor::Available(at),
-        )
     }
 
     /// Type one character, which only a focused input answers — so this reads as "does this still
@@ -195,20 +125,7 @@ impl<'a> Mounted<'a> {
     /// Press a named key, with the pointer nowhere near — a keyboard interaction has to work
     /// without the mouse resting helpfully on the control, or it is not a keyboard interaction.
     fn press_key(&mut self, key: iced::keyboard::key::Named) -> Vec<String> {
-        self.send(
-            Event::Keyboard(iced::keyboard::Event::KeyPressed {
-                key: iced::keyboard::Key::Named(key),
-                modified_key: iced::keyboard::Key::Named(key),
-                physical_key: iced::keyboard::key::Physical::Unidentified(
-                    iced::keyboard::key::NativeCode::Unidentified,
-                ),
-                location: iced::keyboard::Location::Standard,
-                modifiers: iced::keyboard::Modifiers::default(),
-                text: None,
-                repeat: false,
-            }),
-            mouse::Cursor::Unavailable,
-        )
+        self.send(named_key(key), mouse::Cursor::Unavailable)
     }
 }
 

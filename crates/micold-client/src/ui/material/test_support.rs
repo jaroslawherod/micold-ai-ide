@@ -17,7 +17,20 @@ use std::task::{Context, Poll, Waker};
 use iced::advanced::layout::{self, Layout};
 use iced::advanced::renderer::Headless;
 use iced::advanced::widget::Tree;
-use iced::{Element, Size};
+use iced::advanced::{clipboard, mouse};
+use iced::{Element, Event, Point, Rectangle, Size, Vector};
+use micold_core::theme::ColorScheme;
+use micold_core::tokens::{self, Roles};
+
+/// The light role set, which most component tests build against.
+pub fn roles() -> Roles {
+    tokens::roles(ColorScheme::Light)
+}
+
+/// The dark role set, for the tests that need the scheme their light twin cannot show.
+pub fn dark_roles() -> Roles {
+    tokens::roles(ColorScheme::Dark)
+}
 
 /// Poll a future known to be immediately ready.
 ///
@@ -67,12 +80,50 @@ pub fn renderer() -> iced::Renderer {
 }
 
 /// `element` laid out in `room`, as the component tests lay out what they measure.
-fn laid_out<M>(mut element: Element<'_, M>, room: Size) -> layout::Node {
+pub fn laid_out<M>(mut element: Element<'_, M>, room: Size) -> layout::Node {
     let renderer = renderer();
     let mut tree = Tree::new(element.as_widget());
     element
         .as_widget_mut()
         .layout(&mut tree, &renderer, &layout::Limits::new(Size::ZERO, room))
+}
+
+/// The size `element` takes laid out in `room`.
+pub fn size_of<M>(element: Element<'_, M>, room: Size) -> Size {
+    laid_out(element, room).size()
+}
+
+/// The absolute bounds of the node at `path` (child indices, empty for the root) once `element` is
+/// laid out in `room`.
+///
+/// Absolute rather than parent-relative: an inset or a gap is the distance between two boxes, and
+/// `Layout` resolves the offsets so the walk cannot get them wrong.
+pub fn bounds_at<M>(element: Element<'_, M>, room: Size, path: &[usize]) -> Rectangle {
+    let node = laid_out(element, room);
+    let mut layout = Layout::new(&node);
+    for (depth, &index) in path.iter().enumerate() {
+        layout = layout.children().nth(index).unwrap_or_else(|| {
+            panic!(
+                "no child {index} at depth {depth} of {path:?} — the component's tree changed \
+                 shape, so this test is measuring something other than what it names"
+            )
+        });
+    }
+    layout.bounds()
+}
+
+/// Every node of `node`, depth first, as bounds in the root's own coordinates.
+pub fn all_bounds(node: &layout::Node) -> Vec<Rectangle> {
+    fn walk(node: &layout::Node, offset: Vector, out: &mut Vec<Rectangle>) {
+        let bounds = node.bounds() + offset;
+        out.push(bounds);
+        for child in node.children() {
+            walk(child, Vector::new(bounds.x, bounds.y), out);
+        }
+    }
+    let mut all = Vec::new();
+    walk(node, Vector::ZERO, &mut all);
+    all
 }
 
 /// Whether `host`, laid out in `room`, holds a box of `part`'s own size (`part` laid out alone in
@@ -102,4 +153,104 @@ pub fn holds_whole<M>(host: Element<'_, M>, part: Element<'_, M>, room: Size) ->
         boxes.extend(candidate.children());
     }
     false
+}
+
+/// The window the mounted-element tests lay their element out in.
+pub const WINDOW: Size = Size::new(400.0, 800.0);
+
+/// A mounted element, its widget tree and its layout — the three things that have to stay in step
+/// for an event to land where the test thinks it does.
+///
+/// `origin` and `frame` stamp the frame ticks a test hands over: a track ignores a frame it has
+/// already seen, so two ticks at the same instant advance it once and the counter keeps them apart.
+pub struct Mounted<'a> {
+    pub element: Element<'a, String>,
+    pub tree: Tree,
+    pub node: layout::Node,
+    pub renderer: iced::Renderer,
+    pub origin: std::time::Instant,
+    pub frame: u32,
+}
+
+impl<'a> Mounted<'a> {
+    pub fn new(element: impl Into<Element<'a, String>>) -> Self {
+        let mut element = element.into();
+        let renderer = renderer();
+        let mut tree = Tree::new(element.as_widget());
+        let node = element.as_widget_mut().layout(
+            &mut tree,
+            &renderer,
+            &layout::Limits::new(Size::ZERO, WINDOW),
+        );
+        Self {
+            element,
+            tree,
+            node,
+            renderer,
+            origin: std::time::Instant::now(),
+            frame: 0,
+        }
+    }
+
+    /// Lay the element out again over the same tree.
+    pub fn relayout(&mut self) {
+        self.node = self.element.as_widget_mut().layout(
+            &mut self.tree,
+            &self.renderer,
+            &layout::Limits::new(Size::ZERO, WINDOW),
+        );
+    }
+
+    /// The filled container alone — the first of `FormField`'s two bands.
+    pub fn container(&self) -> Rectangle {
+        self.node.children()[0].bounds()
+    }
+
+    /// One event, with no settling, returning whatever was published.
+    pub fn send(&mut self, event: Event, cursor: mouse::Cursor) -> Vec<String> {
+        let mut messages = Vec::new();
+        let mut shell = iced::advanced::Shell::new(&mut messages);
+        self.element.as_widget_mut().update(
+            &mut self.tree,
+            &event,
+            Layout::new(&self.node),
+            cursor,
+            &self.renderer,
+            &mut clipboard::Null,
+            &mut shell,
+            &Rectangle::with_size(WINDOW),
+        );
+        messages
+    }
+
+    /// Press the left button at `at`.
+    pub fn press(&mut self, at: Point) -> Vec<String> {
+        self.send(
+            Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+            mouse::Cursor::Available(at),
+        )
+    }
+
+    /// Move the pointer to `at` without pressing.
+    pub fn hover(&mut self, at: Point) -> Vec<String> {
+        self.send(
+            Event::Mouse(mouse::Event::CursorMoved { position: at }),
+            mouse::Cursor::Available(at),
+        )
+    }
+}
+
+/// A press of the named key, with no modifiers and no text.
+pub fn named_key(named: iced::keyboard::key::Named) -> Event {
+    Event::Keyboard(iced::keyboard::Event::KeyPressed {
+        key: iced::keyboard::Key::Named(named),
+        modified_key: iced::keyboard::Key::Named(named),
+        physical_key: iced::keyboard::key::Physical::Unidentified(
+            iced::keyboard::key::NativeCode::Unidentified,
+        ),
+        location: iced::keyboard::Location::Standard,
+        modifiers: iced::keyboard::Modifiers::empty(),
+        text: None,
+        repeat: false,
+    })
 }

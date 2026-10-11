@@ -516,21 +516,15 @@ impl<'a, M: Clone + 'a> From<ContextMenu<'a, M>> for Surface<'a, M> {
 
 #[cfg(test)]
 mod tests {
+    use super::super::test_support::{self, roles};
     use super::*;
     use crate::showcase::state::Message;
     use crate::ui::material::UnreadMark;
-    use iced::advanced::layout::{self, Layout};
-    use iced::advanced::widget::Tree;
+    use iced::advanced::layout::Layout;
     use iced::{Rectangle, Size};
-    use micold_core::theme::ColorScheme;
-    use micold_core::tokens;
 
     const ROOM: Size = Size::new(PANEL_WIDTH, 600.0);
     const TOLERANCE: f32 = 0.5;
-
-    fn roles() -> Roles {
-        tokens::roles(ColorScheme::Light)
-    }
 
     /// A switcher row for a project with `running` and `unread` in its trailing slots.
     fn project_row(running: Option<&str>, unread: Option<usize>) -> MenuItem<Message> {
@@ -545,14 +539,7 @@ mod tests {
     /// The boxes of what one item's content row holds, in order: the leading slot, the label, then
     /// whatever trails.
     fn content_of(item: MenuItem<Message>) -> Vec<Rectangle> {
-        let mut element = item_column(vec![item], roles());
-        let renderer = crate::ui::material::test_support::renderer();
-        let mut tree = Tree::new(element.as_widget());
-        let node = element.as_widget_mut().layout(
-            &mut tree,
-            &renderer,
-            &layout::Limits::new(Size::ZERO, ROOM),
-        );
+        let node = test_support::laid_out(item_column(vec![item], roles()), ROOM);
         let content: Vec<Rectangle> = Layout::new(&node)
             .children()
             .next()
@@ -568,27 +555,14 @@ mod tests {
 
     /// The size `● n unread` is drawn at.
     fn worded_mark(count: usize) -> Size {
-        let mut element: Element<'_, Message> =
+        let element: Element<'_, Message> =
             UnreadMark::new(roles()).count(count).worded(true).into();
-        let renderer = crate::ui::material::test_support::renderer();
-        let mut tree = Tree::new(element.as_widget());
-        element
-            .as_widget_mut()
-            .layout(&mut tree, &renderer, &layout::Limits::new(Size::ZERO, ROOM))
-            .bounds()
-            .size()
+        test_support::size_of(element, ROOM)
     }
 
     /// The boxes inside an item's last trailing box, in order.
     fn trailing_of(item: MenuItem<Message>) -> (Rectangle, Vec<Rectangle>) {
-        let mut element = item_column(vec![item], roles());
-        let renderer = crate::ui::material::test_support::renderer();
-        let mut tree = Tree::new(element.as_widget());
-        let node = element.as_widget_mut().layout(
-            &mut tree,
-            &renderer,
-            &layout::Limits::new(Size::ZERO, ROOM),
-        );
+        let node = test_support::laid_out(item_column(vec![item], roles()), ROOM);
         let column = Layout::new(&node);
         let row = column
             .children()

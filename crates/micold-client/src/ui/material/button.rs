@@ -429,18 +429,14 @@ impl<'a, M: Clone + 'a> From<Button<'a, M>> for Element<'a, M> {
 
 #[cfg(test)]
 mod tests {
+    use super::super::test_support::roles;
     use super::*;
     use crate::showcase::state::Message;
     use iced::advanced::layout::{self, Layout};
     use iced::advanced::widget::Tree;
     use iced::{Rectangle, Size};
-    use micold_core::theme::ColorScheme;
 
     const ROOM: Size = Size::new(400.0, 300.0);
-
-    fn roles() -> Roles {
-        micold_core::tokens::roles(ColorScheme::Light)
-    }
 
     /// The switcher's button as the app bar builds it, with `unread` sessions in other projects.
     fn switcher_button(unread: usize) -> Element<'static, Message> {
