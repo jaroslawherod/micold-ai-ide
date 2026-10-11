@@ -386,19 +386,20 @@ fn a_quiet_session_costs_nothing_between_appends() {
     );
 }
 
-#[path = "attention_support/mod.rs"]
-mod attention_support;
+#[path = "support/attention.rs"]
+mod attention;
 
 /// A Copilot turn that runs past the long-task threshold ends as a granted **Long task finished**
 /// (Feature 613 US1.9).
 #[tokio::test]
 async fn a_long_copilot_turn_is_granted_as_long_task_finished() {
-    use attention_support::{claims, connect, kinds, session_id, Service};
+    use attention::{claims, connect, kinds, session_id, Service};
     use micold_core::attention::NotificationKind;
     use micold_core::session::AiCli;
 
     let b = session_id(0xB);
-    let service = Service::new(b, AiCli::Copilot, std::time::Duration::from_secs(30));
+    let service =
+        Service::with_threshold(&[(b, AiCli::Copilot)], std::time::Duration::from_secs(30));
     let mut window = connect(&service.state, "window").await;
 
     service.note(
@@ -422,11 +423,12 @@ async fn a_long_copilot_turn_is_granted_as_long_task_finished() {
 /// A short Copilot turn is not granted (Feature 613 US1.9).
 #[tokio::test]
 async fn a_short_copilot_turn_is_not_granted() {
-    use attention_support::{claims, connect, kinds, session_id, Service};
+    use attention::{claims, connect, kinds, session_id, Service};
     use micold_core::session::AiCli;
 
     let b = session_id(0xB);
-    let service = Service::new(b, AiCli::Copilot, std::time::Duration::from_secs(30));
+    let service =
+        Service::with_threshold(&[(b, AiCli::Copilot)], std::time::Duration::from_secs(30));
     let mut window = connect(&service.state, "window").await;
 
     service.note(

@@ -12,10 +12,13 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
-use futures_util::StreamExt;
+use futures_util::{SinkExt, StreamExt};
+use micold_core::attention::NotificationKind;
 use micold_core::project::{Availability, Project};
 use micold_core::protocol::codec::Frame;
-use micold_core::protocol::messages::{CatalogSnapshot, DaemonMsg, DaemonSettings, SessionSummary};
+use micold_core::protocol::messages::{
+    CatalogSnapshot, ClientMsg, DaemonMsg, DaemonSettings, SessionSummary,
+};
 use micold_core::session::{
     AiCli, Session, SessionId, SessionLabel, SessionLocation, TerminalMode,
 };
@@ -106,6 +109,21 @@ impl Service {
             store,
             project,
             live,
+        }
+    }
+
+    /// A service holding `sessions`, each backed by an idle process, whose long-task threshold is
+    /// `threshold` rather than the zero [`state_on`] sets.
+    pub fn with_threshold(sessions: &[(SessionId, AiCli)], threshold: Duration) -> Self {
+        let service = Self::with_sessions_of(sessions);
+        service.state.set_long_task_threshold(threshold);
+        service
+    }
+
+    /// Feed one activity event, pushing the catalog when it changed something.
+    pub fn note(&self, session: SessionId, event: ActivityEvent) {
+        if self.state.note_activity(session, event) {
+            self.state.broadcast_catalog();
         }
     }
 
@@ -276,4 +294,41 @@ pub async fn next_frame(window: &mut Window) -> Option<Frame<DaemonMsg>> {
         .await
         .expect("the service answers in time")
         .map(|frame| frame.expect("a well-formed frame"))
+}
+
+/// How a ping is told apart from other traffic in [`claims`].
+const NONCE: u64 = 0x613;
+
+/// Send the claim, then a `Ping`, and return every control message sent before the `Pong`.
+pub async fn claims(window: &mut Window, session: SessionId, seq: u64) -> Vec<DaemonMsg> {
+    window
+        .send(Frame::Control(ClientMsg::AttentionClaim { session, seq }))
+        .await
+        .expect("the claim is sent");
+    window
+        .send(Frame::Control(ClientMsg::Ping { nonce: NONCE }))
+        .await
+        .expect("the ping is sent");
+    let mut before_the_pong = Vec::new();
+    loop {
+        match next_frame(window).await {
+            Some(Frame::Control(DaemonMsg::Pong { nonce })) if nonce == NONCE => {
+                return before_the_pong;
+            }
+            Some(Frame::Control(DaemonMsg::CatalogChanged { .. })) => {}
+            Some(Frame::Control(msg)) => before_the_pong.push(msg),
+            Some(Frame::Grid(_)) => {}
+            None => panic!("the service closed the connection of a window that claimed"),
+        }
+    }
+}
+
+/// Every grant in `msgs`, with its kind.
+pub fn kinds(msgs: &[DaemonMsg]) -> Vec<(SessionId, u64, NotificationKind)> {
+    msgs.iter()
+        .filter_map(|m| match m {
+            DaemonMsg::AttentionGranted { session, seq, kind } => Some((*session, *seq, *kind)),
+            _ => None,
+        })
+        .collect()
 }
