@@ -67,7 +67,8 @@ scene_point_away
 scene_frame 0.8
 scene_frame_hold 3
 
-scene_click "$scene_form_create_x" "$scene_form_create_y"
+# Return in the Name field is the form's own submit; see the note on the form's coordinates.
+scene_key Return
 scene_point_away
 # Creating the worktree is a git operation on a real repository -- a branch, a checkout, and a
 # rescan of the project. Two seconds is long enough for the demonstration project on any machine
