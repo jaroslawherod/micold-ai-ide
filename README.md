@@ -6,7 +6,12 @@
 
 **Run several AI coding agents side by side, each in its own git worktree, in one native desktop app.**
 
-<!-- TODO: add a screenshot or demo GIF here, e.g. ![Micold AI IDE](docs/media/hero.png) -->
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://jaroslawherod.github.io/micold-ai-ide/media/main-window-dark.png">
+    <img alt="Micold AI IDE: a worktree sidebar on the left and the active project's details on the right" src="https://jaroslawherod.github.io/micold-ai-ide/media/main-window-light.png" width="860">
+  </picture>
+</p>
 
 Micold gives every line of work its own branch, worktree and real terminal, and keeps the agent
 session running in the background — close the window, or crash it, and the sessions are still there
@@ -45,7 +50,23 @@ screenshots of the running application, published from this repository on every 
   the projects you registered and the credentials you allowed, under limits you set. See
   [Running the session service in a container](docs/user-guide/sandboxed-daemon.md).
 
-## Build & run
+## Download
+
+Prebuilt packages for every release are on the
+[releases page](https://github.com/jaroslawherod/micold-ai-ide/releases/latest):
+
+| Platform | Package |
+|---|---|
+| Debian, Ubuntu | `.deb` (amd64, arm64) — `sudo apt install ./micold-client_*.deb` |
+| Fedora, RHEL, openSUSE | `.rpm` (x86_64, aarch64) |
+| macOS | `.dmg` (universal) |
+| Windows | `-setup.exe` (x64, arm64) |
+
+Then run `micold-ai-ide` and open a git project; you also need at least one agent CLI
+(for example `claude`) on your `PATH`. Step-by-step guides:
+[installing](https://jaroslawherod.github.io/micold-ai-ide/install.html).
+
+## Build from source
 
 ```sh
 mise run run        # run the GUI client (it spawns or attaches the session daemon itself)
