@@ -181,8 +181,8 @@ tooltip; hidden whenever there is no current reading.
 
 Doc-only; done by the close unit, not a milestone.
 
-- [ ] T047 Run quickstart Part B §B1–§B6 (the `visual-pass` skill for §B2 and §B6) and record the results in `specs/490-claude-plan-usage/quickstart.md`; §B4's Windows run and the real-account steps are marked for the user when no such machine or account is available
-- [ ] T048 Confirm CI's Linux, macOS and Windows jobs ran the feature's tests on the last milestone PR and note it in `specs/490-claude-plan-usage/quickstart.md` (Principle VI)
+- [x] T047 Run quickstart Part B §B1–§B6 (the `visual-pass` skill for §B2 and §B6) and record the results in `specs/490-claude-plan-usage/quickstart.md`; §B4's Windows run and the real-account steps are marked for the user when no such machine or account is available
+- [x] T048 Confirm CI's Linux, macOS and Windows jobs ran the feature's tests on the last milestone PR and note it in `specs/490-claude-plan-usage/quickstart.md` (Principle VI)
 
 ---
 

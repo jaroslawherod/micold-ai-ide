@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-u1pay5
 - **Started**: 2026-10-10
 - **Phase**: close
-- **Next step**: close: T047 visual pass (quickstart Part B), T048 CI note
+- **Next step**: close PR (visual pass recorded, CI noted); then done
 
 ## Pull requests
 
