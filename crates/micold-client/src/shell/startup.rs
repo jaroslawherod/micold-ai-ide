@@ -226,6 +226,13 @@ fn boot() -> (App, Task<Message>) {
     core.session.desktop_notifications = loaded.settings.desktop_notifications;
     core.session.notification_kinds = loaded.settings.notification_kinds;
     core.session.long_task_threshold_secs = loaded.settings.long_task_threshold_secs;
+    // Feature 490: the switch and threshold until the service's `Welcome` says otherwise.
+    core.plan_usage.settings(
+        loaded.settings.plan_usage_enabled,
+        micold_core::plan_usage::WarnPercent::clamped(u64::from(
+            loaded.settings.plan_usage_warn_percent,
+        )),
+    );
     core.session.cross_session_access = loaded.settings.cross_session_access;
     // No availability answer is filled here (feature 027, FR-023c). One used to be, from this
     // process's own `PATH` — which is the host's, and under the sandboxed placement the sessions

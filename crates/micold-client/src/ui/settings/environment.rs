@@ -43,6 +43,8 @@ pub const SETTINGS: &[(&str, &str)] = &[
     ("desktop_notifications", "DesktopNotificationsToggled"),
     ("notification_kinds", "NotificationKindToggled"),
     ("long_task_threshold_secs", "LongTaskThresholdChanged"),
+    ("plan_usage_enabled", "PlanUsageToggled"),
+    ("plan_usage_warn_percent", "PlanUsageWarnChanged"),
     ("cross_session_access", "CrossSessionAccessChanged"),
 ];
 
@@ -211,6 +213,33 @@ pub fn view<'a>(
         }
     }
 
+    // Feature 490 (US4; FR-001, FR-003, FR-005): **Claude plan usage**, after the notification
+    // rows. The switch carries the statement of where the values come from and what is not done;
+    // the threshold field follows it, editable whatever the switch says, as the long-task one is.
+    let plan_usage = Checkbox::new(
+        "Show Claude plan usage",
+        draft.environment.plan_usage_enabled,
+        roles,
+    )
+    .track_focus(FieldId::SettingsPlanUsageEnabled, focused)
+    .on_toggle(|v| Message::Settings(SettingsMsg::PlanUsageToggled(v)));
+    let plan_usage = field_note(
+        plan_usage,
+        Some("Shows your plan's usage and next limit reset in the app bar. The values come from Claude Code's status-line data in the sessions this app runs. No credential is read, and nothing is sent anywhere."),
+        roles,
+    );
+    let plan_usage_warn = TextField::new("", &draft.environment.plan_usage_warn_percent, roles)
+        .label("Warn at")
+        .supporting("Percent, 50–100")
+        .error(super::error_for(
+            draft,
+            SettingsSection::Environment,
+            FieldId::SettingsPlanUsageWarn,
+        ))
+        .track_focus(FieldId::SettingsPlanUsageWarn, focused)
+        .on_input(|v| Message::Settings(SettingsMsg::PlanUsageWarnChanged(v)))
+        .on_submit(Message::Settings(SettingsMsg::Saved));
+
     // Feature 034, FR-016: whether an agent may read another session's terminal and type into it.
     // A separate option from the binding above it, with three values, so it is the shared `Select`
     // (Principle VIII) rather than a second checkbox. The values are drawn by their `Display`.
@@ -231,6 +260,7 @@ pub fn view<'a>(
     let mut controls: Vec<Element<'a, Message>> =
         vec![cli, pi_activity, tool_server, desktop_notifications];
     controls.extend(kind_rows);
+    controls.extend([plan_usage, plan_usage_warn.into()]);
     controls.push(cross_session);
     controls.extend([enabled.into(), path.into(), timeout.into()]);
 

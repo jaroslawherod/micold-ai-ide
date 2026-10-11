@@ -305,6 +305,9 @@ pub(crate) fn window_settings(app: &App, stored: Settings) -> Settings {
         cross_session_access: app.core.session.cross_session_access,
         notification_kinds: app.core.session.notification_kinds,
         long_task_threshold_secs: app.core.session.long_task_threshold_secs,
+        // Feature 490: the switch and threshold in force, as the window holds them.
+        plan_usage_enabled: app.core.plan_usage.enabled,
+        plan_usage_warn_percent: app.core.plan_usage.warn.get(),
         // Connected, the service's value is the truth; the file may lag another window's change.
         pr_status_enabled: if app.active_outbox().is_some() {
             app.core.pr_status.enabled
@@ -409,6 +412,8 @@ fn set_changed(target: &mut Settings, saved: &Settings, baseline: Option<&Settin
     set!(notification_kinds);
     set!(long_task_threshold_secs);
     set!(pr_status_enabled);
+    set!(plan_usage_enabled);
+    set!(plan_usage_warn_percent);
     // The placement and profile live in the registry's single entry too (feature 491, FR-005):
     // move it with the block still written for rollback.
     // Only when the page changed the daemon block: a theme save must not rewrite an entry the
@@ -434,6 +439,8 @@ struct ServiceChanges {
     notification_kinds: Option<micold_core::attention::NotificationKinds>,
     long_task_threshold_secs: Option<u64>,
     pr_status_enabled: Option<bool>,
+    plan_usage_enabled: Option<bool>,
+    plan_usage_warn_percent: Option<u8>,
 }
 
 impl ServiceChanges {
@@ -454,9 +461,8 @@ impl ServiceChanges {
             pr_status_enabled: self.pr_status_enabled,
             notification_kinds: self.notification_kinds,
             long_task_threshold_secs: self.long_task_threshold_secs,
-            // Not in the form until T044 (feature 490).
-            plan_usage_enabled: None,
-            plan_usage_warn_percent: None,
+            plan_usage_enabled: self.plan_usage_enabled,
+            plan_usage_warn_percent: self.plan_usage_warn_percent,
         }
     }
 }
@@ -483,6 +489,8 @@ fn service_changes(saved: &Settings, baseline: Option<&Settings>) -> Option<Serv
         notification_kinds: changed!(notification_kinds),
         long_task_threshold_secs: changed!(long_task_threshold_secs),
         pr_status_enabled: changed!(pr_status_enabled),
+        plan_usage_enabled: changed!(plan_usage_enabled),
+        plan_usage_warn_percent: changed!(plan_usage_warn_percent),
     };
     (changes != ServiceChanges::default()).then_some(changes)
 }

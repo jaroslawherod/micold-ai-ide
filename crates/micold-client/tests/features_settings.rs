@@ -1995,7 +1995,10 @@ mod pr_status_switch {
 #[test]
 fn the_plan_usage_drafts_start_from_the_stored_settings() {
     let draft = SettingsDraft::from_settings(&micold_core::settings::Settings::default());
-    assert!(draft.environment.plan_usage_enabled, "on by default (FR-001)");
+    assert!(
+        draft.environment.plan_usage_enabled,
+        "on by default (FR-001)"
+    );
     assert_eq!(draft.environment.plan_usage_warn_percent, "80");
 }
 
@@ -2007,7 +2010,10 @@ fn a_threshold_outside_50_to_100_refuses_the_save() {
         let error = draft.validate().expect_err(text);
         assert_eq!(error.field, FieldId::SettingsPlanUsageWarn, "{text:?}");
         assert_eq!(error.section, SettingsSection::Environment);
-        assert_eq!(error.message, "Enter a whole number from 50 to 100", "{text:?}");
+        assert_eq!(
+            error.message, "Enter a whole number from 50 to 100",
+            "{text:?}"
+        );
     }
 }
 

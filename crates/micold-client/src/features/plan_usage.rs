@@ -40,6 +40,9 @@ pub struct View {
     /// One line per current window, the threshold line when one is reached, and when the reading
     /// was obtained (FR-006, FR-009).
     pub details: Vec<String>,
+    /// A current window is at or above the threshold: the warning look (FR-010). Only the look
+    /// changes; nothing is raised (FR-011).
+    pub warning: bool,
 }
 
 impl State {
@@ -74,6 +77,7 @@ impl State {
         Some(View {
             label: current.label(now, offset),
             details: current.details(self.warn, now, offset),
+            warning: !current.warning(self.warn).is_empty(),
         })
     }
 

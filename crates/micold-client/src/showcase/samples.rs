@@ -123,6 +123,8 @@ pub const TAG: &str = "feat";
 pub const USAGE_LABEL: &str = "42% · 15:30";
 /// A plan-usage label at full use with its reset on another day: the widest the label gets.
 pub const USAGE_LONG_LABEL: &str = "100% · Mon 15:30";
+/// A plan-usage label past the default threshold, shown in the warning look.
+pub const USAGE_WARNING_LABEL: &str = "86% · 15:30";
 /// The details of [`USAGE_LABEL`].
 pub const USAGE_DETAILS: &[&str] = &[
     "5-hour: 42%, resets 15:30",

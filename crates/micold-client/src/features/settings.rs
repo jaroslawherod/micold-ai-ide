@@ -381,6 +381,12 @@ pub struct EnvironmentDraft {
     /// The long-task threshold, in seconds as typed (feature 613, FR-025, S5). Text, as the
     /// timeout above is: only a save judges it (S6).
     pub long_task_threshold_secs: String,
+    /// **Show Claude plan usage** (feature 490, FR-001). Service-owned like the switches above;
+    /// the default-on comes from `Settings`.
+    pub plan_usage_enabled: bool,
+    /// The plan-usage warning threshold, as typed (feature 490, FR-005). Text, as the thresholds
+    /// above are: only a save judges it.
+    pub plan_usage_warn_percent: String,
     /// Whether agents may read and type into other sessions (feature 034, FR-016). A closed choice
     /// of three values, like the default CLI above: nothing to validate on save.
     pub cross_session_access: CrossSessionAccess,
@@ -499,6 +505,10 @@ pub struct ValidSettings {
     pub notification_kinds: NotificationKinds,
     /// Environment: the long-task threshold, in 10–3600 seconds (feature 613).
     pub long_task_threshold_secs: u64,
+    /// Environment: **Show Claude plan usage** (feature 490).
+    pub plan_usage_enabled: bool,
+    /// Environment: the plan-usage warning threshold, 50–100 (feature 490).
+    pub plan_usage_warn_percent: u8,
     /// Environment.
     pub cross_session_access: CrossSessionAccess,
     /// Session service.
@@ -536,9 +546,8 @@ impl ValidSettings {
             daemons: Vec::new(),
             next_daemon_id: 0,
             legacy_default_daemon: None,
-            // Not in the form until T044 (feature 490): service-owned, as above.
-            plan_usage_enabled: micold_core::plan_usage::DEFAULT_PLAN_USAGE_ENABLED,
-            plan_usage_warn_percent: micold_core::plan_usage::WarnPercent::DEFAULT,
+            plan_usage_enabled: self.plan_usage_enabled,
+            plan_usage_warn_percent: self.plan_usage_warn_percent,
         }
     }
 }
@@ -640,6 +649,7 @@ impl SettingsDraft {
         let scrollback_lines = self.scrollback()?;
         let env_include_timeout_secs = self.timeout()?;
         let long_task_threshold_secs = self.long_task_threshold()?;
+        let plan_usage_warn_percent = self.plan_usage_warn()?;
 
         let mut profile = self.daemon.profile.clone();
         profile.image.path = {
@@ -662,6 +672,8 @@ impl SettingsDraft {
             desktop_notifications: self.environment.desktop_notifications,
             notification_kinds: self.environment.notification_kinds,
             long_task_threshold_secs,
+            plan_usage_enabled: self.environment.plan_usage_enabled,
+            plan_usage_warn_percent,
             cross_session_access: self.environment.cross_session_access,
             daemon: DaemonConfig {
                 placement: self.daemon.placement,
@@ -869,6 +881,18 @@ impl SettingsDraft {
         }
     }
 
+    /// The plan-usage threshold as typed, refused outside 50–100 with a message naming the range
+    /// (feature 490, FR-005).
+    fn plan_usage_warn(&self) -> Result<u8, FieldError> {
+        micold_core::plan_usage::WarnPercent::parse(&self.environment.plan_usage_warn_percent)
+            .map(micold_core::plan_usage::WarnPercent::get)
+            .map_err(|message| FieldError {
+                field: FieldId::SettingsPlanUsageWarn,
+                section: SettingsSection::Environment,
+                message,
+            })
+    }
+
     /// Bring an open page up to `now`, the settings as stored after another window saved
     /// (BUG-475, FR-026b): each field the user has not edited since the page opened shows its value
     /// in `now`, and a field they edited keeps their edit. "Edited" is judged against the page as
@@ -903,6 +927,8 @@ impl SettingsDraft {
                     desktop_notifications: _,
                     notification_kinds: _,
                     long_task_threshold_secs: _,
+                    plan_usage_enabled: _,
+                    plan_usage_warn_percent: _,
                     cross_session_access: _,
                 },
             daemon:
@@ -945,6 +971,8 @@ impl SettingsDraft {
             environment.desktop_notifications,
             environment.notification_kinds,
             environment.long_task_threshold_secs,
+            environment.plan_usage_enabled,
+            environment.plan_usage_warn_percent,
             environment.cross_session_access,
             daemon.placement,
             daemon.profile,
@@ -985,6 +1013,11 @@ impl SettingsDraft {
                 desktop_notifications: settings.desktop_notifications,
                 notification_kinds: settings.notification_kinds,
                 long_task_threshold_secs: settings.long_task_threshold_secs.to_string(),
+                plan_usage_enabled: settings.plan_usage_enabled,
+                plan_usage_warn_percent: micold_core::settings::clamp_plan_usage_warn_percent(
+                    u64::from(settings.plan_usage_warn_percent),
+                )
+                .to_string(),
                 cross_session_access: settings.cross_session_access,
             },
             daemon: DaemonDraft {
@@ -1127,6 +1160,10 @@ pub enum Msg {
     NotificationKindToggled(NotificationKind, bool),
     /// The Settings long-task threshold field changed (feature 613, S5).
     LongTaskThresholdChanged(String),
+    /// Environment: **Show Claude plan usage** was toggled (feature 490, FR-001).
+    PlanUsageToggled(bool),
+    /// Environment: the plan-usage warning threshold was edited (feature 490, FR-005).
+    PlanUsageWarnChanged(String),
     /// The Settings **Let agents read and type into other sessions** select changed
     /// (feature 034, FR-016).
     CrossSessionAccessChanged(CrossSessionAccess),
@@ -1250,6 +1287,10 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
         Msg::DesktopNotificationsToggled(on) => desktop_notifications_toggled(state, on),
         Msg::NotificationKindToggled(kind, on) => notification_kind_toggled(state, kind, on),
         Msg::LongTaskThresholdChanged(text) => long_task_threshold_changed(state, text),
+        Msg::PlanUsageToggled(on) => edit(state, |draft| draft.environment.plan_usage_enabled = on),
+        Msg::PlanUsageWarnChanged(text) => edit(state, |draft| {
+            draft.environment.plan_usage_warn_percent = text
+        }),
         Msg::CrossSessionAccessChanged(access) => cross_session_access_changed(state, access),
         Msg::PlacementChanged(placement) => placement_changed(state, placement),
         Msg::RuntimeChanged(runtime) => runtime_changed(state, runtime),
