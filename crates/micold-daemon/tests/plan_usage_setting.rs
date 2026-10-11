@@ -161,3 +161,39 @@ async fn turning_the_switch_on_again_keeps_the_reading_empty_until_one_arrives()
     );
     assert!(service.state.note_plan_usage(session_id(A), reading()));
 }
+
+/// Feature 490 T021 (research R9; FR-002, SC-007): the switch rewrites the settings file of every
+/// live Claude Code session and writes or deletes its relay file.
+#[tokio::test]
+async fn the_switch_rewrites_every_live_sessions_settings_and_relay_file() {
+    use micold_core::mcp::binding::ConfigLocations;
+    use micold_daemon::hooks::{HookReceiver, StatusContext};
+
+    let service = Service::with_sessions(&[session_id(A)]);
+    let dir = tempfile::tempdir().unwrap();
+    let (receiver, _listener) = HookReceiver::bind(dir.path().join("hooks")).await.unwrap();
+    let context = StatusContext {
+        cwd: dir.path().join("project"),
+        locations: ConfigLocations::default(),
+    };
+    let settings = receiver
+        .prepare_settings(session_id(A), context, true)
+        .unwrap();
+    let relay = receiver.relay_file(session_id(A));
+    service.state.set_hooks(receiver);
+    let has_block = || {
+        let doc: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&settings).unwrap()).unwrap();
+        doc.get("statusLine").is_some()
+    };
+    assert!(has_block() && relay.exists());
+
+    let (mut one, _, _) = window(&service).await;
+    sends(&mut one, set(Some(false), None)).await;
+    assert!(!has_block(), "off: no statusLine block");
+    assert!(!relay.exists(), "off: no relay file");
+
+    sends(&mut one, set(Some(true), None)).await;
+    assert!(has_block(), "on: the block is back");
+    assert!(relay.exists(), "on: the relay file is back");
+}
