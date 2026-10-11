@@ -65,7 +65,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - M3 review A: the reading is not re-adopted when the window's active daemon changes — settings follow the same rule (adopted at Welcome and on push); the next push corrects it. Declined (pre-existing pattern).
 - M3 review A: the label rounds (79.6 → "80%") while the threshold compares tenths — a warning-look question, carried to M4 (T039–T041).
 - M3 review A: a reset under 24 h away shows no day even past midnight — FR-008 and research R11 define the 24 h rule. Declined (as specified).
-- M4 review A: `SettingsDraft::default()` has the switch off and an empty threshold — the page is always seeded from the settings in force (`from_settings`), as for the other service-owned switches. Declined.
+- M4 review A: `SettingsDraft::default()` had the switch off and an empty threshold — fixed in `456a2ea3` (the gate's `sandbox_limits` helpers hit the same), so the count above is 5 fixed, 4 declined.
 - M4 review A: the `error` role is checked against `surface`, not the app bar's tonal level — the role pairs are the design system's, and the bar's other glyphs are checked the same way. Declined.
 - M4 review A: `warning()` allocates beside `details()` — one short Vec per redraw. Declined (cost over value).
 - M4 review A: three `WarnPercent::clamped(u64::from(..))` sites — each a one-line call of the one helper. Declined.
