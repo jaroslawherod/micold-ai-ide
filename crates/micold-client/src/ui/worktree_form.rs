@@ -80,10 +80,10 @@ pub fn modal<'a>(
             )
             .label("Daemon"),
         );
-    } else if form.preview().is_err() {
+    } else if form.preview().is_err() && form.source != BranchSource::Issue {
         // No runtime is offered with none configured: say how to get one (feature 491, T037), in
-        // the place of the empty preview. With a preview showing the row is not added: the
-        // tallest forms keep their height (the panel-placement gate measures them).
+        // the place of the empty preview. Not added to the issue form, nor beside a preview: those
+        // are the tallest forms and keep their height (the panel-placement gate measures them).
         fields = fields.push(
             Text::new(
                 crate::features::worktree_form::NO_DAEMONS_NOTICE,
