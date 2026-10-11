@@ -142,6 +142,9 @@ pub enum Icon {
     OpenInBrowser,
     /// The Claude plan's usage in the app bar (feature 490, contract U2) — `data_usage`.
     PlanUsage,
+    /// The same indicator at or above the warning threshold (feature 490, U2, FR-010) —
+    /// `warning`, a different shape so the warning is not colour alone.
+    UsageWarning,
 }
 
 impl Icon {
@@ -198,6 +201,7 @@ impl Icon {
         Icon::ChecksFailing,
         Icon::OpenInBrowser,
         Icon::PlanUsage,
+        Icon::UsageWarning,
     ];
 
     /// The font codepoint for this icon (Private Use Area; see `assets/fonts/PROVENANCE.md`).
@@ -268,6 +272,7 @@ impl Icon {
             Icon::ChecksFailing => '\u{e5c9}',
             Icon::OpenInBrowser => '\u{e89e}',
             Icon::PlanUsage => '\u{e1af}',
+            Icon::UsageWarning => '\u{e002}',
         }
     }
 }

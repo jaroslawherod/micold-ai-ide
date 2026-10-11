@@ -113,6 +113,7 @@ fn usage_indicator<'a>(
     let view = state.plan_usage.view(now, offset)?;
     Some(
         UsageIndicator::new(view.label, roles)
+            .warning(view.warning)
             .details(view.details)
             .into(),
     )

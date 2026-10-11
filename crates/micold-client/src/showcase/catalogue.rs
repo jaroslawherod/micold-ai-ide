@@ -280,7 +280,7 @@ pub const COMPONENTS: &[Entry] = &[
         component: "UsageIndicator",
         variants: &[],
         density: &[],
-        posed: &["normal", "long label"],
+        posed: &["normal", "warning", "long label"],
         live: &[],
         interactive: false,
         section: Section::Components,

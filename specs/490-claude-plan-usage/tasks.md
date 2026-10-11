@@ -149,13 +149,13 @@ tooltip; hidden whenever there is no current reading.
 
 ### Tests (write first, see them fail)
 
-- [ ] T039 [P] [US2] Extend `crates/micold-client/tests/features_plan_usage.rs` (US2 s1–s4; FR-010): with threshold 80 the view model warns at 80.0% and not at 79.9%; a window above 100% warns; a newer reading below the threshold returns to normal; changing the threshold in `DaemonSettings` changes the look of the stored reading without a new reading; reaching the threshold produces no notification or dialog command, only the view-model change (FR-011)
-- [ ] T040 [P] [US2] Extend `crates/micold-client/tests/icons.rs`, `crates/micold-client/tests/icon_roles.rs` and `crates/micold-client/tests/gates/bar_controls_hold_their_size.rs`: `Icon::UsageWarning` is U+E002 in the `error` role; the warning look keeps the 40 px height
+- [x] T039 [P] [US2] Extend `crates/micold-client/tests/features_plan_usage.rs` (US2 s1–s4; FR-010): with threshold 80 the view model warns at 80.0% and not at 79.9%; a window above 100% warns; a newer reading below the threshold returns to normal; changing the threshold in `DaemonSettings` changes the look of the stored reading without a new reading; reaching the threshold produces no notification or dialog command, only the view-model change (FR-011)
+- [x] T040 [P] [US2] Extend `crates/micold-client/tests/icons.rs`, `crates/micold-client/tests/icon_roles.rs` and `crates/micold-client/tests/gates/bar_controls_hold_their_size.rs`: `Icon::UsageWarning` is U+E002 in the `error` role; the warning look keeps the 40 px height
 
 ### Implementation
 
-- [ ] T041 [US2] Add `Icon::UsageWarning` (U+E002) to `crates/micold-client/src/icons.rs`, `.warning(bool)` to `UsageIndicator` in `crates/micold-client/src/ui/material/usage_indicator.rs` (glyph and label in `error`, U2), and a warning sample to the showcase in `crates/micold-client/src/showcase/samples.rs`
-- [ ] T042 [US2] Pass `!current.warning(threshold).is_empty()` from the view model in `crates/micold-client/src/features/plan_usage.rs` through `crates/micold-client/src/ui/toolbar.rs` until T039 and T040 pass
+- [x] T041 [US2] Add `Icon::UsageWarning` (U+E002) to `crates/micold-client/src/icons.rs`, `.warning(bool)` to `UsageIndicator` in `crates/micold-client/src/ui/material/usage_indicator.rs` (glyph and label in `error`, U2), and a warning sample to the showcase in `crates/micold-client/src/showcase/samples.rs`
+- [x] T042 [US2] Pass `!current.warning(threshold).is_empty()` from the view model in `crates/micold-client/src/features/plan_usage.rs` through `crates/micold-client/src/ui/toolbar.rs` until T039 and T040 pass
 
 ---
 
@@ -167,13 +167,13 @@ tooltip; hidden whenever there is no current reading.
 
 ### Tests (write first, see them fail)
 
-- [ ] T043 [P] [US4] Extend `crates/micold-client/tests/features_settings.rs` and `crates/micold-client/tests/settings_sections.rs` (US4 s1–s4; FR-001, FR-003, FR-005, FR-018): the drafts start from `DaemonSettings` (switch on, "80"); "49" and "101" are refused with "Enter a whole number from 50 to 100" and nothing is sent; a valid save sends both fields in `SettingsSet`; a `SettingsChanged` from another window updates the drafts; the Environment section has **Claude plan usage** after **Desktop notifications**, and its field note says the values come from Claude Code's status-line data in the sessions the app runs, that no credential is read and that nothing is sent anywhere
+- [x] T043 [P] [US4] Extend `crates/micold-client/tests/features_settings.rs` and `crates/micold-client/tests/settings_sections.rs` (US4 s1–s4; FR-001, FR-003, FR-005, FR-018): the drafts start from `DaemonSettings` (switch on, "80"); "49" and "101" are refused with "Enter a whole number from 50 to 100" and nothing is sent; a valid save sends both fields in `SettingsSet`; a `SettingsChanged` from another window updates the drafts; the Environment section has **Claude plan usage** after **Desktop notifications**, and its field note says the values come from Claude Code's status-line data in the sessions the app runs, that no credential is read and that nothing is sent anywhere
 
 ### Implementation
 
-- [ ] T044 [US4] Add the switch and threshold drafts with `WarnPercent::parse` validation to `crates/micold-client/src/features/settings.rs`, replacing T017's `None`s, following `long_task_threshold_secs`
-- [ ] T045 [US4] Add the **Claude plan usage** subsection (switch **Show Claude plan usage**, threshold field, FR-003 statement) to `crates/micold-client/src/ui/settings/environment.rs` until T043 passes
-- [ ] T046 [US4] Add *Environment → Claude plan usage* to `docs/user-guide/settings.md`: the switch (on by default and why), the threshold (80 by default, 50–100), the warning look, and the FR-003 statement (source, only `statusLine` read from Claude Code's settings files, no credential, nothing sent), linking the T027 section
+- [x] T044 [US4] Add the switch and threshold drafts with `WarnPercent::parse` validation to `crates/micold-client/src/features/settings.rs`, replacing T017's `None`s, following `long_task_threshold_secs`
+- [x] T045 [US4] Add the **Claude plan usage** subsection (switch **Show Claude plan usage**, threshold field, FR-003 statement) to `crates/micold-client/src/ui/settings/environment.rs` until T043 passes
+- [x] T046 [US4] Add *Environment → Claude plan usage* to `docs/user-guide/settings.md`: the switch (on by default and why), the threshold (80 by default, 50–100), the warning look, and the FR-003 statement (source, only `statusLine` read from Claude Code's settings files, no credential, nothing sent), linking the T027 section
 
 ---
 

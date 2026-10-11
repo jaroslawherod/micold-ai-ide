@@ -1,7 +1,8 @@
 //! `UsageIndicator` — the Claude plan's usage in the app bar (Constitution Principle VIII; feature
 //! 490, contract `usage-indicator.md`).
 //!
-//! The `data_usage` glyph at 18 px, then the label at `label_large`, both `on_surface_variant`:
+//! The `data_usage` glyph at 18 px, then the label at `label_large`, both `on_surface_variant`;
+//! the warning look swaps in the `warning` glyph, both in `error` (U2, FR-010):
 //! 40 px high like the bar's other actions, 8 px between glyph and label, 12 px ends, as wide as
 //! the label. Not pressable; hovering shows the details in the shared [`Tooltip`].
 //!
@@ -30,6 +31,7 @@ pub struct UsageIndicator<'a, M> {
     label: String,
     roles: Roles,
     details: Vec<String>,
+    warning: bool,
     _marker: PhantomData<&'a M>,
 }
 
@@ -40,8 +42,15 @@ impl<'a, M: 'a> UsageIndicator<'a, M> {
             label: label.into(),
             roles: *roles,
             details: Vec::new(),
+            warning: false,
             _marker: PhantomData,
         }
+    }
+
+    /// Show the warning look: a window is at or above the threshold (FR-010).
+    pub fn warning(mut self, warning: bool) -> Self {
+        self.warning = warning;
+        self
     }
 
     /// The tooltip's lines (FR-006). Empty, the default, shows no tooltip.
@@ -54,10 +63,14 @@ impl<'a, M: 'a> UsageIndicator<'a, M> {
 impl<'a, M: 'a> From<UsageIndicator<'a, M>> for Element<'a, M> {
     fn from(i: UsageIndicator<'a, M>) -> Self {
         let r = i.roles;
-        let tint = r.on_surface_variant;
+        let (glyph, tint) = if i.warning {
+            (Icon::UsageWarning, r.error)
+        } else {
+            (Icon::PlanUsage, r.on_surface_variant)
+        };
         let body = container(
             row![
-                icon(Icon::PlanUsage, GLYPH, tint),
+                icon(glyph, GLYPH, tint),
                 Text::new(i.label, TypeRole::Action, r).tint(tint),
             ]
             .spacing(GAP)
@@ -114,6 +127,8 @@ mod tests {
                 "the label takes width: {short:?}"
             );
             assert_eq!(detailed, short, "the tooltip adds no size");
+            let warned = size_of(UsageIndicator::new("42% · 15:30", &r).warning(true).into());
+            assert_eq!(warned, short, "the warning look keeps the size (T040)");
         }
     }
 
@@ -123,11 +138,16 @@ mod tests {
     fn the_glyph_is_data_usage_and_legible_on_the_bar() {
         // Its codepoint is pinned in `tests/icons.rs`; a literal here would trip the glyph guard.
         assert!(Icon::ALL.contains(&Icon::PlanUsage));
+        assert!(Icon::ALL.contains(&Icon::UsageWarning));
         for scheme in [ColorScheme::Light, ColorScheme::Dark] {
             let r = tokens::roles(scheme);
             assert!(
                 tokens::contrast(r.on_surface_variant, r.surface) >= tokens::AA_TEXT,
                 "{scheme:?}"
+            );
+            assert!(
+                tokens::contrast(r.error, r.surface) >= tokens::AA_TEXT,
+                "the warning look, {scheme:?}"
             );
         }
     }

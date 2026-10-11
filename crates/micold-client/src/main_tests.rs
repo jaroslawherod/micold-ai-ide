@@ -1977,6 +1977,8 @@ fn settings_saved_sends_settings_set_to_a_connected_daemon() {
             desktop_notifications: true,
             notification_kinds: Default::default(),
             long_task_threshold_secs: "60".to_string(),
+            plan_usage_enabled: true,
+            plan_usage_warn_percent: "80".to_string(),
             cross_session_access: micold_core::mcp::policy::CrossSessionAccess::Auto,
         },
         ..SettingsDraft::default()
@@ -2596,6 +2598,8 @@ fn settings_saved_is_a_silent_no_op_toward_the_daemon_when_disconnected() {
             desktop_notifications: true,
             notification_kinds: Default::default(),
             long_task_threshold_secs: "60".to_string(),
+            plan_usage_enabled: true,
+            plan_usage_warn_percent: "80".to_string(),
             cross_session_access: micold_core::mcp::policy::CrossSessionAccess::Auto,
         },
         ..SettingsDraft::default()
@@ -2639,6 +2643,8 @@ fn app_saving_a_placement(in_force: PlacementKind, chosen: PlacementKind) -> App
             desktop_notifications: true,
             notification_kinds: Default::default(),
             long_task_threshold_secs: "60".to_string(),
+            plan_usage_enabled: true,
+            plan_usage_warn_percent: "80".to_string(),
             cross_session_access: micold_core::mcp::policy::CrossSessionAccess::Auto,
         },
         daemon: micold_client::features::settings::DaemonDraft {
@@ -4613,6 +4619,8 @@ fn save_env_include_and_echo(app: &mut App, settings: DaemonSettings) {
             desktop_notifications: settings.desktop_notifications,
             notification_kinds: settings.notification_kinds,
             long_task_threshold_secs: settings.long_task_threshold_secs.to_string(),
+            plan_usage_enabled: settings.plan_usage_enabled,
+            plan_usage_warn_percent: settings.plan_usage_warn_percent.to_string(),
             cross_session_access: settings.cross_session_access,
         },
         ..SettingsDraft::default()

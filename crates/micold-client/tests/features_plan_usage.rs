@@ -160,13 +160,19 @@ fn at(percent_tenths: u32) -> UsageReading {
 fn the_warning_look_starts_at_the_threshold_exactly() {
     let mut state = State::default();
     state.received(Some(at(800)));
-    assert!(state.view(NOON, utc()).unwrap().warning, "80.0% at 80 warns (FR-010)");
+    assert!(
+        state.view(NOON, utc()).unwrap().warning,
+        "80.0% at 80 warns (FR-010)"
+    );
     state.received(Some(at(799)));
     assert!(!state.view(NOON, utc()).unwrap().warning, "79.9% does not");
     state.received(Some(at(1050)));
     assert!(state.view(NOON, utc()).unwrap().warning, "above 100% warns");
     state.received(Some(at(300)));
-    assert!(!state.view(NOON, utc()).unwrap().warning, "US2 s3: a newer reading below returns to normal");
+    assert!(
+        !state.view(NOON, utc()).unwrap().warning,
+        "US2 s3: a newer reading below returns to normal"
+    );
 }
 
 #[test]

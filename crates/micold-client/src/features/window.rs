@@ -173,6 +173,10 @@ pub enum FieldId {
     SettingsEnvIncludeTimeout,
     /// Settings: the long-task threshold (feature 613, S5).
     SettingsLongTaskThreshold,
+    /// Settings: **Show Claude plan usage** (feature 490, FR-001).
+    SettingsPlanUsageEnabled,
+    /// Settings: the Claude plan-usage warning threshold (feature 490, FR-005).
+    SettingsPlanUsageWarn,
     /// Settings: one notification kind's on/off checkbox (feature 613, FR-015). Parameterised
     /// like `SettingsCredential`, so a fifth kind cannot lose its keyboard focus silently.
     SettingsNotificationKind(micold_core::attention::NotificationKind),

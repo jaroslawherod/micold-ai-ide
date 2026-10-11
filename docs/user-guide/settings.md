@@ -243,6 +243,23 @@ nothing, whatever the system would allow. Where each system keeps its setting is
 [Installing on macOS](install-macos.md#notifications) and
 [Installing on Windows](install-windows.md#notifications).
 
+### Claude plan usage
+
+**Show Claude plan usage** shows how much of your Claude plan's usage limits you have used, and
+when the next limit resets, in the app bar (see
+[Claude plan usage](worktrees-and-sessions.md#claude-plan-usage)). It is **on** by default,
+because it reads no credential and sends nothing off your machine. The values come from Claude
+Code's own status-line data in the Claude sessions the app runs. From Claude Code's settings files
+the app reads only the `statusLine` key, so that your own status line keeps working. No credential
+is read, and nothing is sent anywhere. Turning it off applies to Claude sessions started
+afterwards, and the indicator disappears at once.
+
+**Warn at** sets when the indicator changes to its warning look: a warning sign instead of the
+usage icon, with the icon and text in the error colour. It is a whole percent from 50 to 100, 80 by
+default, and Save refuses anything else with "Enter a whole number from 50 to 100". The warning
+appears as soon as any limit reaches it, and the indicator's tooltip names the limits that did. It
+appears only in the indicator: there is no dialog and no desktop notification.
+
 ### Let agents read and type into other sessions
 
 Whether the assistant in one session may read another session's terminal and type into it, with the
