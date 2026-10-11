@@ -119,6 +119,17 @@ pub const SEARCH_HIGHLIGHT_AT_REST: usize = 1;
 /// A tag's text, for the chip-shaped components.
 pub const TAG: &str = "feat";
 
+/// A plan-usage label with its reset today, and its details (feature 490, `UsageIndicator`).
+pub const USAGE_LABEL: &str = "42% · 15:30";
+/// A plan-usage label at full use with its reset on another day: the widest the label gets.
+pub const USAGE_LONG_LABEL: &str = "100% · Mon 15:30";
+/// The details of [`USAGE_LABEL`].
+pub const USAGE_DETAILS: &[&str] = &[
+    "5-hour: 42%, resets 15:30",
+    "Weekly: 18%, resets Thu 12:00",
+    "Updated 11:58",
+];
+
 /// A stage name, for the progress indicator that pairs a bar with the step in flight.
 pub const STAGE: &str = "Fetching submodules…";
 

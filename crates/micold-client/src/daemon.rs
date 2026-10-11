@@ -473,6 +473,7 @@ async fn connect_and_pump(
                 outbox: Outbox::new(tx),
                 catalog: welcome.catalog,
                 settings: welcome.settings,
+                plan_usage: welcome.plan_usage,
             },
         ))
         .await

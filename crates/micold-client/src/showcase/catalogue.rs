@@ -275,6 +275,18 @@ pub const COMPONENTS: &[Entry] = &[
         layout: Layout::Inline,
         render: sections::atoms::pull_request_indicator,
     },
+    Entry {
+        module: "material/usage_indicator.rs",
+        component: "UsageIndicator",
+        variants: &[],
+        density: &[],
+        posed: &["normal", "long label"],
+        live: &[],
+        interactive: false,
+        section: Section::Components,
+        layout: Layout::Inline,
+        render: sections::atoms::usage_indicator,
+    },
     // ---- controls: buttons, a checkbox, a chip, a field, a dropdown ------------------------
     Entry {
         module: "material/button.rs",

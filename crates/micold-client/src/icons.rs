@@ -140,6 +140,8 @@ pub enum Icon {
     ChecksFailing,
     /// **Open pull request** in a worktree row's menu (feature 040, §4) — `open_in_new`.
     OpenInBrowser,
+    /// The Claude plan's usage in the app bar (feature 490, contract U2) — `data_usage`.
+    PlanUsage,
 }
 
 impl Icon {
@@ -195,6 +197,7 @@ impl Icon {
         Icon::ChecksPending,
         Icon::ChecksFailing,
         Icon::OpenInBrowser,
+        Icon::PlanUsage,
     ];
 
     /// The font codepoint for this icon (Private Use Area; see `assets/fonts/PROVENANCE.md`).
@@ -264,6 +267,7 @@ impl Icon {
             Icon::ChecksPending => '\u{e8b5}',
             Icon::ChecksFailing => '\u{e5c9}',
             Icon::OpenInBrowser => '\u{e89e}',
+            Icon::PlanUsage => '\u{e1af}',
         }
     }
 }

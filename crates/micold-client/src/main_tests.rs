@@ -382,6 +382,7 @@ fn connect(
             outbox: micold_client::daemon::Outbox::new(tx),
             catalog,
             settings: quiet_settings(),
+            plan_usage: None,
         }),
     );
     drain(&mut rx)
@@ -2838,6 +2839,7 @@ fn daemon_connected_adopts_the_authoritative_env_include_settings() {
                 cross_session_access: micold_core::mcp::policy::CrossSessionAccess::Auto,
                 pr_status_enabled: false,
             },
+            plan_usage: None,
         }),
     );
 
@@ -3377,6 +3379,7 @@ fn the_service_answers_with(
                 cross_session_access: micold_core::mcp::policy::CrossSessionAccess::Auto,
                 pr_status_enabled: false,
             },
+            plan_usage: None,
         }),
     );
 }
@@ -3888,6 +3891,7 @@ fn connected_with_outbox(
             outbox: micold_client::daemon::Outbox::new(tx),
             catalog: snapshot_with("/repo/demo", Vec::new()),
             settings: quiet_settings(),
+            plan_usage: None,
         }),
     );
     drain(&mut rx);
@@ -4082,6 +4086,7 @@ fn connect_with_settings_keeping_outbox(
             outbox: micold_client::daemon::Outbox::new(tx),
             catalog,
             settings,
+            plan_usage: None,
         }),
     );
     rx
@@ -5736,6 +5741,7 @@ mod script_path_report {
             micold_client::daemon::Outbox::new(tx),
             micold_core::protocol::messages::CatalogSnapshot::default(),
             settings_saved_elsewhere(&new_path),
+            None,
         );
 
         assert!(
@@ -5763,6 +5769,7 @@ mod script_path_report {
             micold_client::daemon::Outbox::new(tx),
             micold_core::protocol::messages::CatalogSnapshot::default(),
             settings_saved_elsewhere(&stored_path()),
+            None,
         );
 
         assert_eq!(
@@ -9959,6 +9966,7 @@ fn focused_on_a_session_of(
                 vec![summary(session, "s", WireLifecycle::Running)],
             ),
             settings: quiet_settings(),
+            plan_usage: None,
         }),
     );
     let _ = update(
@@ -11372,10 +11380,58 @@ mod two_daemons {
             micold_client::daemon::Outbox::new(tx),
             micold_core::protocol::messages::CatalogSnapshot::default(),
             quiet_settings(),
+            None,
         );
         assert!(app.disconnected.contains(&DaemonId(2)));
         assert!(!app.daemon_catalogs.contains_key(&DaemonId(2)));
         assert!(app.core.settings.links.outbox(DaemonId(2)).is_none());
+    }
+
+    /// Feature 490, T034: the reading is the `Welcome`'s, then each push's, and none once the
+    /// active daemon's connection is lost.
+    #[test]
+    fn the_plan_usage_reading_follows_the_welcome_the_pushes_and_the_disconnect() {
+        use micold_core::plan_usage::{LimitWindow, UsageReading};
+        let (mut app, _rx1, _rx2) = two_connected();
+        let active = app
+            .active_daemon()
+            .unwrap_or_else(|| app.core.settings.legacy_daemon());
+        let reading = UsageReading {
+            windows: vec![LimitWindow {
+                key: "five_hour".into(),
+                used_tenths: 420,
+                resets_at: None,
+            }],
+            obtained_at: 1,
+        };
+        let (tx, _rx) = iced::futures::channel::mpsc::unbounded();
+        let _ = crate::shell::daemon_sync::on_connected(
+            &mut app,
+            active,
+            micold_client::daemon::Outbox::new(tx),
+            micold_core::protocol::messages::CatalogSnapshot::default(),
+            quiet_settings(),
+            Some(reading.clone()),
+        );
+        assert_eq!(
+            app.core.plan_usage.reading,
+            Some(reading.clone()),
+            "Welcome"
+        );
+
+        let changed =
+            |reading| micold_core::protocol::messages::DaemonMsg::PlanUsageChanged { reading };
+        let _ = crate::shell::daemon_sync::on_daemon_event(&mut app, active, changed(None));
+        assert_eq!(app.core.plan_usage.reading, None, "nothing current");
+        let _ = crate::shell::daemon_sync::on_daemon_event(
+            &mut app,
+            active,
+            changed(Some(reading.clone())),
+        );
+        assert_eq!(app.core.plan_usage.reading, Some(reading), "a push");
+
+        let _ = crate::shell::daemon_sync::on_disconnected(&mut app, active);
+        assert_eq!(app.core.plan_usage.reading, None, "FR-014");
     }
 
     #[test]

@@ -277,6 +277,9 @@ pub struct State {
     pub attach: crate::features::attach::State,
     /// What the pr_status feature remembers -- see [`crate::features::pr_status::State`].
     pub pr_status: crate::features::pr_status::State,
+    /// The Claude plan's usage the service pushed (feature 490) -- see
+    /// [`crate::features::plan_usage::State`].
+    pub plan_usage: crate::features::plan_usage::State,
     /// What the Changes view holds (feature 482) -- see [`crate::features::changes::State`].
     pub changes: crate::features::changes::State,
     /// What Run in parallel holds (feature 483) -- see [`crate::features::runs::State`].

@@ -22,7 +22,9 @@ use crate::features::help::Msg as HelpMsg;
 use crate::features::project::Msg as ProjectMsg;
 use crate::features::settings::Msg as SettingsMsg;
 use crate::icons::Icon;
-use crate::ui::material::{unread_total_tooltip, Button, MenuItem, MenuTrigger, Toolbar};
+use crate::ui::material::{
+    unread_total_tooltip, Button, MenuItem, MenuTrigger, Toolbar, UsageIndicator,
+};
 use iced::Element;
 use micold_core::metadata::APP_NAME;
 use micold_core::theme::ColorScheme;
@@ -83,11 +85,79 @@ pub fn view<'a>(state: &State, scheme: ColorScheme) -> Element<'a, Message> {
         switcher = switcher.trailing_mark(unread, unread_total_tooltip(unread));
     }
     let menu = MenuTrigger::new(Icon::Menu, Message::Help(HelpMsg::MenuToggled), r);
-    Toolbar::new(APP_NAME, r)
+    let mut bar = Toolbar::new(APP_NAME, r)
         // Raised once the sidebar has content scrolled under it (FR-025a). The flag is derived from
         // the sidebar's offset rather than stored, so nothing else can set it.
-        .elevated(state.app_bar_elevated())
-        .action(switcher)
-        .action(menu)
-        .into()
+        .elevated(state.app_bar_elevated());
+    // Feature 490 (contract U3): the plan's usage leads the trailing actions, and only while there
+    // is a current reading to show; without one the bar is exactly as before (FR-015).
+    let now = chrono::Utc::now().timestamp();
+    let offset = *chrono::Local::now().offset();
+    if let Some(usage) = usage_indicator(state, now, offset, &r) {
+        bar = bar.action(usage);
+    }
+    bar.action(switcher).action(menu).into()
+}
+
+/// The usage indicator for `now` in the zone `offset`, or `None` when nothing is shown (feature
+/// 490, FR-004, FR-015).
+fn usage_indicator<'a>(
+    state: &State,
+    now: i64,
+    offset: chrono::FixedOffset,
+    roles: &micold_core::tokens::Roles,
+) -> Option<Element<'a, Message>> {
+    let view = state.plan_usage.view(now, offset)?;
+    Some(
+        UsageIndicator::new(view.label, roles)
+            .details(view.details)
+            .into(),
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use micold_core::plan_usage::{LimitWindow, UsageReading, WarnPercent};
+
+    const NOON: i64 = 1_791_720_000;
+
+    fn utc() -> chrono::FixedOffset {
+        chrono::FixedOffset::east_opt(0).unwrap()
+    }
+
+    fn reading() -> UsageReading {
+        UsageReading {
+            windows: vec![LimitWindow {
+                key: "five_hour".into(),
+                used_tenths: 420,
+                resets_at: Some(NOON + 3600),
+            }],
+            obtained_at: NOON,
+        }
+    }
+
+    /// U3: the indicator is in the bar only with the switch on and a current reading.
+    #[test]
+    fn the_bar_carries_the_indicator_only_for_a_current_reading() {
+        let r = tokens::roles(ColorScheme::Light);
+        let mut state = State::default();
+        assert!(
+            usage_indicator(&state, NOON, utc(), &r).is_none(),
+            "no reading"
+        );
+
+        state.plan_usage.received(Some(reading()));
+        assert!(usage_indicator(&state, NOON, utc(), &r).is_some());
+        assert!(
+            usage_indicator(&state, NOON + 7200, utc(), &r).is_none(),
+            "every window has reset"
+        );
+
+        state.plan_usage.settings(false, WarnPercent::default());
+        assert!(
+            usage_indicator(&state, NOON, utc(), &r).is_none(),
+            "switch off"
+        );
+    }
 }

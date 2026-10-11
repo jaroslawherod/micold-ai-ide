@@ -372,3 +372,34 @@ pub fn pull_request_indicator<'a>(
         Layout::Inline,
     )
 }
+
+/// `UsageIndicator` — the plan's usage in the app bar (feature 490, contract U4): a label with its
+/// reset today, with the details as its tooltip, and the widest label, a full plan resetting on
+/// another day. What has to be checked by eye is the glyph–label gap and the 40 px height beside
+/// the bar's other actions.
+pub fn usage_indicator<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
+    use material::UsageIndicator;
+    let details = || {
+        samples::USAGE_DETAILS
+            .iter()
+            .map(|l| l.to_string())
+            .collect()
+    };
+    arrange(
+        vec![
+            posed(
+                "normal",
+                UsageIndicator::<Message>::new(samples::USAGE_LABEL, &roles)
+                    .details(details())
+                    .into(),
+                roles,
+            ),
+            posed(
+                "long label",
+                UsageIndicator::<Message>::new(samples::USAGE_LONG_LABEL, &roles).into(),
+                roles,
+            ),
+        ],
+        Layout::Inline,
+    )
+}

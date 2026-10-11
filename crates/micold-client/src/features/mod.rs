@@ -211,6 +211,7 @@ pub mod connection;
 pub mod daemons;
 pub mod help;
 pub mod notifications;
+pub mod plan_usage;
 pub mod pr_status;
 pub mod project;
 pub mod runs;
