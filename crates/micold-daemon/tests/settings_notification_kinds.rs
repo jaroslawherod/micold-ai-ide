@@ -10,11 +10,10 @@
 //! 30 s, and a long turn moves the service's turn clock past it rather than sleeping (T071), so
 //! no turn depends on how fast the machine is.
 
-mod attention_support;
+#[path = "support/attention.rs"]
+mod attention;
 
-use attention_support::{
-    connect_with_settings as connect, idle_process, next_frame, session_id, Window,
-};
+use attention::{connect_with_settings as connect, idle_process, next_frame, session_id, Window};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Once};

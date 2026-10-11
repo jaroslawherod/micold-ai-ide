@@ -4,9 +4,6 @@
 //! Same harness as `attention_events.rs`: `server::serve_connection` over in-memory duplexes, one
 //! per simulated window, all sharing one `DaemonState`.
 
-mod attention_support;
-
-use attention_support::kinds;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -22,39 +19,11 @@ use portable_pty::CommandBuilder;
 #[path = "support/attention.rs"]
 mod attention;
 use attention::{
-    connect, next_frame, process_that_exits, session_id, state_on, wait_dead, Service, Window,
+    claims, connect, kinds, process_that_exits, session_id, state_on, wait_dead, Service, Window,
 };
 
 /// How long a test waits for something the service owes it.
 const OWED: Duration = Duration::from_secs(10);
-
-const NONCE: u64 = 0x039;
-
-/// Send the claim, then a `Ping`, and return every control message the service sent before the
-/// `Pong`. A connection's messages are handled in order, so the claim has been answered (or not) by
-/// then. Catalog pushes are left out: only the claim's answers matter.
-async fn claims(window: &mut Window, session: SessionId, seq: u64) -> Vec<DaemonMsg> {
-    window
-        .send(Frame::Control(ClientMsg::AttentionClaim { session, seq }))
-        .await
-        .expect("the claim is sent");
-    window
-        .send(Frame::Control(ClientMsg::Ping { nonce: NONCE }))
-        .await
-        .expect("the ping is sent");
-    let mut before_the_pong = Vec::new();
-    loop {
-        match next_frame(window).await {
-            Some(Frame::Control(DaemonMsg::Pong { nonce })) if nonce == NONCE => {
-                return before_the_pong;
-            }
-            Some(Frame::Control(DaemonMsg::CatalogChanged { .. })) => {}
-            Some(Frame::Control(msg)) => before_the_pong.push(msg),
-            Some(Frame::Grid(_)) => {}
-            None => panic!("the service closed the connection of a window that claimed"),
-        }
-    }
-}
 
 fn grants(msgs: &[DaemonMsg]) -> Vec<(SessionId, u64)> {
     msgs.iter()

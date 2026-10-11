@@ -6,9 +6,10 @@
 //! driven as `supervision_giveup.rs` drives it: every respawn runs the platform shell, which this
 //! binary points at a command that exits 1. Nothing else in this binary reads that variable.
 
-mod attention_support;
+#[path = "support/attention.rs"]
+mod attention;
 
-use attention_support::{connect, idle_process, next_frame, session_id, Window};
+use attention::{connect, idle_process, next_frame, session_id, Window};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Once};
