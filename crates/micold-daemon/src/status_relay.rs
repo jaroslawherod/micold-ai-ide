@@ -122,9 +122,12 @@ fn git_bash() -> Option<std::path::PathBuf> {
             return None;
         }
         // `Git\cmd\git.exe` sits beside `Git\bin\bash.exe`; `Git\bin\git.exe` beside `bash.exe`.
-        [dir.join("bash.exe"), dir.parent()?.join("bin").join("bash.exe")]
-            .into_iter()
-            .find(|bash| bash.is_file())
+        [
+            dir.join("bash.exe"),
+            dir.parent()?.join("bin").join("bash.exe"),
+        ]
+        .into_iter()
+        .find(|bash| bash.is_file())
     })
 }
 

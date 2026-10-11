@@ -66,7 +66,10 @@ impl UserStatusLine {
                 .claude_settings_dir()
                 .map(|dir| dir.join("settings.json")),
         ];
-        candidates.into_iter().flatten().find_map(|path| read(&path))
+        candidates
+            .into_iter()
+            .flatten()
+            .find_map(|path| read(&path))
     }
 }
 
@@ -74,7 +77,7 @@ fn read(path: &Path) -> Option<UserStatusLine> {
     let text = std::fs::read(path).ok()?;
     let file: SettingsFile = serde_json::from_slice(&text).ok()?;
     let block: StatusLineBlock = serde_json::from_value(file.status_line?).ok()?;
-    (block.kind == "command" && !block.command.trim().is_empty()).then(|| UserStatusLine {
+    (block.kind == "command" && !block.command.trim().is_empty()).then_some(UserStatusLine {
         command: block.command,
         padding: block.padding,
         refresh_interval: block.refresh_interval,

@@ -27,7 +27,9 @@ fn main() {
     let mut args = std::env::args_os().skip(1);
     if args.next().as_deref() == Some(std::ffi::OsStr::new("status-line")) {
         let file = args.next().unwrap_or_default();
-        std::process::exit(micold_daemon::status_relay::main(std::path::Path::new(&file)));
+        std::process::exit(micold_daemon::status_relay::main(std::path::Path::new(
+            &file,
+        )));
     }
     // No `announce_running` here: the installer's `AppMutex` prompt asks the user to close the app,
     // and a windowless daemon cannot be closed, so setup would never get past it. Setup stops the

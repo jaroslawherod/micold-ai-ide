@@ -111,7 +111,9 @@ fn the_body_is_exactly_the_rate_limits_object_with_the_bearer_token() {
     assert_eq!(status, 0);
     assert!(out.is_empty());
     let seen = rx.seen.recv_timeout(Duration::from_secs(5)).unwrap();
-    assert!(seen.head.starts_with("POST /status/0b6e4a62-6d0b-4a8e-9a43-5d2c9f0b1a77 HTTP/1.1\r\n"));
+    assert!(seen
+        .head
+        .starts_with("POST /status/0b6e4a62-6d0b-4a8e-9a43-5d2c9f0b1a77 HTTP/1.1\r\n"));
     assert!(
         seen.head
             .lines()
@@ -130,7 +132,11 @@ fn the_body_is_exactly_the_rate_limits_object_with_the_bearer_token() {
 fn an_input_without_rate_limits_posts_nothing() {
     let dir = tempfile::tempdir().unwrap();
     let rx = receiver(true);
-    let (status, out) = run(&relay_file(dir.path(), rx.port, None), br#"{"cwd": "/x"}"#, false);
+    let (status, out) = run(
+        &relay_file(dir.path(), rx.port, None),
+        br#"{"cwd": "/x"}"#,
+        false,
+    );
     assert_eq!((status, out.is_empty()), (0, true));
     assert!(rx.seen.recv_timeout(Duration::from_millis(700)).is_err());
 }
@@ -141,7 +147,11 @@ fn the_user_command_gets_the_whole_input_and_its_output_is_copied_unchanged() {
     let dir = tempfile::tempdir().unwrap();
     let rx = receiver(true);
     let command = r#"printf '%s|' "$MICOLD_STATUS_RELAY"; cat; printf '\nsecond line\n'"#;
-    let (status, out) = run(&relay_file(dir.path(), rx.port, Some(command)), &input(), false);
+    let (status, out) = run(
+        &relay_file(dir.path(), rx.port, Some(command)),
+        &input(),
+        false,
+    );
     assert_eq!(status, 0);
     let mut expected = b"1|".to_vec();
     expected.extend_from_slice(&input());
@@ -211,7 +221,11 @@ fn a_failing_user_command_is_not_reported_by_the_relay() {
     let dir = tempfile::tempdir().unwrap();
     let rx = receiver(true);
     let (status, out) = run(
-        &relay_file(dir.path(), rx.port, Some("/nonexistent/line.sh 2>/dev/null")),
+        &relay_file(
+            dir.path(),
+            rx.port,
+            Some("/nonexistent/line.sh 2>/dev/null"),
+        ),
         &input(),
         false,
     );
@@ -232,7 +246,10 @@ fn input_over_1_mib_posts_nothing_but_still_runs_the_user_command() {
         false,
     );
     assert_eq!(status, 0);
-    assert_eq!(String::from_utf8(out).unwrap().trim(), big.len().to_string());
+    assert_eq!(
+        String::from_utf8(out).unwrap().trim(),
+        big.len().to_string()
+    );
     assert!(rx.seen.recv_timeout(Duration::from_millis(700)).is_err());
 }
 
