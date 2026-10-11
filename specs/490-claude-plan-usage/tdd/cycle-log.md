@@ -32,3 +32,15 @@ a daemon, which ran until its idle stop.
 
 Green after M2: `plan_usage_user_status_line` 11, `status_relay` 11, `hooks_receiver` 12,
 `plan_usage_setting` 5, `plan_usage_route` 15.
+
+## M3 (2026-10-11)
+
+| Red commit | Green commit | Behaviours (tasks) |
+|---|---|---|
+| `23abe2ba` | `8b311565` | The window keeps the newest pushed reading, `None` and a disconnect clear it, switch off clears and ignores late pushes; the view is the headline label and every window in the details in the given offset; a passed window drops out and none left hides it; the tick runs only while a reading is held, every 30 s; `Icon::PlanUsage` is U+E1AF (T028–T030 → T032–T034) |
+
+Written with the green commit (no separate red run): the `UsageIndicator` size tests (40 px high,
+width follows the label, the tooltip adds none), the toolbar test (the indicator only for a current
+reading) and the routing test in `main_tests.rs` (Welcome, push, disconnect) (T031, T035, T036).
+T031 named `tests/gates/bar_controls_hold_their_size.rs`, which gates the terminal's bottom bar, not
+the app bar; the app-bar checks are the component and toolbar unit tests instead.
