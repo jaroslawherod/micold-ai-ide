@@ -37,3 +37,27 @@ branch.
 5. **Unavailable** (US3 s1, s4, s7, SC-003). Offline, or with an API-key login: no indicator, no
    notice, and `grep -i "plan.usage\|status" <daemon log>` shows nothing at WARN or ERROR.
 6. **Themes**. Steps 1–2 in light and dark; the showcase's `UsageIndicator` entry in both.
+
+## Part B results (2026-10-11)
+
+Run on Xvfb with iced's software renderer (tiny-skia; no Vulkan here), driven by XTEST, with a
+private data and runtime directory. There was no Claude account on the machine. A real Claude
+session was started from the app, and readings were fed to its relay file with Part A's
+`micold-daemon status-line` command. Screenshots are in [visual-pass/](visual-pass/).
+
+| Step | Result | Evidence |
+|---|---|---|
+| B1 Shown | **pass** (relay), **for the user** (real account, `/usage` comparison SC-002) | The app bar showed `42% · 00:06`. The tooltip read `5-hour: 55%, resets 00:06` / `At or above 50%: 5-hour` / `Updated 23:06` (`app-bar-tooltip.png`). |
+| B2 Warning | **pass** | At 50 with 55–60% the glyph became the triangle and the glyph and label turned the error colour. A 42% reading returned the normal look with no new session. Typing 49 and pressing Save was refused with "Enter a whole number from 50 to 100" (`app-bar-normal-warning-dark-off.png`, `settings-plan-usage-light-dark.png`). |
+| B3 Off | **pass** (app side), **for the user** (Claude Code's own line) | Turning the switch off and saving hid the indicator at once. A new session's `hooks/<uuid>.json` had no `statusLine`, and the running session's relay file was removed. |
+| B4 User status line kept | **for the user** | Needs Claude Code drawing its own status line with a real account, and a Windows machine with and without Git Bash. |
+| B5 Unavailable | **pass** (no reading), **for the user** (offline, API-key login) | No indicator showed before the first reading. Neither log had a plan-usage or status line at WARN or ERROR. |
+| B6 Themes | **pass** | The showcase `UsageIndicator` in light and dark (`usage-indicator-light-dark.png`), and the real app bar and Settings in light and dark. |
+
+The relay's first post, about 3 s after the session started, did not show. Every later post did,
+with and without proxy variables in the environment, and that first miss could not be reproduced.
+
+CI (T048): on #779's head (`bc59b039`), the `build + test` jobs ran green on ubuntu-latest,
+macos-latest and windows-latest, and so did `package + smoke (windows-11-arm)`. The real-runtime
+sandbox job failed once on an image-import timing bound in `micold-core` that this feature does
+not touch, and passed on its one re-run.
