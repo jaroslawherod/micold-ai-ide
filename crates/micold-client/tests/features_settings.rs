@@ -25,6 +25,7 @@ fn valid() -> SettingsDraft {
     draft.terminal.scrollback_lines = "5000".into();
     draft.environment.timeout_secs = "5".into();
     draft.environment.long_task_threshold_secs = "60".into();
+    draft.environment.plan_usage_warn_percent = "80".into();
     draft
 }
 
@@ -1987,4 +1988,35 @@ mod pr_status_switch {
     fn the_section_is_titled_github() {
         assert_eq!(SettingsSection::GithubIssues.label(), "GitHub");
     }
+}
+
+// ---- Feature 490, T043: Claude plan usage (US4 s1–s4; FR-001, FR-005) --------------------------
+
+#[test]
+fn the_plan_usage_drafts_start_from_the_stored_settings() {
+    let draft = SettingsDraft::from_settings(&micold_core::settings::Settings::default());
+    assert!(draft.environment.plan_usage_enabled, "on by default (FR-001)");
+    assert_eq!(draft.environment.plan_usage_warn_percent, "80");
+}
+
+#[test]
+fn a_threshold_outside_50_to_100_refuses_the_save() {
+    for text in ["49", "101", "abc", ""] {
+        let mut draft = valid();
+        draft.environment.plan_usage_warn_percent = text.into();
+        let error = draft.validate().expect_err(text);
+        assert_eq!(error.field, FieldId::SettingsPlanUsageWarn, "{text:?}");
+        assert_eq!(error.section, SettingsSection::Environment);
+        assert_eq!(error.message, "Enter a whole number from 50 to 100", "{text:?}");
+    }
+}
+
+#[test]
+fn a_valid_plan_usage_save_carries_both_fields() {
+    let mut draft = valid();
+    draft.environment.plan_usage_enabled = false;
+    draft.environment.plan_usage_warn_percent = " 65 ".into();
+    let settings = draft.validate().expect("valid").into_settings();
+    assert!(!settings.plan_usage_enabled);
+    assert_eq!(settings.plan_usage_warn_percent, 65);
 }

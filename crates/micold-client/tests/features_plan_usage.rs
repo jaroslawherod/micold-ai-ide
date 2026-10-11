@@ -144,3 +144,42 @@ fn the_clock_ticks_only_while_a_reading_is_held() {
     state.disconnected();
     assert!(!state.ticks(NOON));
 }
+
+fn at(percent_tenths: u32) -> UsageReading {
+    UsageReading {
+        windows: vec![LimitWindow {
+            key: "five_hour".into(),
+            used_tenths: percent_tenths,
+            resets_at: Some(NOON + HOUR),
+        }],
+        obtained_at: NOON,
+    }
+}
+
+#[test]
+fn the_warning_look_starts_at_the_threshold_exactly() {
+    let mut state = State::default();
+    state.received(Some(at(800)));
+    assert!(state.view(NOON, utc()).unwrap().warning, "80.0% at 80 warns (FR-010)");
+    state.received(Some(at(799)));
+    assert!(!state.view(NOON, utc()).unwrap().warning, "79.9% does not");
+    state.received(Some(at(1050)));
+    assert!(state.view(NOON, utc()).unwrap().warning, "above 100% warns");
+    state.received(Some(at(300)));
+    assert!(!state.view(NOON, utc()).unwrap().warning, "US2 s3: a newer reading below returns to normal");
+}
+
+#[test]
+fn the_threshold_changes_the_look_of_the_reading_already_held() {
+    let mut state = State::default();
+    state.received(Some(at(600)));
+    assert!(!state.view(NOON, utc()).unwrap().warning);
+    state.settings(true, WarnPercent::clamped(55));
+    let view = state.view(NOON, utc()).unwrap();
+    assert!(view.warning, "US2 s4: no new reading needed");
+    assert!(
+        view.details.iter().any(|l| l == "At or above 55%: 5-hour"),
+        "the details name the window: {:?}",
+        view.details
+    );
+}

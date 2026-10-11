@@ -59,6 +59,7 @@ fn expected(icon: Icon) -> char {
         Icon::ChecksFailing => '\u{e5c9}',
         Icon::OpenInBrowser => '\u{e89e}',
         Icon::PlanUsage => '\u{e1af}',
+        Icon::UsageWarning => '\u{e002}',
     }
 }
 
@@ -93,8 +94,8 @@ fn all_covers_every_variant_without_duplicates() {
     // `block`, `check`, `schedule`, `cancel`; `edit` is `Rename`'s and `close` is `Close`'s), +1 for `OpenInBrowser`
     // (feature 040's **Open pull request** menu entry — `open_in_new`), +2 for feature 484's pane
     // split buttons (`vertical_split`, `horizontal_split`), +1 for feature 490's plan-usage
-    // indicator (`data_usage`).
-    assert_eq!(Icon::ALL.len(), 51, "curated set size");
+    // indicator (`data_usage`) and +1 for its warning look (`warning`).
+    assert_eq!(Icon::ALL.len(), 52, "curated set size");
 
     // No duplicate variants.
     for (i, &a) in Icon::ALL.iter().enumerate() {
