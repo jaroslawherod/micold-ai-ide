@@ -415,9 +415,10 @@ mod status_line_block {
         }
 
         fn prepare(&self, on: bool) -> Value {
+            self.receiver.set_plan_usage(on);
             let path = self
                 .receiver
-                .prepare_settings(self.session, self.context(), on)
+                .prepare_settings(self.session, self.context())
                 .unwrap();
             serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap()
         }
@@ -498,6 +499,18 @@ mod status_line_block {
         );
         assert_eq!(on["hooks"], off["hooks"]);
         assert_eq!(off.as_object().unwrap().len(), 1, "only `hooks`: {off}");
+    }
+
+    #[tokio::test]
+    async fn a_forgotten_session_is_not_rewritten_by_the_switch() {
+        let f = fixture().await;
+        f.prepare(true);
+        f.receiver.forget(f.session);
+        f.receiver.set_plan_usage(true);
+        assert!(
+            !f.relay_file().exists(),
+            "an ended session's relay file stays gone"
+        );
     }
 
     #[tokio::test]

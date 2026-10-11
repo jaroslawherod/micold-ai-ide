@@ -92,19 +92,22 @@ pub fn relay(
 pub fn user_shell(command: &str) -> Command {
     #[cfg(windows)]
     {
+        // The release daemon is a GUI-subsystem program: a console child would flash a window on
+        // every status-line refresh.
+        use micold_core::process::no_window;
         if let Some(bash) = git_bash() {
             let mut c = Command::new(bash);
-            c.arg("-c").arg(command);
+            no_window(&mut c).arg("-c").arg(command);
             return c;
         }
         let mut c = Command::new("powershell");
-        c.args(["-NoProfile", "-Command", command]);
+        no_window(&mut c).args(["-NoProfile", "-Command", command]);
         c
     }
     #[cfg(not(windows))]
     {
         let mut c = Command::new("sh");
-        c.arg("-c").arg(command);
+        micold_core::process::no_window(&mut c).arg("-c").arg(command);
         c
     }
 }

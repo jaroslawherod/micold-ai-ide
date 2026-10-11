@@ -555,6 +555,15 @@ const COPILOT_HOME_VAR: &str = "COPILOT_HOME";
 /// Relocates the Codex home, `config.toml` (its trust record) included.
 const CODEX_HOME_VAR: &str = "CODEX_HOME";
 
+/// Home and `CLAUDE_CONFIG_DIR` as a session launched with `spec` sees them.
+fn claude_locations(spec: &LaunchSpec) -> ConfigLocations {
+    ConfigLocations {
+        home: directories::UserDirs::new().map(|dirs| dirs.home_dir().to_path_buf()),
+        claude_config_dir: session_dir_var(&spec.env, CLAUDE_CONFIG_DIR_VAR),
+        ..ConfigLocations::default()
+    }
+}
+
 /// A directory named by `var` as the session will see it: its launch environment first (an
 /// environment-include script may set it), then this process's. Empty counts as unset.
 fn session_dir_var(env: &[(String, String)], var: &str) -> Option<PathBuf> {
@@ -851,6 +860,8 @@ impl DaemonState {
     /// Record the loopback hook receiver at startup so AI-CLI spawns can be pointed at it (US2,
     /// T045/T046). A no-op if already set.
     pub fn set_hooks(&self, receiver: crate::hooks::HookReceiver) {
+        // Sessions prepared from now on follow the stored plan-usage switch (feature 490).
+        receiver.set_plan_usage(self.lock().catalog.plan_usage_enabled());
         let _ = self.hooks.set(receiver);
     }
 
@@ -979,14 +990,13 @@ impl DaemonState {
         }
         // Where the user's own configuration lives, as the session will see it.
         let locations = ConfigLocations {
-            home: directories::UserDirs::new().map(|dirs| dirs.home_dir().to_path_buf()),
-            claude_config_dir: session_dir_var(&spec.env, CLAUDE_CONFIG_DIR_VAR),
             copilot_config_dir: matches!(support, ToolServerSupport::AdditionalMcpConfig)
                 .then(|| {
                     session_dir_var(&spec.env, COPILOT_HOME_VAR).or_else(|| provider.config_dir())
                 })
                 .flatten(),
             codex_home: None,
+            ..claude_locations(spec)
         };
         if let Some(path) = mcp_binding::name_taken(support, &locations, &spec.cwd) {
             return Err(SkipReason::NameTaken(path));
@@ -1009,14 +1019,9 @@ impl DaemonState {
         // Where the session's own status line is looked up (feature 490, research R4).
         let status = crate::hooks::StatusContext {
             cwd: spec.cwd.clone(),
-            locations: ConfigLocations {
-                home: directories::UserDirs::new().map(|dirs| dirs.home_dir().to_path_buf()),
-                claude_config_dir: session_dir_var(&spec.env, CLAUDE_CONFIG_DIR_VAR),
-                ..ConfigLocations::default()
-            },
+            locations: claude_locations(spec),
         };
-        let plan_usage = self.lock().catalog.plan_usage_enabled();
-        match receiver.prepare_settings(id, status, plan_usage) {
+        match receiver.prepare_settings(id, status) {
             Ok(path) => Some(path),
             Err(e) => {
                 tracing::warn!(session = %id.0, error = %e, "could not write hook settings; activity will be Unknown");
@@ -4268,6 +4273,11 @@ impl DaemonState {
             inner.views.forget_session(session);
             inner.sessions.remove(&session)
         };
+        // Its hook token and status-line relay file go with it (feature 490); a later start
+        // prepares them afresh.
+        if let Some(receiver) = self.hooks.get() {
+            receiver.forget(session);
+        }
         removed
             .map(|s| s.procs.values().map(|p| Arc::clone(&p.pty)).collect())
             .unwrap_or_default()

@@ -84,9 +84,17 @@ pub struct HookReceiver {
     settings_dir: PathBuf,
     /// The executable Claude Code runs as the status-line relay: this daemon (research R3).
     relay_exe: PathBuf,
-    /// Each prepared session's status context, so turning the plan-usage switch can rewrite its
-    /// settings file (research R9).
-    prepared: Mutex<HashMap<Uuid, StatusContext>>,
+    /// The plan-usage switch as last applied, and each prepared session's status context, so
+    /// turning the switch can rewrite its settings file (research R9). One lock over both, held
+    /// while files are written, so a switch, a prepare and a forget never interleave.
+    prepared: Mutex<Prepared>,
+}
+
+/// See [`HookReceiver::prepared`].
+#[derive(Default)]
+struct Prepared {
+    plan_usage: bool,
+    sessions: HashMap<Uuid, StatusContext>,
 }
 
 impl HookReceiver {
@@ -101,7 +109,10 @@ impl HookReceiver {
             tokens: Arc::new(Mutex::new(HashMap::new())),
             settings_dir,
             relay_exe: std::env::current_exe().unwrap_or_else(|_| PathBuf::from("micold-daemon")),
-            prepared: Mutex::new(HashMap::new()),
+            prepared: Mutex::new(Prepared {
+                plan_usage: micold_core::plan_usage::DEFAULT_PLAN_USAGE_ENABLED,
+                sessions: HashMap::new(),
+            }),
         };
         Ok((receiver, listener))
     }
@@ -129,10 +140,8 @@ impl HookReceiver {
             .lock()
             .expect("hook tokens lock poisoned")
             .remove(&session.0);
-        self.prepared
-            .lock()
-            .expect("hook contexts lock poisoned")
-            .remove(&session.0);
+        let mut prepared = self.prepared.lock().expect("hook contexts lock poisoned");
+        prepared.sessions.remove(&session.0);
         let _ = std::fs::remove_file(self.relay_file(session));
     }
 
@@ -164,35 +173,29 @@ impl HookReceiver {
     /// caller, which spawns without hooks rather than failing the session (activity degrades to
     /// `Unknown`, never wrong — H1).
     ///
-    /// With `plan_usage` on (feature 490), the file also names the status-line relay, and the
-    /// relay file is written; off, neither is there (contract S1).
+    /// While the plan-usage switch is on (feature 490, [`Self::set_plan_usage`]), the file also
+    /// names the status-line relay, and the relay file is written; off, neither is there
+    /// (contract S1).
     pub fn prepare_settings(
         &self,
         session: SessionId,
         status: StatusContext,
-        plan_usage: bool,
     ) -> io::Result<PathBuf> {
-        let path = self.write_settings(session, &status, plan_usage)?;
-        self.prepared
-            .lock()
-            .expect("hook contexts lock poisoned")
-            .insert(session.0, status);
+        let mut prepared = self.prepared.lock().expect("hook contexts lock poisoned");
+        let path = self.write_settings(session, &status, prepared.plan_usage)?;
+        prepared.sessions.insert(session.0, status);
         Ok(path)
     }
 
-    /// Rewrite the settings file of every prepared session for the switch's new state, writing or
-    /// deleting its relay file (feature 490, research R9). A session whose file cannot be written
-    /// keeps its old one; Claude Code picks up the change when it reloads its settings.
+    /// Apply the plan-usage switch: sessions prepared from now on follow it, and the settings file
+    /// of every prepared session is rewritten for it, writing or deleting its relay file (feature
+    /// 490, research R9). A session whose file cannot be written keeps its old one; Claude Code
+    /// picks up the change when it reloads its settings.
     pub fn set_plan_usage(&self, on: bool) {
-        let prepared: Vec<(Uuid, StatusContext)> = self
-            .prepared
-            .lock()
-            .expect("hook contexts lock poisoned")
-            .iter()
-            .map(|(id, status)| (*id, status.clone()))
-            .collect();
-        for (id, status) in prepared {
-            if let Err(e) = self.write_settings(SessionId(id), &status, on) {
+        let mut prepared = self.prepared.lock().expect("hook contexts lock poisoned");
+        prepared.plan_usage = on;
+        for (id, status) in &prepared.sessions {
+            if let Err(e) = self.write_settings(SessionId(*id), status, on) {
                 tracing::warn!(session = %id, error = %e, "could not rewrite hook settings for the plan-usage switch");
             }
         }

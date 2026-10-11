@@ -175,3 +175,20 @@ fn claude_settings_dir_is_the_config_dir_when_set_else_home_dot_claude() {
     };
     assert_eq!(nowhere.claude_settings_dir(), None);
 }
+
+#[test]
+fn an_odd_optional_value_does_not_cost_the_command() {
+    let f = fixture();
+    write(
+        &f.cwd.join(".claude/settings.json"),
+        r#"{"statusLine": {"type": "command", "command": "x", "padding": -1, "refreshInterval": 2.5}}"#,
+    );
+    assert_eq!(
+        resolved(&f, None),
+        Some(UserStatusLine {
+            command: "x".to_owned(),
+            padding: None,
+            refresh_interval: None,
+        })
+    );
+}
