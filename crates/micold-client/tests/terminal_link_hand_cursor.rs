@@ -121,12 +121,10 @@ fn hand_shows(state: &State, grid: &GridCache, area: Option<&PaneArea<'_>>) -> b
         ($cursor:expr, $event:expr $(,)?) => {{
             let cursor: Point = $cursor;
             let mut interaction = mouse::Interaction::None;
-            for event in [
-                $event,
-                Event::Window(iced::window::Event::RedrawRequested(
-                    std::time::Instant::now(),
-                )),
-            ] {
+            // The runtime's own order: the event goes through the interface; only a stale tree
+            // (`Outdated`) is rebuilt and redrawn, and the pointer is what the last update reported.
+            let mut pending = Some($event);
+            while let Some(event) = pending.take() {
                 let mut ui = UserInterface::build(
                     build_view(state, grid, &outcome, &connection, &sandbox, area),
                     WINDOW,
@@ -141,11 +139,15 @@ fn hand_shows(state: &State, grid: &GridCache, area: Option<&PaneArea<'_>>) -> b
                     &mut clipboard::Null,
                     &mut messages,
                 );
-                if let UiState::Updated {
-                    mouse_interaction, ..
-                } = shown
-                {
-                    interaction = mouse_interaction;
+                match shown {
+                    UiState::Updated {
+                        mouse_interaction, ..
+                    } => interaction = mouse_interaction,
+                    UiState::Outdated => {
+                        pending = Some(Event::Window(iced::window::Event::RedrawRequested(
+                            std::time::Instant::now(),
+                        )));
+                    }
                 }
                 cache = ui.into_cache();
             }
@@ -209,6 +211,22 @@ fn hand_shows(state: &State, grid: &GridCache, area: Option<&PaneArea<'_>>) -> b
                 // Ctrl first, then the pointer arrives on the link: the order a user takes.
                 let plain = step!(at, Event::Mouse(mouse::Event::CursorMoved { position: at }),);
                 if plain != mouse::Interaction::Text {
+                    continue;
+                }
+                // The pointer already rests on the link when Ctrl goes down: no pointer event.
+                let resting = step!(
+                    at,
+                    Event::Keyboard(keyboard::Event::ModifiersChanged(
+                        keyboard::Modifiers::COMMAND,
+                    )),
+                );
+                step!(
+                    at,
+                    Event::Keyboard(keyboard::Event::ModifiersChanged(
+                        keyboard::Modifiers::empty(),
+                    )),
+                );
+                if resting != mouse::Interaction::Pointer {
                     continue;
                 }
                 step!(
