@@ -124,14 +124,23 @@ fn with_the_switch_off_nothing_is_shown_or_kept() {
         state.view(NOON, utc()).is_none(),
         "a late push while off is not shown"
     );
+    state.settings(true, WarnPercent::default());
+    assert!(
+        state.view(NOON, utc()).is_some(),
+        "a push that overtook the switch turning on is shown once it is on"
+    );
 }
 
 #[test]
 fn the_clock_ticks_only_while_a_reading_is_held() {
     let mut state = State::default();
-    assert!(!state.ticks(), "R7: no reading, no tick");
+    assert!(!state.ticks(NOON), "R7: no reading, no tick");
     state.received(Some(reading(NOON)));
-    assert!(state.ticks());
+    assert!(state.ticks(NOON));
+    assert!(
+        !state.ticks(NOON + 97 * HOUR),
+        "every window has reset: nothing left to drop"
+    );
     state.disconnected();
-    assert!(!state.ticks());
+    assert!(!state.ticks(NOON));
 }

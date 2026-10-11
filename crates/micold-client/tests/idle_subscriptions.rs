@@ -163,7 +163,7 @@ fn the_plan_usage_tick_is_subscribed_only_while_a_reading_is_held() {
     let guard = enclosing_block(&src, "every(PLAN_USAGE_TICK)")
         .expect("the plan-usage tick is subscribed unconditionally — it must be in an `if`");
     assert!(
-        guard.contains("plan_usage.ticks()"),
+        guard.contains("plan_usage.ticks("),
         "the plan-usage tick is inside `{guard}`, which does not test for a held reading (490 R7)"
     );
     assert!(

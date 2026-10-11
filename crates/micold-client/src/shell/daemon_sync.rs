@@ -1013,8 +1013,17 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
         // env-include, exactly like the local-save path below does for its own change
         // (T100): the enabled/path/timeout settings may have changed, so every previously
         // cached directory's snapshot is stale.
-        // Feature 490: the service's reading changed (a newer one, or none current).
-        DaemonMsg::PlanUsageChanged { reading } => app.core.plan_usage.received(reading),
+        // Feature 490: the service's reading changed (a newer one, or none current). Taken from
+        // the daemon the window works with only, as its `Welcome` reading and settings are: the
+        // window holds one reading, and another daemon's would replace it.
+        DaemonMsg::PlanUsageChanged { reading } => {
+            let active = app
+                .active_daemon()
+                .unwrap_or_else(|| app.core.settings.legacy_daemon());
+            if active == daemon {
+                app.core.plan_usage.received(reading);
+            }
+        }
         DaemonMsg::SettingsChanged { settings } => {
             let pr_status_enabled = settings.pr_status_enabled;
             if let Some(job) = on_settings_changed(app, settings) {

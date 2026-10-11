@@ -53,12 +53,16 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 review B (conformance) | 1 | f2c8b438 | CHANGES: F1 MAJOR no `tdd/cycle-log.md` — fixed (backfilled with the red/green commits); F2 MINOR = review A's 403 set, fixed; F3 MINOR status/reason coupling, fixed |
 | M2 review A (high) | 1 | ac3fec9c:6e6f9ab2 | 10 findings: 4 fixed (`forget` now runs at session removal; one lock over switch, prepare and forget, the receiver owns the switch; odd `padding`/`refreshInterval` keep the command; shared `claude_locations` helper), 6 declined (below) |
 | M2 review B (conformance, sonnet) | 1 | ac3fec9c:6e6f9ab2 | CHANGES: F1 BLOCKER Windows shells not wrapped in `no_window` (console flash; `background_spawns_hide_console` red) — fixed |
+| M3 review A (high) | 1 | fc7826ad | 8 findings: 5 fixed (`PlanUsageChanged` taken from the active daemon only; tick only while something is shown; the reading kept while the switch is off so a push that overtakes the switch is not lost; clock read only with a reading; label contrast checked at the text threshold), 3 declined (below) |
 
 ## Declined review findings
 
 - M1 review A: `Welcome` read before the window is registered can miss one push in between — the catalog has the same gap; the next changed reading corrects it. Declined (cost over value).
 - M1 review A: `Settings`/wire carry `u8` rather than `WarnPercent` — taste; clamped at every write and read. Declined.
 - M1 review A: `Welcome` settings and plan usage taken under two locks — transient, corrected by the next `SettingsChanged`/`PlanUsageChanged`. Declined.
+- M3 review A: the reading is not re-adopted when the window's active daemon changes — settings follow the same rule (adopted at Welcome and on push); the next push corrects it. Declined (pre-existing pattern).
+- M3 review A: the label rounds (79.6 → "80%") while the threshold compares tenths — a warning-look question, carried to M4 (T039–T041).
+- M3 review A: a reset under 24 h away shows no day even past midnight — FR-008 and research R11 define the 24 h rule. Declined (as specified).
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|

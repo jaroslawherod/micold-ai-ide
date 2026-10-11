@@ -44,9 +44,10 @@ pub struct View {
 
 impl State {
     /// The service pushed `reading`: the newest wins, and `None` means it has nothing current.
-    /// Ignored with the switch off, so a push racing the switch shows nothing.
+    /// Kept whatever the switch says, so a push that overtakes the switch turning on is not lost;
+    /// [`State::view`] shows nothing while the switch is off.
     pub fn received(&mut self, reading: Option<UsageReading>) {
-        self.reading = if self.enabled { reading } else { None };
+        self.reading = reading;
     }
 
     /// The connection to the service was lost: a restarted service holds no reading (FR-014).
@@ -76,9 +77,11 @@ impl State {
         })
     }
 
-    /// Whether the window needs the clock: only while a reading is held, to drop a window whose
-    /// reset passes (research R7).
-    pub fn ticks(&self) -> bool {
-        self.reading.is_some()
+    /// Whether the window needs the clock at `now`: only while something is shown, to drop a
+    /// window whose reset passes (research R7). Once every window has reset there is nothing left
+    /// to drop, so an idle window is not woken for it.
+    pub fn ticks(&self, now: i64) -> bool {
+        self.view(now, FixedOffset::east_opt(0).expect("zero offset"))
+            .is_some()
     }
 }

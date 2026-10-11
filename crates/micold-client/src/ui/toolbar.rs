@@ -91,10 +91,13 @@ pub fn view<'a>(state: &State, scheme: ColorScheme) -> Element<'a, Message> {
         .elevated(state.app_bar_elevated());
     // Feature 490 (contract U3): the plan's usage leads the trailing actions, and only while there
     // is a current reading to show; without one the bar is exactly as before (FR-015).
-    let now = chrono::Utc::now().timestamp();
-    let offset = *chrono::Local::now().offset();
-    if let Some(usage) = usage_indicator(state, now, offset, &r) {
-        bar = bar.action(usage);
+    // The clock and zone are read only when a reading is held: most redraws have none.
+    if state.plan_usage.reading.is_some() {
+        let now = chrono::Utc::now().timestamp();
+        let offset = *chrono::Local::now().offset();
+        if let Some(usage) = usage_indicator(state, now, offset, &r) {
+            bar = bar.action(usage);
+        }
     }
     bar.action(switcher).action(menu).into()
 }
