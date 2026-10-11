@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-09
 
-**Status**: Draft
+**Status**: Closed 2026-10-11 — shipped in PRs #695, #752, #758, #767, #768
 
 **Input**: User description: GitHub issue #491, "Support multiple session daemons: host and container" (host and Docker/Podman container runtimes; SSH is #687 and Kubernetes is #688, both out of scope).
 

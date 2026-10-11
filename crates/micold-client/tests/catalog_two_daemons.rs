@@ -2,9 +2,12 @@
 
 use std::path::PathBuf;
 
+use iced::futures::channel::mpsc;
 use micold_client::app::State;
 use micold_client::catalog_sync::{reconcile_catalog, session_daemon};
-use micold_core::daemons::DaemonId;
+use micold_client::daemon::Outbox;
+use micold_client::links::DaemonLinks;
+use micold_core::daemons::{ContainerSettings, DaemonId, DaemonRegistry, DaemonRuntime};
 use micold_core::project::{Availability, Project};
 use micold_core::protocol::messages::{
     ActivitySignal, CatalogSnapshot, ProjectSnapshot, SessionSummary, WireLifecycle,
@@ -192,20 +195,49 @@ fn provenance_and_display_names_are_scoped_to_the_snapshots_daemon() {
 }
 
 #[test]
-fn a_dropped_daemons_sessions_stay_unfinished() {
+fn a_dropped_daemons_sessions_stay_unfinished_and_read_as_lost() {
     let sa = SessionId::new();
     let mut state = state();
+    let mut registry = DaemonRegistry::new(Vec::new(), 1);
+    assert_eq!(registry.add("Alpha", DaemonRuntime::Host, true).unwrap(), A);
+    assert_eq!(
+        registry
+            .add(
+                "Beta",
+                DaemonRuntime::Container(ContainerSettings {
+                    profile: Default::default(),
+                    container_name: "beta".into(),
+                    port: 7001,
+                }),
+                true,
+            )
+            .unwrap(),
+        B,
+    );
+    state.settings.links = DaemonLinks::at_launch(&registry);
+    state.settings.daemons = registry;
+    for id in [A, B] {
+        state
+            .settings
+            .links
+            .connected(id, Outbox::new(mpsc::unbounded().0));
+    }
     reconcile_catalog(
         &mut state,
         A,
         &snapshot(vec![session(sa, "feat-a")], vec![]),
         false,
     );
-    // Nothing is folded when a daemon drops: the session is neither removed nor finished. What
-    // marks it "lost to daemon A" is computed from the link state (see `daemon_version_mismatch`
-    // and `worktree_unavailable_label`), so the lifecycle must stay what the daemon last said.
+    assert_eq!(state.daemon_row_label("feat-a"), "Alpha");
+
+    // The real drop: the link goes unreachable. Nothing is folded into the session, which stays
+    // what the daemon last said; the row reads "lost" from the link state alone.
+    state.settings.links.lost(A, "gone");
+
     let project = PathBuf::from(PROJECT);
     let kept = &state.workspace.sessions[&project][0];
     assert_eq!(kept.lifecycle, SessionLifecycle::Running);
     assert_eq!(session_daemon(&state, &project, kept), Some(A));
+    assert_eq!(state.daemon_row_label("feat-a"), "lost to daemon Alpha");
+    assert_eq!(state.daemon_row_label("feat-b"), "Beta", "B is unaffected");
 }

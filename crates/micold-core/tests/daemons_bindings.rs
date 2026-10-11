@@ -7,8 +7,10 @@ use std::path::PathBuf;
 use micold_core::daemons::{Binding, ContainerSettings, DaemonId, DaemonRegistry, DaemonRuntime};
 use micold_core::project::{Availability, Project};
 use micold_core::sandbox::SandboxProfile;
+use micold_core::settings::{JsonFileSettingsStore, Settings, SettingsStore};
 use micold_core::store::{JsonFileStore, ProjectStore};
 use micold_core::workspace::Workspace;
+use micold_core::worktree::{explain_directory_taken_on, BlockReason, WorktreeOwner};
 use tempfile::tempdir;
 
 const PROJECT: &str = "/a/one";
@@ -85,8 +87,6 @@ fn a_legacy_state_file_without_bindings_loads_with_none() {
         !loaded.bindings.contains_key(&PathBuf::from(PROJECT)),
         "no bindings are invented for a file written before the feature"
     );
-    let json: serde_json::Value =
-        serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
     store.save(&loaded).unwrap();
     let after: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
@@ -94,7 +94,6 @@ fn a_legacy_state_file_without_bindings_loads_with_none() {
         after.get("bindings").is_none(),
         "empty bindings are omitted"
     );
-    let _ = json;
 }
 
 #[test]
@@ -168,14 +167,19 @@ fn renaming_and_adding_daemons_keep_legacy_worktrees_bound() {
 }
 
 #[test]
-fn removing_an_entry_writes_nothing_to_disk() {
+fn removing_an_entry_does_not_rewrite_the_saved_settings() {
     let dir = tempdir().unwrap();
-    let (mut r, _) = one_daemon();
+    let store = JsonFileSettingsStore::at(dir.path().join("settings.json"));
+    let mut settings = Settings::default();
+    let mut r = settings.registry();
     let x = r.add("X", container("c1", 7728), false).unwrap();
+    settings.set_registry(r.clone());
+    store.save(&settings).unwrap();
+    let before = std::fs::read(dir.path().join("settings.json")).unwrap();
     r.remove(x);
     assert_eq!(
-        std::fs::read_dir(dir.path()).unwrap().count(),
-        0,
+        std::fs::read(dir.path().join("settings.json")).unwrap(),
+        before,
         "the registry is plain data; removal touches no file"
     );
 }
@@ -208,24 +212,40 @@ fn a_binding_written_by_the_client_survives_the_daemons_stale_save() {
 fn a_binding_for_a_project_with_no_state_file_is_refused() {
     let dir = tempdir().unwrap();
     let store = JsonFileStore::at(dir.path().join("projects.json"));
-    assert!(store
+    let err = store
         .save_binding(&PathBuf::from(PROJECT), "", DaemonId(1))
-        .is_err());
+        .expect_err("a missing state file is refused");
+    assert_eq!(err.kind(), std::io::ErrorKind::NotFound);
+    assert!(
+        !store.project_state_path(&PathBuf::from(PROJECT)).exists(),
+        "the refusal creates no state file"
+    );
+}
+
+fn checked_out_at_feature_x() -> BlockReason {
+    BlockReason::CheckedOutAt {
+        path: PathBuf::from("/p/.claude/worktrees/feat-x"),
+        owner: WorktreeOwner::User,
+    }
 }
 
 #[test]
 fn a_refusal_names_the_daemon_that_holds_the_worktree() {
-    use micold_core::worktree::{explain_directory_taken_on, BlockReason, WorktreeOwner};
-    let holder = BlockReason::CheckedOutAt {
-        path: PathBuf::from("/p/.claude/worktrees/feat-x"),
-        owner: WorktreeOwner::User,
-    };
-    let said = holder.explain_on("feat/x", Some("Sandbox"));
+    let said = checked_out_at_feature_x().explain_on("feat/x", Some("Sandbox"));
     assert!(
         said.contains("feat-x") && said.contains("'Sandbox'"),
         "{said}"
     );
+}
+
+#[test]
+fn a_refusal_without_a_holder_daemon_is_the_plain_explanation() {
+    let holder = checked_out_at_feature_x();
     assert_eq!(holder.explain_on("feat/x", None), holder.explain("feat/x"));
+}
+
+#[test]
+fn a_holder_the_app_does_not_manage_names_no_daemon() {
     let outside = BlockReason::CheckedOutOutsideApp {
         path: PathBuf::from("/elsewhere"),
     };
@@ -234,6 +254,11 @@ fn a_refusal_names_the_daemon_that_holds_the_worktree() {
         outside.explain("b"),
         "a holder the app does not manage runs on no daemon"
     );
+}
+
+#[test]
+fn a_directory_clash_names_the_daemon() {
     let clash = explain_directory_taken_on(&PathBuf::from("/p/w/feat-x"), Some("Host"));
-    assert!(clash.fact.contains("feat-x") && clash.fact.contains("'Host'"));
+    assert!(clash.fact.contains("feat-x"), "{}", clash.fact);
+    assert!(clash.fact.contains("'Host'"), "{}", clash.fact);
 }

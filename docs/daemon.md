@@ -487,6 +487,13 @@ The third row is why the model exists as a model. Adding the variant now costs o
 site and forces every placement-dependent decision to be *stated*; adding it later would mean finding
 every place the host process was assumed by omission.
 
+Feature 491 turns the placement into a **registry**: the app keeps a list of daemons, at most one on
+this computer and any number in containers, each with its own connection, and every worktree is bound
+to one of them. A daemon that is stopped or unreachable affects only the worktrees bound to it. The
+single placement above is the one-entry case of that list, and an upgrade migrates it to exactly that.
+See [Running a host daemon and container daemons
+together](user-guide/sandboxed-daemon.md#running-a-host-daemon-and-container-daemons-together).
+
 ### Why the container is not reached over a socket
 
 A bind-mounted Unix socket does not survive Docker Desktop's file sharing on macOS or Windows — that
