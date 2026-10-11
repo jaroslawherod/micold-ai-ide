@@ -2,9 +2,10 @@
 //! [`crate::git`], their output handed to the pure parsers of this module.
 
 use std::collections::BTreeSet;
-use std::io::{self, Write};
+use std::io;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output, Stdio};
+use std::process::{Command, Stdio};
+use std::time::Duration;
 
 use super::base::{default_branch_from, Base, BaseUnavailable, DiffRange, ReviewScope, Toggles};
 use super::changes::{
@@ -14,7 +15,7 @@ use super::changes::{
 use super::diff::{added_file, parse_unified, FileDiff, LoadedDiff, SideLines, Spans};
 use super::{limits, RelPath};
 use crate::git::{local_only, run_git, GitCli};
-use crate::process::no_window;
+use crate::process::{no_window, run_bounded_with_input, RunOutcome};
 
 /// Options every review read passes before the subcommand (R1).
 const GLOBAL: [&str; 4] = [
@@ -38,26 +39,51 @@ fn read(dir: &Path, args: &[&str], stdin: Option<&str>) -> io::Result<String> {
 
 /// [`read`], answering git's bytes as they are: a diff body is checked for UTF-8, not repaired.
 fn read_bytes(dir: &Path, args: &[&str], stdin: Option<&str>) -> io::Result<Vec<u8>> {
-    let output = run_read(dir, &GLOBAL, args, stdin)?;
-    if output.status.success() {
-        Ok(output.stdout)
+    let ran = run_read(dir, &GLOBAL, args, stdin, READ_TIMEOUT)?;
+    if ran.success() {
+        Ok(ran.stdout)
     } else {
-        Err(failed(args, &output))
+        Err(failed(args, &ran))
+    }
+}
+
+/// How long one review git command may run before it is killed and the read fails (#771): a git
+/// that never answers (a hung filesystem, a repo under heavy concurrent git work) would otherwise
+/// leave the Changes view on "loading" for good.
+pub const READ_TIMEOUT: Duration = Duration::from_secs(20);
+
+/// What a finished git run said.
+struct Ran {
+    /// The exit code, `-1` when a signal ended it.
+    code: i32,
+    stdout: Vec<u8>,
+    stderr: String,
+}
+
+impl Ran {
+    fn success(&self) -> bool {
+        self.code == 0
     }
 }
 
 /// The error of a git run that did not succeed, with what it said.
-fn failed(args: &[&str], output: &Output) -> io::Error {
+fn failed(args: &[&str], ran: &Ran) -> io::Error {
     io::Error::other(format!(
         "git {} failed: {}",
         args.join(" "),
-        String::from_utf8_lossy(&output.stderr).trim()
+        ran.stderr.trim()
     ))
 }
 
 /// Run a read-only git command in `dir` with `global` options before it, answering its output
-/// whatever its exit status.
-fn run_read(dir: &Path, global: &[&str], args: &[&str], stdin: Option<&str>) -> io::Result<Output> {
+/// whatever its exit status, and killing it (with its children) after `timeout`.
+fn run_read(
+    dir: &Path,
+    global: &[&str],
+    args: &[&str],
+    stdin: Option<&str>,
+    timeout: Duration,
+) -> io::Result<Ran> {
     let mut command = Command::new("git");
     local_only(&mut command);
     // A read never refreshes the index: that write is a change the view's own watch would see,
@@ -68,30 +94,27 @@ fn run_read(dir: &Path, global: &[&str], args: &[&str], stdin: Option<&str>) -> 
         .arg(dir)
         .args(global)
         .args(args)
-        .stdin(if stdin.is_some() {
-            Stdio::piped()
-        } else {
-            Stdio::null()
-        })
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-    let mut child = command.spawn()?;
-    // Write the input on its own thread: git answers as it reads, and a reply that filled its
-    // pipe while we were still writing would stop both sides.
-    let writer = match (stdin, child.stdin.take()) {
-        (Some(text), Some(mut pipe)) => {
-            let text = text.to_owned();
-            Some(std::thread::spawn(move || pipe.write_all(text.as_bytes())))
-        }
-        _ => None,
-    };
-    let output = child.wait_with_output()?;
-    if let Some(writer) = writer {
-        writer
-            .join()
-            .map_err(|_| io::Error::other("the git input writer panicked"))??;
+        .stdin(Stdio::null());
+    match run_bounded_with_input(command, timeout, stdin.map(|text| text.as_bytes().to_vec())) {
+        RunOutcome::Exited {
+            code,
+            stdout,
+            stderr,
+        } => Ok(Ran {
+            code,
+            stdout,
+            stderr,
+        }),
+        RunOutcome::TimedOut { .. } => Err(io::Error::new(
+            io::ErrorKind::TimedOut,
+            format!(
+                "git {} timed out after {}s",
+                args.join(" "),
+                timeout.as_secs()
+            ),
+        )),
+        RunOutcome::SpawnFailed(why) => Err(io::Error::other(why)),
     }
-    Ok(output)
 }
 
 /// `git diff` with the R1 options over `revs` and one more `format` option.
@@ -228,16 +251,16 @@ impl GitCli {
         let mut input = asked.join("\0");
         input.push('\0');
         let args = ["check-ignore", "-z", "--stdin"];
-        let output = run_read(dir, &CHECK_IGNORE_GLOBAL, &args, Some(&input))?;
+        let ran = run_read(dir, &CHECK_IGNORE_GLOBAL, &args, Some(&input), READ_TIMEOUT)?;
         // Exit 1: none of them is ignored.
-        match output.status.code() {
-            Some(0) => Ok(String::from_utf8_lossy(&output.stdout)
+        match ran.code {
+            0 => Ok(String::from_utf8_lossy(&ran.stdout)
                 .split('\0')
                 .filter(|path| !path.is_empty())
                 .map(PathBuf::from)
                 .collect()),
-            Some(1) => Ok(BTreeSet::new()),
-            _ => Err(failed(&args, &output)),
+            1 => Ok(BTreeSet::new()),
+            _ => Err(failed(&args, &ran)),
         }
     }
 
@@ -575,4 +598,42 @@ fn count_lines(full: &Path) -> io::Result<u32> {
     } else {
         lines.saturating_add(1)
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Instant;
+
+    /// #771: a git that never answers is killed at the deadline and the read fails with a timeout,
+    /// instead of leaving the Changes view on "loading" for good.
+    #[cfg(unix)]
+    #[test]
+    fn a_stalled_git_read_fails_at_the_deadline() {
+        let dir = std::env::temp_dir();
+        let started = Instant::now();
+        let error = run_read(
+            &dir,
+            &["-c", "alias.stall=!sleep 30"],
+            &["stall"],
+            None,
+            Duration::from_millis(300),
+        )
+        .err()
+        .expect("a stalled git must not answer");
+        assert_eq!(error.kind(), io::ErrorKind::TimedOut, "{error}");
+        assert!(error.to_string().contains("timed out"), "{error}");
+        assert!(
+            started.elapsed() < Duration::from_secs(10),
+            "the child is killed at the deadline, not waited for"
+        );
+    }
+
+    #[test]
+    fn a_quick_git_read_answers_with_its_output_and_code() {
+        let dir = std::env::temp_dir();
+        let ran = run_read(&dir, &[], &["--version"], None, READ_TIMEOUT).expect("git runs");
+        assert!(ran.success());
+        assert!(String::from_utf8_lossy(&ran.stdout).starts_with("git version"));
+    }
 }

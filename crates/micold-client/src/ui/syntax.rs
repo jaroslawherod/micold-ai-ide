@@ -10,6 +10,8 @@
 //! 4.5:1), so every colour is moved toward the scheme's `on_surface` by [`legible`] until it reads
 //! at 4.5:1 on the surface and on both diff tints.
 
+use std::time::{Duration, Instant};
+
 use iced::highlighter::{Settings, Stream, Theme};
 use micold_core::review::diff::{FileDiff, LoadedDiff, SchemeSpans, SideLines, SideSpans, Spans};
 use micold_core::theme::ColorScheme;
@@ -93,35 +95,58 @@ pub fn highlight_lines<'a>(
     lines: impl IntoIterator<Item = &'a str>,
     scheme: ColorScheme,
 ) -> SideSpans {
+    highlight_lines_until(token, lines, scheme, None).unwrap_or_default()
+}
+
+/// [`highlight_lines`], giving up (`None`) once `deadline` has passed: checked per line, so one
+/// pathological line is the most it overruns by.
+fn highlight_lines_until<'a>(
+    token: &str,
+    lines: impl IntoIterator<Item = &'a str>,
+    scheme: ColorScheme,
+    deadline: Option<Instant>,
+) -> Option<SideSpans> {
     let roles = tokens::roles(scheme);
     let mut stream = Stream::new(&Settings {
         theme: theme(scheme),
         token: token.to_owned(),
     });
-    SideSpans(
-        lines
-            .into_iter()
-            .map(|line| {
-                // The grammars match a line with its ending, as the editor feeds them.
-                let line = format!("{}\n", capped(line));
-                let spans = cap_spans(stream.highlight_line(&line).map(|(range, highlight)| {
-                    let end = range.end.min(line.len() - 1);
-                    (
-                        range.start.min(end)..end,
-                        highlight.color().map(|c| legible(rgb(c), roles)),
-                    )
-                }));
-                stream.commit();
-                spans
-            })
-            .collect(),
-    )
+    let mut out = Vec::new();
+    for line in lines {
+        if deadline.is_some_and(|deadline| Instant::now() >= deadline) {
+            return None;
+        }
+        // The grammars match a line with its ending, as the editor feeds them.
+        let line = format!("{}\n", capped(line));
+        out.push(cap_spans(stream.highlight_line(&line).map(
+            |(range, highlight)| {
+                let end = range.end.min(line.len() - 1);
+                (
+                    range.start.min(end)..end,
+                    highlight.color().map(|c| legible(rgb(c), roles)),
+                )
+            },
+        )));
+        stream.commit();
+    }
+    Some(SideSpans(out))
 }
 
 /// Both versions of `loaded`, highlighted in both schemes as `path`'s language. Each version is
 /// read only up to the last of its lines the diff shows, so a small change to a long file does not
 /// highlight all of it.
 pub fn highlight(loaded: &LoadedDiff, path: &str) -> Spans {
+    highlight_within(loaded, path, None).unwrap_or_default()
+}
+
+/// [`highlight`] under a time `budget` (#771): `None` once it is spent, and the caller shows the
+/// plain diff rather than wait on a pathological grammar match.
+pub fn highlight_within(
+    loaded: &LoadedDiff,
+    path: &str,
+    budget: Option<Duration>,
+) -> Option<Spans> {
+    let deadline = budget.map(|budget| Instant::now() + budget);
     let token = token(path);
     let shown = |old: bool| {
         let FileDiff::Text(hunks) = &loaded.diff else {
@@ -135,18 +160,25 @@ pub fn highlight(loaded: &LoadedDiff, path: &str) -> Spans {
             .unwrap_or(0)
     };
     let side = |lines: &Option<SideLines>, upto: u32, scheme| match lines {
-        Some(lines) => highlight_lines(&token, (1..=upto).map_while(|n| lines.line(n)), scheme),
-        None => SideSpans::default(),
+        Some(lines) => highlight_lines_until(
+            &token,
+            (1..=upto).map_while(|n| lines.line(n)),
+            scheme,
+            deadline,
+        ),
+        None => Some(SideSpans::default()),
     };
     let (old, new) = (shown(true), shown(false));
-    let scheme = |scheme| SchemeSpans {
-        old: side(&loaded.old, old, scheme),
-        new: side(&loaded.new, new, scheme),
+    let scheme = |scheme| {
+        Some(SchemeSpans {
+            old: side(&loaded.old, old, scheme)?,
+            new: side(&loaded.new, new, scheme)?,
+        })
     };
-    Spans {
-        light: scheme(ColorScheme::Light),
-        dark: scheme(ColorScheme::Dark),
-    }
+    Some(Spans {
+        light: scheme(ColorScheme::Light)?,
+        dark: scheme(ColorScheme::Dark)?,
+    })
 }
 
 #[cfg(test)]
@@ -220,6 +252,30 @@ mod tests {
             );
             assert!(!side.line(2).is_empty());
         }
+    }
+
+    #[test]
+    fn a_spent_budget_gives_up_instead_of_colouring() {
+        let old = SideLines::from_bytes(
+            b"fn a() {}
+",
+        )
+        .unwrap();
+        let new = SideLines::from_bytes(
+            b"fn b() {}
+",
+        )
+        .unwrap();
+        let loaded = LoadedDiff {
+            diff: parse_unified(b"@@ -1,1 +1,1 @@\n-fn a() {}\n+fn b() {}\n"),
+            old: Some(old),
+            new: Some(new),
+            spans: Spans::default(),
+        };
+        assert!(highlight_within(&loaded, "x.rs", Some(Duration::ZERO)).is_none());
+        let spans = highlight_within(&loaded, "x.rs", Some(Duration::from_secs(60)))
+            .expect("a roomy budget colours");
+        assert!(!spans.dark.new.line(1).is_empty());
     }
 
     #[test]

@@ -147,8 +147,24 @@ const READER_GRACE: Duration = Duration::from_millis(500);
 /// readers are joined after the group kill above, which brings them to EOF, for at most
 /// [`READER_GRACE`]: a descendant that left the group (`setsid`) and holds a pipe never sends EOF,
 /// and the call returns what was read instead of waiting on it.
-pub fn run_bounded(mut cmd: Command, timeout: Duration) -> RunOutcome {
+pub fn run_bounded(cmd: Command, timeout: Duration) -> RunOutcome {
+    run_bounded_with_input(cmd, timeout, None)
+}
+
+/// [`run_bounded`] with `input` written to the child's stdin on its own thread (git answers as it
+/// reads, so a reply that filled its pipe while we were still writing would stop both sides). A
+/// child that exits without reading it all is not an error. `None`: the caller's stdin setting
+/// stands.
+pub fn run_bounded_with_input(
+    mut cmd: Command,
+    timeout: Duration,
+    input: Option<Vec<u8>>,
+) -> RunOutcome {
+    use std::io::Write;
     cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+    if input.is_some() {
+        cmd.stdin(Stdio::piped());
+    }
     #[cfg(unix)]
     {
         use std::os::unix::process::CommandExt;
@@ -158,6 +174,11 @@ pub fn run_bounded(mut cmd: Command, timeout: Duration) -> RunOutcome {
         Ok(child) => child,
         Err(err) => return RunOutcome::SpawnFailed(err.to_string()),
     };
+    if let (Some(input), Some(mut pipe)) = (input, child.stdin.take()) {
+        std::thread::spawn(move || {
+            let _ = pipe.write_all(&input);
+        });
+    }
     let stdout_reader = child.stdout.take().map(drain);
     let stderr_reader = child.stderr.take().map(drain);
     // Only the Unix kill needs the pid; binding it unconditionally warns on Windows, and this

@@ -1674,3 +1674,17 @@ fn the_discard_confirmation_counts_in_the_singular_and_closes_with_the_view() {
     changes::update(&mut state, Msg::Closed);
     assert_eq!(discard_prompt(&state), None);
 }
+
+/// #771: a file the shown list does not have starts no read, so its pane must not say "loading"
+/// for good.
+#[test]
+fn a_selection_the_list_does_not_have_is_not_left_loading() {
+    let mut state = ready(&["a.rs"]);
+    let effect = changes::update(&mut state, Msg::FileSelected(path("ghost.rs")));
+    assert!(matches!(effect, Effect::None), "{effect:?}");
+    assert!(
+        matches!(diff_body(state.open.as_ref().unwrap()), DiffBody::Failed(_)),
+        "{:?}",
+        diff_body(state.open.as_ref().unwrap())
+    );
+}
