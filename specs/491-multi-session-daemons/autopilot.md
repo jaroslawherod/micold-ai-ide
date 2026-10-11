@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/491_support-multiple-session-daemons-host-container
 - **Started**: 2026-10-09
 - **Phase**: milestone M3
-- **Next step**: M3 scoped gate, review B, visual pass (T039), full gate, PR
+- **Next step**: wait for CI and merge of the M3 PR, then M4
 
 ## Pull requests
 
@@ -26,7 +26,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T017 | full | Upgraded install runs on a one-daemon registry, worktrees bound and labelled, daemon choice persists | #752 | merged |
 | M2 | T018–T029, T048–T049 | full | Host and container daemons concurrent and failure-isolated | #758 | merged |
-| M3 | T030–T039 | full | Settings Daemons section with removal and rebind | - | in progress |
+| M3 | T030–T039 | full | Settings Daemons section with removal and rebind | PR_NUM | PR open |
 | M4 | T040–T045 | full | Real-runtime multi-daemon e2e in CI | - | pending |
 
 ## Decisions
@@ -56,6 +56,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Code A (M2) | 1 | ef9ab0bb89cdd8fb66bb269b68a797d0de782674:3242febfcc63ac47a42b06e5ca4afeae79012555 | CHANGES: 5 MAJOR (F1 detach binding, F2 on_connected gating, F3 sandbox daemon id, F4 outbox on refused connect fixed; F5 declined), 3 MINOR (fixed) |
 | Code B (M2) | 1 | ef9ab0bb89cdd8fb66bb269b68a797d0de782674:3242febfcc63ac47a42b06e5ca4afeae79012555 | CHANGES: 1 MAJOR (cycle-log entry, added), 3 MINOR (fixed); Verify green |
 | Code A+B (M2) | 2 | a1af07f954ab05029a0c4d7608e1a36d1fc8e8c3:3f7af08c3e6d3e7147aee13d5dfdfc24d282e9d7 | CLEAN (3 MINOR, see Follow-ups) |
+| Code B (M3) | 1 | 2e7b47aa4270cb4b7537cf70ba9575811f48af06:c38fd6f09bd55b99c88095bc24dff0680eb6ed54 | CHANGES: 1 MAJOR (cycle-log M3 entry, added), 1 MINOR declined; Verify green (22 tests) |
 | Code A (M3) | 1 | 4b52f6d7682f6f00ab06e2a8e2b23bc0e2ce9893:6731e8bb6222e07008a6821038dbc96d905f3075 | CHANGES: 2 MAJOR (F1 stopped daemon not torn down client-side, F2 edit of unsupported runtime; both fixed), 3 MINOR (F3 draft cleared on removal fixed; F4 inactive-project count, F5 route_for test seam: see Declined) |
 
 ## Declined review findings
@@ -73,7 +74,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None: M2 PR #758 is open.
+None. Visual pass M3 (T039) ran headless under sway, see specs/491-multi-session-daemons/visual-pass/visual-pass-m3.md: list, details, add form, removal confirm, empty state, bind picker, no-daemon form notice PASS; quickstart B1 (Starting -> Connected), B2 (two bound worktrees), B3 (live stop) NOT RUN/partial: no container runtime locally (M4's real-runtime e2e covers them). Cosmetic notes (Connected and Stopped chips close in colour, removal text mentions container for a host daemon) left as follow-ups.
 
 ## Open escalation
 
@@ -86,3 +87,5 @@ SSH (#687) and Kubernetes (#688) split out of #491; extension points only.
 - M2: a worktree's binding is dropped on the `WorktreeDeleted` reply only; a connection drop first leaves it until rebound.
 - M2: only one sandbox container (legacy or first container entry) is brought up by the app; further container daemons connect when already running (per-daemon bring-up for each is not done).
 - M2: ConfirmationAnswer, settings sends and CLI-availability asks go to the active daemon only.
+
+- M3 follow-ups (cosmetic, from the visual pass): Connected and Stopped state chips are both muted, only the text differs; the removal confirmation for a host daemon mentions the container; "Details" toggle shifts Remove by ~30px; connect-at-launch checkbox sits 8px above Save.
