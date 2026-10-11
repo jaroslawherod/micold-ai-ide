@@ -345,7 +345,7 @@ pub struct TerminalDraft {
 }
 
 /// The Environment section's fields (feature 011).
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EnvironmentDraft {
     /// Whether a script is sourced before each session starts (FR-001).
     pub enabled: bool,
@@ -390,6 +390,28 @@ pub struct EnvironmentDraft {
     /// Whether agents may read and type into other sessions (feature 034, FR-016). A closed choice
     /// of three values, like the default CLI above: nothing to validate on save.
     pub cross_session_access: CrossSessionAccess,
+}
+
+/// Every field at its type's default, except the plan-usage pair (feature 490): on and "80", the
+/// stored defaults, so a draft built without the stored settings neither turns the feature off nor
+/// refuses a threshold nobody typed.
+impl Default for EnvironmentDraft {
+    fn default() -> Self {
+        Self {
+            enabled: Default::default(),
+            script_path: Default::default(),
+            timeout_secs: Default::default(),
+            default_ai_cli: Default::default(),
+            pi_activity_component: Default::default(),
+            tool_server_enabled: Default::default(),
+            desktop_notifications: Default::default(),
+            notification_kinds: Default::default(),
+            long_task_threshold_secs: Default::default(),
+            plan_usage_enabled: micold_core::plan_usage::DEFAULT_PLAN_USAGE_ENABLED,
+            plan_usage_warn_percent: micold_core::plan_usage::WarnPercent::DEFAULT.to_string(),
+            cross_session_access: Default::default(),
+        }
+    }
 }
 
 /// The label-to-type mapping the draft carries (feature 034, FR-016).
