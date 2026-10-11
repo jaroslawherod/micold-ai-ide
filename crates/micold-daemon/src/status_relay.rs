@@ -107,7 +107,9 @@ pub fn user_shell(command: &str) -> Command {
     #[cfg(not(windows))]
     {
         let mut c = Command::new("sh");
-        micold_core::process::no_window(&mut c).arg("-c").arg(command);
+        micold_core::process::no_window(&mut c)
+            .arg("-c")
+            .arg(command);
         c
     }
 }
