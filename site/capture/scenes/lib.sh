@@ -382,8 +382,9 @@ scene_row_new=311
 # worktree carries three (start a session, more, remove) and the default checkout carries two, so
 # "start a session" sits further left on the named ones -- which is the only one a scene wants.
 scene_action_start=234
-# The sidebar header's own controls: add a worktree, and hide the sidebar.
-scene_add_worktree_x=259
+# The sidebar header's own controls, right to left from the edge: hide the sidebar (285), Run in
+# parallel (259, feature 483), add a worktree (233), attach an existing one (207) and refresh (181).
+scene_add_worktree_x=233
 scene_add_worktree_y=86
 # The New worktree form, which opens centred over the window. The type list overlays the form when
 # it is open, so its first row -- `feat` -- is below the closed control rather than beside it.
