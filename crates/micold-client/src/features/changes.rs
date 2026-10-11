@@ -987,6 +987,11 @@ fn request_diff(state: &mut State, keep: bool) -> Effect {
         return Effect::None;
     };
     let Some(file) = list.files.iter().find(|f| f.path == path) else {
+        // No read is in flight and none will start: an idle pane would say "loading" for good
+        // (#771). A later list that has the file asks again and replaces this.
+        if matches!(view.diff, Load::Idle) {
+            view.diff = Load::Failed(format!("{path} is not among the changed files"));
+        }
         return Effect::None;
     };
     let from = match &file.kind {

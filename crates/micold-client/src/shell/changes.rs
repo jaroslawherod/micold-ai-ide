@@ -9,6 +9,7 @@
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use iced::widget::text_editor;
 use iced::Task;
@@ -30,9 +31,27 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
     if let Msg::ComposerAction(action) = msg {
         return composer_action(app, action.0);
     }
+    // The reducer drops an answer whose read is no longer the current one, silently: say so in the
+    // log, or a diff that never lands cannot be told from one that was dropped (#771).
+    let stale = match &msg {
+        Msg::DiffRead { seq, .. } => Some((*seq, !diff_read_is_current(app, *seq))),
+        _ => None,
+    };
+    if let Some((seq, true)) = stale {
+        crate::log_line(&format!(
+            "changes: diff seq={seq} answered late, dropped as stale"
+        ));
+    }
     let effect = app.core.update_changes(msg);
     sync_composer(app);
     run(app, effect)
+}
+
+/// Whether the open view is waiting for diff read `seq`.
+fn diff_read_is_current(app: &App, seq: u64) -> bool {
+    app.core.changes.open.as_ref().is_some_and(|view| {
+        matches!(view.diff, micold_client::features::changes::Load::Loading { seq: s, .. } if s == seq)
+    })
 }
 
 /// Perform an action in the composer's editor; an edit reports the new text to the reducer (C2).
@@ -139,7 +158,12 @@ fn run(app: &mut App, effect: Effect) -> Task<Message> {
                 Ok(found) => found,
                 Err(why) => return Task::done(answer(Err(why.into()))),
             };
-            off_thread(move || read_list(&*git, &dir, &entry, toggles), answer)
+            let label = format!("list seq={seq} entry={entry:?}");
+            off_thread(
+                label,
+                move || read_list(&*git, &dir, &entry, toggles),
+                answer,
+            )
         }
         Effect::ReadDiff {
             seq,
@@ -155,13 +179,26 @@ fn run(app: &mut App, effect: Effect) -> Task<Message> {
                 Ok(found) => found,
                 Err(why) => return Task::done(answer(Err(why.into()))),
             };
+            let label = format!("diff seq={seq} path={path} scope={scope:?}");
             off_thread(
+                label,
                 move || {
                     let mut loaded = git
                         .file_diff(&dir, &scope, toggles, &path, from.as_ref(), force_large)
                         .map_err(|error| error.to_string())?;
-                    // Off the update thread with the read, both schemes at once (R10).
-                    loaded.spans = syntax::highlight(&loaded, &path.to_string());
+                    // Off the update thread with the read, both schemes at once (R10). Past the
+                    // budget the plain diff shows: colour is not worth a pane that never lands.
+                    match syntax::highlight_within(
+                        &loaded,
+                        &path.to_string(),
+                        Some(HIGHLIGHT_BUDGET),
+                    ) {
+                        Some(spans) => loaded.spans = spans,
+                        None => crate::log_line(&format!(
+                            "changes: {path} not highlighted, over {}s",
+                            HIGHLIGHT_BUDGET.as_secs()
+                        )),
+                    }
                     Ok(loaded)
                 },
                 answer,
@@ -182,16 +219,50 @@ fn local(
     Ok((dir, git))
 }
 
-/// Run `read` in `spawn_blocking` and answer with `answer`.
+/// The most a whole read may take before the pane shows an error with a retry (#771): each git
+/// command has its own, shorter deadline, but nothing a read does may leave the view waiting.
+const READ_DEADLINE: Duration = Duration::from_secs(45);
+
+/// How long a diff may spend being syntax-coloured before it shows plain.
+const HIGHLIGHT_BUDGET: Duration = Duration::from_secs(5);
+
+/// A read slower than this is logged as slow; every read is logged either way.
+const SLOW_READ: Duration = Duration::from_secs(1);
+
+/// Run `read` in `spawn_blocking` and answer with `answer`, or with a timeout error once
+/// [`READ_DEADLINE`] passes (the blocking task cannot be cancelled; its late answer is dropped).
+/// The read is logged with `label`, its duration and its outcome.
 fn off_thread<T: Send + 'static>(
+    label: String,
     read: impl FnOnce() -> Result<T, String> + Send + 'static,
     answer: impl Fn(Result<T, String>) -> Message + Send + 'static,
 ) -> Task<Message> {
     Task::perform(
         async move {
-            tokio::task::spawn_blocking(read)
-                .await
-                .unwrap_or_else(|joined| Err(joined.to_string()))
+            let started = Instant::now();
+            let result = match tokio::time::timeout(
+                READ_DEADLINE,
+                tokio::task::spawn_blocking(read),
+            )
+            .await
+            {
+                Ok(joined) => joined.unwrap_or_else(|joined| Err(joined.to_string())),
+                Err(_) => Err(format!(
+                    "timed out after {}s: the read did not finish",
+                    READ_DEADLINE.as_secs()
+                )),
+            };
+            let took = started.elapsed();
+            let outcome = match &result {
+                Ok(_) => "ok".to_owned(),
+                Err(why) => format!("failed: {why}"),
+            };
+            let slow = if took >= SLOW_READ { " (slow)" } else { "" };
+            crate::log_line(&format!(
+                "changes: {label} {}ms {outcome}{slow}",
+                took.as_millis()
+            ));
+            result
         },
         answer,
     )
