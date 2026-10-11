@@ -117,11 +117,12 @@ mod tests {
         }
     }
 
-    /// U2: `data_usage` is its own glyph, and `on_surface_variant` is legible on the bar as text
+    /// U2: `data_usage` is in the vocabulary, and `on_surface_variant` is legible on the bar as text
     /// (the label is `label_large`, not large text).
     #[test]
     fn the_glyph_is_data_usage_and_legible_on_the_bar() {
-        assert_eq!(Icon::PlanUsage.glyph(), '\u{e1af}');
+        // Its codepoint is pinned in `tests/icons.rs`; a literal here would trip the glyph guard.
+        assert!(Icon::ALL.contains(&Icon::PlanUsage));
         for scheme in [ColorScheme::Light, ColorScheme::Dark] {
             let r = tokens::roles(scheme);
             assert!(
