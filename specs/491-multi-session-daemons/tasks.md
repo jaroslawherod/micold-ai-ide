@@ -87,12 +87,12 @@ Tests first.
 **Goal**: container path, host path and multi-daemon isolation proven with a scripted stand-in for the AI CLI.
 **Independent test**: `mise run image && mise run test-sandbox` passes with Docker or Podman.
 
-- [ ] T040 [US5] Scripted fake AI CLI stand-in (mounted directory on PATH, not the shipped image) and a helper to start N container daemons with distinct names, ports and state dirs, in `crates/micold-daemon/tests/sandbox_real_support/mod.rs` (R8)
-- [ ] T041 [P] [US5] Container scenario in `crates/micold-daemon/tests/sandbox_real_multi_daemon_container.rs`: session starts, produces output, accepts input, behind `sandbox-real-runtime`
-- [ ] T042 [P] [US5] Host scenario in `crates/micold-daemon/tests/sandbox_real_multi_daemon_host.rs`: same scenario against the host daemon with the same stand-in
-- [ ] T043 [US5] Multi-daemon scenario in `crates/micold-daemon/tests/sandbox_real_multi_daemon.rs`: host and container bound worktrees, stop the container daemon, host session still accepts input, container worktrees report unreachable within 5 s, and the test fails if the failure leaks (SC-001, SC-002, SC-006)
-- [ ] T044 [P] [US5] Parity test in `crates/micold-client/tests/daemon_rows_uniform.rs`: a host and a container daemon project to the same `DaemonView` fields and bindings carry no runtime-specific fields (US5 scenario 5, FR-015)
-- [ ] T045 [US5] Confirm `.github/workflows/ci.yml` sandbox job's `sandbox_real_` filter runs the new files, add a step if it does not, and document the on-demand `mise run test-sandbox` in `docs/development/` where the sandbox suite is described, stating that the e2e runs on the Linux runner only and other platforms rest on the render-free tests (FR-018)
+- [x] T040 [US5] Scripted fake AI CLI stand-in (mounted directory on PATH, not the shipped image) and a helper to start N container daemons with distinct names, ports and state dirs, in `crates/micold-daemon/tests/sandbox_real_support/mod.rs` (R8)
+- [x] T041 [P] [US5] Container scenario in `crates/micold-daemon/tests/sandbox_real_multi_daemon_container.rs`: session starts, produces output, accepts input, behind `sandbox-real-runtime`
+- [x] T042 [P] [US5] Host scenario in `crates/micold-daemon/tests/sandbox_real_multi_daemon_host.rs`: same scenario against the host daemon with the same stand-in
+- [x] T043 [US5] Multi-daemon scenario in `crates/micold-daemon/tests/sandbox_real_multi_daemon.rs`: host and container bound worktrees, stop the container daemon, host session still accepts input, container worktrees report unreachable within 5 s, and the test fails if the failure leaks (SC-001, SC-002, SC-006)
+- [x] T044 [P] [US5] Parity test in `crates/micold-client/tests/daemon_rows_uniform.rs`: a host and a container daemon project to the same `DaemonView` fields and bindings carry no runtime-specific fields (US5 scenario 5, FR-015)
+- [x] T045 [US5] Confirm `.github/workflows/ci.yml` sandbox job's `sandbox_real_` filter runs the new files, add a step if it does not, and document the on-demand `mise run test-sandbox` in `docs/development/` where the sandbox suite is described, stating that the e2e runs on the Linux runner only and other platforms rest on the render-free tests (FR-018)
 
 **Checkpoint (M4)**: the sandbox suite proves host, container and both together.
 

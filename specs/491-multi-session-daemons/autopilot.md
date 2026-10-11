@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #491
 - **Worktree branch**: feat/491_support-multiple-session-daemons-host-container
 - **Started**: 2026-10-09
-- **Phase**: milestone M3
-- **Next step**: wait for CI and merge of the M3 PR, then M4
+- **Phase**: milestone M4
+- **Next step**: wait for CI and merge of the M4 PR, then close
 
 ## Pull requests
 
@@ -19,7 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #695 | Design | merged | 52c691b8fd00540bcf027f60e779003368266214 |
 | #752 | M1 registry, bindings, labels | merged | 3787994d7fe1807844ddfa485d51333227e5a66e |
 | #758 | M2 concurrent host and container daemons | merged | e0d9dd819951476b5f4a2ad94094401af243e601 |
-| #767 | M3 Settings Daemons section | open | - |
+| #767 | M3 Settings Daemons section | merged | 678441fcc0e56eacf56b3005219257c67469d9d0 |
 
 ## Milestones
 
@@ -27,8 +27,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T017 | full | Upgraded install runs on a one-daemon registry, worktrees bound and labelled, daemon choice persists | #752 | merged |
 | M2 | T018–T029, T048–T049 | full | Host and container daemons concurrent and failure-isolated | #758 | merged |
-| M3 | T030–T039 | full | Settings Daemons section with removal and rebind | #767 | PR open |
-| M4 | T040–T045 | full | Real-runtime multi-daemon e2e in CI | - | pending |
+| M3 | T030–T039 | full | Settings Daemons section with removal and rebind | #767 | merged |
+| M4 | T040–T045 | full | Real-runtime multi-daemon e2e in CI | - | in progress |
 
 ## Decisions
 
@@ -59,6 +59,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Code A+B (M2) | 2 | a1af07f954ab05029a0c4d7608e1a36d1fc8e8c3:3f7af08c3e6d3e7147aee13d5dfdfc24d282e9d7 | CLEAN (3 MINOR, see Follow-ups) |
 | Code B (M3) | 1 | 2e7b47aa4270cb4b7537cf70ba9575811f48af06:c38fd6f09bd55b99c88095bc24dff0680eb6ed54 | CHANGES: 1 MAJOR (cycle-log M3 entry, added), 1 MINOR declined; Verify green (22 tests) |
 | Code A (M3) | 1 | 4b52f6d7682f6f00ab06e2a8e2b23bc0e2ce9893:6731e8bb6222e07008a6821038dbc96d905f3075 | CHANGES: 2 MAJOR (F1 stopped daemon not torn down client-side, F2 edit of unsupported runtime; both fixed), 3 MINOR (F3 draft cleared on removal fixed; F4 inactive-project count, F5 route_for test seam: see Declined) |
+| Code A (M4) | 1 | 8840b409bd105f4f2c0f794457959d4cc6a68224:678441fcc0e56eacf56b3005219257c67469d9d0 | CHANGES: 1 BLOCKER (HostDaemon missing field, did not compile), 1 MAJOR (5 s timer started after stop), 3 MINOR (F3, F5 fixed; F4 duplicate fuser helper left, see Follow-ups); fixes re-run green |
+| Code B (M4) | 1 | a9d9bb12c978df6b328827498291f057e8aa654f:678441fcc0e56eacf56b3005219257c67469d9d0 | CLEAN (3 MINOR: worktree-level binding is inferred from daemon state; leak guard is the final converse; binding test is type-level; left) |
 
 ## Declined review findings
 
@@ -90,3 +92,4 @@ SSH (#687) and Kubernetes (#688) split out of #491; extension points only.
 - M2: ConfirmationAnswer, settings sends and CLI-availability asks go to the active daemon only.
 
 - M3 follow-ups (cosmetic, from the visual pass): Connected and Stopped state chips are both muted, only the text differs; the removal confirmation for a host daemon mentions the container; "Details" toggle shifts Remove by ~30px; connect-at-launch checkbox sits 8px above Save.
+- M4: the `fuser`/`kill` host-daemon cleanup in `sandbox_real_support` duplicates `client_restart_input.rs`; hoist when either is next touched.

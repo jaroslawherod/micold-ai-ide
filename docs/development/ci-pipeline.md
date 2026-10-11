@@ -37,6 +37,16 @@ carry the sandbox's headline claims. A `-p` that names one crate does not report
 skipped; it produces no output about it at all, which is why the job looked complete for the whole
 of the feature it was written for.
 
+The multi-daemon end-to-end tests (feature 491) are `sandbox_real_multi_daemon*` in
+`crates/micold-daemon/tests/`, so the second step already runs them and needs no step of its own:
+a container daemon, the host daemon and both together (one stopped, the other checked), each
+driving a scripted stand-in for the AI CLI that sits first on `PATH`, so there is no sign-in,
+network or cost. Run them on demand with `mise run image && mise run test-sandbox`; add
+`MICOLD_RUNTIME=podman MICOLD_TEST_RUNTIME=podman` on a host with podman only. They are off by
+default, like every `sandbox_real_*` test. The end-to-end runs on the Linux runner only; macOS and
+Windows rest on the render-free tests (`daemon_rows_uniform`, `per_daemon_actors`, the registry
+and state-machine tests), which run on every platform.
+
 `docs check` is deliberately unconditional: it is the one gate a documentation-only change can
 actually break, so skipping the build must not skip it. Delete a required document and the run
 fails, exactly as before.
