@@ -78,7 +78,7 @@ Tests first.
 - [x] T036 [US3] "Bind to daemon..." action for a "no daemon" worktree in `crates/micold-client/src/features/sidebar.rs` and `crates/micold-client/src/features/worktree.rs` (T031)
 - [x] T037 [US3] Empty-state view (no daemons: explanation and add action) in `crates/micold-client/src/ui/settings/daemons.rs` and the worktree form in `crates/micold-client/src/features/worktree_form.rs`, after T034 and T016 (T031)
 - [x] T038 [P] [US3] User guide: the Daemons section, add/edit/remove and what removal does, in `docs/user-guide/settings.md` and `docs/user-guide/sandboxed-daemon.md`
-- [ ] T039 [US3] Run the `visual-pass` skill on quickstart Part B items 1 to 4 and save the evidence under `specs/491-multi-session-daemons/` (needs eyes; geometry gates cannot judge it)
+- [x] T039 [US3] Run the `visual-pass` skill on quickstart Part B items 1 to 4 and save the evidence under `specs/491-multi-session-daemons/` (needs eyes; geometry gates cannot judge it)
 
 **Checkpoint (M3)**: the daemon list is managed entirely in the app.
 
