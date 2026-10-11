@@ -83,18 +83,9 @@ done
 [tasks.gate]
 description = "Run CI's merge gate locally: fmt, clippy (core + workspace), workspace tests, shell suites [build-locked]"
 dir = "{{config_root}}"
-run = """
-set -e
-# The tree this gate saw; recorded on success for the autopilot push hook (scripts/autopilot/gate-hook.sh).
-snap=$(scripts/autopilot/review-snapshot.sh)
-scripts/build-lock.sh bash -c '
-  cargo fmt --all -- --check &&
-  cargo clippy -p micold-core --all-targets -- -D warnings &&
-  cargo clippy --workspace --all-targets -- -D warnings &&
-  cargo test --workspace'
-mise run test-scripts
-echo "${snap%%:*}" >> "$(git rev-parse --git-path autopilot-gate-ok)"
-"""
+# The steps live in the script so the gate also runs without mise (cloud containers). As root it runs
+# the test binaries as a normal user; see scripts/run-unprivileged.sh.
+run = "scripts/gate.sh"
 
 # Duplication budget (issue #645). Not part of `gate`: jscpd is an npx download and similarity-rs a
 # `cargo install`, both outside the pinned toolchain, and the gate must stay offline and reproducible.
