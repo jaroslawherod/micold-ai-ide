@@ -9,20 +9,21 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #490
 - **Worktree branch**: claude/project-thread-u1pay5
 - **Started**: 2026-10-10
-- **Phase**: M1
-- **Next step**: M1 PR: full gate, push, open, merge; then M2
+- **Phase**: M2
+- **Next step**: M2: T018–T021 red, then T022–T027
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #694 | design (spec, plan, tasks) | merged | 984ef002 |
+| #772 | M1 + gate runs permission tests as a normal user under root (jaro's pick) | merged | d9bd52e2 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T017 | full | `/status` POST → daemon keeps reading, Welcome + PlanUsageChanged broadcast | — | built, reviewed |
+| M1 | T001–T017 | full | `/status` POST → daemon keeps reading, Welcome + PlanUsageChanged broadcast | #772 | merged |
 | M2 | T018–T027 | full | app-run Claude sessions post readings via `micold-daemon status-line`, user's status line kept | — | pending |
 | M3 | T028–T038 | full | app bar shows `NN% · HH:MM` + tooltip; hidden without a current reading | — | pending |
 | M4 | T039–T046 | light | warning look at threshold; Settings → Environment switch, threshold, statement | — | pending |
