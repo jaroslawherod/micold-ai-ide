@@ -44,3 +44,12 @@ width follows the label, the tooltip adds none), the toolbar test (the indicator
 reading) and the routing test in `main_tests.rs` (Welcome, push, disconnect) (T031, T035, T036).
 T031 named `tests/gates/bar_controls_hold_their_size.rs`, which gates the terminal's bottom bar, not
 the app bar; the app-bar checks are the component and toolbar unit tests instead.
+
+## M4 (2026-10-11)
+
+| Red commit | Green commit | Behaviours (tasks) |
+|---|---|---|
+| `feaae5dc` | `1a187b6c` | Warning from the threshold exactly (80.0 warns, 79.9 not, over 100 warns, a lower reading returns to normal); the threshold restyles the held reading and the details name the window; `Icon::UsageWarning` is U+E002; drafts seeded on and "80"; 49, 101, text and empty refused with "Enter a whole number from 50 to 100"; a valid save carries both fields; the Environment subsection follows Desktop notifications with the FR-003 statement (T039, T040, T043 → T041, T042, T044, T045) |
+
+Written with the green commit: the warning look keeps the indicator's size and `error` is legible as
+text (`usage_indicator` unit tests).

@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #490
 - **Worktree branch**: claude/project-thread-u1pay5
 - **Started**: 2026-10-10
-- **Phase**: M3
-- **Next step**: M3: full gate, review A, push, PR, merge; then M4
+- **Phase**: M4
+- **Next step**: M4: full gate, push, PR, merge; then close (T047–T048)
 
 ## Pull requests
 
@@ -19,6 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #694 | design (spec, plan, tasks) | merged | 984ef002 |
 | #772 | M1 + gate runs permission tests as a normal user under root (jaro's pick) | merged | d9bd52e2 |
 | #777 | M2 status-line relay | merged | a0dbee58 |
+| #778 | M3 app-bar indicator | merged | 4a8d4dbf |
 
 ## Milestones
 
@@ -26,7 +27,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T017 | full | `/status` POST → daemon keeps reading, Welcome + PlanUsageChanged broadcast | #772 | merged |
 | M2 | T018–T027 | full | app-run Claude sessions post readings via `micold-daemon status-line`, user's status line kept | #777 | merged |
-| M3 | T028–T038 | full | app bar shows `NN% · HH:MM` + tooltip; hidden without a current reading | — | pending |
+| M3 | T028–T038 | full | app bar shows `NN% · HH:MM` + tooltip; hidden without a current reading | #778 | merged |
 | M4 | T039–T046 | light | warning look at threshold; Settings → Environment switch, threshold, statement | — | pending |
 
 ## Decisions
@@ -54,6 +55,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 review A (high) | 1 | ac3fec9c:6e6f9ab2 | 10 findings: 4 fixed (`forget` now runs at session removal; one lock over switch, prepare and forget, the receiver owns the switch; odd `padding`/`refreshInterval` keep the command; shared `claude_locations` helper), 6 declined (below) |
 | M2 review B (conformance, sonnet) | 1 | ac3fec9c:6e6f9ab2 | CHANGES: F1 BLOCKER Windows shells not wrapped in `no_window` (console flash; `background_spawns_hide_console` red) — fixed |
 | M3 review A (high) | 1 | fc7826ad | 8 findings: 5 fixed (`PlanUsageChanged` taken from the active daemon only; tick only while something is shown; the reading kept while the switch is off so a push that overtakes the switch is not lost; clock read only with a reading; label contrast checked at the text threshold), 3 declined (below) |
+| M4 review A (high) | 1 | 1a187b6c | 9 findings: 4 fixed (a save applies the switch and threshold in this window at once; disconnected, Settings reads the stored values; named handlers; comment width), 5 declined (below) |
 
 ## Declined review findings
 
@@ -63,6 +65,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 - M3 review A: the reading is not re-adopted when the window's active daemon changes — settings follow the same rule (adopted at Welcome and on push); the next push corrects it. Declined (pre-existing pattern).
 - M3 review A: the label rounds (79.6 → "80%") while the threshold compares tenths — a warning-look question, carried to M4 (T039–T041).
 - M3 review A: a reset under 24 h away shows no day even past midnight — FR-008 and research R11 define the 24 h rule. Declined (as specified).
+- M4 review A: `SettingsDraft::default()` has the switch off and an empty threshold — the page is always seeded from the settings in force (`from_settings`), as for the other service-owned switches. Declined.
+- M4 review A: the `error` role is checked against `surface`, not the app bar's tonal level — the role pairs are the design system's, and the bar's other glyphs are checked the same way. Declined.
+- M4 review A: `warning()` allocates beside `details()` — one short Vec per redraw. Declined (cost over value).
+- M4 review A: three `WarnPercent::clamped(u64::from(..))` sites — each a one-line call of the one helper. Declined.
+- M4 review A: U+E002 presence in the font — `tests/icons_font.rs` checks every `Icon` against the bundled font, and the gate passes. Does not reproduce.
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|

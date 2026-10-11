@@ -305,9 +305,17 @@ pub(crate) fn window_settings(app: &App, stored: Settings) -> Settings {
         cross_session_access: app.core.session.cross_session_access,
         notification_kinds: app.core.session.notification_kinds,
         long_task_threshold_secs: app.core.session.long_task_threshold_secs,
-        // Feature 490: the switch and threshold in force, as the window holds them.
-        plan_usage_enabled: app.core.plan_usage.enabled,
-        plan_usage_warn_percent: app.core.plan_usage.warn.get(),
+        // Feature 490: connected, the service's values are the truth, as for the switch below.
+        plan_usage_enabled: if app.active_outbox().is_some() {
+            app.core.plan_usage.enabled
+        } else {
+            stored.plan_usage_enabled
+        },
+        plan_usage_warn_percent: if app.active_outbox().is_some() {
+            app.core.plan_usage.warn.get()
+        } else {
+            stored.plan_usage_warn_percent
+        },
         // Connected, the service's value is the truth; the file may lag another window's change.
         pr_status_enabled: if app.active_outbox().is_some() {
             app.core.pr_status.enabled
@@ -612,6 +620,11 @@ pub(crate) fn save_and_prepare_check(
     app.core.session.cross_session_access = window.cross_session_access;
     app.core.session.notification_kinds = window.notification_kinds;
     app.core.session.long_task_threshold_secs = window.long_task_threshold_secs;
+    // Feature 490: in force here at once, as the fields above are; the service's echo agrees.
+    app.core.plan_usage.settings(
+        window.plan_usage_enabled,
+        micold_core::plan_usage::WarnPercent::clamped(u64::from(window.plan_usage_warn_percent)),
+    );
 
     let mut written = true;
     if let Some(store) = app.caps.settings() {
