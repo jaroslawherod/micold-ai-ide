@@ -2,6 +2,7 @@
 //! FR-019). The strings are the contract's table.
 
 use iced::futures::channel::mpsc;
+use micold_client::app::State;
 use micold_client::daemon::Outbox;
 use micold_client::links::{session_lost_label, unavailable_label, DaemonLinks, LabelFacts};
 use micold_core::daemons::{
@@ -81,7 +82,7 @@ fn a_version_mismatch_shows_both_versions_and_the_way_out() {
 }
 
 #[test]
-fn sessions_lost_runtime_missing_and_mapped_paths_have_their_own_strings() {
+fn paths_mapped_shows_only_while_the_daemon_is_connected() {
     let (registry, mut links, _, boxed) = fixture();
     let mapped = LabelFacts {
         paths_mapped: true,
@@ -92,30 +93,55 @@ fn sessions_lost_runtime_missing_and_mapped_paths_have_their_own_strings() {
         Some("paths are mapped")
     );
     links.lost(boxed, "gone");
+    assert_eq!(
+        label(&registry, &links, boxed, mapped).as_deref(),
+        Some("daemon Box unavailable"),
+        "an unreachable daemon outranks the informational label"
+    );
+}
+
+#[test]
+fn lost_sessions_name_the_unreachable_daemon() {
+    let (registry, mut links, _, boxed) = fixture();
     let lost = LabelFacts {
         lost_sessions: true,
         ..Default::default()
     };
     assert_eq!(
+        label(&registry, &links, boxed, lost),
+        None,
+        "still connected"
+    );
+    links.lost(boxed, "gone");
+    assert_eq!(
         label(&registry, &links, boxed, lost).as_deref(),
         Some("lost to daemon Box")
     );
+}
+
+#[test]
+fn a_missing_container_runtime_is_said_for_a_container_and_not_a_host() {
+    let (registry, mut links, host, boxed) = fixture();
     let missing = LabelFacts {
         runtime_missing: true,
         ..Default::default()
     };
+    links.lost(boxed, "gone");
+    links.lost(host, "gone");
     assert_eq!(
         label(&registry, &links, boxed, missing).as_deref(),
         Some("container runtime not found")
     );
     // A host daemon has no container runtime to miss.
-    let (_, host_links, host, _) = fixture();
-    let mut host_links = host_links;
-    host_links.lost(host, "gone");
     assert_eq!(
-        label(&registry, &host_links, host, missing).as_deref(),
+        label(&registry, &links, host, missing).as_deref(),
         Some("daemon Host unavailable")
     );
+}
+
+#[test]
+fn a_row_with_no_daemon_says_so() {
+    let (registry, links, _, _) = fixture();
     assert_eq!(
         unavailable_label(&registry, &links, Binding::NoDaemon, LabelFacts::default()).as_deref(),
         Some("no daemon")
@@ -135,24 +161,79 @@ fn a_session_on_a_dropped_daemon_is_lost_not_finished() {
     assert_eq!(session_lost_label(&registry, &links, host, &running), None);
 }
 
-#[test]
-fn the_sidebar_row_label_shows_the_status_in_place_of_the_chip() {
-    use micold_client::app::State;
-    let (registry, mut links, host, boxed) = fixture();
+/// A window state whose worktrees `feat-a` (on Box) and `feat-b` (on Host) are in the active
+/// project, with the fixture's links held as the window's own.
+fn window(boxed_sessions: &[SessionLifecycle]) -> (State, DaemonId, DaemonId) {
+    use micold_core::session::{Session, SessionLocation};
+    let (registry, links, host, boxed) = fixture();
     let mut state = State::default();
     state.settings.daemons = registry;
-    state.workspace.active = Some("/repo".into());
+    state.settings.links = links;
+    let project = std::path::PathBuf::from("/repo");
+    state.workspace.active = Some(project.clone());
     state.workspace.bindings.insert(
-        "/repo".into(),
+        project.clone(),
         [("feat-a".to_string(), boxed), ("feat-b".to_string(), host)]
             .into_iter()
             .collect(),
     );
-    let facts = LabelFacts::default();
-    let of =
-        |state: &State, links: &DaemonLinks, key| state.daemon_status_label_of(key, links, facts);
-    assert_eq!(of(&state, &links, "feat-a"), "Box");
-    links.lost(boxed, "gone");
-    assert_eq!(of(&state, &links, "feat-a"), "daemon Box unavailable");
-    assert_eq!(of(&state, &links, "feat-b"), "Host", "other rows unchanged");
+    let sessions = boxed_sessions
+        .iter()
+        .map(|lifecycle| {
+            let mut s = Session::start_new(
+                SessionLocation::Worktree("feat-a".into()),
+                micold_core::session::AiCli::ClaudeCode,
+            );
+            s.lifecycle = lifecycle.clone();
+            s
+        })
+        .collect();
+    state.workspace.sessions.insert(project, sessions);
+    (state, host, boxed)
+}
+
+#[test]
+fn the_sidebar_row_label_shows_the_status_in_place_of_the_chip() {
+    let (mut state, _, boxed) = window(&[]);
+    assert_eq!(state.daemon_row_label("feat-a"), "Box");
+    state.settings.links.lost(boxed, "gone");
+    assert_eq!(state.daemon_row_label("feat-a"), "daemon Box unavailable");
+    assert_eq!(
+        state.daemon_row_label("feat-b"),
+        "Host",
+        "other rows unchanged"
+    );
+}
+
+#[test]
+fn a_running_session_on_a_dropped_daemon_makes_its_row_lost() {
+    let (mut state, _, boxed) = window(&[SessionLifecycle::Running]);
+    state.settings.links.lost(boxed, "gone");
+    assert_eq!(state.daemon_row_label("feat-a"), "lost to daemon Box");
+    assert_eq!(state.daemon_row_label("feat-b"), "Host");
+}
+
+#[test]
+fn an_idle_session_does_not_make_its_row_lost() {
+    let (mut state, _, boxed) = window(&[SessionLifecycle::Running]);
+    state
+        .workspace
+        .sessions
+        .get_mut(std::path::Path::new("/repo"))
+        .unwrap()[0]
+        .lifecycle = SessionLifecycle::Idle;
+    state.settings.links.lost(boxed, "gone");
+    assert_eq!(state.daemon_row_label("feat-a"), "daemon Box unavailable");
+}
+
+#[test]
+fn a_missing_runtime_shows_on_a_container_row_only() {
+    let (mut state, _, boxed) = window(&[]);
+    state.settings.runtime_missing = true;
+    state.settings.links.lost(boxed, "gone");
+    assert_eq!(
+        state.daemon_row_label("feat-a"),
+        "container runtime not found"
+    );
+    assert_eq!(state.daemon_row_label("feat-b"), "Host");
 }

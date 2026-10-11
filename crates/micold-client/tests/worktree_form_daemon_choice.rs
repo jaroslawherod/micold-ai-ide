@@ -67,7 +67,7 @@ fn the_legacy_default_is_preselected_while_it_is_registered() {
 
 #[test]
 fn choosing_a_daemon_changes_the_choice_and_an_unknown_id_is_ignored() {
-    let (mut state, host, boxed) = state_with_two_daemons();
+    let (mut state, _, boxed) = state_with_two_daemons();
     open(&mut state);
     state.update(Message::WorktreeForm(FormMsg::DaemonChosen(boxed)));
     assert_eq!(
@@ -79,7 +79,6 @@ fn choosing_a_daemon_changes_the_choice_and_an_unknown_id_is_ignored() {
         state.worktree_form.form.as_ref().unwrap().daemon,
         Some(boxed)
     );
-    let _ = host;
 }
 
 #[test]

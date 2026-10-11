@@ -1506,6 +1506,63 @@ fn a_success_after_cancel_is_announced_even_with_no_project_open() {
     );
 }
 
+/// Feature 491, FR-006: the daemon chosen in the form when the create was sent is the worktree's
+/// binding once the daemon reports it created, and not before.
+#[test]
+fn a_created_worktree_is_bound_to_the_daemon_chosen_in_the_form() {
+    use micold_core::daemons::{DaemonRegistry, DaemonRuntime};
+    let (mut app, _rx) = connected_app();
+    let project = PathBuf::from("/repo/demo");
+    let mut registry = DaemonRegistry::new(Vec::new(), 1);
+    registry.add("Host", DaemonRuntime::Host, true).unwrap();
+    let other = registry
+        .add(
+            "Other",
+            DaemonRuntime::Container(micold_core::daemons::ContainerSettings {
+                profile: Default::default(),
+                container_name: "other".into(),
+                port: 7001,
+            }),
+            true,
+        )
+        .unwrap();
+    app.core.settings.daemons = registry;
+    app.core.workspace.active = Some(project.clone());
+    app.core.update(Message::WorktreeForm(FormMsg::Opened));
+    app.core
+        .update(Message::WorktreeForm(FormMsg::DaemonChosen(other)));
+    shell::daemon_sync::send_worktree_create(
+        &mut app,
+        project.clone(),
+        micold_core::naming::DerivedNames {
+            dir_name: "feat-probe-two".into(),
+            branch: "feat/probe-two".into(),
+        },
+        micold_core::worktree::CreateMode::NewBranch,
+    );
+    let req = pending_create_req(&app);
+    assert!(
+        !app.core.workspace.bindings.contains_key(&project),
+        "nothing is bound before the daemon says the worktree exists"
+    );
+
+    let _ = shell::daemon_sync::on_daemon_event(
+        &mut app,
+        micold_core::daemons::DaemonId(1),
+        DaemonMsg::OperationOk {
+            req,
+            result: micold_core::protocol::messages::OperationResult::WorktreeCreated {
+                dir_name: "feat-probe-two".into(),
+            },
+        },
+    );
+
+    assert_eq!(
+        app.core.workspace.bindings[&project]["feat-probe-two"],
+        other
+    );
+}
+
 /// A new attempt starts with a clean slate.
 ///
 /// The stale error from the previous attempt stood through the whole of the next one's pending

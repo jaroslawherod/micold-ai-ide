@@ -136,10 +136,23 @@ fn a_transition_on_one_daemon_leaves_every_other_untouched() {
     let mut states = two();
     states.apply(id(2), DaemonEvent::Connected);
     let before = states.state(id(2)).cloned();
-    for event in [lost("x"), refused(), DaemonEvent::Stop, DaemonEvent::Start] {
-        if let Some(change) = states.apply(id(1), event) {
-            assert_eq!(change.id, id(1));
-        }
+    // Each event with the change daemon 1 must report: the first loss of a Starting daemon is
+    // below the unreachable threshold and changes nothing, the rest all do.
+    let events = [
+        (lost("x"), None),
+        (
+            refused(),
+            Some(DaemonState::VersionMismatch {
+                client: "2".into(),
+                daemon: "1".into(),
+            }),
+        ),
+        (DaemonEvent::Stop, Some(DaemonState::Stopped)),
+        (DaemonEvent::Start, Some(DaemonState::Starting)),
+    ];
+    for (event, expected) in events {
+        let change = states.apply(id(1), event);
+        assert_eq!(change.map(|c| (c.id, c.to)), expected.map(|to| (id(1), to)));
         assert_eq!(states.state(id(2)).cloned(), before);
     }
 }

@@ -1445,6 +1445,64 @@ mod tests {
         (state, id)
     }
 
+    /// Feature 491, T026: a terminal's container is the bound daemon's own, not the fixed
+    /// single-sandbox name; a worktree with no container daemon of its own falls back to it.
+    #[test]
+    fn the_terminal_targets_the_container_of_the_daemon_its_worktree_is_bound_to() {
+        use crate::features::sandbox::{Sandbox, SandboxLocations};
+        use micold_core::daemons::{ContainerSettings, DaemonRegistry, DaemonRuntime};
+        use micold_core::sandbox::lifecycle::SandboxState;
+        use micold_core::sandbox::runtime::ContainerId;
+
+        let (mut state, id) = state_showing(SessionLifecycle::Running);
+        let project = std::path::PathBuf::from("/repo");
+        let mut registry = DaemonRegistry::new(Vec::new(), 1);
+        let host = registry.add("Host", DaemonRuntime::Host, true).unwrap();
+        let boxed = registry
+            .add(
+                "Box",
+                DaemonRuntime::Container(ContainerSettings {
+                    profile: Default::default(),
+                    container_name: "box-ctr".into(),
+                    port: 7001,
+                }),
+                true,
+            )
+            .unwrap();
+        state.settings.daemons = registry;
+        let session = &mut state.workspace.sessions.get_mut(&project).unwrap()[0];
+        session.location = SessionLocation::Worktree("wt1".into());
+        state.workspace.bind(&project, "wt1", boxed);
+        state.session.active = Some(id);
+
+        let container = ContainerId("0123456789abcdef0123456789".into());
+        let sandbox = Sandbox {
+            state: SandboxState::Running(container.clone()),
+            locations: Some((container, SandboxLocations::default())),
+            ..Sandbox::default()
+        };
+
+        let names = |state: &State| {
+            link_context(state, &sandbox)
+                .sandbox
+                .expect("a running sandbox with locations has a link context")
+                .host_names
+        };
+        let bound = names(&state);
+        assert!(bound.iter().any(|n| n == "box-ctr"), "{bound:?}");
+        assert!(!bound.iter().any(|n| n == "micold-sandbox"), "{bound:?}");
+
+        state.workspace.bind(&project, "wt1", host);
+        let fallback = names(&state);
+        assert!(
+            fallback
+                .iter()
+                .any(|n| n == micold_core::sandbox::CONTAINER_NAME),
+            "a host daemon has no container of its own: {fallback:?}"
+        );
+        assert!(!fallback.iter().any(|n| n == "box-ctr"), "{fallback:?}");
+    }
+
     /// A state with one project and one session in `mode`, holding `shells` instances at the given
     /// lifecycles and marking `active` (an index into `shells`) as the displayed one.
     fn state_with_instances(

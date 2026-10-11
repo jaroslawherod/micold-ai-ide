@@ -108,9 +108,19 @@ fn a_container_install_opens_with_one_container_daemon_bound_to_everything() {
 fn closing_and_reopening_keeps_the_daemons_the_bindings_and_the_settings() {
     let (_dir, settings, projects) = legacy_install(CONTAINER);
     let first = launch(&settings, &projects);
-    // The close: both stores write what they hold.
+    // The close: both stores write what the window holds, the registry through the settings the
+    // app would save for it. The reopen reads the files back.
     projects.save(&first.workspace).unwrap();
-    let before = settings.load().settings;
+    let mut saved = settings.load().settings;
+    saved.set_registry(first.settings.daemons.clone());
+    settings.save(&saved).unwrap();
+    let reloaded = settings.load().settings;
+    assert_eq!(
+        reloaded.registry().entries(),
+        first.settings.daemons.entries(),
+        "the registry is what the file holds"
+    );
+
     let reopened = launch(&settings, &projects);
     assert_eq!(
         reopened.settings.daemons.entries(),
@@ -126,7 +136,7 @@ fn closing_and_reopening_keeps_the_daemons_the_bindings_and_the_settings() {
     );
     assert_eq!(
         settings.load().settings,
-        before,
+        saved,
         "the settings are unchanged"
     );
 }

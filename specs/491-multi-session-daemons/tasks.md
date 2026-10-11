@@ -98,8 +98,8 @@ Tests first.
 
 ## Phase 7: Polish and cross-cutting (docs only, done in the close unit)
 
-- [ ] T046 [P] Update any `docs/` architecture text that describes a single app-wide daemon to the registry model; grep `docs/` for "the daemon" placement descriptions
-- [ ] T047 Record quickstart Part A and Part B results in `specs/491-multi-session-daemons/quickstart.md` and tick the tasks
+- [x] T046 [P] Update any `docs/` architecture text that describes a single app-wide daemon to the registry model; grep `docs/` for "the daemon" placement descriptions
+- [x] T047 Record quickstart Part A and Part B results in `specs/491-multi-session-daemons/quickstart.md` and tick the tasks
 
 ## Dependencies and order
 
@@ -156,3 +156,22 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Verify**: `mise run image && mise run test-sandbox` (the `sandbox_real_multi_daemon*` tests pass)
 - **Depends on**: M2, M3
 - **Tier**: full
+
+## Phase 8: TDD remediation
+
+Source: `specs/491-multi-session-daemons/tdd/verification.md` (verdict FAIL at `0a15aa9c`). HIGH items T050 to T055 are cleared in the close unit. T057 (the e2e needs a container runtime and an idle host stream legitimately times out, so the strict no-observation failure was reverted; the leak mutation check is still not run), T060 (shared test-support module, a refactor across ~12 files) and T062 (regenerate the layout snapshot rows) are left as follow-ups; neither changes a verdict-bearing test. Tests are added or strengthened only; no production change is implied except where a test then fails for a real defect.
+
+- [x] T050 [F2] Add a binary test that sends `send_worktree_create` with a chosen daemon, completes `OperationResult::WorktreeCreated`, and asserts `workspace.bindings` and the project state file hold the binding; the mutant `daemon_sync.rs:1143` must fail it (`cargo test -p micold-client --bins`)
+- [x] T051 [F3] Make the close step in `crates/micold-client/tests/upgrade_single_daemon.rs:108-131` save settings, reopen from the saved file, and compare the registry with the first launch (`cargo test -p micold-client --test upgrade_single_daemon`)
+- [x] T052 [F4] Rewrite `removing_an_entry_writes_nothing_to_disk` in `crates/micold-core/tests/daemons_bindings.rs:170-181` to save through `JsonFileSettingsStore` and assert the file bytes are unchanged after `remove` (`cargo test -p micold-core --test daemons_bindings`)
+- [x] T053 [F5] Drive a real `Lost` event for daemon A in `crates/micold-client/tests/catalog_two_daemons.rs:194-211` through `DaemonLinks` and assert the session lifecycle and `session_lost_label`, or delete the test as redundant with `worktree_unavailable_label.rs`
+- [x] T054 [F6] Replace `a_binding_carries_the_daemon_id_and_no_runtime_field` in `crates/micold-client/tests/daemon_rows_uniform.rs:52-62` with an assertion on `Binding::resolve` for a host-bound and a container-bound key, or delete it
+- [x] T055 [F1] Update `tdd/test-list.md`: add behavior ids and `DONE`/state for M2-M4 (T018-T045), correct `spec_criteria`, and record per-milestone red evidence or an explicit TEST_AFTER note in `tdd/cycle-log.md`
+- [x] T056 [F7] Remove the `if let` in `crates/micold-core/tests/daemon_state.rs:139-146`; assert the expected change per event (`cargo test -p micold-core --test daemon_state`)
+- [ ] T057 [F8] In `crates/micold-daemon/tests/sandbox_real_multi_daemon.rs:142-153` fail when no observation of the host connection is made, or drop the hand-folded state in favor of the final `converse`; run the leak mutation check recorded as "not run"
+- [x] T058 [F9] Test the derivation of `LabelFacts` (mapped paths, runtime missing, lost sessions) where the sidebar builds them, in `crates/micold-client/tests/worktree_unavailable_label.rs`
+- [x] T059 [F10] Match the specific error in `daemons_bindings.rs:211-213` and `daemon_removal.rs:150`
+- [ ] T060 [F11] Move the container runtime constructor and the host+box registry into one support module and use it from the files listed in finding 11 (`mise run duplication`)
+- [x] T061 [F12, F15] Split `daemons_bindings.rs:216-239` and `worktree_unavailable_label.rs:83-123` per behavior; remove the dead reads at `daemons_bindings.rs:88,97` and `worktree_form_daemon_choice.rs:82`
+- [ ] T062 [F13] Regenerate `layout_snapshot.txt` rows for 491 only from a clean base and record the review in the ledger
+- [x] T063 [F14] Add a test that the terminal command built in `ui/terminal.rs` targets the bound daemon's container name

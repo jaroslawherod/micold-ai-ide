@@ -10,7 +10,7 @@ use std::path::PathBuf;
 
 use daemons_fixture::World;
 use micold_client::features::daemons::{self, State};
-use micold_core::daemons::{DaemonEvent, DaemonId, DaemonState, DaemonView};
+use micold_core::daemons::{Binding, DaemonEvent, DaemonId, DaemonState, DaemonView};
 
 /// Which fields a row fills, with the runtime as an ordinary string among them.
 fn filled(view: &DaemonView) -> [bool; 7] {
@@ -50,13 +50,11 @@ fn a_host_and_a_container_row_fill_the_same_fields() {
 }
 
 #[test]
-fn a_binding_carries_the_daemon_id_and_no_runtime_field() {
+fn a_binding_resolves_to_a_daemon_id_whatever_its_runtime() {
     let w = World::new();
-    // The type is the claim: a binding is a worktree key to a `DaemonId`, nothing else.
-    let bindings: &BTreeMap<PathBuf, BTreeMap<String, DaemonId>> = &w.bindings;
-    let ids: Vec<DaemonId> = bindings
-        .values()
-        .flat_map(|keys| keys.values().copied())
-        .collect();
-    assert!(ids.contains(&w.host) && ids.contains(&w.boxed));
+    let stored = &w.bindings[&PathBuf::from("/p/a")];
+    let resolve = |key: &str| Binding::resolve(stored, key, &w.registry, None);
+    assert_eq!(resolve(""), Binding::Bound(w.host), "host keyed by Default");
+    assert_eq!(resolve("wt1"), Binding::Bound(w.boxed), "container keyed");
+    assert_eq!(resolve("unbound"), Binding::NoDaemon);
 }
