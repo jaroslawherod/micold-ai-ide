@@ -86,7 +86,7 @@ None. Visual pass M3 (T039) ran headless under sway, see specs/491-multi-session
 
 ## Open escalation
 
-None.
+Close PR not opened: the push of the rewritten branch (remote holds the merged M4 branch commits) was denied by the classifier. Run `git fetch origin feat/491_support-multiple-session-daemons-host-container && git push --force-with-lease -u origin HEAD`, then `gh pr create --base main --title "docs(491): close the spec (#491)" --body-file <scratchpad>/pr-body.md`.
 
 ## Follow-ups not done
 
