@@ -12,7 +12,9 @@ use futures_util::{SinkExt, StreamExt};
 use micold_core::project::{Availability, Project};
 use micold_core::protocol::codec::Frame;
 use micold_core::protocol::messages::{ClientMsg, DaemonMsg, ErrorKind};
-use micold_core::session::{AiCli, Session, SessionId, SessionLabel, SessionLocation, TerminalMode};
+use micold_core::session::{
+    AiCli, Session, SessionId, SessionLabel, SessionLocation, TerminalMode,
+};
 use micold_core::settings::JsonFileSettingsStore;
 use micold_core::store::FakeProjectStore;
 use micold_core::workspace::Workspace;
@@ -195,13 +197,14 @@ async fn a_worktree_with_only_an_archived_session_accepts_one() {
         .await
         .unwrap();
     assert!(
-        matches!(
-            answer(&mut client, 1).await,
-            DaemonMsg::OperationOk { .. }
-        ),
+        matches!(answer(&mut client, 1).await, DaemonMsg::OperationOk { .. }),
         "an archived session does not occupy the worktree"
     );
-    assert_eq!(count(&state, project.path()), 1, "the new session; archived ones are not listed");
+    assert_eq!(
+        count(&state, project.path()),
+        1,
+        "the new session; archived ones are not listed"
+    );
     kill_all(&state, project.path());
 }
 

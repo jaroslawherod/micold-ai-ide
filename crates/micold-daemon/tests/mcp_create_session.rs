@@ -121,8 +121,18 @@ impl Sandbox {
                 project.path().to_path_buf(),
                 true,
                 vec![
-                    session(sid(1), Some("seeded"), TerminalMode::AiCli, AiCli::ClaudeCode),
-                    session(sid(3), Some("caller"), TerminalMode::AiCli, AiCli::ClaudeCode),
+                    session(
+                        sid(1),
+                        Some("seeded"),
+                        TerminalMode::AiCli,
+                        AiCli::ClaudeCode,
+                    ),
+                    session(
+                        sid(3),
+                        Some("caller"),
+                        TerminalMode::AiCli,
+                        AiCli::ClaudeCode,
+                    ),
                 ],
             )],
             store.path(),
@@ -477,7 +487,10 @@ async fn a_session_in_default_runs_in_the_project_root() {
 async fn a_second_session_in_a_worktree_is_a_conflict_naming_the_existing_one() {
     let _guard = ENV.lock().await;
     let s = Sandbox::new().await;
-    let first = Sandbox::created(&s.ok(json!({"worktree": "b", "ai_cli": "claude_code"})).await);
+    let first = Sandbox::created(
+        &s.ok(json!({"worktree": "b", "ai_cli": "claude_code"}))
+            .await,
+    );
     let before = s.session_ids();
 
     for ai_cli in ["claude_code", "copilot"] {
