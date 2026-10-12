@@ -199,6 +199,7 @@ impl<M, Theme, Renderer> Widget<M, Theme, Renderer> for Tooltip<'_, M, Theme, Re
 where
     Renderer: renderer::Renderer,
 {
+    // Only the trigger is laid out; the panel never takes space from its neighbours.
     forward_to_child!(content, M, Theme, Renderer;
         size, layout);
 
