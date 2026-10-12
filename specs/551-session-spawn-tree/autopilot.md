@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #551
 - **Worktree branch**: feat/551_show-sessions-spawned-by-an-agent-as-a-tree-under
 - **Started**: 2026-10-12
-- **Phase**: clarify
-- **Next step**: clarify unit: resolve the 3 `[NEEDS CLARIFICATION]` markers in specs/551-session-spawn-tree/spec.md
+- **Phase**: plan
+- **Next step**: plan unit
 
 ## Pull requests
 
@@ -26,6 +26,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
+| 1 | clarify | Fold state persisted across restarts? | Persisted; never-folded origin starts expanded (FR-017) | agent | specs/017-material-component-architecture/spec.md#FR-016 |
+| 2 | clarify | Children of a stopped or deleted origin? | Stopped: stay nested. Deleted: top-level "origin removed", never deleted (FR-018) | agent | spec.md FR-006, FR-008, US2.3 |
+| 3 | clarify | MCP create_session child of caller? | Yes, same worktree only (FR-019) | agent | specs/034-daemon-mcp-server/contracts/binding.md#2, crates/micold-daemon/src/mcp/tools.rs |
 
 ## Review rounds
 

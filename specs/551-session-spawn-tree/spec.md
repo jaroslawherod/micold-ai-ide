@@ -18,6 +18,22 @@
 - **Native signal**: information the provider itself reports about a session it started (a hook
   payload, an event, or session metadata). A guess from a name, a path or timing is not a native signal.
 
+## Clarifications
+
+### Session 2026-10-12
+
+- Q: Is a fold state remembered across restarts, or do trees start expanded each time? → A:
+  Remembered; a never-folded origin starts expanded. _(agent-resolved: specs/017-material-component-architecture/spec.md#FR-016,
+  which persists expanded tree nodes across restarts)_
+- Q: What happens to children when the origin is stopped or deleted? → A: A stopped origin keeps
+  its children nested; a deleted origin leaves them top-level marked "origin removed", never
+  deleted with it. _(agent-resolved: this spec FR-006, FR-008 and User Story 2.3; deleting a
+  session the user did not select would be destructive and no rule in the repo cascades deletes)_
+- Q: Does a `create_session` through the tool server make the new session a child of the caller?
+  → A: Yes, within one worktree. _(agent-resolved: specs/034-daemon-mcp-server/contracts/binding.md#2
+  and `crates/micold-daemon/src/mcp/tools.rs`, where every call carries the authenticated caller
+  session, `is_caller`)_
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - See an agent's spawned sessions under it (Priority: P1)
@@ -65,7 +81,7 @@ the sidebar tree before and after.
 2. **Given** a child session that was running when the daemon stopped and is now resumable,
    **When** the user lists the worktree's sessions, **Then** it is still nested under its origin.
 3. **Given** a child whose origin session no longer exists in the catalog, **When** the tree is
-   built, **Then** the child is shown as a top-level session marked "origin removed" (provisional, pending the stopped-or-deleted-origin clarification; an origin known to have been deleted, as
+   built, **Then** the child is shown as a top-level session marked "origin removed" (an origin known to have been deleted, as
    against "origin pending" in FR-016), never dropped and never duplicated.
 
 ---
@@ -108,8 +124,8 @@ and the origin shows whether any child needs attention, then expand.
    hidden and the origin shows how many there are.
 2. **Given** a collapsed origin and a child that needs the user's attention, **When** the sidebar
    renders, **Then** the origin shows that a child needs attention.
-3. **Given** a collapsed origin, **When** the app restarts, **Then** the origin is expanded
-   (provisional default) [NEEDS CLARIFICATION: is the fold state remembered across restarts, or do trees start expanded each time?]
+3. **Given** a collapsed origin, **When** the app restarts, **Then** the origin is folded
+   as the user left it; an origin the user never folded is expanded (FR-017).
 
 ---
 
@@ -118,9 +134,10 @@ and the origin shows whether any child needs attention, then expand.
 - A child appears before its origin is known to the catalog (events arrive out of order): the child
   is shown top-level with an "origin pending" marker until the origin is known, then moves under
   it; it is never lost and never duplicated (FR-016).
-- The origin session is stopped or deleted while children remain:
-  [NEEDS CLARIFICATION: do children stay in the tree under a stopped origin, get deleted with it,
-  or move to the top level when the origin is deleted?]
+- The origin session is stopped while children remain: the children stay nested under it, as the
+  origin is still in the catalog (FR-006, FR-017). The origin is deleted while children remain: the
+  children are not deleted; each is shown top-level with the "origin removed" marker (FR-008,
+  FR-018).
 - A session reports itself as its own origin, or two sessions as each other's: the relationship is
   rejected, the sessions are shown top-level and the daemon does not loop.
 - A provider reports an origin id that is not a session of the same worktree and project: the
@@ -131,8 +148,9 @@ and the origin shows whether any child needs attention, then expand.
   origin stands; no duplicate entry appears.
 - Several Micold windows or daemons observe the same worktree (Principle II): every one shows the
   same tree, and an update in one reaches the others.
-- A session started by one session through Micold's own tool server (`create_session`):
-  [NEEDS CLARIFICATION: does a session an assistant creates through the tool server count as a child of the calling session, or stay a user-level top-level session?]
+- A session started by one session through Micold's own tool server (`create_session`): it is a
+  child of the calling session when both are in the same worktree (FR-019); aimed at another
+  worktree it stays top-level (FR-009).
 - Linux, macOS and Windows: the tree and its persistence behave the same on all three (Principle VI).
 
 ## Requirements *(mandatory)*
@@ -168,6 +186,15 @@ and the origin shows whether any child needs attention, then expand.
 - **FR-016**: A child whose origin is not yet in the catalog MUST be shown top-level with an
   "origin pending" marker, and MUST move under its origin once the origin is known; an origin that never becomes known
   leaves the child top-level with the marker.
+- **FR-017**: The fold state of an origin MUST persist across an app restart, as the sidebar's
+  expanded nodes already do; an origin the user has never folded MUST start expanded.
+- **FR-018**: Deleting an origin session MUST NOT delete or stop its children; each child MUST
+  stay visible top-level with the "origin removed" marker (FR-008). Stopping an origin MUST NOT
+  change where its children are shown.
+- **FR-019**: A session created through the tool server's `create_session` MUST record the
+  authenticated calling session as its origin, when that session is in the same worktree
+  (FR-009 otherwise), because the daemon itself identifies the caller; this is a native signal,
+  not a guess (FR-002).
 
 ### Key Entities
 
