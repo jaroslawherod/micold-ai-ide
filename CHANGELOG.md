@@ -1,5 +1,35 @@
 # Changelog
 
+## [0.18.0](https://github.com/jaroslawherod/micold-ai-ide/compare/micold-ai-ide-v0.17.0...micold-ai-ide-v0.18.0) (2026-10-12)
+
+
+### Features
+
+* **490:** plan-usage model, settings and wire in core (T007–T010) ([f5ac69c](https://github.com/jaroslawherod/micold-ai-ide/commit/f5ac69c97a3528771f8beb8315847cbbba953863))
+* **490:** resolve the user's status line, relay config, claude_settings_dir (T022) ([072bb1e](https://github.com/jaroslawherod/micold-ai-ide/commit/072bb1edc88ae4146a233651834b16ffec8f07cf))
+* **490:** session settings name the status-line relay; the switch rewrites them (T025, T026) ([efc2c85](https://github.com/jaroslawherod/micold-ai-ide/commit/efc2c85499f67a24748ed070ce39cc779c5702c3))
+* **490:** show the plan's usage in the app bar ([a6577fb](https://github.com/jaroslawherod/micold-ai-ide/commit/a6577fb312f15e7e097b56368e1cd463659d6745))
+* **490:** the service keeps and pushes the plan's usage (T014–T017) ([e1ccd57](https://github.com/jaroslawherod/micold-ai-ide/commit/e1ccd57b9d73599b1f630ae91f40ed4d647dade1))
+* **490:** the status-line relay and its dispatch in the daemon binary (T023, T024) ([545760f](https://github.com/jaroslawherod/micold-ai-ide/commit/545760fab9f4125b2e7e629f2635c56f516bf878))
+* **490:** warning look and plan-usage settings ([c689ff2](https://github.com/jaroslawherod/micold-ai-ide/commit/c689ff261e434eb9b26aa83436139a96e3dd39ea))
+* **491:** Daemons reducer, removal flow and rebind (T030, T031, T033) ([dcdaacc](https://github.com/jaroslawherod/micold-ai-ide/commit/dcdaacc943d6bb038b51171b6619b373ba8bc717))
+
+
+### Bug Fixes
+
+* **490:** a settings draft defaults to plan usage on at 80 ([e0edbba](https://github.com/jaroslawherod/micold-ai-ide/commit/e0edbbae2b1c5add68eb9826d7778873ac331b65))
+* **490:** M1 review findings: bounded rejection log, idle repeats, unreadable resets ([84e1a91](https://github.com/jaroslawherod/micold-ai-ide/commit/84e1a91ecb58230c798b8bf4031cb717d377e1c1))
+* **490:** M2 review findings: hidden console for the relay's shells, forget at session end, one lock for switch/prepare/forget, loose optional status-line fields ([aa68e03](https://github.com/jaroslawherod/micold-ai-ide/commit/aa68e0311649a06821e274b9004fb067c687bd9c))
+* **490:** M3 review A — active daemon only, tick while shown, keep a reading across the switch ([620e4c0](https://github.com/jaroslawherod/micold-ai-ide/commit/620e4c0617e1c6292248484f62586944f31837a4))
+* **490:** M4 review A — apply a save's plan-usage values at once, stored values while disconnected ([de1fcfc](https://github.com/jaroslawherod/micold-ai-ide/commit/de1fcfca3a1f10d8c8be2f864273084ae30cfa06))
+* **491:** keep the add-worktree form's height with no daemon, M3 cycle log (T037) ([9a0e1f9](https://github.com/jaroslawherod/micold-ai-ide/commit/9a0e1f9d2825ef4a53ce338cc8387dc9bf1d6880))
+* **491:** no-daemon notice stays out of the issue form, layout fixture (T037) ([2c0d752](https://github.com/jaroslawherod/micold-ai-ide/commit/2c0d7521b019fcf99f8d86056e6b5c2bd1e3b9af))
+* **491:** tear down a stopped daemon's client state, keep unsupported runtimes opaque, geometry dialog test (T032, T034-T038) ([d1cfdab](https://github.com/jaroslawherod/micold-ai-ide/commit/d1cfdab722823766a333cf2bef70dc4f2782903a))
+* **491:** the connect-at-launch checkbox reports its focus (T034) ([8fa253b](https://github.com/jaroslawherod/micold-ai-ide/commit/8fa253b14acea4185dfe9b65a842f754c0ce76a9))
+* **changes:** bound the diff read and log it, so the pane never loads forever ([#771](https://github.com/jaroslawherod/micold-ai-ide/issues/771)) ([606e1c1](https://github.com/jaroslawherod/micold-ai-ide/commit/606e1c1dd0bf1e8ecb5f29b419d5a797eaff7ac2))
+* **site:** click New worktree, not Run in parallel, in the create-worktree capture ([aa63acd](https://github.com/jaroslawherod/micold-ai-ide/commit/aa63acdd0b818bb6388a136c064b2f22000e394c))
+* **site:** re-aim the create-worktree capture at the form with the Daemon picker ([547198d](https://github.com/jaroslawherod/micold-ai-ide/commit/547198d9e91e034a05a6fda98a01bba094d3675f))
+
 ## [0.17.0](https://github.com/jaroslawherod/micold-ai-ide/compare/micold-ai-ide-v0.16.0...micold-ai-ide-v0.17.0) (2026-10-10)
 
 
