@@ -8,6 +8,12 @@
 
 **Input**: GitHub issue #532, "Agent-created worktrees should carry the issue reference".
 
+## Clarifications
+
+### Session 2026-10-12
+
+- Q: Should a result for a literal `branch` with no issue tag carry a one-line no-ticket hint, or stay unchanged? → A: Stay unchanged (guidance only). _(agent-resolved: specs/532-worktree-issue-reference/spec.md#Requirements, FR-004, SC-003 and Assumptions: existing call shapes produce the same result, this feature is guidance, docs and tests)_
+
 ## Background
 
 `create_worktree` on the agent tool server already accepts `type`, `ticket`, `name` and
@@ -122,8 +128,8 @@ matters.
   the consequence of omitting it; the worktrees-and-sessions naming section MUST mention that
   agent-created worktrees follow the same convention.
 - **FR-009**: When a literal `branch` is given and the resulting worktree has no issue tag, the
-  result MUST stay unchanged unless clarified otherwise [NEEDS CLARIFICATION: should the result
-  carry a one-line hint that no ticket was recorded, or stay unchanged (guidance only)?]
+  result MUST stay unchanged: no hint, no warning, no extra field. The rule reaches callers through
+  the description, the `ticket` schema text, the `initialize` instructions and the user guide only.
 
 ### Key Entities
 
