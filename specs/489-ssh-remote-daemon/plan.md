@@ -155,6 +155,6 @@ untouched.
 | Deviation | Why | Alternative rejected because |
 |---|---|---|
 | `Reconnecting` added and `Unreachable` redefined for every runtime (delta to 491 FR-009/contract) | Spec FR-008 requires it; a lost established connection and a never-established one must differ for FR-019 | Remote-only state would fork the shared `DaemonState` and the Settings badge logic |
-| Local runtimes keep retrying silently after a failed start while shown `Unreachable` | 491's SC-003 recovery (a daemon that comes up later is picked up) must not regress | Stopping local retries is a behaviour change outside this feature; remote actors follow the spec's definition exactly (R7) |
+| Local runtimes keep retrying silently after a failed start while shown `Unreachable` (spec FR-008 scoped to SSH runtimes for this clause) | 491's SC-003 recovery (a daemon that comes up later is picked up) must not regress | Stopping local retries is a behaviour change outside this feature; remote actors follow the spec's definition exactly (R7) |
 | Remote project identity is a namespaced path, not a new field on `Project` (R5) | Every path-keyed map (state files, catalog reconcile, sessions) keeps working with no signature change | A `host` field threads through ~every project API and persisted shape |
 | Helper subcommands and a status file in the daemon crate | Replacement must be decidable for a daemon whose protocol this client cannot speak (Q2) | Process-tree inspection is OS-specific and unreliable; a wire query needs a matching version, which is the failure case |

@@ -36,10 +36,12 @@ authentication story); a new daemon stdio mode that is itself the daemon (a daem
 connection would die with it, defeating FR-006).
 **Endpoint risk**: `endpoint::resolve()` picks `$XDG_RUNTIME_DIR/micold` or `/tmp/micold-<uid>`, so a
 non-login `ssh` command and a graphical login could resolve different sockets and run two daemons for
-one user. Mitigation, in tasks: the helper always resolves through the same function and `remote
-status` reports the endpoint it used; a test starts the daemon under both environments and asserts one
-daemon is reused; if they differ the helper pins the `/tmp/micold-<uid>` form for remote starts
-(an explicit, documented choice), recorded in the daemon's state endpoint field.
+one user. Decision: `remote bridge`, `status`, `stop` and the daemon start the helper launches always resolve
+the endpoint with the pinned `/tmp/micold-<uid>` form (the `XDG_RUNTIME_DIR` branch ignored), recorded
+in the status file; a graphical login's daemon started by the app on the same host then resolves the
+same socket only if it also lacks `XDG_RUNTIME_DIR`, so a test starts the daemon under both
+environments and asserts one daemon is reused (if not, local starts on that host adopt the pinned
+form as well, the documented fallback).
 
 ## R3. The client copies its own matching build; selection of the artefact
 
@@ -56,10 +58,22 @@ daemon reports `no matching daemon build for <os>-<arch>` (spec edge case: unsup
 architecture reports why). A macOS or Windows client cannot supply a Linux daemon from its own
 binary, and Linux remotes are the common case, so the same-platform rule alone would make User Story 1
 unusable on two of three clients (FR-018).
+**Support matrix** (remote OS-arch by client): `linux-x86_64` remote works from every client (same
+build on Linux x86_64; the bundled artefact on macOS and Windows). `linux-aarch64` remote works only
+from a Linux aarch64 client. A macOS remote works only from a macOS client of the same architecture.
+Every other pair reports `NoMatchingBuild` naming the remote's `<os>-<arch>` and is a documented limit;
+the spec's FR-018 is read as client-OS equivalence for the supported remote set (Linux x86_64 and
+same-platform pairs), not as a build for every remote architecture. Artefact selection is a pure function
+in `ssh/provision.rs`, unit-tested per client platform with a table of (client, remote) pairs.
+**glibc floor**: the shipped Linux artefact for a non-Linux client is built `x86_64-unknown-linux-musl`
+(static), so the remote needs no particular glibc; a Linux client sends its own gnu build, which runs on
+the same family it was built on, and a failed exec reports `no matching daemon build`/start failure with
+the reason.
 **Work item**: package a `linux-x86_64` daemon (the CI image build already cross-targets
 `x86_64-unknown-linux-gnu`) into the macOS and Windows packages. It is separable: the transport and
 everything else works on a Linux client without it, and tasks sequence it last. It adds the daemon's
-size to those packages (recorded in the ledger for the owner to confirm).
+size to those packages (recorded in the ledger for the owner to confirm). A CI check asserts the macOS
+and Windows packages contain `remote-daemons/linux-x86_64/micold-daemon` once the item lands.
 **Rejected**: remote downloads the release (needs network and a release URL, contradicts the answer);
 requires a pre-installed daemon on `PATH` (contradicts FR-005 "without running anything by hand");
 `scp`/`sftp` (a second tool and protocol, `sftp` subsystem often disabled; `sh` and `cat` are always
@@ -155,6 +169,10 @@ being stopped surfaces as `AuthRefused` with the agent hint, never silently.
 **Rejected**: bundling OpenSSH (licence and update burden for a client the user already has).
 
 ## R10. Test stand-in: rootless `sshd` on loopback, a fault proxy, a stale-daemon fixture
+
+**Fixture rule**: the stale-daemon version suffix is read only under the `ssh-real-runtime` feature
+(a unit test asserts a default build ignores `MICOLD_FIXTURE_VERSION_SUFFIX`, so it never reaches
+`BUILD_FINGERPRINT` in a release); tasks pick the mechanism by measuring, with this guard mandatory.
 
 **Decision**: `ssh_real_support` starts `sshd -D -f <generated config>` as the test user on an
 ephemeral loopback port with generated host and client keys, `StrictModes no`, `UsePAM no`,

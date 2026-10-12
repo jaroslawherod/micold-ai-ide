@@ -70,12 +70,28 @@ string (property test). `Project::locality() -> Locality::{Local, Remote(DaemonI
 A worktree whose project has `Locality::Remote(d)`: its binding is `Binding::Bound(d)` always, written
 at creation; shown with `RemoteLocation::path` and the daemon's name. No new persisted field.
 
-## Local-filesystem consumers to guard with `Locality` (audit, done in tasks by grep)
-`shell/workspace.rs` (availability, canonicalise), `shell/changes_watch.rs`, `shell/runs_watch.rs`,
-`shell/pr_status.rs`, `shell/env_include.rs`, `shell/drops.rs`, `shell/link_opener.rs`,
-`features/changes.rs`, reveal-in-file-manager, `core/store.rs` (state-file id from the identity path
-works unchanged). Each either asks the daemon, is hidden, or reports "not on this computer"; none may
-touch a local path built from a remote identity.
+## Local-filesystem consumers to guard with `Locality` (audit)
+**Safe by construction**: `micold_core::project::canonicalize_best_effort` (project.rs:115) returns a
+`micold-remote://` identity verbatim (no fs call); a core unit test pins it. Every caller below that
+only canonicalises is then safe; the others need the disposition shown. Tasks re-run the grep
+(`canonicalize_best_effort`, `.exists()`, `.is_dir()`, `metadata`, `read_dir` over project or worktree
+paths) and add any site found to this table.
+
+| Site (grep-derived) | Disposition for `Locality::Remote` |
+|---|---|
+| `client/features/project.rs` (~474), `features/session.rs` (~701, ~779), `app.rs` (~641) `canonicalize_best_effort` | verbatim identity (by construction) |
+| `shell/workspace.rs` (availability) | availability follows the daemon's state |
+| `shell/changes_watch.rs`, `shell/runs_watch.rs`, `features/changes.rs` | no local watcher; ask the daemon / hidden |
+| `shell/pr_status.rs`, `shell/env_include.rs` | hidden or asks the daemon (runs on the host) |
+| `shell/drops.rs`, `shell/link_opener.rs`, `shell/links.rs` (~121-132) | "not on this computer" |
+| `shell/sandbox.rs` (~121) | not applied client-side; the daemon's host decides |
+| `core/git.rs`, `core/worktree.rs`, `core/attach.rs`, `core/provider.rs` | run only in the daemon, on the remote path after unwrapping at the boundary; never given an identity |
+| reveal-in-file-manager | hidden |
+| `core/store.rs` | state-file id from the identity path works unchanged |
+
+None may touch a local path built from a remote identity. Remote identities are never derived with
+`Path::join`/`parent`; code builds them through `RemoteLocation`, and the round-trip test runs with a
+Windows-separator parameter.
 
 ## DaemonView (projection)
 Unchanged shape (491 FR-015). `runtime_label` = "Remote over SSH"; `endpoint` = `user@host:port`
