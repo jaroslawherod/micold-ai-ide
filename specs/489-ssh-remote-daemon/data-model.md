@@ -82,7 +82,7 @@ paths) and add any site found to this table.
 
 | Site (grep-derived) | Disposition for `Locality::Remote` |
 |---|---|
-| `client/features/project.rs` (~474), `features/session.rs` (~701, ~779), `app.rs` (~641) `canonicalize_best_effort` | verbatim identity (by construction) |
+| `client/features/project.rs` (~474), `features/session.rs` (~701, ~779), `app.rs` (~641) `canonicalize_best_effort` | verbatim identity (relies on the project.rs early return above) |
 | `shell/workspace.rs` (availability) | availability follows the daemon's state |
 | `shell/changes_watch.rs`, `shell/runs_watch.rs`, `features/changes.rs` | no local watcher; ask the daemon / hidden |
 | `shell/pr_status.rs`, `shell/env_include.rs` | hidden or asks the daemon (runs on the host) |

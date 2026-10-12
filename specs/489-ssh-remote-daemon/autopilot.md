@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #489
 - **Worktree branch**: feat/489_run-the-session-daemon-on-a-remote-host-over-ssh
 - **Started**: 2026-10-12
-- **Phase**: plan (review round 3 pending)
-- **Next step**: Continue plan unit from Handover: review round 1, fixes, then tasks unit
+- **Phase**: plan (reviewed, clean)
+- **Next step**: tasks unit
 
 ## Pull requests
 
@@ -36,7 +36,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | Spec | 1 | ba77a079ad4169573eddc31e57ce119656d81c5f:13165b3a9e4938a42528aae5df288475aa63ddae | CHANGES: 4 MAJOR (reconnecting state, timeout value, backoff cap, session state while disconnected), all fixed |
 | Spec | 2 | 0c21e1c00af41296ea2daf2c724c93e197d42c98:13165b3a9e4938a42528aae5df288475aa63ddae | CHANGES: 1 MAJOR (canonicalize_best_effort is a lexical walk, not verbatim: now a required change), 3 MINOR; fixed |
-| Plan | 3 | dfcf4d63a3a9a5e42df4dfb44d48c741b07de2e9:e022a929bab01046ada386829ee3f6fa1e62e347 | pending |
+| Plan | 3 | dfcf4d63a3a9a5e42df4dfb44d48c741b07de2e9:e022a929bab01046ada386829ee3f6fa1e62e347 | CLEAN (1 MINOR fixed) |
 | Plan | 1 | 9a5ff7ae39fe35fcffdb2f2c26b8dcbe452da2be:c33ad03cfb1fec6ccb1c1856d766226a886e57b6 | CHANGES: 3 MAJOR (local Unreachable vs FR-008; R5 audit list incomplete; R3 cross-OS matrix/glibc), 3 MINOR; all fixed |
 | Plan | 2 | 8194452ff2f9a451e06c04598eebc2d0f00299a9:2c9c6abed776f4cdbdf710d33f6c9bea62dd5df1 | pending |
 
@@ -47,13 +47,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-Plan unit 489, written at over 150k context.
-- Done: plan.md, research.md (R1-R13), data-model.md, contracts/ssh-transport.md, contracts/remote-daemon.md,
-  quickstart.md written and committed (not pushed; the branch was rebased onto origin/main by branch-start.sh, so a push needs `--force-with-lease`).
-- Review round 1 returned CHANGES after the handover (see Review rounds); fix F1-F6, do not re-dispatch round 1. If its
-  notification never reaches the orchestrator, dispatch a fresh round 1 (full, session model) with rubrics/plan.md; it does not count against the round limit twice.
-- Next: act on the review (fix BLOCKER/MAJOR, re-review scoped on sonnet), then set Next step to `tasks unit`. Open no PR.
-- Watch in review: R3 cross-OS daemon artefact (macOS/Windows clients), R7 local-runtime Unreachable semantics, R5 remote project identity audit.
+None.
 
 ## Open escalation
 
