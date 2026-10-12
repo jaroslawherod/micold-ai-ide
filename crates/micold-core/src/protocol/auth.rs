@@ -24,6 +24,8 @@ use std::path::{Path, PathBuf};
 
 use uuid::Uuid;
 
+use super::hashing::hex;
+
 /// Where the daemon reads its token from inside the container. Matches the `Containerfile`'s
 /// `MICOLD_TOKEN_PATH`, and is the mount point the runtime attaches the host file to.
 pub const CONTAINER_TOKEN_PATH: &str = "/run/micold/token";
@@ -134,14 +136,6 @@ fn write_owner_only(path: &Path, contents: &str) -> io::Result<()> {
     // Windows has no mode bits. The file inherits the per-user state directory's ACL, which is the
     // same protection the named pipe already relies on.
     fs::write(path, contents)
-}
-
-fn hex(bytes: &[u8]) -> String {
-    let mut out = String::with_capacity(bytes.len() * 2);
-    for b in bytes {
-        out.push_str(&format!("{b:02x}"));
-    }
-    out
 }
 
 #[cfg(test)]
