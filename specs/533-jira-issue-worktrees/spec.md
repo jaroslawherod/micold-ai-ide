@@ -182,8 +182,8 @@ A project that has both a GitHub remote and a Jira connection lets the user choo
 
 ## Assumptions
 
-- **GitHub issues stay outside the switch (decided here, FR-001 stands as the rule).** The existing GitHub issue picker keeps working as it does, because it reads only through the user's own `gh` sign-in, would vanish for every current user on upgrade if gated, and the issue's acceptance criteria do not require it. A follow-up brings it under an integrations switch with a migration. [NEEDS CLARIFICATION: confirm leaving the GitHub issue picker ungated in this feature. Recommended: yes, ungated, with the follow-up. Alternative: gate it, on for settings files that predate the switch and off on a new install.]
-- **Jira Data Center is out of scope (decided here, FR-023).** It signs in differently, speaks an older API and cannot be exercised without an instance. [NEEDS CLARIFICATION: confirm Jira Cloud only. Recommended: yes; Data Center and Server in a later feature.]
+- **GitHub issues stay outside the switch (decided by user, FR-001 stands as the rule).** The existing GitHub issue picker keeps working as it does, because it reads only through the user's own `gh` sign-in, would vanish for every current user on upgrade if gated, and the issue's acceptance criteria do not require it. A follow-up brings it under an integrations switch with a migration.
+- **Jira Data Center is out of scope (decided by user, FR-023).** It signs in differently, speaks an older API and cannot be exercised without an instance.
 - Credentials are an account email plus an API token (Atlassian's documented sign-in for the Cloud REST API); OAuth is out of scope.
 - No operating-system keychain is used: the app has no keychain integration, so "the way the app stores other secrets" is the owner-only file of `owner_only.rs`.
 - The connection is edited in Settings for the project open in the window, because a project is where the connection lives; the switch itself is app-wide.
@@ -197,3 +197,10 @@ A project that has both a GitHub remote and a Jira connection lets the user choo
 - Putting the GitHub issue picker behind the switch (follow-up, see Assumptions).
 - A shared **Integrations** area in Settings that lists every integration's switch, and moving the existing pull request status switch into it (follow-up with the GitHub gating).
 - Showing Jira issue status on worktree rows or in the sidebar.
+
+## Clarifications
+
+### Session 2026-10-12
+
+- Q: Does the GitHub issue picker move under the opt-in integrations switch in this feature? -> A: No, it stays ungated; a follow-up brings it under the switch with a migration. _(decided by user)_
+- Q: Is Jira Data Center in scope? -> A: No, Jira Cloud only; Data Center and Server in a later feature. _(decided by user)_

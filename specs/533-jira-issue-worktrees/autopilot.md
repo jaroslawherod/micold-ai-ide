@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #533
 - **Worktree branch**: feat/533_create-worktrees-from-jira-issues
 - **Started**: 2026-10-12
-- **Phase**: spec
-- **Next step**: clarify unit: ask the two [NEEDS CLARIFICATION] markers in spec.md Assumptions
+- **Phase**: clarify
+- **Next step**: plan unit
 
 ## Pull requests
 
@@ -45,12 +45,7 @@ None.
 
 ## Open escalation
 
-Clarify round 1 (category: scope decision the issue leaves to the spec):
-
-1. GitHub issue picker outside the opt-in switch in this feature? Recommended: ungated, follow-up migrates it. Alternative: gate it (on for settings files predating the switch, off on new install).
-2. Jira Cloud only? Recommended: yes; Data Center and Server later. Alternative: also Data Center (PAT sign-in, v2 API).
-
-Next step on answer: replace the two [NEEDS CLARIFICATION] markers in spec.md Assumptions, add a `## Clarifications` session with `_(decided by user)_`, commit, finish (answers only confirm existing FR-001 and FR-023, so no further round).
+None.
 
 ## Follow-ups not done
 
