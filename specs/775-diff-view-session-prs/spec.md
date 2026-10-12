@@ -64,7 +64,7 @@ When a session opens, merges or closes a PR while the diff view is open, the lis
 - GitHub unreachable or rate limited: the last known list stays shown, marked as possibly stale; it never blocks the existing changes.
 - Several sessions share one worktree: each shows the same PR list; one read serves them (Principle II).
 - Several PRs for one branch (reopened, re-created after close): all are listed, newest first.
-- A PR with a very large diff: it is handled as the existing view handles large diffs.
+- A PR with a very large diff: a file above the view's large-file limit is handled as the existing view handles large files; a PR GitHub itself refuses to diff (over 300 files or 20 000 changed lines) shows one "too large to show here" line with the PR address, never a notice.
 - Detached HEAD, a worktree whose branch was renamed, or the project root (no branch of its own in the Changes pane): no branch to match, so no PR entries.
 - PR status setting off: no PR section (FR-014).
 - Base branch changed or force-pushed head: the shown diff matches the PR's current base...head.
