@@ -53,10 +53,10 @@
 //! [`crate::app::State::set_worktrees`] explains why the obvious shorthand is wrong.
 
 use crate::app::Message;
+use crate::floating_surface;
 use crate::overlay::registry::Registered;
-use crate::overlay::{DismissalRules, FloatingSurface, SurfaceId};
+use crate::overlay::SurfaceId;
 use micold_core::naming::{display_name, parse_tags, Tag};
-use micold_core::overlay::Layer;
 use micold_core::worktree::{Worktree, WorktreeStatus};
 
 /// What this feature remembers (feature 028, contract S1).
@@ -191,20 +191,7 @@ impl WorktreeContextMenu {
     pub const ID: SurfaceId = SurfaceId::new("worktree_menu");
 }
 
-impl FloatingSurface for WorktreeContextMenu {
-    fn id(&self) -> SurfaceId {
-        Self::ID
-    }
-
-    fn layer(&self) -> Layer {
-        Layer::ContextMenu
-    }
-
-    fn dismissal(&self) -> DismissalRules {
-        DismissalRules::for_layer(Layer::ContextMenu)
-            .cancelled_by(Message::Worktree(Msg::MenuDismissed))
-    }
-}
+floating_surface!(WorktreeContextMenu, id: Self::ID, layer: ContextMenu, cancelled_by: Message::Worktree(Msg::MenuDismissed));
 
 impl Registered for WorktreeContextMenu {
     fn open_in(state: &crate::app::State) -> Option<Self> {
@@ -220,20 +207,7 @@ impl Registered for WorktreeContextMenu {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ConfirmWorktreeDeleteDialog;
 
-impl FloatingSurface for ConfirmWorktreeDeleteDialog {
-    fn id(&self) -> SurfaceId {
-        SurfaceId::new("confirm_worktree_delete")
-    }
-
-    fn layer(&self) -> Layer {
-        Layer::Dialog
-    }
-
-    fn dismissal(&self) -> DismissalRules {
-        DismissalRules::for_layer(Layer::Dialog)
-            .cancelled_by(Message::Worktree(Msg::DeleteCancelled))
-    }
-}
+floating_surface!(ConfirmWorktreeDeleteDialog, id: SurfaceId::new("confirm_worktree_delete"), layer: Dialog, cancelled_by: Message::Worktree(Msg::DeleteCancelled));
 
 impl Registered for ConfirmWorktreeDeleteDialog {
     fn open_in(state: &crate::app::State) -> Option<Self> {
@@ -249,20 +223,7 @@ impl Registered for ConfirmWorktreeDeleteDialog {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RenameWorktreeDialog;
 
-impl FloatingSurface for RenameWorktreeDialog {
-    fn id(&self) -> SurfaceId {
-        SurfaceId::new("rename_worktree")
-    }
-
-    fn layer(&self) -> Layer {
-        Layer::Dialog
-    }
-
-    fn dismissal(&self) -> DismissalRules {
-        DismissalRules::for_layer(Layer::Dialog)
-            .cancelled_by(Message::Worktree(Msg::RenameCancelled))
-    }
-}
+floating_surface!(RenameWorktreeDialog, id: SurfaceId::new("rename_worktree"), layer: Dialog, cancelled_by: Message::Worktree(Msg::RenameCancelled));
 
 impl Registered for RenameWorktreeDialog {
     fn open_in(state: &crate::app::State) -> Option<Self> {

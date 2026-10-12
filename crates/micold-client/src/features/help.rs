@@ -24,9 +24,9 @@
 //! [`Outcome`](crate::features::Outcome); nothing about what the menu *contains* is stored.
 
 use crate::app::Message;
+use crate::floating_surface;
 use crate::overlay::registry::Registered;
-use crate::overlay::{DismissalRules, FloatingSurface, SurfaceId};
-use micold_core::overlay::Layer;
+use crate::overlay::SurfaceId;
 
 /// What this feature remembers (feature 028, contract S1).
 ///
@@ -77,19 +77,7 @@ impl HelpMenu {
     pub const ID: SurfaceId = SurfaceId::new("help_menu");
 }
 
-impl FloatingSurface for HelpMenu {
-    fn id(&self) -> SurfaceId {
-        Self::ID
-    }
-
-    fn layer(&self) -> Layer {
-        Layer::Popover
-    }
-
-    fn dismissal(&self) -> DismissalRules {
-        DismissalRules::for_layer(Layer::Popover).cancelled_by(Message::Help(Msg::MenuToggled))
-    }
-}
+floating_surface!(HelpMenu, id: Self::ID, layer: Popover, cancelled_by: Message::Help(Msg::MenuToggled));
 
 impl Registered for HelpMenu {
     fn open_in(state: &crate::app::State) -> Option<Self> {
@@ -104,19 +92,7 @@ impl Registered for HelpMenu {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct AboutDialog;
 
-impl FloatingSurface for AboutDialog {
-    fn id(&self) -> SurfaceId {
-        SurfaceId::new("about")
-    }
-
-    fn layer(&self) -> Layer {
-        Layer::Dialog
-    }
-
-    fn dismissal(&self) -> DismissalRules {
-        DismissalRules::for_layer(Layer::Dialog).cancelled_by(Message::Help(Msg::AboutClosed))
-    }
-}
+floating_surface!(AboutDialog, id: SurfaceId::new("about"), layer: Dialog, cancelled_by: Message::Help(Msg::AboutClosed));
 
 impl Registered for AboutDialog {
     fn open_in(state: &crate::app::State) -> Option<Self> {

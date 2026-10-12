@@ -52,12 +52,12 @@
 //! them the user is looking at and what is open over it.
 
 use crate::app::Message;
+use crate::floating_surface;
 use crate::overlay::registry::Registered;
-use crate::overlay::{DismissalRules, FloatingSurface, SurfaceId};
+use crate::overlay::SurfaceId;
 use micold_core::cli_reason::{
     explain_one, start_refusal, start_refusal_unknown, AttemptDir, Explanation, Place, SpawnEnv,
 };
-use micold_core::overlay::Layer;
 use micold_core::project::canonicalize_best_effort;
 use micold_core::session::{AiCli, Session, SessionId, SessionLocation, ShellInstanceId};
 use micold_core::terminal::LaunchMode;
@@ -907,20 +907,7 @@ pub struct SessionMenu {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SessionContextMenu;
 
-impl FloatingSurface for SessionContextMenu {
-    fn id(&self) -> SurfaceId {
-        SurfaceId::new("session_menu")
-    }
-
-    fn layer(&self) -> Layer {
-        Layer::ContextMenu
-    }
-
-    fn dismissal(&self) -> DismissalRules {
-        DismissalRules::for_layer(Layer::ContextMenu)
-            .cancelled_by(Message::Session(Msg::MenuDismissed))
-    }
-}
+floating_surface!(SessionContextMenu, id: SurfaceId::new("session_menu"), layer: ContextMenu, cancelled_by: Message::Session(Msg::MenuDismissed));
 
 impl Registered for SessionContextMenu {
     fn open_in(state: &crate::app::State) -> Option<Self> {
@@ -937,20 +924,7 @@ impl Registered for SessionContextMenu {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TerminalContextMenu;
 
-impl FloatingSurface for TerminalContextMenu {
-    fn id(&self) -> SurfaceId {
-        SurfaceId::new("terminal_context_menu")
-    }
-
-    fn layer(&self) -> Layer {
-        Layer::ContextMenu
-    }
-
-    fn dismissal(&self) -> DismissalRules {
-        DismissalRules::for_layer(Layer::ContextMenu)
-            .cancelled_by(Message::Session(Msg::TerminalContextMenuClosed))
-    }
-}
+floating_surface!(TerminalContextMenu, id: SurfaceId::new("terminal_context_menu"), layer: ContextMenu, cancelled_by: Message::Session(Msg::TerminalContextMenuClosed));
 
 impl Registered for TerminalContextMenu {
     fn open_in(state: &crate::app::State) -> Option<Self> {
@@ -972,20 +946,7 @@ impl Registered for TerminalContextMenu {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ShellInstanceMenu;
 
-impl FloatingSurface for ShellInstanceMenu {
-    fn id(&self) -> SurfaceId {
-        SurfaceId::new("shell_instance_menu")
-    }
-
-    fn layer(&self) -> Layer {
-        Layer::ContextMenu
-    }
-
-    fn dismissal(&self) -> DismissalRules {
-        DismissalRules::for_layer(Layer::ContextMenu)
-            .cancelled_by(Message::Session(Msg::ShellInstanceMenuClosed))
-    }
-}
+floating_surface!(ShellInstanceMenu, id: SurfaceId::new("shell_instance_menu"), layer: ContextMenu, cancelled_by: Message::Session(Msg::ShellInstanceMenuClosed));
 
 impl Registered for ShellInstanceMenu {
     fn open_in(state: &crate::app::State) -> Option<Self> {
@@ -1011,20 +972,7 @@ pub struct PendingLinkOpen {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ConfirmLinkOpenDialog;
 
-impl FloatingSurface for ConfirmLinkOpenDialog {
-    fn id(&self) -> SurfaceId {
-        SurfaceId::new("confirm_link_open")
-    }
-
-    fn layer(&self) -> Layer {
-        Layer::Dialog
-    }
-
-    fn dismissal(&self) -> DismissalRules {
-        DismissalRules::for_layer(Layer::Dialog)
-            .cancelled_by(Message::Session(Msg::LinkOpenDeclined))
-    }
-}
+floating_surface!(ConfirmLinkOpenDialog, id: SurfaceId::new("confirm_link_open"), layer: Dialog, cancelled_by: Message::Session(Msg::LinkOpenDeclined));
 
 impl Registered for ConfirmLinkOpenDialog {
     fn open_in(state: &crate::app::State) -> Option<Self> {
@@ -1040,20 +988,7 @@ impl Registered for ConfirmLinkOpenDialog {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ConfirmSessionRemoveDialog;
 
-impl FloatingSurface for ConfirmSessionRemoveDialog {
-    fn id(&self) -> SurfaceId {
-        SurfaceId::new("confirm_session_remove")
-    }
-
-    fn layer(&self) -> Layer {
-        Layer::Dialog
-    }
-
-    fn dismissal(&self) -> DismissalRules {
-        DismissalRules::for_layer(Layer::Dialog)
-            .cancelled_by(Message::Session(Msg::RemoveCancelled))
-    }
-}
+floating_surface!(ConfirmSessionRemoveDialog, id: SurfaceId::new("confirm_session_remove"), layer: Dialog, cancelled_by: Message::Session(Msg::RemoveCancelled));
 
 impl Registered for ConfirmSessionRemoveDialog {
     fn open_in(state: &crate::app::State) -> Option<Self> {
@@ -2435,20 +2370,7 @@ pub fn start_menu_dismissed(state: &mut crate::app::State) {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SessionStartMenu;
 
-impl FloatingSurface for SessionStartMenu {
-    fn id(&self) -> SurfaceId {
-        SurfaceId::new("session_start_menu")
-    }
-
-    fn layer(&self) -> Layer {
-        Layer::ContextMenu
-    }
-
-    fn dismissal(&self) -> DismissalRules {
-        DismissalRules::for_layer(Layer::ContextMenu)
-            .cancelled_by(Message::Session(Msg::StartMenuDismissed))
-    }
-}
+floating_surface!(SessionStartMenu, id: SurfaceId::new("session_start_menu"), layer: ContextMenu, cancelled_by: Message::Session(Msg::StartMenuDismissed));
 
 impl Registered for SessionStartMenu {
     fn open_in(state: &crate::app::State) -> Option<Self> {

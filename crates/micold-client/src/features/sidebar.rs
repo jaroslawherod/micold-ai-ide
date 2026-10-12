@@ -46,10 +46,10 @@
 //! rendered tree and is not this field; the two are unrelated despite the shared name.
 
 use crate::features::worktree::worktree_tags;
+use crate::floating_surface;
 use crate::overlay::registry::Registered;
-use crate::overlay::{DismissalRules, FloatingSurface, SurfaceId};
+use crate::overlay::SurfaceId;
 use micold_core::naming::{ConventionalType, Tag};
-use micold_core::overlay::Layer;
 use micold_core::pull_request::{CheckStatus, PrState, PullRequestStatus, ReviewState};
 use micold_core::runs::{GroupId, RunGroup, RunStatus};
 use micold_core::session::{AiCli, Session, SessionId, SessionLocation};
@@ -1254,20 +1254,7 @@ impl SidebarFilterPanel {
     pub const ID: SurfaceId = SurfaceId::new("sidebar_filter");
 }
 
-impl FloatingSurface for SidebarFilterPanel {
-    fn id(&self) -> SurfaceId {
-        Self::ID
-    }
-
-    fn layer(&self) -> Layer {
-        Layer::Popover
-    }
-
-    fn dismissal(&self) -> DismissalRules {
-        DismissalRules::for_layer(Layer::Popover)
-            .cancelled_by(crate::app::Message::Sidebar(Msg::FilterMenuToggled))
-    }
-}
+floating_surface!(SidebarFilterPanel, id: Self::ID, layer: Popover, cancelled_by: crate::app::Message::Sidebar(Msg::FilterMenuToggled));
 
 impl Registered for SidebarFilterPanel {
     fn open_in(state: &crate::app::State) -> Option<Self> {
