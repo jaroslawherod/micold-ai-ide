@@ -182,8 +182,8 @@ assert each hit is either gone or sits under a superseded marker naming this fea
   session.
 - **FR-007**: Handling of the sub-agent lifecycle hooks MUST NOT change the origin session's
   activity state: a sub-agent finishing is not the end of the origin's turn.
-- **FR-008**: The daemon MUST ignore, without error, hook payloads that are malformed or whose
-  origin session is unknown to it, and MUST NOT let any such payload create a catalog entry or a
+- **FR-008**: The daemon MUST ignore, without error, hook payloads that are malformed, and the
+  receiver MUST refuse any request for a session it does not know, and MUST NOT let any such payload create a catalog entry or a
   user session. A valid payload for a known origin stores the relationship keyed by the agent
   session's id and, by itself, creates no catalog entry.
 - **FR-009**: The worktree provenance records and their one-time migration MUST no longer decide
