@@ -36,10 +36,9 @@ and layout gates (`crates/micold-client/tests/`). The rendered pass is quickstar
 
 | id | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U1 | A self-referencing origin is rejected | FR-009 | example | PENDING | |
+| U1 | A self-referencing origin is rejected; an unknown candidate is accepted only when provider-reported | FR-009, R4 | example | PENDING | |
 | U2 | An origin in another project or worktree is rejected; same location accepted | FR-009 | example | PENDING | |
 | U3 | An origin whose chain reaches the child is rejected; a chain of the bounded length that does not is accepted | FR-009 | example | PENDING | |
-| U4 | A second, different origin does not replace the first (`Ok(false)`); the same origin is idempotent | FR-010 | example | PENDING | |
 | U12 | `SessionTree` shows each session once, nests to any depth, breaks a cycle at the first repeat, keeps catalog order, and classifies an absent origin Pending or Removed by status | FR-003, FR-008, FR-016, A2 | example | PENDING | |
 
 ### `crates/micold-core/src/store.rs`, `protocol`, `mcp/tools.rs`
@@ -54,6 +53,7 @@ and layout gates (`crates/micold-client/tests/`). The rendered pass is quickstar
 
 | id | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
+| U4 | `record_origin` on a session with an origin returns `Ok(false)` and keeps the first; the same origin is idempotent | FR-010 | example | PENDING | |
 | U7 | `create_session` for the caller's own worktree records the caller as origin in the same persist | FR-019 | example | PENDING | |
 | U8 | `create_session` for another worktree records no origin | FR-009 | example | PENDING | |
 | U10 | `Catalog::load` keeps origins; a live child restores interrupted-resumable under its origin | FR-006 | example | PENDING | |

@@ -108,7 +108,7 @@ specs/551-session-spawn-tree/
 crates/micold-core/src/
 ├── origin.rs            # NEW  validate_origin, SessionTree, OriginStatus (pure)
 ├── session.rs           # Session.origin
-├── store.rs             # StoredSession.origin (serde default, skip if none)
+├── store.rs             # StoredSession.origin + origin_rejected (serde default, skip if none/false)
 ├── provider.rs          # AiCliProvider::reported_origin (default None) + confirmed readers
 ├── settings.rs          # Settings.folded_origins (additive)
 ├── protocol/{messages,version}.rs   # SessionSummary.origin, PROTOCOL_VERSION 41

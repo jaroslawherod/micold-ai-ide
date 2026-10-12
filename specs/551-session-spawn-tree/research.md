@@ -47,7 +47,7 @@ used by every write path. Rejects: self, a candidate not in the same project and
 already has an origin (FR-010; the first stands, `record_origin` returns `Ok(false)`).
 A candidate not yet in the catalog is accepted only if reported by a provider reader (R3) and kept
 as pending; the full check (same worktree, no cycle) then runs when the origin appears, on the
-next discovery pass. If it fails the stored origin is cleared once (the only mutation of an origin,
+next discovery pass. If it fails the stored origin is cleared once and `StoredSession.origin_rejected` is set so discovery skips it afterwards (the only mutation of an origin,
 allowed because the fact was never valid) and the session is plain top-level without a marker
 (FR-009). This makes event order irrelevant (FR-016).
 Alternatives rejected: validate in the client (several writers and windows).
