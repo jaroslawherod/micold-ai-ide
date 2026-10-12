@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/775_diff-view-should-show-prs-created-within-sessions
 - **Started**: 2026-10-12
 - **Phase**: clarify
-- **Next step**: Run the clarify unit on specs/775-diff-view-session-prs/spec.md (1 open [NEEDS CLARIFICATION])
+- **Next step**: Run the clarify unit on specs/775-diff-view-session-prs/spec.md (1 open [NEEDS CLARIFICATION]: deleted-head PR diff source)
 
 ## Pull requests
 
@@ -31,7 +31,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
-| Spec | 1 | 31e1f27609df7166eb5bf34003062c7df0e2b0b6:13165b3a9e4938a42528aae5df288475aa63ddae | pending |
+| Spec | 1 | 31e1f276:13165b3a (orig) | CHANGES: 2 MAJOR (US2 s3 untestable; PR status setting unspecified), 3 MINOR; all fixed |
+| Spec | 2 | 33713142e3fdd0cdca9affa9cea75fea057f1713:1206eb1f207ab7e71834248b5788b51af061713b | CLEAN (1 MINOR fixed) |
 
 ## Declined review findings
 
