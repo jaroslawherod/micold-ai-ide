@@ -14,4 +14,3 @@
 
 ## Notes
 
-- Two markers are open by design; they become clarify questions.
