@@ -21,6 +21,16 @@
   (created without a definition, attached with nothing to resume, or its session deleted), and
   then takes exactly one, defined once at that moment.
 
+## Clarifications
+
+### Session 2026-10-12
+
+- Q: Can an agent resume a provider session into a worktree (FR-008b), and does that need a
+  confirmation? → A: No agent path exists: resuming a listed provider session is done in the app
+  only (the tool server lists them with `list_resumable_sessions` and attaches worktrees, it never
+  resumes), so FR-008b is always a person's action and always asks for confirmation. Resuming into
+  an empty worktree needs none _(agent-resolved: docs/user-guide/agent-tools.md#What the assistant can do, `list_resumable_sessions`; specs/582-attach-provider-worktrees-sessions/spec.md#FR-008)_
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - A second session in a worktree is refused (Priority: P1)
@@ -173,7 +183,8 @@ data is lost, and no further session can be added.
   no two processes of it run, and no confirmation is asked beyond what restart asks today.
 - **FR-008b**: Resuming a provider session into a worktree that has a session MUST replace that
   session's record with the resumed one, stop the old process first, and require the user's
-  confirmation when a person asked. It never adds a second session.
+  confirmation. Only a person can ask for it (no tool resumes a provider session). It never adds
+  a second session.
 - **FR-009**: `start_session` on a session that is starting, running or restarting MUST stay a
   no-op that reports success; on a stopped one it MUST start that same session.
 - **FR-010**: A worktree with no session (created without a definition, attached with nothing to
