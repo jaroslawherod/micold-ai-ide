@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/552_replace-name-based-hiding-of-agent-work-with-the
 - **Started**: 2026-10-12
 - **Phase**: tasks
-- **Next step**: analyze, tasks review, gate, design PR
+- **Next step**: milestone M1 after design PR merges
 
 ## Pull requests
 
@@ -44,6 +44,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Plan | 1 | f1bf590d11c47941fedf49c5d8d3f426b56a42b7:9122c7468c3de1adb70936b5209542842bf94f0a | CHANGES: 1 MAJOR, 3 MINOR (all fixed: spec edge cases and entity amended to the R1 model, test rows, stale-run rule, T001 capture first) |
 | Plan | 2 | 9a3327187d96db4c03a1ac57711a4e95505eda13:1fc077b2c21c4f566e96e7ff6235834474d828af | CLEAN (1 MINOR, fixed, prose only) |
 | Tasks | 1 | f33bebd86a11c339e1406fdfe83e8d36a17db03d:b55b6b77658c2c01450c00ef3ba20b6f0d2c81aa | CHANGES: 1 BLOCKER, 1 MAJOR, 3 MINOR (all fixed: M1 now removes only the client's reads of the classification; core deletion moved to T024; tests for 42 added to T022) |
+| Tasks | 2 | 73f82d103e50af33acec2be9f1876de5ea25743b:4d47d38bec3db367185caa3f02b8a8d7dd6d369f | CLEAN |
 
 ## Declined review findings
 
