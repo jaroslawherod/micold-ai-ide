@@ -27,7 +27,21 @@
 
 ## Clarifications
 
-None yet.
+### Session 2026-10-12
+
+- Q: With provenance gone, what becomes of feature 582's attach flow (remove it, drive it by "not in
+  the catalog", or keep provenance as that record)? -> A: Attaching a worktree is removed. Its only
+  durable effect was the provenance record that un-hid the worktree (`attach.rs`: "the one durable
+  effect of attaching a worktree is the per-project provenance record"); with every worktree listed
+  it has no effect, so the `attach_worktree` tool, the "Attach existing" worktree list and the
+  `needs_worktree_attach` status go. What stays is 582's discovery and resume of stored provider
+  sessions (FR-006 to FR-011 there), which never depended on provenance; its start-up offer is
+  triggered by stored sessions the catalog lacks, not by missing provenance
+  _(agent-resolved: crates/micold-core/src/attach.rs, specs/582-attach-provider-worktrees-sessions/spec.md#Requirements)_
+- Q: Until #551's tree exists, are identified agent sessions shown flat or must this feature nest
+  them? -> A: Shown flat among the worktree's sessions with the relationship recorded; nesting is
+  #551's, and this spec already puts the tree out of scope and assumes #551 is "the display half"
+  _(agent-resolved: specs/552-native-agent-session-signals/spec.md#Out of Scope; issue #551)_
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -175,15 +189,16 @@ assert each hit is either gone or sits under a superseded marker naming this fea
   user session. A valid payload for a known origin stores the relationship keyed by the agent
   session's id and, by itself, creates no catalog entry.
 - **FR-009**: The worktree provenance records and their one-time migration MUST no longer decide
-  what is visible, offered or hidden. [NEEDS CLARIFICATION: feature 582's attach flow offers only
-  worktrees "without a provenance record"; with provenance gone, is attach (a) removed together
-  with provenance, (b) kept and driven by "not yet in the catalog" instead of provenance, or (c)
-  kept with provenance retained solely as that record?]
+  what is visible, offered or hidden. Feature 582's worktree attaching MUST be removed with them:
+  the `attach_worktree` MCP tool, the worktree rows of the attach dialog and banner, and the
+  `needs_worktree_attach` resumable status (a session whose worktree exists is simply resumable).
+  Discovery and resume of stored provider sessions MUST be kept; the start-up offer MUST be
+  triggered by stored sessions the catalog lacks, not by absent provenance, and stays dismissable.
 - **FR-010**: Persisted state written by earlier versions (hide preference, provenance records,
   migration markers) MUST load without error and MUST NOT hide anything.
 - **FR-011**: While issue #551's session tree is not available, an identified agent session
-  MUST remain visible to the user. [NEEDS CLARIFICATION: is it shown flat among the worktree's sessions (the recorded relationship
-  is kept for #551 to use), or must this feature ship the nesting itself?].
+  MUST remain visible to the user, shown flat among its worktree's sessions with the recorded
+  relationship kept for #551 to use. This feature does not ship the nesting.
 - **FR-012**: The user guide MUST state, per provider, which native signal identifies agent
   sessions or that none exists, and MUST describe the shipped behaviour with no mention of the
   toggle or name-based hiding.
