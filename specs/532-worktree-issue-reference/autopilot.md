@@ -1,0 +1,52 @@
+# Autopilot ledger — #532 worktree-issue-reference
+
+Kept by the `speckit-autopilot` skill. Records what this flow owns and how far it got. `resume`
+finds this file by its **Worktree branch** line. Keep it true.
+
+- **Input**: Issue #532 "Agent-created worktrees should carry the issue reference" (body in the issue); labels: enhancement, flow:feature
+- **Kind**: feature
+- **Effort**: default
+- **Issue**: #532
+- **Worktree branch**: feat/532_agent-created-worktrees-should-carry-the-issue
+- **Started**: 2026-10-12
+- **Phase**: spec
+- **Next step**: clarify unit: resolve FR-009 [NEEDS CLARIFICATION] in spec.md
+
+## Pull requests
+
+| PR | Purpose | Status | Merge SHA |
+|---|---|---|---|
+
+## Milestones
+
+| ID | Tasks | Tier | Deliverable | PR | Status |
+|---|---|---|---|---|---|
+
+## Decisions
+
+| # | Phase | Question | Answer | By | Evidence |
+|---|---|---|---|---|---|
+
+## Review rounds
+
+| Review | Round | Snapshot | Verdict |
+|---|---|---|---|
+| Spec | 1 | 85b89f58a04b29c5c798c39217169f5dd180fc1f:13165b3a9e4938a42528aae5df288475aa63ddae | CHANGES: 2 MAJOR (fixed) |
+| Spec | 2 | 5dd91e6d60ce1f154cd2a546849d0e73b63a52b4:13165b3a9e4938a42528aae5df288475aa63ddae | CLEAN (2 MINOR fixed, prose only) |
+
+## Declined review findings
+
+| Milestone | Review | Finding | Why declined |
+|---|---|---|---|
+
+## Handover
+
+None.
+
+## Open escalation
+
+None.
+
+## Follow-ups not done
+
+None yet.
