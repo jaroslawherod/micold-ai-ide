@@ -112,7 +112,7 @@ A project that has both a GitHub remote and a Jira connection lets the user choo
 - **Key that naming cannot read**: a Jira project key the issue-tag rule in `naming.rs` does not accept as a tag yields a ticket the user can see and edit; the worktree is still created.
 - **Two windows**: a change to the switch or the connection in one window shows in the other without a restart; two windows open on the same project share one connection.
 - **No project open**: the switch can be turned on, the connection fields say a project must be open, and no request is made.
-- **Site URL with a path or trailing slash**: normalised to its origin; a development (debug) build also accepts a loopback `http` origin, for the fake site of the manual pass only (a release build refuses it); any other site URL that is `http`, has a user-info part, or names no host is refused (FR-006).
+- **Site URL with a path or trailing slash**: normalised to its origin; a development (debug) build also accepts a loopback `http` origin, for the fake site of the manual pass only (a release build refuses it); any other site URL that is `http`, has a user-info part, a query or fragment, or names no host is refused (FR-006).
 - **Two windows saving at once**: the last save wins in both windows; neither window shows a half-written connection.
 - **Token removed during a load**: the load's result is discarded and the picker shows no Jira list (as FR-005).
 - **Token rotated on the Jira side**: the next load shows the refused-credentials notice; saving a new token fixes it.
@@ -175,7 +175,7 @@ A project that has both a GitHub remote and a Jira connection lets the user choo
 
 - **SC-001**: With default settings, zero requests go to any Jira host and zero Jira controls other than the off switch are present, across the whole interface (tested by watching the requests the app makes and counting the controls).
 - **SC-002**: A user with a connected project goes from opening the dialog to a created, correctly named worktree with only a search, a click and a confirm, with no field typed by hand.
-- **SC-003**: Searching a 1,000-issue list by key, summary or label shows its matches within one frame of the keystroke (the GitHub picker's bar, 034).
+- **SC-003**: Searching a 1,000-issue list by key, summary or label shows its matches within the GitHub picker's frame budget of 034 (the rank budget, under 50 ms for 1,000 issues in a release build).
 - **SC-004**: A scan of `settings.json`, project files, logs and the session history after a full connect, load, failure and remove cycle finds the token zero times.
 - **SC-005**: With the site down or refusing, 100 percent of picker loads show a notice with a Retry, and a worktree can still be created by hand from the same dialog.
 - **SC-006**: Turning the switch off stops Jira requests within one second in every open window, and no Jira control remains.
@@ -184,6 +184,7 @@ A project that has both a GitHub remote and a Jira connection lets the user choo
 
 - **GitHub issues stay outside the switch (decided by user, FR-001 stands as the rule).** The existing GitHub issue picker keeps working as it does, because it reads only through the user's own `gh` sign-in, would vanish for every current user on upgrade if gated, and the issue's acceptance criteria do not require it. A follow-up brings it under an integrations switch with a migration.
 - **Jira Data Center is out of scope (decided by user, FR-023).** It signs in differently, speaks an older API and cannot be exercised without an instance.
+- With several services (feature 491), the switch and connections follow the service the client is connected to, as the pull request status switch does; the token file stays on the client host, so another service's connection without a token here asks for the token and makes no request.
 - Credentials are an account email plus an API token (Atlassian's documented sign-in for the Cloud REST API); OAuth is out of scope.
 - No operating-system keychain is used: the app has no keychain integration, so "the way the app stores other secrets" is the owner-only file of `owner_only.rs`.
 - The connection is edited in Settings for the project open in the window, because a project is where the connection lives; the switch itself is app-wide.

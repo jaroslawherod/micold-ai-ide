@@ -12,7 +12,7 @@
 
 ## Requirement Completeness
 
-- [ ] Requirements are testable and unambiguous (two scope decisions await clarify)
+- [x] Requirements are testable and unambiguous (both scope decisions answered in spec Clarifications, session 2026-10-12)
 - [x] Success criteria are measurable and technology-agnostic
 - [x] All acceptance scenarios are defined
 - [x] Edge cases are identified
@@ -21,4 +21,4 @@
 
 ## Open items
 
-- [ ] Two `[NEEDS CLARIFICATION]` markers remain, both in Assumptions: GitHub issue picker ungated; Jira Cloud only. The clarify unit asks them.
+- [x] No `[NEEDS CLARIFICATION]` marker remains: GitHub issue picker stays ungated and Jira Cloud only are decided by the user (spec Clarifications).
