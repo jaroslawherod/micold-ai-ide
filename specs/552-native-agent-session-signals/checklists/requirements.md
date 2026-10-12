@@ -6,7 +6,7 @@
 - [x] No implementation details beyond naming the provider's own hook events, which are the requirement's subject
 - [x] Focused on user value
 - [x] Mandatory sections completed
-- [ ] No [NEEDS CLARIFICATION] markers remain (FR-009 and FR-011 open for the clarify unit)
+- [x] No [NEEDS CLARIFICATION] markers remain (FR-009 and FR-011 resolved in the clarify round)
 - [x] Requirements testable
 - [x] Success criteria measurable and technology-agnostic
 - [x] Acceptance scenarios and edge cases defined

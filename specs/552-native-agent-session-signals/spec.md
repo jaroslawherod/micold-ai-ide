@@ -10,12 +10,14 @@
 
 ## Terms
 
-- **Provider**: an AI CLI that Micold runs in a session: Claude Code, Copilot CLI or Pi.
+- **Provider**: an AI CLI that Micold runs in a session: Claude Code, Copilot CLI, Pi, Codex or OpenCode.
+- **Covered provider**: a provider with a documented native signal that the daemon consumes.
 - **Native signal**: information the provider itself emits about a session it started on behalf of
   another one: a lifecycle hook payload, an event, or session metadata in its own store. A
   directory name, branch name or any other string pattern is not a native signal.
-- **Agent session**: a session started by a provider on behalf of another session (a sub-agent or
-  a background agent) rather than by the user.
+- **Agent session**: work a provider starts on behalf of another session (a sub-agent run) rather
+  than by the user. For Claude it shares its origin's session id and is identified by the
+  provider's `agent_id`; it is not a catalog session (plan research R1).
 - **Origin session**: the session on whose behalf an agent session was started.
 - **Name-based hiding**: classifying a worktree as agent-made from its directory or branch name,
   the `agent-` / `worktree-agent-` convention of feature 014, and hiding it unless the "Show agent
@@ -91,10 +93,11 @@ still there.
 1. **Given** a running Claude session, **When** the provider reports a sub-agent start naming an
    agent session and the origin, **Then** the daemon records that session as an agent session of the
    origin.
-2. **Given** an agent session created in an existing worktree, **When** the report arrives,
-   **Then** it is recorded as an agent session although its worktree and branch have ordinary names.
+2. **Given** a sub-agent run in a worktree with an ordinary name, **When** the report arrives,
+   **Then** it is recorded as an agent run of the origin, no name consulted.
 3. **Given** a recorded agent session, **When** the daemon restarts, **Then** the record is
-   unchanged and still available to the session tree.
+   still present and available to the session tree; a run that was still `Running` is marked
+   `Stopped`, since its stop report can no longer arrive.
 4. **Given** a sub-agent stop report, **When** it arrives, **Then** the daemon does not treat it as
    the end of the origin session's turn (the existing activity behaviour is unchanged).
 5. **Given** a session reported by no native signal, **When** it appears, **Then** it is treated as
@@ -177,12 +180,15 @@ assert each hit is either gone or sits under a superseded marker naming this fea
   metadata.
 - **FR-004**: For each identified agent session the daemon MUST record the agent session's id and
   its origin session's id, and MUST make that relationship available to the session tree (#551).
-- **FR-005**: The recorded relationship MUST survive a daemon restart.
+- **FR-005**: The recorded relationship MUST survive a daemon restart. A run recorded as running
+  when its origin session exits or the daemon restarts MUST be marked stopped; the record itself
+  is kept. The list is bounded per origin session (256, oldest stopped runs dropped first).
 - **FR-006**: A session for which no native signal reports an origin MUST be treated as a user
   session.
 - **FR-007**: Handling of the sub-agent lifecycle hooks MUST NOT change the origin session's
   activity state: a sub-agent finishing is not the end of the origin's turn.
-- **FR-008**: The daemon MUST ignore, without error, hook payloads that are malformed, and the
+- **FR-008**: The daemon MUST ignore, without error, hook payloads whose agent id is missing or
+  empty (a body that is not valid JSON keeps the receiver's existing `400`), and the
   receiver MUST refuse any request for a session it does not know, and MUST NOT let any such payload create a catalog entry or a
   user session. A valid payload for a known origin stores the relationship keyed by the agent
   session's id and, by itself, creates no catalog entry.
@@ -194,9 +200,9 @@ assert each hit is either gone or sits under a superseded marker naming this fea
   triggered by stored sessions the catalog lacks, not by absent provenance, and stays dismissable.
 - **FR-010**: Persisted state written by earlier versions (hide preference, provenance records,
   migration markers) MUST load without error and MUST NOT hide anything.
-- **FR-011**: While issue #551's session tree is not available, an identified agent session
-  MUST remain visible to the user, shown flat among its worktree's sessions with the recorded
-  relationship kept for #551 to use. This feature does not ship the nesting.
+- **FR-011**: While issue #551's session tree is not available, nothing is hidden because of an
+  agent run: every worktree and session is listed as before, and the recorded runs ride on the
+  origin session's summary for #551 to nest. This feature does not ship the nesting.
 - **FR-012**: The user guide MUST state, per provider, which native signal identifies agent
   sessions or that none exists, and MUST describe the shipped behaviour with no mention of the
   toggle or name-based hiding.
@@ -222,8 +228,9 @@ assert each hit is either gone or sits under a superseded marker naming this fea
   100% of its worktrees are listed and the app offers no control to reveal hidden ones.
 - **SC-002**: Renaming any worktree directory or branch, to or from the former reserved
   convention, changes its listing in 0 of the tested cases.
-- **SC-003**: For every sub-agent or background-agent session a covered provider reports, the
-  session is recorded as an agent session of its origin; for a session no provider reports, zero
+- **SC-003**: For every sub-agent run a covered provider reports, the run is recorded as an agent
+  session of its origin (Copilot is covered only if the T001 capture finds a native event;
+  background `claude --bg` sessions have no hook and are a documented gap); for a session no provider reports, zero
   are recorded as agent sessions.
 - **SC-004**: After a daemon restart, 100% of previously recorded agent-session relationships are
   still present.

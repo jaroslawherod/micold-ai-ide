@@ -67,7 +67,7 @@ event, so they are a documented gap (R2).
 |---|---|
 | FR-001, FR-002 | Removal plan R-A: `worktree.rs` classification, `features/worktree.rs` filter and tags, `features/sidebar.rs`, `ui/sidebar.rs` chip |
 | FR-003 | `hooks.rs` `HooksMap` + `classify_hook`; [contracts/subagent-hooks.md](contracts/subagent-hooks.md); Copilot mapping in `activity.rs`/`event_log.rs` (R3) |
-| FR-004 | [data-model.md](data-model.md) `AgentRun`; `SessionSummary.agents`; protocol 40 -> 41 |
+| FR-004 | [data-model.md](data-model.md) `AgentRun`; `SessionSummary.agents`; protocol 40 -> 41 (M2) |
 | FR-005 | `StoredSession.agents` (additive, `serde(default)`) |
 | FR-006 | no record written without a payload; `agents` defaults empty |
 | FR-007 | `HookClass::Agent` never reaches `note_activity`; contract C3 |
@@ -104,7 +104,7 @@ crates/micold-core/src/
 │                        #   NeedsWorktreeAttach (R-C)
 ├── session.rs           # Session.agents: Vec<AgentRun> (new, AgentRun in a new agent_run.rs)
 ├── mcp/{tools,policy}.rs# remove attach_worktree
-├── protocol/{messages,version}.rs # SessionSummary.agents; drop worktree attach shapes; 40 -> 41
+├── protocol/{messages,version}.rs # SessionSummary.agents; drop worktree attach shapes; 40 -> 41 (agents, M2) -> 42 (attach shapes removed, M3)
 │                        #   (tests/schema_hash.rs pin and docs/daemon.md follow)
 └── bin/micold-demo-provenance.rs  # deleted (and its use in site/capture/demo-project.sh)
 crates/micold-daemon/src/
@@ -134,7 +134,7 @@ existing hook receiver and stored session.
 - **R-C (attach)**: `attach_worktree`, `AttachTarget::Worktree`, the dialog's worktree rows,
   `needs_worktree_attach` (a session whose worktree exists is `resumable`). The start-up offer
   fires when `AttachDiscover` finds stored provider sessions the catalog lacks; dismissal stays
-  in-memory per run. The protocol bump 41 covers the message-shape changes together.
+  in-memory per run. The attach message-shape removal bumps the protocol to 42 (M3).
 - **R-D (docs)**: superseded banners on 014, 029, 582 (each names 552 and what replaced it); user
   guide pages updated; a provider table: Claude = `SubagentStart`/`SubagentStop`; Copilot per R3;
   Pi, Codex, OpenCode = no native signal (gap); background `claude --bg` sessions = gap.
@@ -151,7 +151,7 @@ existing hook receiver and stored session.
 | FR-010 | core `store_*` test loading a pre-feature file with both keys and a hide preference |
 | FR-006 | daemon + core: a session that received no signal has an empty `agents` list |
 | FR-011 | client: a summary carrying runs lists every worktree and session unchanged (nothing hidden) |
-| Protocol bump | `crates/micold-core/tests/schema_hash.rs` pin (40 -> 41), `version.rs` history, `docs/daemon.md` |
+| Protocol bump | `crates/micold-core/tests/schema_hash.rs` pin (40 -> 41 in M2, 41 -> 42 in M3), `version.rs` history, `docs/daemon.md` |
 | FR-014 | daemon test: two sessions, signal for one leaves the other untouched |
 | FR-012/013, US3/4 | docs grep test in `scripts/tests/` or quickstart §A (docs are verified in CI) |
 | Visual | quickstart §B: sidebar shows no chip; no geometry gate changes (a chip is removed) |

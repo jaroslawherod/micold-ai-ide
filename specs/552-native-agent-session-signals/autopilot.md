@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #552
 - **Worktree branch**: feat/552_replace-name-based-hiding-of-agent-work-with-the
 - **Started**: 2026-10-12
-- **Phase**: plan
-- **Next step**: tasks unit
+- **Phase**: tasks
+- **Next step**: analyze, tasks review, gate, design PR
 
 ## Pull requests
 
@@ -21,10 +21,16 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
+| M1 | T001–T009 | full | every worktree listed, hiding and toggle removed, hook captures | | pending |
+| M2 | T010–T021 | full | Claude sub-agent runs recorded from SubagentStart/Stop, protocol 41 | | pending |
+| M3 | T022–T029 | full | provenance and attach_worktree removed, protocol 42 | | pending |
+| M4 | T030–T033 | full | Copilot mapping or gap, provider table, docs check | | pending |
 
 ## Decisions
 
 - Clarify round 1: FR-009 attach worktree flow removed with provenance (no remaining effect), session discovery/resume kept; FR-011 flat display until #551. Both agent-resolved, no escalation.
+- Tasks: the plan's single 40 -> 41 protocol bump is split by milestone (M2 adds `SessionSummary.agents` -> 41, M3 removes attach shapes -> 42): each wire change moves the schema hash and lands in its own PR. Plan amended in intent; schema_hash pin follows per milestone.
+- Tasks: M1 holds US1 + the T001 capture (Setup/Foundational); provenance/attach removal (FR-009/010) is its own milestone M3, the story-less removal, to stay under ~800 lines per PR; user-guide tasks sit in the milestone that ships the behaviour.
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
