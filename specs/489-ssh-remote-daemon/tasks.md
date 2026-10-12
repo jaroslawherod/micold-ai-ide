@@ -66,7 +66,7 @@ rootless `sshd` and are off by default (`mise run test-ssh`).
 - [ ] T028 [P] [US1] Test `RemoteLocation` and the namespaced identity path round trip, including Windows separators, in `core/ssh/remote_path.rs`
 - [ ] T029 [P] [US1] Test that `canonicalize_best_effort` returns a `micold-remote://` identity verbatim in `core/project.rs`
 - [ ] T030 [P] [US1] Test add-repository binding to its one daemon, never guessed, and boundary path translation in `client/features/daemons.rs` and `client/shell/daemon_sync.rs`
-- [ ] T031 [P] [US1] Test that a remote worktree shows the host path and the daemon name in row labels in `client/links.rs` and `client/features/sidebar.rs`
+- [ ] T031 [P] [US1] Test that a remote worktree shows the host path and the daemon name in row labels in `client/links.rs` and `client/features/sidebar.rs`, and add the geometry-gate case for the repository field in `client/ui/settings/daemons.rs`
 - [ ] T032 [US1] Extend `daemon/tests/ssh_real_endtoend.rs`: add repository, list and create a worktree, session with the fake AI CLI, input and output, terminal command
 - [ ] T033 [US1] Implement `RemoteLocation` and the identity mapping in `core/ssh/remote_path.rs`
 - [ ] T034 [US1] Keep a remote identity verbatim in `canonicalize_best_effort` in `core/project.rs`
@@ -83,7 +83,7 @@ rootless `sshd` and are off by default (`mise run test-ssh`).
 - [ ] T039 [P] [US2] Test `Backoff` (1, 2, 4, 8, 15, 15 s; reset) in `core/ssh/reconnect.rs`
 - [ ] T040 [P] [US2] Test the state-machine delta (`Reconnecting`, `Attempts`, `GiveUp`, `Reconnect`, `Unreachable` meaning, local runtimes unchanged) in `core/daemons.rs`
 - [ ] T041 [P] [US2] Test the actor loop with a stand-in transport: drop, backoff, explicit reconnect bumps the epoch, no second connect, in `client/daemon.rs`
-- [ ] T042 [P] [US2] Test `session_lost_label`: `disconnected` while reconnecting, `lost to daemon <name>` after a restart (strings per contracts/remote-daemon.md; spec FR-019 term `lost to its daemon`), in `client/links.rs`
+- [ ] T042 [P] [US2] Test `session_lost_label`: `disconnected` while reconnecting, `lost to daemon <name>` after a restart (strings per contracts/remote-daemon.md; spec FR-019 term `lost to its daemon`), in `client/links.rs`, and add the geometry-gate case for the `Reconnecting` badge and its actions in `client/ui/settings/daemons.rs`
 - [ ] T043 [US2] Add the fault proxy `daemon/tests/ssh_real_support/proxy.rs` (cut and restore the connection)
 - [ ] T044 [US2] Write `daemon/tests/ssh_real_reconnect.rs`: drop, sessions keep running, reconnect within 30 s with output intact, relaunch finds sessions, stop trying then Reconnect, no second daemon
 - [ ] T045 [US2] Implement `Backoff` in `core/ssh/reconnect.rs`
@@ -171,7 +171,7 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 
 - **Tasks**: T001–T027
 - **Deliverable**: In Settings > Daemons a user adds a "Remote over SSH" daemon, starts it (the client copies its build and starts the remote daemon over `ssh`), and sees it `Connected` with version and `user@host:port`.
-- **Satisfies**: US1 acceptance scenario 1; FR-001, FR-002 (typed host), FR-003, FR-004, FR-005, FR-009 (default 15 s deadline), FR-010 (argv rule), FR-017 (connect), FR-018 (rules)
+- **Satisfies**: US1 acceptance scenario 1; FR-001, FR-002 (typed host), FR-003, FR-004, FR-005, FR-009 (default 15 s deadline), FR-010 (argv rule), FR-017 (connect), FR-018 (rules), FR-020 (test T020)
 - **Verify**: `mise run test-core`, `mise run test-ssh` (`ssh_real_endtoend` part 1); quickstart A.1–A.3
 - **Depends on**: —
 - **Tier**: full

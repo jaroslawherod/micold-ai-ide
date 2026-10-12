@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain (2 open: daemon delivery to the host; resolving a mismatched daemon with running sessions; both go to the clarify unit)
+- [x] No [NEEDS CLARIFICATION] markers remain (both resolved in the clarify unit, spec Clarifications)
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
@@ -31,4 +31,4 @@
 
 ## Notes
 
-- Open markers are deliberate: the autopilot spec unit leaves them for the clarify unit.
+- Both markers were resolved in clarify session 2026-10-12.
