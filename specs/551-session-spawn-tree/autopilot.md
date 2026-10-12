@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/551_show-sessions-spawned-by-an-agent-as-a-tree-under
 - **Started**: 2026-10-12
 - **Phase**: design-pr
-- **Next step**: push (denied by auto-mode classifier, needs user), open design PR, wait for merge, then M1
+- **Next step**: wait for design PR merge, then M1
 
 ## Pull requests
 
@@ -33,6 +33,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | 1 | clarify | Fold state persisted across restarts? | Persisted; never-folded origin starts expanded (FR-017) | agent | specs/017-material-component-architecture/spec.md#FR-016 |
 | 2 | clarify | Children of a stopped or deleted origin? | Stopped: stay nested. Deleted: top-level "origin removed", never deleted (FR-018) | agent | spec.md FR-006, FR-008, US2.3 |
 | 3 | clarify | MCP create_session child of caller? | Yes, same worktree only (FR-019) | agent | specs/034-daemon-mcp-server/contracts/binding.md#2, crates/micold-daemon/src/mcp/tools.rs |
+| 4 | tasks | Force-with-lease push of the rebased feature branch (denied by classifier) | Allowed; pushed by the orchestrator | user | AskUserQuestion; origin at f68aa511 |
 
 ## Review rounds
 
