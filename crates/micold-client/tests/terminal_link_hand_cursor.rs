@@ -19,7 +19,8 @@ use micold_client::grid::GridCache;
 use micold_client::ui::panes::PaneArea;
 use micold_core::env_include::EnvIncludeOutcome;
 use micold_core::protocol::grid::{
-    GridFrame, LineId, StyleRun, WireColor, WireCursor, WireCursorShape, WireLine, WireStyle,
+    CellExtras, GridFrame, LineId, StyleRun, WireColor, WireCursor, WireCursorShape, WireLine,
+    WireStyle,
 };
 use micold_core::protocol::messages::SessionProcess;
 use micold_core::session::SessionId;
@@ -30,7 +31,16 @@ const COLS: u16 = 80;
 const SENTENCE: &str = "See https://example.com/docs for details";
 
 fn grid_showing(session: SessionId) -> GridCache {
-    let text = format!("{SENTENCE:<width$}", width = COLS as usize);
+    grid_with(session, SENTENCE, None)
+}
+
+/// A line of `shown` whose first 60 cells are declared with OSC 8 as `uri`, as the daemon frames it.
+fn grid_declaring(session: SessionId, shown: &str, uri: &str) -> GridCache {
+    grid_with(session, shown, Some(uri))
+}
+
+fn grid_with(session: SessionId, shown: &str, declared: Option<&str>) -> GridCache {
+    let text = format!("{shown:<width$}", width = COLS as usize);
     let mut grid = GridCache::new();
     grid.apply(&GridFrame {
         process: SessionProcess::Primary,
@@ -55,7 +65,7 @@ fn grid_showing(session: SessionId) -> GridCache {
             flags: 0,
             underline_color: None,
         }],
-        hyperlinks: Vec::new(),
+        hyperlinks: declared.map(str::to_string).into_iter().collect(),
         lines: vec![WireLine {
             id: LineId(0),
             runs: vec![StyleRun {
@@ -63,7 +73,17 @@ fn grid_showing(session: SessionId) -> GridCache {
                 style: 0,
             }],
             text,
-            extras: Vec::new(),
+            extras: declared
+                .map(|_| {
+                    (0..60)
+                        .map(|col| CellExtras {
+                            col,
+                            zerowidth: Vec::new(),
+                            hyperlink: Some(0),
+                        })
+                        .collect()
+                })
+                .unwrap_or_default(),
             wrapped: false,
         }],
         mode: 0,
@@ -313,5 +333,20 @@ fn ctrl_held_over_a_link_shows_the_hand_in_split_panes() {
     assert!(
         hand_shows(&state, &attached, Some(&area)),
         "holding Ctrl over a link in a split pane shows the hand (BUG-748)"
+    );
+}
+
+#[test]
+fn ctrl_held_over_an_osc8_link_shows_the_hand_in_a_single_pane() {
+    let id = SessionId::new();
+    let state = state_with_active_session(id);
+    let grid = grid_declaring(
+        id,
+        "an ordinary label with no address in it at all",
+        "https://example.com",
+    );
+    assert!(
+        hand_shows(&state, &grid, None),
+        "holding Ctrl over an OSC 8 hyperlink shows the hand (BUG-748)"
     );
 }
