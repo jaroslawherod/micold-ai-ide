@@ -1654,6 +1654,17 @@ impl crate::pull_request::PullRequestSource for GhCli {
             crate::pull_request::read_outcome(&outcome, chunk, now)
         })
     }
+
+    fn list_branch(
+        &self,
+        repo: &GithubRepo,
+        branch: &str,
+        now: u64,
+    ) -> Result<Vec<crate::pull_request::BranchPullRequest>, crate::pull_request::ReadingFailure>
+    {
+        let outcome = self.outcome(crate::pull_request::list_args(repo, branch));
+        crate::pull_request::read_list_outcome(&outcome, now)
+    }
 }
 
 /// The bound on one `gh` run (FR-007's "didn't answer within 10 seconds").

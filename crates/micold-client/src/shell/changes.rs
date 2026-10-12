@@ -19,6 +19,7 @@ use micold_client::features::changes::Msg;
 use micold_client::features::settings;
 use micold_client::ui::syntax;
 use micold_core::git::Git;
+use micold_core::pull_request::ReadingFailure;
 use micold_core::review::base::{ReviewScope, Toggles};
 use micold_core::review::changes::ChangeList;
 use micold_core::session::SessionLocation;
@@ -41,6 +42,15 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
         crate::log_line(&format!(
             "changes: diff seq={seq} answered late, dropped as stale"
         ));
+    }
+    // GitHub's request limit named by a list read holds the status reading back too (R3).
+    if let Msg::PullRequestsRead {
+        result: Err(ReadingFailure::RateLimited { until }),
+        ..
+    } = &msg
+    {
+        let held = &mut app.core.pr_status.pause_until;
+        *held = Some(held.map_or(*until, |current| current.max(*until)));
     }
     let effect = app.core.update_changes(msg);
     sync_composer(app);
@@ -85,9 +95,29 @@ fn sync_composer(app: &mut App) {
 /// Run the read the root left pending while it opened the view (V1).
 pub fn run_pending(app: &mut App) -> Task<Message> {
     match app.core.take_changes_effect() {
-        Some(effect) => run(app, effect),
+        Some(effect) => {
+            let list = run(app, effect);
+            // The pull requests are asked for apart from the list: the list renders without them
+            // (feature 775, FR-009).
+            let branch = entry_branch(app);
+            let pull_requests = update(app, Msg::PullRequestsWanted { branch });
+            Task::batch([list, pull_requests])
+        }
         None => Task::none(),
     }
+}
+
+/// The branch of the open view's entry: a listed worktree's own; none for the project root.
+fn entry_branch(app: &App) -> Option<String> {
+    let SessionLocation::Worktree(dir_name) = &app.core.changes.open.as_ref()?.entry else {
+        return None;
+    };
+    app.core
+        .worktree
+        .worktrees
+        .iter()
+        .find(|w| &w.dir_name == dir_name)
+        .and_then(|w| w.branch.clone())
 }
 
 /// Why no read can run here: the error each read answers with.
@@ -99,6 +129,11 @@ const NOT_LOCAL: &str =
 fn run(app: &mut App, effect: Effect) -> Task<Message> {
     match effect {
         Effect::None => Task::none(),
+        Effect::ReadPullRequests {
+            seq,
+            project,
+            branch,
+        } => crate::shell::pr_status::list_requested(app, seq, project, branch),
         Effect::SetLayout(layout) => {
             // Service-owned (R12): the daemon stores it and echoes `SettingsChanged` to every
             // window. Disconnected, the choice holds for this run only, as the reducer set it.

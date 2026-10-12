@@ -263,6 +263,17 @@ fn the_source_is_read_from_one_place() {
         show(&reads)
     );
 
+    // The branch list (feature 775) is read through the same one call site.
+    let lists: Vec<_> = lines
+        .iter()
+        .filter(|(f, _, l)| f != MAIN_TESTS && l.contains(".list_branch("))
+        .collect();
+    assert!(
+        !lists.is_empty() && lists.iter().all(|(f, _, _)| f == SHELL),
+        "`PullRequestSource::list_branch` must be reached only from {SHELL}; found:\n{}",
+        show(&lists)
+    );
+
     let factory: Vec<_> = lines
         .iter()
         .filter(|(f, _, l)| f != CAPS && f != MAIN_TESTS && l.contains(".pull_requests"))
@@ -318,6 +329,39 @@ fn a_pull_requests_title_and_address_are_never_logged() {
     assert!(
         offenders.is_empty(),
         "a pull request's title or address must never be logged (contract §1):\n{}",
+        offenders.join("\n")
+    );
+}
+
+/// The files of the Changes pane that hold a listed pull request's title or address (feature 775).
+const CHANGES_FILES: [&str; 3] = [
+    "crates/micold-client/src/features/changes.rs",
+    "crates/micold-client/src/shell/changes.rs",
+    "crates/micold-client/src/ui/changes.rs",
+];
+
+#[test]
+fn a_listed_pull_requests_title_and_address_are_never_logged() {
+    let lines = code_lines();
+    let logging = ["log_line", "println!", "eprintln!", "tracing", "dbg!"];
+    let mut offenders = Vec::new();
+    for file in CHANGES_FILES {
+        let own: Vec<_> = in_file(&lines, file).collect();
+        for (i, (_, _, l)) in own.iter().enumerate() {
+            if !logging.iter().any(|m| l.contains(m)) {
+                continue;
+            }
+            for (_, n, w) in own.iter().skip(i).take(5) {
+                if w.contains(".title") || w.contains(".url") {
+                    offenders.push(format!("  {file}:{n}: {w} (in a logging statement)"));
+                }
+            }
+        }
+    }
+    offenders.dedup();
+    assert!(
+        offenders.is_empty(),
+        "a listed pull request's title or address must never be logged:\n{}",
         offenders.join("\n")
     );
 }

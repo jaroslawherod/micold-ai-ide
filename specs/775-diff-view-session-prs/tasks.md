@@ -17,14 +17,14 @@ description: "Task list for feature 775: PRs in the diff view"
 
 ## Phase 1: Setup
 
-- [ ] T001 [P] Add gh fixtures `crates/micold-core/tests/fixtures/gh/pr_list_*.txt`: open+merged+closed+draft, a cross-repository (fork) PR, an unknown `state`, an empty list, three PRs out of `createdAt` order
+- [x] T001 [P] Add gh fixtures `crates/micold-core/tests/fixtures/gh/pr_list_*.txt`: open+merged+closed+draft, a cross-repository (fork) PR, an unknown `state`, an empty list, three PRs out of `createdAt` order
 
 ## Phase 2: Foundational (core list read, shared by every story)
 
-- [ ] T002 Write failing tests `crates/micold-core/tests/pull_request_list.rs`: `parse_list` (states incl. draft, fork dropped, newest first, unknown state is `ReadingFailure::Passing`), `list_args` (variables only, no branch in the document, `--hostname github.com`), `FakePullRequestSource::list_branch` scripted answers and recorded calls (FR-001, FR-002, FR-003, FR-011)
-- [ ] T003 Implement `BranchPullRequest`, `BranchPrState`, `list_query`, `list_args`, `parse_list` in `crates/micold-core/src/pull_request.rs`
-- [ ] T004 Implement `PullRequestSource::list_branch` in `crates/micold-core/src/pull_request.rs` (trait, Fake) and `crates/micold-core/src/github.rs` (`GhCli`, classified by the existing `reading_failure`); make `BlockingSource` in `crates/micold-client/src/main_tests.rs` implement it so the workspace compiles
-- [ ] T005 Amend the guards in `crates/micold-client/tests/pr_status_is_read_only_on_named_events.rs`: `the_source_is_read_from_one_place` also pins `.list_branch(` (and `.diff(`) to `shell/pr_status.rs`; `a_pull_requests_title_and_address_are_never_logged` covers the new files that touch a title (`features/changes.rs`, `shell/changes.rs`, `ui/changes.rs`); add `BranchPullRequest` to `crates/micold-core/tests/pull_request_is_never_stored.rs`
+- [x] T002 Write failing tests `crates/micold-core/tests/pull_request_list.rs`: `parse_list` (states incl. draft, fork dropped, newest first, unknown state is `ReadingFailure::Passing`), `list_args` (variables only, no branch in the document, `--hostname github.com`), `FakePullRequestSource::list_branch` scripted answers and recorded calls (FR-001, FR-002, FR-003, FR-011)
+- [x] T003 Implement `BranchPullRequest`, `BranchPrState`, `list_query`, `list_args`, `parse_list` in `crates/micold-core/src/pull_request.rs`
+- [x] T004 Implement `PullRequestSource::list_branch` in `crates/micold-core/src/pull_request.rs` (trait, Fake) and `crates/micold-core/src/github.rs` (`GhCli`, classified by the existing `reading_failure`); make `BlockingSource` in `crates/micold-client/src/main_tests.rs` implement it so the workspace compiles
+- [x] T005 Amend the guards in `crates/micold-client/tests/pr_status_is_read_only_on_named_events.rs`: `the_source_is_read_from_one_place` also pins `.list_branch(` (and `.diff(`) to `shell/pr_status.rs`; `a_pull_requests_title_and_address_are_never_logged` covers the new files that touch a title (`features/changes.rs`, `shell/changes.rs`, `ui/changes.rs`); add `BranchPullRequest` to `crates/micold-core/tests/pull_request_is_never_stored.rs`
 
 ## Phase 3: User Story 1 - See the PRs of the worktree (P1) 🎯 MVP
 

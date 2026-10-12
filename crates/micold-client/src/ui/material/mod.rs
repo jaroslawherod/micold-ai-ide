@@ -109,6 +109,7 @@ mod split_view;
 pub(crate) mod style;
 
 mod pull_request_indicator;
+mod pull_request_row;
 /// The ripple's clipping, checked in rasterised pixels rather than in geometry. In-crate for the
 /// same reason as the snapshots above.
 #[cfg(test)]
@@ -181,6 +182,7 @@ pub use picker::Row as TypeaheadRow;
 pub use picker::PICKER_HIGHLIGHT;
 pub use progress::StageProgress;
 pub use pull_request_indicator::{CheckMark, PrMark, PullRequestIndicator};
+pub use pull_request_row::PullRequestRow;
 pub use resize_handle::ResizeHandle;
 pub use review_comment::{CardState, ReviewCommentCard};
 pub use ripple::{pulse as ripple_pulse, Ripple};

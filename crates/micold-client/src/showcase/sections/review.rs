@@ -367,3 +367,46 @@ fn picked_range<'a>(roles: Roles) -> Element<'a, Message> {
         roles,
     )
 }
+
+/// `PullRequestRow` — the four states, the selected row, the stale row and a title longer than the
+/// row (feature 775). What has to be checked by eye is the mark beside `#number`, the outline of the
+/// selected row, and the long title clipped, not wrapped.
+pub fn pull_request_row<'a>(
+    _showcase: &'a Showcase,
+    roles: Roles,
+    _i: usize,
+) -> Element<'a, Message> {
+    use crate::ui::material::{PrMark, PullRequestRow};
+    let pose = |label: &'static str, row: PullRequestRow<'a, Message>| {
+        posed(label, Element::from(row), roles)
+    };
+    let row_of = |n: u64, title: &'static str, state: PrMark| {
+        PullRequestRow::<Message>::new(n, title, state, &roles)
+    };
+    arrange(
+        vec![
+            pose("open", row_of(14, "Add the export", PrMark::Open)),
+            pose("draft", row_of(13, "Try a spike", PrMark::Draft)),
+            pose("merged", row_of(12, "Ship the parser", PrMark::Merged)),
+            pose("closed", row_of(11, "Abandoned attempt", PrMark::Closed)),
+            pose(
+                "selected",
+                row_of(14, "Add the export", PrMark::Open).selected(true),
+            ),
+            pose(
+                "stale",
+                row_of(12, "Ship the parser", PrMark::Merged).stale(true),
+            ),
+            pose(
+                "a long title",
+                row_of(
+                    20,
+                    "A pull request title that is far longer than the row it is listed in, \
+                     so that what the row does with the overflow is on show",
+                    PrMark::Open,
+                ),
+            ),
+        ],
+        Layout::FullWidth,
+    )
+}

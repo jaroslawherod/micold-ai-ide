@@ -3,18 +3,25 @@
 
 use std::path::PathBuf;
 
-use micold_core::pull_request::{CheckStatus, PrState, PullRequestStatus, ReviewState};
+use micold_core::pull_request::{
+    BranchPrState, BranchPullRequest, CheckStatus, PrState, PullRequestStatus, ReviewState,
+};
 
 /// The source text of the `PullRequestStatus` item: its attributes and its `pub struct` line.
 fn declaration() -> String {
+    declaration_of("PullRequestStatus")
+}
+
+/// The source text of the struct `name`: its attributes and its `pub struct` line.
+fn declaration_of(name: &str) -> String {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/pull_request.rs");
     let source =
         std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
     let lines: Vec<&str> = source.lines().collect();
     let at = lines
         .iter()
-        .position(|line| line.starts_with("pub struct PullRequestStatus"))
-        .expect("src/pull_request.rs declares `pub struct PullRequestStatus`");
+        .position(|line| line.starts_with(&format!("pub struct {name}")))
+        .unwrap_or_else(|| panic!("src/pull_request.rs declares `pub struct {name}`"));
     // The attributes and doc comments directly above the struct belong to it.
     let first = lines[..at]
         .iter()
@@ -80,5 +87,31 @@ fn debug_output_holds_the_number_and_the_enums_and_neither_title_nor_address() {
             !output.contains(HEAD),
             "data-model §1: Debug prints number, state and review and nothing else: {output}"
         );
+    }
+}
+
+#[test]
+fn a_listed_pull_request_derives_no_serialisation_and_prints_no_title_or_address() {
+    let declaration = declaration_of("BranchPullRequest");
+    for forbidden in ["Serialize", "Deserialize", "Debug"] {
+        assert!(
+            !declaration.contains(forbidden),
+            "BranchPullRequest must not derive {forbidden}; found:\n{declaration}"
+        );
+    }
+    let listed = BranchPullRequest {
+        number: 4712,
+        title: "Rework the billing export".to_string(),
+        url: "https://github.com/acme/widgets/pull/4712".to_string(),
+        state: BranchPrState::Merged,
+        created_at: "2026-10-10T09:00:00Z".to_string(),
+        base: "main".to_string(),
+        head: "0123456789abcdef0123456789abcdef01234567".to_string(),
+    };
+    for output in [format!("{listed:?}"), format!("{listed:#?}")] {
+        assert!(output.contains("4712") && output.contains("Merged"), "{output}");
+        for secret in ["billing", "github.com", "0123456789", "main"] {
+            assert!(!output.contains(secret), "{secret} printed: {output}");
+        }
     }
 }

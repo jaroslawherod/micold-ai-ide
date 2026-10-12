@@ -52,8 +52,26 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None. <or, when a unit handed over: what is done, the next step, open findings with their review
-snapshots. The next unit sets it back to None.>
+Unit M1 handed over at ~150k context (design PR #782 merged as 0de0b3ce; branch reset to origin/main).
+Done and green: T001-T005 (core: `BranchPullRequest`, `list_query/list_args/parse_list/read_list_outcome`,
+`PullRequestSource::list_branch`, fake, `GhCli`, fixtures `pr_list_*.txt`, `tests/pull_request_list.rs`,
+guards amended; `.diff(` guard pin left to M2 since there is no `diff` method yet).
+Written, NOT yet compiled or run (the first client build waited on another worktree's build lock):
+T006 `tests/features_pr_changes.rs`; T008/T010 `features/changes.rs` (`PrList`, `pr_mark`,
+`OpenView.{branch,pull_requests}`, `State.pr_enabled`, `Msg::{PullRequestsWanted,PullRequestsRead,
+PullRequestSettingChanged}`, `Effect::ReadPullRequests`); T009/T011 `ui/material/pull_request_row.rs`
++ catalogue entry + `showcase/sections/review.rs::pull_request_row`; T012 shell wiring
+(`shell/pr_status.rs::{list_requested,on_list_remotes}`, `PendingOp::PrListRemotes` in
+`daemon_sync.rs` x4 arms, `shell/changes.rs` run_pending sends `PullRequestsWanted{branch}` after the
+list effect, rate limit sets `pr_status.pause_until` in `shell/changes.rs::update`, `enabled_changed`
+forwards `PullRequestSettingChanged`); T013 `ui/changes.rs::pull_request_section`; T014 user guide
+(3 files). Tests for T007 (`pr_list_read_*` in `main_tests.rs`, harness `holding()`/`app_over`/
+`FAKE_GH`/`BlockingSource` near line 8884) are NOT written; T015 visual pass not run.
+Next step: `scripts/build-lock.sh cargo test -p micold-client --test features_pr_changes --test
+pr_status_is_read_only_on_named_events`, fix compile errors in the unverified code (cargo fmt too),
+write T007, run `mise run test-core` + the Verify commands, tick T006-T015, visual pass, then
+review A (high) + B, full gate, PR "feat(775): list session PRs in the Changes pane (#775)".
+Honest TDD note: T006 tests were written beside the reducer code, not shown red first.
 
 ## Open escalation
 

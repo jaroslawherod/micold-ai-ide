@@ -48,3 +48,18 @@ the rate-limit headers replaced, and the body GitHub documents
 
 The failures `gh` reports only on stderr (not signed in, offline, SAML, a missing scope) are feature
 034's `*.stderr` files in this directory, read through `github::classify`; they are not copied.
+
+## The branch list answers (`pr_list_*.txt`, feature 775)
+
+What `gh api graphql --hostname github.com --include -f query="$LIST_QUERY" -f owner=acme -f name=widgets -f b=<branch>`
+prints for `pull_request::list_query()`. Hand-written in the recorded layout (status line, headers,
+empty line, body) because the shapes below do not occur on a public repository on demand; the
+fields are those `list_query` names. `tests/pull_request_list.rs` reads them.
+
+| File | What the answer holds |
+|---|---|
+| `pr_list_mixed.txt` | #14 open, #13 draft, #12 merged, #11 closed, newest first |
+| `pr_list_fork.txt` | #21 from a fork (`isCrossRepository`), #20 own and merged |
+| `pr_list_unknown_state.txt` | #31 with a `state` this version does not know, #30 open |
+| `pr_list_empty.txt` | no pull request |
+| `pr_list_unordered.txt` | #41, #43, #42 in an order that is not newest first |

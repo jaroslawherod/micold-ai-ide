@@ -24,8 +24,8 @@ use crate::features::changes::{
 };
 use crate::icons::Icon;
 use crate::ui::material::{
-    Button, ButtonVariant, CardState, DiffView, ReviewCommentCard, StageProgress, Tag, Text,
-    TextArea, ToggleChip, TypeRole, VirtualRows,
+    Button, ButtonVariant, CardState, DiffView, PullRequestRow, ReviewCommentCard, StageProgress,
+    Tag, Text, TextArea, ToggleChip, TypeRole, VirtualRows,
 };
 
 /// The heading of the comments whose lines the diff on screen does not show (C3).
@@ -119,6 +119,9 @@ fn list_pane<'a>(state: &'a State, view: &'a OpenView, r: Roles) -> Element<'a, 
     ]
     .spacing(spacing::SM);
     let mut pane = column![toggles].spacing(spacing::MD).height(Length::Fill);
+    if let Some(section) = pull_request_section(view, r) {
+        pane = pane.push(section);
+    }
     if !available {
         pane = pane.push(Text::new(DEFAULT_ENTRY_NOTE, TypeRole::Caption, r).muted());
     }
@@ -149,6 +152,25 @@ fn list_pane<'a>(state: &'a State, view: &'a OpenView, r: Roles) -> Element<'a, 
         }
     };
     pane.push(list).into()
+}
+
+/// The pull requests of the entry's branch, above the file list (feature 775, FR-001 to FR-003):
+/// absent while the section is, and when the branch has none.
+fn pull_request_section<'a>(view: &'a OpenView, r: Roles) -> Option<Element<'a, Message>> {
+    let (prs, _read_at) = view.pull_requests.shown()?;
+    if prs.is_empty() {
+        return None;
+    }
+    let mut section = column![Text::new("Pull requests", TypeRole::Section, r)].spacing(spacing::XS);
+    for pr in prs {
+        section = section.push(Element::from(PullRequestRow::<Message>::new(
+            pr.number,
+            pr.title.as_str(),
+            crate::features::changes::pr_mark(pr.state),
+            &r,
+        )));
+    }
+    Some(section.into())
 }
 
 /// One file (L2): path, kind tag, content tag when not text, `+a −r`, and its pending comments.

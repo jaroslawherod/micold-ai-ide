@@ -10,6 +10,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
 use micold_core::protocol::messages::ReviewEditOp;
+use micold_core::pull_request::{BranchPrState, BranchPullRequest, ReadingFailure};
 use micold_core::review::base::{Base, BaseUnavailable, ReviewScope, Toggles};
 use micold_core::review::changes::{ChangeKind, ChangeList, ChangedFile};
 use micold_core::review::comment::{CommentId, CommentState, ReviewComment};
@@ -46,6 +47,60 @@ pub enum Load<T> {
     Ready(T),
     /// The last read failed, with git's message.
     Failed(String),
+}
+
+/// The pull requests of the open view's branch (feature 775, data-model §2). Held per view, so
+/// every session of one worktree shares one list and one read.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum PrList {
+    /// No section: the setting is off, the entry has no branch, or there is no GitHub access.
+    #[default]
+    Absent,
+    /// A read is under way; `again`: one more follows it. `last` stays on screen meanwhile.
+    Loading {
+        /// The read's sequence number; an answer with another is dropped.
+        seq: u64,
+        /// A read was asked while this one ran: it runs once more when this one ends.
+        again: bool,
+        /// The list and when it was read, kept on screen.
+        last: Option<(Vec<BranchPullRequest>, u64)>,
+    },
+    /// The last read's list, newest first, read at `read_at` (Unix seconds).
+    Ready {
+        /// The pull requests.
+        prs: Vec<BranchPullRequest>,
+        /// When the read started.
+        read_at: u64,
+    },
+    /// The last read failed for a reason that may pass: what was listed stays (FR-008).
+    Unavailable {
+        /// The last list and when it was read.
+        last: Option<(Vec<BranchPullRequest>, u64)>,
+    },
+}
+
+impl PrList {
+    /// The pull requests to show, newest first, with when they were read; `None` for no section.
+    pub fn shown(&self) -> Option<(&[BranchPullRequest], u64)> {
+        match self {
+            PrList::Absent => None,
+            PrList::Loading { last, .. } | PrList::Unavailable { last } => {
+                last.as_ref().map(|(prs, at)| (prs.as_slice(), *at))
+            }
+            PrList::Ready { prs, read_at } => Some((prs.as_slice(), *read_at)),
+        }
+    }
+}
+
+/// The one mapping from a listed pull request's state to the mark the sidebar uses (FR-003).
+pub fn pr_mark(state: BranchPrState) -> crate::ui::material::PrMark {
+    use crate::ui::material::PrMark;
+    match state {
+        BranchPrState::Open => PrMark::Open,
+        BranchPrState::Draft => PrMark::Draft,
+        BranchPrState::Merged => PrMark::Merged,
+        BranchPrState::Closed => PrMark::Closed,
+    }
 }
 
 /// The open view (data-model § Client).
@@ -85,6 +140,11 @@ pub struct OpenView {
     pub outdated: BTreeSet<CommentId>,
     /// **Discard pending…** was pressed: its confirmation is open (S3).
     pub confirm_discard: bool,
+    /// The entry's branch, as the shell last told it; `None` for the Default entry and a
+    /// detached HEAD (feature 775).
+    pub branch: Option<String>,
+    /// The pull requests of `branch` (feature 775).
+    pub pull_requests: PrList,
 }
 
 /// A gutter selection: lines `anchor` to `head` (either order) of one side (C1).
@@ -149,6 +209,9 @@ pub struct State {
     /// The last `ReviewChanged` per entry, keyed by project and the wire's worktree dir (`""` is
     /// the Default entry), so no entry ever shows another's comments (FR-021).
     pub reviews: BTreeMap<(PathBuf, String), ReviewView>,
+    /// The PR status setting in force (`github.pr_status_enabled`): the pull request section is
+    /// absent while it is off (feature 775, FR-014).
+    pub pr_enabled: bool,
 }
 
 /// What this feature is told.
@@ -260,6 +323,23 @@ pub enum Msg {
     ClearSentPressed,
     /// **Discard pending…** was pressed: open its confirmation (S3).
     DiscardPendingPressed,
+    /// The shell asks for the open view's pull requests: right after the view opened, and on the
+    /// PR status triggers (feature 775). `branch` is the entry's own branch, if it has one.
+    PullRequestsWanted {
+        /// The entry's branch.
+        branch: Option<String>,
+    },
+    /// Pull request read `seq` ended; `read_at` is when it started, Unix seconds.
+    PullRequestsRead {
+        /// The read it answers.
+        seq: u64,
+        /// When the read started.
+        read_at: u64,
+        /// The list, or why there is none.
+        result: Result<Vec<BranchPullRequest>, ReadingFailure>,
+    },
+    /// The PR status setting changed, or was learned (feature 775, FR-014).
+    PullRequestSettingChanged(bool),
     /// The discard confirmation's Discard (S3).
     DiscardConfirmed,
     /// The discard confirmation's Cancel, or its dismissal (S3).
@@ -297,6 +377,16 @@ pub enum Effect {
         from: Option<RelPath>,
         /// Read it even over the size limits (the user pressed Show diff).
         force_large: bool,
+    },
+    /// Read the pull requests of `branch` in `project` as read `seq`. Never issued as part of a
+    /// `ReadList`: the working-tree list does not wait for it (feature 775, FR-009).
+    ReadPullRequests {
+        /// The read's sequence number.
+        seq: u64,
+        /// The project.
+        project: PathBuf,
+        /// The branch.
+        branch: String,
     },
     /// Tell the service the chosen layout (`SettingsSet { diff_layout }`, R12).
     SetLayout(DiffLayout),
@@ -361,8 +451,59 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
                 slot_heights: BTreeMap::new(),
                 outdated: BTreeSet::new(),
                 confirm_discard: false,
+                branch: None,
+                pull_requests: PrList::Absent,
             });
             request_read(state)
+        }
+        Msg::PullRequestsWanted { branch } => {
+            let Some(view) = state.open.as_mut() else {
+                return Effect::None;
+            };
+            view.branch = branch;
+            request_pull_requests(state)
+        }
+        Msg::PullRequestsRead {
+            seq,
+            read_at,
+            result,
+        } => {
+            let Some(view) = state.open.as_mut() else {
+                return Effect::None;
+            };
+            let (again, last) = match &mut view.pull_requests {
+                PrList::Loading {
+                    seq: s,
+                    again,
+                    last,
+                } if *s == seq => (*again, last.take()),
+                _ => return Effect::None,
+            };
+            view.pull_requests = match result {
+                Ok(prs) => PrList::Ready { prs, read_at },
+                // No GitHub access of any kind: no section, as the sidebar drops its rows.
+                Err(ReadingFailure::Unavailable) => PrList::Absent,
+                // Passing, or a rate limit the shell holds back: keep what was listed (FR-008).
+                Err(_) => PrList::Unavailable { last },
+            };
+            if again {
+                request_pull_requests(state)
+            } else {
+                Effect::None
+            }
+        }
+        Msg::PullRequestSettingChanged(enabled) => {
+            let was = std::mem::replace(&mut state.pr_enabled, enabled);
+            if enabled && !was {
+                request_pull_requests(state)
+            } else if !enabled {
+                if let Some(view) = state.open.as_mut() {
+                    view.pull_requests = PrList::Absent;
+                }
+                Effect::None
+            } else {
+                Effect::None
+            }
         }
         Msg::Closed | Msg::SessionSelected => {
             state.open = None;
@@ -905,6 +1046,48 @@ pub fn file_comments(state: &State) -> FileComments<'_> {
 /// Whether a comment is still pending.
 pub fn is_pending(comment: &ReviewComment) -> bool {
     comment.state == CommentState::Pending
+}
+
+/// Start a read of the open view's pull requests, or queue one behind the read under way. Nothing
+/// is read, and no section shown, while the setting is off or the entry has no branch.
+fn request_pull_requests(state: &mut State) -> Effect {
+    let seq = state.next_seq;
+    let enabled = state.pr_enabled;
+    let Some(view) = state.open.as_mut() else {
+        return Effect::None;
+    };
+    let Some(branch) = view.branch.clone().filter(|_| enabled) else {
+        view.pull_requests = PrList::Absent;
+        return Effect::None;
+    };
+    let last = match std::mem::take(&mut view.pull_requests) {
+        PrList::Loading {
+            seq,
+            last,
+            again: _,
+        } => {
+            view.pull_requests = PrList::Loading {
+                seq,
+                again: true,
+                last,
+            };
+            return Effect::None;
+        }
+        PrList::Ready { prs, read_at } => Some((prs, read_at)),
+        PrList::Unavailable { last } => last,
+        PrList::Absent => None,
+    };
+    view.pull_requests = PrList::Loading {
+        seq,
+        again: false,
+        last,
+    };
+    state.next_seq += 1;
+    Effect::ReadPullRequests {
+        seq,
+        project: view.project.clone(),
+        branch,
+    }
 }
 
 /// Start a read of the open view's list, or queue one behind the read under way.
