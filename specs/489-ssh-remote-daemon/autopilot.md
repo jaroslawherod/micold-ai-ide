@@ -62,7 +62,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 Unit M1 part 3 continues (implement, T001-T027). Commits on the branch, not pushed, no PR yet.
 
 Done and compiled, tests green (`cargo test -p micold-core --lib` 570, `daemons_ssh` 5):
-- T001-T003, T005-T009, T012-T016, T018 (ticked in tasks.md). `crates/micold-core/src/ssh/`:
+- T001-T003, T005-T010, T012-T018 (ticked in tasks.md; T010/T017 helper in
+  `crates/micold-daemon/src/remote.rs`, `bridge` + `prune`, dispatched in main.rs; tokio `io-std` added). `crates/micold-core/src/ssh/`:
   `target`, `argv`, `classify`, `stdio`, `provision` (`SshRunner`/`Artefacts`/`SshHost` traits,
   `ProvisionOptions`, `provision()`, `connect()` returning `Connected`, `parse_probe`,
   `select_artefact`); `DaemonRuntime::Ssh` + `DaemonEvent::StartFailed` in daemons.rs;
@@ -70,27 +71,21 @@ Done and compiled, tests green (`cargo test -p micold-core --lib` 570, `daemons_
 - tdd/test-list.md and tdd/cycle-log.md written (test-after admitted, 5 mutants killed).
 
 Next steps:
-1. T010+T017 daemon helper: `crates/micold-daemon/src/remote.rs` `bridge` (use
-   `endpoint::resolve_pinned`, dial via `connect::dial`, spawn detached daemon with
-   `XDG_RUNTIME_DIR` removed + poll like `connect::connect_or_spawn` (SPAWN_TIMEOUT,
-   RESPAWN_AFTER), relay stdin<->socket byte-for-byte; stdout only relayed bytes) and `prune
-   --keep N`; dispatch in main.rs beside `status-line`, before runtime/singleton. `status`/`stop`
-   are M7. Tests first (T010) against a temp endpoint.
-2. T004+T022 harness + e2e: `crates/micold-daemon/tests/ssh_real_support/{mod,sshd}.rs` (rootless
+1. T004+T022 harness + e2e: `crates/micold-daemon/tests/ssh_real_support/{mod,sshd}.rs` (rootless
    sshd on loopback, keys, authorized_keys, private config `Host` alias, skip with printed reason),
    `tests/ssh_real_endtoend.rs` part 1 (names start `ssh_real_`). Needs a `SystemSsh` runner
    usable from the test: put the real runner in micold-core `ssh/system.rs` (spawn `ssh`,
    `kill_on_drop`, deadline watchdog, chunked stdin with progress) if it is simplest, and have the
    client shell install it (plan said client/shell only; core placement is fine if
    `no_concrete_implementations.rs` stays green - re-run it).
-3. T011, T019-T021, T023-T025 client: `Dial::Ssh{target}` in client/src/daemon.rs `actor_specs`
+2. T011, T019-T021, T023-T025 client: `Dial::Ssh{target}` in client/src/daemon.rs `actor_specs`
    (an `Ssh` entry whose state is Unreachable is not dialled; Start re-adds), actor calls
    `ssh::provision::connect`, on failure sends `StartFailed(reason)` and ends; copy progress ->
    `copying daemon to <host> (<n>%)`; Draft/Msg fields in features/daemons.rs; form + geometry
    case in ui/settings/daemons.rs; connected row shows version and `user@host:port`.
-4. T026 CI job `ssh-remote` + docs/development/ci-pipeline.md; T027 docs/user-guide/remote-daemons.md,
+3. T026 CI job `ssh-remote` + docs/development/ci-pipeline.md; T027 docs/user-guide/remote-daemons.md,
    SUMMARY.md, settings.md, sandboxed-daemon.md links, docs/daemon.md.
-5. Then tick tasks, scoped gate with review A (`code-review` high) and B (conformance), full
+4. Then tick tasks, scoped gate with review A (`code-review` high) and B (conformance), full
    `mise run gate`, PR `feat(489): remote over SSH daemon connects (#489)` per tasks/pr.md.
 
 Tip: run cargo detached (`setsid nohup ... &`) and `scripts/autopilot/hold.sh <log>`; the hook
