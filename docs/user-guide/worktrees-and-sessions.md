@@ -85,6 +85,11 @@ shows as **Login page** with `feat` and `ABC-123` tags. The tags are display-onl
 branch and directory names are unchanged, and a worktree that does not follow the naming convention
 simply shows no type tag.
 
+Worktrees that an AI agent creates through the [agent tools](agent-tools.md) follow the same
+convention: given a `ticket` (or a `github_issue`), the agent's worktree is named
+`${type}/${ticket}_${name}` and gets the same issue tag and issue-filter match as one made in the
+dialog.
+
 The `_` is what separates the ticket from the description, so the app never has to guess where one
 ends. A name without one has no ticket, which is exactly right for something like
 `feat-reporting-2` — the trailing `2` is part of the name, not an issue number. Two consequences

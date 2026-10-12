@@ -147,6 +147,18 @@ fn assert_retry_hint(error: &Value, branch: &str) {
     }
 }
 
+/// The keys of a literal-branch result before feature 532 (FR-009).
+const LITERAL_RESULT_KEYS: [&str; 8] = [
+    "ref",
+    "display_name",
+    "branch",
+    "path",
+    "status",
+    "app_created",
+    "assistant_owned",
+    "session_count",
+];
+
 /// A non-empty folder under the managed root, which the pre-flight reports as taken.
 fn occupy(f: &Fixture, dir: &str) {
     let dir = f.repo().join(".claude").join("worktrees").join(dir);
@@ -494,6 +506,44 @@ async fn type_ticket_and_name_create_the_forms_worktree() {
         .contains(&"fix-123_login-crash".to_string()));
 }
 
+/// FR-003, SC-001, SC-002 (feature 532): a ticket in any accepted form names the worktree as the
+/// dialog does, and the sidebar's issue tag (what `TagFilter::HasIssue` keys on) is present
+/// exactly when the ticket is not blank.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_ticket_in_any_form_names_the_worktree_as_the_dialog_does() {
+    use micold_core::naming::{derive, parse_tags, ConventionalType, Tag, WorktreeNaming};
+
+    let f = Fixture::new().await;
+    let mut n = 0;
+    for ticket in ["123", "#123", "ABC-123", ""] {
+        for type_ in [ConventionalType::Feat, ConventionalType::Fix] {
+            for name in ["add thing", "Login crash"] {
+                n += 1;
+                // A unique suffix keeps each combination its own branch.
+                let name = format!("{name} {n}");
+                let expected = derive(&WorktreeNaming {
+                    type_: Some(type_),
+                    ticket: Some(ticket.to_string()),
+                    name: name.clone(),
+                })
+                .unwrap();
+                let row = f
+                    .ok(
+                        sid(3),
+                        json!({"type": type_.as_str(), "ticket": ticket, "name": name}),
+                    )
+                    .await;
+                assert_eq!(row["branch"], expected.branch, "{ticket:?} {row}");
+                assert_eq!(row["directory"], expected.dir_name, "{ticket:?} {row}");
+                let has_issue = parse_tags(row["ref"].as_str().unwrap())
+                    .iter()
+                    .any(|tag| matches!(tag, Tag::Issue(_)));
+                assert_eq!(has_issue, !ticket.is_empty(), "{ticket:?}: {row}");
+            }
+        }
+    }
+}
+
 /// US1 s2: no ticket means no ticket segment, no issue tag and no `ticket` in the result.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn without_a_ticket_there_is_no_ticket_segment_or_tag() {
@@ -594,6 +644,17 @@ async fn literal_calls_are_unchanged() {
     assert_eq!(row["ref"], "lit");
     assert_eq!(row["branch"], "feat-lit");
     assert!(row.get("type").is_none() && row.get("ticket").is_none());
+    // FR-009: exactly the pre-feature keys; no hint, warning or extra field.
+    let mut keys: Vec<&str> = row
+        .as_object()
+        .unwrap()
+        .keys()
+        .map(String::as_str)
+        .collect();
+    keys.sort_unstable();
+    let mut expected = LITERAL_RESULT_KEYS.to_vec();
+    expected.sort_unstable();
+    assert_eq!(keys, expected, "{row}");
     let mixed = f
         .err(sid(3), json!({"branch": "feat-no", "type": "fix"}))
         .await;

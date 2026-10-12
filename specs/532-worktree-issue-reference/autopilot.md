@@ -9,20 +9,20 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #532
 - **Worktree branch**: feat/532_agent-created-worktrees-should-carry-the-issue
 - **Started**: 2026-10-12
-- **Phase**: tasks
-- **Next step**: M1 after design PR merge
+- **Phase**: milestone M1 (PR open)
+- **Next step**: wait for CI and merge M1 PR, then close
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| #781 | Design PR | open | |
+| #781 | Design PR | merged | aa69bd4cc7fd32c6d3d4f4485f09e5ab74b86819 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T010 | full | agent guidance strings and user guide carry the issue-reference convention | | pending |
+| M1 | T001–T010 | full | agent guidance strings and user guide carry the issue-reference convention | pending | in review |
 
 ## Decisions
 
@@ -37,6 +37,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Spec | 2 | 5dd91e6d60ce1f154cd2a546849d0e73b63a52b4:13165b3a9e4938a42528aae5df288475aa63ddae | CLEAN (2 MINOR fixed, prose only) |
 | Plan | 1 | 01edbf8ee9c103b2f4486e7dc783d537ac3317f2:ba43682744cad0284cd09b80acdbbe3018ec9dec | CLEAN (4 MINOR fixed, prose only) |
 | Tasks | 1 | 5c934acbcb21e6bade1be8d21698d1bcd61fb618:616c92f969019ca3ebce3573659253c4be6c2232 | CLEAN (2 MINOR fixed, prose only; analyze 0 CRITICAL/HIGH) |
+
+- M1 review A (code-review high) 26371c1c:aa69bd4c: CLEAN, 2 MINOR (line wrap, wording) left
+- M1 review B (sonnet): CLEAN, 2 MINOR (line wrap, cycle-log catalog red not printed) left
 
 ## Declined review findings
 
