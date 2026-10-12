@@ -27,6 +27,7 @@ use std::time::Duration;
 
 use iced::Task;
 use micold_client::app::Message;
+use micold_client::features::changes::{Msg as ChangesMsg, PrList};
 use micold_client::features::pr_status::Msg;
 use micold_client::features::pr_status::{Cause, Effect, Outcome, Phase};
 use micold_client::features::OpenRequest;
@@ -168,13 +169,19 @@ pub fn enabled_changed(app: &mut App, enabled: bool) -> Task<Message> {
             draft.github.pr_status_enabled = enabled;
         }
     }
-    update(
+    // The Changes view's pull request section follows the same switch (feature 775, FR-014).
+    let section = crate::shell::changes::update(
+        app,
+        ChangesMsg::PullRequestSettingChanged(enabled),
+    );
+    let status = update(
         app,
         Msg::EnabledChanged {
             enabled,
             now: now(),
         },
-    )
+    );
+    Task::batch([section, status])
 }
 
 /// The daemon answered the reading's `RemoteList`: `None` when it failed. Reads the pull requests
@@ -236,6 +243,100 @@ pub fn on_remotes(
                 joined.unwrap_or_else(|_| finished(seq, Outcome::Err(ReadingFailure::Passing))),
             )
         },
+    )
+}
+
+/// A Changes view asked for the pull requests of `branch` (feature 775, contracts §1). The one
+/// entry of the list read: asks the daemon for the remotes, bounded by [`REMOTES_TIMEOUT`], and
+/// answers `Msg::PullRequestsRead` of the Changes view. Held back while the status reading is paused
+/// by GitHub's request limit (R3); every failure ends as a passing one, never a notice (FR-008).
+pub fn list_requested(app: &mut App, seq: u64, project: PathBuf, branch: String) -> Task<Message> {
+    let started = now();
+    let passing = move || {
+        Message::Changes(ChangesMsg::PullRequestsRead {
+            seq,
+            read_at: started,
+            result: Err(ReadingFailure::Passing),
+        })
+    };
+    let paused = micold_client::features::pr_status::paused(&app.core.pr_status, started);
+    if paused || app.active_outbox().is_none() {
+        return Task::done(passing());
+    }
+    let req = app.next_req;
+    let asked_for = project.clone();
+    send_op(
+        app,
+        PendingOp::PrListRemotes {
+            project: asked_for,
+            seq,
+            branch,
+            started,
+        },
+        move |req| ClientMsg::RemoteList { req, project },
+    );
+    // A late answer finds its read no longer under way and is dropped by the reducer.
+    Task::perform(
+        async move { tokio::time::sleep(REMOTES_TIMEOUT).await },
+        move |()| {
+            let _ = req;
+            passing()
+        },
+    )
+}
+
+/// The daemon answered a list read's `RemoteList` (`None`: it failed). Reads the branch's pull
+/// requests on a blocking thread when the repository is on GitHub and `gh` is found.
+pub fn on_list_remotes(
+    app: &mut App,
+    project: PathBuf,
+    seq: u64,
+    branch: String,
+    started: u64,
+    remotes: Option<Vec<GitRemote>>,
+) -> Task<Message> {
+    let answer = move |result| {
+        Message::Changes(ChangesMsg::PullRequestsRead {
+            seq,
+            read_at: started,
+            result,
+        })
+    };
+    let awaited = app.core.changes.open.as_ref().is_some_and(|view| {
+        matches!(
+            view.pull_requests,
+            PrList::Loading { seq: current, .. } if current == seq
+        )
+    });
+    if !awaited || app.core.workspace.active.as_deref() != Some(project.as_path()) {
+        return Task::none();
+    }
+    let Some(remotes) = remotes else {
+        return Task::done(answer(Err(ReadingFailure::Passing)));
+    };
+    let RemoteChoice::Github { repo, .. } = choose_remote(&remotes) else {
+        return Task::done(answer(Err(ReadingFailure::Unavailable)));
+    };
+    let tooling = app.caps.issue_tooling();
+    let cached = app.env_include_cache.get(&project).cloned();
+    let resolver = app.caps.env_include_shared();
+    let enabled = app.env_include_enabled;
+    let script = app.env_include_script_path.clone();
+    let timeout_secs = app.env_include_timeout_secs;
+    Task::perform(
+        async move {
+            tokio::task::spawn_blocking(move || {
+                let snapshot = cached.unwrap_or_else(|| {
+                    resolve_env_include(&*resolver, enabled, &script, timeout_secs, &project)
+                });
+                let Some(gh) = (tooling.locate_gh)(env_include_path(&snapshot.vars)) else {
+                    return Err(ReadingFailure::Unavailable);
+                };
+                (tooling.pull_requests)(gh).list_branch(&repo, &branch, now())
+            })
+            .await
+        },
+        move |joined| answer(joined.unwrap_or(Err(ReadingFailure::Passing))),
     )
 }
 

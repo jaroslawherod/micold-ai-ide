@@ -128,6 +128,14 @@ pub enum PendingOp {
         branches: Vec<String>,
         started: u64,
     },
+    /// The `RemoteList` a Changes view's pull request list read starts with (feature 775). Carries
+    /// the read it belongs to, so the answer needs nothing recomputed.
+    PrListRemotes {
+        project: PathBuf,
+        seq: u64,
+        branch: String,
+        started: u64,
+    },
     /// The `MergedBranchCheck` a pull request reading ends with when a pull request was merged
     /// (feature 040, reading-and-wire §2 step 4). Carries the reading's statuses, which wait for the
     /// answer, and the branches asked about in the order asked, so the answer needs nothing
@@ -223,7 +231,9 @@ impl PendingOp {
             }
             PendingOp::BranchPreflight { .. } => "check the branch".into(),
             PendingOp::BranchList { .. } => "list the branches".into(),
-            PendingOp::RemoteList { .. } | PendingOp::PrStatusRemotes { .. } => {
+            PendingOp::RemoteList { .. }
+            | PendingOp::PrStatusRemotes { .. }
+            | PendingOp::PrListRemotes { .. } => {
                 "read the repository's remotes".into()
             }
             PendingOp::MergedBranchCheck { .. } => "check the merged branches".into(),
@@ -523,7 +533,9 @@ fn resolve_pending_of(app: &mut App, daemon: DaemonId) -> Task<Message> {
             }
             // Feature 040: the reading ended with the hold, above; no failure of a reading is
             // ever a notice (FR-025, SC-004).
-            PendingOp::PrStatusRemotes { .. } | PendingOp::MergedBranchCheck { .. } => {}
+            PendingOp::PrStatusRemotes { .. }
+            | PendingOp::PrListRemotes { .. }
+            | PendingOp::MergedBranchCheck { .. } => {}
             _ => app.core.notify_error(text),
         }
     }
@@ -1300,6 +1312,21 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
                     app, project, seq, branches, started, remotes,
                 );
             }
+            // Feature 775: the remotes a Changes view's pull request list read asked for.
+            Some(PendingOp::PrListRemotes {
+                project,
+                seq,
+                branch,
+                started,
+            }) => {
+                let remotes = match result {
+                    OperationResult::RemoteList { remotes } => Some(remotes),
+                    _ => None,
+                };
+                follow_up = crate::shell::pr_status::on_list_remotes(
+                    app, project, seq, branch, started, remotes,
+                );
+            }
             // Feature 040: the answer to a reading's question about its merged branches. Whether it
             // is still wanted is `on_merged_branches`' question.
             Some(PendingOp::MergedBranchCheck {
@@ -1495,6 +1522,17 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
                 }) => {
                     return crate::shell::pr_status::on_remotes(
                         app, project, seq, branches, started, None,
+                    );
+                }
+                // Feature 775: a list read that could not learn the remotes passes, with no notice.
+                Some(PendingOp::PrListRemotes {
+                    project,
+                    seq,
+                    branch,
+                    started,
+                }) => {
+                    return crate::shell::pr_status::on_list_remotes(
+                        app, project, seq, branch, started, None,
                     );
                 }
                 // Feature 040: a refused question applies the statuses with no suggestion, and is

@@ -659,6 +659,172 @@ pub fn read_outcome(
     Err(reading_failure(outcome, now))
 }
 
+// ---- #775: every pull request of one branch ----
+
+/// One pull request of a branch as the Changes pane lists it (feature 775, data-model §1). Held in
+/// memory only; what it prints for a log is the number and the state (FR-032).
+#[derive(Clone, PartialEq, Eq)]
+pub struct BranchPullRequest {
+    /// The pull request's number in its repository.
+    pub number: u64,
+    /// Its title. Never logged, never serialised.
+    pub title: String,
+    /// Its address on GitHub. Never logged, never serialised.
+    pub url: String,
+    /// Open, draft, merged or closed.
+    pub state: BranchPrState,
+    /// `createdAt`: ISO-8601 in UTC, ordering key (newest first).
+    pub created_at: String,
+    /// `baseRefName`.
+    pub base: String,
+    /// `headRefOid`.
+    pub head: String,
+}
+
+impl fmt::Debug for BranchPullRequest {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("BranchPullRequest")
+            .field("number", &self.number)
+            .field("state", &self.state)
+            .finish_non_exhaustive()
+    }
+}
+
+/// The state of a listed pull request. [`PrState`] is not reused: its open and draft carry a check
+/// status this list does not read.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BranchPrState {
+    /// Open and ready for review.
+    Open,
+    /// Open, marked as a draft.
+    Draft,
+    /// Merged.
+    Merged,
+    /// Closed without merging.
+    Closed,
+}
+
+/// The GraphQL document that lists one branch's pull requests, newest first (contracts §1). The
+/// branch travels as the variable `$b`, never inside the document.
+pub fn list_query() -> &'static str {
+    "query($owner: String!, $name: String!, $b: String!) { \
+     repository(owner: $owner, name: $name) { \
+     pullRequests(headRefName: $b, first: 100, orderBy: {field: CREATED_AT, direction: DESC}) { \
+     nodes { number title url state isDraft createdAt isCrossRepository baseRefName headRefOid } } } \
+     rateLimit { remaining resetAt } }"
+}
+
+/// The arguments after `gh` for [`list_query`]: raw string variables (`-f`), like [`status_args`].
+pub fn list_args(repo: &GithubRepo, branch: &str) -> Vec<String> {
+    let mut args: Vec<String> = ["api", "graphql", "--hostname", "github.com", "--include"]
+        .map(str::to_string)
+        .to_vec();
+    for value in [
+        format!("query={}", list_query()),
+        format!("owner={}", repo.owner()),
+        format!("name={}", repo.name()),
+        format!("b={branch}"),
+    ] {
+        args.push("-f".into());
+        args.push(value);
+    }
+    args
+}
+
+#[derive(serde::Deserialize)]
+struct ListAnswer {
+    data: Option<ListData>,
+    #[serde(default)]
+    errors: Vec<serde_json::Value>,
+}
+
+#[derive(serde::Deserialize)]
+struct ListData {
+    repository: Option<ListRepository>,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ListRepository {
+    pull_requests: ListConnection,
+}
+
+#[derive(serde::Deserialize)]
+struct ListConnection {
+    nodes: Vec<ListNode>,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ListNode {
+    number: u64,
+    title: String,
+    url: String,
+    state: String,
+    is_draft: bool,
+    created_at: String,
+    is_cross_repository: bool,
+    base_ref_name: String,
+    head_ref_oid: String,
+}
+
+/// The pull requests of an answer's body to [`list_query`]: forks dropped, newest first. An answer
+/// that cannot be read whole (an `errors` entry, a `null` repository, a state this version does
+/// not know, JSON that does not parse) is [`ReadingFailure::Passing`].
+pub fn parse_list(body: &[u8]) -> Result<Vec<BranchPullRequest>, ReadingFailure> {
+    const UNREADABLE: ReadingFailure = ReadingFailure::Passing;
+    let answer: ListAnswer = serde_json::from_slice(body).map_err(|_| UNREADABLE)?;
+    if !answer.errors.is_empty() {
+        return Err(UNREADABLE);
+    }
+    let repository = answer
+        .data
+        .and_then(|data| data.repository)
+        .ok_or(UNREADABLE)?;
+    let mut list = Vec::new();
+    for node in repository.pull_requests.nodes {
+        if node.is_cross_repository {
+            continue;
+        }
+        let state = match (node.state.as_str(), node.is_draft) {
+            ("OPEN", true) => BranchPrState::Draft,
+            ("OPEN", false) => BranchPrState::Open,
+            ("MERGED", _) => BranchPrState::Merged,
+            ("CLOSED", _) => BranchPrState::Closed,
+            _ => return Err(UNREADABLE),
+        };
+        list.push(BranchPullRequest {
+            number: node.number,
+            title: node.title,
+            url: node.url,
+            state,
+            created_at: node.created_at,
+            base: node.base_ref_name,
+            head: node.head_ref_oid,
+        });
+    }
+    // GitHub's order is trusted; the sort is a guard (stable, so equal times keep it).
+    list.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+    Ok(list)
+}
+
+/// The list of one `gh` run that asked [`list_args`]: the pull requests when `gh` exited 0 with an
+/// HTTP 200 that [`parse_list`] reads, else the kind [`reading_failure`] names.
+pub fn read_list_outcome(
+    outcome: &RunOutcome,
+    now: u64,
+) -> Result<Vec<BranchPullRequest>, ReadingFailure> {
+    if let RunOutcome::Exited { code: 0, stdout, .. } = outcome {
+        let read = split_response(stdout)
+            .filter(|response| response.status == 200)
+            .map(|response| parse_list(response.body));
+        if let Some(Ok(list)) = read {
+            return Ok(list);
+        }
+    }
+    Err(reading_failure(outcome, now))
+}
+
 // ---- §1: the source ----
 
 /// Where the pull requests of a project's branches are read from. [`crate::github::GhCli`] is the
@@ -673,6 +839,15 @@ pub trait PullRequestSource {
         branches: &[String],
         now: u64,
     ) -> Result<BTreeMap<String, PullRequestStatus>, ReadingFailure>;
+
+    /// Every pull request whose head branch is `branch`, newest first, forks dropped (feature
+    /// 775). One GitHub request, no retry.
+    fn list_branch(
+        &self,
+        repo: &GithubRepo,
+        branch: &str,
+        now: u64,
+    ) -> Result<Vec<BranchPullRequest>, ReadingFailure>;
 }
 
 /// Read `branches` in chunks of [`BRANCHES_PER_REQUEST`], one after another (FR-023).
@@ -701,7 +876,12 @@ type Reading = Result<BTreeMap<String, PullRequestStatus>, ReadingFailure>;
 pub struct FakePullRequestSource {
     script: std::sync::Mutex<std::collections::VecDeque<Reading>>,
     calls: std::sync::Mutex<Vec<(String, Vec<String>)>>,
+    list_script: std::sync::Mutex<std::collections::VecDeque<ListReading>>,
+    list_calls: std::sync::Mutex<Vec<(String, String)>>,
 }
+
+/// One scripted answer of [`FakePullRequestSource::list_branch`].
+type ListReading = Result<Vec<BranchPullRequest>, ReadingFailure>;
 
 impl FakePullRequestSource {
     /// A source with nothing scripted.
@@ -719,6 +899,34 @@ impl FakePullRequestSource {
     pub fn with_failure(self, failure: ReadingFailure) -> Self {
         self.lock_script().push_back(Err(failure));
         self
+    }
+
+    /// Answer the next unanswered `list_branch` with `list`.
+    pub fn with_list_answer(self, list: Vec<BranchPullRequest>) -> Self {
+        self.lock_list_script().push_back(Ok(list));
+        self
+    }
+
+    /// Answer the next unanswered `list_branch` with `failure`.
+    pub fn with_list_failure(self, failure: ReadingFailure) -> Self {
+        self.lock_list_script().push_back(Err(failure));
+        self
+    }
+
+    /// Every `list_branch` so far, as (`owner/name`, branch).
+    pub fn list_calls(&self) -> Vec<(String, String)> {
+        self.list_calls
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
+    }
+
+    fn lock_list_script(
+        &self,
+    ) -> std::sync::MutexGuard<'_, std::collections::VecDeque<ListReading>> {
+        self.list_script
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
     /// Every `read` so far, as (`owner/name`, branches).
@@ -750,6 +958,22 @@ impl PullRequestSource for FakePullRequestSource {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .push((repo.to_string(), branches.to_vec()));
         self.lock_script()
+            .pop_front()
+            .unwrap_or(Err(ReadingFailure::Passing))
+    }
+
+    /// Nothing scripted answers [`ReadingFailure::Passing`].
+    fn list_branch(
+        &self,
+        repo: &GithubRepo,
+        branch: &str,
+        _now: u64,
+    ) -> Result<Vec<BranchPullRequest>, ReadingFailure> {
+        self.list_calls
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push((repo.to_string(), branch.to_string()));
+        self.lock_list_script()
             .pop_front()
             .unwrap_or(Err(ReadingFailure::Passing))
     }

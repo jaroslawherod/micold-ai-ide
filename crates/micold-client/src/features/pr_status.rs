@@ -302,7 +302,7 @@ pub fn removable_from(asked: &[String], answers: &[BranchContainment]) -> BTreeS
 }
 
 /// Whether readings are held back by GitHub's request limit at `now` (FR-024).
-fn paused(state: &State, now: u64) -> bool {
+pub fn paused(state: &State, now: u64) -> bool {
     state.pause_until.is_some_and(|until| now < until)
 }
 

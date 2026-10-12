@@ -549,7 +549,10 @@ sent to GitHub for this. It applies to every project and every open window, and 
 - **Needs:** `gh` installed and signed in (`gh auth login`). Without them the switch can still be
   checked, but nothing is shown and no error appears. Turning it on is your consent; having `gh`
   does not turn it on.
-- Turning it off removes every indicator at once.
+- **The Changes view:** the same switch controls the **Pull requests** section of a worktree's
+  [Changes view](reviewing-changes.md#pull-requests), which lists every pull request of the
+  worktree's branch. With the switch off that section is absent too.
+- Turning it off removes every indicator, and that section, at once.
 
 Save applies it, like every other setting here; another window's change to it shows here without
 waiting for you.

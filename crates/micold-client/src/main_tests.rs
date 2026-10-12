@@ -8910,6 +8910,15 @@ mod pr_status {
                 .expect("the test lets the source go");
             Ok(statuses())
         }
+
+        fn list_branch(
+            &self,
+            _: &micold_core::github::GithubRepo,
+            _: &str,
+            _: u64,
+        ) -> Result<Vec<micold_core::pull_request::BranchPullRequest>, ReadingFailure> {
+            Ok(Vec::new())
+        }
     }
 
     // A12 (FR-021, SC-005): the update that starts the source returns without calling it, and a

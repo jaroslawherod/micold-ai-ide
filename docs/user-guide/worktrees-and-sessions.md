@@ -141,6 +141,9 @@ A merged or closed pull request, and one with no checks, shows the state alone. 
 status has its own shape, so none depends on colour. The indicator keeps its size however wide the
 sidebar is.
 
+The same switch also lists every pull request of a worktree's branch above the file list of its
+[Changes view](reviewing-changes.md#pull-requests).
+
 #### When the status is read
 
 With the switch on, the status of a project is read:

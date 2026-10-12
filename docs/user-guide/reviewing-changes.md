@@ -31,6 +31,26 @@ lists scroll smoothly: only the rows on screen are drawn.
 While the list is read, the view says **Reading changes…**. With nothing to list it says why:
 **No changes against** `<branch>`, **No uncommitted changes**, or that both kinds are hidden.
 
+## Pull requests
+
+With **Show pull request status on worktrees** checked in [Settings →
+GitHub](settings.md#show-pull-request-status-on-worktrees), the list is preceded by a **Pull
+requests** section: every pull request whose head branch is this worktree's branch, newest first.
+Each row has the pull request's state mark, its `#number` and its title. The marks are the ones the
+sidebar uses (see [Pull request status](worktrees-and-sessions.md#pull-request-status)): open,
+draft, merged and closed each have their own shape, so a merged pull request is never mistaken for
+a closed one.
+
+The section is the same for a worktree with no session as for one with sessions, and it shows
+only pull requests of this project's own repository. A pull request opened from a fork is not
+listed.
+
+The working-tree changes below it never wait for the section: they appear first, and the section
+joins when GitHub has answered. The section is absent, with no message and no error, when the switch
+is off, when the entry is the project root or a detached HEAD, when the branch has no pull request,
+and when GitHub cannot be reached (no `gh`, not signed in, no GitHub remote, offline). While GitHub
+cannot be reached after a list was read, the last list stays.
+
 ## Reading a diff
 
 Select a file to see its diff beside the list. Each changed region starts with a header row,
