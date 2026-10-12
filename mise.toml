@@ -134,6 +134,18 @@ command -v "$runtime" >/dev/null 2>&1 || { echo "test-sandbox: $runtime is not i
   sandbox_real_ --no-fail-fast -- --test-threads=1
 """
 
+[tasks.test-ssh]
+description = "Run the real-sshd remote-daemon tests (feature 489): needs the `sshd` and `ssh` binaries, no root [build-locked]"
+run = """
+# `ssh_real_` is matched against **test names**; one test at a time, because each starts its own
+# rootless sshd and a stand-in remote daemon. The harness skips with a printed reason when `sshd`
+# is not installed (it never fails a machine that cannot run it).
+{{config_root}}/scripts/build-lock.sh cargo build -p micold-daemon --features ssh-real-runtime
+{{config_root}}/scripts/build-lock.sh cargo test -p micold-daemon \
+  --features ssh-real-runtime \
+  ssh_real_ --no-fail-fast -- --test-threads=1
+"""
+
 [tasks.build]
 description = "Build the release GUI binary [build-locked]"
 run = "{{config_root}}/scripts/build-lock.sh cargo build --release -p micold-client"

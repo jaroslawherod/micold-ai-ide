@@ -22,6 +22,8 @@ path = "src/main.rs"
 [features]
 default = []
 sandbox-real-runtime = []
+# Feature 489: the `ssh_real_*` suite against a rootless `sshd` (off by default; `mise run test-ssh`).
+ssh-real-runtime = ["micold-core/ssh-real-runtime"]
 
 [dependencies]
 micold-core = { workspace = true }
