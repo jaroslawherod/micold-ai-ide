@@ -23,6 +23,16 @@ host's paths. The connection reconnects by itself after a network drop, the remo
 running meanwhile, and its state is always visible. The app uses the user's existing SSH
 configuration and agent and stores no credentials.
 
+## Clarifications
+
+### Session 2026-10-12
+
+- Q: How does the daemon binary reach the remote host? → A: The client copies its own matching build
+  over the SSH connection to a per-user directory on the host. _(decided by user)_
+- Q: May the client replace a version-mismatched remote daemon that has running sessions? → A: No. It
+  explains only; replacement is offered only when the daemon has no running sessions, otherwise the
+  user ends it themselves. _(decided by user)_
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Work on a remote project end to end (Priority: P1)
@@ -151,15 +161,15 @@ and read the explanation.
 - **SSH agent absent or key not loaded**: authentication failure is reported as such.
 - **Host unreachable at start**: the failure arrives within the connection timeout, naming
   unreachable host, refused connection or DNS failure when distinguishable.
-- **Remote daemon not yet installed**: the client puts it on the host and starts it
-  ([NEEDS CLARIFICATION: how is the daemon delivered to the host: copied from the client, downloaded
-  by the host, or required to be installed by the user?]); a host that cannot be given the daemon
-  (read-only home, unsupported OS or architecture) reports why.
+- **Remote daemon not yet installed**: the client copies its own matching daemon build to the host
+  over the SSH connection, into a per-user directory, and starts it; the host needs no network access
+  and the user installs nothing; a host that cannot be given the daemon (read-only home, unsupported
+  OS or architecture) reports why.
 - **Remote daemon already running** (left by an earlier client run, or another client): reused, not
   started twice; its sessions are visible.
-- **Remote daemon of another version**: see User Story 5; the resolution for a daemon with running
-  sessions is [NEEDS CLARIFICATION: may the client replace a mismatched remote daemon itself, ending
-  its sessions, or only explain and let the user do it?].
+- **Remote daemon of another version**: see User Story 5; the client never ends running sessions to
+  resolve a mismatch. It explains, and offers to replace the remote daemon only when that daemon has
+  no running sessions; otherwise the user ends the sessions or the daemon themselves.
 - **Repository path missing or not a git repository on the host**: refused with the path named.
 - **Same remote host added twice**: refused, naming the daemon that already uses that host and user.
 - **Flapping connection**: repeated drops do not multiply daemons, sessions or reconnect attempts;
@@ -191,8 +201,9 @@ and read the explanation.
   host-key records, and MUST NOT store, request or log a password, passphrase or private key.
 - **FR-004**: The system MUST reach the remote daemon only through the SSH connection and MUST NOT
   open any new network port reachable from another machine, on the remote host or on the client.
-- **FR-005**: The system MUST start the daemon on the remote host when none is running there, and
-  MUST reuse a running one, without the user logging in to the host by hand.
+- **FR-005**: The system MUST start the daemon on the remote host when none is running there, by
+  copying the client's own matching build to a per-user directory on the host over the SSH
+  connection, and MUST reuse a running one, without the user logging in to the host by hand.
 - **FR-006**: The system MUST keep remote sessions and terminals running on the host when the client
   disconnects or quits, and MUST show them, with the output produced meanwhile, on reconnection.
 - **FR-007**: The system MUST reconnect a dropped remote daemon automatically, with a delay between
@@ -213,7 +224,8 @@ and read the explanation.
   or record one on the user's behalf.
 - **FR-011**: The system MUST detect a client and remote daemon version mismatch in both directions,
   mark the daemon `version mismatch`, state both versions and the way out, and MUST NOT start sessions
-  on a mismatched daemon.
+  on a mismatched daemon. The system MUST NOT end running sessions to resolve a mismatch: it offers to
+  replace the remote daemon only when it has no running sessions.
 - **FR-012**: The system MUST list and create worktrees for repositories located on the remote host,
   start sessions and open terminals in them, and show the remote host's paths and the host's name
   wherever a remote worktree appears.
