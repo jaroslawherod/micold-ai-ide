@@ -25,6 +25,10 @@
 
 ### Session 2026-10-12
 
+- Q: Does one-session-per-location hold for Default (project root)? → A: Yes, the same rule _(decided by user)_
+- Q: Which provider session is catalogued when a worktree has several resumable? → A: A single resume is the user's pick; attach-all catalogues the most recent per worktree and leaves the rest listed as resumable _(decided by user)_
+- Q: What happens to legacy worktrees with several sessions? → A: Every record is kept listed and untouched, none is created, starting an extra while another is starting/running is refused naming it, the user may delete extras; SC-001 carves out legacy data _(decided by user)_
+
 - Q: Can an agent resume a provider session into a worktree (FR-008b), and does that need a
   confirmation? → A: No agent path exists: resuming a listed provider session is done in the app
   only (the tool server lists them with `list_resumable_sessions` and attaches worktrees, it never
@@ -133,6 +137,8 @@ data is lost, and no further session can be added.
    neither session is deleted automatically.
 2. **Given** that worktree, **When** the user asks for another session, **Then** it is refused as
    in story 1.
+3. **Given** that worktree with one of its sessions running, **When** another of its sessions is
+   started, **Then** it is refused and the refusal names the running one.
 
 ---
 
@@ -147,14 +153,14 @@ data is lost, and no further session can be added.
 - **Zero-session worktrees**: one created without a definition, one attached with nothing to
   resume, one whose session was deleted, or one from an older catalog: each takes exactly one
   session through the sidebar or `create_session`, and is refused a second.
-- **Default (project root)**: see FR-011.
+- **Default (project root)**: the same rule (FR-011).
 - **Concurrency**: two windows, or an agent and a window, asking at once: one outcome, never two
   sessions (Principle II).
 - **Daemon restart or lost connection** between the check and the create: no duplicate after
   reconnecting.
 - **Worktree deleted** while a create is in flight: the create fails as it does today and leaves no
   session.
-- **Attached provider worktree** (feature 582): see FR-012.
+- **Attached provider worktree** (feature 582): at most one session catalogued (FR-012).
 - **Platforms**: the rule is the same on Linux, macOS and Windows; nothing in it depends on a
   path or process behaviour (Principle VI).
 
@@ -190,15 +196,17 @@ data is lost, and no further session can be added.
 - **FR-010**: A worktree with no session (created without a definition, attached with nothing to
   resume, or its session deleted) MUST be able to take exactly one new session, through the sidebar
   or `create_session`, with its definition given then; after that FR-002 applies.
-- **FR-011**: The rule applies to the Default (project root) location as to named worktrees, unless
-  clarified otherwise. [NEEDS CLARIFICATION: the project root is not a worktree and the constitution
-  lets it host "session(s)"; does one-session-per-location hold for Default too?]
-- **FR-012**: A worktree attached from a provider (feature 582) with sessions to resume MUST follow
-  the rule: at most one of its sessions is catalogued. [NEEDS CLARIFICATION: which one when a
-  provider holds several resumable sessions for the worktree: the most recent, or the user's pick?]
+- **FR-011**: The rule applies to the Default (project root) location exactly as to named
+  worktrees: at most one session, refused second, defined once.
+- **FR-012**: A worktree attached from a provider (feature 582) with several resumable sessions
+  MUST follow the rule: at most one of its sessions is catalogued. A single resume is the user's
+  pick of the listed session; "attach all" catalogues only the most recent session per worktree and
+  leaves the others listed as resumable.
 - **FR-013**: A catalog that already holds several sessions in a worktree MUST open without losing
-  any of them. [NEEDS CLARIFICATION: should the extras be kept and shown read-only, or collapsed
-  to one at open (and which)?]
+  or changing any of them, and no new session may be created there. Starting one of them while
+  another session of that worktree is starting or running MUST be refused, the refusal naming the
+  running one (as FR-003); the user may delete the extras. FR-009's start of a stopped session is
+  subject to this.
 - **FR-014**: The user guide and the tool catalogue (`create_session`, `start_session`,
   `create_worktree`) MUST describe the rule, the definition at start and the refusal's wording.
   The guide states that a second session is refused and that the refusal names the existing one.
@@ -213,7 +221,7 @@ data is lost, and no further session can be added.
 
 ### Measurable Outcomes
 
-- **SC-001**: In any sequence of create, start, stop, restart, resume and delete operations from
+- **SC-001**: Outside legacy catalogs that already held several sessions in a worktree (FR-013), in any sequence of create, start, stop, restart, resume and delete operations from
   any window and any agent, no worktree is ever observed with more than one session.
 - **SC-002**: 100% of second-session requests through the sidebar and the tools are refused with
   an answer that names the existing session.
