@@ -238,7 +238,7 @@ fn boot() -> (App, Task<Message>) {
     // process's own `PATH` — which is the host's, and under the sandboxed placement the sessions
     // are not on the host. Every directory's answer stays unknown ("nobody has said yet") until its
     // `DaemonMsg::AiCliAvailability` arrives; `on_connected` asks for home and for every directory
-    // in the wanted set (visible rows; hidden agent worktrees wait until revealed) as soon as there
+    // in the wanted set (one per worktree row) as soon as there
     // is a service to ask (feature 033, contract C1). An empty picker for one round trip, after
     // launch and after each reconnect, is the honest cost of not guessing.
     let sandbox_state = micold_client::features::sandbox::Sandbox::for_placement(placement);

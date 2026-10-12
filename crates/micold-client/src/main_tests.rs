@@ -4110,10 +4110,7 @@ fn app_on_demo(worktrees: &[(&str, micold_core::worktree::WorktreeStatus, bool)]
 /// directory is gone: D = 2 rows to answer for (the root and `feat-a`).
 fn app_with_mixed_rows() -> App {
     use micold_core::worktree::WorktreeStatus::{Missing, Valid};
-    app_on_demo(&[
-        ("feat-a", Valid, true),
-        ("feat-gone", Missing, true),
-    ])
+    app_on_demo(&[("feat-a", Valid, true), ("feat-gone", Missing, true)])
 }
 
 /// Connect `app` with `catalog` on a channel this test keeps, **without** draining what the
@@ -4216,7 +4213,7 @@ fn open_start_list(app: &mut App, location: SessionLocation) {
 }
 
 /// U22 (FR-006, FR-007, SC-004): the connect asks home once and each row's directory once — none
-/// for a hidden agent worktree or one whose directory is gone.
+/// for one whose directory is gone.
 #[test]
 fn availability_connect_asks_home_and_each_row_directory_once() {
     let mut app = app_with_mixed_rows();

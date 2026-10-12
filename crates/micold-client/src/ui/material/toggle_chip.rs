@@ -1,7 +1,7 @@
 //! `ToggleChip` — a reusable on/off pill control (Constitution Principle VIII).
 //!
 //! Promoted out of `src/ui/sidebar.rs`'s private `filter_chip()` when feature 014 needed the same
-//! look for its "Show agent worktrees" control. Copying those thirty lines of button styling next
+//! look for a second control. Copying those thirty lines of button styling next
 //! to their original is precisely the accretion the Component-reuse gate exists to prevent, so the
 //! primitive moved here and both call sites consume it.
 //!

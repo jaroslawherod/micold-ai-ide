@@ -365,11 +365,10 @@ pub fn menu_dismissed(state: &mut crate::app::State) {
 ///
 /// Optimistic, for the reason `created()` is: the daemon writes the same record a moment later and
 /// the next catalog push confirms it, but the row has to be the user's *in this frame*. Waiting for
-/// the ack would leave a just-claimed row still wearing the `agent` chip, and would make it vanish
-/// under the cursor if the user switched reveal off in the meantime.
+/// the ack would leave the claim menu showing for a worktree the user has just claimed.
 ///
-/// Touches `worktree_provenance` and `menu_open` and nothing else — not `show_agent_worktrees`,
-/// not the filters, not `worktrees`. A claim states who a worktree belongs to; it does not change
+/// Touches `worktree_provenance` and `menu_open` and nothing else — not the
+/// filters, not `worktrees`. A claim states who a worktree belongs to; it does not change
 /// what the sidebar is showing or what it is filtered by.
 pub fn claim_requested(state: &mut crate::app::State, dir: String) {
     if let Some(project) = state.workspace.active_project().map(|p| p.path.clone()) {

@@ -31,7 +31,7 @@ fn managed(dir_name: &str) -> Worktree {
     }
 }
 
-/// A project holding `worktrees`, of which the app recorded creating those in `recorded`, 
+/// A project holding `worktrees`, of which the app recorded creating those in `recorded`,
 fn revealed(worktrees: Vec<Worktree>, recorded: &[&str]) -> State {
     let mut state = State::default();
     state.workspace.projects.push(Project {

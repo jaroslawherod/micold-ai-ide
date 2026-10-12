@@ -135,9 +135,10 @@ fn an_unknown_directory_still_yields_a_name_rather_than_failing() {
 /// changes when `set_worktrees` applies what the daemon actually found.
 #[test]
 fn asking_for_a_refresh_does_not_itself_touch_the_worktree_listing() {
-    let mut st = with_worktrees(
-        vec![worktree("feat-a", "feat/a"), worktree("feat-b", "feat/b")],
-    );
+    let mut st = with_worktrees(vec![
+        worktree("feat-a", "feat/a"),
+        worktree("feat-b", "feat/b"),
+    ]);
     st.sidebar.expanded.insert("feat-a".to_string());
     let before = st.worktree.worktrees.clone();
 
@@ -230,9 +231,10 @@ fn the_bounded_wait_returns_the_control_to_idle() {
 /// holds the other half — that the listing which *does* arrive is reconciled by the shared path.
 #[test]
 fn no_refresh_transition_touches_the_listing_or_the_arrangement_around_it() {
-    let mut st = with_worktrees(
-        vec![worktree("feat-a", "feat/a"), worktree("feat-b", "feat/b")],
-    );
+    let mut st = with_worktrees(vec![
+        worktree("feat-a", "feat/a"),
+        worktree("feat-b", "feat/b"),
+    ]);
     st.sidebar.expanded.insert("feat-a".to_string());
     st.worktree.hovered = Some("feat-b".to_string());
     let listing = st.worktree.worktrees.clone();

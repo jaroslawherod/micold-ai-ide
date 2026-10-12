@@ -16,9 +16,10 @@
 //!
 //! # The vocabulary this feature declares
 //!
-//! Nine transitions in [`Msg`]: expansion (`WorktreeExpansionToggled`, `DefaultExpansionToggled`), the
-//! tag filters and their menu (`FilterToggled`, `FiltersCleared`, `FilterMenuToggled`), the scroll position (`Scrolled`, `ViewportResized`), and the panel
-//! itself (`Toggled`, `DragMoved`). [`update`] routes all nine and is pure (data-model.md §1.1 shape
+//! Nine transitions in [`Msg`]: expansion (`WorktreeExpansionToggled`,
+//! `DefaultExpansionToggled`), the tag filters and their menu (`FilterToggled`, `FiltersCleared`,
+//! `FilterMenuToggled`), the scroll position (`Scrolled`, `ViewportResized`), and the panel itself
+//! (`Toggled`, `DragMoved`). [`update`] routes all nine and is pure (data-model.md §1.1 shape
 //! A) — every one of them is a question about what the sidebar shows, answerable without leaving the
 //! process, so the binary matches none of them again.
 //!
@@ -1082,8 +1083,7 @@ impl crate::app::State {
 
     /// Build the sidebar tree: worktrees (top level) each joined with their sessions and
     /// expansion state (FR-002, FR-003). Sessions are matched to worktrees by `dir_name`.
-    /// Sourced from [`crate::app::State::visible_worktrees`], so agent-owned worktrees produce no row while
-    /// hidden (feature 014, FR-002).
+    /// Built from every worktree in `self.worktree.worktrees` (552: no worktree is hidden by name).
     pub fn worktree_tree(&self) -> Vec<WorktreeNode> {
         let sessions = self.active_sessions();
         self.worktree
@@ -1111,10 +1111,8 @@ impl crate::app::State {
     /// consistent (FR-028).
     /// (Feature 024) The location holding the current session survives the filters, and says so.
     ///
-    /// Two mechanisms hide a row and the exemption has to reach past both: the tag filters here,
-    /// and the hidden-agent-worktree setting, which excludes rows *earlier* — in
-    /// [`crate::app::State::visible_worktrees`], before [`crate::app::State::worktree_tree`] ever sees them. So the
-    /// re-admitted row is built from `self.worktree.worktrees` rather than from the tree above.
+    /// The tag filters hide rows from the tree above, so the re-admitted row is built from
+    /// `self.worktree.worktrees` rather than from that tree.
     ///
     /// Exactly one row can be re-admitted, because there is one current session. That is what keeps
     /// this an exemption rather than a filter bypass (FR-012), and it is why the row carries
@@ -1198,9 +1196,8 @@ impl crate::app::State {
     /// `Type` per conventional type present, `HasIssue` if any worktree embeds an issue key,
     /// and `Untyped` if any worktree lacks a type. Order: types first, then HasIssue, Untyped.
     ///
-    /// Sourced from [`crate::app::State::visible_worktrees`] (feature 014, FR-003): a hidden agent worktree
-    /// must not conjure a chip — its machine name has no conventional type, so it would otherwise
-    /// offer an `Untyped` filter matching nothing the user can see (research R7).
+    /// Sourced from every worktree (552): an `agent-<hex>` worktree is listed like any other, so
+    /// its missing type is a real `Untyped` row.
     pub fn available_tag_filters(&self) -> Vec<TagFilter> {
         let mut types = BTreeSet::new();
         let mut has_issue = false;
@@ -1348,7 +1345,7 @@ pub fn worktrees_replaced(
 /// The six that began with `Sidebar` do not any more — the type says which surface (contract M1),
 /// so `SidebarFilterMenuToggled` is `Msg::FilterMenuToggled`. The other three keep their names:
 /// `WorktreeExpansionToggled` and `DefaultExpansionToggled` say *which row* expanded, and
-/// dropping the word would leave `ExpansionToggled` twice over.
+/// dropping the word would leave two messages with the same name.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Msg {
     WorktreeExpansionToggled(String),

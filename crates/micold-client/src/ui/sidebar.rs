@@ -143,13 +143,9 @@ pub fn view<'a>(state: &'a State, scheme: micold_core::theme::ColorScheme) -> El
     // the reveal still in progress", which only the accordion itself can answer now that it owns
     // its own track — and asking it would mean it could no longer be built from a single pass over
     // the state. A collapsed accordion lays out and hit-tests nothing regardless.
-    //
-    let filter_accordion: Element<'_, Message> = Accordion::new(
-        filter_bar(state, r),
-        r,
-    )
-    .open(state.sidebar.filter_open)
-    .into();
+    let filter_accordion: Element<'_, Message> = Accordion::new(filter_bar(state, r), r)
+        .open(state.sidebar.filter_open)
+        .into();
 
     // The "Default" entry (feature 010) is always present once a project is open — see
     // `sidebar_entries()` — so, unlike before this feature, the sidebar is never truly "empty":
