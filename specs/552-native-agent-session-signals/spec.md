@@ -143,17 +143,15 @@ assert each hit is either gone or sits under a superseded marker naming this fea
 
 ### Edge Cases
 
-- **An agent session's report arrives before the catalog lists that session**: the relationship is
-  stored by the agent session's id, so when the session later appears it is already an agent
-  session of its origin; it is never listed as a user session in between.
-- **A payload names an origin absent from the catalog**: dropped
-  without error, nothing recorded, no phantom session created.
-- **A payload with a missing or malformed session id, or an origin that is not known**: accepted
-  without a transition, logged, and no relationship recorded (the receiver is loopback, best effort).
+- **A report arrives for a session the daemon does not know**: it cannot occur, because the hook URL
+  and bearer token belong to a known session; any other request is refused before its body is read,
+  and nothing is recorded or created (plan research R1).
+- **A payload with a missing or malformed agent id**: accepted without a transition, logged, and no
+  relationship recorded (the receiver is loopback, best effort).
 - **Concurrent agent sessions** (several sub-agents in one origin, in different worktrees or the
   same one): each is recorded independently; no report overwrites another's.
-- **An agent session whose origin was deleted or archived**: the record remains valid and the child
-  is not promoted to a user session by its origin's disappearance.
+- **An agent run whose origin was deleted**: the runs are removed with their origin; a run is not a
+  catalog session, so nothing is promoted to a user session.
 - **Two daemons** (Principle II multi-session): a report about a session of one daemon never
   changes records of the other (FR-014).
 - **Persisted state from before this feature** (hide toggle preference, provenance records and
@@ -211,8 +209,8 @@ assert each hit is either gone or sits under a superseded marker naming this fea
 
 ### Key Entities
 
-- **Agent session record**: the agent session's id and its origin session's id, reported by a
-  provider-native signal, durable across restart.
+- **Agent session record** (the plan's `AgentRun`): the provider's agent id and the origin Micold
+  session that received the signal, reported by a provider-native signal, durable across restart.
 - **Native signal**: a provider hook payload, event or session metadata item that names a session
   and its origin.
 
@@ -236,10 +234,12 @@ assert each hit is either gone or sits under a superseded marker naming this fea
 
 - Issue #551 (nest child sessions under their origin) is the display half; this feature supplies
   the recorded relationship and does not design the tree.
-- Claude's `SubagentStart` / `SubagentStop` hooks carry the agent's session id, the origin's
-  session id and a transcript path. Today the daemon registers neither (`SubagentStop` is
-  deliberately omitted and classified Ignored); the plan must verify the payload fields against
-  Claude's hook schema and add the registration. Background-agent sessions that are not
+- Claude's `SubagentStart` / `SubagentStop` hooks carry the origin's `session_id` and
+  `transcript_path` plus the sub-agent's `agent_id` and `agent_type` (`SubagentStop` adds
+  `agent_transcript_path`); a sub-agent shares its origin's session id and is not a separate
+  Micold session, so "agent session id" below means `agent_id` and the origin is the Micold session
+  that received the hook (plan research R1). Today the daemon registers neither (`SubagentStop` is
+  deliberately omitted and classified Ignored); the plan adds the registration. Background-agent sessions that are not
   sub-agents are covered only if Claude offers a native event for them, to be checked at plan time.
 - Copilot and Pi native signals are to be investigated at plan time; a provider with none is a
   documented gap, not a reason to guess.
