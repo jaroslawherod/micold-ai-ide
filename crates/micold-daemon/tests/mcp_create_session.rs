@@ -93,6 +93,10 @@ impl Sandbox {
         install_cli(bin.path(), "pi", false);
         init_repo(project.path());
         add_worktree(project.path(), "b");
+        // The caller and the seeded session each hold a worktree of their own: a location has at
+        // most one session (feature 776), and the tests create into `b` and `default`.
+        add_worktree(project.path(), "caller");
+        add_worktree(project.path(), "seeded");
         let gone = add_worktree(project.path(), "gone");
         std::fs::remove_dir_all(gone).unwrap();
         trust_project(home.path(), project.path());
@@ -116,8 +120,8 @@ impl Sandbox {
                 project.path().to_path_buf(),
                 true,
                 vec![
-                    session(sid(1), None, TerminalMode::AiCli, AiCli::ClaudeCode),
-                    session(sid(3), Some("b"), TerminalMode::AiCli, AiCli::ClaudeCode),
+                    session(sid(1), Some("seeded"), TerminalMode::AiCli, AiCli::ClaudeCode),
+                    session(sid(3), Some("caller"), TerminalMode::AiCli, AiCli::ClaudeCode),
                 ],
             )],
             store.path(),

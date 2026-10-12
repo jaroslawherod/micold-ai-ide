@@ -231,6 +231,7 @@ async fn worktree_create_git_failure_reports_stderr_and_leaves_no_dir() {
             branch: "bad..branch".into(),
             dir_name: "bad".into(),
             mode: CreateMode::NewBranch,
+            session: None,
         }))
         .await
         .unwrap();

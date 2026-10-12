@@ -105,6 +105,8 @@ impl Sandbox {
         install_cli(bin.path());
         init_repo(project.path());
         add_worktree(project.path(), "b");
+        // The caller's own worktree: `b` is where S2 is created, and a location holds one session.
+        add_worktree(project.path(), "caller");
         init_repo(other.path());
         add_worktree(other.path(), "elsewhere");
         trust_project(home.path(), project.path());
@@ -126,7 +128,7 @@ impl Sandbox {
                     true,
                     vec![
                         session(sid(IDLE), None, TerminalMode::AiCli, AiCli::ClaudeCode),
-                        session(sid(S1), Some("b"), TerminalMode::AiCli, AiCli::ClaudeCode),
+                        session(sid(S1), Some("caller"), TerminalMode::AiCli, AiCli::ClaudeCode),
                     ],
                 ),
                 (
