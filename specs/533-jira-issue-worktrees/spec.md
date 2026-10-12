@@ -112,13 +112,13 @@ A project that has both a GitHub remote and a Jira connection lets the user choo
 - **Key that naming cannot read**: a Jira project key the issue-tag rule in `naming.rs` does not accept as a tag yields a ticket the user can see and edit; the worktree is still created.
 - **Two windows**: a change to the switch or the connection in one window shows in the other without a restart; two windows open on the same project share one connection.
 - **No project open**: the switch can be turned on, the connection fields say a project must be open, and no request is made.
-- **Site URL with a path or trailing slash**: normalised to its origin; a site URL that is `http`, has a user-info part, or names no host is refused (FR-006).
+- **Site URL with a path or trailing slash**: normalised to its origin; a development (debug) build also accepts a loopback `http` origin, for the fake site of the manual pass only (a release build refuses it); any other site URL that is `http`, has a user-info part, or names no host is refused (FR-006).
 - **Two windows saving at once**: the last save wins in both windows; neither window shows a half-written connection.
 - **Token removed during a load**: the load's result is discarded and the picker shows no Jira list (as FR-005).
 - **Token rotated on the Jira side**: the next load shows the refused-credentials notice; saving a new token fixes it.
 - **Proxy and TLS**: a proxy or a certificate failure is a "could not be reached" notice with its reason shortened, never the token.
 - **Platform differences (Principle VI)**: the stored token is readable only by the signed-in user on Linux, macOS and Windows alike; the dialog and Settings are the same on all three.
-- **Daemon and sessions (Principle II)**: no session's start, state or history depends on Jira; the connection lives with the client's settings, not in a session or a daemon.
+- **Daemon and sessions (Principle II)**: no session's start, state or history depends on Jira; the connection lives with the application's settings (the service-owned half, like the pull request status switch), not in a session: no session depends on it.
 - **Jira Data Center and Server**: not supported (FR-023). A site that answers like one shows the could-not-use notice of FR-018, not a wrong list.
 
 ## Requirements *(mandatory)*
@@ -136,7 +136,7 @@ A project that has both a GitHub remote and a Jira connection lets the user choo
 
 **Connection**
 
-- **FR-006**: A connection MUST hold a site URL (an `https` URL, normalised to its origin), a project key, an account email and an API token; saving MUST refuse an empty or malformed value of any of them and mark the field.
+- **FR-006**: A connection MUST hold a site URL (an `https` URL, normalised to its origin; a development build also accepts a loopback `http` origin for the manual pass's fake site, a release build never), a project key, an account email and an API token; saving MUST refuse an empty or malformed value of any of them and mark the field.
 - **FR-007**: A connection MUST belong to one project and be stored on the user's computer with the app's other per-user data; two projects MAY have different connections, and a project with none offers no Jira.
 - **FR-008**: The API token MUST be stored the way the app stores its other secrets: in a file readable only by the signed-in user, separate from the settings file, and never in a project file.
 - **FR-009**: The token MUST NOT appear in `settings.json`, a project file, a log line, a notice, an error message, a session's history or a `Debug` rendering of any type holding it, on any error path.
