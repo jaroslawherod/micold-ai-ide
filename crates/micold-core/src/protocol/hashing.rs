@@ -148,8 +148,16 @@ pub fn schema_hash(messages: &str, grid: &str, envelope: &str) -> [u8; 32] {
 /// without it this function reads as unused there and warns.
 #[allow(dead_code)]
 pub fn sha256_hex(data: &[u8]) -> String {
-    let mut out = String::with_capacity(64);
-    for byte in sha256(data) {
+    hex(&sha256(data))
+}
+
+/// The lowercase hex rendering of `bytes`, two digits per byte.
+///
+/// `allow(dead_code)`: `build.rs` `include!`s this file and never calls it, same as `sha256_hex`.
+#[allow(dead_code)]
+pub fn hex(bytes: &[u8]) -> String {
+    let mut out = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
         out.push_str(&format!("{byte:02x}"));
     }
     out
