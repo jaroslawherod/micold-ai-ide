@@ -97,6 +97,7 @@ pyftsubset _static.ttf \
 | `Daemons`        | `lan`                | `EB2F`         |
 | `Refresh`      | `refresh`              | `E5D5`         |
 | `IssueMapping` | `label`                | `E892`         |
+| `JiraIssues`   | `assignment`           | `E85D`         |
 | `MoveUp`       | `keyboard_arrow_up`    | `E316`         |
 | `MoveDown`     | `keyboard_arrow_down`  | `E313`         |
 

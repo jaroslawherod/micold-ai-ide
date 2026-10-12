@@ -1999,6 +1999,33 @@ impl DaemonState {
         self.change_settings(|catalog| catalog.set_pr_status_enabled(on))
     }
 
+    /// Turn the Jira integration on or off (feature 533, FR-002). Pushes `SettingsChanged` to
+    /// every client, so every window follows the switch (FR-022).
+    pub fn set_jira_enabled(&self, on: bool) -> std::io::Result<()> {
+        let settings = {
+            let mut inner = self.lock();
+            inner.catalog.set_jira_enabled(on)?;
+            inner.catalog.settings_wire()
+        };
+        self.broadcast(DaemonMsg::SettingsChanged { settings });
+        Ok(())
+    }
+
+    /// Upsert or remove one project's Jira connection (feature 533, FR-006). Pushes
+    /// `SettingsChanged` carrying the whole merged map to every client.
+    pub fn set_jira_connection(
+        &self,
+        change: &micold_core::settings::JiraConnectionChange,
+    ) -> std::io::Result<()> {
+        let settings = {
+            let mut inner = self.lock();
+            inner.catalog.set_jira_connection(change)?;
+            inner.catalog.settings_wire()
+        };
+        self.broadcast(DaemonMsg::SettingsChanged { settings });
+        Ok(())
+    }
+
     /// Set the Changes view's diff layout (feature 482, R12). Pushes `SettingsChanged` to every
     /// client, so every window shows the next diff in it.
     pub fn set_diff_layout(

@@ -935,6 +935,9 @@ fn adopt_daemon_settings(app: &mut App, settings: micold_core::protocol::message
     app.core.session.notification_kinds = settings.notification_kinds;
     app.core.session.long_task_threshold_secs = settings.long_task_threshold_secs;
     app.core.session.cross_session_access = settings.cross_session_access;
+    // Feature 533: the Jira switch and connections in force, in every window (FR-022).
+    app.core.settings.jira_enabled = settings.jira_enabled;
+    app.core.settings.jira_connections = settings.jira_connections;
     // Feature 490: the switch and threshold in force; off forgets the reading (FR-002).
     app.core.plan_usage.settings(
         settings.plan_usage_enabled,
@@ -985,8 +988,16 @@ fn refresh_open_settings(app: &mut App) {
     // Called on the service's own push, so its switch is the value in force even before this
     // window counts as connected.
     now.pr_status_enabled = app.core.pr_status.enabled;
+    now.jira_enabled = app.core.settings.jira_enabled;
+    now.jira_connections = app.core.settings.jira_connections.clone();
+    let project = app
+        .core
+        .workspace
+        .active_project()
+        .map(|project| project.path.clone());
     if let Some(draft) = app.core.settings.settings_draft.as_mut() {
         draft.refresh_untouched(&now);
+        draft.jira.follow(project, &now.jira_connections);
     }
 }
 

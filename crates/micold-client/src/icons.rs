@@ -109,6 +109,9 @@ pub enum Icon {
     Refresh,
     /// The Settings section that maps issue labels to worktree types (feature 034, FR-018).
     IssueMapping,
+    /// The Settings section for the Jira integration (feature 533): Material's `assignment`, the
+    /// clipboard-with-lines glyph, as the issue tracker's section mark.
+    JiraIssues,
     /// Move a list entry one place up (feature 034's mapping editor).
     MoveUp,
     /// Move a list entry one place down (feature 034's mapping editor).
@@ -186,6 +189,7 @@ impl Icon {
         Icon::Daemons,
         Icon::Refresh,
         Icon::IssueMapping,
+        Icon::JiraIssues,
         Icon::MoveUp,
         Icon::MoveDown,
         Icon::NeedsPermission,
@@ -254,6 +258,8 @@ impl Icon {
             Icon::Refresh => '\u{e5d5}',
             // `label` — the tag glyph GitHub's own label chips echo.
             Icon::IssueMapping => '\u{e892}',
+            // `assignment`.
+            Icon::JiraIssues => '\u{e85d}',
             // `keyboard_arrow_up` / `keyboard_arrow_down`. Not `arrow_upward`: that codepoint is
             // already `NavigateUp`'s, and two icons never share one.
             Icon::MoveUp => '\u{e316}',

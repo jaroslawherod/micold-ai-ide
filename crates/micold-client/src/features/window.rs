@@ -145,6 +145,8 @@ pub enum FieldId {
     SettingsSaveTerminalHistory,
     /// The Settings → GitHub pull request status switch (feature 040).
     SettingsPrStatus,
+    /// Settings -> Jira: the **Enable Jira integration** switch (feature 533).
+    SettingsJiraEnabled,
     /// Settings → Daemons: the form's name field (feature 491).
     DaemonName,
     /// Settings → Daemons: the form's container name field (feature 491).

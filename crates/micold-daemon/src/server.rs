@@ -1216,6 +1216,8 @@ where
                 tool_server_enabled,
                 cross_session_access,
                 pr_status_enabled,
+                jira_enabled,
+                jira_connection,
                 desktop_notifications,
                 notification_kinds,
                 long_task_threshold_secs,
@@ -1263,6 +1265,14 @@ where
                 })
                 .and_then(|()| match pr_status_enabled {
                     Some(on) => state.set_pr_status_enabled(on),
+                    None => Ok(()),
+                })
+                .and_then(|()| match jira_enabled {
+                    Some(on) => state.set_jira_enabled(on),
+                    None => Ok(()),
+                })
+                .and_then(|()| match &jira_connection {
+                    Some(change) => state.set_jira_connection(change),
                     None => Ok(()),
                 })
                 .and_then(|()| match desktop_notifications {

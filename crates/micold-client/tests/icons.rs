@@ -44,6 +44,7 @@ fn expected(icon: Icon) -> char {
         Icon::Daemons => '\u{eb2f}',
         Icon::Refresh => '\u{e5d5}',
         Icon::IssueMapping => '\u{e892}',
+        Icon::JiraIssues => '\u{e85d}',
         Icon::MoveUp => '\u{e316}',
         Icon::MoveDown => '\u{e313}',
         Icon::NeedsPermission => '\u{e925}',
@@ -94,8 +95,9 @@ fn all_covers_every_variant_without_duplicates() {
     // `block`, `check`, `schedule`, `cancel`; `edit` is `Rename`'s and `close` is `Close`'s), +1 for `OpenInBrowser`
     // (feature 040's **Open pull request** menu entry — `open_in_new`), +2 for feature 484's pane
     // split buttons (`vertical_split`, `horizontal_split`), +1 for feature 490's plan-usage
-    // indicator (`data_usage`) and +1 for its warning look (`warning`).
-    assert_eq!(Icon::ALL.len(), 52, "curated set size");
+    // indicator (`data_usage`) and +1 for its warning look (`warning`), +1 for feature 533's Jira
+    // settings section (`assignment`; no other icon shares its codepoint).
+    assert_eq!(Icon::ALL.len(), 53, "curated set size");
 
     // No duplicate variants.
     for (i, &a) in Icon::ALL.iter().enumerate() {

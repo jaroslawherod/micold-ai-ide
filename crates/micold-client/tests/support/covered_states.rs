@@ -1630,6 +1630,46 @@ pub fn covered_states() -> &'static [CoveredState] {
                 path: &[0, 0, 1, 0, 0, 0],
             }],
         },
+        // Settings -> Jira (feature 533, FR-001, FR-004): the switch off, which is the whole page
+        // (no credential field, nothing but the switch and its description), and the switch on
+        // with an open project that has no connection yet.
+        CoveredState {
+            name: "settings-view-jira-off",
+            build: || {
+                let mut state = with_project();
+                state.settings.settings_draft = Some(SettingsDraft {
+                    section: SettingsSection::Jira,
+                    ..SettingsDraft::default()
+                });
+                StateUnderTest::new(state)
+            },
+            anchors: &[Anchor {
+                name: "settings.rail",
+                path: &[0, 0, 1, 0, 0, 0],
+            }],
+        },
+        CoveredState {
+            name: "settings-view-jira-on-no-connection",
+            build: || {
+                let mut state = with_project();
+                let project = state
+                    .workspace
+                    .active_project()
+                    .map(|project| project.path.clone());
+                let mut draft = SettingsDraft {
+                    section: SettingsSection::Jira,
+                    ..SettingsDraft::default()
+                };
+                draft.jira.enabled = true;
+                draft.jira.project = project;
+                state.settings.settings_draft = Some(draft);
+                StateUnderTest::new(state)
+            },
+            anchors: &[Anchor {
+                name: "settings.rail",
+                path: &[0, 0, 1, 0, 0, 0],
+            }],
+        },
         // Feature 040 (UI §2, §6): the pull request indicator on a row, with the switch on. The
         // first row has an open pull request with failing checks (the widest form), the third a
         // merged one (the narrowest), and the second none — a row without one beside rows with, so

@@ -1,7 +1,7 @@
 # Settings
 
 Open **Settings** from the overflow menu (the three-dots button) in the top toolbar. It fills the
-main area, with a rail down the left listing six sections. The app bar and the connection strip
+main area, with a rail down the left listing seven sections. The app bar and the connection strip
 stay where they are, so the way back out is always in view.
 
 **Collapse**, at the bottom of the rail, slides the rail in to its icons and gives the width to the
@@ -22,6 +22,7 @@ holding it and marks the field — press **Cancel**, or Esc, to leave without sa
 | [Daemons](#daemons) | The session services you have set up: add, edit, start, stop and remove them |
 | [Session service](#session-service) | Where sessions run, and what that service can reach |
 | [GitHub](#github) | Whether worktrees show their pull request, and which worktree type an issue's labels choose |
+| [Jira](#jira) | Whether Jira issues can start worktrees, and whether the open project is connected |
 
 <!-- media: settings-view-light -->
 
@@ -582,6 +583,23 @@ fix or delete it.
 
 A saved change applies to the next issue you pick, in every open project, without a restart. It is
 kept in `settings.json` with your other settings.
+
+## Jira
+
+### Enable Jira integration
+
+The switch is **off** by default. While it is off the app shows no Jira control anywhere else, asks
+for no Jira credentials and sends nothing to Jira, whether or not a connection was ever saved.
+
+Turning it on lets Micold read the open issues of a Jira Cloud project to start worktrees from. The
+page then says whether the integration is enabled and, for the open project, which Jira site and
+project it is connected to, or that it has no Jira connection yet. With no project open it says to
+open one. Once a project is connected, Micold contacts that connection's Jira site and sends the
+project key, the search text you type and your account email with its API token.
+
+The switch is one setting for the whole app, kept in `settings.json`, and a change made in one open
+window shows in every other without a restart. A settings file written before the integration
+existed reads as off.
 
 ## Where settings are stored
 

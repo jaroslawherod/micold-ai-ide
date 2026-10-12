@@ -250,6 +250,13 @@ pub(crate) fn open_settings(app: &mut App) -> crate::shell::env_include::ScriptP
     // issue pick reads the store at the moment of the pick (feature 034, FR-014a).
     let current = settings_in_force(app);
     let mut draft = SettingsDraft::from_settings(&current);
+    draft.jira.follow(
+        app.core
+            .workspace
+            .active_project()
+            .map(|project| project.path.clone()),
+        &current.jira_connections,
+    );
     // What this machine's runtime can enforce is not a setting and is not in the file — it is the
     // probe's answer, which lands on the sandbox state when a bring-up succeeds. The form needs it
     // to decide which limits are editable (FR-015), so it is carried across here rather than
@@ -322,6 +329,17 @@ pub(crate) fn window_settings(app: &App, stored: Settings) -> Settings {
         } else {
             stored.pr_status_enabled
         },
+        // Connected, the service's value is the truth, as for the switch above (feature 533).
+        jira_enabled: if app.active_outbox().is_some() {
+            app.core.settings.jira_enabled
+        } else {
+            stored.jira_enabled
+        },
+        jira_connections: if app.active_outbox().is_some() {
+            app.core.settings.jira_connections.clone()
+        } else {
+            stored.jira_connections.clone()
+        },
         ..stored
     }
 }
@@ -373,6 +391,9 @@ fn set_changed(target: &mut Settings, saved: &Settings, baseline: Option<&Settin
         cross_session_access: _,
         issue_label_types: _,
         pr_status_enabled: _,
+        jira_enabled: _,
+        // Written by its own per-project change, never by a save of the form (feature 533).
+        jira_connections: _,
         desktop_notifications: _,
         notification_kinds: _,
         long_task_threshold_secs: _,
@@ -420,6 +441,7 @@ fn set_changed(target: &mut Settings, saved: &Settings, baseline: Option<&Settin
     set!(notification_kinds);
     set!(long_task_threshold_secs);
     set!(pr_status_enabled);
+    set!(jira_enabled);
     set!(plan_usage_enabled);
     set!(plan_usage_warn_percent);
     // The placement and profile live in the registry's single entry too (feature 491, FR-005):
@@ -447,6 +469,7 @@ struct ServiceChanges {
     notification_kinds: Option<micold_core::attention::NotificationKinds>,
     long_task_threshold_secs: Option<u64>,
     pr_status_enabled: Option<bool>,
+    jira_enabled: Option<bool>,
     plan_usage_enabled: Option<bool>,
     plan_usage_warn_percent: Option<u8>,
 }
@@ -467,6 +490,8 @@ impl ServiceChanges {
             diff_layout: None,
             cross_session_access: self.cross_session_access,
             pr_status_enabled: self.pr_status_enabled,
+            jira_enabled: self.jira_enabled,
+            jira_connection: None,
             notification_kinds: self.notification_kinds,
             long_task_threshold_secs: self.long_task_threshold_secs,
             plan_usage_enabled: self.plan_usage_enabled,
@@ -497,6 +522,7 @@ fn service_changes(saved: &Settings, baseline: Option<&Settings>) -> Option<Serv
         notification_kinds: changed!(notification_kinds),
         long_task_threshold_secs: changed!(long_task_threshold_secs),
         pr_status_enabled: changed!(pr_status_enabled),
+        jira_enabled: changed!(jira_enabled),
         plan_usage_enabled: changed!(plan_usage_enabled),
         plan_usage_warn_percent: changed!(plan_usage_warn_percent),
     };

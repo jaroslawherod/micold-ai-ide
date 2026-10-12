@@ -154,7 +154,11 @@
 ///
 /// And 43 → 44 for feature 776's main session (contracts/wire.md, amendment 2026-10-14):
 /// `SessionSummary::main` and `ClientMsg::SessionSetMain`; the catalog snapshot's shape changes.
-pub const PROTOCOL_VERSION: u32 = 44;
+///
+/// And 44 → 45 for feature 533's Jira switch, in one edit (contracts/jira-connection.md §1):
+/// `jira_enabled` and `jira_connections` on `DaemonSettings`, and `jira_enabled` and
+/// `jira_connection` on `ClientMsg::SettingsSet`. An older peer would fail to decode any of them.
+pub const PROTOCOL_VERSION: u32 = 45;
 
 // `build.rs` emits `pub const SCHEMA_HASH: [u8; 32] = [...];` into this file.
 include!(concat!(env!("OUT_DIR"), "/schema_hash.rs"));
