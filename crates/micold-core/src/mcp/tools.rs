@@ -479,7 +479,11 @@ const TOOLS: &[Tool] = &[
             existing branch is refused: use branch with mode instead. The result carries the \
             worktree row plus branch, directory, and for derived inputs type and ticket. Any \
             session may create a worktree, one running in the project root (Default) too; \
-            renaming and deleting a worktree are refused from there.",
+            renaming and deleting a worktree are refused from there. When the worktree is for an \
+            issue or ticket, include the issue reference in its name: pass it as `ticket` (with \
+            `type` and `name`) or as `github_issue`, not inside a literal `branch`, so the branch \
+            is `${type}/${ticket}_${name}` and the directory `${type}-${ticket}_${name}`; the \
+            sidebar's issue tag and filter then work.",
         properties: || {
             json!({
                 "branch": {"type": "string", "minLength": 1,
@@ -499,7 +503,8 @@ const TOOLS: &[Tool] = &[
                     "description": "Derived only: the Conventional-Commits type."},
                 "ticket": {"type": "string",
                     "description": "Derived only: a ticket reference, slugified as the form does; \
-                        blank means none."},
+                        blank means none. It is what makes the sidebar issue tag and the issue \
+                        filter work: a worktree without it gets neither."},
                 "github_issue": {"type": "integer", "minimum": 1,
                     "description": "Derived only: a GitHub issue number. Fills ticket, name and type from the open issue; explicit values win."},
             })

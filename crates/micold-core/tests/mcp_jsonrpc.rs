@@ -112,6 +112,9 @@ fn initialize_declares_tools_without_list_changes_and_names_the_server() {
         "another project's sessions and worktrees are reported as not found",
         "ask the user in the app first",
         "needs_confirmation",
+        // feature 532: the issue-reference convention.
+        "include the issue reference",
+        "${type}/${ticket}_${name}",
     ] {
         assert!(
             instructions.contains(phrase),

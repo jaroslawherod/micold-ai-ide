@@ -31,7 +31,9 @@ pub const INSTRUCTIONS: &str =
 project this session belongs to, and only that project: another project's sessions and worktrees \
 are reported as not found. Changes made here are the same operations the user performs in the app \
 and appear in its windows at once. Operations that stop, interrupt or delete another session or a \
-worktree ask the user in the app first and fail with needs_confirmation when nobody answers.";
+worktree ask the user in the app first and fail with needs_confirmation when nobody answers. When a worktree is for an issue or ticket, \
+include the issue reference in its name, by passing `ticket` (or `github_issue`) to \
+create_worktree, which names it `${type}/${ticket}_${name}`.";
 
 /// One parsed JSON-RPC message.
 #[derive(Debug, Clone, PartialEq)]

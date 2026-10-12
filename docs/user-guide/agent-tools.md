@@ -35,7 +35,7 @@ These tools make changes, exactly as the sidebar does:
 
 | Tool | What it does |
 |---|---|
-| `create_worktree` | Creates a worktree for a branch, as the new-worktree dialog does: under `.claude/worktrees/`, named after the branch unless a name is given, and marked as created by the application. By default it makes a new branch; `existing_local` checks out a branch that exists and is free, and `track_remote` tracks a remote branch. Instead of a branch, it can take a `type`, a `ticket` and a `name`, as the new-worktree form does (see below) |
+| `create_worktree` | Creates a worktree for a branch, as the new-worktree dialog does: under `.claude/worktrees/`, named after the branch unless a name is given, and marked as created by the application. By default it makes a new branch; `existing_local` checks out a branch that exists and is free, and `track_remote` tracks a remote branch. Instead of a branch, it can take a `type`, a `ticket` and a `name`, as the new-worktree form does (see below); a worktree for an issue should be created this way, or with `github_issue`, so that it carries the issue reference |
 | `attach_worktree` | Attaches a worktree an AI CLI created, as **Attach existing...** in the app does, so it shows in the sidebar with its sessions and is no longer hidden. Give its folder name, its absolute path or its branch. Nothing is checked out, moved or deleted. The result says `attached` or `already_attached`. A path or branch that is not a worktree of this project is refused as not found, and `default`, an ambiguous branch, a worktree whose folder is missing or invalid, or one that is not under an AI CLI's worktree location, is refused as invalid input; nothing changes in any of those cases |
 | `rename_worktree` | Gives a worktree a new name in the sidebar, as the sidebar's rename does. Its folder and branch stay as they are. The name cannot be empty, and `default` (the project folder) cannot be renamed |
 | `create_session` | Creates a session in a worktree (or in `default`, the project folder) and starts it. It runs the AI CLI the assistant names, or your default AI CLI from Settings. It can also be given a first prompt to type into the new session |
@@ -48,7 +48,8 @@ These tools make changes, exactly as the sidebar does:
 `name`) or the inputs of the new-worktree form, never both:
 
 - `type`: one of `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `build`, `ci`, `perf`, `style`.
-- `ticket`: optional; a reference such as `#123` or `ABC-123`. Blank means none.
+- `ticket`: optional; a reference such as `#123` or `ABC-123`. Blank means none. It is what puts
+  the issue tag on the worktree's sidebar row and makes the issue filter find it.
 - `github_issue`: optional; the number of an open issue in the project's GitHub repository (see
   below).
 - `name`: the description. Without a `branch` it is the description, not the folder name.
@@ -59,6 +60,12 @@ type and issue tags in the sidebar. Without a ticket there is no ticket part. Th
 worktree and also its `branch`, `directory`, `type` and (when there is one) `ticket`. A derived
 branch that already exists is refused, and nothing is created: use `branch` with `mode` to reuse
 it.
+
+When a worktree is for an issue or ticket, an agent should include the issue reference in its name:
+pass `ticket` (with `type` and `name`) or `github_issue`, which name the branch
+`${type}/${ticket}_${name}` and the folder `${type}-${ticket}_${name}`. A literal `branch` that does
+not carry the `_` boundary gets no issue tag and is missed by the issue filter. The tool's own
+description and the server's `initialize` instructions tell the agent the same.
 
 With `github_issue`, the issue fills in what you leave out, as picking it in the form does: the
 ticket is the issue number, the name is its title (cut to fit, as the form cuts it) and the type

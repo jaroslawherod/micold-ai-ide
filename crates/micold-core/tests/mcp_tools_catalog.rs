@@ -254,6 +254,47 @@ fn create_worktree_schema_lists_the_derived_inputs() {
     assert!(description.contains("never both"), "{description}");
 }
 
+/// FR-001, FR-002, FR-006, SC-004: the guidance names the convention, the issue-reference rule
+/// and the inputs that carry it, so a session passes the ticket as its own input.
+#[test]
+fn create_worktree_guidance_states_the_issue_reference_convention() {
+    let listing = micold_core::mcp::tools::list_result();
+    let tool = listing["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|t| t["name"] == "create_worktree")
+        .unwrap();
+    let description = tool["description"].as_str().unwrap();
+    for phrase in [
+        "${type}/${ticket}_${name}",
+        "${type}-${ticket}_${name}",
+        "include the issue reference",
+        "`ticket`",
+        "`github_issue`",
+        "not inside a literal `branch`",
+    ] {
+        assert!(
+            description.contains(phrase),
+            "the description must say {phrase:?}: {description}"
+        );
+    }
+    let ticket = tool["inputSchema"]["properties"]["ticket"]["description"]
+        .as_str()
+        .unwrap();
+    for phrase in [
+        "slugified as the form does",
+        "blank means none",
+        "issue tag",
+        "issue filter",
+    ] {
+        assert!(
+            ticket.contains(phrase),
+            "the ticket input must say {phrase:?}: {ticket}"
+        );
+    }
+}
+
 #[test]
 fn derived_inputs_parse_to_a_derived_request() {
     assert_eq!(
