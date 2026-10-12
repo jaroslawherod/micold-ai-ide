@@ -89,7 +89,6 @@ async fn answer(client: &mut Client, req: u64) -> DaemonMsg {
                     m @ (DaemonMsg::OperationError { req: r, .. }
                     | DaemonMsg::OperationOk { req: r, .. }),
                 ) if r == req => return m,
-                Frame::Control(m @ DaemonMsg::SessionCreated { .. }) => return m,
                 _ => continue,
             }
         }
@@ -135,7 +134,10 @@ async fn refused_in_worktree_with(running: bool) {
             ..
         } => {
             assert_eq!(kind, ErrorKind::Refused);
-            assert!(message.contains("wt"), "names the location: {message}");
+            assert!(
+                message.contains("already has a session"),
+                "names the occupant: {message}"
+            );
             assert_eq!(
                 detail.as_deref(),
                 Some(sid(1).0.to_string().as_str()),
@@ -195,11 +197,11 @@ async fn a_worktree_with_only_an_archived_session_accepts_one() {
     assert!(
         matches!(
             answer(&mut client, 1).await,
-            DaemonMsg::SessionCreated { .. } | DaemonMsg::OperationOk { .. }
+            DaemonMsg::OperationOk { .. }
         ),
         "an archived session does not occupy the worktree"
     );
-    assert_eq!(count(&state, project.path()), 2);
+    assert_eq!(count(&state, project.path()), 1, "the new session; archived ones are not listed");
     kill_all(&state, project.path());
 }
 
@@ -232,8 +234,7 @@ async fn a_hundred_concurrent_creates_for_an_empty_worktree_make_exactly_one() {
                         match client.next().await.expect("stream open").unwrap() {
                             Frame::Control(
                                 m @ (DaemonMsg::OperationError { .. }
-                                | DaemonMsg::OperationOk { .. }
-                                | DaemonMsg::SessionCreated { .. }),
+                                | DaemonMsg::OperationOk { .. }),
                             ) => return m,
                             _ => continue,
                         }

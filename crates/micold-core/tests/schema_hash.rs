@@ -260,7 +260,11 @@ fn the_build_fingerprint_is_a_separate_mechanism_from_the_schema_hash() {
 /// And 39 → 40 for feature 490's plan usage (contracts/plan-usage-wire.md): `plan_usage` on
 /// `Welcome`, `PlanUsageChanged`, and the two plan-usage settings on `DaemonSettings` and
 /// `SettingsSet`, in one edit.
-const FEATURE_026_PROTOCOL_VERSION: u32 = 40;
+///
+/// And 40 → 41 for feature 776's one session per worktree: `WorktreeCreate.session`,
+/// `WorktreeCreated.session`, `AttachItem::Session`, `AttachResult.existing` and
+/// `RefuseReason::LocationHasSession`, in one edit.
+const FEATURE_026_PROTOCOL_VERSION: u32 = 41;
 
 #[test]
 fn the_wire_changes_for_this_feature_cost_exactly_one_version_bump() {

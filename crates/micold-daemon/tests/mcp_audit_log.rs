@@ -100,6 +100,8 @@ async fn fixture(caller: SessionId) -> Fixture {
     init_repo(project.path());
     add_worktree(project.path(), "b");
     add_worktree(project.path(), "c");
+    // A worktree with no session, for `create_session` (one session per location, feature 776).
+    add_worktree(project.path(), "d");
     git(project.path(), &["branch", "taken"]);
     let state = state_over(
         vec![(
@@ -205,7 +207,7 @@ fn good_call(tool: &str, caller: SessionId) -> Value {
         "create_worktree" => json!({"branch": "audit-ok"}),
         "rename_worktree" => json!({"worktree": "b", "display_name": "Audited"}),
         "attach_worktree" => json!({"worktree": "b"}),
-        "create_session" => json!({"worktree": "b", "ai_cli": "copilot"}),
+        "create_session" => json!({"worktree": "d", "ai_cli": "copilot"}),
         "start_session" => json!({"session": caller.0.to_string()}),
         // An idle session: a no-op success, asked of nobody.
         "stop_session" => json!({"session": sibling(caller, SHELL).0.to_string()}),
@@ -360,7 +362,7 @@ async fn a_prompt_never_reaches_the_log() {
         .call(
             caller,
             "create_session",
-            json!({"worktree": "b", "ai_cli": "copilot", "prompt": PROMPT_MARKER}),
+            json!({"worktree": "d", "ai_cli": "copilot", "prompt": PROMPT_MARKER}),
         )
         .await;
     assert_eq!(result["isError"], json!(false), "{result}");

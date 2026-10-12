@@ -77,6 +77,10 @@ impl Fixture {
         }
         init_repo(project.path());
         add_worktree(project.path(), "b");
+        // One session per location (feature 776): the caller and each seeded CLI have their own.
+        for dir in ["caller", "codex", "opencode"] {
+            add_worktree(project.path(), dir);
+        }
         let mut path = vec![bin.path().to_path_buf()];
         path.extend(["/usr/bin", "/bin"].map(PathBuf::from));
         let env = Env::set(&[
@@ -101,9 +105,9 @@ impl Fixture {
                 sessions: [(
                     project.path().to_path_buf(),
                     vec![
-                        session(sid(3), Some("b"), TerminalMode::AiCli, AiCli::ClaudeCode),
-                        session(sid(4), Some("b"), TerminalMode::AiCli, AiCli::Codex),
-                        session(sid(5), Some("b"), TerminalMode::AiCli, AiCli::OpenCode),
+                        session(sid(3), Some("caller"), TerminalMode::AiCli, AiCli::ClaudeCode),
+                        session(sid(4), Some("codex"), TerminalMode::AiCli, AiCli::Codex),
+                        session(sid(5), Some("opencode"), TerminalMode::AiCli, AiCli::OpenCode),
                     ],
                 )]
                 .into(),

@@ -369,9 +369,7 @@ fn send_msg(req: u64, project: &Path, dir: &str) -> ClientMsg {
 }
 
 /// The session a send started: `ReviewSent { started: true }` naming the session that now runs.
-/// With at most one session per worktree (FR-001) that is the entry's own session when it has
-/// one, resumed, and a new record only when it has none.
-fn started_session(result: &Result<OperationResult, (ErrorKind, String)>) -> SessionId {
+fn started_any_session(result: &Result<OperationResult, (ErrorKind, String)>) -> SessionId {
     match result {
         Ok(OperationResult::ReviewSent {
             session,
@@ -381,9 +379,10 @@ fn started_session(result: &Result<OperationResult, (ErrorKind, String)>) -> Ses
     }
 }
 
-/// [`started_session`], asserting it is a new record, not one of the sandbox's.
-fn started_new_session(result: &Result<OperationResult, (ErrorKind, String)>) -> SessionId {
-    let session = started_session(result);
+/// [`started_any_session`], asserting it is a new session, not one of the sandbox's records
+/// (which the attach prunes: they hold no conversation).
+fn started_session(result: &Result<OperationResult, (ErrorKind, String)>) -> SessionId {
+    let session = started_any_session(result);
     assert!(
         !(1..=3).map(sid).any(|known| known == session),
         "a new session, not an existing record: {}",
@@ -699,12 +698,6 @@ async fn us3_s1_with_no_session_running_one_starts_and_its_first_input_is_the_pr
 
     let (result, seen) = send(&mut client, 2, &project, "wt").await;
     let new = started_session(&result);
-    assert_eq!(new, sid(1), "the entry's own session is started, not a second one (FR-001)");
-    assert_eq!(
-        s.state.sessions_for(&project).len(),
-        3,
-        "no session was added to the project"
-    );
     let (cwd, cli) = s
         .state
         .session_cwd_and_cli(new)
@@ -740,7 +733,7 @@ async fn us3_s1_the_default_entry_starts_its_session_in_the_project_root() {
     let expected = prompt::build(EntryKind::Default, &pending(&comments), &[]);
 
     let (result, _) = send(&mut client, 2, &project, "").await;
-    let new = started_new_session(&result);
+    let new = started_session(&result);
     let (cwd, _) = s.state.session_cwd_and_cli(new).unwrap();
     assert_eq!(
         cwd, project,
@@ -758,13 +751,14 @@ async fn r10_an_ended_session_is_started_again_and_no_second_one_is_created() {
     let s = Sandbox::new().await;
     let project = s.project();
     s.start(sid(1), false).await;
+    // Attached while S1 is live, so the attach's pruning of conversation-less sessions spares it.
+    let mut client = window(&s.state, &project).await;
     assert!(
         micold_daemon::ops::stop_session(&s.state, sid(1))
             .await
             .unwrap(),
         "S1 ends"
     );
-    let mut client = window(&s.state, &project).await;
     add(
         &mut client,
         1,
@@ -778,12 +772,12 @@ async fn r10_an_ended_session_is_started_again_and_no_second_one_is_created() {
     .await;
 
     let (result, _) = send(&mut client, 2, &project, "wt").await;
-    let new = started_session(&result);
+    let new = started_any_session(&result);
     assert_eq!(new, sid(1), "the ended session is started again (R10)");
     s.typed_holds(new, "Again for S1.").await;
     assert_eq!(
         s.state.sessions_for(&project).len(),
-        3,
+        1,
         "no second session was created"
     );
 }
