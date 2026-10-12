@@ -15,7 +15,7 @@ Alternatives rejected: infer from adoption timing (FR-002 forbids it).
 
 Decision: add `AiCliProvider::reported_origin(&self, config_dir, cwd, session_id) -> Option<Uuid>`
 defaulting to `None`. A provider gets a reader only after its signal is confirmed against a
-recorded fixture in the first implementation task (spike). An unconfirmed provider ships as a gap.
+recorded fixture in the spike (T025, the first task of M1, before any reader). An unconfirmed provider ships as a gap.
 
 | Provider | Candidate native signal | Status |
 |---|---|---|
@@ -57,7 +57,7 @@ Alternatives rejected: validate in the client (several writers and windows).
 Decision: `Catalog::create_session` takes `origin: Option<SessionId>`; the tool passes
 `Some(caller)` when the target worktree equals the caller's (FR-019), else `None` (FR-009). The
 origin is recorded in the same `persist()` as the new session, so no child exists without it.
-The caller's lifecycle is not required (a caller that exits after spawning still records).
+The caller's lifecycle is not required (a caller that exits after spawning still records); a caller that is archived records no origin (`validate_origin` rejects an archived candidate for a tool-server spawn).
 Alternatives rejected: a second call after creation (a crash between leaves a top-level child).
 
 ## R6. Fold state persistence

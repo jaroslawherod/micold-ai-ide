@@ -6,7 +6,7 @@
 - [x] No implementation details (hook and tool-server names appear only as provider mechanism examples and the `create_session` edge case)
 - [x] Focused on user value
 - [x] Mandatory sections completed
-- [ ] No [NEEDS CLARIFICATION] markers remain (3 open: fold-state persistence, children of a stopped or deleted origin, sessions created through the tool server; each goes to the clarify unit)
+- [x] No [NEEDS CLARIFICATION] markers remain (the three open ones were clarified: spec Clarifications, Decisions 1-3)
 - [x] Requirements testable
 - [x] Success criteria measurable and technology-agnostic
 - [x] Acceptance scenarios and edge cases defined
