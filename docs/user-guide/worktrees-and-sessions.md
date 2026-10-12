@@ -232,10 +232,9 @@ stays applied either way. Whenever a filter is active, the filter button itself 
 so you can tell filtering is on even with the panel closed.
 
 **One exception, and only one.** The worktree holding your current session stays listed even when
-your filters exclude it — including when it's an [agent worktree](#agent-worktrees) you have
-hidden. It sits where it would sit unfiltered, and carries a **current session** chip saying why
+your filters exclude it — including when it's an [agent worktree](#agent-worktrees). It sits where it would sit unfiltered, and carries a **current session** chip saying why
 it's there, so a row that survived a filter it doesn't match is never unexplained. Every other
-excluded worktree stays hidden, and the exception disappears as soon as you move to a session
+excluded worktree stays out of the list, and the exception disappears as soon as you move to a session
 somewhere your filters do allow. Adding it changes nothing about the filter chips on offer.
 
 ### Agent worktrees
@@ -243,82 +242,30 @@ somewhere your filters do allow. Adding it changes nothing about the filter chip
 AI coding assistants create worktrees of their own inside your project, in the same
 `.claude/worktrees/` folder the app manages. Some are throwaway scratch worktrees for a background
 sub-task, with machine-generated names like `agent-a885b42dc521fbda1`. Others are ordinary session
-worktrees the assistant made because you asked it to work on something, and those carry perfectly
-normal names — `fix-the-parser`, `try-the-new-api` — indistinguishable from anything you would type
-yourself.
+worktrees the assistant made because you asked it to work on something.
 
-**The app lists the worktrees it created for you, and hides the rest.** When you add a worktree
-here, the app writes down that it made it, and that note is what puts it in the sidebar. A worktree
-that turns up in the managed folder without one — because an assistant made it, or because you
-created it by hand with `git worktree add` — is hidden. Hidden worktrees aren't counted and never
-appear as somewhere you can start a session.
+**The app lists every worktree git reports for the project.** It does not guess who made a worktree
+from its name, and there is no "Show agent worktrees" switch and no `agent` chip. A worktree
+called `agent-something` is listed like `fix-the-parser`, and renaming a folder or branch never
+changes whether it shows or where it sits. Tag filters apply to every row alike.
 
-This is why a worktree's *name* no longer decides anything. Naming one `agent-something` doesn't
-hide it if you made it here, and giving one an ordinary name doesn't reveal it if you didn't.
+Every row is **fully live**: you can start a session in one, rename it, or delete it, with the
+same confirmation as any other worktree. Deleting a worktree an agent is still using will disrupt
+whatever it was doing, exactly as it would from a terminal.
 
-Hiding is display-only. The app never deletes, prunes, renames, or otherwise modifies a hidden
-worktree or its branch — that lifecycle belongs to whoever created it. `git worktree list` in a
-terminal still shows everything.
-
-**To see them in the app**, open the filter panel and tap **Show agent worktrees**. They join the
-list, each marked with a muted `agent` chip so you can always tell them apart from your own work.
-Tag filters apply to them exactly as they do to everything else.
-
-**The number beside the switch** is how many worktrees it is currently withholding — exactly the
-number of rows that appear when you turn it on. It counts only worktrees in the managed folder that
-the app has no note for; worktrees you keep elsewhere are never hidden and never counted. When
-there is nothing to reveal the number is absent rather than zero, and once the switch is on it
-disappears, because at that point nothing is being held back.
-
-Two things to know about that switch:
-
-- It **resets itself** — every time you restart the app, and every time you switch projects. It
-  applies only to the project you turned it on for, so you never land somewhere new with
-  unexplained extra rows.
-- Revealed rows are **fully live**: you can start a session in one, rename it, or delete it, with
-  the same confirmation as any other worktree. There is no extra safety net, so take care —
-  deleting a worktree an agent is still using will disrupt whatever it was doing, exactly as it
-  would from a terminal.
-
-**Worktrees the app didn't create.** If you keep a worktree you made yourself in
-`.claude/worktrees/`, it will be hidden along with the assistant's. Reveal it, then use **Claim as
-mine** in its right-click menu — the app writes down the same note it would have written had it
-created the worktree, and the row stays listed from then on, including after a restart. Nothing on
-disk changes: no branch is touched, no file is moved, and uncommitted work in the worktree is left
-exactly as it was. Claiming the same worktree twice does nothing the second time, and it works
-whatever the worktree is called — including names that look like the assistant's own.
-
-There is no undo, on purpose: un-claiming would hide the very row you used to do it, so the row
-would disappear mid-click. A note goes away when the worktree does — delete the worktree, or forget
-the project, and nothing is left behind.
-
-Worktrees kept anywhere else on disk are never hidden on these grounds; see
-[Including a worktree that already exists](#including-a-worktree-that-already-exists) if you
-have one.
-
-**What happened at the upgrade.** The first time this version opens a project, it looks for
-worktrees you demonstrably worked in — ones you had renamed, or that hold a session the app
-remembers — and adopts those, so they stay listed without your doing anything. That pass runs once
-per project. Anything it couldn't find evidence for is hidden, and **Claim as mine** brings back any
-it missed.
-
-**If the app can't read what it saved for a project**, nothing is hidden on these grounds: every
-worktree in the folder is listed, without `agent` chips and without a number beside the switch,
-because the app genuinely doesn't know which ones are yours. It also stops saving that project's
-notes for as long as the file stays unreadable, rather than replacing it with an empty one — so a
-passing glitch can't quietly erase what it knew. The file is left untouched for you to inspect or
-delete; once it reads cleanly again, everything resumes as before.
+Worktrees kept anywhere else on disk are listed only when you asked for them; see
+[Including a worktree that already exists](#including-a-worktree-that-already-exists).
 
 ### Attaching worktrees an assistant made
 
 If you lost the app's notes (a new machine, a deleted data folder), or an assistant made worktrees
-the app never recorded, they are hidden and you would otherwise have to switch on **Show agent
-worktrees** to see them. Instead, press the folder button in the sidebar header (its tooltip reads
-**Attach existing…**). It needs a project to be open.
+the app never recorded, they are listed in the sidebar all the same. To have the app record them,
+press the folder button in the sidebar header (its tooltip reads **Attach existing…**). It needs a
+project to be open.
 
 The dialog lists the project's worktrees that the app has no record of, each with its branch. Tick
 the ones you want and press **Attach selected**, or press **Attach all**. Attached worktrees appear
-in the sidebar like any worktree you created, with **Show agent worktrees** still off. A worktree
+in the sidebar like any worktree you created. A worktree
 whose folder is gone, or that git no longer knows, is listed with the reason and can't be ticked.
 
 Attaching only records the worktree in the app. It never creates, deletes or checks out anything:
@@ -667,7 +614,7 @@ came from:
 | `feat/login` | A local branch, ready to use. |
 | `feat/reporting · origin` | Exists on `origin`, not yet on this machine. |
 | `feat/login · in use by feat-login` | Already checked out in that worktree — not available. |
-| `feat/login · in use by a hidden agent worktree` | Held by an agent worktree, which the sidebar hides by default. |
+| `feat/login · in use by an agent worktree` | Held by an agent worktree, which has its own sidebar row. |
 | `fix/olx · in use outside this app` | Held by a worktree the app doesn't manage — see below. |
 | `main · in use by the project checkout` | The project's own current branch — not available. |
 
@@ -716,8 +663,8 @@ Where it is can be one of four places, and the message tells you which:
 
 - **Another of your worktrees** — named by its folder, which is its row in the sidebar.
 - **The project's own checkout** — the branch the project directory itself is on.
-- **A hidden agent worktree** — one of the app's own, but not currently listed. Turn on
-  **Show agent worktrees** in the sidebar to see it.
+- **An agent worktree** — one an assistant made inside the project's worktree folder; it has its
+  own row in the sidebar.
 - **A worktree outside this app** — one git knows about that this app doesn't manage: another
   tool's worktree directory (`.git-paw/worktrees/…` and the like), or a checkout in some unrelated
   folder. These never appear in the sidebar however you filter, so the message gives the **full
@@ -1341,8 +1288,7 @@ need you without expanding them.
   raises it the same way.
 - **In words.** Hover the row: its tooltip ends with the count in words, for example *2 unread
   sessions*.
-- **Hidden worktrees.** A worktree the sidebar hides — by a tag filter, or an agent's worktree
-  while **Show agent worktrees** is off — has no row to carry the number. Its unread sessions are
+- **Filtered-out worktrees.** A worktree the sidebar hides with a tag filter has no row to carry the number. Its unread sessions are
   counted only on the project switcher. The one exception is the worktree of the session you are
   in: its row stays listed, and carries its number like any other.
 

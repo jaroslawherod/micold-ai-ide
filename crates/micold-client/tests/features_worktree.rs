@@ -1,7 +1,7 @@
 //! Worktree visibility and naming, in isolation (feature 021, SC-004).
 //!
-//! An honest caveat about what "isolation" can mean in Tier 1: `visible_worktrees`,
-//! `has_visible_worktrees` and `worktree_display_name` are `impl State` methods, and `State` is
+//! An honest caveat about what "isolation" can mean in Tier 1: `worktree_tree`,
+//! and `worktree_display_name` are `impl State` methods, and `State` is
 //! still the monolith. So this file does build a `State` — it has no choice, and pretending
 //! otherwise by testing something weaker would be worse.
 //!
@@ -17,7 +17,6 @@
 //! is drawing.
 
 use micold_client::app::State;
-use micold_client::features::sidebar;
 use micold_client::features::worktree;
 use micold_core::project::{Availability, Project};
 use micold_core::worktree::{Worktree, WorktreeStatus};
@@ -44,19 +43,14 @@ fn agent_worktree() -> Worktree {
 }
 
 /// A state holding `worktrees`, none of which the app recorded creating.
-fn with_worktrees(worktrees: Vec<Worktree>, reveal: bool) -> State {
-    with_records(worktrees, &[], reveal)
+fn with_worktrees(worktrees: Vec<Worktree>) -> State {
+    with_records(worktrees, &[])
 }
 
 /// A state holding `worktrees`, of which the app recorded creating those named in `recorded`.
-fn with_records(worktrees: Vec<Worktree>, recorded: &[&str], reveal: bool) -> State {
+fn with_records(worktrees: Vec<Worktree>, recorded: &[&str]) -> State {
     let path = PathBuf::from("/p");
     let mut state = State {
-        sidebar: sidebar::State {
-            show_agent_worktrees: reveal,
-            ..Default::default()
-        },
-
         worktree: worktree::State {
             worktrees,
             ..Default::default()
@@ -77,53 +71,26 @@ fn with_records(worktrees: Vec<Worktree>, recorded: &[&str], reveal: bool) -> St
 }
 
 #[test]
-fn an_assistant_owned_worktree_is_hidden_until_it_is_revealed() {
-    let hidden = with_worktrees(vec![agent_worktree()], false);
-    let shown = with_worktrees(vec![agent_worktree()], true);
+fn an_agent_named_worktree_is_listed() {
+    let st = with_worktrees(vec![agent_worktree()]);
 
     assert_eq!(
-        hidden.visible_worktrees().count(),
-        0,
-        "the assistant's own scratch worktrees are noise in the user's sidebar by default"
-    );
-    assert_eq!(
-        shown.visible_worktrees().count(),
+        st.worktree_tree().len(),
         1,
-        "revealing them shows them; hiding is a filter, not a deletion"
+        "every discovered worktree is listed; no name or record hides one (552 FR-001)"
     );
 }
 
 #[test]
-fn hiding_a_worktree_does_not_remove_it() {
-    let st = with_worktrees(vec![agent_worktree()], false);
-
-    assert_eq!(
-        st.worktree.worktrees.len(),
-        1,
-        "visibility is a view concern — pruning, renaming and session lookup all reason about \
-         existence, and a hidden worktree still exists"
-    );
-    assert!(
-        !st.has_visible_worktrees(),
-        "nothing visible, so the sidebar must say 'no worktrees yet' rather than offering to \
-         clear a filter that is not set"
-    );
-}
-
-#[test]
-fn a_user_owned_worktree_is_visible_whether_or_not_reveal_is_on() {
+fn a_recorded_worktree_is_listed() {
     let mine = worktree("feat-thing", "feat/thing");
 
-    for reveal in [false, true] {
-        assert_eq!(
-            with_records(vec![mine.clone()], &["feat-thing"], reveal)
-                .visible_worktrees()
-                .count(),
-            1,
-            "the reveal control adds the assistant's worktrees; it must never subtract the \
-             user's own (reveal = {reveal})"
-        );
-    }
+    assert_eq!(
+        with_records(vec![mine], &["feat-thing"])
+            .worktree_tree()
+            .len(),
+        1
+    );
 }
 
 #[test]
@@ -131,7 +98,6 @@ fn a_worktree_with_no_rename_falls_back_to_a_name_derived_from_its_directory() {
     let st = with_records(
         vec![worktree("feat-add-thing", "feat/add-thing")],
         &["feat-add-thing"],
-        false,
     );
 
     let name = st.worktree_display_name("feat-add-thing");
@@ -171,7 +137,6 @@ fn an_unknown_directory_still_yields_a_name_rather_than_failing() {
 fn asking_for_a_refresh_does_not_itself_touch_the_worktree_listing() {
     let mut st = with_worktrees(
         vec![worktree("feat-a", "feat/a"), worktree("feat-b", "feat/b")],
-        false,
     );
     st.sidebar.expanded.insert("feat-a".to_string());
     let before = st.worktree.worktrees.clone();
@@ -267,7 +232,6 @@ fn the_bounded_wait_returns_the_control_to_idle() {
 fn no_refresh_transition_touches_the_listing_or_the_arrangement_around_it() {
     let mut st = with_worktrees(
         vec![worktree("feat-a", "feat/a"), worktree("feat-b", "feat/b")],
-        false,
     );
     st.sidebar.expanded.insert("feat-a".to_string());
     st.worktree.hovered = Some("feat-b".to_string());

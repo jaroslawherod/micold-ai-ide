@@ -10,23 +10,6 @@ use micold_client::features::worktree;
 use micold_client::features::worktree::Msg as WorktreeMsg;
 use micold_client::ui::terminal::StripTab;
 
-/// Which dialog is open, by name — the question `state.overlay` answered before T037 deleted it.
-/// Asked of the registry, which reads each dialog's own state, so this is the same question about
-/// the same fact rather than a weaker one.
-/// Switch project the way the root does: apply the outcomes, don't just produce them (T067a-6).
-///
-/// `switch_active` reports arriving in a project rather than performing its view resets, so a test
-/// that dropped the outcomes would assert against a half-applied switch.
-fn switch(state: &mut State, path: &std::path::Path) -> bool {
-    match state.switch_active(path) {
-        Some(outcomes) => {
-            micold_client::app::drain(outcomes, |o| micold_client::app::interpret(state, o));
-            true
-        }
-        None => false,
-    }
-}
-
 /// Change the current session the way the root does (T067a-6): the commit of the outgoing row and
 /// the armed scroll are outcomes now, so a test that dropped them would assert against half a move.
 fn set_current(state: &mut State, next: Option<SessionId>) {
@@ -34,6 +17,9 @@ fn set_current(state: &mut State, next: Option<SessionId>) {
     micold_client::app::drain(outcomes, |o| micold_client::app::interpret(state, o));
 }
 
+/// Which dialog is open, by name — the question `state.overlay` answered before T037 deleted it.
+/// Asked of the registry, which reads each dialog's own state, so this is the same question about
+/// the same fact rather than a weaker one.
 fn open_dialog(state: &State) -> Option<&'static str> {
     micold_client::overlay::registry::open_dialog(state).map(|open| open.id().as_str())
 }
@@ -610,9 +596,7 @@ fn escape_cancels_worktree_rename() {
 
 // --- Feature 014 US3: everything derived from the list stays consistent ---
 
-/// A worktree the app has no record of creating (029 FR-004). Pushed onto a fixture's list
-/// *without* a matching `record_user_created`, which is what hides it — the `agent-<hex>` name is
-/// 014's and now decides nothing.
+/// A worktree with the `agent-<hex>` name an assistant gives its own. Listed like any other (552).
 fn agent_worktree(hex: &str) -> Worktree {
     let dir = format!("agent-{hex}");
     Worktree {
@@ -625,10 +609,9 @@ fn agent_worktree(hex: &str) -> Worktree {
 }
 
 #[test]
-fn hidden_worktrees_offer_no_tag_filters() {
-    // FR-003 / research R7: an agent worktree's machine name carries no conventional type, so
-    // leaving it in `available_tag_filters()` would conjure an `Untyped` chip that matches nothing
-    // the user can see — the most confusing possible way for this to fail.
+fn an_agent_named_worktree_counts_as_untyped_like_any_other_untyped_row() {
+    // 552: every listed row feeds the filter set, so a row whose machine name carries no
+    // conventional type offers the `Untyped` chip, and that chip matches the row.
     let mut state = state_with_worktree_and_session("feat-x");
     state
         .worktree
@@ -636,35 +619,25 @@ fn hidden_worktrees_offer_no_tag_filters() {
         .push(agent_worktree("a885b42dc521fbda1"));
 
     let filters = state.available_tag_filters();
-    assert!(
-        !filters.contains(&TagFilter::Untyped),
-        "a hidden worktree must not contribute a filter chip, got {filters:?}"
-    );
+    assert!(filters.contains(&TagFilter::Untyped), "got {filters:?}");
     assert!(filters.contains(&TagFilter::Type(ConventionalType::Feat)));
 }
 
 #[test]
-fn empty_state_distinguishes_no_worktrees_from_none_visible() {
-    // FR-003 / US1 acceptance #2: a project whose only worktrees are agent-owned must read as
-    // "no worktrees yet", not "nothing matched the filter" — there is no filter to clear.
+fn the_sidebar_hint_follows_whether_any_worktree_exists() {
     let agent_only = State {
         worktree: worktree::State {
             worktrees: vec![agent_worktree("a885b42dc521fbda1")],
             ..Default::default()
         },
-
         ..Default::default()
     };
-    assert!(!agent_only.has_visible_worktrees());
-
-    let with_user = state_with_worktree_and_session("feat-x");
-    assert!(with_user.has_visible_worktrees());
-
-    assert!(!State::default().has_visible_worktrees());
+    assert_eq!(agent_only.worktree_tree().len(), 1);
+    assert!(State::default().worktree_tree().is_empty());
 }
 
 #[test]
-fn rename_override_for_a_hidden_worktree_survives_reload() {
+fn rename_override_for_an_agent_named_worktree_survives_reload() {
     // The pruning in `set_worktrees` reasons about EXISTENCE, not visibility: a hidden worktree
     // still exists, so dropping its rename override would silently lose user data the moment the
     // reveal control is switched on (contracts/agent-worktree-classification.md § non-consumers).
@@ -690,91 +663,6 @@ fn rename_override_for_a_hidden_worktree_survives_reload() {
         "Scratch",
         "a hidden worktree still exists, so its rename override must not be pruned"
     );
-}
-
-// --- Feature 014 US4: the reveal control ---
-
-#[test]
-fn reveal_control_is_off_by_default() {
-    // FR-010a: the safe default, with no persisted field to migrate.
-    assert!(!State::default().sidebar.show_agent_worktrees);
-}
-
-#[test]
-fn toggling_reveal_changes_only_that_field() {
-    // FR-010d: the reveal control and the tag filters are independent. Clobbering the filters
-    // would silently discard the user's filtering work every time they peeked at agent worktrees.
-    let mut state = state_with_worktree_and_session("feat-x");
-    state.update(Message::Sidebar(SidebarMsg::FilterToggled(
-        TagFilter::Type(ConventionalType::Feat),
-    )));
-    state.update(Message::Sidebar(SidebarMsg::WorktreeExpansionToggled(
-        "feat-x".to_string(),
-    )));
-    let filters_before = state.sidebar.filters.clone();
-    let expanded_before = state.sidebar.expanded.clone();
-    let dialog_before = open_dialog(&state);
-
-    state.update(Message::Sidebar(SidebarMsg::ShowAgentWorktreesToggled));
-
-    assert!(state.sidebar.show_agent_worktrees);
-    assert_eq!(state.sidebar.filters, filters_before);
-    assert_eq!(state.sidebar.expanded, expanded_before);
-    assert_eq!(open_dialog(&state), dialog_before);
-}
-
-#[test]
-fn two_toggles_restore_the_prior_list() {
-    let mut state = state_with_worktree_and_session("feat-x");
-    state
-        .worktree
-        .worktrees
-        .push(agent_worktree("a885b42dc521fbda1"));
-    let before: Vec<String> = state
-        .worktree_tree()
-        .iter()
-        .map(|n| n.worktree.dir_name.clone())
-        .collect();
-
-    state.update(Message::Sidebar(SidebarMsg::ShowAgentWorktreesToggled));
-    assert_eq!(state.worktree_tree().len(), 2, "revealed");
-    state.update(Message::Sidebar(SidebarMsg::ShowAgentWorktreesToggled));
-
-    let after: Vec<String> = state
-        .worktree_tree()
-        .iter()
-        .map(|n| n.worktree.dir_name.clone())
-        .collect();
-    assert_eq!(after, before);
-}
-
-#[test]
-fn switching_projects_resets_the_reveal_control() {
-    // FR-010e: view state switched on for one project must not silently render in another. The
-    // filter accordion is collapsed by default, so a sticky toggle would show unexplained extra
-    // rows with its cause hidden behind a closed panel.
-    let mut state = state_with_worktree_and_session("feat-x");
-    let other = PathBuf::from("/other-repo");
-    state.workspace.projects.push(Project {
-        path: other.clone(),
-        display_name: "other-repo".to_string(),
-        is_git_repo: true,
-        availability: Availability::Available,
-    });
-
-    state.update(Message::Sidebar(SidebarMsg::ShowAgentWorktreesToggled));
-    assert!(state.sidebar.show_agent_worktrees);
-
-    assert!(switch(&mut state, &other));
-    assert!(
-        !state.sidebar.show_agent_worktrees,
-        "the incoming project must be entered with agent worktrees hidden"
-    );
-
-    // Switching back does not restore it either — nothing is remembered per project.
-    let first = PathBuf::from("/repo");
-    assert!(switch(&mut state, &first));
-    assert!(!state.sidebar.show_agent_worktrees);
 }
 
 // --- Feature 027: the tab strip is the only route between a session's panes ---

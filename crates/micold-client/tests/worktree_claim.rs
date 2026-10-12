@@ -13,7 +13,6 @@
 
 use micold_client::app::{Message, State};
 use micold_client::features::worktree::Msg as WorktreeMsg;
-use micold_core::naming::Tag;
 use micold_core::project::{Availability, Project};
 use micold_core::worktree::{Worktree, WorktreeStatus};
 use std::path::PathBuf;
@@ -32,9 +31,7 @@ fn managed(dir_name: &str) -> Worktree {
     }
 }
 
-/// A project holding `worktrees`, of which the app recorded creating those in `recorded`, with the
-/// reveal control on — the only state from which a claim is reachable, since a hidden worktree
-/// draws no row to right-click.
+/// A project holding `worktrees`, of which the app recorded creating those in `recorded`, 
 fn revealed(worktrees: Vec<Worktree>, recorded: &[&str]) -> State {
     let mut state = State::default();
     state.workspace.projects.push(Project {
@@ -48,7 +45,6 @@ fn revealed(worktrees: Vec<Worktree>, recorded: &[&str]) -> State {
         state.workspace.record_user_created(&project(), dir);
     }
     state.worktree.worktrees = worktrees;
-    state.sidebar.show_agent_worktrees = true;
     state
 }
 
@@ -56,17 +52,6 @@ fn claim(state: &mut State, dir: &str) {
     state.update(Message::Worktree(WorktreeMsg::ClaimRequested(
         dir.to_string(),
     )));
-}
-
-fn node_tags(state: &State, dir: &str) -> Vec<Tag> {
-    state
-        .worktree_tree()
-        .into_iter()
-        // By `dir_name`, the identity — `display_name` is the friendly prose derived from it
-        // ("hand-made" renders as "Hand made"), so matching on it finds nothing.
-        .find(|n| n.worktree.dir_name == dir)
-        .unwrap_or_else(|| panic!("no row for {dir}"))
-        .tags
 }
 
 // --- FR-022: the row is the user's in the same frame -------------------------------------------
@@ -84,44 +69,6 @@ fn a_claim_records_the_worktree_immediately() {
     assert!(
         state.workspace.is_user_created(&project(), "hand-made"),
         "the record is written by the reducer, not awaited from the daemon (FR-022)"
-    );
-}
-
-#[test]
-fn a_claimed_row_loses_the_agent_chip_in_the_same_frame() {
-    let mut state = revealed(vec![managed("hand-made")], &[]);
-    assert!(
-        node_tags(&state, "hand-made").contains(&Tag::Agent),
-        "precondition: revealed, unrecorded, so marked"
-    );
-
-    claim(&mut state, "hand-made");
-
-    assert!(
-        !node_tags(&state, "hand-made").contains(&Tag::Agent),
-        "the chip reads off the same record the claim just wrote"
-    );
-}
-
-#[test]
-fn a_claimed_worktree_survives_switching_the_reveal_control_off() {
-    let mut state = revealed(
-        vec![managed("feat-login"), managed("hand-made")],
-        &["feat-login"],
-    );
-    claim(&mut state, "hand-made");
-
-    state.sidebar.show_agent_worktrees = false;
-
-    let listed: Vec<String> = state
-        .visible_worktrees()
-        .map(|w| w.dir_name.clone())
-        .collect();
-    assert_eq!(
-        listed,
-        vec!["feat-login".to_string(), "hand-made".to_string()],
-        "the claim is what keeps it listed; if it only survived while revealed it would vanish \
-         under the cursor the moment the user switched the control off"
     );
 }
 
@@ -151,8 +98,7 @@ fn a_reserved_convention_name_is_claimable_like_any_other() {
     assert!(state
         .workspace
         .is_user_created(&project(), "agent-a885b42dc521fbda1"));
-    state.sidebar.show_agent_worktrees = false;
-    assert_eq!(state.visible_worktrees().count(), 1, "and it stays listed");
+    assert_eq!(state.worktree_tree().len(), 1, "and it stays listed");
 }
 
 // --- Sole mutation ------------------------------------------------------------------------------
@@ -177,11 +123,6 @@ fn the_claim_closes_the_row_menu_and_touches_nothing_else() {
         state.worktree.menu_open.is_none(),
         "the claim was chosen from the menu, so the menu closes — the courtesy every other menu \
          action does"
-    );
-    assert!(
-        state.sidebar.show_agent_worktrees,
-        "and the reveal control is left exactly as the user set it: a claim says who a worktree \
-         belongs to, not what the sidebar should be showing"
     );
     assert_eq!(state.sidebar.filters, filters_before, "filters untouched");
     assert_eq!(

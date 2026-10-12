@@ -57,9 +57,7 @@ use crate::overlay::registry::Registered;
 use crate::overlay::{DismissalRules, FloatingSurface, SurfaceId};
 use micold_core::naming::{display_name, parse_tags, Tag};
 use micold_core::overlay::Layer;
-use micold_core::worktree::{
-    classify_owner, ProvenanceView, Worktree, WorktreeOwner, WorktreeStatus,
-};
+use micold_core::worktree::{Worktree, WorktreeStatus};
 
 /// What this feature remembers (feature 028, contract S1).
 ///
@@ -121,23 +119,15 @@ pub struct WorktreeRenameDraft {
 }
 
 /// The tags for a worktree: the derived type + issue tags, plus a status tag when the
-/// worktree is not `Valid` (FR-002, FR-003, FR-011).
+/// worktree is not `Valid` (FR-002, FR-003, FR-011). Derived from the directory name and status
+/// only; no tag says who made the worktree (552 FR-001).
 ///
 /// `pub(crate)` rather than private: the sidebar's row and chip projections both read it from
-/// `features/sidebar.rs`. It was private while it and its callers shared one file, and the
-/// widening is the cost of the boundary — Tier 3 revisits it (T062).
-pub(crate) fn worktree_tags(worktree: &Worktree, provenance: &ProvenanceView<'_>) -> Vec<Tag> {
+/// `features/sidebar.rs`.
+pub(crate) fn worktree_tags(worktree: &Worktree) -> Vec<Tag> {
     let mut tags = parse_tags(&worktree.dir_name);
     if worktree.status != WorktreeStatus::Valid {
         tags.push(Tag::Status(worktree.status));
-    }
-    // Feature 014 (FR-010b), now decided by the record rather than by the name (029 FR-015).
-    // Injected here rather than in `parse_tags`, which sees only the directory name — and under
-    // provenance could not decide this from any name at all. The tag, its label and its
-    // non-filterability are untouched (FR-015a); what changed is which worktrees carry it.
-    // Only ever *seen* when the reveal control is on, since a hidden worktree produces no row.
-    if classify_owner(worktree, provenance) == WorktreeOwner::Agent {
-        tags.push(Tag::Agent);
     }
     tags
 }
@@ -153,77 +143,9 @@ impl crate::app::State {
             .unwrap_or_else(|| display_name(dir_name))
     }
 
-    /// What this app knows about who created the active project's worktrees (029 FR-004).
-    ///
-    /// Private, and rebuilt per call rather than cached: the record set lives in
-    /// [`crate::app::State::workspace`], where the catalog snapshot keeps it current, and a cached
-    /// view is a second copy that can be stale for exactly one frame — the frame in which a
-    /// just-created worktree would appear unrecorded, which is the bug FR-010 forbids.
-    ///
-    /// With no active project there is nothing to classify against; [`ProvenanceView::none`] is
-    /// correct rather than merely convenient, since the worktree list is empty too.
-    ///
-    /// `pub(crate)` for the same reason as [`worktree_tags`], which now needs it: the sidebar's
-    /// row and chip projections live in `features/sidebar.rs`, so the classification input has to
-    /// cross that boundary with them.
-    pub(crate) fn provenance_view(&self) -> ProvenanceView<'_> {
-        let Some(project) = self.workspace.active_project() else {
-            return ProvenanceView::none();
-        };
-        ProvenanceView {
-            records: self.workspace.user_created_worktrees(&project.path),
-            // FR-011: a project whose durable state could not be read hides nothing.
-            state_unreadable: self.workspace.unreadable_projects.contains(&project.path),
-        }
-    }
-
-    /// The worktrees currently shown to the user (feature 014, FR-002/FR-003): all of them while
-    /// the reveal control is on, only user-owned ones while it is off.
-    ///
-    /// The single source every worktree surface reads from — [`crate::app::State::worktree_tree`],
-    /// [`crate::app::State::available_tag_filters`], and the sidebar's empty-state hint — so hiding, counting,
-    /// and filtering agree by construction instead of via three separate filters that can drift
-    /// (contracts/agent-worktree-classification.md).
-    ///
-    /// Note what does NOT read this: `set_worktrees`'s pruning and [`crate::app::State::sessions_in_worktree`]
-    /// reason about *existence*, not visibility. A hidden worktree still exists, and its rename
-    /// override must survive.
-    pub fn visible_worktrees(&self) -> impl Iterator<Item = &Worktree> {
-        let show_all = self.sidebar.show_agent_worktrees;
-        let provenance = self.provenance_view();
-        self.worktree
-            .worktrees
-            .iter()
-            .filter(move |w| show_all || classify_owner(w, &provenance) == WorktreeOwner::User)
-    }
-
-    /// How many worktrees the reveal control is currently withholding (feature 029, FR-025).
-    ///
-    /// Zero while the control is on — it is withholding nothing then — and zero for a project
-    /// whose worktrees are all the user's.
-    ///
-    /// Defined as the *difference* between the whole list and the visible one rather than as a
-    /// second filter over the same predicate (FR-025b). Two filters that had to agree would be two
-    /// places to get the rule wrong, and the number beside a control is a promise about what that
-    /// control does: switching it on must add exactly this many rows, always.
-    pub fn hidden_worktree_count(&self) -> usize {
-        self.worktree.worktrees.len() - self.visible_worktrees().count()
-    }
-
-    /// Whether any worktree is currently visible (feature 014, FR-003). Drives the sidebar's
-    /// choice between "No worktrees yet" and "No worktrees match the filter": a project whose only
-    /// worktrees are agent-owned has none *visible*, so it must get the former — offering a
-    /// "Clear filters" action when no filter is active would be nonsense (research R7).
-    ///
-    /// Lives here rather than in the `gui`-only sidebar so the decision is testable
-    /// (Principle I).
-    pub fn has_visible_worktrees(&self) -> bool {
-        self.visible_worktrees().next().is_some()
-    }
-
     /// Whether the worktree listing can be re-read right now (feature 029, FR-005/FR-006).
     ///
-    /// Lives here beside `has_visible_worktrees` rather than in `app.rs`, for the reason that one
+    /// Lives here rather than in `app.rs`, for the reason that one
     /// does: the question is about worktrees, so it belongs to the feature that owns them
     /// (feature 028). Pure and unit-tested, so the view's single `if` over it is the "thin glue
     /// invoking already-tested pure logic" Principle I's exception describes rather than a

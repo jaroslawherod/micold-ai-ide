@@ -26,7 +26,7 @@ use std::path::{Path, PathBuf};
 const REPO: &str = "/repo";
 const FEATURE_X: &str = "feat-x";
 const FEATURE_Y: &str = "feat-y";
-/// A worktree this app has no record of creating: hidden while "Show agent worktrees" is off.
+/// A worktree named the way an assistant names its own: listed like any other (552).
 const AGENT: &str = "agent-00112233445566aa";
 
 fn worktree(dir: &str, status: WorktreeStatus) -> Worktree {
@@ -49,13 +49,13 @@ fn in_worktree(dir: &str, unread: bool) -> Session {
     session_at(SessionLocation::Worktree(dir.to_string()), unread)
 }
 
-/// The active project `/repo` with the recorded worktrees `feat-x` and `feat-y`, the unrecorded
-/// `AGENT` one, and `sessions`.
+/// The active project `/repo` with the worktrees `feat-x`, `feat-y` and `AGENT`, and `sessions`.
 fn state_with(sessions: Vec<Session>) -> State {
     state_with_worktrees(
         vec![
             worktree(FEATURE_X, WorktreeStatus::Valid),
             worktree(FEATURE_Y, WorktreeStatus::Valid),
+            worktree(AGENT, WorktreeStatus::Valid),
         ],
         sessions,
     )
@@ -74,10 +74,7 @@ fn state_with_worktrees(recorded: Vec<Worktree>, sessions: Vec<Session>) -> Stat
     for w in &recorded {
         state.workspace.record_user_created(&path, &w.dir_name);
     }
-    state.worktree.worktrees = recorded
-        .into_iter()
-        .chain([worktree(AGENT, WorktreeStatus::Valid)])
-        .collect();
+    state.worktree.worktrees = recorded;
     state.workspace.sessions.insert(path, sessions);
     state
 }
@@ -247,10 +244,10 @@ fn a_project_without_worktrees_counts_on_its_default_row() {
     );
 }
 
-/// Contract A2: a worktree the tag filters or the agent setting hide has no row, so no count.
+/// Contract A2: a worktree the tag filters hide has no row, so no count.
 #[test]
 fn a_hidden_worktree_has_no_row_to_carry_a_count() {
-    let mut state = state_with(vec![in_worktree(FEATURE_X, true), in_worktree(AGENT, true)]);
+    let mut state = state_with(vec![in_worktree(FEATURE_X, true)]);
     state
         .sidebar
         .filters
@@ -261,37 +258,34 @@ fn a_hidden_worktree_has_no_row_to_carry_a_count() {
         None,
         "a worktree the tag filter hides has no row (008 FR-025)"
     );
-    assert_eq!(
-        count_of(&state, AGENT),
-        None,
-        "an agent worktree hidden by the setting has no row (014)"
-    );
 }
 
-/// Contract A2: the row feature 024 re-admits for the current session carries its count.
+/// Contract A2: the row feature 024 exempts from the filters for the current session carries its
+/// count.
 #[test]
 fn the_row_shown_for_the_current_session_carries_its_count() {
     let current = in_worktree(AGENT, false);
     let id = current.id;
     let mut state = state_with(vec![current, in_worktree(AGENT, true)]);
     state.session.active = Some(id);
+    state
+        .sidebar
+        .filters
+        .insert(TagFilter::Type(ConventionalType::Fix));
 
-    let readmitted = state
+    let exempt = state
         .sidebar_entries()
         .into_iter()
         .find_map(|entry| match entry {
             SidebarEntry::Worktree(node) if node.worktree.dir_name == AGENT => Some(node),
             _ => None,
         })
-        .expect("the hidden worktree holding the current session is listed (024)");
-    assert!(
-        readmitted.shown_for_current_session,
-        "the agent worktree's row is listed only because it holds the current session"
-    );
+        .expect("the worktree holding the current session is listed (024)");
+    assert!(exempt.shown_for_current_session);
     assert_eq!(
         count_of(&state, AGENT),
         Some(1),
-        "the re-admitted row counts its unread session like any other row"
+        "the exempt row counts its unread session like any other row"
     );
 }
 
@@ -667,22 +661,14 @@ fn the_location_rows_add_up_to_the_switchers_count() {
     );
 }
 
-/// FR-010, R8: an agent worktree the sidebar hides is still counted on the switcher, so the sum
-/// holds only for a project with nothing hidden.
+/// 552: an agent-named worktree is listed, so its row carries its count and the sum holds.
 #[test]
-fn an_agent_worktree_hidden_by_the_setting_still_counts_on_the_switcher() {
+fn an_agent_named_worktree_counts_on_its_own_row_and_on_the_switcher() {
     let state = state_with(vec![in_worktree(FEATURE_X, true), in_worktree(AGENT, true)]);
 
-    assert_eq!(
-        switcher_count(&state),
-        2,
-        "the switcher counts the hidden agent worktree's unread session too"
-    );
-    assert_eq!(
-        rows_total(&state),
-        1,
-        "the agent worktree is hidden, so only feat-x's row counts"
-    );
+    assert_eq!(switcher_count(&state), 2);
+    assert_eq!(rows_total(&state), 2);
+    assert_eq!(count_of(&state, AGENT), Some(1));
 }
 
 /// FR-010, R8: a worktree the tag filter hides is still counted on the switcher.

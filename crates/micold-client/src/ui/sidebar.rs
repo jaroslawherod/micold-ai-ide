@@ -144,12 +144,8 @@ pub fn view<'a>(state: &'a State, scheme: micold_core::theme::ColorScheme) -> El
     // its own track — and asking it would mean it could no longer be built from a single pass over
     // the state. A collapsed accordion lays out and hit-tests nothing regardless.
     //
-    // Feature 014 (FR-010c): the reveal chip is the accordion's FIRST element and is rendered
-    // unconditionally — deliberately not inside `filter_bar()`, which returns early with "No tags
-    // to filter yet." exactly when a project's only worktrees are agent-owned, i.e. when the
-    // control matters most.
     let filter_accordion: Element<'_, Message> = Accordion::new(
-        column![reveal_chip(state, r), filter_bar(state, r)].spacing(spacing::XS),
+        filter_bar(state, r),
         r,
     )
     .open(state.sidebar.filter_open)
@@ -166,10 +162,9 @@ pub fn view<'a>(state: &'a State, scheme: micold_core::theme::ColorScheme) -> El
     // "no worktree entries matched" without a second filter pass.
     let entries = state.sidebar_entries();
     let no_worktree_entries = entries.len() <= 1;
-    // Feature 014 (FR-003): asks for VISIBLE worktrees, not all discovered ones. A project whose
-    // only worktrees are agent-owned has none visible, so it takes the "none yet" branch — the
-    // "no match / clear filters" branch would offer to clear a filter that was never applied.
-    let hint: Option<Element<'_, Message>> = if !state.has_visible_worktrees() {
+    // A project with no discovered worktree takes the "none yet" branch — the "no match / clear
+    // filters" branch would offer to clear a filter that was never applied.
+    let hint: Option<Element<'_, Message>> = if state.worktree.worktrees.is_empty() {
         Some(
             Text::new(
                 "No worktrees yet. Add one to get started.",
@@ -384,31 +379,6 @@ fn filter_chip(filter: TagFilter, active: bool, r: Roles) -> Element<'static, Me
     )
     .active(active)
     .accent(fill, on)
-    .into()
-}
-
-/// The "Show agent worktrees" reveal chip (feature 014, FR-010).
-///
-/// Rendered by [`view`] ABOVE `filter_bar()` and outside its early return, so it stays reachable
-/// in a project whose only worktrees are agent-owned — the case where a user most needs it, and
-/// exactly the case where `filter_bar()` bails out with "No tags to filter yet." (FR-010c).
-///
-/// Uses the neutral default accent: this is not a tag, so it borrows no tag color.
-fn reveal_chip(state: &State, r: Roles) -> Element<'static, Message> {
-    ToggleChip::new(
-        "Show agent worktrees",
-        Message::Sidebar(SidebarMsg::ShowAgentWorktreesToggled),
-        r,
-    )
-    .active(state.sidebar.show_agent_worktrees)
-    // Feature 029 FR-025: how many worktrees the control is withholding. The migration can take
-    // rows away on first launch, and a number beside the switch is what accounts for them on
-    // screen — without it the only evidence would be a list that is quietly shorter than it was.
-    //
-    // The label string is deliberately unchanged (FR-015a): 014's wording is what users learned,
-    // and the count sits beside it rather than rewriting it. Zero renders nothing, so a project
-    // hiding nothing looks exactly as it did.
-    .count(state.hidden_worktree_count())
     .into()
 }
 

@@ -491,7 +491,9 @@ pub fn wanted_availability_dirs(state: &crate::app::State) -> BTreeSet<PathBuf> 
     std::iter::once(root)
         .chain(
             state
-                .visible_worktrees()
+                .worktree
+                .worktrees
+                .iter()
                 .filter(|w| w.can_start_session())
                 .filter_map(|w| state.location_dir(&SessionLocation::Worktree(w.dir_name.clone()))),
         )

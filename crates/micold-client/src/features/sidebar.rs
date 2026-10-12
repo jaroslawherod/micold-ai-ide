@@ -16,20 +16,19 @@
 //!
 //! # The vocabulary this feature declares
 //!
-//! Ten transitions in [`Msg`]: expansion (`WorktreeExpansionToggled`, `DefaultExpansionToggled`), the
-//! tag filters and their menu (`FilterToggled`, `FiltersCleared`, `FilterMenuToggled`,
-//! `ShowAgentWorktreesToggled`), the scroll position (`Scrolled`, `ViewportResized`), and the panel
-//! itself (`Toggled`, `DragMoved`). [`update`] routes all ten and is pure (data-model.md §1.1 shape
+//! Nine transitions in [`Msg`]: expansion (`WorktreeExpansionToggled`, `DefaultExpansionToggled`), the
+//! tag filters and their menu (`FilterToggled`, `FiltersCleared`, `FilterMenuToggled`), the scroll position (`Scrolled`, `ViewportResized`), and the panel
+//! itself (`Toggled`, `DragMoved`). [`update`] routes all nine and is pure (data-model.md §1.1 shape
 //! A) — every one of them is a question about what the sidebar shows, answerable without leaving the
 //! process, so the binary matches none of them again.
 //!
 //! # The state this feature remembers (feature 028, contract S1)
 //!
-//! Ten fields in [`State`], reached as `state.sidebar`, in three groups:
+//! Nine fields in [`State`], reached as `state.sidebar`, in three groups:
 //!
 //! - **what is expanded**: `expanded` (the worktree rows the user has opened), `default_expanded`,
 //!   and `pending_reveal_scroll`, the flag that arms a scroll-into-view once layout knows the height;
-//! - **what is shown**: `filters`, `filter_open`, `show_agent_worktrees`;
+//! - **what is shown**: `filters`, `filter_open`;
 //! - **the panel's own geometry**: `hidden`, `width`, `scroll_offset`, `viewport_height`.
 //!
 //! Four kept the names they had flat on the root. Six shed the `sidebar` the qualifier carries:
@@ -64,7 +63,7 @@ use std::path::Path;
 /// `sidebar_filters`, `sidebar_hidden`, `sidebar_scroll_offset`, `sidebar_viewport_height` and
 /// `sidebar_width` are `filter_open`, `filters`, `hidden`, `scroll_offset`, `viewport_height` and
 /// `width`. The other four never carried it — `default_expanded`, `expanded`,
-/// `pending_reveal_scroll`, `show_agent_worktrees` — and keep their names. The reducers below
+/// `pending_reveal_scroll` — and keep their names. The reducers below
 /// spell the root's type `crate::app::State` now that `State` here means this struct.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct State {
@@ -82,15 +81,6 @@ pub struct State {
     /// the first frame where a row for the current session actually exists (research R7,
     /// invariant I4).
     pub pending_reveal_scroll: bool,
-    /// Whether agent-owned worktrees are included in the sidebar list (feature 014, FR-010).
-    /// `false` = hidden, the safe default.
-    ///
-    /// Transient AND project-scoped: never persisted, so every app start begins hidden (FR-010a),
-    /// and reset in [`crate::app::State::restore_after_activation`] so a project switch begins
-    /// hidden too
-    /// (FR-010e). Deliberately unlike `filters`, which survives a switch — view state
-    /// switched on for one project must not silently render in another.
-    pub show_agent_worktrees: bool,
     /// Whether the sidebar's tag-filter panel is shown (feature 009, FR-002/FR-003). Mutually
     /// exclusive with `help.help_menu_open`/`project.switcher_open`. Transient — not persisted;
     /// closing it never alters `filters` (FR-007/FR-008).
@@ -1000,7 +990,6 @@ impl crate::app::State {
     /// Drop view state that must not follow the user into a different project (T067a-6).
     pub fn project_entered(&mut self) {
         self.sidebar.default_expanded = false;
-        self.sidebar.show_agent_worktrees = false;
     }
 
     /// Whether a location's row is shown open (feature 024, contract §1.1).
@@ -1097,11 +1086,12 @@ impl crate::app::State {
     /// hidden (feature 014, FR-002).
     pub fn worktree_tree(&self) -> Vec<WorktreeNode> {
         let sessions = self.active_sessions();
-        let provenance = self.provenance_view();
-        self.visible_worktrees()
+        self.worktree
+            .worktrees
+            .iter()
             .map(|worktree| WorktreeNode {
                 display_name: self.worktree_display_name(&worktree.dir_name),
-                tags: worktree_tags(worktree, &provenance),
+                tags: worktree_tags(worktree),
                 expanded: self.location_open(&SessionLocation::Worktree(worktree.dir_name.clone())),
                 sessions: sessions
                     .iter()
@@ -1150,7 +1140,7 @@ impl crate::app::State {
         let sessions = self.active_sessions();
         let node = WorktreeNode {
             display_name: self.worktree_display_name(&worktree.dir_name),
-            tags: worktree_tags(worktree, &self.provenance_view()),
+            tags: worktree_tags(worktree),
             expanded: self.location_open(&SessionLocation::Worktree(dir.clone())),
             sessions: sessions
                 .iter()
@@ -1215,9 +1205,8 @@ impl crate::app::State {
         let mut types = BTreeSet::new();
         let mut has_issue = false;
         let mut has_untyped = false;
-        let provenance = self.provenance_view();
-        for worktree in self.visible_worktrees() {
-            let tags = worktree_tags(worktree, &provenance);
+        for worktree in &self.worktree.worktrees {
+            let tags = worktree_tags(worktree);
             let mut typed = false;
             for tag in &tags {
                 match tag {
@@ -1330,15 +1319,6 @@ pub fn filter_menu_toggled(state: &mut crate::app::State) -> Vec<crate::features
     crate::features::surface_opened(state.sidebar.filter_open, SidebarFilterPanel::ID)
 }
 
-/// Agent-owned worktrees were shown or hidden (feature 014, FR-010).
-///
-/// Sole mutation (FR-010d): tag filters, expansion state and overlays are left exactly as they
-/// were, and nothing is re-discovered — this is a pure view recomputation, so no git call and no
-/// `Task` (FR-008).
-pub fn show_agent_worktrees_toggled(state: &mut crate::app::State) {
-    state.sidebar.show_agent_worktrees = !state.sidebar.show_agent_worktrees;
-}
-
 /// The sidebar was collapsed or revealed.
 pub fn toggled(state: &mut crate::app::State) {
     state.sidebar.hidden = !state.sidebar.hidden;
@@ -1366,9 +1346,8 @@ pub fn worktrees_replaced(
 /// # The variants kept their meaning and lost their prefix
 ///
 /// The six that began with `Sidebar` do not any more — the type says which surface (contract M1),
-/// so `SidebarFilterMenuToggled` is `Msg::FilterMenuToggled`. The other four keep their names:
+/// so `SidebarFilterMenuToggled` is `Msg::FilterMenuToggled`. The other three keep their names:
 /// `WorktreeExpansionToggled` and `DefaultExpansionToggled` say *which row* expanded, and
-/// `ShowAgentWorktreesToggled` says which filter — none of them is this feature's name, and
 /// dropping the word would leave `ExpansionToggled` twice over.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Msg {
@@ -1377,7 +1356,6 @@ pub enum Msg {
     FilterToggled(TagFilter),
     FiltersCleared,
     FilterMenuToggled,
-    ShowAgentWorktreesToggled,
     Scrolled(u32),
     ViewportResized(u32),
     Toggled,
@@ -1407,7 +1385,6 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
         Msg::FilterMenuToggled => return filter_menu_toggled(state),
         Msg::FilterToggled(filter) => filter_toggled(state, filter),
         Msg::FiltersCleared => filters_cleared(state),
-        Msg::ShowAgentWorktreesToggled => show_agent_worktrees_toggled(state),
         Msg::Scrolled(offset) => scrolled(state, offset),
         Msg::ViewportResized(height) => viewport_resized(state, height),
         Msg::Toggled => toggled(state),

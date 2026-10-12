@@ -729,11 +729,6 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             shell::runs::run_pending(app)
         }
         Message::Runs(msg) => shell::runs::update(app, msg),
-        Message::Sidebar(msg @ SidebarMsg::ShowAgentWorktreesToggled) => {
-            app.core.update(Message::Sidebar(msg));
-            shell::daemon_sync::sync_cli_availability(app);
-            Task::none()
-        }
         Message::Worktree(WorktreeMsg::RenameConfirmed) => {
             shell::daemon_sync::on_worktree_rename_confirmed(app)
         }

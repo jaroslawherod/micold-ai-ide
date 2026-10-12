@@ -562,12 +562,6 @@ pub fn view_with<'a>(
                 .worktrees
                 .iter()
                 .any(|w| &w.dir_name == dir && w.included);
-            // 029 FR-020: the claim is offered exactly when the row is not yet the user's.
-            let claimable = state.worktree.worktrees.iter().any(|w| {
-                &w.dir_name == dir
-                    && micold_core::worktree::classify_owner(w, &state.provenance_view())
-                        == micold_core::worktree::WorktreeOwner::Agent
-            });
             // Feature 040 (FR-010): the entry is offered exactly when the row shows a pull request.
             let has_pull_request = crate::features::sidebar::pull_request_address_to_open(
                 &state.worktree.worktrees,
@@ -579,7 +573,9 @@ pub fn view_with<'a>(
                 dir,
                 &state.worktree_display_name(dir),
                 included,
-                claimable,
+                // 552: no worktree is classified as the assistant's, so the claim is never
+                // offered; the item and its message go with provenance (M3).
+                false,
                 has_pull_request,
             );
             // Feature 491 (T036): a worktree with no daemon offers the explicit bind, above Delete
