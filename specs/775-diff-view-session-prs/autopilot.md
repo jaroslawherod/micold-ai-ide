@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/775_diff-view-should-show-prs-created-within-sessions
 - **Started**: 2026-10-12
 - **Phase**: plan
-- **Next step**: Run the plan unit (clarify round 1 done, no open [NEEDS CLARIFICATION])
+- **Next step**: tasks unit
 
 ## Pull requests
 
@@ -35,6 +35,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | Spec | 1 | 31e1f276:13165b3a (orig) | CHANGES: 2 MAJOR (US2 s3 untestable; PR status setting unspecified), 3 MINOR; all fixed |
 | Spec | 2 | 33713142e3fdd0cdca9affa9cea75fea057f1713:1206eb1f207ab7e71834248b5788b51af061713b | CLEAN (1 MINOR fixed) |
+| Plan | 1 | 9542cb17a47a5cde8de0d120e2391d023bbabb49:4055448678d6361c09ed6bf9f33d1e0188781e25 | CHANGES: 4 MAJOR (PrState/BranchPrState mismatch, no test map, single call-site guard test, rate-limit hold), 3 MINOR; all fixed |
+| Plan | 2 | 44a2dbea1d4c763aa859c8ae3c982ed7bf415968:4055448678d6361c09ed6bf9f33d1e0188781e25 | CLEAN (2 MINOR fixed, prose only) |
 
 ## Declined review findings
 
