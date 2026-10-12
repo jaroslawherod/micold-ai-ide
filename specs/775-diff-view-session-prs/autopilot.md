@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #775
 - **Worktree branch**: feat/775_diff-view-should-show-prs-created-within-sessions
 - **Started**: 2026-10-12
-- **Phase**: clarify
-- **Next step**: Run the clarify unit on specs/775-diff-view-session-prs/spec.md (1 open [NEEDS CLARIFICATION]: deleted-head PR diff source)
+- **Phase**: plan
+- **Next step**: Run the plan unit (clarify round 1 done, no open [NEEDS CLARIFICATION])
 
 ## Pull requests
 
@@ -23,6 +23,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 
 ## Decisions
+
+- Clarify round 1: deleted-head PR diff is shown from GitHub (agent-resolved, FR-004). No escalation.
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|

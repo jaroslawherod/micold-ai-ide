@@ -39,7 +39,7 @@ The user selects a PR entry and the diff view shows the PR's changes (its base c
 
 1. **Given** a listed PR, **When** the user selects it, **Then** the diff view shows the files and hunks of the PR's base...head comparison.
 2. **Given** a PR is selected, **When** the user selects the working-tree/branch changes again, **Then** the view returns to them.
-3. **Given** a merged PR whose head branch was deleted, **When** the user selects it, **Then** its base...head diff is shown from GitHub's data, the same as for a PR whose branch still exists. (Provisional default; see Open Questions.)
+3. **Given** a merged PR whose head branch was deleted, **When** the user selects it, **Then** its base...head diff is shown from GitHub's data, the same as for a PR whose branch still exists.
 
 ---
 
@@ -77,7 +77,7 @@ When a session opens, merges or closes a PR while the diff view is open, the lis
 - **FR-001**: The diff view MUST list the pull requests whose head branch is the branch of the selected session's worktree.
 - **FR-002**: The diff view MUST list the same pull requests for a selected worktree that has no active session.
 - **FR-003**: Each entry MUST show the PR number, title and state, where state is one of open, draft, merged or closed (a draft PR is shown as draft, as the sidebar does).
-- **FR-004**: Selecting an entry MUST show that PR's diff as its base compared with its head, using the view's existing file list, layouts and per-file display.
+- **FR-004**: Selecting an entry MUST show that PR's diff as its base compared with its head, taken from GitHub's data so it also works when the head branch was deleted, using the view's existing file list, layouts and per-file display.
 - **FR-005**: The user MUST be able to return from a PR's diff to the working-tree/branch changes.
 - **FR-006**: The view MUST show the working-tree/branch changes by default, unchanged from today, when no PR is selected.
 - **FR-007**: The list MUST update when a PR for the branch is opened, merged or closed while the view is open.
@@ -112,6 +112,8 @@ When a session opens, merges or closes a PR while the diff view is open, the lis
 - Read-only: creating, merging or commenting on PRs from the diff view is out of scope.
 - Review comments on a PR's diff are out of scope; the PR diff is for reading.
 
-## Open Questions
+## Clarifications
 
-- [NEEDS CLARIFICATION: Should selecting a PR whose head branch no longer exists locally or on the remote (merged and deleted) show its diff from GitHub, or is it listed but not selectable?]
+### Session 2026-10-12
+
+- Q: Should selecting a PR whose head branch no longer exists locally or on the remote (merged and deleted) show its diff from GitHub, or be listed but not selectable? → A: Shown from GitHub's base...head data, selectable like any other entry; every listed entry is selectable. _(agent-resolved: specs/775-diff-view-session-prs/spec.md#Functional Requirements FR-004 "Selecting an entry MUST show that PR's diff", and #Assumptions: PR data comes from the existing GitHub access)_
