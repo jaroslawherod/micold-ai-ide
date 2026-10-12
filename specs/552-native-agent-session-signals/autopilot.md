@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #552
 - **Worktree branch**: feat/552_replace-name-based-hiding-of-agent-work-with-the
 - **Started**: 2026-10-12
-- **Phase**: spec
-- **Next step**: clarify unit: resolve the two [NEEDS CLARIFICATION] markers in spec.md (FR-009, FR-011)
+- **Phase**: clarify
+- **Next step**: plan unit
 
 ## Pull requests
 
@@ -23,6 +23,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 
 ## Decisions
+
+- Clarify round 1: FR-009 attach worktree flow removed with provenance (no remaining effect), session discovery/resume kept; FR-011 flat display until #551. Both agent-resolved, no escalation.
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
