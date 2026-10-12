@@ -36,6 +36,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - Clarify Q1: daemon delivered by the client copying its own matching build over SSH to a per-user dir _(decided by user)_.
 - Clarify Q2: mismatched remote daemon is explained only; replacement offered only with no running sessions _(decided by user)_.
 - Tasks: M1 kept whole at 27 tasks (Setup and Foundational are not observable alone; P1 story must be in M1); US1 split scenario 1 / 2-4 (M1/M2); US5 split M6/M7; Polish M8 changes build config, so it is a milestone.
+- M1 part 4 run authorised (decided by user: run a 4th part of M1).
 - Tasks: speckit-analyze round 1 found 1 HIGH (shared picker widget) and 5 MEDIUM; all fixed in tasks.md, no plan change.
 
 | # | Phase | Question | Answer | By | Evidence |
@@ -59,45 +60,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-Unit M1 part 4 continues (implement, T001-T027). Commits on the branch, not pushed, no PR yet.
-Part 3 wrote the code below but NOTHING of it has been compiled or run: the build lock was held by
-another worktree's gate all session (`build-lock.sh ... waiting`). Part 4 starts by compiling.
-
-Written in part 3 (uncompiled, not ticked in tasks.md):
-- T004/T022: `crates/micold-daemon/tests/ssh_real_support/{mod,sshd}.rs` (rootless sshd, `SetEnv HOME`
-  verified by hand to give the remote a private $HOME, wrapper script as `ssh_path`) and
-  `tests/ssh_real_endtoend.rs` part 1 (`ssh_real_add_start_copies_the_build_and_connects`; kills the
-  daemon it started via the pinned endpoint's lock pid; checks no listening TCP socket).
-  Run: `mise run test-ssh` (a detached run was queued; log gone with the session, re-run).
-- T011/T019: `client/src/daemon.rs`: `Dial::Ssh{target}`, `install_ssh_host` (OnceLock), `ssh_attempt`,
-  `PumpEnd::Ended`, copy progress -> `ConnectionMsg::CopyProgress`, failure ->
-  `ConnectionMsg::StartFailed`; Ssh entries in `Unreachable` are not dialled; 2 unit tests.
-  `features/connection.rs` Msg::{StartFailed,CopyProgress}; `shell/connection.rs` routes them;
-  `shell/daemon_sync.rs::on_start_failed`.
-- T019 shell: `shell/daemons.rs::{locate_windows_ssh,system_ssh}` + test; installed in
-  `shell/startup.rs` after `Capabilities::real()`. Re-run `no_concrete_implementations.rs`.
-- T020/T023/T024: `features/daemons.rs` (DraftRuntime::Ssh, ssh_* draft fields, SshHostEdited..,
-  CopyProgress, `DaemonView.activity` new core field, `invalid_field`), `ui/settings/daemons.rs`
-  form + `activity` line, `features/window.rs` FieldId::DaemonSsh{Host,User,Port,KeyFile}.
-- T026/T027: ci.yml job `ssh-remote` (+ ci-complete needs/env/check/summary, docs-check test -f),
-  ci-pipeline.md, docs/user-guide/remote-daemons.md, SUMMARY, settings.md, sandboxed-daemon.md,
-  daemon.md.
-
-Next steps:
-1. `mise run test-core` then client build/tests (cargo check -p micold-client --tests): likely fixes
-   needed: `DaemonRegistry::default()` in the new daemon.rs test, iced BoxFuture path, `Message`
-   Send for `copy_progress`, other exhaustive matches on `DraftRuntime`/`DaemonView`/connection
-   `Msg`, `FieldId` tables, `tests/support/daemons_fixture.rs` Draft/DaemonView literals.
-2. Still missing: T020 reducer tests (ssh draft -> add -> start -> Starting with progress ->
-   Connected shows version and user@host:port; auto_start applies to Ssh) in
-   `crates/micold-client/tests/daemons_feature.rs` style; T021 geometry-gate case for the SSH form in
-   `ui/settings/daemons.rs` (follow the existing geometry case there); `ssh_real` test run.
-3. Tick T004, T011, T019-T027 once green; update tdd/cycle-log.md; scoped gate, reviews A (code-review
-   high) and B (conformance), full `mise run gate`, PR `feat(489): remote over SSH daemon connects
-   (#489)` per tasks/pr.md.
-
-Tip: run cargo detached (`setsid nohup ... &`) and `scripts/autopilot/hold.sh <log>`; the hook
-blocks foreground calls over 250 s. Expect to wait behind other worktrees' builds.
+None.
 
 ## Open escalation
 
