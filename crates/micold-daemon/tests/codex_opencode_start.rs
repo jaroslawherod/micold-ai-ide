@@ -78,7 +78,7 @@ impl Fixture {
         init_repo(project.path());
         add_worktree(project.path(), "b");
         // One session per location (feature 776): the caller and each seeded CLI have their own.
-        for dir in ["caller", "codex", "opencode"] {
+        for dir in ["caller", "codex", "opencode", "n0", "n1"] {
             add_worktree(project.path(), dir);
         }
         let mut path = vec![bin.path().to_path_buf()];
@@ -433,9 +433,10 @@ async fn only_a_provider_with_an_activity_source_is_wired_for_activity() {
         minted(claude),
         "the control: Claude Code is wired for hooks"
     );
-    for (cli, command) in PROVIDERS {
+    for (n, (cli, command)) in PROVIDERS.into_iter().enumerate() {
+        // A worktree each: a location holds one session (feature 776).
         let id = created(
-            &f.create(json!({"worktree": "b", "ai_cli": cli.tool_name()}))
+            &f.create(json!({"worktree": format!("n{n}"), "ai_cli": cli.tool_name()}))
                 .await,
         );
         f.started_in(command).await;

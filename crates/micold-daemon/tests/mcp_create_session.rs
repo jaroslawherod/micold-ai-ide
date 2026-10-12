@@ -97,6 +97,7 @@ impl Sandbox {
         // most one session (feature 776), and the tests create into `b` and `default`.
         add_worktree(project.path(), "caller");
         add_worktree(project.path(), "seeded");
+        add_worktree(project.path(), "b2");
         let gone = add_worktree(project.path(), "gone");
         std::fs::remove_dir_all(gone).unwrap();
         trust_project(home.path(), project.path());
@@ -691,13 +692,14 @@ async fn a_cli_that_would_ask_to_trust_the_folder_gets_no_first_prompt() {
     let _guard = ENV.lock().await;
     let s = Sandbox::new().await;
     s.distrust();
-    for (cli, command, name) in [
-        ("claude_code", "claude", "Claude Code"),
-        ("copilot", "copilot", "GitHub Copilot"),
+    // One worktree each: a location holds one session (feature 776).
+    for (worktree, (cli, command, name)) in [
+        ("b", ("claude_code", "claude", "Claude Code")),
+        ("b2", ("copilot", "copilot", "GitHub Copilot")),
     ] {
         let asked = Instant::now();
         let out = s
-            .ok(json!({"worktree": "b", "ai_cli": cli, "prompt": PROMPT}))
+            .ok(json!({"worktree": worktree, "ai_cli": cli, "prompt": PROMPT}))
             .await;
         assert_eq!(out["prompt_delivered"], json!(false), "{out}");
         let reason = out["prompt_reason"].as_str().unwrap_or_default();
