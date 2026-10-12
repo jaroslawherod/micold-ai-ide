@@ -215,7 +215,10 @@ and read the explanation.
   it live without reopening Settings. This feature adds `reconnecting` to the shared state set of
   spec 491 FR-009 for every runtime: `reconnecting` means a connection that was established was lost
   and automatic attempts are in progress; `unreachable` means no connection and no attempts in
-  progress (a start that failed, or attempts stopped by the user).
+  progress (a start that failed, or attempts stopped by the user). This definition governs SSH
+  runtimes. Local and container runtimes keep spec 491's silent retries after a failed start, so
+  their `unreachable` may have retries running; they show no retry indicator (clarified in plan
+  review, 491 SC-003 recovery must not regress).
 - **FR-009**: The system MUST report SSH failures (unreachable host, refused connection, authentication
   refused, unknown or changed host key, missing agent or key, timeout) with a reason that names the
   cause, within the connection timeout, and MUST NOT hang or retry silently. The connection timeout is the
