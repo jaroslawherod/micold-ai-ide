@@ -14,6 +14,7 @@
 
 use micold_core::attach::{AttachOutcome, RefuseReason};
 use micold_core::attention::{NotificationKind, NotificationKinds};
+use micold_core::occupancy::{occupancy, refusal_text, ExistingSession, Occupancy};
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -63,6 +64,42 @@ fn mark_archived_durable(project: &Path, session: &Session) {
     let cwd = session.location.cwd(project);
     if let Err(err) = provider.mark_archived(&config_dir, &cwd, session.id.0) {
         tracing::warn!(session = %session.id.0, %err, "failed to write durable archive marker");
+    }
+}
+
+/// Why [`Catalog::create_session`] created nothing (feature 776).
+#[derive(Debug)]
+pub enum CreateSessionError {
+    /// The location already has a session; the catalog is unchanged. Carries the location so the
+    /// refusal can be worded for the worktree or the project root.
+    Occupied(ExistingSession, SessionLocation),
+    /// The catalog could not be written.
+    Io(io::Error),
+}
+
+impl std::fmt::Display for CreateSessionError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Occupied(existing, location) => f.write_str(&refusal_text(existing, location)),
+            Self::Io(e) => e.fmt(f),
+        }
+    }
+}
+
+impl std::error::Error for CreateSessionError {}
+
+impl From<io::Error> for CreateSessionError {
+    fn from(e: io::Error) -> Self {
+        Self::Io(e)
+    }
+}
+
+/// The location a session request names: `""` is the project root (`Default`).
+pub fn location_of(worktree_dir: &str) -> SessionLocation {
+    if worktree_dir.is_empty() {
+        SessionLocation::Default
+    } else {
+        SessionLocation::Worktree(worktree_dir.to_string())
     }
 }
 
@@ -557,17 +594,20 @@ impl Catalog {
     /// Create a new session in `project` at `worktree_dir` (empty = the project root / `Default`
     /// location), persist the catalog, and return the daemon-assigned id (FR-009). The daemon owns
     /// the id and the durable record; the client learns it via `OperationOk`/`CatalogChanged`.
+    ///
+    /// Refused when the location already has an un-archived session (feature 776, FR-001): the
+    /// check and the push happen under this one `&mut self`, so concurrent callers (every one of
+    /// which holds the daemon's state lock) cannot both succeed (FR-005).
     pub fn create_session(
         &mut self,
         project: &Path,
         worktree_dir: &str,
         provider: AiCli,
-    ) -> io::Result<SessionId> {
-        let location = if worktree_dir.is_empty() {
-            SessionLocation::Default
-        } else {
-            SessionLocation::Worktree(worktree_dir.to_string())
-        };
+    ) -> Result<SessionId, CreateSessionError> {
+        let location = location_of(worktree_dir);
+        if let Occupancy::Taken(existing) = self.occupancy(project, &location) {
+            return Err(CreateSessionError::Occupied(existing, location));
+        }
         // The client already resolved default-or-override and put the answer on the wire (T030),
         // so nothing here re-decides it.
         let session = Session::start_new(location, provider);
@@ -579,6 +619,14 @@ impl Catalog {
             .push(session);
         self.persist()?;
         Ok(id)
+    }
+
+    /// Whether `location` of `project` has an un-archived session (feature 776).
+    pub fn occupancy(&self, project: &Path, location: &SessionLocation) -> Occupancy {
+        self.workspace
+            .sessions
+            .get(project)
+            .map_or(Occupancy::Free, |list| occupancy(list, location))
     }
 
     /// Set (or overwrite) a worktree's display-name override for `project`, persisting (FR-014,

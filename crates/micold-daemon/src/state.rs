@@ -2271,13 +2271,23 @@ impl DaemonState {
     ) -> Result<micold_core::protocol::messages::OperationResult, crate::review::Refusal> {
         use micold_core::protocol::messages::{ErrorKind, OperationResult};
         let count = snapshot.ids.len();
-        let cli = self.default_ai_cli();
-        let location = if worktree_dir.is_empty() {
-            SessionLocation::Default
-        } else {
-            SessionLocation::Worktree(worktree_dir.to_owned())
-        };
+        let location = crate::catalog::location_of(worktree_dir);
         let cwd = location.cwd(project);
+        // One session per location (feature 776, R10): an entry whose own session is not running
+        // gets that session started again, never a second one. A free entry gets a new session of
+        // the default CLI.
+        let own = {
+            let inner = self.lock();
+            match inner.catalog.occupancy(project, &location) {
+                micold_core::occupancy::Occupancy::Taken(existing) => inner
+                    .catalog
+                    .workspace()
+                    .find_session(existing.id)
+                    .map(|(_, s)| (s.id, s.provider)),
+                micold_core::occupancy::Occupancy::Free => None,
+            }
+        };
+        let cli = own.map_or_else(|| self.default_ai_cli(), |(_, provider)| provider);
         let refuse = |kind: ErrorKind, message: String| {
             self.close_review_send(project, worktree_dir, None);
             tracing::warn!(
@@ -2292,18 +2302,32 @@ impl DaemonState {
         if let Some(why) = crate::ops::cli_unavailable(self, &cwd, cli).await {
             return refuse(ErrorKind::Refused, why);
         }
-        let new = crate::ops::NewSession {
-            project,
-            worktree_dir,
-            cwd: &cwd,
-            cli,
-        };
         let first = crate::ops::FirstPrompt {
             text: &snapshot.prompt,
             asked,
             require_bracketed: true,
         };
-        match crate::ops::create_session_with_prompt(self, new, Some(first)).await {
+        let sent = match own {
+            Some((session, provider)) => Ok(crate::ops::start_with_prompt(
+                self,
+                session,
+                &cwd,
+                provider,
+                micold_core::terminal::LaunchMode::Resume,
+                Some(first),
+            )
+            .await),
+            None => {
+                let new = crate::ops::NewSession {
+                    project,
+                    worktree_dir,
+                    cwd: &cwd,
+                    cli,
+                };
+                crate::ops::create_session_with_prompt(self, new, Some(first)).await
+            }
+        };
+        match sent {
             Err(err) => refuse(
                 ErrorKind::Internal,
                 format!("a session could not be created: {err}"),
@@ -2728,10 +2752,23 @@ impl DaemonState {
         project: &Path,
         worktree_dir: &str,
         provider: AiCli,
-    ) -> io::Result<SessionId> {
+    ) -> Result<SessionId, crate::catalog::CreateSessionError> {
         self.lock()
             .catalog
             .create_session(project, worktree_dir, provider)
+    }
+
+    /// Whether the entry `worktree_dir` (empty = project root) of `project` has an un-archived
+    /// session, and which (feature 776). A snapshot: the authority for creating is
+    /// [`Self::create_session`], which checks again under the same lock.
+    pub fn occupancy(
+        &self,
+        project: &Path,
+        worktree_dir: &str,
+    ) -> micold_core::occupancy::Occupancy {
+        self.lock()
+            .catalog
+            .occupancy(project, &crate::catalog::location_of(worktree_dir))
     }
 
     // --- US3: worktree management through the daemon (T053) ---
@@ -2991,7 +3028,7 @@ impl DaemonState {
                 AttachItem::Worktree { .. } => {
                     outcomes.next().expect("one outcome per worktree target")
                 }
-                AttachItem::Session { id } => {
+                AttachItem::Session { id, .. } => {
                     let only: BTreeSet<Uuid> = [*id].into();
                     let (records, unreadable, live, known) = {
                         let inner = self.lock();
@@ -3084,6 +3121,7 @@ impl DaemonState {
             results.push(AttachResult {
                 item: item.clone(),
                 outcome,
+                existing: None,
             });
         }
         Ok(results)

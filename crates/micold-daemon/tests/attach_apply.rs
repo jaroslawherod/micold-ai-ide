@@ -671,7 +671,10 @@ async fn discovery_lists_this_projects_sessions_and_attaching_one_adds_an_idle_e
         &mut client,
         project.path(),
         2,
-        vec![AttachItem::Session { id: mine }],
+        vec![AttachItem::Session {
+            id: mine,
+            replace: false,
+        }],
     )
     .await;
 
@@ -708,7 +711,7 @@ async fn resuming_a_session_in_an_unattached_worktree_attaches_the_worktree_firs
         &mut client,
         project.path(),
         2,
-        vec![AttachItem::Session { id }],
+        vec![AttachItem::Session { id, replace: false }],
     )
     .await;
 
@@ -741,7 +744,7 @@ async fn a_session_of_a_deleted_worktree_is_refused_not_resumed_elsewhere() {
         &mut client,
         project.path(),
         1,
-        vec![AttachItem::Session { id }],
+        vec![AttachItem::Session { id, replace: false }],
     )
     .await;
 

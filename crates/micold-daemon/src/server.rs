@@ -977,7 +977,19 @@ where
                         state.begin_start(session);
                         spawn_session_start(state, session, LaunchMode::Fresh, Some((id, req)));
                     }
-                    Err(e) => state.send(
+                    // Feature 776: a location that has a session answers with that session's
+                    // name and id, and the catalog is unchanged.
+                    Err(crate::catalog::CreateSessionError::Occupied(existing, location)) => state
+                        .send(
+                            id,
+                            DaemonMsg::OperationError {
+                                req,
+                                kind: ErrorKind::Refused,
+                                message: micold_core::occupancy::refusal_text(&existing, &location),
+                                detail: Some(existing.id.0.to_string()),
+                            },
+                        ),
+                    Err(crate::catalog::CreateSessionError::Io(e)) => state.send(
                         id,
                         DaemonMsg::OperationError {
                             req,
@@ -1444,6 +1456,7 @@ where
                 branch,
                 dir_name,
                 mode,
+                ..
             } => {
                 if !matches!(state.project_repo(&project), Some((_, true))) {
                     reject_non_repo(state, id, req, &project);
@@ -1490,7 +1503,10 @@ where
                         {
                             Ok(()) => DaemonMsg::OperationOk {
                                 req,
-                                result: OperationResult::WorktreeCreated { dir_name },
+                                result: OperationResult::WorktreeCreated {
+                                    dir_name,
+                                    session: None,
+                                },
                             },
                             Err(ops::CreateFailure::Create(e)) => {
                                 let (kind, message, detail) = describe_create_error(e);

@@ -15,18 +15,21 @@ use micold_core::attention::{NotificationKind, NotificationKinds};
 use micold_core::cli_reason::SpawnEnv;
 use micold_core::git::GitRemote;
 use micold_core::mcp::policy::CrossSessionAccess;
+use micold_core::occupancy::ExistingSession;
 
 use micold_core::protocol::envelope::{Encoding, EnvelopeError, EnvelopeHeader, Kind, HEADER_LEN};
 use micold_core::protocol::grid::{
     CellExtras, GridFrame, LineId, StyleRun, WireColor, WireCursor, WireCursorShape, WireLine,
     WireStyle,
 };
+use micold_core::protocol::messages::SessionDefinition;
 use micold_core::protocol::messages::{
     ActivitySignal, BranchContainment, CatalogSnapshot, ClientIdentity, ClientInstance, ClientMsg,
     ConfirmOperation, DaemonMsg, DaemonSettings, ErrorKind, ExitStatus, LogEntry, LogSink,
     MergedBranchQuery, OperationResult, ProjectSnapshot, RefusalReason, SessionProcess,
     SessionSummary, ShellOpenFailure, TerminalRef, WireLifecycle, WorktreeSnapshot, WorktreeStatus,
 };
+use micold_core::protocol::version::PROTOCOL_VERSION;
 use micold_core::session::{AiCli, SessionId, SessionLabel, ShellInstanceId};
 use micold_core::theme::ColorScheme;
 use micold_core::worktree::{CreateMode, CreateStage};
@@ -198,6 +201,19 @@ fn sample_client_msgs() -> Vec<ClientMsg> {
             branch: "feat/x".into(),
             dir_name: "feat-x".into(),
             mode: CreateMode::NewBranch,
+            session: None,
+        },
+        // Feature 776: a definition travels whole.
+        ClientMsg::WorktreeCreate {
+            req: 40,
+            project: PathBuf::from("/a"),
+            branch: "feat/x".into(),
+            dir_name: "feat-x".into(),
+            mode: CreateMode::NewBranch,
+            session: Some(SessionDefinition {
+                ai_cli: AiCli::ClaudeCode,
+                prompt: Some("fix it".into()),
+            }),
         },
         // Feature 016: the non-default modes and both read-only branch queries must survive the
         // wire too — `TrackRemote` carries a payload, so it is the interesting one.
@@ -207,6 +223,7 @@ fn sample_client_msgs() -> Vec<ClientMsg> {
             branch: "feat/x".into(),
             dir_name: "feat-x".into(),
             mode: CreateMode::ReuseLocal,
+            session: None,
         },
         ClientMsg::WorktreeCreate {
             req: 42,
@@ -216,6 +233,7 @@ fn sample_client_msgs() -> Vec<ClientMsg> {
             mode: CreateMode::TrackRemote {
                 remote: "origin".into(),
             },
+            session: None,
         },
         ClientMsg::BranchPreflight {
             req: 43,
@@ -280,7 +298,10 @@ fn sample_client_msgs() -> Vec<ClientMsg> {
                 AttachItem::Worktree {
                     dir_name: "agent-a885b42dc521fbda1".into(),
                 },
-                AttachItem::Session { id: Uuid::nil() },
+                AttachItem::Session {
+                    id: Uuid::nil(),
+                    replace: true,
+                },
             ],
         },
         ClientMsg::SessionCreate {
@@ -635,6 +656,13 @@ fn sample_daemon_msgs() -> Vec<DaemonMsg> {
             },
         },
         DaemonMsg::OperationOk {
+            req: 44,
+            result: OperationResult::WorktreeCreated {
+                dir_name: "feat-x".into(),
+                session: Some(sid()),
+            },
+        },
+        DaemonMsg::OperationOk {
             req: 83,
             result: OperationResult::AttachApplied {
                 results: vec![
@@ -643,10 +671,26 @@ fn sample_daemon_msgs() -> Vec<DaemonMsg> {
                             dir_name: "w".into(),
                         },
                         outcome: AttachOutcome::Refused(RefuseReason::NotAWorktreeOfProject),
+                        existing: None,
                     },
                     AttachResult {
-                        item: AttachItem::Session { id: Uuid::nil() },
+                        item: AttachItem::Session {
+                            id: Uuid::nil(),
+                            replace: false,
+                        },
                         outcome: AttachOutcome::AlreadyAttached,
+                        existing: None,
+                    },
+                    AttachResult {
+                        item: AttachItem::Session {
+                            id: Uuid::nil(),
+                            replace: false,
+                        },
+                        outcome: AttachOutcome::Refused(RefuseReason::LocationHasSession),
+                        existing: Some(ExistingSession {
+                            id: sid(),
+                            name: "Fix login".into(),
+                        }),
                     },
                 ],
             },
@@ -815,6 +859,64 @@ fn a_merged_branch_check_and_its_answers_round_trip_in_order() {
         } => assert_eq!(back, answers),
         other => panic!("expected a MergedBranchCheck result, got {other:?}"),
     }
+}
+
+/// Feature 776, FR-006/FR-007: an older frame lacks every new field, and decodes with the old
+/// behaviour; the version moved with the hash.
+#[test]
+fn frames_without_the_feature_776_fields_decode_with_the_defaults() {
+    assert_eq!(PROTOCOL_VERSION, 41);
+
+    let create: ClientMsg = serde_json::from_str(
+        r#"{"WorktreeCreate":{"req":1,"project":"/a","branch":"b","dir_name":"d","mode":"NewBranch"}}"#,
+    )
+    .expect("decode WorktreeCreate without session");
+    assert!(matches!(
+        create,
+        ClientMsg::WorktreeCreate { session: None, .. }
+    ));
+
+    let created: DaemonMsg = serde_json::from_str(
+        r#"{"OperationOk":{"req":1,"result":{"WorktreeCreated":{"dir_name":"d"}}}}"#,
+    )
+    .expect("decode WorktreeCreated without session");
+    assert!(matches!(
+        created,
+        DaemonMsg::OperationOk {
+            result: OperationResult::WorktreeCreated { session: None, .. },
+            ..
+        }
+    ));
+
+    let item: AttachItem =
+        serde_json::from_str(&format!(r#"{{"Session":{{"id":"{}"}}}}"#, Uuid::nil()))
+            .expect("decode Session item without replace");
+    assert_eq!(
+        item,
+        AttachItem::Session {
+            id: Uuid::nil(),
+            replace: false
+        }
+    );
+
+    let result: AttachResult = serde_json::from_str(&format!(
+        r#"{{"item":{{"Session":{{"id":"{}"}}}},"outcome":"AlreadyAttached"}}"#,
+        Uuid::nil()
+    ))
+    .expect("decode AttachResult without existing");
+    assert_eq!(result.existing, None);
+}
+
+#[test]
+fn a_blank_prompt_in_a_definition_is_none() {
+    assert_eq!(
+        SessionDefinition::new(AiCli::ClaudeCode, Some("  \n".into())).prompt,
+        None
+    );
+    assert_eq!(
+        SessionDefinition::new(AiCli::ClaudeCode, Some("go".into())).prompt,
+        Some("go".into())
+    );
 }
 
 #[test]

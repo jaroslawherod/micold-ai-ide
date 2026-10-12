@@ -659,52 +659,63 @@ impl FirstPromptUndelivered {
 /// bound of `prompt.asked` (034 FR-017, 482 W7). A ready signal after the bound types nothing: the
 /// wait has ended, and nothing else writes the prompt.
 ///
-/// `Err` only when the session record could not be created. Otherwise the session exists, whether
-/// or not it started, and the inner result says whether the prompt was typed (`Ok` with no
-/// prompt). The prompt is never logged.
+/// `Err` when the session record could not be created, including because the location already
+/// has a session (feature 776). Otherwise the session exists, whether or not it started, and the
+/// inner result says whether the prompt was typed (`Ok` with no prompt). The prompt is never
+/// logged.
 pub async fn create_session_with_prompt(
     state: &Arc<DaemonState>,
     new: NewSession<'_>,
     prompt: Option<FirstPrompt<'_>>,
-) -> io::Result<(SessionId, Result<(), FirstPromptUndelivered>)> {
+) -> Result<(SessionId, Result<(), FirstPromptUndelivered>), crate::catalog::CreateSessionError> {
     let session = state.create_session(new.project, new.worktree_dir, new.cli)?;
+    Ok(start_with_prompt(state, session, new.cwd, new.cli, LaunchMode::Fresh, prompt).await)
+}
+
+/// Start `session` (a fresh one, or an existing one resumed) and type `prompt` as its next input
+/// once its CLI is ready (see [`create_session_with_prompt`]).
+pub async fn start_with_prompt(
+    state: &Arc<DaemonState>,
+    session: SessionId,
+    cwd: &Path,
+    cli: AiCli,
+    launch: LaunchMode,
+    prompt: Option<FirstPrompt<'_>>,
+) -> (SessionId, Result<(), FirstPromptUndelivered>) {
     state.begin_start(session);
     state.broadcast_catalog();
-    let started = start_session(state, session, LaunchMode::Fresh)
-        .await
-        .unwrap_or(false);
+    let started = start_session(state, session, launch).await.unwrap_or(false);
     let Some(prompt) = prompt else {
-        return Ok((session, Ok(())));
+        return (session, Ok(()));
     };
     if !started {
-        return Ok((session, Err(FirstPromptUndelivered::NotStarted)));
+        return (session, Err(FirstPromptUndelivered::NotStarted));
     }
     let st = Arc::clone(state);
-    let place = new.cwd.to_path_buf();
-    let cli = new.cli;
+    let place = cwd.to_path_buf();
     // A failed check counts as asking: typing into a trust question would answer it.
     let asks = tokio::task::spawn_blocking(move || st.cli_would_ask_trust(&place, cli))
         .await
         .unwrap_or(true);
     if asks {
-        return Ok((session, Err(FirstPromptUndelivered::AsksTrust(cli))));
+        return (session, Err(FirstPromptUndelivered::AsksTrust(cli)));
     }
     let bound = state.first_prompt_bound();
     if !state
         .wait_ready_for_input(session, prompt.asked + bound)
         .await
     {
-        return Ok((session, Err(FirstPromptUndelivered::NotReady(cli, bound))));
+        return (session, Err(FirstPromptUndelivered::NotReady(cli, bound)));
     }
     let Some(pty) = state.primary_pty(session) else {
-        return Ok((
+        return (
             session,
             Err(FirstPromptUndelivered::Typing(Undelivered::NotRunning)),
-        ));
+        );
     };
     let typed = write_submission(&pty, prompt.text, prompt.require_bracketed)
         .map_err(FirstPromptUndelivered::Typing);
-    Ok((session, typed))
+    (session, typed)
 }
 
 /// Pick run `number` of `group`: integrate its branch into the group's base branch and record the

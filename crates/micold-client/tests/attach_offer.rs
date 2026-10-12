@@ -186,10 +186,12 @@ fn the_answer_ends_the_offer_and_says_what_happened() {
             AttachResult {
                 item: wt("a"),
                 outcome: AttachOutcome::Attached,
+                existing: None,
             },
             AttachResult {
                 item: wt("b"),
                 outcome: AttachOutcome::Attached,
+                existing: None,
             },
         ]),
     );
@@ -235,6 +237,7 @@ fn a_batch_that_all_failed_keeps_the_offer() {
             outcome: AttachOutcome::Refused(
                 micold_core::attach::RefuseReason::NotAWorktreeOfProject,
             ),
+            existing: None,
         }]),
     );
     assert!(offer_visible(&state));

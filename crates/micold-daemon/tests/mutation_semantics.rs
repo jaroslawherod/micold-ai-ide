@@ -177,6 +177,7 @@ async fn worktree_create_on_a_taken_branch_with_new_branch_mode_is_refused_witho
             branch: "feature/dup".into(),
             dir_name: "dup".into(),
             mode: CreateMode::NewBranch,
+            session: None,
         }))
         .await
         .unwrap();
@@ -272,6 +273,7 @@ async fn worktree_create_succeeds_and_propagates() {
             branch: "feature/new".into(),
             dir_name: "new".into(),
             mode: CreateMode::NewBranch,
+            session: None,
         }))
         .await
         .unwrap();
@@ -1074,6 +1076,7 @@ async fn worktree_create_can_reuse_an_existing_branch() {
             branch: "feature/reuse".into(),
             dir_name: "reuse".into(),
             mode: CreateMode::ReuseLocal,
+            session: None,
         }))
         .await
         .unwrap();
@@ -1127,6 +1130,7 @@ async fn worktree_create_on_a_branch_held_by_the_project_checkout_is_refused() {
             branch: current.clone(),
             dir_name: "held".into(),
             mode: CreateMode::ReuseLocal,
+            session: None,
         }))
         .await
         .unwrap();
@@ -1264,6 +1268,7 @@ async fn worktree_create_streams_its_stages_before_the_terminal_reply() {
             branch: "feature/staged".into(),
             dir_name: "staged".into(),
             mode: CreateMode::ReuseLocal,
+            session: None,
         }))
         .await
         .unwrap();
@@ -1746,6 +1751,7 @@ async fn the_streamed_worktree_list_matches_local_git_discovery() {
                 branch: branch.into(),
                 dir_name: dir.into(),
                 mode: CreateMode::NewBranch,
+                session: None,
             }))
             .await
             .unwrap();

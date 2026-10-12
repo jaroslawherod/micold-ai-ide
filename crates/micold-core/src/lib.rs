@@ -33,6 +33,7 @@ pub mod mcp;
 pub mod metadata;
 pub mod naming;
 pub mod notify;
+pub mod occupancy;
 pub mod os_theme;
 pub mod overlay;
 pub mod owner_only;

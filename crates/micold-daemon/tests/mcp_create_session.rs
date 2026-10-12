@@ -465,6 +465,30 @@ async fn a_session_in_default_runs_in_the_project_root() {
     assert_eq!(summary.worktree_dir, None, "the project root");
 }
 
+/// Feature 776, FR-002/FR-003 (US1 s2, s4): a worktree with a session refuses a second with
+/// category `conflict`, naming the existing one, and adds no record; the refusal comes before the
+/// CLI is looked at, so it does not depend on what is installed.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_second_session_in_a_worktree_is_a_conflict_naming_the_existing_one() {
+    let _guard = ENV.lock().await;
+    let s = Sandbox::new().await;
+    let first = Sandbox::created(&s.ok(json!({"worktree": "b", "ai_cli": "claude_code"})).await);
+    let before = s.session_ids();
+
+    for ai_cli in ["claude_code", "copilot"] {
+        let error = s.err(json!({"worktree": "b", "ai_cli": ai_cli})).await;
+        assert_eq!(error["category"], "conflict", "{error}");
+        let message = error["message"].as_str().unwrap_or_default();
+        assert!(
+            message.starts_with("this worktree already has a session: ")
+                && message.contains(&format!("({})", first.0))
+                && message.contains(&format!("start_session on {} brings it back", first.0)),
+            "{message}"
+        );
+    }
+    assert_eq!(s.session_ids(), before, "the catalog is unchanged");
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn an_unknown_worktree_is_not_found_and_creates_no_record() {
     let _guard = ENV.lock().await;

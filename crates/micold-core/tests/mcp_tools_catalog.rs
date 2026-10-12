@@ -440,6 +440,21 @@ fn create_worktree_rejects_a_malformed_branch() {
     invalid("create_worktree", json!({"branch": 7}));
 }
 
+/// Feature 776, FR-014: the catalogue tells an agent that a worktree has at most one session.
+#[test]
+fn create_session_says_a_worktree_has_at_most_one_session() {
+    let tools = tools_list();
+    let description = tools
+        .iter()
+        .find(|t| t["name"] == "create_session")
+        .and_then(|t| t["description"].as_str())
+        .unwrap();
+    assert!(
+        description.contains("at most one session") && description.contains("naming the existing"),
+        "{description:?}"
+    );
+}
+
 #[test]
 fn create_session_accepts_exactly_the_five_ai_clis() {
     for (name, cli) in [

@@ -161,6 +161,7 @@ async fn create(
             branch: branch.to_string(),
             dir_name: dir_name.to_string(),
             mode,
+            session: None,
         }))
         .await
         .unwrap();
@@ -334,6 +335,7 @@ async fn a_refused_create_records_nothing() {
             branch: "feat/dup".into(),
             dir_name: "dup".into(),
             mode: CreateMode::NewBranch,
+            session: None,
         }))
         .await
         .unwrap();

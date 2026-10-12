@@ -574,7 +574,8 @@ const TOOLS: &[Tool] = &[
             root) running an AI CLI (default: the user's default from Settings). With prompt, \
             the prompt is typed as the session's first input once its CLI is ready, and the call \
             returns once it is (prompt_delivered: true) or 60 s after the request \
-            (prompt_delivered: false).",
+            (prompt_delivered: false). A worktree has at most one session: a second is \
+            refused, naming the existing one.",
         properties: || {
             json!({
                 "worktree": {"type": "string", "minLength": 1,
