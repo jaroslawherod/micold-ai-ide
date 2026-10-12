@@ -10,12 +10,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/532_agent-created-worktrees-should-carry-the-issue
 - **Started**: 2026-10-12
 - **Phase**: tasks
-- **Next step**: open design PR, then M1
+- **Next step**: M1 after design PR merge
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
+| #781 | Design PR | open | |
 
 ## Milestones
 
