@@ -17,12 +17,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #781 | Design PR | merged | aa69bd4cc7fd32c6d3d4f4485f09e5ab74b86819 |
+| #792 | M1 | open | |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T010 | full | agent guidance strings and user guide carry the issue-reference convention | pending | in review |
+| M1 | T001–T010 | full | agent guidance strings and user guide carry the issue-reference convention | #792 | in review |
 
 ## Decisions
 
