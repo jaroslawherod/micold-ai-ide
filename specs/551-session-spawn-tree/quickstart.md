@@ -6,7 +6,7 @@ Prerequisites: `mise trust`; a project with a worktree; the `:dev` daemon (`mise
 
 1. `mise run test-core` : origin validation, `SessionTree`, store round trip, provider fixtures,
    protocol and MCP shape tests.
-2. `cargo test -p micold-daemon --test mcp_create_session --test catalog_adoption` via
+2. `cargo test -p micold-daemon --test mcp_create_session --test catalog_adoption --test session_origin_removal` via
    `mise run test`: nesting through `create_session`, restart survival, removed origin.
 3. `cargo test -p micold-client --test sidebar_tree --test layout_snapshot`.
 4. `mise run gate` before push.

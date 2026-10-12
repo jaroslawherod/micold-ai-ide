@@ -42,7 +42,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Spec 551 | 2 | 72380bb32aa8cae88205f35b4fcae1ce1459a190:13165b3a9e4938a42528aae5df288475aa63ddae | CLEAN (2 MINOR fixed, prose only) |
 | Plan 551 | 1 | d39d189620904732240bb92b8325ded71e3e99d0:66c580d0da56f9eb86256315e6aec379967b5a15 | CHANGES: 2 MAJOR (F1 child removal emit, F2 fold prune), 4 MINOR; all fixed |
 | Plan 551 | 2 | d3b3e472cd18ecf87fe544cdb57b74a377bf70c4:66c580d0da56f9eb86256315e6aec379967b5a15 | CHANGES: 1 MAJOR (single-delete path missing, fixed; prose only, paths verified by grep), 2 MINOR fixed |
-| Tasks 551 | 1 | e04f39460adaad4619f835ff528eb2909e11e215:f602c37c08334f421b8583446a4439c4bde3f094 | (running) |
+| Tasks 551 | 1 | e04f39460adaad4619f835ff528eb2909e11e215:f602c37c08334f421b8583446a4439c4bde3f094 | CHANGES: 2 MAJOR (F1 U4 test placement, F2 unknown-candidate case), 3 MINOR; all fixed |
 
 ## Declined review findings
 

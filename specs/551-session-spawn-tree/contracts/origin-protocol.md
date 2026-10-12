@@ -1,7 +1,9 @@
 # Contract: origin on the wire and on disk
 
 **Catalog file** (`projects.json`, per project): each stored session may carry `"origin":
-"<uuid>"`. Absent means top-level. Written only by the daemon's `Catalog`.
+"<uuid>"`. Absent means top-level. Written only by the daemon's `Catalog`. A session may also carry
+`"origin_rejected": true` (absent means false): a provider-reported origin that failed the full
+check was cleared once and is not recorded again.
 
 **Protocol 41**: `SessionSummary` gains
 `origin: Option<{ id: SessionId, status: "known" | "removed" }>`. Carried by every message that
