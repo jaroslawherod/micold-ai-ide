@@ -230,7 +230,7 @@ mod tests {
     #[test]
     fn a_placement_that_cannot_do_it_says_so_in_both_directions() {
         let remote = Placement::Remote(crate::sandbox::placement::RemotePlacement {
-            host: "elsewhere".to_string(),
+            target: crate::ssh::SshTarget::new("elsewhere", None, None, None).unwrap(),
         });
         for outcome in [enable_for(&remote), disable_for(&remote)] {
             assert_eq!(outcome, SurvivalOutcome::Unsupported);

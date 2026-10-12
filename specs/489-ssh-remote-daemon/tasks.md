@@ -17,32 +17,32 @@ rootless `sshd` and are off by default (`mise run test-ssh`).
 
 ## Phase 1: Setup
 
-- [ ] T001 Enable the `process` feature of the workspace `tokio` dependency in `Cargo.toml` (and the crates that use it)
-- [ ] T002 Add the off-by-default `ssh-real-runtime` feature to `daemon/Cargo.toml`, forward it to `core/Cargo.toml` (read by `crates/micold-core/build.rs`, T068), and a `test-ssh` task to `mise.toml` (builds the daemon, runs `ssh_real_*` with `--test-threads=1`)
-- [ ] T003 Create the `ssh` module skeleton `core/ssh/mod.rs` and export it from `core/lib.rs`
+- [x] T001 Enable the `process` feature of the workspace `tokio` dependency in `Cargo.toml` (and the crates that use it)
+- [x] T002 Add the off-by-default `ssh-real-runtime` feature to `daemon/Cargo.toml`, forward it to `core/Cargo.toml` (read by `crates/micold-core/build.rs`, T068), and a `test-ssh` task to `mise.toml` (builds the daemon, runs `ssh_real_*` with `--test-threads=1`)
+- [x] T003 Create the `ssh` module skeleton `core/ssh/mod.rs` and export it from `core/lib.rs`
 - [ ] T004 [P] Add the rootless-`sshd` harness `daemon/tests/ssh_real_support/{mod,sshd}.rs`: host and client keys, `authorized_keys`, loopback port, a `Host` alias in a private ssh config, skip with a printed reason when `sshd` is missing
 
 ## Phase 2: Foundational
 
 **Tests first**
 
-- [ ] T005 [P] Test `SshTarget` validation (host not blank, no whitespace, not starting `-`, user without `@`, port 1..=65535, `InvalidField{field}`) in `core/ssh/target.rs`
-- [ ] T006 [P] Test the argv builders in `core/ssh/argv.rs`: `BatchMode=yes`, `StrictHostKeyChecking=yes`, `ClearAllForwardings=yes`, `-T`, `--` before host, `LC_ALL=C`, no `-L/-R/-D`, no `-F`, no `accept-new`/`no`, no secret, per client platform
-- [ ] T007 [P] Test `SshFailure` classification fixtures and `is_permanent` for every class and reason string of contracts/ssh-transport.md in `core/ssh/classify.rs`
-- [ ] T008 [P] Test `DaemonRuntime::Ssh` serde round trip, `label()`, `is_startable()`, additive load of an old `settings.json` with no `settings_version` bump in `core/daemons.rs` and `core/settings.rs`
-- [ ] T009 [P] Test the provision sequence (probe, copy only when absent, start, reuse a running daemon, permanent failures stop) over a stand-in `SshRunner`, and the artefact-selection table over (client, remote) pairs in `core/ssh/provision.rs`
+- [x] T005 [P] Test `SshTarget` validation (host not blank, no whitespace, not starting `-`, user without `@`, port 1..=65535, `InvalidField{field}`) in `core/ssh/target.rs`
+- [x] T006 [P] Test the argv builders in `core/ssh/argv.rs`: `BatchMode=yes`, `StrictHostKeyChecking=yes`, `ClearAllForwardings=yes`, `-T`, `--` before host, `LC_ALL=C`, no `-L/-R/-D`, no `-F`, no `accept-new`/`no`, no secret, per client platform
+- [x] T007 [P] Test `SshFailure` classification fixtures and `is_permanent` for every class and reason string of contracts/ssh-transport.md in `core/ssh/classify.rs`
+- [x] T008 [P] Test `DaemonRuntime::Ssh` serde round trip, `label()`, `is_startable()`, additive load of an old `settings.json` with no `settings_version` bump in `core/daemons.rs` and `core/settings.rs`
+- [x] T009 [P] Test the provision sequence (probe, copy only when absent, start, reuse a running daemon, permanent failures stop) over a stand-in `SshRunner`, and the artefact-selection table over (client, remote) pairs in `core/ssh/provision.rs`
 - [ ] T010 [P] Test `remote bridge` (relays bytes to the daemon's Unix socket, starts the daemon when none runs, reuses a running one) and `remote prune` against a temp endpoint in `daemon/src/remote.rs`
 - [ ] T011 Test the client actor with a stand-in transport: `Dial::Ssh` goes `Starting` to `Connected` with version and endpoint, a permanent failure goes `Unreachable{reason}` with no retry, in `client/daemon.rs`
 
 **Implementation**
 
-- [ ] T012 [P] Implement `SshTarget` and `SshSettings` in `core/ssh/target.rs`
-- [ ] T013 [P] Implement the pure argv builders in `core/ssh/argv.rs`
-- [ ] T014 [P] Implement `SshFailure` classification in `core/ssh/classify.rs`
-- [ ] T015 Add `DaemonRuntime::Ssh(SshSettings)` to `core/daemons.rs` and its persistence in `core/settings.rs`
-- [ ] T016 Implement `SshRunner`, the probe, copy and start sequence and artefact selection in `core/ssh/provision.rs`
+- [x] T012 [P] Implement `SshTarget` and `SshSettings` in `core/ssh/target.rs`
+- [x] T013 [P] Implement the pure argv builders in `core/ssh/argv.rs`
+- [x] T014 [P] Implement `SshFailure` classification in `core/ssh/classify.rs`
+- [x] T015 Add `DaemonRuntime::Ssh(SshSettings)` to `core/daemons.rs` and its persistence in `core/settings.rs`
+- [x] T016 Implement `SshRunner`, the probe, copy and start sequence and artefact selection in `core/ssh/provision.rs`
 - [ ] T017 Implement `micold-daemon remote bridge | prune` in `daemon/src/remote.rs` and dispatch it from `daemon/src/main.rs`
-- [ ] T018 Add `Transport::Ssh(SshStdio)` in `core/connect.rs`, `DialAddress::Ssh` in `core/endpoint.rs`, and `RemotePlacement` carrying the target in `core/sandbox/placement.rs`
+- [x] T018 Add `Transport::Ssh(SshStdio)` in `core/connect.rs`, `DialAddress::Ssh` in `core/endpoint.rs`, and `RemotePlacement` carrying the target in `core/sandbox/placement.rs`
 - [ ] T019 Add `Dial::Ssh` to the actor in `client/daemon.rs` and the one real `SystemSsh` runner (Windows `ssh.exe` lookup and hint, `CREATE_NO_WINDOW`) chosen only in `client/shell/daemons.rs`, with a 15 s watchdog deadline so no connect hangs (the `ConnectTimeout` value replaces it in T063); keep `no_concrete_implementations.rs` green
 
 ## Phase 3: User Story 1 - Work on a remote project end to end (P1) MVP

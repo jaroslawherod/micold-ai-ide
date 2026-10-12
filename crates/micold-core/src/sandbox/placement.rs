@@ -39,16 +39,12 @@ impl PlacementKind {
     }
 }
 
-/// A daemon that is not on this machine. Reserved by FR-003a.
-///
-/// `#[non_exhaustive]` and unconstructible outside this crate on purpose: the shape is not designed
-/// yet, and pretending otherwise would bake a guess into the settings schema.
+/// A daemon that is not on this machine, reached over SSH (feature 489).
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct RemotePlacement {
-    /// The host the daemon runs on. Private, so no caller outside can build one by accident.
-    #[allow(dead_code)]
-    pub(crate) host: String,
+    /// The host the daemon runs on, as the user entered it.
+    pub target: crate::ssh::SshTarget,
 }
 
 /// Where the daemon runs, resolved.
@@ -92,6 +88,9 @@ impl Placement {
             DaemonRuntime::Container(c) => {
                 Some(Placement::LocalSandbox(Box::new(c.profile.clone())))
             }
+            DaemonRuntime::Ssh(s) => Some(Placement::Remote(RemotePlacement {
+                target: s.target.clone(),
+            })),
             DaemonRuntime::Unsupported { .. } => None,
         }
     }
@@ -265,7 +264,7 @@ mod tests {
         // The one that is not about path mapping at all: there is no shared filesystem, so no
         // mapping could rescue a local answer. FR-003a.
         let remote = Placement::Remote(RemotePlacement {
-            host: "elsewhere".to_string(),
+            target: crate::ssh::SshTarget::new("elsewhere", None, None, None).unwrap(),
         });
         for identity in [true, false] {
             assert_eq!(remote.git_routing_for(identity), GitRouting::ViaDaemon);
