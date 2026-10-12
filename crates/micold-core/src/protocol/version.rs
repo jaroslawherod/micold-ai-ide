@@ -138,7 +138,13 @@
 /// `plan_usage` on `DaemonMsg::Welcome`, `DaemonMsg::PlanUsageChanged`, and `plan_usage_enabled`
 /// and `plan_usage_warn_percent` on `DaemonSettings` and `ClientMsg::SettingsSet`. An older peer
 /// would fail to decode any of them.
-pub const PROTOCOL_VERSION: u32 = 40;
+///
+/// And 40 → 41 for feature 776's one session per worktree, once for the whole feature
+/// (contracts/wire.md): `WorktreeCreate::session`, `OperationResult::WorktreeCreated::session`,
+/// `AttachItem::Session::replace`, `AttachResult::existing` and `RefuseReason::LocationHasSession`.
+/// Every addition is serde-defaulted, so an older frame still decodes; the version moves because
+/// the hash does.
+pub const PROTOCOL_VERSION: u32 = 41;
 
 // `build.rs` emits `pub const SCHEMA_HASH: [u8; 32] = [...];` into this file.
 include!(concat!(env!("OUT_DIR"), "/schema_hash.rs"));

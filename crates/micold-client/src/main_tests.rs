@@ -1400,6 +1400,51 @@ fn pending_create_req(app: &App) -> u64 {
         .0
 }
 
+/// Feature 776, FR-002/FR-003 (US1 s1): a refused second session shows the service's refusal, which
+/// names the existing session, as a notice; the window's session list is unchanged.
+#[test]
+fn a_refused_session_create_shows_the_refusal_text_and_changes_nothing() {
+    let (mut app, _rx) = connected_app();
+    let project = PathBuf::from("/repo/demo");
+    app.core.workspace.active = Some(project.clone());
+    let before = app.core.workspace.sessions.clone();
+    let _ = shell::daemon_sync::on_session_start_requested(
+        &mut app,
+        micold_core::session::SessionLocation::Worktree("feat-x".into()),
+        micold_core::session::AiCli::ClaudeCode,
+    );
+    let req = *app
+        .pending_ops
+        .iter()
+        .find(|(_, op)| matches!(op, PendingOp::CreateSession))
+        .expect("the start requested a create")
+        .0;
+    let text = "this worktree already has a session: \"Fix login\" \
+                (00000000-0000-0000-0000-000000000001); start_session on \
+                00000000-0000-0000-0000-000000000001 brings it back";
+
+    let _ = shell::daemon_sync::on_daemon_event(
+        &mut app,
+        micold_core::daemons::DaemonId(1),
+        DaemonMsg::OperationError {
+            req,
+            kind: micold_core::protocol::messages::ErrorKind::Refused,
+            message: text.into(),
+            detail: Some("00000000-0000-0000-0000-000000000001".into()),
+        },
+    );
+
+    let said = app
+        .core
+        .notifications
+        .queue
+        .visible()
+        .map(|n| n.message.clone())
+        .unwrap_or_default();
+    assert_eq!(said, text, "the refusal is shown as the service worded it");
+    assert_eq!(app.core.workspace.sessions, before, "no session was added");
+}
+
 /// `013` BUG-001, A1: with a create in flight, neither Escape nor the scrim closes the form.
 ///
 /// The reported case, end to end through the window's own paths: `Message::EscapePressed` for
@@ -1491,6 +1536,7 @@ fn a_success_after_cancel_is_announced_even_with_no_project_open() {
             req,
             result: micold_core::protocol::messages::OperationResult::WorktreeCreated {
                 dir_name: "feat-probe-two".into(),
+                session: None,
             },
         },
     );
@@ -1556,6 +1602,7 @@ fn a_created_worktree_is_bound_to_the_daemon_chosen_in_the_form() {
             req,
             result: micold_core::protocol::messages::OperationResult::WorktreeCreated {
                 dir_name: "feat-probe-two".into(),
+                session: None,
             },
         },
     );

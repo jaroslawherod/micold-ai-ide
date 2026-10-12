@@ -95,6 +95,7 @@ async fn a_mutation_whose_reply_is_lost_is_visible_to_the_next_connection() {
             branch: "feature/lost".into(),
             dir_name: "lost".into(),
             mode: CreateMode::NewBranch,
+            session: None,
         }))
         .await
         .unwrap();

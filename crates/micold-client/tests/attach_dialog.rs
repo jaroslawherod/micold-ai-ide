@@ -170,6 +170,7 @@ fn result(name: &str, outcome: AttachOutcome) -> AttachResult {
     AttachResult {
         item: wt(name),
         outcome,
+        existing: None,
     }
 }
 
@@ -343,7 +344,8 @@ fn resume_sends_one_session_target() {
     assert_eq!(
         dialog.in_flight,
         vec![AttachItem::Session {
-            id: Uuid::from_u128(2)
+            id: Uuid::from_u128(2),
+            replace: false,
         }]
     );
     assert!(dialog.applying());
@@ -399,7 +401,8 @@ fn a_second_resume_while_one_is_applying_changes_nothing() {
     assert_eq!(
         state.attach.dialog.as_ref().unwrap().in_flight,
         vec![AttachItem::Session {
-            id: Uuid::from_u128(1)
+            id: Uuid::from_u128(1),
+            replace: false,
         }]
     );
 }
@@ -415,12 +418,14 @@ fn a_resumed_session_closes_the_dialog_and_a_refusal_names_its_reason() {
     );
     let item = AttachItem::Session {
         id: Uuid::from_u128(1),
+        replace: false,
     };
     let outcomes = attach::update(
         &mut state,
         Msg::Applied(vec![AttachResult {
             item: item.clone(),
             outcome: AttachOutcome::Refused(RefuseReason::AlreadyRunning),
+            existing: None,
         }]),
     );
     let [micold_client::features::Outcome::NotificationRaised(n)] = outcomes.as_slice() else {
@@ -431,7 +436,8 @@ fn a_resumed_session_closes_the_dialog_and_a_refusal_names_its_reason() {
     assert_eq!(
         attach::summary(&[AttachResult {
             item,
-            outcome: AttachOutcome::Attached
+            outcome: AttachOutcome::Attached,
+            existing: None,
         }]),
         "Attached 1 session."
     );

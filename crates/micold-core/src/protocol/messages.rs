@@ -80,6 +80,28 @@ pub struct TerminalRef {
 #[serde(transparent)]
 pub struct PresentedToken(String);
 
+/// The session a new worktree is created with (feature 776, FR-006): whole or absent, never a
+/// partial definition.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SessionDefinition {
+    /// The AI CLI that backs the session.
+    pub ai_cli: AiCli,
+    /// The session's first input, typed once the CLI is ready. Non-empty after trim; an empty or
+    /// blank prompt is `None` (see [`SessionDefinition::new`]).
+    #[serde(default)]
+    pub prompt: Option<String>,
+}
+
+impl SessionDefinition {
+    /// A definition whose blank prompt is normalised to `None`.
+    pub fn new(ai_cli: AiCli, prompt: Option<String>) -> Self {
+        Self {
+            ai_cli,
+            prompt: prompt.filter(|p| !p.trim().is_empty()),
+        }
+    }
+}
+
 impl PresentedToken {
     /// Wrap a token for presentation.
     pub fn new(token: impl Into<String>) -> Self {
@@ -434,6 +456,10 @@ pub enum ClientMsg {
         /// one tracking a remote (feature 016). The daemon re-verifies this against a fresh
         /// pre-flight before acting (FR-009).
         mode: CreateMode,
+        /// The session defined at start (feature 776, FR-006): `None` creates the worktree with no
+        /// session, as before. An older frame without the field decodes as `None`.
+        #[serde(default)]
+        session: Option<SessionDefinition>,
     },
     /// Classify what stands between the user and a new worktree on `branch`, so the client can
     /// offer reuse/overwrite instead of failing (feature 016, FR-001). Read-only — the daemon
@@ -1525,6 +1551,9 @@ pub enum OperationResult {
     WorktreeCreated {
         /// The new worktree's directory name.
         dir_name: String,
+        /// The session created with it (feature 776), when a definition was sent.
+        #[serde(default)]
+        session: Option<SessionId>,
     },
     /// A worktree was deleted (feature 013, FR-011/FR-015). git has released the worktree and its
     /// sessions are archived by this point; `branch_delete_failed` and `leftovers` report the two

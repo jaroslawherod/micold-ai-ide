@@ -157,6 +157,10 @@ pub enum AttachItem {
     Session {
         /// The CLI's own id.
         id: Uuid,
+        /// Replace the session the location already has (feature 776, FR-007): set per item, so a
+        /// confirmation covers exactly the pair it named. Absent means `false`.
+        #[serde(default)]
+        replace: bool,
     },
 }
 
@@ -171,6 +175,8 @@ pub enum RefuseReason {
     IoFailed,
     /// The session is starting, running or restarting here: resumed in at most one place (FR-016).
     AlreadyRunning,
+    /// The location already has a different session (feature 776, FR-001).
+    LocationHasSession,
 }
 
 impl RefuseReason {
@@ -181,6 +187,7 @@ impl RefuseReason {
             Self::Unavailable => "its worktree or session is not available",
             Self::IoFailed => "the catalog could not be written",
             Self::AlreadyRunning => "that session is already running",
+            Self::LocationHasSession => "that worktree already has a session",
         }
     }
 }
@@ -203,6 +210,10 @@ pub struct AttachResult {
     pub item: AttachItem,
     /// What happened.
     pub outcome: AttachOutcome,
+    /// For [`RefuseReason::LocationHasSession`], the session the location already has, so a
+    /// confirmation can name it (feature 776). Absent means `None`.
+    #[serde(default)]
+    pub existing: Option<crate::occupancy::ExistingSession>,
 }
 
 /// The worktrees `worktrees` (from [`crate::worktree::reconcile`]) offers to attach: those the

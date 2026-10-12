@@ -129,6 +129,7 @@ async fn start_create(client: &mut Client, req: u64, project: &Path, name: &str)
             branch: format!("feature/{name}"),
             dir_name: name.into(),
             mode: CreateMode::NewBranch,
+            session: None,
         }))
         .await
         .unwrap();
@@ -202,7 +203,11 @@ async fn a_busy_connection_still_answers_pings_and_still_delivers_its_result() {
     .await;
     match reply {
         DaemonMsg::OperationOk {
-            result: OperationResult::WorktreeCreated { dir_name },
+            result:
+                OperationResult::WorktreeCreated {
+                    dir_name,
+                    session: None,
+                },
             ..
         } => assert_eq!(dir_name, "slow"),
         other => panic!("expected WorktreeCreated, got {other:?}"),

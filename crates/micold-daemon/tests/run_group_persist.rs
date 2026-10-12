@@ -309,6 +309,7 @@ async fn half_created(s: &Sandbox, client: &mut runs_support::Client) {
             branch: "feat/login-page-3".into(),
             dir_name: "feat-login-page-3".into(),
             mode: CreateMode::NewBranch,
+            session: None,
         },
     )
     .await;

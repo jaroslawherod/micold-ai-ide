@@ -125,6 +125,7 @@ async fn create_without_a_client_matches_the_protocol_create() {
             branch: "feat/x".into(),
             dir_name: "feat-x".into(),
             mode: CreateMode::NewBranch,
+            session: None,
         },
     )
     .await;

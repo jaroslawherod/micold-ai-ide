@@ -1390,6 +1390,18 @@ async fn create_session(
         },
     )?;
 
+    // A worktree has at most one session (feature 776, FR-002): said before the CLI is looked at,
+    // so the answer does not depend on what is installed. `create_session` below checks again
+    // under the catalog lock, which is what makes two simultaneous calls yield one session.
+    let dir = match &worktree {
+        WorktreeRef::Default => String::new(),
+        WorktreeRef::Named(name) => name.clone(),
+    };
+    if let micold_core::occupancy::Occupancy::Taken(existing) = state.occupancy(&project.path, &dir)
+    {
+        return Err(occupied(&existing, &dir));
+    }
+
     // Checked before the record exists, so a missing CLI leaves nothing behind (US2 s5). The
     // words are `cli_reason`'s: "is not installed" was said here in every state, and is true in
     // none that the service can tell apart (FR-009a, FR-002). The reply tells the agent what to
@@ -1398,10 +1410,6 @@ async fn create_session(
         return Err(OpError::service_error(why));
     }
 
-    let dir = match &worktree {
-        WorktreeRef::Default => String::new(),
-        WorktreeRef::Named(name) => name.clone(),
-    };
     let prompt_given = prompt.is_some();
     let first = prompt.as_deref().map(|text| ops::FirstPrompt {
         text,
@@ -1420,7 +1428,10 @@ async fn create_session(
         first,
     )
     .await
-    .map_err(|e| OpError::service_error(format!("could not create the session: {e}")))?;
+    .map_err(|e| match e {
+        crate::catalog::CreateSessionError::Occupied(existing, _) => occupied(&existing, &dir),
+        e => OpError::service_error(format!("could not create the session: {e}")),
+    })?;
     let undelivered = typed.err().map(|why| match why {
         // A terminal that went away or refused the write: said as for a CLI never ready.
         ops::FirstPromptUndelivered::Typing(_) => {
@@ -1450,6 +1461,15 @@ async fn create_session(
         out["prompt_reason"] = json!(reason);
     }
     Ok(out)
+}
+
+/// The refusal of a second session in a worktree (feature 776): category `Conflict`, naming the
+/// existing session, in `occupancy::refusal_text`'s words.
+fn occupied(existing: &micold_core::occupancy::ExistingSession, dir: &str) -> OpError {
+    OpError::new(
+        ErrorCategory::Conflict,
+        micold_core::occupancy::refusal_text(existing, &crate::catalog::location_of(dir)),
+    )
 }
 
 /// A worktree directory name given by the agent: accepted only as the dialog would write it

@@ -1397,19 +1397,22 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
                 if let OperationResult::AttachApplied { results } = result {
                     // A resume is an attach that then runs the session: view and start it once
                     // the catalog holds it (the broadcast precedes this answer).
-                    let resumed =
-                        results.iter().find_map(|r| match (&r.item, r.outcome) {
-                            (
-                                AttachItem::Session { id },
-                                AttachOutcome::Attached | AttachOutcome::AlreadyAttached,
-                            ) if app.core.attach.dialog.as_ref().is_some_and(|d| {
-                                d.in_flight == [AttachItem::Session { id: *id }]
-                            }) =>
-                            {
-                                Some(*id)
-                            }
-                            _ => None,
-                        });
+                    let resumed = results.iter().find_map(|r| match (&r.item, r.outcome) {
+                        (
+                            AttachItem::Session { id, .. },
+                            AttachOutcome::Attached | AttachOutcome::AlreadyAttached,
+                        ) if app.core.attach.dialog.as_ref().is_some_and(|d| {
+                            d.in_flight
+                                == [AttachItem::Session {
+                                    id: *id,
+                                    replace: false,
+                                }]
+                        }) =>
+                        {
+                            Some(*id)
+                        }
+                        _ => None,
+                    });
                     app.core
                         .update(Message::Attach(AttachMsg::Applied(results)));
                     if let Some(id) = resumed {
@@ -1540,6 +1543,10 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
                 }
                 // Feature 483 (C8): the refusal's own text, the view unchanged.
                 Some(PendingOp::RunGroupPick { .. }) => app.core.notify_error(message),
+                // Feature 776 (FR-002, FR-003): the service's refusal already names the existing
+                // session and how to bring it back; the catalog is unchanged, so the notice is
+                // the whole outcome.
+                Some(PendingOp::CreateSession) => app.core.notify_error(message),
                 Some(op) => app
                     .core
                     .notify_error(format!("Couldn't {}: {message}", op.describe())),
@@ -3130,6 +3137,7 @@ pub fn send_worktree_create(
             branch,
             dir_name,
             mode,
+            session: None,
         },
     );
 }
@@ -3486,8 +3494,9 @@ pub(crate) mod tests {
 
     fn session_result(id: uuid::Uuid, outcome: AttachOutcome) -> AttachResult {
         AttachResult {
-            item: AttachItem::Session { id },
+            item: AttachItem::Session { id, replace: false },
             outcome,
+            existing: None,
         }
     }
 
@@ -3645,6 +3654,7 @@ pub(crate) mod tests {
                         dir_name: "a".into(),
                     },
                     outcome: AttachOutcome::Attached,
+                    existing: None,
                 }],
             ),
         );
@@ -3700,6 +3710,7 @@ pub(crate) mod tests {
                         dir_name: "a".into(),
                     },
                     outcome: AttachOutcome::Attached,
+                    existing: None,
                 }],
             ),
         );
