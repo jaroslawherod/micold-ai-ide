@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #551
 - **Worktree branch**: feat/551_show-sessions-spawned-by-an-agent-as-a-tree-under
 - **Started**: 2026-10-12
-- **Phase**: tasks
-- **Next step**: review tasks, gate, open design PR
+- **Phase**: design-pr
+- **Next step**: push (denied by auto-mode classifier, needs user), open design PR, wait for merge, then M1
 
 ## Pull requests
 
@@ -43,6 +43,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Plan 551 | 1 | d39d189620904732240bb92b8325ded71e3e99d0:66c580d0da56f9eb86256315e6aec379967b5a15 | CHANGES: 2 MAJOR (F1 child removal emit, F2 fold prune), 4 MINOR; all fixed |
 | Plan 551 | 2 | d3b3e472cd18ecf87fe544cdb57b74a377bf70c4:66c580d0da56f9eb86256315e6aec379967b5a15 | CHANGES: 1 MAJOR (single-delete path missing, fixed; prose only, paths verified by grep), 2 MINOR fixed |
 | Tasks 551 | 1 | e04f39460adaad4619f835ff528eb2909e11e215:f602c37c08334f421b8583446a4439c4bde3f094 | CHANGES: 2 MAJOR (F1 U4 test placement, F2 unknown-candidate case), 3 MINOR; all fixed |
+| Tasks 551 | 2 | 53e6be0a87d9891999753144cad487cb7714f632:00b47e5aab03d843624242c92786bfd6cfac0b61 | CLEAN (2 MINOR: R4/data-model signature fixed, prose only; fold steps 3-4 are in M4 Verify, declined) |
 
 ## Declined review findings
 

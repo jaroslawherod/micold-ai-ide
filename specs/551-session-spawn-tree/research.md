@@ -41,7 +41,7 @@ Alternatives rejected: a file watcher (new moving part; discovery already runs a
 
 ## R4. Validation and immutability
 
-Decision: one pure `origin::validate_origin(child, candidate, lookup) -> Result<(), OriginRejected>`
+Decision: one pure `origin::validate_origin(child, candidate, lookup, reported_by_provider) -> Result<(), OriginRejected>`
 used by every write path. Rejects: self, a candidate not in the same project and worktree
 (`SessionLocation` equal), a chain that reaches the child (cycle, bounded walk), a child that
 already has an origin (FR-010; the first stands, `record_origin` returns `Ok(false)`).
