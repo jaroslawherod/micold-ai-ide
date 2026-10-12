@@ -223,7 +223,7 @@ impl Drop for Sandbox {
 
 /// The stand-in `claude`: waits `<bin>/slow` seconds when that file exists, asks for bracketed
 /// paste (unless told not to), draws a prompt, and appends everything typed into it to
-/// `<bin>/input.<its --session-id>`.
+/// `<bin>/input.<its --session-id or --resume id>`.
 fn install_claude(bin: &Path) {
     let dir = bin.display();
     let path = bin.join("claude");
@@ -232,7 +232,7 @@ fn install_claude(bin: &Path) {
         format!(
             "#!/bin/sh\n\
              sid=''; prev=''\n\
-             for a in \"$@\"; do [ \"$prev\" = --session-id ] && sid=\"$a\"; prev=\"$a\"; done\n\
+             for a in \"$@\"; do case \"$prev\" in --session-id|--resume) sid=\"$a\";; esac; prev=\"$a\"; done\n\
              [ -e '{dir}'/slow ] && sleep \"$(cat '{dir}'/slow)\"\n\
              [ -e '{dir}'/nopaste.\"$sid\" ] || printf '\\033[?2004h'\n\
              printf 'ready> '\n\
@@ -368,23 +368,28 @@ fn send_msg(req: u64, project: &Path, dir: &str) -> ClientMsg {
     }
 }
 
-/// The session a send started: `ReviewSent { started: true }` naming a session that is not one of
-/// the sandbox's records.
+/// The session a send started: `ReviewSent { started: true }` naming the session that now runs.
+/// With at most one session per worktree (FR-001) that is the entry's own session when it has
+/// one, resumed, and a new record only when it has none.
 fn started_session(result: &Result<OperationResult, (ErrorKind, String)>) -> SessionId {
     match result {
         Ok(OperationResult::ReviewSent {
             session,
             started: true,
-        }) => {
-            assert!(
-                !(1..=3).map(sid).any(|known| known == *session),
-                "a new session, not an existing record: {}",
-                session.0
-            );
-            *session
-        }
+        }) => *session,
         other => panic!("a session was started for the send: {other:?}"),
     }
+}
+
+/// [`started_session`], asserting it is a new record, not one of the sandbox's.
+fn started_new_session(result: &Result<OperationResult, (ErrorKind, String)>) -> SessionId {
+    let session = started_session(result);
+    assert!(
+        !(1..=3).map(sid).any(|known| known == session),
+        "a new session, not an existing record: {}",
+        session.0
+    );
+    session
 }
 
 /// The bytes a submission of `prompt` types into a terminal with bracketed paste on, as the
@@ -694,6 +699,12 @@ async fn us3_s1_with_no_session_running_one_starts_and_its_first_input_is_the_pr
 
     let (result, seen) = send(&mut client, 2, &project, "wt").await;
     let new = started_session(&result);
+    assert_eq!(new, sid(1), "the entry's own session is started, not a second one (FR-001)");
+    assert_eq!(
+        s.state.sessions_for(&project).len(),
+        3,
+        "no session was added to the project"
+    );
     let (cwd, cli) = s
         .state
         .session_cwd_and_cli(new)
@@ -729,7 +740,7 @@ async fn us3_s1_the_default_entry_starts_its_session_in_the_project_root() {
     let expected = prompt::build(EntryKind::Default, &pending(&comments), &[]);
 
     let (result, _) = send(&mut client, 2, &project, "").await;
-    let new = started_session(&result);
+    let new = started_new_session(&result);
     let (cwd, _) = s.state.session_cwd_and_cli(new).unwrap();
     assert_eq!(
         cwd, project,
@@ -742,7 +753,7 @@ async fn us3_s1_the_default_entry_starts_its_session_in_the_project_root() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn us3_s4_an_ended_session_is_not_resumed_and_a_new_one_starts() {
+async fn r10_an_ended_session_is_started_again_and_no_second_one_is_created() {
     let _guard = ENV.lock().await;
     let s = Sandbox::new().await;
     let project = s.project();
@@ -762,22 +773,18 @@ async fn us3_s4_an_ended_session_is_not_resumed_and_a_new_one_starts() {
         "a",
         1,
         &["x"],
-        "Not for S1.",
+        "Again for S1.",
     )
     .await;
 
     let (result, _) = send(&mut client, 2, &project, "wt").await;
     let new = started_session(&result);
-    s.typed_holds(new, "Not for S1.").await;
-    assert!(
-        s.state
-            .live_session(sid(1))
-            .is_none_or(|pty| !pty.is_alive()),
-        "the ended session is not resumed (US3 s4)"
-    );
-    assert!(
-        !s.typed(sid(1)).contains("Not for S1."),
-        "nothing reached S1"
+    assert_eq!(new, sid(1), "the ended session is started again (R10)");
+    s.typed_holds(new, "Again for S1.").await;
+    assert_eq!(
+        s.state.sessions_for(&project).len(),
+        3,
+        "no second session was created"
     );
 }
 
