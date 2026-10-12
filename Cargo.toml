@@ -90,6 +90,7 @@ embed-resource = "3"
 # --- transport / async (daemon; the client already has tokio via iced) — plan W1 ---
 # The shared framing codec lives in micold-core; the runtime + IPC live in the daemon/client.
 tokio = { version = "1.53", features = [
+    "io-std",
     "rt-multi-thread",
     "net",
     "io-util",

@@ -31,6 +31,13 @@ fn main() {
             &file,
         )));
     }
+    // `remote bridge | prune`: the helper the client runs over `ssh` (feature 489). Same reasons as
+    // `status-line`: no runtime, log or singleton, and stdout carries only relayed bytes.
+    let mut args = std::env::args_os().skip(1);
+    if args.next().as_deref() == Some(std::ffi::OsStr::new("remote")) {
+        let rest: Vec<std::ffi::OsString> = args.collect();
+        std::process::exit(micold_daemon::remote::main(&rest));
+    }
     // No `announce_running` here: the installer's `AppMutex` prompt asks the user to close the app,
     // and a windowless daemon cannot be closed, so setup would never get past it. Setup stops the
     // daemon itself instead, in `[Code] PrepareToInstall` (feature 030, research R12).
