@@ -440,6 +440,9 @@ pub struct DaemonView {
     pub state: DaemonState,
     /// The worktrees bound to it.
     pub bound: Vec<WorktreeRef>,
+    /// What is being done now, when it takes long enough to say (copying the build to an SSH
+    /// host, feature 489).
+    pub activity: Option<String>,
 }
 
 /// Most recent connection errors kept per daemon.

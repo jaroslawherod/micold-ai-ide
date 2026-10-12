@@ -153,6 +153,14 @@ pub enum FieldId {
     DaemonPort,
     /// Settings → Daemons: the form's image field (feature 491).
     DaemonImage,
+    /// Settings → Daemons: the form's SSH host field (feature 489).
+    DaemonSshHost,
+    /// Settings → Daemons: the form's SSH user field (feature 489).
+    DaemonSshUser,
+    /// Settings → Daemons: the form's SSH port field (feature 489).
+    DaemonSshPort,
+    /// Settings → Daemons: the form's SSH key file field (feature 489).
+    DaemonSshKeyFile,
     /// Settings → Daemons: the form's connect-at-launch checkbox (feature 491).
     DaemonAutoStart,
     /// Settings: the "let AI sessions manage worktrees and sessions" checkbox (feature 034, FR-004).

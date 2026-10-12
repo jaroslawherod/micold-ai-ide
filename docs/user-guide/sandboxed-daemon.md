@@ -1,5 +1,7 @@
 # Running the session service in a container
 
+To run it on another computer instead, see [over SSH](remote-daemons.md).
+
 The session service — the process that owns your terminals and worktrees — normally runs directly on
 your computer, with the same access to your files that you have. It can instead run inside a
 container, where it sees **only the projects you have registered** and nothing else.

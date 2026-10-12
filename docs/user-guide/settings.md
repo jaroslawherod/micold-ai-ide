@@ -477,7 +477,7 @@ You can run a host daemon and several container daemons together, each worktree 
 edit, start, stop and remove them in [Daemons](#daemons); the limits (one host daemon at most,
 unique names, container names and ports) and what an unavailable daemon looks like are in
 [Running a host daemon and container daemons
-together](sandboxed-daemon.md#running-a-host-daemon-and-container-daemons-together).
+together](sandboxed-daemon.md#running-a-host-daemon-and-container-daemons-together). A daemon can also run on another computer: see [Running the session service on another computer over SSH](remote-daemons.md).
 
 The container settings stay visible and editable whichever placement you pick, and are kept if you
 switch back — configuring the container and then trying the host process first doesn't mean setting

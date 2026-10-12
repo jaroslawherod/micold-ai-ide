@@ -23,6 +23,7 @@ shapes:
 | `build + test (windows-latest)` | runs | **skipped** |
 | `assertion freeze (advisory)` | runs | **skipped** |
 | `sandbox against a real runtime (linux)` | runs | **skipped** |
+| `remote daemon over a real sshd (linux)` | runs | **skipped** |
 | `docs check` | runs | **runs** |
 | `ci complete` | runs | runs |
 
@@ -46,6 +47,11 @@ network or cost. Run them on demand with `mise run image && mise run test-sandbo
 default, like every `sandbox_real_*` test. The end-to-end runs on the Linux runner only; macOS and
 Windows rest on the render-free tests (`daemon_rows_uniform`, `per_daemon_actors`, the registry
 and state-machine tests), which run on every platform.
+
+`remote daemon over a real sshd` (feature 489) installs `openssh-server` and runs the `ssh_real_*`
+tests (`mise run test-ssh` locally): a rootless `sshd` on loopback that logs in as the runner's own
+user, the client's own build copied to a private `$HOME` and started through the bridge. They are
+off by default (`ssh-real-runtime`) and skip with a printed reason on a machine with no `sshd`.
 
 `docs check` is deliberately unconditional: it is the one gate a documentation-only change can
 actually break, so skipping the build must not skip it. Delete a required document and the run

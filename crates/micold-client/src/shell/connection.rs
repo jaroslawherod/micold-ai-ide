@@ -42,6 +42,12 @@ pub fn update(app: &mut App, id: DaemonId, msg: Msg) -> Task<Message> {
         Msg::Disconnected => daemon_sync::on_disconnected(app, id),
         Msg::ConnectFailed(reason) => daemon_sync::on_connect_failed(app, id, reason),
         Msg::Refused(reason) => daemon_sync::on_refused(app, id, reason),
+        Msg::StartFailed(reason) => daemon_sync::on_start_failed(app, id, reason),
+        Msg::CopyProgress(percent) => {
+            app.core
+                .update(Message::Daemons(micold_client::features::daemons::Msg::CopyProgress(id, percent)));
+            Task::none()
+        }
         Msg::TakeoverRequested => daemon_sync::on_takeover_requested(app),
         // The daemon refused us on a contract mismatch (US6, FR-021): record it so the banner can
         // name both versions and offer the restart action. The connection subscription keeps

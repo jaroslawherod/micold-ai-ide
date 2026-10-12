@@ -59,44 +59,45 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-Unit M1 part 3 continues (implement, T001-T027). Commits on the branch, not pushed, no PR yet.
+Unit M1 part 4 continues (implement, T001-T027). Commits on the branch, not pushed, no PR yet.
+Part 3 wrote the code below but NOTHING of it has been compiled or run: the build lock was held by
+another worktree's gate all session (`build-lock.sh ... waiting`). Part 4 starts by compiling.
 
-Done and compiled, tests green (`cargo test -p micold-core --lib` 570, `daemons_ssh` 5):
-- T001-T003, T005-T010, T012-T018 (ticked in tasks.md; T010/T017 helper in
-  `crates/micold-daemon/src/remote.rs`, `bridge` + `prune`, dispatched in main.rs; tokio `io-std` added). `crates/micold-core/src/ssh/`:
-  `target`, `argv`, `classify`, `stdio`, `provision` (`SshRunner`/`Artefacts`/`SshHost` traits,
-  `ProvisionOptions`, `provision()`, `connect()` returning `Connected`, `parse_probe`,
-  `select_artefact`); `DaemonRuntime::Ssh` + `DaemonEvent::StartFailed` in daemons.rs;
-  `Transport::Ssh`, `DialAddress::Ssh`, `endpoint::resolve_pinned()`, `RemotePlacement{target}`.
-- tdd/test-list.md and tdd/cycle-log.md written (test-after admitted, 5 mutants killed).
+Written in part 3 (uncompiled, not ticked in tasks.md):
+- T004/T022: `crates/micold-daemon/tests/ssh_real_support/{mod,sshd}.rs` (rootless sshd, `SetEnv HOME`
+  verified by hand to give the remote a private $HOME, wrapper script as `ssh_path`) and
+  `tests/ssh_real_endtoend.rs` part 1 (`ssh_real_add_start_copies_the_build_and_connects`; kills the
+  daemon it started via the pinned endpoint's lock pid; checks no listening TCP socket).
+  Run: `mise run test-ssh` (a detached run was queued; log gone with the session, re-run).
+- T011/T019: `client/src/daemon.rs`: `Dial::Ssh{target}`, `install_ssh_host` (OnceLock), `ssh_attempt`,
+  `PumpEnd::Ended`, copy progress -> `ConnectionMsg::CopyProgress`, failure ->
+  `ConnectionMsg::StartFailed`; Ssh entries in `Unreachable` are not dialled; 2 unit tests.
+  `features/connection.rs` Msg::{StartFailed,CopyProgress}; `shell/connection.rs` routes them;
+  `shell/daemon_sync.rs::on_start_failed`.
+- T019 shell: `shell/daemons.rs::{locate_windows_ssh,system_ssh}` + test; installed in
+  `shell/startup.rs` after `Capabilities::real()`. Re-run `no_concrete_implementations.rs`.
+- T020/T023/T024: `features/daemons.rs` (DraftRuntime::Ssh, ssh_* draft fields, SshHostEdited..,
+  CopyProgress, `DaemonView.activity` new core field, `invalid_field`), `ui/settings/daemons.rs`
+  form + `activity` line, `features/window.rs` FieldId::DaemonSsh{Host,User,Port,KeyFile}.
+- T026/T027: ci.yml job `ssh-remote` (+ ci-complete needs/env/check/summary, docs-check test -f),
+  ci-pipeline.md, docs/user-guide/remote-daemons.md, SUMMARY, settings.md, sandboxed-daemon.md,
+  daemon.md.
 
 Next steps:
-1. T004+T022 harness + e2e: `crates/micold-daemon/tests/ssh_real_support/{mod,sshd}.rs` (rootless
-   sshd on loopback, keys, authorized_keys, private config `Host` alias, skip with printed reason),
-   `tests/ssh_real_endtoend.rs` part 1 (names start `ssh_real_`). Needs a `SystemSsh` runner
-   usable from the test: DONE as `micold_core::ssh::SystemSsh` (core `ssh/system.rs`: spawns ssh,
-   kill_on_drop, deadline, chunked stdin + progress, `own_daemon`/`bundled_dir`/`ssh_path` fields;
-   tested). The client shell constructs and installs it (T019); re-run
-   `crates/micold-client/tests/no_concrete_implementations.rs`. Windows `ssh.exe` lookup (PATH,
-   then `%SystemRoot%\System32\OpenSSH\ssh.exe`) is still to do, in the shell, via `ssh_path`.
-2. T011, T019-T021, T023-T025 client: `Dial::Ssh{target}` in client/src/daemon.rs `actor_specs`
-   (an `Ssh` entry whose state is Unreachable is not dialled; Start re-adds), actor calls
-   `ssh::provision::connect`, on failure sends `StartFailed(reason)` and ends; copy progress ->
-   `copying daemon to <host> (<n>%)`; Draft/Msg fields in features/daemons.rs; form + geometry
-   case in ui/settings/daemons.rs; connected row shows version and `user@host:port`.
-3. T026 CI job `ssh-remote` + docs/development/ci-pipeline.md; T027 docs/user-guide/remote-daemons.md,
-   SUMMARY.md, settings.md, sandboxed-daemon.md links, docs/daemon.md.
-4. Then tick tasks, scoped gate with review A (`code-review` high) and B (conformance), full
-   `mise run gate`, PR `feat(489): remote over SSH daemon connects (#489)` per tasks/pr.md.
-
-Harness insight: argv builders ban `-F`, and OpenSSH reads `~/.ssh` from getpwuid, not `$HOME`, so the
-harness points `SystemSsh.ssh_path` at a wrapper script `exec ssh -F <private config> "$@"` whose
-config holds the `Host` alias, `Port`, `IdentityFile`, `UserKnownHostsFile`, `IdentitiesOnly`. The e2e
-calls `ssh::provision::connect(&SystemSsh{own_daemon: <built micold-daemon>, ..}, target, opts, ..)`
-with the daemon's `XDG_RUNTIME_DIR` unset; check `which sshd` first (skip with reason if absent).
+1. `mise run test-core` then client build/tests (cargo check -p micold-client --tests): likely fixes
+   needed: `DaemonRegistry::default()` in the new daemon.rs test, iced BoxFuture path, `Message`
+   Send for `copy_progress`, other exhaustive matches on `DraftRuntime`/`DaemonView`/connection
+   `Msg`, `FieldId` tables, `tests/support/daemons_fixture.rs` Draft/DaemonView literals.
+2. Still missing: T020 reducer tests (ssh draft -> add -> start -> Starting with progress ->
+   Connected shows version and user@host:port; auto_start applies to Ssh) in
+   `crates/micold-client/tests/daemons_feature.rs` style; T021 geometry-gate case for the SSH form in
+   `ui/settings/daemons.rs` (follow the existing geometry case there); `ssh_real` test run.
+3. Tick T004, T011, T019-T027 once green; update tdd/cycle-log.md; scoped gate, reviews A (code-review
+   high) and B (conformance), full `mise run gate`, PR `feat(489): remote over SSH daemon connects
+   (#489)` per tasks/pr.md.
 
 Tip: run cargo detached (`setsid nohup ... &`) and `scripts/autopilot/hold.sh <log>`; the hook
-blocks foreground calls over 250 s.
+blocks foreground calls over 250 s. Expect to wait behind other worktrees' builds.
 
 ## Open escalation
 
