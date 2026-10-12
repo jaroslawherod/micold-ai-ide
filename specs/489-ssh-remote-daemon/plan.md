@@ -75,7 +75,7 @@ Complexity Tracking.
 | FR-008 | `DaemonState::Reconnecting { reason }` (new) and `Unreachable` semantics in `daemons.rs`; strings in the contract; Settings rows live via `Message::Daemon` (491) |
 | FR-009, FR-011 (text) | `ssh/classify.rs`: `SshFailure` from exit status and stderr; watchdog deadline = `ConnectTimeout` (from `ssh -G`) else 15 s; `ssh/mismatch.rs`: `MismatchExplanation` from `RefusalReason::{VersionMismatch, BuildMismatch}` |
 | FR-011 (no end, offer) | `micold-daemon remote status` over the version-stable `status.json` (R6); `ReplaceOffer::{Available, Blocked{running}, Unknown}`; `remote stop` refuses unless status proves zero sessions; no code path stops a daemon with sessions |
-| FR-012 | `ssh/remote_path.rs` (`RemoteLocation`, namespaced identity, R5), translation at the daemon boundary in `shell/daemon_sync.rs`; gate over the wire in `shell/workspace.rs` (existing); host name shown by `links.rs` row labels and the worktree row (`features/sidebar.rs`) |
+| FR-012 | `micold-core/src/project.rs` (modified: `canonicalize_best_effort` keeps a remote identity verbatim), `ssh/remote_path.rs` (`RemoteLocation`, namespaced identity, R5), translation at the daemon boundary in `shell/daemon_sync.rs`; gate over the wire in `shell/workspace.rs` (existing); host name shown by `links.rs` row labels and the worktree row (`features/sidebar.rs`) |
 | FR-013 | per-daemon actor and state (491); remote failures emit only that daemon's events; `ssh_real_*` and client test assert local sessions unchanged; app start never awaits a remote dial |
 | FR-015, FR-016 | registry persistence (491 `write_then_rename`); `DaemonRegistry::add/edit` gain `SshDuplicate{other}` over (resolved host, user, port) and `InvalidField` naming the field |
 | FR-017 | `crates/micold-daemon/tests/ssh_real_*.rs` + `ssh_real_support/` (rootless `sshd` on loopback, fault proxy, stale-daemon fixture), `mise run test-ssh`, `ci.yml` job `ssh-remote` |
@@ -129,7 +129,7 @@ crates/micold-client/src/
 ├── ui/settings/daemons.rs    # SSH fields, state badge Reconnecting, errors, replace button
 crates/micold-daemon/tests/ssh_real_{endtoend,reconnect,hostkey_auth,mismatch,concurrent}.rs
 crates/micold-daemon/tests/ssh_real_support/  # sshd, fault proxy, stale-daemon fixture
-packaging/ + .github/workflows/  # remote-daemon bundle for non-Linux clients (R3), CI job ssh-remote
+packaging/ + .github/workflows/  # remote-daemon bundle for non-Linux clients (R3, new musl build), CI job ssh-remote
 docs/user-guide/remote-daemons.md, settings.md, worktrees-and-sessions.md; docs/daemon.md; docs/SUMMARY.md
 ```
 
@@ -148,14 +148,14 @@ untouched.
 | FR-001, 012, 014, 015 | core unit (settings round-trip, identity mapping); client feature reducers; geometry gates; quickstart §B visual pass |
 | FR-013 | client test: a remote daemon in every non-connected state beside a connected local one, local `DaemonView`/outbox untouched |
 | FR-004 (no listener), 005, 006, 011 (replace), 021, SC-001..006 | `ssh_real_*` against rootless `sshd` + fault proxy + fake AI CLI, `mise run test-ssh`, CI `ssh-remote` |
-| FR-018 (artefact per client platform), R5 identity, R10 fixture guard | core unit: `provision.rs` artefact-selection table over (client, remote) pairs; `canonicalize_best_effort` returns a `micold-remote://` identity verbatim; `RemoteLocation` round-trip with Windows separators; a default build ignores `MICOLD_FIXTURE_VERSION_SUFFIX`; CI check that macOS/Windows packages ship the Linux artefact |
+| FR-018 (artefact per client platform), R5 identity, R10 fixture guard | core unit: `provision.rs` artefact-selection table over (client, remote) pairs; `canonicalize_best_effort` (modified in `micold-core/src/project.rs`, early return) returns a `micold-remote://` identity verbatim; `RemoteLocation` round-trip with Windows separators; a default build ignores `MICOLD_FIXTURE_VERSION_SUFFIX`; CI check that macOS/Windows packages ship the Linux artefact |
 | Helper subcommands | daemon crate unit tests (`remote.rs`, `runtime_status.rs`) and `ssh_real_*` |
 
 ## Complexity Tracking
 
 | Deviation | Why | Alternative rejected because |
 |---|---|---|
-| `Reconnecting` added and `Unreachable` redefined for every runtime (delta to 491 FR-009/contract) | Spec FR-008 requires it; a lost established connection and a never-established one must differ for FR-019 | Remote-only state would fork the shared `DaemonState` and the Settings badge logic |
+| `Reconnecting` added for every runtime; the `Unreachable` = no-attempts definition applies to SSH runtimes only (delta to 491 FR-009/contract) | Spec FR-008 requires it; a lost established connection and a never-established one must differ for FR-019 | Remote-only state would fork the shared `DaemonState` and the Settings badge logic |
 | Local runtimes keep retrying silently after a failed start while shown `Unreachable` (spec FR-008 scoped to SSH runtimes for this clause) | 491's SC-003 recovery (a daemon that comes up later is picked up) must not regress | Stopping local retries is a behaviour change outside this feature; remote actors follow the spec's definition exactly (R7) |
 | Remote project identity is a namespaced path, not a new field on `Project` (R5) | Every path-keyed map (state files, catalog reconcile, sessions) keeps working with no signature change | A `host` field threads through ~every project API and persisted shape |
 | Helper subcommands and a status file in the daemon crate | Replacement must be decidable for a daemon whose protocol this client cannot speak (Q2) | Process-tree inspection is OS-specific and unreliable; a wire query needs a matching version, which is the failure case |

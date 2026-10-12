@@ -35,7 +35,7 @@ Every step before 5 runs under the connect deadline (`Timeout` when exceeded); s
 outside it and reports progress.
 
 ## Remote helper (`micold-daemon remote ...`, `crates/micold-daemon/src/remote.rs`)
-- `bridge`: resolve endpoint; dial; when nothing accepts, spawn the daemon detached and poll
+- `bridge`: resolve the pinned `/tmp/micold-<uid>` endpoint (R2; `status` and `stop` do too); dial; when nothing accepts, spawn the daemon detached and poll
   (`SPAWN_TIMEOUT`, `RESPAWN_AFTER` as `connect_or_spawn`); then relay both directions byte-for-byte.
   Exits 0 when either side closes. Writes nothing to stdout except relayed bytes; diagnostics to
   stderr only. It never speaks the protocol and never changes a daemon.
