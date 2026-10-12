@@ -50,6 +50,8 @@ pub enum DraftRuntime {
     /// A container on this machine.
     #[default]
     Container,
+    /// A host reached through the user's own `ssh` (feature 489).
+    Ssh,
 }
 
 /// The add/edit form's fields, as typed (the port is text so a bad one can be reported).
@@ -69,6 +71,14 @@ pub struct Draft {
     pub profile: SandboxProfile,
     /// Connect at launch.
     pub auto_start: bool,
+    /// The host or `Host` alias (SSH runtime only, feature 489).
+    pub ssh_host: String,
+    /// The remote user; blank takes it from the SSH configuration (SSH runtime only).
+    pub ssh_user: String,
+    /// The remote port as typed; blank takes it from the SSH configuration (SSH runtime only).
+    pub ssh_port: String,
+    /// The private key file; blank takes it from the SSH configuration (SSH runtime only).
+    pub ssh_key_file: String,
 }
 
 /// A refused save: the field at fault and what to tell the user.
@@ -143,6 +153,8 @@ pub struct State {
     diagnostics: BTreeMap<DaemonId, DaemonDiagnostics>,
     versions: BTreeMap<DaemonId, String>,
     runtime_missing: BTreeMap<DaemonId, String>,
+    /// How much of the build has been copied to an SSH daemon's host, in percent (feature 489).
+    copy_progress: BTreeMap<DaemonId, u8>,
     ended: Vec<SessionId>,
 }
 
@@ -197,6 +209,7 @@ pub fn views(state: &State, model: &Model<'_>) -> ViewModel {
             endpoint: match &entry.runtime {
                 DaemonRuntime::Container(c) => format!("127.0.0.1:{}", c.port),
                 DaemonRuntime::Host => "local".to_string(),
+                DaemonRuntime::Ssh(s) => s.target.describe(),
                 DaemonRuntime::Unsupported { kind, .. } => format!("unsupported ({kind})"),
                 _ => String::new(),
             },
@@ -207,6 +220,17 @@ pub fn views(state: &State, model: &Model<'_>) -> ViewModel {
                 .cloned()
                 .unwrap_or(DaemonState::Stopped),
             bound: bound_to(model, entry.id),
+            activity: match (&entry.runtime, state.copy_progress.get(&entry.id)) {
+                (DaemonRuntime::Ssh(s), Some(percent))
+                    if model.links.state(entry.id) == Some(&DaemonState::Starting) =>
+                {
+                    Some(format!(
+                        "copying daemon to {} ({percent}%)",
+                        s.target.host
+                    ))
+                }
+                _ => None,
+            },
         })
         .collect::<Vec<_>>();
     ViewModel {
@@ -237,7 +261,9 @@ pub fn daemon_event(
 ) -> Option<StateChange> {
     let diagnostics = state.diagnostics.entry(id).or_default();
     match &event {
-        DaemonEvent::DialFailed(reason) | DaemonEvent::Lost(reason) => {
+        DaemonEvent::DialFailed(reason)
+        | DaemonEvent::Lost(reason)
+        | DaemonEvent::StartFailed(reason) => {
             diagnostics.record_error(reason.clone());
         }
         DaemonEvent::Refused { client, daemon } => {
@@ -248,6 +274,13 @@ pub fn daemon_event(
         _ => {}
     }
     let change = links.apply(id, event);
+    if change
+        .as_ref()
+        .is_some_and(|c| c.to != DaemonState::Starting)
+    {
+        state.copy_progress.remove(&id);
+    }
+    let diagnostics = state.diagnostics.entry(id).or_default();
     if let Some(change) = &change {
         diagnostics.push_log(format!("state: {:?}", change.to));
     }
@@ -303,6 +336,10 @@ pub fn begin_add(state: &mut State) {
         port: String::new(),
         profile: SandboxProfile::default(),
         auto_start: true,
+        ssh_host: String::new(),
+        ssh_user: String::new(),
+        ssh_port: String::new(),
+        ssh_key_file: String::new(),
     });
 }
 
@@ -312,9 +349,22 @@ pub fn begin_edit<'s>(state: &'s mut State, model: &Model<'_>, id: DaemonId) -> 
     // A runtime this build does not know is kept opaque: editing it as a host would replace it.
     if !matches!(
         entry.runtime,
-        DaemonRuntime::Container(_) | DaemonRuntime::Host
+        DaemonRuntime::Container(_) | DaemonRuntime::Host | DaemonRuntime::Ssh(_)
     ) {
         return None;
+    }
+    let mut ssh = (String::new(), String::new(), String::new(), String::new());
+    if let DaemonRuntime::Ssh(s) = &entry.runtime {
+        ssh = (
+            s.target.host.clone(),
+            s.target.user.clone().unwrap_or_default(),
+            s.target.port.map(|p| p.to_string()).unwrap_or_default(),
+            s.target
+                .key_file
+                .as_ref()
+                .map(|k| k.display().to_string())
+                .unwrap_or_default(),
+        );
     }
     let (runtime, container_name, port, profile) = match &entry.runtime {
         DaemonRuntime::Container(c) => (
@@ -322,6 +372,12 @@ pub fn begin_edit<'s>(state: &'s mut State, model: &Model<'_>, id: DaemonId) -> 
             c.container_name.clone(),
             c.port.to_string(),
             c.profile.clone(),
+        ),
+        DaemonRuntime::Ssh(_) => (
+            DraftRuntime::Ssh,
+            String::new(),
+            String::new(),
+            SandboxProfile::default(),
         ),
         _ => (
             DraftRuntime::Host,
@@ -338,6 +394,10 @@ pub fn begin_edit<'s>(state: &'s mut State, model: &Model<'_>, id: DaemonId) -> 
         port,
         profile,
         auto_start: entry.auto_start,
+        ssh_host: ssh.0,
+        ssh_user: ssh.1,
+        ssh_port: ssh.2,
+        ssh_key_file: ssh.3,
     });
     state.draft.as_ref()
 }
@@ -382,15 +442,7 @@ fn form_error(registry: &DaemonRegistry, draft: &Draft, err: RegistryError) -> F
                 message: format!("That {what} is already used by daemon {}.", named(other)),
             }
         }
-        RegistryError::InvalidField { field } => FormError {
-            field,
-            message: match field {
-                "port" => "Enter a port between 1 and 65535.".to_string(),
-                "image" => "The image reference is not valid.".to_string(),
-                "container_name" => "Enter a container name.".to_string(),
-                other => format!("{other} is not valid."),
-            },
-        },
+        RegistryError::InvalidField { field } => invalid_field(field),
         RegistryError::UnknownDaemon => FormError {
             field: "name",
             message: "That daemon no longer exists.".into(),
@@ -398,9 +450,41 @@ fn form_error(registry: &DaemonRegistry, draft: &Draft, err: RegistryError) -> F
     }
 }
 
+/// The refused field and the sentence beside it.
+fn invalid_field(field: &'static str) -> FormError {
+    let message = match field {
+        "port" => "Enter a port between 1 and 65535.".to_string(),
+        "image" => "The image reference is not valid.".to_string(),
+        "container_name" => "Enter a container name.".to_string(),
+        "host" => "Enter a host name, or a Host alias from your SSH configuration.".to_string(),
+        "user" => "Enter a user name without an @.".to_string(),
+        "key_file" => "That key file does not exist.".to_string(),
+        other => format!("{other} is not valid."),
+    };
+    FormError { field, message }
+}
+
 fn runtime_of(draft: &Draft) -> Result<DaemonRuntime, FormError> {
     match draft.runtime {
         DraftRuntime::Host => Ok(DaemonRuntime::Host),
+        DraftRuntime::Ssh => {
+            let blank = |v: &str| Some(v.trim()).filter(|v| !v.is_empty());
+            let port = match blank(&draft.ssh_port) {
+                Some(p) => Some(p.parse::<u16>().map_err(|_| invalid_field("port"))?),
+                None => None,
+            };
+            let target = micold_core::ssh::SshTarget::new(
+                &draft.ssh_host,
+                blank(&draft.ssh_user),
+                port,
+                blank(&draft.ssh_key_file).map(PathBuf::from),
+            )
+            .map_err(|e| match e {
+                RegistryError::InvalidField { field } => invalid_field(field),
+                _ => invalid_field("host"),
+            })?;
+            Ok(DaemonRuntime::Ssh(micold_core::ssh::SshSettings { target }))
+        }
         DraftRuntime::Container => {
             let port = draft.port.trim().parse::<u16>().map_err(|_| FormError {
                 field: "port",
@@ -636,6 +720,16 @@ pub enum Msg {
     PortEdited(String),
     /// The image reference field changed.
     ImageEdited(String),
+    /// The SSH host field changed.
+    SshHostEdited(String),
+    /// The SSH user field changed.
+    SshUserEdited(String),
+    /// The SSH port field changed.
+    SshPortEdited(String),
+    /// The SSH key file field changed.
+    SshKeyFileEdited(String),
+    /// The share of the build copied to an SSH daemon's host, in percent.
+    CopyProgress(DaemonId, u8),
     /// The connect-at-launch box changed.
     AutoStartToggled(bool),
     /// Start this daemon, and only it.
@@ -710,6 +804,13 @@ pub fn update(state: &mut State, model: &mut Model<'_>, msg: Msg) -> Vec<Outcome
         Msg::ContainerNameEdited(v) => edit(state, &|d| d.container_name = v.clone()),
         Msg::PortEdited(v) => edit(state, &|d| d.port = v.clone()),
         Msg::ImageEdited(v) => edit(state, &|d| d.profile.image.reference = v.clone()),
+        Msg::SshHostEdited(v) => edit(state, &|d| d.ssh_host = v.clone()),
+        Msg::SshUserEdited(v) => edit(state, &|d| d.ssh_user = v.clone()),
+        Msg::SshPortEdited(v) => edit(state, &|d| d.ssh_port = v.clone()),
+        Msg::SshKeyFileEdited(v) => edit(state, &|d| d.ssh_key_file = v.clone()),
+        Msg::CopyProgress(id, percent) => {
+            state.copy_progress.insert(id, percent);
+        }
         Msg::AutoStartToggled(v) => edit(state, &|d| d.auto_start = v),
         Msg::Started(id) => {
             start(state, model, id);

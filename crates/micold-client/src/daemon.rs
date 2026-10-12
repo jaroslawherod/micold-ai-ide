@@ -19,12 +19,15 @@ use iced::futures::{SinkExt, Stream, StreamExt};
 use iced::Subscription;
 
 use micold_core::connect::{connect_at, connect_or_spawn, Connected, Credentials, SPAWN_TIMEOUT};
-use micold_core::daemons::{DaemonId, DaemonRegistry, DaemonRuntime, DaemonStates};
+use micold_core::daemons::{DaemonId, DaemonRegistry, DaemonRuntime, DaemonState, DaemonStates};
 use micold_core::endpoint::{self, DialAddress};
 use micold_core::protocol::codec::{CodecError, Frame};
 use micold_core::protocol::keepalive::{self, Keepalive, KeepaliveAction};
 use micold_core::protocol::messages::{ClientMsg, DaemonMsg};
 use micold_core::sandbox::placement::PlacementKind;
+use micold_core::ssh::argv::{current_build_id, DEFAULT_CONNECT_TIMEOUT_SECS};
+use micold_core::ssh::provision::{connect as ssh_connect, ProvisionOptions};
+use micold_core::ssh::{ClientPlatform, ProvisionProgress, ReasonContext, SshHost, SshTarget};
 
 use crate::app::Message;
 
@@ -60,6 +63,17 @@ fn sandbox_credentials(token_path: &Path, strict_fingerprint: bool) -> Credentia
         auth_token: token.map(|t| micold_core::protocol::messages::PresentedToken::new(t.as_str())),
         require_fingerprint_match: strict_fingerprint,
     }
+}
+
+/// The one `ssh` runner of this process, chosen by the shell (`Capabilities`' sibling: this module
+/// names no concrete implementation, `tests/no_concrete_implementations.rs`). A process that never
+/// installs one (a test, the showcase) reports an SSH daemon as unreachable instead of spawning.
+static SSH_HOST: std::sync::OnceLock<std::sync::Arc<dyn SshHost>> = std::sync::OnceLock::new();
+
+/// Install the runner SSH daemons are provisioned and dialled with (feature 489). The first call
+/// wins; later ones are ignored.
+pub fn install_ssh_host(host: std::sync::Arc<dyn SshHost>) {
+    let _ = SSH_HOST.set(host);
 }
 
 /// How many messages may queue in each direction before backpressure. Input is small and rare
@@ -132,6 +146,12 @@ pub enum Dial {
         /// Where this daemon's token lives on the host.
         token_path: PathBuf,
     },
+    /// Provision and bridge to a daemon on a remote host with the user's own `ssh` (feature 489).
+    /// One try per start: a failure is reported and not retried until the user starts it again.
+    Ssh {
+        /// The host and connection settings.
+        target: SshTarget,
+    },
 }
 
 /// Everything one actor needs, and its subscription identity (it is hashed whole). A change to any
@@ -176,6 +196,12 @@ pub fn actor_specs(
         .entries()
         .iter()
         .filter(|e| states.should_dial(e.id))
+        // An SSH daemon makes one try per start: once unreachable it is not dialled until the user
+        // starts it again, which moves it to `Starting` and puts its actor back.
+        .filter(|e| {
+            !(matches!(e.runtime, DaemonRuntime::Ssh(_))
+                && matches!(states.state(e.id), Some(DaemonState::Unreachable { .. })))
+        })
         .filter_map(|entry| {
             let key = keys.iter().find(|k| k.id == entry.id)?.clone();
             let dial = match &entry.runtime {
@@ -183,6 +209,9 @@ pub fn actor_specs(
                 DaemonRuntime::Container(c) => Dial::Container {
                     port: c.port,
                     token_path: entry.token_path(state_dir, legacy_default)?,
+                },
+                DaemonRuntime::Ssh(s) => Dial::Ssh {
+                    target: s.target.clone(),
                 },
                 _ => return None,
             };
@@ -284,6 +313,8 @@ enum PumpEnd {
     Disconnected,
     /// The iced side is gone; stop the whole subscription.
     AppGone,
+    /// A one-try bring-up failed and was reported; nothing is retried until the user starts it.
+    Ended,
 }
 
 fn actor(spec: ActorSpec) -> impl Stream<Item = Message> {
@@ -308,7 +339,7 @@ fn actor(spec: ActorSpec) -> impl Stream<Item = Message> {
                         return;
                     }
                 },
-                Dial::Container { .. } => None,
+                Dial::Container { .. } | Dial::Ssh { .. } => None,
             };
 
             // Reconnect loop: connect, pump until the link drops, surface it, back off, repeat. A
@@ -321,7 +352,7 @@ fn actor(spec: ActorSpec) -> impl Stream<Item = Message> {
                 match connect_and_pump(id, &spec, endpoint.as_ref(), &mut output, &mut failures)
                     .await
                 {
-                    PumpEnd::AppGone => return,
+                    PumpEnd::AppGone | PumpEnd::Ended => return,
                     PumpEnd::Disconnected => {
                         if output
                             .send(Message::daemon(id, ConnectionMsg::Disconnected))
@@ -362,6 +393,17 @@ async fn connect_and_pump(
         // the image being acquired. All this loop does is dial it — and if nothing is listening,
         // say so. It does **not** fall back to a host process: that is FR-035, and this is the one
         // place it would be easiest to lose.
+        (Dial::Ssh { target }, _) => {
+            let progress = copy_progress(id, output);
+            match ssh_attempt(SSH_HOST.get().map(|h| &**h), target, Some(progress)).await {
+                Ok(c) => Ok(c),
+                Err(reason) => {
+                    return report(id, output, ConnectionMsg::StartFailed(reason))
+                        .await
+                        .ended();
+                }
+            }
+        }
         (Dial::Container { port, token_path }, _) => {
             let address = DialAddress::Loopback { port: *port };
             let credentials = sandbox_credentials(token_path, spec.strict_fingerprint);
@@ -595,6 +637,60 @@ async fn report_refusal(
     report(id, output, ConnectionMsg::Refused(reason)).await
 }
 
+impl PumpEnd {
+    /// A reported one-try failure ends the actor, unless the app is already gone.
+    fn ended(self) -> PumpEnd {
+        match self {
+            PumpEnd::AppGone => PumpEnd::AppGone,
+            _ => PumpEnd::Ended,
+        }
+    }
+}
+
+/// A progress callback that publishes how much of the build has been copied as daemon state.
+/// A full channel drops a report: the next one carries a larger number.
+fn copy_progress(id: DaemonId, output: &mpsc::Sender<Message>) -> ProvisionProgress {
+    let sender = std::sync::Mutex::new(output.clone());
+    std::sync::Arc::new(move |percent| {
+        if let Ok(mut sender) = sender.lock() {
+            let _ = sender.try_send(Message::daemon(id, ConnectionMsg::CopyProgress(percent)));
+        }
+    })
+}
+
+/// One bring-up of an SSH daemon: provision, bridge and handshake, with a failure already in the
+/// user's words (FR-008). `None` is a process that installed no runner.
+async fn ssh_attempt(
+    host: Option<&dyn SshHost>,
+    target: &SshTarget,
+    progress: Option<ProvisionProgress>,
+) -> Result<Connected, String> {
+    let Some(host) = host else {
+        return Err("this build cannot run `ssh`".to_string());
+    };
+    let platform = ClientPlatform::current();
+    // The connect watchdog: no attempt hangs the client. The user's `ConnectTimeout` replaces it
+    // when read from their SSH configuration (M5).
+    let timeout_secs = DEFAULT_CONNECT_TIMEOUT_SECS;
+    let opts = ProvisionOptions {
+        platform,
+        client_arch: std::env::consts::ARCH.to_string(),
+        timeout_secs,
+        build_id: current_build_id(),
+        client_build: CLIENT_BUILD.to_string(),
+    };
+    ssh_connect(host, target, &opts, progress)
+        .await
+        .map_err(|failure| {
+            failure.reason(&ReasonContext {
+                host: target.host.clone(),
+                port: target.port.unwrap_or(22),
+                timeout_secs,
+                platform,
+            })
+        })
+}
+
 async fn report(id: DaemonId, output: &mut mpsc::Sender<Message>, msg: ConnectionMsg) -> PumpEnd {
     if output.send(Message::daemon(id, msg)).await.is_err() {
         PumpEnd::AppGone
@@ -605,7 +701,79 @@ async fn report(id: DaemonId, output: &mut mpsc::Sender<Message>, msg: Connectio
 
 #[cfg(test)]
 mod tests {
-    use super::{stale_dev_image_advice, ConnectFailures, RECONNECT_BACKOFF};
+    use super::{
+        actor_specs, ssh_attempt, stale_dev_image_advice, ConnectFailures, Dial, RECONNECT_BACKOFF,
+    };
+    use micold_core::daemons::{
+        DaemonRegistry, DaemonRuntime, DaemonState, DaemonStates,
+    };
+    use micold_core::ssh::{Artefacts, SshCommand, SshOutput, SshRunner, SshSettings, SshStdio, SshTarget};
+
+    /// A runner standing in for `ssh`: it cannot be started, as on a machine with no OpenSSH.
+    struct NoSsh;
+
+    impl SshRunner for NoSsh {
+        fn run(
+            &self,
+            _: SshCommand,
+            _: Vec<u8>,
+            _: Option<std::time::Duration>,
+            _: Option<micold_core::ssh::ProvisionProgress>,
+        ) -> iced::futures::future::BoxFuture<'_, std::io::Result<SshOutput>> {
+            Box::pin(async { Err(std::io::ErrorKind::NotFound.into()) })
+        }
+
+        fn open(&self, _: SshCommand) -> std::io::Result<SshStdio> {
+            Err(std::io::ErrorKind::NotFound.into())
+        }
+    }
+
+    impl Artefacts for NoSsh {
+        fn own(&self) -> std::io::Result<Vec<u8>> {
+            Ok(Vec::new())
+        }
+        fn bundled(&self, _: &str, _: &str) -> Option<Vec<u8>> {
+            None
+        }
+    }
+
+    fn ssh_registry() -> (DaemonRegistry, micold_core::daemons::DaemonId) {
+        let mut registry = DaemonRegistry::default();
+        let target = SshTarget::new("build-box", Some("me"), None, None).unwrap();
+        let id = registry
+            .add("Build box", DaemonRuntime::Ssh(SshSettings { target }), false)
+            .unwrap();
+        (registry, id)
+    }
+
+    /// T011: a started SSH daemon is dialled with `Dial::Ssh`; once it is unreachable it is not,
+    /// until started again.
+    #[test]
+    fn an_ssh_daemon_is_dialled_when_starting_and_not_when_unreachable() {
+        let (registry, id) = ssh_registry();
+        let dir = std::path::Path::new("/nonexistent");
+        let mut states = DaemonStates::default();
+        states.insert(id, DaemonState::Starting);
+        let specs = actor_specs(&registry, &states, dir, None, false);
+        assert!(matches!(specs.as_slice(), [s] if matches!(&s.dial, Dial::Ssh { target } if target.host == "build-box")));
+
+        states.insert(id, DaemonState::Unreachable { reason: "no route".into() });
+        assert!(actor_specs(&registry, &states, dir, None, false).is_empty());
+    }
+
+    /// T011: a bring-up that cannot start `ssh` is a failure in words, with no retry loop behind
+    /// it (the actor ends on it).
+    #[tokio::test]
+    async fn a_missing_ssh_is_reported_in_words_not_retried() {
+        let target = SshTarget::new("build-box", None, None, None).unwrap();
+        let err = match ssh_attempt(Some(&NoSsh), &target, None).await {
+            Ok(_) => panic!("no ssh cannot connect"),
+            Err(e) => e,
+        };
+        assert!(err.to_lowercase().contains("ssh"), "{err}");
+        let none = ssh_attempt(None, &target, None).await.err().expect("no runner");
+        assert!(none.contains("ssh"), "{none}");
+    }
 
     /// S-6 against the real retry rather than a copy of it: an unattended bring-up after a failed
     /// one must not arrive on the next connection tick, or the whole budget is spent in the seconds

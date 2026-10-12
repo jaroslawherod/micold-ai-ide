@@ -561,3 +561,10 @@ stays somewhere you can see and back up.
 
 *This document covers the daemon feature end to end (User Stories 1–7), plus feature 027's placement
 model.*
+
+## The remote helper (feature 489)
+
+`micold-daemon remote bridge` is what the client runs over `ssh` on a remote host: it connects its
+stdin and stdout to the host's own daemon endpoint, starting the daemon first when none listens, and
+writes nothing to stdout but relayed bytes. `micold-daemon remote prune --keep <n>` removes older
+build directories under `~/.micold/remote/`. Neither opens a network port.

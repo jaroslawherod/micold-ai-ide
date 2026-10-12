@@ -531,6 +531,24 @@ jobs:
   # fails just as loudly. Scope still applies -- out of scope this reports in full and exits 0, so
   # a concurrent feature is told what it did to the suite without being blocked.
 
+  # Feature 489. The remote daemon is reached with the user's own `ssh`; this job runs the
+  # `ssh_real_*` tests against a rootless `sshd` on loopback (no root, no container). Linux only:
+  # the transport is the same code on every platform, and the argv builders are covered by the
+  # `test` job on all three.
+  ssh-remote:
+    name: remote daemon over a real sshd (linux)
+    needs: classify
+    if: needs.classify.outputs.docs_only != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - name: Install the OpenSSH server
+        run: sudo apt-get update && sudo apt-get install -y openssh-server
+      - name: Run the real-sshd tests
+        run: cargo test -p micold-daemon --features ssh-real-runtime ssh_real_ --no-fail-fast -- --test-threads=1
+
   assertions:
     name: assertion freeze
     needs: classify
@@ -572,6 +590,7 @@ jobs:
           test -f docs/user-guide/appearance-theming.md
           test -f docs/user-guide/settings.md
           test -f docs/user-guide/sandboxed-daemon.md
+          test -f docs/user-guide/remote-daemons.md
           test -f docs/user-guide/worktrees-and-sessions.md
           test -f docs/user-guide/icons.md
           test -f docs/user-guide/install-macos.md
@@ -684,7 +703,7 @@ jobs:
   # repository.
   ci-complete:
     name: ci complete
-    needs: [classify, lint, test, windows-arm64-package, sandbox-runtime, assertions, docs]
+    needs: [classify, lint, test, windows-arm64-package, sandbox-runtime, ssh-remote, assertions, docs]
     # Load-bearing. Without it the implicit `success()` applies, so this job would be *skipped*
     # whenever a covered job failed -- and a skipped check reports success. The gate would go green
     # exactly when the run went red. `crates/micold-core/tests/ci_gate_covers_every_job.rs` asserts
@@ -699,6 +718,7 @@ jobs:
           TEST: ${{ needs.test.result }}
           WINARM: ${{ needs.windows-arm64-package.result }}
           SANDBOX: ${{ needs.sandbox-runtime.result }}
+          SSHREMOTE: ${{ needs.ssh-remote.result }}
           DOCS: ${{ needs.docs.result }}
           ASSERTIONS: ${{ needs.assertions.result }}
         run: |
@@ -716,6 +736,7 @@ jobs:
           check test "$TEST"
           check windows-arm64 "$WINARM"
           check sandbox "$SANDBOX"
+          check ssh-remote "$SSHREMOTE"
           check docs "$DOCS"
           check assertions "$ASSERTIONS"
           {
@@ -728,6 +749,7 @@ jobs:
             echo "| test | \`$TEST\` | yes |"
             echo "| windows-arm64-package | \`$WINARM\` | yes |"
             echo "| sandbox-runtime | \`$SANDBOX\` | yes |"
+            echo "| ssh-remote | \`$SSHREMOTE\` | yes |"
             echo "| docs | \`$DOCS\` | yes |"
             echo "| assertions | \`$ASSERTIONS\` | yes |"
           } >> "$GITHUB_STEP_SUMMARY"

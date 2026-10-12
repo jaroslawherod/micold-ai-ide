@@ -637,6 +637,15 @@ pub fn on_connect_failed(app: &mut App, daemon: DaemonId, reason: String) -> Tas
     }
 }
 
+/// A bring-up that makes one try failed (an SSH daemon, feature 489): the daemon is unreachable
+/// with the reason, and is not dialled again until the user starts it.
+pub fn on_start_failed(app: &mut App, daemon: DaemonId, reason: String) -> Task<Message> {
+    crate::log_line(&format!("ssh: daemon {} failed reason={reason}", daemon.0));
+    daemon_event(app, daemon, DaemonEvent::StartFailed(reason));
+    app.disconnected.insert(daemon);
+    Task::none()
+}
+
 /// A daemon answered and said no (#370). Reported on this dial: none of [`refused_dial`]'s grace
 /// applies, because that grace is for a service not listening yet, and this one is listening. Nor
 /// is a bring-up started — the service is there, and a new container would meet the same answer.

@@ -231,6 +231,11 @@ pub enum Msg {
     Disconnected,
     /// Connecting to (or spawning) the daemon failed, with a human-facing reason.
     ConnectFailed(String),
+    /// A bring-up that makes exactly one try (an SSH daemon) failed, with the reason in the user's
+    /// words (feature 489): unreachable at once, not retried until the user starts it again.
+    StartFailed(String),
+    /// How much of the daemon build has been copied to the remote host, in percent (feature 489).
+    CopyProgress(u8),
     /// A daemon answered and refused the handshake, with a human-facing reason — a stale `:dev`
     /// image, or a refusal without a variant of its own (#370).
     ///
@@ -305,6 +310,7 @@ impl Msg {
             Msg::OfDaemon(_, inner) => inner.daemon_event(),
             Msg::Connected { .. } => Some(DaemonEvent::Connected),
             Msg::Disconnected => Some(DaemonEvent::Lost("connection lost".to_string())),
+            Msg::StartFailed(reason) => Some(DaemonEvent::StartFailed(reason.clone())),
             Msg::ConnectFailed(reason) | Msg::Refused(reason) => {
                 Some(DaemonEvent::DialFailed(reason.clone()))
             }

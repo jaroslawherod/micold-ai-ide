@@ -28,6 +28,7 @@ use micold_core::tokens::{spacing, Roles};
 const RUNTIMES: &[Named<DraftRuntime>] = &[
     Named(DraftRuntime::Container, "Container"),
     Named(DraftRuntime::Host, "Host"),
+    Named(DraftRuntime::Ssh, "Remote over SSH"),
 ];
 
 /// The section's explanation when no daemon is configured.
@@ -167,6 +168,9 @@ fn daemon_row<'a>(view: DaemonView, state: &State, roles: Roles) -> Element<'a, 
     ]
     .spacing(spacing::XS)
     .width(Length::Fill);
+    if let Some(activity) = &view.activity {
+        body = body.push(note(activity.clone(), roles));
+    }
     if let Some(sentence) = state_note(&view) {
         body = body.push(caution(sentence, roles));
     }
@@ -240,6 +244,37 @@ fn form<'a>(
                     .track_focus(FieldId::DaemonImage, focused)
                     .error(error_of(state, "image"))
                     .on_input(|v| Message::Daemons(DaemonsMsg::ImageEdited(v))),
+            );
+    }
+    if draft.runtime == DraftRuntime::Ssh {
+        fields = fields
+            .push(
+                TextField::new("", &draft.ssh_host, roles)
+                    .label("Host")
+                    .track_focus(FieldId::DaemonSshHost, focused)
+                    .error(error_of(state, "host"))
+                    .on_input(|v| Message::Daemons(DaemonsMsg::SshHostEdited(v))),
+            )
+            .push(
+                TextField::new("", &draft.ssh_user, roles)
+                    .label("User")
+                    .track_focus(FieldId::DaemonSshUser, focused)
+                    .error(error_of(state, "user"))
+                    .on_input(|v| Message::Daemons(DaemonsMsg::SshUserEdited(v))),
+            )
+            .push(
+                TextField::new("", &draft.ssh_port, roles)
+                    .label("Port")
+                    .track_focus(FieldId::DaemonSshPort, focused)
+                    .error(error_of(state, "port"))
+                    .on_input(|v| Message::Daemons(DaemonsMsg::SshPortEdited(v))),
+            )
+            .push(
+                TextField::new("", &draft.ssh_key_file, roles)
+                    .label("Key file")
+                    .track_focus(FieldId::DaemonSshKeyFile, focused)
+                    .error(error_of(state, "key_file"))
+                    .on_input(|v| Message::Daemons(DaemonsMsg::SshKeyFileEdited(v))),
             );
     }
     fields = fields

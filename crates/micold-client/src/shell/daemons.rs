@@ -9,6 +9,7 @@
 //! stopped one is neither dialled nor reconnected.
 
 use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
 
 use iced::Task;
 use micold_client::app::Message;
@@ -80,4 +81,72 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
         micold_client::app::interpret(&mut app.core, outcome)
     });
     Task::none()
+}
+
+/// The `ssh` executable on Windows: the one on `PATH`, then the OpenSSH that ships with Windows
+/// (`%SystemRoot%\\System32\\OpenSSH\\ssh.exe`). `None` leaves the lookup to the runner, which
+/// reports a missing `ssh` with the hint to install it. `is_file` is injected so the order is
+/// testable on any platform.
+pub fn locate_windows_ssh(
+    path_var: &str,
+    system_root: Option<&Path>,
+    is_file: &dyn Fn(&Path) -> bool,
+) -> Option<PathBuf> {
+    let on_path = std::env::split_paths(path_var)
+        .map(|dir| dir.join("ssh.exe"))
+        .find(|p| is_file(p));
+    on_path.or_else(|| {
+        system_root
+            .map(|root| root.join("System32").join("OpenSSH").join("ssh.exe"))
+            .filter(|p| is_file(p))
+    })
+}
+
+/// The one real `ssh` runner of this process (feature 489, FR-017): this build's own daemon is the
+/// artefact copied to a host of the same platform, and the executable is looked up by name, except
+/// on Windows where OpenSSH is not always on `PATH`.
+pub fn system_ssh() -> micold_core::ssh::SystemSsh {
+    let ssh_path = if cfg!(windows) {
+        locate_windows_ssh(
+            &std::env::var("PATH").unwrap_or_default(),
+            std::env::var_os("SystemRoot").map(PathBuf::from).as_deref(),
+            &|p| p.is_file(),
+        )
+    } else {
+        None
+    };
+    micold_core::ssh::SystemSsh {
+        own_daemon: PathBuf::from(micold_core::spawn::daemon_binary()),
+        // Builds for other platforms ship beside the client when packaged (M8).
+        bundled_dir: std::env::current_exe()
+            .ok()
+            .and_then(|exe| exe.parent().map(|d| d.join("remote"))),
+        ssh_path,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn windows_ssh_is_taken_from_path_before_the_system_openssh() {
+        let tools = PathBuf::from("tools");
+        let root = PathBuf::from("win");
+        let path_var = std::env::join_paths([&tools]).unwrap().into_string().unwrap();
+        let on_path = tools.join("ssh.exe");
+        let system = root.join("System32").join("OpenSSH").join("ssh.exe");
+
+        let both = |p: &Path| p == on_path || p == system;
+        assert_eq!(
+            locate_windows_ssh(&path_var, Some(&root), &both),
+            Some(on_path.clone())
+        );
+        let system_only = |p: &Path| p == system;
+        assert_eq!(
+            locate_windows_ssh(&path_var, Some(&root), &system_only),
+            Some(system)
+        );
+        assert_eq!(locate_windows_ssh(&path_var, None, &system_only), None);
+    }
 }
