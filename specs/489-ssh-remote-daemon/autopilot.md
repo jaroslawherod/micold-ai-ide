@@ -89,6 +89,12 @@ Next steps:
 4. Then tick tasks, scoped gate with review A (`code-review` high) and B (conformance), full
    `mise run gate`, PR `feat(489): remote over SSH daemon connects (#489)` per tasks/pr.md.
 
+Harness insight: argv builders ban `-F`, and OpenSSH reads `~/.ssh` from getpwuid, not `$HOME`, so the
+harness points `SystemSsh.ssh_path` at a wrapper script `exec ssh -F <private config> "$@"` whose
+config holds the `Host` alias, `Port`, `IdentityFile`, `UserKnownHostsFile`, `IdentitiesOnly`. The e2e
+calls `ssh::provision::connect(&SystemSsh{own_daemon: <built micold-daemon>, ..}, target, opts, ..)`
+with the daemon's `XDG_RUNTIME_DIR` unset; check `which sshd` first (skip with reason if absent).
+
 Tip: run cargo detached (`setsid nohup ... &`) and `scripts/autopilot/hold.sh <log>`; the hook
 blocks foreground calls over 250 s.
 
