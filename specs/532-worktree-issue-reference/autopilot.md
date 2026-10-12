@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #532
 - **Worktree branch**: feat/532_agent-created-worktrees-should-carry-the-issue
 - **Started**: 2026-10-12
-- **Phase**: clarify
-- **Next step**: plan unit
+- **Phase**: plan
+- **Next step**: tasks unit
 
 ## Pull requests
 
@@ -33,6 +33,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | Spec | 1 | 85b89f58a04b29c5c798c39217169f5dd180fc1f:13165b3a9e4938a42528aae5df288475aa63ddae | CHANGES: 2 MAJOR (fixed) |
 | Spec | 2 | 5dd91e6d60ce1f154cd2a546849d0e73b63a52b4:13165b3a9e4938a42528aae5df288475aa63ddae | CLEAN (2 MINOR fixed, prose only) |
+| Plan | 1 | 01edbf8ee9c103b2f4486e7dc783d537ac3317f2:ba43682744cad0284cd09b80acdbbe3018ec9dec | CLEAN (4 MINOR fixed, prose only) |
 
 ## Declined review findings
 
