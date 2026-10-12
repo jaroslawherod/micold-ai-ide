@@ -21,6 +21,7 @@ pub(crate) mod daemon;
 pub(crate) mod daemons;
 pub(crate) mod environment;
 pub(crate) mod github;
+pub(crate) mod jira;
 pub(crate) mod terminal;
 
 use crate::app::Message;

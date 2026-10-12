@@ -649,6 +649,12 @@ fn project_id(path: &Path) -> String {
     format!("{:016x}", hasher.finish())
 }
 
+/// The id a project's files are named with (`projects/<id>.json`), for a sibling store that keys
+/// a file by project: the Jira token file (feature 533, contracts/jira-connection.md §3).
+pub fn project_id_of(path: &Path) -> String {
+    project_id(path)
+}
+
 /// Path of the temporary file used for an atomic write to `path`.
 ///
 /// Unique per call, not derived from `path` alone (T153, BUG-025). A staging path that only the
@@ -1589,6 +1595,23 @@ mod unread_tests {
             naming_unread,
             vec![store.project_state_path(&project)],
             "unread state is in the file that holds the project's sessions and nowhere else"
+        );
+    }
+}
+
+#[cfg(test)]
+mod project_id_of_tests {
+    //! Feature 533: the Jira token file is named with the project's store id.
+    use super::*;
+
+    #[test]
+    fn the_public_accessor_names_the_projects_state_file() {
+        let store = JsonFileStore::at(PathBuf::from("/data/projects.json"));
+        let project = PathBuf::from("/work/app");
+        let file = store.project_state_path(&project);
+        assert_eq!(
+            file.file_stem().and_then(|s| s.to_str()),
+            Some(project_id_of(&project).as_str())
         );
     }
 }

@@ -9,6 +9,7 @@
 
 use crate::attention::{NotificationKinds, LONG_TASK_THRESHOLD};
 use crate::issue_types::{default_mapping, LabelTypeEntry};
+use crate::jira::JiraConnection;
 use crate::mcp::policy::CrossSessionAccess;
 use crate::sandbox::placement::PlacementKind;
 use crate::sandbox::{BudgetViolation, SandboxProfile};
@@ -16,6 +17,7 @@ use crate::session::AiCli;
 use crate::store::LoadStatus;
 use crate::theme::ThemePreference;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::io;
 use std::path::{Path, PathBuf};
 
@@ -153,6 +155,39 @@ pub enum DiffLayout {
     SideBySide,
 }
 
+/// One project's Jira connection changing (feature 533). Sent alone so two windows saving
+/// different projects never overwrite each other's map.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct JiraConnectionChange {
+    /// The project, as the wire names it elsewhere.
+    pub project: String,
+    /// What happens to its connection.
+    pub change: JiraChange,
+}
+
+/// What a [`JiraConnectionChange`] does.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum JiraChange {
+    /// Store this connection, replacing any.
+    Upsert(JiraConnection),
+    /// Remove the project's connection.
+    Remove,
+}
+
+impl JiraConnectionChange {
+    /// Apply the change to a connections map.
+    pub fn apply(&self, map: &mut BTreeMap<String, JiraConnection>) {
+        match &self.change {
+            JiraChange::Upsert(connection) => {
+                map.insert(self.project.clone(), connection.clone());
+            }
+            JiraChange::Remove => {
+                map.remove(&self.project);
+            }
+        }
+    }
+}
+
 /// The persisted application settings document.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Settings {
@@ -226,6 +261,15 @@ pub struct Settings {
     /// feature before then. Service-owned like the binding toggle, so every window follows it.
     #[serde(default)]
     pub pr_status_enabled: bool,
+    /// Whether the Jira integration is on (feature 533, FR-002). Off until the user turns it on:
+    /// while off nothing is sent to Jira and no Jira control is shown (FR-001). Service-owned so
+    /// every window follows one switch (FR-022).
+    #[serde(default)]
+    pub jira_enabled: bool,
+    /// Each project's Jira connection, keyed by the project path as the wire names it (feature
+    /// 533, FR-006). Never holds a token. An entry that no longer parses is dropped on read.
+    #[serde(default, deserialize_with = "crate::jira::known_connections")]
+    pub jira_connections: BTreeMap<String, JiraConnection>,
     /// Whether a session that comes to await input while not in view raises a desktop
     /// notification (feature 039, FR-026). One switch for every AI CLI (FR-028). Service-owned,
     /// so every window follows it at once; unread marks do not depend on it (FR-017).
@@ -304,6 +348,8 @@ impl Default for Settings {
             cross_session_access: CrossSessionAccess::default(),
             issue_label_types: default_mapping(),
             pr_status_enabled: false,
+            jira_enabled: false,
+            jira_connections: BTreeMap::new(),
             desktop_notifications: default_desktop_notifications(),
             notification_kinds: NotificationKinds::default(),
             long_task_threshold_secs: default_long_task_threshold_secs(),
@@ -608,6 +654,13 @@ struct StoredSettings {
     /// defaulted, so `settings_version` does not move for it either.
     #[serde(default)]
     pr_status_enabled: bool,
+    /// Missing in files written before feature 533 → off (FR-002). Additive and defaulted, so
+    /// `settings_version` does not move for it either.
+    #[serde(default)]
+    jira_enabled: bool,
+    /// Missing → none; an entry that no longer parses is dropped and the rest kept (FR-006).
+    #[serde(default, deserialize_with = "crate::jira::known_connections")]
+    jira_connections: BTreeMap<String, JiraConnection>,
     /// Missing in files written before feature 039 → on, the requirement's default (FR-026).
     /// Additive and defaulted, so `settings_version` does not move for it either.
     #[serde(default = "default_desktop_notifications")]
@@ -671,6 +724,8 @@ impl StoredSettings {
             cross_session_access: settings.cross_session_access,
             issue_label_types: settings.issue_label_types.clone(),
             pr_status_enabled: settings.pr_status_enabled,
+            jira_enabled: settings.jira_enabled,
+            jira_connections: settings.jira_connections.clone(),
             desktop_notifications: settings.desktop_notifications,
             notification_kinds: settings.notification_kinds,
             long_task_threshold_secs: settings.long_task_threshold_secs,
@@ -725,6 +780,8 @@ impl StoredSettings {
             cross_session_access: self.cross_session_access,
             issue_label_types: self.issue_label_types,
             pr_status_enabled: self.pr_status_enabled,
+            jira_enabled: self.jira_enabled,
+            jira_connections: self.jira_connections,
             desktop_notifications: self.desktop_notifications,
             notification_kinds: self.notification_kinds,
             long_task_threshold_secs: clamp_long_task_threshold(self.long_task_threshold_secs),

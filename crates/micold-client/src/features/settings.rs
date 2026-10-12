@@ -88,6 +88,11 @@ pub struct State {
     pub runtime_missing: bool,
     /// In-progress Settings edit, present only while the Settings view is shown (feature 006).
     pub settings_draft: Option<SettingsDraft>,
+    /// Whether the Jira integration is on, as the service last reported it (feature 533, FR-022).
+    /// Every Jira control and request is gated on it through `micold_core::jira::jira_visible`.
+    pub jira_enabled: bool,
+    /// Each project's Jira connection, as the service last reported it (feature 533, FR-022).
+    pub jira_connections: std::collections::BTreeMap<String, micold_core::jira::JiraConnection>,
     /// Whether the Settings rail is showing icons alone (feature 027, FR-026c).
     ///
     /// Here rather than on [`SettingsDraft`], and that placement is the requirement: FR-026d calls
@@ -270,6 +275,8 @@ pub enum SettingsSection {
     Daemon,
     /// How an issue's labels choose a worktree's type (feature 034, FR-018).
     GithubIssues,
+    /// The Jira integration's switch and the open project's connection (feature 533, FR-002).
+    Jira,
 }
 
 impl SettingsSection {
@@ -281,6 +288,7 @@ impl SettingsSection {
         SettingsSection::Daemons,
         SettingsSection::Daemon,
         SettingsSection::GithubIssues,
+        SettingsSection::Jira,
     ];
 
     /// The section's name, as the rail shows it.
@@ -292,6 +300,7 @@ impl SettingsSection {
             SettingsSection::Daemons => "Daemons",
             SettingsSection::Daemon => "Session service",
             SettingsSection::GithubIssues => "GitHub",
+            SettingsSection::Jira => "Jira",
         }
     }
 
@@ -313,6 +322,7 @@ impl SettingsSection {
             SettingsSection::Daemons => Icon::Daemons,
             SettingsSection::Daemon => Icon::SessionService,
             SettingsSection::GithubIssues => Icon::IssueMapping,
+            SettingsSection::Jira => Icon::JiraIssues,
         }
     }
 
@@ -438,6 +448,51 @@ impl Default for GithubDraft {
     }
 }
 
+/// The Jira section (feature 533, FR-002, FR-004).
+///
+/// Holds the switch and, for the status line, the open project and the connection stored for it.
+/// With the switch off the page renders only the switch and its description (FR-001); the
+/// connection form arrives with the connect milestone.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct JiraDraft {
+    /// The switch **Enable Jira integration**. Off until the user turns it on (FR-002).
+    pub enabled: bool,
+    /// The open project, when one is open.
+    pub project: Option<std::path::PathBuf>,
+    /// The connection stored for [`Self::project`], when there is one.
+    pub connection: Option<micold_core::jira::JiraConnection>,
+}
+
+impl JiraDraft {
+    /// The status line under the switch (FR-004); `None` while the switch is off.
+    pub fn status(&self) -> Option<String> {
+        if !self.enabled {
+            return None;
+        }
+        Some(match (&self.project, &self.connection) {
+            (None, _) => "Open a project to connect it to Jira.".to_owned(),
+            (Some(_), None) => "Enabled. This project has no Jira connection yet.".to_owned(),
+            (Some(_), Some(c)) => format!(
+                "Enabled. Connected to {} (project {}).",
+                c.site, c.project_key
+            ),
+        })
+    }
+
+    /// Point the status at `project` and the connection `connections` holds for it.
+    pub fn follow(
+        &mut self,
+        project: Option<std::path::PathBuf>,
+        connections: &std::collections::BTreeMap<String, micold_core::jira::JiraConnection>,
+    ) {
+        self.connection = project
+            .as_deref()
+            .and_then(|p| connections.get(&micold_core::jira::connection_key(p)))
+            .cloned();
+        self.project = project;
+    }
+}
+
 /// The Session service section's fields (feature 027, FR-028).
 ///
 /// The sandbox profile is held whole rather than field by field, so that a setting this section
@@ -539,6 +594,8 @@ pub struct ValidSettings {
     pub issue_label_types: Vec<LabelTypeEntry>,
     /// GitHub: whether pull request status is read (feature 040, FR-029).
     pub pr_status_enabled: bool,
+    /// Jira: whether the integration is on (feature 533, FR-002).
+    pub jira_enabled: bool,
 }
 
 impl ValidSettings {
@@ -559,6 +616,9 @@ impl ValidSettings {
             daemon: self.daemon,
             issue_label_types: self.issue_label_types,
             pr_status_enabled: self.pr_status_enabled,
+            jira_enabled: self.jira_enabled,
+            // Not in the form yet (feature 533): written by their own change, never by a save.
+            jira_connections: std::collections::BTreeMap::new(),
             notification_kinds: self.notification_kinds,
             long_task_threshold_secs: self.long_task_threshold_secs,
             // Not in the form (feature 482): service-owned; the save keeps the stored value.
@@ -602,6 +662,8 @@ pub struct SettingsDraft {
     pub daemon: DaemonDraft,
     /// GitHub issues (feature 034).
     pub github: GithubDraft,
+    /// Jira (feature 533).
+    pub jira: JiraDraft,
     /// The last validation failure shown after a rejected save.
     pub error: Option<FieldError>,
     /// The settings the page was opened with, which a save compares against so that it changes
@@ -713,6 +775,7 @@ impl SettingsDraft {
                 })
                 .collect(),
             pr_status_enabled: self.github.pr_status_enabled,
+            jira_enabled: self.jira.enabled,
         })
     }
 
@@ -970,6 +1033,12 @@ impl SettingsDraft {
                     entries: _,
                     pr_status_enabled: _,
                 },
+            jira:
+                JiraDraft {
+                    enabled: _,
+                    project: _,
+                    connection: _,
+                },
             error: _,
             baseline: _,
         } = &fresh;
@@ -1005,6 +1074,7 @@ impl SettingsDraft {
             daemon.storage_mib,
             github.entries,
             github.pr_status_enabled,
+            jira.enabled,
         );
         self.baseline = Some(
             fresh
@@ -1092,6 +1162,11 @@ impl SettingsDraft {
             github: GithubDraft {
                 entries: settings.issue_label_types.clone(),
                 pr_status_enabled: settings.pr_status_enabled,
+            },
+            jira: JiraDraft {
+                enabled: settings.jira_enabled,
+                project: None,
+                connection: None,
             },
             error: None,
             baseline: Some(settings.clone()),
@@ -1258,6 +1333,8 @@ pub enum Msg {
     IssueMappingDefaultsRestored,
     /// The pull request status switch was toggled (feature 040, FR-029).
     PrStatusToggled(bool),
+    /// The **Enable Jira integration** switch was toggled (feature 533, FR-002).
+    JiraEnabledToggled(bool),
     /// Save the Settings form (validated + persisted by the shell) (FR-020, FR-021).
     Saved,
     /// Dismiss the Settings form without saving (Cancel or Esc).
@@ -1360,6 +1437,7 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
             edit_mapping(state, |entries| *entries = default_mapping())
         }
         Msg::PrStatusToggled(on) => edit(state, |draft| draft.github.pr_status_enabled = on),
+        Msg::JiraEnabledToggled(on) => edit(state, |draft| draft.jira.enabled = on),
         Msg::Saved => saved(state),
         Msg::Cancelled => cancelled(state),
         Msg::ScriptPathCheckStarted {
@@ -2068,6 +2146,8 @@ pub fn diff_layout_set(
         tool_server_enabled: None,
         cross_session_access: None,
         pr_status_enabled: None,
+        jira_enabled: None,
+        jira_connection: None,
         desktop_notifications: None,
         notification_kinds: None,
         long_task_threshold_secs: None,

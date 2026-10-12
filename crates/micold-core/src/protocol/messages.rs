@@ -24,11 +24,13 @@ use crate::attach::{AttachItem, AttachResult, DiscoveryReport};
 use crate::attention::{NotificationKind, NotificationKinds};
 use crate::cli_reason::SpawnEnv;
 use crate::mcp::policy::CrossSessionAccess;
+use crate::jira::JiraConnection;
 use crate::naming::WorktreeNaming;
 use crate::plan_usage::UsageReading;
 use crate::protocol::grid::{LineId, WireLine, WireStyle};
 use crate::review::comment::{CommentId, ReviewComment};
 use crate::review::Side;
+use crate::settings::JiraConnectionChange;
 use crate::runs::{GroupId, Integration, RunGroup};
 use crate::session::{AiCli, SessionId, SessionLabel, ShellInstanceId};
 use crate::settings::DiffLayout;
@@ -695,6 +697,13 @@ pub enum ClientMsg {
         /// Read and show pull request status, or `None` to leave unchanged (feature 040,
         /// FR-029).
         pr_status_enabled: Option<bool>,
+        /// Turn the Jira integration on or off, or `None` to leave unchanged (feature 533,
+        /// FR-002).
+        jira_enabled: Option<bool>,
+        /// Upsert or remove one project's Jira connection, or `None` to leave them unchanged
+        /// (feature 533, FR-006). Per project, so two windows saving different projects never
+        /// overwrite each other. Carries no token.
+        jira_connection: Option<JiraConnectionChange>,
         /// Raise desktop notifications, or `None` to leave unchanged (feature 039, FR-026).
         desktop_notifications: Option<bool>,
         /// The per-kind switches, all four at once, or `None` to leave them unchanged
@@ -1492,6 +1501,12 @@ pub struct DaemonSettings {
     /// Whether pull request status is read from GitHub and shown on worktree rows (feature 040,
     /// FR-029, FR-030). Service-owned so that every window follows one switch.
     pub pr_status_enabled: bool,
+    /// Whether the Jira integration is on (feature 533, FR-002). Service-owned so that every
+    /// window follows one switch (FR-022); the service stores it and never reads it (FR-021).
+    pub jira_enabled: bool,
+    /// Each project's Jira connection, by project path (feature 533, FR-006, FR-022). Never holds
+    /// a token.
+    pub jira_connections: std::collections::BTreeMap<String, JiraConnection>,
     /// Whether a session that comes to await input while not in view raises a desktop
     /// notification (feature 039, FR-026, FR-027). Service-owned so that every window follows one
     /// switch, and because the service is what grants a claim.
@@ -1957,6 +1972,8 @@ mod desktop_notifications_wire_tests {
                 tool_server_enabled: None,
                 cross_session_access: None,
                 pr_status_enabled: None,
+                jira_enabled: None,
+                jira_connection: None,
                 desktop_notifications: chosen,
                 notification_kinds: None,
                 long_task_threshold_secs: None,

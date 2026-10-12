@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/533_create-worktrees-from-jira-issues
 - **Started**: 2026-10-12
 - **Phase**: tasks
-- **Next step**: design PR open; M1 after merge
+- **Next step**: M1 implementation WIP committed, see Handover
 
 ## Pull requests
 
@@ -55,7 +55,34 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M1 (T001-T021, T034) is WRITTEN BUT NOT YET COMPILED OR TESTED, committed as one WIP commit on
+`feat/533_create-worktrees-from-jira-issues` (not pushed, no PR). branch-start.sh 785 ran (design PR
+#785 merge SHA a9ea34a2d7d101cbf3b9ce52a88ad9d6e59aeb61). No `mise run` build finished: every
+attempt queued behind other worktrees' build locks (`scripts/build-lock.sh`); run the next build as a
+detached job and `scripts/autopilot/hold.sh` it.
+
+Done (written): core `jira.rs` (SiteOrigin, ProjectKey, AccountEmail, JiraConnection, FieldProblem,
+`jira_visible`, `connection_key`, `known_connections`), `settings.rs` (jira_enabled, jira_connections,
+`JiraConnectionChange{project, change: JiraChange::Upsert|Remove}`), `store::project_id_of`,
+messages.rs (SettingsSet `jira_enabled`/`jira_connection`; DaemonSettings `jira_enabled`/
+`jira_connections`), PROTOCOL_VERSION 41, daemon catalog/state/server setters
+(`persist_service_settings_with` merges the change into the on-disk map), client draft
+(`SettingsSection::Jira`, `JiraDraft{enabled, project, connection}`, `JiraEnabledToggled`), persist.rs,
+daemon_sync.rs (`app.core.settings.jira_enabled/jira_connections`), `ui/settings/jira.rs`,
+`Icon::JiraIssues` (E85D), CI step, user guide, tests T003-T008, T015-T017.
+
+Next step:
+1. Build and fix compile errors. Known to fix: every `DaemonSettings { .. }` literal lacks
+   `jira_enabled`/`jira_connections` (tests in micold-core protocol_roundtrip, micold-daemon tests,
+   micold-client main_tests.rs/persist.rs tests ~line 1129, covered_states); `SettingsDraft { .. }`
+   literals in tests/support/covered_states.rs lack `jira: ..Default`; `tests/settings_sections.rs`
+   needs `("jira_connections", "M2 ...")` in DEFERRED (jira.rs claims `jira_enabled`);
+   `SettingsSection` exhaustive matches elsewhere; `SettingsSet` literals the perl pass missed.
+2. Regenerate `crates/micold-client/tests/fixtures/layout_snapshot.txt` (new covered states
+   settings-view-jira-off, settings-view-jira-on-no-connection) and check any icon/provenance tests.
+3. `mise run gate`; tick T001-T021, T034 in tasks.md; TDD evidence per speckit-implement hook;
+   then verify.md, review, review-rounds, gate, pr per the unit task files.
+Caveat: tests were written after the code (no red-phase evidence); note it in the cycle log.
 
 ## Open escalation
 

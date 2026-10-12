@@ -214,6 +214,8 @@ impl Catalog {
             tool_server_enabled: self.settings.tool_server_enabled,
             cross_session_access: self.settings.cross_session_access,
             pr_status_enabled: self.settings.pr_status_enabled,
+            jira_enabled: self.settings.jira_enabled,
+            jira_connections: self.settings.jira_connections.clone(),
             desktop_notifications: self.settings.desktop_notifications,
             notification_kinds: self.settings.notification_kinds,
             long_task_threshold_secs: self.settings.long_task_threshold_secs,
@@ -354,8 +356,20 @@ impl Catalog {
     /// Re-reading is the fix rather than widening `SettingsSet`, because the extra fields are not
     /// the service's to know. A theme is not a session-service setting, and a protocol that
     /// carried one would make this daemon the authority on a question it has no opinion about.
-    fn persist_service_settings(&self) -> io::Result<()> {
-        if let Some(store) = &self.settings_store {
+    fn persist_service_settings(&mut self) -> io::Result<()> {
+        self.persist_service_settings_with(None)
+    }
+
+    /// [`Self::persist_service_settings`], optionally merging one project's Jira connection change
+    /// into the map **read from disk** inside the same write (feature 533, FR-022). The map is
+    /// never copied from this daemon's boot snapshot: another daemon or window may have saved a
+    /// different project's connection since. The merged map becomes the one this daemon echoes.
+    fn persist_service_settings_with(
+        &mut self,
+        jira: Option<&micold_core::settings::JiraConnectionChange>,
+    ) -> io::Result<()> {
+        let mut connections = None;
+        let result = if let Some(store) = &self.settings_store {
             // `update` rather than `load` + `save` (BUG-025, T155). Re-reading the file is what
             // makes the client's fields survive this write; going through `update` is what stops
             // that re-read from becoming a weapon when it *fails*, and holds the file against the
@@ -371,6 +385,13 @@ impl Catalog {
                 on_disk.tool_server_enabled = self.settings.tool_server_enabled;
                 on_disk.cross_session_access = self.settings.cross_session_access;
                 on_disk.pr_status_enabled = self.settings.pr_status_enabled;
+                // `jira_enabled` is a service field; `jira_connections` is not copied from this
+                // daemon's snapshot, only merged from the one change that arrived (feature 533).
+                on_disk.jira_enabled = self.settings.jira_enabled;
+                if let Some(change) = jira {
+                    change.apply(&mut on_disk.jira_connections);
+                }
+                connections = Some(on_disk.jira_connections.clone());
                 on_disk.desktop_notifications = self.settings.desktop_notifications;
                 on_disk.notification_kinds = self.settings.notification_kinds;
                 on_disk.long_task_threshold_secs = self.settings.long_task_threshold_secs;
@@ -382,9 +403,18 @@ impl Catalog {
             // disk. Written for a refused write too — a save that did not happen is exactly the
             // event nothing recorded.
             tracing::info!("{}", write.log_line("daemon"));
-            write.result?;
+            write.result
+        } else {
+            // No store (an ephemeral catalog): the in-memory map is the only copy.
+            if let Some(change) = jira {
+                change.apply(&mut self.settings.jira_connections);
+            }
+            Ok(())
+        };
+        if let (Ok(()), Some(map)) = (&result, connections) {
+            self.settings.jira_connections = map;
         }
-        Ok(())
+        result
     }
 
     /// Set any of the three service-owned environment-include settings (leaving a field unchanged
@@ -483,6 +513,22 @@ impl Catalog {
     pub fn set_pr_status_enabled(&mut self, on: bool) -> io::Result<()> {
         self.settings.pr_status_enabled = on;
         self.persist_service_settings()
+    }
+
+    /// Turn the Jira integration on or off, persisting atomically (feature 533, FR-002). The
+    /// service only holds the switch for the clients; it never reads it (FR-021).
+    pub fn set_jira_enabled(&mut self, on: bool) -> io::Result<()> {
+        self.settings.jira_enabled = on;
+        self.persist_service_settings()
+    }
+
+    /// Upsert or remove one project's Jira connection (feature 533, FR-006, FR-022), merged into
+    /// the map on disk inside the write so another project's concurrent save survives.
+    pub fn set_jira_connection(
+        &mut self,
+        change: &micold_core::settings::JiraConnectionChange,
+    ) -> io::Result<()> {
+        self.persist_service_settings_with(Some(change))
     }
 
     /// A project's stored review comments (feature 482, FR-020); empty for the ephemeral catalog.
@@ -1886,5 +1932,106 @@ mod notify_tests {
         });
         catalog.set_desktop_notifications(false).unwrap();
         assert_eq!(stored(&dir).long_task_threshold_secs, 300);
+    }
+}
+
+#[cfg(test)]
+mod jira_tests {
+    //! Feature 533, T008: the service holds the Jira switch and merges one connection change into
+    //! the map on disk; it never copies a boot-time snapshot of the map over another writer's.
+
+    use super::*;
+    use micold_core::jira::JiraConnection;
+    use micold_core::settings::{
+        JiraChange, JiraConnectionChange, JsonFileSettingsStore, Settings, SettingsStore,
+    };
+    use micold_core::store::JsonFileStore;
+
+    fn catalog_over(dir: &tempfile::TempDir) -> Catalog {
+        Catalog::load(
+            Box::new(JsonFileStore::at(dir.path().join("catalog.json"))),
+            Box::new(JsonFileSettingsStore::at(dir.path().join("settings.json"))),
+        )
+    }
+
+    fn stored(dir: &tempfile::TempDir) -> Settings {
+        JsonFileSettingsStore::at(dir.path().join("settings.json"))
+            .load()
+            .settings
+    }
+
+    fn upsert(project: &str, key: &str) -> JiraConnectionChange {
+        JiraConnectionChange {
+            project: project.to_owned(),
+            change: JiraChange::Upsert(
+                JiraConnection::parse("https://acme.atlassian.net", key, "me@acme.com").unwrap(),
+            ),
+        }
+    }
+
+    /// Two catalogs share one store: one saves a connection, the other then saves an unrelated
+    /// service setting, and the connection is still on disk.
+    #[test]
+    fn another_daemons_unrelated_save_keeps_a_saved_connection() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut first = catalog_over(&dir);
+        let mut second = catalog_over(&dir);
+
+        first.set_jira_connection(&upsert("/work/a", "ABC")).unwrap();
+        second.set_desktop_notifications(false).unwrap();
+
+        assert!(stored(&dir).jira_connections.contains_key("/work/a"));
+    }
+
+    /// A connection saved through the second catalog merges into the first's, not over it.
+    #[test]
+    fn a_connection_change_merges_into_the_map_on_disk() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut first = catalog_over(&dir);
+        let mut second = catalog_over(&dir);
+
+        first.set_jira_connection(&upsert("/work/a", "AAA")).unwrap();
+        second.set_jira_connection(&upsert("/work/b", "BBB")).unwrap();
+
+        assert_eq!(stored(&dir).jira_connections.len(), 2);
+        assert_eq!(second.settings_wire().jira_connections.len(), 2);
+    }
+
+    /// An unrelated setter's save leaves the map untouched.
+    #[test]
+    fn an_unrelated_setter_leaves_the_jira_map_untouched() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut catalog = catalog_over(&dir);
+        catalog.set_jira_connection(&upsert("/work/a", "ABC")).unwrap();
+        let before = stored(&dir).jira_connections;
+
+        catalog.set_pr_status_enabled(true).unwrap();
+
+        assert_eq!(stored(&dir).jira_connections, before);
+    }
+
+    /// The service write copies `jira_enabled` but never the daemon's snapshot of the map.
+    #[test]
+    fn the_service_write_copies_the_switch_and_never_the_snapshot_map() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut catalog = catalog_over(&dir);
+        // Another writer (the client or another daemon) stores a connection after this boot.
+        let mut on_disk = stored(&dir);
+        on_disk.jira_connections.insert(
+            "/work/other".to_owned(),
+            JiraConnection::parse("https://acme.atlassian.net", "OTH", "me@acme.com").unwrap(),
+        );
+        JsonFileSettingsStore::at(dir.path().join("settings.json"))
+            .save(&on_disk)
+            .unwrap();
+
+        catalog.set_jira_enabled(true).unwrap();
+
+        let after = stored(&dir);
+        assert!(after.jira_enabled);
+        assert!(
+            after.jira_connections.contains_key("/work/other"),
+            "the snapshot's empty map did not overwrite the file's"
+        );
     }
 }

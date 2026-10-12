@@ -361,6 +361,8 @@ fn sample_client_msgs() -> Vec<ClientMsg> {
             // Feature 034 (FR-016): the option crosses the wire as the value chosen.
             cross_session_access: Some(CrossSessionAccess::ConfirmEachSend),
             pr_status_enabled: Some(true),
+            jira_enabled: None,
+            jira_connection: None,
             desktop_notifications: Some(false),
             // Feature 613 (W5.4, W5.6): the whole set of kinds, and the threshold in seconds.
             notification_kinds: Some(NotificationKinds {
@@ -388,6 +390,8 @@ fn sample_client_msgs() -> Vec<ClientMsg> {
             tool_server_enabled: None,
             cross_session_access: None,
             pr_status_enabled: None,
+            jira_enabled: None,
+            jira_connection: None,
             desktop_notifications: None,
             notification_kinds: None,
             long_task_threshold_secs: None,
@@ -898,7 +902,7 @@ fn a_merged_branch_check_and_its_answers_round_trip_in_order() {
 /// behaviour; the version moved with the hash.
 #[test]
 fn frames_without_the_feature_776_fields_decode_with_the_defaults() {
-    assert_eq!(PROTOCOL_VERSION, 44);
+    assert_eq!(PROTOCOL_VERSION, 45);
 
     let create: ClientMsg = serde_json::from_str(
         r#"{"WorktreeCreate":{"req":1,"project":"/a","branch":"b","dir_name":"d","mode":"NewBranch"}}"#,
@@ -1087,6 +1091,8 @@ fn the_cross_session_option_round_trips_in_daemon_settings_and_settings_set() {
             tool_server_enabled: None,
             cross_session_access: Some(access),
             pr_status_enabled: None,
+            jira_enabled: None,
+            jira_connection: None,
             desktop_notifications: None,
             notification_kinds: None,
             long_task_threshold_secs: None,
@@ -1503,6 +1509,8 @@ fn the_review_messages_and_the_diff_layout_round_trip_on_both_wires() {
             tool_server_enabled: None,
             cross_session_access: None,
             pr_status_enabled: None,
+            jira_enabled: None,
+            jira_connection: None,
             desktop_notifications: None,
             notification_kinds: None,
             long_task_threshold_secs: None,
@@ -1663,6 +1671,8 @@ fn the_save_terminal_history_setting_round_trips_on_the_wire() {
             tool_server_enabled: None,
             cross_session_access: None,
             pr_status_enabled: None,
+            jira_enabled: None,
+            jira_connection: None,
             desktop_notifications: None,
             notification_kinds: None,
             long_task_threshold_secs: None,
@@ -1703,6 +1713,8 @@ fn plan_usage_settings_set(
         tool_server_enabled: None,
         cross_session_access: None,
         pr_status_enabled: None,
+        jira_enabled: None,
+        jira_connection: None,
         desktop_notifications: None,
         notification_kinds: None,
         long_task_threshold_secs: None,
@@ -1823,7 +1835,6 @@ fn a_session_summary_carries_its_agent_runs_and_defaults_to_none() {
     value.as_object_mut().unwrap().remove("agents");
     let older: SessionSummary = serde_json::from_value(value).unwrap();
     assert!(older.agents.is_empty());
-    assert_eq!(PROTOCOL_VERSION, 44);
 }
 
 /// Feature 776, amendment 2026-10-14 (v44): the main marker rides the catalog snapshot, an older
@@ -1859,4 +1870,53 @@ fn the_main_marker_and_set_main_round_trip() {
     postcard_roundtrip(&ClientMsg::SessionSetMain {
         id: SessionId::new(),
     });
+}
+
+/// Feature 533 (T006): the Jira switch and one project's connection change cross the wire, both
+/// ways, and the echo carries the whole map.
+#[test]
+fn the_jira_switch_and_a_connection_change_round_trip() {
+    use micold_core::jira::JiraConnection;
+    use micold_core::settings::{JiraChange, JiraConnectionChange};
+
+    let connection =
+        JiraConnection::parse("https://acme.atlassian.net", "ABC", "me@acme.com").unwrap();
+    for change in [
+        JiraConnectionChange {
+            project: "/work/app".into(),
+            change: JiraChange::Upsert(connection.clone()),
+        },
+        JiraConnectionChange {
+            project: "/work/app".into(),
+            change: JiraChange::Remove,
+        },
+    ] {
+        let mut asked = sample_client_msgs()
+            .into_iter()
+            .find(|m| matches!(m, ClientMsg::SettingsSet { .. }))
+            .expect("a SettingsSet sample");
+        if let ClientMsg::SettingsSet {
+            jira_enabled,
+            jira_connection,
+            ..
+        } = &mut asked
+        {
+            *jira_enabled = Some(true);
+            *jira_connection = Some(change.clone());
+        }
+        json_roundtrip(&asked);
+    }
+
+    let mut settings = sample_daemon_msgs()
+        .into_iter()
+        .find_map(|m| match m {
+            DaemonMsg::SettingsChanged { settings } => Some(settings),
+            _ => None,
+        })
+        .expect("a SettingsChanged sample");
+    settings.jira_enabled = true;
+    settings
+        .jira_connections
+        .insert("/work/app".into(), connection.clone());
+    json_roundtrip(&DaemonMsg::SettingsChanged { settings });
 }

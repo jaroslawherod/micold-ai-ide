@@ -1846,6 +1846,8 @@ fn choosing_a_layout_tells_the_service_that_layout_and_nothing_else() {
             tool_server_enabled,
             cross_session_access,
             pr_status_enabled,
+            jira_enabled,
+            jira_connection,
             desktop_notifications,
             notification_kinds,
             long_task_threshold_secs,
@@ -1865,6 +1867,8 @@ fn choosing_a_layout_tells_the_service_that_layout_and_nothing_else() {
                     && tool_server_enabled.is_none()
                     && cross_session_access.is_none()
                     && pr_status_enabled.is_none()
+                    && jira_enabled.is_none()
+                    && jira_connection.is_none()
                     && desktop_notifications.is_none()
                     && notification_kinds.is_none()
                     && long_task_threshold_secs.is_none()
@@ -2025,4 +2029,100 @@ fn a_valid_plan_usage_save_carries_both_fields() {
     let settings = draft.validate().expect("valid").into_settings();
     assert!(!settings.plan_usage_enabled);
     assert_eq!(settings.plan_usage_warn_percent, 65);
+}
+
+// --- Feature 533 US2: the Jira switch (T015) ---------------------------------------------------
+
+mod jira_switch {
+    use micold_client::app::State;
+    use micold_client::features::settings::{update, Msg, SettingsDraft, SettingsSection};
+    use micold_core::jira::JiraConnection;
+    use micold_core::settings::Settings;
+    use std::collections::BTreeMap;
+    use std::path::PathBuf;
+
+    fn open(stored: bool) -> State {
+        let settings = Settings {
+            jira_enabled: stored,
+            ..Settings::default()
+        };
+        let mut state = State::default();
+        state.settings.settings_draft = Some(SettingsDraft::from_settings(&settings));
+        state
+    }
+
+    fn draft(state: &State) -> &SettingsDraft {
+        state.settings.settings_draft.as_ref().expect("Settings is open")
+    }
+
+    /// FR-002: the draft follows the persisted switch, off by default.
+    #[test]
+    fn the_draft_follows_the_persisted_switch() {
+        assert!(!draft(&open(false)).jira.enabled);
+        assert!(draft(&open(true)).jira.enabled);
+        assert!(!SettingsDraft::default().jira.enabled);
+    }
+
+    /// US2 AS1: off, the page shows no status, only the switch.
+    #[test]
+    fn off_there_is_no_status_line() {
+        assert_eq!(draft(&open(false)).jira.status(), None);
+    }
+
+    /// US2 AS3, FR-004: on, the status names the project state.
+    #[test]
+    fn on_the_status_says_what_the_open_project_has() {
+        let mut state = open(false);
+        update(&mut state, Msg::JiraEnabledToggled(true));
+        assert_eq!(
+            draft(&state).jira.status().as_deref(),
+            Some("Open a project to connect it to Jira.")
+        );
+
+        let project = PathBuf::from("/work/app");
+        let mut connections = BTreeMap::new();
+        state
+            .settings
+            .settings_draft
+            .as_mut()
+            .unwrap()
+            .jira
+            .follow(Some(project.clone()), &connections);
+        assert_eq!(
+            draft(&state).jira.status().as_deref(),
+            Some("Enabled. This project has no Jira connection yet.")
+        );
+
+        connections.insert(
+            "/work/app".to_owned(),
+            JiraConnection::parse("https://acme.atlassian.net", "abc", "me@acme.com").unwrap(),
+        );
+        state
+            .settings
+            .settings_draft
+            .as_mut()
+            .unwrap()
+            .jira
+            .follow(Some(project), &connections);
+        let status = draft(&state).jira.status().unwrap();
+        assert!(status.contains("https://acme.atlassian.net"), "{status}");
+        assert!(status.contains("ABC"), "{status}");
+    }
+
+    /// Save writes the switch, and nothing else about Jira.
+    #[test]
+    fn save_writes_the_switch() {
+        for chosen in [false, true] {
+            let mut state = open(!chosen);
+            update(&mut state, Msg::JiraEnabledToggled(chosen));
+            let valid = state.settings.settings_draft.unwrap().validate().unwrap();
+            assert_eq!(valid.jira_enabled, chosen);
+            assert_eq!(valid.into_settings().jira_enabled, chosen);
+        }
+    }
+
+    #[test]
+    fn the_section_is_titled_jira() {
+        assert_eq!(SettingsSection::Jira.label(), "Jira");
+    }
 }
