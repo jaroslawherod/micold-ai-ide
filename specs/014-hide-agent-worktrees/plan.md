@@ -1,5 +1,7 @@
 # Implementation Plan: Hide Agent Worktrees
 
+> **Superseded by [552-native-agent-session-signals](../552-native-agent-session-signals/spec.md).** The app no longer hides or tags worktrees by name, branch or creation record: every worktree is listed, and there is no "Show agent worktrees" control. The rules below are kept as history only.
+
 **Branch**: `fix/hide-agent-worktrees` | **Date**: 2026-07-23 | **Spec**: [spec.md](./spec.md)
 
 **Input**: Feature specification from `/specs/014-hide-agent-worktrees/spec.md`

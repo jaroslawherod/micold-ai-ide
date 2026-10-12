@@ -347,8 +347,8 @@ fn boot() -> (App, Task<Message>) {
         //
         // The same function a project switch calls, deliberately. It resolves the memory, applies
         // it, and gives the terminal the keyboard — all three wanted here — and everything else it
-        // does is already true at boot: `default_expanded` and `show_agent_worktrees` are their
-        // defaults, and `arm_notice` finds nothing because no session has restarted yet. A
+        // does is already true at boot: `default_expanded` is its
+        // default, and `arm_notice` finds nothing because no session has restarted yet. A
         // launch-only path would be a second implementation of a sequence the switch already
         // performs, and the two would drift (research R5).
         //

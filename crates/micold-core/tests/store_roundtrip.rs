@@ -233,6 +233,26 @@ fn missing_worktree_names_field_loads_without_override() {
     assert_eq!(out.workspace.worktree_name("feat-x"), None);
 }
 
+#[test]
+fn a_file_holding_a_pre_552_hide_preference_loads_and_hides_nothing() {
+    // 552 FR-010: the "Show agent worktrees" preference of 014 is gone; a file that still carries
+    // its key, at either level, loads as an ordinary catalog, and the workspace has nothing that
+    // could hide a worktree.
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("projects.json");
+    let json = r#"{"schema_version":1,"last_active":"/repo","show_agent_worktrees":false,
+                   "projects":[{"path":"/repo","display_name":"repo","is_git_repo":true,
+                                "show_agent_worktrees":false,"hide_agent_worktrees":true}]}"#;
+    std::fs::write(&path, json).unwrap();
+    let store = JsonFileStore::at(path);
+
+    let out = store.load();
+
+    assert_eq!(out.status, LoadStatus::Loaded);
+    assert_eq!(out.workspace.projects.len(), 1);
+    assert_eq!(out.workspace.active, Some(PathBuf::from("/repo")));
+}
+
 // T026 (010-root-dir-session, contracts/storage-schema.md backward-compatibility guarantee):
 // a `projects.json` shaped exactly as it was before this feature — `worktree_dir` always a
 // plain JSON string, across multiple sessions and multiple projects — loads unchanged, with

@@ -125,9 +125,8 @@ const ALLOWED: &[(&str, &str, usize, &str)] = &[
     (
         "crates/micold-client/src/main.rs",
         "shell::daemon_sync::sync_cli_availability(app);",
-        2,
-        "C1 A6, the `ForgetConfirmed` arm (prunes the forgotten project's rows); and C1 A5b, the \
-         `ShowAgentWorktreesToggled` arm (asks revealed rows, prunes hidden ones).",
+        1,
+        "C1 A6, the `ForgetConfirmed` arm (prunes the forgotten project's rows).",
     ),
     (
         "crates/micold-client/src/shell/workspace.rs",

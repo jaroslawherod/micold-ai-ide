@@ -526,7 +526,6 @@ fn arranged() -> State {
         .insert(TagFilter::Type(ConventionalType::Feat));
     state.sidebar.scroll_offset = 240;
     state.sidebar.viewport_height = 600;
-    state.sidebar.show_agent_worktrees = true;
 
     let session = Session::start_new(
         SessionLocation::Worktree("feat-a".to_string()),
@@ -595,7 +594,6 @@ fn a_worktree_missing_from_the_listing_is_pruned_and_nothing_else_is() {
         state.sidebar.scroll_offset, 240,
         "and so is scroll position"
     );
-    assert!(state.sidebar.show_agent_worktrees);
     assert_eq!(
         state.session.active, selected,
         "the active session is on `feat-a`, which is still here — a listing that removed a \

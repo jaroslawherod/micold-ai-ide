@@ -76,3 +76,25 @@ provenance keys are the real compatibility case.
 supports `http` (docs). If a Claude version predates the event, the settings loader would
 reject an unknown key: the hook name is a documented event since sub-agents shipped, and the live
 check is quickstart §C.
+
+## R8 Live captures (T001)
+
+- **Claude Code 2.1.296**, `claude -p --settings <file>` with `SubagentStart`, `SubagentStop` (and
+  `PreToolUse`) as `{"type":"http"}` hooks to a local listener, prompt "Use the Explore agent to
+  list files...". `--settings` **accepted** both events; the `http` type worked (no `command`
+  fallback needed). Raw bodies (home and temp paths scrubbed): `contracts/captures/claude-SubagentStart.json`,
+  `contracts/captures/claude-SubagentStop.json`.
+- **SubagentStart** keys: `session_id`, `transcript_path`, `cwd`, `prompt_id`, `agent_id`
+  (`a15f822c8aa66a621`), `agent_type` (`Explore`), `hook_event_name`. No `permission_mode`.
+- **SubagentStop** keys: the above plus `permission_mode`, `effort`, `stop_hook_active`,
+  `agent_transcript_path` (`<parent-session-id>/subagents/agent-<agent_id>.jsonl`),
+  `last_assistant_message`, `background_tasks`, `session_crons`.
+- **Identity**: `session_id` in both events equals the parent's (same value as the parent's
+  `PreToolUse` for the `Agent` tool call). Sub-agent tool calls (`PreToolUse` for `Bash`) carry the
+  parent `session_id` plus `agent_id`/`agent_type`. Transport headers: `Content-Type:
+  application/json`, `User-Agent: axios/...`; no auth header unless configured.
+- **Copilot CLI**: not installed (`which copilot` fails); no sub-agent event captured. R3 stands:
+  Copilot stays "unverified, gap unless a real log shows the event".
+- **R1**: confirmed, not contradicted. Extra fields beyond R1's list (`prompt_id`, `permission_mode`,
+  `effort`, `background_tasks`, `session_crons`) are ignorable; `agent_id`/`agent_type` are always
+  present on both events.

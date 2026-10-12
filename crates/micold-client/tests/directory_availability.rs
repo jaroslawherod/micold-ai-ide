@@ -521,22 +521,16 @@ fn the_wanted_set_is_the_rows_on_screen() {
     );
 }
 
-/// U18 (FR-003, SC-004): a hidden row is not asked about.
+/// U18 (FR-003, 552): an agent-named row is asked about like any other.
 #[test]
-fn hidden_agent_worktrees_are_not_asked_about_until_revealed() {
-    let mut state = state_with(
+fn agent_named_worktrees_are_asked_about_like_any_other() {
+    let state = state_with(
         vec![worktree("feat-a", WorktreeStatus::Valid)],
         vec![worktree("agent-1f", WorktreeStatus::Valid)],
     );
     assert!(
-        !wanted_availability_dirs(&state).contains(&worktree_dir("agent-1f")),
-        "a hidden agent worktree has no row to answer for"
-    );
-
-    state.sidebar.show_agent_worktrees = true;
-    assert!(
         wanted_availability_dirs(&state).contains(&worktree_dir("agent-1f")),
-        "once revealed it has one"
+        "every listed worktree has a row to answer for"
     );
 }
 

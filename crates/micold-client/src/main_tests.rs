@@ -4059,13 +4059,12 @@ fn app_on_demo(worktrees: &[(&str, micold_core::worktree::WorktreeStatus, bool)]
     app
 }
 
-/// `/repo/demo` with one valid worktree of the user's, one hidden agent worktree and one whose
+/// `/repo/demo` with one valid worktree and one whose
 /// directory is gone: D = 2 rows to answer for (the root and `feat-a`).
 fn app_with_mixed_rows() -> App {
     use micold_core::worktree::WorktreeStatus::{Missing, Valid};
     app_on_demo(&[
         ("feat-a", Valid, true),
-        ("agent-1f", Valid, false),
         ("feat-gone", Missing, true),
     ])
 }
@@ -4817,35 +4816,6 @@ fn availability_a_deleted_then_recreated_worktree_is_asked_again() {
         cwds(&availability_requests(&mut rx)),
         vec![Some(PathBuf::from(FEAT_A))],
         "recreated, it is asked about again"
-    );
-}
-
-/// U31 (FR-003, C1 A5b): revealing agent worktrees asks about them, and hiding them drops their
-/// answers.
-#[test]
-fn availability_revealing_agent_worktrees_asks_hiding_drops() {
-    const AGENT: &str = "/repo/demo/.claude/worktrees/agent-1f";
-    let (mut app, mut rx) = app_offering_pi_under(quiet_settings());
-
-    let _ = update_inner(
-        &mut app,
-        Message::Sidebar(SidebarMsg::ShowAgentWorktreesToggled),
-    );
-    let asked = availability_requests(&mut rx);
-    assert_eq!(
-        cwds(&asked),
-        vec![Some(PathBuf::from(AGENT))],
-        "the revealed agent worktree is asked about, once"
-    );
-    answer_each(&mut app, &asked, CLAUDE, &[(AGENT, CLAUDE_AND_PI)]);
-
-    let _ = update_inner(
-        &mut app,
-        Message::Sidebar(SidebarMsg::ShowAgentWorktreesToggled),
-    );
-    assert!(
-        !offers_a_choice(&app, AGENT),
-        "hidden again, its answer is dropped"
     );
 }
 
