@@ -44,7 +44,7 @@ Rules (each is a test):
 | candidate == child | rejected: self |
 | candidate in other project/worktree | rejected: cross-worktree |
 | chain from candidate reaches child | rejected: cycle |
-| child already has origin | not replaced; `Ok(false)` |
+| child already has origin | not replaced; `Ok(false)` (in `Catalog::record_origin`, not the pure function) |
 | candidate unknown (provider reader only) | accepted as pending; re-checked when it appears, cleared if rejected |
 
 ## State transitions
