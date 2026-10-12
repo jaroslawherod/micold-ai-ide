@@ -23,8 +23,8 @@
 ### Session 2026-10-12
 
 - Q: Is a fold state remembered across restarts, or do trees start expanded each time? → A:
-  Remembered; a never-folded origin starts expanded. _(agent-resolved: specs/017-material-component-architecture/spec.md#FR-016,
-  which persists expanded tree nodes across restarts)_
+  Remembered; a never-folded origin starts expanded. _(agent-resolved: a fold the user left is the user's state; research R6 found that the sidebar's
+  expanded nodes are in memory only today, so this persistence is new work)_
 - Q: What happens to children when the origin is stopped or deleted? → A: A stopped origin keeps
   its children nested; a deleted origin leaves them top-level marked "origin removed", never
   deleted with it. _(agent-resolved: this spec FR-006, FR-008 and User Story 2.3; deleting a
@@ -121,7 +121,7 @@ and the origin shows whether any child needs attention, then expand.
 **Acceptance Scenarios**:
 
 1. **Given** an origin with children, **When** the user collapses it, **Then** its children are
-   hidden and the origin shows how many there are.
+   hidden and the origin shows how many direct children it has.
 2. **Given** a collapsed origin and a child that needs the user's attention, **When** the sidebar
    renders, **Then** the origin shows that a child needs attention.
 3. **Given** a collapsed origin, **When** the app restarts, **Then** the origin is folded
@@ -168,14 +168,14 @@ and the origin shows whether any child needs attention, then expand.
   running and resumable sessions alike.
 - **FR-007**: A child session MUST support every action an ordinary session supports (open, input,
   stop, resume, delete), and MUST be visibly marked as a child.
-- **FR-008**: A session whose origin is missing from the catalog MUST remain visible and MUST NOT
+- **FR-008**: A session whose origin is missing from the catalog (archived, or not yet adopted) MUST remain visible and MUST NOT
   be duplicated.
 - **FR-009**: The system MUST reject a cyclic or self-referencing origin and a cross-worktree
   origin, leaving the session top-level.
 - **FR-010**: An origin MUST be recorded once per session; a later report with a different origin
   MUST NOT replace it.
 - **FR-011**: The user MUST be able to collapse and expand an origin's children, and a collapsed
-  origin MUST show how many children it has and whether any needs attention.
+  origin MUST show how many direct children it has and whether any needs attention.
 - **FR-012**: Every window observing the same worktree MUST show the same tree.
 - **FR-013**: The relationship MUST be available to clients of the daemon, so an assistant listing
   sessions can see each session's origin.
@@ -221,9 +221,10 @@ and the origin shows whether any child needs attention, then expand.
 
 ## Assumptions
 
-- Claude Code is the first provider expected to report an origin (its lifecycle hooks already reach
-  the daemon); whether each other provider has a native signal is established during planning, and
-  the result goes in the user guide.
+- Planning (research R2) found no confirmed native signal for Claude Code background sessions. The
+  live path is therefore the tool server's `create_session` (FR-019) for every provider, plus any
+  provider whose signal the spike in M1 confirms; US1 and SC-001 hold for those. A provider
+  without a signal is a documented gap (US3), and the user guide records the result.
 - The tree applies within one worktree: an origin and its children share a worktree.
 - Removing name-based hiding of agent worktrees is the companion issue #552 and is out of scope
   here; this feature only supplies the session tree that work feeds.

@@ -11,7 +11,9 @@
 
 ## StoredSession (existing, extended)
 
-`origin: Option<SessionId>`, `#[serde(default, skip_serializing_if = "Option::is_none")]`.
+`origin: Option<SessionId>`, `#[serde(default, skip_serializing_if = "Option::is_none")]`, and
+`origin_rejected: bool`, `#[serde(default, skip_serializing_if = "is_false")]`: set when a pending
+provider-reported origin failed the full check, so no later discovery pass records it again (R4).
 `SCHEMA_VERSION` stays 1; a file without the key loads with every session top-level (FR-015).
 
 ## SessionSummary (wire, extended)
