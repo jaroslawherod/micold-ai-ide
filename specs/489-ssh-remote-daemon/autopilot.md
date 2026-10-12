@@ -36,7 +36,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | Spec | 1 | ba77a079ad4169573eddc31e57ce119656d81c5f:13165b3a9e4938a42528aae5df288475aa63ddae | CHANGES: 4 MAJOR (reconnecting state, timeout value, backoff cap, session state while disconnected), all fixed |
 | Spec | 2 | 0c21e1c00af41296ea2daf2c724c93e197d42c98:13165b3a9e4938a42528aae5df288475aa63ddae | pending |
-| Plan | 1 | a9e957e75fc18a955e71800797da0aa0859e8a57:b02ba3bb68bd6586737ff72170be0b797fa5c03e | pending |
+| Plan | 1 | 9a5ff7ae39fe35fcffdb2f2c26b8dcbe452da2be:c33ad03cfb1fec6ccb1c1856d766226a886e57b6 | pending (fresh dispatch; earlier reviewer lost) |
 
 ## Declined review findings
 
@@ -48,7 +48,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 Plan unit 489, written at over 150k context.
 - Done: plan.md, research.md (R1-R13), data-model.md, contracts/ssh-transport.md, contracts/remote-daemon.md,
   quickstart.md written and committed (not pushed; the branch was rebased onto origin/main by branch-start.sh, so a push needs `--force-with-lease`).
-- Review round 1 of the plan (snapshot a9e957e7...:b02ba3bb...) was dispatched as agent a539dfc3265bdfdfd and had not returned. If its
+- Review round 1 returned CHANGES after the handover (see Review rounds); fix F1-F6, do not re-dispatch round 1. If its
   notification never reaches the orchestrator, dispatch a fresh round 1 (full, session model) with rubrics/plan.md; it does not count against the round limit twice.
 - Next: act on the review (fix BLOCKER/MAJOR, re-review scoped on sonnet), then set Next step to `tasks unit`. Open no PR.
 - Watch in review: R3 cross-OS daemon artefact (macOS/Windows clients), R7 local-runtime Unreachable semantics, R5 remote project identity audit.
