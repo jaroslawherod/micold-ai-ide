@@ -120,7 +120,7 @@ mod tests {
     use crate::session::{AiCli, SessionLabel, SessionLifecycle};
 
     fn session(location: SessionLocation, name: &str, lifecycle: SessionLifecycle) -> Session {
-        let mut s = Session::start_new(location, AiCli::Claude);
+        let mut s = Session::start_new(location, AiCli::ClaudeCode);
         s.label = SessionLabel::Named(name.to_string());
         s.lifecycle = lifecycle;
         s
