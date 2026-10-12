@@ -39,9 +39,10 @@
 //! opened its menu at the window's bottom edge). The handed cursor still decides *whether* the
 //! press is over this area — in content coordinates, which is what its bounds are in.
 
-use iced::advanced::widget::{tree, Operation, Tree, Widget};
-use iced::advanced::{layout, mouse, overlay, renderer, Clipboard, Layout, Shell};
-use iced::{Element, Event, Length, Rectangle, Size, Vector};
+use crate::ui::cdk::passthrough::forward_to_child;
+use iced::advanced::widget::{tree, Tree, Widget};
+use iced::advanced::{mouse, Clipboard, Layout, Shell};
+use iced::{Element, Event, Rectangle};
 
 /// What a press is turned into: a message built from the press point, in window pixels.
 type OnPress<'a, M> = Box<dyn Fn((u16, u16)) -> M + 'a>;
@@ -94,56 +95,15 @@ impl<'a, M: 'a> ContextArea<'a, M> {
 }
 
 impl<'a, M: 'a> Widget<M, iced::Theme, iced::Renderer> for ContextArea<'a, M> {
+    forward_to_child!(content, M, iced::Theme, iced::Renderer;
+        children, diff, size, layout, draw, mouse_interaction, operate, overlay);
+
     fn tag(&self) -> tree::Tag {
         tree::Tag::of::<Pointer>()
     }
 
     fn state(&self) -> tree::State {
         tree::State::new(Pointer::default())
-    }
-
-    fn children(&self) -> Vec<Tree> {
-        vec![Tree::new(&self.content)]
-    }
-
-    fn diff(&self, tree: &mut Tree) {
-        tree.diff_children(std::slice::from_ref(&self.content));
-    }
-
-    fn size(&self) -> Size<Length> {
-        self.content.as_widget().size()
-    }
-
-    fn layout(
-        &mut self,
-        tree: &mut Tree,
-        renderer: &iced::Renderer,
-        limits: &layout::Limits,
-    ) -> layout::Node {
-        self.content
-            .as_widget_mut()
-            .layout(&mut tree.children[0], renderer, limits)
-    }
-
-    fn draw(
-        &self,
-        tree: &Tree,
-        renderer: &mut iced::Renderer,
-        theme: &iced::Theme,
-        style: &renderer::Style,
-        layout: Layout<'_>,
-        cursor: mouse::Cursor,
-        viewport: &Rectangle,
-    ) {
-        self.content.as_widget().draw(
-            &tree.children[0],
-            renderer,
-            theme,
-            style,
-            layout,
-            cursor,
-            viewport,
-        );
     }
 
     fn update(
@@ -197,54 +157,6 @@ impl<'a, M: 'a> Widget<M, iced::Theme, iced::Renderer> for ContextArea<'a, M> {
         // the terminal pane's own context menu, which would otherwise open a second menu under the
         // first for the same click.
         shell.capture_event();
-    }
-
-    fn mouse_interaction(
-        &self,
-        tree: &Tree,
-        layout: Layout<'_>,
-        cursor: mouse::Cursor,
-        viewport: &Rectangle,
-        renderer: &iced::Renderer,
-    ) -> mouse::Interaction {
-        self.content.as_widget().mouse_interaction(
-            &tree.children[0],
-            layout,
-            cursor,
-            viewport,
-            renderer,
-        )
-    }
-
-    fn operate(
-        &mut self,
-        tree: &mut Tree,
-        layout: Layout<'_>,
-        renderer: &iced::Renderer,
-        operation: &mut dyn Operation,
-    ) {
-        // Delegated whole. Focus traversal must reach the tab through this wrapper, or wrapping a
-        // control would quietly remove it from the keyboard's order (feature 023).
-        self.content
-            .as_widget_mut()
-            .operate(&mut tree.children[0], layout, renderer, operation);
-    }
-
-    fn overlay<'b>(
-        &'b mut self,
-        tree: &'b mut Tree,
-        layout: Layout<'b>,
-        renderer: &iced::Renderer,
-        viewport: &Rectangle,
-        translation: Vector,
-    ) -> Option<overlay::Element<'b, M, iced::Theme, iced::Renderer>> {
-        self.content.as_widget_mut().overlay(
-            &mut tree.children[0],
-            layout,
-            renderer,
-            viewport,
-            translation,
-        )
     }
 }
 

@@ -19,6 +19,7 @@
 
 use std::time::{Duration, Instant};
 
+use super::passthrough::forward_to_child;
 use iced::advanced::layout::{self, Layout};
 use iced::advanced::widget::{tree, Operation, Tree};
 use iced::advanced::{mouse, overlay, renderer, Clipboard, Shell, Widget};
@@ -198,6 +199,9 @@ impl<M, Theme, Renderer> Widget<M, Theme, Renderer> for Tooltip<'_, M, Theme, Re
 where
     Renderer: renderer::Renderer,
 {
+    forward_to_child!(content, M, Theme, Renderer;
+        size, layout);
+
     fn tag(&self) -> tree::Tag {
         tree::Tag::of::<State>()
     }
@@ -217,24 +221,8 @@ where
         tree.diff_children(&[&self.content, &self.tooltip]);
     }
 
-    fn size(&self) -> Size<Length> {
-        self.content.as_widget().size()
-    }
-
     fn size_hint(&self) -> Size<Length> {
         self.content.as_widget().size_hint()
-    }
-
-    /// Only the trigger is laid out; the panel never takes space from its neighbours.
-    fn layout(
-        &mut self,
-        tree: &mut Tree,
-        renderer: &Renderer,
-        limits: &layout::Limits,
-    ) -> layout::Node {
-        self.content
-            .as_widget_mut()
-            .layout(&mut tree.children[0], renderer, limits)
     }
 
     fn update(
