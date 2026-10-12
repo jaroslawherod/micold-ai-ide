@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #532
 - **Worktree branch**: feat/532_agent-created-worktrees-should-carry-the-issue
 - **Started**: 2026-10-12
-- **Phase**: spec
-- **Next step**: clarify unit: resolve FR-009 [NEEDS CLARIFICATION] in spec.md
+- **Phase**: clarify
+- **Next step**: plan unit
 
 ## Pull requests
 
