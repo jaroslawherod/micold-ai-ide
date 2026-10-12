@@ -2328,6 +2328,11 @@ impl DaemonState {
             }
         };
         match sent {
+            // A session appeared at the location after the check above (FR-009): refused, not
+            // an internal failure; the comments stay pending and a retry resumes it.
+            Err(err @ crate::catalog::CreateSessionError::Occupied(..)) => {
+                refuse(ErrorKind::Refused, err.to_string())
+            }
             Err(err) => refuse(
                 ErrorKind::Internal,
                 format!("a session could not be created: {err}"),
