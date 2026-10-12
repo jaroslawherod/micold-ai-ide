@@ -148,6 +148,7 @@ untouched.
 | FR-001, 012, 014, 015 | core unit (settings round-trip, identity mapping); client feature reducers; geometry gates; quickstart §B visual pass |
 | FR-013 | client test: a remote daemon in every non-connected state beside a connected local one, local `DaemonView`/outbox untouched |
 | FR-004 (no listener), 005, 006, 011 (replace), 021, SC-001..006 | `ssh_real_*` against rootless `sshd` + fault proxy + fake AI CLI, `mise run test-ssh`, CI `ssh-remote` |
+| FR-018 (artefact per client platform), R5 identity, R10 fixture guard | core unit: `provision.rs` artefact-selection table over (client, remote) pairs; `canonicalize_best_effort` returns a `micold-remote://` identity verbatim; `RemoteLocation` round-trip with Windows separators; a default build ignores `MICOLD_FIXTURE_VERSION_SUFFIX`; CI check that macOS/Windows packages ship the Linux artefact |
 | Helper subcommands | daemon crate unit tests (`remote.rs`, `runtime_status.rs`) and `ssh_real_*` |
 
 ## Complexity Tracking
