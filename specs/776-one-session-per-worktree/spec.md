@@ -17,7 +17,7 @@
 - **Worktree start**: the moment a worktree is created (create-worktree dialog or `create_worktree`
   MCP tool) together with the session that will run in it.
 - **Own session**: the one session a worktree hosts, whatever its state (starting, running,
-  stopped, failed, exited). A worktree has at most one; it has none only in the cases of FR-010
+  stopped, failed, exited). A deleted (archived) session does not occupy the worktree. A worktree has at most one; it has none only in the cases of FR-010
   (created without a definition, attached with nothing to resume, or its session deleted), and
   then takes exactly one, defined once at that moment.
 
@@ -234,7 +234,7 @@ data is lost, and no further session can be added.
 
 - A session in any lifecycle state counts as the worktree's session; "exactly one" is about
   records, not only running processes.
-- The model is part of the definition only for AI CLIs that take one; others have agent and prompt.
+- The model is part of the definition only for AI CLIs that take one; others have agent and prompt. No AI CLI takes a model today (research R4), so the definition carries agent and prompt. Replacing (FR-007, FR-008b) archives the old record rather than deleting it.
 - Restart and resume reuse the existing start paths; no new lifecycle state is introduced.
 - Out of scope: changing which worktree a session belongs to, running several agents inside one
   session, and any change to sessions across different worktrees (Principle II is unchanged there).

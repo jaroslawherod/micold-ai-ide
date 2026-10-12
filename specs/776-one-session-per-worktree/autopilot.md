@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #776
 - **Worktree branch**: feat/776_one-session-per-worktree-chosen-at-start
 - **Started**: 2026-10-12
-- **Phase**: plan (done)
-- **Next step**: tasks unit
+- **Phase**: tasks (done, design PR open)
+- **Next step**: milestone M1 after the design PR merges
 
 ## Pull requests
 
@@ -21,8 +21,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
+| M1 | T001–T013 | full | Second session refused by daemon (RPC, create_session, review send); wire fields + v41 | | pending |
+| M2 | T014–T016, T021 | full | create_worktree / WorktreeCreate define the session at start | | pending |
+| M3 | T017–T020, T022, T036 | full | Dialog CLI/prompt fields; no add action on occupied rows | | pending |
+| M4 | T023–T030 | full | Resume replaces with confirmation; attach cap | | pending |
+| M5 | T031–T035 | full | Legacy catalogs intact; start refused while another is live | | pending |
 
 ## Decisions
+
+- Tasks: optional hooks (docguard review, tdd plan) skipped; test tasks are ordered first by hand. All wire additions and the v41 bump land in M1 so later milestones need no second bump. Foundational+US1 server half is 13 tasks; kept whole (no split gives an observable deliverable earlier). Polish has no code: quickstart results are left to the close unit.
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
@@ -37,6 +44,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Plan | 1 | a0ffca5dedb4e146bf5ab61d75fca3fcbc39b919:6a7d599bd7d6d380ce4c8afc405b01095c336d91 | CHANGES: 2 MAJOR, 3 MINOR (all fixed) |
 | Plan | 2 | 7a0314a89407314e315a9bc5c4df676b7896a95f:6a7d599bd7d6d380ce4c8afc405b01095c336d91 | CHANGES: 1 MAJOR (fixed), 2 MINOR (fixed) |
 | Plan | 3 | f7336d39da2163aeb5245509456a3a91207ec911:6a7d599bd7d6d380ce4c8afc405b01095c336d91 | CLEAN (2 MINOR, fixed, prose only) |
+| Tasks | 1 | 88f01682a9aa66bc17d3ab75057ec889afc7f777:0b295551eba2928d4ff1de381dbd709c9c9e17f3 | CLEAN (3 MINOR, fixed; analyze 5 MEDIUM fixed or spec prose clarified) |
 
 ## Declined review findings
 
