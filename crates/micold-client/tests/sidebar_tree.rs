@@ -612,7 +612,10 @@ fn names_sharing_the_reserved_prefix_stay_listed() {
     );
     let listed = dirs(&state.worktree_tree());
     for name in corpus {
-        assert!(listed.iter().any(|d| d == name), "{name} missing: {listed:?}");
+        assert!(
+            listed.iter().any(|d| d == name),
+            "{name} missing: {listed:?}"
+        );
     }
 }
 

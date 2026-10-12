@@ -125,10 +125,7 @@ fn renaming_to_or_from_the_old_convention_changes_neither_listing_nor_order() {
 #[test]
 fn the_sidebar_view_has_no_reveal_control() {
     for (file, source) in [
-        (
-            "ui/sidebar.rs",
-            include_str!("../src/ui/sidebar.rs"),
-        ),
+        ("ui/sidebar.rs", include_str!("../src/ui/sidebar.rs")),
         (
             "features/sidebar.rs",
             include_str!("../src/features/sidebar.rs"),

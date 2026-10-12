@@ -492,7 +492,7 @@ fn an_unmanaged_holder_is_explained_by_its_full_path_and_said_to_be_outside_the_
 /// BUG-001 / FR-021b. A hidden holder IS one of the app's, so it keeps its folder name — but the
 /// sentence has to account for the row not being on screen.
 #[test]
-fn a_hidden_agent_holder_is_named_and_says_how_to_reveal_it() {
+fn an_agent_holder_is_named_without_a_reveal_hint() {
     let sentence = BlockReason::CheckedOutAt {
         path: PathBuf::from("/repo/.claude/worktrees/agent-deadbeefdeadbeef"),
         owner: WorktreeOwner::Agent,
@@ -504,8 +504,8 @@ fn a_hidden_agent_holder_is_named_and_says_how_to_reveal_it() {
         "the holder is the app's, so name it: {sentence}"
     );
     assert!(
-        sentence.contains("Show agent worktrees"),
-        "must say how to bring it into view: {sentence}"
+        !sentence.contains("Show agent worktrees"),
+        "no hidden-worktree toggle exists any more (552): {sentence}"
     );
 }
 

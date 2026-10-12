@@ -638,8 +638,7 @@ impl BlockReason {
                 path,
                 owner: WorktreeOwner::Agent,
             } => format!(
-                "'{branch}' is already checked out in the agent worktree '{}', which the sidebar \
-                 hides until you turn on \"Show agent worktrees\".",
+                "'{branch}' is already checked out in the agent worktree '{}'.",
                 folder_name(path)
             ),
             BlockReason::CheckedOutOutsideApp { path } => format!(
@@ -757,7 +756,7 @@ impl fmt::Display for BranchCandidate {
             Some(BlockReason::CheckedOutAt {
                 owner: WorktreeOwner::Agent,
                 ..
-            }) => f.write_str(" · in use by a hidden agent worktree"),
+            }) => f.write_str(" · in use by an agent worktree"),
             Some(BlockReason::CheckedOutAt { path, .. }) => {
                 write!(f, " · in use by {}", folder_name(path))
             }

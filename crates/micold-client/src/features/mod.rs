@@ -94,9 +94,8 @@ pub enum Outcome {
     RevealScrollArmed,
     /// The user arrived in a project, so view state switched on for the previous one resets.
     ///
-    /// `default_expanded` is not keyed per project (unlike `expanded`, pruned by `dir_name`), and
-    /// feature 014's reveal of agent worktrees is remembered nowhere — both would otherwise render
-    /// in a project that never asked for them.
+    /// `default_expanded` is not keyed per project (unlike `expanded`, pruned by `dir_name`), so it
+    /// would otherwise render in a project that never asked for it.
     ProjectEntered,
     /// The user closed (or reopened) the row holding the current session (feature 024, I2).
     ///

@@ -310,7 +310,7 @@ fn rows_for_holders_the_sidebar_cannot_show_name_the_kind_not_a_folder() {
     assert_eq!(label("fix/paw"), "fix/paw · in use outside this app");
     assert_eq!(
         label("feat/agent-held"),
-        "feat/agent-held · in use by a hidden agent worktree"
+        "feat/agent-held · in use by an agent worktree"
     );
     assert!(
         !label("fix/paw").contains("fix-paw"),

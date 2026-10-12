@@ -138,8 +138,7 @@ const ALLOWED: &[(&str, &str, &str)] = &[
     // reveal: the revealed row is *derived* by `location_open` and never written, and what these
     // wrote was the moment a reveal ends — the outgoing row folded into the user's own set.
     // `LocationOpened`, `RevealScrollArmed`, `ProjectEntered` and `RevealSuppressed` now carry it,
-    // and `restore_after_activation`'s `show_agent_worktrees` row — once its own task — turned out
-    // to be the same fact as `ProjectEntered` and went with them.)
+    // and the `show_agent_worktrees` row of `restore_after_activation` went with them.)
     // (T059 recorded a row here — `restore_after_activation` writing `focused_field` via
     // `State::focus_terminal` — and asked whether it was a violation at all, or whether
     // `focus_terminal` was a session operation sitting in the wrong file. **T067a-7 answered: the

@@ -482,8 +482,8 @@ impl AvailabilityAnswers {
 ///
 /// The active project's root (its Default row) plus each visible worktree a session can start in,
 /// each keyed by [`crate::app::State::location_dir`] — never by `Worktree::path`, which differs for
-/// an included worktree, so the key asked about is the key the row reads. Hidden agent worktrees
-/// have no row and are not asked about until revealed (SC-004). Empty with no project open.
+/// an included worktree, so the key asked about is the key the row reads. Every worktree has a
+/// row (552), so every worktree is asked about. Empty with no project open.
 pub fn wanted_availability_dirs(state: &crate::app::State) -> BTreeSet<PathBuf> {
     let Some(root) = state.location_dir(&SessionLocation::Default) else {
         return BTreeSet::new();
