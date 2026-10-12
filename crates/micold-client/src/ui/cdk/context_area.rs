@@ -95,6 +95,8 @@ impl<'a, M: 'a> ContextArea<'a, M> {
 }
 
 impl<'a, M: 'a> Widget<M, iced::Theme, iced::Renderer> for ContextArea<'a, M> {
+    // `operate` is delegated whole: focus traversal must reach the tab through this wrapper, or
+    // wrapping a control would quietly remove it from the keyboard's order (feature 023).
     forward_to_child!(content, M, iced::Theme, iced::Renderer;
         children, diff, size, layout, draw, mouse_interaction, operate, overlay);
 
