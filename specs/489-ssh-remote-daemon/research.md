@@ -69,8 +69,8 @@ in `ssh/provision.rs`, unit-tested per client platform with a table of (client, 
 (static), so the remote needs no particular glibc; a Linux client sends its own gnu build, which runs on
 the same family it was built on, and a failed exec reports `no matching daemon build`/start failure with
 the reason.
-**Work item**: package a `linux-x86_64` daemon (the CI image build already cross-targets
-`x86_64-unknown-linux-gnu`) into the macOS and Windows packages. It is separable: the transport and
+**Work item**: package a `linux-x86_64` daemon (the `x86_64-unknown-linux-musl` target is new to CI; if the daemon's dependencies do not build on musl,
+fall back to a gnu build on an old-glibc image, stating that floor) into the macOS and Windows packages. It is separable: the transport and
 everything else works on a Linux client without it, and tasks sequence it last. It adds the daemon's
 size to those packages (recorded in the ledger for the owner to confirm). A CI check asserts the macOS
 and Windows packages contain `remote-daemons/linux-x86_64/micold-daemon` once the item lands.

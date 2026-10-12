@@ -71,9 +71,12 @@ A worktree whose project has `Locality::Remote(d)`: its binding is `Binding::Bou
 at creation; shown with `RemoteLocation::path` and the daemon's name. No new persisted field.
 
 ## Local-filesystem consumers to guard with `Locality` (audit)
-**Safe by construction**: `micold_core::project::canonicalize_best_effort` (project.rs:115) returns a
-`micold-remote://` identity verbatim (no fs call); a core unit test pins it. Every caller below that
-only canonicalises is then safe; the others need the disposition shown. Tasks re-run the grep
+**Made safe by one change (modified, `crates/micold-core/src/project.rs`)**: today
+`canonicalize_best_effort` (project.rs:115) is a lexical component walk that would collapse the `//`
+of `micold-remote://<id>/p` (and use backslashes on Windows). It gains an early return of the input
+unchanged when it starts with the `micold-remote://` prefix; a core unit test pins it. Every caller
+below that only canonicalises (including `micold-core/src/workspace.rs` callers) relies on that change
+and is then safe; the others need the disposition shown. Tasks re-run the grep
 (`canonicalize_best_effort`, `.exists()`, `.is_dir()`, `metadata`, `read_dir` over project or worktree
 paths) and add any site found to this table.
 
