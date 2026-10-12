@@ -55,6 +55,7 @@ pub mod selector;
 pub mod session;
 pub mod settings;
 pub mod spawn;
+pub mod ssh;
 pub mod store;
 pub mod terminal;
 pub mod terminal_history;

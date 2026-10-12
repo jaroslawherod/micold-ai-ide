@@ -41,6 +41,8 @@ pub enum Transport {
     Local(Stream),
     /// Loopback TCP: the sandbox placement.
     Loopback(tokio::net::TcpStream),
+    /// The stdio of an `ssh` child that runs the remote helper's bridge (feature 489).
+    Ssh(crate::ssh::SshStdio),
 }
 
 macro_rules! delegate {
@@ -48,6 +50,7 @@ macro_rules! delegate {
         match $self.get_mut() {
             Transport::Local(s) => Pin::new(s).$method($($arg),*),
             Transport::Loopback(s) => Pin::new(s).$method($($arg),*),
+            Transport::Ssh(s) => Pin::new(s).$method($($arg),*),
         }
     };
 }
@@ -333,6 +336,8 @@ pub async fn dial_address(address: &DialAddress) -> io::Result<Option<Transport>
                 Err(e) => Err(e),
             }
         }
+        // Reaching a remote host is provisioning plus a bridge, not a dial: `ssh::provision::connect`.
+        DialAddress::Ssh(_) => Ok(None),
         DialAddress::Loopback { .. } => {
             let addr = address.socket_addr().expect("loopback has an address");
             match tokio::net::TcpStream::connect(addr).await {
@@ -463,10 +468,10 @@ pub async fn connect_or_start(
         Placement::HostProcess => {
             let endpoint = match address {
                 DialAddress::Local(e) => e.clone(),
-                DialAddress::Loopback { .. } => {
+                DialAddress::Loopback { .. } | DialAddress::Ssh(_) => {
                     return Err(io::Error::new(
                         io::ErrorKind::InvalidInput,
-                        "the host placement is not reached over loopback TCP",
+                        "the host placement is reached over its local endpoint",
                     ))
                 }
             };

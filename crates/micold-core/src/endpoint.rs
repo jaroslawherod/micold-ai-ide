@@ -42,6 +42,16 @@ pub fn resolve() -> io::Result<Endpoint> {
     imp::resolve()
 }
 
+/// The endpoint the remote helper (`micold-daemon remote ...`) uses on the host it runs on.
+///
+/// Pinned rather than following `XDG_RUNTIME_DIR`: a non-interactive `ssh` command has none, while
+/// a daemon started from a desktop login has one, so [`resolve`] could name two different sockets
+/// for the same user (research R2). The helper also starts its daemon without that variable, so
+/// both name the same one. macOS and Windows already have a single location.
+pub fn resolve_pinned() -> io::Result<Endpoint> {
+    imp::resolve_pinned()
+}
+
 /// The default loopback port the sandboxed daemon publishes its control channel on.
 ///
 /// Fixed rather than ephemeral: the client has to know where to dial before the container exists,
@@ -59,6 +69,9 @@ pub enum DialAddress {
     Local(Endpoint),
     /// Loopback TCP, for the sandbox. Authenticated by the shared secret, never by the transport.
     Loopback { port: u16 },
+    /// A remote host reached through the user's own `ssh` (feature 489). Authenticated by SSH;
+    /// nothing is bound on either machine.
+    Ssh(crate::ssh::SshTarget),
 }
 
 impl DialAddress {
@@ -68,7 +81,7 @@ impl DialAddress {
     /// input and terminal output on the network, which no part of this feature asks for.
     pub fn socket_addr(&self) -> Option<SocketAddr> {
         match self {
-            DialAddress::Local(_) => None,
+            DialAddress::Local(_) | DialAddress::Ssh(_) => None,
             DialAddress::Loopback { port } => Some(SocketAddr::from((Ipv4Addr::LOCALHOST, *port))),
         }
     }
@@ -78,6 +91,7 @@ impl DialAddress {
         match self {
             DialAddress::Local(e) => e.socket_path.display().to_string(),
             DialAddress::Loopback { port } => format!("127.0.0.1:{port}"),
+            DialAddress::Ssh(target) => target.describe(),
         }
     }
 }
@@ -205,6 +219,16 @@ mod imp {
     pub(super) fn resolve_in_predictable_dir(dir: &std::path::Path) -> io::Result<Endpoint> {
         guard_predictable_dir(dir)?;
         Ok(endpoint_in(dir))
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    pub(super) fn resolve_pinned() -> io::Result<Endpoint> {
+        resolve_in_predictable_dir(&PathBuf::from(format!("/tmp/micold-{}", euid())))
+    }
+
+    #[cfg(target_os = "macos")]
+    pub(super) fn resolve_pinned() -> io::Result<Endpoint> {
+        resolve()
     }
 
     #[cfg(target_os = "macos")]

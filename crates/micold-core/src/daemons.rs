@@ -40,6 +40,8 @@ pub enum DaemonRuntime {
     Host,
     /// A container on this machine.
     Container(ContainerSettings),
+    /// A host reached through the user's own `ssh` (feature 489).
+    Ssh(crate::ssh::SshSettings),
     /// A runtime this build does not know: kept verbatim on save, never started.
     Unsupported {
         /// The `kind` the file named.
@@ -124,6 +126,7 @@ impl DaemonRuntime {
         match self {
             DaemonRuntime::Host => "Host",
             DaemonRuntime::Container(_) => "Container",
+            DaemonRuntime::Ssh(_) => "Remote over SSH",
             DaemonRuntime::Unsupported { .. } => "Unsupported",
         }
     }
@@ -237,6 +240,16 @@ impl DaemonRegistry {
                     return Err(RegistryError::ContainerInUse { other });
                 }
             }
+            // The entry's fields were validated when its target was built; a deserialized one is
+            // re-checked here so a hand-edited file cannot add a blank host.
+            DaemonRuntime::Ssh(settings) => {
+                crate::ssh::SshTarget::new(
+                    &settings.target.host,
+                    settings.target.user.as_deref(),
+                    settings.target.port,
+                    settings.target.key_file.clone(),
+                )?;
+            }
             // A runtime this build cannot run is only ever loaded, never added.
             DaemonRuntime::Unsupported { .. } => {
                 return Err(RegistryError::InvalidField { field: "runtime" });
@@ -299,6 +312,9 @@ pub enum DaemonEvent {
     },
     /// The user stopped it, or it was removed.
     Stop,
+    /// A bring-up attempt that makes exactly one try (an SSH daemon) failed: unreachable at once,
+    /// with no further dial until the user starts it again.
+    StartFailed(String),
 }
 
 /// A state change of exactly one daemon: the only thing a transition reports (FR-007).
@@ -378,6 +394,7 @@ impl DaemonStates {
             }
             // A mismatch is not cured by a dial that fails again.
             (DaemonState::VersionMismatch { .. }, _) => None,
+            (_, DaemonEvent::StartFailed(reason)) => Some(DaemonState::Unreachable { reason }),
             (
                 DaemonState::Connected,
                 DaemonEvent::Lost(reason) | DaemonEvent::DialFailed(reason),
@@ -573,6 +590,11 @@ impl Serialize for DaemonRuntime {
                 value["kind"] = "container".into();
                 value
             }
+            DaemonRuntime::Ssh(c) => {
+                let mut value = serde_json::to_value(c).map_err(S::Error::custom)?;
+                value["kind"] = "ssh".into();
+                value
+            }
             DaemonRuntime::Unsupported { raw, .. } => raw.clone(),
         };
         value.serialize(serializer)
@@ -592,6 +614,10 @@ impl<'de> Deserialize<'de> for DaemonRuntime {
             "container" => match serde_json::from_value::<ContainerSettings>(raw.clone()) {
                 Ok(c) => DaemonRuntime::Container(c),
                 // A container entry this build cannot read is kept, not repaired.
+                Err(_) => DaemonRuntime::Unsupported { kind, raw },
+            },
+            "ssh" => match serde_json::from_value::<crate::ssh::SshSettings>(raw.clone()) {
+                Ok(c) => DaemonRuntime::Ssh(c),
                 Err(_) => DaemonRuntime::Unsupported { kind, raw },
             },
             _ => DaemonRuntime::Unsupported { kind, raw },
