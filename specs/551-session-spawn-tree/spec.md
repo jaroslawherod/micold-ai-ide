@@ -186,8 +186,8 @@ and the origin shows whether any child needs attention, then expand.
 - **FR-016**: A child whose origin is not yet in the catalog MUST be shown top-level with an
   "origin pending" marker, and MUST move under its origin once the origin is known; an origin that never becomes known
   leaves the child top-level with the marker.
-- **FR-017**: The fold state of an origin MUST persist across an app restart, as the sidebar's
-  expanded nodes already do; an origin the user has never folded MUST start expanded.
+- **FR-017**: The fold state of an origin MUST persist across an app restart; an origin the user has
+  never folded MUST start expanded.
 - **FR-018**: Deleting an origin session MUST NOT delete or stop its children; each child MUST
   stay visible top-level with the "origin removed" marker (FR-008). Stopping an origin MUST NOT
   change where its children are shown.
