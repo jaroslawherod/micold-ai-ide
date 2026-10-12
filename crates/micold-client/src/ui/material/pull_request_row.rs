@@ -84,7 +84,7 @@ impl<'a, M: 'a> From<PullRequestRow<'a, M>> for Element<'a, M> {
         if r.selected {
             body = body.style(move |_| container::Style {
                 border: iced::Border {
-                    color: iced::Color::from(roles.outline),
+                    color: super::style::color(roles.outline),
                     width: 1.0,
                     radius: 8.0.into(),
                 },
