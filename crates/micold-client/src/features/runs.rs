@@ -12,10 +12,10 @@ use std::path::PathBuf;
 use crate::app::Message;
 use crate::features::changes::Load;
 use crate::features::Outcome;
+use crate::floating_surface;
 use crate::overlay::registry::Registered;
-use crate::overlay::{DismissalRules, FloatingSurface, SurfaceId};
+use crate::overlay::{FloatingSurface, SurfaceId};
 use micold_core::naming::{derive, ConventionalType, DerivedNames, NamingError, WorktreeNaming};
-use micold_core::overlay::Layer;
 use micold_core::protocol::messages::ActivitySignal;
 use micold_core::protocol::messages::ClientMsg;
 use micold_core::runs::naming::derive_group;
@@ -1212,19 +1212,7 @@ fn confirmed(state: &mut State) -> Effect {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ParallelRunDialog;
 
-impl FloatingSurface for ParallelRunDialog {
-    fn id(&self) -> SurfaceId {
-        SurfaceId::new("run_in_parallel")
-    }
-
-    fn layer(&self) -> Layer {
-        Layer::Dialog
-    }
-
-    fn dismissal(&self) -> DismissalRules {
-        DismissalRules::for_layer(Layer::Dialog).cancelled_by(Message::Runs(Msg::Dismissed))
-    }
-}
+floating_surface!(ParallelRunDialog, id: SurfaceId::new("run_in_parallel"), layer: Dialog, cancelled_by: Message::Runs(Msg::Dismissed));
 
 impl Registered for ParallelRunDialog {
     fn open_in(state: &crate::app::State) -> Option<Self> {
@@ -1241,20 +1229,7 @@ impl GroupContextMenu {
     pub const ID: SurfaceId = SurfaceId::new("run_group_menu");
 }
 
-impl FloatingSurface for GroupContextMenu {
-    fn id(&self) -> SurfaceId {
-        Self::ID
-    }
-
-    fn layer(&self) -> Layer {
-        Layer::ContextMenu
-    }
-
-    fn dismissal(&self) -> DismissalRules {
-        DismissalRules::for_layer(Layer::ContextMenu)
-            .cancelled_by(Message::Runs(Msg::MenuDismissed))
-    }
-}
+floating_surface!(GroupContextMenu, id: Self::ID, layer: ContextMenu, cancelled_by: Message::Runs(Msg::MenuDismissed));
 
 impl Registered for GroupContextMenu {
     fn open_in(state: &crate::app::State) -> Option<Self> {
@@ -1266,19 +1241,7 @@ impl Registered for GroupContextMenu {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ConfirmDismissGroupDialog;
 
-impl FloatingSurface for ConfirmDismissGroupDialog {
-    fn id(&self) -> SurfaceId {
-        SurfaceId::new("confirm_dismiss_run_group")
-    }
-
-    fn layer(&self) -> Layer {
-        Layer::Dialog
-    }
-
-    fn dismissal(&self) -> DismissalRules {
-        DismissalRules::for_layer(Layer::Dialog).cancelled_by(Message::Runs(Msg::DismissCancelled))
-    }
-}
+floating_surface!(ConfirmDismissGroupDialog, id: SurfaceId::new("confirm_dismiss_run_group"), layer: Dialog, cancelled_by: Message::Runs(Msg::DismissCancelled));
 
 impl Registered for ConfirmDismissGroupDialog {
     fn open_in(state: &crate::app::State) -> Option<Self> {
@@ -1294,19 +1257,7 @@ impl Registered for ConfirmDismissGroupDialog {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ConfirmPickRunDialog;
 
-impl FloatingSurface for ConfirmPickRunDialog {
-    fn id(&self) -> SurfaceId {
-        SurfaceId::new("confirm_pick_run")
-    }
-
-    fn layer(&self) -> Layer {
-        Layer::Dialog
-    }
-
-    fn dismissal(&self) -> DismissalRules {
-        DismissalRules::for_layer(Layer::Dialog).cancelled_by(Message::Runs(Msg::PickCancelled))
-    }
-}
+floating_surface!(ConfirmPickRunDialog, id: SurfaceId::new("confirm_pick_run"), layer: Dialog, cancelled_by: Message::Runs(Msg::PickCancelled));
 
 impl Registered for ConfirmPickRunDialog {
     fn open_in(state: &crate::app::State) -> Option<Self> {
@@ -1322,19 +1273,7 @@ impl Registered for ConfirmPickRunDialog {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CleanupOfferDialog;
 
-impl FloatingSurface for CleanupOfferDialog {
-    fn id(&self) -> SurfaceId {
-        SurfaceId::new("run_cleanup_offer")
-    }
-
-    fn layer(&self) -> Layer {
-        Layer::Dialog
-    }
-
-    fn dismissal(&self) -> DismissalRules {
-        DismissalRules::for_layer(Layer::Dialog).cancelled_by(Message::Runs(Msg::CleanupDismissed))
-    }
-}
+floating_surface!(CleanupOfferDialog, id: SurfaceId::new("run_cleanup_offer"), layer: Dialog, cancelled_by: Message::Runs(Msg::CleanupDismissed));
 
 impl Registered for CleanupOfferDialog {
     fn open_in(state: &crate::app::State) -> Option<Self> {
@@ -1351,19 +1290,7 @@ impl Registered for CleanupOfferDialog {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CleanupSecondConfirmDialog;
 
-impl FloatingSurface for CleanupSecondConfirmDialog {
-    fn id(&self) -> SurfaceId {
-        SurfaceId::new("run_cleanup_second_confirm")
-    }
-
-    fn layer(&self) -> Layer {
-        Layer::Dialog
-    }
-
-    fn dismissal(&self) -> DismissalRules {
-        DismissalRules::for_layer(Layer::Dialog).cancelled_by(Message::Runs(Msg::CleanupDismissed))
-    }
-}
+floating_surface!(CleanupSecondConfirmDialog, id: SurfaceId::new("run_cleanup_second_confirm"), layer: Dialog, cancelled_by: Message::Runs(Msg::CleanupDismissed));
 
 impl Registered for CleanupSecondConfirmDialog {
     fn open_in(state: &crate::app::State) -> Option<Self> {

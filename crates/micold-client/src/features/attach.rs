@@ -19,14 +19,14 @@
 
 use crate::app::Message;
 use crate::features::Outcome;
+use crate::floating_surface;
 use crate::overlay::registry::Registered;
-use crate::overlay::{DismissalRules, FloatingSurface, SurfaceId};
+use crate::overlay::SurfaceId;
 use micold_core::attach::{
     AttachItem, AttachOutcome, AttachResult, AttachableWorktree, Availability, DiscoveryNote,
     DiscoveryReport, ResumableSession, ResumableStatus, SkipReason, UnresumableReason,
 };
 use micold_core::notify::{Level, Notification};
-use micold_core::overlay::Layer;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 
@@ -190,19 +190,7 @@ pub fn status_text(session: &ResumableSession) -> String {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct AttachDialog;
 
-impl FloatingSurface for AttachDialog {
-    fn id(&self) -> SurfaceId {
-        SurfaceId::new("attach_worktrees")
-    }
-
-    fn layer(&self) -> Layer {
-        Layer::Dialog
-    }
-
-    fn dismissal(&self) -> DismissalRules {
-        DismissalRules::for_layer(Layer::Dialog).cancelled_by(Message::Attach(Msg::Cancelled))
-    }
-}
+floating_surface!(AttachDialog, id: SurfaceId::new("attach_worktrees"), layer: Dialog, cancelled_by: Message::Attach(Msg::Cancelled));
 
 impl Registered for AttachDialog {
     fn open_in(state: &crate::app::State) -> Option<Self> {

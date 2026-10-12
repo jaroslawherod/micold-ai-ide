@@ -170,3 +170,29 @@ pub trait FloatingSurface {
     /// What closes it.
     fn dismissal(&self) -> DismissalRules;
 }
+
+/// Implements [`FloatingSurface`] for a surface whose three answers are constants: its id, its
+/// layer, and the one message that cancels it.
+///
+/// `id` is any `SurfaceId` expression (`Self::ID` or `SurfaceId::new("..")`), `layer` a [`Layer`]
+/// variant name. The dismissal is `DismissalRules::for_layer(layer).cancelled_by(message)`; a
+/// surface that needs anything else (protected input, a conditional) writes the impl by hand.
+#[macro_export]
+macro_rules! floating_surface {
+    ($ty:ty, id: $id:expr, layer: $layer:ident, cancelled_by: $msg:expr $(,)?) => {
+        impl $crate::overlay::FloatingSurface for $ty {
+            fn id(&self) -> $crate::overlay::SurfaceId {
+                $id
+            }
+
+            fn layer(&self) -> ::micold_core::overlay::Layer {
+                ::micold_core::overlay::Layer::$layer
+            }
+
+            fn dismissal(&self) -> $crate::overlay::DismissalRules {
+                $crate::overlay::DismissalRules::for_layer(::micold_core::overlay::Layer::$layer)
+                    .cancelled_by($msg)
+            }
+        }
+    };
+}

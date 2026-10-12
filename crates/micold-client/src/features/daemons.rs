@@ -20,10 +20,10 @@ use micold_core::sandbox::SandboxProfile;
 use micold_core::session::SessionId;
 
 use super::Outcome;
+use crate::floating_surface;
 use crate::links::{route, DaemonLinks, Route};
 use crate::overlay::registry::Registered;
-use crate::overlay::{DismissalRules, FloatingSurface, SurfaceId};
-use micold_core::overlay::Layer;
+use crate::overlay::SurfaceId;
 
 /// What the reducer acts on: the registry, the connection of each daemon, the bindings and what
 /// runs where. Borrowed from the app's settings and workspace for the length of one step.
@@ -761,20 +761,7 @@ pub fn update(state: &mut State, model: &mut Model<'_>, msg: Msg) -> Vec<Outcome
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ConfirmDaemonRemovalDialog;
 
-impl FloatingSurface for ConfirmDaemonRemovalDialog {
-    fn id(&self) -> SurfaceId {
-        SurfaceId::new("confirm_daemon_removal")
-    }
-
-    fn layer(&self) -> Layer {
-        Layer::Dialog
-    }
-
-    fn dismissal(&self) -> DismissalRules {
-        DismissalRules::for_layer(Layer::Dialog)
-            .cancelled_by(crate::app::Message::Daemons(Msg::RemovalCancelled))
-    }
-}
+floating_surface!(ConfirmDaemonRemovalDialog, id: SurfaceId::new("confirm_daemon_removal"), layer: Dialog, cancelled_by: crate::app::Message::Daemons(Msg::RemovalCancelled));
 
 impl Registered for ConfirmDaemonRemovalDialog {
     fn open_in(state: &crate::app::State) -> Option<Self> {
@@ -789,20 +776,7 @@ impl Registered for ConfirmDaemonRemovalDialog {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BindDaemonDialog;
 
-impl FloatingSurface for BindDaemonDialog {
-    fn id(&self) -> SurfaceId {
-        SurfaceId::new("bind_daemon")
-    }
-
-    fn layer(&self) -> Layer {
-        Layer::Dialog
-    }
-
-    fn dismissal(&self) -> DismissalRules {
-        DismissalRules::for_layer(Layer::Dialog)
-            .cancelled_by(crate::app::Message::Daemons(Msg::BindCancelled))
-    }
-}
+floating_surface!(BindDaemonDialog, id: SurfaceId::new("bind_daemon"), layer: Dialog, cancelled_by: crate::app::Message::Daemons(Msg::BindCancelled));
 
 impl Registered for BindDaemonDialog {
     fn open_in(state: &crate::app::State) -> Option<Self> {

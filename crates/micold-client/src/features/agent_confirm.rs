@@ -36,9 +36,9 @@
 //! operation is an explicit Allow.
 
 use crate::app::Message;
+use crate::floating_surface;
 use crate::overlay::registry::Registered;
-use crate::overlay::{DismissalRules, FloatingSurface, SurfaceId};
-use micold_core::overlay::Layer;
+use crate::overlay::SurfaceId;
 use micold_core::protocol::messages::ConfirmOperation;
 use std::path::PathBuf;
 
@@ -113,19 +113,7 @@ pub enum Msg {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ConfirmAgentRequestDialog;
 
-impl FloatingSurface for ConfirmAgentRequestDialog {
-    fn id(&self) -> SurfaceId {
-        SurfaceId::new("confirm_agent_request")
-    }
-
-    fn layer(&self) -> Layer {
-        Layer::Dialog
-    }
-
-    fn dismissal(&self) -> DismissalRules {
-        DismissalRules::for_layer(Layer::Dialog).cancelled_by(Message::AgentConfirm(Msg::Dismissed))
-    }
-}
+floating_surface!(ConfirmAgentRequestDialog, id: SurfaceId::new("confirm_agent_request"), layer: Dialog, cancelled_by: Message::AgentConfirm(Msg::Dismissed));
 
 impl Registered for ConfirmAgentRequestDialog {
     fn open_in(state: &crate::app::State) -> Option<Self> {

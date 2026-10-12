@@ -45,9 +45,9 @@
 //! this feature draws over that catalog.
 
 use crate::app::Message;
+use crate::floating_surface;
 use crate::overlay::registry::Registered;
-use crate::overlay::{DismissalRules, FloatingSurface, SurfaceId};
-use micold_core::overlay::Layer;
+use crate::overlay::SurfaceId;
 use micold_core::project::{canonicalize_best_effort, FolderEntry, RenameError};
 use micold_core::selector::Selector;
 use std::path::PathBuf;
@@ -156,20 +156,7 @@ impl ProjectSwitcher {
     pub const ID: SurfaceId = SurfaceId::new("project_switcher");
 }
 
-impl FloatingSurface for ProjectSwitcher {
-    fn id(&self) -> SurfaceId {
-        Self::ID
-    }
-
-    fn layer(&self) -> Layer {
-        Layer::Popover
-    }
-
-    fn dismissal(&self) -> DismissalRules {
-        DismissalRules::for_layer(Layer::Popover)
-            .cancelled_by(Message::Project(Msg::SwitcherToggled))
-    }
-}
+floating_surface!(ProjectSwitcher, id: Self::ID, layer: Popover, cancelled_by: Message::Project(Msg::SwitcherToggled));
 
 impl Registered for ProjectSwitcher {
     fn open_in(state: &crate::app::State) -> Option<Self> {
@@ -193,20 +180,7 @@ impl ProjectContextMenu {
     pub const ID: SurfaceId = SurfaceId::new("project_menu");
 }
 
-impl FloatingSurface for ProjectContextMenu {
-    fn id(&self) -> SurfaceId {
-        Self::ID
-    }
-
-    fn layer(&self) -> Layer {
-        Layer::ContextMenu
-    }
-
-    fn dismissal(&self) -> DismissalRules {
-        DismissalRules::for_layer(Layer::ContextMenu)
-            .cancelled_by(Message::Project(Msg::MenuDismissed))
-    }
-}
+floating_surface!(ProjectContextMenu, id: Self::ID, layer: ContextMenu, cancelled_by: Message::Project(Msg::MenuDismissed));
 
 impl Registered for ProjectContextMenu {
     fn open_in(state: &crate::app::State) -> Option<Self> {
@@ -219,19 +193,7 @@ impl Registered for ProjectContextMenu {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ProjectSelectorDialog;
 
-impl FloatingSurface for ProjectSelectorDialog {
-    fn id(&self) -> SurfaceId {
-        SurfaceId::new("project_selector")
-    }
-
-    fn layer(&self) -> Layer {
-        Layer::Dialog
-    }
-
-    fn dismissal(&self) -> DismissalRules {
-        DismissalRules::for_layer(Layer::Dialog).cancelled_by(Message::Project(Msg::SelectorClosed))
-    }
-}
+floating_surface!(ProjectSelectorDialog, id: SurfaceId::new("project_selector"), layer: Dialog, cancelled_by: Message::Project(Msg::SelectorClosed));
 
 impl Registered for ProjectSelectorDialog {
     fn open_in(state: &crate::app::State) -> Option<Self> {
@@ -247,20 +209,7 @@ impl Registered for ProjectSelectorDialog {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RenameProjectDialog;
 
-impl FloatingSurface for RenameProjectDialog {
-    fn id(&self) -> SurfaceId {
-        SurfaceId::new("rename_project")
-    }
-
-    fn layer(&self) -> Layer {
-        Layer::Dialog
-    }
-
-    fn dismissal(&self) -> DismissalRules {
-        DismissalRules::for_layer(Layer::Dialog)
-            .cancelled_by(Message::Project(Msg::RenameCancelled))
-    }
-}
+floating_surface!(RenameProjectDialog, id: SurfaceId::new("rename_project"), layer: Dialog, cancelled_by: Message::Project(Msg::RenameCancelled));
 
 impl Registered for RenameProjectDialog {
     fn open_in(state: &crate::app::State) -> Option<Self> {
@@ -276,20 +225,7 @@ impl Registered for RenameProjectDialog {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ConfirmForgetProjectDialog;
 
-impl FloatingSurface for ConfirmForgetProjectDialog {
-    fn id(&self) -> SurfaceId {
-        SurfaceId::new("confirm_forget_project")
-    }
-
-    fn layer(&self) -> Layer {
-        Layer::Dialog
-    }
-
-    fn dismissal(&self) -> DismissalRules {
-        DismissalRules::for_layer(Layer::Dialog)
-            .cancelled_by(Message::Project(Msg::ForgetCancelled))
-    }
-}
+floating_surface!(ConfirmForgetProjectDialog, id: SurfaceId::new("confirm_forget_project"), layer: Dialog, cancelled_by: Message::Project(Msg::ForgetCancelled));
 
 impl Registered for ConfirmForgetProjectDialog {
     fn open_in(state: &crate::app::State) -> Option<Self> {

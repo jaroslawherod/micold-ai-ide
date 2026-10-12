@@ -52,8 +52,9 @@ use std::path::PathBuf;
 
 use crate::features::session::CliAvailability;
 use crate::features::window::FieldId;
+use crate::floating_surface;
 use crate::overlay::registry::Registered;
-use crate::overlay::{DismissalRules, FloatingSurface, SurfaceId};
+use crate::overlay::SurfaceId;
 use micold_core::attention::{NotificationKind, NotificationKinds};
 use micold_core::cli_reason::{explain, AttemptDir, Explanation};
 use micold_core::issue_types::{
@@ -61,7 +62,6 @@ use micold_core::issue_types::{
 };
 use micold_core::mcp::policy::CrossSessionAccess;
 use micold_core::naming::ConventionalType;
-use micold_core::overlay::Layer;
 use micold_core::sandbox::placement::PlacementKind;
 use micold_core::sandbox::runtime::RuntimeCapabilities;
 use micold_core::sandbox::{
@@ -1822,23 +1822,10 @@ pub fn placement_in_force_changed(state: &mut crate::app::State, kind: Placement
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ConfirmPlacementDialog;
 
-impl FloatingSurface for ConfirmPlacementDialog {
-    fn id(&self) -> SurfaceId {
-        SurfaceId::new("confirm_placement")
-    }
-
-    fn layer(&self) -> Layer {
-        Layer::Dialog
-    }
-
-    fn dismissal(&self) -> DismissalRules {
-        // Dismissing is declining, and declining leaves the whole save unapplied (FR-032b) — so
-        // the scrim and Escape both reach the same reducer the Cancel button does, and none of the
-        // three can leave a half-applied save behind.
-        DismissalRules::for_layer(Layer::Dialog)
-            .cancelled_by(crate::app::Message::Settings(Msg::PlacementChangeCancelled))
-    }
-}
+// Dismissing is declining, and declining leaves the whole save unapplied (FR-032b) — so
+// the scrim and Escape both reach the same reducer the Cancel button does, and none of the
+// three can leave a half-applied save behind.
+floating_surface!(ConfirmPlacementDialog, id: SurfaceId::new("confirm_placement"), layer: Dialog, cancelled_by: crate::app::Message::Settings(Msg::PlacementChangeCancelled));
 
 impl Registered for ConfirmPlacementDialog {
     fn open_in(state: &crate::app::State) -> Option<Self> {
