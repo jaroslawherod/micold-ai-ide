@@ -8,6 +8,7 @@
 //! Builder form: `TextArea::new(&content, roles).placeholder("Comment").on_action(Msg::Edit)
 //! .on_submit(Msg::Save).into()`.
 
+use crate::ui::cdk::passthrough::forward_to_child;
 use iced::advanced::text::highlighter::PlainText;
 use iced::advanced::widget::{tree, Operation, Tree, Widget};
 use iced::advanced::{layout, mouse, renderer, Clipboard, Layout, Renderer as _, Shell};
@@ -147,13 +148,8 @@ impl<M> Chrome<'_, M> {
 }
 
 impl<'a, M: 'a> Widget<M, iced::Theme, iced::Renderer> for Chrome<'a, M> {
-    fn children(&self) -> Vec<Tree> {
-        vec![Tree::new(&self.editor)]
-    }
-
-    fn diff(&self, tree: &mut Tree) {
-        tree.diff_children(std::slice::from_ref(&self.editor));
-    }
+    forward_to_child!(editor, M, iced::Theme, iced::Renderer;
+        children, diff);
 
     fn tag(&self) -> tree::Tag {
         tree::Tag::stateless()

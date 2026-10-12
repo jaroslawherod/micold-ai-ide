@@ -38,9 +38,10 @@
 //! tiling. It is pure geometry and tested as such, because "does this rectangle lie inside a
 //! rounded rectangle" is checkable arithmetic and not something to confirm by looking at it.
 
+use crate::ui::cdk::passthrough::forward_to_child;
 use iced::advanced::widget::{operation::Outcome, tree, Id, Operation, Tree, Widget};
-use iced::advanced::{layout, mouse, overlay, renderer, Clipboard, Layout, Shell};
-use iced::{Border, Color, Element, Event, Length, Rectangle, Size, Vector};
+use iced::advanced::{mouse, renderer, Clipboard, Layout, Shell};
+use iced::{Border, Color, Element, Event, Rectangle};
 use micold_core::tokens::{motion::duration, state};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -178,35 +179,15 @@ impl<Message, Theme, Renderer> Widget<Message, Theme, Renderer>
 where
     Renderer: renderer::Renderer,
 {
+    forward_to_child!(content, Message, Theme, Renderer;
+        children, diff, size, layout, mouse_interaction, overlay);
+
     fn tag(&self) -> tree::Tag {
         tree::Tag::of::<RippleState>()
     }
 
     fn state(&self) -> tree::State {
         tree::State::new(RippleState::new())
-    }
-
-    fn children(&self) -> Vec<Tree> {
-        vec![Tree::new(&self.content)]
-    }
-
-    fn diff(&self, tree: &mut Tree) {
-        tree.diff_children(std::slice::from_ref(&self.content));
-    }
-
-    fn size(&self) -> Size<Length> {
-        self.content.as_widget().size()
-    }
-
-    fn layout(
-        &mut self,
-        tree: &mut Tree,
-        renderer: &Renderer,
-        limits: &layout::Limits,
-    ) -> layout::Node {
-        self.content
-            .as_widget_mut()
-            .layout(&mut tree.children[0], renderer, limits)
     }
 
     fn update(
@@ -283,23 +264,6 @@ where
         self.content
             .as_widget_mut()
             .operate(&mut tree.children[0], layout, renderer, operation);
-    }
-
-    fn mouse_interaction(
-        &self,
-        tree: &Tree,
-        layout: Layout<'_>,
-        cursor: mouse::Cursor,
-        viewport: &Rectangle,
-        renderer: &Renderer,
-    ) -> mouse::Interaction {
-        self.content.as_widget().mouse_interaction(
-            &tree.children[0],
-            layout,
-            cursor,
-            viewport,
-            renderer,
-        )
     }
 
     fn draw(
@@ -381,23 +345,6 @@ where
                 renderer.fill_quad(quad, background);
             });
         }
-    }
-
-    fn overlay<'b>(
-        &'b mut self,
-        tree: &'b mut Tree,
-        layout: Layout<'b>,
-        renderer: &Renderer,
-        viewport: &Rectangle,
-        translation: Vector,
-    ) -> Option<overlay::Element<'b, Message, Theme, Renderer>> {
-        self.content.as_widget_mut().overlay(
-            &mut tree.children[0],
-            layout,
-            renderer,
-            viewport,
-            translation,
-        )
     }
 }
 

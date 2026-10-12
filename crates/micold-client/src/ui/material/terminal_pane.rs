@@ -12,6 +12,7 @@ use crate::features::session::SelectKind;
 use crate::grid::GridCache;
 use crate::keymap;
 use crate::selection::Selection;
+use crate::ui::cdk::passthrough::forward_to_child;
 use crate::ui::terminal::{
     cell_font, encode_mouse_report, shows_cursor, wire_cell_colors, CellMetrics, TermPalette,
     TERM_FONT_SIZE,
@@ -83,35 +84,15 @@ impl<Theme, Renderer> Widget<Message, Theme, Renderer> for GridSizeReporter<'_, 
 where
     Renderer: renderer::Renderer,
 {
+    forward_to_child!(content, Message, Theme, Renderer;
+        children, diff, size, layout, draw, mouse_interaction, operate, overlay);
+
     fn tag(&self) -> tree::Tag {
         tree::Tag::of::<ReporterState>()
     }
 
     fn state(&self) -> tree::State {
         tree::State::new(ReporterState::default())
-    }
-
-    fn children(&self) -> Vec<Tree> {
-        vec![Tree::new(&self.content)]
-    }
-
-    fn diff(&self, tree: &mut Tree) {
-        tree.diff_children(std::slice::from_ref(&self.content));
-    }
-
-    fn size(&self) -> Size<Length> {
-        self.content.as_widget().size()
-    }
-
-    fn layout(
-        &mut self,
-        tree: &mut Tree,
-        renderer: &Renderer,
-        limits: &layout::Limits,
-    ) -> layout::Node {
-        self.content
-            .as_widget_mut()
-            .layout(&mut tree.children[0], renderer, limits)
     }
 
     fn update(
@@ -155,73 +136,6 @@ where
             shell,
             viewport,
         );
-    }
-
-    fn operate(
-        &mut self,
-        tree: &mut Tree,
-        layout: Layout<'_>,
-        renderer: &Renderer,
-        operation: &mut dyn iced::advanced::widget::Operation,
-    ) {
-        self.content
-            .as_widget_mut()
-            .operate(&mut tree.children[0], layout, renderer, operation);
-    }
-
-    fn mouse_interaction(
-        &self,
-        tree: &Tree,
-        layout: Layout<'_>,
-        cursor: mouse::Cursor,
-        viewport: &Rectangle,
-        renderer: &Renderer,
-    ) -> mouse::Interaction {
-        self.content.as_widget().mouse_interaction(
-            &tree.children[0],
-            layout,
-            cursor,
-            viewport,
-            renderer,
-        )
-    }
-
-    fn draw(
-        &self,
-        tree: &Tree,
-        renderer: &mut Renderer,
-        theme: &Theme,
-        style: &renderer::Style,
-        layout: Layout<'_>,
-        cursor: mouse::Cursor,
-        viewport: &Rectangle,
-    ) {
-        self.content.as_widget().draw(
-            &tree.children[0],
-            renderer,
-            theme,
-            style,
-            layout,
-            cursor,
-            viewport,
-        );
-    }
-
-    fn overlay<'b>(
-        &'b mut self,
-        tree: &'b mut Tree,
-        layout: Layout<'b>,
-        renderer: &Renderer,
-        viewport: &Rectangle,
-        translation: iced::Vector,
-    ) -> Option<iced::advanced::overlay::Element<'b, Message, Theme, Renderer>> {
-        self.content.as_widget_mut().overlay(
-            &mut tree.children[0],
-            layout,
-            renderer,
-            viewport,
-            translation,
-        )
     }
 }
 

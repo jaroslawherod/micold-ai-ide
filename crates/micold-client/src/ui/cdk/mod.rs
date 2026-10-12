@@ -17,6 +17,7 @@ pub mod context_area;
 pub mod keyboard_elsewhere;
 pub mod motion;
 pub mod overlay;
+pub(crate) mod passthrough;
 pub mod picker;
 pub mod reflow;
 pub mod ripple;

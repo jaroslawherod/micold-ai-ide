@@ -39,10 +39,11 @@
 //!
 //! [`state::FOCUS_RING_WIDTH`]: micold_core::tokens::state::FOCUS_RING_WIDTH
 
-use iced::advanced::widget::{operation, tree, Operation, Tree, Widget};
-use iced::advanced::{layout, mouse, overlay, renderer, Clipboard, Layout, Renderer as _, Shell};
+use crate::ui::cdk::passthrough::forward_to_child;
+use iced::advanced::widget::{operation, tree, Tree, Widget};
+use iced::advanced::{mouse, renderer, Clipboard, Layout, Renderer as _, Shell};
 use iced::touch;
-use iced::{keyboard, Background, Border, Color, Element, Event, Length, Rectangle, Size, Vector};
+use iced::{keyboard, Background, Border, Color, Element, Event, Rectangle};
 use micold_core::tokens::{state, Rgb};
 
 use super::style;
@@ -255,9 +256,8 @@ fn ring_bounds(bounds: Rectangle) -> Rectangle {
 }
 
 impl<'a, M: Clone + 'a> Widget<M, iced::Theme, iced::Renderer> for TakesTheKeyboard<'a, M> {
-    fn children(&self) -> Vec<Tree> {
-        vec![Tree::new(&self.content)]
-    }
+    forward_to_child!(content, M, iced::Theme, iced::Renderer;
+        children, size, layout, mouse_interaction, operate, overlay);
 
     fn diff(&self, tree: &mut Tree) {
         // A rebuild is where the application's answer can be seen changing, and the only place: a
@@ -286,21 +286,6 @@ impl<'a, M: Clone + 'a> Widget<M, iced::Theme, iced::Renderer> for TakesTheKeybo
 
     fn state(&self) -> tree::State {
         tree::State::new(Focus::default())
-    }
-
-    fn size(&self) -> Size<Length> {
-        self.content.as_widget().size()
-    }
-
-    fn layout(
-        &mut self,
-        tree: &mut Tree,
-        renderer: &iced::Renderer,
-        limits: &layout::Limits,
-    ) -> layout::Node {
-        self.content
-            .as_widget_mut()
-            .layout(&mut tree.children[0], renderer, limits)
     }
 
     fn draw(
@@ -454,68 +439,6 @@ impl<'a, M: Clone + 'a> Widget<M, iced::Theme, iced::Renderer> for TakesTheKeybo
                 shell.publish(on_focus_change(now));
             }
         }
-    }
-
-    fn operate(
-        &mut self,
-        tree: &mut Tree,
-        layout: Layout<'_>,
-        renderer: &iced::Renderer,
-        operation: &mut dyn Operation,
-    ) {
-        if self.enabled {
-            operation.focusable(
-                None,
-                layout.bounds(),
-                tree.state.downcast_mut::<Focus>() as &mut dyn operation::Focusable,
-            );
-            // The same state again, whole: `Focusable` can say "focused" but not whether that is
-            // shown, and a sliding rail row hands both to the form it draws (feature 030 FR-007).
-            // Under the same condition, so the n-th state offered is the n-th focusable.
-            operation.custom(None, layout.bounds(), tree.state.downcast_mut::<Focus>());
-        }
-        operation.traverse(&mut |operation| {
-            self.content.as_widget_mut().operate(
-                &mut tree.children[0],
-                layout,
-                renderer,
-                operation,
-            );
-        });
-    }
-
-    fn mouse_interaction(
-        &self,
-        tree: &Tree,
-        layout: Layout<'_>,
-        cursor: mouse::Cursor,
-        viewport: &Rectangle,
-        renderer: &iced::Renderer,
-    ) -> mouse::Interaction {
-        self.content.as_widget().mouse_interaction(
-            &tree.children[0],
-            layout,
-            cursor,
-            viewport,
-            renderer,
-        )
-    }
-
-    fn overlay<'b>(
-        &'b mut self,
-        tree: &'b mut Tree,
-        layout: Layout<'b>,
-        renderer: &iced::Renderer,
-        viewport: &Rectangle,
-        translation: Vector,
-    ) -> Option<overlay::Element<'b, M, iced::Theme, iced::Renderer>> {
-        self.content.as_widget_mut().overlay(
-            &mut tree.children[0],
-            layout,
-            renderer,
-            viewport,
-            translation,
-        )
     }
 }
 
