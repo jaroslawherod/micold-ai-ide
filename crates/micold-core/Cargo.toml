@@ -20,6 +20,8 @@ path = "src/lib.rs"
 # platform, which is the property that keeps the adapter layer's cross-platform coverage honest
 # (Principle VI). The `sandbox-runtime` CI job turns it on, on Linux only.
 sandbox-real-runtime = []
+# Feature 489: the stale-daemon fixture suffix is honoured only under this feature (research R10).
+ssh-real-runtime = []
 
 [dependencies]
 serde = { workspace = true }

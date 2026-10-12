@@ -9,14 +9,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #489
 - **Worktree branch**: feat/489_run-the-session-daemon-on-a-remote-host-over-ssh
 - **Started**: 2026-10-12
-- **Phase**: tasks (reviewed, clean; design PR open)
-- **Next step**: milestone M1 after the design PR merges
+- **Phase**: implement M1
+- **Next step**: M1 implement, continue from Handover (fresh unit)
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| #789 | Design (spec, plan, tasks) | open | — |
+| #789 | Design (spec, plan, tasks) | merged | 63838fce6f95ea5195529109ba0e0b1073530135 |
 
 ## Milestones
 
@@ -59,9 +59,71 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+Unit M1 (implement, T001-T027) stopped at the 150k context cap. WIP commit on the branch, not pushed,
+no PR yet. Gate/review/PR still to do after implement.
+
+Done (uncommitted-to-gate, nothing compiled yet; tasks.md boxes NOT ticked):
+- T001 `process` feature on workspace tokio; T002 `ssh-real-runtime` feature (core + daemon) and
+  `mise run test-ssh` task (mise.toml).
+- Written, never compiled, in `crates/micold-core/src/ssh/`: `mod.rs` (declares argv, classify,
+  provision, stdio, target; re-exports `ClientPlatform, SshCommand, ReasonContext, SshFailure,
+  Artefacts, ProvisionProgress, SshHost, SshOutput, SshRunner, SshStdio, SshSettings, SshTarget`),
+  `target.rs` (T005+T012, with tests), `argv.rs` (T006+T013, with tests), `classify.rs`
+  (T007+T014, with tests), `stdio.rs` (SshStdio from_parts/from_child, StderrTail, with a test).
+  Tests were written WITH the code (test-after for these pure modules): run a deliberate-mutant
+  check on a couple before claiming red, and say so in tdd/cycle-log.md. `lib.rs` has NOT yet got
+  `pub mod ssh;`. `mod.rs` re-exports names from `provision` that do not exist yet.
+
+Next steps (design decided, see below):
+1. `ssh/provision.rs` (T009+T016): traits `SshRunner` (`run(cmd, stdin: Vec<u8>, deadline,
+   progress) -> BoxFuture<io::Result<SshOutput{status, stdout, stderr, timed_out}>>`, `open(cmd) ->
+   io::Result<SshStdio>`), `Artefacts` (own daemon bytes; bundled `<os>-<arch>` bytes), `SshHost =
+   SshRunner + Artefacts`; `parse_probe` of `MICOLD_PROBE os= arch= home_writable= have= dir=`
+   (os `Linux`->linux, `Darwin`->macos; arch x86_64, aarch64|arm64); pure `select_artefact(client
+   platform+arch, remote os/arch)` (own when equal, else bundled, else `NoMatchingBuild`); sequence
+   probe -> copy only if `have=0` (progress %) -> re-probe -> `open(bridge)`; `connect()` returns
+   `Connected` via `connect::handshake_with(Transport::Ssh(stdio), ..)` mapping errors with
+   `StderrTail` to `HelperFailed`. Fixed 15 s deadline (`DEFAULT_CONNECT_TIMEOUT_SECS`); ConnectTimeout
+   from `ssh -G` is M5. Tests over a fake `SshRunner` (duplex stand-in for the remote end).
+2. Core wiring (T015, T018): `pub mod ssh;` in lib.rs; `DaemonRuntime::Ssh(SshSettings)` in
+   daemons.rs (label "Remote over SSH", startable; custom Serialize/Deserialize there: kind "ssh",
+   flat host/user/port/key_file; bad entry -> `Unsupported`); registry `check` validates the target
+   and returns `InvalidField`; add `DaemonEvent::StartFailed(String)` (Starting -> Unreachable at
+   once; ssh runtimes make one attempt) ; settings.rs round trip with no `settings_version` bump;
+   `Transport::Ssh(SshStdio)` in connect.rs (delegate! macro + dial arms), `DialAddress::Ssh(SshTarget)`
+   in endpoint.rs (`describe`, `socket_addr` None), `RemotePlacement` carries `SshTarget` (currently
+   private `host: String`, `#[non_exhaustive]`; used in logout_survival.rs:232 test),
+   `Placement::from_runtime(Ssh)` -> `Remote`, `connect_or_start` Remote arm unchanged (error).
+   `endpoint.rs` needs a pinned `resolve` for the helper: `/tmp/micold-<uid>` ignoring
+   XDG_RUNTIME_DIR (research R2); the bridge spawns the daemon with `XDG_RUNTIME_DIR` removed so it
+   binds the same endpoint (macOS is HOME-based already).
+3. Daemon helper (T010, T017): `crates/micold-daemon/src/remote.rs` `bridge` (resolve pinned endpoint,
+   dial, spawn detached daemon + poll like `connect::connect_or_spawn` (SPAWN_TIMEOUT, RESPAWN_AFTER),
+   relay stdin<->socket byte-for-byte, stdout only relayed bytes) and `prune --keep N`; dispatch in
+   main.rs beside `status-line` (before the runtime/singleton). `status`/`stop` are M7, not M1.
+4. Harness + e2e (T004, T022): `crates/micold-daemon/tests/ssh_real_support/{mod,sshd}.rs` (rootless
+   sshd on loopback, host+client keys, authorized_keys, private ssh config `Host` alias, skip with a
+   printed reason when sshd missing), `tests/ssh_real_endtoend.rs` part 1 (names must start `ssh_real_`).
+5. Client (T011, T019, T020, T021, T023-T025): `Dial::Ssh{target}` in client/src/daemon.rs
+   `actor_specs` (exclude an `Ssh` entry whose state is Unreachable so no retry; Start re-adds);
+   actor calls a runner installed with `daemon::set_ssh_host(Arc<dyn SshHost>)` (a replaceable
+   global; the real `SystemSsh` + artefact reader is defined and installed only in
+   client/src/shell/ (daemons.rs), Windows `ssh.exe` lookup (PATH, then
+   `%SystemRoot%\System32\OpenSSH\ssh.exe`), CREATE_NO_WINDOW; not a port in inventory PORTS so the
+   no_concrete_implementations guard is unaffected, re-run it); on failure send
+   `ConnectionMsg::StartFailed(reason)` and end the stream; copy progress as
+   `ConnectionMsg::Progress(u8)` -> shown as `copying daemon to <host> (<n>%)`; Draft/Msg SSH fields
+   in features/daemons.rs; form + geometry case in ui/settings/daemons.rs; connected row shows
+   version and `user@host:port` (DaemonView.endpoint).
+6. T026 CI job `ssh-remote` (.github/workflows/ci.yml) + docs/development/ci-pipeline.md; T027
+   docs/user-guide/remote-daemons.md, SUMMARY.md, settings.md, sandboxed-daemon.md links, docs/daemon.md.
+7. Then: tdd/cycle-log.md (no tdd/test-list.md exists for 489: tasks.md already orders tests first; the
+   mandatory tdd hook could not run `speckit.tdd.plan`; note it), tick T001-T027, scoped gate with
+   review A (`code-review` high) in its shadow, review B (conformance), full `mise run gate`, PR
+   `feat(489): remote over SSH daemon connects (#489)` with body per tasks/pr.md.
 
 ## Open escalation
+
 
 None.
 
