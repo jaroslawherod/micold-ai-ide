@@ -74,10 +74,11 @@ Next steps:
 1. T004+T022 harness + e2e: `crates/micold-daemon/tests/ssh_real_support/{mod,sshd}.rs` (rootless
    sshd on loopback, keys, authorized_keys, private config `Host` alias, skip with printed reason),
    `tests/ssh_real_endtoend.rs` part 1 (names start `ssh_real_`). Needs a `SystemSsh` runner
-   usable from the test: put the real runner in micold-core `ssh/system.rs` (spawn `ssh`,
-   `kill_on_drop`, deadline watchdog, chunked stdin with progress) if it is simplest, and have the
-   client shell install it (plan said client/shell only; core placement is fine if
-   `no_concrete_implementations.rs` stays green - re-run it).
+   usable from the test: DONE as `micold_core::ssh::SystemSsh` (core `ssh/system.rs`: spawns ssh,
+   kill_on_drop, deadline, chunked stdin + progress, `own_daemon`/`bundled_dir`/`ssh_path` fields;
+   tested). The client shell constructs and installs it (T019); re-run
+   `crates/micold-client/tests/no_concrete_implementations.rs`. Windows `ssh.exe` lookup (PATH,
+   then `%SystemRoot%\System32\OpenSSH\ssh.exe`) is still to do, in the shell, via `ssh_path`.
 2. T011, T019-T021, T023-T025 client: `Dial::Ssh{target}` in client/src/daemon.rs `actor_specs`
    (an `Ssh` entry whose state is Unreachable is not dialled; Start re-adds), actor calls
    `ssh::provision::connect`, on failure sends `StartFailed(reason)` and ends; copy progress ->
