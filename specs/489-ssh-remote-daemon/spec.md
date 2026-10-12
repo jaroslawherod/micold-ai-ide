@@ -211,14 +211,6 @@ and read the explanation.
   `ConnectTimeout` of the user's SSH configuration for the host, or 15 seconds when it sets none.
 - **FR-010**: The system MUST refuse a host key that is unknown or has changed, and MUST NOT accept
   or record one on the user's behalf.
-- **FR-019**: While its daemon is `reconnecting`, a session MUST be shown as `disconnected` (it may
-  return), never as running or finished. When the client reconnects and the daemon is found restarted
-  or without that session, the session MUST be shown as `lost to its daemon`, the term of spec 491.
-- **FR-020**: A remote daemon MUST support the `auto_start` choice of spec 491: when set, the daemon is
-  connected when the app launches.
-- **FR-021**: When several clients are connected to one remote daemon, each MUST see the same sessions,
-  input from a client MUST reach only the session it was sent to, and one client disconnecting MUST
-  leave the others connected.
 - **FR-011**: The system MUST detect a client and remote daemon version mismatch in both directions,
   mark the daemon `version mismatch`, state both versions and the way out, and MUST NOT start sessions
   on a mismatched daemon.
@@ -242,6 +234,14 @@ and read the explanation.
   on demand by a documented task, and run in CI.
 - **FR-018**: Every user-facing behaviour above MUST work equivalently on Linux, macOS and Windows
   clients.
+- **FR-019**: While its daemon is `reconnecting`, or `unreachable` after a connection was established, a session MUST be shown as `disconnected` (it may
+  return), never as running or finished. When the client reconnects and the daemon is found restarted
+  or without that session, the session MUST be shown as `lost to its daemon`, the term of spec 491.
+- **FR-020**: A remote daemon MUST support the connect-at-launch choice of spec 491: when set, the daemon is
+  connected when the app launches.
+- **FR-021**: When several clients are connected to one remote daemon, each MUST see the same sessions,
+  input from a client MUST reach only the session it was sent to, and one client disconnecting MUST
+  leave the others connected.
 
 ### Key Entities
 
@@ -261,8 +261,8 @@ and read the explanation.
   terminal on it in under 3 minutes, without opening a port or running anything on the host by hand.
 - **SC-002**: After a network drop of up to 10 minutes, 100% of remote sessions that were running are
   still running and shown with their output once the network is back, and the client is connected
-  again within 30 seconds of the network returning (attempt delay is capped at 15 s, FR-007), without user action.
-- **SC-003**: Every SSH failure class in FR-009 shows a named reason within the connection timeout (FR-009: SSH configuration's `ConnectTimeout`, else 15 s);
+  again within 30 seconds of the network returning (FR-007), without user action.
+- **SC-003**: Every SSH failure class in FR-009 shows a named reason within the connection timeout (FR-009);
   0 failures present as a hang.
 - **SC-004**: While a remote daemon is unreachable or reconnecting, 0 local sessions are interrupted
   and local input is accepted with no added delay visible to the user.
