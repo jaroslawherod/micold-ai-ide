@@ -29,8 +29,7 @@ fields and not written back (FR-010).
 
 ## Wire
 
-`SessionSummary.agents: Vec<AgentRunSummary>` (same fields). `PROTOCOL_VERSION` 40 -> 41, which also
-covers removal of the worktree attach messages/status (R-C).
+`SessionSummary.agents: Vec<AgentRunSummary>` (same fields). `PROTOCOL_VERSION` 40 -> 41 (M2); the removal of the worktree attach messages/status (R-C, M3) bumps it to 42.
 
 ## Removed
 
