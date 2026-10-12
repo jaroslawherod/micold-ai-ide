@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #776
 - **Worktree branch**: feat/776_one-session-per-worktree-chosen-at-start
 - **Started**: 2026-10-12
-- **Phase**: spec (done)
-- **Next step**: clarify unit: resolve FR-011, FR-012, FR-013 (and the agent-initiated provider-resume case of FR-008b) in specs/776-one-session-per-worktree/spec.md
+- **Phase**: clarify (done)
+- **Next step**: plan unit
 
 ## Pull requests
 
@@ -46,10 +46,7 @@ None.
 
 ## Open escalation
 
-Clarify round 1 (FR-008b agent case resolved from repo, see spec Clarifications). Awaiting the user on:
-1. FR-011 Default (project root): does one-session-per-location hold? Recommended: yes, same rule (constitution Principle III says "MAY host session(s)", permits, does not require several; the issue's build-lock/index/file races apply at the root equally).
-2. FR-012 attach with several resumable sessions per worktree: Recommended: a single resume is the user's pick; "attach all" catalogues the most recent per worktree and leaves the rest listed as resumable.
-3. FR-013 legacy catalogs: Recommended: keep every record listed and untouched (SC-005), create none, refuse starting an extra while another in that worktree is starting/running; user may delete extras. Needs an SC-001 carve-out for legacy data.
+None.
 
 ## Follow-ups not done
 
