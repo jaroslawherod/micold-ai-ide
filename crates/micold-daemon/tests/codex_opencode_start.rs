@@ -105,9 +105,19 @@ impl Fixture {
                 sessions: [(
                     project.path().to_path_buf(),
                     vec![
-                        session(sid(3), Some("caller"), TerminalMode::AiCli, AiCli::ClaudeCode),
+                        session(
+                            sid(3),
+                            Some("caller"),
+                            TerminalMode::AiCli,
+                            AiCli::ClaudeCode,
+                        ),
                         session(sid(4), Some("codex"), TerminalMode::AiCli, AiCli::Codex),
-                        session(sid(5), Some("opencode"), TerminalMode::AiCli, AiCli::OpenCode),
+                        session(
+                            sid(5),
+                            Some("opencode"),
+                            TerminalMode::AiCli,
+                            AiCli::OpenCode,
+                        ),
                     ],
                 )]
                 .into(),

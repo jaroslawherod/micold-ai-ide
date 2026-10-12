@@ -128,7 +128,12 @@ impl Sandbox {
                     true,
                     vec![
                         session(sid(IDLE), None, TerminalMode::AiCli, AiCli::ClaudeCode),
-                        session(sid(S1), Some("caller"), TerminalMode::AiCli, AiCli::ClaudeCode),
+                        session(
+                            sid(S1),
+                            Some("caller"),
+                            TerminalMode::AiCli,
+                            AiCli::ClaudeCode,
+                        ),
                     ],
                 ),
                 (
