@@ -48,7 +48,7 @@ the status read; no retry inside a read.
 - [x] **I. Test-First**: every task pairs a failing test first; decision logic (query, parse, diff
   split, reducer) lands in `micold-core` and the render-free `features/changes.rs`. Only `ui/changes.rs`
   rendering and the `shell/` spawn wiring rely on the quickstart exception.
-- [x] **II. Multi-Session**: the list is keyed by (project, branch) and shared by every session of
+- [x] **II. Multi-Session**: the list is read per (project, branch) and held by the entry's one view, shared by every session of
   the worktree (one read serves them); the selected PR is remembered per (project, entry), so no
   state crosses entries (FR-010, FR-013).
 - [x] **III. Worktree**: the branch comes from the listed worktree (`worktree.branch`); Default
@@ -79,7 +79,7 @@ No violation: Complexity Tracking is empty.
 | FR-003 | `BranchPrState` (new core enum: Open/Draft/Merged/Closed, no check status); one mapping `BranchPrState -> material::PrMark` used by `ui/changes.rs` |
 | FR-004 | `PullRequestSource::diff` (§2), `review/pr_diff.rs::split_pr_diff`, `Source::PullRequest` in `OpenView` (data-model §2) |
 | FR-005, FR-006, FR-013 | `Msg::SourceChosen`, `Source`, `State.remembered` (data-model §2, §3) |
-| FR-007, FR-012 | `shell/pr_status.rs` fires `Msg::PullRequestsStale`/refresh on the status triggers; `PrList.read_at` with `is_stale` |
+| FR-007, FR-012 | `shell/pr_status.rs` fires `Msg::PullRequestsWanted` on the status triggers; `PrList.read_at` with `is_stale` |
 | FR-008, FR-009, FR-014 | read failure maps to `PrList::Unavailable`, no `notice`; separate effect; gated on `app.core.pr_status.enabled` |
 
 ## Test strategy
@@ -123,7 +123,7 @@ crates/micold-client/src/
 ├── shell/changes.rs       # + hands ReadPullRequests / ReadPullRequestDiff effects to shell/pr_status.rs
 ├── shell/pr_status.rs     # + the ONE place that calls `(tooling.pull_requests)(gh)` (one factory call, then `read`, `list_branch` and `diff` on the returned source; no second call line): new `list_branch`/`diff` runs live here, and it requests the list on the status triggers while a view is open
 ├── ui/changes.rs          # + pull_request_section
-├── ui/material/           # NEW PullRequestRow builder, promoted from the sidebar-private row_pull_request and added to showcase sections/review.rs
+├── ui/material/           # NEW pull_request_row.rs: PullRequestRow builder composing PullRequestIndicator; registered in showcase/catalogue.rs, shown in showcase/sections/review.rs
 crates/micold-client/tests/features_changes.rs, features_pr_changes.rs (NEW); main_tests.rs `BlockingSource` implements the new trait methods
 crates/micold-core/src/session.rs  # SessionLocation derives PartialOrd, Ord (key of `remembered`)
 crates/micold-client/src/features/pr_status.rs # `paused` made `pub` for the rate-limit hold

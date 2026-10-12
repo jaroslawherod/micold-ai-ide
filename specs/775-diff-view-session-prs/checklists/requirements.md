@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain (1 open: deleted-head PR diff source, for the clarify unit)
+- [x] No [NEEDS CLARIFICATION] markers remain (resolved in spec.md Clarifications, session 2026-10-12)
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
@@ -31,4 +31,4 @@
 
 ## Notes
 
-- One open marker is left for the clarify unit.
+- The deleted-head marker was resolved by the clarify unit.
