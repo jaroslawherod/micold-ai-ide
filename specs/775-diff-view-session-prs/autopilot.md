@@ -16,6 +16,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
+| #782 | Design PR (spec, plan, tasks) | open | — |
 
 ## Milestones
 
