@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #489
 - **Worktree branch**: feat/489_run-the-session-daemon-on-a-remote-host-over-ssh
 - **Started**: 2026-10-12
-- **Phase**: spec (done); next clarify
-- **Next step**: (clarify round 1 awaiting user answers, see Open escalation) Run the clarify unit on specs/489-ssh-remote-daemon/spec.md: two [NEEDS CLARIFICATION] markers (daemon delivery to host; replacing a mismatched daemon with running sessions)
+- **Phase**: clarify (done); next plan
+- **Next step**: Run the plan unit for specs/489-ssh-remote-daemon
 
 ## Pull requests
 
@@ -23,6 +23,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 
 ## Decisions
+
+- Clarify Q1: daemon delivered by the client copying its own matching build over SSH to a per-user dir _(decided by user)_.
+- Clarify Q2: mismatched remote daemon is explained only; replacement offered only with no running sessions _(decided by user)_.
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
@@ -45,11 +48,7 @@ None.
 
 ## Open escalation
 
-Clarify round 1 (category 5, product decision; repo does not settle either, checked spec 491, constitution, docs):
-
-- Q1: How does the daemon binary reach the remote host? Options: (a) client copies its own matching build over SSH to a per-user dir (Recommended: no network on host, always version-matched, needs no manual step per SC-001); (b) host downloads a release; (c) user installs it.
-- Q2: May the client replace a version-mismatched remote daemon that has running sessions? Options: (a) explain only, user decides; offer replace only when it has no running sessions (Recommended: protects running sessions, FR-006); (b) client may replace after explicit confirmation naming the sessions that end; (c) always replace automatically.
-
+None.
 
 ## Follow-ups not done
 
