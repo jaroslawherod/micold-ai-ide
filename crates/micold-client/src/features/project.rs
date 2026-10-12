@@ -166,7 +166,7 @@ impl Registered for ProjectSwitcher {
 
 /// A project row's right-click menu, as a floating surface (feature 021, T031).
 ///
-/// [`Layer::ContextMenu`] rather than [`Layer::Popover`]: it is opened *over* the switcher it was
+/// [`micold_core::overlay::Layer::ContextMenu`] rather than [`micold_core::overlay::Layer::Popover`]: it is opened *over* the switcher it was
 /// right-clicked in, and the row it acts on has to stay visible behind it. That was a property of
 /// the order `ui::view` happened to build the two in; declaring the band makes it a property of
 /// what the menu is.
