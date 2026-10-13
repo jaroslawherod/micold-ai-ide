@@ -4592,6 +4592,21 @@ impl DaemonState {
         changed
     }
 
+    /// Record a provider-native agent report against its origin `session` (feature 552, FR-004).
+    /// Returns `true` when the recorded runs changed, so the caller broadcasts the catalog. A
+    /// report for a session the catalog does not hold records nothing (FR-008).
+    ///
+    /// **Never reaches the activity state machine** (FR-007): a sub-agent finishing is not the end
+    /// of the origin's turn, so `note_activity` is not called. The change is written by
+    /// [`Self::persist_attention`] from the supervisor tick, as attention events are.
+    pub fn note_agent_signal(&self, session: SessionId, signal: micold_core::agent_run::AgentSignal) -> bool {
+        let mut guard = self.lock();
+        let inner = &mut *guard;
+        let changed = inner.catalog.record_agent_signal(session, signal);
+        inner.attention_unsaved |= changed;
+        changed
+    }
+
     /// Record that `session`'s CLI is ready for its first prompt (feature 034, FR-017). A no-op for
     /// a session that is not live.
     pub fn mark_ready_for_input(&self, session: SessionId) {

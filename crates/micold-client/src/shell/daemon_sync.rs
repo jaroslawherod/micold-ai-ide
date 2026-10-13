@@ -3272,6 +3272,7 @@ pub(crate) mod tests {
             live_shells: Vec::new(),
             attention_seq: 0,
             unread: false,
+            agents: Vec::new(),
         }
     }
 

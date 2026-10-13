@@ -1278,7 +1278,15 @@ pub struct SessionSummary {
     /// Whether the session has had an attention event since a window last reported it in view
     /// (feature 039, W2). Durable, as `attention_seq` is, and the same for every window (FR-024).
     pub unread: bool,
+    /// The agent runs the AI CLI reported against this session (feature 552, FR-004, FR-011), for
+    /// the session tree (#551) to nest. Durable; empty for a session no signal named a run of, and
+    /// for a frame from before protocol 42.
+    #[serde(default)]
+    pub agents: Vec<AgentRunSummary>,
 }
+
+/// One agent run on a [`SessionSummary`] — the stored form, unchanged (feature 552).
+pub type AgentRunSummary = crate::agent_run::AgentRun;
 
 /// What a window reports having in view: the fields of [`ClientMsg::WindowView`], as the client
 /// remembers its last report and the service keeps one per connection (feature 039, W1.1, W1.2).
@@ -1832,6 +1840,7 @@ mod attention_wire_tests {
             live_shells: Vec::new(),
             attention_seq: COUNTED,
             unread: false,
+            agents: Vec::new(),
         };
 
         assert_eq!(
@@ -1856,6 +1865,7 @@ mod attention_wire_tests {
             // `true` is the value no default produces, so a field that never encoded cannot read
             // back as it.
             unread: true,
+            agents: Vec::new(),
         };
 
         assert!(

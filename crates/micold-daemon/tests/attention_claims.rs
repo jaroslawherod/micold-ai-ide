@@ -284,7 +284,7 @@ async fn a_refused_permission_ending_the_turn_adds_nothing() {
     assert!(kinds(&claims(&mut window, b, 2).await).is_empty());
 }
 
-/// FR-024: Claude Code's `SubagentStop`, posted to the hook receiver mid-turn and while paused,
+/// FR-024, 552 FR-007: Claude Code's `SubagentStop` (now registered and recorded), posted to the hook receiver mid-turn and while paused,
 /// changes no signal, counts nothing and marks nothing unread; the turn across it still ends as a
 /// long task.
 #[tokio::test]
@@ -307,7 +307,7 @@ async fn a_helper_agent_finishing_changes_nothing() {
         Arc::clone(&service.state),
     ));
     let subagent_stop = || async {
-        let body = r#"{"hook_event_name":"SubagentStop"}"#;
+        let body = r#"{"hook_event_name":"SubagentStop","agent_id":"a1","agent_type":"Explore"}"#;
         let mut stream = tokio::net::TcpStream::connect(&addr)
             .await
             .expect("connect");
@@ -329,6 +329,9 @@ async fn a_helper_agent_finishing_changes_nothing() {
     subagent_stop().await;
     assert_eq!(service.attention_seq(b), 0, "mid-turn: nothing counted");
     assert!(!service.unread(b), "mid-turn: not unread");
+    // Registered and recorded (feature 552, FR-007): the run is on the session, its activity not.
+    let snapshot = service.state.catalog_snapshot();
+    assert_eq!(attention::summary(&snapshot, b).agents.len(), 1);
 
     service.signal(b, HookKind::Notification);
     service.signal(b, HookKind::PreToolUse);

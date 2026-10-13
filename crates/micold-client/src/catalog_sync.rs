@@ -493,6 +493,7 @@ mod tests {
                             attention_seq: 0,
                             unread: false,
                             provider: micold_core::session::AiCli::ClaudeCode,
+                            agents: Vec::new(),
                         })
                         .collect(),
                 })

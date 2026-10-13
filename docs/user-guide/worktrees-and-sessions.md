@@ -257,6 +257,15 @@ Every row is **fully live**: you can start a session in one, rename it, or delet
 same confirmation as any other worktree. Deleting a worktree an agent is still using will disrupt
 whatever it was doing, exactly as it would from a terminal.
 
+### Sub-agent runs
+
+When Claude Code starts a sub-agent inside a session, Claude Code itself reports it (its
+`SubagentStart` and `SubagentStop` events), and the app records the run against that session. The
+record is kept across restarts of the app's background service; a run that was still going when the
+session ended or the service restarted is shown as stopped. Recording a run changes nothing in the
+sidebar yet: no worktree or session is hidden, moved or marked busy because of it. Claude Code's
+`claude --bg` background sessions send no such report and are not recognised.
+
 Worktrees kept anywhere else on disk are listed only when you asked for them; see
 [Including a worktree that already exists](#including-a-worktree-that-already-exists).
 

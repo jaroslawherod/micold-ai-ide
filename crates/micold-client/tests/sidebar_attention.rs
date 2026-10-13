@@ -423,6 +423,7 @@ fn catalog(sessions: &[(SessionId, Option<&str>, bool)]) -> CatalogSnapshot {
                     live_shells: Vec::new(),
                     attention_seq: 1,
                     unread,
+                    agents: Vec::new(),
                 })
                 .collect(),
         }],

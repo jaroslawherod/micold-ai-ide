@@ -355,6 +355,10 @@ pub struct Session {
     /// (feature 039, FR-016). Persisted (FR-008a); only the session service sets and clears it,
     /// and a session written before the feature reads `false`.
     pub unread: bool,
+    /// The agent runs the AI CLI reported against this session (feature 552, FR-004, FR-005):
+    /// persisted, bounded, and never read from a name. A `Running` run is `Stopped` once the
+    /// session exits or the daemon restarts.
+    pub agents: Vec<crate::agent_run::AgentRun>,
 }
 
 impl Session {
@@ -378,6 +382,7 @@ impl Session {
             archived: false,
             attention_seq: 0,
             unread: false,
+            agents: Vec::new(),
         }
     }
 
@@ -409,6 +414,7 @@ impl Session {
             archived: false,
             attention_seq: 0,
             unread: false,
+            agents: Vec::new(),
         }
     }
 

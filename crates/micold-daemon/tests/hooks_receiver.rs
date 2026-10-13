@@ -537,3 +537,59 @@ mod status_line_block {
         assert!(f.relay_file().exists());
     }
 }
+
+/// Feature 552, contract C2: a sub-agent start and stop posted for a known session are recorded
+/// on it; a report with no `agent_id` is answered `200` and records nothing; invalid JSON is `400`.
+/// The activity state is not touched, and the body is not echoed.
+#[tokio::test]
+async fn sub_agent_reports_are_recorded_on_the_origin_session() {
+    let id = SessionId::from_uuid(Uuid::from_u128(SESSION_U128));
+    let (state, _project, _store) = state_with_session(id);
+    let cat = register_cat(&state, id);
+
+    let (receiver, listener) = HookReceiver::bind(std::env::temp_dir().join("micold-hooks-test"))
+        .await
+        .expect("bind receiver");
+    let token = receiver.token_for(id);
+    let addr = listener.local_addr().unwrap().to_string();
+    tokio::spawn(micold_daemon::hooks::serve(
+        listener,
+        receiver.tokens(),
+        Arc::clone(&state),
+    ));
+    let agents = || {
+        state
+            .catalog_snapshot()
+            .projects
+            .into_iter()
+            .flat_map(|p| p.sessions)
+            .find(|s| s.id == id)
+            .expect("session in snapshot")
+            .agents
+    };
+
+    let start = r#"{"hook_event_name":"SubagentStart","agent_id":"a15f822c8aa66a621","agent_type":"Explore"}"#;
+    assert_eq!(post_hook(&addr, id.0, Some(&token), start).await, 200);
+    assert_eq!(agents().len(), 1);
+    assert_eq!(agents()[0].state, micold_core::agent_run::AgentRunState::Running);
+
+    let stop = r#"{"hook_event_name":"SubagentStop","agent_id":"a15f822c8aa66a621","agent_transcript_path":"/t/a.jsonl"}"#;
+    assert_eq!(post_hook(&addr, id.0, Some(&token), stop).await, 200);
+    let runs = agents();
+    assert_eq!(runs.len(), 1);
+    assert_eq!(runs[0].state, micold_core::agent_run::AgentRunState::Stopped);
+    assert_eq!(runs[0].transcript.as_deref(), Some("/t/a.jsonl"));
+    assert_eq!(activity(&state, id), ActivitySignal::Unknown);
+
+    for ignored in [
+        r#"{"hook_event_name":"SubagentStart"}"#,
+        r#"{"hook_event_name":"SubagentStop","agent_id":""}"#,
+        r#"{"hook_event_name":"SubagentStop","agent_id":42}"#,
+    ] {
+        assert_eq!(post_hook(&addr, id.0, Some(&token), ignored).await, 200, "{ignored}");
+    }
+    assert_eq!(agents().len(), 1, "nothing more was recorded");
+    assert_eq!(post_hook(&addr, id.0, Some(&token), "{not json").await, 400);
+
+    cat.kill().expect("kill");
+}

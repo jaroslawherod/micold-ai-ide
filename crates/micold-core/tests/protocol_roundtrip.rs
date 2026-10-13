@@ -430,6 +430,14 @@ fn sample_summary() -> SessionSummary {
         attention_seq: 5,
         // `true`, for the same reason: a field that never encoded would read back as `false`.
         unread: true,
+        // One run no default produces: a field that never encoded would read back empty (552).
+        agents: vec![micold_core::agent_run::AgentRun {
+            agent_id: "a15f822c8aa66a621".into(),
+            agent_type: Some("Explore".into()),
+            transcript: None,
+            state: micold_core::agent_run::AgentRunState::Running,
+            provider: AiCli::ClaudeCode,
+        }],
     }
 }
 
@@ -889,7 +897,7 @@ fn a_merged_branch_check_and_its_answers_round_trip_in_order() {
 /// behaviour; the version moved with the hash.
 #[test]
 fn frames_without_the_feature_776_fields_decode_with_the_defaults() {
-    assert_eq!(PROTOCOL_VERSION, 42);
+    assert!(PROTOCOL_VERSION >= 42);
 
     let create: ClientMsg = serde_json::from_str(
         r#"{"WorktreeCreate":{"req":1,"project":"/a","branch":"b","dir_name":"d","mode":"NewBranch"}}"#,
@@ -1799,4 +1807,20 @@ fn the_plan_usage_settings_round_trip_in_daemon_settings_and_settings_set() {
             other => panic!("expected SettingsSet, got {other:?}"),
         }
     }
+}
+
+/// Feature 552: the agent runs travel on the summary, and a frame from before them decodes empty.
+#[test]
+fn a_session_summary_carries_its_agent_runs_and_defaults_to_none() {
+    let summary = sample_summary();
+    let json = serde_json::to_string(&summary).unwrap();
+    let back: SessionSummary = serde_json::from_str(&json).unwrap();
+    assert_eq!(back.agents, summary.agents);
+    assert_eq!(back.agents.len(), 1);
+
+    let mut value: serde_json::Value = serde_json::from_str(&json).unwrap();
+    value.as_object_mut().unwrap().remove("agents");
+    let older: SessionSummary = serde_json::from_value(value).unwrap();
+    assert!(older.agents.is_empty());
+    assert_eq!(PROTOCOL_VERSION, 42);
 }

@@ -118,6 +118,16 @@ and nothing is done.
 Requests that would be refused anyway never show a dialog. A session cannot stop, interrupt or
 delete itself, or delete the worktree it runs in; ask from another session, or use the sidebar.
 
+### Sub-agent runs
+
+The app registers for Claude Code's `SubagentStart` and `SubagentStop` events in each Claude Code
+session it starts, and records each sub-agent run on the session that owns it: the run's id, its
+kind and whether it is still going. The record is kept across restarts of the service, and a run
+still going at that point is marked stopped. A report that names no run, or comes for a session the
+app does not know, is ignored. Sub-agent runs do not change the session's activity: a sub-agent
+finishing is not the end of the session's turn. Background sessions started with `claude --bg` are
+not reported this way and are not recognised.
+
 ### The first prompt
 
 When `create_session` is given a prompt, it waits until the new session's AI CLI is ready to take

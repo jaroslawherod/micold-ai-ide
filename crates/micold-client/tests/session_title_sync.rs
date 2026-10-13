@@ -231,6 +231,7 @@ mod derived_labels {
                     live_shells: Vec::new(),
                     attention_seq: 0,
                     unread: false,
+                    agents: Vec::new(),
                 }],
             }],
             env_include_failures: Vec::new(),
