@@ -149,7 +149,7 @@ pub fn prune(root: &Path, current: &std::ffi::OsStr, keep: usize) -> io::Result<
             .unwrap_or(std::time::UNIX_EPOCH);
         others.push((modified, entry.path()));
     }
-    others.sort_by(|a, b| b.0.cmp(&a.0));
+    others.sort_by_key(|a| std::cmp::Reverse(a.0));
     for (_, path) in others.into_iter().skip(keep.saturating_sub(1)) {
         let _ = std::fs::remove_dir_all(path);
     }
