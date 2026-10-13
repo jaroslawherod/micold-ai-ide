@@ -20,7 +20,7 @@ rootless `sshd` and are off by default (`mise run test-ssh`).
 - [x] T001 Enable the `process` feature of the workspace `tokio` dependency in `Cargo.toml` (and the crates that use it)
 - [x] T002 Add the off-by-default `ssh-real-runtime` feature to `daemon/Cargo.toml`, forward it to `core/Cargo.toml` (read by `crates/micold-core/build.rs`, T068), and a `test-ssh` task to `mise.toml` (builds the daemon, runs `ssh_real_*` with `--test-threads=1`)
 - [x] T003 Create the `ssh` module skeleton `core/ssh/mod.rs` and export it from `core/lib.rs`
-- [ ] T004 [P] Add the rootless-`sshd` harness `daemon/tests/ssh_real_support/{mod,sshd}.rs`: host and client keys, `authorized_keys`, loopback port, a `Host` alias in a private ssh config, skip with a printed reason when `sshd` is missing
+- [x] T004 [P] Add the rootless-`sshd` harness `daemon/tests/ssh_real_support/{mod,sshd}.rs`: host and client keys, `authorized_keys`, loopback port, a `Host` alias in a private ssh config, skip with a printed reason when `sshd` is missing
 
 ## Phase 2: Foundational
 
@@ -32,7 +32,7 @@ rootless `sshd` and are off by default (`mise run test-ssh`).
 - [x] T008 [P] Test `DaemonRuntime::Ssh` serde round trip, `label()`, `is_startable()`, additive load of an old `settings.json` with no `settings_version` bump in `core/daemons.rs` and `core/settings.rs`
 - [x] T009 [P] Test the provision sequence (probe, copy only when absent, start, reuse a running daemon, permanent failures stop) over a stand-in `SshRunner`, and the artefact-selection table over (client, remote) pairs in `core/ssh/provision.rs`
 - [x] T010 [P] Test `remote bridge` (relays bytes to the daemon's Unix socket, starts the daemon when none runs, reuses a running one) and `remote prune` against a temp endpoint in `daemon/src/remote.rs`
-- [ ] T011 Test the client actor with a stand-in transport: `Dial::Ssh` goes `Starting` to `Connected` with version and endpoint, a permanent failure goes `Unreachable{reason}` with no retry, in `client/daemon.rs`
+- [x] T011 Test the client actor with a stand-in transport: `Dial::Ssh` goes `Starting` to `Connected` with version and endpoint, a permanent failure goes `Unreachable{reason}` with no retry, in `client/daemon.rs`
 
 **Implementation**
 
@@ -43,7 +43,7 @@ rootless `sshd` and are off by default (`mise run test-ssh`).
 - [x] T016 Implement `SshRunner`, the probe, copy and start sequence and artefact selection in `core/ssh/provision.rs`
 - [x] T017 Implement `micold-daemon remote bridge | prune` in `daemon/src/remote.rs` and dispatch it from `daemon/src/main.rs`
 - [x] T018 Add `Transport::Ssh(SshStdio)` in `core/connect.rs`, `DialAddress::Ssh` in `core/endpoint.rs`, and `RemotePlacement` carrying the target in `core/sandbox/placement.rs`
-- [ ] T019 Add `Dial::Ssh` to the actor in `client/daemon.rs` and the one real `SystemSsh` runner (Windows `ssh.exe` lookup and hint, `CREATE_NO_WINDOW`) chosen only in `client/shell/daemons.rs`, with a 15 s watchdog deadline so no connect hangs (the `ConnectTimeout` value replaces it in T063); keep `no_concrete_implementations.rs` green
+- [x] T019 Add `Dial::Ssh` to the actor in `client/daemon.rs` and the one real `SystemSsh` runner (Windows `ssh.exe` lookup and hint, `CREATE_NO_WINDOW`) chosen only in `client/shell/daemons.rs`, with a 15 s watchdog deadline so no connect hangs (the `ConnectTimeout` value replaces it in T063); keep `no_concrete_implementations.rs` green
 
 ## Phase 3: User Story 1 - Work on a remote project end to end (P1) MVP
 
@@ -52,14 +52,14 @@ rootless `sshd` and are off by default (`mise run test-ssh`).
 
 ### Scenario 1: add and start (M1)
 
-- [ ] T020 [P] [US1] Test the Daemons form reducers for an SSH runtime (draft, add, start, `Starting` with copy progress, `Connected` with version and `user@host:port`; `auto_start` applies to an `Ssh` entry, FR-020) in `client/features/daemons.rs`
-- [ ] T021 [P] [US1] Add the geometry-gate case for the SSH fields and state badges of the Daemons form in `client/ui/settings/daemons.rs`
-- [ ] T022 [US1] Write `daemon/tests/ssh_real_endtoend.rs` part 1: add the stand-in host, start, copy build, `Connected` with version and endpoint, no new listener
-- [ ] T023 [US1] Add SSH runtime fields (host, user, port, key file) and messages to `Draft` and `Msg` in `client/features/daemons.rs`
-- [ ] T024 [US1] Render the "Remote over SSH" runtime option and its host, user, port and key file fields in `client/ui/settings/daemons.rs`, reusing the shared text-input and badge builders (Principle VIII)
-- [ ] T025 [US1] Run provisioning from the client and publish copy progress as daemon state in `client/shell/daemons.rs`
-- [ ] T026 [US1] Add CI job `ssh-remote` running `mise run test-ssh` in `.github/workflows/ci.yml`, and document it in `docs/development/ci-pipeline.md`
-- [ ] T027 [US1] Write `docs/user-guide/remote-daemons.md` (add, start, states), link it from `docs/SUMMARY.md`, `docs/user-guide/settings.md` and `docs/user-guide/sandboxed-daemon.md`, and describe the helper in `docs/daemon.md`
+- [x] T020 [P] [US1] Test the Daemons form reducers for an SSH runtime (draft, add, start, `Starting` with copy progress, `Connected` with version and `user@host:port`; `auto_start` applies to an `Ssh` entry, FR-020) in `client/features/daemons.rs`
+- [x] T021 [P] [US1] Add the geometry-gate case for the SSH fields and state badges of the Daemons form in `client/ui/settings/daemons.rs`
+- [x] T022 [US1] Write `daemon/tests/ssh_real_endtoend.rs` part 1: add the stand-in host, start, copy build, `Connected` with version and endpoint, no new listener
+- [x] T023 [US1] Add SSH runtime fields (host, user, port, key file) and messages to `Draft` and `Msg` in `client/features/daemons.rs`
+- [x] T024 [US1] Render the "Remote over SSH" runtime option and its host, user, port and key file fields in `client/ui/settings/daemons.rs`, reusing the shared text-input and badge builders (Principle VIII)
+- [x] T025 [US1] Run provisioning from the client and publish copy progress as daemon state in `client/shell/daemons.rs`
+- [x] T026 [US1] Add CI job `ssh-remote` running `mise run test-ssh` in `.github/workflows/ci.yml`, and document it in `docs/development/ci-pipeline.md`
+- [x] T027 [US1] Write `docs/user-guide/remote-daemons.md` (add, start, states), link it from `docs/SUMMARY.md`, `docs/user-guide/settings.md` and `docs/user-guide/sandboxed-daemon.md`, and describe the helper in `docs/daemon.md`
 
 ### Scenarios 2-4: remote projects, worktrees, sessions (M2)
 
