@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-12
 
-**Status**: Draft
+**Status**: Closed 2026-10-13 — shipped in PRs #781, #792
 
 **Input**: GitHub issue #532, "Agent-created worktrees should carry the issue reference".
 

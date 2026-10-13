@@ -515,7 +515,13 @@ async fn a_ticket_in_any_form_names_the_worktree_as_the_dialog_does() {
 
     let f = Fixture::new().await;
     let mut n = 0;
-    for ticket in ["123", "#123", "ABC-123", ""] {
+    // Each ticket form with the issue tag the sidebar shows for it (literals, not `derive`).
+    for (ticket, label) in [
+        ("123", "#123"),
+        ("#123", "#123"),
+        ("ABC-123", "ABC-123"),
+        ("", ""),
+    ] {
         for type_ in [ConventionalType::Feat, ConventionalType::Fix] {
             for name in ["add thing", "Login crash"] {
                 n += 1;
@@ -535,10 +541,16 @@ async fn a_ticket_in_any_form_names_the_worktree_as_the_dialog_does() {
                     .await;
                 assert_eq!(row["branch"], expected.branch, "{ticket:?} {row}");
                 assert_eq!(row["directory"], expected.dir_name, "{ticket:?} {row}");
-                let has_issue = parse_tags(row["ref"].as_str().unwrap())
-                    .iter()
-                    .any(|tag| matches!(tag, Tag::Issue(_)));
-                assert_eq!(has_issue, !ticket.is_empty(), "{ticket:?}: {row}");
+                let issue_tags: Vec<Tag> = parse_tags(row["ref"].as_str().unwrap())
+                    .into_iter()
+                    .filter(|tag| matches!(tag, Tag::Issue(_)))
+                    .collect();
+                let want: Vec<Tag> = if label.is_empty() {
+                    vec![]
+                } else {
+                    vec![Tag::Issue(label.into())]
+                };
+                assert_eq!(issue_tags, want, "{type_:?} {name:?} {ticket:?}: {row}");
             }
         }
     }
