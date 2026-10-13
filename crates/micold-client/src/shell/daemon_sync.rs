@@ -1857,6 +1857,7 @@ pub fn on_connected(
         .unwrap_or_else(|| app.core.settings.legacy_daemon())
         == daemon;
     let mut script_check = None;
+    let mut list_follow_up = Task::none();
     if is_active {
         let pr_status_enabled = settings.pr_status_enabled;
         adopt_daemon_settings(app, settings);
@@ -1868,7 +1869,8 @@ pub fn on_connected(
             recheck_open_settings(app).map(crate::shell::env_include::run_script_path_check);
         // Feature 040: the switch's live value. Nothing is held yet (the disconnect released it),
         // so this starts no reading; the `Attached` and listing that follow do (S1).
-        let _ = crate::shell::pr_status::enabled_changed(app, pr_status_enabled);
+        // The Changes view's list follows the same switch, and its read is issued here (775).
+        list_follow_up = crate::shell::pr_status::enabled_changed(app, pr_status_enabled);
         // Another window may have saved while this one was disconnected (BUG-475, FR-026b).
         refresh_open_settings(app);
     }
@@ -1993,7 +1995,11 @@ pub fn on_connected(
         // Feature 582 (FR-012): the start-up offer, asked once the attach is on the wire.
         request_attach_offer(app, &offer_for);
     }
-    Task::batch([script_check.unwrap_or_else(Task::none), reread_sandbox(app)])
+    Task::batch([
+        script_check.unwrap_or_else(Task::none),
+        list_follow_up,
+        reread_sandbox(app),
+    ])
 }
 
 /// Tell the daemon the window's resolved colour scheme when this connection has not been told it yet
