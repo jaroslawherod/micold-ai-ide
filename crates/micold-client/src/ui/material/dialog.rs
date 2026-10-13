@@ -16,9 +16,10 @@
 //! argument `Surface` already makes for §7.4's width bounds: applied by the kind rather than by
 //! each dialog, because "the seven that build dialogs were each free to forget it".
 
-use iced::widget::{column, Column, Row};
-use iced::Element;
-use micold_core::tokens::anatomy;
+use super::{Button, Surface, SurfaceKind};
+use iced::widget::{column, row, Column, Row};
+use iced::{Element, Length};
+use micold_core::tokens::{anatomy, Roles};
 
 /// The dialog's content column — title, body, and whatever fields sit between them — spaced by
 /// §7.4's title-to-body gap.
@@ -44,4 +45,25 @@ pub fn body<'a, M: 'a>(
     actions: impl Into<Element<'a, M>>,
 ) -> Column<'a, M> {
     column![fields.into(), actions.into()].spacing(anatomy::dialog::BODY_TO_ACTIONS)
+}
+
+/// A confirm dialog: `fields` above a filled `confirm` button and an outlined `cancel` one, each a
+/// label and the message it sends, on a [`SurfaceKind::Dialog`] surface `width` dp wide.
+///
+/// The tail every `confirm_*` dialog repeated. Takes the fields column un-spaced, so a call site
+/// keeps `column![..]` and its conditional `push`es.
+pub fn confirm<'a, M: Clone + 'a>(
+    r: Roles,
+    fields: Column<'a, M>,
+    confirm: (&str, M),
+    cancel: (&str, M),
+    width: f32,
+) -> Element<'a, M> {
+    let actions = actions(row![
+        Button::filled(confirm.0, r).on_press(confirm.1),
+        Button::outlined(cancel.0, r).on_press(cancel.1),
+    ]);
+    Surface::new(body(self::fields(fields), actions), SurfaceKind::Dialog, r)
+        .width(Length::Fixed(width))
+        .into()
 }

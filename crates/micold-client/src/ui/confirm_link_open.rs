@@ -5,10 +5,9 @@
 
 use crate::app::{Message, State};
 use crate::features::session::Msg as SessionMsg;
-use crate::ui::material::{self, Button, SurfaceKind, Text, TypeRole};
-use iced::widget::{column, row};
+use crate::ui::material::{self, Text, TypeRole};
+use iced::widget::column;
 use iced::Element;
-use iced::Length;
 use micold_core::env_include::EnvIncludeOutcome;
 use micold_core::theme::ColorScheme;
 use micold_core::tokens;
@@ -23,24 +22,18 @@ pub fn modal<'a>(host_path: &str, scheme: ColorScheme) -> Element<'a, Message> {
          or macros."
     );
 
-    let fields = material::dialog::fields(column![
+    let fields = column![
         Text::new("Open a file from the sandbox?", TypeRole::Headline, r),
         Text::new(warning, TypeRole::Body, r).muted(),
-    ]);
+    ];
 
-    let actions = material::dialog::actions(row![
-        Button::filled("Open", r).on_press(Message::Session(SessionMsg::LinkOpenConfirmed)),
-        Button::outlined("Cancel", r).on_press(Message::Session(SessionMsg::LinkOpenDeclined)),
-    ]);
-
-    let dialog = material::Surface::new(
-        material::dialog::body(fields, actions),
-        SurfaceKind::Dialog,
+    material::dialog::confirm(
         r,
+        fields,
+        ("Open", Message::Session(SessionMsg::LinkOpenConfirmed)),
+        ("Cancel", Message::Session(SessionMsg::LinkOpenDeclined)),
+        460.0,
     )
-    .width(Length::Fixed(460.0));
-
-    dialog.into()
 }
 
 /// This dialog's body, built from the state that opened it — the uniform shape every registered

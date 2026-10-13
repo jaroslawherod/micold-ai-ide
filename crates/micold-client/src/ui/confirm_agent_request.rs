@@ -3,10 +3,9 @@
 
 use crate::app::{Message, State};
 use crate::features::agent_confirm::{self, Msg, Prompt};
-use crate::ui::material::{self, Button, SurfaceKind, Text, TypeRole};
-use iced::widget::{column, row};
+use crate::ui::material::{self, Text, TypeRole};
+use iced::widget::column;
 use iced::Element;
-use iced::Length;
 use micold_core::env_include::EnvIncludeOutcome;
 use micold_core::theme::ColorScheme;
 use micold_core::tokens::{self};
@@ -20,26 +19,24 @@ pub fn modal<'a>(prompt: &Prompt, scheme: ColorScheme) -> Element<'a, Message> {
     let body = "An AI session asked for this. Nothing changes unless you allow it; if nobody \
                 answers within 60 seconds, the request fails.";
 
-    let fields = material::dialog::fields(column![
+    let fields = column![
         Text::new(agent_confirm::headline(prompt), TypeRole::Headline, r),
         Text::new(body, TypeRole::Body, r).muted(),
-    ]);
+    ];
 
-    let actions = material::dialog::actions(row![
-        Button::filled("Allow", r)
-            .on_press(Message::AgentConfirm(Msg::Answered { id, allow: true })),
-        Button::outlined("Deny", r)
-            .on_press(Message::AgentConfirm(Msg::Answered { id, allow: false })),
-    ]);
-
-    let dialog = material::Surface::new(
-        material::dialog::body(fields, actions),
-        SurfaceKind::Dialog,
+    material::dialog::confirm(
         r,
+        fields,
+        (
+            "Allow",
+            Message::AgentConfirm(Msg::Answered { id, allow: true }),
+        ),
+        (
+            "Deny",
+            Message::AgentConfirm(Msg::Answered { id, allow: false }),
+        ),
+        460.0,
     )
-    .width(Length::Fixed(460.0));
-
-    dialog.into()
 }
 
 /// This dialog's body, built from the oldest pending prompt — `None` when there is none.

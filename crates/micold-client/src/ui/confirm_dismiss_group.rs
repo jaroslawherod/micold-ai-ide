@@ -3,30 +3,26 @@
 
 use crate::app::{Message, State};
 use crate::features::runs::{Msg, DISMISS_CONFIRMATION};
-use crate::ui::material::{self, Button, SurfaceKind, Text, TypeRole};
-use iced::widget::{column, row};
-use iced::{Element, Length};
+use crate::ui::material::{self, Text, TypeRole};
+use iced::widget::column;
+use iced::Element;
 use micold_core::env_include::EnvIncludeOutcome;
 use micold_core::theme::ColorScheme;
 use micold_core::tokens::{self, Roles};
 
 /// The dialog body for the group named `name`.
 pub fn modal<'a>(name: &str, r: Roles) -> Element<'a, Message> {
-    let fields = material::dialog::fields(column![
+    let fields = column![
         Text::new(format!("Dismiss “{name}”?"), TypeRole::Headline, r),
         Text::new(DISMISS_CONFIRMATION, TypeRole::Body, r).muted(),
-    ]);
-    let actions = material::dialog::actions(row![
-        Button::filled("Dismiss group", r).on_press(Message::Runs(Msg::DismissConfirmed)),
-        Button::outlined("Cancel", r).on_press(Message::Runs(Msg::DismissCancelled)),
-    ]);
-    material::Surface::new(
-        material::dialog::body(fields, actions),
-        SurfaceKind::Dialog,
+    ];
+    material::dialog::confirm(
         r,
+        fields,
+        ("Dismiss group", Message::Runs(Msg::DismissConfirmed)),
+        ("Cancel", Message::Runs(Msg::DismissCancelled)),
+        460.0,
     )
-    .width(Length::Fixed(460.0))
-    .into()
 }
 
 /// The registered body, from the group the confirmation is about.
