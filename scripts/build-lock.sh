@@ -97,6 +97,8 @@ fi
 printf '%s, pid %s\n' "$PWD" "$$" >"$owner_file"
 trap 'rm -f "$owner_file"' EXIT
 
+# Close fd 9 for the command: the flock lives on the open file description, so any child that
+# outlives this script (a stray `sleep`, a daemon) would otherwise keep the lock held forever.
 status=0
-"$@" || status=$?
+"$@" 9>&- || status=$?
 exit "$status"
