@@ -276,7 +276,13 @@ pub fn list_requested(app: &mut App, seq: u64, project: PathBuf, branch: String)
         })
     };
     let paused = micold_client::features::pr_status::paused(&app.core.pr_status, started);
-    if paused || app.active_outbox().is_none() {
+    // `send_op` raises a notice when no daemon route is up; a list read never does (FR-008).
+    let binding = app.active_binding();
+    let routed = matches!(
+        app.route(binding),
+        micold_client::links::Route::To(id) if app.outbox_for(id).is_some()
+    );
+    if paused || !routed {
         return Task::done(passing());
     }
     let req = app.next_req;
