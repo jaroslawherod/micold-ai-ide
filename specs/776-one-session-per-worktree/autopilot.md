@@ -22,7 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T013 | full | Second session refused by daemon (RPC, create_session, review send); wire fields + v41 | #PRN | PR open |
+| M1 | T001–T013 | full | Second session refused by daemon (RPC, create_session, review send); wire fields + v41 | #794 | PR open |
 | M2 | T014–T016, T021 | full | create_worktree / WorktreeCreate define the session at start | | pending |
 | M3 | T017–T020, T022, T036 | full | Dialog CLI/prompt fields; no add action on occupied rows | | pending |
 | M4 | T023–T030 | full | Resume replaces with confirmation; attach cap | | pending |
