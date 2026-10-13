@@ -619,16 +619,18 @@ pub(crate) fn marked_link(
     hover?.resolved.as_ref()
 }
 
-/// The pointer over the pane: a hand over a marked link only while the link modifier is held, so it
-/// shows exactly when a click would open it (FR-007, clarification 2026-09-16).
+/// The pointer over the pane: a hand over a link only while the link modifier is held (FR-007,
+/// clarification 2026-09-16). It follows the link under the pointer, not the marking: under mouse
+/// reporting Ctrl/Cmd alone shows it, though a click still goes to the program unless Shift is held
+/// (BUG-748).
 pub(crate) fn pane_interaction(
     over: bool,
-    marked: bool,
+    on_link: bool,
     modifiers: keyboard::Modifiers,
 ) -> mouse::Interaction {
     if !over {
         mouse::Interaction::Idle
-    } else if marked && modifiers.command() {
+    } else if on_link && modifiers.command() {
         mouse::Interaction::Pointer
     } else {
         mouse::Interaction::Text
@@ -1314,7 +1316,8 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                 | Event::Window(iced::window::Event::RedrawRequested(_))
         ) {
             // What is drawn or shown for the link: the marked link, the pointer's row while one is
-            // marked (the hint's side follows it), and the link modifier (the pointer).
+            // marked (the hint's side follows it), the link modifier, and whether a link is under
+            // the pointer (the hand, which under mouse reporting shows with nothing marked).
             let shown = |state: &PaneState| {
                 let marked = marked_link(
                     state.hover.as_ref(),
@@ -1326,7 +1329,11 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                     .as_ref()
                     .and(state.hover.as_ref())
                     .map(|hover| hover.cell.1);
-                (marked, row, state.modifiers.command())
+                let on_link = state
+                    .hover
+                    .as_ref()
+                    .is_some_and(|hover| hover.resolved.is_some());
+                (marked, row, state.modifiers.command(), on_link)
             };
             let before = shown(state);
             // A press over the scrollbar strip pages the view, so nothing under it is a link.
@@ -1364,7 +1371,8 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
             }
             // Not a frame request: `idle_requests_no_frames.rs` keeps the only one in `cdk::motion`.
             // A stale tree is what makes the runtime repaint, and this fires only on a change of
-            // the marked link or the modifier, so the render loop still settles (see `select.rs`).
+            // the marked link, the modifier or the link under the pointer, so the render loop still
+            // settles (see `select.rs`).
             if shown(state) != before {
                 shell.invalidate_widgets();
             }
@@ -1838,13 +1846,11 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
         _renderer: &Renderer,
     ) -> mouse::Interaction {
         let state = tree.state.downcast_ref::<PaneState>();
-        let marked = marked_link(
-            state.hover.as_ref(),
-            self.mouse_mode(),
-            state.modifiers.shift(),
-        )
-        .is_some();
-        pane_interaction(cursor.is_over(layout.bounds()), marked, state.modifiers)
+        let on_link = state
+            .hover
+            .as_ref()
+            .is_some_and(|hover| hover.resolved.is_some());
+        pane_interaction(cursor.is_over(layout.bounds()), on_link, state.modifiers)
     }
 }
 
@@ -4394,9 +4400,28 @@ mod tests {
             pane.hold(at(10, 0), keyboard::Modifiers::COMMAND);
             assert_eq!(
                 pane.interaction(at(10, 0)),
-                mouse::Interaction::Text,
-                "under mouse reporting Ctrl alone is the program's"
+                mouse::Interaction::Pointer,
+                "under mouse reporting Ctrl alone shows the hand too (BUG-748)"
             );
+            assert_eq!(
+                pane.marked(),
+                None,
+                "but the link is not marked without Shift"
+            );
+            pane.hold(at(10, 0), keyboard::Modifiers::empty());
+            assert_eq!(
+                pane.interaction(at(10, 0)),
+                mouse::Interaction::Text,
+                "released, back to the text pointer"
+            );
+            pane.hover(1, 0);
+            pane.hold(at(1, 0), keyboard::Modifiers::COMMAND);
+            assert_eq!(
+                pane.interaction(at(1, 0)),
+                mouse::Interaction::Text,
+                "plain text under mouse reporting keeps the text pointer"
+            );
+            pane.hover(10, 0);
             pane.hold(
                 at(10, 0),
                 keyboard::Modifiers::COMMAND | keyboard::Modifiers::SHIFT,
@@ -4862,6 +4887,21 @@ mod tests {
                 pane.marked().is_some(),
                 "the same link left of the strip is marked"
             );
+        }
+
+        /// BUG-748: under mouse reporting nothing is marked, yet the cursor follows the link under
+        /// the pointer, so moving between a link and plain text repaints while Ctrl is held.
+        #[test]
+        fn under_mouse_reporting_moving_between_link_and_text_repaints_with_ctrl() {
+            let mut pane = Pane::new(screen_in_mode(&[row(SENTENCE)], mouse_reporting()));
+            pane.hover(1, 0);
+            pane.hold(at(1, 0), keyboard::Modifiers::COMMAND);
+            pane.hover(10, 0);
+            assert!(pane.invalidated, "the pointer reached a link");
+            assert_eq!(pane.interaction(at(10, 0)), mouse::Interaction::Pointer);
+            pane.hover(1, 0);
+            assert!(pane.invalidated, "the pointer left it for plain text");
+            assert_eq!(pane.interaction(at(1, 0)), mouse::Interaction::Text);
         }
 
         /// U160: moving to another row of the same marked link repaints, since the hint's side
