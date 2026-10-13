@@ -48,6 +48,19 @@ else
 fi
 rm -rf "$d"
 
+# --- orphaned children do not keep the lock -----------------------------------------------------
+
+d="$(mktemp -d)"
+git -C "$d" init --quiet
+cases=$((cases + 1))
+(cd "$d" && "$SCRIPT" bash -c 'sleep 5 </dev/null >/dev/null 2>&1 & exit 0')
+if flock --nonblock "$d/.git/micold-build.lock" true; then
+  pass "releases the lock when the command exits, even with a child still running"
+else
+  fail "releases the lock when the command exits, even with a child still running" "lock still held by an orphaned child"
+fi
+rm -rf "$d"
+
 # -----------------------------------------------------------------------------------------------
 
 printf '\n%d case(s), %d failure(s)\n' "$cases" "$failures"
