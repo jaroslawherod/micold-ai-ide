@@ -31,15 +31,25 @@ const COLS: u16 = 80;
 const SENTENCE: &str = "See https://example.com/docs for details";
 
 fn grid_showing(session: SessionId) -> GridCache {
-    grid_with(session, SENTENCE, None)
+    grid_with(session, SENTENCE, None, 0)
 }
 
 /// A line of `shown` whose first 60 cells are declared with OSC 8 as `uri`, as the daemon frames it.
 fn grid_declaring(session: SessionId, shown: &str, uri: &str) -> GridCache {
-    grid_with(session, shown, Some(uri))
+    grid_with(session, shown, Some(uri), 0)
 }
 
-fn grid_with(session: SessionId, shown: &str, declared: Option<&str>) -> GridCache {
+/// The sentence, in a screen whose program reports mouse clicks (`MOUSE_REPORT_CLICK`).
+fn grid_under_mouse_reporting(session: SessionId) -> GridCache {
+    grid_with(
+        session,
+        SENTENCE,
+        None,
+        alacritty_terminal::term::TermMode::MOUSE_REPORT_CLICK.bits(),
+    )
+}
+
+fn grid_with(session: SessionId, shown: &str, declared: Option<&str>, mode: u32) -> GridCache {
     let text = format!("{shown:<width$}", width = COLS as usize);
     let mut grid = GridCache::new();
     grid.apply(&GridFrame {
@@ -86,7 +96,7 @@ fn grid_with(session: SessionId, shown: &str, declared: Option<&str>) -> GridCac
                 .unwrap_or_default(),
             wrapped: false,
         }],
-        mode: 0,
+        mode,
         input_serial: None,
     });
     grid
@@ -348,5 +358,18 @@ fn ctrl_held_over_an_osc8_link_shows_the_hand_in_a_single_pane() {
     assert!(
         hand_shows(&state, &grid, None),
         "holding Ctrl over an OSC 8 hyperlink shows the hand (BUG-748)"
+    );
+}
+
+/// BUG-748 (T091): a program that reports the mouse owns clicks, not the hand: Ctrl alone over a link
+/// still shows it, with no Shift.
+#[test]
+fn ctrl_held_over_a_link_shows_the_hand_under_mouse_reporting() {
+    let id = SessionId::new();
+    let state = state_with_active_session(id);
+    let grid = grid_under_mouse_reporting(id);
+    assert!(
+        hand_shows(&state, &grid, None),
+        "holding Ctrl over a link shows the hand while the program reports the mouse (BUG-748)"
     );
 }
