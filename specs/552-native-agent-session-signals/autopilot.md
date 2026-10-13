@@ -24,7 +24,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T009 | full | every worktree listed, toggle and client name-based visibility removed, hook captures | #795 | in review |
-| M2 | T010–T021 | full | Claude sub-agent runs recorded from SubagentStart/Stop, protocol 41 | | pending |
+| M2 | T010–T021 | full | Claude sub-agent runs recorded from SubagentStart/Stop, protocol 42 | | in review |
 | M3 | T022–T029 | full | provenance and attach_worktree removed, protocol 42 | | pending |
 | M4 | T030–T033 | full | Copilot mapping or gap, provider table, docs check | | pending |
 
@@ -50,6 +50,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Tasks | 2 | 73f82d103e50af33acec2be9f1876de5ea25743b:4d47d38bec3db367185caa3f02b8a8d7dd6d369f | CLEAN |
 | Diff A (code-review high) M1 | 1 | f56c31b32ec335c0bdd823ff595786a1465046db:9f92c4dc32aca6d3f2da21b9696ee7f1ecb2c94d | CHANGES: 1 MAJOR (fmt, fixed), 3 MINOR (stale docs, fixed); coordinator supplement: core strings fixed, daemon list_worktrees include_hidden noted into T024, claim item `false` kept to M3, per-worktree availability fan-out accepted, user-guide wording fixed |
 | Diff B (conformance, sonnet) M1 | 1 | f56c31b32ec335c0bdd823ff595786a1465046db:9f92c4dc32aca6d3f2da21b9696ee7f1ecb2c94d | CLEAN (3 MINOR, fixed/none); Verify: worktree_visibility 7 passed, store_roundtrip 37 passed |
+| Diff A (code-review high) M2 | 1 | 0434104615196360d0d89b3d96283a701ad8ba5f:55510b15508ff8a97204e57a080d28b1eaba66cf | CLEAN (3 MINOR: eviction no longer drops the new run and field length bounded, fixed; late start after stop not reconciled until restart, accepted) |
+| Diff B (conformance, sonnet) M2 | 1 | same | CLEAN (3 MINOR: Verify queued behind build lock, covered by the full gate; no cycle-log kept for this feature; body-not-logged claim in a test comment, accepted) |
 
 ## Declined review findings
 
