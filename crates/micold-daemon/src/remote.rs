@@ -143,7 +143,10 @@ pub fn prune(root: &Path, current: &std::ffi::OsStr, keep: usize) -> io::Result<
         if entry.file_name() == current || !entry.file_type()?.is_dir() {
             continue;
         }
-        let modified = entry.metadata()?.modified().unwrap_or(std::time::UNIX_EPOCH);
+        let modified = entry
+            .metadata()?
+            .modified()
+            .unwrap_or(std::time::UNIX_EPOCH);
         others.push((modified, entry.path()));
     }
     others.sort_by(|a, b| b.0.cmp(&a.0));
@@ -211,7 +214,11 @@ mod tests {
         })
         .await;
         assert_eq!(got, b"hello");
-        assert_eq!(starts.load(Ordering::SeqCst), 0, "a running daemon is reused");
+        assert_eq!(
+            starts.load(Ordering::SeqCst),
+            0,
+            "a running daemon is reused"
+        );
     }
 
     #[tokio::test]
@@ -252,7 +259,8 @@ mod tests {
             let p = dir.path().join(name);
             std::fs::create_dir(&p).unwrap();
             let f = std::fs::File::open(&p).unwrap();
-            f.set_modified(now - Duration::from_secs(age * 1000)).unwrap();
+            f.set_modified(now - Duration::from_secs(age * 1000))
+                .unwrap();
         }
         prune(dir.path(), std::ffi::OsStr::new("cur"), 2).unwrap();
         let mut left: Vec<_> = std::fs::read_dir(dir.path())

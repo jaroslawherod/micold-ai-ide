@@ -224,10 +224,7 @@ pub fn views(state: &State, model: &Model<'_>) -> ViewModel {
                 (DaemonRuntime::Ssh(s), Some(percent))
                     if model.links.state(entry.id) == Some(&DaemonState::Starting) =>
                 {
-                    Some(format!(
-                        "copying daemon to {} ({percent}%)",
-                        s.target.host
-                    ))
+                    Some(format!("copying daemon to {} ({percent}%)", s.target.host))
                 }
                 _ => None,
             },

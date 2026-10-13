@@ -704,10 +704,10 @@ mod tests {
     use super::{
         actor_specs, ssh_attempt, stale_dev_image_advice, ConnectFailures, Dial, RECONNECT_BACKOFF,
     };
-    use micold_core::daemons::{
-        DaemonRegistry, DaemonRuntime, DaemonState, DaemonStates,
+    use micold_core::daemons::{DaemonRegistry, DaemonRuntime, DaemonState, DaemonStates};
+    use micold_core::ssh::{
+        Artefacts, SshCommand, SshOutput, SshRunner, SshSettings, SshStdio, SshTarget,
     };
-    use micold_core::ssh::{Artefacts, SshCommand, SshOutput, SshRunner, SshSettings, SshStdio, SshTarget};
 
     /// A runner standing in for `ssh`: it cannot be started, as on a machine with no OpenSSH.
     struct NoSsh;
@@ -741,7 +741,11 @@ mod tests {
         let mut registry = DaemonRegistry::default();
         let target = SshTarget::new("build-box", Some("me"), None, None).unwrap();
         let id = registry
-            .add("Build box", DaemonRuntime::Ssh(SshSettings { target }), false)
+            .add(
+                "Build box",
+                DaemonRuntime::Ssh(SshSettings { target }),
+                false,
+            )
             .unwrap();
         (registry, id)
     }
@@ -755,9 +759,16 @@ mod tests {
         let mut states = DaemonStates::default();
         states.insert(id, DaemonState::Starting);
         let specs = actor_specs(&registry, &states, dir, None, false);
-        assert!(matches!(specs.as_slice(), [s] if matches!(&s.dial, Dial::Ssh { target } if target.host == "build-box")));
+        assert!(
+            matches!(specs.as_slice(), [s] if matches!(&s.dial, Dial::Ssh { target } if target.host == "build-box"))
+        );
 
-        states.insert(id, DaemonState::Unreachable { reason: "no route".into() });
+        states.insert(
+            id,
+            DaemonState::Unreachable {
+                reason: "no route".into(),
+            },
+        );
         assert!(actor_specs(&registry, &states, dir, None, false).is_empty());
     }
 
@@ -771,7 +782,10 @@ mod tests {
             Err(e) => e,
         };
         assert!(err.to_lowercase().contains("ssh"), "{err}");
-        let none = ssh_attempt(None, &target, None).await.err().expect("no runner");
+        let none = ssh_attempt(None, &target, None)
+            .await
+            .err()
+            .expect("no runner");
         assert!(none.contains("ssh"), "{none}");
     }
 

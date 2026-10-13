@@ -198,7 +198,9 @@ fn boot() -> (App, Task<Message>) {
     // the placement is known and before anything asks git a question.
     let mut caps = Capabilities::real();
     // The one `ssh` runner SSH daemons are brought up with (feature 489).
-    micold_client::daemon::install_ssh_host(std::sync::Arc::new(crate::shell::daemons::system_ssh()));
+    micold_client::daemon::install_ssh_host(std::sync::Arc::new(
+        crate::shell::daemons::system_ssh(),
+    ));
     let mut core = State::default();
     // Feature 028 (FR-019): before anything else is loaded, where is this executable running from?
     // Asked here because `current_exe()` is a syscall and this is the boundary; the verdict is a

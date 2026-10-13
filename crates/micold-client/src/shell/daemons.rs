@@ -133,7 +133,10 @@ mod tests {
     fn windows_ssh_is_taken_from_path_before_the_system_openssh() {
         let tools = PathBuf::from("tools");
         let root = PathBuf::from("win");
-        let path_var = std::env::join_paths([&tools]).unwrap().into_string().unwrap();
+        let path_var = std::env::join_paths([&tools])
+            .unwrap()
+            .into_string()
+            .unwrap();
         let on_path = tools.join("ssh.exe");
         let system = root.join("System32").join("OpenSSH").join("ssh.exe");
 
