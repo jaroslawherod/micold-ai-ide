@@ -9813,6 +9813,51 @@ mod pr_status {
         assert!(nothing_was_reported(&rig.app));
     }
 
+    /// The pending `RemoteList` of the list read: its `req` and `seq`.
+    fn list_pending(app: &App) -> Option<(u64, u64)> {
+        app.pending_ops.iter().find_map(|(req, op)| match op {
+            crate::shell::daemon_sync::PendingOp::PrListRemotes { seq, .. } => Some((*req, *seq)),
+            _ => None,
+        })
+    }
+
+    // The 10-second bound covers the remotes: unanswered, the read ends passing and its entry goes.
+    #[test]
+    fn pr_list_read_remotes_timeout_ends_the_read_and_frees_the_entry() {
+        let mut rig = rig(Some(FAKE_GH), FakePullRequestSource::new());
+        ask_list(&mut rig, "feat/a");
+        let (req, seq) = list_pending(&rig.app).expect("the list read waits for the remotes");
+        let work = update_inner(
+            &mut rig.app,
+            Message::PrStatus(Msg::RemotesTimedOut { seq, req }),
+        );
+        settle(&mut rig.app, work);
+        assert!(list_pending(&rig.app).is_none(), "the entry does not leak");
+        assert!(matches!(view_list(&rig.app), PrList::Unavailable { .. }));
+        assert!(nothing_was_reported(&rig.app));
+    }
+
+    // After the answer the timer is a no-op: the read it bounded is under way and keeps its result.
+    #[test]
+    fn pr_list_read_a_timeout_after_the_remotes_answered_does_nothing() {
+        let mut rig = rig(
+            Some(FAKE_GH),
+            FakePullRequestSource::new().with_list_answer(vec![branch_pr(1)]),
+        );
+        ask_list(&mut rig, "feat/a");
+        let (req, seq) = list_pending(&rig.app).expect("pending");
+        answer_remotes(&mut rig.app, req, github_remote());
+        let work = update_inner(
+            &mut rig.app,
+            Message::PrStatus(Msg::RemotesTimedOut { seq, req }),
+        );
+        settle(&mut rig.app, work);
+        assert!(matches!(
+            view_list(&rig.app),
+            PrList::Ready { prs, .. } if prs.len() == 1
+        ));
+    }
+
     // FR-014: with the setting off nothing is asked of the daemon or of GitHub.
     #[test]
     fn pr_list_read_with_the_setting_off_sends_nothing() {

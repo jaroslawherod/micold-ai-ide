@@ -69,6 +69,24 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
         // The 10-second bound on the remotes ran out. Still unanswered: the reading ends as a
         // passing failure. Answered meanwhile: the entry is gone and there is nothing to do.
         Msg::RemotesTimedOut { seq, req } => {
+            // A list read of the Changes view (feature 775) bounds its remotes the same way.
+            if let Some(PendingOp::PrListRemotes {
+                seq: asked,
+                started,
+                ..
+            }) = app.pending_ops.get(&req)
+            {
+                if *asked != seq {
+                    return Task::none();
+                }
+                let started = *started;
+                app.pending_ops.remove(&req);
+                return Task::done(Message::Changes(ChangesMsg::PullRequestsRead {
+                    seq,
+                    read_at: started,
+                    result: Err(ReadingFailure::Passing),
+                }));
+            }
             let unanswered = matches!(
                 app.pending_ops.get(&req),
                 Some(PendingOp::PrStatusRemotes { seq: asked, .. }) if *asked == seq
@@ -273,13 +291,11 @@ pub fn list_requested(app: &mut App, seq: u64, project: PathBuf, branch: String)
         },
         move |req| ClientMsg::RemoteList { req, project },
     );
-    // A late answer finds its read no longer under way and is dropped by the reducer.
+    // The bound covers the remotes only: a late answer, or a timeout after the answer, finds the
+    // pending operation gone and does nothing (`Msg::RemotesTimedOut`).
     Task::perform(
         async move { tokio::time::sleep(REMOTES_TIMEOUT).await },
-        move |()| {
-            let _ = req;
-            passing()
-        },
+        move |()| Message::PrStatus(Msg::RemotesTimedOut { seq, req }),
     )
 }
 
