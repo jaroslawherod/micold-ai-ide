@@ -751,6 +751,7 @@ async fn resolve_naming(
         type_,
         ticket,
         name,
+        ..
     } = request
     else {
         return Ok(explicit);
