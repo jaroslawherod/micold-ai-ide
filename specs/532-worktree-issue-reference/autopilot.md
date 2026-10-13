@@ -9,21 +9,21 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #532
 - **Worktree branch**: feat/532_agent-created-worktrees-should-carry-the-issue
 - **Started**: 2026-10-12
-- **Phase**: milestone M1 (PR open)
-- **Next step**: wait for CI and merge M1 PR, then close
+- **Phase**: close (gate and review)
+- **Next step**: gate, review, open close PR
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #781 | Design PR | merged | aa69bd4cc7fd32c6d3d4f4485f09e5ab74b86819 |
-| #792 | M1 | open | |
+| #792 | M1 | merged | 18616a32b59e09d4b8aa63e72b9299bc90d6460f |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T010 | full | agent guidance strings and user guide carry the issue-reference convention | #792 | in review |
+| M1 | T001–T010 | full | agent guidance strings and user guide carry the issue-reference convention | #792 | merged |
 
 ## Decisions
 
