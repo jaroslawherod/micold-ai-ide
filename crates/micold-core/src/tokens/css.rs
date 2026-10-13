@@ -49,6 +49,17 @@ pub fn stylesheet() -> String {
     out
 }
 
+/// The corner-radius scale, listed once: the emitter and its test both iterate it.
+const CORNER_RADII: [(&str, f32); 7] = [
+    ("none", shape::NONE),
+    ("extra-small", shape::EXTRA_SMALL),
+    ("small", shape::SMALL),
+    ("medium", shape::MEDIUM),
+    ("large", shape::LARGE),
+    ("extra-large", shape::EXTRA_LARGE),
+    ("full", shape::FULL),
+];
+
 fn block(out: &mut String, selector: &str, scheme: ColorScheme, comment: &str) {
     let r = roles(scheme);
     let _ = writeln!(out, "{selector} {{ /* {comment} */");
@@ -144,15 +155,7 @@ fn type_scale(out: &mut String) {
 }
 
 fn corner_radii(out: &mut String) {
-    for (name, value) in [
-        ("none", shape::NONE),
-        ("extra-small", shape::EXTRA_SMALL),
-        ("small", shape::SMALL),
-        ("medium", shape::MEDIUM),
-        ("large", shape::LARGE),
-        ("extra-large", shape::EXTRA_LARGE),
-        ("full", shape::FULL),
-    ] {
+    for (name, value) in CORNER_RADII {
         declare(
             out,
             &format!("--micold-shape-corner-{name}"),
@@ -427,15 +430,7 @@ mod tests {
     #[test]
     fn every_corner_radius_is_emitted_in_px() {
         let declarations = block("light");
-        for (name, value) in [
-            ("none", shape::NONE),
-            ("extra-small", shape::EXTRA_SMALL),
-            ("small", shape::SMALL),
-            ("medium", shape::MEDIUM),
-            ("large", shape::LARGE),
-            ("extra-large", shape::EXTRA_LARGE),
-            ("full", shape::FULL),
-        ] {
+        for (name, value) in CORNER_RADII {
             let name = format!("--micold-shape-corner-{name}");
             assert_eq!(
                 declarations.get(&name).map(String::as_str),

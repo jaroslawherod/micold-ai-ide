@@ -367,6 +367,21 @@ mod tests {
             vec![f.root.join("proj").to_string_lossy().into_owned()]
         }
 
+        /// The plan for `files` against the fixture's mounts, with `m` as the mounted container dirs.
+        fn plan_with(
+            f: &Fixture,
+            m: &[String],
+            files: &[PathBuf],
+            shell: ShellKind,
+        ) -> InsertionPlan {
+            plan_insertion(files, shell, InsertTarget::Sandbox(&f.mounts, m))
+        }
+
+        /// The plan for `files` under POSIX quoting, with only the `proj` project mounted.
+        fn plan_in_sandbox(f: &Fixture, files: &[PathBuf]) -> InsertionPlan {
+            plan_with(f, &mounted(f), files, ShellKind::Posix)
+        }
+
         // Unix only: a Windows host's own paths are not container paths (the next test).
         #[cfg(unix)]
         #[test]
@@ -375,11 +390,7 @@ mod tests {
             let file = f.root.join("proj/a b.png");
             std::fs::write(&file, b"x").unwrap();
             let m = mounted(&f);
-            let plan = plan_insertion(
-                std::slice::from_ref(&file),
-                ShellKind::Fish,
-                InsertTarget::Sandbox(&f.mounts, &m),
-            );
+            let plan = plan_with(&f, &m, std::slice::from_ref(&file), ShellKind::Fish);
             assert_eq!(plan.accepted[0].shown, file);
             // The container's shell is bash whatever the host runs: single quotes, not fish's.
             assert_eq!(
@@ -396,11 +407,7 @@ mod tests {
             let file = f.root.join("proj").join("a\\b");
             std::fs::write(&file, b"x").unwrap();
             let m = mounted(&f);
-            let plan = plan_insertion(
-                std::slice::from_ref(&file),
-                ShellKind::Fish,
-                InsertTarget::Sandbox(&f.mounts, &m),
-            );
+            let plan = plan_with(&f, &m, std::slice::from_ref(&file), ShellKind::Fish);
             // Fish would double the backslash; the container's bash would read that as two.
             assert_eq!(
                 plan.text().unwrap(),
@@ -419,11 +426,7 @@ mod tests {
             let file = f.root.join("proj/inner/x.png");
             std::fs::write(&file, b"x").unwrap();
             let m = vec!["/mnt/outer".to_string(), "/mnt/inner".to_string()];
-            let plan = plan_insertion(
-                &[file],
-                ShellKind::Posix,
-                InsertTarget::Sandbox(&f.mounts, &m),
-            );
+            let plan = plan_with(&f, &m, &[file], ShellKind::Posix);
             assert_eq!(plan.accepted[0].shown, PathBuf::from("/mnt/inner/x.png"));
         }
 
@@ -435,11 +438,7 @@ mod tests {
             std::fs::create_dir_all(file.parent().unwrap()).unwrap();
             std::fs::write(&file, b"x").unwrap();
             let m = vec!["/mnt/host/c/p".to_string()];
-            let plan = plan_insertion(
-                &[file],
-                ShellKind::Posix,
-                InsertTarget::Sandbox(&f.mounts, &m),
-            );
+            let plan = plan_with(&f, &m, &[file], ShellKind::Posix);
             assert_eq!(
                 plan.accepted[0].shown,
                 PathBuf::from("/mnt/host/c/p/sub/x.png")
@@ -451,12 +450,7 @@ mod tests {
             let f = fixture();
             let file = f.root.join("elsewhere/secret.txt");
             std::fs::write(&file, b"x").unwrap();
-            let m = mounted(&f);
-            let plan = plan_insertion(
-                &[file],
-                ShellKind::Posix,
-                InsertTarget::Sandbox(&f.mounts, &m),
-            );
+            let plan = plan_in_sandbox(&f, &[file]);
             assert_eq!(plan.text(), None);
             assert!(matches!(plan.refused[0], Refusal::OutsideProjects { .. }));
             let msg = plan.refused[0].message();
@@ -471,12 +465,7 @@ mod tests {
             let f = fixture();
             let file = f.root.join("late/a.png");
             std::fs::write(&file, b"x").unwrap();
-            let m = mounted(&f);
-            let plan = plan_insertion(
-                &[file],
-                ShellKind::Posix,
-                InsertTarget::Sandbox(&f.mounts, &m),
-            );
+            let plan = plan_in_sandbox(&f, &[file]);
             assert!(matches!(plan.refused[0], Refusal::NotMounted { .. }));
             assert!(plan.refused[0].message().contains("a.png"));
         }
@@ -489,12 +478,7 @@ mod tests {
             std::fs::write(&target, b"x").unwrap();
             let link = f.root.join("proj/link.txt");
             std::os::unix::fs::symlink(&target, &link).unwrap();
-            let m = mounted(&f);
-            let plan = plan_insertion(
-                &[link],
-                ShellKind::Posix,
-                InsertTarget::Sandbox(&f.mounts, &m),
-            );
+            let plan = plan_in_sandbox(&f, &[link]);
             assert!(matches!(plan.refused[0], Refusal::OutsideProjects { .. }));
         }
 
@@ -503,14 +487,9 @@ mod tests {
         #[test]
         fn a_missing_file_is_judged_by_its_parent() {
             let f = fixture();
-            let m = mounted(&f);
             let inside = f.root.join("proj").join("not-yet.png");
             let outside = f.root.join("elsewhere/not-yet.png");
-            let plan = plan_insertion(
-                &[inside.clone(), outside, f.root.join("nodir/x.png")],
-                ShellKind::Posix,
-                InsertTarget::Sandbox(&f.mounts, &m),
-            );
+            let plan = plan_in_sandbox(&f, &[inside.clone(), outside, f.root.join("nodir/x.png")]);
             assert_eq!(plan.accepted.len(), 1);
             assert_eq!(plan.accepted[0].shown, inside);
             assert_eq!(plan.refused.len(), 2);
@@ -540,17 +519,12 @@ mod tests {
         #[test]
         fn only_the_pasted_folder_of_the_state_directory_is_offered() {
             let f = fixture();
-            let m = mounted(&f);
             let image = f.root.join("state/pasted/abc/1-0.png");
             let token = f.root.join("state/token");
             std::fs::create_dir_all(image.parent().unwrap()).unwrap();
             std::fs::write(&image, b"x").unwrap();
             std::fs::write(&token, b"x").unwrap();
-            let plan = plan_insertion(
-                &[image, token],
-                ShellKind::Posix,
-                InsertTarget::Sandbox(&f.mounts, &m),
-            );
+            let plan = plan_in_sandbox(&f, &[image, token]);
             assert_eq!(
                 plan.accepted[0].shown,
                 PathBuf::from(format!("{STATE_CONTAINER_DIR}/pasted/abc/1-0.png"))
@@ -561,18 +535,13 @@ mod tests {
         #[test]
         fn a_mixed_drop_inserts_the_visible_ones_and_names_the_rest() {
             let f = fixture();
-            let m = mounted(&f);
             let a = f.root.join("proj/a.png");
             let b = f.root.join("proj/b.png");
             let c = f.root.join("elsewhere/c.png");
             for p in [&a, &b, &c] {
                 std::fs::write(p, b"x").unwrap();
             }
-            let plan = plan_insertion(
-                &[a, c, b],
-                ShellKind::Posix,
-                InsertTarget::Sandbox(&f.mounts, &m),
-            );
+            let plan = plan_in_sandbox(&f, &[a, c, b]);
             assert_eq!(plan.accepted.len(), 2);
             assert_eq!(plan.refused.len(), 1);
             assert!(plan.refused[0].message().contains("c.png"));

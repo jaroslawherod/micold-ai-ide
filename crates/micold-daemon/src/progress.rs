@@ -73,6 +73,24 @@ mod tests {
         }
     }
 
+    /// A throttle that has just seen the submodule stage begin, at `t0`.
+    fn entered() -> (Instant, ProgressThrottle) {
+        let t0 = Instant::now();
+        let mut th = ProgressThrottle::new(GAP);
+        th.admit(
+            event(CreateStage::SettingUpSubmodules, "$ git submodule…"),
+            t0,
+        );
+        (t0, th)
+    }
+
+    /// [`entered`], with the stage's first line already reported at `t0`: the gap is running.
+    fn primed() -> (Instant, ProgressThrottle) {
+        let (t0, mut th) = entered();
+        th.admit(event(CreateStage::SettingUpSubmodules, "first"), t0);
+        (t0, th)
+    }
+
     #[test]
     fn entering_a_stage_reports_the_stage_alone() {
         let t0 = Instant::now();
@@ -87,12 +105,7 @@ mod tests {
     fn the_first_line_of_a_stage_is_reported_without_waiting_out_the_gap() {
         // Otherwise every stage would open with a gap's worth of silence — the frozen-label
         // behaviour this exists to remove, just shorter.
-        let t0 = Instant::now();
-        let mut th = ProgressThrottle::new(GAP);
-        th.admit(
-            event(CreateStage::SettingUpSubmodules, "$ git submodule…"),
-            t0,
-        );
+        let (t0, mut th) = entered();
         assert_eq!(
             th.admit(
                 event(CreateStage::SettingUpSubmodules, "Cloning into 'vendor/a'…"),
@@ -104,13 +117,7 @@ mod tests {
 
     #[test]
     fn same_stage_lines_inside_the_gap_are_dropped() {
-        let t0 = Instant::now();
-        let mut th = ProgressThrottle::new(GAP);
-        th.admit(
-            event(CreateStage::SettingUpSubmodules, "$ git submodule…"),
-            t0,
-        );
-        th.admit(event(CreateStage::SettingUpSubmodules, "first"), t0);
+        let (t0, mut th) = primed();
         // A fetch emits these in a burst; only the clock decides, never the count.
         for ms in [1, 50, 399] {
             assert_eq!(
@@ -125,13 +132,7 @@ mod tests {
 
     #[test]
     fn a_same_stage_line_reports_again_once_the_gap_has_passed() {
-        let t0 = Instant::now();
-        let mut th = ProgressThrottle::new(GAP);
-        th.admit(
-            event(CreateStage::SettingUpSubmodules, "$ git submodule…"),
-            t0,
-        );
-        th.admit(event(CreateStage::SettingUpSubmodules, "first"), t0);
+        let (t0, mut th) = primed();
         assert_eq!(
             th.admit(event(CreateStage::SettingUpSubmodules, "later"), t0 + GAP),
             Some(Some("later".to_string()))
@@ -143,13 +144,7 @@ mod tests {
         // The stage is the thing the user reads; a transition arriving mid-gap must not be dropped
         // for having arrived too soon after a line. Rollback is the case that matters: a failure
         // right after a fetch line must still be able to say it is rolling back.
-        let t0 = Instant::now();
-        let mut th = ProgressThrottle::new(GAP);
-        th.admit(
-            event(CreateStage::SettingUpSubmodules, "$ git submodule…"),
-            t0,
-        );
-        th.admit(event(CreateStage::SettingUpSubmodules, "first"), t0);
+        let (t0, mut th) = primed();
         assert_eq!(
             th.admit(
                 event(CreateStage::RollingBack, "Rolling back…"),
