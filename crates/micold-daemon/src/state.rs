@@ -1414,13 +1414,7 @@ impl DaemonState {
     /// `SettingsChanged` to every client. Each window recomputes the warning look from the reading
     /// it holds.
     pub fn set_plan_usage_warn_percent(&self, percent: u8) -> std::io::Result<()> {
-        let settings = {
-            let mut inner = self.lock();
-            inner.catalog.set_plan_usage_warn_percent(percent)?;
-            inner.catalog.settings_wire()
-        };
-        self.broadcast(DaemonMsg::SettingsChanged { settings });
-        Ok(())
+        self.change_settings(|catalog| catalog.set_plan_usage_warn_percent(percent))
     }
 
     /// A full catalog snapshot with each project's worktrees overlaid from the live git+fs discovery
@@ -1910,38 +1904,35 @@ impl DaemonState {
         }
     }
 
-    /// Set the scrollback limit and push `SettingsChanged` to every client (FR-012a, FR-011).
-    pub fn set_scrollback(&self, lines: usize) -> std::io::Result<()> {
+    /// Apply one catalog settings change under the state lock, then push `SettingsChanged` to every
+    /// client after the lock is released.
+    fn change_settings<T>(
+        &self,
+        change: impl FnOnce(&mut Catalog) -> std::io::Result<T>,
+    ) -> std::io::Result<()> {
         let settings = {
             let mut inner = self.lock();
-            inner.catalog.set_scrollback(lines)?;
+            change(&mut inner.catalog)?;
             inner.catalog.settings_wire()
         };
         self.broadcast(DaemonMsg::SettingsChanged { settings });
         Ok(())
     }
 
+    /// Set the scrollback limit and push `SettingsChanged` to every client (FR-012a, FR-011).
+    pub fn set_scrollback(&self, lines: usize) -> std::io::Result<()> {
+        self.change_settings(|catalog| catalog.set_scrollback(lines))
+    }
+
     /// Set the default AI CLI and push `SettingsChanged` to every client (feature 026, FR-003).
     pub fn set_default_ai_cli(&self, which: AiCli) -> std::io::Result<()> {
-        let settings = {
-            let mut inner = self.lock();
-            inner.catalog.set_default_ai_cli(which)?;
-            inner.catalog.settings_wire()
-        };
-        self.broadcast(DaemonMsg::SettingsChanged { settings });
-        Ok(())
+        self.change_settings(|catalog| catalog.set_default_ai_cli(which))
     }
 
     /// Turn the Pi activity component on or off and push `SettingsChanged` to every client
     /// (feature 029, FR-012e).
     pub fn set_pi_activity_component(&self, on: bool) -> std::io::Result<()> {
-        let settings = {
-            let mut inner = self.lock();
-            inner.catalog.set_pi_activity_component(on)?;
-            inner.catalog.settings_wire()
-        };
-        self.broadcast(DaemonMsg::SettingsChanged { settings });
-        Ok(())
+        self.change_settings(|catalog| catalog.set_pi_activity_component(on))
     }
 
     /// Turn terminal history saving on or off, push `SettingsChanged` to every client, and apply it
@@ -1995,13 +1986,7 @@ impl DaemonState {
     /// Running sessions keep the binding they were started with. Pushes `SettingsChanged` to every
     /// client.
     pub fn set_tool_server_enabled(&self, on: bool) -> std::io::Result<()> {
-        let settings = {
-            let mut inner = self.lock();
-            inner.catalog.set_tool_server_enabled(on)?;
-            inner.catalog.settings_wire()
-        };
-        self.broadcast(DaemonMsg::SettingsChanged { settings });
-        Ok(())
+        self.change_settings(|catalog| catalog.set_tool_server_enabled(on))
     }
 
     /// The cross-session option as it is now (feature 034, FR-016). The tool server reads it on
@@ -2013,25 +1998,13 @@ impl DaemonState {
     /// Set the cross-session option (feature 034, FR-016). It applies to the next tool request,
     /// including from sessions already running. Pushes `SettingsChanged` to every client.
     pub fn set_cross_session_access(&self, access: CrossSessionAccess) -> std::io::Result<()> {
-        let settings = {
-            let mut inner = self.lock();
-            inner.catalog.set_cross_session_access(access)?;
-            inner.catalog.settings_wire()
-        };
-        self.broadcast(DaemonMsg::SettingsChanged { settings });
-        Ok(())
+        self.change_settings(|catalog| catalog.set_cross_session_access(access))
     }
 
     /// Turn pull request status on or off (feature 040, FR-030). Pushes `SettingsChanged` to every
     /// client, so each open window starts or stops reading pull requests.
     pub fn set_pr_status_enabled(&self, on: bool) -> std::io::Result<()> {
-        let settings = {
-            let mut inner = self.lock();
-            inner.catalog.set_pr_status_enabled(on)?;
-            inner.catalog.settings_wire()
-        };
-        self.broadcast(DaemonMsg::SettingsChanged { settings });
-        Ok(())
+        self.change_settings(|catalog| catalog.set_pr_status_enabled(on))
     }
 
     /// Set the Changes view's diff layout (feature 482, R12). Pushes `SettingsChanged` to every
@@ -2040,13 +2013,7 @@ impl DaemonState {
         &self,
         layout: micold_core::settings::DiffLayout,
     ) -> std::io::Result<()> {
-        let settings = {
-            let mut inner = self.lock();
-            inner.catalog.set_diff_layout(layout)?;
-            inner.catalog.settings_wire()
-        };
-        self.broadcast(DaemonMsg::SettingsChanged { settings });
-        Ok(())
+        self.change_settings(|catalog| catalog.set_diff_layout(layout))
     }
 
     /// Turn desktop notifications on or off (feature 039, FR-026, W4.1). Pushes `SettingsChanged`
@@ -2081,25 +2048,13 @@ impl DaemonState {
     /// was already noted as not to notify, and a pending event of a kind that was on stays
     /// claimable.
     pub fn set_notification_kinds(&self, kinds: NotificationKinds) -> std::io::Result<()> {
-        let settings = {
-            let mut inner = self.lock();
-            inner.catalog.set_notification_kinds(kinds)?;
-            inner.catalog.settings_wire()
-        };
-        self.broadcast(DaemonMsg::SettingsChanged { settings });
-        Ok(())
+        self.change_settings(|catalog| catalog.set_notification_kinds(kinds))
     }
 
     /// Set the long-task threshold in seconds, clamped into 10–3600 (feature 613, T063, W5.6, FR-026), and
     /// push `SettingsChanged` to every client. The next turn end reads it (FR-013).
     pub fn set_long_task_threshold_secs(&self, secs: u64) -> std::io::Result<()> {
-        let settings = {
-            let mut inner = self.lock();
-            inner.catalog.set_long_task_threshold(secs)?;
-            inner.catalog.settings_wire()
-        };
-        self.broadcast(DaemonMsg::SettingsChanged { settings });
-        Ok(())
+        self.change_settings(|catalog| catalog.set_long_task_threshold(secs))
     }
 
     /// Set any of the three environment-include settings and push `SettingsChanged` to every
