@@ -52,8 +52,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Plan | 1 | 9a5ff7ae39fe35fcffdb2f2c26b8dcbe452da2be:c33ad03cfb1fec6ccb1c1856d766226a886e57b6 | CHANGES: 3 MAJOR (local Unreachable vs FR-008; R5 audit list incomplete; R3 cross-OS matrix/glibc), 3 MINOR; all fixed |
 | Plan | 2 | 8194452ff2f9a451e06c04598eebc2d0f00299a9:2c9c6abed776f4cdbdf710d33f6c9bea62dd5df1 | CLEAN (round 3 followed) |
 | Tasks | 1 | f72a58cd6bb526d69c196ac5286ceb5e01e46526:7b87ef147273f34743f12f80b97367aea13812bc | CLEAN (3 MINOR fixed, prose/task wording; checklist ticked) |
+| Code A | 1 | 575310e1c7993dc68f2fafa530e09dd835035320:4ef2cba18ab0513f2d054751ad72c07e34988385 | CHANGES: 1 MAJOR (bridge hangs on stdin at runtime drop), 3 MINOR (UpdateHostKeys, ServerAlive, comment order); all fixed |
+| Conformance B | 1 | 63a975671eae50a8aec5a9d00f1b2f1f30e15cc4:b3098a8a0a49c93ac8ad31fe0dcc292ba48f1fe3 | CHANGES: 1 MAJOR (no red-before-green recorded outside core/ssh: deviation now written in cycle-log, no red run fabricated), 2 MINOR declined |
 
 ## Declined review findings
+
+- B F2 (assert user@host:port in ssh_real test): declined; the stand-in test drives `provision::connect`, not the view; the rendering is asserted in `daemons_feature.rs` (T020).
+- B F3 (copy has no deadline of its own): declined; the copy step already runs with `deadline = None` and progress, and `ServerAliveInterval/CountMax` now bound a dead network.
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
