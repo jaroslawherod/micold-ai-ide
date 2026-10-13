@@ -27,7 +27,7 @@ use micold_core::mcp::policy::{
 };
 use micold_core::mcp::tools::{
     is_mutating_tool, parse_call, CreateWorktreeRequest, LineCount, NonEmptyText, Operation,
-    SessionRef, WorktreeRef,
+    SessionRef, StartSession, WorktreeRef,
 };
 use micold_core::naming::{self, DerivedNames, NamingError};
 use micold_core::protocol::messages::{
@@ -103,7 +103,7 @@ async fn dispatch(
     hangup: &CancellationToken,
 ) -> Result<Value, OpError> {
     match operation {
-        Operation::CreateWorktree(request) => create_worktree(&state, caller, request).await,
+        Operation::CreateWorktree(request) => create_worktree(&state, caller, request, asked).await,
         Operation::CreateSession {
             worktree,
             ai_cli,
@@ -616,13 +616,17 @@ async fn create_worktree(
     state: &Arc<DaemonState>,
     caller: SessionId,
     request: CreateWorktreeRequest,
+    asked: tokio::time::Instant,
 ) -> Result<Value, OpError> {
     match request {
-        CreateWorktreeRequest::Literal { branch, name, mode } => {
-            create_literal_worktree(state, caller, branch, name, mode).await
-        }
+        CreateWorktreeRequest::Literal {
+            branch,
+            name,
+            mode,
+            start,
+        } => create_literal_worktree(state, caller, branch, name, mode, start, asked).await,
         derived @ CreateWorktreeRequest::Derived { .. } => {
-            create_derived_worktree(state, caller, derived).await
+            create_derived_worktree(state, caller, derived, asked).await
         }
     }
 }
@@ -633,6 +637,7 @@ async fn create_derived_worktree(
     state: &Arc<DaemonState>,
     caller: SessionId,
     request: CreateWorktreeRequest,
+    asked: tokio::time::Instant,
 ) -> Result<Value, OpError> {
     let st = Arc::clone(state);
     let (who, project) = blocking(move || resolve_caller(&st, caller)).await?;
@@ -688,17 +693,20 @@ async fn create_derived_worktree(
         }
     }
 
-    ops::create_worktree(
+    let started = create_with_optional_session(
         state,
-        project.path.clone(),
+        caller,
+        &who,
+        &project.path,
         names.clone(),
         CreateMode::NewBranch,
-        None,
+        request.start(),
+        asked,
     )
-    .await
-    .map_err(create_failure)?;
+    .await?;
 
     let mut row = worktree_row(state, caller, names.dir_name.clone()).await?;
+    merge_session_reply(&mut row, started);
     if let Some(row) = row.as_object_mut() {
         row.insert("branch".into(), names.branch.into());
         row.insert("directory".into(), names.dir_name.into());
@@ -788,6 +796,8 @@ async fn create_literal_worktree(
     branch: String,
     name: Option<String>,
     mode: CreateMode,
+    start: Option<StartSession>,
+    asked: tokio::time::Instant,
 ) -> Result<Value, OpError> {
     let st = Arc::clone(state);
     let (who, project) = blocking(move || resolve_caller(&st, caller)).await?;
@@ -823,6 +833,7 @@ async fn create_literal_worktree(
             branch: branch.clone(),
             name,
             mode: mode.clone(),
+            start: start.clone(),
         }),
     )?;
 
@@ -850,11 +861,85 @@ async fn create_literal_worktree(
         }
     }
 
-    ops::create_worktree(state, project.path.clone(), names, mode, None)
-        .await
-        .map_err(create_failure)?;
+    let started = create_with_optional_session(
+        state,
+        caller,
+        &who,
+        &project.path,
+        names,
+        mode,
+        start.as_ref(),
+        asked,
+    )
+    .await?;
 
-    worktree_row(state, caller, dir_name).await
+    let mut row = worktree_row(state, caller, dir_name).await?;
+    merge_session_reply(&mut row, started);
+    Ok(row)
+}
+
+/// Create the worktree and, when the call defined a session (feature 776, FR-006), its one session
+/// with it; the session's `create_session` reply is returned. Policy is checked for the session as
+/// `create_session` would, before anything exists; a missing CLI fails before the worktree does.
+#[allow(clippy::too_many_arguments)]
+async fn create_with_optional_session(
+    state: &Arc<DaemonState>,
+    caller: SessionId,
+    who: &Caller,
+    project: &Path,
+    names: DerivedNames,
+    mode: CreateMode,
+    start: Option<&StartSession>,
+    asked: tokio::time::Instant,
+) -> Result<Option<Value>, OpError> {
+    let Some(start) = start else {
+        ops::create_worktree(state, project.to_path_buf(), names, mode, None)
+            .await
+            .map_err(create_failure)?;
+        return Ok(None);
+    };
+    let cli = start.ai_cli.unwrap_or_else(|| state.default_ai_cli());
+    check_policy(
+        who,
+        &Operation::CreateSession {
+            worktree: WorktreeRef::Named(names.dir_name.clone()),
+            ai_cli: Some(cli),
+            prompt: None,
+        },
+    )?;
+    let first = start.prompt.as_deref().map(|text| ops::FirstPrompt {
+        text,
+        asked,
+        // A terminal without bracketed paste still gets the prompt, as one plain submission.
+        require_bracketed: false,
+    });
+    let (session, typed) = ops::create_worktree_with_session(
+        state,
+        project.to_path_buf(),
+        names,
+        mode,
+        None,
+        ops::StartDefinition { cli, prompt: first },
+    )
+    .await
+    .map_err(|failure| match failure {
+        ops::WorktreeStartFailure::CliUnavailable(why) => OpError::service_error(why),
+        ops::WorktreeStartFailure::Create(failure) => create_failure(failure),
+        ops::WorktreeStartFailure::Session { dir_name, error } => OpError::service_error(format!(
+            "worktree \"{dir_name}\" was created, but its session could not be: {error}; it has \
+             no session, and create_session starts one"
+        )),
+    })?;
+    session_reply(state, caller, session, cli, start.prompt.is_some(), typed)
+        .await
+        .map(Some)
+}
+
+/// Add a session's `create_session` reply fields to a worktree row.
+fn merge_session_reply(row: &mut Value, reply: Option<Value>) {
+    if let (Some(row), Some(Value::Object(fields))) = (row.as_object_mut(), reply) {
+        row.extend(fields);
+    }
 }
 
 /// The `list_worktrees` row of worktree `dir_name`, as it is now, after a change to it. A row
@@ -1439,6 +1524,19 @@ async fn create_session(
         crate::catalog::CreateSessionError::Occupied(existing, _) => occupied(&existing, &dir),
         e => OpError::service_error(format!("could not create the session: {e}")),
     })?;
+    session_reply(state, caller, session, cli, prompt_given, typed).await
+}
+
+/// The reply of `create_session`, and of `create_worktree` for the session it created: the id, the
+/// lifecycle now, and whether the first prompt was typed and why not.
+async fn session_reply(
+    state: &Arc<DaemonState>,
+    caller: SessionId,
+    session: SessionId,
+    cli: AiCli,
+    prompt_given: bool,
+    typed: Result<(), ops::FirstPromptUndelivered>,
+) -> Result<Value, OpError> {
     let undelivered = typed.err().map(|why| match why {
         // A terminal that went away or refused the write: said as for a CLI never ready.
         ops::FirstPromptUndelivered::Typing(_) => {

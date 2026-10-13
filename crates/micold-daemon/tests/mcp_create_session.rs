@@ -889,3 +889,141 @@ async fn pi_without_its_event_is_ready_once_its_output_settles() {
     s.settle_typed("pi", &format!("{PROMPT}\n")).await;
     assert_eq!(s.typed("pi"), format!("{PROMPT}\n"));
 }
+
+// --- Feature 776, US2: `create_worktree` defines the session at start (FR-006) -------------------
+
+impl Sandbox {
+    /// `create_worktree` as the caller, `Ok` payload.
+    async fn worktree_ok(&self, caller: SessionId, args: Value) -> Value {
+        call_ok(
+            self.addr,
+            &credential(&self.state, caller),
+            "create_worktree",
+            args,
+        )
+        .await
+    }
+
+    async fn worktree_err(&self, args: Value) -> Value {
+        call_err(
+            self.addr,
+            &credential(&self.state, sid(3)),
+            "create_worktree",
+            args,
+        )
+        .await
+    }
+
+    /// The worktree directories on disk under the managed root.
+    fn worktree_dirs(&self) -> Vec<String> {
+        let mut names: Vec<String> = std::fs::read_dir(self.project.path().join(".claude/worktrees"))
+            .unwrap()
+            .flatten()
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .collect();
+        names.sort();
+        names
+    }
+}
+
+/// US2 s2: a call with an AI CLI and a prompt creates the worktree and its one session, the session
+/// runs in the new worktree and the reply names it, as `create_session` does.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn create_worktree_with_a_definition_creates_the_worktree_and_its_session() {
+    let _guard = ENV.lock().await;
+    let s = Sandbox::new().await;
+    s.state.set_first_prompt_bound(READY_BOUND);
+    let out = s
+        .worktree_ok(
+            sid(3),
+            json!({"branch": "feat-x", "ai_cli": "copilot", "prompt": PROMPT}),
+        )
+        .await;
+    assert_eq!(out["ref"], "feat-x", "the worktree row: {out}");
+    assert_eq!(out["prompt_delivered"], json!(true), "{out}");
+    assert!(out["lifecycle"].is_string(), "{out}");
+    let id = Sandbox::created(&out);
+    let summary = session_in(&s.state.catalog_snapshot(), id)
+        .cloned()
+        .unwrap();
+    assert_eq!(summary.worktree_dir.as_deref(), Some("feat-x"));
+    assert_eq!(summary.provider, AiCli::Copilot);
+    s.settle_typed("copilot", &format!("{PROMPT}\n")).await;
+    assert_eq!(s.typed("copilot"), format!("{PROMPT}\n"));
+}
+
+/// A prompt alone takes the user's default CLI; the derived form takes a definition too.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_prompt_alone_takes_the_default_cli() {
+    let _guard = ENV.lock().await;
+    let s = Sandbox::new().await;
+    s.state.set_default_ai_cli(AiCli::Copilot).unwrap();
+    s.state.set_first_prompt_bound(READY_BOUND);
+    let out = s
+        .worktree_ok(sid(3), json!({"name": "dark mode", "prompt": PROMPT}))
+        .await;
+    let id = Sandbox::created(&out);
+    let summary = session_in(&s.state.catalog_snapshot(), id)
+        .cloned()
+        .unwrap();
+    assert_eq!(summary.provider, AiCli::Copilot, "{out}");
+    assert_eq!(summary.worktree_dir.as_deref(), out["directory"].as_str());
+}
+
+/// US2 s5: without a definition the reply has no session fields and `create_session` then works.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn create_worktree_without_a_definition_has_no_session_and_create_session_then_works() {
+    let _guard = ENV.lock().await;
+    let s = Sandbox::new().await;
+    let out = s.worktree_ok(sid(3), json!({"branch": "feat-y"})).await;
+    for key in ["session", "lifecycle", "prompt_delivered"] {
+        assert_eq!(out.get(key), None, "{key} is absent: {out}");
+    }
+    let created = s
+        .ok(json!({"worktree": "feat-y", "ai_cli": "claude_code"}))
+        .await;
+    let id = Sandbox::created(&created);
+    assert_eq!(
+        session_in(&s.state.catalog_snapshot(), id)
+            .and_then(|s| s.worktree_dir.clone())
+            .as_deref(),
+        Some("feat-y")
+    );
+}
+
+/// US2 s4: a CLI that is not available creates nothing: no worktree, no session.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_missing_cli_creates_no_worktree_and_no_session() {
+    let _guard = ENV.lock().await;
+    let s = Sandbox::new().await;
+    std::fs::remove_file(s.bin.path().join("pi")).unwrap();
+    let (sessions, dirs) = (s.session_ids(), s.worktree_dirs());
+    let error = s
+        .worktree_err(json!({"branch": "feat-z", "ai_cli": "pi", "prompt": PROMPT}))
+        .await;
+    assert_eq!(error["category"], "service_error", "{error}");
+    assert_eq!(s.session_ids(), sessions, "no session record");
+    assert_eq!(s.worktree_dirs(), dirs, "no worktree");
+}
+
+/// A caller running in the project root (Default) may create a worktree with a definition: the
+/// session runs in the new worktree, never in the root (constitution III, research R6).
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_default_caller_creates_the_worktree_and_its_session_in_it() {
+    let _guard = ENV.lock().await;
+    let s = Sandbox::new().await;
+    s.state.set_first_prompt_bound(READY_BOUND);
+    let plain = s.worktree_ok(sid(1), json!({"branch": "feat-p"})).await;
+    assert_eq!(plain.get("session"), None, "{plain}");
+    let out = s
+        .worktree_ok(
+            sid(1),
+            json!({"branch": "feat-q", "ai_cli": "claude_code"}),
+        )
+        .await;
+    let id = Sandbox::created(&out);
+    let summary = session_in(&s.state.catalog_snapshot(), id)
+        .cloned()
+        .unwrap();
+    assert_eq!(summary.worktree_dir.as_deref(), Some("feat-q"));
+}

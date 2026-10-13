@@ -210,6 +210,16 @@ pub enum Operation {
     },
 }
 
+/// The session `create_worktree` defines at the worktree's start (feature 776, FR-006): given when
+/// the call names `ai_cli` or `prompt`. A `prompt` alone takes the user's default AI CLI.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StartSession {
+    /// The session's AI CLI; `None` takes the default from Settings.
+    pub ai_cli: Option<AiCli>,
+    /// The session's first input, typed once its CLI is ready.
+    pub prompt: Option<String>,
+}
+
 /// What `create_worktree` was asked for. Built only by the parser (feature 550, data-model.md).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CreateWorktreeRequest {
@@ -218,6 +228,8 @@ pub enum CreateWorktreeRequest {
         branch: String,
         name: Option<String>,
         mode: CreateMode,
+        /// The session created with the worktree (776), when the call defined one.
+        start: Option<StartSession>,
     },
     /// The form's inputs: at least one of the four fields, never a `branch`, `mode` or `remote`.
     /// `name` is the description the branch and directory are derived from.
@@ -226,10 +238,20 @@ pub enum CreateWorktreeRequest {
         ticket: Option<String>,
         name: Option<String>,
         github_issue: Option<u32>,
+        /// The session created with the worktree (776), when the call defined one.
+        start: Option<StartSession>,
     },
 }
 
 impl CreateWorktreeRequest {
+    /// The session this call defines at start, if any.
+    pub fn start(&self) -> Option<&StartSession> {
+        match self {
+            CreateWorktreeRequest::Literal { start, .. }
+            | CreateWorktreeRequest::Derived { start, .. } => start.as_ref(),
+        }
+    }
+
     /// The form's inputs of a derived request, as `naming::derive` takes them; `None` for a
     /// literal one. A missing name derives as blank, which `derive` refuses as the form does.
     pub fn naming(&self) -> Option<WorktreeNaming> {
@@ -260,6 +282,7 @@ impl CreateWorktreeRequest {
                 ticket,
                 name,
                 github_issue,
+                ..
             } => match (name, github_issue) {
                 (Some(name), _) => name.clone(),
                 (None, Some(issue)) => format!("#{issue}"),
@@ -486,7 +509,10 @@ const TOOLS: &[Tool] = &[
             issue or ticket, include the issue reference in its name: pass it as `ticket` (with \
             `type` and `name`) or as `github_issue`, not inside a literal `branch`, so the branch \
             is `${type}/${ticket}_${name}` and the directory `${type}-${ticket}_${name}`; the \
-            sidebar's issue tag and filter then work.",
+            sidebar's issue tag and filter then work. With ai_cli or prompt the worktree's one \
+            session is created in it in the same call, and the result also carries session, \
+            lifecycle and prompt_delivered as create_session returns them; a missing CLI creates \
+            nothing. Without them the worktree has no session, and create_session starts its one.",
         properties: || {
             json!({
                 "branch": {"type": "string", "minLength": 1,
@@ -510,6 +536,13 @@ const TOOLS: &[Tool] = &[
                         filter work: a worktree without it gets neither."},
                 "github_issue": {"type": "integer", "minimum": 1,
                     "description": "Derived only: a GitHub issue number. Fills ticket, name and type from the open issue; explicit values win."},
+                "ai_cli": {"type": "string",
+                    "enum": AiCli::ALL.map(AiCli::tool_name),
+                    "description": "The AI CLI of the worktree's session; with it or prompt the \
+                        worktree and its one session are created together (default CLI: the \
+                        user's default from Settings)."},
+                "prompt": {"type": "string",
+                    "description": "The session's first input, typed once its CLI is ready."},
             })
         },
         required: &[],
@@ -800,6 +833,11 @@ const MAX_GITHUB_ISSUE: u64 = 2_147_483_647;
 /// `name`, `mode`, `remote`) or the derived inputs (`type`, `ticket`, `github_issue`, `name`).
 fn create_worktree_request(args: &Map<String, Value>) -> Result<CreateWorktreeRequest, OpError> {
     let present = |key: &str| !matches!(args.get(key), None | Some(Value::Null));
+    let ai_cli = optional_ai_cli(args, "ai_cli")?;
+    let prompt = optional_text(args, "prompt")?;
+    // A blank prompt is no prompt, as for the dialog (feature 776); either field defines a session.
+    let prompt = prompt.filter(|p| !p.trim().is_empty());
+    let start = (ai_cli.is_some() || prompt.is_some()).then_some(StartSession { ai_cli, prompt });
     let literal = ["branch", "mode", "remote"]
         .into_iter()
         .filter(|k| present(k))
@@ -821,6 +859,7 @@ fn create_worktree_request(args: &Map<String, Value>) -> Result<CreateWorktreeRe
             branch: required_string(args, "branch")?,
             name: optional_string(args, "name")?,
             mode: create_mode(args)?,
+            start,
         });
     }
     if present("mode") || present("remote") {
@@ -851,6 +890,7 @@ fn create_worktree_request(args: &Map<String, Value>) -> Result<CreateWorktreeRe
         ticket,
         name,
         github_issue,
+        start,
     })
 }
 
