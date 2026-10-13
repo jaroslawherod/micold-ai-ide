@@ -106,7 +106,8 @@ pub fn apply_signal(runs: &mut Vec<AgentRun>, signal: AgentSignal) -> bool {
         provider,
     });
     if runs.len() > MAX_RUNS_PER_ORIGIN {
-        let victim = runs
+        let last = runs.len() - 1;
+        let victim = runs[..last]
             .iter()
             .position(|r| r.state == AgentRunState::Stopped)
             .unwrap_or(0);
