@@ -17,6 +17,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #791 | Design (spec, plan, tasks) | merged | 6b60f3201a2e4dacdfc8d7d626ea55384eb959a0 |
+| #794 | M1 | merged | 497a497cd87bdd573581252a7b51278d37d7e16f |
+| #807 | Amendment: soft limit, default session (specs only) | open | |
 
 ## Milestones
 
