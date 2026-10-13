@@ -90,6 +90,7 @@ use iced::{alignment, keyboard, Element, Event, Length, Rectangle, Size, Vector}
 use micold_core::tokens::{anatomy, Roles};
 use micold_core::typeahead::{claims, intent_for, move_highlight, Intent};
 
+use super::form_field::{field_text_builders, FieldText};
 use super::picker::{animated_menu, menu_element, Row, EXIT, GAP};
 use super::text::TypeRole;
 use crate::icons::Icon;
@@ -106,9 +107,7 @@ pub struct Select<'a, T, M> {
     on_selected: Box<dyn Fn(T) -> M + 'a>,
     placeholder: String,
     roles: Roles,
-    label: Option<String>,
-    supporting: Option<String>,
-    error: Option<String>,
+    text: FieldText,
     /// The trigger and its list, assembled in [`Widget::layout`] — see the module docs for why they
     /// cannot be built any earlier.
     content: Option<Element<'a, M>>,
@@ -132,34 +131,12 @@ where
             on_selected: Box::new(on_selected),
             placeholder: "Select…".to_string(),
             roles,
-            label: None,
-            supporting: None,
-            error: None,
+            text: FieldText::default(),
             content: None,
         }
     }
 
-    /// The control's name, rendered inside its container above the value (FR-031a).
-    ///
-    /// §7.7 moves the free-standing label that sat above the select into the control's own
-    /// container, which is what makes it look like every other field rather than like a button
-    /// with a caption.
-    pub fn label(mut self, label: impl Into<String>) -> Self {
-        self.label = Some(label.into());
-        self
-    }
-
-    /// Explanatory text beneath the container.
-    pub fn supporting(mut self, text: impl Into<String>) -> Self {
-        self.supporting = Some(text.into());
-        self
-    }
-
-    /// The validation failure, if any — replaces the supporting text and recolours the chrome.
-    pub fn error(mut self, error: Option<impl Into<String>>) -> Self {
-        self.error = error.map(Into::into);
-        self
-    }
+    field_text_builders!();
 
     /// Text shown when nothing is selected (default: "Select…").
     ///
@@ -310,7 +287,7 @@ where
     let populated = s.selected.is_some();
     // A resting label *is* the placeholder — it sits on the value's line — so the trigger must not
     // draw a second one under it. One rule, in one place: see `form_field::label_floats`.
-    let resting = s.label.is_some() && !super::form_field::label_floats(populated, view.open);
+    let resting = s.text.has_label() && !super::form_field::label_floats(populated, view.open);
     let value = match &s.selected {
         Some(chosen) => chosen.to_string(),
         None if resting => String::new(),
@@ -337,7 +314,7 @@ where
         .height(Length::Fill)
         .into();
 
-    let mut field = super::FormField::new(trigger, r)
+    let field = super::FormField::new(trigger, r)
         // The indicator, answering for itself. Nothing supplies this and nothing can (FR-013).
         //
         // Thickened by the keyboard as well as by the list (FR-030). It is the same mark a focused
@@ -352,13 +329,7 @@ where
         .pressable(true)
         // A selection counts as content; an unset select rests its label like an empty input.
         .populated(populated);
-    if let Some(label) = s.label.clone() {
-        field = field.label(label);
-    }
-    if let Some(supporting) = s.supporting.clone() {
-        field = field.supporting(supporting);
-    }
-    let field: Element<'a, M> = field.error(s.error.clone()).into();
+    let field: Element<'a, M> = s.text.clone().apply(field).into();
 
     // The rows are the search picker's rows, with no matched spans — an `EmphasisedLabel` with no
     // spans is a plain label, so the same renderer serves both lists and there is one definition of

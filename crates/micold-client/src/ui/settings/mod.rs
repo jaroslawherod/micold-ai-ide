@@ -26,10 +26,10 @@ pub(crate) mod terminal;
 use crate::app::Message;
 use crate::features::settings::{SettingsDraft, SettingsSection};
 use crate::features::window::FieldId;
-use crate::ui::material::{Text, TypeRole};
-use iced::widget::{column, container, Space};
+use crate::ui::material::{beneath, Text, TypeRole};
+use iced::widget::column;
 use iced::{Element, Length};
-use micold_core::tokens::{anatomy, spacing, Roles};
+use micold_core::tokens::{spacing, Roles};
 
 /// A durable enum, paired with the name the picker shows for it.
 ///
@@ -122,17 +122,7 @@ pub fn field_note<'a>(
     text: Option<impl Into<std::borrow::Cow<'a, str>>>,
     roles: Roles,
 ) -> Element<'a, Message> {
-    let beneath: Element<'a, Message> = match text {
-        Some(text) => container(note(text, roles))
-            .padding(iced::Padding {
-                top: 0.0,
-                bottom: 0.0,
-                left: anatomy::text_field::PADDING,
-                right: anatomy::text_field::PADDING,
-            })
-            .into(),
-        None => Space::new().into(),
-    };
+    let beneath = beneath(text.map(|text| note(text, roles)), 0.0);
     column![control.into(), beneath]
         .spacing(spacing::XS)
         .width(Length::Fill)
