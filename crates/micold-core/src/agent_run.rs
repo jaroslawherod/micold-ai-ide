@@ -119,7 +119,10 @@ pub fn apply_signal(runs: &mut Vec<AgentRun>, signal: AgentSignal) -> bool {
 /// the daemon restarted). `true` when any changed.
 pub fn stop_running(runs: &mut [AgentRun]) -> bool {
     let mut changed = false;
-    for run in runs.iter_mut().filter(|r| r.state == AgentRunState::Running) {
+    for run in runs
+        .iter_mut()
+        .filter(|r| r.state == AgentRunState::Running)
+    {
         run.state = AgentRunState::Stopped;
         changed = true;
     }

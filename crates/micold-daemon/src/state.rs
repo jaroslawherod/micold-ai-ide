@@ -4599,7 +4599,11 @@ impl DaemonState {
     /// **Never reaches the activity state machine** (FR-007): a sub-agent finishing is not the end
     /// of the origin's turn, so `note_activity` is not called. The change is written by
     /// [`Self::persist_attention`] from the supervisor tick, as attention events are.
-    pub fn note_agent_signal(&self, session: SessionId, signal: micold_core::agent_run::AgentSignal) -> bool {
+    pub fn note_agent_signal(
+        &self,
+        session: SessionId,
+        signal: micold_core::agent_run::AgentSignal,
+    ) -> bool {
         let mut guard = self.lock();
         let inner = &mut *guard;
         let changed = inner.catalog.record_agent_signal(session, signal);
