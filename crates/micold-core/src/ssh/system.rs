@@ -161,7 +161,12 @@ mod tests {
     #[tokio::test]
     async fn the_deadline_kills_the_child_and_says_so() {
         let out = runner()
-            .run(sh("sleep 30"), Vec::new(), Some(Duration::from_millis(100)), None)
+            .run(
+                sh("sleep 30"),
+                Vec::new(),
+                Some(Duration::from_millis(100)),
+                None,
+            )
             .await
             .unwrap();
         assert!(out.timed_out);
@@ -179,9 +184,15 @@ mod tests {
     async fn progress_reaches_one_hundred() {
         let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
         let sink = seen.clone();
-        let progress: ProvisionProgress = std::sync::Arc::new(move |p| sink.lock().unwrap().push(p));
+        let progress: ProvisionProgress =
+            std::sync::Arc::new(move |p| sink.lock().unwrap().push(p));
         runner()
-            .run(sh("cat >/dev/null"), vec![0; CHUNK * 3], None, Some(progress))
+            .run(
+                sh("cat >/dev/null"),
+                vec![0; CHUNK * 3],
+                None,
+                Some(progress),
+            )
             .await
             .unwrap();
         assert_eq!(seen.lock().unwrap().last(), Some(&100));

@@ -44,8 +44,9 @@ pub fn update(app: &mut App, id: DaemonId, msg: Msg) -> Task<Message> {
         Msg::Refused(reason) => daemon_sync::on_refused(app, id, reason),
         Msg::StartFailed(reason) => daemon_sync::on_start_failed(app, id, reason),
         Msg::CopyProgress(percent) => {
-            app.core
-                .update(Message::Daemons(micold_client::features::daemons::Msg::CopyProgress(id, percent)));
+            app.core.update(Message::Daemons(
+                micold_client::features::daemons::Msg::CopyProgress(id, percent),
+            ));
             Task::none()
         }
         Msg::TakeoverRequested => daemon_sync::on_takeover_requested(app),

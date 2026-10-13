@@ -1,7 +1,9 @@
 //! Feature 489 (FR-001, FR-002, T008): a "Remote over SSH" daemon is one more runtime in the
 //! registry, persisted additively with no `settings_version` bump.
 
-use micold_core::daemons::{DaemonEvent, DaemonRegistry, DaemonRuntime, DaemonState, DaemonStates, RegistryError};
+use micold_core::daemons::{
+    DaemonEvent, DaemonRegistry, DaemonRuntime, DaemonState, DaemonStates, RegistryError,
+};
 use micold_core::settings::{JsonFileSettingsStore, SettingsStore};
 use micold_core::ssh::{SshSettings, SshTarget};
 
@@ -32,7 +34,8 @@ fn the_runtime_round_trips_flat_with_its_kind() {
 #[test]
 fn a_blank_host_is_refused_by_the_registry() {
     let mut registry = DaemonRegistry::new(Vec::new(), 1);
-    let bad: DaemonRuntime = serde_json::from_value(serde_json::json!({"kind": "ssh", "host": " "})).unwrap();
+    let bad: DaemonRuntime =
+        serde_json::from_value(serde_json::json!({"kind": "ssh", "host": " "})).unwrap();
     assert_eq!(
         registry.add("Build", bad, false),
         Err(RegistryError::InvalidField { field: "host" })
@@ -49,7 +52,8 @@ fn an_old_document_loads_and_a_saved_one_keeps_its_version() {
     registry.add("Build", ssh("build-box"), true).unwrap();
     settings.set_registry(registry);
     store.save(&settings).unwrap();
-    let saved: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    let saved: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
     let again = store.load().settings;
     assert_eq!(again.daemons.last().unwrap().runtime, ssh("build-box"));
     assert_eq!(
@@ -65,9 +69,14 @@ fn a_failed_start_is_unreachable_at_once() {
     let id = registry.add("Build", ssh("build-box"), false).unwrap();
     let mut states = DaemonStates::at_launch(&registry);
     states.apply(id, DaemonEvent::Start);
-    let change = states.apply(id, DaemonEvent::StartFailed("build-box is unreachable".into()));
+    let change = states.apply(
+        id,
+        DaemonEvent::StartFailed("build-box is unreachable".into()),
+    );
     assert_eq!(
         change.unwrap().to,
-        DaemonState::Unreachable { reason: "build-box is unreachable".into() }
+        DaemonState::Unreachable {
+            reason: "build-box is unreachable".into()
+        }
     );
 }

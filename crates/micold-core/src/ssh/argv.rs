@@ -85,10 +85,16 @@ fn command(
     connect_timeout_secs: u32,
     remote: &str,
 ) -> SshCommand {
-    let mut args: Vec<String> = ["-T", "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=yes"]
-        .iter()
-        .map(|s| s.to_string())
-        .collect();
+    let mut args: Vec<String> = [
+        "-T",
+        "-o",
+        "BatchMode=yes",
+        "-o",
+        "StrictHostKeyChecking=yes",
+    ]
+    .iter()
+    .map(|s| s.to_string())
+    .collect();
     // `UpdateHostKeys=no`: never write to known_hosts on the user's behalf (FR-010). The server
     // alive options bound a network that dies mid-copy or mid-session (FR-009).
     for option in [
@@ -148,7 +154,12 @@ pub fn copy(target: &SshTarget, platform: ClientPlatform, timeout: u32, build: &
 }
 
 /// The bridge: the remote daemon binary's relay, whose stdin/stdout carry the protocol.
-pub fn bridge(target: &SshTarget, platform: ClientPlatform, timeout: u32, build: &str) -> SshCommand {
+pub fn bridge(
+    target: &SshTarget,
+    platform: ClientPlatform,
+    timeout: u32,
+    build: &str,
+) -> SshCommand {
     let remote = format!("\"{}/micold-daemon\" remote bridge", remote_dir(build));
     command(target, platform, timeout, &remote)
 }
@@ -226,7 +237,12 @@ mod tests {
                 );
             }
             let joined = cmd.args.join(" ");
-            for forbidden in ["accept-new", "StrictHostKeyChecking=no", "UserKnownHostsFile", "PasswordAuthentication"] {
+            for forbidden in [
+                "accept-new",
+                "StrictHostKeyChecking=no",
+                "UserKnownHostsFile",
+                "PasswordAuthentication",
+            ] {
                 assert!(!joined.contains(forbidden), "{forbidden} in {joined}");
             }
         }
@@ -234,7 +250,9 @@ mod tests {
 
     #[test]
     fn a_key_path_may_appear_but_no_secret_does() {
-        let joined = bridge(&target(), ClientPlatform::Linux, 15, "b").args.join(" ");
+        let joined = bridge(&target(), ClientPlatform::Linux, 15, "b")
+            .args
+            .join(" ");
         assert!(joined.contains("-i /home/me/.ssh/id"));
         assert!(!joined.to_lowercase().contains("password"));
     }
@@ -257,14 +275,20 @@ mod tests {
 
     #[test]
     fn the_program_is_ssh_exe_on_windows_and_ssh_elsewhere() {
-        assert_eq!(probe(&target(), ClientPlatform::Windows, 15).program, "ssh.exe");
+        assert_eq!(
+            probe(&target(), ClientPlatform::Windows, 15).program,
+            "ssh.exe"
+        );
         assert_eq!(probe(&target(), ClientPlatform::Linux, 15).program, "ssh");
         assert_eq!(probe(&target(), ClientPlatform::MacOs, 15).program, "ssh");
     }
 
     #[test]
     fn the_build_directory_name_is_version_and_twelve_hex_of_the_fingerprint() {
-        assert_eq!(build_id("1.2.3", "0123456789abcdef0123"), "1.2.3-0123456789ab");
+        assert_eq!(
+            build_id("1.2.3", "0123456789abcdef0123"),
+            "1.2.3-0123456789ab"
+        );
     }
 
     #[test]
@@ -272,7 +296,8 @@ mod tests {
         let cmd = bridge(&target(), ClientPlatform::Linux, 15, "1.0-abc");
         let last = cmd.args.last().unwrap();
         assert!(
-            last.ends_with("micold-daemon\" remote bridge") && last.contains(".micold/remote/1.0-abc/"),
+            last.ends_with("micold-daemon\" remote bridge")
+                && last.contains(".micold/remote/1.0-abc/"),
             "{last}"
         );
     }
@@ -282,6 +307,9 @@ mod tests {
         let cmd = copy(&target(), ClientPlatform::Linux, 15, "1.0-abc");
         let last = cmd.args.last().unwrap();
         assert!(last.contains("umask 077") && last.contains(".part") && last.contains("mv "));
-        assert!(!last.contains("build"), "host name must not reach the script: {last}");
+        assert!(
+            !last.contains("build"),
+            "host name must not reach the script: {last}"
+        );
     }
 }

@@ -49,7 +49,9 @@ impl SshTarget {
             return Err(RegistryError::InvalidField { field: "host" });
         }
         let user = match user.map(str::trim).filter(|u| !u.is_empty()) {
-            Some(u) if u.contains('@') || u.starts_with('-') || u.chars().any(char::is_whitespace) => {
+            Some(u)
+                if u.contains('@') || u.starts_with('-') || u.chars().any(char::is_whitespace) =>
+            {
                 return Err(RegistryError::InvalidField { field: "user" })
             }
             other => other.map(str::to_string),

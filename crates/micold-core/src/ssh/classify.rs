@@ -70,7 +70,9 @@ const PATTERNS: &[(&str, fn() -> SshFailure)] = &[
     ("REMOTE HOST IDENTIFICATION HAS CHANGED", || {
         SshFailure::HostKeyChanged
     }),
-    ("Host key verification failed", || SshFailure::HostKeyUnknown),
+    ("Host key verification failed", || {
+        SshFailure::HostKeyUnknown
+    }),
     ("host key is known", || SshFailure::HostKeyUnknown),
     ("Could not resolve hostname", || SshFailure::DnsFailure),
     ("Connection refused", || SshFailure::ConnectionRefused),
@@ -83,12 +85,7 @@ const PATTERNS: &[(&str, fn() -> SshFailure)] = &[
 
 /// Classify an attempt. `spawn_not_found`: the `ssh` executable could not be started;
 /// `timed_out`: the watchdog killed the child at the deadline.
-pub fn classify(
-    spawn_not_found: bool,
-    timed_out: bool,
-    exit_ok: bool,
-    stderr: &str,
-) -> SshFailure {
+pub fn classify(spawn_not_found: bool, timed_out: bool, exit_ok: bool, stderr: &str) -> SshFailure {
     if spawn_not_found {
         return SshFailure::SshMissing;
     }
@@ -171,7 +168,9 @@ fn install_hint(platform: ClientPlatform) -> &'static str {
     match platform {
         ClientPlatform::Windows => "Settings > Optional features > OpenSSH Client",
         ClientPlatform::MacOs => "it ships with macOS; check your PATH",
-        ClientPlatform::Linux => "for example `apt install openssh-client` or `dnf install openssh-clients`",
+        ClientPlatform::Linux => {
+            "for example `apt install openssh-client` or `dnf install openssh-clients`"
+        }
     }
 }
 
@@ -241,8 +240,12 @@ mod tests {
     fn a_changed_key_wins_over_the_generic_verification_failure_line() {
         // The changed-key banner is followed by `Host key verification failed.`, which alone
         // would read as an unknown key: the more specific class must win.
-        let stderr = "WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!\nHost key verification failed.";
-        assert_eq!(classify(false, false, false, stderr), SshFailure::HostKeyChanged);
+        let stderr =
+            "WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!\nHost key verification failed.";
+        assert_eq!(
+            classify(false, false, false, stderr),
+            SshFailure::HostKeyChanged
+        );
     }
 
     #[test]
@@ -318,7 +321,10 @@ mod tests {
             SshFailure::ConnectionRefused.reason(&c),
             "build refused the connection on port 22"
         );
-        assert_eq!(SshFailure::HostUnreachable.reason(&c), "build is unreachable");
+        assert_eq!(
+            SshFailure::HostUnreachable.reason(&c),
+            "build is unreachable"
+        );
         assert_eq!(
             SshFailure::Timeout.reason(&c),
             "no answer from build within 15 s"
@@ -356,7 +362,10 @@ mod tests {
             "cannot write the daemon to ~/.micold on build (read-only or no space)"
         );
         assert_eq!(
-            SshFailure::HelperFailed { tail: "boom".into() }.reason(&c),
+            SshFailure::HelperFailed {
+                tail: "boom".into()
+            }
+            .reason(&c),
             "the daemon helper on build failed: boom"
         );
     }

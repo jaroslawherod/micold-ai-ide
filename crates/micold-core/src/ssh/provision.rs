@@ -178,7 +178,12 @@ async fn run_probe(
         .await
         .map_err(io_failure)?;
     if !out.ok() {
-        return Err(classify(false, out.timed_out, out.status == Some(0), &out.stderr));
+        return Err(classify(
+            false,
+            out.timed_out,
+            out.status == Some(0),
+            &out.stderr,
+        ));
     }
     parse_probe(&String::from_utf8_lossy(&out.stdout)).map_err(|raw| match raw {
         Some((os, arch)) => SshFailure::RemoteUnsupported { os, arch },
@@ -311,11 +316,27 @@ mod tests {
             (ClientPlatform::Linux, "x86_64", "linux", "aarch64", Bundled),
             (ClientPlatform::MacOs, "aarch64", "macos", "aarch64", Own),
             (ClientPlatform::MacOs, "aarch64", "linux", "x86_64", Bundled),
-            (ClientPlatform::Windows, "x86_64", "linux", "x86_64", Bundled),
-            (ClientPlatform::Windows, "x86_64", "macos", "aarch64", Bundled),
+            (
+                ClientPlatform::Windows,
+                "x86_64",
+                "linux",
+                "x86_64",
+                Bundled,
+            ),
+            (
+                ClientPlatform::Windows,
+                "x86_64",
+                "macos",
+                "aarch64",
+                Bundled,
+            ),
         ];
         for (c, ca, ro, ra, want) in cases {
-            assert_eq!(select_artefact(c, ca, ro, ra), want, "{c:?} {ca} -> {ro} {ra}");
+            assert_eq!(
+                select_artefact(c, ca, ro, ra),
+                want,
+                "{c:?} {ca} -> {ro} {ra}"
+            );
         }
     }
 
@@ -435,7 +456,9 @@ mod tests {
             out(String::new()),
             out(probe_line("Linux", "x86_64", 1, 0)),
         ]);
-        let err = provision(&fake, &target(), &opts(), None).await.unwrap_err();
+        let err = provision(&fake, &target(), &opts(), None)
+            .await
+            .unwrap_err();
         assert_eq!(err, SshFailure::RemoteNotWritable);
     }
 
@@ -444,7 +467,9 @@ mod tests {
         let fake = Fake::new(vec![failed(
             "@@@ WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED! @@@",
         )]);
-        let err = provision(&fake, &target(), &opts(), None).await.unwrap_err();
+        let err = provision(&fake, &target(), &opts(), None)
+            .await
+            .unwrap_err();
         assert_eq!(err, SshFailure::HostKeyChanged);
         assert!(err.is_permanent());
         assert_eq!(fake.commands().len(), 1);
@@ -453,7 +478,9 @@ mod tests {
     #[tokio::test]
     async fn no_matching_build_is_named_with_the_remote_platform() {
         let fake = Fake::new(vec![out(probe_line("Darwin", "arm64", 1, 0))]);
-        let err = provision(&fake, &target(), &opts(), None).await.unwrap_err();
+        let err = provision(&fake, &target(), &opts(), None)
+            .await
+            .unwrap_err();
         assert_eq!(
             err,
             SshFailure::NoMatchingBuild {
@@ -478,14 +505,18 @@ mod tests {
     #[tokio::test]
     async fn missing_ssh_is_named() {
         let fake = Fake::new(vec![Err(io::Error::from(io::ErrorKind::NotFound))]);
-        let err = provision(&fake, &target(), &opts(), None).await.unwrap_err();
+        let err = provision(&fake, &target(), &opts(), None)
+            .await
+            .unwrap_err();
         assert_eq!(err, SshFailure::SshMissing);
     }
 
     #[tokio::test]
     async fn read_only_home_is_named_before_copying() {
         let fake = Fake::new(vec![out(probe_line("Linux", "x86_64", 0, 0))]);
-        let err = provision(&fake, &target(), &opts(), None).await.unwrap_err();
+        let err = provision(&fake, &target(), &opts(), None)
+            .await
+            .unwrap_err();
         assert_eq!(err, SshFailure::RemoteNotWritable);
         assert_eq!(fake.commands().len(), 1);
     }

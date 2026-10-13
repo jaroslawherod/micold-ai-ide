@@ -262,7 +262,11 @@ fn an_ssh_daemon_is_added_started_and_shows_progress_then_its_version_and_target
         "auto_start applies to an Ssh entry"
     );
 
-    daemons::update(&mut state, &mut w.model(), daemons::Msg::CopyProgress(id, 40));
+    daemons::update(
+        &mut state,
+        &mut w.model(),
+        daemons::Msg::CopyProgress(id, 40),
+    );
     let vm = daemons::views(&state, &w.model());
     let row = vm.rows.iter().find(|r| r.id == id).unwrap();
     assert_eq!(row.state, DaemonState::Starting);

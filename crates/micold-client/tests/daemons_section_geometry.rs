@@ -231,4 +231,3 @@ fn the_ssh_form_and_ssh_rows_paint_their_fields_and_badges_without_overflow() {
     assert!(has(&form, "Host"), "{form:?}");
     assert_no_text_overflows(&state, "the SSH add form with a refused host");
 }
-

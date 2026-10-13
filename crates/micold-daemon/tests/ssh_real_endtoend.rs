@@ -23,7 +23,9 @@ struct RemoteDaemon(Option<u32>);
 impl Drop for RemoteDaemon {
     fn drop(&mut self) {
         if let Some(pid) = self.0 {
-            let _ = std::process::Command::new("kill").arg(pid.to_string()).status();
+            let _ = std::process::Command::new("kill")
+                .arg(pid.to_string())
+                .status();
         }
     }
 }
@@ -59,7 +61,8 @@ fn listening_inodes() -> Vec<String> {
                         a.starts_with("0100007F:")
                             || a.starts_with("00000000000000000000000001000000:")
                     });
-                    (f.get(3) == Some(&"0A") && !loopback).then(|| f.get(9).map(|s| s.to_string()))?
+                    (f.get(3) == Some(&"0A") && !loopback)
+                        .then(|| f.get(9).map(|s| s.to_string()))?
                 })
                 .collect::<Vec<_>>()
         })
@@ -68,7 +71,8 @@ fn listening_inodes() -> Vec<String> {
 
 #[tokio::test]
 async fn ssh_real_add_start_copies_the_build_and_connects() {
-    let Some(host) = ssh_real_support::host_or_skip("ssh_real_add_start_copies_the_build_and_connects")
+    let Some(host) =
+        ssh_real_support::host_or_skip("ssh_real_add_start_copies_the_build_and_connects")
     else {
         return;
     };
@@ -76,7 +80,10 @@ async fn ssh_real_add_start_copies_the_build_and_connects() {
     // reached instead of the one this test provisions.
     let endpoint = micold_core::endpoint::resolve_pinned().expect("pinned endpoint");
     if micold_core::spawn::running_daemon_pid(&endpoint).is_some() {
-        eprintln!("SKIP ssh_real_add_start_copies_the_build_and_connects: a daemon already listens on {}", endpoint.socket_path.display());
+        eprintln!(
+            "SKIP ssh_real_add_start_copies_the_build_and_connects: a daemon already listens on {}",
+            endpoint.socket_path.display()
+        );
         return;
     }
 
@@ -119,7 +126,11 @@ async fn ssh_real_add_start_copies_the_build_and_connects() {
         .join(".micold/remote")
         .join(&build)
         .join("micold-daemon");
-    assert!(copied.is_file(), "the build was copied to {}", copied.display());
+    assert!(
+        copied.is_file(),
+        "the build was copied to {}",
+        copied.display()
+    );
     assert_eq!(
         seen.lock().unwrap().last(),
         Some(&100),
