@@ -6,9 +6,10 @@
 
 ## Summary
 
-A worktree (or the Default root) hosts at most one un-archived session. The invariant is enforced
-where the record is written, in one place, under the daemon's catalog lock, and every other
-surface follows from it:
+A worktree (or the Default root) hosts, by default, at most one un-archived session; the limit is
+soft (amendment 2026-10-13, research R12): a request that says so explicitly adds another. The
+default is enforced where the record is written, in one place, under the daemon's catalog lock,
+and every other surface follows from it:
 
 1. **One rule, in `micold-core`**: a pure `occupancy` module decides, from a location's sessions,
    whether it is `Free` or `Taken(existing)`, and whether starting a given session is `Blocked` by
@@ -16,18 +17,24 @@ surface follows from it:
 2. **Refuse at the write**: `Catalog::create_session` checks and pushes under one `&mut self`, so
    FR-005 holds for any mix of windows and agents. Its refusal is a typed error that carries the
    existing session; every caller maps it (`SessionCreate` RPC, MCP `create_session`, review send,
-   runs).
+   runs). `create_session` takes an `Additional::{No, Yes}` argument: `Yes` (the explicit request)
+   skips the check, nothing else (R12).
 3. **Define at start**: `WorktreeCreate` and MCP `create_worktree` take an optional session
    definition (AI CLI, first prompt); the daemon creates the worktree and its session in one
    operation, checking the CLI first so a missing CLI leaves nothing.
-4. **No add affordance**: the sidebar offers the start action only on a location with no session;
-   the create-worktree dialog gains the CLI and prompt fields.
+4. **No casual add**: the sidebar row offers the start action only on a location with no session;
+   the create-worktree dialog gains the CLI and prompt fields; an additional session is only the
+   worktree row menu's "Start another session..." and its confirmation (R12).
+4a. **Worktree rows, default session**: the sidebar lists worktrees only; a row expands to its
+   sessions only when it has more than one; selecting a row selects `occupancy::default_session`
+   (R13).
 5. **Resume replaces**: provider-session resume (`AttachApply` of a session) into an occupied
    location is refused until the person confirms; with confirmation the daemon swaps the records
    in one catalog write after stopping the old process. Project-open adoption and "attach all"
-   catalogue at most one session per location.
-6. **Legacy**: nothing is migrated or deleted; extra sessions stay; a start is refused while
-   another of the location's sessions is live.
+   catalogue at most one session per location; the confirmation offers replace or keep both (R7,
+   R12).
+6. **Several sessions**: nothing is migrated or deleted; extra sessions stay; a start is refused
+   while another of the location's sessions is live, unless the request is explicit (R9, R12).
 
 No new storage, no new crate, no new lifecycle state.
 
@@ -56,13 +63,14 @@ process-free; nothing platform-specific is added.
 already held for the write.
 
 **Constraints**: offline; check-and-create atomic under the catalog lock (FR-005); wire change is
-additive (optional fields) with a `PROTOCOL_VERSION` bump (40 to 41).
+additive (optional fields) with `PROTOCOL_VERSION` bumps (40 to 41 shipped in M1; 41 to 42 in M2
+for the opt-in fields, the one further bump of the amendment).
 
 **Scale/Scope**: tens of sessions per project; one scan per create/start.
 
 ## Constitution Check
 
-*GATE: Must pass before Phase 0 research. Re-checked after Phase 1 design: unchanged.*
+*GATE: Must pass before Phase 0 research. Re-checked after Phase 1 design: unchanged. Re-checked for the 2026-10-13 amendment: II holds (several sessions in one worktree only on an explicit request; the build lock and git index are the user's to manage, the confirmation says so); VIII holds (the confirmation is built from existing dialog primitives as `confirm_session_remove`; the expander and menu entries use the existing tree and menu).*
 
 - [x] **I. Test-First (NON-NEGOTIABLE)**: PASS. Every decision (rule, refusal mapping, atomic
   create, definition at start, replace, legacy refusal, adoption cap) lands first in core or
@@ -108,7 +116,7 @@ specs/776-one-session-per-worktree/
 
 ```text
 crates/micold-core/src/
-├── occupancy.rs          # NEW: Occupancy, StartBlock, refusal wording (pure)
+├── occupancy.rs          # NEW: Occupancy, StartBlock, refusal wording, default_session (pure)
 ├── lib.rs                # export occupancy
 ├── attach.rs             # RefuseReason::LocationHasSession; per-location cap helper
 ├── session.rs            # (read) Session, SessionLocation, SessionLifecycle::is_live
@@ -116,11 +124,12 @@ crates/micold-core/src/
 │                         #   optional ai_cli/prompt on create_worktree
 └── protocol/
     ├── messages.rs       # WorktreeCreate.session, WorktreeCreated.session,
-    │                     #   AttachApply.replace
-    └── version.rs        # PROTOCOL_VERSION 41
+    │                     #   AttachItem::Session.replace (M1), allow_additional_session on
+    │                     #   SessionCreate/SessionStart/SessionRestart/AttachItem::Session (M2)
+    └── version.rs        # PROTOCOL_VERSION 41 (M1), 42 (M2)
 
 crates/micold-daemon/src/
-├── catalog.rs            # create_session -> CreateSessionError; attach_session/adopt cap;
+├── catalog.rs            # create_session(.., Additional) -> CreateSessionError; attach_session/adopt cap;
 │                         #   replace_session (swap under one write)
 ├── state.rs              # create_session passthrough; start_refusal; in-lock check+claim in start_session_gated; review_send_to_new_session
 │                         #   reuses the entry's own session; attach_apply replace + cap
@@ -131,10 +140,14 @@ crates/micold-daemon/src/
                           #   definition
 
 crates/micold-client/src/
-├── features/session.rs   # start affordance offered only for a Free location
+├── features/session.rs   # start affordance offered only for a Free location; additional-session
+│                         #   confirmation; row press selects the default session
+├── features/sidebar.rs   # expander only for a multi-session worktree, collapsed by default
 ├── features/worktree_form.rs   # AI CLI + prompt fields, "None" choice
-├── features/attach.rs    # confirm-replace step
-├── ui/sidebar.rs         # hide start action when occupied (renders the reducer's answer)
+├── features/attach.rs    # confirm step: replace or keep both
+├── ui/sidebar.rs         # hide start action when occupied; no session rows for one session;
+│                         #   row menu entries (renders the reducer's answer)
+├── ui/confirm_additional_session.rs   # NEW: the confirmation, pattern of confirm_session_remove.rs
 ├── ui/worktree_form.rs   # render the two fields
 ├── ui/attach_dialog.rs   # render the confirmation
 └── shell/daemon_sync.rs  # send definition, show the refusal text, select and view the
@@ -155,24 +168,27 @@ or `ui/`.
 | FR-001, FR-005 | `occupancy::Occupancy` + atomic check in `Catalog::create_session` (R1, R2) |
 | FR-002, FR-003 | `CreateSessionError::Occupied` mapped by `SessionCreate`, MCP `create_session`, review send (R3); wording in `occupancy::refusal_text` (contracts) |
 | FR-004 | `SessionState::start_intent` returns no start for an occupied location; sidebar renders it (R5) |
+| FR-015 | `allow_additional_session` on the tools and wire; `Additional::Yes` in `Catalog::create_session` and `start_session_gated` (R12) |
+| FR-016 | row menu "Start another session...", `confirm_additional_session` view, blocked-start confirmation (R12) |
+| FR-017, FR-018, FR-019 | `occupancy::default_session`, sidebar reducer and view (R13) |
 | FR-006 | `WorktreeCreate.session`, MCP `create_worktree` `ai_cli`/`prompt`, dialog fields (R4, R6); `ops::create_worktree_with_session` |
-| FR-007, FR-008b | `AttachApply.replace`, `Catalog::replace_session`, confirm step (R7) |
+| FR-007, FR-008b, FR-008c | `AttachItem::Session.replace` / `.allow_additional_session`, `Catalog::replace_session`, confirm step (R7, R12) |
 | FR-008a, FR-009 | existing `SessionRestart`/`SessionStart` paths, unchanged; pinned by tests |
 | FR-010 | `Occupancy::Free` includes a worktree whose sessions are all archived |
 | FR-011 | `SessionLocation::Default` is just another key (R1) |
 | FR-012 | `attach::cap_per_location`, `adopt_discovered_sessions` cap (R8) |
 | FR-013 | `occupancy::start_block`; in-lock check in `start_session_gated` plus `start_refusal` at the entries (R9) |
 | FR-014 | user-guide pages, tool catalogue strings |
-| SC-001..SC-005 | tests listed in quickstart.md |
+| SC-001..SC-007 | tests listed in quickstart.md |
 
 ## Test strategy (which layer proves what)
 
 | Layer | Proves |
 |---|---|
-| core unit (`occupancy`) | free/taken for every lifecycle, archived ignored, Default key, legacy block naming the live one |
+| core unit (`occupancy`) | free/taken for every lifecycle, archived ignored, Default key, block naming the live one; `default_session` (last viewed, else first, none) |
 | core unit (wire, tools) | additive fields round-trip; old frames decode; tool schemas and descriptions; refusal text holds id, name, `start_session` hint |
-| daemon integration | second `create_session` refused, catalog unchanged; 100 concurrent creates, one wins (SC-003); create_worktree with definition, missing CLI leaves nothing; restart/stop/start keep one; replace stops the old process; legacy catalog opens intact and refuses; adoption cap; review send reuses own stopped session |
-| client reducer | start affordance absent when occupied; dialog fields and "None"; refusal text shown; confirm-replace step |
+| daemon integration | second `create_session` refused, catalog unchanged; with `allow_additional_session` two sessions, both addressable; 100 concurrent creates, one wins (SC-003); create_worktree with definition, missing CLI leaves nothing; restart/stop/start keep one; replace stops the old process; legacy catalog opens intact and refuses; adoption cap; review send reuses own stopped session |
+| client reducer | start affordance absent when occupied; dialog fields and "None"; refusal text shown; confirm step replace or keep both; row press selects the default session; expander only for several; "Start another session..." confirm sends the opt-in |
 | geometry gates / quickstart §B | dialog layout, sidebar row without the action (rendering only) |
 
 ## Complexity Tracking

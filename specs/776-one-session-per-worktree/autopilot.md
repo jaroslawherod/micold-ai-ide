@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #776
 - **Worktree branch**: feat/776_one-session-per-worktree-chosen-at-start
 - **Started**: 2026-10-12
-- **Phase**: milestone M1 (PR open, awaiting CI and merge)
-- **Next step**: wait for the M1 PR to merge, then M2
+- **Phase**: amendment PR open; waiting for merge
+- **Next step**: amendment PR merges; then milestone M2 (soft limit)
 
 ## Pull requests
 
@@ -22,11 +22,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T013 | full | Second session refused by daemon (RPC, create_session, review send); wire fields + v41 | #794 | PR open |
-| M2 | T014–T016, T021 | full | create_worktree / WorktreeCreate define the session at start | | pending |
-| M3 | T017–T020, T022, T036 | full | Dialog CLI/prompt fields; no add action on occupied rows | | pending |
-| M4 | T023–T030 | full | Resume replaces with confirmation; attach cap | | pending |
-| M5 | T031–T035 | full | Legacy catalogs intact; start refused while another is live | | pending |
+| M1 | T001–T013 | full | Second session refused by daemon (RPC, create_session, review send); wire fields + v41 | #794 | merged (#794) |
+| M2 | T037–T042 | full | Soft limit: `allow_additional_session` on create_session, wire v42 (the start flag lands with the start block in M7) | | pending |
+| M3 | T014–T016, T021 | full | create_worktree / WorktreeCreate define the session at start (WIP at tag wip-776-m3, cherry-picked after M2) | | pending |
+| M4 | T017–T020, T022, T036, T043–T045 | full | Dialog fields; worktree rows only; row press opens the default session | | pending |
+| M5 | T046–T049 | full | Row menu "Start another session..." with confirmation | | pending |
+| M6 | T023–T030 | full | Resume replaces or keeps both; attach cap | | pending |
+| M7 | T031–T035 | full | Several sessions intact; start beside a live one needs confirmation | | pending |
 
 ## Decisions
 
@@ -34,6 +36,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
+| 1 | amend | Is the one-session limit absolute? | Soft: refusal naming the existing session stays the default; more than one session allowed when really requested; supersedes the issue's "no way to run more than one" and M1's hard refusal | user | "the limit should be soft, allow user to start more than on session if realy requested" |
+| 2 | amend | Sidebar content and selection | Only worktrees by default; selecting a worktree selects its default session | user | "by default it should show only work tree and when selecting a worktree it should select default session" |
+| 3 | amend | Name of the explicit request | boolean `allow_additional_session`, default false, on create_session/start_session and the wire messages; app: row menu entry plus confirmation | orchestrator recommended, agent-resolved | snake_case booleans/`ai_cli`, `prompt` conventions in core/src/mcp/tools.rs |
+| 4 | amend | Default session | last viewed in this window if un-archived, else first un-archived in list order | agent-resolved | `Session` has no persisted activity timestamp; refusal already names the first in list order (occupancy.rs) |
+| 5 | amend | Extra sessions' place | sub-rows of their worktree, only when it has several, collapsed by default; single-session rename/close in the worktree row menu | agent-resolved | ui/sidebar.rs already draws expandable session sub-rows |
 
 ## Review rounds
 
@@ -48,6 +55,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Tasks | 1 | 88f01682a9aa66bc17d3ab75057ec889afc7f777:0b295551eba2928d4ff1de381dbd709c9c9e17f3 | CLEAN (3 MINOR, fixed; analyze 5 MEDIUM fixed or spec prose clarified) |
 | Code A M1 | 1 | b0bf3f11714bee25a5b75389dd46cfb3e8e9d57f:8a53a8576b8e2d739b53ace3b35d15c852c98337 | CHANGES: 1 BLOCKER (Display compile error), 1 MINOR (occupied send mapped to Refused); both fixed |
 | Conformance B M1 | 1 | 592f90467d46ed5fd93eb67960a2dc5e4456973e:7bb8c03e4b755bd0b5faf262c0b63fe3bf4db1ba | CLEAN (2 MINOR: T008 path text fixed; per-lifecycle refusal cases covered by core occupancy unit tests) |
+| Amendment (spec+plan+tasks) | 1 | 84499e08a0ccde4f8380eb9d9d7df6e33210f7b9:b361448a232e0df33ff72231f33f9712ded5cf5d | CHANGES: 2 MAJOR (start flag and attach assertion moved to M7/M6), 4 MINOR; all fixed |
+| Amendment | 2 | 71db8a9058396eabe058cfa25dde64f9e1c5fd8e:b361448a232e0df33ff72231f33f9712ded5cf5d | CLEAN (2 MINOR fixed, prose only) |
 
 ## Declined review findings
 
@@ -56,7 +65,12 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+None. The soft-limit amendment is in the amendment PR (spec, plan, tasks, contracts only; no code).
+The uncompiled WIP for old M2, now M3 (`create_worktree` with a definition; commits d860ad3d,
+201eee28, docs T021) is kept off this branch at the local tag `wip-776-m3` (commit cf638754): the
+M3 unit starts from `git cherry-pick d860ad3d 201eee28` after M2 merges, then fixes it to the
+`Additional::No` signature. Core tests passed earlier; daemon tests never ran; no gate, no review B.
+The M1 items that change are listed in research.md R12.
 
 ## Open escalation
 
