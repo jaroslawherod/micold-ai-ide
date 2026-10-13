@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #532
 - **Worktree branch**: feat/532_agent-created-worktrees-should-carry-the-issue
 - **Started**: 2026-10-12
-- **Phase**: close (gate and review)
-- **Next step**: gate, review, open close PR
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -41,6 +41,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 - M1 review A (code-review high) 26371c1c:aa69bd4c: CLEAN, 2 MINOR (line wrap, wording) left
 - M1 review B (sonnet): CLEAN, 2 MINOR (line wrap, cycle-log catalog red not printed) left
+- Close review (sonnet) ea798ffc:59e8c13f: CLEAN, 1 MINOR fixed, prose only
 
 ## Declined review findings
 
