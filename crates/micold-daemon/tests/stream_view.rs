@@ -460,7 +460,10 @@ async fn a_client_can_start_view_and_drive_a_session_from_cold_over_the_wire() {
 
     // Bring the session to life, then view it — the daemon spawns the shell and streams a snapshot.
     client
-        .send(Frame::Control(ClientMsg::SessionStart { session: sid }))
+        .send(Frame::Control(ClientMsg::SessionStart {
+            session: sid,
+            allow_additional_session: false,
+        }))
         .await
         .unwrap();
     client

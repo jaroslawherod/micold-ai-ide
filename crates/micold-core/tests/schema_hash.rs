@@ -264,7 +264,10 @@ fn the_build_fingerprint_is_a_separate_mechanism_from_the_schema_hash() {
 /// And 40 → 41 for feature 776's one session per worktree: `WorktreeCreate.session`,
 /// `WorktreeCreated.session`, `AttachItem::Session`, `AttachResult.existing` and
 /// `RefuseReason::LocationHasSession`, in one edit.
-const FEATURE_026_PROTOCOL_VERSION: u32 = 41;
+///
+/// And 41 → 42 for feature 776's soft limit: `allow_additional_session` on `SessionCreate`,
+/// `SessionStart`, `SessionRestart` and `AttachItem::Session`.
+const FEATURE_026_PROTOCOL_VERSION: u32 = 42;
 
 #[test]
 fn the_wire_changes_for_this_feature_cost_exactly_one_version_bump() {

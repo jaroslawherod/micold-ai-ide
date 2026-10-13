@@ -464,7 +464,12 @@ async fn evidence_appearing_after_the_migration_grandfathers_nothing() {
 
     // The session the user starts in the revealed worktree, exactly as the store would hold it.
     state
-        .create_session(project.path(), "tidy-the-parser", AiCli::ClaudeCode)
+        .create_session(
+            project.path(),
+            "tidy-the-parser",
+            AiCli::ClaudeCode,
+            micold_core::occupancy::Additional::No,
+        )
         .expect("session created");
 
     // Another refresh — every path that lists worktrees goes through this.

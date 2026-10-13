@@ -318,6 +318,10 @@ pub enum ClientMsg {
     SessionStart {
         /// Target session.
         session: SessionId,
+        /// The caller explicitly asks for another session beside the location's live one (feature
+        /// 776, FR-015). Absent means `false`. Carried only until its milestone gives it effect.
+        #[serde(default)]
+        allow_additional_session: bool,
     },
     /// A user's manual restart of the session's AI CLI: as `SessionStart`, after re-sourcing the
     /// environment-include script for the session's directory (011 FR-007(b), BUG-442). A plain
@@ -325,6 +329,10 @@ pub enum ClientMsg {
     SessionRestart {
         /// Target session.
         session: SessionId,
+        /// The caller explicitly asks for another session beside the location's live one (feature
+        /// 776, FR-015). Absent means `false`. Carried only until its milestone gives it effect.
+        #[serde(default)]
+        allow_additional_session: bool,
     },
     /// Graceful stop → `Idle`, no restart.
     SessionStop {
@@ -638,6 +646,10 @@ pub enum ClientMsg {
         /// The daemon does read `settings.json` — `Catalog::new` loads it at boot — it is simply
         /// not asked to make this choice.
         provider: AiCli,
+        /// The caller explicitly asks for another session beside the location's live one (feature
+        /// 776, FR-015). Absent means `false`. `true` skips the occupancy check: the session is created beside the existing one.
+        #[serde(default)]
+        allow_additional_session: bool,
     },
     /// Delete a session record.
     SessionDelete {

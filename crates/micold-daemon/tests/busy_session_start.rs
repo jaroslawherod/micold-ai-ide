@@ -187,6 +187,7 @@ async fn a_slow_session_start_does_not_park_its_connection() {
     client
         .send(Frame::Control(ClientMsg::SessionStart {
             session: session_id(),
+            allow_additional_session: false,
         }))
         .await
         .unwrap();
@@ -249,6 +250,7 @@ async fn input_typed_during_a_slow_start_is_applied_in_order_not_dropped() {
     client
         .send(Frame::Control(ClientMsg::SessionStart {
             session: session_id(),
+            allow_additional_session: false,
         }))
         .await
         .unwrap();
@@ -311,6 +313,7 @@ async fn a_view_requested_before_a_slow_start_finishes_still_streams() {
     client
         .send(Frame::Control(ClientMsg::SessionStart {
             session: session_id(),
+            allow_additional_session: false,
         }))
         .await
         .unwrap();

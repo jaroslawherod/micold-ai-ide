@@ -302,6 +302,7 @@ async fn start_stop_then(again: ClientMsg) -> usize {
         &mut client,
         ClientMsg::SessionStart {
             session: session_id(),
+            allow_additional_session: false,
         },
     )
     .await;
@@ -345,6 +346,7 @@ async fn start_stop_then(again: ClientMsg) -> usize {
 async fn restarting_the_ai_cli_re_sources_its_directory() {
     let runs = start_stop_then(ClientMsg::SessionRestart {
         session: session_id(),
+        allow_additional_session: false,
     })
     .await;
     assert_eq!(
@@ -360,6 +362,7 @@ async fn restarting_the_ai_cli_re_sources_its_directory() {
 async fn a_plain_start_reuses_the_cached_environment() {
     let runs = start_stop_then(ClientMsg::SessionStart {
         session: session_id(),
+        allow_additional_session: false,
     })
     .await;
     assert_eq!(

@@ -28,7 +28,12 @@ impl Service {
     fn creates_a_session(&mut self) -> SessionId {
         let id = self
             .state
-            .create_session(self.project.path(), "", AiCli::ClaudeCode)
+            .create_session(
+                self.project.path(),
+                "",
+                AiCli::ClaudeCode,
+                micold_core::occupancy::Additional::No,
+            )
             .expect("the session is created");
         self.live
             .push(self.state.register_session(idle_process(id)));

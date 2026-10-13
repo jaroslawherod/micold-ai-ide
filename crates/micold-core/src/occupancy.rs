@@ -30,6 +30,35 @@ impl ExistingSession {
     }
 }
 
+/// Whether a request explicitly asks for a session beside the one a location already has
+/// (feature 776, FR-015). The one-session rule is a soft limit: only `Yes` puts a second session
+/// beside another. On the wire it is the boolean `allow_additional_session`, default false.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Additional {
+    /// No explicit request: a location with a session refuses another.
+    #[default]
+    No,
+    /// The caller asked for another session on purpose: the occupancy check is skipped.
+    Yes,
+}
+
+impl From<bool> for Additional {
+    fn from(allow: bool) -> Self {
+        if allow {
+            Self::Yes
+        } else {
+            Self::No
+        }
+    }
+}
+
+impl Additional {
+    /// Whether the explicit request was made.
+    pub fn is_yes(self) -> bool {
+        self == Self::Yes
+    }
+}
+
 /// Whether a location can take a new session.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Occupancy {
@@ -86,6 +115,22 @@ pub fn start_block(
         })
 }
 
+/// The session a window selects when the user presses a worktree row (R13): `last_viewed` when it
+/// names an un-archived session of `location`, else the first un-archived session of the location
+/// in list order (the one a refusal names), else `None`. Other locations and archived sessions are
+/// ignored.
+pub fn default_session(
+    sessions: &[Session],
+    location: &SessionLocation,
+    last_viewed: Option<SessionId>,
+) -> Option<SessionId> {
+    let here = |s: &&Session| !s.archived && &s.location == location;
+    last_viewed
+        .and_then(|id| sessions.iter().filter(here).find(|s| s.id == id))
+        .or_else(|| sessions.iter().find(here))
+        .map(|s| s.id)
+}
+
 fn place(location: &SessionLocation) -> &'static str {
     match location {
         SessionLocation::Default => "the project root",
@@ -96,7 +141,8 @@ fn place(location: &SessionLocation) -> &'static str {
 /// The refusal of a second session, naming the existing one (FR-003).
 pub fn refusal_text(existing: &ExistingSession, location: &SessionLocation) -> String {
     format!(
-        "{} already has a session: \"{}\" ({}); start_session on {} brings it back",
+        "{} already has a session: \"{}\" ({}); start_session on {} brings it back; \
+         pass allow_additional_session: true to start another on purpose",
         place(location),
         existing.name,
         existing.id.0,
@@ -107,7 +153,8 @@ pub fn refusal_text(existing: &ExistingSession, location: &SessionLocation) -> S
 /// The refusal of a start beside a live session of the same location (FR-013).
 pub fn start_block_text(live: &ExistingSession, location: &SessionLocation) -> String {
     format!(
-        "session \"{}\" ({}) is running in {}; stop it first",
+        "session \"{}\" ({}) is running in {}; stop it first, or pass \
+         allow_additional_session: true to run both on purpose",
         live.name,
         live.id.0,
         place(location)
@@ -235,6 +282,10 @@ mod tests {
         assert!(text.starts_with("this worktree already has a session"));
         assert!(text.contains("\"Fix login\""));
         assert!(text.contains(&format!("start_session on {}", e.id.0)));
+        assert!(
+            text.ends_with("; pass allow_additional_session: true to start another on purpose"),
+            "{text}"
+        );
         let root = refusal_text(&e, &SessionLocation::Default);
         assert!(root.starts_with("the project root already has a session"));
     }
@@ -247,5 +298,55 @@ mod tests {
         };
         let text = start_block_text(&e, &wt("a"));
         assert!(text.contains("\"Live\"") && text.contains("stop it first"));
+        assert!(
+            text.ends_with(", or pass allow_additional_session: true to run both on purpose"),
+            "{text}"
+        );
+    }
+
+    #[test]
+    fn additional_is_no_unless_asked() {
+        assert_eq!(Additional::default(), Additional::No);
+        assert_eq!(Additional::from(false), Additional::No);
+        assert_eq!(Additional::from(true), Additional::Yes);
+        assert!(Additional::Yes.is_yes() && !Additional::No.is_yes());
+    }
+
+    #[test]
+    fn the_default_session_is_the_last_viewed_one_when_it_is_here() {
+        let a = session(wt("a"), "a", SessionLifecycle::Idle);
+        let b = session(wt("a"), "b", SessionLifecycle::Idle);
+        let (aid, bid) = (a.id, b.id);
+        let all = [a, b];
+        assert_eq!(default_session(&all, &wt("a"), Some(bid)), Some(bid));
+        assert_eq!(default_session(&all, &wt("a"), Some(aid)), Some(aid));
+    }
+
+    #[test]
+    fn the_default_session_falls_back_to_the_first_unarchived_one() {
+        let mut gone = session(wt("a"), "gone", SessionLifecycle::Idle);
+        gone.archived = true;
+        let elsewhere = session(wt("z"), "z", SessionLifecycle::Idle);
+        let first = session(wt("a"), "first", SessionLifecycle::Idle);
+        let second = session(wt("a"), "second", SessionLifecycle::Idle);
+        let (gid, zid, fid) = (gone.id, elsewhere.id, first.id);
+        let all = [gone, elsewhere, first, second];
+        assert_eq!(default_session(&all, &wt("a"), None), Some(fid));
+        // A last-viewed id that is archived or of another location does not count.
+        assert_eq!(default_session(&all, &wt("a"), Some(gid)), Some(fid));
+        assert_eq!(default_session(&all, &wt("a"), Some(zid)), Some(fid));
+        assert_eq!(
+            default_session(&all, &wt("a"), Some(SessionId::new())),
+            Some(fid)
+        );
+    }
+
+    #[test]
+    fn a_location_without_an_unarchived_session_has_no_default() {
+        let mut gone = session(wt("a"), "gone", SessionLifecycle::Idle);
+        gone.archived = true;
+        let elsewhere = session(wt("z"), "z", SessionLifecycle::Idle);
+        assert_eq!(default_session(&[], &wt("a"), None), None);
+        assert_eq!(default_session(&[gone, elsewhere], &wt("a"), None), None);
     }
 }

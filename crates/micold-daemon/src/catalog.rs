@@ -14,7 +14,7 @@
 
 use micold_core::attach::{AttachOutcome, RefuseReason};
 use micold_core::attention::{NotificationKind, NotificationKinds};
-use micold_core::occupancy::{occupancy, refusal_text, ExistingSession, Occupancy};
+use micold_core::occupancy::{occupancy, refusal_text, Additional, ExistingSession, Occupancy};
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -603,10 +603,14 @@ impl Catalog {
         project: &Path,
         worktree_dir: &str,
         provider: AiCli,
+        additional: Additional,
     ) -> Result<SessionId, CreateSessionError> {
         let location = location_of(worktree_dir);
-        if let Occupancy::Taken(existing) = self.occupancy(project, &location) {
-            return Err(CreateSessionError::Occupied(existing, location));
+        // An explicit request (FR-015) skips the check and adds a session beside the existing one.
+        if !additional.is_yes() {
+            if let Occupancy::Taken(existing) = self.occupancy(project, &location) {
+                return Err(CreateSessionError::Occupied(existing, location));
+            }
         }
         // The client already resolved default-or-override and put the answer on the wire (T030),
         // so nothing here re-decides it.

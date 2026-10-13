@@ -177,9 +177,12 @@ async fn sandbox_real_mcp_binding_answers_whoami_from_inside_the_container() {
     // 1. Starting the AI-CLI session writes its binding file under the container's data
     // directory. The state mount is that directory, so the file is waited for on the host side
     // and then read at its container path, from inside.
-    conn.send(Frame::Control(ClientMsg::SessionStart { session: agent }))
-        .await
-        .expect("start the AI-CLI session");
+    conn.send(Frame::Control(ClientMsg::SessionStart {
+        session: agent,
+        allow_additional_session: false,
+    }))
+    .await
+    .expect("start the AI-CLI session");
     let binding_name = format!("{}.json", agent.0);
     let binding_on_host = state.join("mcp").join(&binding_name);
     wait_for_file(&binding_on_host, &log).await;

@@ -221,6 +221,7 @@ async fn a_resume_that_fails_reaches_the_client() {
     client
         .send(Frame::Control(ClientMsg::SessionStart {
             session: session_id(),
+            allow_additional_session: false,
         }))
         .await
         .unwrap();
@@ -401,7 +402,10 @@ async fn a_pi_resume_whose_conversation_is_gone_reaches_the_client() {
 
     let mut client = connect(&state).await;
     client
-        .send(Frame::Control(ClientMsg::SessionStart { session: id }))
+        .send(Frame::Control(ClientMsg::SessionStart {
+            session: id,
+            allow_additional_session: false,
+        }))
         .await
         .unwrap();
 

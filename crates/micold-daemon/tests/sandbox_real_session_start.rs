@@ -147,9 +147,12 @@ async fn time_one(
     session: SessionId,
 ) -> (Duration, String) {
     let started = Instant::now();
-    conn.send(Frame::Control(ClientMsg::SessionStart { session }))
-        .await
-        .expect("SessionStart");
+    conn.send(Frame::Control(ClientMsg::SessionStart {
+        session,
+        allow_additional_session: false,
+    }))
+    .await
+    .expect("SessionStart");
     conn.send(Frame::Control(ClientMsg::SetViewedSession {
         project: project.to_path_buf(),
         session: Some(session),

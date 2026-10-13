@@ -168,6 +168,9 @@ pub enum Operation {
         worktree: WorktreeRef,
         ai_cli: Option<AiCli>,
         prompt: Option<String>,
+        /// An explicit request for a session beside the worktree's existing one (feature 776,
+        /// FR-015): `allow_additional_session`, default `No`.
+        additional: crate::occupancy::Additional,
     },
     /// Start an idle, failed or resumable session, as the sidebar does.
     StartSession {
@@ -574,8 +577,10 @@ const TOOLS: &[Tool] = &[
             root) running an AI CLI (default: the user's default from Settings). With prompt, \
             the prompt is typed as the session's first input once its CLI is ready, and the call \
             returns once it is (prompt_delivered: true) or 60 s after the request \
-            (prompt_delivered: false). A worktree has at most one session: a second is \
-            refused, naming the existing one.",
+            (prompt_delivered: false). A worktree has at most one session by \
+            default: a second is refused, naming the existing one and the way to ask for another. \
+            Pass allow_additional_session: true to start another beside it on purpose (the limit \
+            is soft: policy, the CLI check and every other check still apply).",
         properties: || {
             json!({
                 "worktree": {"type": "string", "minLength": 1,
@@ -583,6 +588,9 @@ const TOOLS: &[Tool] = &[
                 "ai_cli": {"type": "string",
                     "enum": AiCli::ALL.map(AiCli::tool_name)},
                 "prompt": {"type": "string", "description": "The session's first input."},
+                "allow_additional_session": {"type": "boolean", "default": false,
+                    "description": "Create the session even though the worktree already has \
+                        one, leaving the existing session untouched."},
             })
         },
         required: &["worktree"],
@@ -743,6 +751,9 @@ pub fn parse_operation(name: &str, arguments: &Value) -> Result<Operation, OpErr
             })?,
             ai_cli: optional_ai_cli(args, "ai_cli")?,
             prompt: optional_text(args, "prompt")?,
+            additional: optional_bool(args, "allow_additional_session")?
+                .unwrap_or(false)
+                .into(),
         },
         "start_session" => Operation::StartSession {
             session: required_session(args, "session")?,
