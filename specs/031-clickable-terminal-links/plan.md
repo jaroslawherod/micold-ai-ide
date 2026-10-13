@@ -81,7 +81,8 @@ core is a parameter. The platform is read in the client and daemon shells and pa
 
 - FR-014: activation writes nothing to the PTY.
 - FR-016: mouse reporting keeps priority unless Shift is held, which the existing `press_routing`
-  already decides.
+  already decides. The link pointer is not part of that priority: it follows the link modifier alone
+  (BUG-748), so `pane_interaction` takes whether a link is under the pointer, not whether it is marked.
 - FR-019: no network access of any kind, including no DNS lookup to decide whether a host is "this
   machine".
 - Principle VIII: the hint and underline are drawn by the existing `TerminalPane`, the confirm

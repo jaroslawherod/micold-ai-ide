@@ -196,11 +196,11 @@ the `env_include.rs` builders (plan, Target Platform).
   - Top-left when the pointer is within the hint's height of the bottom.
   - Always inside the content bounds.
   - The middle-elided label leaves `ResolvedLink.display` complete.
-- [x] T025 [US1] [U118] [U119] [U120] [U121] [U122] [U123] [U124] Hover tests in the same module.
+- [ ] T025 (reopened — BUG-748) [US1] [U118] [U119] [U120] [U121] [U122] [U123] [U124] Hover tests in the same module.
   - Hover is recomputed when the pointer cell changes, and on `window::Event::RedrawRequested` when `(generation, seq)` moved *and* the hash of the consulted rows changed. This includes an in-place redraw that keeps the same `LineId`.
   - It is reused, without re-running `link_at`, when the hash is unchanged.
   - It is recomputed when the session shown or the `LinkContext` changes, and on `ModifiersChanged` under mouse reporting.
-  - `mouse_interaction` is `Pointer` over a followable link only while the link modifier (`command()`) is held, and back to the text pointer when it is released; under mouse reporting only while Shift and the link modifier are held (clarification 2026-09-16).
+  - `mouse_interaction` is `Pointer` over a followable link only while the link modifier (`command()`) is held, and back to the text pointer when it is released; under mouse reporting too, with or without Shift (clarification 2026-09-16, amended 2026-10-13 by BUG-748, T091–T093).
   - Two `PaneState`s: hovering and pressing in one leaves the other's `hover` and `link_press` `None`, and only the pressed pane emits `LinkActivated` (FR-022).
 - [x] T026 [P] [US1] [U131] A new test module in `crates/micold-client/src/showcase/samples.rs`: the terminal sample's grid carries a detected `https://` address and a cell with a declared hyperlink
 - [x] T027 [P] [US2] [U72] Create `crates/micold-daemon/tests/osc8_passthrough.rs` (research R13).
@@ -222,17 +222,17 @@ the `env_include.rs` builders (plan, Target Platform).
   - **Press**: `modifiers.command()`, routing is terminal (`press_routing`), single cadence, and `hover.resolved` is `Some`. The press records `link_press`, updates `last_click` through `Click::new`, focuses as today, and emits no `TerminalSelectStart`.
   - **Move off the press cell**: `TerminalSelectStart` at the press cell.
   - **Release on the press cell**: re-resolve and publish `Message::Session(SessionMsg::LinkActivated(r))` once.
-- [x] T030 [US1] [U123] [U125] [U126] [U127] [U128] Drawing in `crates/micold-client/src/ui/material/terminal_pane.rs`.
+- [ ] T030 (reopened — BUG-748) [US1] [U123] [U125] [U126] [U127] [U128] Drawing in `crates/micold-client/src/ui/material/terminal_pane.rs`.
   - An underline under the hovered link's cells inside the viewport, in each cell's own foreground colour, so text colour, cursor and selection stay visible (FR-009).
   - The hint label at `link_hint_rect`, middle-elided, using the existing surface and on-surface theme roles.
-  - `mouse_interaction` returns `Pointer` over a link only while the link modifier is held (the pane keeps the modifiers from `ModifiersChanged`), and under mouse reporting only while Shift and the link modifier are held.
+  - `mouse_interaction` returns `Pointer` over a link only while the link modifier is held (the pane keeps the modifiers from `ModifiersChanged`), and under mouse reporting likewise, with or without Shift (BUG-748: it follows the link under the pointer, not the marking).
 - [x] T031 [US1] [U134] In `crates/micold-client/src/ui/terminal.rs` and its call site in `crates/micold-client/src/ui/mod.rs`, build the pane's `LinkContext { host_names: Vec::new(), windows_host: cfg!(windows), sandbox: None }`; `ui::view`'s signature is unchanged. T050 fills in `host_names` and `sandbox` (glue).
 - [x] T032 [US1] [U131] Give the terminal sample in `crates/micold-client/src/showcase/samples.rs` a detected `https://` address and a run of cells carrying a declared hyperlink, so that T026 passes
 - [x] T033 [US1] Add a "Links" subsection under "Interacting with the terminal" in `docs/user-guide/worktrees-and-sessions.md`. It covers:
   - hover marking and the address hint;
   - Ctrl+click on Linux and Windows, Cmd+click on macOS;
   - plain clicks, drags and double or triple clicks still select;
-  - Shift+Ctrl/Cmd+click under mouse-reporting programs;
+  - Shift+Ctrl/Cmd+click under mouse-reporting programs; the link pointer shows there with Ctrl/Cmd alone (BUG-748);
   - web and mail addresses open in the default browser or mail client;
   - a link a program declared behind its text is marked as that text and shows, and opens, the address it declares;
   - the "Couldn't open …" notification.
@@ -621,3 +621,13 @@ Both were done in the close PR: `U164`/`U165` now carry the two M7 review behavi
 `tdd/test-list.md`, with `cycle-log.md` Cycle 94 and ledger Decisions 56–57 following them, and the
 M6 red-phase loss and the commit-per-cycle practice that prevents it are recorded as a note above
 Cycle 76 in `cycle-log.md`.
+
+## Phase 9: Bugfix BUG-748 (link pointer under mouse reporting)
+
+From [bugs/BUG-748.md](bugs/BUG-748.md). FR-007, FR-016 and clarification 2026-10-13 amended; no new
+requirement beyond the pointer. A press under mouse reporting is unchanged (G5).
+
+- [ ] T091 [US1] [U123] Regression tests first, in `crates/micold-client/src/ui/material/terminal_pane.rs` (`tests::links`) and `crates/micold-client/tests/terminal_link_hand_cursor.rs`. Red on `main`, with mouse reporting on, the pointer over a link, `command()` held and no Shift: `Pointer`. Update `the_pointer_is_a_hand_over_a_link_only_while_the_link_modifier_is_held` (its last assertions: Ctrl alone is now `Pointer`; released, `Text`) and add the whole-window case to the integration test.
+  - Guards, green before and after: under mouse reporting without the modifier the pointer is `Text` and the link is not marked; a press without Shift still reaches the program (`under_mouse_reporting_a_command_click_goes_to_the_program`); Shift+Ctrl still opens (`under_mouse_reporting_shift_and_command_open_the_link`); `under_mouse_reporting_a_link_is_marked_only_while_shift_is_held` is unchanged.
+- [ ] T092 [US1] In `terminal_pane.rs`, change `pane_interaction` and its call in `mouse_interaction` (L~1841) to take whether a link is under the pointer (`state.hover` resolved, regardless of `mouse_mode`) instead of `marked`. Add the same flag to the `shown` tuple of the link-refresh block (L~1318), so a pointer moving between a link and plain text with the modifier held repaints the cursor under mouse reporting (`marked` is `None` on both there). `marked_link`, the underline, the hint and `press_routing` stay as they are. Update the doc comment of `pane_interaction` (it no longer shows "exactly when a click would open it") and the comment on `shown`. Re-tick T025 and T030 when T091 and T092 land.
+- [ ] T093 [P] [US1] Docs: the "Programs that use the mouse" bullet in `docs/user-guide/worktrees-and-sessions.md` and quickstart B.12 are already patched by the bugfix patch; check they read true against the fix, and tick `tdd/test-list.md` U123's text (the row names the old rule).
