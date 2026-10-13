@@ -38,6 +38,10 @@ use micold_core::plan_usage::user_status_line::{RelayConfig, UserStatusLine};
 use micold_core::protocol::messages::DaemonMsg;
 use micold_core::session::{AiCli, SessionId};
 
+/// Longest `agent_id`, `agent_type` or transcript path recorded (feature 552): the runs ride on every
+/// catalog frame, so an oversized field is treated as absent.
+const MAX_AGENT_FIELD: usize = 1024;
+
 /// Maximum request-body size accepted (contracts/hooks.md §5). Anything larger is rejected with
 /// `413` rather than buffered.
 ///
@@ -483,7 +487,7 @@ fn classify_hook(body: &str) -> HookClass {
                 value
                     .get(key)
                     .and_then(|v| v.as_str())
-                    .filter(|v| !v.is_empty())
+                    .filter(|v| !v.is_empty() && v.len() <= MAX_AGENT_FIELD)
                     .map(str::to_owned)
             };
             let Some(agent_id) = text("agent_id") else {

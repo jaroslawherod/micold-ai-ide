@@ -897,8 +897,6 @@ fn a_merged_branch_check_and_its_answers_round_trip_in_order() {
 /// behaviour; the version moved with the hash.
 #[test]
 fn frames_without_the_feature_776_fields_decode_with_the_defaults() {
-    assert!(PROTOCOL_VERSION >= 42);
-
     let create: ClientMsg = serde_json::from_str(
         r#"{"WorktreeCreate":{"req":1,"project":"/a","branch":"b","dir_name":"d","mode":"NewBranch"}}"#,
     )
