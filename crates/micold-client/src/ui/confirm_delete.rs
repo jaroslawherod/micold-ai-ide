@@ -7,10 +7,9 @@ use crate::app::{Message, State};
 use crate::features::window::FieldId;
 use crate::features::worktree::Msg as WorktreeMsg;
 use crate::ui::focus::TrackFocus;
-use crate::ui::material::{self, Button, Checkbox, SurfaceKind, Text, TypeRole};
-use iced::widget::{column, row};
+use crate::ui::material::{self, Checkbox, Text, TypeRole};
+use iced::widget::column;
 use iced::Element;
-use iced::Length;
 use micold_core::env_include::EnvIncludeOutcome;
 use micold_core::theme::ColorScheme;
 use micold_core::tokens::{self};
@@ -47,10 +46,10 @@ pub fn modal<'a>(
         ),
     };
 
-    let mut fields = material::dialog::fields(column![
+    let mut fields = column![
         Text::new(format!("Delete “{friendly}”?"), TypeRole::Headline, r),
         Text::new(warning, TypeRole::Body, r).muted(),
-    ]);
+    ];
 
     // The branch-deletion choice (feature 013, FR-011): only offered when this worktree
     // actually has an associated branch to act on (edge case — an orphan/invalid worktree may
@@ -68,19 +67,13 @@ pub fn modal<'a>(
         );
     }
 
-    let actions = material::dialog::actions(row![
-        Button::filled("Delete", r).on_press(Message::Worktree(WorktreeMsg::DeleteConfirmed)),
-        Button::outlined("Cancel", r).on_press(Message::Worktree(WorktreeMsg::DeleteCancelled)),
-    ]);
-
-    let dialog = material::Surface::new(
-        material::dialog::body(fields, actions),
-        SurfaceKind::Dialog,
+    material::dialog::confirm(
         r,
+        fields,
+        ("Delete", Message::Worktree(WorktreeMsg::DeleteConfirmed)),
+        ("Cancel", Message::Worktree(WorktreeMsg::DeleteCancelled)),
+        460.0,
     )
-    .width(Length::Fixed(460.0));
-
-    dialog.into()
 }
 
 /// This dialog's body, built from the state that opened it — `None` when the surface is open but

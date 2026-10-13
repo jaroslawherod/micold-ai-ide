@@ -4,10 +4,9 @@
 
 use crate::app::{Message, State};
 use crate::features::session::Msg as SessionMsg;
-use crate::ui::material::{self, Button, SurfaceKind, Text, TypeRole};
-use iced::widget::{column, row};
+use crate::ui::material::{self, Text, TypeRole};
+use iced::widget::column;
 use iced::Element;
-use iced::Length;
 use micold_core::env_include::EnvIncludeOutcome;
 use micold_core::theme::ColorScheme;
 use micold_core::tokens::{self};
@@ -21,24 +20,18 @@ pub fn modal<'a>(label: &str, scheme: ColorScheme) -> Element<'a, Message> {
                    the underlying `claude` conversation itself is untouched, but the app will \
                    never show or resume it again.";
 
-    let fields = material::dialog::fields(column![
+    let fields = column![
         Text::new(format!("Remove “{label}”?"), TypeRole::Headline, r),
         Text::new(warning, TypeRole::Body, r).muted(),
-    ]);
+    ];
 
-    let actions = material::dialog::actions(row![
-        Button::filled("Remove", r).on_press(Message::Session(SessionMsg::RemoveConfirmed)),
-        Button::outlined("Cancel", r).on_press(Message::Session(SessionMsg::RemoveCancelled)),
-    ]);
-
-    let dialog = material::Surface::new(
-        material::dialog::body(fields, actions),
-        SurfaceKind::Dialog,
+    material::dialog::confirm(
         r,
+        fields,
+        ("Remove", Message::Session(SessionMsg::RemoveConfirmed)),
+        ("Cancel", Message::Session(SessionMsg::RemoveCancelled)),
+        460.0,
     )
-    .width(Length::Fixed(460.0));
-
-    dialog.into()
 }
 
 /// This dialog's body, built from the state that opened it — `None` when the surface is open but

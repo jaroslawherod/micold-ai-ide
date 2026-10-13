@@ -5,10 +5,9 @@
 
 use crate::app::{Message, State};
 use crate::features::project::Msg as ProjectMsg;
-use crate::ui::material::{self, Button, SurfaceKind, Text, TypeRole};
-use iced::widget::{column, row};
+use crate::ui::material::{self, Text, TypeRole};
+use iced::widget::column;
 use iced::Element;
-use iced::Length;
 use micold_core::env_include::EnvIncludeOutcome;
 use micold_core::theme::ColorScheme;
 use micold_core::tokens::{self};
@@ -27,7 +26,7 @@ pub fn modal<'a>(
 ) -> Element<'a, Message> {
     let r = tokens::roles(scheme);
 
-    let mut fields = material::dialog::fields(column![
+    let mut fields = column![
         Text::new(format!("Forget “{display_name}”?"), TypeRole::Headline, r),
         Text::new(
             "This removes the project from your list and discards what the app remembers about it \
@@ -37,7 +36,7 @@ pub fn modal<'a>(
             r
         )
         .muted(),
-    ]);
+    ];
 
     // FR-002a: only warn about stopping sessions when there actually are running ones.
     if running_sessions > 0 {
@@ -56,19 +55,13 @@ pub fn modal<'a>(
         );
     }
 
-    let actions = material::dialog::actions(row![
-        Button::filled("Forget", r).on_press(Message::Project(ProjectMsg::ForgetConfirmed)),
-        Button::outlined("Cancel", r).on_press(Message::Project(ProjectMsg::ForgetCancelled)),
-    ]);
-
-    let dialog = material::Surface::new(
-        material::dialog::body(fields, actions),
-        SurfaceKind::Dialog,
+    material::dialog::confirm(
         r,
+        fields,
+        ("Forget", Message::Project(ProjectMsg::ForgetConfirmed)),
+        ("Cancel", Message::Project(ProjectMsg::ForgetCancelled)),
+        460.0,
     )
-    .width(Length::Fixed(460.0));
-
-    dialog.into()
 }
 
 /// This dialog's body, built from the state that opened it — `None` when the surface is open but

@@ -8,10 +8,9 @@
 
 use crate::app::{Message, State};
 use crate::features::settings::{placement_move_consequence, Msg as SettingsMsg};
-use crate::ui::material::{self, Button, SurfaceKind, Text, TypeRole};
-use iced::widget::{column, row};
+use crate::ui::material::{self, Text, TypeRole};
+use iced::widget::column;
 use iced::Element;
-use iced::Length;
 use micold_core::env_include::EnvIncludeOutcome;
 use micold_core::sandbox::placement::PlacementKind;
 use micold_core::theme::ColorScheme;
@@ -34,29 +33,28 @@ pub fn modal<'a>(
     // that can be *wrong*, and a `String` is assertable where an `Element` is not (FR-033).
     let consequence = placement_move_consequence(from, to, live_sessions);
 
-    let fields = material::dialog::fields(column![
+    let fields = column![
         Text::new(
             format!("Move sessions {}?", to.label().to_lowercase()),
             TypeRole::Headline,
             r
         ),
         Text::new(consequence, TypeRole::Body, r).muted(),
-    ]);
+    ];
 
-    let actions = material::dialog::actions(row![
-        Button::filled("Move sessions", r)
-            .on_press(Message::Settings(SettingsMsg::PlacementChangeConfirmed)),
-        Button::outlined("Cancel", r)
-            .on_press(Message::Settings(SettingsMsg::PlacementChangeCancelled)),
-    ]);
-
-    material::Surface::new(
-        material::dialog::body(fields, actions),
-        SurfaceKind::Dialog,
+    material::dialog::confirm(
         r,
+        fields,
+        (
+            "Move sessions",
+            Message::Settings(SettingsMsg::PlacementChangeConfirmed),
+        ),
+        (
+            "Cancel",
+            Message::Settings(SettingsMsg::PlacementChangeCancelled),
+        ),
+        460.0,
     )
-    .width(Length::Fixed(460.0))
-    .into()
 }
 
 /// This dialog's body, built from the state that opened it (feature 021, T035 — FR-008, FR-009).

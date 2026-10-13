@@ -7,9 +7,9 @@
 
 use crate::app::{Message, State};
 use crate::features::daemons::{Msg as DaemonsMsg, RemovalPrompt};
-use crate::ui::material::{self, Button, SurfaceKind, Text, TypeRole};
-use iced::widget::{column, row};
-use iced::{Element, Length};
+use crate::ui::material::{self, Text, TypeRole};
+use iced::widget::column;
+use iced::Element;
 use micold_core::env_include::EnvIncludeOutcome;
 use micold_core::theme::ColorScheme;
 use micold_core::tokens;
@@ -17,21 +17,17 @@ use micold_core::tokens;
 /// The dialog body for `prompt`.
 pub fn modal<'a>(prompt: &'a RemovalPrompt, scheme: ColorScheme) -> Element<'a, Message> {
     let r = tokens::roles(scheme);
-    let fields = material::dialog::fields(column![
+    let fields = column![
         Text::new(format!("Daemon {}", prompt.name), TypeRole::Headline, r),
         Text::new(prompt.text.clone(), TypeRole::Body, r).muted(),
-    ]);
-    let actions = material::dialog::actions(row![
-        Button::filled("Continue", r).on_press(Message::Daemons(DaemonsMsg::RemovalConfirmed)),
-        Button::outlined("Cancel", r).on_press(Message::Daemons(DaemonsMsg::RemovalCancelled)),
-    ]);
-    material::Surface::new(
-        material::dialog::body(fields, actions),
-        SurfaceKind::Dialog,
+    ];
+    material::dialog::confirm(
         r,
+        fields,
+        ("Continue", Message::Daemons(DaemonsMsg::RemovalConfirmed)),
+        ("Cancel", Message::Daemons(DaemonsMsg::RemovalCancelled)),
+        460.0,
     )
-    .width(Length::Fixed(460.0))
-    .into()
 }
 
 /// This dialog's body, built from the state that opened it.
