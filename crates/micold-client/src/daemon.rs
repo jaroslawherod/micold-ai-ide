@@ -389,10 +389,6 @@ async fn connect_and_pump(
             std::io::ErrorKind::NotFound,
             "no host endpoint",
         )),
-        // The sandbox is brought up by `shell::sandbox`, which the app drives so the user can watch
-        // the image being acquired. All this loop does is dial it — and if nothing is listening,
-        // say so. It does **not** fall back to a host process: that is FR-035, and this is the one
-        // place it would be easiest to lose.
         (Dial::Ssh { target }, _) => {
             let progress = copy_progress(id, output);
             match ssh_attempt(SSH_HOST.get().map(|h| &**h), target, Some(progress)).await {
@@ -404,6 +400,10 @@ async fn connect_and_pump(
                 }
             }
         }
+        // The sandbox is brought up by `shell::sandbox`, which the app drives so the user can watch
+        // the image being acquired. All this loop does is dial it — and if nothing is listening,
+        // say so. It does **not** fall back to a host process: that is FR-035, and this is the one
+        // place it would be easiest to lose.
         (Dial::Container { port, token_path }, _) => {
             let address = DialAddress::Loopback { port: *port };
             let credentials = sandbox_credentials(token_path, spec.strict_fingerprint);

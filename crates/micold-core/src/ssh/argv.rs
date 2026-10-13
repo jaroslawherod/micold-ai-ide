@@ -89,7 +89,16 @@ fn command(
         .iter()
         .map(|s| s.to_string())
         .collect();
-    args.extend(["-o".into(), "ClearAllForwardings=yes".into()]);
+    // `UpdateHostKeys=no`: never write to known_hosts on the user's behalf (FR-010). The server
+    // alive options bound a network that dies mid-copy or mid-session (FR-009).
+    for option in [
+        "ClearAllForwardings=yes",
+        "UpdateHostKeys=no",
+        "ServerAliveInterval=15",
+        "ServerAliveCountMax=3",
+    ] {
+        args.extend(["-o".into(), option.into()]);
+    }
     args.extend([
         "-o".into(),
         format!("ConnectTimeout={connect_timeout_secs}"),
@@ -180,6 +189,8 @@ mod tests {
                     "BatchMode=yes",
                     "StrictHostKeyChecking=yes",
                     "ClearAllForwardings=yes",
+                    "UpdateHostKeys=no",
+                    "ServerAliveInterval=15",
                     "ConnectTimeout=15",
                 ] {
                     assert!(joined.contains(needle), "{needle} missing: {joined}");

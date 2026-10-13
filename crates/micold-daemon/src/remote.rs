@@ -64,13 +64,17 @@ fn run_bridge() -> io::Result<()> {
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()?;
-    runtime.block_on(bridge(
+    let result = runtime.block_on(bridge(
         &endpoint,
         tokio::io::stdin(),
         tokio::io::stdout(),
         || micold_core::spawn::spawn_detached_daemon().map(|_| ()),
         SPAWN_TIMEOUT,
-    ))
+    ));
+    // `tokio::io::stdin` reads on the blocking pool; a normal drop would wait for that read, so a
+    // daemon-initiated close would not end this process until the client closed its side.
+    runtime.shutdown_background();
+    result
 }
 
 /// Relay `input` to the daemon at `endpoint` and its answers to `output`, byte for byte, until
