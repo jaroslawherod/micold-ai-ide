@@ -66,7 +66,10 @@ pub struct ReasonContext {
 }
 
 /// `(stderr needle, class)` in match order: the first present needle wins.
-const PATTERNS: &[(&str, fn() -> SshFailure)] = &[
+/// One stderr needle and the class it names.
+type Pattern = (&'static str, fn() -> SshFailure);
+
+const PATTERNS: &[Pattern] = &[
     ("REMOTE HOST IDENTIFICATION HAS CHANGED", || {
         SshFailure::HostKeyChanged
     }),
