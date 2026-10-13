@@ -3,10 +3,8 @@
 
 use std::path::PathBuf;
 
-use micold_client::features::changes::{
-    self, pr_mark, Effect, Msg, PrList, State,
-};
-use micold_client::ui::material::PrMark;
+use micold_client::features::changes::{self, pr_mark, Effect, Msg, PrList, State};
+use micold_client::ui::PrMark;
 use micold_core::pull_request::{BranchPrState, BranchPullRequest, ReadingFailure};
 use micold_core::session::SessionLocation;
 
@@ -42,7 +40,10 @@ fn opened(enabled: bool) -> State {
             entry: worktree(),
         },
     );
-    assert!(matches!(effect, Effect::ReadList { .. }), "FR-009: the list read comes first");
+    assert!(
+        matches!(effect, Effect::ReadList { .. }),
+        "FR-009: the list read comes first"
+    );
     state
 }
 
@@ -169,7 +170,9 @@ fn a_failed_read_keeps_the_last_list_and_the_view_has_no_notice_channel() {
     );
     assert_eq!(effect, Effect::None, "FR-008: nothing follows a failure");
     assert_eq!(
-        view_list(&state).shown().map(|(prs, at)| (prs.to_vec(), at)),
+        view_list(&state)
+            .shown()
+            .map(|(prs, at)| (prs.to_vec(), at)),
         Some((list, 3))
     );
 }

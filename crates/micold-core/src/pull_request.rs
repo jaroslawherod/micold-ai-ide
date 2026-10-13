@@ -814,7 +814,10 @@ pub fn read_list_outcome(
     outcome: &RunOutcome,
     now: u64,
 ) -> Result<Vec<BranchPullRequest>, ReadingFailure> {
-    if let RunOutcome::Exited { code: 0, stdout, .. } = outcome {
+    if let RunOutcome::Exited {
+        code: 0, stdout, ..
+    } = outcome
+    {
         let read = split_response(stdout)
             .filter(|response| response.status == 200)
             .map(|response| parse_list(response.body));

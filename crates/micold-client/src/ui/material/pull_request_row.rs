@@ -27,12 +27,7 @@ pub struct PullRequestRow<'a, M> {
 
 impl<'a, M: 'a> PullRequestRow<'a, M> {
     /// The row of pull request `number` titled `title`, in `state`, themed by `roles`.
-    pub fn new(
-        number: u64,
-        title: impl Into<Cow<'a, str>>,
-        state: PrMark,
-        roles: &Roles,
-    ) -> Self {
+    pub fn new(number: u64, title: impl Into<Cow<'a, str>>, state: PrMark, roles: &Roles) -> Self {
         Self {
             roles: *roles,
             number,

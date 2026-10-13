@@ -161,7 +161,8 @@ fn pull_request_section<'a>(view: &'a OpenView, r: Roles) -> Option<Element<'a, 
     if prs.is_empty() {
         return None;
     }
-    let mut section = column![Text::new("Pull requests", TypeRole::Section, r)].spacing(spacing::XS);
+    let mut section =
+        column![Text::new("Pull requests", TypeRole::Section, r)].spacing(spacing::XS);
     for pr in prs {
         section = section.push(Element::from(PullRequestRow::<Message>::new(
             pr.number,

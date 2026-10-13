@@ -9667,6 +9667,163 @@ mod pr_status {
         assert!(removable(&rig).is_empty());
         assert!(nothing_was_reported(&rig.app));
     }
+
+    // ---- Feature 775, T007: the Changes view's pull request list, through the shell ----------
+
+    use micold_client::features::changes::{Msg as ChangesMsg, PrList};
+    use micold_core::session::SessionLocation;
+
+    fn branch_pr(number: u64) -> micold_core::pull_request::BranchPullRequest {
+        micold_core::pull_request::BranchPullRequest {
+            number,
+            title: format!("Pull request {number}"),
+            url: format!("https://github.com/o/r/pull/{number}"),
+            state: micold_core::pull_request::BranchPrState::Open,
+            created_at: "2026-10-10T09:00:00Z".into(),
+            base: "main".into(),
+            head: "a".repeat(40),
+        }
+    }
+
+    /// Open the Changes view of `DEMO`'s worktree `a` and ask for its pull requests, as the shell
+    /// does right after opening. The timer the ask returns is never run.
+    fn ask_list(rig: &mut Rig, branch: &str) {
+        let _ = rig.app.core.update_changes(ChangesMsg::Opened {
+            project: PathBuf::from(DEMO),
+            entry: SessionLocation::Worktree("a".into()),
+        });
+        let _ = crate::shell::changes::update(
+            &mut rig.app,
+            ChangesMsg::PullRequestsWanted {
+                branch: Some(branch.to_string()),
+            },
+        );
+    }
+
+    fn view_list(app: &App) -> &PrList {
+        &app.core
+            .changes
+            .open
+            .as_ref()
+            .expect("the view is open")
+            .pull_requests
+    }
+
+    // FR-010: a read asks the repository of its own project's remote, whatever the branch's name.
+    #[test]
+    fn pr_list_read_asks_only_the_repository_of_its_own_project() {
+        let mut rig = rig(
+            Some(FAKE_GH),
+            FakePullRequestSource::new()
+                .with_list_answer(vec![branch_pr(1)])
+                .with_list_answer(vec![branch_pr(2)]),
+        );
+        ask_list(&mut rig, "feat/a");
+        let first = remote_lists(&mut rig);
+        assert_eq!(first.len(), 1);
+        answer_remotes(&mut rig.app, first[0], github_remote());
+        assert_eq!(
+            rig.source.list_calls(),
+            vec![("o/r".to_string(), "feat/a".to_string())]
+        );
+        assert!(matches!(
+            view_list(&rig.app),
+            PrList::Ready { prs, .. } if prs.len() == 1 && prs[0].number == 1
+        ));
+
+        // Another project with a branch of the same name reads its own repository.
+        let other = "/projects/other";
+        rig.app.core.workspace.active = Some(PathBuf::from(other));
+        let _ = rig.app.core.update_changes(ChangesMsg::Opened {
+            project: PathBuf::from(other),
+            entry: SessionLocation::Worktree("a".into()),
+        });
+        let _ = crate::shell::changes::update(
+            &mut rig.app,
+            ChangesMsg::PullRequestsWanted {
+                branch: Some("feat/a".into()),
+            },
+        );
+        let second = remote_lists(&mut rig);
+        assert_eq!(second.len(), 1);
+        answer_remotes(
+            &mut rig.app,
+            second[0],
+            vec![GitRemote {
+                name: "origin".into(),
+                url: "git@github.com:o2/r2.git".into(),
+            }],
+        );
+        assert_eq!(
+            rig.source.list_calls(),
+            vec![
+                ("o/r".to_string(), "feat/a".to_string()),
+                ("o2/r2".to_string(), "feat/a".to_string())
+            ]
+        );
+    }
+
+    // Principle II: a second ask while the first is under way shares its read.
+    #[test]
+    fn pr_list_read_a_second_ask_shares_the_read_under_way() {
+        let mut rig = rig(
+            Some(FAKE_GH),
+            FakePullRequestSource::new().with_list_answer(vec![branch_pr(1)]),
+        );
+        ask_list(&mut rig, "feat/a");
+        let _ = crate::shell::changes::update(
+            &mut rig.app,
+            ChangesMsg::PullRequestsWanted {
+                branch: Some("feat/a".into()),
+            },
+        );
+        let asked = remote_lists(&mut rig);
+        assert_eq!(asked.len(), 1, "one read for two askers");
+        answer_remotes(&mut rig.app, asked[0], github_remote());
+        assert_eq!(rig.source.list_calls().len(), 1);
+    }
+
+    // FR-008: no `gh`, or no GitHub remote, leaves no section and no notice.
+    #[test]
+    fn pr_list_read_without_gh_is_absent_and_silent() {
+        let mut rig = rig(None, FakePullRequestSource::new());
+        ask_list(&mut rig, "feat/a");
+        let asked = remote_lists(&mut rig);
+        answer_remotes(&mut rig.app, asked[0], github_remote());
+        assert!(matches!(view_list(&rig.app), PrList::Absent));
+        assert!(rig.source.list_calls().is_empty());
+        assert!(nothing_was_reported(&rig.app));
+    }
+
+    #[test]
+    fn pr_list_read_without_a_github_remote_is_absent_and_silent() {
+        let mut rig = rig(Some(FAKE_GH), FakePullRequestSource::new());
+        ask_list(&mut rig, "feat/a");
+        let asked = remote_lists(&mut rig);
+        answer_remotes(
+            &mut rig.app,
+            asked[0],
+            vec![GitRemote {
+                name: "origin".into(),
+                url: "git@example.com:o/r.git".into(),
+            }],
+        );
+        assert!(matches!(view_list(&rig.app), PrList::Absent));
+        assert!(rig.source.list_calls().is_empty());
+        assert!(nothing_was_reported(&rig.app));
+    }
+
+    // FR-014: with the setting off nothing is asked of the daemon or of GitHub.
+    #[test]
+    fn pr_list_read_with_the_setting_off_sends_nothing() {
+        let mut rig = rig(Some(FAKE_GH), FakePullRequestSource::new());
+        let _ = shell::pr_status::enabled_changed(&mut rig.app, false);
+        let _ = sent(&mut rig);
+        ask_list(&mut rig, "feat/a");
+        assert!(remote_lists(&mut rig).is_empty());
+        assert!(rig.source.list_calls().is_empty());
+        assert!(matches!(view_list(&rig.app), PrList::Absent));
+    }
 }
 
 /// Feature 613, T035 (S3, W5.4): toggling one kind changes only that kind in the draft, and the

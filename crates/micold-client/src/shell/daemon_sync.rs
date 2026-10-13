@@ -233,9 +233,7 @@ impl PendingOp {
             PendingOp::BranchList { .. } => "list the branches".into(),
             PendingOp::RemoteList { .. }
             | PendingOp::PrStatusRemotes { .. }
-            | PendingOp::PrListRemotes { .. } => {
-                "read the repository's remotes".into()
-            }
+            | PendingOp::PrListRemotes { .. } => "read the repository's remotes".into(),
             PendingOp::MergedBranchCheck { .. } => "check the merged branches".into(),
             PendingOp::RepoRootQuery(p) => {
                 format!("check whether {} is a repository", p.display())
