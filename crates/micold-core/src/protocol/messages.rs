@@ -23,17 +23,17 @@ use serde::{Deserialize, Serialize};
 use crate::attach::{AttachItem, AttachResult, DiscoveryReport};
 use crate::attention::{NotificationKind, NotificationKinds};
 use crate::cli_reason::SpawnEnv;
-use crate::mcp::policy::CrossSessionAccess;
 use crate::jira::JiraConnection;
+use crate::mcp::policy::CrossSessionAccess;
 use crate::naming::WorktreeNaming;
 use crate::plan_usage::UsageReading;
 use crate::protocol::grid::{LineId, WireLine, WireStyle};
 use crate::review::comment::{CommentId, ReviewComment};
 use crate::review::Side;
-use crate::settings::JiraConnectionChange;
 use crate::runs::{GroupId, Integration, RunGroup};
 use crate::session::{AiCli, SessionId, SessionLabel, ShellInstanceId};
 use crate::settings::DiffLayout;
+use crate::settings::JiraConnectionChange;
 use crate::theme::ColorScheme;
 use crate::worktree::{BranchCandidate, BranchSituation, CreateMode, CreateStage};
 
@@ -1918,6 +1918,8 @@ mod desktop_notifications_wire_tests {
 
     fn settings(desktop_notifications: bool) -> DaemonSettings {
         DaemonSettings {
+            jira_enabled: false,
+            jira_connections: Default::default(),
             plan_usage_enabled: true,
             plan_usage_warn_percent: 80,
             scrollback_lines: 10_000,

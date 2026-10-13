@@ -351,6 +351,8 @@ fn the_ai_cli_restart_control_sends_a_restart_and_selecting_sends_a_start() {
 /// session messages go out, and env-include would reach for the filesystem on the way.
 pub(crate) fn quiet_settings() -> micold_core::protocol::messages::DaemonSettings {
     micold_core::protocol::messages::DaemonSettings {
+        jira_enabled: false,
+        jira_connections: Default::default(),
         plan_usage_enabled: true,
         plan_usage_warn_percent: 80,
         scrollback_lines: micold_core::settings::DEFAULT_SCROLLBACK_LINES,
@@ -2097,6 +2099,8 @@ fn the_binding_toggle_opens_with_the_value_the_service_reported() {
         &mut app,
         DaemonMsg::SettingsChanged {
             settings: DaemonSettings {
+                jira_enabled: false,
+                jira_connections: Default::default(),
                 tool_server_enabled: false,
                 ..quiet_settings()
             },
@@ -2227,6 +2231,8 @@ fn the_desktop_notifications_switch_opens_with_the_value_the_service_reported() 
             &mut app,
             DaemonMsg::SettingsChanged {
                 settings: DaemonSettings {
+                    jira_enabled: false,
+                    jira_connections: Default::default(),
                     desktop_notifications: reported,
                     ..quiet_settings()
                 },
@@ -2273,6 +2279,8 @@ fn an_open_settings_page_shows_another_windows_save_and_keeps_its_own_edits() {
         &mut app,
         DaemonMsg::SettingsChanged {
             settings: DaemonSettings {
+                jira_enabled: false,
+                jira_connections: Default::default(),
                 desktop_notifications: false,
                 env_include_script_path: "/elsewhere/env.sh".into(),
                 scrollback_lines: 9999,
@@ -2322,6 +2330,8 @@ fn an_open_settings_page_keeps_an_edited_pr_status_switch_and_follows_an_untouch
         &mut app,
         DaemonMsg::SettingsChanged {
             settings: DaemonSettings {
+                jira_enabled: false,
+                jira_connections: Default::default(),
                 desktop_notifications: false,
                 ..quiet_settings()
             },
@@ -2338,6 +2348,8 @@ fn an_open_settings_page_keeps_an_edited_pr_status_switch_and_follows_an_untouch
         &mut app,
         DaemonMsg::SettingsChanged {
             settings: DaemonSettings {
+                jira_enabled: false,
+                jira_connections: Default::default(),
                 pr_status_enabled: true,
                 ..quiet_settings()
             },
@@ -2382,6 +2394,8 @@ fn a_stale_settings_page_saves_only_what_its_user_changed() {
         &mut app,
         DaemonMsg::SettingsChanged {
             settings: DaemonSettings {
+                jira_enabled: false,
+                jira_connections: Default::default(),
                 desktop_notifications: false,
                 tool_server_enabled: false,
                 ..quiet_settings()
@@ -2496,6 +2510,8 @@ fn turning_the_pr_status_switch_off_and_saving_tells_the_service() {
         &mut app,
         DaemonMsg::SettingsChanged {
             settings: DaemonSettings {
+                jira_enabled: false,
+                jira_connections: Default::default(),
                 pr_status_enabled: true,
                 ..quiet_settings()
             },
@@ -2532,6 +2548,8 @@ fn the_open_draft_follows_a_pr_status_change_from_the_service() {
             &mut app,
             DaemonMsg::SettingsChanged {
                 settings: DaemonSettings {
+                    jira_enabled: false,
+                    jira_connections: Default::default(),
                     pr_status_enabled: reported,
                     ..quiet_settings()
                 },
@@ -2543,6 +2561,80 @@ fn the_open_draft_follows_a_pr_status_change_from_the_service() {
             "the page shows what the service says"
         );
     }
+}
+
+/// Feature 533 (FR-022): turning the Jira switch on and saving tells the service, and names
+/// nothing else of the Jira fields (a connection is changed by its own message, M2).
+#[test]
+fn turning_the_jira_switch_on_and_saving_tells_the_service() {
+    let (mut app, mut rx) = connected_app();
+    feed(
+        &mut app,
+        DaemonMsg::SettingsChanged {
+            settings: quiet_settings(),
+        },
+    );
+    let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Opened));
+    let _ = update_inner(
+        &mut app,
+        Message::Settings(SettingsMsg::JiraEnabledToggled(true)),
+    );
+    let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Saved));
+
+    let told: Vec<_> = drain(&mut rx)
+        .into_iter()
+        .filter_map(|msg| match msg {
+            ClientMsg::SettingsSet {
+                jira_enabled,
+                jira_connection,
+                pr_status_enabled,
+                ..
+            } => Some((jira_enabled, jira_connection, pr_status_enabled)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(told, vec![(Some(true), None, None)]);
+}
+
+/// Feature 533 (FR-022): the window adopts the service's Jira switch and connections, and an open
+/// untouched Settings page follows them.
+#[test]
+fn the_window_and_the_open_draft_follow_the_services_jira_settings() {
+    let mut app = base_app();
+    let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Opened));
+    assert!(!app.core.settings.jira_enabled, "off on a first start");
+
+    let connection = micold_core::jira::JiraConnection::parse(
+        "https://acme.atlassian.net",
+        "ABC",
+        "me@acme.com",
+    )
+    .expect("a valid connection");
+    let mut connections = std::collections::BTreeMap::new();
+    connections.insert("/work/app".to_owned(), connection);
+    feed(
+        &mut app,
+        DaemonMsg::SettingsChanged {
+            settings: DaemonSettings {
+                jira_enabled: true,
+                jira_connections: connections.clone(),
+                ..quiet_settings()
+            },
+        },
+    );
+
+    assert!(app.core.settings.jira_enabled);
+    assert_eq!(app.core.settings.jira_connections, connections);
+    assert!(
+        app.core
+            .settings
+            .settings_draft
+            .as_ref()
+            .expect("the page is open")
+            .jira
+            .enabled,
+        "the open page shows what the service says"
+    );
 }
 
 /// U217 (feature 034, FR-016): choosing a value for "Let agents read and type into other
@@ -2601,6 +2693,8 @@ fn the_cross_session_select_opens_with_the_value_the_service_reported() {
         &mut app,
         DaemonMsg::SettingsChanged {
             settings: DaemonSettings {
+                jira_enabled: false,
+                jira_connections: Default::default(),
                 cross_session_access: CrossSessionAccess::Off,
                 ..quiet_settings()
             },
@@ -2875,6 +2969,8 @@ fn daemon_connected_adopts_the_authoritative_env_include_settings() {
             outbox: micold_client::daemon::Outbox::new(tx),
             catalog: snapshot_with("/repo/demo", Vec::new()),
             settings: micold_core::protocol::messages::DaemonSettings {
+                jira_enabled: false,
+                jira_connections: Default::default(),
                 plan_usage_enabled: true,
                 plan_usage_warn_percent: 80,
                 default_ai_cli: AiCli::ClaudeCode,
@@ -2916,6 +3012,8 @@ fn settings_changed_event_syncs_env_include_fields() {
         &mut app,
         Message::Connection(ConnectionMsg::Event(DaemonMsg::SettingsChanged {
             settings: micold_core::protocol::messages::DaemonSettings {
+                jira_enabled: false,
+                jira_connections: Default::default(),
                 plan_usage_enabled: true,
                 plan_usage_warn_percent: 80,
                 default_ai_cli: AiCli::ClaudeCode,
@@ -3415,6 +3513,8 @@ fn the_service_answers_with(
             outbox: micold_client::daemon::Outbox::new(tx),
             catalog,
             settings: micold_core::protocol::messages::DaemonSettings {
+                jira_enabled: false,
+                jira_connections: Default::default(),
                 plan_usage_enabled: true,
                 plan_usage_warn_percent: 80,
                 default_ai_cli: AiCli::ClaudeCode,
@@ -4616,6 +4716,8 @@ use micold_core::protocol::messages::DaemonSettings;
 /// which runs nothing either way (`resolve_env_include`), so no test here spawns a shell.
 fn settings_with_env_include(enabled: bool) -> DaemonSettings {
     DaemonSettings {
+        jira_enabled: false,
+        jira_connections: Default::default(),
         env_include_enabled: enabled,
         env_include_script_path: "   ".into(),
         ..quiet_settings()
@@ -4752,6 +4854,8 @@ fn availability_an_unrelated_settings_change_asks_nothing() {
         &mut app,
         DaemonMsg::SettingsChanged {
             settings: DaemonSettings {
+                jira_enabled: false,
+                jira_connections: Default::default(),
                 scrollback_lines: 42_000,
                 ..settings_with_env_include(true)
             },
@@ -5677,6 +5781,8 @@ mod script_path_report {
     /// What another window saved: environment include on, `path` stored (spec 035 T3).
     fn settings_saved_elsewhere(path: &str) -> micold_core::protocol::messages::DaemonSettings {
         micold_core::protocol::messages::DaemonSettings {
+            jira_enabled: false,
+            jira_connections: Default::default(),
             plan_usage_enabled: true,
             plan_usage_warn_percent: 80,
             default_ai_cli: AiCli::ClaudeCode,
@@ -9283,6 +9389,8 @@ mod pr_status {
     fn settings(pr_status_enabled: bool) -> DaemonMsg {
         DaemonMsg::SettingsChanged {
             settings: micold_core::protocol::messages::DaemonSettings {
+                jira_enabled: false,
+                jira_connections: Default::default(),
                 pr_status_enabled,
                 ..quiet_settings()
             },
@@ -10219,6 +10327,8 @@ fn another_windows_kinds_and_threshold_reach_the_stored_values() {
         &mut app,
         DaemonMsg::SettingsChanged {
             settings: DaemonSettings {
+                jira_enabled: false,
+                jira_connections: Default::default(),
                 notification_kinds: kinds,
                 long_task_threshold_secs: 15,
                 ..quiet_settings()

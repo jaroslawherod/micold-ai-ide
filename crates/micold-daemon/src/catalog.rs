@@ -1977,7 +1977,9 @@ mod jira_tests {
         let mut first = catalog_over(&dir);
         let mut second = catalog_over(&dir);
 
-        first.set_jira_connection(&upsert("/work/a", "ABC")).unwrap();
+        first
+            .set_jira_connection(&upsert("/work/a", "ABC"))
+            .unwrap();
         second.set_desktop_notifications(false).unwrap();
 
         assert!(stored(&dir).jira_connections.contains_key("/work/a"));
@@ -1990,8 +1992,12 @@ mod jira_tests {
         let mut first = catalog_over(&dir);
         let mut second = catalog_over(&dir);
 
-        first.set_jira_connection(&upsert("/work/a", "AAA")).unwrap();
-        second.set_jira_connection(&upsert("/work/b", "BBB")).unwrap();
+        first
+            .set_jira_connection(&upsert("/work/a", "AAA"))
+            .unwrap();
+        second
+            .set_jira_connection(&upsert("/work/b", "BBB"))
+            .unwrap();
 
         assert_eq!(stored(&dir).jira_connections.len(), 2);
         assert_eq!(second.settings_wire().jira_connections.len(), 2);
@@ -2002,7 +2008,9 @@ mod jira_tests {
     fn an_unrelated_setter_leaves_the_jira_map_untouched() {
         let dir = tempfile::tempdir().unwrap();
         let mut catalog = catalog_over(&dir);
-        catalog.set_jira_connection(&upsert("/work/a", "ABC")).unwrap();
+        catalog
+            .set_jira_connection(&upsert("/work/a", "ABC"))
+            .unwrap();
         let before = stored(&dir).jira_connections;
 
         catalog.set_pr_status_enabled(true).unwrap();

@@ -1133,6 +1133,8 @@ mod tests {
     #[test]
     fn saving_a_theme_keeps_every_other_setting() {
         let stored = Settings {
+            jira_enabled: false,
+            jira_connections: Default::default(),
             plan_usage_enabled: false,
             plan_usage_warn_percent: 65,
             theme: ThemePreference::Light,

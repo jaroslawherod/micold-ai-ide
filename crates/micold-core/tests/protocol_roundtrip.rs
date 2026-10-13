@@ -527,6 +527,8 @@ fn sample_daemon_msgs() -> Vec<DaemonMsg> {
             daemon_build: "daemon-abc".into(),
             catalog: sample_catalog(),
             settings: DaemonSettings {
+                jira_enabled: false,
+                jira_connections: Default::default(),
                 plan_usage_enabled: true,
                 plan_usage_warn_percent: 80,
                 scrollback_lines: 10_000,
@@ -598,6 +600,8 @@ fn sample_daemon_msgs() -> Vec<DaemonMsg> {
         },
         DaemonMsg::SettingsChanged {
             settings: DaemonSettings {
+                jira_enabled: false,
+                jira_connections: Default::default(),
                 plan_usage_enabled: true,
                 plan_usage_warn_percent: 80,
                 scrollback_lines: 1_000,
@@ -1054,6 +1058,8 @@ fn a_session_error_notice_round_trips_without_a_req() {
 fn the_cross_session_option_round_trips_in_daemon_settings_and_settings_set() {
     for access in CrossSessionAccess::ALL {
         let settings = DaemonSettings {
+            jira_enabled: false,
+            jira_connections: Default::default(),
             plan_usage_enabled: true,
             plan_usage_warn_percent: 80,
             scrollback_lines: 10_000,
@@ -1102,6 +1108,8 @@ fn the_cross_session_option_round_trips_in_daemon_settings_and_settings_set() {
         let bytes = serde_json::to_vec(&set).unwrap();
         match serde_json::from_slice::<ClientMsg>(&bytes).unwrap() {
             ClientMsg::SettingsSet {
+                jira_enabled: None,
+                jira_connection: None,
                 cross_session_access,
                 ..
             } => assert_eq!(cross_session_access, Some(access)),
@@ -1126,6 +1134,8 @@ fn the_cross_session_option_round_trips_in_daemon_settings_and_settings_set() {
 fn the_pull_request_switch_round_trips_in_daemon_settings_and_settings_set() {
     for on in [true, false] {
         let settings = DaemonSettings {
+            jira_enabled: false,
+            jira_connections: Default::default(),
             plan_usage_enabled: true,
             plan_usage_warn_percent: 80,
             scrollback_lines: 10_000,
@@ -1154,6 +1164,8 @@ fn the_pull_request_switch_round_trips_in_daemon_settings_and_settings_set() {
     }
     for chosen in [Some(true), Some(false), None] {
         let set = ClientMsg::SettingsSet {
+            jira_enabled: None,
+            jira_connection: None,
             plan_usage_enabled: None,
             plan_usage_warn_percent: None,
             req: 3,
@@ -1175,7 +1187,10 @@ fn the_pull_request_switch_round_trips_in_daemon_settings_and_settings_set() {
         let bytes = serde_json::to_vec(&set).unwrap();
         match serde_json::from_slice::<ClientMsg>(&bytes).unwrap() {
             ClientMsg::SettingsSet {
-                pr_status_enabled, ..
+                jira_enabled: None,
+                jira_connection: None,
+                pr_status_enabled,
+                ..
             } => assert_eq!(pr_status_enabled, chosen),
             other => panic!("expected SettingsSet, got {other:?}"),
         }
@@ -1469,6 +1484,8 @@ fn the_review_messages_and_the_diff_layout_round_trip_on_both_wires() {
 
     for layout in [DiffLayout::Unified, DiffLayout::SideBySide] {
         let settings = DaemonSettings {
+            jira_enabled: false,
+            jira_connections: Default::default(),
             plan_usage_enabled: true,
             plan_usage_warn_percent: 80,
             scrollback_lines: 10_000,
@@ -1681,6 +1698,8 @@ fn the_save_terminal_history_setting_round_trips_on_the_wire() {
         let json = serde_json::to_string(&asked).unwrap();
         match serde_json::from_str::<ClientMsg>(&json).unwrap() {
             ClientMsg::SettingsSet {
+                jira_enabled: None,
+                jira_connection: None,
                 save_terminal_history,
                 ..
             } => assert_eq!(save_terminal_history, chosen),
@@ -1797,6 +1816,8 @@ fn the_plan_usage_settings_round_trip_in_daemon_settings_and_settings_set() {
     for (enabled, percent) in [(true, 80), (false, 50)] {
         let pushed = DaemonMsg::SettingsChanged {
             settings: DaemonSettings {
+                jira_enabled: false,
+                jira_connections: Default::default(),
                 plan_usage_enabled: enabled,
                 plan_usage_warn_percent: percent,
                 ..settings.clone()
@@ -1810,6 +1831,8 @@ fn the_plan_usage_settings_round_trip_in_daemon_settings_and_settings_set() {
         json_roundtrip(&asked);
         match serde_json::from_str::<ClientMsg>(&serde_json::to_string(&asked).unwrap()).unwrap() {
             ClientMsg::SettingsSet {
+                jira_enabled: None,
+                jira_connection: None,
                 plan_usage_enabled,
                 plan_usage_warn_percent,
                 ..

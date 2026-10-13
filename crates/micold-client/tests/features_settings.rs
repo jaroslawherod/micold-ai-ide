@@ -753,9 +753,10 @@ mod issue_mapping {
         assert_eq!(
             SettingsSection::ALL.get(5),
             Some(&SettingsSection::GithubIssues),
-            "GitHub is the last section in the rail, after Daemons and Session service (AS1)"
+            "GitHub is fifth in the rail, after Daemons and Session service (AS1); Jira follows it (feature 533)"
         );
-        assert_eq!(SettingsSection::ALL.len(), 6);
+        assert_eq!(SettingsSection::ALL.len(), 7);
+        assert_eq!(SettingsSection::ALL.get(6), Some(&SettingsSection::Jira));
         // Feature 040 (FR-029): the page also holds the pull request switch, so it is "GitHub".
         assert_eq!(SettingsSection::GithubIssues.label(), "GitHub");
         assert_eq!(
@@ -2052,7 +2053,11 @@ mod jira_switch {
     }
 
     fn draft(state: &State) -> &SettingsDraft {
-        state.settings.settings_draft.as_ref().expect("Settings is open")
+        state
+            .settings
+            .settings_draft
+            .as_ref()
+            .expect("Settings is open")
     }
 
     /// FR-002: the draft follows the persisted switch, off by default.

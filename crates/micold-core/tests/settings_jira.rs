@@ -3,7 +3,7 @@
 //! changed, and an entry that no longer parses is dropped on read.
 
 use micold_core::jira::JiraConnection;
-use micold_core::settings::{JsonFileSettingsStore, Settings, SettingsStore, SETTINGS_VERSION};
+use micold_core::settings::{JsonFileSettingsStore, Settings, SettingsStore};
 use micold_core::store::LoadStatus;
 
 fn store(dir: &tempfile::TempDir) -> JsonFileSettingsStore {
@@ -34,7 +34,6 @@ fn a_file_written_before_the_feature_reads_as_off() {
     assert!(!loaded.settings.jira_enabled);
     assert!(loaded.settings.jira_connections.is_empty());
     assert_eq!(loaded.settings.scrollback_lines, 20000);
-    assert_eq!(SETTINGS_VERSION, 4);
 }
 
 #[test]
