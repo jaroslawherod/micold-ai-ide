@@ -14,10 +14,12 @@ use std::path::Path;
 use std::sync::Arc;
 
 use futures_util::{SinkExt, StreamExt};
+use micold_core::jira::JiraConnection;
 use micold_core::protocol::codec::Frame;
 use micold_core::protocol::messages::{ClientMsg, DaemonMsg, DaemonSettings, OperationResult};
-use micold_core::jira::JiraConnection;
-use micold_core::settings::{JiraChange, JiraConnectionChange, JsonFileSettingsStore, SettingsStore};
+use micold_core::settings::{
+    JiraChange, JiraConnectionChange, JsonFileSettingsStore, SettingsStore,
+};
 use micold_core::store::{JsonFileStore, ProjectStore};
 use micold_core::workspace::Workspace;
 use micold_daemon::catalog::Catalog;

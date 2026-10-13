@@ -15,7 +15,10 @@ fn a_site_is_normalised_to_its_origin() {
             "  https://Acme.atlassian.net/jira/software ",
             "https://acme.atlassian.net",
         ),
-        ("https://jira.example.com:8443/x", "https://jira.example.com:8443"),
+        (
+            "https://jira.example.com:8443/x",
+            "https://jira.example.com:8443",
+        ),
     ] {
         let parsed = SiteOrigin::parse(input).unwrap_or_else(|_| panic!("{input} accepted"));
         assert_eq!(parsed.to_string(), origin, "{input}");
@@ -47,7 +50,9 @@ fn a_site_that_is_not_an_https_origin_is_refused() {
 #[test]
 fn a_development_build_accepts_a_loopback_http_origin() {
     assert_eq!(
-        SiteOrigin::parse("http://127.0.0.1:8080/").unwrap().as_str(),
+        SiteOrigin::parse("http://127.0.0.1:8080/")
+            .unwrap()
+            .as_str(),
         "http://127.0.0.1:8080"
     );
     assert!(SiteOrigin::parse("http://example.com").is_err());
@@ -57,7 +62,10 @@ fn a_development_build_accepts_a_loopback_http_origin() {
 fn a_project_key_is_trimmed_and_upper_cased() {
     assert_eq!(ProjectKey::parse(" abc ").unwrap().as_str(), "ABC");
     assert_eq!(ProjectKey::parse("A1_B2").unwrap().as_str(), "A1_B2");
-    assert_eq!(ProjectKey::parse("ABCDEFGHIJ").unwrap().as_str(), "ABCDEFGHIJ");
+    assert_eq!(
+        ProjectKey::parse("ABCDEFGHIJ").unwrap().as_str(),
+        "ABCDEFGHIJ"
+    );
 }
 
 #[test]

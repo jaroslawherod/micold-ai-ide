@@ -21,7 +21,10 @@ fn a_stored_connection_does_not_open_the_gate() {
         "/work/app".to_owned(),
         JiraConnection::parse("https://acme.atlassian.net", "ABC", "me@acme.com").unwrap(),
     );
-    assert!(!jira_visible(&settings), "the switch decides, not a stored connection");
+    assert!(
+        !jira_visible(&settings),
+        "the switch decides, not a stored connection"
+    );
     settings.jira_enabled = true;
     assert!(jira_visible(&settings));
 }

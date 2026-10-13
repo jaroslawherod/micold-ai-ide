@@ -188,6 +188,8 @@ fn other_writers_preserve_the_mapping() {
             "env_include_script_path",
             "env_include_timeout_secs",
             "issue_label_types",
+            "jira_connections",
+            "jira_enabled",
             "legacy_default_daemon",
             "long_task_threshold_secs",
             "next_daemon_id",

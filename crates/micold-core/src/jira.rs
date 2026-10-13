@@ -212,8 +212,12 @@ impl TryFrom<RawConnection> for JiraConnection {
     type Error = String;
 
     fn try_from(raw: RawConnection) -> Result<Self, String> {
-        Self::parse(&raw.site, &raw.project_key, &raw.email)
-            .map_err(|problems| problems.first().map(|p| p.reason.to_owned()).unwrap_or_default())
+        Self::parse(&raw.site, &raw.project_key, &raw.email).map_err(|problems| {
+            problems
+                .first()
+                .map(|p| p.reason.to_owned())
+                .unwrap_or_default()
+        })
     }
 }
 
@@ -248,9 +252,7 @@ where
     Ok(match serde_json::Value::deserialize(deserializer)? {
         serde_json::Value::Object(entries) => entries
             .into_iter()
-            .filter_map(|(project, value)| {
-                serde_json::from_value(value).ok().map(|c| (project, c))
-            })
+            .filter_map(|(project, value)| serde_json::from_value(value).ok().map(|c| (project, c)))
             .collect(),
         _ => Default::default(),
     })
