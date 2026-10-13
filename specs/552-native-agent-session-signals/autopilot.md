@@ -17,12 +17,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #786 | design (spec, plan, tasks) | merged | 31a433b352e7301c5c860ea0cf64ca0c2f78eb1f |
+| #795 | M1 every worktree listed | open | |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T009 | full | every worktree listed, toggle and client name-based visibility removed, hook captures | PR_M1 | in review |
+| M1 | T001–T009 | full | every worktree listed, toggle and client name-based visibility removed, hook captures | #795 | in review |
 | M2 | T010–T021 | full | Claude sub-agent runs recorded from SubagentStart/Stop, protocol 41 | | pending |
 | M3 | T022–T029 | full | provenance and attach_worktree removed, protocol 42 | | pending |
 | M4 | T030–T033 | full | Copilot mapping or gap, provider table, docs check | | pending |
