@@ -429,6 +429,7 @@ mod one_conversation_one_session {
         let mut a = connect_as_window(&state, "window-A").await;
         a.send(Frame::Control(ClientMsg::SessionStart {
             session: session_id(),
+            allow_additional_session: false,
         }))
         .await
         .unwrap();
@@ -446,6 +447,7 @@ mod one_conversation_one_session {
         let mut b = connect_as_window(&state, "window-B").await;
         b.send(Frame::Control(ClientMsg::SessionStart {
             session: session_id(),
+            allow_additional_session: false,
         }))
         .await
         .unwrap();

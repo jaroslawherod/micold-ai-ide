@@ -257,7 +257,7 @@ fn displaying_a_session_states_the_pane_size_before_starting_it() {
     assert!(
         matches!(
             rx.try_recv(),
-            Ok(ClientMsg::SessionStart { session }) if session == id
+            Ok(ClientMsg::SessionStart { session, .. }) if session == id
         ),
         "the start must follow the size, not precede it"
     );
@@ -277,7 +277,7 @@ fn displaying_a_session_before_the_pane_has_a_size_sends_only_the_start() {
     assert!(
         matches!(
             rx.try_recv(),
-            Ok(ClientMsg::SessionStart { session }) if session == id
+            Ok(ClientMsg::SessionStart { session, .. }) if session == id
         ),
         "the first message is the start itself"
     );
@@ -310,7 +310,7 @@ fn the_ai_cli_restart_control_sends_a_restart_and_selecting_sends_a_start() {
     let sent: Vec<ClientMsg> = drain(&mut rx);
     assert!(
         sent.iter()
-            .any(|m| matches!(m, ClientMsg::SessionRestart { session } if *session == id)),
+            .any(|m| matches!(m, ClientMsg::SessionRestart { session, .. } if *session == id)),
         "the restart control must send `SessionRestart`, so the service re-sources the \
          session's directory (FR-007(b)). Sent: {sent:?}"
     );
@@ -326,7 +326,7 @@ fn the_ai_cli_restart_control_sends_a_restart_and_selecting_sends_a_start() {
     let sent: Vec<ClientMsg> = drain(&mut rx);
     assert!(
         sent.iter()
-            .any(|m| matches!(m, ClientMsg::SessionStart { session } if *session == id))
+            .any(|m| matches!(m, ClientMsg::SessionStart { session, .. } if *session == id))
             && !sent
                 .iter()
                 .any(|m| matches!(m, ClientMsg::SessionRestart { .. })),
@@ -465,7 +465,7 @@ fn connecting_starts_the_restored_session_rather_than_only_viewing_it() {
         .expect("the project is attached first");
     let start = sent
         .iter()
-        .position(|m| matches!(m, ClientMsg::SessionStart { session } if *session == id))
+        .position(|m| matches!(m, ClientMsg::SessionStart { session, .. } if *session == id))
         .expect("the restored session must be started, or no frame will ever arrive for it");
     let view = sent
         .iter()
@@ -519,7 +519,7 @@ fn connecting_starts_only_the_session_it_restores() {
     let started: Vec<SessionId> = sent
         .iter()
         .filter_map(|m| match m {
-            ClientMsg::SessionStart { session } => Some(*session),
+            ClientMsg::SessionStart { session, .. } => Some(*session),
             _ => None,
         })
         .collect();
@@ -586,7 +586,7 @@ fn a_service_restart_resumes_only_the_session_being_restored() {
     let started: Vec<SessionId> = sent
         .iter()
         .filter_map(|m| match m {
-            ClientMsg::SessionStart { session } => Some(*session),
+            ClientMsg::SessionStart { session, .. } => Some(*session),
             _ => None,
         })
         .collect();
@@ -5054,7 +5054,7 @@ mod script_path_report {
         let _ = update_inner(&mut app, Message::Session(SessionMsg::Selected(id)));
 
         assert!(
-            matches!(rx.try_recv(), Ok(ClientMsg::SessionStart { session }) if session == id),
+            matches!(rx.try_recv(), Ok(ClientMsg::SessionStart { session, .. }) if session == id),
             "the launch proceeds as before (US1 scenario 4)"
         );
         assert!(
@@ -8956,9 +8956,9 @@ mod pr_status {
         let id = SessionId::new();
         let _ = update_inner(&mut app, Message::Session(SessionMsg::Selected(id)));
         assert!(
-            rig_sent()
-                .iter()
-                .any(|msg| matches!(msg, ClientMsg::SessionStart { session } if *session == id)),
+            rig_sent().iter().any(
+                |msg| matches!(msg, ClientMsg::SessionStart { session, .. } if *session == id)
+            ),
             "the selection was applied while the reading was outstanding"
         );
         assert!(matches!(app.core.pr_status.phase, Phase::Reading { .. }));

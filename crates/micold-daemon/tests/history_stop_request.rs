@@ -288,9 +288,12 @@ async fn a_signal_stops_a_real_service_within_five_seconds_with_its_terminals_sa
             assert!(Instant::now() < deadline, "the service never listened");
             tokio::time::sleep(Duration::from_millis(25)).await;
         };
-        conn.send(Frame::Control(ClientMsg::SessionStart { session: id }))
-            .await
-            .expect("start the session");
+        conn.send(Frame::Control(ClientMsg::SessionStart {
+            session: id,
+            allow_additional_session: false,
+        }))
+        .await
+        .expect("start the session");
         wait_file(&ready);
         tokio::time::sleep(Duration::from_millis(300)).await;
 
@@ -464,9 +467,12 @@ mod windows {
             assert!(Instant::now() < deadline, "the service never listened");
             tokio::time::sleep(Duration::from_millis(25)).await;
         };
-        conn.send(Frame::Control(ClientMsg::SessionStart { session: id }))
-            .await
-            .expect("start the session");
+        conn.send(Frame::Control(ClientMsg::SessionStart {
+            session: id,
+            allow_additional_session: false,
+        }))
+        .await
+        .expect("start the session");
         wait_file(&service._project.path().join("ready"));
         tokio::time::sleep(Duration::from_millis(300)).await;
         Some(service)

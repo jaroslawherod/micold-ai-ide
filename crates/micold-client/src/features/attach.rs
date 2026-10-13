@@ -327,7 +327,14 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<Outcome> {
         Msg::Resume { id } => {
             if let Some(dialog) = state.attach.dialog.as_mut() {
                 if dialog.sessions.iter().any(|s| s.id == id && can_resume(s)) {
-                    begin_apply(dialog, vec![AttachItem::Session { id, replace: false }]);
+                    begin_apply(
+                        dialog,
+                        vec![AttachItem::Session {
+                            id,
+                            replace: false,
+                            allow_additional_session: false,
+                        }],
+                    );
                 }
             }
             Vec::new()

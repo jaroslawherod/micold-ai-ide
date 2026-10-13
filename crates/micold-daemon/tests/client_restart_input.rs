@@ -257,7 +257,10 @@ async fn a_restarted_client_drives_a_session_it_did_not_start() {
 
     let session = SessionId::from_uuid(Uuid::from_u128(SESSION));
     conn1
-        .send(Frame::Control(ClientMsg::SessionStart { session }))
+        .send(Frame::Control(ClientMsg::SessionStart {
+            session,
+            allow_additional_session: false,
+        }))
         .await
         .expect("start the session");
     let mut stamper1 = SessionInputStamper::new();

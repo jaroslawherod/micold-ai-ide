@@ -894,7 +894,7 @@ where
                 bytes,
                 process,
             } => state.session_input_to(session, serial, &bytes, process),
-            ClientMsg::SessionStart { session } => {
+            ClientMsg::SessionStart { session, .. } => {
                 // Bringing an existing durable session back is a resume.
                 //
                 // Spawned, not run here (BUG-009 T125, FR-026a): `start_session` resolves the
@@ -906,7 +906,7 @@ where
                 state.begin_start(session);
                 spawn_session_start(state, session, LaunchMode::Resume, None);
             }
-            ClientMsg::SessionRestart { session } => {
+            ClientMsg::SessionRestart { session, .. } => {
                 // The user's manual restart of the AI CLI (011 FR-007(b), BUG-442): exactly the
                 // start above, after dropping the session's directory from the environment-include
                 // cache so the relaunch re-sources the script. A plain `SessionStart` stays cached.
@@ -960,11 +960,17 @@ where
                 project,
                 worktree_dir,
                 provider,
+                allow_additional_session,
             } => {
                 // The catalog write stays on the loop: it is a small atomic file write, and it is
                 // what mints the id every later message refers to. Only the spawn — the slow half
                 // — is deferred (BUG-009, T125).
-                match state.create_session(&project, &worktree_dir, provider) {
+                match state.create_session(
+                    &project,
+                    &worktree_dir,
+                    provider,
+                    allow_additional_session.into(),
+                ) {
                     Ok(session) => {
                         // A brand-new session starts fresh (`claude --session-id`), never `--resume`
                         // against a conversation that does not exist yet.

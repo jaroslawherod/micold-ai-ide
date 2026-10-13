@@ -146,8 +146,22 @@ fn sample_client_msgs() -> Vec<ClientMsg> {
             project: PathBuf::from("/p"),
             layout: None,
         },
-        ClientMsg::SessionStart { session: sid() },
-        ClientMsg::SessionRestart { session: sid() },
+        ClientMsg::SessionStart {
+            session: sid(),
+            allow_additional_session: false,
+        },
+        ClientMsg::SessionStart {
+            session: sid(),
+            allow_additional_session: true,
+        },
+        ClientMsg::SessionRestart {
+            session: sid(),
+            allow_additional_session: false,
+        },
+        ClientMsg::SessionRestart {
+            session: sid(),
+            allow_additional_session: true,
+        },
         ClientMsg::SessionStop { session: sid() },
         ClientMsg::SessionKill { session: sid() },
         ClientMsg::SessionInterrupt { session: sid() },
@@ -301,6 +315,12 @@ fn sample_client_msgs() -> Vec<ClientMsg> {
                 AttachItem::Session {
                     id: Uuid::nil(),
                     replace: true,
+                    allow_additional_session: false,
+                },
+                AttachItem::Session {
+                    id: Uuid::nil(),
+                    replace: false,
+                    allow_additional_session: true,
                 },
             ],
         },
@@ -309,6 +329,7 @@ fn sample_client_msgs() -> Vec<ClientMsg> {
             project: PathBuf::from("/a"),
             worktree_dir: "feat-x".into(),
             provider: AiCli::ClaudeCode,
+            allow_additional_session: false,
         },
         // The same message on the second provider (feature 026, T021). Both variants ride the
         // wire, not just the default one — an encoding that only ever saw `ClaudeCode` would
@@ -318,6 +339,7 @@ fn sample_client_msgs() -> Vec<ClientMsg> {
             project: PathBuf::from("/a"),
             worktree_dir: "feat-y".into(),
             provider: AiCli::Copilot,
+            allow_additional_session: true,
         },
         ClientMsg::SessionDelete {
             req: 8,
@@ -677,6 +699,7 @@ fn sample_daemon_msgs() -> Vec<DaemonMsg> {
                         item: AttachItem::Session {
                             id: Uuid::nil(),
                             replace: false,
+                            allow_additional_session: false,
                         },
                         outcome: AttachOutcome::AlreadyAttached,
                         existing: None,
@@ -685,6 +708,7 @@ fn sample_daemon_msgs() -> Vec<DaemonMsg> {
                         item: AttachItem::Session {
                             id: Uuid::nil(),
                             replace: false,
+                            allow_additional_session: false,
                         },
                         outcome: AttachOutcome::Refused(RefuseReason::LocationHasSession),
                         existing: Some(ExistingSession {
@@ -865,7 +889,7 @@ fn a_merged_branch_check_and_its_answers_round_trip_in_order() {
 /// behaviour; the version moved with the hash.
 #[test]
 fn frames_without_the_feature_776_fields_decode_with_the_defaults() {
-    assert_eq!(PROTOCOL_VERSION, 41);
+    assert_eq!(PROTOCOL_VERSION, 42);
 
     let create: ClientMsg = serde_json::from_str(
         r#"{"WorktreeCreate":{"req":1,"project":"/a","branch":"b","dir_name":"d","mode":"NewBranch"}}"#,
@@ -895,9 +919,43 @@ fn frames_without_the_feature_776_fields_decode_with_the_defaults() {
         item,
         AttachItem::Session {
             id: Uuid::nil(),
-            replace: false
+            replace: false,
+            allow_additional_session: false,
         }
     );
+
+    // Feature 776, amendment 2026-10-13 (v42): the explicit request is absent from an older frame
+    // and decodes to the refusal.
+    for (frame, expect) in [
+        (
+            r#"{"SessionStart":{"session":"00000000-0000-0000-0000-000000000000"}}"#,
+            "SessionStart",
+        ),
+        (
+            r#"{"SessionRestart":{"session":"00000000-0000-0000-0000-000000000000"}}"#,
+            "SessionRestart",
+        ),
+        (
+            r#"{"SessionCreate":{"req":1,"project":"/a","worktree_dir":"d","provider":"ClaudeCode"}}"#,
+            "SessionCreate",
+        ),
+    ] {
+        match serde_json::from_str::<ClientMsg>(frame).unwrap_or_else(|e| panic!("{expect}: {e}")) {
+            ClientMsg::SessionStart {
+                allow_additional_session,
+                ..
+            }
+            | ClientMsg::SessionRestart {
+                allow_additional_session,
+                ..
+            }
+            | ClientMsg::SessionCreate {
+                allow_additional_session,
+                ..
+            } => assert!(!allow_additional_session, "{expect}"),
+            other => panic!("{expect}: {other:?}"),
+        }
+    }
 
     let result: AttachResult = serde_json::from_str(&format!(
         r#"{{"item":{{"Session":{{"id":"{}"}}}},"outcome":"AlreadyAttached"}}"#,

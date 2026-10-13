@@ -2368,6 +2368,7 @@ pub fn on_session_start_requested(
                 project,
                 worktree_dir,
                 provider,
+                allow_additional_session: false,
             }
         });
     }
@@ -2978,14 +2979,28 @@ pub fn on_worktree_delete_confirmed(app: &mut App) -> Task<Message> {
 /// View a session on the daemon — start/resume it and stream its grid — resetting the local
 /// selection and scroll for the newly-displayed session.
 pub fn view_and_start(app: &mut App, id: SessionId) {
-    view_and_send(app, id, ClientMsg::SessionStart { session: id });
+    view_and_send(
+        app,
+        id,
+        ClientMsg::SessionStart {
+            session: id,
+            allow_additional_session: false,
+        },
+    );
 }
 
 /// [`view_and_start`] for the user's manual restart of the AI CLI: sends `SessionRestart`, which
 /// the service handles as `SessionStart` after re-sourcing the session's directory (011 FR-007(b),
 /// BUG-442). Only the restart control sends it; every passive start stays a `SessionStart`.
 pub fn view_and_restart(app: &mut App, id: SessionId) {
-    view_and_send(app, id, ClientMsg::SessionRestart { session: id });
+    view_and_send(
+        app,
+        id,
+        ClientMsg::SessionRestart {
+            session: id,
+            allow_additional_session: false,
+        },
+    );
 }
 
 /// The shared body of [`view_and_start`] and [`view_and_restart`]: `start` is the message that
@@ -3494,7 +3509,11 @@ pub(crate) mod tests {
 
     fn session_result(id: uuid::Uuid, outcome: AttachOutcome) -> AttachResult {
         AttachResult {
-            item: AttachItem::Session { id, replace: false },
+            item: AttachItem::Session {
+                id,
+                replace: false,
+                allow_additional_session: false,
+            },
             outcome,
             existing: None,
         }
@@ -3502,7 +3521,7 @@ pub(crate) mod tests {
 
     fn starts_of(sent: &[ClientMsg], id: SessionId) -> usize {
         sent.iter()
-            .filter(|m| matches!(m, ClientMsg::SessionStart { session } if *session == id))
+            .filter(|m| matches!(m, ClientMsg::SessionStart { session, .. } if *session == id))
             .count()
     }
 
@@ -3768,7 +3787,7 @@ pub(crate) mod tests {
         );
         assert!(
             sent.iter()
-                .any(|m| matches!(m, ClientMsg::SessionStart { session } if *session == id)),
+                .any(|m| matches!(m, ClientMsg::SessionStart { session, .. } if *session == id)),
             "and the restored session is started, exactly as selecting it by hand would"
         );
     }
@@ -3965,7 +3984,7 @@ pub(crate) mod tests {
         // the daemon must already hold this client's attachment when it is told to.
         assert!(matches!(
             rx.try_recv(),
-            Ok(ClientMsg::SessionStart { session }) if session == viewed
+            Ok(ClientMsg::SessionStart { session, .. }) if session == viewed
         ));
         assert!(matches!(
             rx.try_recv(),

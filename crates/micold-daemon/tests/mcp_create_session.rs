@@ -507,6 +507,76 @@ async fn a_second_session_in_a_worktree_is_a_conflict_naming_the_existing_one() 
     assert_eq!(s.session_ids(), before, "the catalog is unchanged");
 }
 
+/// Feature 776, FR-003/FR-015 (US1 s4, s5): the refusal names the flag, and the flag creates a
+/// second session beside the first, leaving it as it was.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn the_flag_creates_a_session_beside_the_existing_one() {
+    let _guard = ENV.lock().await;
+    let s = Sandbox::new().await;
+    let first = Sandbox::created(
+        &s.ok(json!({"worktree": "b", "ai_cli": "claude_code"}))
+            .await,
+    );
+    let error = s
+        .err(json!({"worktree": "b", "ai_cli": "claude_code"}))
+        .await;
+    assert!(
+        error["message"]
+            .as_str()
+            .unwrap_or_default()
+            .ends_with("; pass allow_additional_session: true to start another on purpose"),
+        "{error}"
+    );
+    let before = session_in(&s.state.catalog_snapshot(), first)
+        .cloned()
+        .unwrap();
+
+    let out = s
+        .ok(json!({"worktree": "b", "ai_cli": "claude_code", "allow_additional_session": true}))
+        .await;
+    let second = Sandbox::created(&out);
+    assert_ne!(second, first);
+    let snapshot = s.state.catalog_snapshot();
+    let in_b =
+        |id| session_in(&snapshot, id).is_some_and(|x| x.worktree_dir.as_deref() == Some("b"));
+    assert!(
+        in_b(first) && in_b(second),
+        "both sessions are in the worktree"
+    );
+    assert_eq!(
+        session_in(&snapshot, first),
+        Some(&before),
+        "the first session is untouched"
+    );
+    s.kill_all();
+}
+
+/// Feature 776, FR-015, US1 s6: with the flag a missing CLI fails as without it, and nothing is
+/// created; a non-boolean flag is an input error.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn the_flag_does_not_skip_the_cli_check_and_must_be_a_boolean() {
+    let _guard = ENV.lock().await;
+    let s = Sandbox::new().await;
+    let _ = Sandbox::created(
+        &s.ok(json!({"worktree": "b", "ai_cli": "claude_code"}))
+            .await,
+    );
+    let before = s.session_ids();
+    // `codex` is not installed in the sandbox's PATH.
+    let error = s
+        .err(json!({"worktree": "b", "ai_cli": "codex", "allow_additional_session": true}))
+        .await;
+    assert_eq!(error["category"], "service_error", "{error}");
+    assert_eq!(s.session_ids(), before, "nothing is created");
+
+    let error = s
+        .err(json!({"worktree": "b", "allow_additional_session": "yes"}))
+        .await;
+    assert_eq!(error["category"], "invalid_input", "{error}");
+    assert_eq!(s.session_ids(), before);
+    s.kill_all();
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn an_unknown_worktree_is_not_found_and_creates_no_record() {
     let _guard = ENV.lock().await;

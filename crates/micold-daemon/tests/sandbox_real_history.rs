@@ -223,6 +223,7 @@ async fn show(conn: &mut DaemonConnection, world: &World, live: &[&str]) -> Stri
     use futures_util::SinkExt;
     conn.send(Frame::Control(ClientMsg::SessionStart {
         session: world.session,
+        allow_additional_session: false,
     }))
     .await
     .expect("start");

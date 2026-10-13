@@ -144,7 +144,11 @@
 /// `AttachItem::Session::replace`, `AttachResult::existing` and `RefuseReason::LocationHasSession`.
 /// Every addition is serde-defaulted, so an older frame still decodes; the version moves because
 /// the hash does.
-pub const PROTOCOL_VERSION: u32 = 41;
+///
+/// And 41 → 42 for feature 776's soft limit (contracts/wire.md, amendment 2026-10-13):
+/// `allow_additional_session` on `ClientMsg::SessionCreate`, `SessionStart`, `SessionRestart` and
+/// `AttachItem::Session`, serde-defaulted to `false` so an older frame decodes to the refusal.
+pub const PROTOCOL_VERSION: u32 = 42;
 
 // `build.rs` emits `pub const SCHEMA_HASH: [u8; 32] = [...];` into this file.
 include!(concat!(env!("OUT_DIR"), "/schema_hash.rs"));

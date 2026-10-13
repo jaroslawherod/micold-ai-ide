@@ -490,6 +490,7 @@ async fn run_one(
             worktree_dir: &run.names.dir_name,
             cwd: &cwd,
             cli,
+            additional: micold_core::occupancy::Additional::No,
         },
         Some(first),
     )

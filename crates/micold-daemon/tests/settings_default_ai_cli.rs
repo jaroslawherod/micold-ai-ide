@@ -188,7 +188,9 @@ fn a_session_started_on_the_third_cli_records_it_and_keeps_it_across_a_restart()
     std::fs::create_dir_all(&project).unwrap();
     catalog.add_project(&project, &StdFolderScanner).unwrap();
 
-    let id = catalog.create_session(&project, "", chosen).unwrap();
+    let id = catalog
+        .create_session(&project, "", chosen, micold_core::occupancy::Additional::No)
+        .unwrap();
     assert_eq!(
         catalog
             .sessions_for(&project)

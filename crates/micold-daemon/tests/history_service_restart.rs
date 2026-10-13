@@ -548,7 +548,10 @@ async fn a_stop_then_a_start_over_a_connection_saves_and_restores_in_that_order(
     let printed = project.path().join("printed");
     script(project.path(), "print first run\ntouch printed\nwait\n");
     client
-        .send(Frame::Control(ClientMsg::SessionStart { session: id }))
+        .send(Frame::Control(ClientMsg::SessionStart {
+            session: id,
+            allow_additional_session: false,
+        }))
         .await
         .unwrap();
     until("the first run printed", || printed.exists(), &mut client).await;
@@ -559,7 +562,10 @@ async fn a_stop_then_a_start_over_a_connection_saves_and_restores_in_that_order(
         .await
         .unwrap();
     client
-        .send(Frame::Control(ClientMsg::SessionStart { session: id }))
+        .send(Frame::Control(ClientMsg::SessionStart {
+            session: id,
+            allow_additional_session: false,
+        }))
         .await
         .unwrap();
     let shown = |state: &DaemonState| {

@@ -161,6 +161,10 @@ pub enum AttachItem {
         /// confirmation covers exactly the pair it named. Absent means `false`.
         #[serde(default)]
         replace: bool,
+        /// Keep both: resume beside the session the location already has (feature 776, FR-015).
+        /// Absent means `false`; `replace` and this on one item is malformed. Carried only.
+        #[serde(default)]
+        allow_additional_session: bool,
     },
 }
 

@@ -108,7 +108,8 @@ async fn dispatch(
             worktree,
             ai_cli,
             prompt,
-        } => create_session(&state, caller, worktree, ai_cli, prompt, asked).await,
+            additional,
+        } => create_session(&state, caller, worktree, ai_cli, prompt, additional, asked).await,
         Operation::StartSession { session } => start_session(&state, caller, session).await,
         Operation::RenameWorktree {
             worktree,
@@ -1357,6 +1358,7 @@ async fn create_session(
     worktree: WorktreeRef,
     ai_cli: Option<AiCli>,
     prompt: Option<String>,
+    additional: micold_core::occupancy::Additional,
     asked: tokio::time::Instant,
 ) -> Result<Value, OpError> {
     let st = Arc::clone(state);
@@ -1387,6 +1389,7 @@ async fn create_session(
             worktree: worktree.clone(),
             ai_cli: Some(cli),
             prompt: None,
+            additional,
         },
     )?;
 
@@ -1397,9 +1400,12 @@ async fn create_session(
         WorktreeRef::Default => String::new(),
         WorktreeRef::Named(name) => name.clone(),
     };
-    if let micold_core::occupancy::Occupancy::Taken(existing) = state.occupancy(&project.path, &dir)
-    {
-        return Err(occupied(&existing, &dir));
+    if !additional.is_yes() {
+        if let micold_core::occupancy::Occupancy::Taken(existing) =
+            state.occupancy(&project.path, &dir)
+        {
+            return Err(occupied(&existing, &dir));
+        }
     }
 
     // Checked before the record exists, so a missing CLI leaves nothing behind (US2 s5). The
@@ -1424,6 +1430,7 @@ async fn create_session(
             worktree_dir: &dir,
             cwd: &cwd,
             cli,
+            additional,
         },
         first,
     )

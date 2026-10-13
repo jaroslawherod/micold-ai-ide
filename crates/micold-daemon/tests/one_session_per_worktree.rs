@@ -74,11 +74,16 @@ fn shell(id: SessionId, worktree: Option<&str>) -> Session {
 }
 
 fn create(req: u64, project: &Path, dir: &str) -> ClientMsg {
+    create_with(req, project, dir, false)
+}
+
+fn create_with(req: u64, project: &Path, dir: &str, allow_additional_session: bool) -> ClientMsg {
     ClientMsg::SessionCreate {
         req,
         project: project.to_path_buf(),
         worktree_dir: dir.to_string(),
         provider: AiCli::ClaudeCode,
+        allow_additional_session,
     }
 }
 
@@ -265,5 +270,134 @@ async fn a_hundred_concurrent_creates_for_an_empty_worktree_make_exactly_one() {
     assert_eq!(refused, 99, "every request but one is refused");
     assert!(other <= 1, "at most one request was accepted: {other}");
     assert_eq!(count(&state, project.path()), 1, "one session exists");
+    kill_all(&state, project.path());
+}
+
+/// The first session's record as JSON, to prove a request beside it left it byte-identical.
+fn record_of(state: &DaemonState, project: &Path, id: SessionId) -> String {
+    let session = state
+        .sessions_for(project)
+        .into_iter()
+        .find(|s| s.id == id)
+        .expect("the session is listed");
+    format!("{session:?}")
+}
+
+/// FR-015, scenario 5: the explicit request adds a second session and leaves the first untouched.
+async fn soft_limit_adds_beside(dir: &str, worktree: Option<&str>) {
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    init_repo(project.path());
+    if let Some(wt) = worktree {
+        add_worktree(project.path(), wt);
+    }
+    let state = state_with(
+        project.path(),
+        store.path(),
+        vec![shell(sid(1), worktree)],
+        &[],
+    );
+    let before = record_of(&state, project.path(), sid(1));
+    let mut client = connect(&state).await;
+    client
+        .send(Frame::Control(create_with(1, project.path(), dir, true)))
+        .await
+        .unwrap();
+    assert!(
+        matches!(answer(&mut client, 1).await, DaemonMsg::OperationOk { .. }),
+        "the explicit request is honoured"
+    );
+    assert_eq!(count(&state, project.path()), 2, "a second session exists");
+    assert_eq!(
+        record_of(&state, project.path(), sid(1)),
+        before,
+        "the first session's record is byte-identical"
+    );
+    kill_all(&state, project.path());
+}
+
+#[tokio::test]
+async fn soft_limit_flag_adds_a_second_session_in_an_occupied_worktree() {
+    soft_limit_adds_beside("wt", Some("wt")).await;
+}
+
+#[tokio::test]
+async fn soft_limit_flag_adds_a_second_session_in_the_project_root() {
+    soft_limit_adds_beside("", None).await;
+}
+
+#[tokio::test]
+async fn soft_limit_flag_on_a_free_worktree_creates_its_first_session() {
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    init_repo(project.path());
+    add_worktree(project.path(), "wt");
+    let state = state_with(project.path(), store.path(), vec![], &[]);
+    let mut client = connect(&state).await;
+    client
+        .send(Frame::Control(create_with(1, project.path(), "wt", true)))
+        .await
+        .unwrap();
+    assert!(matches!(
+        answer(&mut client, 1).await,
+        DaemonMsg::OperationOk { .. }
+    ));
+    assert_eq!(count(&state, project.path()), 1);
+    kill_all(&state, project.path());
+}
+
+#[tokio::test]
+async fn soft_limit_without_the_flag_is_still_refused_and_names_the_way_forward() {
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    init_repo(project.path());
+    add_worktree(project.path(), "wt");
+    let state = state_with(
+        project.path(),
+        store.path(),
+        vec![shell(sid(1), Some("wt"))],
+        &[],
+    );
+    let mut client = connect(&state).await;
+    client
+        .send(Frame::Control(create_with(1, project.path(), "wt", false)))
+        .await
+        .unwrap();
+    match answer(&mut client, 1).await {
+        DaemonMsg::OperationError {
+            kind: ErrorKind::Refused,
+            message,
+            ..
+        } => assert!(
+            message.contains("allow_additional_session: true"),
+            "FR-003: {message}"
+        ),
+        other => panic!("refused without the flag: {other:?}"),
+    }
+    assert_eq!(count(&state, project.path()), 1);
+}
+
+/// SC-003 holds beside the flag: requests that carry it each create their own (FR-005).
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn soft_limit_concurrent_flagged_creates_each_make_a_session() {
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    init_repo(project.path());
+    add_worktree(project.path(), "wt");
+    let state = state_with(project.path(), store.path(), vec![], &[]);
+    let mut client = connect(&state).await;
+    for i in 0..5u64 {
+        client
+            .send(Frame::Control(create_with(i, project.path(), "wt", true)))
+            .await
+            .unwrap();
+    }
+    for i in 0..5u64 {
+        assert!(matches!(
+            answer(&mut client, i).await,
+            DaemonMsg::OperationOk { .. }
+        ));
+    }
+    assert_eq!(count(&state, project.path()), 5);
     kill_all(&state, project.path());
 }

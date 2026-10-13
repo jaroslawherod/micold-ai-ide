@@ -193,10 +193,20 @@ fn a_copilot_session_survives_a_daemon_restart_on_the_cli_it_was_started_on() {
     let (copilot_id, claude_id) = {
         let state = DaemonState::new(load(projects_path.clone(), settings_path.clone()));
         let copilot_id = state
-            .create_session(&project, "feat-x", AiCli::Copilot)
+            .create_session(
+                &project,
+                "feat-x",
+                AiCli::Copilot,
+                micold_core::occupancy::Additional::No,
+            )
             .expect("create must succeed");
         let claude_id = state
-            .create_session(&project, "", AiCli::ClaudeCode)
+            .create_session(
+                &project,
+                "",
+                AiCli::ClaudeCode,
+                micold_core::occupancy::Additional::No,
+            )
             .expect("create must succeed");
         (copilot_id, claude_id)
         // …and the daemon goes away here. Everything below reads the files it left behind.
@@ -344,7 +354,12 @@ async fn a_session_outlives_the_client_that_was_connected_when_it_started() {
 
     // …and a session exists while it is connected.
     let session = state
-        .create_session(&project, "feat-x", AiCli::ClaudeCode)
+        .create_session(
+            &project,
+            "feat-x",
+            AiCli::ClaudeCode,
+            micold_core::occupancy::Additional::No,
+        )
         .expect("create must succeed");
     assert!(state.sessions_for(&project).iter().any(|s| s.id == session));
 

@@ -585,9 +585,12 @@ pub async fn open_session(
     session: SessionId,
     log: &Path,
 ) -> Screen {
-    conn.send(Frame::Control(ClientMsg::SessionStart { session }))
-        .await
-        .expect("start");
+    conn.send(Frame::Control(ClientMsg::SessionStart {
+        session,
+        allow_additional_session: false,
+    }))
+    .await
+    .expect("start");
     conn.send(Frame::Control(ClientMsg::SetViewedSession {
         project: project.to_path_buf(),
         session: Some(session),

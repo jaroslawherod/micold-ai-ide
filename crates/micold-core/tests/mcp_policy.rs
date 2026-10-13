@@ -18,6 +18,7 @@ use micold_core::mcp::policy::{
 use micold_core::mcp::tools::{
     CreateWorktreeRequest, LineCount, NonEmptyText, Operation, SessionRef, WorktreeRef,
 };
+use micold_core::occupancy::Additional;
 use micold_core::session::{AiCli, SessionId, SessionLocation};
 use micold_core::worktree::CreateMode;
 use uuid::Uuid;
@@ -135,6 +136,7 @@ fn a_default_caller_keeps_every_operation_that_touches_no_worktree() {
             worktree: WorktreeRef::Named("b".into()),
             ai_cli: None,
             prompt: None,
+            additional: Additional::No,
         },
     ] {
         assert_eq!(
@@ -519,5 +521,30 @@ fn a_default_caller_is_refused_attach_worktree_and_may_list_resumable_sessions()
     };
     for location in [SessionLocation::Default, in_worktree("a")] {
         assert_eq!(decide_for(location, &list), PolicyDecision::Proceed);
+    }
+}
+
+/// Feature 776, FR-015: the explicit request skips the occupancy check only; the policy decision
+/// for `create_session` is the same with it set, for every kind of caller.
+#[test]
+fn the_explicit_request_does_not_change_the_policy_decision_for_create_session() {
+    for location in [
+        SessionLocation::Default,
+        SessionLocation::Worktree("a".into()),
+        SessionLocation::Worktree("b".into()),
+    ] {
+        for worktree in [WorktreeRef::Default, WorktreeRef::Named("b".into())] {
+            let ask = |additional| Operation::CreateSession {
+                worktree: worktree.clone(),
+                ai_cli: None,
+                prompt: None,
+                additional,
+            };
+            assert_eq!(
+                decide_for(location.clone(), &ask(Additional::Yes)),
+                decide_for(location.clone(), &ask(Additional::No)),
+                "{location:?} {worktree:?}"
+            );
+        }
     }
 }

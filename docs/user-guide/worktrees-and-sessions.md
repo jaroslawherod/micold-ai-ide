@@ -23,9 +23,12 @@ choose a folder.
 - A worktree whose directory was deleted outside the app, or that is not a valid git worktree,
   shows its name in the error color with a **missing** or **invalid** status tag — you cannot
   start new sessions on it until it is resolved.
-- A worktree (and the Default entry) holds **at most one session**. Asking for a second one — from
-  the app or from an assistant's `create_session` tool — is refused with a message naming the
-  session that is already there, and nothing is created. A session you closed (archived) no
+- A worktree (and the Default entry) holds **at most one session** by default. The limit is soft:
+  asking for a second one without saying so on purpose — from the app or from an assistant's
+  `create_session` tool — is refused with a message naming the session that is already there, how
+  to bring it back (`start_session` on its id) and how to ask for another, and nothing is created.
+  An assistant asks for another on purpose with `allow_additional_session: true` on
+  `create_session`; the existing session is left as it is. A session you closed (archived) no
   longer counts, so the worktree can take a new one.
 
 <!-- media: worktree-sidebar-light -->

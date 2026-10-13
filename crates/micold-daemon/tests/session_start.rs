@@ -295,7 +295,12 @@ fn create_session_adds_a_daemon_owned_session_to_the_catalog() {
 
     // The daemon assigns the id and records the session at the project root (empty worktree_dir).
     let id = state
-        .create_session(&project, "", AiCli::ClaudeCode)
+        .create_session(
+            &project,
+            "",
+            AiCli::ClaudeCode,
+            micold_core::occupancy::Additional::No,
+        )
         .expect("create must succeed");
 
     let snapshot = state.welcome_payload().0;
@@ -583,10 +588,20 @@ fn a_created_session_records_the_cli_the_client_chose() {
     ));
 
     let claude = state
-        .create_session(&project, "", AiCli::ClaudeCode)
+        .create_session(
+            &project,
+            "",
+            AiCli::ClaudeCode,
+            micold_core::occupancy::Additional::No,
+        )
         .expect("create must succeed");
     let copilot = state
-        .create_session(&project, "feat-x", AiCli::Copilot)
+        .create_session(
+            &project,
+            "feat-x",
+            AiCli::Copilot,
+            micold_core::occupancy::Additional::No,
+        )
         .expect("create must succeed");
 
     let summaries = state.sessions_for(&project);

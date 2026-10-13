@@ -2278,6 +2278,7 @@ impl DaemonState {
                     worktree_dir,
                     cwd: &cwd,
                     cli,
+                    additional: micold_core::occupancy::Additional::No,
                 };
                 crate::ops::create_session_with_prompt(self, new, Some(first)).await
             }
@@ -2712,10 +2713,11 @@ impl DaemonState {
         project: &Path,
         worktree_dir: &str,
         provider: AiCli,
+        additional: micold_core::occupancy::Additional,
     ) -> Result<SessionId, crate::catalog::CreateSessionError> {
         self.lock()
             .catalog
-            .create_session(project, worktree_dir, provider)
+            .create_session(project, worktree_dir, provider, additional)
     }
 
     /// Whether the entry `worktree_dir` (empty = project root) of `project` has an un-archived

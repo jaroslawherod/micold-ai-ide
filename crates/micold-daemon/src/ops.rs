@@ -605,6 +605,8 @@ pub struct NewSession<'a> {
     pub cwd: &'a Path,
     /// The AI CLI it runs.
     pub cli: AiCli,
+    /// An explicit request for a session beside the entry's existing one (feature 776, FR-015).
+    pub additional: micold_core::occupancy::Additional,
 }
 
 /// A new session's first input (see [`create_session_with_prompt`]).
@@ -668,7 +670,7 @@ pub async fn create_session_with_prompt(
     new: NewSession<'_>,
     prompt: Option<FirstPrompt<'_>>,
 ) -> Result<(SessionId, Result<(), FirstPromptUndelivered>), crate::catalog::CreateSessionError> {
-    let session = state.create_session(new.project, new.worktree_dir, new.cli)?;
+    let session = state.create_session(new.project, new.worktree_dir, new.cli, new.additional)?;
     Ok(start_with_prompt(state, session, new.cwd, new.cli, LaunchMode::Fresh, prompt).await)
 }
 

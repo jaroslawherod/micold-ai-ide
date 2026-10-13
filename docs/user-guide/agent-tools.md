@@ -38,7 +38,7 @@ These tools make changes, exactly as the sidebar does:
 | `create_worktree` | Creates a worktree for a branch, as the new-worktree dialog does: under `.claude/worktrees/`, named after the branch unless a name is given, and marked as created by the application. By default it makes a new branch; `existing_local` checks out a branch that exists and is free, and `track_remote` tracks a remote branch. Instead of a branch, it can take a `type`, a `ticket` and a `name`, as the new-worktree form does (see below); a worktree for an issue should be created this way, or with `github_issue`, so that it carries the issue reference |
 | `attach_worktree` | Attaches a worktree an AI CLI created, as **Attach existing...** in the app does, so it shows in the sidebar with its sessions and is no longer hidden. Give its folder name, its absolute path or its branch. Nothing is checked out, moved or deleted. The result says `attached` or `already_attached`. A path or branch that is not a worktree of this project is refused as not found, and `default`, an ambiguous branch, a worktree whose folder is missing or invalid, or one that is not under an AI CLI's worktree location, is refused as invalid input; nothing changes in any of those cases |
 | `rename_worktree` | Gives a worktree a new name in the sidebar, as the sidebar's rename does. Its folder and branch stay as they are. The name cannot be empty, and `default` (the project folder) cannot be renamed |
-| `create_session` | Creates a session in a worktree (or in `default`, the project folder) and starts it. It runs the AI CLI the assistant names, or your default AI CLI from Settings. It can also be given a first prompt to type into the new session. A worktree holds at most one session: when it already has one, the call fails with a conflict that names the existing session (its name and id) and creates nothing |
+| `create_session` | Creates a session in a worktree (or in `default`, the project folder) and starts it. It runs the AI CLI the assistant names, or your default AI CLI from Settings. It can also be given a first prompt to type into the new session. A worktree holds at most one session by default: when it already has one, the call fails with a conflict that names the existing session (its name and id), says that `start_session` on that id brings it back, and says to pass `allow_additional_session: true` to start another on purpose; nothing is created. With `allow_additional_session: true` (optional, default false) the call creates a second session beside the existing one and leaves that one untouched; the policy, the AI CLI check and every other check still apply |
 | `start_session` | Starts a session that is idle, failed, or waiting to be resumed, as **Start** in the sidebar does: a session that was running when the service last stopped resumes its conversation. Every window shows it starting, then running. A session that is already starting, running or restarting is left as it is, and the result says which it is |
 | `send_session_input` | Types text into another session and submits it once, as if you had typed it there and pressed Enter. See [Reading and typing into other sessions](#reading-and-typing-into-other-sessions) |
 
@@ -148,6 +148,14 @@ If the AI CLI is one a session would not find in the target directory, `create_s
 leaves no session behind. The reply gives the same reason and action a person is shown, for example
 that "Source a script before each session" is off, or that the startup script was not found. See
 [When a CLI isn't installed](./worktrees-and-sessions.md#when-a-cli-isnt-installed).
+
+### One session per worktree is a soft limit
+
+A worktree, or `default`, holds one session unless you ask for more on purpose. `create_session`
+without `allow_additional_session` refuses a second session with the conflict described in the
+table above, so two assistants cannot end up editing the same files by accident. An assistant that
+really wants a second session passes `allow_additional_session: true`; a value that is not a
+boolean is an input error.
 
 ## Reading and typing into other sessions
 

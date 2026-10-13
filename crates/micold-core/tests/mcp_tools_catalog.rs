@@ -9,6 +9,7 @@ use micold_core::mcp::tools::{
     NonEmptyText, Operation, SessionRef, WorktreeRef,
 };
 use micold_core::naming::ConventionalType;
+use micold_core::occupancy::Additional;
 use micold_core::session::AiCli;
 use micold_core::worktree::CreateMode;
 use serde_json::{json, Value};
@@ -455,6 +456,41 @@ fn create_session_says_a_worktree_has_at_most_one_session() {
     );
 }
 
+/// Feature 776, FR-015: `allow_additional_session` is an optional boolean, default false, and the
+/// description states that the limit is soft.
+#[test]
+fn create_session_holds_the_optional_allow_additional_session_flag() {
+    let tools = tools_list();
+    let tool = tools
+        .iter()
+        .find(|t| t["name"] == "create_session")
+        .unwrap();
+    let flag = &tool["inputSchema"]["properties"]["allow_additional_session"];
+    assert_eq!(flag["type"], "boolean", "{flag}");
+    assert_eq!(flag["default"], json!(false));
+    let required = tool["inputSchema"]["required"].as_array().unwrap();
+    assert!(!required.iter().any(|r| r == "allow_additional_session"));
+    let description = tool["description"].as_str().unwrap();
+    assert!(
+        description.contains("allow_additional_session: true") && description.contains("soft"),
+        "{description:?}"
+    );
+
+    let parsed = |args: Value| match parse_call("create_session", &args).unwrap() {
+        Operation::CreateSession { additional, .. } => additional,
+        other => panic!("{other:?}"),
+    };
+    assert_eq!(
+        parsed(json!({"worktree": "feat-x", "allow_additional_session": true})),
+        Additional::Yes
+    );
+    assert_eq!(
+        parsed(json!({"worktree": "feat-x", "allow_additional_session": false})),
+        Additional::No
+    );
+    assert_eq!(parsed(json!({"worktree": "feat-x"})), Additional::No);
+}
+
 #[test]
 fn create_session_accepts_exactly_the_five_ai_clis() {
     for (name, cli) in [
@@ -474,6 +510,7 @@ fn create_session_accepts_exactly_the_five_ai_clis() {
                 worktree: WorktreeRef::Named("feat-x".into()),
                 ai_cli: Some(cli),
                 prompt: Some("go".into()),
+                additional: Additional::No,
             }
         );
     }
@@ -483,6 +520,7 @@ fn create_session_accepts_exactly_the_five_ai_clis() {
             worktree: WorktreeRef::Default,
             ai_cli: None,
             prompt: None,
+            additional: Additional::No,
         }
     );
     invalid(
@@ -500,6 +538,14 @@ fn create_session_accepts_exactly_the_five_ai_clis() {
     assert!(
         message.contains("codex") && message.contains("opencode"),
         "the refusal names every provider: {message}"
+    );
+    invalid(
+        "create_session",
+        json!({"worktree": "feat-x", "allow_additional_session": "yes"}),
+    );
+    invalid(
+        "create_session",
+        json!({"worktree": "feat-x", "allow_additional_session": 1}),
     );
     invalid("create_session", json!({"ai_cli": "pi"}));
     invalid("create_session", json!({"worktree": "feat-x", "prompt": 3}));
