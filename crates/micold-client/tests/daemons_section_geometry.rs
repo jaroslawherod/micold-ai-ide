@@ -186,3 +186,49 @@ fn the_removal_dialog_states_both_counts_and_fits() {
         .collect();
     assert!(overflows.is_empty(), "removal dialog: {overflows:?}");
 }
+
+/// Feature 489, T021: the SSH fields of the add form and an SSH row in each state badge hold.
+#[test]
+fn the_ssh_form_and_ssh_rows_paint_their_fields_and_badges_without_overflow() {
+    let (mut state, _) = with_daemons();
+    let target = micold_core::ssh::SshTarget::new(
+        "a-rather-long-host-name.internal.example.com",
+        Some("deploy"),
+        Some(2222),
+        None,
+    )
+    .unwrap();
+    let ssh = state
+        .settings
+        .daemons
+        .add(
+            "Remote over SSH",
+            DaemonRuntime::Ssh(micold_core::ssh::SshSettings { target }),
+            true,
+        )
+        .unwrap();
+    state.settings.links = DaemonLinks::at_launch(&state.settings.daemons);
+    state.update(Message::Daemons(DaemonsMsg::CopyProgress(ssh, 40)));
+    for event in [DaemonEvent::Start] {
+        state.settings.links.apply(ssh, event);
+    }
+    let painted_rows = painted(&state);
+    assert!(has(&painted_rows, "Remote over SSH"), "{painted_rows:?}");
+    assert!(has(&painted_rows, "copying daemon"), "{painted_rows:?}");
+    assert_no_text_overflows(&state, "an SSH row while starting");
+
+    state.settings.links.apply(ssh, DaemonEvent::Connected);
+    assert_no_text_overflows(&state, "an SSH row connected");
+
+    state.update(Message::Daemons(DaemonsMsg::AddOpened));
+    state.update(Message::Daemons(DaemonsMsg::RuntimeChosen(
+        micold_client::features::daemons::DraftRuntime::Ssh,
+    )));
+    state.update(Message::Daemons(DaemonsMsg::NameEdited("Far".into())));
+    state.update(Message::Daemons(DaemonsMsg::SshHostEdited("-bad".into())));
+    state.update(Message::Daemons(DaemonsMsg::Saved));
+    let form = painted(&state);
+    assert!(has(&form, "Host"), "{form:?}");
+    assert_no_text_overflows(&state, "the SSH add form with a refused host");
+}
+

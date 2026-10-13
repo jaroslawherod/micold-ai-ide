@@ -235,3 +235,69 @@ fn no_daemons_is_an_empty_state_with_nothing_to_pick() {
     daemons::begin_add(&mut state);
     assert!(state.draft.is_some(), "the add action is still there");
 }
+
+fn fill_ssh(state: &mut State, name: &str, auto_start: bool) {
+    daemons::begin_add(state);
+    let draft = state.draft.as_mut().unwrap();
+    draft.name = name.into();
+    draft.runtime = DraftRuntime::Ssh;
+    draft.ssh_host = "devbox".into();
+    draft.ssh_user = "dev".into();
+    draft.ssh_port = "2222".into();
+    draft.auto_start = auto_start;
+}
+
+/// Feature 489, T020, FR-020: an SSH draft is added, started, shows the copy progress while
+/// `Starting`, and once `Connected` shows the version and `user@host:port`.
+#[test]
+fn an_ssh_daemon_is_added_started_and_shows_progress_then_its_version_and_target() {
+    let mut w = World::new();
+    let mut state = State::default();
+    fill_ssh(&mut state, "Remote", true);
+    daemons::save(&mut state, &mut w.model()).unwrap();
+    let id = w.registry.entries()[2].id;
+    assert_eq!(
+        w.links.state(id),
+        Some(&DaemonState::Starting),
+        "auto_start applies to an Ssh entry"
+    );
+
+    daemons::update(&mut state, &mut w.model(), daemons::Msg::CopyProgress(id, 40));
+    let vm = daemons::views(&state, &w.model());
+    let row = vm.rows.iter().find(|r| r.id == id).unwrap();
+    assert_eq!(row.state, DaemonState::Starting);
+    assert_eq!(row.endpoint, "dev@devbox:2222");
+    assert!(
+        row.activity.as_deref().is_some_and(|a| a.contains("40%")),
+        "{:?}",
+        row.activity
+    );
+
+    daemons::daemon_event(&mut state, &mut w.links, id, DaemonEvent::Connected);
+    daemons::version_reported(&mut state, id, "0.9.1");
+    let vm = daemons::views(&state, &w.model());
+    let row = vm.rows.iter().find(|r| r.id == id).unwrap();
+    assert_eq!(row.state, DaemonState::Connected);
+    assert_eq!(row.version.as_deref(), Some("0.9.1"));
+    assert_eq!(row.endpoint, "dev@devbox:2222");
+    assert_eq!(row.activity, None, "no progress once connected");
+}
+
+#[test]
+fn an_ssh_daemon_without_auto_start_is_added_stopped_and_a_bad_host_names_its_field() {
+    let mut w = World::new();
+    let mut state = State::default();
+    fill_ssh(&mut state, "Remote", false);
+    daemons::save(&mut state, &mut w.model()).unwrap();
+    let id = w.registry.entries()[2].id;
+    assert_eq!(w.links.state(id), Some(&DaemonState::Stopped));
+
+    daemons::begin_add(&mut state);
+    let draft = state.draft.as_mut().unwrap();
+    draft.name = "Bad".into();
+    draft.runtime = DraftRuntime::Ssh;
+    draft.ssh_host = "-oProxyCommand=x".into();
+    let err = daemons::save(&mut state, &mut w.model()).unwrap_err();
+    assert!(format!("{err:?}").contains("host"), "{err:?}");
+    assert_eq!(w.registry.entries().len(), 3, "nothing was added");
+}

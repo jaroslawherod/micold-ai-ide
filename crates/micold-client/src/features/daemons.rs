@@ -468,7 +468,9 @@ fn runtime_of(draft: &Draft) -> Result<DaemonRuntime, FormError> {
     match draft.runtime {
         DraftRuntime::Host => Ok(DaemonRuntime::Host),
         DraftRuntime::Ssh => {
-            let blank = |v: &str| Some(v.trim()).filter(|v| !v.is_empty());
+            fn blank(v: &str) -> Option<&str> {
+                Some(v.trim()).filter(|v| !v.is_empty())
+            }
             let port = match blank(&draft.ssh_port) {
                 Some(p) => Some(p.parse::<u16>().map_err(|_| invalid_field("port"))?),
                 None => None,
