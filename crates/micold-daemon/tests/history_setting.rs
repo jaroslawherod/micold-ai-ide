@@ -13,6 +13,8 @@ mod attention;
 #[path = "support/history.rs"]
 mod history;
 
+use attention::{settings_set, SettingsPatch};
+
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -25,7 +27,7 @@ use history::{
     wait_file,
 };
 use micold_core::protocol::codec::Frame;
-use micold_core::protocol::messages::{ClientMsg, DaemonMsg};
+use micold_core::protocol::messages::DaemonMsg;
 use micold_core::session::SessionId;
 use micold_core::terminal::LaunchMode;
 use micold_core::terminal_history::schedule::SAVE_SPACING;
@@ -399,25 +401,13 @@ async fn a_settings_set_deletes_the_files_before_it_is_answered_and_is_broadcast
     assert_eq!(files(saved.path()).len(), 1);
 
     window
-        .send(Frame::Control(ClientMsg::SettingsSet {
-            plan_usage_enabled: None,
-            plan_usage_warn_percent: None,
-            req: 5,
-            scrollback_lines: None,
-            env_include_enabled: None,
-            env_include_script_path: None,
-            env_include_timeout_secs: None,
-            default_ai_cli: None,
-            pi_activity_component: None,
-            save_terminal_history: Some(false),
-            tool_server_enabled: None,
-            cross_session_access: None,
-            pr_status_enabled: None,
-            desktop_notifications: None,
-            notification_kinds: None,
-            long_task_threshold_secs: None,
-            diff_layout: None,
-        }))
+        .send(Frame::Control(settings_set(
+            5,
+            SettingsPatch {
+                save_terminal_history: Some(false),
+                ..Default::default()
+            },
+        )))
         .await
         .unwrap();
     // `SettingsChanged` is pushed before the answer, so it is among what comes up to it.

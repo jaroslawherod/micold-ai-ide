@@ -18,7 +18,7 @@ use micold_daemon::state::DaemonState;
 
 #[path = "support/conn.rs"]
 mod conn;
-use conn::{connect_with_settings, Client};
+use conn::{connect_with_settings, settings_set, Client, SettingsPatch};
 
 /// A service whose catalog and settings live in `store_dir`. Called twice over one directory, the
 /// second service is the first one restarted.
@@ -37,25 +37,13 @@ fn service(store_dir: &Path) -> Arc<DaemonState> {
 
 /// A `SettingsSet` that names only the diff layout.
 fn set_layout(req: u64, layout: DiffLayout) -> ClientMsg {
-    ClientMsg::SettingsSet {
-        plan_usage_enabled: None,
-        plan_usage_warn_percent: None,
+    settings_set(
         req,
-        scrollback_lines: None,
-        env_include_enabled: None,
-        env_include_script_path: None,
-        env_include_timeout_secs: None,
-        default_ai_cli: None,
-        pi_activity_component: None,
-        save_terminal_history: None,
-        tool_server_enabled: None,
-        cross_session_access: None,
-        pr_status_enabled: None,
-        desktop_notifications: None,
-        notification_kinds: None,
-        long_task_threshold_secs: None,
-        diff_layout: Some(layout),
-    }
+        SettingsPatch {
+            diff_layout: Some(layout),
+            ..Default::default()
+        },
+    )
 }
 
 /// The answer to request `req`: `Ok(())` for an `Ack`, else the error's kind and message.

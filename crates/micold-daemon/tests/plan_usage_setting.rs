@@ -6,7 +6,9 @@ mod attention;
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use attention::{connect_with_welcome, received, sends, session_id, Service, Window};
+use attention::{
+    connect_with_welcome, received, sends, session_id, settings_set, Service, SettingsPatch, Window,
+};
 use micold_core::plan_usage::{LimitWindow, UsageReading};
 use micold_core::protocol::messages::{ClientMsg, DaemonMsg, DaemonSettings};
 use micold_core::settings::{JsonFileSettingsStore, Settings, SettingsStore};
@@ -14,25 +16,14 @@ use micold_core::settings::{JsonFileSettingsStore, Settings, SettingsStore};
 const A: u128 = 0x490A;
 
 fn set(plan_usage_enabled: Option<bool>, plan_usage_warn_percent: Option<u8>) -> ClientMsg {
-    ClientMsg::SettingsSet {
-        req: 1,
-        scrollback_lines: None,
-        env_include_enabled: None,
-        env_include_script_path: None,
-        env_include_timeout_secs: None,
-        default_ai_cli: None,
-        pi_activity_component: None,
-        save_terminal_history: None,
-        tool_server_enabled: None,
-        cross_session_access: None,
-        pr_status_enabled: None,
-        desktop_notifications: None,
-        notification_kinds: None,
-        long_task_threshold_secs: None,
-        diff_layout: None,
-        plan_usage_enabled,
-        plan_usage_warn_percent,
-    }
+    settings_set(
+        1,
+        SettingsPatch {
+            plan_usage_enabled,
+            plan_usage_warn_percent,
+            ..Default::default()
+        },
+    )
 }
 
 async fn window(service: &Service) -> (Window, DaemonSettings, Option<UsageReading>) {

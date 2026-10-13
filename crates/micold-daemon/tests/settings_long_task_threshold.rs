@@ -8,7 +8,10 @@
 #[path = "support/attention.rs"]
 mod attention;
 
-use attention::{connect_with_settings as connect, idle_process, next_frame, session_id, Window};
+use attention::{
+    connect_with_settings as connect, idle_process, next_frame, session_id, settings_set,
+    SettingsPatch, Window,
+};
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::Arc;
@@ -194,25 +197,14 @@ async fn sets(
 ) -> Vec<DaemonMsg> {
     let answers = sends(
         window,
-        ClientMsg::SettingsSet {
-            plan_usage_enabled: None,
-            plan_usage_warn_percent: None,
-            req: 1,
-            scrollback_lines,
-            env_include_enabled: None,
-            env_include_script_path: None,
-            env_include_timeout_secs: None,
-            default_ai_cli: None,
-            pi_activity_component: None,
-            save_terminal_history: None,
-            tool_server_enabled: None,
-            cross_session_access: None,
-            pr_status_enabled: None,
-            desktop_notifications: None,
-            notification_kinds: None,
-            long_task_threshold_secs,
-            diff_layout: None,
-        },
+        settings_set(
+            1,
+            SettingsPatch {
+                scrollback_lines,
+                long_task_threshold_secs,
+                ..Default::default()
+            },
+        ),
     )
     .await;
     assert!(

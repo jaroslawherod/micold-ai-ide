@@ -8,13 +8,13 @@
 #[path = "support/conn.rs"]
 mod conn;
 
-use conn::{connect_with_settings, Client};
+use conn::{connect_with_settings, settings_set, Client, SettingsPatch};
 use std::path::Path;
 use std::sync::Arc;
 
 use futures_util::{SinkExt, StreamExt};
 use micold_core::protocol::codec::Frame;
-use micold_core::protocol::messages::{ClientMsg, DaemonMsg, DaemonSettings, OperationResult};
+use micold_core::protocol::messages::{DaemonMsg, DaemonSettings, OperationResult};
 use micold_core::settings::JsonFileSettingsStore;
 use micold_core::store::{JsonFileStore, ProjectStore};
 use micold_core::workspace::Workspace;
@@ -45,25 +45,14 @@ async fn set(
     scrollback: Option<usize>,
 ) {
     client
-        .send(Frame::Control(ClientMsg::SettingsSet {
-            plan_usage_enabled: None,
-            plan_usage_warn_percent: None,
+        .send(Frame::Control(settings_set(
             req,
-            scrollback_lines: scrollback,
-            env_include_enabled: None,
-            env_include_script_path: None,
-            env_include_timeout_secs: None,
-            default_ai_cli: None,
-            pi_activity_component: None,
-            save_terminal_history: None,
-            tool_server_enabled: None,
-            cross_session_access: None,
-            pr_status_enabled,
-            desktop_notifications: None,
-            notification_kinds: None,
-            long_task_threshold_secs: None,
-            diff_layout: None,
-        }))
+            SettingsPatch {
+                scrollback_lines: scrollback,
+                pr_status_enabled,
+                ..Default::default()
+            },
+        )))
         .await
         .unwrap();
     let acknowledged = async {
@@ -153,25 +142,13 @@ async fn turning_pull_request_status_on_is_broadcast_to_two_connected_clients() 
     let (mut b, _) = connect_with_settings(&state).await;
     both_registered(&state).await;
 
-    a.send(Frame::Control(ClientMsg::SettingsSet {
-        plan_usage_enabled: None,
-        plan_usage_warn_percent: None,
-        req: 1,
-        scrollback_lines: None,
-        env_include_enabled: None,
-        env_include_script_path: None,
-        env_include_timeout_secs: None,
-        default_ai_cli: None,
-        pi_activity_component: None,
-        save_terminal_history: None,
-        tool_server_enabled: None,
-        cross_session_access: None,
-        pr_status_enabled: Some(true),
-        desktop_notifications: None,
-        notification_kinds: None,
-        long_task_threshold_secs: None,
-        diff_layout: None,
-    }))
+    a.send(Frame::Control(settings_set(
+        1,
+        SettingsPatch {
+            pr_status_enabled: Some(true),
+            ..Default::default()
+        },
+    )))
     .await
     .unwrap();
 
