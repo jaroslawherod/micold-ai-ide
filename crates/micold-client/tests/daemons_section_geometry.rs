@@ -209,9 +209,7 @@ fn the_ssh_form_and_ssh_rows_paint_their_fields_and_badges_without_overflow() {
         .unwrap();
     state.settings.links = DaemonLinks::at_launch(&state.settings.daemons);
     state.update(Message::Daemons(DaemonsMsg::CopyProgress(ssh, 40)));
-    for event in [DaemonEvent::Start] {
-        state.settings.links.apply(ssh, event);
-    }
+    state.settings.links.apply(ssh, DaemonEvent::Start);
     let painted_rows = painted(&state);
     assert!(has(&painted_rows, "Remote over SSH"), "{painted_rows:?}");
     assert!(has(&painted_rows, "copying daemon"), "{painted_rows:?}");
