@@ -9837,6 +9837,20 @@ mod pr_status {
         assert!(nothing_was_reported(&rig.app));
     }
 
+    // A disconnect while the remotes are pending ends the read: the view must not stay Loading.
+    #[test]
+    fn pr_list_read_a_disconnect_ends_the_read_and_raises_no_notice() {
+        let mut rig = rig(Some(FAKE_GH), FakePullRequestSource::new());
+        ask_list(&mut rig, "feat/a");
+        let (req, _) = list_pending(&rig.app).expect("pending");
+        let daemon = *rig.app.pending_daemon.get(&req).expect("bound to a daemon");
+        let work = shell::daemon_sync::on_disconnected(&mut rig.app, daemon);
+        settle(&mut rig.app, work);
+        assert!(list_pending(&rig.app).is_none());
+        assert!(matches!(view_list(&rig.app), PrList::Unavailable { .. }));
+        assert!(nothing_was_reported(&rig.app));
+    }
+
     // After the answer the timer is a no-op: the read it bounded is under way and keeps its result.
     #[test]
     fn pr_list_read_a_timeout_after_the_remotes_answered_does_nothing() {

@@ -480,6 +480,7 @@ fn resolve_pending_of(app: &mut App, daemon: DaemonId) -> Task<Message> {
             resolved.push(op);
         }
     }
+    let mut ended = Vec::new();
     for op in resolved {
         let text = format!(
             "The session service disconnected before confirming the request to {} — \
@@ -531,9 +532,18 @@ fn resolve_pending_of(app: &mut App, daemon: DaemonId) -> Task<Message> {
             }
             // Feature 040: the reading ended with the hold, above; no failure of a reading is
             // ever a notice (FR-025, SC-004).
-            PendingOp::PrStatusRemotes { .. }
-            | PendingOp::PrListRemotes { .. }
-            | PendingOp::MergedBranchCheck { .. } => {}
+            PendingOp::PrStatusRemotes { .. } | PendingOp::MergedBranchCheck { .. } => {}
+            // The list read ends as a passing failure, or its view would stay `Loading` for ever
+            // (feature 775).
+            PendingOp::PrListRemotes { seq, started, .. } => {
+                ended.push(Task::done(Message::Changes(
+                    micold_client::features::changes::Msg::PullRequestsRead {
+                        seq,
+                        read_at: started,
+                        result: Err(micold_core::pull_request::ReadingFailure::Passing),
+                    },
+                )));
+            }
             _ => app.core.notify_error(text),
         }
     }
@@ -542,12 +552,15 @@ fn resolve_pending_of(app: &mut App, daemon: DaemonId) -> Task<Message> {
     // from here, and the difference is one question to the runtime (FR-036, US6 scenario 3). Asked
     // once, on the disconnect, rather than polled: the answer only changes when the connection
     // does.
-    match (app.sandbox.state.accepts_sessions(), &app.sandbox_boot) {
-        (true, Some(plan)) if is_sandbox_daemon(app, daemon) => {
-            crate::shell::sandbox::check_alive(plan)
-        }
-        _ => Task::none(),
-    }
+    ended.push(
+        match (app.sandbox.state.accepts_sessions(), &app.sandbox_boot) {
+            (true, Some(plan)) if is_sandbox_daemon(app, daemon) => {
+                crate::shell::sandbox::check_alive(plan)
+            }
+            _ => Task::none(),
+        },
+    );
+    Task::batch(ended)
 }
 
 /// Send `ProjectAdd` to `daemon` for each project that has a location bound to it and that its

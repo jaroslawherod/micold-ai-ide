@@ -44,11 +44,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Plan | 1 | 9542cb17a47a5cde8de0d120e2391d023bbabb49:4055448678d6361c09ed6bf9f33d1e0188781e25 | CHANGES: 4 MAJOR (PrState/BranchPrState mismatch, no test map, single call-site guard test, rate-limit hold), 3 MINOR; all fixed |
 | Plan | 2 | 44a2dbea1d4c763aa859c8ae3c982ed7bf415968:4055448678d6361c09ed6bf9f33d1e0188781e25 | CLEAN (2 MINOR fixed, prose only) |
 | Tasks | 1 | f299e17b1b36488e83cceece626596063613b3d7:a3576aeee9ba5abbc3ef2b89553f242f5bed2ac7 | CHANGES: 2 MAJOR (PullRequestRow premise, showcase paths), 3 MINOR; all fixed, wording and task split only, checked against the repo |
+| M1 review A (high) | 1 | a24a773c7a9fa0ff3115024bc9939df6a47f8604:addb7d2a98edc3c8c044fca7705e4b25d0154682 | CHANGES: 2 MAJOR (disconnect leaves list Loading; list read raised a notice with no route), 1 MINOR; MAJORs fixed with test, MINOR declined |
 
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| M1 | A | changes.rs:146 stale branch list while a read for another branch is in flight (MINOR) | The window is one read long and the queued read replaces it; the view's branch changes only when the entry's branch does. Not worth a seq-branch field. |
 
 ## Handover
 
