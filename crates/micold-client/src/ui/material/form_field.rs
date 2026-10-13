@@ -73,6 +73,92 @@ pub fn label_floats(populated: bool, active: bool) -> bool {
     populated || active
 }
 
+/// The three strings every field carries: its name, its hint, its validation failure.
+///
+/// One struct so the builders exist once ([`field_text_builders!`]) instead of being pasted on
+/// each field type, and so a type wrapping another passes the trio through whole.
+#[derive(Clone, Default)]
+pub(super) struct FieldText {
+    label: Option<String>,
+    supporting: Option<String>,
+    error: Option<String>,
+}
+
+impl FieldText {
+    pub(super) fn label(mut self, label: impl Into<String>) -> Self {
+        self.label = Some(label.into());
+        self
+    }
+
+    pub(super) fn supporting(mut self, text: impl Into<String>) -> Self {
+        self.supporting = Some(text.into());
+        self
+    }
+
+    pub(super) fn error(mut self, error: Option<impl Into<String>>) -> Self {
+        self.error = error.map(Into::into);
+        self
+    }
+
+    pub(super) fn has_label(&self) -> bool {
+        self.label.is_some()
+    }
+
+    /// Hand the trio to a [`FormField`].
+    pub(super) fn apply<'a, M: 'a>(self, mut field: FormField<'a, M>) -> FormField<'a, M> {
+        field.text = self;
+        field
+    }
+}
+
+/// The `label`/`supporting` builders on a type holding a `text: FieldText`.
+macro_rules! field_text_builders {
+    () => {
+        $crate::ui::material::form_field::field_text_builders!(label_supporting);
+
+        /// The validation failure, if any: takes the supporting text's place and recolours the
+        /// chrome.
+        pub fn error(mut self, error: Option<impl Into<String>>) -> Self {
+            self.text = self.text.error(error);
+            self
+        }
+    };
+    (label_supporting) => {
+        /// The field's name, rendered inside its container above the value (FR-031a).
+        ///
+        /// A *name*, not a hint ("Ticket", not "Ticket (optional, e.g. ABC-123)"): the example
+        /// belongs in [`Self::supporting`].
+        pub fn label(mut self, label: impl Into<String>) -> Self {
+            self.text = self.text.label(label);
+            self
+        }
+
+        /// Explanatory text beneath the container: a constraint, an example, a unit.
+        pub fn supporting(mut self, text: impl Into<String>) -> Self {
+            self.text = self.text.supporting(text);
+            self
+        }
+    };
+}
+pub(super) use field_text_builders;
+
+/// The row under a field's container: `text` inset to the container's text column, or an empty
+/// `Space` when there is none, so the widget tree has the same shape either way (see the module
+/// docs). `top` is the gap above it.
+pub(crate) fn beneath<'a, M: 'a>(text: Option<Element<'a, M>>, top: f32) -> Element<'a, M> {
+    match text {
+        Some(text) => container(text)
+            .padding(iced::Padding {
+                top,
+                bottom: 0.0,
+                left: anatomy::text_field::PADDING,
+                right: anatomy::text_field::PADDING,
+            })
+            .into(),
+        None => Space::new().into(),
+    }
+}
+
 /// A form control wearing Material's filled-field chrome. Builder form (Principle VIII):
 ///
 /// ```ignore
@@ -86,9 +172,7 @@ pub fn label_floats(populated: bool, active: bool) -> bool {
 pub struct FormField<'a, M> {
     control: Element<'a, M>,
     roles: Roles,
-    label: Option<String>,
-    supporting: Option<String>,
-    error: Option<String>,
+    text: FieldText,
     active: bool,
     populated: bool,
     leading: Option<Element<'a, M>>,
@@ -104,9 +188,7 @@ impl<'a, M: 'a> FormField<'a, M> {
         Self {
             control: control.into(),
             roles,
-            label: None,
-            supporting: None,
-            error: None,
+            text: FieldText::default(),
             active: false,
             populated: false,
             leading: None,
@@ -127,31 +209,7 @@ impl<'a, M: 'a> FormField<'a, M> {
         self
     }
 
-    /// The field's name, rendered **inside** the container above the value.
-    ///
-    /// This is the field's name, never a hint or an example — those are [`Self::supporting`]. The
-    /// placeholder is for a genuine example only (§7.7), which is the distinction today's call
-    /// sites collapse by bundling both into one string.
-    pub fn label(mut self, label: impl Into<String>) -> Self {
-        self.label = Some(label.into());
-        self
-    }
-
-    /// Explanatory text beneath the container: a constraint, an example, a unit.
-    pub fn supporting(mut self, text: impl Into<String>) -> Self {
-        self.supporting = Some(text.into());
-        self
-    }
-
-    /// The validation failure, if any.
-    ///
-    /// Takes the place of the supporting text and switches the indicator and the label to the error
-    /// role together, because a field showing a problem should not also be showing the hint the
-    /// problem replaces.
-    pub fn error(mut self, error: Option<impl Into<String>>) -> Self {
-        self.error = error.map(Into::into);
-        self
-    }
+    field_text_builders!();
 
     /// Whether the control is currently active — **focused** for a text input, **open** for the
     /// select. See the module docs for why this is supplied rather than inferred.
@@ -213,7 +271,7 @@ impl<'a, M: 'a> FormField<'a, M> {
 impl<'a, M: 'a> From<FormField<'a, M>> for Element<'a, M> {
     fn from(f: FormField<'a, M>) -> Self {
         let r = f.roles;
-        let invalid = f.error.is_some();
+        let invalid = f.text.error.is_some();
 
         // Every slot is emitted whether or not it is filled — see the module docs. `Space::new()`
         // and not a zero-sized one: iced drops a child whose size hint `is_void()`, which is true
@@ -226,7 +284,7 @@ impl<'a, M: 'a> From<FormField<'a, M>> for Element<'a, M> {
         // changes with the position — `body_small` floating, `body_large` at rest — which is what
         // makes a resting label read as the field's *content placeholder* rather than as a caption.
         let floating = label_floats(f.populated, f.active);
-        let label: Element<'a, M> = match f.label {
+        let label: Element<'a, M> = match f.text.label {
             Some(text) => Text::new(
                 text,
                 if floating {
@@ -274,19 +332,14 @@ impl<'a, M: 'a> From<FormField<'a, M>> for Element<'a, M> {
         // Supporting text sits *beneath* the box, outside it. The error message replaces it rather
         // than joining it: a field showing a problem should not also be showing the hint the
         // problem replaces.
-        let beneath: Element<'a, M> = match f.error.or(f.supporting) {
-            Some(message) => container(
-                Text::new(message, TypeRole::Caption, r).tint(style::field_support(r, invalid)),
-            )
-            .padding(iced::Padding {
-                top: spacing::XS,
-                bottom: 0.0,
-                left: anatomy::text_field::PADDING,
-                right: anatomy::text_field::PADDING,
-            })
-            .into(),
-            None => Space::new().into(),
-        };
+        let beneath = beneath(
+            f.text.error.or(f.text.supporting).map(|message| {
+                Text::new(message, TypeRole::Caption, r)
+                    .tint(style::field_support(r, invalid))
+                    .into()
+            }),
+            spacing::XS,
+        );
 
         column![field, beneath].width(Length::Fill).into()
     }

@@ -168,6 +168,7 @@ pub use divider::Divider;
 pub use edge_fade::EdgeFade;
 pub use ellipsized::Ellipsized;
 pub use filter_panel::FilterTrigger;
+pub(crate) use form_field::beneath;
 pub use form_field::{FormField, Layer as FieldLayer};
 pub use glyph::Glyph;
 pub use icon_button::IconButton;

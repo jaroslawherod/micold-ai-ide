@@ -21,6 +21,7 @@
 //! the field's name.
 
 use crate::icons::Icon;
+use crate::ui::material::form_field::{field_text_builders, FieldText};
 use crate::ui::material::style;
 use crate::ui::material::text::TypeRole;
 use iced::widget::text_input;
@@ -40,9 +41,7 @@ pub struct TextField<'a, M> {
     trailing_action: Option<(Icon, M)>,
     on_input: Option<Box<dyn Fn(String) -> M + 'a>>,
     on_submit: Option<M>,
-    label: Option<String>,
-    supporting: Option<String>,
-    error: Option<String>,
+    text: FieldText,
     active: bool,
     on_focus_change: Option<Box<dyn Fn(bool) -> M + 'a>>,
 }
@@ -58,9 +57,7 @@ impl<'a, M: Clone + 'a> TextField<'a, M> {
             trailing_action: None,
             on_input: None,
             on_submit: None,
-            label: None,
-            supporting: None,
-            error: None,
+            text: FieldText::default(),
             active: false,
             on_focus_change: None,
         }
@@ -87,25 +84,11 @@ impl<'a, M: Clone + 'a> TextField<'a, M> {
         self
     }
 
-    /// The field's name, rendered inside the container above the value (FR-031a).
-    ///
-    /// A *name*, not a hint: "Ticket", not "Ticket (optional, e.g. ABC-123)". The example belongs in
-    /// [`Self::supporting`], and the two were bundled into the placeholder at every call site —
-    /// the migration §7.7 tabulates.
-    pub fn label(mut self, label: impl Into<String>) -> Self {
-        self.label = Some(label.into());
-        self
-    }
+    field_text_builders!();
 
-    /// Explanatory text beneath the container: a constraint, an example, a unit.
-    pub fn supporting(mut self, text: impl Into<String>) -> Self {
-        self.supporting = Some(text.into());
-        self
-    }
-
-    /// The validation failure, if any — takes the supporting text's place and recolours the chrome.
-    pub fn error(mut self, error: Option<impl Into<String>>) -> Self {
-        self.error = error.map(Into::into);
+    /// Take the name, hint and failure from `text` whole (what a wrapping control passes through).
+    pub(super) fn text(mut self, text: FieldText) -> Self {
+        self.text = text;
         self
     }
 
@@ -159,7 +142,7 @@ impl<'a, M: Clone + 'a> From<TextField<'a, M>> for Element<'a, M> {
         // on top of it. Material shows one or the other, never both: the resting label is the
         // placeholder, and the real one appears once the label has floated out of the way.
         let resting =
-            f.label.is_some() && !super::form_field::label_floats(!f.value.is_empty(), f.active);
+            f.text.has_label() && !super::form_field::label_floats(!f.value.is_empty(), f.active);
         let placeholder = if resting { "" } else { &f.placeholder };
         let mut widget = text_input(placeholder, f.value)
             .padding(0)
@@ -203,12 +186,6 @@ impl<'a, M: Clone + 'a> From<TextField<'a, M>> for Element<'a, M> {
         if let Some((icon, message)) = f.trailing_action {
             field = field.trailing(super::IconButton::new(icon, f.roles).on_press(message));
         }
-        if let Some(label) = f.label {
-            field = field.label(label);
-        }
-        if let Some(supporting) = f.supporting {
-            field = field.supporting(supporting);
-        }
-        field.error(f.error).into()
+        f.text.apply(field).into()
     }
 }

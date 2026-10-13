@@ -20,6 +20,7 @@
 //! Contracts: `specs/021-branch-typeahead-search/contracts/typeahead-component.md` §1, §4, and
 //! `specs/022-dedicated-select-component/contracts/picker-base.md` §3.
 
+use super::form_field::{field_text_builders, FieldText};
 use super::picker::{animated_menu, menu_element, Row, EXIT, GAP};
 use crate::icons::Icon;
 use crate::ui::cdk::picker::Picker as Behaviour;
@@ -37,8 +38,7 @@ pub struct Typeahead<'a, M> {
     on_input: Box<dyn Fn(String) -> M + 'a>,
     roles: Roles,
     placeholder: String,
-    label: Option<String>,
-    supporting: Option<String>,
+    text: FieldText,
     open: bool,
     highlighted: Option<usize>,
     selected: Option<usize>,
@@ -70,8 +70,7 @@ impl<'a, M: Clone + 'a> Typeahead<'a, M> {
             on_input: Box::new(on_input),
             roles,
             placeholder: "Search…".to_string(),
-            label: None,
-            supporting: None,
+            text: FieldText::default(),
             open: false,
             highlighted: None,
             selected: None,
@@ -83,23 +82,9 @@ impl<'a, M: Clone + 'a> Typeahead<'a, M> {
         }
     }
 
+    field_text_builders!(label_supporting);
+
     /// Text shown when the field is empty.
-    /// The control's name, rendered inside its container above the value (FR-031a).
-    ///
-    /// Forwarded to the search field's own `FormField`, so the branch picker's label sits where
-    /// every other field's does. §7.7's migration table predates this control — it names the select
-    /// the type-ahead replaced — and design-tokens §7.7 extends the same requirement here.
-    pub fn label(mut self, label: impl Into<String>) -> Self {
-        self.label = Some(label.into());
-        self
-    }
-
-    /// Explanatory text beneath the container.
-    pub fn supporting(mut self, text: impl Into<String>) -> Self {
-        self.supporting = Some(text.into());
-        self
-    }
-
     pub fn placeholder(mut self, placeholder: impl Into<String>) -> Self {
         self.placeholder = placeholder.into();
         self
@@ -163,8 +148,7 @@ impl<'a, M: Clone + 'a> From<Typeahead<'a, M>> for Element<'a, M> {
             on_input,
             roles: r,
             placeholder,
-            label,
-            supporting,
+            text,
             open,
             highlighted,
             selected,
@@ -209,16 +193,11 @@ impl<'a, M: Clone + 'a> From<Typeahead<'a, M>> for Element<'a, M> {
         let mut input = super::TextField::new(placeholder, query, r)
             .leading_icon(Icon::Search)
             .active(open)
+            .text(text)
             .on_input(on_input);
         // Nothing here has to say whether the label rests or floats: `TextField` derives that from
         // its own value, which for the type-ahead *is* the query — so a picker with an empty search
         // box rests its label exactly as an empty input does, and one being typed into floats it.
-        if let Some(label) = label {
-            input = input.label(label);
-        }
-        if let Some(supporting) = supporting {
-            input = input.supporting(supporting);
-        }
         if !query.is_empty() {
             input = input.trailing_action(Icon::Close, cleared);
         }
