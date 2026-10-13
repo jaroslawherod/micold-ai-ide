@@ -1462,7 +1462,7 @@ where
                 branch,
                 dir_name,
                 mode,
-                ..
+                session,
             } => {
                 if !matches!(state.project_repo(&project), Some((_, true))) {
                     reject_non_repo(state, id, req, &project);
@@ -1503,18 +1503,57 @@ where
                 let task_state = Arc::clone(state);
                 tokio::spawn(async move {
                     let state = &task_state;
-                    let reply =
-                        match ops::create_worktree(state, project, names, mode, Some(progress))
+                    // Feature 776: a definition makes the worktree and its one session one
+                    // operation, so the reply names both, or neither for a missing CLI.
+                    let asked = tokio::time::Instant::now();
+                    let created = match &session {
+                        None => ops::create_worktree(state, project, names, mode, Some(progress))
                             .await
-                        {
-                            Ok(()) => DaemonMsg::OperationOk {
-                                req,
-                                result: OperationResult::WorktreeCreated {
-                                    dir_name,
-                                    session: None,
-                                },
+                            .map(|()| None)
+                            .map_err(ops::WorktreeStartFailure::Create),
+                        Some(definition) => ops::create_worktree_with_session(
+                            state,
+                            project,
+                            names,
+                            mode,
+                            Some(progress),
+                            ops::StartDefinition {
+                                cli: definition.ai_cli,
+                                prompt: definition.prompt.as_deref().map(|text| ops::FirstPrompt {
+                                    text,
+                                    asked,
+                                    require_bracketed: false,
+                                }),
                             },
-                            Err(ops::CreateFailure::Create(e)) => {
+                        )
+                        .await
+                        .map(|(session, _prompt)| Some(session)),
+                    };
+                    let reply = match created {
+                        Ok(session) => DaemonMsg::OperationOk {
+                            req,
+                            result: OperationResult::WorktreeCreated { dir_name, session },
+                        },
+                        Err(ops::WorktreeStartFailure::CliUnavailable(why)) => {
+                            DaemonMsg::OperationError {
+                                req,
+                                kind: ErrorKind::Refused,
+                                message: why,
+                                detail: None,
+                            }
+                        }
+                        Err(ops::WorktreeStartFailure::Session { dir_name, error }) => {
+                            DaemonMsg::OperationError {
+                                req,
+                                kind: ErrorKind::IoFailed,
+                                message: format!(
+                                    "the worktree was created but its session was not: {error}"
+                                ),
+                                detail: Some(dir_name),
+                            }
+                        }
+                        Err(ops::WorktreeStartFailure::Create(failure)) => match failure {
+                            ops::CreateFailure::Create(e) => {
                                 let (kind, message, detail) = describe_create_error(e);
                                 DaemonMsg::OperationError {
                                     req,
@@ -1523,16 +1562,17 @@ where
                                     detail,
                                 }
                             }
-                            Err(ops::CreateFailure::NotARepository) => DaemonMsg::OperationError {
+                            ops::CreateFailure::NotARepository => DaemonMsg::OperationError {
                                 req,
                                 kind: ErrorKind::NotFound,
                                 message: "unknown project".into(),
                                 detail: None,
                             },
-                            Err(ops::CreateFailure::Task(join)) => {
+                            ops::CreateFailure::Task(join) => {
                                 task_failed(req, "worktree create", &join)
                             }
-                        };
+                        },
+                    };
                     state.send(id, reply);
                 });
             }

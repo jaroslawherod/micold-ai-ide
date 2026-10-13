@@ -720,6 +720,75 @@ pub async fn start_with_prompt(
     (session, typed)
 }
 
+/// Why [`create_worktree_with_session`] did not give a worktree with its session (feature 776).
+#[derive(Debug)]
+pub enum WorktreeStartFailure {
+    /// The session's CLI is not available where it would run; nothing was created. The text is
+    /// `cli_reason`'s.
+    CliUnavailable(String),
+    /// The worktree was not created.
+    Create(CreateFailure),
+    /// The worktree was created and the session record was not: the worktree stays, with no
+    /// session, which FR-010 allows.
+    Session {
+        /// The worktree that was created.
+        dir_name: String,
+        /// Why there is no session.
+        error: crate::catalog::CreateSessionError,
+    },
+}
+
+/// The session `create_worktree_with_session` defines: its CLI and optional first prompt.
+#[derive(Debug, Clone, Copy)]
+pub struct StartDefinition<'a> {
+    /// The AI CLI.
+    pub cli: AiCli,
+    /// The first input, typed once the CLI is ready.
+    pub prompt: Option<FirstPrompt<'a>>,
+}
+
+/// Create worktree `names.dir_name` and its one session together (feature 776, FR-006): the
+/// CLI is checked at the worktree's future directory first, so a missing CLI leaves nothing; then
+/// the worktree is created ([`create_worktree`]); then the session through the same locked
+/// create path as any other ([`create_session_with_prompt`]). A worktree created whose session
+/// could not be stays, as [`WorktreeStartFailure::Session`] says.
+pub async fn create_worktree_with_session(
+    state: &Arc<DaemonState>,
+    project: PathBuf,
+    names: DerivedNames,
+    mode: CreateMode,
+    progress: Option<ProgressSink>,
+    definition: StartDefinition<'_>,
+) -> Result<(SessionId, Result<(), FirstPromptUndelivered>), WorktreeStartFailure> {
+    let Some((repo, true)) = state.project_repo(&project) else {
+        return Err(WorktreeStartFailure::Create(CreateFailure::NotARepository));
+    };
+    let cwd = repo.join(".claude/worktrees").join(&names.dir_name);
+    let unavailable = cli_unavailable(state, &cwd, definition.cli).await;
+    // The directory does not exist yet, so whatever the environment include script resolved for
+    // it was resolved for nothing: forget it, so the session's own start looks again.
+    state.invalidate_env_include(&cwd);
+    if let Some(why) = unavailable {
+        return Err(WorktreeStartFailure::CliUnavailable(why));
+    }
+    let dir_name = names.dir_name.clone();
+    create_worktree(state, project.clone(), names, mode, progress)
+        .await
+        .map_err(WorktreeStartFailure::Create)?;
+    create_session_with_prompt(
+        state,
+        NewSession {
+            project: &project,
+            worktree_dir: &dir_name,
+            cwd: &cwd,
+            cli: definition.cli,
+        },
+        definition.prompt,
+    )
+    .await
+    .map_err(|error| WorktreeStartFailure::Session { dir_name, error })
+}
+
 /// Pick run `number` of `group`: integrate its branch into the group's base branch and record the
 /// winner (feature 483, W3, contracts/integration.md). Taken under the project's worktree gate, so
 /// two picks of one group run one after the other and the second finds the winner (FR-018). Each

@@ -11,7 +11,9 @@ use std::time::Duration;
 use futures_util::{SinkExt, StreamExt};
 use micold_core::project::{Availability, Project};
 use micold_core::protocol::codec::Frame;
-use micold_core::protocol::messages::{ClientMsg, DaemonMsg, ErrorKind};
+use micold_core::protocol::messages::{
+    ClientMsg, DaemonMsg, ErrorKind, OperationResult, SessionDefinition,
+};
 use micold_core::session::{
     AiCli, Session, SessionId, SessionLabel, SessionLocation, TerminalMode,
 };
@@ -399,4 +401,157 @@ async fn soft_limit_concurrent_flagged_creates_each_make_a_session() {
     }
     assert_eq!(count(&state, project.path()), 5);
     kill_all(&state, project.path());
+
+// --- US2: `WorktreeCreate` with a definition (FR-006) ---------------------------------------------
+
+/// `PATH` is process-wide: the tests below set it to a directory they control, one at a time.
+static PATH_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+/// Set `PATH` to `bin` (and the system's) for a test; restored on drop.
+struct PathGuard(Option<std::ffi::OsString>);
+
+impl PathGuard {
+    fn set(bin: &Path) -> Self {
+        let saved = std::env::var_os("PATH");
+        let paths = [bin.to_path_buf(), "/usr/bin".into(), "/bin".into()];
+        std::env::set_var("PATH", std::env::join_paths(paths).unwrap());
+        Self(saved)
+    }
+}
+
+impl Drop for PathGuard {
+    fn drop(&mut self) {
+        match self.0.take() {
+            Some(path) => std::env::set_var("PATH", path),
+            None => std::env::remove_var("PATH"),
+        }
+    }
+}
+
+/// A `claude` stand-in that reads its input until closed.
+#[cfg(unix)]
+fn stand_in_claude(bin: &Path) {
+    use std::os::unix::fs::PermissionsExt;
+    let path = bin.join("claude");
+    std::fs::write(&path, "#!/bin/sh\nexec cat > /dev/null\n").unwrap();
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+}
+
+fn worktree_create(
+    req: u64,
+    project: &Path,
+    dir: &str,
+    session: Option<SessionDefinition>,
+) -> ClientMsg {
+    ClientMsg::WorktreeCreate {
+        req,
+        project: project.to_path_buf(),
+        branch: dir.to_string(),
+        dir_name: dir.to_string(),
+        mode: micold_core::worktree::CreateMode::NewBranch,
+        session,
+    }
+}
+
+fn worktree_dirs(project: &Path) -> Vec<String> {
+    std::fs::read_dir(project.join(".claude/worktrees"))
+        .map(|dir| {
+            dir.flatten()
+                .map(|e| e.file_name().to_string_lossy().into_owned())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// US2 s1/s5 at the wire: a definition makes the worktree and its session together and the reply
+/// names the session; none leaves the worktree without one, as before.
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn worktree_create_with_a_definition_creates_the_session_with_it() {
+    let _guard = PATH_LOCK.lock().await;
+    let bin = tempfile::tempdir().unwrap();
+    stand_in_claude(bin.path());
+    let _path = PathGuard::set(bin.path());
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    init_repo(project.path());
+    let state = state_with(project.path(), store.path(), vec![], &[]);
+    let mut client = connect(&state).await;
+
+    client
+        .send(Frame::Control(worktree_create(1, project.path(), "plain", None)))
+        .await
+        .unwrap();
+    match answer(&mut client, 1).await {
+        DaemonMsg::OperationOk {
+            result: OperationResult::WorktreeCreated { dir_name, session },
+            ..
+        } => {
+            assert_eq!(dir_name, "plain");
+            assert_eq!(session, None, "no definition, no session");
+        }
+        other => panic!("created: {other:?}"),
+    }
+    assert_eq!(count(&state, project.path()), 0);
+
+    let definition = SessionDefinition::new(AiCli::ClaudeCode, None);
+    client
+        .send(Frame::Control(worktree_create(
+            2,
+            project.path(),
+            "with-session",
+            Some(definition),
+        )))
+        .await
+        .unwrap();
+    let id = match answer(&mut client, 2).await {
+        DaemonMsg::OperationOk {
+            result: OperationResult::WorktreeCreated { session, .. },
+            ..
+        } => session.expect("the reply names the session"),
+        other => panic!("created: {other:?}"),
+    };
+    let sessions = state.sessions_for(project.path());
+    assert_eq!(sessions.len(), 1, "one session");
+    assert_eq!(sessions[0].id, id);
+    assert_eq!(sessions[0].worktree_dir.as_deref(), Some("with-session"));
+    kill_all(&state, project.path());
+}
+
+/// US2 s4 at the wire: a CLI that is not available leaves no worktree and no session.
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn worktree_create_with_a_missing_cli_creates_nothing() {
+    let _guard = PATH_LOCK.lock().await;
+    let bin = tempfile::tempdir().unwrap();
+    let _path = PathGuard::set(bin.path());
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    init_repo(project.path());
+    let state = state_with(project.path(), store.path(), vec![], &[]);
+    let mut client = connect(&state).await;
+    let before = worktree_dirs(project.path());
+
+    let definition = SessionDefinition::new(AiCli::Pi, Some("go".into()));
+    client
+        .send(Frame::Control(worktree_create(
+            1,
+            project.path(),
+            "nothing",
+            Some(definition),
+        )))
+        .await
+        .unwrap();
+    assert!(
+        matches!(
+            answer(&mut client, 1).await,
+            DaemonMsg::OperationError {
+                kind: ErrorKind::Refused,
+                ..
+            }
+        ),
+        "a missing CLI is refused"
+    );
+    assert_eq!(count(&state, project.path()), 0, "no session");
+    assert_eq!(worktree_dirs(project.path()), before, "no worktree");
 }

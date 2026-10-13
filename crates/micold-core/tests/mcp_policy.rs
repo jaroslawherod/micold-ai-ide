@@ -42,6 +42,7 @@ fn create_worktree() -> Operation {
         branch: "feat-x".into(),
         name: None,
         mode: CreateMode::NewBranch,
+        start: None,
     })
 }
 
@@ -69,6 +70,7 @@ fn a_default_caller_may_create_a_worktree() {
             branch: "feat-x".into(),
             name: None,
             mode: mode.clone(),
+            start: None,
         });
         assert_eq!(
             decide_for(SessionLocation::Default, &operation),
@@ -88,6 +90,7 @@ fn a_derived_create_is_allowed_and_audited_by_name_or_issue() {
             ticket: None,
             name: name.map(str::to_string),
             github_issue: issue,
+            start: None,
         })
     };
     assert_eq!(derived(Some("login"), None).audit_target(), "login");

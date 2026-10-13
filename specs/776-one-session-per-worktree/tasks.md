@@ -84,7 +84,7 @@ User stories: US1 refused second session unless really requested (P1), US2 defin
 - [ ] T018 [P] [US2] Client tests in `crates/micold-client/tests/features_session.rs`: `start_intent` offers a start only for a `Free` location (`occupancy`), none for an occupied one, Default included (additional sessions are US6's menu entry, not this action); `WorktreeCreated.session` is selected and viewed as `SessionCreated` is.
 - [ ] T019 [US2] Add the fields to `crates/micold-client/src/features/worktree_form.rs` and render them in `crates/micold-client/src/ui/worktree_form.rs` (existing select and text-field primitives only, Principle VIII); send the definition and select the returned session in `crates/micold-client/src/shell/daemon_sync.rs`.
 - [ ] T020 [US2] Make `start_intent` in `crates/micold-client/src/features/session.rs` ask `occupancy`, and have `crates/micold-client/src/ui/sidebar.rs` render exactly one start action for a free location and none for an occupied one (FR-004).
-- [ ] T021 [P] [US2] Update `docs/user-guide/agent-tools.md` (`create_worktree` inputs `ai_cli` and `prompt`, reply fields).
+- [x] T021 [P] [US2] Update `docs/user-guide/agent-tools.md` (`create_worktree` inputs `ai_cli` and `prompt`, reply fields).
 - [ ] T036 [P] [US2] Update `docs/user-guide/worktrees-and-sessions.md` (dialog fields, definition at start, no add action on a started worktree).
 - [ ] T022 [US2] Visual pass of quickstart Part B items 1, 2 and 4 via the `visual-pass` skill; save evidence in `specs/776-one-session-per-worktree/tdd/`.
 

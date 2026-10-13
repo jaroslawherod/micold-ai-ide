@@ -217,6 +217,7 @@ fn create_worktree(branch: &str, name: Option<&str>, mode: CreateMode) -> Operat
         branch: branch.into(),
         name: name.map(str::to_string),
         mode,
+        start: None,
     })
 }
 
@@ -226,6 +227,7 @@ fn derived(type_: Option<ConventionalType>, ticket: Option<&str>, name: Option<&
         ticket: ticket.map(str::to_string),
         name: name.map(str::to_string),
         github_issue: None,
+        start: None,
     })
 }
 
@@ -904,4 +906,71 @@ fn list_resumable_sessions_pages_with_a_limit_and_an_offset() {
     invalid("list_resumable_sessions", json!({"offset": -1}));
     invalid("list_resumable_sessions", json!({"offset": "1"}));
     assert!(!is_mutating_tool("list_resumable_sessions"));
+}
+
+/// Feature 776, FR-006: `create_worktree` takes the session's definition at start. `ai_cli` is an
+/// enum of every CLI's tool name, `prompt` a string, and neither is required.
+#[test]
+fn create_worktree_schema_offers_the_session_definition() {
+    let listing = micold_core::mcp::tools::list_result();
+    let tool = listing["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|t| t["name"] == "create_worktree")
+        .unwrap();
+    let props = &tool["inputSchema"]["properties"];
+    let names: Vec<&str> = AiCli::ALL.iter().map(|c| c.tool_name()).collect();
+    let offered: Vec<&str> = props["ai_cli"]["enum"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v.as_str().unwrap())
+        .collect();
+    assert_eq!(offered, names);
+    assert_eq!(props["prompt"]["type"], "string");
+    assert_eq!(tool["inputSchema"]["required"], json!([]), "neither is required");
+}
+
+#[test]
+fn create_worktree_parses_the_definition_with_either_form() {
+    use micold_core::mcp::tools::StartSession;
+    let literal = parse_call(
+        "create_worktree",
+        &json!({"branch": "feat-x", "ai_cli": "claude_code", "prompt": "go"}),
+    )
+    .unwrap();
+    let Operation::CreateWorktree(request) = literal else {
+        panic!("a create")
+    };
+    assert_eq!(
+        request.start(),
+        Some(&StartSession {
+            ai_cli: Some(AiCli::ClaudeCode),
+            prompt: Some("go".into()),
+        })
+    );
+    // A prompt alone is a definition with the default CLI.
+    let derived = parse_call("create_worktree", &json!({"name": "x", "prompt": "go"})).unwrap();
+    let Operation::CreateWorktree(request) = derived else {
+        panic!("a create")
+    };
+    assert_eq!(
+        request.start(),
+        Some(&StartSession {
+            ai_cli: None,
+            prompt: Some("go".into()),
+        })
+    );
+    // Neither: the 550 call.
+    let plain = parse_call("create_worktree", &json!({"branch": "feat-x"})).unwrap();
+    let Operation::CreateWorktree(request) = plain else {
+        panic!("a create")
+    };
+    assert_eq!(request.start(), None);
+}
+
+#[test]
+fn create_worktree_refuses_an_unknown_ai_cli() {
+    invalid("create_worktree", json!({"branch": "feat-x", "ai_cli": "emacs"}));
 }
