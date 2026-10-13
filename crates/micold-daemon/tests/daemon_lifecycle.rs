@@ -32,7 +32,7 @@ use micold_daemon::state::DaemonState;
 
 #[path = "support/conn.rs"]
 mod conn;
-use conn::connect_as;
+use conn::{connect_as, settings_set, SettingsPatch};
 
 fn new_state() -> Arc<DaemonState> {
     Arc::new(DaemonState::new(Catalog::ephemeral()))
@@ -122,25 +122,13 @@ async fn a_settings_mutation_reaches_a_second_connected_client() {
     wait_until(|| state.client_count() == 2).await;
 
     // Client A changes a service-owned setting.
-    a.send(Frame::Control(ClientMsg::SettingsSet {
-        plan_usage_enabled: None,
-        plan_usage_warn_percent: None,
-        req: 1,
-        scrollback_lines: Some(5_000),
-        env_include_enabled: None,
-        env_include_script_path: None,
-        env_include_timeout_secs: None,
-        default_ai_cli: None,
-        pi_activity_component: None,
-        save_terminal_history: None,
-        tool_server_enabled: None,
-        cross_session_access: None,
-        pr_status_enabled: None,
-        desktop_notifications: None,
-        notification_kinds: None,
-        long_task_threshold_secs: None,
-        diff_layout: None,
-    }))
+    a.send(Frame::Control(settings_set(
+        1,
+        SettingsPatch {
+            scrollback_lines: Some(5_000),
+            ..Default::default()
+        },
+    )))
     .await
     .unwrap();
 
@@ -162,25 +150,13 @@ async fn turning_the_tool_server_binding_off_over_the_wire_reaches_every_client(
     let mut b = connect_as(&state, "client-b").await;
     wait_until(|| state.client_count() == 2).await;
 
-    a.send(Frame::Control(ClientMsg::SettingsSet {
-        plan_usage_enabled: None,
-        plan_usage_warn_percent: None,
-        req: 1,
-        scrollback_lines: None,
-        env_include_enabled: None,
-        env_include_script_path: None,
-        env_include_timeout_secs: None,
-        default_ai_cli: None,
-        pi_activity_component: None,
-        save_terminal_history: None,
-        tool_server_enabled: Some(false),
-        cross_session_access: None,
-        pr_status_enabled: None,
-        desktop_notifications: None,
-        notification_kinds: None,
-        long_task_threshold_secs: None,
-        diff_layout: None,
-    }))
+    a.send(Frame::Control(settings_set(
+        1,
+        SettingsPatch {
+            tool_server_enabled: Some(false),
+            ..Default::default()
+        },
+    )))
     .await
     .unwrap();
 
@@ -219,25 +195,14 @@ async fn setting_the_cross_session_option_over_the_wire_reaches_every_client_and
         // A save about something else: the option stays Off.
         (3, None, Some(7_000)),
     ] {
-        a.send(Frame::Control(ClientMsg::SettingsSet {
-            plan_usage_enabled: None,
-            plan_usage_warn_percent: None,
+        a.send(Frame::Control(settings_set(
             req,
-            scrollback_lines: scrollback,
-            env_include_enabled: None,
-            env_include_script_path: None,
-            env_include_timeout_secs: None,
-            default_ai_cli: None,
-            pi_activity_component: None,
-            save_terminal_history: None,
-            tool_server_enabled: None,
-            cross_session_access: chosen,
-            pr_status_enabled: None,
-            desktop_notifications: None,
-            notification_kinds: None,
-            long_task_threshold_secs: None,
-            diff_layout: None,
-        }))
+            SettingsPatch {
+                scrollback_lines: scrollback,
+                cross_session_access: chosen,
+                ..Default::default()
+            },
+        )))
         .await
         .unwrap();
 

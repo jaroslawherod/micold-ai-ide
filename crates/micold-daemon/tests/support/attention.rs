@@ -33,6 +33,8 @@ use portable_pty::CommandBuilder;
 use uuid::Uuid;
 
 pub use conn::Client as Window;
+#[allow(unused_imports)] // each test binary uses its own subset
+pub use conn::{settings_set, SettingsPatch};
 
 /// How long a window waits for a message the service owes it.
 pub const OWED: Duration = Duration::from_secs(10);

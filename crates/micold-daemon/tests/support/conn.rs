@@ -8,13 +8,81 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use futures_util::{SinkExt, StreamExt};
+use micold_core::attention::NotificationKinds;
+use micold_core::mcp::policy::CrossSessionAccess;
 use micold_core::protocol::codec::{ClientCodec, Frame};
 use micold_core::protocol::messages::{ClientInstance, ClientMsg, DaemonMsg, DaemonSettings};
 use micold_core::protocol::version::{
     BUILD_FINGERPRINT, PACKAGE_VERSION, PROTOCOL_VERSION, SCHEMA_HASH,
 };
+use micold_core::session::AiCli;
+use micold_core::settings::DiffLayout;
 use micold_daemon::state::DaemonState;
 use tokio_util::codec::Framed;
+
+/// The fields of a `ClientMsg::SettingsSet` other than `req`; `None` leaves a setting as it is.
+/// Name the ones a test changes and take the rest from `Default`: `settings_set(1,
+/// SettingsPatch { diff_layout: Some(l), ..Default::default() })`.
+#[derive(Default)]
+pub struct SettingsPatch {
+    pub scrollback_lines: Option<usize>,
+    pub env_include_enabled: Option<bool>,
+    pub env_include_script_path: Option<String>,
+    pub env_include_timeout_secs: Option<u64>,
+    pub default_ai_cli: Option<AiCli>,
+    pub pi_activity_component: Option<bool>,
+    pub save_terminal_history: Option<bool>,
+    pub tool_server_enabled: Option<bool>,
+    pub cross_session_access: Option<CrossSessionAccess>,
+    pub pr_status_enabled: Option<bool>,
+    pub desktop_notifications: Option<bool>,
+    pub notification_kinds: Option<NotificationKinds>,
+    pub long_task_threshold_secs: Option<u64>,
+    pub diff_layout: Option<DiffLayout>,
+    pub plan_usage_enabled: Option<bool>,
+    pub plan_usage_warn_percent: Option<u8>,
+}
+
+/// The `SettingsSet` request `req` that carries `patch`.
+pub fn settings_set(req: u64, patch: SettingsPatch) -> ClientMsg {
+    let SettingsPatch {
+        scrollback_lines,
+        env_include_enabled,
+        env_include_script_path,
+        env_include_timeout_secs,
+        default_ai_cli,
+        pi_activity_component,
+        save_terminal_history,
+        tool_server_enabled,
+        cross_session_access,
+        pr_status_enabled,
+        desktop_notifications,
+        notification_kinds,
+        long_task_threshold_secs,
+        diff_layout,
+        plan_usage_enabled,
+        plan_usage_warn_percent,
+    } = patch;
+    ClientMsg::SettingsSet {
+        req,
+        scrollback_lines,
+        env_include_enabled,
+        env_include_script_path,
+        env_include_timeout_secs,
+        default_ai_cli,
+        pi_activity_component,
+        save_terminal_history,
+        tool_server_enabled,
+        cross_session_access,
+        pr_status_enabled,
+        desktop_notifications,
+        notification_kinds,
+        long_task_threshold_secs,
+        diff_layout,
+        plan_usage_enabled,
+        plan_usage_warn_percent,
+    }
+}
 
 /// The client end of a connection to the service.
 pub type Client = Framed<tokio::io::DuplexStream, ClientCodec>;
