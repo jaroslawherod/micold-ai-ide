@@ -116,7 +116,10 @@ fn the_query_holds_no_branch_and_the_args_send_variables_only() {
     assert_eq!(fields.len(), 4);
     assert!(fields[0].starts_with("query="));
     assert!(!fields[0].contains(branch));
-    assert_eq!(fields[1..], ["owner=acme", "name=widgets", &format!("b={branch}")]);
+    assert_eq!(
+        fields[1..],
+        ["owner=acme", "name=widgets", &format!("b={branch}")]
+    );
     assert!(!args.iter().any(|a| a == "-F"));
 }
 

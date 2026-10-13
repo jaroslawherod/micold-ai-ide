@@ -258,8 +258,9 @@ fn the_source_is_read_from_one_place() {
         .filter(|(f, _, l)| f != MAIN_TESTS && l.contains("(tooling.pull_requests)("))
         .collect();
     assert!(
-        reads.len() == 1 && reads[0].0 == SHELL,
-        "`PullRequestSource::read` must be reached from one line, in {SHELL}; found:\n{}",
+        // One line for the status reading, one for the branch list (feature 775).
+        reads.len() == 2 && reads.iter().all(|(f, _, _)| f == SHELL),
+        "the source must be reached from two lines (`read`, `list_branch`), in {SHELL}; found:\n{}",
         show(&reads)
     );
 
@@ -276,10 +277,10 @@ fn the_source_is_read_from_one_place() {
 
     let factory: Vec<_> = lines
         .iter()
-        .filter(|(f, _, l)| f != CAPS && f != MAIN_TESTS && l.contains(".pull_requests"))
+        .filter(|(f, _, l)| f != CAPS && f != MAIN_TESTS && l.contains("tooling.pull_requests"))
         .collect();
     assert!(
-        factory.len() == 1 && factory[0].0 == SHELL,
+        factory.len() == 2 && factory.iter().all(|(f, _, _)| f == SHELL),
         "the `pull_requests` factory is used only by {SHELL} outside {CAPS}; found:\n{}",
         show(&factory)
     );

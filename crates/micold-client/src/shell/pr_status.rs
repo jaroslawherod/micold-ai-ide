@@ -170,10 +170,8 @@ pub fn enabled_changed(app: &mut App, enabled: bool) -> Task<Message> {
         }
     }
     // The Changes view's pull request section follows the same switch (feature 775, FR-014).
-    let section = crate::shell::changes::update(
-        app,
-        ChangesMsg::PullRequestSettingChanged(enabled),
-    );
+    let section =
+        crate::shell::changes::update(app, ChangesMsg::PullRequestSettingChanged(enabled));
     let status = update(
         app,
         Msg::EnabledChanged {
