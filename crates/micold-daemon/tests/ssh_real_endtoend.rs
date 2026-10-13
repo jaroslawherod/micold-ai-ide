@@ -44,7 +44,8 @@ fn socket_inodes(pid: u32) -> Vec<String> {
         .collect()
 }
 
-/// Inodes of every TCP socket in the listening state, either family.
+/// Inodes of every TCP socket listening on a non-loopback address, either family. The daemon's own
+/// loopback listeners (hooks, MCP) are not reachable from the network and are not what FR-005 bars.
 fn listening_inodes() -> Vec<String> {
     ["/proc/net/tcp", "/proc/net/tcp6"]
         .iter()
@@ -54,7 +55,11 @@ fn listening_inodes() -> Vec<String> {
                 .skip(1)
                 .filter_map(|l| {
                     let f: Vec<&str> = l.split_whitespace().collect();
-                    (f.get(3) == Some(&"0A")).then(|| f.get(9).map(|s| s.to_string()))?
+                    let loopback = f.get(1).is_some_and(|a| {
+                        a.starts_with("0100007F:")
+                            || a.starts_with("00000000000000000000000001000000:")
+                    });
+                    (f.get(3) == Some(&"0A") && !loopback).then(|| f.get(9).map(|s| s.to_string()))?
                 })
                 .collect::<Vec<_>>()
         })
@@ -121,12 +126,12 @@ async fn ssh_real_add_start_copies_the_build_and_connects() {
         "the copy reported progress up to 100%"
     );
 
-    // No new listener: the daemon the bridge started binds a Unix socket only.
+    // No network listener: the daemon the bridge started is reached over its Unix socket only.
     let pid = pid.expect("the bridge started a daemon");
     let listening = listening_inodes();
     let held = socket_inodes(pid);
     assert!(
         !held.iter().any(|i| listening.contains(i)),
-        "the remote daemon holds a listening TCP socket"
+        "the remote daemon holds a non-loopback listening TCP socket"
     );
 }
