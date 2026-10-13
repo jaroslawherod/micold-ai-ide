@@ -209,10 +209,9 @@ dialog (FR-018a) and "Copy Link Address" carry the full text.
 The underline is drawn for exactly the link's cells using the cell's own foreground colour, so
 text colour, cursor and selection highlight are not hidden (FR-009). The pointer becomes
 `mouse::Interaction::Pointer` (`mouse_interaction`, `terminal_pane.rs:1124`) only while the link
-modifier (`modifiers.command()`) is also held, so it signals exactly when a click would open the link
-(clarification 2026-09-16). Under mouse reporting the underline appears only while Shift is held, and
-the pointer only while Shift and the link modifier are, so hover is also recomputed on
-`ModifiersChanged`.
+modifier (`modifiers.command()`) is also held (clarification 2026-09-16). Under mouse reporting the
+underline appears only while Shift is held, while the pointer follows the link modifier alone, as
+without mouse reporting (BUG-748), so hover is also recomputed on `ModifiersChanged`.
 
 **Rejected.** `Tooltip`: it is delayed, anchored to a widget and a refresh late. A status field in
 the session chrome: a message round trip per pointer move, a layout-snapshot change, and ambiguity

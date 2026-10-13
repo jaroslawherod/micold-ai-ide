@@ -50,6 +50,10 @@ document.
 
 - Q: Should the pointer become the link pointer on plain hover, or only when a click would open the link? → A: Only while the link modifier (Ctrl, or Cmd on macOS) is held. The underline and the address hint still show on plain hover. (FR-007)
 
+### Session 2026-10-13
+
+- Q: Under a mouse-reporting program, should Ctrl/Cmd held over a link show the link pointer without Shift? → A: Yes. The pointer shows the link pointer while the link modifier is held over a recognised link, as in a plain shell, with or without Shift; a Ctrl/Cmd-click without Shift is still the program's, and the underline and address hint still need Shift. The user cannot tell which text a mouse-reporting program treats as a link, so the pointer is the only signal that the modifier is held over one. (FR-007, FR-016; BUG-748)
+
 ### Session 2026-09-14
 
 - Q: Which gesture opens a link in the terminal? → A: Ctrl+click on Linux and Windows, Cmd+click on
@@ -212,8 +216,10 @@ the complete address arrived; right-click again and choose open, and confirm it 
 - **Click to focus.** A plain press on a link in an unfocused terminal focuses it as today and opens
   nothing; a modifier-click there focuses the terminal and opens the link (FR-004).
 - **Mouse-reporting programs.** When the running program has turned on mouse reporting (a full-screen
-  editor, a TUI), presses keep reaching the program as today; links are reached with Shift, the
-  terminal's existing "the terminal, not the program" override (FR-016).
+  editor, a TUI), presses keep reaching the program as today; links are opened by the terminal with
+  Shift, the terminal's existing "the terminal, not the program" override (FR-016). The link pointer
+  still shows over a link while the link modifier is held, so the user can see which text is one
+  (FR-007).
 - **Output moving under the pointer.** New output scrolls the screen, or the program redraws the row,
   between hover and activation. The marking, the displayed address and the link that opens all follow
   what is under the pointer at that moment, never a stale earlier frame.
@@ -266,7 +272,9 @@ the complete address arrived; right-click again and choose open, and confirm it 
   programs' links degrade to plain text, where FR-001 still recognises any address the text contains.
   Whether each platform passes declared hyperlinks through is verified, not assumed.
 - **Hover under a mouse-reporting program.** Without Shift held, the pointer over a link shows no link
-  marking, because a click would go to the program; holding Shift shows it.
+  marking (no underline, no address), because a click would go to the program; holding Shift shows
+  it. The link pointer shows over the link while the link modifier is held, with or without Shift:
+  the program may open the link itself on that click (BUG-748).
 - **Multiple sessions and panes.** Hover state and activation belong to the pane under the pointer;
   following a link in one session's terminal changes nothing in any other session, and a background
   session's output never opens anything.
@@ -318,9 +326,9 @@ the complete address arrived; right-click again and choose open, and confirm it 
   modifier (FR-004: Ctrl, or Cmd on macOS) is held the pointer MUST change to the platform's link
   pointer, changing back as soon as the modifier is released. The marking MUST disappear when the
   pointer leaves it. While the running program has mouse reporting on, the marking MUST appear only
-  while Shift is held, and the link pointer only while Shift and the link modifier are held
-  (FR-016). A declared link is a maximal run of adjacent cells carrying the same address,
-  continuing across a soft wrap but not across a real line break; two runs separated by other cells
+  while Shift is held, but the link pointer MUST show over a link whenever the link modifier is
+  held, with or without Shift, as it does without mouse reporting (FR-016; BUG-748).
+  A declared link is a maximal run of adjacent cells carrying the same address, continuing across a soft wrap but not across a real line break; two runs separated by other cells
   are two links, even with the same address.
 - **FR-008**: Whenever FR-007 marks a link — detected or declared — the address it will open MUST be
   displayed to the user, and that display MUST change in the same refresh as the link under the
@@ -371,7 +379,8 @@ the complete address arrived; right-click again and choose open, and confirm it 
 - **FR-016**: When the running program has turned on mouse reporting, a press without Shift MUST
   continue to reach the program exactly as today — including a Ctrl- or Cmd-click. With Shift held,
   the link gesture (Shift plus the link modifier, click) on a link MUST open it, and a Shift-drag MUST
-  select as today.
+  select as today. Only the pointer differs from a plain shell: holding the link modifier over a link
+  shows the link pointer without Shift (FR-007), and does not change what a press does.
 - **FR-017**: For the link gesture, the link that opens MUST be the one under the pointer at the moment
   of activation, as the terminal shows it at that moment. For the right-click menu, it is the link
   that was under the pointer when the menu opened (FR-020).

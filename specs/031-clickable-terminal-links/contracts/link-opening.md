@@ -13,7 +13,7 @@
 | G3 | double or triple click without the modifier | selection as today; no activation |
 | G3b | double or triple click with the modifier, on a link | the first press + release is G1 and opens once. The press records `last_click` through `Click::new`, as a plain press does, so the second and third presses are double and triple: they select and never activate. The open is not delayed to wait for them (FR-004) |
 | G4 | plain left press (no modifier) | today's focus and selection; no activation |
-| G5 | mouse reporting on, no Shift, any modifier | the press is reported to the program as today; no activation |
+| G5 | mouse reporting on, no Shift, any modifier | the press is reported to the program as today; no activation. The pointer is still the link pointer over a link while `command()` is held (FR-007, BUG-748) |
 | G6 | mouse reporting on, Shift + `command()`, press + release on a link | as G1 |
 | G7 | middle click, wheel | as today |
 | G8 | unfocused pane, G1 | focus as today, and G1 |

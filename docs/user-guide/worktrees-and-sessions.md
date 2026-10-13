@@ -1480,8 +1480,9 @@ Web and mail addresses in a terminal are links, and so is text a program marked 
   line, and, for a link a program declared, the address it declared rather than the word you see.
   Over anything that is not a link the menu offers Copy and Paste alone.
 - **Programs that use the mouse** (`vim` with `:set mouse=a`, `htop`, …) get Ctrl+clicks as they
-  always did. Hold **Shift** as well, **Shift+Ctrl+click** (Shift+Cmd+click on macOS), to open a
-  link there; the underline shows only while Shift is held.
+  always did. The pointer still turns into a hand over a link while Ctrl (Cmd on macOS) is held; the
+  program may open it itself. Hold **Shift** as well, **Shift+Ctrl+click** (Shift+Cmd+click on
+  macOS), to have the terminal open it; the underline shows only while Shift is held.
 - **Links a program declares.** Some programs print a word such as `docs` that stands for an
   address. The whole word is marked as one link, and the label shows, and a click opens, the
   address the program declared, even when the visible text reads like another address.
