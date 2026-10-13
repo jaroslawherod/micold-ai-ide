@@ -66,7 +66,10 @@ fn the_list_is_capped_and_drops_the_oldest_stopped_run_first() {
     }
     assert_eq!(runs.len(), MAX_RUNS_PER_ORIGIN);
     assert!(runs.iter().any(|r| r.agent_id == "running-oldest"));
-    assert!(runs.iter().all(|r| r.agent_id != "s0"), "oldest stopped went first");
+    assert!(
+        runs.iter().all(|r| r.agent_id != "s0"),
+        "oldest stopped went first"
+    );
     assert!(runs.iter().any(|r| r.agent_id == "s1"));
 }
 

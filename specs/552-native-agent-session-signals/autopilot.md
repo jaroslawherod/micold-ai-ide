@@ -9,15 +9,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #552
 - **Worktree branch**: feat/552_replace-name-based-hiding-of-agent-work-with-the
 - **Started**: 2026-10-12
-- **Phase**: milestone M1 (implementing)
-- **Next step**: M1 PR open; wait for CI and merge, then M2
+- **Phase**: milestone M2 (reviewing)
+- **Next step**: M2 scoped gate, reviews A and B, full gate, PR
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #786 | design (spec, plan, tasks) | merged | 31a433b352e7301c5c860ea0cf64ca0c2f78eb1f |
-| #795 | M1 every worktree listed | open | |
+| #795 | M1 every worktree listed | merged | 4ba66482fc44ac820233512a21001fe2e8a5bbef |
 
 ## Milestones
 
@@ -36,6 +36,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
+- M2 bump: main was already at protocol 41 when M2 rebased, so `SessionSummary.agents` lands as 42 (M3's attach removal is then 43).
 
 ## Review rounds
 

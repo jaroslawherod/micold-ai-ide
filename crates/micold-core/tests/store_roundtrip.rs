@@ -1060,6 +1060,8 @@ mod agents {
         .unwrap();
         let out = JsonFileStore::at(file).load();
         assert_eq!(out.status, LoadStatus::Loaded);
-        assert!(out.workspace.sessions[&PathBuf::from("/p")][0].agents.is_empty());
+        assert!(out.workspace.sessions[&PathBuf::from("/p")][0]
+            .agents
+            .is_empty());
     }
 }

@@ -571,13 +571,19 @@ async fn sub_agent_reports_are_recorded_on_the_origin_session() {
     let start = r#"{"hook_event_name":"SubagentStart","agent_id":"a15f822c8aa66a621","agent_type":"Explore"}"#;
     assert_eq!(post_hook(&addr, id.0, Some(&token), start).await, 200);
     assert_eq!(agents().len(), 1);
-    assert_eq!(agents()[0].state, micold_core::agent_run::AgentRunState::Running);
+    assert_eq!(
+        agents()[0].state,
+        micold_core::agent_run::AgentRunState::Running
+    );
 
     let stop = r#"{"hook_event_name":"SubagentStop","agent_id":"a15f822c8aa66a621","agent_transcript_path":"/t/a.jsonl"}"#;
     assert_eq!(post_hook(&addr, id.0, Some(&token), stop).await, 200);
     let runs = agents();
     assert_eq!(runs.len(), 1);
-    assert_eq!(runs[0].state, micold_core::agent_run::AgentRunState::Stopped);
+    assert_eq!(
+        runs[0].state,
+        micold_core::agent_run::AgentRunState::Stopped
+    );
     assert_eq!(runs[0].transcript.as_deref(), Some("/t/a.jsonl"));
     assert_eq!(activity(&state, id), ActivitySignal::Unknown);
 
@@ -586,7 +592,11 @@ async fn sub_agent_reports_are_recorded_on_the_origin_session() {
         r#"{"hook_event_name":"SubagentStop","agent_id":""}"#,
         r#"{"hook_event_name":"SubagentStop","agent_id":42}"#,
     ] {
-        assert_eq!(post_hook(&addr, id.0, Some(&token), ignored).await, 200, "{ignored}");
+        assert_eq!(
+            post_hook(&addr, id.0, Some(&token), ignored).await,
+            200,
+            "{ignored}"
+        );
     }
     assert_eq!(agents().len(), 1, "nothing more was recorded");
     assert_eq!(post_hook(&addr, id.0, Some(&token), "{not json").await, 400);

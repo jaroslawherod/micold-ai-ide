@@ -1098,7 +1098,12 @@ fn a_summary_carrying_agent_runs_lists_every_worktree_and_session() {
         }],
         env_include_failures: Vec::new(),
     };
-    reconcile_catalog(&mut state, micold_core::daemons::DaemonId(1), &snapshot, false);
+    reconcile_catalog(
+        &mut state,
+        micold_core::daemons::DaemonId(1),
+        &snapshot,
+        false,
+    );
 
     let after: Vec<_> = state
         .worktree_tree()

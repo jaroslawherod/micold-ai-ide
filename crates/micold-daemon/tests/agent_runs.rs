@@ -51,7 +51,10 @@ fn a_report_records_a_run_on_its_origin_only_and_leaves_activity_alone() {
     assert_eq!(origin.agents.len(), 1);
     assert_eq!(origin.agents[0].agent_id, "a1");
     assert_eq!(origin.agents[0].state, AgentRunState::Stopped);
-    assert_eq!(origin.activity, before, "a sub-agent's end is not the origin's");
+    assert_eq!(
+        origin.activity, before,
+        "a sub-agent's end is not the origin's"
+    );
     assert!(summary(&snapshot, b).agents.is_empty());
 }
 
@@ -64,7 +67,14 @@ fn a_report_for_an_unknown_session_records_nothing() {
     assert!(!service.state.note_agent_signal(stranger, started("x")));
     let snapshot = service.state.catalog_snapshot();
     assert!(find_summary(&snapshot, stranger).is_none());
-    assert_eq!(snapshot.projects.iter().map(|p| p.sessions.len()).sum::<usize>(), 1);
+    assert_eq!(
+        snapshot
+            .projects
+            .iter()
+            .map(|p| p.sessions.len())
+            .sum::<usize>(),
+        1
+    );
 }
 
 /// FR-005: the runs are written, and a restart brings back a run recorded as running as stopped.
@@ -74,7 +84,10 @@ fn runs_survive_a_restart_and_a_running_one_comes_back_stopped() {
     let service = Service::with_sessions(&[a]);
     service.state.note_agent_signal(a, started("running"));
     service.state.note_agent_signal(a, stopped("done"));
-    assert!(service.state.has_unsaved_attention(), "the change waits to be written");
+    assert!(
+        service.state.has_unsaved_attention(),
+        "the change waits to be written"
+    );
     service.state.persist_attention();
 
     let restarted = DaemonState::new(catalog_on(service.store.path()));

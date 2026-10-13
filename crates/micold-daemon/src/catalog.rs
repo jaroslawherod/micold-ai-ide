@@ -1652,7 +1652,7 @@ fn session_summary(session: &Session) -> SessionSummary {
         live_shells: Vec::new(),
         attention_seq: session.attention_seq,
         unread: session.unread,
-        agents: Vec::new(),
+        agents: session.agents.clone(),
     }
 }
 
