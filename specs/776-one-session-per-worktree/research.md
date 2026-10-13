@@ -45,12 +45,14 @@ be raced.
 
 ## R3. The refusal and its wording
 
-**Decision**: reuse `ErrorKind::Refused` (`messages.rs`, "refused by policy" doc extended) for the
+**Amended 2026-10-13 (R12)**: the text also names the way to ask for another. **Decision**: reuse `ErrorKind::Refused` (`messages.rs`, "refused by policy" doc extended) for the
 RPC; MCP uses `OpError` category `Conflict` (as `create_derived_worktree` does for a taken
 branch). One wording function `occupancy::refusal_text(&ExistingSession)` in core, used by both:
 `this worktree already has a session: "<name>" (<id>); start_session on <id> brings it back`.
 For Default the first words read `the project root already has a session`. Legacy start refusal
-(R9) uses `session "<name>" (<id>) is running in this worktree; stop it first`.
+(R9) uses `session "<name>" (<id>) is running in this worktree; stop it first`. Both refusals
+append the way forward (R12): tool callers `, or pass allow_additional_session: true to run another
+on purpose`; the app words it as the confirmation.
 
 **Rationale**: FR-003 needs id, name and the hint in one place that tests can pin; the client
 shows the daemon's text (as it does for other `OperationError`s), so wording is not duplicated.
@@ -95,8 +97,8 @@ the authority for a stale window (US1 s1).
 **Rationale**: the sidebar renders an intent and decides nothing (its own doc comment), so the
 decision stays in the render-free reducer where Principle I applies.
 
-**Alternatives rejected**: disable the button with a tooltip: spec says "no way to add", and a
-disabled control still reads as an affordance.
+**Alternatives rejected**: disable the button with a tooltip: FR-004 says the row offers no start
+action (an additional session is the menu entry only), and a disabled control still reads as an affordance.
 
 ## R6. `create_worktree` over MCP with a definition
 
@@ -230,3 +232,66 @@ replaces and its confirmation, legacy worktrees) and `docs/user-guide/agent-tool
 (`create_session` refusal text, `create_worktree` `ai_cli`/`prompt`, `start_session`) change in
 the PR, and the tool catalogue descriptions in `core/src/mcp/tools.rs`. The user-guide check
 (`scripts/check-user-guide-updated.sh`) enforces it.
+
+## R12. The limit is soft: the explicit request (amendment 2026-10-13)
+
+**What M1 shipped that changes** (merged in #794, hard refusal):
+1. `Catalog::create_session` refuses unconditionally. Now it takes `Additional::{No, Yes}`; `Yes`
+   skips the occupancy check only. Every existing caller passes `No` (review send, runs,
+   `create_worktree_with_session`, `SessionCreate` without the field).
+2. `ClientMsg::SessionCreate`, `SessionStart`, `SessionRestart` and `AttachItem::Session` carry no
+   opt-in. All four gain `allow_additional_session: bool`, serde-default false; `PROTOCOL_VERSION`
+   41 to 42, with `SCHEMA_HASH`.
+3. MCP `create_session` and `start_session` schemas and descriptions say "at most one" absolutely.
+   Both gain optional boolean `allow_additional_session`; the descriptions state default refusal and
+   the opt-in.
+4. `occupancy::refusal_text` / `start_block_text` omit the way forward. They append it (R3).
+5. The in-lock start check of R9 (`start_session_gated`, `start_refusal`) was framed as "legacy
+   only". It is the general rule for starting a session beside a live one and is skipped when the
+   request is explicit.
+6. User-guide pages `agent-tools.md` and `worktrees-and-sessions.md` state the refusal as
+   absolute; reworded. Spec FR-001..FR-005, FR-013, SC-001..SC-003 amended.
+Unchanged from M1: the `occupancy`/`start_block` functions, the typed `CreateSessionError`, the
+wire fields added for `create_worktree`, the review-send reuse (R10), all M1 tests (they exercise
+the default path, which still refuses).
+
+**Decision**: one boolean, one name, everywhere: `allow_additional_session`. A per-call flag
+rather than a setting (no stored state; each additional session is a deliberate act) and not a
+second tool (a second door to keep in step with policy). Policy is unchanged: the same
+`CreateSession` operation is evaluated; the flag does not bypass it. `start_session` with the
+flag on a live/starting session is still the no-op of FR-009. Atomicity (FR-005) is unchanged for
+requests without the flag; with it there is nothing to race.
+
+**App**: the explicit request is the worktree row menu "Start another session..." on an occupied
+location, then `confirm_additional_session` (copies `confirm_session_remove.rs`) naming the worktree
+and the existing session; confirm sends `SessionCreate { allow_additional_session: true }` with
+the default CLI (the start menu's choice applies as for any start: the confirmation is followed
+by the existing CLI choice only when the default CLI is missing). A start blocked by FR-013
+(stopped extra, another live) shows the same confirmation naming the live session and re-sends
+`SessionStart` with the flag. A resume into an occupied worktree offers Replace and Keep both.
+
+**Alternatives rejected**: a project or worktree setting "allow several" (new persisted state,
+and it makes accidents silent again); a tool-only opt-in (the user asked for the app too).
+
+## R13. Worktree rows only, and the default session
+
+**Decision**: `occupancy::default_session(sessions, &location, last_viewed: Option<SessionId>)
+-> Option<SessionId>`: `last_viewed` when it names an un-archived session of the location, else
+the first un-archived session of the location in list order (stable, persisted; the same one a
+refusal names), else `None`. The window holds `last_viewed` per location in reducer state
+(session feature, transient, like the active session); nothing is persisted. `Session` has no
+activity timestamp that survives (`attention_seq` is transient), so "most recently active" is not
+available without a schema change; "last viewed here, else the original" is.
+
+**Sidebar**: `build_items` (`ui/sidebar.rs:594`) pushes `session_tree_item` rows only when the
+node is expanded; `node.expanded` and `default_expanded` default to collapsed and the expander is
+drawn only when `node.sessions` has more than one entry. A press on the row (today it only
+toggles) emits `Session::Selected(default_session)`; the expander toggles as before. Rename and
+close of a single session move to the worktree row's existing context menu
+(`WorktreeMsg::MenuToggled`, `ui/sidebar.rs`); a multi-session sub-row keeps its menu. Unread and
+activity indicators already aggregate per location (feature 575, FR-003), so a collapsed row loses
+nothing.
+
+**Alternatives rejected**: removing session rows outright (extras would need a new switcher widget
+in the pane, a Principle VIII addition for a rare case); selecting the most recent by creation
+(the original session is the better default: the one the user chose at start).

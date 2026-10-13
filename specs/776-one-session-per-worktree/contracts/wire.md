@@ -4,6 +4,17 @@
 additions are optional and serde-defaulted, so an older frame decodes and the old behaviour is the
 default; `SCHEMA_HASH` changes with them.
 
+## Amendment 2026-10-13: the explicit request (M2)
+
+`PROTOCOL_VERSION` 41 to 42 (the 41 of M1 is merged). `allow_additional_session: bool`
+(serde-default `false`, so an older frame decodes to the default refusal) is added to
+`ClientMsg::SessionCreate`, `SessionStart`, `SessionRestart` and `AttachItem::Session` (beside
+`replace`; both true on one item is refused as malformed). `true` skips the occupancy check of
+`SessionCreate` (M2) and the start block of `SessionStart`/`SessionRestart` (M7, which builds the
+block) and lets a resume item keep both (M6); M2 only carries the field on those three and the
+daemon ignores it there until its milestone. Both `replace` and the flag on one item is refused as
+malformed (M6). The refusal texts gain the way forward (research R3, R12).
+
 ## `ClientMsg::WorktreeCreate`
 
 Adds `session: Option<SessionDefinition>` (default `None`).

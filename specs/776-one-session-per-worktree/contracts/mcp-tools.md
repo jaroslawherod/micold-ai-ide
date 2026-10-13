@@ -15,14 +15,23 @@ CLI availability check, and enforced again under the catalog lock (R2):
 - Two simultaneous calls on an empty worktree: one succeeds, the other gets this error naming the
   winner.
 
-Description gains: "A worktree has at most one session: a second is refused, naming the
-existing one."
+Description gains: "A worktree has at most one session by default: a second is refused, naming the
+existing one. Pass allow_additional_session: true to start another on purpose."
+
+**Amended 2026-10-13**: input gains `allow_additional_session` (boolean, optional, default false).
+When true the occupancy check is skipped: a second session is created and the first is untouched;
+scope, policy and the CLI check apply as always. The refusal message ends with
+`; pass allow_additional_session: true to start another on purpose`.
 
 ## `start_session`
 
 Input unchanged. Still a no-op reporting success for a starting, running or restarting session
-(FR-009) and a start of the same session when stopped. New failure (legacy catalogs only): category
-`Conflict`, `session "<name>" (<id>) is running in this worktree; stop it first`.
+(FR-009) and a start of the same session when stopped. New failure (any worktree where another
+un-archived session is live): category `Conflict`,
+`session "<name>" (<id>) is running in this worktree; stop it first, or pass
+allow_additional_session: true to run both on purpose`. **Amended 2026-10-13**: input gains the same
+optional boolean `allow_additional_session` (default false); true skips this check and starts the
+session beside the live one. Lands with the start block in M7.
 
 ## `create_worktree`
 

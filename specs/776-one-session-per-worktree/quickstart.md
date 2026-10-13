@@ -24,7 +24,13 @@ mise run gate                            # fmt, clippy, workspace tests, scripts
 | catalog fixture with two sessions in one worktree: both listed after load, create refused, start refused while the other runs | US4, SC-005 |
 | project open with two resumable provider sessions for one worktree: one catalogued, one listed resumable | FR-012 |
 | review send into a worktree whose own session is stopped starts that session, adds none | R10 |
-| sequence test over create/start/stop/restart/resume/delete from two connections never observes two un-archived sessions on a fresh catalog | SC-001 |
+| sequence test over create/start/stop/restart/resume/delete (no explicit request) from two connections never observes two un-archived sessions on a fresh catalog | SC-001 |
+| resume with `allow_additional_session`: both kept, nothing stopped; flag with `replace`: refused as malformed | FR-015, FR-008c |
+| `create_session` with `allow_additional_session: true` on an occupied worktree: two sessions, first untouched; refusal text names the flag | US1 s4-s5, FR-015 |
+| `start_session` of a stopped extra while another runs: refused; with the flag both run | US4 s3 |
+| `default_session`: last viewed, else first in list order, else none | FR-018 |
+| row press selects the default session; expander only for a multi-session worktree, collapsed | US5 |
+| row menu "Start another session...": confirm sends the opt-in, cancel changes nothing | US6 |
 
 ## Part B: visual pass (needs eyes at a display)
 
@@ -37,5 +43,10 @@ Run through the `visual-pass` skill against the client.
    the Default row follows the same rule.
 3. Attach dialog: resuming into an occupied worktree shows the confirmation naming both
    sessions; cancel changes nothing.
+
+4. Sidebar with one session per worktree shows only worktree rows; selecting one opens its
+   session; a worktree with two shows a collapsed expander (US5).
+5. Row menu "Start another session..." on an occupied worktree opens the confirmation naming the
+   existing session; confirm adds and shows the second (US6).
 
 Record the result in `tdd/` evidence as the other features do.
