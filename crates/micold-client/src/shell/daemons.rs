@@ -145,7 +145,7 @@ mod tests {
         let system_only = |p: &Path| p == system;
         assert_eq!(
             locate_windows_ssh(&path_var, Some(&root), &system_only),
-            Some(system)
+            Some(system.clone())
         );
         assert_eq!(locate_windows_ssh(&path_var, None, &system_only), None);
     }
