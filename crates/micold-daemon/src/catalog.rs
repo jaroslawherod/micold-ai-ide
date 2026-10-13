@@ -12,6 +12,7 @@
 //!
 //! External-modification detection is out of scope (spec Out of Scope).
 
+use micold_core::agent_run::AgentSignal;
 use micold_core::attach::{AttachOutcome, RefuseReason};
 use micold_core::attention::{NotificationKind, NotificationKinds};
 use micold_core::occupancy::{occupancy, refusal_text, Additional, ExistingSession, Occupancy};
@@ -1036,6 +1037,19 @@ impl Catalog {
         true
     }
 
+    /// Apply a provider-native agent report to session `id`'s recorded runs (feature 552, FR-004),
+    /// in memory only, as [`Self::mark_attention`] is, and for the same reason: the caller writes
+    /// it from the supervisor's `spawn_blocking` hop. Returns whether the list changed; `false` for
+    /// an unknown session, so a report never creates one (FR-008). Touches that session alone
+    /// (FR-014).
+    pub fn record_agent_signal(&mut self, id: SessionId, signal: AgentSignal) -> bool {
+        self.workspace
+            .find_session_mut(id)
+            .is_some_and(|(_project, session)| {
+                micold_core::agent_run::apply_signal(&mut session.agents, signal)
+            })
+    }
+
     /// Session `id` came into view (feature 039, W2.2, FR-019): it is no longer unread. Returns
     /// whether it was unread, so the caller broadcasts and writes only for a change.
     ///
@@ -1316,6 +1330,9 @@ impl Catalog {
         // rather than being looked up again there — re-deriving it would be the one place a
         // restart could quietly change which CLI a session runs (feature 026, FR-001).
         let provider = session.provider;
+        // Its process is gone, so no stop report can arrive for a run still going (feature 552,
+        // FR-005); the catalog change the exit already broadcasts carries it.
+        micold_core::agent_run::stop_running(&mut session.agents);
         let action = supervise_exit(session, outcome);
         Some((project, action, cwd, mode, provider))
     }
@@ -1333,6 +1350,7 @@ impl Catalog {
         if !matches!(session.lifecycle, SessionLifecycle::Failed { .. }) {
             session.lifecycle = SessionLifecycle::Idle;
         }
+        micold_core::agent_run::stop_running(&mut session.agents);
         Some(project)
     }
 
@@ -1634,6 +1652,7 @@ fn session_summary(session: &Session) -> SessionSummary {
         live_shells: Vec::new(),
         attention_seq: session.attention_seq,
         unread: session.unread,
+        agents: Vec::new(),
     }
 }
 

@@ -31,11 +31,12 @@ use uuid::Uuid;
 use crate::activity::{ActivityEvent, HookKind};
 use crate::http::{self, respond, Body, HeadRead};
 use crate::state::{unix_secs, DaemonState};
+use micold_core::agent_run::AgentSignal;
 use micold_core::mcp::binding::ConfigLocations;
 use micold_core::plan_usage::status_line;
 use micold_core::plan_usage::user_status_line::{RelayConfig, UserStatusLine};
 use micold_core::protocol::messages::DaemonMsg;
-use micold_core::session::SessionId;
+use micold_core::session::{AiCli, SessionId};
 
 /// Maximum request-body size accepted (contracts/hooks.md §5). Anything larger is rejected with
 /// `413` rather than buffered.
@@ -289,6 +290,9 @@ enum Route {
 enum HookClass {
     /// A recognised turn-affecting hook — apply it to the FSM.
     Event(HookKind),
+    /// A sub-agent run started or stopped (feature 552, contract C2): recorded against the origin
+    /// session, never applied to its activity (FR-007).
+    Agent(AgentSignal),
     /// A well-formed hook that carries no FSM transition (e.g. `SessionStart`) — accept, do nothing.
     Ignored,
     /// The body was not valid JSON or lacked a usable `hook_event_name` — reject with `400`.
@@ -369,6 +373,12 @@ async fn handle_connection(
     match classify_hook(body_str) {
         HookClass::Event(kind) => {
             if state.note_activity(session, ActivityEvent::Hook(kind)) {
+                state.broadcast_catalog();
+            }
+            respond(&mut stream, 200, "OK").await
+        }
+        HookClass::Agent(signal) => {
+            if state.note_agent_signal(session, signal) {
                 state.broadcast_catalog();
             }
             respond(&mut stream, 200, "OK").await
@@ -465,9 +475,37 @@ fn classify_hook(body: &str) -> HookClass {
         "Notification" => HookClass::Event(HookKind::Notification),
         // SessionStart is well-formed but carries no FSM transition (the session starts Unknown).
         "SessionStart" => HookClass::Ignored,
-        // A helper agent finishing inside a turn neither ends nor pauses it (feature 613, FR-024,
-        // C17). No longer registered; ignored should an older settings file still send it.
-        "SubagentStop" => HookClass::Ignored,
+        // A helper agent starting or finishing inside a turn neither ends nor pauses it (feature
+        // 613, FR-024, C17; feature 552, FR-007): it is recorded as an agent run, and the origin's
+        // activity is not touched. A payload with no usable `agent_id` records nothing (FR-008).
+        "SubagentStart" | "SubagentStop" => {
+            let text = |key: &str| {
+                value
+                    .get(key)
+                    .and_then(|v| v.as_str())
+                    .filter(|v| !v.is_empty())
+                    .map(str::to_owned)
+            };
+            let Some(agent_id) = text("agent_id") else {
+                return HookClass::Ignored;
+            };
+            let provider = AiCli::ClaudeCode;
+            let agent_type = text("agent_type");
+            HookClass::Agent(if name == "SubagentStart" {
+                AgentSignal::Started {
+                    provider,
+                    agent_id,
+                    agent_type,
+                }
+            } else {
+                AgentSignal::Stopped {
+                    provider,
+                    agent_id,
+                    agent_type,
+                    transcript: text("agent_transcript_path"),
+                }
+            })
+        }
         // An unrecognised but structurally valid hook: accept it without inventing a transition.
         _ => HookClass::Ignored,
     }
@@ -500,8 +538,8 @@ struct MatcherGroup<'a> {
 /// The `hooks` map of the per-session `--settings` file: one matcher-group array per lifecycle
 /// event this daemon's activity FSM (`classify_hook`) understands — omitting an event here means
 /// `claude` never POSTs it at all, regardless of what `classify_hook` is prepared to handle.
-/// `SubagentStop` is not registered: a helper agent finishing is not the end of a turn (feature
-/// 613, FR-024).
+/// `SubagentStart` and `SubagentStop` are registered (feature 552, C1) to record agent runs; they
+/// never reach the FSM, as a helper agent finishing is not the end of a turn (feature 613, FR-024).
 #[derive(serde::Serialize)]
 struct HooksMap<'a> {
     #[serde(rename = "SessionStart")]
@@ -516,6 +554,10 @@ struct HooksMap<'a> {
     stop: [MatcherGroup<'a>; 1],
     #[serde(rename = "Notification")]
     notification: [MatcherGroup<'a>; 1],
+    #[serde(rename = "SubagentStart")]
+    subagent_start: [MatcherGroup<'a>; 1],
+    #[serde(rename = "SubagentStop")]
+    subagent_stop: [MatcherGroup<'a>; 1],
 }
 
 /// The `statusLine` block of the per-session settings (feature 490, contract S1).
@@ -561,6 +603,8 @@ pub fn settings_json(url: &str, token: &str, status_line: Option<&StatusLineBloc
             post_tool_use: [group()],
             stop: [group()],
             notification: [group()],
+            subagent_start: [group()],
+            subagent_stop: [group()],
         },
         status_line,
     };
@@ -630,11 +674,52 @@ mod tests {
         assert_eq!(ev("PostToolUse"), HookClass::Event(HookKind::PostToolUse));
         assert_eq!(ev("Stop"), HookClass::Event(HookKind::Stop));
         assert_eq!(ev("Notification"), HookClass::Event(HookKind::Notification));
-        // C17 (feature 613, FR-024): a helper agent finishing is not the end of the turn.
+        // A helper agent starting or finishing is not the end of the turn (feature 613, FR-024);
+        // with no `agent_id` there is nothing to record (feature 552, FR-008).
         assert_eq!(ev("SubagentStop"), HookClass::Ignored);
+        assert_eq!(ev("SubagentStart"), HookClass::Ignored);
         // SessionStart and unknown-but-valid hooks are accepted without a transition.
         assert_eq!(ev("SessionStart"), HookClass::Ignored);
         assert_eq!(ev("SomethingNew"), HookClass::Ignored);
+    }
+
+    #[test]
+    fn classifies_sub_agent_reports_into_agent_signals() {
+        let start = classify_hook(
+            r#"{"hook_event_name":"SubagentStart","agent_id":"a1","agent_type":"Explore"}"#,
+        );
+        assert_eq!(
+            start,
+            HookClass::Agent(AgentSignal::Started {
+                provider: AiCli::ClaudeCode,
+                agent_id: "a1".into(),
+                agent_type: Some("Explore".into()),
+            })
+        );
+        let stop = classify_hook(
+            r#"{"hook_event_name":"SubagentStop","agent_id":"a1","agent_transcript_path":"/t/a1.jsonl","last_assistant_message":"x"}"#,
+        );
+        assert_eq!(
+            stop,
+            HookClass::Agent(AgentSignal::Stopped {
+                provider: AiCli::ClaudeCode,
+                agent_id: "a1".into(),
+                agent_type: None,
+                transcript: Some("/t/a1.jsonl".into()),
+            })
+        );
+    }
+
+    #[test]
+    fn a_sub_agent_report_without_a_usable_agent_id_is_ignored() {
+        for body in [
+            r#"{"hook_event_name":"SubagentStart"}"#,
+            r#"{"hook_event_name":"SubagentStart","agent_id":""}"#,
+            r#"{"hook_event_name":"SubagentStop","agent_id":7}"#,
+            r#"{"hook_event_name":"SubagentStop","agent_id":null}"#,
+        ] {
+            assert_eq!(classify_hook(body), HookClass::Ignored, "{body}");
+        }
     }
 
     #[test]
@@ -664,6 +749,8 @@ mod tests {
             "PostToolUse",
             "Stop",
             "Notification",
+            "SubagentStart",
+            "SubagentStop",
         ] {
             assert!(
                 parsed["hooks"][hook].is_array(),
@@ -679,10 +766,5 @@ mod tests {
                 "{hook}'s matcher-group must have a non-empty nested hooks array"
             );
         }
-        // FR-024: a helper agent finishing is not registered, so `claude` never POSTs it.
-        assert!(
-            parsed["hooks"].get("SubagentStop").is_none(),
-            "SubagentStop must not be configured"
-        );
     }
 }

@@ -968,3 +968,98 @@ fn every_provider_survives_a_save_and_load() {
         .collect();
     assert_eq!(providers, AiCli::ALL.to_vec());
 }
+
+// Feature 552, FR-005: agent runs ride on the stored session, additively.
+
+mod agents {
+    use micold_core::agent_run::{AgentRun, AgentRunState};
+    use micold_core::session::{AiCli, Session, SessionLabel, SessionLocation, TerminalMode};
+    use micold_core::store::{JsonFileStore, LoadStatus, ProjectStore};
+    use std::path::PathBuf;
+    use tempfile::tempdir;
+
+    fn run(id: &str, state: AgentRunState) -> AgentRun {
+        AgentRun {
+            agent_id: id.into(),
+            agent_type: Some("Explore".into()),
+            transcript: Some("/t/a.jsonl".into()),
+            state,
+            provider: AiCli::ClaudeCode,
+        }
+    }
+
+    fn saved_text(dir: &std::path::Path) -> String {
+        let mut all = String::new();
+        let mut stack = vec![dir.to_path_buf()];
+        while let Some(d) = stack.pop() {
+            for entry in std::fs::read_dir(d).unwrap().flatten() {
+                let p = entry.path();
+                if p.is_dir() {
+                    stack.push(p);
+                } else if let Ok(text) = std::fs::read_to_string(&p) {
+                    all.push_str(&text);
+                }
+            }
+        }
+        all
+    }
+
+    fn workspace(agents: Vec<AgentRun>) -> super::Workspace {
+        let mut ws = super::Workspace::empty();
+        ws.projects.push(super::project("/a/one", "one", true));
+        let mut s = Session::restored(
+            micold_core::session::SessionId::new(),
+            SessionLocation::Default,
+            SessionLabel::Pending,
+            TerminalMode::AiCli,
+            AiCli::ClaudeCode,
+        );
+        s.agents = agents;
+        ws.sessions.insert(PathBuf::from("/a/one"), vec![s]);
+        ws
+    }
+
+    #[test]
+    fn agents_round_trip_and_are_skipped_when_empty() {
+        let dir = tempdir().unwrap();
+        let store = JsonFileStore::at(dir.path().join("projects.json"));
+        store.save(&workspace(Vec::new())).unwrap();
+        assert!(!saved_text(dir.path()).contains("agents"));
+
+        let runs = vec![run("a1", AgentRunState::Stopped)];
+        store.save(&workspace(runs.clone())).unwrap();
+        let text = saved_text(dir.path());
+        assert!(text.contains("\"agents\"") && text.contains("a1"), "{text}");
+        assert!(text.contains("\"schema_version\": 1") || text.contains("\"schema_version\":1"));
+        let out = store.load();
+        assert_eq!(out.status, LoadStatus::Loaded);
+        let loaded = &out.workspace.sessions[&PathBuf::from("/a/one")][0];
+        assert_eq!(loaded.agents, runs);
+    }
+
+    #[test]
+    fn a_run_stored_as_running_loads_stopped() {
+        let dir = tempdir().unwrap();
+        let store = JsonFileStore::at(dir.path().join("projects.json"));
+        store
+            .save(&workspace(vec![run("a1", AgentRunState::Running)]))
+            .unwrap();
+        let out = store.load();
+        let loaded = &out.workspace.sessions[&PathBuf::from("/a/one")][0];
+        assert_eq!(loaded.agents[0].state, AgentRunState::Stopped);
+    }
+
+    #[test]
+    fn an_older_file_without_agents_loads_with_none() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("projects.json");
+        std::fs::write(
+            &file,
+            r#"{"schema_version":1,"last_active":null,"projects":[{"path":"/p","display_name":"p","is_git_repo":true,"sessions":[{"id":"00000000-0000-0000-0000-000000000001","worktree_dir":null,"title":null}]}]}"#,
+        )
+        .unwrap();
+        let out = JsonFileStore::at(file).load();
+        assert_eq!(out.status, LoadStatus::Loaded);
+        assert!(out.workspace.sessions[&PathBuf::from("/p")][0].agents.is_empty());
+    }
+}

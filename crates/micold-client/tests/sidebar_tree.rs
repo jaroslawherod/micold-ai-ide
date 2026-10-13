@@ -1046,3 +1046,65 @@ fn a_pi_session_joins_its_worktree_and_labels_its_row_by_command_name() {
     assert_eq!(label, "pi");
     assert_ne!(label, row.provider.provider().display_name());
 }
+
+/// Feature 552, FR-011: a session whose summary carries agent runs changes nothing in the tree.
+/// Every worktree and session stays listed, and the runs are not read as hidden sessions.
+#[test]
+fn a_summary_carrying_agent_runs_lists_every_worktree_and_session() {
+    use micold_client::catalog_sync::reconcile_catalog;
+    use micold_core::agent_run::{AgentRun, AgentRunState};
+    use micold_core::protocol::messages::{
+        ActivitySignal, CatalogSnapshot, ProjectSnapshot, SessionSummary, WireLifecycle,
+    };
+    use micold_core::session::SessionLabel;
+
+    let mut state = state_with_active_project();
+    let origin = state.workspace.sessions[&PathBuf::from("/repo")][0].id;
+    let before: Vec<_> = state
+        .worktree_tree()
+        .iter()
+        .map(|n| (n.worktree.dir_name.clone(), n.sessions.len()))
+        .collect();
+
+    let snapshot = CatalogSnapshot {
+        schema_version: 1,
+        last_active: Some(PathBuf::from("/repo")),
+        projects: vec![ProjectSnapshot {
+            pane_layout: None,
+            path: PathBuf::from("/repo"),
+            display_name: "repo".to_string(),
+            is_git_repo: true,
+            available: true,
+            worktrees: Vec::new(),
+            sessions: vec![SessionSummary {
+                id: origin,
+                worktree_dir: Some("feat-a".to_string()),
+                title: SessionLabel::Pending,
+                lifecycle: WireLifecycle::Running,
+                activity: ActivitySignal::Working,
+                provider: AiCli::ClaudeCode,
+                input_serial: 0,
+                live_shells: Vec::new(),
+                attention_seq: 0,
+                unread: false,
+                agents: vec![AgentRun {
+                    agent_id: "a15f822c8aa66a621".into(),
+                    agent_type: Some("Explore".into()),
+                    transcript: None,
+                    state: AgentRunState::Running,
+                    provider: AiCli::ClaudeCode,
+                }],
+            }],
+        }],
+        env_include_failures: Vec::new(),
+    };
+    reconcile_catalog(&mut state, micold_core::daemons::DaemonId(1), &snapshot, false);
+
+    let after: Vec<_> = state
+        .worktree_tree()
+        .iter()
+        .map(|n| (n.worktree.dir_name.clone(), n.sessions.len()))
+        .collect();
+    assert_eq!(after, before, "nothing is hidden because of an agent run");
+    assert_eq!(state.workspace.sessions[&PathBuf::from("/repo")].len(), 1);
+}

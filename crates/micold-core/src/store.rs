@@ -258,6 +258,11 @@ struct StoredSession {
     /// so no `schema_version` bump, as for `attention_seq` (research R1).
     #[serde(default)]
     unread: bool,
+    /// The agent runs reported against the session (feature 552, FR-005). `#[serde(default)]` and
+    /// skipped when empty, so a file written before the feature reads as it did and no
+    /// `schema_version` bump is needed.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    agents: Vec<crate::agent_run::AgentRun>,
 }
 
 /// Serde-mapped mirror of [`AiCli`] (feature 026), kept separate for the same reason
@@ -370,6 +375,7 @@ impl StoredSession {
             provider: session.provider.into(),
             attention_seq: session.attention_seq,
             unread: session.unread,
+            agents: session.agents.clone(),
         }
     }
 
@@ -395,6 +401,10 @@ impl StoredSession {
         session.archived = self.archived;
         session.attention_seq = self.attention_seq;
         session.unread = self.unread;
+        session.agents = self.agents;
+        // The daemon that recorded a run as running is gone, so its stop report cannot arrive
+        // (feature 552, FR-005).
+        crate::agent_run::stop_running(&mut session.agents);
         session
     }
 }
