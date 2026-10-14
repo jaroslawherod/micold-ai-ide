@@ -300,6 +300,27 @@ mod tests {
         (app, rx)
     }
 
+    /// Pull the `RepoRootQuery` the gate sent and answer it as the daemon would.
+    fn reply_repo_root(
+        app: &mut App,
+        rx: &mut iced::futures::channel::mpsc::UnboundedReceiver<ClientMsg>,
+        path: PathBuf,
+        is_repo_root: bool,
+    ) {
+        let req = match rx.try_recv().expect("asked") {
+            ClientMsg::RepoRootQuery { req, .. } => req,
+            other => panic!("{other:?}"),
+        };
+        let _ = crate::shell::daemon_sync::on_daemon_event(
+            app,
+            micold_core::daemons::DaemonId(1),
+            DaemonMsg::OperationOk {
+                req,
+                result: OperationResult::RepoRoot { path, is_repo_root },
+            },
+        );
+    }
+
     /// The whole point of R2 part 2, as one assertion: a client that cannot see the daemon's
     /// filesystem does not guess. It asks.
     ///
@@ -334,22 +355,7 @@ mod tests {
         let (mut app, mut rx) = client_without_local_git();
         let chosen = PathBuf::from("/repo/thing");
         let _ = on_folder_chosen(&mut app, chosen.clone());
-        let req = match rx.try_recv().expect("asked") {
-            ClientMsg::RepoRootQuery { req, .. } => req,
-            other => panic!("{other:?}"),
-        };
-
-        let _ = crate::shell::daemon_sync::on_daemon_event(
-            &mut app,
-            micold_core::daemons::DaemonId(1),
-            DaemonMsg::OperationOk {
-                req,
-                result: OperationResult::RepoRoot {
-                    path: chosen.clone(),
-                    is_repo_root: true,
-                },
-            },
-        );
+        reply_repo_root(&mut app, &mut rx, chosen.clone(), true);
         assert_eq!(app.core.workspace.active.as_deref(), Some(chosen.as_path()));
     }
 
@@ -359,22 +365,7 @@ mod tests {
         let (mut app, mut rx) = client_without_local_git();
         let chosen = PathBuf::from("/repo/not-one");
         let _ = on_folder_chosen(&mut app, chosen.clone());
-        let req = match rx.try_recv().expect("asked") {
-            ClientMsg::RepoRootQuery { req, .. } => req,
-            other => panic!("{other:?}"),
-        };
-
-        let _ = crate::shell::daemon_sync::on_daemon_event(
-            &mut app,
-            micold_core::daemons::DaemonId(1),
-            DaemonMsg::OperationOk {
-                req,
-                result: OperationResult::RepoRoot {
-                    path: chosen,
-                    is_repo_root: false,
-                },
-            },
-        );
+        reply_repo_root(&mut app, &mut rx, chosen, false);
         assert!(app.core.workspace.active.is_none());
         assert_eq!(
             app.core
@@ -397,22 +388,7 @@ mod tests {
         let (mut app, mut rx) = client_without_local_git();
         let chosen = PathBuf::from("/repo/asked-about");
         let _ = on_folder_chosen(&mut app, chosen);
-        let req = match rx.try_recv().expect("asked") {
-            ClientMsg::RepoRootQuery { req, .. } => req,
-            other => panic!("{other:?}"),
-        };
-
-        let _ = crate::shell::daemon_sync::on_daemon_event(
-            &mut app,
-            micold_core::daemons::DaemonId(1),
-            DaemonMsg::OperationOk {
-                req,
-                result: OperationResult::RepoRoot {
-                    path: PathBuf::from("/repo/something-else"),
-                    is_repo_root: true,
-                },
-            },
-        );
+        reply_repo_root(&mut app, &mut rx, PathBuf::from("/repo/something-else"), true);
         assert!(
             app.core.workspace.active.is_none(),
             "an answer about another folder must not open one"

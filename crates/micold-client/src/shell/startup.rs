@@ -514,12 +514,8 @@ mod tests {
         assert!(core.notifications.queue.visible().is_none());
     }
 
-    /// FR-009a (BUG-006): boot hands the prune the placement it is starting under. A sandboxed
-    /// session's conversation is in the sandbox, so the host having no record of it must not drop
-    /// it before the window opens.
-    #[test]
-    fn a_sandboxed_launch_keeps_a_session_the_host_has_no_record_of() {
-        let session = Session::start_new(SessionLocation::Default, AiCli::ClaudeCode);
+    /// A workspace with the one available project `/here`, holding `session`.
+    fn here_workspace(session: &Session) -> Workspace {
         let mut workspace = Workspace {
             projects: vec![Project::new(
                 PathBuf::from("/here"),
@@ -531,6 +527,16 @@ mod tests {
         workspace
             .sessions
             .insert(PathBuf::from("/here"), vec![session.clone()]);
+        workspace
+    }
+
+    /// FR-009a (BUG-006): boot hands the prune the placement it is starting under. A sandboxed
+    /// session's conversation is in the sandbox, so the host having no record of it must not drop
+    /// it before the window opens.
+    #[test]
+    fn a_sandboxed_launch_keeps_a_session_the_host_has_no_record_of() {
+        let session = Session::start_new(SessionLocation::Default, AiCli::ClaudeCode);
+        let workspace = here_workspace(&session);
         let mut core = State::default();
 
         restore_catalog(
@@ -654,17 +660,7 @@ mod tests {
         sandboxed.daemon.placement = PlacementKind::LocalSandbox;
         let settings = RecoveredOnce::serving(sandboxed);
         let session = Session::start_new(SessionLocation::Default, AiCli::ClaudeCode);
-        let mut workspace = Workspace {
-            projects: vec![Project::new(
-                PathBuf::from("/here"),
-                true,
-                Availability::Available,
-            )],
-            ..Default::default()
-        };
-        workspace
-            .sessions
-            .insert(PathBuf::from("/here"), vec![session.clone()]);
+        let workspace = here_workspace(&session);
         let mut core = State::default();
 
         let loaded = restore_from_disk(
