@@ -32,12 +32,13 @@
 //! renderer, and a text input's state includes its focus: a field that gained a child when a
 //! validation error appeared would drop the keystroke that caused it (feature 021's lesson).
 
-use iced::advanced::widget::{operation, tree, Id, Operation, Tree, Widget};
+use iced::advanced::widget::{tree, Tree, Widget};
 use iced::advanced::{layout, mouse, overlay, renderer, Clipboard, Layout, Renderer as _, Shell};
 use iced::{Element, Event, Length, Rectangle, Size, Vector};
 use micold_core::tokens::{anatomy, density, Roles};
 
 use super::style;
+use crate::ui::cdk::focus::FocusOp;
 
 /// Where the label sits, and where the value sits beneath it (§7.7).
 ///
@@ -71,84 +72,6 @@ pub struct State {
     pub layer: Layer,
 }
 
-/// Whether the control holds the keyboard — asked of the control, not guessed from the pointer.
-///
-/// The field cannot infer this. A press in its 16dp padding lands on the container and not on the
-/// input, and focus also moves for reasons that never reach this widget at all: Tab, a focus
-/// operation, the window itself losing and regaining focus. Any rule written here would be a second
-/// opinion about a fact the input already holds, and BUG-002 was exactly what two opinions look
-/// like. So this asks, through the traversal the rendering stack provides for the purpose, and the
-/// answer comes from the input's own state — the only copy of it there is.
-///
-/// A control that cannot be focused — the select's trigger is a plain container — never answers,
-/// which leaves this `false` and its field's `active` entirely in its caller's hands (§7.7 wants a
-/// picker's indicator to follow *open*, not focus).
-#[derive(Default)]
-struct AsksControlForFocus(bool);
-
-impl Operation for AsksControlForFocus {
-    fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
-        operate(self);
-    }
-
-    fn focusable(
-        &mut self,
-        _id: Option<&Id>,
-        _bounds: Rectangle,
-        state: &mut dyn operation::Focusable,
-    ) {
-        self.0 |= state.is_focused();
-    }
-}
-
-/// Hand the keyboard to the control, for a press that landed on the container around it.
-///
-/// The mirror of [`AsksControlForFocus`], and it goes through the same traversal for the same
-/// reason: focus lives in the control's own state and this is the way in that does not require
-/// knowing what the control is. A control with no focus to take never answers.
-struct FocusesTheControl;
-
-impl Operation for FocusesTheControl {
-    fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
-        operate(self);
-    }
-
-    fn focusable(
-        &mut self,
-        _id: Option<&Id>,
-        _bounds: Rectangle,
-        state: &mut dyn operation::Focusable,
-    ) {
-        if !state.is_focused() {
-            state.focus();
-        }
-    }
-}
-
-/// Take the keyboard back from the control, because the application says it no longer holds it.
-///
-/// The mirror of [`FocusesTheControl`], and the half BUG-004 was missing. A control that cannot be
-/// focused never answers, so this is as safe to run over the select's plain container as the other
-/// two are.
-struct UnfocusesTheControl;
-
-impl Operation for UnfocusesTheControl {
-    fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
-        operate(self);
-    }
-
-    fn focusable(
-        &mut self,
-        _id: Option<&Id>,
-        _bounds: Rectangle,
-        state: &mut dyn operation::Focusable,
-    ) {
-        if state.is_focused() {
-            state.unfocus();
-        }
-    }
-}
-
 /// What this last told its caller about the control's focus, and what the caller last said back.
 ///
 /// `focused` is remembered so that only *changes* are published: the question is asked on every
@@ -163,7 +86,7 @@ impl Operation for UnfocusesTheControl {
 /// the application changing its mind, and the control adopts it.
 ///
 /// A change and not a disagreement, because a standing disagreement is also what an unreported
-/// focus looks like: [`FocusesTheControl`] runs before the answer is asked for, and a focus
+/// focus looks like: [`FocusOp::Focusing`] runs before the answer is asked for, and a focus
 /// traversal can take focus without publishing at all.
 #[derive(Default)]
 struct Reported {
@@ -485,14 +408,14 @@ impl<'a, M: 'a> Widget<M, iced::Theme, iced::Renderer> for FilledField<'a, M> {
                     &mut tree.children[1],
                     control,
                     renderer,
-                    &mut FocusesTheControl,
+                    &mut FocusOp::Focusing,
                 );
             } else {
                 self.children[1].as_widget_mut().operate(
                     &mut tree.children[1],
                     control,
                     renderer,
-                    &mut UnfocusesTheControl,
+                    &mut FocusOp::unfocusing(),
                 );
             }
             tree.state.downcast_mut::<Reported>().focused = target;
@@ -535,7 +458,7 @@ impl<'a, M: 'a> Widget<M, iced::Theme, iced::Renderer> for FilledField<'a, M> {
                     &mut tree.children[1],
                     control,
                     renderer,
-                    &mut FocusesTheControl,
+                    &mut FocusOp::Focusing,
                 );
             }
         }
@@ -543,7 +466,7 @@ impl<'a, M: 'a> Widget<M, iced::Theme, iced::Renderer> for FilledField<'a, M> {
         // *After* the children, always: the event that changes focus is the one the input has just
         // handled, and asking before it does would report the previous frame's answer.
         if self.on_focus_change.is_some() {
-            let mut asks = AsksControlForFocus::default();
+            let mut asks = FocusOp::asking();
             self.children[1].as_widget_mut().operate(
                 &mut tree.children[1],
                 layout
@@ -554,10 +477,10 @@ impl<'a, M: 'a> Widget<M, iced::Theme, iced::Renderer> for FilledField<'a, M> {
                 &mut asks,
             );
             let reported = tree.state.downcast_mut::<Reported>();
-            if reported.focused != asks.0 {
-                reported.focused = asks.0;
+            if reported.focused != asks.answer() {
+                reported.focused = asks.answer();
                 if let Some(on_focus_change) = &self.on_focus_change {
-                    shell.publish(on_focus_change(asks.0));
+                    shell.publish(on_focus_change(asks.answer()));
                 }
             }
         }
