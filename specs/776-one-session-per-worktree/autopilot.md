@@ -20,7 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #794 | M1 | merged | 497a497cd87bdd573581252a7b51278d37d7e16f |
 | #807 | Amendment: soft limit, default session (specs only) | merged | 7440dca0d4fe03719c38ed46df6854fb2a42305d |
 | #821 | M2 | merged | 08e3a36dc925bffd3e44623701a9cbade577cf57 |
-| TBD | Amendment: main session and helpers (specs only) | open | |
+| #827 | Amendment: main session and helpers (specs only) | open | |
 
 ## Milestones
 
