@@ -545,7 +545,10 @@ sent to GitHub for this. It applies to every project and every open window, and 
 
 - **What is read:** the pull requests of the open project's own GitHub repository, with your GitHub
   CLI sign-in (`gh`). Only the repository's name and your worktrees' branch names are sent.
-- **When:** when a project opens, and when you turn the switch on.
+- **When:** when a project opens, when you turn the switch on, and every 5 minutes after that. An
+  open Changes view's **Pull requests** list is refreshed on the same schedule; when GitHub cannot
+  be reached the last list stays, captioned **Possibly stale** once it is older than ten minutes,
+  and no error appears.
 - **Needs:** `gh` installed and signed in (`gh auth login`). Without them the switch can still be
   checked, but nothing is shown and no error appears. Turning it on is your consent; having `gh`
   does not turn it on.

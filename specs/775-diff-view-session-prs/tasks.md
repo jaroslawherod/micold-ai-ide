@@ -62,12 +62,12 @@ description: "Task list for feature 775: PRs in the diff view"
 
 **Goal**: list refreshes on the status triggers while the view is open; stale marked. **Independent test**: shell tests in `main_tests.rs`, quickstart §B step 6.
 
-- [ ] T027 [P] [US3] Write failing shell tests named `pr_list_refresh_*` in `crates/micold-client/src/main_tests.rs`: a status trigger while a view is open requests the list (SC-004); none while no view is open; skipped while `pr_status` is paused by `RateLimited{until}` and while a read is under way; `Unavailable` is re-asked only on a trigger (R3); a list-read `RateLimited` sets `pause_until`
-- [ ] T028 [P] [US3] Write failing reducer tests in `crates/micold-client/tests/features_pr_changes.rs`: `PullRequestsWanted` returns `ReadPullRequests`; a failed refresh keeps the list, which is stale by `is_stale(read_at, now)` (FR-007, FR-012); a refreshed state replaces the mark
-- [ ] T029 [US3] Extend `crates/micold-client/tests/pr_status_is_read_only_on_named_events.rs` so `Msg::PullRequestsWanted` is sent only from the named status triggers
-- [ ] T030 [US3] (`Msg::PullRequestsWanted`, its `ReadPullRequests` transition and `pub fn paused` were pulled forward into M1; M3 only sends it from the triggers) Implement `Msg::PullRequestsWanted` in `crates/micold-client/src/features/changes.rs`, make `paused` `pub` in `crates/micold-client/src/features/pr_status.rs`, send the message from the existing triggers in `crates/micold-client/src/shell/pr_status.rs`
-- [ ] T031 [US3] "possibly stale" caption in `crates/micold-client/src/ui/changes.rs`
-- [ ] T032 [US3] User guide: refresh interval, stale caption, no notice when GitHub is unreachable, in `docs/user-guide/reviewing-changes.md` ("Keeping up with changes") and `docs/user-guide/settings.md`
+- [x] T027 [P] [US3] Write failing shell tests named `pr_list_refresh_*` in `crates/micold-client/src/main_tests.rs`: a status trigger while a view is open requests the list (SC-004); none while no view is open; skipped while `pr_status` is paused by `RateLimited{until}` and while a read is under way; `Unavailable` is re-asked only on a trigger (R3); a list-read `RateLimited` sets `pause_until`
+- [x] T028 [P] [US3] Write failing reducer tests in `crates/micold-client/tests/features_pr_changes.rs`: `PullRequestsWanted` returns `ReadPullRequests`; a failed refresh keeps the list, which is stale by `is_stale(read_at, now)` (FR-007, FR-012); a refreshed state replaces the mark
+- [x] T029 [US3] Extend `crates/micold-client/tests/pr_status_is_read_only_on_named_events.rs` so `Msg::PullRequestsWanted` is sent only from the named status triggers
+- [x] T030 [US3] (`Msg::PullRequestsWanted`, its `ReadPullRequests` transition and `pub fn paused` were pulled forward into M1; M3 only sends it from the triggers) Implement `Msg::PullRequestsWanted` in `crates/micold-client/src/features/changes.rs`, make `paused` `pub` in `crates/micold-client/src/features/pr_status.rs`, send the message from the existing triggers in `crates/micold-client/src/shell/pr_status.rs`
+- [x] T031 [US3] "possibly stale" caption in `crates/micold-client/src/ui/changes.rs`
+- [x] T032 [US3] User guide: refresh interval, stale caption, no notice when GitHub is unreachable, in `docs/user-guide/reviewing-changes.md` ("Keeping up with changes") and `docs/user-guide/settings.md`
 - [ ] T033 [US3] Visual pass (quickstart §B steps 5 offline part, 6); record evidence in `specs/775-diff-view-session-prs/`
 
 ## Polish (no milestone)

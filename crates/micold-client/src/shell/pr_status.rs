@@ -150,10 +150,35 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
     if let Msg::Finished { seq, outcome, .. } = &msg {
         log_outcome(app, *seq, outcome);
     }
-    match app.core.update_pr_status(msg) {
+    // The Changes view's pull request list follows the same triggers (feature 775, FR-007).
+    let trigger_now = match &msg {
+        Msg::Trigger { now, .. } => Some(*now),
+        _ => None,
+    };
+    let status = match app.core.update_pr_status(msg) {
         Effect::Read { seq } => start(app, seq),
         Effect::None => Task::none(),
+    };
+    match trigger_now {
+        Some(now) => Task::batch([status, refresh_list(app, now)]),
+        None => status,
     }
+}
+
+/// A status trigger fired (S3, S4): refresh the open Changes view's pull request list. Nothing is
+/// asked while no view is open, while GitHub's request limit pauses reads, or while a list read is
+/// under way; a list that was `Unavailable` is asked again only here (R3).
+fn refresh_list(app: &mut App, now: u64) -> Task<Message> {
+    let Some(view) = app.core.changes.open.as_ref() else {
+        return Task::none();
+    };
+    if matches!(view.pull_requests, PrList::Loading { .. })
+        || micold_client::features::pr_status::paused(&app.core.pr_status, now)
+    {
+        return Task::none();
+    }
+    let branch = view.branch.clone();
+    crate::shell::changes::update(app, ChangesMsg::PullRequestsWanted { branch })
 }
 
 /// **Open pull request** was chosen on the row `dir` (contract pull-request-ui §4).
