@@ -38,7 +38,7 @@ use std::time::Duration;
 
 use iced::advanced::layout::{self, Layout};
 use iced::advanced::widget::{tree, Id, Operation, Tree};
-use iced::advanced::{mouse, overlay, renderer, Clipboard, Renderer as _, Shell, Widget};
+use iced::advanced::{mouse, renderer, Clipboard, Renderer as _, Shell, Widget};
 use iced::widget::{column, container, row, Space};
 use iced::{touch, window, Alignment, Element, Event, Length, Rectangle, Size, Vector};
 
@@ -47,6 +47,7 @@ use super::navigation_drawer::parked;
 use super::{Button, ButtonVariant, Glyph, Tag, Text, TypeRole};
 use crate::icons::Icon;
 use crate::ui::cdk::motion::Progress;
+use crate::ui::cdk::passthrough::forward_to_selected;
 use micold_core::tokens::motion::{self, duration};
 use micold_core::tokens::{spacing, Rgb, Roles};
 
@@ -562,7 +563,7 @@ struct RowSlide<'a, M> {
 #[derive(Debug, Default)]
 struct Held(Option<usize>);
 
-impl<M> RowSlide<'_, M> {
+impl<'a, M> RowSlide<'a, M> {
     /// The child drawn when the row is `width` wide and `held` is the form a press is held on.
     fn drawn(&self, held: &Held, width: f32) -> usize {
         match (&self.forms, held.0) {
@@ -585,6 +586,14 @@ impl<M> RowSlide<'_, M> {
             .children()
             .nth(drawn)
             .map(|form_layout| (drawn, form_layout))
+    }
+
+    fn child(&self, i: usize) -> &Element<'_, M> {
+        &self.forms.elements()[i]
+    }
+
+    fn child_mut(&mut self, i: usize) -> &mut Element<'a, M> {
+        &mut self.forms.elements_mut()[i]
     }
 }
 
@@ -807,7 +816,7 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for RowSlide<'_, M> {
         let cursor = within(cursor, layout.bounds());
         self.drawn_in(tree, layout)
             .map(|(drawn, form_layout)| {
-                self.forms.elements()[drawn].as_widget().mouse_interaction(
+                self.child(drawn).as_widget().mouse_interaction(
                     &tree.children[drawn],
                     form_layout,
                     cursor,
@@ -860,40 +869,7 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for RowSlide<'_, M> {
         }
     }
 
-    fn operate(
-        &mut self,
-        tree: &mut Tree,
-        layout: Layout<'_>,
-        renderer: &iced::Renderer,
-        operation: &mut dyn Operation,
-    ) {
-        if let Some((drawn, form_layout)) = self.drawn_in(tree, layout) {
-            self.forms.elements_mut()[drawn].as_widget_mut().operate(
-                &mut tree.children[drawn],
-                form_layout,
-                renderer,
-                operation,
-            );
-        }
-    }
-
-    fn overlay<'b>(
-        &'b mut self,
-        tree: &'b mut Tree,
-        layout: Layout<'b>,
-        renderer: &iced::Renderer,
-        viewport: &Rectangle,
-        translation: Vector,
-    ) -> Option<overlay::Element<'b, M, iced::Theme, iced::Renderer>> {
-        let (drawn, form_layout) = self.drawn_in(tree, layout)?;
-        self.forms.elements_mut()[drawn].as_widget_mut().overlay(
-            &mut tree.children[drawn],
-            form_layout,
-            renderer,
-            viewport,
-            translation,
-        )
-    }
+    forward_to_selected!(drawn_in, child, child_mut, M, iced::Theme, iced::Renderer; operate, overlay);
 }
 
 /// The width the rail comes to rest at in each state.
@@ -932,13 +908,26 @@ struct Slide {
     progress: Progress,
 }
 
-impl<M> Rail<'_, M> {
+impl<'a, M> Rail<'a, M> {
     fn target(&self) -> f32 {
         if self.collapsed {
             0.0
         } else {
             1.0
         }
+    }
+
+    /// The rail's one child, with its layout.
+    fn drawn_in<'l>(&self, _: &Tree, layout: Layout<'l>) -> Option<(usize, Layout<'l>)> {
+        layout.children().next().map(|child| (0, child))
+    }
+
+    fn child(&self, _: usize) -> &Element<'_, M> {
+        &self.rendering
+    }
+
+    fn child_mut(&mut self, _: usize) -> &mut Element<'a, M> {
+        &mut self.rendering
     }
 }
 
@@ -1023,29 +1012,7 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for Rail<'_, M> {
         );
     }
 
-    fn mouse_interaction(
-        &self,
-        tree: &Tree,
-        layout: Layout<'_>,
-        cursor: mouse::Cursor,
-        viewport: &Rectangle,
-        renderer: &iced::Renderer,
-    ) -> mouse::Interaction {
-        layout
-            .children()
-            .next()
-            .map(|child_layout| {
-                self.rendering.as_widget().mouse_interaction(
-                    &tree.children[0],
-                    child_layout,
-                    cursor,
-                    viewport,
-                    renderer,
-                )
-            })
-            .unwrap_or_default()
-    }
-
+    forward_to_selected!(drawn_in, child, child_mut, M, iced::Theme, iced::Renderer; mouse_interaction, operate, overlay);
     fn draw(
         &self,
         tree: &Tree,
@@ -1067,41 +1034,6 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for Rail<'_, M> {
                 viewport,
             );
         }
-    }
-
-    fn operate(
-        &mut self,
-        tree: &mut Tree,
-        layout: Layout<'_>,
-        renderer: &iced::Renderer,
-        operation: &mut dyn Operation,
-    ) {
-        if let Some(child_layout) = layout.children().next() {
-            self.rendering.as_widget_mut().operate(
-                &mut tree.children[0],
-                child_layout,
-                renderer,
-                operation,
-            );
-        }
-    }
-
-    fn overlay<'b>(
-        &'b mut self,
-        tree: &'b mut Tree,
-        layout: Layout<'b>,
-        renderer: &iced::Renderer,
-        viewport: &Rectangle,
-        translation: Vector,
-    ) -> Option<overlay::Element<'b, M, iced::Theme, iced::Renderer>> {
-        let child_layout = layout.children().next()?;
-        self.rendering.as_widget_mut().overlay(
-            &mut tree.children[0],
-            child_layout,
-            renderer,
-            viewport,
-            translation,
-        )
     }
 }
 
