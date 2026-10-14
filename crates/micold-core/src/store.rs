@@ -703,7 +703,7 @@ fn read_or_quarantine<T: Default, E>(path: &Path, parse: impl FnOnce(&str) -> Re
 }
 
 /// Path a corrupt file at `path` is moved to before recovery.
-fn backup_path_for(path: &Path) -> PathBuf {
+pub(crate) fn backup_path_for(path: &Path) -> PathBuf {
     path.with_extension("json.bak")
 }
 
@@ -732,14 +732,14 @@ fn write_project_state(path: &Path, state: &StoredProjectState) -> io::Result<()
     }
     let json = serde_json::to_string_pretty(state)
         .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?;
-    let temp = temp_path_for(path);
-    write_then_rename(&temp, path, &json)
+    write_atomic(path, &json)
 }
 
-/// Write `json` to `temp`, then rename it over `target`. On either failure the staging file is
-/// removed rather than left behind: staging paths are unique per write now (T153), so a leaked
-/// one is a file nobody will ever reuse or clean up.
-pub(crate) fn write_then_rename(temp: &Path, target: &Path, json: &str) -> io::Result<()> {
+/// Write `json` to a fresh staging file beside `target`, then rename it over `target`. On either
+/// failure the staging file is removed rather than left behind: staging paths are unique per write
+/// now (T153), so a leaked one is a file nobody will ever reuse or clean up.
+pub(crate) fn write_atomic(target: &Path, json: &str) -> io::Result<()> {
+    let temp = &temp_path_for(target);
     if let Err(err) = std::fs::write(temp, json) {
         let _ = std::fs::remove_file(temp);
         return Err(err);
@@ -793,16 +793,6 @@ impl JsonFileStore {
         crate::paths::data_subdir("projects.json").map(Self::at)
     }
 
-    /// Path of the temporary file used for the catalog's atomic write.
-    fn temp_path(&self) -> PathBuf {
-        temp_path_for(&self.path)
-    }
-
-    /// Path the corrupt catalog file is moved to before recovery.
-    fn backup_path(&self) -> PathBuf {
-        backup_path_for(&self.path)
-    }
-
     /// Move an unreadable catalog aside and say where it went (002 BUG-007).
     ///
     /// Never over an earlier copy: a second recovery that renamed onto `projects.json.bak` would
@@ -811,7 +801,7 @@ impl JsonFileStore {
     /// failed (or, absurdly, every name is taken) — the caller then has no copy to name.
     fn preserve_unreadable(&self) -> Option<PathBuf> {
         const MAX_COPIES: u32 = 100;
-        let first = self.backup_path();
+        let first = backup_path_for(&self.path);
         let target = std::iter::once(first.clone())
             .chain((2..=MAX_COPIES).map(|n| {
                 let mut name = first.as_os_str().to_os_string();
@@ -871,7 +861,7 @@ impl JsonFileStore {
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)?;
         }
-        write_then_rename(&temp_path_for(&path), &path, &file.to_json())
+        write_atomic(&path, &file.to_json())
     }
 
     /// Delete a project's review file (feature 482, W11). An already-absent file is success.
@@ -909,7 +899,7 @@ impl JsonFileStore {
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)?;
         }
-        write_then_rename(&temp_path_for(&path), &path, &file.to_json())
+        write_atomic(&path, &file.to_json())
     }
 
     /// Delete a project's runs file (feature 483, W5). An already-absent file is success.
@@ -1239,8 +1229,7 @@ impl ProjectStore for JsonFileStore {
             .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?;
 
         // Atomic write: temp file in the same directory, then rename over the target.
-        let temp = self.temp_path();
-        write_then_rename(&temp, &self.path, &json)?;
+        write_atomic(&self.path, &json)?;
 
         match first_err {
             Some(err) => Err(err),

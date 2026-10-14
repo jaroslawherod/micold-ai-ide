@@ -811,18 +811,6 @@ impl JsonFileSettingsStore {
         crate::paths::data_subdir("settings.json").map(Self::at)
     }
 
-    /// Path of the temporary file used for one atomic write. Unique per call — see
-    /// [`crate::store`]'s `temp_path_for`, which this delegates to, for why deriving it from the
-    /// target alone is what made two writers of one settings file destroy each other (T153,
-    /// BUG-025).
-    fn temp_path(&self) -> PathBuf {
-        crate::store::temp_path_for(&self.path)
-    }
-
-    fn backup_path(&self) -> PathBuf {
-        self.path.with_extension("json.bak")
-    }
-
     /// The sidecar whose file lock serialises read-modify-write cycles on `settings.json`.
     ///
     /// A sidecar rather than the settings file itself: the write replaces that file by rename, so
@@ -889,7 +877,7 @@ impl SettingsStore for JsonFileSettingsStore {
     }
 
     fn recovery_path(&self) -> Option<PathBuf> {
-        Some(self.backup_path())
+        Some(crate::store::backup_path_for(&self.path))
     }
 
     /// After a load, the file is still there for every failure except the corrupt one, which
@@ -924,7 +912,7 @@ impl SettingsStore for JsonFileSettingsStore {
             },
             Err(_) => {
                 // Corrupt: preserve the bad file (best-effort) and recover to defaults.
-                let _ = std::fs::rename(&self.path, self.backup_path());
+                let _ = std::fs::rename(&self.path, crate::store::backup_path_for(&self.path));
                 SettingsOutcome {
                     settings: Settings::default(),
                     status: LoadStatus::Recovered,
@@ -963,8 +951,7 @@ impl SettingsStore for JsonFileSettingsStore {
         // Atomic write: temp file in the same directory, then rename over the target. The
         // staging path is this write's alone (T153); sharing one across writers is what produced
         // the truncated documents in BUG-025.
-        let temp = self.temp_path();
-        crate::store::write_then_rename(&temp, &self.path, &json)
+        crate::store::write_atomic(&self.path, &json)
     }
 }
 
