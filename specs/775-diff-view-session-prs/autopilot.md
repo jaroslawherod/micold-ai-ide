@@ -19,6 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #782 | Design PR (spec, plan, tasks) | merged | 0de0b3ce005d2cb69c99300e52e5cb6ed3da25fa |
 | #825 | M1: PR list in the Changes pane | merged | 057d71e68f57170dda7af54bdc254cab626d7d47 |
 | #832 | M2: select a PR and read its diff | merged | bd39d5c1c43e92ff1cdd845510a2779ad37eb743 |
+| #836 | M3: PR list refresh and stale mark | open | — |
 
 ## Milestones
 
@@ -26,7 +27,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T015 | full | PRs of the entry's branch listed in the Changes pane | #825 | merged (T015 visual pass moved to M2) |
 | M2 | T016–T026, T023b (+T015 visual pass) | full | Select a PR, read its base...head diff, return | #832 | merged (visual pass not observed) |
-| M3 | T027–T032 (T033 visual pass unobserved) | full | List refreshes on status triggers, stale marked | PR opening | gate green, review A CLEAN |
+| M3 | T027–T032 (T033 visual pass unobserved) | full | List refreshes on status triggers, stale marked | #836 | gate green, review A and B CLEAN; visual pass not observed |
 
 ## Decisions
 
