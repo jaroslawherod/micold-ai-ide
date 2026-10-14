@@ -613,7 +613,8 @@ pub fn current_session_row(entries: &[SidebarEntry], current: Option<SessionId>)
                     for run in &group.runs {
                         if let RunRow::Worktree(node) = &run.row {
                             let sessions = node.listed_sessions();
-                            if let Some(found) = location(&mut row, node.sessions_shown(), &sessions)
+                            if let Some(found) =
+                                location(&mut row, node.sessions_shown(), &sessions)
                             {
                                 return Some(found);
                             }

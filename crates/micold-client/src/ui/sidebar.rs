@@ -668,8 +668,7 @@ fn build_items(
             .hover(
                 Message::Worktree(WorktreeMsg::Hovered(dir.clone())),
                 Message::Worktree(WorktreeMsg::Unhovered(dir.clone())),
-            )
-            ;
+            );
         // FR-017: an expander only for several sessions. FR-018: a press selects the main
         // session, never a helper; with no session it selects nothing.
         if node.has_expander() {
@@ -1071,8 +1070,17 @@ mod tests {
     #[test]
     fn lifecycle_still_reaches_the_row_through_the_tint() {
         let r = tokens::roles(ColorScheme::Dark);
-        let tint =
-            |l| session_tree_item(1, &session(ActivitySignal::Unknown, l), None, None, false, r).tint;
+        let tint = |l| {
+            session_tree_item(
+                1,
+                &session(ActivitySignal::Unknown, l),
+                None,
+                None,
+                false,
+                r,
+            )
+            .tint
+        };
 
         assert_eq!(tint(failed()), r.error);
         assert_eq!(tint(SessionLifecycle::Idle), r.on_surface_variant);

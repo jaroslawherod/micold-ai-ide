@@ -1174,7 +1174,10 @@ fn a_start_is_offered_only_for_a_free_location() {
         .push(Session::start_new(taken.clone(), AiCli::ClaudeCode));
 
     assert!(st.start_offered(&free));
-    assert!(!st.start_offered(&taken), "an occupied worktree offers none");
+    assert!(
+        !st.start_offered(&taken),
+        "an occupied worktree offers none"
+    );
     assert!(
         !st.start_offered(&SessionLocation::Default),
         "the project root follows the same rule"
