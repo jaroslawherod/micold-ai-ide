@@ -346,6 +346,7 @@ fn resume_sends_one_session_target() {
         vec![AttachItem::Session {
             id: Uuid::from_u128(2),
             replace: false,
+            allow_additional_session: false,
         }]
     );
     assert!(dialog.applying());
@@ -403,6 +404,7 @@ fn a_second_resume_while_one_is_applying_changes_nothing() {
         vec![AttachItem::Session {
             id: Uuid::from_u128(1),
             replace: false,
+            allow_additional_session: false,
         }]
     );
 }
@@ -419,6 +421,7 @@ fn a_resumed_session_closes_the_dialog_and_a_refusal_names_its_reason() {
     let item = AttachItem::Session {
         id: Uuid::from_u128(1),
         replace: false,
+        allow_additional_session: false,
     };
     let outcomes = attach::update(
         &mut state,

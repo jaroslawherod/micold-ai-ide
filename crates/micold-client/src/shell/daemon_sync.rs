@@ -1406,6 +1406,7 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
                                 == [AttachItem::Session {
                                     id: *id,
                                     replace: false,
+                                    allow_additional_session: false,
                                 }]
                         }) =>
                         {
