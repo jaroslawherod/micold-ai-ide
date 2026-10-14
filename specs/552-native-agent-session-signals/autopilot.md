@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #552
 - **Worktree branch**: feat/552_replace-name-based-hiding-of-agent-work-with-the
 - **Started**: 2026-10-12
-- **Phase**: milestone M2 (reviewing)
-- **Next step**: M2 scoped gate, reviews A and B, full gate, PR
+- **Phase**: milestone M2 (PR open)
+- **Next step**: orchestrator waits on CI and merges M2 PR, then M3
 
 ## Pull requests
 
@@ -23,7 +23,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T009 | full | every worktree listed, toggle and client name-based visibility removed, hook captures | #795 | in review |
+| M1 | T001–T009 | full | every worktree listed, toggle and client name-based visibility removed, hook captures | #795 | merged |
 | M2 | T010–T021 | full | Claude sub-agent runs recorded from SubagentStart/Stop, protocol 42 | | in review |
 | M3 | T022–T029 | full | provenance and attach_worktree removed, protocol 42 | | pending |
 | M4 | T030–T033 | full | Copilot mapping or gap, provider table, docs check | | pending |
