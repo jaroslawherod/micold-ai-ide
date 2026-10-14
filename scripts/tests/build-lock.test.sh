@@ -61,6 +61,19 @@ else
 fi
 rm -rf "$d"
 
+# --- nested calls ---------------------------------------------------------------------------------
+
+d="$(mktemp -d)"
+git -C "$d" init --quiet
+cases=$((cases + 1))
+if (cd "$d" && env -u MICOLD_BUILD_LOCK_HELD -u MICOLD_NO_BUILD_LOCK timeout 20 \
+  "$SCRIPT" "$SCRIPT" bash -c 'echo nested' >/dev/null 2>&1); then
+  pass "a build-lock.sh call nested under the lock runs without waiting on it"
+else
+  fail "a build-lock.sh call nested under the lock runs without waiting on it" "nested call blocked or failed"
+fi
+rm -rf "$d"
+
 # -----------------------------------------------------------------------------------------------
 
 printf '\n%d case(s), %d failure(s)\n' "$cases" "$failures"
