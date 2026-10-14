@@ -1615,6 +1615,43 @@ fn a_created_worktree_is_bound_to_the_daemon_chosen_in_the_form() {
     );
 }
 
+/// Feature 776, FR-006 (T018): the session a worktree was created with is selected when the
+/// daemon reports the create, as a `SessionCreated` would select it.
+#[test]
+fn a_created_worktrees_returned_session_is_selected() {
+    use micold_core::session::{AiCli, Session, SessionLocation};
+    let (mut app, _rx) = app_creating_a_worktree();
+    let req = pending_create_req(&app);
+    let session = Session::start_new(
+        SessionLocation::Worktree("feat-probe-two".to_string()),
+        AiCli::ClaudeCode,
+    );
+    let id = session.id;
+    app.core
+        .workspace
+        .sessions
+        .insert(PathBuf::from("/repo/demo"), vec![session]);
+    app.core.session.active = None;
+
+    let _ = shell::daemon_sync::on_daemon_event(
+        &mut app,
+        micold_core::daemons::DaemonId(1),
+        DaemonMsg::OperationOk {
+            req,
+            result: micold_core::protocol::messages::OperationResult::WorktreeCreated {
+                dir_name: "feat-probe-two".into(),
+                session: Some(id),
+            },
+        },
+    );
+
+    assert_eq!(
+        app.core.session.active,
+        Some(id),
+        "the worktree's own session is the one in front of the user"
+    );
+}
+
 /// A new attempt starts with a clean slate.
 ///
 /// The stale error from the previous attempt stood through the whole of the next one's pending

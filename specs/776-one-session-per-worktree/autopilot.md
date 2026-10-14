@@ -30,7 +30,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T013 | full | Second session refused by daemon (RPC, create_session, review send); wire fields + v41 | #794 | merged (#794) |
 | M2 | T037–T042 | full | Soft limit: `allow_additional_session` on create_session, wire v42 (the start flag lands with the start block in M7) | #821 | merged (#821) |
 | M3 | T014–T016, T021, T050–T054 | full | create_worktree / WorktreeCreate define the session at start (WIP at tag wip-776-m3, cherry-picked after M2); main session persisted, moved, promoted; wire v44 | | pending |
-| M4 | T017–T020, T022, T036, T043–T045 | full | Dialog fields; worktree rows only; row press opens the main session; helpers marked | | pending |
+| M4 | T017–T020, T022, T036, T043–T045 | full | Dialog fields; worktree rows only; row press opens the main session; helpers marked | | in review/gate |
 | M5 | T046–T049, T055–T057 | full | Row menu "Start another session..." (adds a helper) with confirmation; "Make main session"; delete names successor | | pending |
 | M6 | T023–T030 | full | Resume replaces (resumed becomes main) or keeps both (helper); attach cap | | pending |
 | M7 | T031–T035 | full | Several sessions intact; start beside a live one needs confirmation | | pending |
@@ -72,6 +72,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Conformance B M3 | 1 | 0a6031f8335591c7c59a02840b354249dbd6dbfd:5b9d4e5a05a02a467f79cf38e5dfcc04d159f07c | CLEAN (1 MINOR declined) |
 
 ## Declined review findings
+
+- M4 review B F2 (row-press wiring untested at the widget level): declined; the node-level main_session and start_offered tests plus the layout snapshot cover it, and iced TreeItem messages are not inspectable here. F4 wrap: prose only. Visual pass: items 1,2,4 (one session) pass; two-session expander not reachable until M5 adds the row menu entry (evidence: tdd/visual-pass.md).
 
 - M3 review A F2 (MINOR): WorktreeCreate RPC drops `FirstPromptUndelivered`; the first prompt is best-effort for the dialog and the MCP path reports `prompt_delivered`. Declined.
 - M3 review B F1 (MINOR): `archive_session_ids` may run promotion twice per project; idempotent. Declined.

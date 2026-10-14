@@ -83,10 +83,10 @@ User stories: US1 refused second session unless really requested (P1), US2 defin
 - [x] T017 [P] [US2] Client reducer tests in `crates/micold-client/tests/features_worktree_form.rs`: dialog has an AI CLI choice (default CLI preselected, "None" last) and a first-prompt field; confirm sends `session: Some(definition)` or `None`; a prompt with "None" is not representable.
 - [x] T018 [P] [US2] Client tests in `crates/micold-client/tests/features_session.rs`: `start_intent` offers a start only for a `Free` location (`occupancy`), none for an occupied one, Default included (additional sessions are US6's menu entry, not this action); `WorktreeCreated.session` is selected and viewed as `SessionCreated` is.
 - [x] T019 [US2] Add the fields to `crates/micold-client/src/features/worktree_form.rs` and render them in `crates/micold-client/src/ui/worktree_form.rs` (existing select and text-field primitives only, Principle VIII); send the definition and select the returned session in `crates/micold-client/src/shell/daemon_sync.rs`.
-- [x] T020 [US2] Make `start_intent` in `crates/micold-client/src/features/session.rs` ask `occupancy`, and have `crates/micold-client/src/ui/sidebar.rs` render exactly one start action for a free location and none for an occupied one (FR-004).
+- [x] T020 [US2] Add `State::start_offered` in `crates/micold-client/src/features/session.rs`, asking `occupancy` (the sidebar offers a start only when it holds), and have `crates/micold-client/src/ui/sidebar.rs` render exactly one start action for a free location and none for an occupied one (FR-004).
 - [x] T021 [P] [US2] Update `docs/user-guide/agent-tools.md` (`create_worktree` inputs `ai_cli` and `prompt`, reply fields).
 - [x] T036 [P] [US2] Update `docs/user-guide/worktrees-and-sessions.md` (dialog fields, definition at start, no add action on a started worktree).
-- [ ] T022 [US2] Visual pass of quickstart Part B items 1, 2 and 4 via the `visual-pass` skill; save evidence in `specs/776-one-session-per-worktree/tdd/`.
+- [x] T022 [US2] Visual pass of quickstart Part B items 1, 2 and 4 via the `visual-pass` skill; save evidence in `specs/776-one-session-per-worktree/tdd/`.
 
 ## Phase 4b: User Story 5 - Worktree rows and the main session (P2)
 
