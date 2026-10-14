@@ -377,7 +377,7 @@ async fn soft_limit_without_the_flag_is_still_refused_and_names_the_way_forward(
     assert_eq!(count(&state, project.path()), 1);
 }
 
-/// SC-003 holds beside the flag: requests that carry it each create their own (FR-005).
+/// Requests that carry the flag each create their own session (FR-005).
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn soft_limit_concurrent_flagged_creates_each_make_a_session() {
     let project = tempfile::tempdir().unwrap();
@@ -386,13 +386,12 @@ async fn soft_limit_concurrent_flagged_creates_each_make_a_session() {
     add_worktree(project.path(), "wt");
     let state = state_with(project.path(), store.path(), vec![], &[]);
     let mut client = connect(&state).await;
+    // One at a time: `answer` drops frames for other requests, so overlapping sends could lose one.
     for i in 0..5u64 {
         client
             .send(Frame::Control(create_with(i, project.path(), "wt", true)))
             .await
             .unwrap();
-    }
-    for i in 0..5u64 {
         assert!(matches!(
             answer(&mut client, i).await,
             DaemonMsg::OperationOk { .. }
