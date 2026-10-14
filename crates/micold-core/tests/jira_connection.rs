@@ -39,6 +39,12 @@ fn a_site_that_is_not_an_https_origin_is_refused() {
         "https://acme.atlassian.net/#frag",
         "https://acme atlassian.net",
         "https://acme.atlassian.net:abc",
+        "https://acme.atlassian.net:0",
+        "https://acme.atlassian.net:65536",
+        "https://acme.atlassian.net:+80",
+        "https://acme..atlassian.net",
+        "https://acme.atlassian.net.",
+        "https://-acme.atlassian.net",
     ] {
         let problem = SiteOrigin::parse(input).expect_err(input);
         assert_eq!(problem.field, JiraField::Site, "{input}");

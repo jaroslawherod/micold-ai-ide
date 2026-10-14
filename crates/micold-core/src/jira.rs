@@ -51,6 +51,12 @@ pub struct SiteOrigin(String);
 impl SiteOrigin {
     /// Parse a site address. `https` only; a development build also accepts a loopback `http`
     /// origin for the manual pass's fake site, a release build never (FR-006, research R10).
+    ///
+    /// This is also what reads a connection back from the settings file and off the wire, so a
+    /// loopback `http` entry written by a development build is dropped by a release one, entry by
+    /// entry (`known_connections`), never failing the document. On the wire (not self-describing)
+    /// an entry cannot be skipped; the service has already dropped such entries, so only a
+    /// development daemon feeding a release client could meet one, which is dev-only.
     pub fn parse(input: &str) -> Result<Self, FieldProblem> {
         let refuse = FieldProblem {
             field: JiraField::Site,
@@ -71,20 +77,25 @@ impl SiteOrigin {
         }
         let (host, port) = match authority.rsplit_once(':') {
             Some((host, port)) => {
-                if port.is_empty() || !port.chars().all(|c| c.is_ascii_digit()) {
-                    return Err(refuse);
-                }
+                // A real port: digits only, 1 to 65535.
+                let port = Some(port)
+                    .filter(|p| p.chars().all(|c| c.is_ascii_digit()))
+                    .and_then(|p| p.parse::<u16>().ok())
+                    .filter(|p| *p != 0)
+                    .ok_or(refuse)?;
                 (host, Some(port))
             }
             None => (authority, None),
         };
         let host = host.to_ascii_lowercase();
-        if host.is_empty()
-            || host.starts_with('.')
-            || !host
-                .chars()
-                .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '.')
-        {
+        // Every dot-separated label non-empty, made of letters, digits and inner hyphens.
+        let label_ok = |label: &str| {
+            !label.is_empty()
+                && !label.starts_with('-')
+                && !label.ends_with('-')
+                && label.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
+        };
+        if !host.split('.').all(label_ok) {
             return Err(refuse);
         }
         match scheme.as_str() {

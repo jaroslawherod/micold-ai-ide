@@ -29,7 +29,6 @@ use micold_core::protocol::messages::{
     MergedBranchQuery, OperationResult, ProjectSnapshot, RefusalReason, SessionProcess,
     SessionSummary, ShellOpenFailure, TerminalRef, WireLifecycle, WorktreeSnapshot, WorktreeStatus,
 };
-use micold_core::protocol::version::PROTOCOL_VERSION;
 use micold_core::session::{AiCli, SessionId, SessionLabel, ShellInstanceId};
 use micold_core::theme::ColorScheme;
 use micold_core::worktree::{CreateMode, CreateStage};

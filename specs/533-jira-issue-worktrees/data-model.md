@@ -37,7 +37,7 @@ provider-aware ([jira-cloud-source §6](./contracts/jira-cloud-source.md)).
 | token file | `<data_dir>/jira/<project-id>.token`, owner-only | raw token bytes, UTF-8 | absent | client |
 | `issue_source` | `StoredProjectState` | `Option<IssueProvider>` | `None` = GitHub | client |
 
-`SETTINGS_VERSION` stays 4 (additive); `PROTOCOL_VERSION` 40 -> 41; `schema_hash.rs` pin moves.
+`SETTINGS_VERSION` stays 4 (additive); `PROTOCOL_VERSION` 41 -> 42; `schema_hash.rs` pin moves.
 A project key in `jira_connections` is the same string the client uses for the project path in
 `SettingsSet` elsewhere; the token file name is `store::project_id(path)` (new public accessor).
 

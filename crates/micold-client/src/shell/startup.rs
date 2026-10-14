@@ -238,6 +238,10 @@ fn boot() -> (App, Task<Message>) {
         )),
     );
     core.session.cross_session_access = loaded.settings.cross_session_access;
+    // Feature 533: the Jira switch and connections as stored, until the service's copy arrives, so
+    // a restart with Jira on shows it from the first frame (FR-022).
+    core.settings.jira_enabled = loaded.settings.jira_enabled;
+    core.settings.jira_connections = loaded.settings.jira_connections.clone();
     // No availability answer is filled here (feature 027, FR-023c). One used to be, from this
     // process's own `PATH` — which is the host's, and under the sandboxed placement the sessions
     // are not on the host. Every directory's answer stays unknown ("nobody has said yet") until its
