@@ -63,3 +63,19 @@ fields are those `list_query` names. `tests/pull_request_list.rs` reads them.
 | `pr_list_unknown_state.txt` | #31 with a `state` this version does not know, #30 open |
 | `pr_list_empty.txt` | no pull request |
 | `pr_list_unordered.txt` | #41, #43, #42 in an order that is not newest first |
+
+## The pull request diff fixtures (`pr_diff_*.txt`, feature 775)
+
+Hand-written `diff --git` text in the shape `gh api -H "Accept: application/vnd.github.v3.diff"
+repos/<o>/<n>/pulls/<N>` prints (no HTTP headers: the diff is stdout as is). Not recorded from
+GitHub; `tests/pr_diff_split.rs` reads them. `pr_diff_large.txt` holds one file of 5 001 added
+lines beside a small one.
+
+| File | What it holds |
+|---|---|
+| `pr_diff_rename.txt` | one rename with an edit |
+| `pr_diff_add.txt` / `pr_diff_delete.txt` | a new file; a deleted file |
+| `pr_diff_binary.txt` | a new binary file |
+| `pr_diff_quoted.txt` | a path with a non-ASCII letter and quotes, C-quoted |
+| `pr_diff_large.txt` | a file above `limits::MAX_CHANGED_LINES` and a small one |
+| `pr_diff_empty.txt` | nothing (a PR with no change) |

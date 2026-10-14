@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #775
 - **Worktree branch**: feat/775_diff-view-should-show-prs-created-within-sessions
 - **Started**: 2026-10-12
-- **Phase**: milestone M1
+- **Phase**: milestone M2
 - **Next step**: M1 PR merge, then milestone M2 (T015 visual pass to run once a display build is available)
 
 ## Pull requests
@@ -17,14 +17,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #782 | Design PR (spec, plan, tasks) | merged | 0de0b3ce005d2cb69c99300e52e5cb6ed3da25fa |
-| #825 | M1: PR list in the Changes pane | open | — |
+| #825 | M1: PR list in the Changes pane | merged | 057d71e68f57170dda7af54bdc254cab626d7d47 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T015 | full | PRs of the entry's branch listed in the Changes pane | #825 | in review (T015 visual pass not run) |
-| M2 | T016–T026, T023b | full | Select a PR, read its base...head diff, return | — | pending |
+| M1 | T001–T015 | full | PRs of the entry's branch listed in the Changes pane | #825 | merged (T015 visual pass moved to M2) |
+| M2 | T016–T026, T023b (+T015 visual pass) | full | Select a PR, read its base...head diff, return | — | in progress (handover) |
 | M3 | T027–T033 | full | List refreshes on status triggers, stale marked | — | pending |
 
 ## Decisions
@@ -57,7 +57,50 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M2 unit hit the 150k cap with code written but NOT yet compiled or tested (no gate run, no PR, nothing
+pushed; the work is one local WIP commit on the branch). Branch was reset to origin/main (M1 merged).
+
+Done (uncommitted-then-WIP, unverified):
+- Core: `crates/micold-core/src/review/pr_diff.rs` (+ `pub mod pr_diff`), `pull_request.rs`
+  (`PullRequestSource::diff(repo, number, now)`, `DiffReadFailure`, `diff_args`, `diff_failure`,
+  `diff_outcome`, Fake `with_diff_answer/with_diff_failure/diff_calls`), `github.rs` GhCli::diff,
+  `session.rs` `SessionLocation` derives `PartialOrd, Ord` + inline test; fixtures
+  `tests/fixtures/gh/pr_diff_*.txt` + README section; tests `tests/pr_diff_split.rs`,
+  `tests/pull_request_diff.rs` (T016-T020). A `cargo test -p micold-core --test pr_diff_split --test
+  pull_request_diff` was started in background and never read: re-run it.
+- Client reducer `features/changes.rs`: `Source`, `PullRequestView`, `PrDiffLoad`, `State.remembered`,
+  `Msg::{SourceChosen, PullRequestDiffRead, PullRequestOpenRequested}`, `Effect::ReadPullRequestDiff`,
+  `ListBody::PullRequestUnread`, `selected_file`, PR branches in `list_body/base_line/diff_body/
+  can_pick/file_comments`; tests appended to `tests/features_pr_changes.rs` (T021/T022).
+- Shell: `shell/pr_status.rs` (`diff_requested`, `on_diff_remotes`, `may_read_pull_requests`, timeout arm),
+  `shell/daemon_sync.rs` (`PendingOp::PrDiffRemotes`, 4 arms), `shell/changes.rs` (effect wiring,
+  `pull_request_address`, open on GitHub). Guard pins updated in
+  `tests/pr_status_is_read_only_on_named_events.rs` (3 factory lines, `.diff(&repo` only in shell).
+- UI `ui/changes.rs`: "Working tree" row + PR rows as Buttons, too-large/unread line, `Open on GitHub`.
+
+Next steps (in order):
+1. `scripts/build-lock.sh cargo check -p micold-client --tests` and fix compile errors (expect: unused
+   imports, `Spans`/`parse_unified` import paths, `DiffReadFailure` Eq/Clone on `ReadingFailure`,
+   `Button::with_content` arg types in `choice` closure, `PullRequestRow` selected(false) leftover,
+   other `OpenView {..}` / exhaustive `Effect`/`Msg` matches elsewhere, e.g. main.rs / app.rs).
+2. Run core tests, `features_pr_changes`, guard test `pr_status_is_read_only_on_named_events`.
+3. T023: add `pr_diff_read_*` shell tests in `crates/micold-client/src/main_tests.rs` (model on
+   `pr_list_read_*` at ~9714; `BlockingSource` at ~8893 must implement `diff`, which the compiler will
+   demand): `ReadPullRequestDiff` runs `diff` on the source from the factory; failure raises no
+   notice; timeout and disconnect end the read. Also add `BranchPullRequest`-style no-store coverage
+   if needed.
+4. T025 user guide `docs/user-guide/reviewing-changes.md` (selecting a PR, returning, merged-and-deleted
+   heads, large-PR line); tick T016-T026+T023b in tasks.md; tdd/cycle-log.md M2 rows (core tests were
+   written before implementation; reducer tests too, but red run not shown - record honestly).
+5. T015 + T026 visual pass (quickstart §B steps 1,2,3,4,5) via `visual-pass` skill/autopilot-worker; evidence
+   in specs/775-diff-view-session-prs/.
+6. Review A (code-review high) on origin/main...HEAD in shadow of scoped gate, Review B (conformance,
+   sonnet), full `mise run gate` (locked; MICOLD_NO_BUILD_LOCK=1 gives false failures), PR title
+   `feat(775): select a pull request and read its diff (#775)`, body per tasks/pr.md, `Refs #775`.
+7. Known simplification to mention in PR: plan wanted a single factory call; M1 already had two and
+   M2 adds a third line (`diff`), guard updated to 3.
+8. Note: shell `RemotesTimedOut` for the diff read reuses `Msg::RemotesTimedOut` with `PendingOp::
+   PrDiffRemotes`.
 
 ## Open escalation
 

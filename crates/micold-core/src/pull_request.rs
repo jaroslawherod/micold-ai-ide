@@ -851,6 +851,59 @@ pub trait PullRequestSource {
         branch: &str,
         now: u64,
     ) -> Result<Vec<BranchPullRequest>, ReadingFailure>;
+
+    /// The unified diff of pull request `number` as GitHub computes it, base...head, so it also
+    /// exists after the head branch is deleted (feature 775, FR-004). One request, no retry.
+    fn diff(&self, repo: &GithubRepo, number: u64, now: u64) -> Result<String, DiffReadFailure>;
+}
+
+/// Why a pull request's diff was not read (feature 775).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DiffReadFailure {
+    /// GitHub refuses to diff a request above 300 files or 20 000 changed lines (HTTP 406).
+    TooLarge,
+    /// Any other reason.
+    Failed(ReadingFailure),
+}
+
+/// The arguments after `gh` for a pull request's diff: owner, repository and number only.
+pub fn diff_args(repo: &GithubRepo, number: u64) -> Vec<String> {
+    [
+        "api",
+        "--hostname",
+        "github.com",
+        "-H",
+        "Accept: application/vnd.github.v3.diff",
+    ]
+    .into_iter()
+    .map(str::to_string)
+    .chain([format!(
+        "repos/{}/{}/pulls/{number}",
+        repo.owner(),
+        repo.name()
+    )])
+    .collect()
+}
+
+/// Why a diff run failed: HTTP 406 is [`DiffReadFailure::TooLarge`], the rest what
+/// [`reading_failure`] names.
+pub fn diff_failure(outcome: &RunOutcome, now: u64) -> DiffReadFailure {
+    if let RunOutcome::Exited { stderr, .. } = outcome {
+        if stderr.contains("HTTP 406") {
+            return DiffReadFailure::TooLarge;
+        }
+    }
+    DiffReadFailure::Failed(reading_failure(outcome, now))
+}
+
+/// The diff text when `gh` exited 0, else [`diff_failure`].
+pub fn diff_outcome(outcome: &RunOutcome, now: u64) -> Result<String, DiffReadFailure> {
+    match outcome {
+        RunOutcome::Exited {
+            code: 0, stdout, ..
+        } => Ok(String::from_utf8_lossy(stdout).into_owned()),
+        _ => Err(diff_failure(outcome, now)),
+    }
 }
 
 /// Read `branches` in chunks of [`BRANCHES_PER_REQUEST`], one after another (FR-023).
@@ -881,6 +934,8 @@ pub struct FakePullRequestSource {
     calls: std::sync::Mutex<Vec<(String, Vec<String>)>>,
     list_script: std::sync::Mutex<std::collections::VecDeque<ListReading>>,
     list_calls: std::sync::Mutex<Vec<(String, String)>>,
+    diff_script: std::sync::Mutex<std::collections::VecDeque<Result<String, DiffReadFailure>>>,
+    diff_calls: std::sync::Mutex<Vec<(String, u64)>>,
 }
 
 /// One scripted answer of [`FakePullRequestSource::list_branch`].
@@ -914,6 +969,35 @@ impl FakePullRequestSource {
     pub fn with_list_failure(self, failure: ReadingFailure) -> Self {
         self.lock_list_script().push_back(Err(failure));
         self
+    }
+
+    /// Answer the next unanswered `diff` with `text`.
+    pub fn with_diff_answer(self, text: String) -> Self {
+        self.lock_diff_script().push_back(Ok(text));
+        self
+    }
+
+    /// Answer the next unanswered `diff` with `failure`.
+    pub fn with_diff_failure(self, failure: DiffReadFailure) -> Self {
+        self.lock_diff_script().push_back(Err(failure));
+        self
+    }
+
+    /// Every `diff` so far, as (`owner/name`, number).
+    pub fn diff_calls(&self) -> Vec<(String, u64)> {
+        self.diff_calls
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
+    }
+
+    fn lock_diff_script(
+        &self,
+    ) -> std::sync::MutexGuard<'_, std::collections::VecDeque<Result<String, DiffReadFailure>>>
+    {
+        self.diff_script
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
     /// Every `list_branch` so far, as (`owner/name`, branch).
@@ -979,5 +1063,16 @@ impl PullRequestSource for FakePullRequestSource {
         self.lock_list_script()
             .pop_front()
             .unwrap_or(Err(ReadingFailure::Passing))
+    }
+
+    /// Nothing scripted answers [`ReadingFailure::Passing`] as a failure.
+    fn diff(&self, repo: &GithubRepo, number: u64, _now: u64) -> Result<String, DiffReadFailure> {
+        self.diff_calls
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push((repo.to_string(), number));
+        self.lock_diff_script()
+            .pop_front()
+            .unwrap_or(Err(DiffReadFailure::Failed(ReadingFailure::Passing)))
     }
 }

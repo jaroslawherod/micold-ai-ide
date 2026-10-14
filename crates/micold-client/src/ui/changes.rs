@@ -19,8 +19,8 @@ use micold_core::tokens::{self, spacing, Rgb, Roles};
 use crate::app::{EditorAction, Message, State};
 use crate::features::changes::{
     base_line, can_pick, committed_available, composer_placed, diff_body, discard_prompt,
-    file_comments, is_pending, list_body, pending_counts, review_of, send_action, tidy_actions,
-    ComposerTarget, DiffBody, ListBody, Msg, OpenView, DEFAULT_ENTRY_NOTE,
+    file_comments, is_pending, list_body, pending_counts, review_of, selected_file, send_action,
+    tidy_actions, ComposerTarget, DiffBody, ListBody, Msg, OpenView, Source, DEFAULT_ENTRY_NOTE,
 };
 use crate::icons::Icon;
 use crate::ui::material::{
@@ -31,6 +31,13 @@ use crate::ui::material::{
 /// The heading of the comments whose lines the diff on screen does not show (C3).
 pub const NOT_IN_DIFF: &str = "Not in the current diff";
 /// Above a new comment whose lines a refresh removed (C4).
+/// A pull request GitHub will not diff (above 300 files or 20 000 changed lines): not an error, so
+/// not a notice (FR-008).
+pub const PR_TOO_LARGE: &str = "This pull request is too large to show here";
+/// A pull request whose diff could not be read; pressing its row again retries.
+pub const PR_UNREAD: &str = "The pull request's diff could not be read; select it again to retry";
+/// The row that returns the view to the entry's own changes (FR-005).
+pub const WORKING_TREE: &str = "Working tree";
 pub const UNPLACED: &str = "The lines this comment was on are gone. Pick lines to place it.";
 
 /// One file row's height: fixed, which is what lets `VirtualRows` build only the visible rows.
@@ -118,11 +125,15 @@ fn list_pane<'a>(state: &'a State, view: &'a OpenView, r: Roles) -> Element<'a, 
             .active(view.toggles.uncommitted),
     ]
     .spacing(spacing::SM);
-    let mut pane = column![toggles].spacing(spacing::MD).height(Length::Fill);
+    // The toggles shape the entry's own list, which a shown pull request replaces.
+    let mut pane = column![].spacing(spacing::MD).height(Length::Fill);
+    if view.source == Source::Changes {
+        pane = pane.push(toggles);
+    }
     if let Some(section) = pull_request_section(view, r) {
         pane = pane.push(section);
     }
-    if !available {
+    if !available && view.source == Source::Changes {
         pane = pane.push(Text::new(DEFAULT_ENTRY_NOTE, TypeRole::Caption, r).muted());
     }
 
@@ -132,8 +143,24 @@ fn list_pane<'a>(state: &'a State, view: &'a OpenView, r: Roles) -> Element<'a, 
             .into(),
         ListBody::Failed(message) => Text::new(message, TypeRole::Body, r).tint(r.error).into(),
         ListBody::Empty(sentence) => Text::new(sentence, TypeRole::Body, r).muted().into(),
+        ListBody::PullRequestUnread { too_large } => {
+            let mut lines = column![Text::new(
+                if too_large { PR_TOO_LARGE } else { PR_UNREAD },
+                TypeRole::Body,
+                r
+            )
+            .muted()]
+            .spacing(spacing::SM);
+            if let (true, Source::PullRequest(pr)) = (too_large, &view.source) {
+                lines = lines.push(
+                    Button::outlined("Open on GitHub", r)
+                        .on_press(Message::Changes(Msg::PullRequestOpenRequested(pr.number))),
+                );
+            }
+            lines.into()
+        }
         ListBody::Files(files) => {
-            let selected = view.selected.as_ref();
+            let selected = selected_file(view);
             let counts = pending_counts(&state.changes);
             VirtualRows::new(
                 files.len(),
@@ -161,15 +188,45 @@ fn pull_request_section<'a>(view: &'a OpenView, r: Roles) -> Option<Element<'a, 
     if prs.is_empty() {
         return None;
     }
-    let mut section =
-        column![Text::new("Pull requests", TypeRole::Section, r)].spacing(spacing::XS);
+    let shown = match &view.source {
+        Source::Changes => None,
+        Source::PullRequest(pr) => Some(pr.number),
+    };
+    let choice = |content: Element<'a, Message>, chosen: bool, msg: Msg| {
+        Button::with_content(
+            content,
+            if chosen {
+                ButtonVariant::Outlined
+            } else {
+                ButtonVariant::Text
+            },
+            r,
+        )
+        .width(Length::Fill)
+        .on_press(Message::Changes(msg))
+    };
+    let mut section = column![
+        Text::new("Pull requests", TypeRole::Section, r),
+        choice(
+            Text::new(WORKING_TREE, TypeRole::Body, r).into(),
+            shown.is_none(),
+            Msg::SourceChosen(None),
+        ),
+    ]
+    .spacing(spacing::XS);
     for pr in prs {
-        section = section.push(Element::from(PullRequestRow::<Message>::new(
+        let row = PullRequestRow::<Message>::new(
             pr.number,
             pr.title.as_str(),
             crate::features::changes::pr_mark(pr.state),
             &r,
-        )));
+        )
+        .selected(false);
+        section = section.push(choice(
+            Element::from(row),
+            shown == Some(pr.number),
+            Msg::SourceChosen(Some(pr.number)),
+        ));
     }
     Some(section.into())
 }

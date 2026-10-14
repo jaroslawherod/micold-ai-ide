@@ -272,7 +272,7 @@ pub struct ShellInstance {
 /// (Constitution Principle V) so a session can never be ambiguously "maybe a worktree, maybe
 /// not" — every session maps to exactly one of these two sanctioned locations (constitution
 /// v1.3.0, Principle III).
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum SessionLocation {
     /// Hosted by a worktree, identified by its `dir_name` (identity, unchanged from before
     /// feature 010).
@@ -628,5 +628,22 @@ impl Session {
     pub fn archive(&mut self) {
         self.lifecycle = SessionLifecycle::Idle;
         self.archived = true;
+    }
+}
+
+#[cfg(test)]
+mod location_order_tests {
+    use super::SessionLocation;
+
+    /// A location is the key of the Changes view's per-entry memory (feature 775): a total order.
+    #[test]
+    fn locations_are_totally_ordered_and_usable_as_a_map_key() {
+        let mut map = std::collections::BTreeMap::new();
+        map.insert(SessionLocation::Default, 1);
+        map.insert(SessionLocation::Worktree("b".into()), 2);
+        map.insert(SessionLocation::Worktree("a".into()), 3);
+        assert_eq!(map.len(), 3);
+        assert!(SessionLocation::Worktree("a".into()) < SessionLocation::Worktree("b".into()));
+        assert_eq!(map[&SessionLocation::Worktree("a".into())], 3);
     }
 }

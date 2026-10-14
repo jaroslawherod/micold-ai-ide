@@ -7,6 +7,7 @@ pub mod changes;
 pub mod comment;
 pub mod diff;
 pub mod git;
+pub mod pr_diff;
 pub mod prompt;
 pub mod store;
 pub mod target;

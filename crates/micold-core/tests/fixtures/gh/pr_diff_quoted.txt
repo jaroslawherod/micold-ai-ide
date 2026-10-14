@@ -1,0 +1,7 @@
+diff --git "a/sp\303\244ce \"q\".txt" "b/sp\303\244ce \"q\".txt"
+index 6666666..7777777 100644
+--- "a/sp\303\244ce \"q\".txt"
++++ "b/sp\303\244ce \"q\".txt"
+@@ -1 +1 @@
+-old
++new
