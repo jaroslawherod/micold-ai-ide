@@ -54,6 +54,7 @@ pub use picker_scroll::{into_view as picker_into_view, picker_highlight_into_vie
 pub use sandbox_status::{attempt_line, stage_line, view as sandbox_indicator, StageLine};
 pub(crate) mod project_selector;
 pub(crate) mod rename;
+pub(crate) mod rename_dialog;
 mod sandbox_status;
 /// The Settings sections — one module per page of the full-surface view (feature 027, FR-026).
 pub(crate) mod settings;

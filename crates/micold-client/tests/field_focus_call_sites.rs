@@ -167,8 +167,7 @@ fn the_sweep_reaches_the_application_dialogs() {
         .collect();
 
     for expected in [
-        "ui/rename.rs",
-        "ui/worktree_rename.rs",
+        "ui/rename_dialog.rs",
         "ui/worktree_form.rs",
         "ui/settings/terminal.rs",
         "ui/settings/environment.rs",

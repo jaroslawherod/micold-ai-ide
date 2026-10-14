@@ -6,62 +6,34 @@ use crate::app::{Message, State};
 use crate::features::window::FieldId;
 use crate::features::worktree::Msg as WorktreeMsg;
 use crate::features::worktree::WorktreeRenameDraft;
-use crate::ui::focus::TrackFocus;
-use crate::ui::material::{self, Button, SurfaceKind, Text, TextField, TypeRole};
-use iced::widget::{column, row};
-use iced::{Element, Length};
+use crate::ui::rename_dialog::{self, RenameSpec};
+use iced::Element;
 use micold_core::env_include::EnvIncludeOutcome;
-use micold_core::project::RenameError;
 use micold_core::theme::ColorScheme;
-use micold_core::tokens::{self};
 
-/// The worktree-rename dialog as the dialog body; `ui::view` wraps it in the shared
+/// The rename dialog as the dialog body; `ui::view` wraps it in the shared
 /// [`Modal`](crate::ui::material::Modal) transition.
 pub fn modal<'a>(
     draft: &'a WorktreeRenameDraft,
     scheme: ColorScheme,
     focused: Option<FieldId>,
 ) -> Element<'a, Message> {
-    let r = tokens::roles(scheme);
-
-    let input = TextField::new("", &draft.text, r)
-        .label("Worktree name")
-        .track_focus(FieldId::RenameWorktreeName, focused)
-        .on_input(|text| Message::Worktree(WorktreeMsg::RenameTextChanged(text)))
-        .on_submit(Message::Worktree(WorktreeMsg::RenameConfirmed));
-
-    let mut fields = material::dialog::fields(column![
-        Text::new("Rename worktree", TypeRole::Headline, r),
-        Text::new(
-            "Changes only the name shown in the sidebar — not the branch or folder.",
-            TypeRole::Caption,
-            r
-        )
-        .muted(),
-        input,
-    ]);
-
-    if let Some(error) = draft.error {
-        let message = match error {
-            RenameError::Empty => "Name cannot be empty.",
-            RenameError::Whitespace => "Name cannot be only whitespace.",
-        };
-        fields = fields.push(Text::new(message, TypeRole::Caption, r).tint(r.error));
-    }
-
-    let actions = material::dialog::actions(row![
-        Button::filled("Rename", r).on_press(Message::Worktree(WorktreeMsg::RenameConfirmed)),
-        Button::outlined("Cancel", r).on_press(Message::Worktree(WorktreeMsg::RenameCancelled)),
-    ]);
-
-    let dialog = material::Surface::new(
-        material::dialog::body(fields, actions),
-        SurfaceKind::Dialog,
-        r,
+    rename_dialog::view(
+        RenameSpec {
+            title: "Rename worktree",
+            caption: "Changes only the name shown in the sidebar — not the branch or folder."
+                .to_owned(),
+            label: "Worktree name",
+            field: FieldId::RenameWorktreeName,
+            text: &draft.text,
+            error: draft.error,
+            on_input: |t| Message::Worktree(WorktreeMsg::RenameTextChanged(t)),
+            on_confirm: Message::Worktree(WorktreeMsg::RenameConfirmed),
+            on_cancel: Message::Worktree(WorktreeMsg::RenameCancelled),
+        },
+        scheme,
+        focused,
     )
-    .width(Length::Fixed(420.0));
-
-    dialog.into()
 }
 
 /// This dialog's body, built from the state that opened it — `None` when the surface is open but
