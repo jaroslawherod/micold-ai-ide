@@ -906,6 +906,11 @@ where
                 state.begin_start(session);
                 spawn_session_start(state, session, LaunchMode::Resume, None);
             }
+            ClientMsg::SessionSetMain { id } => {
+                // Fire-and-forget (FR-021): the catalog update is the answer. A no-op for an
+                // unknown, archived or already-main id.
+                state.set_main(id);
+            }
             ClientMsg::SessionRestart { session, .. } => {
                 // The user's manual restart of the AI CLI (011 FR-007(b), BUG-442): exactly the
                 // start above, after dropping the session's directory from the environment-include

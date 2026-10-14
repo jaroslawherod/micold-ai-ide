@@ -338,7 +338,7 @@ change. One boolean per record is the smallest durable form.
    "main session" (contracts/mcp-tools.md).
 3. `Catalog::create_session(.., Additional)` (M1/M2) sets `main` as above; its signature is
    unchanged.
-4. `Session` gains `main`; `PROTOCOL_VERSION` 42 to 43 with `SCHEMA_HASH` (the catalog snapshot
+4. `Session` gains `main`; `PROTOCOL_VERSION` 43 to 44 with `SCHEMA_HASH` (the catalog snapshot
    shape changes) and `ClientMsg::SessionSetMain`.
 5. The start block (M7, not yet built) is unchanged: it names the live session, main or helper.
 6. The client's `last_viewed` per location (planned in M4's T044) is dropped.

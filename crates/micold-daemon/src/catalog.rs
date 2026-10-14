@@ -615,13 +615,17 @@ impl Catalog {
         }
         // The client already resolved default-or-override and put the answer on the wire (T030),
         // so nothing here re-decides it.
-        let session = Session::start_new(location, provider);
+        let mut session = Session::start_new(location, provider);
         let id = session.id;
-        self.workspace
+        let list = self
+            .workspace
             .sessions
             .entry(project.to_path_buf())
-            .or_default()
-            .push(session);
+            .or_default();
+        // The session that finds its location free is its main (FR-020); one beside another is a
+        // helper.
+        claim_main_if_free(list, &mut session);
+        list.push(session);
         self.persist()?;
         Ok(id)
     }
@@ -770,11 +774,13 @@ impl Catalog {
                 AttachOutcome::AlreadyAttached
             });
         }
+        let mut session = session;
         let list = self
             .workspace
             .sessions
             .entry(project.to_path_buf())
             .or_default();
+        claim_main_if_free(list, &mut session);
         list.push(session);
         if let Err(e) = self.persist() {
             if let Some(list) = self.workspace.sessions.get_mut(project) {
@@ -1129,6 +1135,7 @@ impl Catalog {
             for session in list.iter_mut() {
                 if !session.archived && session.location.is_worktree(dir_name) {
                     session.archive();
+                    session.main = false;
                     mark_archived_durable(project, session);
                     archived.push(session.id);
                 }
@@ -1234,10 +1241,63 @@ impl Catalog {
             mark_archived_durable(&path, s);
             path
         });
-        if owner.is_some() {
+        if let Some(path) = &owner {
+            self.promote_after_archive(path, &[session]);
             self.persist()?;
         }
         Ok(owner)
+    }
+
+    /// Archiving a main session passes the role to the first remaining un-archived session of its
+    /// location in list order, in the same write (FR-022); a helper's archive changes nothing
+    /// else. The archived record keeps no marker.
+    fn promote_after_archive(&mut self, project: &Path, archived: &[SessionId]) {
+        let Some(list) = self.workspace.sessions.get_mut(project) else {
+            return;
+        };
+        let lost: Vec<SessionLocation> = list
+            .iter_mut()
+            .filter(|s| archived.contains(&s.id) && s.main)
+            .map(|s| {
+                s.main = false;
+                s.location.clone()
+            })
+            .collect();
+        for location in lost {
+            if list
+                .iter()
+                .any(|s| !s.archived && s.location == location && s.main)
+            {
+                continue;
+            }
+            if let Some(next) = list
+                .iter_mut()
+                .find(|s| !s.archived && s.location == location)
+            {
+                next.main = true;
+            }
+        }
+    }
+
+    /// Make `id` the main session of its location, clearing the marker on the location's other
+    /// sessions, in one persisted write (FR-021). A no-op (nothing written) for an unknown,
+    /// archived or already-main id. Returns whether the catalog changed.
+    pub fn set_main(&mut self, id: SessionId) -> io::Result<bool> {
+        let (project, location) = match self.workspace.find_session(id) {
+            Some((project, s)) if !s.archived => (project.to_path_buf(), s.location.clone()),
+            _ => return Ok(false),
+        };
+        let list = self.workspace.sessions.entry(project).or_default();
+        // Already main: nothing to write. A catalog without the marker derives its main as the
+        // first un-archived session; choosing that one stores the marker, so it is a write.
+        if target_marked(list, id) {
+            return Ok(false);
+        }
+        for s in list.iter_mut().filter(|s| s.location == location) {
+            s.main = s.id == id;
+        }
+        self.persist()?;
+        Ok(true)
     }
 
     /// The worktree directory `session` runs in, or `None` for an unknown session or one that runs
@@ -1299,14 +1359,19 @@ impl Catalog {
     /// tombstone stays, so reconciliation can't bring a pruned session back.
     pub fn archive_session_ids(&mut self, ids: &[SessionId]) -> io::Result<Vec<SessionId>> {
         let mut archived = Vec::new();
+        let mut touched: Vec<PathBuf> = Vec::new();
         for &id in ids {
             if let Some((project, session)) = self.workspace.find_session_mut(id) {
                 if !session.archived {
                     session.archive();
                     mark_archived_durable(&project, session);
                     archived.push(id);
+                    touched.push(project);
                 }
             }
+        }
+        for project in touched {
+            self.promote_after_archive(&project, &archived);
         }
         if !archived.is_empty() {
             self.persist()?;
@@ -1523,11 +1588,15 @@ impl Catalog {
             return 0;
         }
         let adopted = fresh.len();
-        self.workspace
+        let list = self
+            .workspace
             .sessions
             .entry(project.to_path_buf())
-            .or_default()
-            .extend(fresh);
+            .or_default();
+        for mut session in fresh {
+            claim_main_if_free(list, &mut session);
+            list.push(session);
+        }
         if let Err(err) = self.persist() {
             // Best-effort, like every other write in this file: the sessions are in memory and the
             // client will see them; the next pass re-derives them from the provider's store.
@@ -1625,6 +1694,20 @@ impl PendingWrite {
     }
 }
 
+/// Whether `id`'s record carries the stored marker (a derived main of an older catalog does not).
+fn target_marked(list: &[Session], id: SessionId) -> bool {
+    list.iter().any(|s| s.id == id && s.main)
+}
+
+/// Mark `session` main when no un-archived session of its location is listed yet (FR-020): the
+/// first session of a location, by creation, attach or adoption, is its main.
+fn claim_main_if_free(list: &[Session], session: &mut Session) {
+    session.main = !session.archived
+        && !list
+            .iter()
+            .any(|s| !s.archived && s.location == session.location);
+}
+
 /// Map a persisted [`Session`] to its wire [`SessionSummary`]. Activity is never persisted, so it is
 /// always `Unknown` on load (data-model A4); `input_serial` is likewise runtime-only and defaults to
 /// `0` here (FR-028a, BUG-006).
@@ -1653,6 +1736,7 @@ fn session_summary(session: &Session) -> SessionSummary {
         attention_seq: session.attention_seq,
         unread: session.unread,
         agents: session.agents.clone(),
+        main: session.main,
     }
 }
 

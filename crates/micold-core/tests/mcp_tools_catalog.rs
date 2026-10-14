@@ -929,7 +929,11 @@ fn create_worktree_schema_offers_the_session_definition() {
         .collect();
     assert_eq!(offered, names);
     assert_eq!(props["prompt"]["type"], "string");
-    assert_eq!(tool["inputSchema"]["required"], json!([]), "neither is required");
+    assert_eq!(
+        tool["inputSchema"]["required"],
+        json!([]),
+        "neither is required"
+    );
 }
 
 #[test]
@@ -972,5 +976,8 @@ fn create_worktree_parses_the_definition_with_either_form() {
 
 #[test]
 fn create_worktree_refuses_an_unknown_ai_cli() {
-    invalid("create_worktree", json!({"branch": "feat-x", "ai_cli": "emacs"}));
+    invalid(
+        "create_worktree",
+        json!({"branch": "feat-x", "ai_cli": "emacs"}),
+    );
 }

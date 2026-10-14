@@ -438,6 +438,7 @@ fn sample_summary() -> SessionSummary {
             state: micold_core::agent_run::AgentRunState::Running,
             provider: AiCli::ClaudeCode,
         }],
+        main: false,
     }
 }
 
@@ -897,6 +898,8 @@ fn a_merged_branch_check_and_its_answers_round_trip_in_order() {
 /// behaviour; the version moved with the hash.
 #[test]
 fn frames_without_the_feature_776_fields_decode_with_the_defaults() {
+    assert_eq!(PROTOCOL_VERSION, 44);
+
     let create: ClientMsg = serde_json::from_str(
         r#"{"WorktreeCreate":{"req":1,"project":"/a","branch":"b","dir_name":"d","mode":"NewBranch"}}"#,
     )
@@ -1820,5 +1823,39 @@ fn a_session_summary_carries_its_agent_runs_and_defaults_to_none() {
     value.as_object_mut().unwrap().remove("agents");
     let older: SessionSummary = serde_json::from_value(value).unwrap();
     assert!(older.agents.is_empty());
-    assert_eq!(PROTOCOL_VERSION, 43);
+    assert_eq!(PROTOCOL_VERSION, 44);
+}
+
+/// Feature 776, amendment 2026-10-14 (v44): the main marker rides the catalog snapshot, an older
+/// record without it decodes `false`, and `SessionSetMain` round-trips.
+#[test]
+fn the_main_marker_and_set_main_round_trip() {
+    use micold_core::protocol::messages::{ActivitySignal, SessionSummary, WireLifecycle};
+    use micold_core::session::{AiCli, SessionLabel};
+
+    let summary = SessionSummary {
+        id: SessionId::new(),
+        worktree_dir: Some("a".into()),
+        title: SessionLabel::Pending,
+        lifecycle: WireLifecycle::Idle,
+        activity: ActivitySignal::Unknown,
+        provider: AiCli::ClaudeCode,
+        input_serial: 0,
+        live_shells: Vec::new(),
+        attention_seq: 0,
+        unread: false,
+        main: true,
+    };
+    let json = serde_json::to_value(&summary).expect("encode");
+    assert_eq!(json["main"], true);
+    let back: SessionSummary = serde_json::from_value(json.clone()).expect("decode");
+    assert!(back.main);
+    let mut older = json;
+    older.as_object_mut().expect("object").remove("main");
+    let older: SessionSummary = serde_json::from_value(older).expect("decode without main");
+    assert!(!older.main);
+
+    postcard_roundtrip(&ClientMsg::SessionSetMain {
+        id: SessionId::new(),
+    });
 }

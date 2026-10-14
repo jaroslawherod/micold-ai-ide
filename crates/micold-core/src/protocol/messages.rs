@@ -334,6 +334,13 @@ pub enum ClientMsg {
         #[serde(default)]
         allow_additional_session: bool,
     },
+    /// Make `id` the main session of its location (feature 776, FR-021): the daemon sets `main` on
+    /// it and clears it on the location's other sessions in one persisted write. Fire-and-forget:
+    /// the catalog update is the answer. A no-op for an unknown, archived or already-main id.
+    SessionSetMain {
+        /// The session to make main.
+        id: SessionId,
+    },
     /// Graceful stop → `Idle`, no restart.
     SessionStop {
         /// Target session.
@@ -1283,6 +1290,12 @@ pub struct SessionSummary {
     /// for a frame from before protocol 43.
     #[serde(default)]
     pub agents: Vec<AgentRunSummary>,
+    /// Whether this is its location's main session (feature 776, FR-020): the stored marker,
+    /// which a catalog written before the feature does not carry. A reader that finds none
+    /// derives the main as the first un-archived session of the location
+    /// (`occupancy::main_session`). Absent on an older frame means `false`.
+    #[serde(default)]
+    pub main: bool,
 }
 
 /// One agent run on a [`SessionSummary`] — the stored form, unchanged (feature 552).
@@ -1841,6 +1854,7 @@ mod attention_wire_tests {
             attention_seq: COUNTED,
             unread: false,
             agents: Vec::new(),
+            main: false,
         };
 
         assert_eq!(
@@ -1866,6 +1880,7 @@ mod attention_wire_tests {
             // back as it.
             unread: true,
             agents: Vec::new(),
+            main: false,
         };
 
         assert!(

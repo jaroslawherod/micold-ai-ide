@@ -268,7 +268,10 @@ fn the_build_fingerprint_is_a_separate_mechanism_from_the_schema_hash() {
 /// And 41 → 42 for feature 776's soft limit: `allow_additional_session` on `SessionCreate`,
 /// `SessionStart`, `SessionRestart` and `AttachItem::Session`.
 /// And 42 → 43 for feature 552's `SessionSummary.agents` (native agent-session signals).
-const FEATURE_026_PROTOCOL_VERSION: u32 = 43;
+///
+/// And 43 → 44 for feature 776's main session: `SessionSummary.main` and
+/// `ClientMsg::SessionSetMain`.
+const FEATURE_026_PROTOCOL_VERSION: u32 = 44;
 
 #[test]
 fn the_wire_changes_for_this_feature_cost_exactly_one_version_bump() {

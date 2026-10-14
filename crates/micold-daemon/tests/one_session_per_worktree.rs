@@ -18,7 +18,7 @@ use micold_core::session::{
     AiCli, Session, SessionId, SessionLabel, SessionLocation, TerminalMode,
 };
 use micold_core::settings::JsonFileSettingsStore;
-use micold_core::store::FakeProjectStore;
+use micold_core::store::{FakeProjectStore, JsonFileStore, ProjectStore};
 use micold_core::workspace::Workspace;
 use micold_daemon::catalog::Catalog;
 use micold_daemon::state::DaemonState;
@@ -144,7 +144,7 @@ async fn refused_in_worktree_with(running: bool) {
         } => {
             assert_eq!(kind, ErrorKind::Refused);
             assert!(
-                message.contains("already has a session"),
+                message.contains("already has a main session"),
                 "names the occupant: {message}"
             );
             assert_eq!(
@@ -401,6 +401,7 @@ async fn soft_limit_concurrent_flagged_creates_each_make_a_session() {
     }
     assert_eq!(count(&state, project.path()), 5);
     kill_all(&state, project.path());
+}
 
 // --- US2: `WorktreeCreate` with a definition (FR-006) ---------------------------------------------
 
@@ -479,7 +480,12 @@ async fn worktree_create_with_a_definition_creates_the_session_with_it() {
     let mut client = connect(&state).await;
 
     client
-        .send(Frame::Control(worktree_create(1, project.path(), "plain", None)))
+        .send(Frame::Control(worktree_create(
+            1,
+            project.path(),
+            "plain",
+            None,
+        )))
         .await
         .unwrap();
     match answer(&mut client, 1).await {
@@ -554,4 +560,292 @@ async fn worktree_create_with_a_missing_cli_creates_nothing() {
     );
     assert_eq!(count(&state, project.path()), 0, "no session");
     assert_eq!(worktree_dirs(project.path()), before, "no worktree");
+}
+
+// --- US7: the main session (FR-020 to FR-022, SC-008) ---------------------------------------------
+
+/// The `main` marker of each of `project`'s sessions, in list order, with their ids.
+fn mains(state: &DaemonState, project: &Path) -> Vec<(SessionId, bool)> {
+    state
+        .sessions_for(project)
+        .into_iter()
+        .map(|s| (s.id, s.main))
+        .collect()
+}
+
+/// Wait until `ready` holds: `SessionSetMain` and the catalog update that answers it are
+/// asynchronous.
+async fn until(state: &DaemonState, project: &Path, ready: impl Fn(&[(SessionId, bool)]) -> bool) {
+    tokio::time::timeout(BOUND, async {
+        while !ready(&mains(state, project)) {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("the catalog reaches the expected state");
+}
+
+async fn send(client: &mut Client, msg: ClientMsg) {
+    client.send(Frame::Control(msg)).await.unwrap();
+}
+
+/// Create a session in `wt` and return its id.
+async fn create_in_wt(
+    state: &DaemonState,
+    client: &mut Client,
+    project: &Path,
+    req: u64,
+    flag: bool,
+) -> SessionId {
+    let before: Vec<SessionId> = mains(state, project).into_iter().map(|(i, _)| i).collect();
+    send(client, create_with(req, project, "wt", flag)).await;
+    assert!(matches!(
+        answer(client, req).await,
+        DaemonMsg::OperationOk { .. }
+    ));
+    mains(state, project)
+        .into_iter()
+        .map(|(i, _)| i)
+        .find(|i| !before.contains(i))
+        .expect("a session was added")
+}
+
+async fn delete(client: &mut Client, req: u64, session: SessionId) {
+    send(client, ClientMsg::SessionDelete { req, session }).await;
+    assert!(matches!(
+        answer(client, req).await,
+        DaemonMsg::OperationOk { .. }
+    ));
+}
+
+fn named(id: SessionId, name: &str, main: bool) -> Session {
+    let mut s = shell(id, Some("wt"));
+    s.label = SessionLabel::Named(name.into());
+    s.main = main;
+    s
+}
+
+#[tokio::test]
+async fn main_session_the_session_created_on_a_free_worktree_is_main() {
+    for flag in [false, true] {
+        let project = tempfile::tempdir().unwrap();
+        let store = tempfile::tempdir().unwrap();
+        init_repo(project.path());
+        add_worktree(project.path(), "wt");
+        let state = state_with(project.path(), store.path(), vec![], &[]);
+        let mut client = connect(&state).await;
+        let id = create_in_wt(&state, &mut client, project.path(), 1, flag).await;
+        assert_eq!(
+            mains(&state, project.path()),
+            vec![(id, true)],
+            "flag {flag}"
+        );
+        kill_all(&state, project.path());
+    }
+}
+
+#[tokio::test]
+async fn main_session_a_flagged_create_on_an_occupied_worktree_is_a_helper() {
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    init_repo(project.path());
+    add_worktree(project.path(), "wt");
+    let state = state_with(project.path(), store.path(), vec![], &[]);
+    let mut client = connect(&state).await;
+    let first = create_in_wt(&state, &mut client, project.path(), 1, false).await;
+    let second = create_in_wt(&state, &mut client, project.path(), 2, true).await;
+    assert_eq!(
+        mains(&state, project.path()),
+        vec![(first, true), (second, false)]
+    );
+    kill_all(&state, project.path());
+}
+
+#[tokio::test]
+async fn main_session_set_main_moves_the_role_in_one_write_and_noops_otherwise() {
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    init_repo(project.path());
+    add_worktree(project.path(), "wt");
+    let state = state_with(
+        project.path(),
+        store.path(),
+        vec![
+            named(sid(1), "one", true),
+            named(sid(2), "two", false),
+            named(sid(3), "three", false),
+        ],
+        &[],
+    );
+    let mut client = connect(&state).await;
+    send(&mut client, ClientMsg::SessionSetMain { id: sid(2) }).await;
+    until(&state, project.path(), |m| {
+        m == [(sid(1), false), (sid(2), true), (sid(3), false)]
+    })
+    .await;
+    // Already main, unknown and archived ids change nothing.
+    let settled = mains(&state, project.path());
+    send(&mut client, ClientMsg::SessionSetMain { id: sid(2) }).await;
+    send(&mut client, ClientMsg::SessionSetMain { id: sid(99) }).await;
+    delete(&mut client, 5, sid(3)).await;
+    send(&mut client, ClientMsg::SessionSetMain { id: sid(3) }).await;
+    // A round trip after the fire-and-forget messages orders them before the check.
+    send(
+        &mut client,
+        ClientMsg::SessionDelete {
+            req: 6,
+            session: sid(99),
+        },
+    )
+    .await;
+    assert!(matches!(
+        answer(&mut client, 6).await,
+        DaemonMsg::OperationError { .. }
+    ));
+    assert_eq!(mains(&state, project.path()).len(), 2);
+    assert_eq!(
+        mains(&state, project.path()),
+        settled
+            .into_iter()
+            .filter(|(i, _)| *i != sid(3))
+            .collect::<Vec<_>>()
+    );
+}
+
+#[tokio::test]
+async fn main_session_set_main_survives_a_daemon_restart() {
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    init_repo(project.path());
+    add_worktree(project.path(), "wt");
+    let file = store.path().join("projects.json");
+    let mut map = BTreeMap::new();
+    map.insert(
+        project.path().to_path_buf(),
+        vec![named(sid(1), "one", true), named(sid(2), "two", false)],
+    );
+    let workspace = Workspace {
+        projects: vec![Project::new(
+            project.path().to_path_buf(),
+            true,
+            Availability::Available,
+        )],
+        active: Some(project.path().to_path_buf()),
+        sessions: map,
+        ..Default::default()
+    };
+    JsonFileStore::at(file.clone()).save(&workspace).unwrap();
+    let load = || {
+        let catalog = Catalog::load(
+            Box::new(JsonFileStore::at(file.clone())),
+            Box::new(JsonFileSettingsStore::at(
+                store.path().join("settings.json"),
+            )),
+        );
+        Arc::new(DaemonState::new(catalog))
+    };
+    let state = load();
+    let mut client = connect(&state).await;
+    send(&mut client, ClientMsg::SessionSetMain { id: sid(2) }).await;
+    until(&state, project.path(), |m| {
+        m == [(sid(1), false), (sid(2), true)]
+    })
+    .await;
+    drop(client);
+    drop(state);
+    let restarted = load();
+    assert_eq!(
+        mains(&restarted, project.path()),
+        vec![(sid(1), false), (sid(2), true)]
+    );
+}
+
+#[tokio::test]
+async fn main_session_archiving_the_main_promotes_the_first_remaining() {
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    init_repo(project.path());
+    add_worktree(project.path(), "wt");
+    let state = state_with(
+        project.path(),
+        store.path(),
+        vec![
+            named(sid(1), "one", false),
+            named(sid(2), "two", true),
+            named(sid(3), "three", false),
+        ],
+        &[],
+    );
+    let mut client = connect(&state).await;
+    // A helper's delete changes nothing else.
+    delete(&mut client, 1, sid(3)).await;
+    assert_eq!(
+        mains(&state, project.path()),
+        vec![(sid(1), false), (sid(2), true)]
+    );
+    // The main's delete promotes the first remaining, in the same write.
+    delete(&mut client, 2, sid(2)).await;
+    assert_eq!(mains(&state, project.path()), vec![(sid(1), true)]);
+    // The only session's delete frees the location; the next create is its main.
+    delete(&mut client, 3, sid(1)).await;
+    assert!(mains(&state, project.path()).is_empty());
+    let id = create_in_wt(&state, &mut client, project.path(), 4, false).await;
+    assert_eq!(mains(&state, project.path()), vec![(id, true)]);
+    kill_all(&state, project.path());
+}
+
+#[tokio::test]
+async fn main_session_a_catalog_without_the_marker_derives_its_main_and_rewrites_nothing() {
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    init_repo(project.path());
+    add_worktree(project.path(), "wt");
+    let mut gone = named(sid(1), "archived", false);
+    gone.archived = true;
+    let state = state_with(
+        project.path(),
+        store.path(),
+        vec![
+            gone,
+            named(sid(2), "first", false),
+            named(sid(3), "second", false),
+        ],
+        &[],
+    );
+    // No record gained the marker on load.
+    assert_eq!(
+        mains(&state, project.path()),
+        vec![(sid(2), false), (sid(3), false)]
+    );
+    // The refusal names the derived main, the first un-archived session.
+    let mut client = connect(&state).await;
+    send(&mut client, create_with(1, project.path(), "wt", false)).await;
+    match answer(&mut client, 1).await {
+        DaemonMsg::OperationError { message, .. } => {
+            assert!(message.contains("main session: \"first\""), "{message}");
+        }
+        other => panic!("expected a refusal: {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn main_session_the_refusal_names_the_marked_main_not_the_first() {
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    init_repo(project.path());
+    add_worktree(project.path(), "wt");
+    let state = state_with(
+        project.path(),
+        store.path(),
+        vec![named(sid(1), "helper", false), named(sid(2), "chief", true)],
+        &[],
+    );
+    let mut client = connect(&state).await;
+    send(&mut client, create_with(1, project.path(), "wt", false)).await;
+    match answer(&mut client, 1).await {
+        DaemonMsg::OperationError { message, .. } => {
+            assert!(message.contains("main session: \"chief\""), "{message}");
+        }
+        other => panic!("expected a refusal: {other:?}"),
+    }
 }

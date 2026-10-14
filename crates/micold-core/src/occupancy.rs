@@ -64,7 +64,7 @@ impl Additional {
 pub enum Occupancy {
     /// No un-archived session has the location.
     Free,
-    /// An un-archived session has it: the first in list order.
+    /// An un-archived session has it: the main session (research R14).
     Taken(ExistingSession),
 }
 
@@ -82,12 +82,20 @@ pub enum StartBlock {
 
 /// Whether `location` holds an un-archived session among `sessions` (FR-001, FR-010, FR-011).
 pub fn occupancy(sessions: &[Session], location: &SessionLocation) -> Occupancy {
+    main_of(sessions, location).map_or(Occupancy::Free, |s| {
+        Occupancy::Taken(ExistingSession::of(s))
+    })
+}
+
+/// The un-archived session of `location` that is main, else the first un-archived one in list
+/// order (a catalog written before the marker, FR-020).
+fn main_of<'a>(sessions: &'a [Session], location: &SessionLocation) -> Option<&'a Session> {
+    let here = |s: &&Session| !s.archived && &s.location == location;
     sessions
         .iter()
-        .find(|s| !s.archived && &s.location == location)
-        .map_or(Occupancy::Free, |s| {
-            Occupancy::Taken(ExistingSession::of(s))
-        })
+        .filter(here)
+        .find(|s| s.main)
+        .or_else(|| sessions.iter().find(here))
 }
 
 /// Whether starting `id` is blocked by another live session of its location (FR-013).
@@ -115,20 +123,11 @@ pub fn start_block(
         })
 }
 
-/// The session a window selects when the user presses a worktree row (R13): `last_viewed` when it
-/// names an un-archived session of `location`, else the first un-archived session of the location
-/// in list order (the one a refusal names), else `None`. Other locations and archived sessions are
-/// ignored.
-pub fn default_session(
-    sessions: &[Session],
-    location: &SessionLocation,
-    last_viewed: Option<SessionId>,
-) -> Option<SessionId> {
-    let here = |s: &&Session| !s.archived && &s.location == location;
-    last_viewed
-        .and_then(|id| sessions.iter().filter(here).find(|s| s.id == id))
-        .or_else(|| sessions.iter().find(here))
-        .map(|s| s.id)
+/// The main session of `location` (FR-020, R14): the un-archived session with `main`, else the
+/// first un-archived one in list order (a catalog without the marker), else `None`. Other
+/// locations and archived sessions are ignored.
+pub fn main_session(sessions: &[Session], location: &SessionLocation) -> Option<SessionId> {
+    main_of(sessions, location).map(|s| s.id)
 }
 
 fn place(location: &SessionLocation) -> &'static str {
@@ -141,7 +140,7 @@ fn place(location: &SessionLocation) -> &'static str {
 /// The refusal of a second session, naming the existing one (FR-003).
 pub fn refusal_text(existing: &ExistingSession, location: &SessionLocation) -> String {
     format!(
-        "{} already has a session: \"{}\" ({}); start_session on {} brings it back; \
+        "{} already has a main session: \"{}\" ({}); start_session on {} brings it back; \
          pass allow_additional_session: true to start another on purpose",
         place(location),
         existing.name,
@@ -279,7 +278,7 @@ mod tests {
             name: "Fix login".into(),
         };
         let text = refusal_text(&e, &wt("a"));
-        assert!(text.starts_with("this worktree already has a session"));
+        assert!(text.starts_with("this worktree already has a main session"));
         assert!(text.contains("\"Fix login\""));
         assert!(text.contains(&format!("start_session on {}", e.id.0)));
         assert!(
@@ -287,7 +286,7 @@ mod tests {
             "{text}"
         );
         let root = refusal_text(&e, &SessionLocation::Default);
-        assert!(root.starts_with("the project root already has a session"));
+        assert!(root.starts_with("the project root already has a main session"));
     }
 
     #[test]
@@ -313,40 +312,33 @@ mod tests {
     }
 
     #[test]
-    fn the_default_session_is_the_last_viewed_one_when_it_is_here() {
-        let a = session(wt("a"), "a", SessionLifecycle::Idle);
-        let b = session(wt("a"), "b", SessionLifecycle::Idle);
-        let (aid, bid) = (a.id, b.id);
-        let all = [a, b];
-        assert_eq!(default_session(&all, &wt("a"), Some(bid)), Some(bid));
-        assert_eq!(default_session(&all, &wt("a"), Some(aid)), Some(aid));
-    }
-
-    #[test]
-    fn the_default_session_falls_back_to_the_first_unarchived_one() {
+    fn the_main_session_is_the_marked_one_else_the_first_unarchived() {
         let mut gone = session(wt("a"), "gone", SessionLifecycle::Idle);
         gone.archived = true;
+        gone.main = true;
         let elsewhere = session(wt("z"), "z", SessionLifecycle::Idle);
         let first = session(wt("a"), "first", SessionLifecycle::Idle);
-        let second = session(wt("a"), "second", SessionLifecycle::Idle);
-        let (gid, zid, fid) = (gone.id, elsewhere.id, first.id);
-        let all = [gone, elsewhere, first, second];
-        assert_eq!(default_session(&all, &wt("a"), None), Some(fid));
-        // A last-viewed id that is archived or of another location does not count.
-        assert_eq!(default_session(&all, &wt("a"), Some(gid)), Some(fid));
-        assert_eq!(default_session(&all, &wt("a"), Some(zid)), Some(fid));
-        assert_eq!(
-            default_session(&all, &wt("a"), Some(SessionId::new())),
-            Some(fid)
-        );
+        let mut second = session(wt("a"), "second", SessionLifecycle::Idle);
+        let (fid, sid) = (first.id, second.id);
+        let mut all = vec![gone, elsewhere, first];
+        all.push(second.clone());
+        // No marker: the first un-archived session in list order; an archived marked one is ignored.
+        assert_eq!(main_session(&all, &wt("a")), Some(fid));
+        second.main = true;
+        all[3] = second;
+        assert_eq!(main_session(&all, &wt("a")), Some(sid));
+        let Occupancy::Taken(named) = occupancy(&all, &wt("a")) else {
+            panic!("taken")
+        };
+        assert_eq!(named.id, sid);
     }
 
     #[test]
-    fn a_location_without_an_unarchived_session_has_no_default() {
+    fn a_location_without_an_unarchived_session_has_no_main() {
         let mut gone = session(wt("a"), "gone", SessionLifecycle::Idle);
         gone.archived = true;
         let elsewhere = session(wt("z"), "z", SessionLifecycle::Idle);
-        assert_eq!(default_session(&[], &wt("a"), None), None);
-        assert_eq!(default_session(&[gone, elsewhere], &wt("a"), None), None);
+        assert_eq!(main_session(&[], &wt("a")), None);
+        assert_eq!(main_session(&[gone, elsewhere], &wt("a")), None);
     }
 }

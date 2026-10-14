@@ -782,6 +782,8 @@ pub async fn create_worktree_with_session(
             worktree_dir: &dir_name,
             cwd: &cwd,
             cli: definition.cli,
+            // A worktree this call just made is free: its session is the main one.
+            additional: micold_core::occupancy::Additional::No,
         },
         definition.prompt,
     )

@@ -347,6 +347,11 @@ pub struct Session {
     /// marker in the AI CLI provider's own storage (`AiCliProvider::mark_archived`), which
     /// survives even if this field's own persisted copy is lost. Set via [`Session::archive`].
     pub archived: bool,
+    /// Whether this is the main session of its location (feature 776, FR-020, research R14).
+    /// Persisted. At most one un-archived session per location has it; a catalog written before
+    /// the marker has none, and readers derive the main as the first un-archived session
+    /// (`occupancy::main_session`). The daemon's catalog is its only writer.
+    pub main: bool,
     /// How many attention events the session has had (feature 039, FR-008a): changes into awaiting
     /// input while no window had the session in view. Persisted, and only the session service
     /// adds to it; a session written before the feature reads `0`.
@@ -380,6 +385,7 @@ impl Session {
             active_shell: None,
             next_shell_id: 1,
             archived: false,
+            main: false,
             attention_seq: 0,
             unread: false,
             agents: Vec::new(),
@@ -412,6 +418,7 @@ impl Session {
             active_shell: None,
             next_shell_id: 1,
             archived: false,
+            main: false,
             attention_seq: 0,
             unread: false,
             agents: Vec::new(),
