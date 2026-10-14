@@ -584,7 +584,10 @@ pub fn view_with<'a>(
             // FR-019: the sub-row's actions for the one session of a worktree, above Delete.
             let at = items.len() - 1;
             let location = micold_core::session::SessionLocation::Worktree(dir.to_string());
-            for (offset, item) in single_session_items(state, &location).into_iter().enumerate() {
+            for (offset, item) in single_session_items(state, &location)
+                .into_iter()
+                .enumerate()
+            {
                 items.insert(at + offset, item);
             }
             // Feature 491 (T036): a worktree with no daemon offers the explicit bind, above Delete
@@ -1004,7 +1007,9 @@ fn single_session_items(
     location: &micold_core::session::SessionLocation,
 ) -> Vec<material::MenuItem<Message>> {
     let sessions = state.active_sessions();
-    let mut here = sessions.iter().filter(|s| &s.location == location && !s.archived);
+    let mut here = sessions
+        .iter()
+        .filter(|s| &s.location == location && !s.archived);
     match (here.next(), here.next()) {
         (Some(only), None) => {
             let id = only.id;
