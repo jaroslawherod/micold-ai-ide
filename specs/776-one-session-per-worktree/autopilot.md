@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #776
 - **Worktree branch**: feat/776_one-session-per-worktree-chosen-at-start
 - **Started**: 2026-10-12
-- **Phase**: amendment PR open; waiting for merge
-- **Next step**: amendment PR merges; then milestone M2 (soft limit)
+- **Phase**: milestone M2 reviewed; full gate pending, then PR
+- **Next step**: M2 full gate, push, open PR
 
 ## Pull requests
 
@@ -18,7 +18,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #791 | Design (spec, plan, tasks) | merged | 6b60f3201a2e4dacdfc8d7d626ea55384eb959a0 |
 | #794 | M1 | merged | 497a497cd87bdd573581252a7b51278d37d7e16f |
-| #807 | Amendment: soft limit, default session (specs only) | open | |
+| #807 | Amendment: soft limit, default session (specs only) | merged | 7440dca0d4fe03719c38ed46df6854fb2a42305d |
 
 ## Milestones
 
@@ -59,6 +59,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Conformance B M1 | 1 | 592f90467d46ed5fd93eb67960a2dc5e4456973e:7bb8c03e4b755bd0b5faf262c0b63fe3bf4db1ba | CLEAN (2 MINOR: T008 path text fixed; per-lifecycle refusal cases covered by core occupancy unit tests) |
 | Amendment (spec+plan+tasks) | 1 | 84499e08a0ccde4f8380eb9d9d7df6e33210f7b9:b361448a232e0df33ff72231f33f9712ded5cf5d | CHANGES: 2 MAJOR (start flag and attach assertion moved to M7/M6), 4 MINOR; all fixed |
 | Amendment | 2 | 71db8a9058396eabe058cfa25dde64f9e1c5fd8e:b361448a232e0df33ff72231f33f9712ded5cf5d | CLEAN (2 MINOR fixed, prose only) |
+| Code A M2 | 1 | b28cbc7a1e5380a90b1b6a6aee84b70c6fab31b4:4a8e0269bdac0074368055715714d8222d0dcf2a | CLEAN (2 MINOR: comment width, start_block_text unused until M7; left) |
+| Conformance B M2 | 1 | b28cbc7a1e5380a90b1b6a6aee84b70c6fab31b4:4a8e0269bdac0074368055715714d8222d0dcf2a | CHANGES: 1 MAJOR (flagged-concurrency test dropped out-of-order answers); fixed by awaiting each answer in turn |
 
 ## Declined review findings
 
