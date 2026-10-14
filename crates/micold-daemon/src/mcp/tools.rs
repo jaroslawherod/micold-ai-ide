@@ -357,6 +357,64 @@ fn resolve_session_target(
     Ok((who, project, target))
 }
 
+/// [`resolve_session_target`] for a tool's `target`, off the async thread.
+async fn session_target(
+    state: &Arc<DaemonState>,
+    caller: SessionId,
+    target: SessionRef,
+) -> Result<(SessionId, Caller, ProjectSnapshot, SessionSummary), OpError> {
+    let session = SessionId::from_uuid(target.0);
+    let st = Arc::clone(state);
+    let (who, project, summary) =
+        blocking(move || resolve_session_target(&st, caller, session)).await?;
+    Ok((session, who, project, summary))
+}
+
+/// Ask the user to allow the operation policy named, when it named one, on the session `summary`.
+async fn confirm_session_op(
+    state: &DaemonState,
+    who: &Caller,
+    project: &ProjectSnapshot,
+    summary: &SessionSummary,
+    confirm: Option<ConfirmedOp>,
+    hangup: &CancellationToken,
+) -> Result<(), OpError> {
+    let Some(op) = confirm else {
+        return Ok(());
+    };
+    let label = summary.title.display().to_string();
+    ask_user(
+        state,
+        who,
+        project,
+        op,
+        ConfirmTarget::Session(summary.id),
+        label,
+        hangup,
+    )
+    .await
+}
+
+/// `get_session`'s row for `session`, off the async thread.
+async fn session_row_now(
+    state: &Arc<DaemonState>,
+    caller: SessionId,
+    session: SessionId,
+) -> Result<Value, OpError> {
+    let st = Arc::clone(state);
+    blocking(move || {
+        let project = caller_project(&st, caller)?;
+        let modes = st.session_modes(&project.path);
+        Context {
+            caller,
+            project: &project,
+            modes: &modes,
+        }
+        .get_session(session)
+    })
+    .await
+}
+
 /// `stop_session` (contracts/mcp-tools.md): scope, then policy (a session may not stop itself,
 /// FR-015), then the no-op for a session with no process (FR-012a), then the user's confirmation,
 /// then the sidebar's own stop: processes end, the record is `Idle` in every window, and the
@@ -367,27 +425,12 @@ async fn stop_session(
     target: SessionRef,
     hangup: &CancellationToken,
 ) -> Result<Value, OpError> {
-    let session = SessionId::from_uuid(target.0);
-    let st = Arc::clone(state);
-    let (who, project, summary) =
-        blocking(move || resolve_session_target(&st, caller, session)).await?;
+    let (session, who, project, summary) = session_target(state, caller, target).await?;
     let confirm = policy_for(&who, &Operation::StopSession { session: target })?;
     if state.session_ptys(session).is_empty() {
         return Ok(json!({ "lifecycle": lifecycle_name(&summary.lifecycle) }));
     }
-    if let Some(op) = confirm {
-        let label = summary.title.display().to_string();
-        ask_user(
-            state,
-            &who,
-            &project,
-            op,
-            ConfirmTarget::Session(session),
-            label,
-            hangup,
-        )
-        .await?;
-    }
+    confirm_session_op(state, &who, &project, &summary, confirm, hangup).await?;
     let st = Arc::clone(state);
     if !blocking(move || Ok(st.stop_session(session))).await? {
         return Err(OpError::not_found(format!(
@@ -408,10 +451,7 @@ async fn interrupt_session(
     target: SessionRef,
     hangup: &CancellationToken,
 ) -> Result<Value, OpError> {
-    let session = SessionId::from_uuid(target.0);
-    let st = Arc::clone(state);
-    let (who, project, summary) =
-        blocking(move || resolve_session_target(&st, caller, session)).await?;
+    let (session, who, project, summary) = session_target(state, caller, target).await?;
     let confirm = policy_for(&who, &Operation::InterruptSession { session: target })?;
     let not_running = || {
         OpError::new(
@@ -428,19 +468,7 @@ async fn interrupt_session(
     // The process the user is asked about: a restart while the prompt waits is another process,
     // and the approval does not carry over to it.
     let asked_about = state.primary_pty(session).ok_or_else(not_running)?;
-    if let Some(op) = confirm {
-        let label = summary.title.display().to_string();
-        ask_user(
-            state,
-            &who,
-            &project,
-            op,
-            ConfirmTarget::Session(session),
-            label,
-            hangup,
-        )
-        .await?;
-    }
+    confirm_session_op(state, &who, &project, &summary, confirm, hangup).await?;
     let pty = state.primary_pty(session).ok_or_else(not_running)?;
     if !Arc::ptr_eq(&pty, &asked_about) {
         return Err(not_running());
@@ -459,23 +487,9 @@ async fn delete_session(
     target: SessionRef,
     hangup: &CancellationToken,
 ) -> Result<Value, OpError> {
-    let session = SessionId::from_uuid(target.0);
-    let st = Arc::clone(state);
-    let (who, project, summary) =
-        blocking(move || resolve_session_target(&st, caller, session)).await?;
-    if let Some(op) = policy_for(&who, &Operation::DeleteSession { session: target })? {
-        let label = summary.title.display().to_string();
-        ask_user(
-            state,
-            &who,
-            &project,
-            op,
-            ConfirmTarget::Session(session),
-            label,
-            hangup,
-        )
-        .await?;
-    }
+    let (session, who, project, summary) = session_target(state, caller, target).await?;
+    let confirm = policy_for(&who, &Operation::DeleteSession { session: target })?;
+    confirm_session_op(state, &who, &project, &summary, confirm, hangup).await?;
     let st = Arc::clone(state);
     let (owner, ptys) = blocking(move || {
         st.delete_session(session)
@@ -1166,18 +1180,7 @@ async fn start_session(
             .unwrap_or(false);
         if !started {
             // A failed start is the call's failure (FR-013), with the reason the sidebar shows.
-            let st = Arc::clone(state);
-            let row = blocking(move || {
-                let project = caller_project(&st, caller)?;
-                let modes = st.session_modes(&project.path);
-                Context {
-                    caller,
-                    project: &project,
-                    modes: &modes,
-                }
-                .get_session(session)
-            })
-            .await?;
+            let row = session_row_now(state, caller, session).await?;
             let reason = row["failure_reason"]
                 .as_str()
                 .filter(|r| !r.is_empty())
@@ -1187,19 +1190,7 @@ async fn start_session(
             )));
         }
     }
-    let st = Arc::clone(state);
-    let lifecycle = blocking(move || {
-        let project = caller_project(&st, caller)?;
-        let modes = st.session_modes(&project.path);
-        Context {
-            caller,
-            project: &project,
-            modes: &modes,
-        }
-        .get_session(session)
-    })
-    .await?["lifecycle"]
-        .clone();
+    let lifecycle = session_row_now(state, caller, session).await?["lifecycle"].clone();
     Ok(json!({ "lifecycle": lifecycle }))
 }
 
@@ -1278,10 +1269,7 @@ async fn send_session_input(
     text: NonEmptyText,
     hangup: &CancellationToken,
 ) -> Result<Value, OpError> {
-    let session = SessionId::from_uuid(target.0);
-    let st = Arc::clone(state);
-    let (who, project, summary) =
-        blocking(move || resolve_session_target(&st, caller, session)).await?;
+    let (session, who, project, summary) = session_target(state, caller, target).await?;
     let confirm = cross_session_policy(
         state,
         &who,
@@ -1326,19 +1314,7 @@ async fn send_session_input(
             ),
         ));
     }
-    if let Some(op) = confirm {
-        let label = summary.title.display().to_string();
-        ask_user(
-            state,
-            &who,
-            &project,
-            op,
-            ConfirmTarget::Session(session),
-            label,
-            hangup,
-        )
-        .await?;
-    }
+    confirm_session_op(state, &who, &project, &summary, confirm, hangup).await?;
     let pty = running()?;
     if !Arc::ptr_eq(&pty, &asked_about) {
         return Err(not_running(session));
