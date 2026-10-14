@@ -65,7 +65,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M1 is implemented, all T001-T027 ticked, reviews A and B done (round 1, fixed). Branch rebased onto origin/main (ffff0aab/5f51b06f), 16 commits ahead, not pushed. Full gate on the rebased tree: fmt, clippy, cargo test --workspace green; test-scripts stage fails only on `site/capture/demo-project.sh builds a project`, which hung 22 min then was killed. Next: once the build-lock deadlock is fixed on main, rebase, run `mise run gate`, push, open the M1 PR (pr.md).
+M1 implemented (T001-T027), reviews A and B done. Rebased onto origin/main bc78c938 (contains #810), 17 commits ahead, not pushed. Full gate on the rebased tree: fmt, clippy, cargo test --workspace and every script suite up to `capture-harness.test.sh` green. That test's `site/capture/demo-project.sh` nested `build-lock.sh cargo run` queues on the repo lock behind ~17 other worktrees' gates (the test-scripts stage runs outside the lock, so the nested call takes it and waits); the same hang shows in other worktrees (refactor-720) on main-based trees. After 20+ min the gate was SIGTERMed twice (GATE_EXIT=1, not ours to attribute). Next: rerun `mise run gate` when the lock queue is short (or with `MICOLD_NO_BUILD_LOCK=1`, which I was denied from trying alongside a broad pkill), push, open the M1 PR (pr.md).
 
 
 ## Open escalation
