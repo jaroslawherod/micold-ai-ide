@@ -492,6 +492,7 @@ mod tests {
                             live_shells: Vec::new(),
                             attention_seq: 0,
                             unread: false,
+                            main: false,
                             provider: micold_core::session::AiCli::ClaudeCode,
                             agents: Vec::new(),
                         })

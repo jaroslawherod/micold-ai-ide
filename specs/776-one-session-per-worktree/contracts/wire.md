@@ -1,6 +1,6 @@
 # Contract: wire changes
 
-`PROTOCOL_VERSION` 40 to 41 (M1; superseded by the M2 and M3 amendments below, 42 and 43), with the `version.rs` history entry. All
+`PROTOCOL_VERSION` 40 to 41 (M1; superseded by the M2 and M3 amendments below, 42 and 44), with the `version.rs` history entry. All
 additions are optional and serde-defaulted, so an older frame decodes and the old behaviour is the
 default; `SCHEMA_HASH` changes with them.
 
@@ -17,7 +17,7 @@ malformed (M6). The refusal texts gain the way forward (research R3, R12).
 
 ## Amendment 2026-10-14: the main session (M3)
 
-`PROTOCOL_VERSION` 42 to 43 (the catalog snapshot shape changes). `Session` gains `main: bool`
+`PROTOCOL_VERSION` 43 to 44 (the catalog snapshot shape changes). `Session` gains `main: bool`
 (serde-default `false`; persisted with the record and carried in the catalog snapshot; an older
 frame or catalog decodes to `false` and the reader derives the main, research R14). New
 `ClientMsg::SessionSetMain { id: SessionId }`, fire-and-forget like `SessionStart`: the daemon

@@ -28,7 +28,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T013 | full | Second session refused by daemon (RPC, create_session, review send); wire fields + v41 | #794 | merged (#794) |
 | M2 | T037–T042 | full | Soft limit: `allow_additional_session` on create_session, wire v42 (the start flag lands with the start block in M7) | #821 | merged (#821) |
-| M3 | T014–T016, T021, T050–T054 | full | create_worktree / WorktreeCreate define the session at start (WIP at tag wip-776-m3, cherry-picked after M2); main session persisted, moved, promoted; wire v43 | | pending |
+| M3 | T014–T016, T021, T050–T054 | full | create_worktree / WorktreeCreate define the session at start (WIP at tag wip-776-m3, cherry-picked after M2); main session persisted, moved, promoted; wire v44 | | pending |
 | M4 | T017–T020, T022, T036, T043–T045 | full | Dialog fields; worktree rows only; row press opens the main session; helpers marked | | pending |
 | M5 | T046–T049, T055–T057 | full | Row menu "Start another session..." (adds a helper) with confirmation; "Make main session"; delete names successor | | pending |
 | M6 | T023–T030 | full | Resume replaces (resumed becomes main) or keeps both (helper); attach cap | | pending |
@@ -36,7 +36,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Decisions
 
-- Tasks: optional hooks (docguard review, tdd plan) skipped; test tasks are ordered first by hand. All wire additions and the v41 bump landed in M1 (superseded: v42 in M2, v43 in M3). Foundational+US1 server half is 13 tasks; kept whole (no split gives an observable deliverable earlier). Polish has no code: quickstart results are left to the close unit.
+- Tasks: optional hooks (docguard review, tdd plan) skipped; test tasks are ordered first by hand. All wire additions and the v41 bump landed in M1 (superseded: v42 in M2, v44 in M3). Foundational+US1 server half is 13 tasks; kept whole (no split gives an observable deliverable earlier). Polish has no code: quickstart results are left to the close unit.
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
@@ -47,7 +47,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | 5 | amend | Extra sessions' place | sub-rows of their worktree, only when it has several, collapsed by default; single-session rename/close in the worktree row menu | agent-resolved | ui/sidebar.rs already draws expandable session sub-rows |
 | 6 | amend 2026-10-14 | One main session per worktree, others helpers (replaces the derived default) | Designated, persisted `Session.main`; set at start; stays until the user changes it; user's scope message | user | "for each worktree there should one main session that is responsible for work the others should be considered a only helpers or some short time activities" |
 | 7 | amend 2026-10-14 | Main deleted | First remaining un-archived session in list order is promoted, no prompt; the delete confirmation names it | agent-resolved | user asked for "a rule"; list order is stable and already what refusals name |
-| 8 | amend 2026-10-14 | Changing the main; helper lifetime | App menu "Make main session" on a helper (`SessionSetMain`, wire v43, M3); no MCP tool; helpers are marked and never auto-closed | agent-resolved | spec Session 2026-10-14; research R14 |
+| 8 | amend 2026-10-14 | Changing the main; helper lifetime | App menu "Make main session" on a helper (`SessionSetMain`, wire v44, M3); no MCP tool; helpers are marked and never auto-closed | agent-resolved | spec Session 2026-10-14; research R14 |
 
 ## Review rounds
 

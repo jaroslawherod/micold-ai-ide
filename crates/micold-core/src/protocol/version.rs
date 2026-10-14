@@ -151,7 +151,10 @@
 /// And 42 → 43 for feature 552's native agent-session signals: `SessionSummary::agents`, serde-
 /// defaulted, so an older frame still decodes. (The removal of the worktree attach shapes lands as
 /// a later bump of the same feature.)
-pub const PROTOCOL_VERSION: u32 = 43;
+///
+/// And 43 → 44 for feature 776's main session (contracts/wire.md, amendment 2026-10-14):
+/// `SessionSummary::main` and `ClientMsg::SessionSetMain`; the catalog snapshot's shape changes.
+pub const PROTOCOL_VERSION: u32 = 44;
 
 // `build.rs` emits `pub const SCHEMA_HASH: [u8; 32] = [...];` into this file.
 include!(concat!(env!("OUT_DIR"), "/schema_hash.rs"));

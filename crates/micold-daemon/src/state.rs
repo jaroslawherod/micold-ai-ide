@@ -3585,6 +3585,22 @@ impl DaemonState {
         Ok((owner, ptys))
     }
 
+    /// Make `session` the main session of its location (FR-021) and push the catalog when the
+    /// record changed. A no-op for an unknown, archived or already-main id; a failed write is
+    /// logged and leaves the catalog as it was.
+    pub fn set_main(&self, session: SessionId) {
+        let changed = match self.lock().catalog.set_main(session) {
+            Ok(changed) => changed,
+            Err(err) => {
+                tracing::warn!(%session, %err, "could not persist the main session");
+                false
+            }
+        };
+        if changed {
+            self.broadcast_catalog();
+        }
+    }
+
     /// Remove the images pasted into `session`: its directory in its worktree and the one in the
     /// data directory. Never a file the user dropped (feature 487, FR-013). Deletes files, so it
     /// runs outside the state lock; a failure is logged, never fatal.

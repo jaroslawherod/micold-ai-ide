@@ -31,6 +31,7 @@ fn session(id: SessionId, dir: &str) -> SessionSummary {
         live_shells: Vec::new(),
         attention_seq: 0,
         unread: false,
+        main: false,
         provider: AiCli::ClaudeCode,
         agents: Vec::new(),
     }

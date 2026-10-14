@@ -498,7 +498,7 @@ async fn a_second_session_in_a_worktree_is_a_conflict_naming_the_existing_one() 
         assert_eq!(error["category"], "conflict", "{error}");
         let message = error["message"].as_str().unwrap_or_default();
         assert!(
-            message.starts_with("this worktree already has a session: ")
+            message.starts_with("this worktree already has a main session: ")
                 && message.contains(&format!("({})", first.0))
                 && message.contains(&format!("start_session on {} brings it back", first.0)),
             "{message}"
@@ -916,11 +916,12 @@ impl Sandbox {
 
     /// The worktree directories on disk under the managed root.
     fn worktree_dirs(&self) -> Vec<String> {
-        let mut names: Vec<String> = std::fs::read_dir(self.project.path().join(".claude/worktrees"))
-            .unwrap()
-            .flatten()
-            .map(|e| e.file_name().to_string_lossy().into_owned())
-            .collect();
+        let mut names: Vec<String> =
+            std::fs::read_dir(self.project.path().join(".claude/worktrees"))
+                .unwrap()
+                .flatten()
+                .map(|e| e.file_name().to_string_lossy().into_owned())
+                .collect();
         names.sort();
         names
     }
@@ -960,7 +961,10 @@ async fn a_prompt_alone_takes_the_default_cli() {
     s.state.set_default_ai_cli(AiCli::Copilot).unwrap();
     s.state.set_first_prompt_bound(READY_BOUND);
     let out = s
-        .worktree_ok(sid(3), json!({"name": "dark mode", "prompt": PROMPT}))
+        .worktree_ok(
+            sid(3),
+            json!({"name": "dark mode", "type": "feat", "prompt": PROMPT}),
+        )
         .await;
     let id = Sandbox::created(&out);
     let summary = session_in(&s.state.catalog_snapshot(), id)
@@ -1016,10 +1020,7 @@ async fn a_default_caller_creates_the_worktree_and_its_session_in_it() {
     let plain = s.worktree_ok(sid(1), json!({"branch": "feat-p"})).await;
     assert_eq!(plain.get("session"), None, "{plain}");
     let out = s
-        .worktree_ok(
-            sid(1),
-            json!({"branch": "feat-q", "ai_cli": "claude_code"}),
-        )
+        .worktree_ok(sid(1), json!({"branch": "feat-q", "ai_cli": "claude_code"}))
         .await;
     let id = Sandbox::created(&out);
     let summary = session_in(&s.state.catalog_snapshot(), id)

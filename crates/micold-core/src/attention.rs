@@ -499,6 +499,7 @@ mod tests {
             attention_seq: seq,
             unread: false,
             agents: Vec::new(),
+            main: false,
         }
     }
 

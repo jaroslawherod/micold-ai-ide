@@ -1419,7 +1419,7 @@ fn a_refused_session_create_shows_the_refusal_text_and_changes_nothing() {
         .find(|(_, op)| matches!(op, PendingOp::CreateSession))
         .expect("the start requested a create")
         .0;
-    let text = "this worktree already has a session: \"Fix login\" \
+    let text = "this worktree already has a main session: \"Fix login\" \
                 (00000000-0000-0000-0000-000000000001); start_session on \
                 00000000-0000-0000-0000-000000000001 brings it back";
 

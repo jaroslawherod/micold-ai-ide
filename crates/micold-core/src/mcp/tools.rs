@@ -613,7 +613,8 @@ const TOOLS: &[Tool] = &[
             (prompt_delivered: false). A worktree has at most one session by \
             default: a second is refused, naming the existing one and the way to ask for another. \
             Pass allow_additional_session: true to start another beside it on purpose (the limit \
-            is soft: policy, the CLI check and every other check still apply).",
+            is soft: policy, the CLI check and every other check still apply). The first session \
+            of a worktree is its main session; extra sessions are helpers.",
         properties: || {
             json!({
                 "worktree": {"type": "string", "minLength": 1,

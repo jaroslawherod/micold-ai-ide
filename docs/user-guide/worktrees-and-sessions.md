@@ -30,6 +30,14 @@ choose a folder.
   An assistant asks for another on purpose with `allow_additional_session: true` on
   `create_session`; the existing session is left as it is. A session you closed (archived) no
   longer counts, so the worktree can take a new one.
+- **Main and helper sessions.** The first session of a worktree is its **main session**, chosen
+  when the worktree starts; any session added beside it on purpose is a **helper**. Which one is
+  main is stored, so it stays the same across restarts until you change it: you can make a helper
+  the main session, and the former main becomes a helper. When you delete the main session, the
+  first remaining session of that worktree becomes main in the same step; deleting a helper never
+  changes the main. Closing the only session leaves the worktree free, and its next session is the
+  main one. Worktrees recorded before this existed treat their first open session as the main one
+  until you choose another; nothing is rewritten.
 
 <!-- media: worktree-sidebar-light -->
 

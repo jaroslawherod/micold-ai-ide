@@ -263,6 +263,15 @@ struct StoredSession {
     /// `schema_version` bump is needed.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     agents: Vec<crate::agent_run::AgentRun>,
+    /// Whether the session is its location's main session (feature 776, FR-020). Additive and
+    /// defaulted: a record written before the marker loads `false` and the reader derives the
+    /// main; nothing is rewritten on load.
+    #[serde(default, skip_serializing_if = "is_false")]
+    main: bool,
+}
+
+fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 /// Serde-mapped mirror of [`AiCli`] (feature 026), kept separate for the same reason
@@ -376,6 +385,7 @@ impl StoredSession {
             attention_seq: session.attention_seq,
             unread: session.unread,
             agents: session.agents.clone(),
+            main: session.main,
         }
     }
 
@@ -405,6 +415,7 @@ impl StoredSession {
         // The daemon that recorded a run as running is gone, so its stop report cannot arrive
         // (feature 552, FR-005).
         crate::agent_run::stop_running(&mut session.agents);
+        session.main = self.main;
         session
     }
 }

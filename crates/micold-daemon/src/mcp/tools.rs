@@ -920,6 +920,7 @@ async fn create_with_optional_session(
             worktree: WorktreeRef::Named(names.dir_name.clone()),
             ai_cli: Some(cli),
             prompt: None,
+            additional: micold_core::occupancy::Additional::No,
         },
     )?;
     let first = start.prompt.as_deref().map(|text| ops::FirstPrompt {
