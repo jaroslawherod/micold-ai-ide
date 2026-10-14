@@ -1226,6 +1226,17 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
                 project,
                 daemon,
             }) => {
+                // The session created with the worktree (feature 776): selected and viewed as a
+                // `SessionCreated` is. The daemon has started it, so only the view follows.
+                if let OperationResult::WorktreeCreated {
+                    session: Some(session),
+                    ..
+                } = result
+                {
+                    app.core
+                        .update(Message::Session(SessionMsg::Selected(session)));
+                    view_session(app, session);
+                }
                 // The daemon chosen at submit is the worktree's binding (feature 491, FR-006).
                 if let Some(id) = daemon {
                     bind_created_worktree(app, &project, &dir_name, id);
@@ -3110,12 +3121,24 @@ pub fn view_and_restart(app: &mut App, id: SessionId) {
 /// The shared body of [`view_and_start`] and [`view_and_restart`]: `start` is the message that
 /// starts the session.
 fn view_and_send(app: &mut App, id: SessionId, start: ClientMsg) {
+    show_session(app, id, Some(start));
+}
+
+/// Show `id` without starting it: its process was started by the daemon already (feature 776, a
+/// session created with its worktree).
+pub fn view_session(app: &mut App, id: SessionId) {
+    show_session(app, id, None);
+}
+
+fn show_session(app: &mut App, id: SessionId, start: Option<ClientMsg>) {
     app.viewed_dirty = true;
     app.selection = None;
     app.display_offset = 0;
     if let (Some(project), Some(d)) = (app.core.workspace.active.clone(), app.active_outbox()) {
         send_pane_size(app, id);
-        d.send(start);
+        if let Some(start) = start {
+            d.send(start);
+        }
         d.send(ClientMsg::SetViewedSession {
             project,
             session: Some(id),
@@ -3241,6 +3264,13 @@ pub fn send_worktree_create(
     app.core
         .update(Message::WorktreeForm(FormMsg::CreateStarted(mode.clone())));
     let (branch, dir_name) = (names.branch, names.dir_name);
+    // The session defined at start (feature 776, FR-006), read from the form that is submitting.
+    let session = app
+        .core
+        .worktree_form
+        .form
+        .as_ref()
+        .and_then(|f| f.session_definition());
     // The mode is not duplicated here: `WorktreeCreateStarted` above already put it on the form,
     // which is where the stage label reads it from (FR-024).
     send_op(
@@ -3256,7 +3286,7 @@ pub fn send_worktree_create(
             branch,
             dir_name,
             mode,
-            session: None,
+            session,
         },
     );
 }

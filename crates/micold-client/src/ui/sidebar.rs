@@ -669,10 +669,25 @@ fn build_items(
                 Message::Worktree(WorktreeMsg::Hovered(dir.clone())),
                 Message::Worktree(WorktreeMsg::Unhovered(dir.clone())),
             )
-            .expandable(
+            ;
+        // FR-017: an expander only for several sessions. FR-018: a press selects the main
+        // session, never a helper; with no session it selects nothing.
+        if node.has_expander() {
+            item = item.expandable(
                 node.expanded,
                 Message::Sidebar(SidebarMsg::WorktreeExpansionToggled(dir.clone())),
             );
+        }
+        if let Some(main) = node.main_session() {
+            // The row carries the highlight when it draws no sub-row for the viewed session.
+            let holds_viewed = state
+                .session
+                .active
+                .is_some_and(|a| node.sessions.iter().any(|s| s.id == a));
+            item = item
+                .selected(holds_viewed && !node.sessions_shown())
+                .on_press(Message::Session(SessionMsg::Selected(main)));
+        }
         // Row tooltip (feature 010 FR-010, extended by feature 029): the full name the row had to
         // shorten, plus the facts its prettified label leaves out. Attached unconditionally — an
         // unknown project root costs the tooltip its `Location` line, not its existence (029 R5),
@@ -701,7 +716,8 @@ fn build_items(
         let active = hovered == Some(dir.as_str());
         let cluster = row_actions_cluster(
             &dir,
-            wt.can_start_session(),
+            // FR-004: no start action on a worktree that has a session.
+            wt.can_start_session() && state.start_offered(&node.location()),
             active,
             // Threaded in rather than reached for: this function takes narrow arguments and cannot
             // see `State` (feature 026, T014a). Both answers come from the render-free layer —
@@ -737,13 +753,15 @@ fn build_items(
         }
         items.push(item);
 
-        if node.expanded {
-            for session in &node.sessions {
+        if node.sessions_shown() {
+            let main = node.main_session();
+            for session in node.listed_sessions() {
                 items.push(session_tree_item(
                     depth + 1,
                     session,
                     state.session.active,
                     in_view,
+                    Some(session.id) != main,
                     r,
                 ));
             }
@@ -850,6 +868,7 @@ fn session_tree_item(
     session: &micold_core::session::Session,
     active_session: Option<micold_core::session::SessionId>,
     in_view: Option<micold_core::session::SessionId>,
+    helper: bool,
     r: Roles,
 ) -> TreeItem<'static, Message> {
     let tint = match session.lifecycle {
@@ -884,7 +903,15 @@ fn session_tree_item(
         //
         // An annotation, not a tag chip: tags open a second line, and `row_heights` hardcodes that
         // a session row is one line. The label changes the row's content, never its height.
-        .annotation(session.provider.provider().command(), r.on_surface_variant)
+        .annotation(
+            // A helper says so (FR-017); the main session is the unmarked one.
+            if helper {
+                format!("helper, {}", session.provider.provider().command())
+            } else {
+                session.provider.provider().command().to_string()
+            },
+            r.on_surface_variant,
+        )
         // The unread mark (feature 039, FR-018, contract `unread-mark.md` U5): on the row of an
         // unread session this window does not have in view.
         .unread(crate::features::attention::row_unread(session, in_view))
@@ -933,17 +960,12 @@ fn build_default_item(
         r,
     );
 
-    let item = TreeItem::new(0, node.display_name.to_string(), r.on_surface)
+    let mut item = TreeItem::new(0, node.display_name.to_string(), r.on_surface)
         // Distinct icon (FR-006): never the git/branch iconography used for worktree rows.
         .with_icon(Icon::ProjectRoot)
         // Feature 482, V1: the Default row's menu, which is the worktree menu under the wire's
         // name for the project root (`""`).
         .on_right_press(|point| Message::Worktree(WorktreeMsg::MenuToggled(String::new(), point)))
-        .expandable(
-            node.expanded,
-            Message::Sidebar(SidebarMsg::DefaultExpansionToggled),
-        )
-        .trailing_element(start_session)
         // The attention indicator (feature 575, FR-001), as on a worktree row.
         .unread_count(unread)
         // Location tooltip (FR-010): fixed, since the Default entry is always the project root,
@@ -952,16 +974,36 @@ fn build_default_item(
             crate::features::sidebar::DEFAULT_LOCATION_LABEL.to_string(),
             unread,
         ));
+    if state.start_offered(&SessionLocation::Default) {
+        item = item.trailing_element(start_session);
+    }
+    if node.has_expander() {
+        item = item.expandable(
+            node.expanded,
+            Message::Sidebar(SidebarMsg::DefaultExpansionToggled),
+        );
+    }
+    if let Some(main) = node.main_session() {
+        let holds_viewed = state
+            .session
+            .active
+            .is_some_and(|a| node.sessions.iter().any(|s| s.id == a));
+        item = item
+            .selected(holds_viewed && !node.sessions_shown())
+            .on_press(Message::Session(SessionMsg::Selected(main)));
+    }
     items.push(item);
 
-    if node.expanded {
+    if node.sessions_shown() {
         let in_view = crate::features::attention::in_view(&state.attention);
-        for session in &node.sessions {
+        let main = node.main_session();
+        for session in node.listed_sessions() {
             items.push(session_tree_item(
                 1,
                 session,
                 state.session.active,
                 in_view,
+                Some(session.id) != main,
                 r,
             ));
         }
@@ -1012,7 +1054,7 @@ mod tests {
             SessionLifecycle::InterruptedResumable,
         ] {
             let s = session(ActivitySignal::Unknown, lifecycle.clone());
-            let item: TreeItem<'_, Message> = session_tree_item(1, &s, None, None, r);
+            let item: TreeItem<'_, Message> = session_tree_item(1, &s, None, None, false, r);
             assert!(
                 item.icon.is_none(),
                 "session row for {lifecycle:?} still carries a leading icon"
@@ -1030,7 +1072,7 @@ mod tests {
     fn lifecycle_still_reaches_the_row_through_the_tint() {
         let r = tokens::roles(ColorScheme::Dark);
         let tint =
-            |l| session_tree_item(1, &session(ActivitySignal::Unknown, l), None, None, r).tint;
+            |l| session_tree_item(1, &session(ActivitySignal::Unknown, l), None, None, false, r).tint;
 
         assert_eq!(tint(failed()), r.error);
         assert_eq!(tint(SessionLifecycle::Idle), r.on_surface_variant);

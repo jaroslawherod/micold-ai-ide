@@ -12,8 +12,8 @@ use crate::features::window::FieldId;
 use crate::features::worktree::Msg as WorktreeMsg;
 use crate::features::worktree_form::Msg as FormMsg;
 use crate::features::worktree_form::{
-    BranchSource, GithubAvailability, IssueList, ResolutionState, SearchState, WorktreeForm,
-    WorktreeFormStatus,
+    BranchSource, GithubAvailability, IssueList, ResolutionState, SearchState, SessionChoice,
+    WorktreeForm, WorktreeFormStatus,
 };
 use crate::ui::focus::TrackFocus;
 use crate::ui::material::{
@@ -91,6 +91,31 @@ pub fn modal<'a>(
                 r,
             )
             .muted(),
+        );
+    }
+
+    // The session the worktree starts with (feature 776, FR-006): the AI CLI, "None" last, and the
+    // first prompt, which exists only with a CLI.
+    fields = fields.push(
+        Select::new(
+            &form.session_choices,
+            Some(form.session_choice()),
+            |choice| {
+                Message::WorktreeForm(FormMsg::SessionCliChosen(match choice {
+                    SessionChoice::Cli(cli) => Some(cli),
+                    SessionChoice::NoSession => None,
+                }))
+            },
+            r,
+        )
+        .label("AI CLI"),
+    );
+    if form.session_cli.is_some() {
+        fields = fields.push(
+            TextField::new("", &form.first_prompt, r)
+                .label("First prompt")
+                .supporting("Optional — typed once the CLI is ready")
+                .on_input(|text| Message::WorktreeForm(FormMsg::FirstPromptChanged(text))),
         );
     }
 

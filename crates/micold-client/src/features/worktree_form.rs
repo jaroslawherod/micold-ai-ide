@@ -38,6 +38,8 @@ use micold_core::naming::{
     WorktreeNaming,
 };
 use micold_core::overlay::Layer;
+use micold_core::protocol::messages::SessionDefinition;
+use micold_core::session::AiCli;
 use micold_core::typeahead::{clamp_highlight, move_highlight, rank, Direction, Match, Query};
 use micold_core::worktree::{BranchCandidate, BranchSituation, CreateMode, CreateStage, Worktree};
 use std::path::PathBuf;
@@ -350,6 +352,24 @@ impl std::fmt::Display for DaemonChoice {
     }
 }
 
+/// One entry of the dialog's AI CLI choice (feature 776, FR-006): a CLI, or no session.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SessionChoice {
+    /// Start a session on this CLI together with the worktree.
+    Cli(AiCli),
+    /// Create the worktree with no session (FR-010).
+    NoSession,
+}
+
+impl std::fmt::Display for SessionChoice {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Cli(cli) => write!(f, "{cli}"),
+            Self::NoSession => f.write_str("None"),
+        }
+    }
+}
+
 /// In-progress add-worktree form state, present only while the form overlay is open (FR-005).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct WorktreeForm {
@@ -435,9 +455,29 @@ pub struct WorktreeForm {
     pub issue_highlight: Option<usize>,
     /// The issue last picked, if any (FR-010a).
     pub picked_issue: Option<u64>,
+    /// The AI CLI the worktree's session starts on (feature 776, FR-006); `None` creates the
+    /// worktree with no session. Preselected to the default CLI when the form opens.
+    pub session_cli: Option<AiCli>,
+    /// The entries the choice offers, "None" last. Fixed when the form opens.
+    pub session_choices: Vec<SessionChoice>,
+    /// The session's first prompt, as typed. Only sent with a CLI: see [`Self::session_definition`].
+    pub first_prompt: String,
 }
 
 impl WorktreeForm {
+    /// The chosen entry of [`Self::session_choices`].
+    pub fn session_choice(&self) -> SessionChoice {
+        self.session_cli
+            .map_or(SessionChoice::NoSession, SessionChoice::Cli)
+    }
+
+    /// The session to create with the worktree (FR-006): whole or absent. A prompt without a CLI
+    /// is not representable, so "None" sends nothing whatever was typed.
+    pub fn session_definition(&self) -> Option<SessionDefinition> {
+        self.session_cli
+            .map(|cli| SessionDefinition::new(cli, Some(self.first_prompt.clone())))
+    }
+
     /// The daemon label of the worktree at `path`, when the app manages one there.
     pub fn holder_daemon(&self, path: &std::path::Path) -> Option<&str> {
         let folder = path.file_name()?.to_str()?;
@@ -763,10 +803,29 @@ pub fn opened(state: &mut crate::app::State) {
             Some((folder, state.daemon_label_of(&w.dir_name)))
         })
         .collect();
+    // The CLIs offered are the ones known to exist at the home directory (the worktree has no
+    // directory yet); "not asked yet" offers every supported one. The default is preselected when
+    // offered, else the first.
+    let known = state.session.known_clis(None);
+    let session_clis: Vec<AiCli> = if known.is_empty() {
+        AiCli::ALL.to_vec()
+    } else {
+        known.to_vec()
+    };
+    let session_cli = Some(state.session.default_ai_cli)
+        .filter(|cli| session_clis.contains(cli))
+        .or_else(|| session_clis.first().copied());
+    let session_choices = session_clis
+        .into_iter()
+        .map(SessionChoice::Cli)
+        .chain(std::iter::once(SessionChoice::NoSession))
+        .collect();
     state.worktree_form.form = Some(WorktreeForm {
         daemons,
         daemon,
         holder_daemons,
+        session_cli,
+        session_choices,
         ..WorktreeForm::default()
     });
     state.worktree_form.worktree_error = None;
@@ -823,6 +882,26 @@ pub fn type_selected(state: &mut crate::app::State, type_: ConventionalType) {
     while_editing(state, |form| {
         form.type_ = Some(type_);
         form.error = None;
+    });
+}
+
+/// The session's AI CLI was chosen, or "None" (feature 776, FR-006). Choosing none drops the
+/// prompt: a prompt without a CLI is not representable.
+pub fn session_cli_chosen(state: &mut crate::app::State, cli: Option<AiCli>) {
+    while_editing(state, |form| {
+        form.session_cli = cli;
+        if cli.is_none() {
+            form.first_prompt.clear();
+        }
+    });
+}
+
+/// The first-prompt field was edited. Ignored with no CLI chosen.
+pub fn first_prompt_changed(state: &mut crate::app::State, text: String) {
+    while_editing(state, |form| {
+        if form.session_cli.is_some() {
+            form.first_prompt = text;
+        }
     });
 }
 
@@ -1421,6 +1500,10 @@ pub enum Msg {
     TicketChanged(String),
     /// The form's name field changed.
     NameChanged(String),
+    /// The session's AI CLI was chosen; `None` is "None" (feature 776).
+    SessionCliChosen(Option<AiCli>),
+    /// The session's first prompt was edited (feature 776).
+    FirstPromptChanged(String),
     /// Submit the form (FR-006). Validation happens here; the binary performs the git create.
     Submitted,
     /// Dismiss the form without creating (Cancel or Esc).
@@ -1537,6 +1620,8 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
         Msg::TypeSelected(type_) => type_selected(state, type_),
         Msg::TicketChanged(text) => ticket_changed(state, text),
         Msg::NameChanged(text) => name_changed(state, text),
+        Msg::SessionCliChosen(cli) => session_cli_chosen(state, cli),
+        Msg::FirstPromptChanged(text) => first_prompt_changed(state, text),
         Msg::Submitted => submitted(state),
         Msg::Cancelled => cancelled(state),
         Msg::SourceChanged(source) => source_changed(state, source),

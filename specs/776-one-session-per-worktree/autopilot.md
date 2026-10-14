@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #776
 - **Worktree branch**: feat/776_one-session-per-worktree-chosen-at-start
 - **Started**: 2026-10-12
-- **Phase**: M3 PR #828 open, awaiting CI and merge
-- **Next step**: M3 PR merges; then M4
+- **Phase**: M4 implementation in progress (handover)
+- **Next step**: finish M4 per Handover, then gate, reviews A/B, PR
 
 ## Pull requests
 
@@ -21,7 +21,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #807 | Amendment: soft limit, default session (specs only) | merged | 7440dca0d4fe03719c38ed46df6854fb2a42305d |
 | #821 | M2 | merged | 08e3a36dc925bffd3e44623701a9cbade577cf57 |
 | #827 | Amendment: main session and helpers (specs only) | merged | fa395078be20e60fa40eacb8d45b52beb683d37d |
-| #828 | M3 | open (rebased onto c6536f1b; main took wire v43 for feature 552, ours renumbered v44; full gate green) | |
+| #828 | M3 | merged | 5ac2e0a2648abd82f8f95bbbf52d6f0309c193ca |
 
 ## Milestones
 
@@ -82,12 +82,23 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None. The soft-limit amendment is in the amendment PR (spec, plan, tasks, contracts only; no code).
-The uncompiled WIP for old M2, now M3 (`create_worktree` with a definition; commits d860ad3d,
-201eee28, docs T021) is kept off this branch at the local tag `wip-776-m3` (commit cf638754): the
-M3 unit starts from `git cherry-pick d860ad3d 201eee28` after M2 merges, then fixes it to the
-`Additional::No` signature. Core tests passed earlier; daemon tests never ran; no gate, no review B.
-The M1 items that change are listed in research.md R12.
+M4 (branch reset to origin/main 5ac2e0a2, M3 merged) code is written and uncommitted-then-committed as
+WIP; client tests `features_session`, `features_sidebar`, `features_worktree_form` pass. Done:
+catalog_sync adopts `main`; sidebar `WorktreeNode`/`DefaultNode` `has_expander`, `sessions_shown`,
+`main_session`, `listed_sessions`; `row_heights`/`current_session_row` follow; ui/sidebar.rs: expander
+only for several sessions, row press = `Selected(main)`, helpers annotated "helper, <cli>", start
+action only when `State::start_offered` (occupancy Free); ui/mod.rs worktree/Default menu gets
+"Close session"/"Remove session" for a single session; worktree form `session_cli`,
+`session_choices`, `first_prompt`, msgs `SessionCliChosen`/`FirstPromptChanged`, `session_definition()`,
+Select + TextField in ui/worktree_form.rs; daemon_sync sends `session` and on `WorktreeCreated{session}`
+selects + `view_session`. Tests added for T017/T018/T043 (reducer level).
+Next: (1) full `cargo test -p micold-client` incl. main_tests and the dialog geometry gates (new fields
+may break a height gate; unrun after the last edits); add a main_tests test that a created
+worktree's returned session is selected/viewed; (2) T036/T045 docs in
+docs/user-guide/worktrees-and-sessions.md; (3) tick T017-T020, T022, T036, T043-T045 in tasks.md;
+(4) T022 visual pass (quickstart B items 1,2,4) evidence in specs/776-.../tdd/; (5) scoped gate,
+review A (high) + B, full `mise run gate`, PR titled `feat(776): ... (#776)`.
+Tests for "Default root follows same" and unread aggregation exist as before (unchanged code).
 
 ## Open escalation
 

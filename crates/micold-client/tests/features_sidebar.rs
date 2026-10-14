@@ -513,16 +513,30 @@ fn an_open_locations_sessions_are_rows_and_a_closed_ones_are_not() {
     let with_sessions = vec![worktree_entry(
         "feat-a",
         vec![],
+        vec![
+            session(SessionLocation::Worktree("feat-a".into())),
+            session(SessionLocation::Worktree("feat-a".into())),
+        ],
+    )];
+    assert_eq!(row_heights(&with_sessions).len(), 3);
+
+    // FR-017: one session has no expander, so no sub-row even when the row is marked open.
+    let single = vec![worktree_entry(
+        "feat-a",
+        vec![],
         vec![session(SessionLocation::Worktree("feat-a".into()))],
     )];
-    assert_eq!(row_heights(&with_sessions).len(), 2);
+    assert_eq!(row_heights(&single).len(), 1);
 
     let closed = vec![SidebarEntry::Worktree(WorktreeNode {
         worktree: worktree("feat-a"),
         display_name: "feat-a".to_string(),
         tags: vec![],
         expanded: false,
-        sessions: vec![session(SessionLocation::Worktree("feat-a".into()))],
+        sessions: vec![
+            session(SessionLocation::Worktree("feat-a".into())),
+            session(SessionLocation::Worktree("feat-a".into())),
+        ],
         shown_for_current_session: false,
         daemon: String::new(),
     })];
@@ -618,10 +632,11 @@ fn the_current_sessions_row_is_found_by_walking_the_rows_as_drawn() {
         worktree_entry("feat-a", vec![], vec![worktree_session]),
     ];
 
-    // Rows as drawn: Default, its session, feat-a, its session.
+    // Rows as drawn: Default, feat-a. One session has no sub-row (FR-017), so the session is
+    // found at its location's row.
     assert_eq!(
         current_session_row(&entries, Some(wanted)),
-        Some(3),
+        Some(1),
         "the index is a position in the rendered list, so it has to be counted the way the list is \
          built — locations and the sessions of the open ones, in order"
     );
@@ -630,6 +645,64 @@ fn the_current_sessions_row_is_found_by_walking_the_rows_as_drawn() {
         None,
         "and with no current session there is no row to scroll to (FR-013)"
     );
+
+    // Several sessions: Default, feat-b, then its listed sessions, the main one first.
+    let main = session(SessionLocation::Worktree("feat-b".into()));
+    let mut helper = session(SessionLocation::Worktree("feat-b".into()));
+    helper.main = false;
+    let mut main = main;
+    main.main = true;
+    let (helper_id, main_id) = (helper.id, main.id);
+    let entries = vec![
+        default_entry(vec![]),
+        worktree_entry("feat-b", vec![], vec![helper, main]),
+    ];
+    assert_eq!(current_session_row(&entries, Some(main_id)), Some(2));
+    assert_eq!(current_session_row(&entries, Some(helper_id)), Some(3));
+}
+
+// --- Feature 776 (M4): worktrees only, a press opens the main session -----------------------
+
+#[test]
+fn a_worktree_with_one_session_has_no_expander_and_a_press_selects_it() {
+    let only = session(SessionLocation::Worktree("feat-a".into()));
+    let id = only.id;
+    let SidebarEntry::Worktree(node) = worktree_entry("feat-a", vec![], vec![only]) else {
+        unreachable!()
+    };
+    assert!(!node.has_expander());
+    assert!(!node.sessions_shown());
+    assert_eq!(node.main_session(), Some(id));
+}
+
+#[test]
+fn several_sessions_list_the_main_first_and_a_press_selects_the_main_not_the_last_viewed() {
+    let mut helper = session(SessionLocation::Worktree("feat-a".into()));
+    let mut main = session(SessionLocation::Worktree("feat-a".into()));
+    helper.main = false;
+    main.main = true;
+    let (helper_id, main_id) = (helper.id, main.id);
+    // The helper is first in catalog order, and last viewed: neither decides the press.
+    let SidebarEntry::Worktree(mut node) = worktree_entry("feat-a", vec![], vec![helper, main])
+    else {
+        unreachable!()
+    };
+    assert!(node.has_expander());
+    assert_eq!(node.main_session(), Some(main_id));
+    let listed: Vec<_> = node.listed_sessions().iter().map(|s| s.id).collect();
+    assert_eq!(listed, vec![main_id, helper_id]);
+    // Collapsed by default: the flag is the user's, and a collapsed row draws no sub-rows.
+    node.expanded = false;
+    assert!(!node.sessions_shown());
+}
+
+#[test]
+fn a_worktree_without_a_session_selects_nothing_and_keeps_its_start_action() {
+    let SidebarEntry::Worktree(node) = worktree_entry("feat-a", vec![], vec![]) else {
+        unreachable!()
+    };
+    assert_eq!(node.main_session(), None);
+    assert!(!node.has_expander());
 }
 
 // --- the §B5 test hook (MICOLD_SIDEBAR_FILTER) ------------------------------------------------
@@ -804,7 +877,11 @@ fn a_session_on_an_uninstalled_cli_is_still_listed_and_still_identified() {
         sessions: vec![session.clone()],
     })];
 
-    assert_eq!(row_heights(&entries).len(), 2, "the row is drawn");
+    assert_eq!(
+        row_heights(&entries).len(),
+        1,
+        "its location's row is drawn; one session has no sub-row (FR-017)"
+    );
     assert_eq!(
         entries
             .iter()
