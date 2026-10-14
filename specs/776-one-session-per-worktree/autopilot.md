@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #776
 - **Worktree branch**: feat/776_one-session-per-worktree-chosen-at-start
 - **Started**: 2026-10-12
-- **Phase**: milestone M2 reviewed; full gate pending, then PR
-- **Next step**: M2 full gate, push, open PR
+- **Phase**: M2 PR open; waiting for merge
+- **Next step**: PR #821 merges; then M3 (cherry-pick wip-776-m3)
 
 ## Pull requests
 
@@ -19,13 +19,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #791 | Design (spec, plan, tasks) | merged | 6b60f3201a2e4dacdfc8d7d626ea55384eb959a0 |
 | #794 | M1 | merged | 497a497cd87bdd573581252a7b51278d37d7e16f |
 | #807 | Amendment: soft limit, default session (specs only) | merged | 7440dca0d4fe03719c38ed46df6854fb2a42305d |
+| #821 | M2 | open | |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T013 | full | Second session refused by daemon (RPC, create_session, review send); wire fields + v41 | #794 | merged (#794) |
-| M2 | T037–T042 | full | Soft limit: `allow_additional_session` on create_session, wire v42 (the start flag lands with the start block in M7) | | pending |
+| M2 | T037–T042 | full | Soft limit: `allow_additional_session` on create_session, wire v42 (the start flag lands with the start block in M7) | | #821 | open |
 | M3 | T014–T016, T021 | full | create_worktree / WorktreeCreate define the session at start (WIP at tag wip-776-m3, cherry-picked after M2) | | pending |
 | M4 | T017–T020, T022, T036, T043–T045 | full | Dialog fields; worktree rows only; row press opens the default session | | pending |
 | M5 | T046–T049 | full | Row menu "Start another session..." with confirmation | | pending |
