@@ -405,7 +405,7 @@ With **New branch** selected:
 2. **Ticket** — optional reference (e.g. `ABC-123`). Leave blank to omit it.
 3. **Name** — a short description (e.g. `login page`).
 
-Below the name fields, an **AI CLI** select chooses the session the worktree starts with: your
+Beside **Type**, an **AI CLI** select chooses the session the worktree starts with: your
 default CLI is preselected and **None** (last in the list) creates the worktree without a session.
 With a CLI chosen, an optional **First prompt** field holds the opening prompt sent to it. The
 session is defined here, when the worktree is created, and opens at once; there is no separate
