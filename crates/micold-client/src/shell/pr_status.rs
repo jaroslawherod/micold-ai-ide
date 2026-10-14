@@ -54,9 +54,7 @@ const MERGED_CHECK_LIMIT: usize = 50;
 
 /// Unix seconds now. The reducer has no clock; every message that needs the time carries this.
 fn now() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_or(0, |since| since.as_secs())
+    micold_core::unix_time::unix_secs()
 }
 
 /// Apply a pull request status message, and start the reading when the reducer asks for one.

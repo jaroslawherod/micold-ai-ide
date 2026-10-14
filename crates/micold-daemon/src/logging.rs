@@ -25,7 +25,6 @@ use std::io;
 use std::io::IsTerminal;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use file_rotate::{compression::Compression, suffix::AppendCount, ContentLimit, FileRotate};
 use micold_core::protocol::messages::{LogEntry, LogSink};
@@ -91,10 +90,7 @@ impl<S: Subscriber> Layer<S> for RecentErrorsLayer {
         }
         let mut visitor = MessageVisitor::default();
         event.record(&mut visitor);
-        let timestamp_secs = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map(|d| d.as_secs())
-            .unwrap_or(0);
+        let timestamp_secs = micold_core::unix_time::unix_secs();
         self.0.push(LogEntry {
             timestamp_secs,
             level: meta.level().to_string(),

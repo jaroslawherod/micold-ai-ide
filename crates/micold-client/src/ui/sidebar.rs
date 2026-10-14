@@ -831,9 +831,7 @@ fn group_items(
 /// Unix seconds now, for the age of a pull request reading. The view glue owns the clock: the
 /// render-free layer is handed the time, never asks for it.
 pub(crate) fn unix_now() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_or(0, |since| since.as_secs())
+    micold_core::unix_time::unix_secs()
 }
 
 /// The indicator's marks for a pull request state: the shared component does not know the pull
