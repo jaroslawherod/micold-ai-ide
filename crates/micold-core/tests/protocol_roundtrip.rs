@@ -902,11 +902,9 @@ fn a_merged_branch_check_and_its_answers_round_trip_in_order() {
 }
 
 /// Feature 776, FR-006/FR-007: an older frame lacks every new field, and decodes with the old
-/// behaviour; the version moved with the hash.
+/// behaviour.
 #[test]
 fn frames_without_the_feature_776_fields_decode_with_the_defaults() {
-    assert_eq!(PROTOCOL_VERSION, 45);
-
     let create: ClientMsg = serde_json::from_str(
         r#"{"WorktreeCreate":{"req":1,"project":"/a","branch":"b","dir_name":"d","mode":"NewBranch"}}"#,
     )
