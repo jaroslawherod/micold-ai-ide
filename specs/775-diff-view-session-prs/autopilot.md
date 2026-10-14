@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/775_diff-view-should-show-prs-created-within-sessions
 - **Started**: 2026-10-12
 - **Phase**: milestone M2
-- **Next step**: M1 PR merge, then milestone M2 (T015 visual pass to run once a display build is available)
+- **Next step**: M2 PR merge, then milestone M3; T015/T026 visual pass still owed (see Follow-ups)
 
 ## Pull requests
 
@@ -24,7 +24,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T015 | full | PRs of the entry's branch listed in the Changes pane | #825 | merged (T015 visual pass moved to M2) |
-| M2 | T016–T026, T023b (+T015 visual pass) | full | Select a PR, read its base...head diff, return | — | in progress (handover) |
+| M2 | T016–T026, T023b (+T015 visual pass) | full | Select a PR, read its base...head diff, return | (this PR) | gate green, review A and B CLEAN; visual pass not observed |
 | M3 | T027–T033 | full | List refreshes on status triggers, stale marked | — | pending |
 
 ## Decisions
@@ -46,6 +46,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Plan | 2 | 44a2dbea1d4c763aa859c8ae3c982ed7bf415968:4055448678d6361c09ed6bf9f33d1e0188781e25 | CLEAN (2 MINOR fixed, prose only) |
 | Tasks | 1 | f299e17b1b36488e83cceece626596063613b3d7:a3576aeee9ba5abbc3ef2b89553f242f5bed2ac7 | CHANGES: 2 MAJOR (PullRequestRow premise, showcase paths), 3 MINOR; all fixed, wording and task split only, checked against the repo |
 | M1 review B (sonnet) | 1 | d08b95eb:da6107ad | CHANGES: 2 MAJOR (no red evidence, declined with the deviation recorded; Verify not observed by B, observed by the gate), 3 MINOR (pull-forward noted, T005/T030 text amended) |
+| M2 review A (high) | 1 | e91435f8:a7a35a9f | CLEAN (clippy large_enum_variant found by the gate, fixed by boxing) |
+| M2 review B (sonnet) | 1 | e91435f8:a7a35a9f | CLEAN (3 MINOR: unused `_started` kept as pass-through, leftover fixed, red evidence known) |
 | M1 review A (high) | 1 | a24a773c7a9fa0ff3115024bc9939df6a47f8604:addb7d2a98edc3c8c044fca7705e4b25d0154682 | CHANGES: 2 MAJOR (disconnect leaves list Loading; list read raised a notice with no route), 1 MINOR; MAJORs fixed with test, MINOR declined |
 
 ## Declined review findings
@@ -56,6 +58,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | A | changes.rs:146 stale branch list while a read for another branch is in flight (MINOR) | The window is one read long and the queued read replaces it; the view's branch changes only when the entry's branch does. Not worth a seq-branch field. |
 
 ## Handover
+
+None. (M2 finished; the earlier handover text below is superseded.)
+
+<!-- superseded handover:
 
 M2 unit hit the 150k cap with code written but NOT yet compiled or tested (no gate run, no PR, nothing
 pushed; the work is one local WIP commit on the branch). Branch was reset to origin/main (M1 merged).
@@ -102,10 +108,14 @@ Next steps (in order):
 8. Note: shell `RemotesTimedOut` for the diff read reuses `Msg::RemotesTimedOut` with `PendingOp::
    PrDiffRemotes`.
 
+-->
+
 ## Open escalation
 
 None. <or: the banner as sent, and when>
 
 ## Follow-ups not done
 
-<Defects found outside this flow's work, scope deliberately cut, etc. Copied into the handoff.>
+- T015 and T026 (visual pass, quickstart Part B 1-5) NOT observed: no Xvfb/xdotool here (headless sway is possible) and no fixture worktree with open/merged/deleted-branch/too-large PRs. Evidence file `visual/evidence.md` says so. Left unticked; run in a session with a display and a fixture repo, or accept at close.
+- M2 shape: plan wanted one factory call; there are three (list, status, diff), guard test pins 3.
+- No red evidence for M2 behaviours (part 1 handover): tdd-verify mutation testing at close should cover `split_pr_diff`, the 406 mapping, `SourceChosen`.
