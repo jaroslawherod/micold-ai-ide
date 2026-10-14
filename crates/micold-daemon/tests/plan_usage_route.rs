@@ -5,7 +5,7 @@
 #[path = "support/attention.rs"]
 mod attention;
 
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use attention::{connect_with_welcome, received, session_id, Service, Window};
@@ -18,6 +18,9 @@ use tokio::net::TcpStream;
 
 const A: u128 = 0x490A;
 const B: u128 = 0x490B;
+/// The session of the log test alone, so its lines are told from the other tests' in the one
+/// process-wide capture.
+const LOGGED: u128 = 0x490C;
 /// The route's body bound (S3).
 const MAX_STATUS_BODY: usize = 16 * 1024;
 
@@ -388,44 +391,64 @@ impl Captured {
             .map(str::to_owned)
             .collect()
     }
+
+    /// The lines logged for `session`, in order.
+    fn lines_of(&self, session: SessionId) -> Vec<String> {
+        let id = session.0.to_string();
+        let mut lines = self.lines();
+        lines.retain(|line| line.contains(&id));
+        lines
+    }
+}
+
+/// The capture behind the process-wide subscriber, installed once.
+///
+/// Not `set_default`: that subscriber is thread-local, and `tracing` caches each callsite's
+/// interest process-wide, so tests running in parallel threads race to register the callsite and
+/// the event could be dropped for this test's dispatcher (issue #829: no line captured, on
+/// Windows CI). A global subscriber is the one every thread and every callsite sees, whatever
+/// the scheduling; the test picks its own lines out by its session id.
+fn global_capture() -> Captured {
+    static CAPTURE: OnceLock<Captured> = OnceLock::new();
+    CAPTURE
+        .get_or_init(|| {
+            let captured = Captured::default();
+            tracing_subscriber::fmt()
+                .with_writer(captured.clone())
+                .with_max_level(tracing::Level::TRACE)
+                .with_ansi(false)
+                .try_init()
+                .expect("no other subscriber is installed in this test binary");
+            captured
+        })
+        .clone()
 }
 
 /// S3.1 (FR-015, FR-016, SC-003): a rejection is logged at debug, once per (session, answer)
 /// until that session's next accepted reading, never at warn or above, and never with the body.
 #[tokio::test]
 async fn rejections_are_logged_at_debug_once_and_never_with_the_body() {
-    let captured = Captured::default();
-    let subscriber = tracing_subscriber::fmt()
-        .with_writer(captured.clone())
-        .with_max_level(tracing::Level::TRACE)
-        .with_ansi(false)
-        .finish();
-    let _guard = tracing::subscriber::set_default(subscriber);
-
-    let rx = Receiver::with_sessions(&[session_id(A)]).await;
+    let captured = global_capture();
+    let session = session_id(LOGGED);
+    let rx = Receiver::with_sessions(&[session]).await;
     const SECRET: &str = "a-body-that-must-not-be-logged";
     let bad = format!("[\"{SECRET}\"]");
     let empty = format!("{{\"{SECRET}\": 1}}");
     for _ in 0..3 {
-        assert_eq!(rx.status(session_id(A), &bad).await, 400);
-        assert_eq!(rx.status(session_id(A), &empty).await, 200);
+        assert_eq!(rx.status(session, &bad).await, 400);
+        assert_eq!(rx.status(session, &empty).await, 200);
     }
     let status_lines = |captured: &Captured| -> Vec<String> {
-        captured
-            .lines()
-            .into_iter()
-            .filter(|line| line.contains("plan usage"))
-            .collect()
+        let mut lines = captured.lines_of(session);
+        lines.retain(|line| line.contains("plan usage"));
+        lines
     };
     let lines = status_lines(&captured);
     assert_eq!(lines.len(), 2, "once per (session, answer): {lines:#?}");
     assert!(lines.iter().all(|l| l.contains("DEBUG")), "{lines:#?}");
 
-    assert_eq!(
-        rx.status(session_id(A), &rate_limits(42.0, 3600)).await,
-        200
-    );
-    assert_eq!(rx.status(session_id(A), &bad).await, 400);
+    assert_eq!(rx.status(session, &rate_limits(42.0, 3600)).await, 200);
+    assert_eq!(rx.status(session, &bad).await, 400);
     assert_eq!(
         status_lines(&captured).len(),
         3,
@@ -439,7 +462,7 @@ async fn rejections_are_logged_at_debug_once_and_never_with_the_body() {
     );
     assert!(
         all.iter()
-            .filter(|l| l.contains("plan usage"))
+            .filter(|l| l.contains("plan usage") && l.contains(&session.0.to_string()))
             .all(|l| !l.contains("WARN") && !l.contains("ERROR")),
         "{all:#?}"
     );
