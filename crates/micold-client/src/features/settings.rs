@@ -610,6 +610,27 @@ pub struct SettingsDraft {
     pub baseline: Option<Settings>,
 }
 
+/// Trim, parse and range-check one number field: `not_number` when the text is not a number,
+/// `out_of_range` when it is a number outside `min..=max`.
+fn parse_range<T: std::str::FromStr + PartialOrd + Copy>(
+    text: &str,
+    (min, max): (T, T),
+    (field, section): (FieldId, SettingsSection),
+    out_of_range: String,
+    not_number: &str,
+) -> Result<T, FieldError> {
+    let reject = |message: String| FieldError {
+        field,
+        section,
+        message,
+    };
+    match text.trim().parse::<T>() {
+        Ok(n) if n >= min && n <= max => Ok(n),
+        Ok(_) => Err(reject(out_of_range)),
+        Err(_) => Err(reject(not_number.to_string())),
+    }
+}
+
 /// A processor share as the field shows it: cores, with no trailing zeros.
 ///
 /// `MilliCpus(2000)` is "2" and not "2.000". The field is round-trippable — what it shows is what
@@ -735,16 +756,13 @@ impl SettingsDraft {
     fn scrollback(&self) -> Result<usize, FieldError> {
         let min = micold_core::settings::MIN_SCROLLBACK_LINES;
         let max = micold_core::settings::MAX_SCROLLBACK_LINES;
-        let reject = |message: String| FieldError {
-            field: FieldId::SettingsScrollback,
-            section: SettingsSection::Terminal,
-            message,
-        };
-        match self.terminal.scrollback_lines.trim().parse::<usize>() {
-            Ok(n) if (min..=max).contains(&n) => Ok(n),
-            Ok(_) => Err(reject(format!("Enter a number between {min} and {max}."))),
-            Err(_) => Err(reject("Enter a whole number of lines.".to_string())),
-        }
+        parse_range(
+            &self.terminal.scrollback_lines,
+            (min, max),
+            (FieldId::SettingsScrollback, SettingsSection::Terminal),
+            format!("Enter a number between {min} and {max}."),
+            "Enter a whole number of lines.",
+        )
     }
 
     /// The four sandbox limits, parsed from what was typed.
@@ -826,17 +844,17 @@ impl SettingsDraft {
             return Ok(None);
         }
         let min_mib = min.as_mib();
-        match text.parse::<u64>() {
-            Ok(m) if (min_mib..=max_mib).contains(&m) => Ok(Some(Bytes::from_mib(m))),
-            Ok(_) => Err(self.reject(
-                field,
-                format!(
-                    "Enter between {min_mib} and {max_mib} MiB, or leave it empty to use the \
-                     runtime's default."
-                ),
-            )),
-            Err(_) => Err(self.reject(field, "Enter a whole number of mebibytes.".to_string())),
-        }
+        parse_range(
+            text,
+            (min_mib, max_mib),
+            (field, SettingsSection::Daemon),
+            format!(
+                "Enter between {min_mib} and {max_mib} MiB, or leave it empty to use the \
+                 runtime's default."
+            ),
+            "Enter a whole number of mebibytes.",
+        )
+        .map(|m| Some(Bytes::from_mib(m)))
     }
 
     fn count(
@@ -850,57 +868,48 @@ impl SettingsDraft {
         if text.is_empty() {
             return Ok(None);
         }
-        match text.parse::<u32>() {
-            Ok(n) if (min..=max).contains(&n) => Ok(Some(n)),
-            Ok(_) => Err(self.reject(
-                field,
-                format!(
-                    "Enter between {min} and {max} processes, or leave it empty to use the \
-                     runtime's default."
-                ),
-            )),
-            Err(_) => Err(self.reject(field, "Enter a whole number of processes.".to_string())),
-        }
+        parse_range(
+            text,
+            (min, max),
+            (field, SettingsSection::Daemon),
+            format!(
+                "Enter between {min} and {max} processes, or leave it empty to use the \
+                 runtime's default."
+            ),
+            "Enter a whole number of processes.",
+        )
+        .map(Some)
     }
 
     fn timeout(&self) -> Result<u64, FieldError> {
         let min = micold_core::settings::MIN_ENV_INCLUDE_TIMEOUT_SECS;
         let max = micold_core::settings::MAX_ENV_INCLUDE_TIMEOUT_SECS;
-        let reject = |message: String| FieldError {
-            field: FieldId::SettingsEnvIncludeTimeout,
-            section: SettingsSection::Environment,
-            message,
-        };
-        match self.environment.timeout_secs.trim().parse::<u64>() {
-            Ok(t) if (min..=max).contains(&t) => Ok(t),
-            Ok(_) => Err(reject(format!(
-                "Enter a timeout between {min} and {max} seconds."
-            ))),
-            Err(_) => Err(reject("Enter a whole number of seconds.".to_string())),
-        }
+        parse_range(
+            &self.environment.timeout_secs,
+            (min, max),
+            (
+                FieldId::SettingsEnvIncludeTimeout,
+                SettingsSection::Environment,
+            ),
+            format!("Enter a timeout between {min} and {max} seconds."),
+            "Enter a whole number of seconds.",
+        )
     }
 
     /// The long-task threshold as typed, parsed and range-checked (feature 613, S6, FR-026).
     fn long_task_threshold(&self) -> Result<u64, FieldError> {
         let min = micold_core::settings::MIN_LONG_TASK_THRESHOLD_SECS;
         let max = micold_core::settings::MAX_LONG_TASK_THRESHOLD_SECS;
-        let reject = |message: String| FieldError {
-            field: FieldId::SettingsLongTaskThreshold,
-            section: SettingsSection::Environment,
-            message,
-        };
-        match self
-            .environment
-            .long_task_threshold_secs
-            .trim()
-            .parse::<u64>()
-        {
-            Ok(t) if (min..=max).contains(&t) => Ok(t),
-            Ok(_) => Err(reject(format!(
-                "Enter a threshold between {min} and {max} seconds."
-            ))),
-            Err(_) => Err(reject("Enter a whole number of seconds.".to_string())),
-        }
+        parse_range(
+            &self.environment.long_task_threshold_secs,
+            (min, max),
+            (
+                FieldId::SettingsLongTaskThreshold,
+                SettingsSection::Environment,
+            ),
+            format!("Enter a threshold between {min} and {max} seconds."),
+            "Enter a whole number of seconds.",
+        )
     }
 
     /// The plan-usage threshold as typed, refused outside 50–100 with a message naming the range
