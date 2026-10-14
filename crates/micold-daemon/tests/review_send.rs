@@ -12,12 +12,9 @@
 #[path = "support/mcp.rs"]
 mod mcp_support;
 
-#[path = "support/conn.rs"]
-mod conn;
+#[path = "support/runs.rs"]
+mod runs_support;
 
-use conn::{connect, Client};
-use std::ffi::OsString;
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -35,47 +32,7 @@ use micold_core::session::{AiCli, SessionId, TerminalMode};
 use micold_core::terminal::LaunchMode;
 use micold_daemon::activity::{ActivityEvent, HookKind};
 use micold_daemon::state::DaemonState;
-
-/// The tests change process-wide variables (`PATH`, `HOME`); one at a time.
-static ENV: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
-
-/// How long a test waits for something it expects.
-const BOUND: Duration = Duration::from_secs(30);
-/// How long a test waits to be sure something does not come.
-const QUIET: Duration = Duration::from_millis(500);
-
-/// Every variable a test changes, restored on drop.
-struct Env {
-    saved: Vec<(&'static str, Option<OsString>)>,
-}
-
-impl Env {
-    fn set(vars: &[(&'static str, Option<OsString>)]) -> Self {
-        let saved = vars
-            .iter()
-            .map(|(name, value)| {
-                let previous = std::env::var_os(name);
-                match value {
-                    Some(value) => std::env::set_var(name, value),
-                    None => std::env::remove_var(name),
-                }
-                (*name, previous)
-            })
-            .collect();
-        Self { saved }
-    }
-}
-
-impl Drop for Env {
-    fn drop(&mut self) {
-        for (name, previous) in self.saved.drain(..) {
-            match previous {
-                Some(value) => std::env::set_var(name, value),
-                None => std::env::remove_var(name),
-            }
-        }
-    }
-}
+use runs_support::{install_claude, submitted, window, Client, Env, BOUND, ENV, QUIET};
 
 /// S1 and S2 in `wt`, S3 in `other`, all `claude`.
 struct Sandbox {
@@ -221,53 +178,6 @@ impl Drop for Sandbox {
     }
 }
 
-/// The stand-in `claude`: waits `<bin>/slow` seconds when that file exists, asks for bracketed
-/// paste (unless told not to), draws a prompt, and appends everything typed into it to
-/// `<bin>/input.<its --session-id or --resume id>`.
-fn install_claude(bin: &Path) {
-    let dir = bin.display();
-    let path = bin.join("claude");
-    std::fs::write(
-        &path,
-        format!(
-            "#!/bin/sh\n\
-             sid=''; prev=''\n\
-             for a in \"$@\"; do case \"$prev\" in --session-id|--resume) sid=\"$a\";; esac; prev=\"$a\"; done\n\
-             [ -e '{dir}'/slow ] && sleep \"$(cat '{dir}'/slow)\"\n\
-             [ -e '{dir}'/nopaste.\"$sid\" ] || printf '\\033[?2004h'\n\
-             printf 'ready> '\n\
-             exec cat >> '{dir}'/input.\"$sid\"\n"
-        ),
-    )
-    .unwrap();
-    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
-}
-
-/// Connect, complete the handshake and attach to `project`.
-async fn window(state: &Arc<DaemonState>, project: &Path) -> Client {
-    let mut client = connect(state).await;
-    client
-        .send(Frame::Control(ClientMsg::Attach {
-            project: project.to_path_buf(),
-            force: true,
-        }))
-        .await
-        .unwrap();
-    let attached = async {
-        loop {
-            if let Frame::Control(DaemonMsg::CatalogChanged { .. }) =
-                client.next().await.expect("stream open").unwrap()
-            {
-                return;
-            }
-        }
-    };
-    tokio::time::timeout(BOUND, attached)
-        .await
-        .expect("attach completes with its catalog");
-    client
-}
-
 /// One `ReviewChanged` push: the entry, its comments and whether a send is open.
 type Pushed = (String, Vec<ReviewComment>, bool);
 
@@ -389,12 +299,6 @@ fn started_session(result: &Result<OperationResult, (ErrorKind, String)>) -> Ses
         session.0
     );
     session
-}
-
-/// The bytes a submission of `prompt` types into a terminal with bracketed paste on, as the
-/// stand-in's cooked terminal writes them (its Enter arrives as a line feed).
-fn submitted(prompt: &str) -> String {
-    format!("\u{1b}[200~{prompt}\u{1b}[201~\n")
 }
 
 /// The last push of a send holds exactly the comments `added` (same ids, same order), each sent
