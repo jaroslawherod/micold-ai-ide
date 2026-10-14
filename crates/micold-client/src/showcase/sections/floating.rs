@@ -284,6 +284,22 @@ pub fn menu_trigger<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a
     )
 }
 
+/// A 420x160 caption surface under a tooltip, for the placements that follow the pointer.
+fn hover_area<'a>(caption: &'a str, tip: &'a str, roles: Roles) -> material::Tooltip<'a, Message> {
+    material::Tooltip::new(
+        material::Surface::new(
+            material::Text::new(caption, TypeRole::Caption, roles),
+            material::SurfaceKind::Plain,
+            roles,
+        )
+        .width(Length::Fixed(420.0))
+        .height(Length::Fixed(160.0))
+        .padding(spacing::MD),
+        tip,
+        roles,
+    )
+}
+
 /// `Tooltip` — hover-driven, so it has nothing to pose: point at an instance and wait.
 ///
 /// The third instance is the one worth hovering. A tooltip's label used to be a single short
@@ -371,19 +387,8 @@ pub fn tooltip<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Mes
             // the panel sits beside the pointer and moves with it, flipping at the window's edges.
             posed(
                 "follows the pointer: move over the area",
-                material::Tooltip::new(
-                    material::Surface::new(
-                        material::Text::new(
-                            "Move the pointer over this area",
-                            TypeRole::Caption,
-                            roles,
-                        ),
-                        material::SurfaceKind::Plain,
-                        roles,
-                    )
-                    .width(Length::Fixed(420.0))
-                    .height(Length::Fixed(160.0))
-                    .padding(spacing::MD),
+                hover_area(
+                    "Move the pointer over this area",
                     "Beside the pointer, not beside the area",
                     roles,
                 )
@@ -403,19 +408,8 @@ pub fn tooltip<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Mes
             ),
             posed(
                 "show delay 1 s and follows: move over the area",
-                material::Tooltip::new(
-                    material::Surface::new(
-                        material::Text::new(
-                            "Wait a second, then the panel appears beside the pointer",
-                            TypeRole::Caption,
-                            roles,
-                        ),
-                        material::SurfaceKind::Plain,
-                        roles,
-                    )
-                    .width(Length::Fixed(420.0))
-                    .height(Length::Fixed(160.0))
-                    .padding(spacing::MD),
+                hover_area(
+                    "Wait a second, then the panel appears beside the pointer",
                     "Beside the pointer once the delay has run",
                     roles,
                 )
