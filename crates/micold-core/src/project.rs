@@ -88,6 +88,16 @@ pub enum RenameError {
     Whitespace,
 }
 
+impl RenameError {
+    /// The sentence a rename dialog shows for this rejection.
+    pub fn message(self) -> &'static str {
+        match self {
+            RenameError::Empty => "Name cannot be empty.",
+            RenameError::Whitespace => "Name cannot be only whitespace.",
+        }
+    }
+}
+
 /// Validate a proposed display name (FR-020, SC-008). An empty string is rejected as
 /// [`RenameError::Empty`]; a non-empty but all-whitespace string as
 /// [`RenameError::Whitespace`]. On success the trimmed name is returned, so leading and

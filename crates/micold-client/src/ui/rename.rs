@@ -6,14 +6,10 @@ use crate::app::{Message, State};
 use crate::features::project::Msg as ProjectMsg;
 use crate::features::project::RenameDraft;
 use crate::features::window::FieldId;
-use crate::ui::focus::TrackFocus;
-use crate::ui::material::{self, Button, SurfaceKind, Text, TextField, TypeRole};
-use iced::widget::{column, row};
-use iced::{Element, Length};
+use crate::ui::rename_dialog::{self, RenameSpec};
+use iced::Element;
 use micold_core::env_include::EnvIncludeOutcome;
-use micold_core::project::RenameError;
 use micold_core::theme::ColorScheme;
-use micold_core::tokens::{self};
 
 /// The rename dialog as the dialog body; `ui::view` wraps it in the shared
 /// [`Modal`](crate::ui::material::Modal) transition.
@@ -22,42 +18,21 @@ pub fn modal<'a>(
     scheme: ColorScheme,
     focused: Option<FieldId>,
 ) -> Element<'a, Message> {
-    let r = tokens::roles(scheme);
-
-    let input = TextField::new("", &draft.text, r)
-        .label("Project name")
-        .track_focus(FieldId::RenameProjectName, focused)
-        .on_input(|text| Message::Project(ProjectMsg::RenameTextChanged(text)))
-        .on_submit(Message::Project(ProjectMsg::RenameConfirmed));
-
-    let mut fields = material::dialog::fields(column![
-        Text::new("Rename project", TypeRole::Headline, r),
-        Text::new(draft.path.display().to_string(), TypeRole::Caption, r).muted(),
-        input,
-    ]);
-
-    // Show the validation problem when a blank name was submitted (FR-020).
-    if let Some(error) = draft.error {
-        let message = match error {
-            RenameError::Empty => "Name cannot be empty.",
-            RenameError::Whitespace => "Name cannot be only whitespace.",
-        };
-        fields = fields.push(Text::new(message, TypeRole::Caption, r).tint(r.error));
-    }
-
-    let actions = material::dialog::actions(row![
-        Button::filled("Rename", r).on_press(Message::Project(ProjectMsg::RenameConfirmed)),
-        Button::outlined("Cancel", r).on_press(Message::Project(ProjectMsg::RenameCancelled)),
-    ]);
-
-    let dialog = material::Surface::new(
-        material::dialog::body(fields, actions),
-        SurfaceKind::Dialog,
-        r,
+    rename_dialog::view(
+        RenameSpec {
+            title: "Rename project",
+            caption: draft.path.display().to_string(),
+            label: "Project name",
+            field: FieldId::RenameProjectName,
+            text: &draft.text,
+            error: draft.error,
+            on_input: |t| Message::Project(ProjectMsg::RenameTextChanged(t)),
+            on_confirm: Message::Project(ProjectMsg::RenameConfirmed),
+            on_cancel: Message::Project(ProjectMsg::RenameCancelled),
+        },
+        scheme,
+        focused,
     )
-    .width(Length::Fixed(420.0));
-
-    dialog.into()
 }
 
 /// This dialog's body, built from the state that opened it — `None` when the surface is open but
