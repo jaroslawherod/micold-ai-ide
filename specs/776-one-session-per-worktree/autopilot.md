@@ -26,7 +26,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T013 | full | Second session refused by daemon (RPC, create_session, review send); wire fields + v41 | #794 | merged (#794) |
-| M2 | T037–T042 | full | Soft limit: `allow_additional_session` on create_session, wire v42 (the start flag lands with the start block in M7) | | #821 | open |
+| M2 | T037–T042 | full | Soft limit: `allow_additional_session` on create_session, wire v42 (the start flag lands with the start block in M7) | #821 | open (#821) |
 | M3 | T014–T016, T021 | full | create_worktree / WorktreeCreate define the session at start (WIP at tag wip-776-m3, cherry-picked after M2) | | pending |
 | M4 | T017–T020, T022, T036, T043–T045 | full | Dialog fields; worktree rows only; row press opens the default session | | pending |
 | M5 | T046–T049 | full | Row menu "Start another session..." with confirmation | | pending |
