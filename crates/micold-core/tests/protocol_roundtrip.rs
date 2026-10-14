@@ -1844,6 +1844,7 @@ fn the_main_marker_and_set_main_round_trip() {
         live_shells: Vec::new(),
         attention_seq: 0,
         unread: false,
+        agents: Vec::new(),
         main: true,
     };
     let json = serde_json::to_value(&summary).expect("encode");
