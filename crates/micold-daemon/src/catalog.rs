@@ -1287,16 +1287,32 @@ impl Catalog {
             Some((project, s)) if !s.archived => (project.to_path_buf(), s.location.clone()),
             _ => return Ok(false),
         };
+        let project_key = project.clone();
         let list = self.workspace.sessions.entry(project).or_default();
         // Already main: nothing to write. A catalog without the marker derives its main as the
         // first un-archived session; choosing that one stores the marker, so it is a write.
         if target_marked(list, id) {
             return Ok(false);
         }
+        let before: Vec<(SessionId, bool)> = list
+            .iter()
+            .filter(|s| s.location == location)
+            .map(|s| (s.id, s.main))
+            .collect();
         for s in list.iter_mut().filter(|s| s.location == location) {
             s.main = s.id == id;
         }
-        self.persist()?;
+        if let Err(err) = self.persist() {
+            // Roll back, so memory, disk and the clients' view stay one thing.
+            if let Some(list) = self.workspace.sessions.get_mut(&project_key) {
+                for s in list.iter_mut() {
+                    if let Some((_, was)) = before.iter().find(|(i, _)| *i == s.id) {
+                        s.main = *was;
+                    }
+                }
+            }
+            return Err(err);
+        }
         Ok(true)
     }
 
