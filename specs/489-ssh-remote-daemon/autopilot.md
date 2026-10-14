@@ -65,7 +65,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M1 is implemented, all T001-T027 ticked, reviews A and B done (round 1, fixed). Branch rebased onto origin/main (ffff0aab/5f51b06f), 16 commits ahead, not pushed. Full gate on the rebased tree: fmt, clippy, cargo test --workspace green; test-scripts stage fails only on `site/capture/demo-project.sh builds a project`, which hung 22 min then was killed. Next: once the build-lock deadlock is fixed on main, rebase, run `mise run gate`, push, open the M1 PR (pr.md).
+
 
 ## Open escalation
 
