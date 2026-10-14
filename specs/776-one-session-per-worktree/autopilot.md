@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #776
 - **Worktree branch**: feat/776_one-session-per-worktree-chosen-at-start
 - **Started**: 2026-10-12
-- **Phase**: amendment 2026-10-14 (main session) in review; specs only
-- **Next step**: amendment PR merges; then M3 (cherry-pick wip-776-m3, then T050-T054)
+- **Phase**: M3 implemented; gate and reviews done, PR being opened
+- **Next step**: M3 PR merges; then M4
 
 ## Pull requests
 
@@ -20,7 +20,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #794 | M1 | merged | 497a497cd87bdd573581252a7b51278d37d7e16f |
 | #807 | Amendment: soft limit, default session (specs only) | merged | 7440dca0d4fe03719c38ed46df6854fb2a42305d |
 | #821 | M2 | merged | 08e3a36dc925bffd3e44623701a9cbade577cf57 |
-| #827 | Amendment: main session and helpers (specs only) | open | |
+| #827 | Amendment: main session and helpers (specs only) | merged | fa395078be20e60fa40eacb8d45b52beb683d37d |
+| #TBD | M3 | open | |
 
 ## Milestones
 
@@ -67,8 +68,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Code A M2 | 1 | b28cbc7a1e5380a90b1b6a6aee84b70c6fab31b4:4a8e0269bdac0074368055715714d8222d0dcf2a | CLEAN (2 MINOR: comment width, start_block_text unused until M7; left) |
 | Conformance B M2 | 1 | b28cbc7a1e5380a90b1b6a6aee84b70c6fab31b4:4a8e0269bdac0074368055715714d8222d0dcf2a | CHANGES: 1 MAJOR (flagged-concurrency test dropped out-of-order answers); fixed by awaiting each answer in turn |
 | Amendment 2026-10-14 (main session) | 1 | ec2345907f0bee18669772be003f4096e916dd99:08e3a36dc925bffd3e44623701a9cbade577cf57 | CLEAN (3 MINOR, fixed, prose only) |
+| Code A M3 | 1 | 0a6031f8335591c7c59a02840b354249dbd6dbfd:5b9d4e5a05a02a467f79cf38e5dfcc04d159f07c | CLEAN (2 MINOR: set_main rollback fixed; RPC prompt-undelivered declined) |
+| Conformance B M3 | 1 | 0a6031f8335591c7c59a02840b354249dbd6dbfd:5b9d4e5a05a02a467f79cf38e5dfcc04d159f07c | CLEAN (1 MINOR declined) |
 
 ## Declined review findings
+
+- M3 review A F2 (MINOR): WorktreeCreate RPC drops `FirstPromptUndelivered`; the first prompt is best-effort for the dialog and the MCP path reports `prompt_delivered`. Declined.
+- M3 review B F1 (MINOR): `archive_session_ids` may run promotion twice per project; idempotent. Declined.
+- M3 review A F1 (MINOR, set_main rollback on failed persist): fixed.
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
