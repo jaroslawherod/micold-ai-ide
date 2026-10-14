@@ -84,23 +84,19 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M4 (branch reset to origin/main 5ac2e0a2, M3 merged) code is written and uncommitted-then-committed as
-WIP; client tests `features_session`, `features_sidebar`, `features_worktree_form` pass. Done:
-catalog_sync adopts `main`; sidebar `WorktreeNode`/`DefaultNode` `has_expander`, `sessions_shown`,
-`main_session`, `listed_sessions`; `row_heights`/`current_session_row` follow; ui/sidebar.rs: expander
-only for several sessions, row press = `Selected(main)`, helpers annotated "helper, <cli>", start
-action only when `State::start_offered` (occupancy Free); ui/mod.rs worktree/Default menu gets
-"Close session"/"Remove session" for a single session; worktree form `session_cli`,
-`session_choices`, `first_prompt`, msgs `SessionCliChosen`/`FirstPromptChanged`, `session_definition()`,
-Select + TextField in ui/worktree_form.rs; daemon_sync sends `session` and on `WorktreeCreated{session}`
-selects + `view_session`. Tests added for T017/T018/T043 (reducer level).
-Next: (1) full `cargo test -p micold-client` incl. main_tests and the dialog geometry gates (new fields
-may break a height gate; unrun after the last edits); add a main_tests test that a created
-worktree's returned session is selected/viewed; (2) T036/T045 docs in
-docs/user-guide/worktrees-and-sessions.md; (3) tick T017-T020, T022, T036, T043-T045 in tasks.md;
-(4) T022 visual pass (quickstart B items 1,2,4) evidence in specs/776-.../tdd/; (5) scoped gate,
-review A (high) + B, full `mise run gate`, PR titled `feat(776): ... (#776)`.
-Tests for "Default root follows same" and unread aggregation exist as before (unchanged code).
+M4 is implemented, committed locally (4 commits on the branch, rebased on origin/main 5ac2e0a2; not
+pushed, no PR). Done: full `cargo test -p micold-client` green (geometry gates fixed: AI CLI select
+shares the Type row, new FieldId::AddWorktreeFirstPrompt, covered-state paths, PICKER_LIST_CONTENT,
+layout snapshot regenerated, layout_text_overflow fixture adds a helper); docs T036/T045; tasks ticked
+(T017-T020, T022, T036, T043-T045); visual pass evidence in tdd/visual-pass.md (items 1, 2, 4 one-session
+pass); scoped gate green after fmt; review A CLEAN; review B round 1 CHANGES: F1 fixed (main_tests
+`a_created_worktrees_returned_session_is_selected`), F2 declined (see Declined), F3 fixed in tasks.md.
+Next: a green `mise run gate` on the current tree (a first run died on SIGTERM in capture-harness
+test-scripts, environmental; a second run was queued behind ~30 other worktrees on the build lock, log
+may be gone), then `git fetch; git rebase origin/main` if it moved, push, open PR titled
+`feat(776): dialog session fields, worktree rows, main session press (#776)` (body per tasks/pr.md,
+review A clean, review B above, note visual pass two-session case deferred to M5).
+Re-review of B is not required (its fixes: a test and prose).
 
 ## Open escalation
 
