@@ -38,6 +38,24 @@ fn alpha(c: Color, a: f32) -> Color {
 /// disabled button cannot grey out content that colors itself.
 pub const DISABLED_OPACITY: f32 = 0.38;
 
+/// `c` at the disabled opacity when the button is disabled, otherwise unchanged.
+fn disabled_alpha(c: Color, status: button::Status) -> Color {
+    if matches!(status, button::Status::Disabled) {
+        alpha(c, DISABLED_OPACITY)
+    } else {
+        c
+    }
+}
+
+/// The hover/press layer a transparent button paints over its content colour; none at rest.
+fn state_overlay(content: Color, status: button::Status) -> Option<Background> {
+    match status {
+        button::Status::Hovered => Some(Background::Color(state_fill(content, state::HOVER))),
+        button::Status::Pressed => Some(Background::Color(state_fill(content, state::PRESSED))),
+        _ => None,
+    }
+}
+
 /// A token color at the disabled opacity, for content a widget colors itself.
 pub fn disabled_color(c: Rgb) -> Color {
     alpha(color(c), DISABLED_OPACITY)
@@ -651,13 +669,9 @@ pub fn filled(r: Roles, host: Option<Host>) -> impl Fn(&Theme, button::Status) -
             button::Status::Active => base,
             button::Status::Hovered => state_layer(base, on, state::HOVER),
             button::Status::Pressed => state_layer(base, on, state::PRESSED),
-            button::Status::Disabled => alpha(base, 0.38),
+            button::Status::Disabled => alpha(base, DISABLED_OPACITY),
         };
-        let text = if matches!(status, button::Status::Disabled) {
-            alpha(on, 0.38)
-        } else {
-            on
-        };
+        let text = disabled_alpha(on, status);
         button::Style {
             background: Some(Background::Color(bg)),
             text_color: text,
@@ -679,16 +693,9 @@ pub fn outlined(r: Roles, host: Option<Host>) -> impl Fn(&Theme, button::Status)
     let edge = imposed.map_or(r.outline, |(_, on_fill)| on_fill);
     move |_theme, status| {
         let prim = color(front);
-        let fill = match status {
-            button::Status::Hovered => Some(Background::Color(state_fill(prim, state::HOVER))),
-            button::Status::Pressed => Some(Background::Color(state_fill(prim, state::PRESSED))),
-            _ => None,
-        };
-        let (text, border_color) = if matches!(status, button::Status::Disabled) {
-            (alpha(prim, 0.38), alpha(color(edge), 0.38))
-        } else {
-            (prim, color(edge))
-        };
+        let fill = state_overlay(prim, status);
+        let text = disabled_alpha(prim, status);
+        let border_color = disabled_alpha(color(edge), status);
         button::Style {
             background: fill,
             text_color: text,
@@ -715,16 +722,8 @@ pub fn text_button(
         .map_or(r.primary, |(_, on_fill)| on_fill);
     move |_theme, status| {
         let prim = color(front);
-        let fill = match status {
-            button::Status::Hovered => Some(Background::Color(state_fill(prim, state::HOVER))),
-            button::Status::Pressed => Some(Background::Color(state_fill(prim, state::PRESSED))),
-            _ => None,
-        };
-        let text = if matches!(status, button::Status::Disabled) {
-            alpha(prim, 0.38)
-        } else {
-            prim
-        };
+        let fill = state_overlay(prim, status);
+        let text = disabled_alpha(prim, status);
         button::Style {
             background: fill,
             text_color: text,
@@ -741,16 +740,8 @@ pub fn text_button(
 pub fn circular_icon_button(r: Roles) -> impl Fn(&Theme, button::Status) -> button::Style {
     move |_theme, status| {
         let prim = color(r.primary);
-        let fill = match status {
-            button::Status::Hovered => Some(Background::Color(state_fill(prim, state::HOVER))),
-            button::Status::Pressed => Some(Background::Color(state_fill(prim, state::PRESSED))),
-            _ => None,
-        };
-        let text = if matches!(status, button::Status::Disabled) {
-            alpha(prim, 0.38)
-        } else {
-            prim
-        };
+        let fill = state_overlay(prim, status);
+        let text = disabled_alpha(prim, status);
         button::Style {
             background: fill,
             text_color: text,
