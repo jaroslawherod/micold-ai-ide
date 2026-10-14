@@ -1087,8 +1087,8 @@ fn a_summary_carrying_agent_runs_lists_every_worktree_and_session() {
                 live_shells: Vec::new(),
                 attention_seq: 0,
                 unread: false,
-                unread: false,
                 main: false,
+                agents: vec![AgentRun {
                     agent_id: "a15f822c8aa66a621".into(),
                     agent_type: Some("Explore".into()),
                     transcript: None,
