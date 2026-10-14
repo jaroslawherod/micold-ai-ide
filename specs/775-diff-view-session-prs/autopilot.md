@@ -16,13 +16,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| #782 | Design PR (spec, plan, tasks) | open | — |
+| #782 | Design PR (spec, plan, tasks) | merged | 0de0b3ce005d2cb69c99300e52e5cb6ed3da25fa |
+| #825 | M1: PR list in the Changes pane | open | — |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T015 | full | PRs of the entry's branch listed in the Changes pane | PR | in review (T015 visual pass not run) |
+| M1 | T001–T015 | full | PRs of the entry's branch listed in the Changes pane | #825 | in review (T015 visual pass not run) |
 | M2 | T016–T026, T023b | full | Select a PR, read its base...head diff, return | — | pending |
 | M3 | T027–T033 | full | List refreshes on status triggers, stale marked | — | pending |
 
