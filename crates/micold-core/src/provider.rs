@@ -730,12 +730,7 @@ impl AiCliProvider for ClaudeProvider {
     }
 
     fn config_dir(&self) -> Option<PathBuf> {
-        if let Ok(dir) = std::env::var(Self::CONFIG_DIR_ENV) {
-            if !dir.is_empty() {
-                return Some(PathBuf::from(dir));
-            }
-        }
-        directories::UserDirs::new().map(|d| d.home_dir().join(".claude"))
+        env_or_home(Self::CONFIG_DIR_ENV, &[".claude"])
     }
 
     fn sandbox_auth_file(&self, home: &Path) -> Option<PathBuf> {
@@ -1052,12 +1047,7 @@ impl AiCliProvider for CopilotProvider {
         // takes the home directory as an argument and neither the platform nor `%LOCALAPPDATA%`,
         // while its *cache* home right beside it takes all three; every `.copilot` literal in the
         // CLI joins it to `homedir()` with no branch. Nothing here needs a `cfg!(windows)` arm.
-        if let Ok(dir) = std::env::var(Self::CONFIG_DIR_ENV) {
-            if !dir.is_empty() {
-                return Some(PathBuf::from(dir));
-            }
-        }
-        directories::UserDirs::new().map(|d| d.home_dir().join(".copilot"))
+        env_or_home(Self::CONFIG_DIR_ENV, &[".copilot"])
     }
 
     fn sandbox_auth_file(&self, _home: &Path) -> Option<PathBuf> {
@@ -1456,12 +1446,7 @@ impl AiCliProvider for PiProvider {
         // application and the user's own `pi` could disagree about where a conversation lives, and
         // the store this reads has to be the one `--session-id` writes (contract, §Known
         // limitations).
-        if let Ok(dir) = std::env::var(Self::CONFIG_DIR_ENV) {
-            if !dir.is_empty() {
-                return Some(PathBuf::from(dir));
-            }
-        }
-        directories::UserDirs::new().map(|d| d.home_dir().join(".pi").join("agent"))
+        env_or_home(Self::CONFIG_DIR_ENV, &[".pi", "agent"])
     }
 
     fn sandbox_auth_file(&self, _home: &Path) -> Option<PathBuf> {
@@ -1616,6 +1601,16 @@ fn env_dir(name: &str) -> Option<PathBuf> {
     std::env::var_os(name)
         .filter(|value| !value.is_empty())
         .map(PathBuf::from)
+}
+
+/// `env` as a path when set and non-empty, else `rel` under the home directory.
+fn env_or_home(env: &str, rel: &[&str]) -> Option<PathBuf> {
+    env_dir(env).or_else(|| {
+        directories::UserDirs::new().map(|d| {
+            rel.iter()
+                .fold(d.home_dir().to_path_buf(), |p, s| p.join(s))
+        })
+    })
 }
 
 /// `<base>/micold-bindings/<session>` — the file holding the CLI's conversation id for a session
