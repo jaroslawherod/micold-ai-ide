@@ -61,6 +61,7 @@ fn catalog(id: SessionId, unread: bool) -> CatalogSnapshot {
                 attention_seq: 1,
                 unread,
                 agents: Vec::new(),
+                main: false,
             }],
         }],
         env_include_failures: Vec::new(),
