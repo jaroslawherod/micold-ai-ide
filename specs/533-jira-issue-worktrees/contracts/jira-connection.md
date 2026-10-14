@@ -15,7 +15,7 @@ removes), so two windows saving different projects never overwrite each other; t
 it to its map and merges it into the on-disk map inside the same `update_reporting` closure
 (the Jira setter only; `persist_service_settings` does not copy `jira_connections`), and
 `SettingsChanged.settings` carries `jira_enabled` and the whole `jira_connections`;
-`PROTOCOL_VERSION` 42. Daemon test: a save of another field keeps both fields.
+`PROTOCOL_VERSION` 43. Daemon test: a save of another field keeps both fields.
 
 ## 2. Validation (`JiraConnection::parse`)
 
