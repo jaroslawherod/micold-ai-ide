@@ -18,6 +18,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #786 | design (spec, plan, tasks) | merged | 31a433b352e7301c5c860ea0cf64ca0c2f78eb1f |
 | #795 | M1 every worktree listed | merged | 4ba66482fc44ac820233512a21001fe2e8a5bbef |
+| #823 | M2 Claude sub-agent runs recorded, protocol 42 | open | |
 
 ## Milestones
 
