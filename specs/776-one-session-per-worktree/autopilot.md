@@ -21,7 +21,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #807 | Amendment: soft limit, default session (specs only) | merged | 7440dca0d4fe03719c38ed46df6854fb2a42305d |
 | #821 | M2 | merged | 08e3a36dc925bffd3e44623701a9cbade577cf57 |
 | #827 | Amendment: main session and helpers (specs only) | merged | fa395078be20e60fa40eacb8d45b52beb683d37d |
-| #828 | M3 | open | |
+| #828 | M3 | open (rebased onto c6536f1b; main took wire v43 for feature 552, ours renumbered v44; full gate green) | |
 
 ## Milestones
 
