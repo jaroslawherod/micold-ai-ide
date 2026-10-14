@@ -62,6 +62,7 @@ pub mod theme;
 pub mod tokens;
 pub mod tooltip;
 pub mod typeahead;
+pub mod unix_time;
 #[cfg(windows)]
 pub(crate) mod win_job;
 pub mod workspace;

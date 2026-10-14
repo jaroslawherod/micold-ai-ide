@@ -433,17 +433,10 @@ struct LiveSession {
 /// from the request (feature 034, FR-017).
 pub const FIRST_PROMPT_BOUND: std::time::Duration = std::time::Duration::from_secs(60);
 
-/// Seconds since the Unix epoch, for a comment's `created_at` and `Sent { at }`.
-fn unix_now() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_or(0, |d| d.as_secs())
-}
-
-/// [`unix_now`] signed, as plan-usage readings carry it: when one was obtained, and whether its
-/// windows have reset (feature 490, R5, R7).
+/// [`micold_core::unix_time::unix_secs`] signed, as plan-usage readings carry it: when one was
+/// obtained, and whether its windows have reset (feature 490, R5, R7).
 pub fn unix_secs() -> i64 {
-    i64::try_from(unix_now()).unwrap_or(i64::MAX)
+    i64::try_from(micold_core::unix_time::unix_secs()).unwrap_or(i64::MAX)
 }
 
 /// How long a reading with unchanged windows goes without being pushed again (feature 490, R6).
@@ -2107,10 +2100,13 @@ impl DaemonState {
         let mut inner = self.lock();
         Self::check_entry_locked(&inner, project, worktree_dir)?;
         let inner = &mut *inner;
-        let msg =
-            inner
-                .reviews
-                .apply_edit(&inner.catalog, project, worktree_dir, op, unix_now())?;
+        let msg = inner.reviews.apply_edit(
+            &inner.catalog,
+            project,
+            worktree_dir,
+            op,
+            micold_core::unix_time::unix_secs(),
+        )?;
         Self::broadcast_locked(inner, vec![msg]);
         Ok(())
     }
@@ -2336,7 +2332,7 @@ impl DaemonState {
                 project,
                 worktree_dir,
                 snapshot,
-                unix_now(),
+                micold_core::unix_time::unix_secs(),
             ),
             None => inner
                 .reviews
