@@ -52,9 +52,30 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
         let held = &mut app.core.pr_status.pause_until;
         *held = Some(held.map_or(*until, |current| current.max(*until)));
     }
+    // The address of a too-large pull request is opened as the sidebar's is (FR-014).
+    if let Msg::PullRequestOpenRequested(number) = &msg {
+        return match pull_request_address(app, *number) {
+            Some(address) => crate::shell::links::perform(
+                app,
+                micold_client::features::OpenRequest::Url(address),
+            ),
+            None => Task::none(),
+        };
+    }
     let effect = app.core.update_changes(msg);
     sync_composer(app);
     run(app, effect)
+}
+
+/// The address of pull request `number` of the open Changes view, when it is a GitHub one
+/// (FR-014): the held address, never one built from the number.
+pub fn pull_request_address(app: &App, number: u64) -> Option<String> {
+    let view = app.core.changes.open.as_ref()?;
+    let (prs, _) = view.pull_requests.shown()?;
+    let address = &prs.iter().find(|pr| pr.number == number)?.url;
+    address
+        .starts_with(micold_client::features::sidebar::GITHUB_ADDRESS_PREFIX)
+        .then(|| address.clone())
 }
 
 /// Whether the open view is waiting for diff read `seq`.
@@ -134,6 +155,11 @@ fn run(app: &mut App, effect: Effect) -> Task<Message> {
             project,
             branch,
         } => crate::shell::pr_status::list_requested(app, seq, project, branch),
+        Effect::ReadPullRequestDiff {
+            seq,
+            project,
+            number,
+        } => crate::shell::pr_status::diff_requested(app, seq, project, number),
         Effect::SetLayout(layout) => {
             // Service-owned (R12): the daemon stores it and echoes `SettingsChanged` to every
             // window. Disconnected, the choice holds for this run only, as the reducer set it.

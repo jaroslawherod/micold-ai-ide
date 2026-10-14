@@ -258,9 +258,10 @@ fn the_source_is_read_from_one_place() {
         .filter(|(f, _, l)| f != MAIN_TESTS && l.contains("(tooling.pull_requests)("))
         .collect();
     assert!(
-        // One line for the status reading, one for the branch list (feature 775).
-        reads.len() == 2 && reads.iter().all(|(f, _, _)| f == SHELL),
-        "the source must be reached from two lines (`read`, `list_branch`), in {SHELL}; found:\n{}",
+        // One line for the status reading, one for the branch list, one for a pull request's
+        // diff (feature 775).
+        reads.len() == 3 && reads.iter().all(|(f, _, _)| f == SHELL),
+        "the source must be reached from three lines (`read`, `list_branch`, `diff`), in {SHELL}; found:\n{}",
         show(&reads)
     );
 
@@ -275,12 +276,23 @@ fn the_source_is_read_from_one_place() {
         show(&lists)
     );
 
+    // A pull request's diff (feature 775) is read through the same shell file.
+    let diffs: Vec<_> = lines
+        .iter()
+        .filter(|(f, _, l)| f != MAIN_TESTS && l.contains(".diff(&repo"))
+        .collect();
+    assert!(
+        !diffs.is_empty() && diffs.iter().all(|(f, _, _)| f == SHELL),
+        "`PullRequestSource::diff` must be reached only from {SHELL}; found:\n{}",
+        show(&diffs)
+    );
+
     let factory: Vec<_> = lines
         .iter()
         .filter(|(f, _, l)| f != CAPS && f != MAIN_TESTS && l.contains("tooling.pull_requests"))
         .collect();
     assert!(
-        factory.len() == 2 && factory.iter().all(|(f, _, _)| f == SHELL),
+        factory.len() == 3 && factory.iter().all(|(f, _, _)| f == SHELL),
         "the `pull_requests` factory is used only by {SHELL} outside {CAPS}; found:\n{}",
         show(&factory)
     );

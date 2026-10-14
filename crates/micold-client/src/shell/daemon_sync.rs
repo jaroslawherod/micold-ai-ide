@@ -136,6 +136,13 @@ pub enum PendingOp {
         branch: String,
         started: u64,
     },
+    /// The `RemoteList` a Changes view's pull request diff read starts with (feature 775).
+    PrDiffRemotes {
+        project: PathBuf,
+        seq: u64,
+        number: u64,
+        started: u64,
+    },
     /// The `MergedBranchCheck` a pull request reading ends with when a pull request was merged
     /// (feature 040, reading-and-wire §2 step 4). Carries the reading's statuses, which wait for the
     /// answer, and the branches asked about in the order asked, so the answer needs nothing
@@ -233,7 +240,8 @@ impl PendingOp {
             PendingOp::BranchList { .. } => "list the branches".into(),
             PendingOp::RemoteList { .. }
             | PendingOp::PrStatusRemotes { .. }
-            | PendingOp::PrListRemotes { .. } => "read the repository's remotes".into(),
+            | PendingOp::PrListRemotes { .. }
+            | PendingOp::PrDiffRemotes { .. } => "read the repository's remotes".into(),
             PendingOp::MergedBranchCheck { .. } => "check the merged branches".into(),
             PendingOp::RepoRootQuery(p) => {
                 format!("check whether {} is a repository", p.display())
@@ -541,6 +549,18 @@ fn resolve_pending_of(app: &mut App, daemon: DaemonId) -> Task<Message> {
                         seq,
                         read_at: started,
                         result: Err(micold_core::pull_request::ReadingFailure::Passing),
+                    },
+                )));
+            }
+            // Likewise the diff read: a line in the pane, never a notice (feature 775, FR-008).
+            PendingOp::PrDiffRemotes { seq, number, .. } => {
+                ended.push(Task::done(Message::Changes(
+                    micold_client::features::changes::Msg::PullRequestDiffRead {
+                        seq,
+                        number,
+                        result: Err(micold_core::pull_request::DiffReadFailure::Failed(
+                            micold_core::pull_request::ReadingFailure::Passing,
+                        )),
                     },
                 )));
             }
@@ -1338,6 +1358,21 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
                     app, project, seq, branch, started, remotes,
                 );
             }
+            // Feature 775: the remotes a Changes view's pull request diff read asked for.
+            Some(PendingOp::PrDiffRemotes {
+                project,
+                seq,
+                number,
+                started,
+            }) => {
+                let remotes = match result {
+                    OperationResult::RemoteList { remotes } => Some(remotes),
+                    _ => None,
+                };
+                follow_up = crate::shell::pr_status::on_diff_remotes(
+                    app, project, seq, number, started, remotes,
+                );
+            }
             // Feature 040: the answer to a reading's question about its merged branches. Whether it
             // is still wanted is `on_merged_branches`' question.
             Some(PendingOp::MergedBranchCheck {
@@ -1544,6 +1579,16 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
                 }) => {
                     return crate::shell::pr_status::on_list_remotes(
                         app, project, seq, branch, started, None,
+                    );
+                }
+                Some(PendingOp::PrDiffRemotes {
+                    project,
+                    seq,
+                    number,
+                    started,
+                }) => {
+                    return crate::shell::pr_status::on_diff_remotes(
+                        app, project, seq, number, started, None,
                     );
                 }
                 // Feature 040: a refused question applies the statuses with no suggestion, and is

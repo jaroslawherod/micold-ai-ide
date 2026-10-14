@@ -10,11 +10,14 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
 use micold_core::protocol::messages::ReviewEditOp;
-use micold_core::pull_request::{BranchPrState, BranchPullRequest, ReadingFailure};
+use micold_core::pull_request::{
+    BranchPrState, BranchPullRequest, DiffReadFailure, ReadingFailure,
+};
 use micold_core::review::base::{Base, BaseUnavailable, ReviewScope, Toggles};
 use micold_core::review::changes::{ChangeKind, ChangeList, ChangedFile};
 use micold_core::review::comment::{CommentId, CommentState, ReviewComment};
-use micold_core::review::diff::{FileDiff, LoadedDiff};
+use micold_core::review::diff::{parse_unified, FileDiff, LoadedDiff, Spans};
+use micold_core::review::pr_diff::PrDiff;
 use micold_core::review::{LineRange, RelPath, Side};
 use micold_core::session::SessionLocation;
 use micold_core::settings::DiffLayout;
@@ -92,6 +95,54 @@ impl PrList {
     }
 }
 
+/// What the view shows the diff of (feature 775, data-model §2): the entry's own changes, or one
+/// pull request's. A selected pull request is an enum arm, so it cannot hold a working-tree list.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum Source {
+    /// The working-tree/branch changes, as before the pull request list existed (FR-006).
+    #[default]
+    Changes,
+    /// A listed pull request's base...head diff. The working tree's list, selection and diff are
+    /// kept meanwhile, not read.
+    PullRequest(PullRequestView),
+}
+
+/// The pull request shown in place of the entry's changes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PullRequestView {
+    /// Its number.
+    pub number: u64,
+    /// Its diff as read.
+    pub diff: PrDiffLoad,
+    /// The selected file.
+    pub selected: Option<RelPath>,
+    /// The selected file's diff, parsed from its patch: no read per file.
+    pub file: Option<LoadedDiff>,
+    /// Files over the size limits the user asked to see.
+    pub shown_large: BTreeSet<RelPath>,
+}
+
+/// A pull request's diff, read once on selection (FR-004).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PrDiffLoad {
+    /// Read `seq` is under way.
+    Loading {
+        /// The read's sequence number; an answer with another is dropped.
+        seq: u64,
+    },
+    /// Its files, and each one's patch.
+    Ready {
+        /// The rows, in GitHub's order.
+        files: Vec<ChangedFile>,
+        /// Each file's section of the diff.
+        patches: BTreeMap<RelPath, Vec<u8>>,
+    },
+    /// GitHub will not diff it: above 300 files or 20 000 changed lines.
+    TooLarge,
+    /// The read failed; selecting the row again retries.
+    Failed,
+}
+
 /// The one mapping from a listed pull request's state to the mark the sidebar uses (FR-003).
 pub fn pr_mark(state: BranchPrState) -> crate::ui::material::PrMark {
     use crate::ui::material::PrMark;
@@ -145,6 +196,8 @@ pub struct OpenView {
     pub branch: Option<String>,
     /// The pull requests of `branch` (feature 775).
     pub pull_requests: PrList,
+    /// What the diff shows: the entry's changes, or a pull request's (feature 775).
+    pub source: Source,
 }
 
 /// A gutter selection: lines `anchor` to `head` (either order) of one side (C1).
@@ -212,6 +265,9 @@ pub struct State {
     /// The PR status setting in force (`github.pr_status_enabled`): the pull request section is
     /// absent while it is off (feature 775, FR-014).
     pub pr_enabled: bool,
+    /// The pull request chosen per entry, kept while another entry's view is open (FR-013). In
+    /// memory only: nothing about pull requests is stored (feature 040 FR-032).
+    pub remembered: BTreeMap<(PathBuf, SessionLocation), u64>,
 }
 
 /// What this feature is told.
@@ -340,6 +396,21 @@ pub enum Msg {
     },
     /// The PR status setting changed, or was learned (feature 775, FR-014).
     PullRequestSettingChanged(bool),
+    /// A row of the pull request section was pressed: `Some(number)` for a pull request, `None`
+    /// for "Working tree" (FR-004, FR-005).
+    SourceChosen(Option<u64>),
+    /// Diff read `seq` of pull request `number` ended, already split per file.
+    PullRequestDiffRead {
+        /// The read it answers.
+        seq: u64,
+        /// The pull request it was asked of.
+        number: u64,
+        /// The files, or why there are none.
+        result: Result<PrDiff, DiffReadFailure>,
+    },
+    /// **Open on GitHub** was pressed on a pull request's "too large" line; the shell opens the
+    /// held address and the reducer changes nothing.
+    PullRequestOpenRequested(u64),
     /// The discard confirmation's Discard (S3).
     DiscardConfirmed,
     /// The discard confirmation's Cancel, or its dismissal (S3).
@@ -387,6 +458,15 @@ pub enum Effect {
         project: PathBuf,
         /// The branch.
         branch: String,
+    },
+    /// Read pull request `number`'s diff in `project` as read `seq` (feature 775, FR-004).
+    ReadPullRequestDiff {
+        /// The read's sequence number.
+        seq: u64,
+        /// The project.
+        project: PathBuf,
+        /// The pull request's number.
+        number: u64,
     },
     /// Tell the service the chosen layout (`SettingsSet { diff_layout }`, R12).
     SetLayout(DiffLayout),
@@ -453,6 +533,7 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
                 confirm_discard: false,
                 branch: None,
                 pull_requests: PrList::Absent,
+                source: Source::Changes,
             });
             request_read(state)
         }
@@ -479,19 +560,90 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
                 } if *s == seq => (*again, last.take()),
                 _ => return Effect::None,
             };
+            let numbers: Option<Vec<u64>> = result
+                .as_ref()
+                .ok()
+                .map(|prs| prs.iter().map(|pr| pr.number).collect());
             view.pull_requests = match result {
                 Ok(prs) => PrList::Ready { prs, read_at },
                 // No GitHub access of any kind: no section, as the sidebar drops its rows.
-                Err(ReadingFailure::Unavailable) => PrList::Absent,
+                Err(ReadingFailure::Unavailable) => {
+                    view.source = Source::Changes;
+                    PrList::Absent
+                }
                 // Passing, or a rate limit the shell holds back: keep what was listed (FR-008).
                 Err(_) => PrList::Unavailable { last },
             };
+            let restored = numbers.and_then(|numbers| reconcile_source(state, &numbers, again));
             if again {
                 request_pull_requests(state)
             } else {
-                Effect::None
+                restored.unwrap_or(Effect::None)
             }
         }
+        Msg::SourceChosen(None) => {
+            let Some(view) = state.open.as_mut() else {
+                return Effect::None;
+            };
+            if view.source == Source::Changes {
+                return Effect::None;
+            }
+            view.source = Source::Changes;
+            state
+                .remembered
+                .remove(&(view.project.clone(), view.entry.clone()));
+            reset_diff_pane(view);
+            Effect::None
+        }
+        Msg::SourceChosen(Some(number)) => {
+            let Some(view) = state.open.as_ref() else {
+                return Effect::None;
+            };
+            let listed = view
+                .pull_requests
+                .shown()
+                .is_some_and(|(prs, _)| prs.iter().any(|pr| pr.number == number));
+            let current = matches!(
+                &view.source,
+                Source::PullRequest(p) if p.number == number && p.diff != PrDiffLoad::Failed
+            );
+            if !listed || current {
+                return Effect::None;
+            }
+            let key = (view.project.clone(), view.entry.clone());
+            state.remembered.insert(key, number);
+            read_pull_request_diff(state, number)
+        }
+        Msg::PullRequestDiffRead {
+            seq,
+            number,
+            result,
+        } => {
+            let Some(view) = state.open.as_mut() else {
+                return Effect::None;
+            };
+            let Source::PullRequest(pr) = &mut view.source else {
+                return Effect::None;
+            };
+            if pr.number != number || pr.diff != (PrDiffLoad::Loading { seq }) {
+                return Effect::None;
+            }
+            pr.diff = match result {
+                Ok(diff) => {
+                    let mut files = Vec::with_capacity(diff.files.len());
+                    let mut patches = BTreeMap::new();
+                    for file in diff.files {
+                        patches.insert(file.file.path.clone(), file.patch);
+                        files.push(file.file);
+                    }
+                    PrDiffLoad::Ready { files, patches }
+                }
+                Err(DiffReadFailure::TooLarge) => PrDiffLoad::TooLarge,
+                Err(DiffReadFailure::Failed(_)) => PrDiffLoad::Failed,
+            };
+            Effect::None
+        }
+        Msg::PullRequestOpenRequested(_) => Effect::None,
         Msg::PullRequestSettingChanged(enabled) => {
             let was = std::mem::replace(&mut state.pr_enabled, enabled);
             if enabled && !was {
@@ -499,6 +651,10 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
             } else if !enabled {
                 if let Some(view) = state.open.as_mut() {
                     view.pull_requests = PrList::Absent;
+                    if view.source != Source::Changes {
+                        view.source = Source::Changes;
+                        reset_diff_pane(view);
+                    }
                 }
                 Effect::None
             } else {
@@ -530,6 +686,13 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
             let Some(view) = state.open.as_mut() else {
                 return Effect::None;
             };
+            if let Source::PullRequest(pr) = &mut view.source {
+                // A pull request's patches are held: choosing a file parses one, reads nothing.
+                pr.selected = Some(path);
+                pr.file = pr_file_diff(pr);
+                reset_diff_pane(view);
+                return Effect::None;
+            }
             // The file already shown keeps its diff and scroll; only a failed read is retried.
             if view.selected.as_ref() == Some(&path) && !matches!(view.diff, Load::Failed(_)) {
                 return Effect::None;
@@ -546,6 +709,13 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
             let Some(view) = state.open.as_mut() else {
                 return Effect::None;
             };
+            if let Source::PullRequest(pr) = &mut view.source {
+                if let Some(path) = pr.selected.clone() {
+                    pr.shown_large.insert(path);
+                    pr.file = pr_file_diff(pr);
+                }
+                return Effect::None;
+            }
             let Some(path) = view.selected.clone() else {
                 return Effect::None;
             };
@@ -1009,6 +1179,9 @@ pub fn file_comments(state: &State) -> FileComments<'_> {
     let Some(view) = state.open.as_ref() else {
         return placed;
     };
+    if view.source != Source::Changes {
+        return placed;
+    }
     let (Some(path), Some(review)) = (view.selected.as_ref(), review_of(state, view)) else {
         return placed;
     };
@@ -1048,6 +1221,86 @@ pub fn is_pending(comment: &ReviewComment) -> bool {
     comment.state == CommentState::Pending
 }
 
+/// The selected file of a pull request, parsed from the patch GitHub gave: a file over the limits
+/// waits for **Show diff** like a working-tree one. There are no full versions to show, so the
+/// diff carries no syntax colours and no context beyond its hunks.
+fn pr_file_diff(pr: &PullRequestView) -> Option<LoadedDiff> {
+    let PrDiffLoad::Ready { files, patches } = &pr.diff else {
+        return None;
+    };
+    let path = pr.selected.as_ref()?;
+    let file = files.iter().find(|f| &f.path == path)?;
+    let diff = if file.large && !pr.shown_large.contains(path) {
+        FileDiff::TooLarge {
+            added: file.added,
+            removed: file.removed,
+        }
+    } else {
+        parse_unified(patches.get(path).map_or(&[][..], Vec::as_slice))
+    };
+    Some(LoadedDiff {
+        diff,
+        old: None,
+        new: None,
+        spans: Spans::default(),
+    })
+}
+
+/// What a change of source resets in the diff pane: picks, the composer, scroll and slot heights
+/// belong to the file that was shown.
+fn reset_diff_pane(view: &mut OpenView) {
+    close_new(view);
+    view.diff_offset = 0;
+    view.slot_heights.clear();
+}
+
+/// Show pull request `number`: ask for its diff, replacing whatever source was shown.
+fn read_pull_request_diff(state: &mut State, number: u64) -> Effect {
+    let seq = state.next_seq;
+    let Some(view) = state.open.as_mut() else {
+        return Effect::None;
+    };
+    view.source = Source::PullRequest(PullRequestView {
+        number,
+        diff: PrDiffLoad::Loading { seq },
+        selected: None,
+        file: None,
+        shown_large: BTreeSet::new(),
+    });
+    reset_diff_pane(view);
+    state.next_seq += 1;
+    Effect::ReadPullRequestDiff {
+        seq,
+        project: view.project.clone(),
+        number,
+    }
+}
+
+/// A fresh list of `numbers` arrived (FR-013): a shown pull request that is not in it returns the
+/// view to the working tree and is forgotten; the one this entry remembered is shown again once a
+/// list holds it (`again`: another list read follows, so wait for it).
+fn reconcile_source(state: &mut State, numbers: &[u64], again: bool) -> Option<Effect> {
+    let view = state.open.as_mut()?;
+    let key = (view.project.clone(), view.entry.clone());
+    match &view.source {
+        Source::PullRequest(pr) if !numbers.contains(&pr.number) => {
+            view.source = Source::Changes;
+            reset_diff_pane(view);
+            state.remembered.remove(&key);
+            None
+        }
+        Source::PullRequest(_) => None,
+        Source::Changes => {
+            let wanted = state.remembered.get(&key).copied()?;
+            if !numbers.contains(&wanted) {
+                state.remembered.remove(&key);
+                return None;
+            }
+            (!again).then(|| read_pull_request_diff(state, wanted))
+        }
+    }
+}
+
 /// Start a read of the open view's pull requests, or queue one behind the read under way. Nothing
 /// is read, and no section shown, while the setting is off or the entry has no branch.
 fn request_pull_requests(state: &mut State) -> Effect {
@@ -1058,6 +1311,7 @@ fn request_pull_requests(state: &mut State) -> Effect {
     };
     let Some(branch) = view.branch.clone().filter(|_| enabled) else {
         view.pull_requests = PrList::Absent;
+        view.source = Source::Changes;
         return Effect::None;
     };
     let last = match std::mem::take(&mut view.pull_requests) {
@@ -1273,6 +1527,14 @@ pub fn committed_available(view: &OpenView) -> bool {
     view.entry != SessionLocation::Default
 }
 
+/// The file the list and diff show as selected: the pull request's own while one is shown.
+pub fn selected_file(view: &OpenView) -> Option<&RelPath> {
+    match &view.source {
+        Source::Changes => view.selected.as_ref(),
+        Source::PullRequest(pr) => pr.selected.as_ref(),
+    }
+}
+
 /// What the list pane shows (L3).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ListBody<'a> {
@@ -1284,10 +1546,27 @@ pub enum ListBody<'a> {
     Empty(String),
     /// The rows.
     Files(&'a [ChangedFile]),
+    /// The shown pull request has no diff to list: GitHub refused it as too large, or the read
+    /// failed (feature 775).
+    PullRequestUnread {
+        /// Too large rather than failed: the way out is its address.
+        too_large: bool,
+    },
 }
 
 /// What the list pane shows for `view` (L3).
 pub fn list_body(view: &OpenView) -> ListBody<'_> {
+    if let Source::PullRequest(pr) = &view.source {
+        return match &pr.diff {
+            PrDiffLoad::Loading { .. } => ListBody::Loading,
+            PrDiffLoad::TooLarge => ListBody::PullRequestUnread { too_large: true },
+            PrDiffLoad::Failed => ListBody::PullRequestUnread { too_large: false },
+            PrDiffLoad::Ready { files, .. } if files.is_empty() => {
+                ListBody::Empty("This pull request changes no files".into())
+            }
+            PrDiffLoad::Ready { files, .. } => ListBody::Files(files),
+        };
+    }
     if let Load::Failed(message) = &view.list {
         return ListBody::Failed(message);
     }
@@ -1312,6 +1591,18 @@ pub fn list_body(view: &OpenView) -> ListBody<'_> {
 /// The header's base line (V2): `Compared with <branch> at <short sha>`, or why there is none.
 /// `None` until the first read answers.
 pub fn base_line(view: &OpenView) -> Option<String> {
+    if let Source::PullRequest(pr) = &view.source {
+        let (prs, _) = view.pull_requests.shown()?;
+        let listed = prs.iter().find(|p| p.number == pr.number)?;
+        let head = view
+            .branch
+            .clone()
+            .unwrap_or_else(|| listed.head.chars().take(7).collect());
+        return Some(format!(
+            "Pull request #{}: {} ... {head}",
+            pr.number, listed.base
+        ));
+    }
     let list = shown_list(view)?;
     Some(match &list.scope {
         ReviewScope::Worktree {
@@ -1363,6 +1654,13 @@ pub enum DiffBody<'a> {
 
 /// What the diff pane shows for `view`.
 pub fn diff_body(view: &OpenView) -> DiffBody<'_> {
+    if let Source::PullRequest(pr) = &view.source {
+        return match (&pr.selected, &pr.file) {
+            (None, _) => DiffBody::NoSelection,
+            (Some(_), Some(loaded)) => DiffBody::Diff(loaded),
+            (Some(_), None) => DiffBody::Loading,
+        };
+    }
     if view.selected.is_none() {
         return DiffBody::NoSelection;
     }
@@ -1378,13 +1676,15 @@ pub fn diff_body(view: &OpenView) -> DiffBody<'_> {
 
 /// Whether lines of the shown diff can be picked for a comment: text only (D3).
 pub fn can_pick(view: &OpenView) -> bool {
-    matches!(
-        &view.diff,
-        Load::Ready(LoadedDiff {
-            diff: FileDiff::Text(_),
-            ..
-        })
-    )
+    // Review comments belong to the entry's own files, never to a pull request's diff.
+    view.source == Source::Changes
+        && matches!(
+            &view.diff,
+            Load::Ready(LoadedDiff {
+                diff: FileDiff::Text(_),
+                ..
+            })
+        )
 }
 
 /// How many bytes of a line are syntax-coloured: a minified line cannot stall the highlighter, and

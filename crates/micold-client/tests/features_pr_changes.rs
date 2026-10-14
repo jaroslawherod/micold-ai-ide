@@ -3,9 +3,17 @@
 
 use std::path::PathBuf;
 
-use micold_client::features::changes::{self, pr_mark, Effect, Msg, PrList, State};
+use micold_client::features::changes::{
+    self, base_line, diff_body, list_body, pr_mark, DiffBody, Effect, ListBody, Msg, PrDiffLoad,
+    PrList, Source, State,
+};
 use micold_client::ui::PrMark;
-use micold_core::pull_request::{BranchPrState, BranchPullRequest, ReadingFailure};
+use micold_core::pull_request::{
+    BranchPrState, BranchPullRequest, DiffReadFailure, ReadingFailure,
+};
+use micold_core::review::diff::FileDiff;
+use micold_core::review::pr_diff::split_pr_diff;
+use micold_core::review::RelPath;
 use micold_core::session::SessionLocation;
 
 fn project() -> PathBuf {
@@ -237,4 +245,223 @@ fn the_four_states_have_four_distinct_marks() {
         marks,
         [PrMark::Open, PrMark::Draft, PrMark::Merged, PrMark::Closed]
     );
+}
+
+// ---- M2: select a pull request and read its diff ----
+
+const DIFF: &str = "diff --git a/a.rs b/a.rs\nindex 1..2 100644\n--- a/a.rs\n+++ b/a.rs\n@@ -1,2 +1,2 @@\n keep\n-old\n+new\n\
+diff --git a/b.rs b/b.rs\nnew file mode 100644\nindex 0..3\n--- /dev/null\n+++ b/b.rs\n@@ -0,0 +1 @@\n+fresh\n";
+
+fn listed(state: &mut State, prs: Vec<BranchPullRequest>) {
+    let seq = seq_of(wanted(state, Some("feat/a")));
+    changes::update(
+        state,
+        Msg::PullRequestsRead {
+            seq,
+            read_at: 1,
+            result: Ok(prs),
+        },
+    );
+}
+
+fn diff_seq(effect: Effect, expected_number: u64) -> u64 {
+    match effect {
+        Effect::ReadPullRequestDiff {
+            seq,
+            project: p,
+            number,
+        } => {
+            assert_eq!((p, number), (project(), expected_number));
+            seq
+        }
+        other => panic!("expected ReadPullRequestDiff, got {other:?}"),
+    }
+}
+
+fn source(state: &State) -> &Source {
+    &state.open.as_ref().expect("open").source
+}
+
+fn chosen(state: &mut State, number: u64) -> u64 {
+    let effect = changes::update(state, Msg::SourceChosen(Some(number)));
+    let seq = diff_seq(effect, number);
+    changes::update(
+        state,
+        Msg::PullRequestDiffRead {
+            seq,
+            number,
+            result: Ok(split_pr_diff(DIFF)),
+        },
+    );
+    seq
+}
+
+#[test]
+fn choosing_a_pull_request_reads_its_diff_and_lists_its_files() {
+    let mut state = opened(true);
+    listed(&mut state, vec![pr(7, BranchPrState::Merged)]);
+    let effect = changes::update(&mut state, Msg::SourceChosen(Some(7)));
+    let seq = diff_seq(effect, 7);
+    let view = state.open.as_ref().expect("open");
+    assert!(matches!(list_body(view), ListBody::Loading));
+
+    changes::update(
+        &mut state,
+        Msg::PullRequestDiffRead {
+            seq,
+            number: 7,
+            result: Ok(split_pr_diff(DIFF)),
+        },
+    );
+    let view = state.open.as_ref().expect("open");
+    let ListBody::Files(files) = list_body(view) else {
+        panic!("files of the pull request");
+    };
+    let paths: Vec<_> = files.iter().map(|f| f.path.as_str()).collect();
+    assert_eq!(paths, ["a.rs", "b.rs"]);
+    assert_eq!(
+        base_line(view).as_deref(),
+        Some("Pull request #7: main ... feat/a")
+    );
+}
+
+#[test]
+fn selecting_a_file_of_a_pull_request_reads_nothing() {
+    let mut state = opened(true);
+    listed(&mut state, vec![pr(7, BranchPrState::Open)]);
+    chosen(&mut state, 7);
+    let effect = changes::update(
+        &mut state,
+        Msg::FileSelected(RelPath::from_native("a.rs").unwrap()),
+    );
+    assert_eq!(effect, Effect::None, "the patch is parsed, not read");
+    let view = state.open.as_ref().expect("open");
+    let DiffBody::Diff(loaded) = diff_body(view) else {
+        panic!("the file's diff");
+    };
+    assert!(matches!(&loaded.diff, FileDiff::Text(hunks) if hunks.len() == 1));
+}
+
+#[test]
+fn choosing_the_working_tree_returns_to_it() {
+    let mut state = opened(true);
+    listed(&mut state, vec![pr(7, BranchPrState::Open)]);
+    chosen(&mut state, 7);
+    let effect = changes::update(&mut state, Msg::SourceChosen(None));
+    assert_eq!(effect, Effect::None);
+    assert_eq!(source(&state), &Source::Changes);
+}
+
+#[test]
+fn each_entry_remembers_its_own_choice() {
+    let mut state = opened(true);
+    listed(&mut state, vec![pr(7, BranchPrState::Open)]);
+    chosen(&mut state, 7);
+    // Switch to another entry, then back: the first entry shows its pull request again once the
+    // list that holds it is read, and the other entry never showed it.
+    changes::update(
+        &mut state,
+        Msg::Opened {
+            project: project(),
+            entry: SessionLocation::Worktree("feat-b".into()),
+        },
+    );
+    assert_eq!(source(&state), &Source::Changes);
+    changes::update(
+        &mut state,
+        Msg::Opened {
+            project: project(),
+            entry: worktree(),
+        },
+    );
+    assert_eq!(source(&state), &Source::Changes);
+    let seq = seq_of(wanted(&mut state, Some("feat/a")));
+    let effect = changes::update(
+        &mut state,
+        Msg::PullRequestsRead {
+            seq,
+            read_at: 2,
+            result: Ok(vec![pr(7, BranchPrState::Open)]),
+        },
+    );
+    diff_seq(effect, 7);
+    assert!(matches!(source(&state), Source::PullRequest(p) if p.number == 7));
+}
+
+#[test]
+fn a_pull_request_that_leaves_the_list_returns_the_view_to_the_working_tree() {
+    let mut state = opened(true);
+    listed(
+        &mut state,
+        vec![pr(7, BranchPrState::Open), pr(8, BranchPrState::Closed)],
+    );
+    chosen(&mut state, 7);
+    let seq = seq_of(wanted(&mut state, Some("feat/a")));
+    changes::update(
+        &mut state,
+        Msg::PullRequestsRead {
+            seq,
+            read_at: 5,
+            result: Ok(vec![pr(8, BranchPrState::Closed)]),
+        },
+    );
+    assert_eq!(source(&state), &Source::Changes);
+    assert!(state.remembered.is_empty(), "forgotten, not restored later");
+}
+
+#[test]
+fn a_too_large_pull_request_and_a_failed_read_show_a_line_and_raise_nothing() {
+    for (failure, too_large) in [
+        (DiffReadFailure::TooLarge, true),
+        (DiffReadFailure::Failed(ReadingFailure::Passing), false),
+    ] {
+        let mut state = opened(true);
+        listed(&mut state, vec![pr(7, BranchPrState::Open)]);
+        let seq = diff_seq(changes::update(&mut state, Msg::SourceChosen(Some(7))), 7);
+        let effect = changes::update(
+            &mut state,
+            Msg::PullRequestDiffRead {
+                seq,
+                number: 7,
+                result: Err(failure),
+            },
+        );
+        assert_eq!(effect, Effect::None);
+        let Source::PullRequest(p) = source(&state) else {
+            panic!("still on the pull request");
+        };
+        assert_eq!(matches!(p.diff, PrDiffLoad::TooLarge), too_large);
+        assert!(matches!(
+            list_body(state.open.as_ref().expect("open")),
+            ListBody::PullRequestUnread { too_large: t } if t == too_large
+        ));
+    }
+}
+
+#[test]
+fn an_answer_for_another_read_is_dropped() {
+    let mut state = opened(true);
+    listed(&mut state, vec![pr(7, BranchPrState::Open)]);
+    let seq = diff_seq(changes::update(&mut state, Msg::SourceChosen(Some(7))), 7);
+    changes::update(
+        &mut state,
+        Msg::PullRequestDiffRead {
+            seq: seq + 1,
+            number: 7,
+            result: Ok(split_pr_diff(DIFF)),
+        },
+    );
+    let Source::PullRequest(p) = source(&state) else {
+        panic!("pull request");
+    };
+    assert!(matches!(p.diff, PrDiffLoad::Loading { .. }));
+}
+
+#[test]
+fn the_setting_turned_off_returns_to_the_working_tree() {
+    let mut state = opened(true);
+    listed(&mut state, vec![pr(7, BranchPrState::Open)]);
+    chosen(&mut state, 7);
+    changes::update(&mut state, Msg::PullRequestSettingChanged(false));
+    assert_eq!(source(&state), &Source::Changes);
 }

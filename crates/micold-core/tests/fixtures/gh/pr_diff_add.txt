@@ -1,0 +1,8 @@
+diff --git a/docs/new.md b/docs/new.md
+new file mode 100644
+index 0000000..3333333
+--- /dev/null
++++ b/docs/new.md
+@@ -0,0 +1,2 @@
++# New
++text

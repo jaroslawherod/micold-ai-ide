@@ -27,14 +27,17 @@ use std::time::Duration;
 
 use iced::Task;
 use micold_client::app::Message;
-use micold_client::features::changes::{Msg as ChangesMsg, PrList};
+use micold_client::features::changes::{Msg as ChangesMsg, PrDiffLoad, PrList, Source};
 use micold_client::features::pr_status::Msg;
 use micold_client::features::pr_status::{Cause, Effect, Outcome, Phase};
 use micold_client::features::OpenRequest;
 use micold_core::git::GitRemote;
 use micold_core::github::{choose_remote, env_include_path, RemoteChoice};
 use micold_core::protocol::messages::{BranchContainment, ClientMsg, MergedBranchQuery};
-use micold_core::pull_request::{PrState, PullRequestStatus, ReadingFailure};
+use micold_core::pull_request::{
+    DiffReadFailure, PrState, PullRequestSource, PullRequestStatus, ReadingFailure,
+};
+use micold_core::review::pr_diff::split_pr_diff;
 
 use crate::shell::daemon_sync::{send_op, PendingOp};
 use crate::shell::env_include::resolve_env_include;
@@ -85,6 +88,22 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
                     seq,
                     read_at: started,
                     result: Err(ReadingFailure::Passing),
+                }));
+            }
+            // A pull request's diff read (feature 775) is bounded the same way.
+            if let Some(PendingOp::PrDiffRemotes {
+                seq: asked, number, ..
+            }) = app.pending_ops.get(&req)
+            {
+                if *asked != seq {
+                    return Task::none();
+                }
+                let number = *number;
+                app.pending_ops.remove(&req);
+                return Task::done(Message::Changes(ChangesMsg::PullRequestDiffRead {
+                    seq,
+                    number,
+                    result: Err(DiffReadFailure::Failed(ReadingFailure::Passing)),
                 }));
             }
             let unanswered = matches!(
@@ -262,6 +281,19 @@ pub fn on_remotes(
     )
 }
 
+/// Whether a Changes view's GitHub read may start: the status reading is not paused by GitHub's
+/// request limit (R3), and a daemon route is up, since `send_op` raises a notice when none is and
+/// these reads never do (FR-008).
+fn may_read_pull_requests(app: &App, started: u64) -> bool {
+    let paused = micold_client::features::pr_status::paused(&app.core.pr_status, started);
+    let binding = app.active_binding();
+    let routed = matches!(
+        app.route(binding),
+        micold_client::links::Route::To(id) if app.outbox_for(id).is_some()
+    );
+    !paused && routed
+}
+
 /// A Changes view asked for the pull requests of `branch` (feature 775, contracts §1). The one
 /// entry of the list read: asks the daemon for the remotes, bounded by [`REMOTES_TIMEOUT`], and
 /// answers `Msg::PullRequestsRead` of the Changes view. Held back while the status reading is paused
@@ -275,14 +307,7 @@ pub fn list_requested(app: &mut App, seq: u64, project: PathBuf, branch: String)
             result: Err(ReadingFailure::Passing),
         })
     };
-    let paused = micold_client::features::pr_status::paused(&app.core.pr_status, started);
-    // `send_op` raises a notice when no daemon route is up; a list read never does (FR-008).
-    let binding = app.active_binding();
-    let routed = matches!(
-        app.route(binding),
-        micold_client::links::Route::To(id) if app.outbox_for(id).is_some()
-    );
-    if paused || !routed {
+    if !may_read_pull_requests(app, started) {
         return Task::done(passing());
     }
     let req = app.next_req;
@@ -357,6 +382,97 @@ pub fn on_list_remotes(
             .await
         },
         move |joined| answer(joined.unwrap_or(Err(ReadingFailure::Passing))),
+    )
+}
+
+/// A Changes view asked for pull request `number`'s diff (feature 775, contracts §2). Like
+/// [`list_requested`]: the daemon's remotes first, bounded by [`REMOTES_TIMEOUT`], held back while
+/// GitHub's request limit pauses reads, and a failure is a line in the pane, never a notice.
+pub fn diff_requested(app: &mut App, seq: u64, project: PathBuf, number: u64) -> Task<Message> {
+    let started = now();
+    if !may_read_pull_requests(app, started) {
+        return Task::done(Message::Changes(ChangesMsg::PullRequestDiffRead {
+            seq,
+            number,
+            result: Err(DiffReadFailure::Failed(ReadingFailure::Passing)),
+        }));
+    }
+    let req = app.next_req;
+    let asked_for = project.clone();
+    send_op(
+        app,
+        PendingOp::PrDiffRemotes {
+            project: asked_for,
+            seq,
+            number,
+            started,
+        },
+        move |req| ClientMsg::RemoteList { req, project },
+    );
+    Task::perform(
+        async move { tokio::time::sleep(REMOTES_TIMEOUT).await },
+        move |()| Message::PrStatus(Msg::RemotesTimedOut { seq, req }),
+    )
+}
+
+/// The daemon answered a diff read's `RemoteList` (`None`: it failed). Reads the diff on a
+/// blocking thread when the repository is on GitHub and `gh` is found, and splits it per file.
+pub fn on_diff_remotes(
+    app: &mut App,
+    project: PathBuf,
+    seq: u64,
+    number: u64,
+    started: u64,
+    remotes: Option<Vec<GitRemote>>,
+) -> Task<Message> {
+    let answer = move |result| {
+        Message::Changes(ChangesMsg::PullRequestDiffRead {
+            seq,
+            number,
+            result,
+        })
+    };
+    let awaited = app.core.changes.open.as_ref().is_some_and(|view| {
+        matches!(
+            &view.source,
+            Source::PullRequest(pr) if pr.number == number
+                && pr.diff == (PrDiffLoad::Loading { seq })
+        )
+    });
+    if !awaited || app.core.workspace.active.as_deref() != Some(project.as_path()) {
+        return Task::none();
+    }
+    let failed = |why| Task::done(answer(Err(DiffReadFailure::Failed(why))));
+    let Some(remotes) = remotes else {
+        return failed(ReadingFailure::Passing);
+    };
+    let RemoteChoice::Github { repo, .. } = choose_remote(&remotes) else {
+        return failed(ReadingFailure::Unavailable);
+    };
+    let tooling = app.caps.issue_tooling();
+    let cached = app.env_include_cache.get(&project).cloned();
+    let resolver = app.caps.env_include_shared();
+    let enabled = app.env_include_enabled;
+    let script = app.env_include_script_path.clone();
+    let timeout_secs = app.env_include_timeout_secs;
+    Task::perform(
+        async move {
+            tokio::task::spawn_blocking(move || {
+                let snapshot = cached.unwrap_or_else(|| {
+                    resolve_env_include(&*resolver, enabled, &script, timeout_secs, &project)
+                });
+                let Some(gh) = (tooling.locate_gh)(env_include_path(&snapshot.vars)) else {
+                    return Err(DiffReadFailure::Failed(ReadingFailure::Unavailable));
+                };
+                (tooling.pull_requests)(gh)
+                    .diff(&repo, number, now())
+                    .map(|raw| split_pr_diff(&raw))
+            })
+            .await
+        },
+        move |joined| {
+            answer(joined.unwrap_or(Err(DiffReadFailure::Failed(ReadingFailure::Passing))))
+        },
     )
 }
 

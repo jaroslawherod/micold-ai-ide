@@ -1665,6 +1665,16 @@ impl crate::pull_request::PullRequestSource for GhCli {
         let outcome = self.outcome(crate::pull_request::list_args(repo, branch));
         crate::pull_request::read_list_outcome(&outcome, now)
     }
+
+    fn diff(
+        &self,
+        repo: &GithubRepo,
+        number: u64,
+        now: u64,
+    ) -> Result<String, crate::pull_request::DiffReadFailure> {
+        let outcome = self.outcome(crate::pull_request::diff_args(repo, number));
+        crate::pull_request::diff_outcome(&outcome, now)
+    }
 }
 
 /// The bound on one `gh` run (FR-007's "didn't answer within 10 seconds").
