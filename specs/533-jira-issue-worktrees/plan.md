@@ -30,7 +30,7 @@ The design turns on five decisions (each in [research.md](./research.md)):
    ([R3](./research.md#r3--where-the-switch-and-the-connection-live)): `settings.json` has two
    writers and a client-only field is reverted by the daemon's next whole-struct save; the daemon's
    `SettingsChanged` echo is also the only existing path that reaches every window (FR-022). The
-   daemon stores the fields and never reads them (FR-021). **Protocol 42 -> 43.** Like `pr_status_enabled`, the switch and the connection therefore follow the service the client is connected to; the token file stays on the client host, so a second daemon shows the connection and asks for the token again (R3 records the multi-daemon behaviour).
+   daemon stores the fields and never reads them (FR-021). **Protocol 43 -> 44.** Like `pr_status_enabled`, the switch and the connection therefore follow the service the client is connected to; the token file stays on the client host, so a second daemon shows the connection and asks for the token again (R3 records the multi-daemon behaviour).
 4. **The token is a separate owner-only file written by the client** with `owner_only::write`
    ([R4](./research.md#r4--the-token-an-owner-only-file-beside-settings-never-on-the-wire)), never
    in `Settings`, never on the wire, never in `Debug`. The settings carry only the connection's
@@ -176,7 +176,7 @@ crates/micold-core/
 │   ├── settings.rs            # + jira_enabled, jira_connections (StoredSettings, Settings)
 │   ├── store.rs               # + jira_token_dir(), StoredProjectState.issue_source
 │   ├── protocol/messages.rs   # SettingsSet/SettingsChanged carry the two fields
-│   └── protocol/version.rs    # PROTOCOL_VERSION 42 -> 43
+│   └── protocol/version.rs    # PROTOCOL_VERSION 43 -> 44
 └── tests/
     ├── jira_site_release.rs   # NEW - release-only: loopback http refused; #[cfg_attr(debug_assertions, ignore)]
     ├── jira_connection.rs  jira_jql.rs  jira_parse.rs  jira_classify.rs  jira_load.rs
@@ -247,4 +247,4 @@ composition; the daemon only stores and echoes two fields.
 | Addition | Why needed | Simpler alternative rejected |
 |---|---|---|
 | New crates `ureq` (+ rustls, platform verifier) and `base64` in the client | Jira has no CLI that owns the sign-in; HTTPS with the user's own credentials is the minimum | `curl` subprocess, `reqwest`, native-tls: [R2](./research.md#r2--http-client-ureq-3-in-the-client-not-curl-not-reqwest) |
-| `PROTOCOL_VERSION` 42 -> 43 | A change in one window must reach every window (FR-022) and the daemon is the only echo | Client-only file with its own refresh: [R3](./research.md#r3--where-the-switch-and-the-connection-live) |
+| `PROTOCOL_VERSION` 43 -> 44 | A change in one window must reach every window (FR-022) and the daemon is the only echo | Client-only file with its own refresh: [R3](./research.md#r3--where-the-switch-and-the-connection-live) |
