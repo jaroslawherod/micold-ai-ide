@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #775
 - **Worktree branch**: feat/775_diff-view-should-show-prs-created-within-sessions
 - **Started**: 2026-10-12
-- **Phase**: milestone M2
-- **Next step**: M2 PR merge, then milestone M3; T015/T026 visual pass still owed (see Follow-ups)
+- **Phase**: milestone M3
+- **Next step**: M3 PR merge, then close; T015/T026/T033 visual pass still owed (see Follow-ups)
 
 ## Pull requests
 
@@ -18,15 +18,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #782 | Design PR (spec, plan, tasks) | merged | 0de0b3ce005d2cb69c99300e52e5cb6ed3da25fa |
 | #825 | M1: PR list in the Changes pane | merged | 057d71e68f57170dda7af54bdc254cab626d7d47 |
-| #832 | M2: select a PR and read its diff | open | — |
+| #832 | M2: select a PR and read its diff | merged | bd39d5c1c43e92ff1cdd845510a2779ad37eb743 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T015 | full | PRs of the entry's branch listed in the Changes pane | #825 | merged (T015 visual pass moved to M2) |
-| M2 | T016–T026, T023b (+T015 visual pass) | full | Select a PR, read its base...head diff, return | #832 | gate green, review A and B CLEAN; visual pass not observed |
-| M3 | T027–T033 | full | List refreshes on status triggers, stale marked | — | pending |
+| M2 | T016–T026, T023b (+T015 visual pass) | full | Select a PR, read its base...head diff, return | #832 | merged (visual pass not observed) |
+| M3 | T027–T032 (T033 visual pass unobserved) | full | List refreshes on status triggers, stale marked | PR opening | gate green, review A CLEAN |
 
 ## Decisions
 
@@ -50,6 +50,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 review A (high) | 1 | e91435f8:a7a35a9f | CLEAN (clippy large_enum_variant found by the gate, fixed by boxing) |
 | M2 review B (sonnet) | 1 | e91435f8:a7a35a9f | CLEAN (3 MINOR: unused `_started` kept as pass-through, leftover fixed, red evidence known) |
 | M1 review A (high) | 1 | a24a773c7a9fa0ff3115024bc9939df6a47f8604:addb7d2a98edc3c8c044fca7705e4b25d0154682 | CHANGES: 2 MAJOR (disconnect leaves list Loading; list read raised a notice with no route), 1 MINOR; MAJORs fixed with test, MINOR declined |
+| M3 review A (high) | 1 | da4c3766:9fb42b3b | CLEAN |
+| M3 review B (sonnet) | 1 | da4c3766:9fb42b3b | CLEAN |
 
 ## Declined review findings
 
@@ -118,5 +120,7 @@ None. <or: the banner as sent, and when>
 ## Follow-ups not done
 
 - T015 and T026 (visual pass, quickstart Part B 1-5) NOT observed: no Xvfb/xdotool here (headless sway is possible) and no fixture worktree with open/merged/deleted-branch/too-large PRs. Evidence file `visual/evidence.md` says so. Left unticked; run in a session with a display and a fixture repo, or accept at close.
+- T033 (M3 visual pass, quickstart §B 5 offline part, 6) NOT observed, same reason as T015/T026; left unticked.
+- M3: trigger refresh reuses the view's stored branch; stale mark is `PrList::possibly_stale` (any shown list older than `STALE_AFTER_SECS`), caption "Possibly stale".
 - M2 shape: plan wanted one factory call; there are three (list, status, diff), guard test pins 3.
 - No red evidence for M2 behaviours (part 1 handover): tdd-verify mutation testing at close should cover `split_pr_diff`, the 406 mapping, `SourceChosen`.
