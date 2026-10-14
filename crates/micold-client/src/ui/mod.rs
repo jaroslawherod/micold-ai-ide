@@ -543,9 +543,13 @@ pub fn view_with<'a>(
             // Feature 482: the Default row's menu reuses this one with the wire's name for the
             // project root, `""`, and offers only **Review changes** (V1).
             if dir.is_empty() {
-                let items = vec![review_changes_item(
+                let mut items = vec![review_changes_item(
                     micold_core::session::SessionLocation::Default,
                 )];
+                items.extend(single_session_items(
+                    state,
+                    &micold_core::session::SessionLocation::Default,
+                ));
                 let (x, y) = crate::features::project::clamp_menu_anchor(
                     menu.anchor,
                     material::menu_panel_size(items.len()),
@@ -577,6 +581,12 @@ pub fn view_with<'a>(
                 included,
                 has_pull_request,
             );
+            // FR-019: the sub-row's actions for the one session of a worktree, above Delete.
+            let at = items.len() - 1;
+            let location = micold_core::session::SessionLocation::Worktree(dir.to_string());
+            for (offset, item) in single_session_items(state, &location).into_iter().enumerate() {
+                items.insert(at + offset, item);
+            }
             // Feature 491 (T036): a worktree with no daemon offers the explicit bind, above Delete
             // like the other non-destructive entries.
             if let (Some(project), true) = (
@@ -985,6 +995,34 @@ pub(crate) fn session_start_menu_items(
             .trailing_tooltip(reason),
         })
         .collect()
+}
+
+/// FR-019: with one session at `location` there is no sub-row to carry its Close and Remove, so the
+/// location's own menu does. Empty for none or several (the sub-rows keep theirs).
+fn single_session_items(
+    state: &State,
+    location: &micold_core::session::SessionLocation,
+) -> Vec<material::MenuItem<Message>> {
+    let sessions = state.active_sessions();
+    let mut here = sessions.iter().filter(|s| &s.location == location && !s.archived);
+    match (here.next(), here.next()) {
+        (Some(only), None) => {
+            let id = only.id;
+            vec![
+                material::MenuItem::new(
+                    Icon::Close,
+                    "Close session",
+                    Message::Session(SessionMsg::CloseRequested(id)),
+                ),
+                material::MenuItem::new(
+                    Icon::Unavailable,
+                    "Remove session",
+                    Message::Session(SessionMsg::RemoveRequested(id)),
+                ),
+            ]
+        }
+        _ => Vec::new(),
+    }
 }
 
 fn session_menu_items(id: SessionId) -> Vec<material::MenuItem<Message>> {

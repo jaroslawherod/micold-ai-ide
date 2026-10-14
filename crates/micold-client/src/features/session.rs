@@ -2236,6 +2236,17 @@ impl State {
     }
 }
 
+impl crate::app::State {
+    /// Whether `location` takes a start action from its row (FR-004): only a `Free` one, the
+    /// project root included. Another session is the explicit request of a row menu entry.
+    pub fn start_offered(&self, location: &SessionLocation) -> bool {
+        matches!(
+            micold_core::occupancy::occupancy(self.active_sessions(), location),
+            micold_core::occupancy::Occupancy::Free
+        )
+    }
+}
+
 /// One supported AI CLI in a row's start list, and whether it can be chosen there (037 FR-010).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StartMenuEntry {

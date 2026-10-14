@@ -308,6 +308,63 @@ pub struct WorktreeNode {
     pub daemon: String,
 }
 
+impl WorktreeNode {
+    /// The location this row stands for.
+    pub fn location(&self) -> SessionLocation {
+        SessionLocation::Worktree(self.worktree.dir_name.clone())
+    }
+
+    /// Whether the row has an expander: only a worktree with several sessions does (FR-017).
+    pub fn has_expander(&self) -> bool {
+        self.sessions.len() > 1
+    }
+
+    /// Whether the row's session sub-rows are drawn: an expander that is open.
+    pub fn sessions_shown(&self) -> bool {
+        self.expanded && self.has_expander()
+    }
+
+    /// The session a press of this row selects (FR-018): the main one, never a helper, whatever
+    /// was last viewed. `None` when the worktree has no session.
+    pub fn main_session(&self) -> Option<SessionId> {
+        micold_core::occupancy::main_session(&self.sessions, &self.location())
+    }
+
+    /// The sessions in the order the expander lists them: the main one first, then the helpers.
+    pub fn listed_sessions(&self) -> Vec<&Session> {
+        main_first(&self.sessions, self.main_session())
+    }
+}
+
+impl DefaultNode {
+    /// Whether the row has an expander: only a root with several sessions does (FR-017).
+    pub fn has_expander(&self) -> bool {
+        self.sessions.len() > 1
+    }
+
+    /// Whether the row's session sub-rows are drawn: an expander that is open.
+    pub fn sessions_shown(&self) -> bool {
+        self.expanded && self.has_expander()
+    }
+
+    /// The session a press of this row selects (FR-018).
+    pub fn main_session(&self) -> Option<SessionId> {
+        micold_core::occupancy::main_session(&self.sessions, &SessionLocation::Default)
+    }
+
+    /// The sessions in the order the expander lists them: the main one first.
+    pub fn listed_sessions(&self) -> Vec<&Session> {
+        main_first(&self.sessions, self.main_session())
+    }
+}
+
+/// `sessions` with the one `main` first, the rest in their order.
+fn main_first(sessions: &[Session], main: Option<SessionId>) -> Vec<&Session> {
+    let (first, rest): (Vec<&Session>, Vec<&Session>) =
+        sessions.iter().partition(|s| Some(s.id) == main);
+    first.into_iter().chain(rest).collect()
+}
+
 impl SidebarEntry {
     /// The number of this location's sessions that count as unread (feature 575, FR-002).
     ///
@@ -473,7 +530,7 @@ pub fn row_heights(entries: &[SidebarEntry]) -> Vec<f32> {
         match entry {
             SidebarEntry::Default(node) => {
                 heights.push(one_line);
-                if node.expanded {
+                if node.sessions_shown() {
                     heights.extend(std::iter::repeat_n(one_line, node.sessions.len()));
                 }
             }
@@ -483,7 +540,7 @@ pub fn row_heights(entries: &[SidebarEntry]) -> Vec<f32> {
                 } else {
                     two_line
                 });
-                if node.expanded {
+                if node.sessions_shown() {
                     heights.extend(std::iter::repeat_n(one_line, node.sessions.len()));
                 }
             }
@@ -498,7 +555,7 @@ pub fn row_heights(entries: &[SidebarEntry]) -> Vec<f32> {
                                 } else {
                                     two_line
                                 });
-                                if node.expanded {
+                                if node.sessions_shown() {
                                     heights
                                         .extend(std::iter::repeat_n(one_line, node.sessions.len()));
                                 }
@@ -520,37 +577,51 @@ pub fn row_heights(entries: &[SidebarEntry]) -> Vec<f32> {
 pub fn current_session_row(entries: &[SidebarEntry], current: Option<SessionId>) -> Option<usize> {
     let current = current?;
     let mut row = 0usize;
+    // A location row: the row itself when it holds `current` without drawing it (a single session
+    // has no sub-row), else the sub-row's position.
+    let location = |row: &mut usize, shown: bool, sessions: &[&Session]| -> Option<usize> {
+        let at = *row;
+        *row += 1;
+        if !shown {
+            return sessions.iter().any(|s| s.id == current).then_some(at);
+        }
+        for session in sessions {
+            if session.id == current {
+                return Some(*row);
+            }
+            *row += 1;
+        }
+        None
+    };
     for entry in entries {
-        let (expanded, sessions) = match entry {
-            SidebarEntry::Default(node) => (node.expanded, &node.sessions),
-            SidebarEntry::Worktree(node) => (node.expanded, &node.sessions),
+        match entry {
+            SidebarEntry::Default(node) => {
+                let sessions = node.listed_sessions();
+                if let Some(found) = location(&mut row, node.sessions_shown(), &sessions) {
+                    return Some(found);
+                }
+            }
+            SidebarEntry::Worktree(node) => {
+                let sessions = node.listed_sessions();
+                if let Some(found) = location(&mut row, node.sessions_shown(), &sessions) {
+                    return Some(found);
+                }
+            }
             SidebarEntry::Group(group) => {
                 row += 1;
                 if group.expanded {
                     for run in &group.runs {
-                        row += 1;
                         if let RunRow::Worktree(node) = &run.row {
-                            if node.expanded {
-                                for session in &node.sessions {
-                                    if session.id == current {
-                                        return Some(row);
-                                    }
-                                    row += 1;
-                                }
+                            let sessions = node.listed_sessions();
+                            if let Some(found) = location(&mut row, node.sessions_shown(), &sessions)
+                            {
+                                return Some(found);
                             }
+                        } else {
+                            row += 1;
                         }
                     }
                 }
-                continue;
-            }
-        };
-        row += 1;
-        if expanded {
-            for session in sessions {
-                if session.id == current {
-                    return Some(row);
-                }
-                row += 1;
             }
         }
     }

@@ -1159,3 +1159,64 @@ mod drops {
         assert_eq!(notified(&out).len(), 1);
     }
 }
+
+// --- Feature 776 (M4): a start action only for a free location; the dialog's definition --------
+
+#[test]
+fn a_start_is_offered_only_for_a_free_location() {
+    let (mut st, _, _) = two_projects(1, 0);
+    let free = SessionLocation::Worktree("feat-a".into());
+    let taken = SessionLocation::Worktree("feat-b".into());
+    st.workspace
+        .sessions
+        .get_mut(Path::new("/a"))
+        .unwrap()
+        .push(Session::start_new(taken.clone(), AiCli::ClaudeCode));
+
+    assert!(st.start_offered(&free));
+    assert!(!st.start_offered(&taken), "an occupied worktree offers none");
+    assert!(
+        !st.start_offered(&SessionLocation::Default),
+        "the project root follows the same rule"
+    );
+}
+
+#[test]
+fn an_archived_session_leaves_its_location_free() {
+    let (mut st, _, _) = two_projects(0, 0);
+    let location = SessionLocation::Worktree("feat-a".into());
+    let mut gone = Session::start_new(location.clone(), AiCli::ClaudeCode);
+    gone.archived = true;
+    st.workspace
+        .sessions
+        .get_mut(Path::new("/a"))
+        .unwrap()
+        .push(gone);
+
+    assert!(st.start_offered(&location));
+}
+
+#[test]
+fn the_dialog_preselects_the_default_cli_and_offers_none_last() {
+    use micold_client::features::worktree_form::{Msg as FormMsg, SessionChoice};
+    let mut st = state_with(AiCli::Pi, &[AiCli::ClaudeCode, AiCli::Pi]);
+    st.update(micold_client::app::Message::WorktreeForm(FormMsg::Opened));
+
+    let form = st.worktree_form.form.as_ref().expect("the dialog is open");
+    assert_eq!(form.session_cli, Some(AiCli::Pi));
+    assert_eq!(form.session_choices.last(), Some(&SessionChoice::NoSession));
+
+    // Choosing None drops the prompt, and typing one afterwards changes nothing.
+    st.update(micold_client::app::Message::WorktreeForm(
+        FormMsg::FirstPromptChanged("go".into()),
+    ));
+    st.update(micold_client::app::Message::WorktreeForm(
+        FormMsg::SessionCliChosen(None),
+    ));
+    st.update(micold_client::app::Message::WorktreeForm(
+        FormMsg::FirstPromptChanged("again".into()),
+    ));
+    let form = st.worktree_form.form.as_ref().unwrap();
+    assert_eq!(form.session_definition(), None);
+    assert!(form.first_prompt.is_empty());
+}
