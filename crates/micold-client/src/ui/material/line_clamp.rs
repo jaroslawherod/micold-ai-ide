@@ -16,6 +16,7 @@
 
 use std::marker::PhantomData;
 
+use super::shaped_text::{draw_paragraph, State};
 use super::text::TypeRole;
 use iced::advanced::layout::{self, Layout};
 use iced::advanced::text::{self, Paragraph as _, Text as CoreText};
@@ -44,42 +45,16 @@ impl<M> LineClamped<M> {
     }
 }
 
-/// The shaped label, plus what it was shaped for.
-///
-/// The cut is a binary search that shapes the text a dozen times, so its inputs are remembered: a
-/// layout at the same width with the same text reuses the paragraph.
-struct State<P> {
-    paragraph: P,
-    /// What the paragraph holds: the text, or its cut form.
-    fitted: String,
-    source: String,
-    for_width: f32,
-    for_lines: usize,
-}
-
-impl<P: Default> Default for State<P> {
-    fn default() -> Self {
-        Self {
-            paragraph: P::default(),
-            fitted: String::new(),
-            source: String::new(),
-            // NaN compares unequal to everything, itself included: the first layout measures.
-            for_width: f32::NAN,
-            for_lines: 0,
-        }
-    }
-}
-
 impl<Message, Theme, Renderer> Widget<Message, Theme, Renderer> for LineClamped<Message>
 where
     Renderer: text::Renderer<Font = Font>,
 {
     fn tag(&self) -> tree::Tag {
-        tree::Tag::of::<State<Renderer::Paragraph>>()
+        tree::Tag::of::<State<Renderer::Paragraph, (String, f32, usize)>>()
     }
 
     fn state(&self) -> tree::State {
-        tree::State::new(State::<Renderer::Paragraph>::default())
+        tree::State::new(State::<Renderer::Paragraph, (String, f32, usize)>::default())
     }
 
     fn size(&self) -> Size<Length> {
@@ -92,13 +67,13 @@ where
         _renderer: &Renderer,
         limits: &layout::Limits,
     ) -> layout::Node {
-        let state = tree.state.downcast_mut::<State<Renderer::Paragraph>>();
+        let state = tree
+            .state
+            .downcast_mut::<State<Renderer::Paragraph, (String, f32, usize)>>();
         let available = limits.max().width;
 
-        if state.source != self.content
-            || state.for_width != available
-            || state.for_lines != self.max_lines
-        {
+        let key = (self.content.clone(), available, self.max_lines);
+        if !state.holds(&key) {
             // Shaped as it will be drawn: at the width on offer, breaking on words and, where a
             // word is wider than the line (a path, an address), on glyphs.
             let template: CoreText<(), Renderer::Font> = CoreText {
@@ -121,11 +96,8 @@ where
                 (height / line).round() as usize
             };
             let fitted = clamp_to_lines(&self.content, self.max_lines, lines_of).into_owned();
-            state.paragraph = Renderer::Paragraph::with_text(template.with_content(&fitted));
-            state.fitted = fitted;
-            state.source = self.content.clone();
-            state.for_width = available;
-            state.for_lines = self.max_lines;
+            let paragraph = Renderer::Paragraph::with_text(template.with_content(&fitted));
+            state.store(paragraph, fitted, key);
         }
 
         layout::Node::new(limits.resolve(
@@ -145,17 +117,17 @@ where
         _cursor: mouse::Cursor,
         viewport: &Rectangle,
     ) {
-        let state = tree.state.downcast_ref::<State<Renderer::Paragraph>>();
-        let bounds = layout.bounds();
-        let anchor = bounds.anchor(
-            state.paragraph.min_bounds(),
-            state.paragraph.align_x(),
-            state.paragraph.align_y(),
+        let state = tree
+            .state
+            .downcast_ref::<State<Renderer::Paragraph, (String, f32, usize)>>();
+        // A measurement off by a fraction must not paint a fourth line below the panel.
+        draw_paragraph(
+            renderer,
+            &state.paragraph,
+            layout,
+            viewport,
+            style.text_color,
         );
-        // Clipped to the label's own bounds: a measurement off by a fraction must not paint a
-        // fourth line below the panel.
-        let clip = bounds.intersection(viewport).unwrap_or(bounds);
-        renderer.fill_paragraph(&state.paragraph, anchor, style.text_color, clip);
     }
 }
 
@@ -210,7 +182,7 @@ mod tests {
         let node = widget.layout(&mut tree, &renderer, &limits);
         let state = tree
             .state
-            .downcast_ref::<State<<iced::Renderer as text::Renderer>::Paragraph>>();
+            .downcast_ref::<State<<iced::Renderer as text::Renderer>::Paragraph, (String, f32, usize)>>();
         (state.fitted.clone(), node.size().height)
     }
 

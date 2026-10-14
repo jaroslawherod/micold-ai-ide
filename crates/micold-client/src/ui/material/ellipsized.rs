@@ -14,6 +14,7 @@
 
 use std::marker::PhantomData;
 
+use super::shaped_text::{draw_paragraph, State};
 use super::text::TypeRole;
 use iced::advanced::layout::{self, Layout};
 use iced::advanced::text::{self, Paragraph as _, Text as CoreText};
@@ -78,48 +79,17 @@ impl<M> Ellipsized<M> {
     }
 }
 
-/// The shaped label, plus what it was shaped for.
-///
-/// Shaping is the expensive part and the search does it several times over, so the inputs that
-/// decide the outcome are remembered: a re-render at the same width with the same name reuses the
-/// paragraph rather than measuring the name again on every frame.
-struct State<P> {
-    paragraph: P,
-    source: String,
-    for_width: f32,
-    for_size: f32,
-    for_font: Font,
-}
-
-impl<P: Default> Default for State<P> {
-    fn default() -> Self {
-        Self {
-            paragraph: P::default(),
-            source: String::new(),
-            // NaN compares unequal to everything, including itself, so the first layout always
-            // measures rather than trusting an uninitialised width.
-            for_width: f32::NAN,
-            for_size: f32::NAN,
-            for_font: Font::DEFAULT,
-        }
-    }
-}
-
 /// What a cached paragraph was shaped for — the inputs that decide its outcome.
-struct Shaped<'a> {
-    source: &'a str,
-    width: f32,
-    size: f32,
-    font: Font,
-}
-
-/// Whether the cached paragraph still answers the question being asked of it.
 ///
 /// The font is part of the key and not an afterthought: the sidebar's ordinary and current session
 /// roles are the same size, so a row that becomes current changes *only* its face. Key on size alone
 /// and that row keeps the paragraph it was shaped with, and the mark never appears (BUG-001).
-fn needs_reshape(was: &Shaped<'_>, content: &str, width: f32, size: f32, font: Font) -> bool {
-    was.source != content || was.width != width || was.size != size || was.font != font
+#[derive(PartialEq)]
+struct Shaped {
+    source: String,
+    width: f32,
+    size: f32,
+    font: Font,
 }
 
 impl<Message, Theme, Renderer> Widget<Message, Theme, Renderer> for Ellipsized<Message>
@@ -127,11 +97,11 @@ where
     Renderer: text::Renderer<Font = Font>,
 {
     fn tag(&self) -> tree::Tag {
-        tree::Tag::of::<State<Renderer::Paragraph>>()
+        tree::Tag::of::<State<Renderer::Paragraph, Shaped>>()
     }
 
     fn state(&self) -> tree::State {
-        tree::State::new(State::<Renderer::Paragraph>::default())
+        tree::State::new(State::<Renderer::Paragraph, Shaped>::default())
     }
 
     fn size(&self) -> Size<Length> {
@@ -146,7 +116,9 @@ where
         renderer: &Renderer,
         limits: &layout::Limits,
     ) -> layout::Node {
-        let state = tree.state.downcast_mut::<State<Renderer::Paragraph>>();
+        let state = tree
+            .state
+            .downcast_mut::<State<Renderer::Paragraph, Shaped>>();
         let available = limits.max().width;
         let font = self.font.unwrap_or_else(|| renderer.default_font());
 
@@ -164,30 +136,21 @@ where
             wrapping: text::Wrapping::None,
         };
 
-        let stale = needs_reshape(
-            &Shaped {
-                source: &state.source,
-                width: state.for_width,
-                size: state.for_size,
-                font: state.for_font,
-            },
-            &self.content,
-            available,
-            self.size,
+        let key = Shaped {
+            source: self.content.clone(),
+            width: available,
+            size: self.size,
             font,
-        );
-        if stale {
+        };
+        if !state.holds(&key) {
             let measure = |candidate: &str| {
                 Renderer::Paragraph::with_text(template.with_content(candidate))
                     .min_bounds()
                     .width
             };
             let fitted = fit(&self.content, available, measure);
-            state.paragraph = Renderer::Paragraph::with_text(template.with_content(&fitted));
-            state.source = self.content.clone();
-            state.for_width = available;
-            state.for_size = self.size;
-            state.for_font = font;
+            let paragraph = Renderer::Paragraph::with_text(template.with_content(&fitted));
+            state.store(paragraph, fitted, key);
         }
 
         layout::Node::new(limits.resolve(
@@ -207,21 +170,15 @@ where
         _cursor: mouse::Cursor,
         viewport: &Rectangle,
     ) {
-        let state = tree.state.downcast_ref::<State<Renderer::Paragraph>>();
-        let bounds = layout.bounds();
-        let anchor = bounds.anchor(
-            state.paragraph.min_bounds(),
-            state.paragraph.align_x(),
-            state.paragraph.align_y(),
-        );
-        // Clipped to the label's own bounds, not the viewport: truncation should already have made
-        // this impossible, and a belt that only holds when the braces do is not a belt.
-        let clip = bounds.intersection(viewport).unwrap_or(bounds);
-        renderer.fill_paragraph(
+        let state = tree
+            .state
+            .downcast_ref::<State<Renderer::Paragraph, Shaped>>();
+        draw_paragraph(
+            renderer,
             &state.paragraph,
-            anchor,
+            layout,
+            viewport,
             super::style::color(self.color),
-            clip,
         );
     }
 }
@@ -448,34 +405,18 @@ mod tests {
         let regular = TypeRole::SidebarSession.font();
         let medium = TypeRole::SidebarSessionCurrent.font();
 
+        let shaped = |font| Shaped {
+            source: "Claude Code".into(),
+            width: 180.0,
+            size: 12.0,
+            font,
+        };
         assert!(
-            needs_reshape(
-                &Shaped {
-                    source: "Claude Code",
-                    width: 180.0,
-                    size: 12.0,
-                    font: regular,
-                },
-                "Claude Code",
-                180.0,
-                12.0,
-                medium,
-            ),
+            shaped(regular) != shaped(medium),
             "becoming current changes only the font, and must still re-shape"
         );
         assert!(
-            !needs_reshape(
-                &Shaped {
-                    source: "Claude Code",
-                    width: 180.0,
-                    size: 12.0,
-                    font: medium,
-                },
-                "Claude Code",
-                180.0,
-                12.0,
-                medium,
-            ),
+            shaped(medium) == shaped(medium),
             "nothing changed, so nothing should be re-shaped"
         );
     }
