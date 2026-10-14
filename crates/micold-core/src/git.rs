@@ -8,7 +8,7 @@
 
 use std::io;
 use std::path::Path;
-use std::process::Command;
+use std::process::{Command, Output};
 
 use crate::process::no_window;
 use crate::protocol::messages::BranchContainment;
@@ -330,21 +330,30 @@ pub(crate) fn local_only(command: &mut Command) -> &mut Command {
 /// Run `git -C <repo> <args...>`, returning stdout on success or an `io::Error` carrying
 /// stderr on a non-zero exit.
 pub(crate) fn run_git(repo: &Path, args: &[&str]) -> io::Result<String> {
-    let output = no_window(&mut Command::new("git"))
-        .arg("-C")
-        .arg(repo)
-        .args(args)
-        .output()?;
+    let output = git_output(repo, args)?;
     if output.status.success() {
         Ok(String::from_utf8_lossy(&output.stdout).into_owned())
     } else {
-        let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
-        Err(io::Error::other(format!(
-            "git {} failed: {}",
-            args.join(" "),
-            stderr.trim()
-        )))
+        Err(git_failed(args, &output.stderr))
     }
+}
+
+/// Run `git -C <repo> <args...>` and answer its raw output whatever its exit status.
+pub(crate) fn git_output(repo: &Path, args: &[&str]) -> io::Result<Output> {
+    no_window(&mut Command::new("git"))
+        .arg("-C")
+        .arg(repo)
+        .args(args)
+        .output()
+}
+
+/// The error of a git run that did not succeed, carrying what it said on `stderr`.
+pub(crate) fn git_failed(args: &[&str], stderr: &[u8]) -> io::Error {
+    io::Error::other(format!(
+        "git {} failed: {}",
+        args.join(" "),
+        String::from_utf8_lossy(stderr).trim()
+    ))
 }
 
 /// Whether two paths name the same location, resolving symlinks when both sides exist.
@@ -378,11 +387,7 @@ impl Git for GitCli {
 
     fn branch_exists(&self, repo: &Path, branch: &str) -> io::Result<bool> {
         let refname = format!("refs/heads/{branch}");
-        let output = no_window(&mut Command::new("git"))
-            .arg("-C")
-            .arg(repo)
-            .args(["show-ref", "--verify", "--quiet", &refname])
-            .output()?;
+        let output = git_output(repo, &["show-ref", "--verify", "--quiet", &refname])?;
         Ok(output.status.success())
     }
 
@@ -530,20 +535,12 @@ impl Git for GitCli {
 
     fn remote_list(&self, repo: &Path) -> io::Result<String> {
         let args = ["config", "--local", "--get-regexp", r"^remote\..+\.url$"];
-        let output = no_window(&mut Command::new("git"))
-            .arg("-C")
-            .arg(repo)
-            .args(args)
-            .output()?;
+        let output = git_output(repo, &args)?;
         match output.status.code() {
             Some(0) => Ok(String::from_utf8_lossy(&output.stdout).into_owned()),
             // `--get-regexp` exits 1 when nothing matches: a repository without remotes.
             Some(1) => Ok(String::new()),
-            _ => Err(io::Error::other(format!(
-                "git {} failed: {}",
-                args.join(" "),
-                String::from_utf8_lossy(&output.stderr).trim()
-            ))),
+            _ => Err(git_failed(&args, &output.stderr)),
         }
     }
 
