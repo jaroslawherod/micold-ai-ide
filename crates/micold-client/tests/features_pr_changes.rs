@@ -491,7 +491,10 @@ fn pr_list_refresh_replaces_the_list_with_the_new_state() {
         Msg::PullRequestsRead {
             seq,
             read_at: 200,
-            result: Ok(vec![pr(1, BranchPrState::Merged), pr(2, BranchPrState::Open)]),
+            result: Ok(vec![
+                pr(1, BranchPrState::Merged),
+                pr(2, BranchPrState::Open),
+            ]),
         },
     );
     let (prs, at) = view_list(&state).shown().expect("listed");
@@ -524,7 +527,10 @@ fn pr_list_refresh_failure_keeps_the_list_and_marks_it_stale_by_age() {
         },
     );
     let list = view_list(&state);
-    assert_eq!(list.shown().map(|(prs, at)| (prs.len(), at)), Some((1, 1_000)));
+    assert_eq!(
+        list.shown().map(|(prs, at)| (prs.len(), at)),
+        Some((1, 1_000))
+    );
     assert!(!list.possibly_stale(1_000 + STALE_AFTER_SECS));
     assert!(list.possibly_stale(1_000 + STALE_AFTER_SECS + 1));
 

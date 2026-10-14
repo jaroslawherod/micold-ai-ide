@@ -217,7 +217,10 @@ fn pull_request_section<'a>(view: &'a OpenView, r: Roles) -> Option<Element<'a, 
         ),
     ]
     .spacing(spacing::XS);
-    if view.pull_requests.possibly_stale(super::sidebar::unix_now()) {
+    if view
+        .pull_requests
+        .possibly_stale(super::sidebar::unix_now())
+    {
         section = section.push(Text::new(POSSIBLY_STALE, TypeRole::Caption, r).muted());
     }
     for pr in prs {
