@@ -14,7 +14,7 @@ use super::changes::{
 };
 use super::diff::{added_file, parse_unified, FileDiff, LoadedDiff, SideLines, Spans};
 use super::{limits, RelPath};
-use crate::git::{local_only, run_git, GitCli};
+use crate::git::{git_failed, local_only, run_git, GitCli};
 use crate::process::{no_window, run_bounded_with_input, RunOutcome};
 
 /// Options every review read passes before the subcommand (R1).
@@ -43,7 +43,7 @@ fn read_bytes(dir: &Path, args: &[&str], stdin: Option<&str>) -> io::Result<Vec<
     if ran.success() {
         Ok(ran.stdout)
     } else {
-        Err(failed(args, &ran))
+        Err(git_failed(args, ran.stderr.as_bytes()))
     }
 }
 
@@ -64,15 +64,6 @@ impl Ran {
     fn success(&self) -> bool {
         self.code == 0
     }
-}
-
-/// The error of a git run that did not succeed, with what it said.
-fn failed(args: &[&str], ran: &Ran) -> io::Error {
-    io::Error::other(format!(
-        "git {} failed: {}",
-        args.join(" "),
-        ran.stderr.trim()
-    ))
 }
 
 /// Run a read-only git command in `dir` with `global` options before it, answering its output
@@ -260,7 +251,7 @@ impl GitCli {
                 .map(PathBuf::from)
                 .collect()),
             1 => Ok(BTreeSet::new()),
-            _ => Err(failed(&args, &ran)),
+            _ => Err(git_failed(&args, ran.stderr.as_bytes())),
         }
     }
 
