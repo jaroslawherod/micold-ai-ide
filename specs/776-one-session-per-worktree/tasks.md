@@ -1,14 +1,16 @@
 # Tasks: One Session per Worktree, Chosen at Start
 
-**Input**: `/specs/776-one-session-per-worktree/` (spec.md, plan.md, research.md R1-R13, data-model.md, contracts/wire.md, contracts/mcp-tools.md, quickstart.md)
+**Input**: `/specs/776-one-session-per-worktree/` (spec.md, plan.md, research.md R1-R14, data-model.md, contracts/wire.md, contracts/mcp-tools.md, quickstart.md)
 
 **Tests**: mandatory (Constitution I). Every test task precedes the implementation it covers and must be seen failing for the right reason first.
 
 **Format**: `- [ ] T### [P?] [US?] Description with file path`. `[P]` = different files, no dependency on an unfinished task.
 
-User stories: US1 refused second session unless really requested (P1), US2 defined at start (P1), US3 resume/restart replace (P2), US4 worktrees with several sessions (P3), US5 worktree rows and default session (P2), US6 additional session on purpose (P2).
+User stories: US1 refused second session unless really requested (P1), US2 defined at start (P1), US3 resume/restart replace (P2), US4 worktrees with several sessions (P3), US5 worktree rows and main session (P2), US6 helper session on purpose (P2), US7 one main session, changeable (P2).
 
 **Amended 2026-10-13** (soft limit, default session; research R12, R13). T001-T013 are merged (M1, #794) and stay ticked: the default path still refuses. T037-T049 are new; amended wording of open tasks is marked *(amended)*. Milestones are renumbered in *Milestones* below.
+
+**Amended 2026-10-14** (main session and helpers; research R14, spec Session 2026-10-14). T014-T016 and T021 stay M3's; T050-T054 (core, wire v43, daemon) are new and go first in M3; T055-T057 are M5's. T038's `default_session` tests and T044's `last_viewed` are replaced (*amended*). T001-T013 and T037-T042 are merged and stay ticked; what they built that changes is listed in research R14.
 
 ## Phase 1: Setup
 
@@ -55,6 +57,20 @@ User stories: US1 refused second session unless really requested (P1), US2 defin
 
 **Checkpoint**: `mise run gate` green; the default path unchanged, the flag adds.
 
+## Phase 3c: Main session (US7 amendment; first in M3)
+
+**Goal**: the daemon designates, persists, moves and promotes the main session; the wire carries it. No UI.
+
+**Independent test**: `cargo test -p micold-daemon --test one_session_per_worktree main_session` and `mise run test-core`.
+
+- [ ] T050 [P] [US7] Core and wire tests: in `crates/micold-core/src/occupancy.rs` (`#[cfg(test)]`) `main_session` returns the un-archived session with `main`, else the first un-archived in list order, else `None`, ignores other locations and archived sessions; `occupancy` names it; `refusal_text`/`start_block_text` say "main session"; remove the `default_session`/`last_viewed` tests of T038. In `crates/micold-core/tests/protocol_roundtrip.rs`: `Session.main` round-trips and a record without it decodes `false`; `ClientMsg::SessionSetMain { id }` round-trips; `PROTOCOL_VERSION == 43`.
+- [ ] T051 [P] [US7] Daemon tests `main_session_*` in `crates/micold-daemon/tests/one_session_per_worktree.rs` (US7 s1-s5, FR-020-FR-022, SC-008): create on a free worktree (with and without `allow_additional_session`) is main; `allow_additional_session` on an occupied one is a helper and the main is unchanged; `SessionSetMain` on a helper moves the role in one write (exactly one main), persists across a daemon restart, and is a no-op for the main, an archived or an unknown id; archive of the main promotes the first remaining un-archived in list order in the same write, archive of a helper changes nothing, archive of the only session frees the location and the next create is main; a catalog fixture without the marker derives its main as the first un-archived and no record is rewritten on load; the refusal of M1/M2 names the main.
+- [ ] T052 [US7] Implement in `crates/micold-core`: `Session.main` (serde-default) in `src/session.rs`; `occupancy::main_session` replacing `default_session` and the naming/wording in `src/occupancy.rs`; `ClientMsg::SessionSetMain`, `PROTOCOL_VERSION` 43 with history entry and `SCHEMA_HASH` in `src/protocol/messages.rs` and `version.rs`.
+- [ ] T053 [US7] Implement in `crates/micold-daemon`: `main` set by `Catalog::create_session` and inherited by `Catalog::replace_session` (`src/catalog.rs`), promotion in the archive path in the same persisted write, `Catalog::set_main`; adoption sets it for the one catalogued session per location (`src/state.rs`); map `SessionSetMain` in `src/server.rs` (fire-and-forget; the catalog update is the answer). Keep the daemon and client compiling: the client ignores the field until M4.
+- [ ] T054 [P] [US7] Amend `docs/user-guide/agent-tools.md` (the refusal names the main session; `list_sessions` rows do not mark it and listing order does not indicate it) and `docs/user-guide/worktrees-and-sessions.md` (main and helper sessions, set at start, how it is moved and promoted on delete) (FR-014, Constitution VII).
+
+**Checkpoint**: `mise run gate` green; the daemon designates and moves the main; no UI change.
+
 ## Phase 4: User Story 2 - The session is defined when the worktree starts (P1)
 
 **Goal**: worktree and session are created together with the chosen CLI and first prompt; the sidebar offers a start only on a location without a session.
@@ -72,26 +88,29 @@ User stories: US1 refused second session unless really requested (P1), US2 defin
 - [ ] T036 [P] [US2] Update `docs/user-guide/worktrees-and-sessions.md` (dialog fields, definition at start, no add action on a started worktree).
 - [ ] T022 [US2] Visual pass of quickstart Part B items 1, 2 and 4 via the `visual-pass` skill; save evidence in `specs/776-one-session-per-worktree/tdd/`.
 
-## Phase 4b: User Story 5 - Worktree rows and the default session (P2)
+## Phase 4b: User Story 5 - Worktree rows and the main session (P2)
 
-**Goal**: one row per worktree, no session rows by default, selecting a row opens its default session.
+**Goal**: one row per worktree, no session rows by default, selecting a row opens its main session.
 
 **Independent test**: `cargo test -p micold-client --test features_sidebar --test features_session`.
 
-- [ ] T043 [P] [US5] Client reducer tests in `crates/micold-client/tests/features_sidebar.rs` and `features_session.rs`: a worktree with one session builds no session rows and has no expander; with two it has an expander, collapsed by default, listing both with the default marked; a row press selects `default_session(.., last_viewed)` (last viewed, else first); a worktree with no session selects nothing and keeps its start action; the Default root follows the same; unread and activity of a collapsed row aggregate as before (feature 575).
-- [ ] T044 [US5] Implement in `crates/micold-client/src/features/sidebar.rs` (expander only for several, default collapsed), `crates/micold-client/src/features/session.rs` (`last_viewed` per location, row-press selection via `occupancy::default_session`) and `crates/micold-client/src/ui/sidebar.rs` (no sub-rows for one session, press emits the selection; rename and close of the single session in the worktree row's existing context menu), existing primitives only (Principle VIII).
-- [ ] T045 [P] [US5] Update `docs/user-guide/worktrees-and-sessions.md`: the sidebar lists worktrees, selecting one opens its default session, several sessions expand.
+- [ ] T043 [P] [US5] Client reducer tests in `crates/micold-client/tests/features_sidebar.rs` and `features_session.rs`: a worktree with one session builds no session rows and has no expander; with two it has an expander, collapsed by default, listing the main first and the helper marked *(amended)*; a row press selects `main_session` whatever was last viewed *(amended)*; a worktree with no session selects nothing and keeps its start action; the Default root follows the same; unread and activity of a collapsed row aggregate as before (feature 575).
+- [ ] T044 [US5] Implement in `crates/micold-client/src/features/sidebar.rs` (expander only for several, default collapsed), `crates/micold-client/src/features/session.rs` (row-press selection via `occupancy::main_session`; no `last_viewed`) *(amended)* and `crates/micold-client/src/ui/sidebar.rs` (no sub-rows for one session, helpers marked, press emits the selection; rename and close of the single session in the worktree row's existing context menu), existing primitives only (Principle VIII).
+- [ ] T045 [P] [US5] Update `docs/user-guide/worktrees-and-sessions.md`: the sidebar lists worktrees, selecting one opens its main session, several sessions expand with the helpers marked.
 
-## Phase 4c: User Story 6 - An additional session on purpose (P2)
+## Phase 4c: User Stories 6 and 7 - A helper on purpose; changing the main (P2)
 
-**Goal**: the app's explicit request: the row menu entry and its confirmation.
+**Goal**: the app's explicit request (row menu entry and confirmation) adds a helper; a helper can be made main; deleting a main names its successor.
 
 **Independent test**: `cargo test -p micold-client --test features_session additional`.
 
 - [ ] T046 [P] [US6] Client tests in `crates/micold-client/tests/features_session.rs`: the worktree row menu has "Start another session..." only for an occupied location (Default included); it opens a confirmation naming the worktree and the existing session; confirm sends `SessionCreate { allow_additional_session: true }` and the created session is selected; cancel changes nothing; the confirmation survives a refusal arriving first (US6 s4).
 - [ ] T047 [US6] Add the menu entry and the confirmation state in `crates/micold-client/src/features/session.rs` and `crates/micold-client/src/features/worktree.rs`, and `crates/micold-client/src/ui/confirm_additional_session.rs` (pattern of `ui/confirm_session_remove.rs`) rendered from `crates/micold-client/src/ui/mod.rs` / the sidebar menu; send in `crates/micold-client/src/shell/daemon_sync.rs`.
 - [ ] T048 [P] [US6] Update `docs/user-guide/worktrees-and-sessions.md`: "Start another session..." and its confirmation.
-- [ ] T049 [US6] Visual pass of quickstart Part B item 5 via `visual-pass`; evidence in `specs/776-one-session-per-worktree/tdd/`.
+- [ ] T055 [P] [US7] Client tests in `crates/micold-client/tests/features_session.rs` and `features_sidebar.rs`: a helper sub-row menu has "Make main session" and the main's does not; choosing it sends `SessionSetMain` and, on the catalog update, the row press opens the new main and the old is listed as a helper; the delete confirmation of a main that has helpers names `main_session` of the remaining sessions, and of a helper or a lone main does not (FR-021, FR-022).
+- [ ] T056 [US7] Implement the menu entry and the delete-confirmation wording in `crates/micold-client/src/features/session.rs`, `crates/micold-client/src/ui/sidebar.rs` and the existing confirmation view; send in `crates/micold-client/src/shell/daemon_sync.rs`.
+- [ ] T057 [P] [US7] Update `docs/user-guide/worktrees-and-sessions.md`: "Make main session" and the promotion on delete.
+- [ ] T049 [US6] Visual pass of quickstart Part B items 5 and 6 via `visual-pass`; evidence in `specs/776-one-session-per-worktree/tdd/`.
 
 ## Phase 5: User Story 3 - Resume and restart replace, never add (P2)
 
@@ -100,7 +119,7 @@ User stories: US1 refused second session unless really requested (P1), US2 defin
 **Independent test**: `cargo test -p micold-daemon --test attach_apply --test one_session_per_worktree`.
 
 - [ ] T023 [P] [US3] Daemon tests in `crates/micold-daemon/tests/one_session_per_worktree.rs`: stop, `start_session`, restart keep the same id and one session (FR-008a, FR-009 pinned); `start_session` on a running session is still a no-op success.
-- [ ] T024 [P] [US3] Daemon tests in `crates/micold-daemon/tests/attach_apply.rs` *(amended)*: `AttachItem::Session` with both `replace` and `allow_additional_session` is `Refused` (malformed); resume with `allow_additional_session: true` into an occupied location adds the resumed session beside the existing one, stops nothing and archives nothing; a request into a free location ignores the flag; resume into an occupied location without `replace` is `Refused(LocationHasSession)` with `existing`, nothing stopped or written; with `replace: true` the old process is stopped first, the new record persists, then the old is archived (R7), a failed write leaves the old listed; a batch of several sessions for one location keeps the most recent (`cap_per_location`), the rest stay resumable; a single explicit resume is never capped (FR-012).
+- [ ] T024 [P] [US3] Daemon tests in `crates/micold-daemon/tests/attach_apply.rs` *(amended)*: `AttachItem::Session` with both `replace` and `allow_additional_session` is `Refused` (malformed); resume with `allow_additional_session: true` into an occupied location adds the resumed session beside the existing one, stops nothing and archives nothing; a request into a free location ignores the flag; resume into an occupied location without `replace` is `Refused(LocationHasSession)` with `existing`, nothing stopped or written; with `replace: true` the old process is stopped first, the new record persists, then the old is archived (R7), a failed write leaves the old listed; the replacing record inherits `main` from the replaced one and a kept-beside record is a helper *(amended 2026-10-14)*; a batch of several sessions for one location keeps the most recent (`cap_per_location`), the rest stay resumable; a single explicit resume is never capped (FR-012).
 - [ ] T025 [P] [US3] Core tests in `crates/micold-core/tests/attach_discovery.rs`: `cap_per_location` keeps the greatest `last_activity` per `AttachTarget` and drops every candidate for an occupied one; `catalog_adoption.rs` in `crates/micold-daemon/tests/` covers `adopt_discovered_sessions` catalogue at most one per location.
 - [ ] T026 [US3] Implement `cap_per_location` in `crates/micold-core/src/attach.rs`; `Catalog::replace_session` and the adoption cap in `crates/micold-daemon/src/catalog.rs`; `attach_apply` replace, keep-both (`allow_additional_session`) and cap in `crates/micold-daemon/src/state.rs` *(amended)*.
 - [ ] T027 [P] [US3] Client tests in `crates/micold-client/tests/features_attach.rs` and `attach_dialog.rs`: a `Refused(LocationHasSession)` result opens a confirmation naming both sessions with Replace and Keep both; Replace re-sends the item with `replace: true`, Keep both with `allow_additional_session: true`; cancel changes nothing *(amended)*.
@@ -122,18 +141,19 @@ User stories: US1 refused second session unless really requested (P1), US2 defin
 
 ## Dependencies
 
+- US7's daemon half (T050-T054) needs T041 and is needed by US5 (T044 reads `main_session`), US6 (the new session is a helper) and US3 (replace inherits `main`). T055-T056 need T044 and T047.
 - Phase 2 blocks all stories. T002/T003 before T004/T005.
-- US1 (T006-T013) needs Phase 2. The soft limit (T037-T042) needs US1 and is needed by every later story: it changes `Catalog::create_session`'s signature and the wire. US2 needs T041. US5 needs T041 (`default_session`). US6 needs T041 and US5's menu. US3 needs T041 and US1. US4 needs T041, `start_block` (T004) and US6's confirmation (T047).
+- US1 (T006-T013) needs Phase 2. The soft limit (T037-T042) needs US1 and is needed by every later story: it changes `Catalog::create_session`'s signature and the wire. US2 needs T041. US5 needs T052 (`main_session`). US6 needs T041, T053 and US5's menu. US3 needs T041 and US1. US4 needs T041, `start_block` (T004) and US6's confirmation (T047).
 - Within a story: tests, then implementation, then docs.
 - Files shared across tasks (`one_session_per_worktree.rs`, `state.rs`, `session.rs`, the user-guide pages) are edited in order of task ID, not in parallel.
 
 ## Implementation Strategy
 
-MVP: Phases 1-3 (rule, wire, refusal everywhere a session is created), merged. Then the soft limit (3b), US2, US5, US6, US3, US4, each its own PR. Quickstart Part A is the automated pass; Part B items are tasks T022, T030 and T049.
+MVP: Phases 1-3 (rule, wire, refusal everywhere a session is created), merged. Then the soft limit (3b), the main session's daemon half with US2 (3c, M3), the client stories US5, US6 and US7, US3, US4, each its own PR. Quickstart Part A is the automated pass; Part B items are tasks T022, T030 and T049.
 
 ## Milestones
 
-Each milestone merges to `main` on its own, through one PR (speckit-autopilot). M1 is merged (#794). M2-M7 are the amended cut (2026-10-13); the old M2-M5 were renumbered M3, M4, M6, M7 and M5 is new.
+Each milestone merges to `main` on its own, through one PR (speckit-autopilot). M1 is merged (#794). M2-M7 are the amended cut (2026-10-13); the old M2-M5 were renumbered M3, M4, M6, M7 and M5 is new. Amended 2026-10-14: M3 gains the main-session daemon half (T050-T054) and M5 gains the client half (T055-T057); the cut and order are unchanged.
 
 ### M1 — The rule and the refusal 🎯 MVP (merged, #794)
 
@@ -153,40 +173,40 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot). 
 - **Depends on**: M1
 - **Tier**: full
 
-### M3 — Define the session at worktree start (daemon and tools)
+### M3 — Define the session at worktree start; the main session (daemon, wire, tools)
 
-- **Tasks**: T014–T016, T021
-- **Deliverable**: `create_worktree` (MCP) and the `WorktreeCreate` RPC accept an AI CLI and first prompt and create the worktree and its one session together; a missing CLI creates nothing. (WIP kept at local tag `wip-776-m3`, cherry-picked after M2 merges and adapted to M2's `Additional::No` signature.)
-- **Satisfies**: US2 acceptance scenarios 2, 4, 5; FR-006, FR-010, FR-014 (`create_worktree`)
-- **Verify**: `cargo test -p micold-daemon --test mcp_create_worktree --test one_session_per_worktree`
+- **Tasks**: T014–T016, T021, T050–T054
+- **Deliverable**: `create_worktree` (MCP) and the `WorktreeCreate` RPC accept an AI CLI and first prompt and create the worktree and its one session together, which is its main session; a missing CLI creates nothing. The daemon persists which session is main, moves it on `SessionSetMain`, promotes the first remaining session when the main is deleted, and names it in refusals (wire v43). (WIP for T014–T016 kept at local tag `wip-776-m3`, cherry-picked after M2 merges and adapted to M2's `Additional::No` signature; T050–T054 are written on top.)
+- **Satisfies**: US2 acceptance scenarios 2, 4, 5; US7 acceptance scenarios 1–5 (daemon half); FR-006, FR-010, FR-014 (`create_worktree`, refusal), FR-020, FR-022; SC-008
+- **Verify**: `cargo test -p micold-daemon --test mcp_create_worktree --test one_session_per_worktree` and `mise run test-core`
 - **Depends on**: M2
 - **Tier**: full
 
-### M4 — Dialog fields, worktree rows and the default session
+### M4 — Dialog fields, worktree rows and the main session
 
 - **Tasks**: T017–T020, T022, T036, T043–T045
-- **Deliverable**: The create-worktree dialog starts the session with the worktree; the sidebar lists worktrees only (an expander only for several sessions, collapsed), a row press opens the default session, and a row with a session has no start action.
+- **Deliverable**: The create-worktree dialog starts the session with the worktree; the sidebar lists worktrees only (an expander only for several sessions, collapsed, the main first and helpers marked), a row press opens the main session, and a row with a session has no start action.
 - **Satisfies**: US2 acceptance scenarios 1, 3; US5 acceptance scenarios 1–5; FR-004, FR-006, FR-017, FR-018, FR-019, FR-014 (dialog, sidebar); SC-004, SC-006
 - **Verify**: `cargo test -p micold-client --test features_worktree_form --test features_session --test features_sidebar` and quickstart §B items 1, 2, 4
 - **Depends on**: M3
 - **Tier**: full
 
-### M5 — Start another session on purpose (app)
+### M5 — Start a helper on purpose; make a session main (app)
 
-- **Tasks**: T046–T049
-- **Deliverable**: The worktree row menu offers "Start another session..." on an occupied worktree; confirming adds a second session and shows it.
-- **Satisfies**: US6 acceptance scenarios 1–4; FR-016 (menu entry); SC-007
-- **Verify**: `cargo test -p micold-client --test features_session additional` and quickstart §B item 5
+- **Tasks**: T046–T049, T055–T057
+- **Deliverable**: The worktree row menu offers "Start another session..." on an occupied worktree; confirming adds a helper session and shows it. A helper's menu offers "Make main session"; deleting a main names the session that takes over.
+- **Satisfies**: US6 acceptance scenarios 1–4; US7 acceptance scenarios 2–3 (app half); FR-016 (menu entry), FR-021, FR-022 (confirmation); SC-007, SC-008
+- **Verify**: `cargo test -p micold-client --test features_session --test features_sidebar additional main` and quickstart §B items 5, 6
 - **Depends on**: M2, M4
 - **Tier**: full
 
 ### M6 — Resume replaces, or keeps both
 
 - **Tasks**: T023–T030
-- **Deliverable**: Resuming a provider session into an occupied worktree asks for confirmation and replaces the occupant or keeps both; "attach all" catalogues one session per location; restart and start keep one session.
+- **Deliverable**: Resuming a provider session into an occupied worktree asks for confirmation and replaces the occupant (the resumed session becomes main) or keeps both (the resumed session is a helper); "attach all" catalogues one session per location; restart and start keep one session.
 - **Satisfies**: US3 acceptance scenarios 1–4; FR-007, FR-008a, FR-008b, FR-008c, FR-009, FR-012, FR-015 (`AttachItem::Session`), FR-014 (resume)
 - **Verify**: `cargo test -p micold-daemon --test attach_apply --test one_session_per_worktree` and quickstart §B item 3
-- **Depends on**: M2
+- **Depends on**: M2, M3 (main role)
 - **Tier**: full
 
 ### M7 — Worktrees with several sessions stay intact

@@ -1,6 +1,6 @@
 # Contract: wire changes
 
-`PROTOCOL_VERSION` 40 to 41, once for the whole feature, with the `version.rs` history entry. All
+`PROTOCOL_VERSION` 40 to 41 (M1; superseded by the M2 and M3 amendments below, 42 and 43), with the `version.rs` history entry. All
 additions are optional and serde-defaulted, so an older frame decodes and the old behaviour is the
 default; `SCHEMA_HASH` changes with them.
 
@@ -14,6 +14,18 @@ default; `SCHEMA_HASH` changes with them.
 block) and lets a resume item keep both (M6); M2 only carries the field on those three and the
 daemon ignores it there until its milestone. Both `replace` and the flag on one item is refused as
 malformed (M6). The refusal texts gain the way forward (research R3, R12).
+
+## Amendment 2026-10-14: the main session (M3)
+
+`PROTOCOL_VERSION` 42 to 43 (the catalog snapshot shape changes). `Session` gains `main: bool`
+(serde-default `false`; persisted with the record and carried in the catalog snapshot; an older
+frame or catalog decodes to `false` and the reader derives the main, research R14). New
+`ClientMsg::SessionSetMain { id: SessionId }`, fire-and-forget like `SessionStart`: the daemon
+sets `main` on `id` and clears it on the location's other sessions in one persisted write; the
+catalog update is the answer. A no-op for an unknown, archived or already-main id. The create,
+replace, adopt and archive paths write the marker as research R14 lists, with no new message.
+Refusal texts name "the main session" (contracts/mcp-tools.md). No existing message changes
+shape.
 
 ## `ClientMsg::WorktreeCreate`
 
@@ -74,4 +86,4 @@ reason so the confirmation can name the session being replaced.
 
 ## Not changed
 
-`CatalogSnapshot`, session records, `AttachDiscover`, store files. No catalog migration.
+`CatalogSnapshot`'s shape beyond `Session.main`, `AttachDiscover`, store files. No catalog migration: records written before M3 load with `main` false and derive it.

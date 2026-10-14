@@ -273,7 +273,10 @@ by the existing CLI choice only when the default CLI is missing). A start blocke
 **Alternatives rejected**: a project or worktree setting "allow several" (new persisted state,
 and it makes accidents silent again); a tool-only opt-in (the user asked for the app too).
 
-## R13. Worktree rows only, and the default session
+## R13. Worktree rows only, and the default session (default superseded by R14)
+
+**Amended 2026-10-14**: the sidebar half of this section stands; the `default_session` /
+`last_viewed` half is replaced by the main session of R14.
 
 **Decision**: `occupancy::default_session(sessions, &location, last_viewed: Option<SessionId>)
 -> Option<SessionId>`: `last_viewed` when it names an un-archived session of the location, else
@@ -295,3 +298,58 @@ nothing.
 **Alternatives rejected**: removing session rows outright (extras would need a new switcher widget
 in the pane, a Principle VIII addition for a rare case); selecting the most recent by creation
 (the original session is the better default: the one the user chose at start).
+
+## R14. A designated main session; the others are helpers (amendment 2026-10-14)
+
+**Decision**: each worktree has one main session, stored as a boolean `main` on the `Session`
+record (`micold-core/src/session.rs`, serde-default `false`, so an older catalog and an older
+frame decode unchanged). It rides the catalog snapshot with the rest of the record; no new
+message carries it. The pure function `occupancy::main_session(sessions, &location) ->
+Option<SessionId>` is the one reader (daemon, client): the un-archived session with `main` true,
+else (legacy catalogs, or no marker) the first un-archived session in list order, else `None`.
+Nothing is rewritten on load (FR-020, SC-005). `occupancy::occupancy` names the main session in
+`Taken` and so in every refusal.
+
+**Who writes the marker** (daemon, under the catalog lock, in the write that already happens):
+- `Catalog::create_session`: `main = true` when the location is `Free`, whatever `Additional` says;
+  `false` when `Taken` and `Additional::Yes`.
+- `Catalog::replace_session` (confirmed resume): the new record inherits `main` from the old one
+  and the old is archived in the same write (R7).
+- Keep both (FR-008c) and adoption of a second session: `main = false`; adoption into a free
+  location (at most one, R8): `true`.
+- Archive (`delete_session`): if the archived record was the main, the first remaining un-archived
+  record of the location in list order gets `main = true` in the same persisted write; the
+  archived record keeps its marker cleared. Deleting a helper touches nothing else.
+- `SessionSetMain { id }` (new `ClientMsg`, fire-and-forget like `SessionStart`; reply is the
+  catalog update): sets `main` on `id` and clears it on the location's others in one write; a
+  no-op for an archived, unknown or already-main id.
+
+**Why a marker and not list order or last viewed**: "stays main until the user changes it" needs
+state that survives restarts and several windows; last viewed is per window and transient (R13),
+and reordering the list would couple the role to a display order the user may later be able to
+change. One boolean per record is the smallest durable form.
+
+**What M1 and M2 built that changes** (merged; M3 onward amends):
+1. `occupancy::default_session(.., last_viewed)` (M2, T038/T041) and its tests: replaced by
+   `main_session` without `last_viewed`; nothing outside core calls it yet (the client use was
+   M4's T044), so no caller changes.
+2. `occupancy::occupancy`/`refusal_text`/`start_block_text` name "the first in list order": they
+   name the main session (the same record on a catalog without the marker). Wording gains
+   "main session" (contracts/mcp-tools.md).
+3. `Catalog::create_session(.., Additional)` (M1/M2) sets `main` as above; its signature is
+   unchanged.
+4. `Session` gains `main`; `PROTOCOL_VERSION` 42 to 43 with `SCHEMA_HASH` (the catalog snapshot
+   shape changes) and `ClientMsg::SessionSetMain`.
+5. The start block (M7, not yet built) is unchanged: it names the live session, main or helper.
+6. The client's `last_viewed` per location (planned in M4's T044) is dropped.
+
+**Sidebar and client**: a row press emits `Session::Selected(main_session)`; the expander lists
+the main first, helpers marked ("helper" badge from existing label/badge primitives); a helper
+sub-row menu has "Make main session" (sends `SessionSetMain`); the delete confirmation of a main
+that has helpers names the session that will become main (`main_session` of the remaining).
+Agents start helpers with `allow_additional_session`; no tool re-designates (spec clarification).
+
+**Alternatives rejected**: asking the user which helper to promote on delete (a dialog in a
+delete, and the user asked for "a rule"); closing helpers automatically (data loss, not asked);
+a second tool or an MCP `set_main_session` now (a later addition, no wire change needed beyond
+`SessionSetMain`).
