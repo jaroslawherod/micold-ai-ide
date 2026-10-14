@@ -5,9 +5,11 @@
 
 #[path = "conn.rs"]
 mod conn;
+#[path = "env.rs"]
+mod env;
 
 pub use conn::{connect, Client};
-use std::ffi::OsString;
+pub use env::Env;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -66,39 +68,6 @@ pub fn branch_exists(repo: &Path, branch: &str) -> bool {
         .expect("git runs")
         .status
         .success()
-}
-
-/// Every variable a test changes, restored on drop.
-struct Env {
-    saved: Vec<(&'static str, Option<OsString>)>,
-}
-
-impl Env {
-    fn set(vars: &[(&'static str, Option<OsString>)]) -> Self {
-        let saved = vars
-            .iter()
-            .map(|(name, value)| {
-                let previous = std::env::var_os(name);
-                match value {
-                    Some(value) => std::env::set_var(name, value),
-                    None => std::env::remove_var(name),
-                }
-                (*name, previous)
-            })
-            .collect();
-        Self { saved }
-    }
-}
-
-impl Drop for Env {
-    fn drop(&mut self) {
-        for (name, previous) in self.saved.drain(..) {
-            match previous {
-                Some(value) => std::env::set_var(name, value),
-                None => std::env::remove_var(name),
-            }
-        }
-    }
 }
 
 /// A repository on `main` with a branch `base` one commit ahead, its catalog in a store directory,
@@ -253,8 +222,9 @@ pub fn service(store: &Path) -> Arc<DaemonState> {
 }
 
 /// The stand-in `claude`: waits `<bin>/slow` seconds when that file exists, asks for bracketed
-/// paste, draws a prompt, and appends everything typed into it to `<bin>/input.<--session-id>`.
-fn install_claude(bin: &Path) {
+/// paste (unless `<bin>/nopaste.<--session-id>` exists), draws a prompt, and appends everything
+/// typed into it to `<bin>/input.<--session-id or --resume id>`.
+pub fn install_claude(bin: &Path) {
     let dir = bin.display();
     let path = bin.join("claude");
     std::fs::write(
@@ -262,9 +232,9 @@ fn install_claude(bin: &Path) {
         format!(
             "#!/bin/sh\n\
              sid=''; prev=''\n\
-             for a in \"$@\"; do [ \"$prev\" = --session-id ] && sid=\"$a\"; prev=\"$a\"; done\n\
+             for a in \"$@\"; do case \"$prev\" in --session-id|--resume) sid=\"$a\";; esac; prev=\"$a\"; done\n\
              [ -e '{dir}'/slow ] && sleep \"$(cat '{dir}'/slow)\"\n\
-             printf '\\033[?2004h'\n\
+             [ -e '{dir}'/nopaste.\"$sid\" ] || printf '\\033[?2004h'\n\
              printf 'ready> '\n\
              exec cat >> '{dir}'/input.\"$sid\"\n"
         ),
