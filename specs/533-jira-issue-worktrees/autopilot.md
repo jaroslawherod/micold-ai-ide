@@ -23,7 +23,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T021, T034 | full | Jira switch, settings fields, protocol 43 and the opt-in gate | #819 | open |
+| M1 | T001–T021, T034 | full | Jira switch, settings fields, protocol 44 and the opt-in gate | #819 | open |
 | M2 | T022–T031 | full | Connect, change and remove a project's connection and token | | pending |
 | M3 | T032–T033, T035–T053, T068–T069 | full | Start a worktree from a Jira issue (list, pick, notices); kept whole: core, adapter and dialog are one wired path (no half-wired UI) | | pending |
 | M4 | T054–T058, T070 | full | Search Jira issues incl. beyond the loaded list | | pending |
@@ -70,6 +70,7 @@ None.
 ## Follow-ups not done
 
 - Main took PROTOCOL_VERSION 41 and 42 (feature 776) before M1 merged: M1 is now 42 -> 43; spec artifacts updated.
+- Main then took 43 (feature 552) too: M1 is now 43 -> 44.
 
 - M1 had no test-first red-phase evidence (tests written after the code in part 1); no tdd/cycle-log.md; coverage is by the tests T003-T008, T015-T017 passing in the gate, not by red-then-green history.
 - GitHub issue picker brought under an integrations switch (pending clarify answer).

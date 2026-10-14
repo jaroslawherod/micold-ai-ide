@@ -1296,7 +1296,7 @@ pub struct SessionSummary {
     pub unread: bool,
     /// The agent runs the AI CLI reported against this session (feature 552, FR-004, FR-011), for
     /// the session tree (#551) to nest. Durable; empty for a session no signal named a run of, and
-    /// for a frame from before protocol 43.
+    /// for a frame from before protocol 44.
     #[serde(default)]
     pub agents: Vec<AgentRunSummary>,
     /// Whether this is its location's main session (feature 776, FR-020): the stored marker,
