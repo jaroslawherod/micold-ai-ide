@@ -2,8 +2,9 @@
 
 Micold AI IDE organizes your work into **worktrees** (isolated git branches checked out under
 your project) and **sessions** (interactive AI CLI runs inside a worktree). The left sidebar
-shows worktrees at the top level and their sessions as sub-items; the right side hosts the
-embedded terminal for the active session. The sidebar also always shows one **Default** entry —
+shows worktrees at the top level; selecting a worktree opens its main session, and a worktree
+with several sessions expands to list them. The right side hosts the embedded terminal for the
+active session. The sidebar also always shows one **Default** entry —
 a session location that isn't a worktree at all, for work you don't want to isolate onto its own
 branch (see [The "Default" entry](#the-default-entry-sessions-without-a-worktree) below).
 
@@ -19,7 +20,11 @@ choose a folder.
 ## Browsing worktrees
 
 - Worktrees discovered under `.claude/worktrees/` appear as top-level items in the sidebar.
-- Expand a worktree (the leading toggle) to reveal its sessions.
+- Selecting a worktree opens its **main session** in the terminal, whichever session you looked at
+  last. A worktree with one session has no toggle and no sub-rows; one with several has a toggle
+  (collapsed by default) that lists the main session first and marks each helper "helper". Rename
+  or close the only session from the worktree row's context menu. A worktree with no session shows
+  its start action instead.
 - A worktree whose directory was deleted outside the app, or that is not a valid git worktree,
   shows its name in the error color with a **missing** or **invalid** status tag — you cannot
   start new sessions on it until it is resolved.
@@ -400,6 +405,12 @@ With **New branch** selected:
 2. **Ticket** — optional reference (e.g. `ABC-123`). Leave blank to omit it.
 3. **Name** — a short description (e.g. `login page`).
 
+Below the name fields, an **AI CLI** select chooses the session the worktree starts with: your
+default CLI is preselected and **None** (last in the list) creates the worktree without a session.
+With a CLI chosen, an optional **First prompt** field holds the opening prompt sent to it. The
+session is defined here, when the worktree is created, and opens at once; there is no separate
+add action on a worktree that already has one.
+
 The form shows the derived names before you create:
 
 - **Directory**: `.claude/worktrees/${type}-${ticket}_${name}`
@@ -746,8 +757,8 @@ Right-click a worktree in the sidebar to open its context menu:
 
 ## Starting, switching, and closing sessions
 
-- Select a valid worktree and use its **start session** action to launch a session. It appears as
-  a sub-item and its terminal opens on the right. Which AI CLI it runs is your default, or whatever
+- A worktree created with an AI CLI already has its session. Only a worktree with no session shows
+  a **start session** action; use it to launch one. Its terminal opens on the right. Which AI CLI it runs is your default, or whatever
   you pick from the chevron beside that action — see
   [Choosing which AI CLI a session runs](#choosing-which-ai-cli-a-session-runs).
 - A worktree can host **multiple concurrent sessions** — start as many as you need for parallel,

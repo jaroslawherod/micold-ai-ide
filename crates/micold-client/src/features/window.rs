@@ -114,6 +114,8 @@ pub enum FieldId {
     AddWorktreeTicket,
     /// The add-worktree form's branch-name field.
     AddWorktreeName,
+    /// The add-worktree form's first-prompt field.
+    AddWorktreeFirstPrompt,
     /// The Run in parallel dialog's prompt field.
     RunPrompt,
     /// The Run in parallel dialog's optional ticket field.

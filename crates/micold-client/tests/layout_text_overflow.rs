@@ -275,7 +275,16 @@ fn a_narrow_session_row_shortens_the_title_and_never_the_cli_label() {
             TerminalMode::AiCli,
             AiCli::Copilot,
         );
-        let mut workspace = support::workspace_with(vec![(PROJECT, vec![session])]);
+        // A worktree with one session draws no sub-row (feature 776); a short-titled helper beside
+        // it makes the list appear, and its row paints "helper, claude", never the bare label.
+        let helper = Session::restored(
+            SessionId::new(),
+            SessionLocation::Worktree("feat-short".to_string()),
+            SessionLabel::Named("aux".to_string()),
+            TerminalMode::AiCli,
+            AiCli::ClaudeCode,
+        );
+        let mut workspace = support::workspace_with(vec![(PROJECT, vec![session, helper])]);
         workspace.active = workspace.projects.first().map(|p| p.path.clone());
 
         let mut state = micold_client::app::State {
