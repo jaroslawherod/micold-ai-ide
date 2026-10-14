@@ -128,7 +128,7 @@ const SCROLL_CONTENT: &[&str] = &["0/0/0/1/0/0/0/2/0"];
 /// the one above already does, and the alternative — a list that does not scroll — would leave two
 /// of the ten types unreachable. `the_recorded_picker_overflow_is_the_open_option_list` proves the
 /// attribution from the records rather than from the shape.
-const PICKER_LIST_CONTENT: &[&str] = &["0/0/0/0/0/0/0"];
+const PICKER_LIST_CONTENT: &[&str] = &["0/0/0/0/0/0/0/0"];
 
 /// The **terminal tab strip**, overflowing its own viewport in the bar (feature 026 FR-002a).
 ///

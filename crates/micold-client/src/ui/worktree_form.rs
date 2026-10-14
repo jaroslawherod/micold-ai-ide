@@ -57,6 +57,7 @@ pub fn modal<'a>(
         }
         BranchSource::Existing => {
             fields = fields.push(branch_picker(form, r));
+            fields = fields.push(session_select(form, r));
         }
         BranchSource::Issue => {
             fields = fields.push(issue_picker(form, r));
@@ -94,27 +95,13 @@ pub fn modal<'a>(
         );
     }
 
-    // The session the worktree starts with (feature 776, FR-006): the AI CLI, "None" last, and the
-    // first prompt, which exists only with a CLI.
-    fields = fields.push(
-        Select::new(
-            &form.session_choices,
-            Some(form.session_choice()),
-            |choice| {
-                Message::WorktreeForm(FormMsg::SessionCliChosen(match choice {
-                    SessionChoice::Cli(cli) => Some(cli),
-                    SessionChoice::NoSession => None,
-                }))
-            },
-            r,
-        )
-        .label("AI CLI"),
-    );
+    // The first prompt of the session the worktree starts with (feature 776, FR-006); it exists
+    // only with a CLI, which `session_select` chooses.
     if form.session_cli.is_some() {
         fields = fields.push(
             TextField::new("", &form.first_prompt, r)
                 .label("First prompt")
-                .supporting("Optional — typed once the CLI is ready")
+                .track_focus(FieldId::AddWorktreeFirstPrompt, focused)
                 .on_input(|text| Message::WorktreeForm(FormMsg::FirstPromptChanged(text))),
         );
     }
@@ -234,7 +221,29 @@ fn naming_inputs<'a>(
         .on_input(|a0| Message::WorktreeForm(FormMsg::NameChanged(a0)))
         .on_submit(Message::WorktreeForm(FormMsg::Submitted));
 
-    fields.push(type_select).push(ticket).push(name)
+    // The session's AI CLI shares the Type row, so the tallest forms keep their height (the
+    // panel-placement gate measures them).
+    fields
+        .push(row![type_select, session_select(form, r)].spacing(spacing::MD))
+        .push(ticket)
+        .push(name)
+}
+
+/// The AI CLI the worktree's first session runs, "None" last (feature 776, FR-006).
+fn session_select<'a>(form: &'a WorktreeForm, r: Roles) -> Element<'a, Message> {
+    Select::new(
+        &form.session_choices,
+        Some(form.session_choice()),
+        |choice| {
+            Message::WorktreeForm(FormMsg::SessionCliChosen(match choice {
+                SessionChoice::Cli(cli) => Some(cli),
+                SessionChoice::NoSession => None,
+            }))
+        },
+        r,
+    )
+    .label("AI CLI")
+    .into()
 }
 
 /// The new-branch / existing-branch switch (feature 016, FR-010), built from the shared
