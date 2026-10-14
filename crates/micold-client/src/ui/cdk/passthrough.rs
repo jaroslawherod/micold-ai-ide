@@ -125,4 +125,78 @@ macro_rules! forward_to_child {
     };
 }
 
+/// Emit `mouse_interaction`, `operate` and `overlay` for a wrapper that hands them to one of
+/// several children, chosen per call (issue 718, duplication row W8).
+///
+/// `$pick(&self, tree, layout)` returns the chosen child's index and its layout, or `None` when
+/// nothing is drawn; `$child(&self, i)` and `$child_mut(&mut self, i)` return that child's element.
+/// The child's tree is `tree.children[i]`. A wrapper that adjusts the cursor writes its own
+/// `mouse_interaction` and lists only the others.
+macro_rules! forward_to_selected {
+    ($pick:ident, $child:ident, $child_mut:ident, $m:ty, $t:ty, $r:ty; $($method:ident),+ $(,)?) => {
+        $( $crate::ui::cdk::passthrough::forward_to_selected!(
+            @one $method, $pick, $child, $child_mut, $m, $t, $r); )+
+    };
+    (@one mouse_interaction, $pick:ident, $child:ident, $child_mut:ident, $m:ty, $t:ty, $r:ty) => {
+        fn mouse_interaction(
+            &self,
+            tree: &iced::advanced::widget::Tree,
+            layout: iced::advanced::Layout<'_>,
+            cursor: iced::advanced::mouse::Cursor,
+            viewport: &iced::Rectangle,
+            renderer: &$r,
+        ) -> iced::advanced::mouse::Interaction {
+            self.$pick(tree, layout)
+                .map(|(i, child_layout)| {
+                    self.$child(i).as_widget().mouse_interaction(
+                        &tree.children[i],
+                        child_layout,
+                        cursor,
+                        viewport,
+                        renderer,
+                    )
+                })
+                .unwrap_or_default()
+        }
+    };
+    (@one operate, $pick:ident, $child:ident, $child_mut:ident, $m:ty, $t:ty, $r:ty) => {
+        fn operate(
+            &mut self,
+            tree: &mut iced::advanced::widget::Tree,
+            layout: iced::advanced::Layout<'_>,
+            renderer: &$r,
+            operation: &mut dyn iced::advanced::widget::Operation,
+        ) {
+            if let Some((i, child_layout)) = self.$pick(tree, layout) {
+                self.$child_mut(i).as_widget_mut().operate(
+                    &mut tree.children[i],
+                    child_layout,
+                    renderer,
+                    operation,
+                );
+            }
+        }
+    };
+    (@one overlay, $pick:ident, $child:ident, $child_mut:ident, $m:ty, $t:ty, $r:ty) => {
+        fn overlay<'b>(
+            &'b mut self,
+            tree: &'b mut iced::advanced::widget::Tree,
+            layout: iced::advanced::Layout<'b>,
+            renderer: &$r,
+            viewport: &iced::Rectangle,
+            translation: iced::Vector,
+        ) -> Option<iced::advanced::overlay::Element<'b, $m, $t, $r>> {
+            let (i, child_layout) = self.$pick(tree, layout)?;
+            self.$child_mut(i).as_widget_mut().overlay(
+                &mut tree.children[i],
+                child_layout,
+                renderer,
+                viewport,
+                translation,
+            )
+        }
+    };
+}
+
 pub(crate) use forward_to_child;
+pub(crate) use forward_to_selected;
