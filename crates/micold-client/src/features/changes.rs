@@ -93,6 +93,14 @@ impl PrList {
             PrList::Ready { prs, read_at } => Some((prs.as_slice(), *read_at)),
         }
     }
+
+    /// Whether the list shown is older than the app's PR status stale threshold at `now`: a
+    /// refresh that failed (or was held back) leaves the last list, which is marked then
+    /// (feature 775, FR-012). A fresh read replaces the mark.
+    pub fn possibly_stale(&self, now: u64) -> bool {
+        self.shown()
+            .is_some_and(|(_, read_at)| micold_core::pull_request::is_stale(read_at, now))
+    }
 }
 
 /// What the view shows the diff of (feature 775, data-model §2): the entry's own changes, or one

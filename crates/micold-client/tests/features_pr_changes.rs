@@ -465,3 +465,77 @@ fn the_setting_turned_off_returns_to_the_working_tree() {
     changes::update(&mut state, Msg::PullRequestSettingChanged(false));
     assert_eq!(source(&state), &Source::Changes);
 }
+
+// FR-007: a status trigger's refresh is the same ask; the list stays while it runs and the answer
+// replaces it.
+#[test]
+fn pr_list_refresh_replaces_the_list_with_the_new_state() {
+    let mut state = opened(true);
+    let seq = seq_of(wanted(&mut state, Some("feat/a")));
+    changes::update(
+        &mut state,
+        Msg::PullRequestsRead {
+            seq,
+            read_at: 100,
+            result: Ok(vec![pr(1, BranchPrState::Open)]),
+        },
+    );
+    let seq = seq_of(wanted(&mut state, Some("feat/a")));
+    assert_eq!(
+        view_list(&state).shown().map(|(prs, _)| prs.len()),
+        Some(1),
+        "the last list stays while the refresh runs"
+    );
+    changes::update(
+        &mut state,
+        Msg::PullRequestsRead {
+            seq,
+            read_at: 200,
+            result: Ok(vec![pr(1, BranchPrState::Merged), pr(2, BranchPrState::Open)]),
+        },
+    );
+    let (prs, at) = view_list(&state).shown().expect("listed");
+    assert_eq!((prs.len(), at), (2, 200));
+    assert_eq!(prs[0].state, BranchPrState::Merged);
+}
+
+// FR-012: a failed refresh keeps the list; it is marked once older than the stale threshold, and
+// a refreshed list replaces the mark.
+#[test]
+fn pr_list_refresh_failure_keeps_the_list_and_marks_it_stale_by_age() {
+    use micold_core::pull_request::STALE_AFTER_SECS;
+    let mut state = opened(true);
+    let seq = seq_of(wanted(&mut state, Some("feat/a")));
+    changes::update(
+        &mut state,
+        Msg::PullRequestsRead {
+            seq,
+            read_at: 1_000,
+            result: Ok(vec![pr(1, BranchPrState::Open)]),
+        },
+    );
+    let seq = seq_of(wanted(&mut state, Some("feat/a")));
+    changes::update(
+        &mut state,
+        Msg::PullRequestsRead {
+            seq,
+            read_at: 1_000 + STALE_AFTER_SECS,
+            result: Err(ReadingFailure::Passing),
+        },
+    );
+    let list = view_list(&state);
+    assert_eq!(list.shown().map(|(prs, at)| (prs.len(), at)), Some((1, 1_000)));
+    assert!(!list.possibly_stale(1_000 + STALE_AFTER_SECS));
+    assert!(list.possibly_stale(1_000 + STALE_AFTER_SECS + 1));
+
+    let seq = seq_of(wanted(&mut state, Some("feat/a")));
+    changes::update(
+        &mut state,
+        Msg::PullRequestsRead {
+            seq,
+            read_at: 5_000,
+            result: Ok(vec![pr(1, BranchPrState::Open)]),
+        },
+    );
+    assert!(!view_list(&state).possibly_stale(5_000));
+}

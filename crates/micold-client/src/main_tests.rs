@@ -9861,6 +9861,115 @@ mod pr_status {
         assert!(nothing_was_reported(&rig.app));
     }
 
+    // ---- Feature 775, T027: the list follows the status triggers --------------------------------
+
+    /// The interval's tick, as the shell receives it. The timers it returns are never run: the
+    /// remotes' bound would end the read it bounds.
+    fn tick(rig: &mut Rig) {
+        let _ = update_inner(&mut rig.app, Message::PrStatus(Msg::Tick));
+    }
+
+    /// Open the view and complete its first list read, so a refresh finds it idle.
+    fn listed_once(rig: &mut Rig) {
+        ask_list(rig, "feat/a");
+        let (req, _) = list_pending(&rig.app).expect("pending");
+        answer_remotes(&mut rig.app, req, github_remote());
+        assert!(matches!(view_list(&rig.app), PrList::Ready { .. }));
+        let _ = sent(rig);
+    }
+
+    // SC-004: a status trigger while a view is open asks the list again.
+    #[test]
+    fn pr_list_refresh_a_trigger_with_a_view_open_requests_the_list() {
+        let mut rig = rig(
+            Some(FAKE_GH),
+            FakePullRequestSource::new()
+                .with_list_answer(vec![branch_pr(1)])
+                .with_list_answer(vec![branch_pr(1), branch_pr(2)]),
+        );
+        listed_once(&mut rig);
+        tick(&mut rig);
+        let (req, _) = list_pending(&rig.app).expect("the trigger asked for the list");
+        answer_remotes(&mut rig.app, req, github_remote());
+        assert!(matches!(
+            view_list(&rig.app),
+            PrList::Ready { prs, .. } if prs.len() == 2
+        ));
+        assert!(nothing_was_reported(&rig.app));
+    }
+
+    #[test]
+    fn pr_list_refresh_a_trigger_with_no_view_open_asks_nothing_of_the_list() {
+        let mut rig = rig(Some(FAKE_GH), FakePullRequestSource::new());
+        tick(&mut rig);
+        assert!(list_pending(&rig.app).is_none());
+        assert!(rig.source.list_calls().is_empty());
+    }
+
+    #[test]
+    fn pr_list_refresh_is_skipped_while_paused_and_while_a_read_is_under_way() {
+        let mut rig = rig(
+            Some(FAKE_GH),
+            FakePullRequestSource::new().with_list_answer(vec![branch_pr(1)]),
+        );
+        listed_once(&mut rig);
+        let far = u64::MAX;
+        rig.app.core.pr_status.pause_until = Some(far);
+        tick(&mut rig);
+        assert!(list_pending(&rig.app).is_none(), "paused: no read");
+        assert!(matches!(view_list(&rig.app), PrList::Ready { .. }));
+
+        rig.app.core.pr_status.pause_until = None;
+        tick(&mut rig);
+        let first = list_pending(&rig.app).expect("asked");
+        tick(&mut rig);
+        assert_eq!(
+            list_pending(&rig.app),
+            Some(first),
+            "a read under way is not asked again"
+        );
+        assert!(matches!(
+            view_list(&rig.app),
+            PrList::Loading { again: false, .. }
+        ));
+    }
+
+    // R3: Unavailable is re-asked on a trigger, and on nothing else.
+    #[test]
+    fn pr_list_refresh_unavailable_is_asked_again_only_on_a_trigger() {
+        let mut rig = rig(None, FakePullRequestSource::new());
+        ask_list(&mut rig, "feat/a");
+        let (req, seq) = list_pending(&rig.app).expect("pending");
+        let work = update_inner(
+            &mut rig.app,
+            Message::PrStatus(Msg::RemotesTimedOut { seq, req }),
+        );
+        settle(&mut rig.app, work);
+        assert!(matches!(view_list(&rig.app), PrList::Unavailable { .. }));
+        assert!(list_pending(&rig.app).is_none(), "nothing asks by itself");
+        tick(&mut rig);
+        assert!(list_pending(&rig.app).is_some(), "the trigger asks again");
+    }
+
+    // R3: a rate limit named by a list read pauses the status reading.
+    #[test]
+    fn pr_list_refresh_a_rate_limited_list_read_sets_the_pause() {
+        let mut rig = rig(Some(FAKE_GH), FakePullRequestSource::new());
+        ask_list(&mut rig, "feat/a");
+        let seq = list_pending(&rig.app).expect("pending").1;
+        let _ = crate::shell::changes::update(
+            &mut rig.app,
+            ChangesMsg::PullRequestsRead {
+                seq,
+                read_at: 1,
+                result: Err(micold_core::pull_request::ReadingFailure::RateLimited {
+                    until: 5_000,
+                }),
+            },
+        );
+        assert_eq!(rig.app.core.pr_status.pause_until, Some(5_000));
+    }
+
     // ---- Feature 775, T023: a pull request's diff read, through the shell ----------------------
 
     const TWO_FILE_DIFF: &str =

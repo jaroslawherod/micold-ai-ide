@@ -830,7 +830,7 @@ fn group_items(
 
 /// Unix seconds now, for the age of a pull request reading. The view glue owns the clock: the
 /// render-free layer is handed the time, never asks for it.
-fn unix_now() -> u64 {
+pub(crate) fn unix_now() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |since| since.as_secs())

@@ -132,6 +132,12 @@ to press. A burst of edits (a build, an agent rewriting several files) is read o
 settles, not once per file. Files git ignores do not trigger a refresh, and the Default entry does
 not react to changes inside its worktrees.
 
+The **Pull requests** list follows the same pull request status refresh as the sidebar: a pull
+request opened, merged or closed while the view is open shows its new state within that refresh
+interval (5 minutes), and a list refresh in the sidebar updates it too. If a refresh cannot reach
+GitHub, the last list stays on screen with no error, and once it is older than ten minutes it is
+captioned **Possibly stale** until a refresh succeeds.
+
 The text you are writing in a comment box is kept across a refresh. Picked lines are kept while
 they are still in the diff; when they are gone, the pick is dropped.
 

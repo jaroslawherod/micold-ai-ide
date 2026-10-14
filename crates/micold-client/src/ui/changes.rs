@@ -38,6 +38,9 @@ pub const PR_TOO_LARGE: &str = "This pull request is too large to show here";
 pub const PR_UNREAD: &str = "The pull request's diff could not be read; select it again to retry";
 /// The row that returns the view to the entry's own changes (FR-005).
 pub const WORKING_TREE: &str = "Working tree";
+/// The caption under the pull request section's title once a failed refresh left a list older than
+/// the PR status stale threshold (feature 775, FR-012).
+pub const POSSIBLY_STALE: &str = "Possibly stale";
 pub const UNPLACED: &str = "The lines this comment was on are gone. Pick lines to place it.";
 
 /// One file row's height: fixed, which is what lets `VirtualRows` build only the visible rows.
@@ -214,6 +217,9 @@ fn pull_request_section<'a>(view: &'a OpenView, r: Roles) -> Option<Element<'a, 
         ),
     ]
     .spacing(spacing::XS);
+    if view.pull_requests.possibly_stale(super::sidebar::unix_now()) {
+        section = section.push(Text::new(POSSIBLY_STALE, TypeRole::Caption, r).muted());
+    }
     for pr in prs {
         let row = PullRequestRow::<Message>::new(
             pr.number,

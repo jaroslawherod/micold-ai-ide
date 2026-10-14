@@ -435,3 +435,36 @@ fn the_tooltip_and_the_menu_builder_call_nothing_in_the_shell() {
         }
     }
 }
+
+/// Feature 775: the Changes view's list is asked for only right after the view opened
+/// (`shell/changes.rs::run_pending`) and on the status triggers (`refresh_list` in the status shell,
+/// reached from `Msg::Trigger` alone). A new sender is a new way to contact GitHub.
+#[test]
+fn the_changes_list_is_asked_for_only_from_the_named_triggers() {
+    let lines = code_lines();
+    let senders: Vec<_> = lines
+        .iter()
+        .filter(|(f, _, l)| {
+            f != MAIN_TESTS
+                && f != "crates/micold-client/src/features/changes.rs"
+                && l.contains("PullRequestsWanted")
+        })
+        .collect();
+    let by_file = |file: &str| senders.iter().filter(|(f, _, _)| f == file).count();
+    assert!(
+        senders.len() == 2
+            && by_file("crates/micold-client/src/shell/changes.rs") == 1
+            && by_file(SHELL) == 1,
+        "`PullRequestsWanted` must be sent from `run_pending` and from the status trigger only; \
+         found:\n{}",
+        show(&senders)
+    );
+    let refresh: Vec<_> = in_file(&lines, SHELL)
+        .filter(|(_, _, l)| l.contains("refresh_list("))
+        .collect();
+    assert!(
+        refresh.len() == 2,
+        "`refresh_list` is defined once and called once, from the `Msg::Trigger` path; found:\n{}",
+        show(&refresh)
+    );
+}
