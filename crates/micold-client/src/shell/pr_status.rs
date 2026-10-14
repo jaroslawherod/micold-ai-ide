@@ -34,9 +34,7 @@ use micold_client::features::OpenRequest;
 use micold_core::git::GitRemote;
 use micold_core::github::{choose_remote, env_include_path, RemoteChoice};
 use micold_core::protocol::messages::{BranchContainment, ClientMsg, MergedBranchQuery};
-use micold_core::pull_request::{
-    DiffReadFailure, PrState, PullRequestSource, PullRequestStatus, ReadingFailure,
-};
+use micold_core::pull_request::{DiffReadFailure, PrState, PullRequestStatus, ReadingFailure};
 use micold_core::review::pr_diff::split_pr_diff;
 
 use crate::shell::daemon_sync::{send_op, PendingOp};
@@ -422,7 +420,7 @@ pub fn on_diff_remotes(
     project: PathBuf,
     seq: u64,
     number: u64,
-    started: u64,
+    _started: u64,
     remotes: Option<Vec<GitRemote>>,
 ) -> Task<Message> {
     let answer = move |result| {

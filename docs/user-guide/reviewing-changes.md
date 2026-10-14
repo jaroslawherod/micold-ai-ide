@@ -51,6 +51,23 @@ is off, when the entry is the project root or a detached HEAD, when the branch h
 and when GitHub cannot be reached (no `gh`, not signed in, no GitHub remote, offline). While GitHub
 cannot be reached after a list was read, the last list stays.
 
+### Reading a pull request's diff
+
+Click a pull request row to read its diff. The file list, the diff and the base line then show
+the pull request: **Pull request #N: base ... head**, as GitHub computes it. Select a file as
+usual; comments are kept per file and line as for any other diff. While the pull request is
+chosen, the working-tree changes are not read, and nothing reads them behind your back.
+
+Click the **Working tree** row to go back. Each entry remembers its own choice while the window is
+open, so switching to another worktree and back returns to the pull request you were reading.
+
+A pull request whose branch was merged and deleted still shows its diff: GitHub keeps it. If the
+pull request is no longer listed after a refresh, the view returns to the working tree.
+
+GitHub will not diff a pull request above 300 files or 20 000 changed lines. The pane then says
+the pull request is too large to show here and offers **Open on GitHub**. A read that fails for
+another reason says so in the pane, with no notice; click the row again to retry.
+
 ## Reading a diff
 
 Select a file to see its diff beside the list. Each changed region starts with a header row,

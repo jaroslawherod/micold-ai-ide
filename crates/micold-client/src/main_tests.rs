@@ -8919,6 +8919,15 @@ mod pr_status {
         ) -> Result<Vec<micold_core::pull_request::BranchPullRequest>, ReadingFailure> {
             Ok(Vec::new())
         }
+
+        fn diff(
+            &self,
+            _: &micold_core::github::GithubRepo,
+            _: u64,
+            _: u64,
+        ) -> Result<String, DiffReadFailure> {
+            Ok(String::new())
+        }
     }
 
     // A12 (FR-021, SC-005): the update that starts the source returns without calling it, and a
@@ -9670,7 +9679,8 @@ mod pr_status {
 
     // ---- Feature 775, T007: the Changes view's pull request list, through the shell ----------
 
-    use micold_client::features::changes::{Msg as ChangesMsg, PrList};
+    use micold_client::features::changes::{Msg as ChangesMsg, PrDiffLoad, PrList, Source};
+    use micold_core::pull_request::DiffReadFailure;
     use micold_core::session::SessionLocation;
 
     fn branch_pr(number: u64) -> micold_core::pull_request::BranchPullRequest {
@@ -9848,6 +9858,110 @@ mod pr_status {
         settle(&mut rig.app, work);
         assert!(list_pending(&rig.app).is_none());
         assert!(matches!(view_list(&rig.app), PrList::Unavailable { .. }));
+        assert!(nothing_was_reported(&rig.app));
+    }
+
+    // ---- Feature 775, T023: a pull request's diff read, through the shell ----------------------
+
+    const TWO_FILE_DIFF: &str =
+        "diff --git a/x.rs b/x.rs\n--- a/x.rs\n+++ b/x.rs\n@@ -1 +1 @@\n-a\n+b\n\
+diff --git a/y.rs b/y.rs\nnew file mode 100644\n--- /dev/null\n+++ b/y.rs\n@@ -0,0 +1 @@\n+c\n";
+
+    /// The view with pull request 1 listed and chosen: the diff read is waiting for the remotes.
+    fn choose_listed_pr(rig: &mut Rig) {
+        ask_list(rig, "feat/a");
+        let (req, _) = list_pending(&rig.app).expect("pending");
+        answer_remotes(&mut rig.app, req, github_remote());
+        // The timer the choice returns is never run: it would end the read it bounds.
+        let _ = crate::shell::changes::update(&mut rig.app, ChangesMsg::SourceChosen(Some(1)));
+    }
+
+    /// The pending `RemoteList` of the diff read: its `req` and `seq`.
+    fn diff_pending(app: &App) -> Option<(u64, u64)> {
+        app.pending_ops.iter().find_map(|(req, op)| match op {
+            crate::shell::daemon_sync::PendingOp::PrDiffRemotes { seq, .. } => Some((*req, *seq)),
+            _ => None,
+        })
+    }
+
+    fn view_diff(app: &App) -> PrDiffLoad {
+        match &app.core.changes.open.as_ref().expect("open").source {
+            Source::PullRequest(pr) => pr.diff.clone(),
+            Source::Changes => panic!("a pull request is chosen"),
+        }
+    }
+
+    // FR-004: choosing a pull request reads its diff once, from its own repository, and lists it.
+    #[test]
+    fn pr_diff_read_runs_the_source_and_lists_the_files() {
+        let mut rig = rig(
+            Some(FAKE_GH),
+            FakePullRequestSource::new()
+                .with_list_answer(vec![branch_pr(1)])
+                .with_diff_answer(TWO_FILE_DIFF.to_string()),
+        );
+        choose_listed_pr(&mut rig);
+        let (req, _) = diff_pending(&rig.app).expect("the diff read waits for the remotes");
+        answer_remotes(&mut rig.app, req, github_remote());
+        assert_eq!(rig.source.diff_calls(), vec![("o/r".to_string(), 1)]);
+        assert!(matches!(
+            view_diff(&rig.app),
+            PrDiffLoad::Ready { files, .. } if files.len() == 2
+        ));
+        assert!(diff_pending(&rig.app).is_none());
+        assert!(nothing_was_reported(&rig.app));
+    }
+
+    // A failed read ends as Failed and raises no notice.
+    #[test]
+    fn pr_diff_read_a_failure_raises_no_notice() {
+        let mut rig = rig(
+            Some(FAKE_GH),
+            FakePullRequestSource::new()
+                .with_list_answer(vec![branch_pr(1)])
+                .with_diff_failure(DiffReadFailure::TooLarge),
+        );
+        choose_listed_pr(&mut rig);
+        let (req, _) = diff_pending(&rig.app).expect("pending");
+        answer_remotes(&mut rig.app, req, github_remote());
+        assert_eq!(view_diff(&rig.app), PrDiffLoad::TooLarge);
+        assert!(nothing_was_reported(&rig.app));
+    }
+
+    // The remotes unanswered: the timer ends the read and frees the entry.
+    #[test]
+    fn pr_diff_read_remotes_timeout_ends_the_read() {
+        let mut rig = rig(
+            Some(FAKE_GH),
+            FakePullRequestSource::new().with_list_answer(vec![branch_pr(1)]),
+        );
+        choose_listed_pr(&mut rig);
+        let (req, seq) = diff_pending(&rig.app).expect("pending");
+        let work = update_inner(
+            &mut rig.app,
+            Message::PrStatus(Msg::RemotesTimedOut { seq, req }),
+        );
+        settle(&mut rig.app, work);
+        assert!(diff_pending(&rig.app).is_none());
+        assert_eq!(view_diff(&rig.app), PrDiffLoad::Failed);
+        assert!(rig.source.diff_calls().is_empty());
+        assert!(nothing_was_reported(&rig.app));
+    }
+
+    // A disconnect while the remotes are pending ends the read: the view must not stay Loading.
+    #[test]
+    fn pr_diff_read_a_disconnect_ends_the_read_and_raises_no_notice() {
+        let mut rig = rig(
+            Some(FAKE_GH),
+            FakePullRequestSource::new().with_list_answer(vec![branch_pr(1)]),
+        );
+        choose_listed_pr(&mut rig);
+        let (req, _) = diff_pending(&rig.app).expect("pending");
+        let daemon = *rig.app.pending_daemon.get(&req).expect("bound to a daemon");
+        let work = shell::daemon_sync::on_disconnected(&mut rig.app, daemon);
+        settle(&mut rig.app, work);
+        assert!(diff_pending(&rig.app).is_none());
+        assert_eq!(view_diff(&rig.app), PrDiffLoad::Failed);
         assert!(nothing_was_reported(&rig.app));
     }
 
