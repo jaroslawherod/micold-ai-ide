@@ -388,7 +388,12 @@ mod tests {
         let (mut app, mut rx) = client_without_local_git();
         let chosen = PathBuf::from("/repo/asked-about");
         let _ = on_folder_chosen(&mut app, chosen);
-        reply_repo_root(&mut app, &mut rx, PathBuf::from("/repo/something-else"), true);
+        reply_repo_root(
+            &mut app,
+            &mut rx,
+            PathBuf::from("/repo/something-else"),
+            true,
+        );
         assert!(
             app.core.workspace.active.is_none(),
             "an answer about another folder must not open one"
