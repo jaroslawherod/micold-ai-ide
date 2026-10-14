@@ -37,6 +37,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - Clarify Q2: mismatched remote daemon is explained only; replacement offered only with no running sessions _(decided by user)_.
 - Tasks: M1 kept whole at 27 tasks (Setup and Foundational are not observable alone; P1 story must be in M1); US1 split scenario 1 / 2-4 (M1/M2); US5 split M6/M7; Polish M8 changes build config, so it is a milestone.
 - M1 part 4 run authorised (decided by user: run a 4th part of M1).
+- M1 part 6 authorised (decided by user via AskUserQuestion): rerun the gate with MICOLD_NO_BUILD_LOCK=1, then push and open the M1 PR.
 - Tasks: speckit-analyze round 1 found 1 HIGH (shared picker widget) and 5 MEDIUM; all fixed in tasks.md, no plan change.
 
 | # | Phase | Question | Answer | By | Evidence |
@@ -65,8 +66,12 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M1 implemented (T001-T027), reviews A and B done. Rebased onto origin/main bc78c938 (contains #810), 17 commits ahead, not pushed. Full gate on the rebased tree: fmt, clippy, cargo test --workspace and every script suite up to `capture-harness.test.sh` green. That test's `site/capture/demo-project.sh` nested `build-lock.sh cargo run` queues on the repo lock behind ~17 other worktrees' gates (the test-scripts stage runs outside the lock, so the nested call takes it and waits); the same hang shows in other worktrees (refactor-720) on main-based trees. After 20+ min the gate was SIGTERMed twice (GATE_EXIT=1, not ours to attribute). Next: rerun `mise run gate` when the lock queue is short (or with `MICOLD_NO_BUILD_LOCK=1`, which I was denied from trying alongside a broad pkill), push, open the M1 PR (pr.md).
-
+M1 implemented (T001-T027), reviews A and B done. Rebased onto origin/main bc78c938 (contains #810), 18 commits ahead (origin/main has since moved 31 more), not pushed. Part 6 authorised by the user (rerun gate with MICOLD_NO_BUILD_LOCK=1, then push and open the M1 PR). Four gate reruns with that env var, none green, no failure in our code:
+1. `version_mismatch_resolves`: spawned shared `target-shared/debug/micold-daemon` was rebuilt by another worktree mid-run (protocol 45 vs our 43).
+2. `idle_race::a_connect_as_the_window_expires_ends_attached`: 20s spawn timeout under load ~11-18; passes alone (7s).
+3. `idle_stop::a_daemon_with_one_client_connected_never_exits`: load flake; passes alone.
+4. Killed by SIGTERM (not ours) while blocked on cargo's own build-dir lock behind other gates; ~5 other `mise run gate` were running.
+capture-harness stage was not reached again. Next: rerun `mise run gate` (MICOLD_NO_BUILD_LOCK=1) when the machine is quiet (load under ~4, no other gates), push, open the M1 PR (pr.md). Consider rebasing onto current origin/main first (branch-start.sh 789).
 
 ## Open escalation
 
