@@ -507,7 +507,7 @@ cannot answer for it", and the filesystem permission is still what enforces it. 
 protocol grew an authenticated handshake — version 6 when the sandbox landed, version 7 after the
 repository-root query the container placement also needed (below), version 9 after a window became
 nameable on the wire so it could stop displacing itself, and version 10 after Pi joined the AI CLIs
-a frame can name. It is version 42 today: the later bumps are listed beside `PROTOCOL_VERSION` in
+a frame can name. It is version 43 today: the later bumps are listed beside `PROTOCOL_VERSION` in
 `crates/micold-core/src/protocol/version.rs`. Version 42 gives every session summary the agent runs
 its AI CLI reported against it (`agents`). Version 21 lets a window report the session it
 has in view (`WindowView`) and gives every session summary its count of attention events

@@ -1820,5 +1820,5 @@ fn a_session_summary_carries_its_agent_runs_and_defaults_to_none() {
     value.as_object_mut().unwrap().remove("agents");
     let older: SessionSummary = serde_json::from_value(value).unwrap();
     assert!(older.agents.is_empty());
-    assert_eq!(PROTOCOL_VERSION, 42);
+    assert_eq!(PROTOCOL_VERSION, 43);
 }
