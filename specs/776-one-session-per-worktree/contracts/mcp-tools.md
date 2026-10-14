@@ -23,6 +23,12 @@ When true the occupancy check is skipped: a second session is created and the fi
 scope, policy and the CLI check apply as always. The refusal message ends with
 `; pass allow_additional_session: true to start another on purpose`.
 
+**Amended 2026-10-14**: the refusal names the worktree's main session (`this worktree already has a
+main session: "<name>" (<id>); ...`). A session created with the flag in an occupied worktree is a
+helper and the main is unchanged; with the flag in a free worktree it is the main. Description
+gains: "The first session of a worktree is its main session; extra sessions are helpers." No new
+input; no tool changes the main (spec Session 2026-10-14).
+
 ## `start_session`
 
 Input unchanged. Still a no-op reporting success for a starting, running or restarting session
@@ -53,5 +59,6 @@ Adds optional inputs, valid with both the literal (`branch`, `name`) and derived
 
 ## Unchanged
 
-`delete_session` (archive; frees the location, FR-010), `attach_worktree`, `list_sessions`,
+`delete_session` (archive; frees the location when it was the last, FR-010; deleting the main
+promotes the first remaining session, FR-022), `attach_worktree`, `list_sessions`,
 `list_resumable_sessions` (no tool resumes a provider session, so FR-008b has no MCP surface).

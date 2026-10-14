@@ -28,8 +28,9 @@ mise run gate                            # fmt, clippy, workspace tests, scripts
 | resume with `allow_additional_session`: both kept, nothing stopped; flag with `replace`: refused as malformed | FR-015, FR-008c |
 | `create_session` with `allow_additional_session: true` on an occupied worktree: two sessions, first untouched; refusal text names the flag | US1 s4-s5, FR-015 |
 | `start_session` of a stopped extra while another runs: refused; with the flag both run | US4 s3 |
-| `default_session`: last viewed, else first in list order, else none | FR-018 |
-| row press selects the default session; expander only for a multi-session worktree, collapsed | US5 |
+| `main_session`: marked, else first un-archived in list order, else none | FR-018, FR-020 |
+| main set at create, helper beside it, `SessionSetMain` moves it and it survives a restart; archive of the main promotes the first remaining; legacy catalog derives the main unrewritten | US7, SC-008 |
+| row press selects the main session whatever was last viewed; expander only for a multi-session worktree, collapsed, helpers marked | US5 |
 | row menu "Start another session...": confirm sends the opt-in, cancel changes nothing | US6 |
 
 ## Part B: visual pass (needs eyes at a display)
@@ -47,6 +48,8 @@ Run through the `visual-pass` skill against the client.
 4. Sidebar with one session per worktree shows only worktree rows; selecting one opens its
    session; a worktree with two shows a collapsed expander (US5).
 5. Row menu "Start another session..." on an occupied worktree opens the confirmation naming the
-   existing session; confirm adds and shows the second (US6).
+   existing session; confirm adds and shows the second, marked as a helper (US6).
+6. A helper's sub-row menu "Make main session": the row press now opens it and the former main is
+   marked a helper; deleting a main that has helpers names the successor in its confirmation (US7).
 
 Record the result in `tdd/` evidence as the other features do.

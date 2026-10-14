@@ -10,6 +10,10 @@
 issue's "no way to run more than one session" is superseded by the user: the limit is a default
 that an explicit request overrides.
 
+**Amended**: 2026-10-14 (main session; see Clarifications, Session 2026-10-14). The derived
+"default session" (last viewed) is replaced by a designated main session per worktree; the other
+sessions are helpers.
+
 **Input**: User description: "Implement GitHub issue #776: One session per worktree, chosen at start. A worktree should host exactly one session. The session is defined when the worktree is started, and there must be no way to run more than one session in the same worktree. Expected: starting a session in a worktree that already has one is refused (UI and the `create_session` / `start_session` MCP tools), with a clear error naming the existing session; the session's definition (agent/model/prompt) is set at worktree start, not added afterwards; resuming or restarting replaces the worktree's session rather than adding a second one. Why: concurrent sessions in one worktree edit the same files and branch, and race on the build lock and git index."
 
 ## Terms
@@ -20,16 +24,21 @@ that an explicit request overrides.
   the CLI takes one, and the first prompt.
 - **Worktree start**: the moment a worktree is created (create-worktree dialog or `create_worktree`
   MCP tool) together with the session that will run in it.
-- **Own session**: the session a worktree hosts by default, whatever its state (starting, running,
+- **Own session**: the (main) session a worktree hosts by default, whatever its state (starting, running,
   stopped, failed, exited). A deleted (archived) session does not occupy the worktree. Unless an
   explicit request says otherwise a worktree has at most one; it has none only in the cases of
   FR-010 (created without a definition, attached with nothing to resume, or its session deleted),
   and then takes one, defined once at that moment.
 - **Additional session**: a second or later session in a worktree that already has one, created or
-  started only on an explicit request (FR-015, FR-016). Never created by a default path.
-- **Default session**: the session selecting a worktree opens: the one last viewed in that
-  worktree in this window if it is still un-archived, otherwise the first un-archived session in
-  the worktree's list order (its original session). The worktree's one session is its default.
+  started only on an explicit request (FR-015, FR-016). Never created by a default path. It is a
+  helper.
+- **Main session**: the one session of a worktree that is responsible for its work. It is
+  designated, not derived: the session the worktree is started with (or the first one it takes, or
+  the one that replaced it by a confirmed resume) is main, and stays main until the user changes it
+  (FR-020) or it is deleted (FR-022). A worktree has at most one; selecting the worktree opens it.
+- **Helper session**: every other un-archived session of a worktree: an additional session, or an
+  extra one of a legacy catalog. Meant for short side activities; marked as a helper wherever
+  sessions of the worktree are listed. Nothing ends it automatically.
 
 ## Clarifications
 
@@ -60,7 +69,8 @@ that an explicit request overrides.
 - Q: What does the sidebar show? → A: By default only worktrees: selecting a worktree selects its
   default session _(decided by user: "by default it should show only work tree and when selecting a
   worktree it should select default session")_
-- Q: Which session is the default? → A: The one last viewed in that worktree in this window if it
+- Q: Which session is the default? → A: _(superseded 2026-10-14 by the main session, Session
+  2026-10-14)_ The one last viewed in that worktree in this window if it
   is still un-archived, else the first un-archived session in list order _(agent-resolved: the list
   order is stable and persisted, and the refusal already names that first session, FR-003;
   `Session` has no persisted activity timestamp, only the transient `attention_seq`)_
@@ -70,6 +80,34 @@ that an explicit request overrides.
   with the confirmation _(agent-resolved: the sidebar already draws worktrees with expandable
   session sub-rows, `crates/micold-client/src/ui/sidebar.rs`; this keeps that tree and hides it
   until there is something to expand)_
+
+### Session 2026-10-14
+
+- Q: Which session does a worktree open, and who is responsible for the work? → A: Each worktree
+  has one designated main session, responsible for the work; the other sessions are helpers,
+  meant for short activities. Selecting the worktree row always opens the main session, never a
+  helper _(decided by user: "for each worktree there should one main session that is responsible
+  for work the others should be considered a only helpers or some short time activities")_.
+  Supersedes the 2026-10-13 answer that the default is the last viewed.
+- Q: When is the main session set, and when does it change? → A: It is set at start (the session
+  the worktree is created or started with) and stays main until the user changes it _(decided by
+  user: the same message; "amend after M2")_. Creating a helper, viewing one or resuming beside the
+  main never changes it.
+- Q: What happens when the main session is deleted (archived)? → A: The first remaining
+  un-archived session in list order is promoted to main, without asking, and the delete
+  confirmation names it; with none left the worktree is free (FR-010) _(agent-resolved: the user
+  asked for "a rule"; list order is stable, persisted and already what a refusal names; asking
+  would add a dialog to a delete)_.
+- Q: How does the user change the main session? → A: The sub-row menu of a helper has "Make main
+  session"; the previous main becomes a helper. The tool server has no equivalent: agents start
+  helpers with `allow_additional_session` but do not re-designate _(agent-resolved: the app owns
+  who is responsible, as it owns confirmations; a tool can be added without a wire change later)_.
+- Q: Is a helper marked, and does it expire? → A: It is marked "helper" in the worktree's
+  expanded session list and is not auto-closed; the user deletes it _(agent-resolved: "short time"
+  describes intent; auto-deletion would lose output and is not asked for)_.
+- Q: What does a confirmed resume replace and what role does the result have? → A: It replaces the
+  main session and the resumed session is main; "keep both" adds it as a helper _(agent-resolved:
+  the refusal names the main session, so that is what the user confirmed against)_.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -190,39 +228,41 @@ while the first runs needs one.
 
 ---
 
-### User Story 5 - The sidebar shows worktrees; selecting one opens its default session (Priority: P2)
+### User Story 5 - The sidebar shows worktrees; selecting one opens its main session (Priority: P2)
 
 A user sees one row per worktree, with no session rows under it. Selecting a worktree opens its
-default session. A worktree that holds more than one session can be expanded to show them.
+main session. A worktree that holds more than one session can be expanded to show them, the main
+one first and the others marked as helpers.
 
 **Why this priority**: It matches the model (a worktree is the unit, its session is its content)
 and removes rows that duplicate the worktree.
 
 **Independent Test**: With one session in each of two worktrees the sidebar lists two rows and no
 session rows; selecting a worktree views its session. Give one worktree a second session: its row
-gains an expander, collapsed, listing both when opened.
+gains an expander, collapsed, listing both when opened, the second marked as a helper.
 
 **Acceptance Scenarios**:
 
 1. **Given** worktrees each with one session, **When** the sidebar renders, **Then** it shows one
    row per worktree, no session sub-rows and no expander.
-2. **Given** a worktree with a session, **When** the user selects its row, **Then** its default
+2. **Given** a worktree with a session, **When** the user selects its row, **Then** its main
    session is selected and shown (FR-018).
 3. **Given** a worktree with several sessions, **When** the sidebar renders, **Then** its row is
-   collapsed with an expander; opening it lists every session, the default one marked, and
-   selecting a listed session views that one.
-4. **Given** a worktree whose extra session was last viewed, **When** the user selects another
-   worktree and then this one, **Then** the extra session is shown (the default is the last
-   viewed).
+   collapsed with an expander; opening it lists every session, the main one first and the others
+   marked as helpers, and selecting a listed session views that one.
+4. **Given** a worktree whose helper session was last viewed, **When** the user selects another
+   worktree and then this one, **Then** the main session is shown (a helper is only opened by
+   choosing it in the list).
 5. **Given** a worktree without a session, **When** the user selects it, **Then** nothing is
    selected and its row offers the start action of FR-006.
 
 ---
 
-### User Story 6 - Starting an additional session on purpose (Priority: P2)
+### User Story 6 - Starting a helper session on purpose (Priority: P2)
 
 A user who really wants a second session in a worktree asks for it and confirms; an agent passes
-`allow_additional_session: true`. The worktree then holds both, each independently addressable.
+`allow_additional_session: true`. The worktree then holds both, each independently addressable;
+the new one is a helper and the main session stays main.
 
 **Why this priority**: The user made the limit soft; without this story the soft limit is
 unreachable from the app.
@@ -238,9 +278,39 @@ unreachable from the app.
 2. **Given** that choice, **When** the confirmation opens, **Then** it names the existing session
    and the worktree, and offers confirm and cancel; cancel changes nothing.
 3. **Given** the user confirms, **When** the session is created, **Then** the worktree holds both,
-   the new one is selected and shown, and the first is untouched.
+   the new one is a helper, selected and shown, and the first is untouched and still main.
 4. **Given** the confirm step is pending, **When** a second window or an agent adds a session
    first, **Then** the confirmed request still creates its session (the user asked for one more).
+
+---
+
+### User Story 7 - One main session, changeable by the user (Priority: P2)
+
+A user sees which session of a worktree is the main one, can make another session the main one,
+and keeps a sensible main when it is deleted.
+
+**Why this priority**: The user wants one session responsible for the work and the rest as
+helpers; without a way to change it, the choice at start would be permanent.
+
+**Independent Test**: With a worktree holding a main and a helper, make the helper main; selecting
+the worktree row now opens it, and the former main is listed as a helper. Delete the main: the
+remaining session is main.
+
+**Acceptance Scenarios**:
+
+1. **Given** a worktree created with a session, **When** it is listed, **Then** that session is
+   main and any session added later is a helper.
+2. **Given** a worktree with a main and a helper, **When** the user chooses "Make main session" in
+   the helper's menu, **Then** the helper is main, the previous main is a helper, the change
+   survives a restart, and selecting the row opens the new main.
+3. **Given** a worktree with a main and one or two helpers, **When** the main session is deleted,
+   **Then** the first remaining un-archived session in list order is main, and the delete
+   confirmation named it.
+4. **Given** a worktree with only a main session, **When** it is deleted, **Then** the worktree is
+   free and the next session created takes the main role.
+5. **Given** a catalog written before this feature with several sessions in a worktree, **When** it
+   opens, **Then** the first un-archived session in list order is its main and the others are
+   helpers, and no record is rewritten until the user changes the main.
 
 ---
 
@@ -262,8 +332,12 @@ unreachable from the app.
   session and each gets one.
 - **Explicit request to a free worktree**: `allow_additional_session: true` on a worktree with no
   session simply creates its first session; the flag changes nothing there.
-- **Default session deleted**: the next un-archived session in list order becomes the default;
-  with none, the worktree is free (FR-010).
+- **Main session deleted**: the first remaining un-archived session in list order becomes main
+  (FR-022); with none, the worktree is free (FR-010).
+- **Helper deleted**: the main is unchanged.
+- **Make main on the main or on an archived session**: a no-op or refused; never two mains.
+- **Main session stopped, failed or exited**: still main; the user restarts it or makes another
+  main.
 - **Several sessions running**: only on an explicit request; the build lock and git index are the
   user's to manage, the warning is the confirmation's wording.
 - **Daemon restart or lost connection** between the check and the create: no duplicate after
@@ -343,10 +417,24 @@ unreachable from the app.
   `allow_additional_session: true` and selects the session.
 - **FR-017**: The sidebar MUST show one row per worktree (and the Default root) and no session
   rows by default. A row of a worktree with more than one session MUST have an expander, collapsed
-  by default, that lists its sessions, the default one marked. A worktree with one session has no
-  expander.
-- **FR-018**: Selecting a worktree row MUST select and show its default session (Terms). With no
-  session nothing is selected and the row keeps its start action (FR-010).
+  by default, that lists its sessions, the main one first and the others marked as helpers. A
+  worktree with one session has no expander.
+- **FR-018**: Selecting a worktree row MUST select and show its main session (Terms), never a
+  helper, whatever was last viewed. With no session nothing is selected and the row keeps its start
+  action (FR-010).
+- **FR-020**: Every worktree with an un-archived session MUST have exactly one main session. It is
+  set when the first session of the worktree is created (by worktree start, `create_session` on a
+  free worktree, or adoption), is persisted, and changes only by the user's explicit choice
+  (FR-021), by a confirmed resume that replaces it (FR-007, the resumed session becomes main) or by
+  its deletion (FR-022). A session created beside it (FR-015, FR-008c) is a helper. A catalog
+  without the marker derives the main as the first un-archived session in list order and rewrites
+  nothing.
+- **FR-021**: The app MUST let the user make a helper the main session (menu entry "Make main
+  session" on its sub-row); the previous main becomes a helper in the same change. Making the main
+  main again is a no-op.
+- **FR-022**: When the main session is deleted (archived) and the worktree still has un-archived
+  sessions, the first of them in list order MUST become main in the same change; the delete
+  confirmation MUST name it. Deleting a helper never changes the main.
 - **FR-019**: Session actions the removed sub-row carried (rename, close) MUST stay reachable: for
   the one session of a worktree from the worktree row menu, for each session of a multi-session
   worktree from its sub-row menu as today.
@@ -354,7 +442,9 @@ unreachable from the app.
 ### Key Entities
 
 - **Worktree**: has at most one session by default; the invariant is on it, not on the session.
-- **Session**: belongs to one worktree; carries its definition (AI CLI, model, first prompt).
+  Exactly one of its un-archived sessions is main.
+- **Session**: belongs to one worktree; carries its definition (AI CLI, model, first prompt) and
+  whether it is the worktree's main session.
 - **Refusal**: the answer to a second-session request: names the existing session's id and name.
 
 ## Success Criteria *(mandatory)*
@@ -372,6 +462,8 @@ unreachable from the app.
 - **SC-006**: A user with one session per worktree sees no session rows in the sidebar, and a
   single selection opens the worktree's session.
 - **SC-007**: A user adds an additional session in at most the menu entry and one confirmation.
+- **SC-008**: In a worktree with several sessions, selecting its row opens the same session (the
+  main) every time until the user changes it, and the main survives a daemon restart.
 - **SC-004**: A user can create a worktree and have its session running with the chosen definition
   in a single dialog confirmation, with no further step.
 - **SC-005**: No session record is lost when an existing catalog is opened.
@@ -384,10 +476,11 @@ unreachable from the app.
 - Restart and resume reuse the existing start paths; no new lifecycle state is introduced.
 - The limit is soft by the user's decision: the explicit request is a boolean per call and a
   confirmation in the app, not a setting; nothing stores a per-worktree "allow many".
-- The default session is derived (last viewed in this window, else first in list order); nothing
-  new is persisted.
+- The main session is designated and persisted (one marker per session record, serde-defaulted so
+  an older catalog loads unchanged); a catalog without it derives the main as the first
+  un-archived session in list order (FR-020). Nothing else new is persisted.
 - Out of scope: changing which worktree a session belongs to, running several agents inside one
-  session, a setting that lifts the limit for a worktree or a project, ordering or merging the
+  session, auto-closing or expiring helpers, a tool that changes the main, a setting that lifts the limit for a worktree or a project, ordering or merging the
   sessions of one worktree, and any change to sessions across different worktrees (Principle II is
   unchanged there).
 - Depends on features 491 (multi-session daemons), 550 (create_worktree form inputs) and 582

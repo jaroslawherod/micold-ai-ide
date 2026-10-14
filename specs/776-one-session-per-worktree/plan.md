@@ -25,9 +25,12 @@ and every other surface follows from it:
 4. **No casual add**: the sidebar row offers the start action only on a location with no session;
    the create-worktree dialog gains the CLI and prompt fields; an additional session is only the
    worktree row menu's "Start another session..." and its confirmation (R12).
-4a. **Worktree rows, default session**: the sidebar lists worktrees only; a row expands to its
-   sessions only when it has more than one; selecting a row selects `occupancy::default_session`
-   (R13).
+4a. **Worktree rows, main session**: the sidebar lists worktrees only; a row expands to its
+   sessions only when it has more than one, the main first and helpers marked; selecting a row
+   selects `occupancy::main_session` (R13, R14).
+4b. **One main, the rest helpers** (amendment 2026-10-14, R14): `Session.main` is persisted and
+   written under the catalog lock by create, replace, adopt and archive (promote the first
+   remaining); `SessionSetMain` moves it; a catalog without it derives the first un-archived.
 5. **Resume replaces**: provider-session resume (`AttachApply` of a session) into an occupied
    location is refused until the person confirms; with confirmation the daemon swaps the records
    in one catalog write after stopping the old process. Project-open adoption and "attach all"
@@ -36,7 +39,7 @@ and every other surface follows from it:
 6. **Several sessions**: nothing is migrated or deleted; extra sessions stay; a start is refused
    while another of the location's sessions is live, unless the request is explicit (R9, R12).
 
-No new storage, no new crate, no new lifecycle state.
+One new persisted boolean (`Session.main`, serde-defaulted), no new crate, no new lifecycle state.
 
 ## Technical Context
 
@@ -45,9 +48,9 @@ No new storage, no new crate, no new lifecycle state.
 **Primary Dependencies**: existing only: `iced` (client), `serde`/`serde_json`, `uuid`, `tokio`
 (daemon). No new crate.
 
-**Storage**: none new. The catalog (`micold-daemon/src/catalog.rs`, project store via
+**Storage**: one serde-defaulted boolean on the session record (`main`, R14); otherwise none new. The catalog (`micold-daemon/src/catalog.rs`, project store via
 `micold-core/src/store.rs`) already persists sessions with `location` and `archived`; the rule is
-derived from them. No schema change, so an old catalog loads unchanged (SC-005).
+derived from them. `main` defaults to false and the reader derives the main when it is absent, so an old catalog loads unchanged and unrewritten (SC-005).
 
 **Testing**: `cargo test` via `mise run test-core` (rule, wire, tool catalogue) and `mise run
 gate`; daemon integration tests in `crates/micold-daemon/tests/` (real daemon over its socket, as
@@ -116,7 +119,7 @@ specs/776-one-session-per-worktree/
 
 ```text
 crates/micold-core/src/
-├── occupancy.rs          # NEW: Occupancy, StartBlock, refusal wording, default_session (pure)
+├── occupancy.rs          # NEW: Occupancy, StartBlock, refusal wording, main_session (pure)
 ├── lib.rs                # export occupancy
 ├── attach.rs             # RefuseReason::LocationHasSession; per-location cap helper
 ├── session.rs            # (read) Session, SessionLocation, SessionLifecycle::is_live
@@ -141,7 +144,7 @@ crates/micold-daemon/src/
 
 crates/micold-client/src/
 ├── features/session.rs   # start affordance offered only for a Free location; additional-session
-│                         #   confirmation; row press selects the default session
+│                         #   confirmation; row press selects the main session; make-main
 ├── features/sidebar.rs   # expander only for a multi-session worktree, collapsed by default
 ├── features/worktree_form.rs   # AI CLI + prompt fields, "None" choice
 ├── features/attach.rs    # confirm step: replace or keep both
@@ -170,7 +173,8 @@ or `ui/`.
 | FR-004 | `SessionState::start_intent` returns no start for an occupied location; sidebar renders it (R5) |
 | FR-015 | `allow_additional_session` on the tools and wire; `Additional::Yes` in `Catalog::create_session` and `start_session_gated` (R12) |
 | FR-016 | row menu "Start another session...", `confirm_additional_session` view, blocked-start confirmation (R12) |
-| FR-017, FR-018, FR-019 | `occupancy::default_session`, sidebar reducer and view (R13) |
+| FR-017, FR-018, FR-019 | `occupancy::main_session`, sidebar reducer and view (R13, R14) |
+| FR-020, FR-021, FR-022, US7, SC-008 | `Session.main`, `Catalog::create_session`/`replace_session`/archive/`set_main`, `ClientMsg::SessionSetMain`, helper marking and "Make main session" in the sidebar (R14) |
 | FR-006 | `WorktreeCreate.session`, MCP `create_worktree` `ai_cli`/`prompt`, dialog fields (R4, R6); `ops::create_worktree_with_session` |
 | FR-007, FR-008b, FR-008c | `AttachItem::Session.replace` / `.allow_additional_session`, `Catalog::replace_session`, confirm step (R7, R12) |
 | FR-008a, FR-009 | existing `SessionRestart`/`SessionStart` paths, unchanged; pinned by tests |
@@ -185,10 +189,10 @@ or `ui/`.
 
 | Layer | Proves |
 |---|---|
-| core unit (`occupancy`) | free/taken for every lifecycle, archived ignored, Default key, block naming the live one; `default_session` (last viewed, else first, none) |
+| core unit (`occupancy`) | free/taken for every lifecycle, archived ignored, Default key, block naming the live one; `main_session` (marked, else first un-archived, none) |
 | core unit (wire, tools) | additive fields round-trip; old frames decode; tool schemas and descriptions; refusal text holds id, name, `start_session` hint |
-| daemon integration | second `create_session` refused, catalog unchanged; with `allow_additional_session` two sessions, both addressable; 100 concurrent creates, one wins (SC-003); create_worktree with definition, missing CLI leaves nothing; restart/stop/start keep one; replace stops the old process; legacy catalog opens intact and refuses; adoption cap; review send reuses own stopped session |
-| client reducer | start affordance absent when occupied; dialog fields and "None"; refusal text shown; confirm step replace or keep both; row press selects the default session; expander only for several; "Start another session..." confirm sends the opt-in |
+| daemon integration (US7, SC-008) | main set at create, moved, inherited by replace, promoted on archive, derived for a legacy catalog; second `create_session` refused, catalog unchanged; with `allow_additional_session` two sessions, both addressable; 100 concurrent creates, one wins (SC-003); create_worktree with definition, missing CLI leaves nothing; restart/stop/start keep one; replace stops the old process; legacy catalog opens intact and refuses; adoption cap; review send reuses own stopped session |
+| client reducer | start affordance absent when occupied; dialog fields and "None"; refusal text shown; confirm step replace or keep both; row press selects the main session; expander only for several, helpers marked; "Make main session" sends `SessionSetMain`; "Start another session..." confirm sends the opt-in |
 | geometry gates / quickstart §B | dialog layout, sidebar row without the action (rendering only) |
 
 ## Complexity Tracking

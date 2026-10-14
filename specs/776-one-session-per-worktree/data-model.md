@@ -1,11 +1,14 @@
 # Data Model: One Session per Worktree
 
-No stored field is added. The invariant is a function of existing records.
+One stored field is added (amendment 2026-10-14, research R14): `Session.main`. The invariant is a
+function of the records.
 
 ## Existing (read, unchanged)
 
 - `Session` (`micold-core/src/session.rs`): `id`, `location: SessionLocation`, `label`,
-  `provider: AiCli`, `lifecycle: SessionLifecycle`, `archived: bool`.
+  `provider: AiCli`, `lifecycle: SessionLifecycle`, `archived: bool`, and **new** `main: bool`
+  (serde-default `false`; at most one un-archived record per location has it true; the
+  worktree's main session, R14).
 - `SessionLocation`: `Default` | `Worktree(dir_name)`.
 - Catalog `Workspace.sessions: Map<project, Vec<Session>>` (persisted by the project store).
 
@@ -14,7 +17,7 @@ No stored field is added. The invariant is a function of existing records.
 | Type | Fields | Rule |
 |---|---|---|
 | `ExistingSession` | `id: SessionId`, `name: String` (the displayed label) | what a refusal names (FR-003) |
-| `Occupancy` | `Free` \| `Taken(ExistingSession)` | `Taken` when an un-archived session has the location; first in list order |
+| `Occupancy` | `Free` \| `Taken(ExistingSession)` | `Taken` when an un-archived session has the location; names the main session (`main_session`) |
 | `StartBlock` | `Clear` \| `Blocked { live: ExistingSession }` | `Blocked` when another un-archived session of the location is starting, running or restarting (FR-013) |
 
 `SessionDefinition { ai_cli: AiCli, prompt: Option<String> }` lives in `protocol/messages.rs`:
@@ -25,8 +28,8 @@ wire's `allow_additional_session` bool to `Catalog::create_session` and the star
 skips the occupancy and start-block checks and nothing else (research R12).
 
 Functions: `occupancy(sessions, &location) -> Occupancy`;
-`default_session(sessions, &location, last_viewed: Option<SessionId>) -> Option<SessionId>`
-(research R13);
+`main_session(sessions, &location) -> Option<SessionId>`: the un-archived session with `main`,
+else the first un-archived in list order, else `None` (research R14; replaces `default_session`);
 `start_block(sessions, id, live_ids: &HashSet<SessionId>) -> StartBlock`; `refusal_text(&ExistingSession, &SessionLocation)
 -> String`; `start_block_text(...)`.
 
@@ -52,6 +55,10 @@ Functions: `occupancy(sessions, &location) -> Occupancy`;
   `create_session` on a `Free` one); there is no "update definition" operation.
 
 ## State transitions
+
+Main role: set `true` by the create that finds the location `Free`; moved by `SessionSetMain`;
+inherited by a replacing resume; passed to the first remaining un-archived session on archive of
+the main; never set by an additional or kept-beside session.
 
 Location occupancy: `Free` --create/resume/adopt--> `Taken`; `Taken` --archive (delete)-->
 `Free`; `Taken` --replace (confirmed resume)--> `Taken` (new id, old archived); `Taken` --explicit request-->

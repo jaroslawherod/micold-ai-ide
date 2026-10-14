@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #776
 - **Worktree branch**: feat/776_one-session-per-worktree-chosen-at-start
 - **Started**: 2026-10-12
-- **Phase**: M2 PR open; waiting for merge
-- **Next step**: PR #821 merges; then M3 (cherry-pick wip-776-m3)
+- **Phase**: amendment 2026-10-14 (main session) in review; specs only
+- **Next step**: amendment PR merges; then M3 (cherry-pick wip-776-m3, then T050-T054)
 
 ## Pull requests
 
@@ -19,23 +19,24 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #791 | Design (spec, plan, tasks) | merged | 6b60f3201a2e4dacdfc8d7d626ea55384eb959a0 |
 | #794 | M1 | merged | 497a497cd87bdd573581252a7b51278d37d7e16f |
 | #807 | Amendment: soft limit, default session (specs only) | merged | 7440dca0d4fe03719c38ed46df6854fb2a42305d |
-| #821 | M2 | open | |
+| #821 | M2 | merged | 08e3a36dc925bffd3e44623701a9cbade577cf57 |
+| TBD | Amendment: main session and helpers (specs only) | open | |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T013 | full | Second session refused by daemon (RPC, create_session, review send); wire fields + v41 | #794 | merged (#794) |
-| M2 | T037–T042 | full | Soft limit: `allow_additional_session` on create_session, wire v42 (the start flag lands with the start block in M7) | #821 | open (#821) |
-| M3 | T014–T016, T021 | full | create_worktree / WorktreeCreate define the session at start (WIP at tag wip-776-m3, cherry-picked after M2) | | pending |
-| M4 | T017–T020, T022, T036, T043–T045 | full | Dialog fields; worktree rows only; row press opens the default session | | pending |
-| M5 | T046–T049 | full | Row menu "Start another session..." with confirmation | | pending |
-| M6 | T023–T030 | full | Resume replaces or keeps both; attach cap | | pending |
+| M2 | T037–T042 | full | Soft limit: `allow_additional_session` on create_session, wire v42 (the start flag lands with the start block in M7) | #821 | merged (#821) |
+| M3 | T014–T016, T021, T050–T054 | full | create_worktree / WorktreeCreate define the session at start (WIP at tag wip-776-m3, cherry-picked after M2); main session persisted, moved, promoted; wire v43 | | pending |
+| M4 | T017–T020, T022, T036, T043–T045 | full | Dialog fields; worktree rows only; row press opens the main session; helpers marked | | pending |
+| M5 | T046–T049, T055–T057 | full | Row menu "Start another session..." (adds a helper) with confirmation; "Make main session"; delete names successor | | pending |
+| M6 | T023–T030 | full | Resume replaces (resumed becomes main) or keeps both (helper); attach cap | | pending |
 | M7 | T031–T035 | full | Several sessions intact; start beside a live one needs confirmation | | pending |
 
 ## Decisions
 
-- Tasks: optional hooks (docguard review, tdd plan) skipped; test tasks are ordered first by hand. All wire additions and the v41 bump land in M1 so later milestones need no second bump. Foundational+US1 server half is 13 tasks; kept whole (no split gives an observable deliverable earlier). Polish has no code: quickstart results are left to the close unit.
+- Tasks: optional hooks (docguard review, tdd plan) skipped; test tasks are ordered first by hand. All wire additions and the v41 bump landed in M1 (superseded: v42 in M2, v43 in M3). Foundational+US1 server half is 13 tasks; kept whole (no split gives an observable deliverable earlier). Polish has no code: quickstart results are left to the close unit.
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
@@ -44,6 +45,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | 3 | amend | Name of the explicit request | boolean `allow_additional_session`, default false, on create_session/start_session and the wire messages; app: row menu entry plus confirmation | orchestrator recommended, agent-resolved | snake_case booleans/`ai_cli`, `prompt` conventions in core/src/mcp/tools.rs |
 | 4 | amend | Default session | last viewed in this window if un-archived, else first un-archived in list order | agent-resolved | `Session` has no persisted activity timestamp; refusal already names the first in list order (occupancy.rs) |
 | 5 | amend | Extra sessions' place | sub-rows of their worktree, only when it has several, collapsed by default; single-session rename/close in the worktree row menu | agent-resolved | ui/sidebar.rs already draws expandable session sub-rows |
+| 6 | amend 2026-10-14 | One main session per worktree, others helpers (replaces the derived default) | Designated, persisted `Session.main`; set at start; stays until the user changes it; user's scope message | user | "for each worktree there should one main session that is responsible for work the others should be considered a only helpers or some short time activities" |
+| 7 | amend 2026-10-14 | Main deleted | First remaining un-archived session in list order is promoted, no prompt; the delete confirmation names it | agent-resolved | user asked for "a rule"; list order is stable and already what refusals name |
+| 8 | amend 2026-10-14 | Changing the main; helper lifetime | App menu "Make main session" on a helper (`SessionSetMain`, wire v43, M3); no MCP tool; helpers are marked and never auto-closed | agent-resolved | spec Session 2026-10-14; research R14 |
 
 ## Review rounds
 
@@ -62,6 +66,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Amendment | 2 | 71db8a9058396eabe058cfa25dde64f9e1c5fd8e:b361448a232e0df33ff72231f33f9712ded5cf5d | CLEAN (2 MINOR fixed, prose only) |
 | Code A M2 | 1 | b28cbc7a1e5380a90b1b6a6aee84b70c6fab31b4:4a8e0269bdac0074368055715714d8222d0dcf2a | CLEAN (2 MINOR: comment width, start_block_text unused until M7; left) |
 | Conformance B M2 | 1 | b28cbc7a1e5380a90b1b6a6aee84b70c6fab31b4:4a8e0269bdac0074368055715714d8222d0dcf2a | CHANGES: 1 MAJOR (flagged-concurrency test dropped out-of-order answers); fixed by awaiting each answer in turn |
+| Amendment 2026-10-14 (main session) | 1 | ec2345907f0bee18669772be003f4096e916dd99:08e3a36dc925bffd3e44623701a9cbade577cf57 | CLEAN (3 MINOR, fixed, prose only) |
 
 ## Declined review findings
 
