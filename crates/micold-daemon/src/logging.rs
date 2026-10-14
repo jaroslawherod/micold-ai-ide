@@ -32,6 +32,7 @@ use tracing::field::{Field, Visit};
 use tracing::{Event, Level, Subscriber};
 use tracing_subscriber::filter::EnvFilter;
 use tracing_subscriber::fmt;
+use tracing_subscriber::fmt::writer::BoxMakeWriter;
 use tracing_subscriber::layer::Context;
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::{reload, Layer};
@@ -259,78 +260,46 @@ pub fn init() -> io::Result<Logging> {
     let errors = RecentErrors::new();
     let capture = RecentErrorsLayer(errors.clone());
 
-    // systemd sets JOURNAL_STREAM on units whose stdout/stderr go to the journal; the journal
-    // supplies timestamps and metadata, so ours would be redundant noise.
-    if stderr_is_journal_stream() {
-        let layer = fmt::layer()
-            .with_ansi(false)
-            .without_time()
-            .with_writer(io::stderr);
-        tracing_subscriber::registry()
-            .with(filter)
-            .with(capture)
-            .with(layer)
-            .try_init()
-            .map_err(io::Error::other)?;
-        return Ok(Logging {
-            sink: LogSink::Journald,
-            path: None,
-            reload,
-            errors,
-        });
-    }
-
-    if io::stderr().is_terminal() {
-        let layer = fmt::layer().with_ansi(true).with_writer(io::stderr);
-        tracing_subscriber::registry()
-            .with(filter)
-            .with(capture)
-            .with(layer)
-            .try_init()
-            .map_err(io::Error::other)?;
-        return Ok(Logging {
-            sink: LogSink::Stderr,
-            path: None,
-            reload,
-            errors,
-        });
-    }
-
-    // Detached (the auto-spawn case): nobody is reading stderr, so log to a size-capped file.
-    let Some(path) = default_log_path() else {
+    // Pick the sink; one subscriber install below serves all four cases. systemd sets
+    // JOURNAL_STREAM on units whose stdout/stderr go to the journal; the journal supplies
+    // timestamps and metadata, so ours would be redundant noise.
+    let journald = stderr_is_journal_stream();
+    let mut path = None;
+    let (sink, ansi, writer) = if journald {
+        (LogSink::Journald, false, BoxMakeWriter::new(io::stderr))
+    } else if io::stderr().is_terminal() {
+        (LogSink::Stderr, true, BoxMakeWriter::new(io::stderr))
+    } else if let Some(file) = default_log_path() {
+        // Detached (the auto-spawn case): nobody is reading stderr, so log to a size-capped file.
+        if let Some(parent) = file.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        let handle = RotateHandle(Arc::new(Mutex::new(rotating_file(&file))));
+        path = Some(file);
+        (
+            LogSink::File,
+            false,
+            BoxMakeWriter::new(move || handle.clone()),
+        )
+    } else {
         // No data dir: fall back to stderr rather than losing diagnostics entirely.
-        let layer = fmt::layer().with_ansi(false).with_writer(io::stderr);
-        tracing_subscriber::registry()
-            .with(filter)
-            .with(capture)
-            .with(layer)
-            .try_init()
-            .map_err(io::Error::other)?;
-        return Ok(Logging {
-            sink: LogSink::Stderr,
-            path: None,
-            reload,
-            errors,
-        });
+        (LogSink::Stderr, false, BoxMakeWriter::new(io::stderr))
     };
-
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-    let handle = RotateHandle(Arc::new(Mutex::new(rotating_file(&path))));
-    let layer = fmt::layer()
-        .with_ansi(false)
-        .with_writer(move || handle.clone());
+    let layer = fmt::layer().with_ansi(ansi).with_writer(writer);
+    let layer = if journald {
+        layer.without_time().boxed()
+    } else {
+        layer.boxed()
+    };
     tracing_subscriber::registry()
         .with(filter)
         .with(capture)
         .with(layer)
         .try_init()
         .map_err(io::Error::other)?;
-
     Ok(Logging {
-        sink: LogSink::File,
-        path: Some(path),
+        sink,
+        path,
         reload,
         errors,
     })
