@@ -132,8 +132,7 @@ fn side(text: &str, prefix: &str) -> Option<String> {
 /// lines (a binary file, a mode change).
 fn header_path(header: &str) -> Option<String> {
     if header.starts_with('"') {
-        let (first, rest) = quoted_prefix(header)?;
-        let _ = rest;
+        let (first, _) = quoted_prefix(header)?;
         return Some(
             first
                 .strip_prefix("a/")

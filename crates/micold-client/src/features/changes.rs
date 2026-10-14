@@ -104,7 +104,7 @@ pub enum Source {
     Changes,
     /// A listed pull request's base...head diff. The working tree's list, selection and diff are
     /// kept meanwhile, not read.
-    PullRequest(PullRequestView),
+    PullRequest(Box<PullRequestView>),
 }
 
 /// The pull request shown in place of the entry's changes.
@@ -1260,13 +1260,13 @@ fn read_pull_request_diff(state: &mut State, number: u64) -> Effect {
     let Some(view) = state.open.as_mut() else {
         return Effect::None;
     };
-    view.source = Source::PullRequest(PullRequestView {
+    view.source = Source::PullRequest(Box::new(PullRequestView {
         number,
         diff: PrDiffLoad::Loading { seq },
         selected: None,
         file: None,
         shown_large: BTreeSet::new(),
-    });
+    }));
     reset_diff_pane(view);
     state.next_seq += 1;
     Effect::ReadPullRequestDiff {
