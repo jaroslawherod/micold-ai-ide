@@ -646,6 +646,14 @@ pub(crate) fn save_and_prepare_check(
     app.core.session.cross_session_access = window.cross_session_access;
     app.core.session.notification_kinds = window.notification_kinds;
     app.core.session.long_task_threshold_secs = window.long_task_threshold_secs;
+    // Feature 533: a save with no service to echo it (disconnected) still puts the switch in force
+    // here, so Settings and the gate agree; connected, the echo sets the same value.
+    if let Some(enabled) = changed_value(
+        &settings.jira_enabled,
+        baseline.as_ref().map(|b| &b.jira_enabled),
+    ) {
+        app.core.settings.jira_enabled = enabled;
+    }
     // Feature 490: in force here at once, as the fields above are; the service's echo agrees.
     app.core.plan_usage.settings(
         window.plan_usage_enabled,

@@ -30,7 +30,7 @@ The design turns on five decisions (each in [research.md](./research.md)):
    ([R3](./research.md#r3--where-the-switch-and-the-connection-live)): `settings.json` has two
    writers and a client-only field is reverted by the daemon's next whole-struct save; the daemon's
    `SettingsChanged` echo is also the only existing path that reaches every window (FR-022). The
-   daemon stores the fields and never reads them (FR-021). **Protocol 40 -> 41.** Like `pr_status_enabled`, the switch and the connection therefore follow the service the client is connected to; the token file stays on the client host, so a second daemon shows the connection and asks for the token again (R3 records the multi-daemon behaviour).
+   daemon stores the fields and never reads them (FR-021). **Protocol 41 -> 42.** Like `pr_status_enabled`, the switch and the connection therefore follow the service the client is connected to; the token file stays on the client host, so a second daemon shows the connection and asks for the token again (R3 records the multi-daemon behaviour).
 4. **The token is a separate owner-only file written by the client** with `owner_only::write`
    ([R4](./research.md#r4--the-token-an-owner-only-file-beside-settings-never-on-the-wire)), never
    in `Settings`, never on the wire, never in `Debug`. The settings carry only the connection's
@@ -78,7 +78,7 @@ wire or session history (FR-009); GitHub path and every other creation path unch
 capable (FR-003, FR-018).
 
 **Scale/Scope**: one new core module (`jira`) + extended `github` (Issue key, shared paging),
-`settings`, `owner_only` user, `store` (token dir, source choice), `protocol` (two fields, v41);
+`settings`, `owner_only` user, `store` (token dir, source choice), `protocol` (two fields, v42);
 client: provider state in `worktree_form`, Settings **Jira** page (a rail entry that is always present and shows only the switch while it is off: FR-001's "its own switch"), shell effect module `shell/jira.rs`, `ureq` adapter; docs on three pages.
 
 ## Constitution Check
@@ -176,11 +176,11 @@ crates/micold-core/
 │   ├── settings.rs            # + jira_enabled, jira_connections (StoredSettings, Settings)
 │   ├── store.rs               # + jira_token_dir(), StoredProjectState.issue_source
 │   ├── protocol/messages.rs   # SettingsSet/SettingsChanged carry the two fields
-│   └── protocol/version.rs    # PROTOCOL_VERSION 40 -> 41
+│   └── protocol/version.rs    # PROTOCOL_VERSION 41 -> 42
 └── tests/
     ├── jira_site_release.rs   # NEW - release-only: loopback http refused; #[cfg_attr(debug_assertions, ignore)]
     ├── jira_connection.rs  jira_jql.rs  jira_parse.rs  jira_classify.rs  jira_load.rs
-    ├── issue_jira_rows.rs  issue_types.rs (extended)  settings_jira.rs  schema_hash.rs (pin -> 41)
+    ├── issue_jira_rows.rs  issue_types.rs (extended)  settings_jira.rs  schema_hash.rs (pin -> 42)
     └── fixtures/jira/        # captured Cloud v3 bodies per outcome
 
 crates/micold-daemon/
@@ -222,7 +222,7 @@ composition; the daemon only stores and echoes two fields.
 
 | Slice | Delivers | Gate |
 |---|---|---|
-| **1 (US2 + US3 core)** | Settings fields + protocol v41; switch, connection draft/validation, token file, Jira section with the switch-off prompt; nothing requested yet | `mise run gate`; §B Settings |
+| **1 (US2 + US3 core)** | Settings fields + protocol v42; switch, connection draft/validation, token file, Jira section with the switch-off prompt; nothing requested yet | `mise run gate`; §B Settings |
 | **2 (US1, P1)** | `jira` module, `ureq` adapter, provider in the form, Jira-only project picker, pick fills, naming, type match, notice and failures with Retry; user-guide section | `mise run gate`; §B pick |
 | **3 (US4, P2)** | Source choice for GitHub + Jira, per-project memory, switch/discard rules | §B source choice |
 | **Polish** | architecture doc; §B two-window and sandbox/desktop passes recorded | quickstart §B complete |
@@ -247,4 +247,4 @@ composition; the daemon only stores and echoes two fields.
 | Addition | Why needed | Simpler alternative rejected |
 |---|---|---|
 | New crates `ureq` (+ rustls, platform verifier) and `base64` in the client | Jira has no CLI that owns the sign-in; HTTPS with the user's own credentials is the minimum | `curl` subprocess, `reqwest`, native-tls: [R2](./research.md#r2--http-client-ureq-3-in-the-client-not-curl-not-reqwest) |
-| `PROTOCOL_VERSION` 40 -> 41 | A change in one window must reach every window (FR-022) and the daemon is the only echo | Client-only file with its own refresh: [R3](./research.md#r3--where-the-switch-and-the-connection-live) |
+| `PROTOCOL_VERSION` 41 -> 42 | A change in one window must reach every window (FR-022) and the daemon is the only echo | Client-only file with its own refresh: [R3](./research.md#r3--where-the-switch-and-the-connection-live) |

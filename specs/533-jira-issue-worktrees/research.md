@@ -63,7 +63,7 @@ OpenSSL: a system library dependency that breaks the "one binary" Linux and Wind
 path as the client names it. The switch rides `SettingsSet` as an `Option<bool>`; a connection rides it as one per-project
 change `jira_connection: Option<JiraConnectionChange { project, connection: Option<JiraConnection> }>`
 (upsert or removal) which the daemon applies to its map; `SettingsChanged` carries both whole
-(`settings_version` stays 4; `PROTOCOL_VERSION` 40 -> 41). `JiraConnection` holds `site`,
+(`settings_version` stays 4; `PROTOCOL_VERSION` 41 -> 42). `JiraConnection` holds `site`,
 `project_key`, `email`; no token.
 
 **Rationale**: `settings.json` has two writers and the split is by field (the doc on

@@ -1505,7 +1505,10 @@ pub struct DaemonSettings {
     /// window follows one switch (FR-022); the service stores it and never reads it (FR-021).
     pub jira_enabled: bool,
     /// Each project's Jira connection, by project path (feature 533, FR-006, FR-022). Never holds
-    /// a token.
+    /// a token. Strict on the wire (the codec is not self-describing, so entries cannot be skipped):
+    /// the service drops entries that do not parse when it reads its file, so none is ever sent
+    /// that this build would refuse, bar a development daemon's loopback `http` site reaching a
+    /// release client, which is dev-only (research R10).
     pub jira_connections: std::collections::BTreeMap<String, JiraConnection>,
     /// Whether a session that comes to await input while not in view raises a desktop
     /// notification (feature 039, FR-026, FR-027). Service-owned so that every window follows one
