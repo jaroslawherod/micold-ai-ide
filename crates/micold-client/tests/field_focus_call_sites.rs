@@ -171,7 +171,7 @@ fn the_sweep_reaches_the_application_dialogs() {
         "ui/worktree_form.rs",
         "ui/settings/terminal.rs",
         "ui/settings/environment.rs",
-        "ui/settings/daemon.rs",
+        "ui/settings/daemons.rs",
         "ui/confirm_delete.rs",
     ] {
         assert!(
