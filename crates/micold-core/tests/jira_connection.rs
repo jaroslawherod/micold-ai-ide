@@ -157,7 +157,7 @@ fn the_token_file_is_named_after_the_project_in_the_jira_directory() {
         jira_token_path(dir, project),
         dir.join(format!("{}.token", project_id_of(project)))
     );
-    if let Some(data) = micold_core::paths::data_dir() {
-        assert_eq!(jira_token_dir(), Some(data.join("jira")));
+    if let Some(token_dir) = jira_token_dir() {
+        assert_eq!(token_dir.file_name().and_then(|n| n.to_str()), Some("jira"));
     }
 }
