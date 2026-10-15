@@ -16,7 +16,8 @@ pub fn color(c: Rgb) -> Color {
 }
 
 /// An iced color as the token type: both are 8-bit sRGB, so this changes representation, not value
-/// (alpha is dropped). The inverse of [`color`].
+/// (alpha is dropped). The inverse of [`color`]. Only the contrast measurements read it.
+#[cfg(test)]
 pub fn to_rgb(c: Color) -> Rgb {
     let q = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
     Rgb {
