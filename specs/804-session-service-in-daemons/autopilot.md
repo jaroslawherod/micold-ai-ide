@@ -35,6 +35,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
 | Spec | 1 | b13a0044e288eb4d69133c3183da0ba44d895f63:1bf62326e8f9f29b3ef9df261c3ddba110f6ae54 | CHANGES: 4 MAJOR (fixed; F2 routed to clarify) |
+| Spec | 2 | 23e1dba8160d1800dfdd6d8915d4550176991274:1bf62326e8f9f29b3ef9df261c3ddba110f6ae54 | CLEAN (1 MINOR: remote-daemon marker has no FR; for clarify) |
 
 ## Declined review findings
 
