@@ -16,9 +16,12 @@ use micold_core::daemons::{
     Binding, ConnectionError, DaemonDiagnostics, DaemonEvent, DaemonId, DaemonName, DaemonRegistry,
     DaemonRuntime, DaemonState, DaemonView, RegistryError, StateChange, WorktreeRef,
 };
-use micold_core::sandbox::SandboxProfile;
+use micold_core::sandbox::image::{ImageSourceKind, ImageSourceProblem};
+use micold_core::sandbox::runtime::RuntimeKind;
+use micold_core::sandbox::{CredentialShare, NetworkPosture, SandboxProfile};
 use micold_core::session::SessionId;
 
+use super::settings::{parse_budget, LimitField, ProfileTexts};
 use super::Outcome;
 use crate::floating_surface;
 use crate::links::{route, DaemonLinks, Route};
@@ -69,6 +72,16 @@ pub struct Draft {
     pub port: String,
     /// Image, budget and the rest of a container's profile.
     pub profile: SandboxProfile,
+    /// The image archive path as typed (container runtime only; empty means none).
+    pub image_path: String,
+    /// The processor limit in cores as typed; empty means unset (rule RB-2).
+    pub cpus: String,
+    /// The memory limit in MiB as typed; empty means unset.
+    pub memory_mib: String,
+    /// The process-count limit as typed; empty means unset.
+    pub pids: String,
+    /// The writable-storage limit in MiB as typed; empty means unset.
+    pub storage_mib: String,
     /// Connect at launch.
     pub auto_start: bool,
     /// The host or `Host` alias (SSH runtime only, feature 489).
@@ -84,7 +97,8 @@ pub struct Draft {
 /// A refused save: the field at fault and what to tell the user.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FormError {
-    /// `name`, `runtime`, `container_name`, `port` or `image`.
+    /// `name`, `runtime`, `container_name`, `port`, `image`, `image_path`, `cpus`, `memory`, `pids`
+    /// or `storage`.
     pub field: &'static str,
     /// The sentence shown beside the field.
     pub message: String,
@@ -136,6 +150,9 @@ pub struct ViewModel {
     pub rows: Vec<DaemonView>,
     /// The daemons a worktree can be bound to (`Bind to daemon...`); empty with none configured.
     pub bind_choices: Vec<(DaemonId, String)>,
+    /// The daemon an unbound location resolves to: the one whose container the machine facts
+    /// (probed limits, an unmounted sign-in) describe.
+    pub legacy_default: Option<DaemonId>,
 }
 
 /// What the Daemons feature remembers.
@@ -233,6 +250,7 @@ pub fn views(state: &State, model: &Model<'_>) -> ViewModel {
     ViewModel {
         empty: rows.is_empty(),
         bind_choices: rows.iter().map(|r| (r.id, r.name.clone())).collect(),
+        legacy_default: model.legacy_default,
         rows,
     }
 }
@@ -332,6 +350,11 @@ pub fn begin_add(state: &mut State) {
         container_name: String::new(),
         port: String::new(),
         profile: SandboxProfile::default(),
+        image_path: String::new(),
+        cpus: String::new(),
+        memory_mib: String::new(),
+        pids: String::new(),
+        storage_mib: String::new(),
         auto_start: true,
         ssh_host: String::new(),
         ssh_user: String::new(),
@@ -383,6 +406,7 @@ pub fn begin_edit<'s>(state: &'s mut State, model: &Model<'_>, id: DaemonId) -> 
             SandboxProfile::default(),
         ),
     };
+    let texts = ProfileTexts::of(&profile);
     state.draft = Some(Draft {
         editing: Some(id),
         name: entry.name.as_str().to_string(),
@@ -390,6 +414,11 @@ pub fn begin_edit<'s>(state: &'s mut State, model: &Model<'_>, id: DaemonId) -> 
         container_name,
         port,
         profile,
+        image_path: texts.image_path,
+        cpus: texts.cpus,
+        memory_mib: texts.memory_mib,
+        pids: texts.pids,
+        storage_mib: texts.storage_mib,
         auto_start: entry.auto_start,
         ssh_host: ssh.0,
         ssh_user: ssh.1,
@@ -489,9 +518,38 @@ fn runtime_of(draft: &Draft) -> Result<DaemonRuntime, FormError> {
                 field: "port",
                 message: "Enter a port between 1 and 65535.".into(),
             })?;
+            let mut profile = draft.profile.clone();
+            let path = draft.image_path.trim();
+            profile.image.path = (!path.is_empty()).then(|| PathBuf::from(path));
+            profile.budget = parse_budget(
+                &draft.cpus,
+                &draft.memory_mib,
+                &draft.pids,
+                &draft.storage_mib,
+            )
+            .map_err(|(field, message)| FormError {
+                field: match field {
+                    LimitField::Cpus => "cpus",
+                    LimitField::Memory => "memory",
+                    LimitField::Pids => "pids",
+                    LimitField::Storage => "storage",
+                },
+                message,
+            })?;
+            if let Some(problem) = profile.image.validate().into_iter().find(|p| {
+                matches!(
+                    p,
+                    ImageSourceProblem::MissingArchivePath | ImageSourceProblem::UnusedArchivePath
+                )
+            }) {
+                return Err(FormError {
+                    field: "image_path",
+                    message: problem.message(),
+                });
+            }
             Ok(DaemonRuntime::Container(
                 micold_core::daemons::ContainerSettings {
-                    profile: draft.profile.clone(),
+                    profile,
                     container_name: draft.container_name.trim().to_string(),
                     port,
                 },
@@ -719,6 +777,26 @@ pub enum Msg {
     PortEdited(String),
     /// The image reference field changed.
     ImageEdited(String),
+    /// The container runtime (Docker or Podman) changed.
+    ContainerRuntimeChosen(RuntimeKind),
+    /// The image source changed.
+    ImageKindChosen(ImageSourceKind),
+    /// The image archive path field changed.
+    ImagePathEdited(String),
+    /// A credential share was ticked or unticked.
+    CredentialToggled(CredentialShare, bool),
+    /// The network posture changed.
+    NetworkChosen(NetworkPosture),
+    /// The processor limit field changed.
+    CpuLimitEdited(String),
+    /// The memory limit field changed.
+    MemoryLimitEdited(String),
+    /// The process-count limit field changed.
+    PidLimitEdited(String),
+    /// The storage limit field changed.
+    StorageLimitEdited(String),
+    /// The keep-running-after-sign-out box changed.
+    SurviveLogoutToggled(bool),
     /// The SSH host field changed.
     SshHostEdited(String),
     /// The SSH user field changed.
@@ -803,6 +881,22 @@ pub fn update(state: &mut State, model: &mut Model<'_>, msg: Msg) -> Vec<Outcome
         Msg::ContainerNameEdited(v) => edit(state, &|d| d.container_name = v.clone()),
         Msg::PortEdited(v) => edit(state, &|d| d.port = v.clone()),
         Msg::ImageEdited(v) => edit(state, &|d| d.profile.image.reference = v.clone()),
+        Msg::ContainerRuntimeChosen(v) => edit(state, &|d| d.profile.runtime = v),
+        Msg::ImageKindChosen(v) => edit(state, &|d| d.profile.image.kind = v),
+        Msg::ImagePathEdited(v) => edit(state, &|d| d.image_path = v.clone()),
+        Msg::CredentialToggled(share, on) => edit(state, &|d| {
+            if on {
+                d.profile.credentials.insert(share);
+            } else {
+                d.profile.credentials.remove(&share);
+            }
+        }),
+        Msg::NetworkChosen(v) => edit(state, &|d| d.profile.network = v),
+        Msg::CpuLimitEdited(v) => edit(state, &|d| d.cpus = v.clone()),
+        Msg::MemoryLimitEdited(v) => edit(state, &|d| d.memory_mib = v.clone()),
+        Msg::PidLimitEdited(v) => edit(state, &|d| d.pids = v.clone()),
+        Msg::StorageLimitEdited(v) => edit(state, &|d| d.storage_mib = v.clone()),
+        Msg::SurviveLogoutToggled(v) => edit(state, &|d| d.profile.survive_logout = v),
         Msg::SshHostEdited(v) => edit(state, &|d| d.ssh_host = v.clone()),
         Msg::SshUserEdited(v) => edit(state, &|d| d.ssh_user = v.clone()),
         Msg::SshPortEdited(v) => edit(state, &|d| d.ssh_port = v.clone()),

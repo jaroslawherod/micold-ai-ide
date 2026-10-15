@@ -9,24 +9,24 @@ Paths: `C` = `crates/micold-core/src`, `K` = `crates/micold-client/src`, `T` = `
 
 ## Phase 1: Foundational
 
-- [ ] T001 Test first: `Settings::sync_legacy_daemon` for Container (placement LocalSandbox + profile), Host (HostProcess, profile kept) and SSH (block untouched) in `C/settings.rs` tests
-- [ ] T002 Implement `Settings::sync_legacy_daemon` in `C/settings.rs` (inverse of `set_single_daemon`)
-- [ ] T003 Test first: `parse_budget(cpus, memory_mib, pids, storage_mib) -> Result<ResourceBudget, (LimitField, String)>` keeps today's parsing and errors, in `K/features/settings.rs` tests
-- [ ] T004 Extract `parse_budget` from `SettingsDraft::budget()` in `K/features/settings.rs` as a free function used by the page and the form (single copy)
+- [x] T001 Test first: `Settings::sync_legacy_daemon` for Container (placement LocalSandbox + profile), Host (HostProcess, profile kept) and SSH (block untouched) in `C/settings.rs` tests
+- [x] T002 Implement `Settings::sync_legacy_daemon` in `C/settings.rs` (inverse of `set_single_daemon`)
+- [x] T003 Test first: `parse_budget(cpus, memory_mib, pids, storage_mib) -> Result<ResourceBudget, (LimitField, String)>` keeps today's parsing and errors, in `K/features/settings.rs` tests
+- [x] T004 Extract `parse_budget` from `SettingsDraft::budget()` in `K/features/settings.rs` as a free function used by the page and the form (single copy)
 
 ## Phase 2: User Story 1 - Container settings in the daemon form (P1) 🎯 MVP
 
 **Goal**: Settings > Daemons edits every Session service field per daemon, saved by the form's own save.
 **Independent test**: edit a daemon's runtime and a limit, save, see the confirmation and restart.
 
-- [ ] T005 [US1] Test first: profile fields (runtime, image kind/ref/archive, credential shares, network, four limits, survive-logout) round trip through `save`; `FormError.field` ids `cpus`, `memory`, `pids`, `storage`, `image_path` in `T/daemons_feature.rs`
-- [ ] T006 [US1] Test first: two daemons edit independently; unsaved drafts of two forms kept apart; remove discards, rename keeps; running daemon asks confirmation (FR-003, FR-004) in `T/daemons_feature.rs`
-- [ ] T007 [US1] Test first: SSH entry shows no container fields and an unedited SSH entry keeps its stored profile; container to SSH save drops it (FR-011) in `T/daemons_feature.rs`
+- [x] T005 [US1] Test first: profile fields (runtime, image kind/ref/archive, credential shares, network, four limits, survive-logout) round trip through `save`; `FormError.field` ids `cpus`, `memory`, `pids`, `storage`, `image_path` in `T/daemons_feature.rs`
+- [x] T006 [US1] Test first: two daemons edit independently; unsaved drafts of two forms kept apart; remove discards, rename keeps; running daemon asks confirmation (FR-003, FR-004) in `T/daemons_feature.rs`
+- [x] T007 [US1] Test first: SSH entry shows no container fields and an unedited SSH entry keeps its stored profile; container to SSH save drops it (FR-011) in `T/daemons_feature.rs`
 - [ ] T007a [US1] Test first: a settings save with unchanged `daemon` leaves the registry untouched after a form save synced the block (D3) in `T/daemons_feature.rs`
-- [ ] T008 [US1] Add `image_path`, `cpus`, `memory_mib`, `pids`, `storage_mib` text mirrors, the Msgs for each field, and `runtime_of` parsing via `parse_budget` to `Draft` in `K/features/daemons.rs`; refusals return `FormError { field }`
-- [ ] T009 [US1] Move the field helpers (`limits`, `network_warning`, `unshared_sign_in_notice`, `sharing_summary`, `survival_support`, option tables) from `K/ui/settings/daemon.rs` to new `K/ui/settings/container_fields.rs` taking `ContainerView<'_>`; register in `K/ui/settings/mod.rs`
-- [ ] T010 [US1] Append the container groups under the container branch of `form` in `K/ui/settings/daemons.rs`, read capabilities and unshared sign-in from `app.sandbox`; host daemon shows them inert, SSH none
-- [ ] T011 [US1] Call `sync_legacy_daemon` from the form save of the legacy-mirrored daemon in `K/features/daemons.rs` (covered by T007a)
+- [x] T008 [US1] Add `image_path`, `cpus`, `memory_mib`, `pids`, `storage_mib` text mirrors, the Msgs for each field, and `runtime_of` parsing via `parse_budget` to `Draft` in `K/features/daemons.rs`; refusals return `FormError { field }`
+- [x] T009 [US1] Move the field helpers (`limits`, `network_warning`, `unshared_sign_in_notice`, `sharing_summary`, `survival_support`, option tables) from `K/ui/settings/daemon.rs` to new `K/ui/settings/container_fields.rs` taking `ContainerView<'_>`; register in `K/ui/settings/mod.rs`
+- [x] T010 [US1] Append the container groups under the container branch of `form` in `K/ui/settings/daemons.rs`, read capabilities and unshared sign-in from `app.sandbox`; host daemon shows them inert, SSH none
+- [x] T011 [US1] Call `sync_legacy_daemon` from the form save of the legacy-mirrored daemon in `K/features/daemons.rs` (covered by T007a)
 - [ ] T012 [US1] Run the geometry gates (field-note column, form layout) for the longer form and fix overflow in `K/ui/settings/daemons.rs`
 - [ ] T013 [US1] User guide: describe container runtime, image, shares, network, limits and survive-logout in the daemon form in `docs/user-guide/sandboxed-daemon.md`
 

@@ -809,6 +809,154 @@ const MAX_MIB: u64 = 1024 * 1024;
 /// The kernel's own `pid_max` ceiling on 64-bit Linux.
 const MAX_PIDS: u32 = 4_194_304;
 
+/// A sandbox profile's path and limits as the text fields show them (page and Daemons form).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ProfileTexts {
+    /// The archive path; empty when none.
+    pub image_path: String,
+    /// Cores; empty when unset.
+    pub cpus: String,
+    /// MiB; empty when unset.
+    pub memory_mib: String,
+    /// Processes; empty when unset.
+    pub pids: String,
+    /// MiB; empty when unset.
+    pub storage_mib: String,
+}
+
+impl ProfileTexts {
+    /// What `profile` shows: what the user would type to reproduce it.
+    pub fn of(profile: &SandboxProfile) -> Self {
+        let b = &profile.budget;
+        Self {
+            image_path: profile
+                .image
+                .path
+                .as_ref()
+                .map(|p| p.display().to_string())
+                .unwrap_or_default(),
+            cpus: b.cpus_milli.map(cores_text).unwrap_or_default(),
+            memory_mib: b
+                .memory_bytes
+                .map(|v| v.as_mib().to_string())
+                .unwrap_or_default(),
+            pids: b.pids.map(|p| p.to_string()).unwrap_or_default(),
+            storage_mib: b
+                .storage_bytes
+                .map(|v| v.as_mib().to_string())
+                .unwrap_or_default(),
+        }
+    }
+}
+
+/// Which of the four sandbox limits a text was about (feature 804): the page and the Daemons form
+/// each map it to their own field.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LimitField {
+    /// The processor limit.
+    Cpus,
+    /// The memory limit.
+    Memory,
+    /// The process-count limit.
+    Pids,
+    /// The writable-storage limit.
+    Storage,
+}
+
+impl LimitField {
+    fn field_id(self) -> FieldId {
+        match self {
+            Self::Cpus => FieldId::SettingsCpuLimit,
+            Self::Memory => FieldId::SettingsMemoryLimit,
+            Self::Pids => FieldId::SettingsPidLimit,
+            Self::Storage => FieldId::SettingsStorageLimit,
+        }
+    }
+}
+
+/// Parse the four typed limits. An empty text is *unset* (rule RB-2); a value outside the
+/// documented range is refused with the range that would be accepted (FR-016). The one copy of
+/// this parsing, used by the Settings page and the Daemons form.
+pub fn parse_budget(
+    cpus: &str,
+    memory_mib: &str,
+    pids: &str,
+    storage_mib: &str,
+) -> Result<micold_core::sandbox::ResourceBudget, (LimitField, String)> {
+    Ok(micold_core::sandbox::ResourceBudget {
+        cpus_milli: parse_cores(cpus)?,
+        memory_bytes: parse_mib(memory_mib, LimitField::Memory, MIN_MEMORY, MAX_MIB)?,
+        pids: parse_count(pids, MIN_PIDS, MAX_PIDS)?,
+        storage_bytes: parse_mib(storage_mib, LimitField::Storage, MIN_STORAGE, MAX_MIB)?,
+    })
+}
+
+fn parse_cores(text: &str) -> Result<Option<MilliCpus>, (LimitField, String)> {
+    let text = text.trim();
+    if text.is_empty() {
+        return Ok(None);
+    }
+    let min = cores_text(MIN_MILLI_CPUS);
+    match text.parse::<f64>() {
+        Ok(c) if c.is_finite() && c >= f64::from(MIN_MILLI_CPUS.0) / 1000.0 && c <= MAX_CORES => {
+            Ok(Some(MilliCpus((c * 1000.0).round() as u32)))
+        }
+        Ok(_) => Err((
+            LimitField::Cpus,
+            format!("Enter between {min} and {MAX_CORES:.0} cores, or leave it empty to use the runtime's default."),
+        )),
+        Err(_) => Err((
+            LimitField::Cpus,
+            "Enter a number of cores, like 2 or 1.5.".to_string(),
+        )),
+    }
+}
+
+fn parse_mib(
+    text: &str,
+    field: LimitField,
+    min: Bytes,
+    max_mib: u64,
+) -> Result<Option<Bytes>, (LimitField, String)> {
+    let text = text.trim();
+    if text.is_empty() {
+        return Ok(None);
+    }
+    let min_mib = min.as_mib();
+    match text.parse::<u64>() {
+        Ok(m) if (min_mib..=max_mib).contains(&m) => Ok(Some(Bytes::from_mib(m))),
+        Ok(_) => Err((
+            field,
+            format!(
+                "Enter between {min_mib} and {max_mib} MiB, or leave it empty to use the \
+                 runtime's default."
+            ),
+        )),
+        Err(_) => Err((field, "Enter a whole number of mebibytes.".to_string())),
+    }
+}
+
+fn parse_count(text: &str, min: u32, max: u32) -> Result<Option<u32>, (LimitField, String)> {
+    let text = text.trim();
+    if text.is_empty() {
+        return Ok(None);
+    }
+    match text.parse::<u32>() {
+        Ok(n) if (min..=max).contains(&n) => Ok(Some(n)),
+        Ok(_) => Err((
+            LimitField::Pids,
+            format!(
+                "Enter between {min} and {max} processes, or leave it empty to use the \
+                 runtime's default."
+            ),
+        )),
+        Err(_) => Err((
+            LimitField::Pids,
+            "Enter a whole number of processes.".to_string(),
+        )),
+    }
+}
+
 impl SettingsDraft {
     /// Show `section`. Nothing else changes — in particular nothing is reseeded, which is the
     /// whole of US3 scenario 2.
@@ -1005,105 +1153,14 @@ impl SettingsDraft {
     /// these ceilings only keep a typo like `1e12` from overflowing the unit conversion, so they
     /// live here with the form that parses the text.
     fn budget(&self) -> Result<micold_core::sandbox::ResourceBudget, FieldError> {
-        Ok(micold_core::sandbox::ResourceBudget {
-            cpus_milli: self.cores()?,
-            memory_bytes: self.mib(
-                &self.daemon.memory_mib,
-                FieldId::SettingsMemoryLimit,
-                MIN_MEMORY,
-                MAX_MIB,
-            )?,
-            pids: self.count(
-                &self.daemon.pids,
-                FieldId::SettingsPidLimit,
-                MIN_PIDS,
-                MAX_PIDS,
-            )?,
-            storage_bytes: self.mib(
-                &self.daemon.storage_mib,
-                FieldId::SettingsStorageLimit,
-                MIN_STORAGE,
-                MAX_MIB,
-            )?,
-        })
-    }
-
-    fn reject(&self, field: FieldId, message: String) -> FieldError {
-        FieldError {
-            field,
-            section: SettingsSection::Daemon,
-            message,
-        }
-    }
-
-    fn cores(&self) -> Result<Option<MilliCpus>, FieldError> {
-        let text = self.daemon.cpus.trim();
-        if text.is_empty() {
-            return Ok(None);
-        }
-        let min = cores_text(MIN_MILLI_CPUS);
-        match text.parse::<f64>() {
-            Ok(c) if c.is_finite() && c >= f64::from(MIN_MILLI_CPUS.0) / 1000.0 && c <= MAX_CORES => {
-                Ok(Some(MilliCpus((c * 1000.0).round() as u32)))
+        let d = &self.daemon;
+        parse_budget(&d.cpus, &d.memory_mib, &d.pids, &d.storage_mib).map_err(|(field, message)| {
+            FieldError {
+                field: field.field_id(),
+                section: SettingsSection::Daemon,
+                message,
             }
-            Ok(_) => Err(self.reject(
-                FieldId::SettingsCpuLimit,
-                format!("Enter between {min} and {MAX_CORES:.0} cores, or leave it empty to use the runtime's default."),
-            )),
-            Err(_) => Err(self.reject(
-                FieldId::SettingsCpuLimit,
-                "Enter a number of cores, like 2 or 1.5.".to_string(),
-            )),
-        }
-    }
-
-    fn mib(
-        &self,
-        text: &str,
-        field: FieldId,
-        min: Bytes,
-        max_mib: u64,
-    ) -> Result<Option<Bytes>, FieldError> {
-        let text = text.trim();
-        if text.is_empty() {
-            return Ok(None);
-        }
-        let min_mib = min.as_mib();
-        match text.parse::<u64>() {
-            Ok(m) if (min_mib..=max_mib).contains(&m) => Ok(Some(Bytes::from_mib(m))),
-            Ok(_) => Err(self.reject(
-                field,
-                format!(
-                    "Enter between {min_mib} and {max_mib} MiB, or leave it empty to use the \
-                     runtime's default."
-                ),
-            )),
-            Err(_) => Err(self.reject(field, "Enter a whole number of mebibytes.".to_string())),
-        }
-    }
-
-    fn count(
-        &self,
-        text: &str,
-        field: FieldId,
-        min: u32,
-        max: u32,
-    ) -> Result<Option<u32>, FieldError> {
-        let text = text.trim();
-        if text.is_empty() {
-            return Ok(None);
-        }
-        match text.parse::<u32>() {
-            Ok(n) if (min..=max).contains(&n) => Ok(Some(n)),
-            Ok(_) => Err(self.reject(
-                field,
-                format!(
-                    "Enter between {min} and {max} processes, or leave it empty to use the \
-                     runtime's default."
-                ),
-            )),
-            Err(_) => Err(self.reject(field, "Enter a whole number of processes.".to_string())),
-        }
+        })
     }
 
     fn timeout(&self) -> Result<u64, FieldError> {
@@ -1274,6 +1331,7 @@ impl SettingsDraft {
 
     /// Seed the draft from what is stored, so the form opens showing the current values.
     pub fn from_settings(settings: &Settings) -> Self {
+        let profile_texts = ProfileTexts::of(&settings.daemon.sandbox);
         Self {
             section: SettingsSection::default(),
             appearance: AppearanceDraft {
@@ -1303,45 +1361,13 @@ impl SettingsDraft {
             daemon: DaemonDraft {
                 placement: settings.daemon.placement,
                 profile: settings.daemon.sandbox.clone(),
-                image_path: settings
-                    .daemon
-                    .sandbox
-                    .image
-                    .path
-                    .as_ref()
-                    .map(|p| p.display().to_string())
-                    .unwrap_or_default(),
                 // An unset limit seeds an *empty* field rather than a zero or the word
-                // "unlimited": empty is what the user types to unset it, so what they are shown is
-                // what they would have to type to reproduce it (rule RB-2).
-                cpus: settings
-                    .daemon
-                    .sandbox
-                    .budget
-                    .cpus_milli
-                    .map(cores_text)
-                    .unwrap_or_default(),
-                memory_mib: settings
-                    .daemon
-                    .sandbox
-                    .budget
-                    .memory_bytes
-                    .map(|b| b.as_mib().to_string())
-                    .unwrap_or_default(),
-                pids: settings
-                    .daemon
-                    .sandbox
-                    .budget
-                    .pids
-                    .map(|p| p.to_string())
-                    .unwrap_or_default(),
-                storage_mib: settings
-                    .daemon
-                    .sandbox
-                    .budget
-                    .storage_bytes
-                    .map(|b| b.as_mib().to_string())
-                    .unwrap_or_default(),
+                // "unlimited": empty is what the user types to unset it (rule RB-2).
+                image_path: profile_texts.image_path,
+                cpus: profile_texts.cpus,
+                memory_mib: profile_texts.memory_mib,
+                pids: profile_texts.pids,
+                storage_mib: profile_texts.storage_mib,
                 // Seeded by the shell from the sandbox's state, which is where the probe's answer
                 // lands — `Settings` has never heard of it and must not learn.
                 capabilities: None,
@@ -2389,5 +2415,48 @@ pub fn diff_layout_set(
         diff_layout: Some(layout),
         plan_usage_enabled: None,
         plan_usage_warn_percent: None,
+    }
+}
+
+#[cfg(test)]
+mod parse_budget_tests {
+    //! Feature 804, T003: the one parser of the four typed limits.
+
+    use super::*;
+
+    #[test]
+    fn empty_texts_are_unset() {
+        assert_eq!(
+            parse_budget("", " ", "", ""),
+            Ok(micold_core::sandbox::ResourceBudget {
+                cpus_milli: None,
+                memory_bytes: None,
+                pids: None,
+                storage_bytes: None,
+            })
+        );
+    }
+
+    #[test]
+    fn valid_texts_parse_to_the_budget() {
+        let b = parse_budget("1.5", "2048", "512", "4096").unwrap();
+        assert_eq!(b.cpus_milli, Some(MilliCpus(1500)));
+        assert_eq!(b.memory_bytes, Some(Bytes::from_mib(2048)));
+        assert_eq!(b.pids, Some(512));
+        assert_eq!(b.storage_bytes, Some(Bytes::from_mib(4096)));
+    }
+
+    #[test]
+    fn each_refusal_names_its_limit() {
+        for (args, field) in [
+            (("abc", "", "", ""), LimitField::Cpus),
+            (("", "1", "", ""), LimitField::Memory),
+            (("", "", "x", ""), LimitField::Pids),
+            (("", "", "", "1"), LimitField::Storage),
+        ] {
+            let (got, message) = parse_budget(args.0, args.1, args.2, args.3).unwrap_err();
+            assert_eq!(got, field, "{message}");
+            assert!(!message.is_empty());
+        }
     }
 }

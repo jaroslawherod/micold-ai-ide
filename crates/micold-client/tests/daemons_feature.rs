@@ -305,3 +305,168 @@ fn an_ssh_daemon_without_auto_start_is_added_stopped_and_a_bad_host_names_its_fi
     assert!(format!("{err:?}").contains("host"), "{err:?}");
     assert_eq!(w.registry.entries().len(), 3, "nothing was added");
 }
+
+// Feature 804, M1: the container settings of the Session service page live in the daemon form.
+
+use micold_core::daemons::DaemonRuntime;
+use micold_core::sandbox::image::ImageSourceKind;
+use micold_core::sandbox::runtime::RuntimeKind;
+use micold_core::sandbox::{CredentialShare, NetworkPosture};
+
+fn profile_of(w: &World, id: micold_core::daemons::DaemonId) -> micold_core::sandbox::SandboxProfile {
+    match &w.registry.get(id).unwrap().runtime {
+        DaemonRuntime::Container(c) => c.profile.clone(),
+        other => panic!("not a container: {other:?}"),
+    }
+}
+
+fn send(state: &mut State, w: &mut World, msg: daemons::Msg) -> Vec<Outcome> {
+    daemons::update(state, &mut w.model(), msg)
+}
+
+#[test]
+fn profile_fields_round_trip_through_save() {
+    use daemons::Msg;
+    let mut w = World::new();
+    let mut state = State::default();
+    let boxed = w.boxed;
+    daemons::begin_edit(&mut state, &w.model(), boxed);
+    for msg in [
+        Msg::ContainerRuntimeChosen(RuntimeKind::Podman),
+        Msg::ImageKindChosen(ImageSourceKind::ImportedFile),
+        Msg::ImagePathEdited("/tmp/image.tar".into()),
+        Msg::CredentialToggled(CredentialShare::GitConfig, true),
+        Msg::NetworkChosen(NetworkPosture::NoOutbound),
+        Msg::CpuLimitEdited("1.5".into()),
+        Msg::MemoryLimitEdited("2048".into()),
+        Msg::PidLimitEdited("600".into()),
+        Msg::StorageLimitEdited("4096".into()),
+        Msg::SurviveLogoutToggled(true),
+    ] {
+        send(&mut state, &mut w, msg);
+    }
+    daemons::save(&mut state, &mut w.model()).unwrap();
+    let p = profile_of(&w, boxed);
+    assert_eq!(p.runtime, RuntimeKind::Podman);
+    assert_eq!(p.image.kind, ImageSourceKind::ImportedFile);
+    assert_eq!(p.image.path.as_deref(), Some(std::path::Path::new("/tmp/image.tar")));
+    assert!(p.credentials.contains(&CredentialShare::GitConfig));
+    assert_eq!(p.network, NetworkPosture::NoOutbound);
+    assert_eq!(p.budget.cpus_milli.map(|c| c.0), Some(1500));
+    assert_eq!(p.budget.pids, Some(600));
+    assert!(p.budget.memory_bytes.is_some() && p.budget.storage_bytes.is_some());
+    assert!(p.survive_logout);
+
+    // Reopened, the form shows what was stored.
+    let d = daemons::begin_edit(&mut state, &w.model(), boxed).unwrap();
+    assert_eq!(
+        (d.cpus.as_str(), d.memory_mib.as_str(), d.pids.as_str(), d.storage_mib.as_str()),
+        ("1.5", "2048", "600", "4096")
+    );
+    assert_eq!(d.image_path, "/tmp/image.tar");
+}
+
+#[test]
+fn a_bad_limit_or_archive_names_its_field_and_changes_nothing() {
+    use daemons::Msg;
+    let mut w = World::new();
+    let mut state = State::default();
+    let boxed = w.boxed;
+    let before = profile_of(&w, boxed);
+    for (msg, field) in [
+        (Msg::CpuLimitEdited("lots".into()), "cpus"),
+        (Msg::MemoryLimitEdited("1".into()), "memory"),
+        (Msg::PidLimitEdited("x".into()), "pids"),
+        (Msg::StorageLimitEdited("1".into()), "storage"),
+        (Msg::ImagePathEdited("/tmp/x.tar".into()), "image_path"),
+    ] {
+        daemons::begin_edit(&mut state, &w.model(), boxed);
+        send(&mut state, &mut w, msg);
+        send(&mut state, &mut w, Msg::Saved);
+        let err = state.form_error.clone().expect("refused");
+        assert_eq!(err.field, field, "{}", err.message);
+        assert_eq!(profile_of(&w, boxed), before);
+    }
+}
+
+#[test]
+fn two_daemons_edit_independently_and_drafts_are_kept_apart() {
+    use daemons::Msg;
+    let mut w = World::new();
+    let mut state = State::default();
+    let (host, boxed) = (w.host, w.boxed);
+    // A second container daemon.
+    add_container(&mut state, "Three", "c3", "7003");
+    daemons::save(&mut state, &mut w.model()).unwrap();
+    let three = w.registry.entries()[2].id;
+    let three_before = profile_of(&w, three).budget.pids;
+
+    daemons::begin_edit(&mut state, &w.model(), boxed);
+    send(&mut state, &mut w, Msg::PidLimitEdited("300".into()));
+    daemons::save(&mut state, &mut w.model()).unwrap();
+    assert_eq!(profile_of(&w, boxed).budget.pids, Some(300));
+    assert_eq!(profile_of(&w, three).budget.pids, three_before, "FR-003");
+
+    // An unsaved draft of one form does not show in the other.
+    daemons::begin_edit(&mut state, &w.model(), boxed);
+    send(&mut state, &mut w, Msg::CpuLimitEdited("2".into()));
+    let d = daemons::begin_edit(&mut state, &w.model(), three).unwrap();
+    assert_eq!(d.cpus, "");
+    assert_eq!(d.pids, three_before.map(|p| p.to_string()).unwrap_or_default());
+    let _ = host;
+
+    // Renaming keeps the profile; removing discards it.
+    daemons::begin_edit(&mut state, &w.model(), boxed);
+    send(&mut state, &mut w, Msg::NameEdited("Renamed".into()));
+    daemons::save(&mut state, &mut w.model()).unwrap();
+    assert_eq!(profile_of(&w, boxed).budget.pids, Some(300));
+    daemons::request_removal(&mut state, &w.model(), boxed);
+    daemons::confirm(&mut state, &mut w.model());
+    assert!(w.registry.get(boxed).is_none());
+}
+
+#[test]
+fn a_running_daemon_asks_before_new_container_settings_apply() {
+    use daemons::Msg;
+    let mut w = World::new();
+    let mut state = State::default();
+    let boxed = w.boxed;
+    let pids_before = profile_of(&w, boxed).budget.pids;
+    daemons::start(&mut state, &mut w.model(), boxed);
+    daemons::begin_edit(&mut state, &w.model(), boxed);
+    send(&mut state, &mut w, Msg::PidLimitEdited("300".into()));
+    let out = send(&mut state, &mut w, Msg::Saved);
+    assert!(out.is_empty());
+    assert!(state.prompt().is_some(), "FR-004, FR-010");
+    assert_eq!(profile_of(&w, boxed).budget.pids, pids_before, "not applied yet");
+    send(&mut state, &mut w, Msg::RemovalConfirmed);
+    assert_eq!(profile_of(&w, boxed).budget.pids, Some(300));
+}
+
+#[test]
+fn an_ssh_entry_shows_no_container_profile_and_switching_to_ssh_drops_it() {
+    use daemons::Msg;
+    let mut w = World::new();
+    let mut state = State::default();
+    fill_ssh(&mut state, "Remote", false);
+    daemons::save(&mut state, &mut w.model()).unwrap();
+    let ssh = w.registry.entries()[2].id;
+
+    // Unedited: opened and saved again, the entry is as it was.
+    let before = w.registry.get(ssh).unwrap().clone();
+    daemons::begin_edit(&mut state, &w.model(), ssh);
+    send(&mut state, &mut w, Msg::Saved);
+    assert_eq!(w.registry.get(ssh).unwrap(), &before);
+
+    // A container daemon switched to SSH and saved holds no container settings.
+    let boxed = w.boxed;
+    daemons::begin_edit(&mut state, &w.model(), boxed);
+    send(&mut state, &mut w, Msg::PidLimitEdited("300".into()));
+    send(&mut state, &mut w, Msg::RuntimeChosen(DraftRuntime::Ssh));
+    send(&mut state, &mut w, Msg::SshHostEdited("devbox".into()));
+    daemons::save(&mut state, &mut w.model()).unwrap();
+    assert!(matches!(
+        w.registry.get(boxed).unwrap().runtime,
+        DaemonRuntime::Ssh(_)
+    ));
+}

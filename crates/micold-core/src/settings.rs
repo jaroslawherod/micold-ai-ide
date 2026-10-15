@@ -418,6 +418,84 @@ impl Settings {
         }
         self.daemon = config;
     }
+
+    /// Bring the legacy `daemon` block in step with the registry entry that stands for it (the
+    /// legacy default, else the first): the inverse of [`Self::set_single_daemon`], run after the
+    /// Daemons form saved that entry so the block kept for rollback does not disagree.
+    ///
+    /// A container entry sets `LocalSandbox` and takes its profile; a host entry sets
+    /// `HostProcess` and keeps the block's profile; an SSH (or unknown) entry leaves the block
+    /// alone.
+    pub fn sync_legacy_daemon(&mut self) {
+        use crate::daemons::DaemonRuntime;
+        let target = self
+            .legacy_default_daemon
+            .filter(|id| self.daemons.iter().any(|d| d.id == *id))
+            .or_else(|| self.daemons.first().map(|d| d.id));
+        let Some(entry) = target.and_then(|id| self.daemons.iter().find(|d| d.id == id)) else {
+            return;
+        };
+        match &entry.runtime {
+            DaemonRuntime::Container(c) => {
+                self.daemon.placement = PlacementKind::LocalSandbox;
+                self.daemon.sandbox = c.profile.clone();
+            }
+            DaemonRuntime::Host => self.daemon.placement = PlacementKind::HostProcess,
+            _ => {}
+        }
+    }
+}
+
+#[cfg(test)]
+mod sync_legacy_daemon_tests {
+    //! Feature 804, T001: the legacy block follows the registry entry the Daemons form saved.
+
+    use super::*;
+    use crate::daemons::DaemonRuntime;
+    use crate::ssh::SshSettings;
+    use crate::sandbox::runtime::RuntimeKind;
+
+    fn with_runtime(runtime: DaemonRuntime) -> Settings {
+        let mut s = Settings::default();
+        s.daemons[0].runtime = runtime;
+        s
+    }
+
+    #[test]
+    fn a_container_entry_sets_local_sandbox_and_its_profile() {
+        let mut profile = SandboxProfile::default();
+        profile.runtime = RuntimeKind::Podman;
+        profile.survive_logout = true;
+        let mut s = with_runtime(DaemonRuntime::Container(crate::daemons::ContainerSettings {
+            profile: profile.clone(),
+            container_name: "c".into(),
+            port: 1234,
+        }));
+        s.daemon.placement = PlacementKind::HostProcess;
+        s.sync_legacy_daemon();
+        assert_eq!(s.daemon.placement, PlacementKind::LocalSandbox);
+        assert_eq!(s.daemon.sandbox, profile);
+    }
+
+    #[test]
+    fn a_host_entry_sets_host_process_and_keeps_the_profile() {
+        let mut s = with_runtime(DaemonRuntime::Host);
+        s.daemon.sandbox.survive_logout = true;
+        let kept = s.daemon.sandbox.clone();
+        s.sync_legacy_daemon();
+        assert_eq!(s.daemon.placement, PlacementKind::HostProcess);
+        assert_eq!(s.daemon.sandbox, kept);
+    }
+
+    #[test]
+    fn an_ssh_entry_leaves_the_block_untouched() {
+        let target = crate::ssh::SshTarget::new("box", None, None, None).unwrap();
+        let mut s = with_runtime(DaemonRuntime::Ssh(SshSettings { target }));
+        s.daemon.sandbox.survive_logout = true;
+        let before = s.daemon.clone();
+        s.sync_legacy_daemon();
+        assert_eq!(s.daemon, before);
+    }
 }
 
 /// How a settings load resolved. Always yields usable [`Settings`]; `status` distinguishes a

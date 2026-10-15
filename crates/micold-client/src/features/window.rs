@@ -175,6 +175,20 @@ pub enum FieldId {
     DaemonSshKeyFile,
     /// Settings → Daemons: the form's connect-at-launch checkbox (feature 491).
     DaemonAutoStart,
+    /// Settings → Daemons: the form's image archive field (feature 804).
+    DaemonImagePath,
+    /// Settings → Daemons: one host credential's share opt-in in the form (feature 804).
+    DaemonCredential(micold_core::sandbox::CredentialShare),
+    /// Settings → Daemons: the form's keep-running-after-sign-out checkbox (feature 804).
+    DaemonSurviveLogout,
+    /// Settings → Daemons: the form's processor limit (feature 804).
+    DaemonCpuLimit,
+    /// Settings → Daemons: the form's memory limit (feature 804).
+    DaemonMemoryLimit,
+    /// Settings → Daemons: the form's process-count limit (feature 804).
+    DaemonPidLimit,
+    /// Settings → Daemons: the form's writable-storage limit (feature 804).
+    DaemonStorageLimit,
     /// Settings: the "let AI sessions manage worktrees and sessions" checkbox (feature 034, FR-004).
     SettingsToolServer,
     /// Settings: the "Desktop notifications" checkbox (feature 039, FR-026).
