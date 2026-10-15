@@ -33,20 +33,9 @@ use super::button::Variant;
 use super::style;
 use crate::features::notifications::NoticeLevel;
 use iced::widget::button;
-use iced::{Background, Color};
+use iced::Background;
 use micold_core::theme::ColorScheme;
 use micold_core::tokens::{self, contrast, Rgb, AA_NON_TEXT, AA_TEXT};
-
-/// The renderer works in `iced::Color`; the thresholds are stated over the token type. Both are
-/// 8-bit sRGB, so this is a change of representation and not of value.
-fn rgb(c: Color) -> Rgb {
-    let q = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
-    Rgb {
-        r: q(c.r),
-        g: q(c.g),
-        b: q(c.b),
-    }
-}
 
 /// The statuses a button is drawn in. `Disabled` is excluded and the exclusion is stated rather
 /// than assumed: Material draws disabled content at 38% deliberately, which is below AA by design
@@ -66,7 +55,7 @@ const STATES: [(&str, button::Status); 3] = [
 /// state layers were, and is why they were as invisible as the label.
 fn behind(host_fill: Rgb, s: &button::Style) -> Rgb {
     match s.background {
-        Some(Background::Color(c)) => rgb(style::over(c, style::color(host_fill))),
+        Some(Background::Color(c)) => style::to_rgb(style::over(c, style::color(host_fill))),
         _ => host_fill,
     }
 }
@@ -91,12 +80,12 @@ fn a_component_is_legible_against_the_container_it_is_drawn_in() {
                     let where_ =
                         format!("{scheme:?} / {level:?} banner / {variant:?} / {state_name}");
 
-                    let label = contrast(rgb(s.text_color), bg);
+                    let label = contrast(style::to_rgb(s.text_color), bg);
                     if label < AA_TEXT {
                         violations.push(format!("{where_}: label {label:.2}:1 (needs {AA_TEXT})"));
                     }
                     if s.border.width > 0.0 && s.border.color.a > 0.0 {
-                        let border = contrast(rgb(s.border.color), bg);
+                        let border = contrast(style::to_rgb(s.border.color), bg);
                         if border < AA_NON_TEXT {
                             violations.push(format!(
                                 "{where_}: {}px border {border:.2}:1 (needs {AA_NON_TEXT})",
@@ -136,7 +125,7 @@ fn the_unread_mark_is_legible_on_every_fill_a_host_draws_it_on() {
         let r = tokens::roles(scheme);
         let mark = super::unread_mark::fill(r);
         for (host, fill) in [
-            ("the sidebar", rgb(style::sidebar_fill(r))),
+            ("the sidebar", style::to_rgb(style::sidebar_fill(r))),
             // A hovered sidebar row (feature 575, FR-013): the location row's count is hovered as
             // often as it is read.
             ("a hovered sidebar row", hovered_sidebar_row(r)),
@@ -163,7 +152,7 @@ fn the_unread_mark_is_legible_on_every_fill_a_host_draws_it_on() {
 /// The fill behind a hovered sidebar row: the sidebar's surface with the hover state layer of the
 /// row's content colour over it (feature 575, FR-013).
 fn hovered_sidebar_row(r: tokens::Roles) -> Rgb {
-    rgb(style::state_layer(
+    style::to_rgb(style::state_layer(
         style::sidebar_fill(r),
         style::color(r.on_surface),
         tokens::state::HOVER,
@@ -182,7 +171,7 @@ fn a_location_rows_unread_count_is_legible_in_every_row_state() {
         for row_tint in [r.on_surface, r.error] {
             let count = super::tree_view::count_tint(r, row_tint);
             for (state, fill) in [
-                ("at rest", rgb(style::sidebar_fill(r))),
+                ("at rest", style::to_rgb(style::sidebar_fill(r))),
                 ("hovered", hovered_sidebar_row(r)),
                 ("selected", r.secondary_container),
             ] {
