@@ -17,6 +17,7 @@
 //! `Message`.
 
 pub(crate) mod appearance;
+pub(crate) mod container_fields;
 pub(crate) mod daemon;
 pub(crate) mod daemons;
 pub(crate) mod environment;

@@ -1,9 +1,9 @@
 //! The Daemons section: every configured daemon, its state and what runs on it, with the actions
 //! to start, stop, reconnect, edit and remove it (feature 491, M3: US3, FR-010 to FR-015).
 //!
-//! Beside the Session service section, not instead of it: that one edits the single legacy entry's
-//! placement, limits and credentials through the settings draft; this one edits the registry,
-//! which is saved by its own form and not by the page's Save.
+//! A container daemon's form carries its runtime, image, credential shares, network, limits and
+//! survive-logout (feature 804), saved by the form's own save with its restart confirmation. The
+//! Session service section still edits the legacy block until it is removed.
 //!
 //! A row says what a daemon runs in as a plain label (FR-015): nothing here branches on the kind
 //! of runtime except the form's container fields.
@@ -17,7 +17,10 @@ use crate::features::daemons::{
     DaemonDetails, Draft, DraftRuntime, FormError, Msg as DaemonsMsg, State, ViewModel,
 };
 use crate::features::window::FieldId;
+use crate::features::settings::DaemonDraft;
 use crate::ui::focus::TrackFocus;
+use crate::ui::settings::container_fields::{self, ContainerView, FieldErrors, Surface};
+use micold_core::sandbox::placement::PlacementKind;
 use crate::ui::material::{Button, Checkbox, Select, Tag, TextField};
 use crate::ui::settings::{caution, group, name_of, note, page, Named};
 use iced::widget::{column, row};
@@ -192,9 +195,19 @@ fn error_of(state: &State, field: &str) -> Option<String> {
         .map(|e| e.message.clone())
 }
 
+/// What the machine says about the running container, which only the legacy default daemon is.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct MachineFacts<'a> {
+    /// The settings draft's seed of the sandbox's probed capabilities and unshared sign-in.
+    pub draft: Option<&'a DaemonDraft>,
+    /// The daemon those facts describe.
+    pub legacy_default: Option<DaemonId>,
+}
+
 fn form<'a>(
     draft: &'a Draft,
     state: &State,
+    facts: MachineFacts<'a>,
     focused: Option<FieldId>,
     roles: Roles,
 ) -> Element<'a, Message> {
@@ -237,14 +250,44 @@ fn form<'a>(
                     .track_focus(FieldId::DaemonPort, focused)
                     .error(error_of(state, "port"))
                     .on_input(|v| Message::Daemons(DaemonsMsg::PortEdited(v))),
-            )
-            .push(
-                TextField::new("", &draft.profile.image.reference, roles)
-                    .label("Image")
-                    .track_focus(FieldId::DaemonImage, focused)
-                    .error(error_of(state, "image"))
-                    .on_input(|v| Message::Daemons(DaemonsMsg::ImageEdited(v))),
             );
+        let described = draft.editing.is_some() && draft.editing == facts.legacy_default;
+        let machine = facts.draft.filter(|_| described);
+        let view = ContainerView {
+            profile: &draft.profile,
+            image_path: &draft.image_path,
+            cpus: &draft.cpus,
+            memory_mib: &draft.memory_mib,
+            pids: &draft.pids,
+            storage_mib: &draft.storage_mib,
+            capabilities: machine.and_then(|d| d.capabilities.as_ref()),
+            unshared_sign_in: machine.and_then(|d| d.unshared_sign_in.as_deref()),
+            placement: PlacementKind::LocalSandbox,
+        };
+        let errors = FieldErrors {
+            reference: error_of(state, "image"),
+            path: error_of(state, "image_path"),
+            limits: [
+                error_of(state, "cpus"),
+                error_of(state, "memory"),
+                error_of(state, "pids"),
+                error_of(state, "storage"),
+            ],
+        };
+        for control in container_fields::groups(&view, Surface::Form, errors, None, focused, roles)
+        {
+            fields = fields.push(control);
+        }
+    }
+    if draft.runtime == DraftRuntime::Host {
+        // A host daemon keeps no container profile: the groups stay out rather than take edits
+        // that would be dropped, and the one thing that applies to it is said (FR-014d).
+        fields = fields
+            .push(group("Sessions", roles))
+            .push(container_fields::survival_note(
+                PlacementKind::HostProcess,
+                roles,
+            ));
     }
     if draft.runtime == DraftRuntime::Ssh {
         fields = fields
@@ -314,6 +357,7 @@ pub fn empty_state<'a>(roles: Roles) -> Element<'a, Message> {
 pub fn view<'a>(
     state: &'a State,
     list: ViewModel,
+    facts: MachineFacts<'a>,
     focused: Option<FieldId>,
     roles: Roles,
 ) -> Element<'a, Message> {
@@ -325,7 +369,7 @@ pub fn view<'a>(
         controls.push(daemon_row(view, state, roles));
     }
     match &state.draft {
-        Some(draft) => controls.push(form(draft, state, focused, roles)),
+        Some(draft) => controls.push(form(draft, state, facts, focused, roles)),
         None if !list.empty => controls.push(
             Button::outlined("Add daemon", roles)
                 .on_press(Message::Daemons(DaemonsMsg::AddOpened))

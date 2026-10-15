@@ -211,6 +211,9 @@ impl App {
                 if let Some(store) = self.caps.settings() {
                     let write = store.update_reporting(&mut |settings| {
                         settings.set_registry(registry.clone());
+                        // The rollback copy of the single-daemon block follows the entry the
+                        // form saved (feature 804, D3).
+                        settings.sync_legacy_daemon();
                     });
                     crate::log_line(&write.log_line("client"));
                     if let Err(err) = write.result {

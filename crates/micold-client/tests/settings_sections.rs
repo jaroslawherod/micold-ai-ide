@@ -163,6 +163,12 @@ fn section_sources() -> BTreeMap<String, String> {
         }
         out.insert(name, read(&path));
     }
+    // The Session service page draws its controls through the container fields it shares with the
+    // Daemons form (feature 804), so that file is where its controls are, and counts as the page's.
+    if let Some(fields) = out.remove("container_fields.rs") {
+        let page = out.get_mut("daemon.rs").expect("the Session service page");
+        page.push_str(&fields);
+    }
     out
 }
 

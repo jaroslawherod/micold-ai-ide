@@ -48,8 +48,27 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None. <or, when a unit handed over: what is done, the next step, open findings with their review
-snapshots. The next unit sets it back to None.>
+M1 (unit hit the 150k cap; not yet pushed, no PR). Branch reset to origin/main (#869 merged).
+Done, committed in one WIP commit, T001-T011 ticked in tasks.md:
+- core: `Settings::sync_legacy_daemon` + tests (crates/micold-core/src/settings.rs).
+- client: `parse_budget`/`LimitField`/`ProfileTexts` in features/settings.rs (page uses them);
+  `Draft` text mirrors + Msgs + `FormError` ids in features/daemons.rs; new
+  ui/settings/container_fields.rs (`ContainerView`, `Surface::{Page,Form}`, `groups`) used by both
+  the page (ui/settings/daemon.rs, wrappers `limits`/`network_warning` kept) and the Daemons form
+  (ui/settings/daemons.rs; host daemon shows only the survive note, SSH none); new FieldIds
+  `Daemon{ImagePath,Credential,SurviveLogout,CpuLimit,MemoryLimit,PidLimit,StorageLimit}`;
+  `MachineFacts` passed to `daemons::view`; `ViewModel.legacy_default`; shell/routing.rs calls
+  `sync_legacy_daemon` after `set_registry`; tests appended to tests/daemons_feature.rs;
+  tests/settings_sections.rs folds container_fields.rs into daemon.rs.
+- Passing so far: micold-core sync tests, daemons_feature, sandbox_limits, settings_sections,
+  features_settings, client lib tests.
+Next: T012 run geometry gates (field-note column, form layout; `cargo test -p micold-client`
+whole, fix overflow in ui/settings/daemons.rs), T013 user guide docs/user-guide/sandboxed-daemon.md
+(then tick both), `mise run gate` (fmt/clippy: check unused imports in features/settings.rs and
+daemon.rs), review A (code-review high) and review B (conformance, sonnet), visual pass for the
+longer form, PR per pr.md (title `feat(804): container settings in the Daemons form (#804)`,
+ends `Refs #804`). Ledger: set M1 PR and previous PR #869 merge SHA 4b96bf2b526ca9b42e7dd9993d4b437016f49f18.
+Note: the tdd cycle log was not written (tests and impl were written together for T001/T003).
 
 ## Open escalation
 

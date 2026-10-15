@@ -103,7 +103,13 @@ pub fn view<'a>(
             focused,
             r,
         ),
-        SettingsSection::Daemons => daemons::view(daemons.0, daemons.1, focused, r),
+        SettingsSection::Daemons => {
+            let facts = daemons::MachineFacts {
+                draft: Some(&draft.daemon),
+                legacy_default: daemons.1.legacy_default,
+            };
+            daemons::view(daemons.0, daemons.1, facts, focused, r)
+        }
         SettingsSection::Daemon => daemon::view(draft, in_force, availability, focused, r),
         SettingsSection::GithubIssues => github::view(draft, focused, r),
         SettingsSection::Jira => jira::view(draft, focused, r),
