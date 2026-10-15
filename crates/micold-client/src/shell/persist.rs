@@ -725,7 +725,8 @@ pub(crate) fn save_and_prepare_check(
     // when the save changed none of them (BUG-570).
     let mut told = service_changes(&settings, baseline.as_ref());
     if jira_change.is_some() {
-        told.get_or_insert_with(ServiceChanges::default).jira_connection = jira_change.clone();
+        told.get_or_insert_with(ServiceChanges::default)
+            .jira_connection = jira_change.clone();
     }
     if let (Some(daemon), Some(told)) = (app.active_outbox(), told) {
         let req = app.next_req;

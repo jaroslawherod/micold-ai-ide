@@ -1680,18 +1680,20 @@ pub fn covered_states() -> &'static [CoveredState] {
         // Keep-or-Remove question.
         CoveredState {
             name: "settings-view-jira-on-with-connection",
-            build: || StateUnderTest::new(jira_form_state(|draft| {
-                draft.jira.site = "https://acme.atlassian.net".to_owned();
-                draft.jira.project_key = "ABC".to_owned();
-                draft.jira.email = "me@acme.com".to_owned();
-                draft.jira.token_stored = true;
-                draft.jira.connection = micold_core::jira::JiraConnection::parse(
-                    "https://acme.atlassian.net",
-                    "ABC",
-                    "me@acme.com",
-                )
-                .ok();
-            })),
+            build: || {
+                StateUnderTest::new(jira_form_state(|draft| {
+                    draft.jira.site = "https://acme.atlassian.net".to_owned();
+                    draft.jira.project_key = "ABC".to_owned();
+                    draft.jira.email = "me@acme.com".to_owned();
+                    draft.jira.token_stored = true;
+                    draft.jira.connection = micold_core::jira::JiraConnection::parse(
+                        "https://acme.atlassian.net",
+                        "ABC",
+                        "me@acme.com",
+                    )
+                    .ok();
+                }))
+            },
             anchors: &[Anchor {
                 name: "settings.rail",
                 path: &[0, 0, 1, 0, 0, 0],
@@ -1699,14 +1701,16 @@ pub fn covered_states() -> &'static [CoveredState] {
         },
         CoveredState {
             name: "settings-view-jira-on-field-error",
-            build: || StateUnderTest::new(jira_form_state(|draft| {
-                draft.jira.site = "acme".to_owned();
-                draft.error = Some(micold_client::features::settings::FieldError {
-                    field: micold_client::features::window::FieldId::SettingsJiraSite,
-                    section: SettingsSection::Jira,
-                    message: micold_core::jira::SITE_REFUSED.to_owned(),
-                });
-            })),
+            build: || {
+                StateUnderTest::new(jira_form_state(|draft| {
+                    draft.jira.site = "acme".to_owned();
+                    draft.error = Some(micold_client::features::settings::FieldError {
+                        field: micold_client::features::window::FieldId::SettingsJiraSite,
+                        section: SettingsSection::Jira,
+                        message: micold_core::jira::SITE_REFUSED.to_owned(),
+                    });
+                }))
+            },
             anchors: &[Anchor {
                 name: "settings.rail",
                 path: &[0, 0, 1, 0, 0, 0],
@@ -1714,19 +1718,21 @@ pub fn covered_states() -> &'static [CoveredState] {
         },
         CoveredState {
             name: "settings-view-jira-keep-or-remove-prompt",
-            build: || StateUnderTest::new(jira_form_state(|draft| {
-                draft.jira.enabled = false;
-                draft.jira.connection = micold_core::jira::JiraConnection::parse(
-                    "https://acme.atlassian.net",
-                    "ABC",
-                    "me@acme.com",
-                )
-                .ok();
-                draft.jira.prompt = draft.jira.project.clone().map(|project| {
-                    micold_client::features::settings::KeepOrRemovePrompt { project }
-                });
-                draft.jira.enabled = true;
-            })),
+            build: || {
+                StateUnderTest::new(jira_form_state(|draft| {
+                    draft.jira.enabled = false;
+                    draft.jira.connection = micold_core::jira::JiraConnection::parse(
+                        "https://acme.atlassian.net",
+                        "ABC",
+                        "me@acme.com",
+                    )
+                    .ok();
+                    draft.jira.prompt = draft.jira.project.clone().map(|project| {
+                        micold_client::features::settings::KeepOrRemovePrompt { project }
+                    });
+                    draft.jira.enabled = true;
+                }))
+            },
             anchors: &[Anchor {
                 name: "settings.rail",
                 path: &[0, 0, 1, 0, 0, 0],
