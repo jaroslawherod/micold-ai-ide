@@ -880,6 +880,23 @@ fn list_resumable_sessions_pages_with_a_limit_and_an_offset() {
     assert!(!is_mutating_tool("list_resumable_sessions"));
 }
 
+#[test]
+fn the_session_tools_name_the_origin_row_fields() {
+    // Feature 551, FR-013 (contracts/mcp-origin.md): an agent reading the catalog learns that rows
+    // can say which session started a session.
+    for name in ["list_sessions", "get_session"] {
+        let tool = tools_list()
+            .into_iter()
+            .find(|t| t["name"] == name)
+            .unwrap_or_else(|| panic!("{name} is shipped"));
+        let description = tool["description"].as_str().unwrap();
+        assert!(
+            description.contains("origin") && description.contains("origin_state"),
+            "{name} names the origin fields: {description:?}"
+        );
+    }
+}
+
 /// Feature 776, FR-006: `create_worktree` takes the session's definition at start. `ai_cli` is an
 /// enum of every CLI's tool name, `prompt` a string, and neither is required.
 #[test]

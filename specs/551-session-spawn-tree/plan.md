@@ -9,14 +9,15 @@
 A session gains one optional, write-once fact: the session it was started from (its **origin**).
 Three things follow from it, none of which stores a tree:
 
-1. **Record** the origin from a native signal only. Two sources exist: (a) the daemon itself, when
-   an agent calls the tool server's `create_session` (FR-019; `is_caller` already identifies the
-   caller), and (b) a provider-reported signal read by a new `AiCliProvider::reported_origin`
-   seam when the daemon adopts or re-reads a provider-started session (FR-001). The default of the
-   seam is "no signal"; a provider is only given a reader once its signal is confirmed against a
-   fixture (research R2), so FR-002 and the "keeps today's behaviour" story hold by construction.
+1. **Record** the origin from a native signal only. The one source is a provider-reported signal
+   read by a new `AiCliProvider::reported_origin` seam when the daemon adopts or re-reads a
+   provider-started session (FR-001). The tool server is not a source (FR-019, research R5):
+   feature 776 refuses a second session in a worktree, and the user decided that agent-created
+   sessions nest one level under the worktree's user session. The default of the seam is "no
+   signal"; a provider is only given a reader once its signal is confirmed (research R2), so FR-002
+   and the "keeps today's behaviour" story hold by construction.
 2. **Carry** it: `StoredSession.origin` (additive serde default, no schema bump: FR-015, FR-006),
-   `Session.origin`, `SessionSummary.origin` on the wire (protocol 40 to 41), and an `origin`
+   `Session.origin`, `SessionSummary.origin` on the wire (protocol 46 to 47), and an `origin`
    field in the MCP `list_sessions`/`get_session` rows (FR-013).
 3. **Show** it: a pure `SessionTree` in `micold-core` derived from a worktree's sessions, consumed
    by the client's render-free `features/sidebar.rs` and rendered by recursion in
@@ -83,7 +84,7 @@ No violations; Complexity Tracking is empty.
 | FR-012 | derived from `SessionChanged`/snapshot; no new broadcast; contracts/origin-protocol.md |
 | FR-013 | `SessionSummary.origin`, MCP rows; contracts/origin-protocol.md, contracts/mcp-origin.md |
 | FR-014 | user guide; contracts/provider-signals.md |
-| FR-019 | `mcp/tools.rs::create_session` passing `Some(caller)` to `Catalog::create_session`; R5 |
+| FR-019 | `Catalog::create_session` and the tool take no origin; `record_origin` is the only writer; R5. Touches 776's `create_session` path only by not adding to it; 776's refusal is unchanged (issue #802 owns any change) |
 
 ## Project Structure
 
@@ -111,14 +112,12 @@ crates/micold-core/src/
 ├── store.rs             # StoredSession.origin + origin_rejected (serde default, skip if none/false)
 ├── provider.rs          # AiCliProvider::reported_origin (default None) + confirmed readers
 ├── settings.rs          # Settings.folded_origins (additive)
-├── protocol/{messages,version}.rs   # SessionSummary.origin, PROTOCOL_VERSION 41
+├── protocol/{messages,version}.rs   # SessionSummary.origin, PROTOCOL_VERSION 47
 └── mcp/tools.rs         # row schema text
 crates/micold-daemon/src/
-├── catalog.rs           # create_session(.., origin), record_origin, archive paths emit child SessionChanged, session_summary overlay
-├── ops.rs               # NewSession.origin (NEW field); create_session_with_prompt passes it
-├── state.rs             # DaemonState::create_session(.., origin) (also builds a NewSession at state.rs); discover_external_sessions: reported_origin for adopted sessions
-├── runs.rs              # existing NewSession caller passes origin: None
-└── mcp/tools.rs         # create_session: resolve_caller location, same worktree -> Some(caller); session_row.origin
+├── catalog.rs           # record_origin, archive paths emit child SessionChanged, session_summary overlay
+├── state.rs             # discover_external_sessions: reported_origin for adopted sessions; origin-removed broadcast
+└── mcp/tools.rs         # session_row.origin (create_session unchanged)
 crates/micold-client/src/
 ├── features/sidebar.rs  # worktree_tree nests via SessionTree; fold msgs/state
 ├── ui/sidebar.rs        # recursion in group_items/build_default_item; summary on folded rows
@@ -138,7 +137,7 @@ writer, the client derives the tree; no new crate or file format.
 | FR-003, FR-004, FR-005, FR-008, FR-016, depth, order | core unit: `SessionTree`; client reducer test `sidebar_tree.rs` |
 | FR-006, FR-015 | core `store_roundtrip.rs` (old file loads, new field survives); daemon test restart via `Catalog::load` |
 | FR-001, FR-002 | core provider tests with fixtures per confirmed provider; a "no signal" provider test proving a name/path/timing never yields an origin |
-| FR-019, FR-009 | daemon `mcp_create_session.rs` (same worktree nests, other worktree top-level) |
+| FR-019, FR-009 | daemon `mcp_create_session.rs` (a created session has no origin and no input names one; rows show a recorded origin) |
 | FR-013 | core `protocol_roundtrip.rs`, `mcp_tools_catalog.rs`; daemon MCP row test |
 | FR-012 | daemon: two subscribers see the same summary |
 | FR-011, FR-017 | client reducer: fold, counts, attention rollup; settings round trip (core) |
@@ -150,8 +149,9 @@ writer, the client derives the tree; no new crate or file format.
 
 ## Risks
 
-- **No confirmed Claude Code signal yet** (research R2). If the spike finds none, Claude Code
-  ships as a documented gap and the feature's live path is `create_session` (FR-019) plus the
-  providers whose signal is confirmed. This is the spec's own fallback (US3).
+- **No Claude Code signal** (research R2, spike T025): Claude Code ships as a documented gap, and
+  the live path is the providers that report (OpenCode, Codex). Claude Code is the provider the
+  issue names; closing its gap needs a recorded `claude --bg` session record with a parent field,
+  which the spike host could not read. This is the spec's own fallback (US3).
 - Protocol bump is breaking for a mismatched client and daemon; the existing handshake handles it
   (R7).

@@ -103,6 +103,7 @@ fn summary(id: SessionId, seq: u64, activity: ActivitySignal) -> SessionSummary 
         live_shells: Vec::new(),
         attention_seq: seq,
         unread: false,
+        origin: None,
         agents: Vec::new(),
         main: false,
     }

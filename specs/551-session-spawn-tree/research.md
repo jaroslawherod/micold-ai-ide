@@ -14,19 +14,22 @@ Alternatives rejected: infer from adoption timing (FR-002 forbids it).
 ## R2. Per-provider native signals
 
 Decision: add `AiCliProvider::reported_origin(&self, config_dir, cwd, session_id) -> Option<Uuid>`
-defaulting to `None`. A provider gets a reader only after its signal is confirmed against a
-recorded fixture in the spike (T025, the first task of M1, before any reader). An unconfirmed provider ships as a gap.
+defaulting to `None`. A provider gets a reader only after its signal is confirmed in the spike
+(T025, before any reader): against a recorded real output, or, where none can be recorded here,
+against the provider's own authoritative schema or source, with a fixture built from it and marked
+`synthetic` (decided 2026-10-13 so the providers that do report are not blocked on a recording).
+An unconfirmed provider ships as a gap.
 
 | Provider | Candidate native signal | Status |
 |---|---|---|
-| Claude Code | None found. In 26.5k transcript lines of Claude Code 2.1.296 across local stores, `parentUuid` and `isSidechain` are message-level links; in-session subagents live in `<session>/subagents/agent-*.jsonl`, not as top-level sessions; `origin.kind` is a per-turn origin (`human`, `task-notification`), and `claude agents --json` lists sessions with `pid, cwd, kind, startedAt, sessionId, name, status` and no parent. | Gap unless the spike finds a field for `claude --bg` sessions started from a session. |
-| OpenCode | Session info has a `parentID` for sessions created by the task tool. | Confirm against a fixture; reader if present. |
-| Codex | Rollout `session_meta.source` can name a spawning thread (sub-agent thread spawn with a parent thread id). | Confirm against a fixture; reader if present. |
+| Claude Code | None found. In 26.5k transcript lines of Claude Code 2.1.296 across local stores, `parentUuid` and `isSidechain` are message-level links; in-session subagents live in `<session>/subagents/agent-*.jsonl`, not as top-level sessions; `origin.kind` is a per-turn origin (`human`, `task-notification`), and `claude agents --json` lists sessions with `pid, cwd, kind, startedAt, sessionId, name, status` and no parent. | **Gap** (T025, 2026-10-12). `~/.claude/sessions/*.json` records for `--bg` sessions could not be read in the spike environment (access denied), and no parent field is documented in the transcript format or `claude agents --json`; no fixture. |
+| OpenCode | Session info has a `parentID` for sessions created by the task tool. | **Reader, synthetic fixture** (T025, decided 2026-10-13). Real local schema evidence: `~/.local/share/opencode/opencode.db` table `session` has a nullable `parent_id` column (`opencode db path`, schema read read-only), but this host has zero recorded sessions, so no real child row exists and no fixture was written. The reader (M3) is built on that schema with a fixture of one row with `parent_id` set and one NULL, marked synthetic, replaced by a recording when one is captured. |
+| Codex | Rollout `session_meta.source` can name a spawning thread (sub-agent thread spawn with a parent thread id). | **Reader, synthetic fixture** (T025, decided 2026-10-13; not observable here). Codex is not installed and no rollout is on disk. Authoritative source (`openai/codex` `codex-rs/protocol/src/protocol.rs`) defines the field: `session_meta` payload `source` = `{"subagent":{"thread_spawn":{"parent_thread_id":"<uuid>","depth":N,...}}}` (`SessionSource::SubAgent(SubAgentSource::ThreadSpawn{..})`, snake_case), and `SessionMeta` also has a top-level optional `parent_thread_id`. Shape is source-confirmed, so the reader (M3) is built on it with a synthetic rollout fixture, replaced by a recording when one is captured. |
 | Copilot CLI | Sub-agent events are inside the same session's `events.jsonl`, not separate sessions. | Gap (no separate session to nest). |
 | Pi | Header `parentSession` marks a fork of a session, not a spawn by an agent. | Gap: nesting forks would be a different feature. |
 
-Every provider also gains an origin through the tool server (R5) because that signal is the
-daemon's own.
+The tool server is not an origin source (R5): feature 776 refuses a second session in the
+caller's worktree, so a tool-created session never has a same-worktree origin.
 Alternatives rejected: parse transcript `parentUuid`/`isSidechain` (message links within one
 session, not session origins); match titles or cwd (FR-002).
 
@@ -52,13 +55,18 @@ allowed because the fact was never valid) and the session is plain top-level wit
 (FR-009). This makes event order irrelevant (FR-016).
 Alternatives rejected: validate in the client (several writers and windows).
 
-## R5. `create_session` through the tool server
+## R5. `create_session` through the tool server (revised 2026-10-13)
 
-Decision: `Catalog::create_session` takes `origin: Option<SessionId>`; the tool passes
-`Some(caller)` when the target worktree equals the caller's (FR-019), else `None` (FR-009). The
-origin is recorded in the same `persist()` as the new session, so no child exists without it.
-The caller's lifecycle is not required (a caller that exits after spawning still records); a caller that is archived records no origin (`validate_origin` rejects an archived candidate for a tool-server spawn).
-Alternatives rejected: a second call after creation (a crash between leaves a top-level child).
+Decision: the tool server records no origin. The first plan had `Catalog::create_session` take
+`origin: Option<SessionId>` and the tool pass `Some(caller)` for the caller's own worktree
+(FR-019). Feature 776 then made a worktree hold at most one session and `create_session` into an
+occupied one a `Conflict` refusal, so that call can never succeed, and a call into another worktree
+is a different worktree's own session (FR-009). The user decided (spec Clarifications 2026-10-13)
+that agent-created sessions nest one level under the worktree's user session; they reach the
+catalog by discovery (R3), whose origin is what the provider reports.
+`record_origin` (write-once, validated) is the only writer; discovery calls it (T030).
+Alternatives rejected: a cross-worktree tree from the tool server (the user kept it same-worktree);
+lifting 776's refusal here (issue #802).
 
 ## R6. Fold state persistence
 

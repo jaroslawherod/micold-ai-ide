@@ -415,7 +415,10 @@ const TOOLS: &[Tool] = &[
     Tool {
         name: "list_sessions",
         description: "List the project's sessions with their label, AI CLI, lifecycle, activity \
-            and worktree; is_caller marks the calling session. Filter by worktree ref if given.",
+            and worktree; is_caller marks the calling session. A session started by another \
+            session also carries origin (that session's ref) and origin_state (\"known\" or \
+            \"removed\"); both are omitted for a session the user started. Filter by worktree \
+            ref if given.",
         properties: || {
             json!({"worktree": {"type": "string", "minLength": 1,
                 "description": "A worktree ref from list_worktrees, or \"default\"."}})
@@ -428,7 +431,8 @@ const TOOLS: &[Tool] = &[
     Tool {
         name: "get_session",
         description: "Describe one session of the project; a failed session includes its \
-            failure_reason.",
+            failure_reason, and a session started by another session carries origin and \
+            origin_state (\"known\" or \"removed\").",
         properties: session_property,
         required: &["session"],
         read_only: true,

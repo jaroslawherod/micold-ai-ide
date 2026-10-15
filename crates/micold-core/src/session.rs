@@ -360,6 +360,13 @@ pub struct Session {
     /// (feature 039, FR-016). Persisted (FR-008a); only the session service sets and clears it,
     /// and a session written before the feature reads `false`.
     pub unread: bool,
+    /// The session that started this one (feature 551, FR-006): write-once, `None` for a session
+    /// the user started. Only `id` is stored; `status` is runtime, overlaid by the daemon from the
+    /// catalog. Written only through the daemon's `Catalog`, after `origin::validate_origin`.
+    pub origin: Option<crate::origin::SessionOrigin>,
+    /// Set once a provider-reported origin failed the full check, so no later discovery pass
+    /// records it again (research R4). Persisted; never set for a validated origin.
+    pub origin_rejected: bool,
     /// The agent runs the AI CLI reported against this session (feature 552, FR-004, FR-005):
     /// persisted, bounded, and never read from a name. A `Running` run is `Stopped` once the
     /// session exits or the daemon restarts.
@@ -388,6 +395,8 @@ impl Session {
             main: false,
             attention_seq: 0,
             unread: false,
+            origin: None,
+            origin_rejected: false,
             agents: Vec::new(),
         }
     }
@@ -421,6 +430,8 @@ impl Session {
             main: false,
             attention_seq: 0,
             unread: false,
+            origin: None,
+            origin_rejected: false,
             agents: Vec::new(),
         }
     }

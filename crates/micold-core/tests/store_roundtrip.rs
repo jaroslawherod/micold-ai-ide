@@ -918,6 +918,74 @@ fn every_provider_survives_a_save_and_load() {
     assert_eq!(providers, AiCli::ALL.to_vec());
 }
 
+#[test]
+fn a_stored_origin_survives_save_and_load_and_a_file_without_it_is_top_level() {
+    // FR-006, FR-015. The origin id is stored; its status is runtime and loads as known.
+    use micold_core::origin::{OriginStatus, SessionOrigin};
+    use micold_core::session::{AiCli, Session, SessionLocation};
+    let dir = tempdir().unwrap();
+    let store = JsonFileStore::at(dir.path().join("projects.json"));
+    let repo = PathBuf::from("/repo");
+    let origin = Session::start_new(SessionLocation::Default, AiCli::ClaudeCode);
+    let mut child = Session::start_new(SessionLocation::Default, AiCli::ClaudeCode);
+    child.origin = Some(SessionOrigin {
+        id: origin.id,
+        status: OriginStatus::Removed,
+    });
+    let mut rejected = Session::start_new(SessionLocation::Default, AiCli::ClaudeCode);
+    rejected.origin_rejected = true;
+
+    let mut ws = Workspace::empty();
+    ws.projects.push(project("/repo", "repo", true));
+    ws.sessions.insert(
+        repo.clone(),
+        vec![origin.clone(), child.clone(), rejected.clone()],
+    );
+    store.save(&ws).unwrap();
+
+    let out = store.load();
+    let sessions = &out.workspace.sessions[&repo];
+    let find = |id| {
+        sessions
+            .iter()
+            .find(|s| s.id == id)
+            .expect("session present")
+    };
+    assert_eq!(
+        find(child.id).origin,
+        Some(SessionOrigin {
+            id: origin.id,
+            status: OriginStatus::Known
+        })
+    );
+    assert_eq!(find(origin.id).origin, None);
+    assert!(find(rejected.id).origin_rejected);
+    assert!(!find(child.id).origin_rejected);
+}
+
+#[test]
+fn a_catalog_written_before_origins_loads_every_session_top_level() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("projects.json");
+    std::fs::write(
+        &path,
+        r#"{"schema_version":1,"last_active":"/repo","projects":[
+            {"path":"/repo","display_name":"repo","is_git_repo":true,"sessions":[
+                {"id":"11111111-1111-1111-1111-111111111111","worktree_dir":"feat-one","title":"One","mode":"AiCli","archived":false},
+                {"id":"22222222-2222-2222-2222-222222222222","worktree_dir":"feat-one","title":"Two","mode":"AiCli","archived":false}
+            ]}
+        ]}"#,
+    )
+    .unwrap();
+    let out = JsonFileStore::at(path).load();
+    assert_eq!(out.status, LoadStatus::Loaded);
+    let sessions: Vec<_> = out.workspace.sessions.values().flatten().collect();
+    assert_eq!(sessions.len(), 2);
+    assert!(sessions
+        .iter()
+        .all(|s| s.origin.is_none() && !s.origin_rejected));
+}
+
 // Feature 552, FR-005: agent runs ride on the stored session, additively.
 
 mod agents {

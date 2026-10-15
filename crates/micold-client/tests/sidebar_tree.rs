@@ -1074,6 +1074,7 @@ fn a_summary_carrying_agent_runs_lists_every_worktree_and_session() {
                     state: AgentRunState::Running,
                     provider: AiCli::ClaudeCode,
                 }],
+                origin: None,
             }],
         }],
         env_include_failures: Vec::new(),

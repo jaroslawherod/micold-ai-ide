@@ -84,6 +84,16 @@ struct Sandbox {
 
 impl Sandbox {
     async fn new() -> Self {
+        Self::build(false).await
+    }
+
+    /// [`Self::new`] plus a session `sid(4)` in the caller's worktree whose provider-reported
+    /// origin is the caller (feature 551).
+    async fn with_child() -> Self {
+        Self::build(true).await
+    }
+
+    async fn build(child: bool) -> Self {
         let bin = tempfile::tempdir().unwrap();
         let home = tempfile::tempdir().unwrap();
         let project = tempfile::tempdir().unwrap();
@@ -116,25 +126,35 @@ impl Sandbox {
             // The service runs on this computer, whatever started the test run (037, A14).
             ("MICOLD_IMAGE_REFERENCE", None),
         ]);
+        let mut seeded = vec![
+            session(
+                sid(1),
+                Some("seeded"),
+                TerminalMode::AiCli,
+                AiCli::ClaudeCode,
+            ),
+            session(
+                sid(3),
+                Some("caller"),
+                TerminalMode::AiCli,
+                AiCli::ClaudeCode,
+            ),
+        ];
+        if child {
+            let mut c = session(
+                sid(4),
+                Some("caller"),
+                TerminalMode::AiCli,
+                AiCli::ClaudeCode,
+            );
+            c.origin = Some(micold_core::origin::SessionOrigin {
+                id: sid(3),
+                status: micold_core::origin::OriginStatus::Known,
+            });
+            seeded.push(c);
+        }
         let state = state_over(
-            vec![(
-                project.path().to_path_buf(),
-                true,
-                vec![
-                    session(
-                        sid(1),
-                        Some("seeded"),
-                        TerminalMode::AiCli,
-                        AiCli::ClaudeCode,
-                    ),
-                    session(
-                        sid(3),
-                        Some("caller"),
-                        TerminalMode::AiCli,
-                        AiCli::ClaudeCode,
-                    ),
-                ],
-            )],
+            vec![(project.path().to_path_buf(), true, seeded)],
             store.path(),
         );
         state.set_pi_activity_component(true).unwrap();
@@ -888,6 +908,58 @@ async fn pi_without_its_event_is_ready_once_its_output_settles() {
     assert_eq!(out["prompt_delivered"], json!(true), "{out}");
     s.settle_typed("pi", &format!("{PROMPT}\n")).await;
     assert_eq!(s.typed("pi"), format!("{PROMPT}\n"));
+}
+
+/// Feature 551 (FR-009, FR-013): a session the tool creates is never given an origin, and no input
+/// names one: an origin is only what the session's provider reports.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_created_session_has_no_origin_and_no_input_names_one() {
+    let _guard = ENV.lock().await;
+    let s = Sandbox::new().await;
+    let error = s
+        .err(json!({"worktree": "default", "ai_cli": "copilot", "origin": sid(1).0.to_string()}))
+        .await;
+    assert_eq!(error["category"], "invalid_input", "{error}");
+
+    let out = s
+        .ok(json!({"worktree": "default", "ai_cli": "copilot"}))
+        .await;
+    let id = Sandbox::created(&out);
+    assert!(out.get("origin").is_none(), "{out}");
+    let summary = session_in(&s.state.catalog_snapshot(), id)
+        .cloned()
+        .unwrap();
+    assert_eq!(summary.origin, None);
+}
+
+/// Feature 551 (FR-013): `get_session` and `list_sessions` rows carry `origin` and `origin_state`
+/// for a session with a recorded origin and omit both for a top-level one.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn session_rows_carry_the_origin_of_a_child_and_omit_it_otherwise() {
+    let _guard = ENV.lock().await;
+    let s = Sandbox::with_child().await;
+    let caller = sid(3).0.to_string();
+    let child = sid(4).0.to_string();
+    let got = s.call("get_session", json!({"session": child})).await["structuredContent"].clone();
+    assert_eq!(got["origin"], json!(caller), "{got}");
+    assert_eq!(got["origin_state"], json!("known"), "{got}");
+
+    let listed = s.call("list_sessions", json!({})).await["structuredContent"]["sessions"].clone();
+    let row = |id: &str| {
+        listed
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|r| r["ref"] == json!(id))
+            .cloned()
+            .expect("listed")
+    };
+    assert_eq!(row(&child)["origin"], json!(caller));
+    let me = row(&caller);
+    assert!(
+        me.get("origin").is_none() && me.get("origin_state").is_none(),
+        "{me}"
+    );
 }
 
 // --- Feature 776, US2: `create_worktree` defines the session at start (FR-006) -------------------

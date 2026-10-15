@@ -17,13 +17,13 @@ and layout gates (`crates/micold-client/tests/`). The rendered pass is quickstar
 
 | id | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| A1 | A session created by an agent in the same worktree is a child of the caller and is not a top-level sidebar session | US1-1, FR-003, FR-004, FR-019 | example | PENDING | |
+| A1 | A session whose provider-reported origin is the worktree's user session is nested under it and is not a top-level sidebar session | US1-1, FR-003, FR-004 | example | PENDING | |
 | A2 | A child of a child nests at depth 3 while the first child stays under the origin | US1-2, FR-003 | example | PENDING | |
 | A3 | A session the user started has no origin and renders top-level as before | US1-3, FR-005 | example | PENDING | |
 | A4 | A child opens and takes actions like any session and its row carries the child marker | US1-4, FR-007, SC-004 | example | PENDING | |
-| A5 | After a daemon restart the origin, its two children and their nesting are unchanged | US2-1, FR-006, SC-002 | example | PENDING | |
-| A6 | A child running at daemon stop is resumable after restart and still nested | US2-2, FR-006 | example | PENDING | |
-| A7 | A child whose origin was deleted stays visible top-level marked "origin removed", once | US2-3, FR-008, FR-018 | example | PENDING | |
+| A5 | After a daemon restart the origin, its two children and their nesting are unchanged | US2-1, FR-006, SC-002 | example | DONE | M1 |
+| A6 | A child running at daemon stop is resumable after restart and still nested | US2-2, FR-006 | example | DONE | M1 |
+| A7 | A child whose origin was deleted stays visible top-level marked "origin removed", once | US2-3, FR-008, FR-018 | example | DONE | M1 |
 | A8 | A session from a provider with no signal is top-level and nothing is nested by guesswork | US3-1, FR-002, SC-003 | example | PENDING | |
 | A9 | The user guide lists every provider with its reporting status | US3-2, FR-014, SC-005 | example | PENDING | |
 | A10 | Collapsing an origin hides its children and shows their count | US4-1, FR-011 | example | PENDING | |
@@ -36,28 +36,28 @@ and layout gates (`crates/micold-client/tests/`). The rendered pass is quickstar
 
 | id | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U1 | A self-referencing origin is rejected; an unknown candidate is accepted only when provider-reported | FR-009, R4 | example | PENDING | |
-| U2 | An origin in another project or worktree is rejected; same location accepted | FR-009 | example | PENDING | |
-| U3 | An origin whose chain reaches the child is rejected; a chain of the bounded length that does not is accepted | FR-009 | example | PENDING | |
+| U1 | A self-referencing origin is rejected; an unknown candidate is accepted only when provider-reported | FR-009, R4 | example | DONE | M1 |
+| U2 | An origin in another project or worktree is rejected; same location accepted | FR-009 | example | DONE | M1 |
+| U3 | An origin whose chain reaches the child is rejected; a chain of the bounded length that does not is accepted | FR-009 | example | DONE | M1 |
 | U12 | `SessionTree` shows each session once, nests to any depth, breaks a cycle at the first repeat, keeps catalog order, and classifies an absent origin Pending or Removed by status | FR-003, FR-008, FR-016, A2 | example | PENDING | |
 
 ### `crates/micold-core/src/store.rs`, `protocol`, `mcp/tools.rs`
 
 | id | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U5 | A catalog without `origin` loads top-level; a stored origin and `origin_rejected` survive a round trip | FR-006, FR-015 | example | PENDING | |
-| U6 | `SessionSummary.origin` round-trips, decodes to `None` from an older payload, protocol is 41 | FR-013 | contract | PENDING | |
-| U9 | `list_sessions`/`get_session`/`create_session` rows carry `origin` and `origin_state` and omit them when top-level | FR-013 | contract | PENDING | |
+| U5 | A catalog without `origin` loads top-level; a stored origin and `origin_rejected` survive a round trip | FR-006, FR-015 | example | DONE | M1 |
+| U6 | `SessionSummary.origin` round-trips, decodes to `None` from an older payload, protocol is 41 | FR-013 | contract | DONE | M1 |
+| U9 | `list_sessions`/`get_session` rows carry `origin` and `origin_state` and omit them when top-level | FR-013 | contract | DONE | M1 |
 
 ### `crates/micold-daemon/src/catalog.rs`, `mcp/tools.rs`
 
 | id | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U4 | `record_origin` on a session with an origin returns `Ok(false)` and keeps the first; the same origin is idempotent | FR-010 | example | PENDING | |
-| U7 | `create_session` for the caller's own worktree records the caller as origin in the same persist | FR-019 | example | PENDING | |
-| U8 | `create_session` for another worktree records no origin | FR-009 | example | PENDING | |
-| U10 | `Catalog::load` keeps origins; a live child restores interrupted-resumable under its origin | FR-006 | example | PENDING | |
-| U11 | Each archive path emits a `removed` `SessionChanged` per direct child; children are not deleted or stopped; stopping an origin changes nothing | FR-012, FR-018 | example | PENDING | |
+| U4 | `record_origin` on a session with an origin returns `Ok(false)` and keeps the first; the same origin is idempotent | FR-010 | example | DONE | M1 |
+| U7 | `record_origin` for a session adopted into the same worktree records the origin and persists it (the tool server records none) | FR-001, FR-019 | example | DONE | M1 |
+| U8 | A session created through `create_session` has no origin and no input names one | FR-009, FR-019 | example | DONE | M1 |
+| U10 | `Catalog::load` keeps origins; a live child restores interrupted-resumable under its origin | FR-006 | example | DONE | M1 |
+| U11 | Each archive path emits a `removed` `SessionChanged` per direct child; children are not deleted or stopped; stopping an origin changes nothing | FR-012, FR-018 | example | DONE | M1 |
 
 ### `crates/micold-client/src/features/sidebar.rs`, `ui/`
 

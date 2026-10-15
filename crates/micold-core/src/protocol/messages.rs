@@ -1275,9 +1275,14 @@ pub struct SessionSummary {
     /// Whether the session has had an attention event since a window last reported it in view
     /// (feature 039, W2). Durable, as `attention_seq` is, and the same for every window (FR-024).
     pub unread: bool,
+    /// The session that started this one, and whether it is still in the catalog (feature 551,
+    /// FR-013). `None` for a session the user started and for every payload written before protocol
+    /// 41. Carried by every message that carries a summary, so every window derives one tree.
+    #[serde(default)]
+    pub origin: Option<crate::origin::SessionOrigin>,
     /// The agent runs the AI CLI reported against this session (feature 552, FR-004, FR-011), for
     /// the session tree (#551) to nest. Durable; empty for a session no signal named a run of, and
-    /// for a frame from before protocol 45.
+    /// for a frame from before protocol 47.
     #[serde(default)]
     pub agents: Vec<AgentRunSummary>,
     /// Whether this is its location's main session (feature 776, FR-020): the stored marker,
@@ -1836,6 +1841,7 @@ mod attention_wire_tests {
             live_shells: Vec::new(),
             attention_seq: COUNTED,
             unread: false,
+            origin: None,
             agents: Vec::new(),
             main: false,
         };
@@ -1862,6 +1868,7 @@ mod attention_wire_tests {
             // `true` is the value no default produces, so a field that never encoded cannot read
             // back as it.
             unread: true,
+            origin: None,
             agents: Vec::new(),
             main: false,
         };

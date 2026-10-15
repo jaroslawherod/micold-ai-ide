@@ -63,6 +63,7 @@ fn snapshot(lifecycle: WireLifecycle) -> CatalogSnapshot {
                 live_shells: Vec::new(),
                 attention_seq: 0,
                 unread: false,
+                origin: None,
                 agents: Vec::new(),
                 main: false,
             }],
