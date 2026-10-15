@@ -11,3 +11,7 @@ No persisted type changes.
   default entry by `Settings::sync_legacy_daemon` on a form save.
 - **Removed** (UI-only): `SettingsSection::Daemon`, the page's `DaemonDraft` text mirrors and
   `PendingPlacementChange` once unreferenced.
+- **New (UI/logic only)**: `parse_budget(cpus, memory_mib, pids, storage_mib) -> Result<ResourceBudget,
+  (LimitField, String)>`; `FormError.field` gains `cpus`, `memory`, `pids`, `storage`, `image_path`;
+  `ViewModel::shares_credentials: bool`; `Settings::sync_legacy_daemon` (Container -> LocalSandbox +
+  profile; Host -> HostProcess, profile kept; SSH -> block untouched).
