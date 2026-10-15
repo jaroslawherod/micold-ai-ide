@@ -463,9 +463,11 @@ mod sync_legacy_daemon_tests {
 
     #[test]
     fn a_container_entry_sets_local_sandbox_and_its_profile() {
-        let mut profile = SandboxProfile::default();
-        profile.runtime = RuntimeKind::Podman;
-        profile.survive_logout = true;
+        let profile = SandboxProfile {
+            runtime: RuntimeKind::Podman,
+            survive_logout: true,
+            ..SandboxProfile::default()
+        };
         let mut s = with_runtime(DaemonRuntime::Container(
             crate::daemons::ContainerSettings {
                 profile: profile.clone(),
