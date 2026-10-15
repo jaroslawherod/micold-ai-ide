@@ -71,6 +71,30 @@ struct Geometry {
     headers: Vec<(PaneId, Rectangle)>,
 }
 
+/// Fills one quad at `r`'s corner offset by `origin`, `size` wide and high, with `border`.
+fn quad<R: renderer::Renderer>(
+    renderer: &mut R,
+    origin: Point,
+    r: Rect,
+    (width, height): (f32, f32),
+    border: iced::Border,
+    fill: iced::Color,
+) {
+    renderer.fill_quad(
+        renderer::Quad {
+            bounds: Rectangle {
+                x: origin.x + r.x,
+                y: origin.y + r.y,
+                width,
+                height,
+            },
+            border,
+            ..renderer::Quad::default()
+        },
+        fill,
+    );
+}
+
 fn contains(r: Rect, p: Point) -> bool {
     p.x >= r.x && p.x < r.x + r.w && p.y >= r.y && p.y < r.y + r.h
 }
@@ -490,21 +514,15 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for SplitView<'_, M> {
                 .iter()
                 .find(|(id, r)| *id != src && contains(*r, p))
             {
-                renderer::Renderer::fill_quad(
+                quad(
                     renderer,
-                    renderer::Quad {
-                        bounds: Rectangle {
-                            x: origin.x + r.x,
-                            y: origin.y + r.y,
-                            width: r.w,
-                            height: r.h,
-                        },
-                        border: iced::Border {
-                            color: style::color(self.roles.primary),
-                            width: 2.0,
-                            radius: 0.0.into(),
-                        },
-                        ..renderer::Quad::default()
+                    origin,
+                    *r,
+                    (r.w, r.h),
+                    iced::Border {
+                        color: style::color(self.roles.primary),
+                        width: 2.0,
+                        radius: 0.0.into(),
                     },
                     iced::Color::TRANSPARENT,
                 );
@@ -516,17 +534,12 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for SplitView<'_, M> {
                 Axis::Vertical => (RULE, r.h),
                 Axis::Horizontal => (r.w, RULE),
             };
-            renderer::Renderer::fill_quad(
+            quad(
                 renderer,
-                renderer::Quad {
-                    bounds: Rectangle {
-                        x: origin.x + r.x,
-                        y: origin.y + r.y,
-                        width: w,
-                        height: h,
-                    },
-                    ..renderer::Quad::default()
-                },
+                origin,
+                r,
+                (w, h),
+                iced::Border::default(),
                 style::separator(self.roles),
             );
         }

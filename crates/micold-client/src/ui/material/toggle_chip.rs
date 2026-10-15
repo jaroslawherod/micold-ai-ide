@@ -169,6 +169,11 @@ impl<'a, M: Clone + 'a> From<ToggleChip<M>> for Element<'a, M> {
         .height(iced::Length::Fixed(anatomy::chip::HEIGHT))
         .on_press_maybe(on_press)
         .style(move |_theme: &iced::Theme, status| {
+            let border = |color: Color| Border {
+                color,
+                width: if active { 0.0 } else { anatomy::chip::OUTLINE },
+                radius: shape::FULL.into(),
+            };
             if disabled {
                 // Material's disabled treatment, from the state tokens rather than a literal.
                 let content = |c: Color| Color {
@@ -186,18 +191,14 @@ impl<'a, M: Clone + 'a> From<ToggleChip<M>> for Element<'a, M> {
                         Color::TRANSPARENT
                     })),
                     text_color: content(text),
-                    border: Border {
-                        color: if active {
-                            Color::TRANSPARENT
-                        } else {
-                            Color {
-                                a: state::DISABLED_CONTAINER,
-                                ..outline
-                            }
-                        },
-                        width: if active { 0.0 } else { anatomy::chip::OUTLINE },
-                        radius: shape::FULL.into(),
-                    },
+                    border: border(if active {
+                        Color::TRANSPARENT
+                    } else {
+                        Color {
+                            a: state::DISABLED_CONTAINER,
+                            ..outline
+                        }
+                    }),
                     ..Default::default()
                 };
             }
@@ -224,11 +225,7 @@ impl<'a, M: Clone + 'a> From<ToggleChip<M>> for Element<'a, M> {
             iced::widget::button::Style {
                 background,
                 text_color: if active { on } else { muted },
-                border: Border {
-                    color: if active { fill } else { outline },
-                    width: if active { 0.0 } else { anatomy::chip::OUTLINE },
-                    radius: shape::FULL.into(),
-                },
+                border: border(if active { fill } else { outline }),
                 ..Default::default()
             }
         });
