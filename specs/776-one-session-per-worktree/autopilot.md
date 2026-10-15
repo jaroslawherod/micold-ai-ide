@@ -30,7 +30,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T013 | full | Second session refused by daemon (RPC, create_session, review send); wire fields + v41 | #794 | merged (#794) |
 | M2 | T037–T042 | full | Soft limit: `allow_additional_session` on create_session, wire v42 (the start flag lands with the start block in M7) | #821 | merged (#821) |
 | M3 | T014–T016, T021, T050–T054 | full | create_worktree / WorktreeCreate define the session at start (WIP at tag wip-776-m3, cherry-picked after M2); main session persisted, moved, promoted; wire v44 | | pending |
-| M4 | T017–T020, T022, T036, T043–T045 | full | Dialog fields; worktree rows only; row press opens the main session; helpers marked | | PR open |
+| M4 | T017–T020, T022, T036, T043–T045 | full | Dialog fields; worktree rows only; row press opens the main session; helpers marked | | #880 | PR open |
 | M5 | T046–T049, T055–T057 | full | Row menu "Start another session..." (adds a helper) with confirmation; "Make main session"; delete names successor | | pending |
 | M6 | T023–T030 | full | Resume replaces (resumed becomes main) or keeps both (helper); attach cap | | pending |
 | M7 | T031–T035 | full | Several sessions intact; start beside a live one needs confirmation | | pending |
