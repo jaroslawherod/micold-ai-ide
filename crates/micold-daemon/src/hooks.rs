@@ -618,8 +618,7 @@ pub fn settings_json(url: &str, token: &str, status_line: Option<&StatusLineBloc
 /// The default per-session settings directory under the daemon's data dir. Falls back to the system
 /// temp dir if no data dir resolves (e.g. a headless CI environment).
 pub fn default_settings_dir() -> PathBuf {
-    directories::ProjectDirs::from("", "", "micold-ai-ide")
-        .map(|dirs| dirs.data_dir().join("hooks"))
+    micold_core::paths::data_subdir("hooks")
         .unwrap_or_else(|| std::env::temp_dir().join("micold-daemon-hooks"))
 }
 

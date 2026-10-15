@@ -56,8 +56,7 @@ pub struct DeletionFailure {
 /// which on Windows is `%LOCALAPPDATA%`, never the roaming profile (FR-019). `None` when no home
 /// directory can be determined.
 pub fn history_dir() -> Option<PathBuf> {
-    directories::ProjectDirs::from("", "", "micold-ai-ide")
-        .map(|dirs| dirs.data_local_dir().join("terminal-history"))
+    crate::paths::project_dirs().map(|dirs| dirs.data_local_dir().join("terminal-history"))
 }
 
 /// The saved-history files of one directory.

@@ -751,8 +751,7 @@ impl JsonFileSettingsStore {
     /// the same application tuple (and therefore directory) as the projects store
     /// (settings-schema contract). Returns `None` if no data directory can be determined.
     pub fn default_location() -> Option<Self> {
-        directories::ProjectDirs::from("", "", "micold-ai-ide")
-            .map(|dirs| Self::at(dirs.data_dir().join("settings.json")))
+        crate::paths::data_subdir("settings.json").map(Self::at)
     }
 
     /// Path of the temporary file used for one atomic write. Unique per call — see

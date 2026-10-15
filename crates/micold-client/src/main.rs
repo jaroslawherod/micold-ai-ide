@@ -1184,11 +1184,10 @@ fn log_line(message: &str) {
     if cfg!(test) {
         return;
     }
-    let Some(dirs) = directories::ProjectDirs::from("", "", "micold-ai-ide") else {
+    let Some(dir) = micold_core::paths::data_dir() else {
         return;
     };
-    let dir = dirs.data_dir();
-    if std::fs::create_dir_all(dir).is_err() {
+    if std::fs::create_dir_all(&dir).is_err() {
         return;
     }
     if let Ok(mut file) = std::fs::OpenOptions::new()

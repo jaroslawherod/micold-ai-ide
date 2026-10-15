@@ -397,7 +397,7 @@ mod imp {
     }
 
     fn run_dir() -> io::Result<PathBuf> {
-        let dirs = directories::ProjectDirs::from("", "", "micold-ai-ide").ok_or_else(|| {
+        let dirs = crate::paths::project_dirs().ok_or_else(|| {
             io::Error::new(
                 io::ErrorKind::NotFound,
                 "no local app data directory for this user",
