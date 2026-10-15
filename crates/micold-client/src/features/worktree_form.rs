@@ -38,7 +38,7 @@ use micold_core::naming::{
     WorktreeNaming,
 };
 use micold_core::overlay::Layer;
-use micold_core::typeahead::{move_highlight, rank, Direction, Match, Query};
+use micold_core::typeahead::{clamp_highlight, move_highlight, rank, Direction, Match, Query};
 use micold_core::worktree::{BranchCandidate, BranchSituation, CreateMode, CreateStage, Worktree};
 use std::path::PathBuf;
 
@@ -544,11 +544,7 @@ impl WorktreeForm {
         let held = self.issues.held();
         let query = Query::new(&self.issue_query);
         self.issue_matches = rank(&held, |issue| issue.row_text(), &query);
-        self.issue_highlight = match self.issue_highlight {
-            Some(_) if self.issue_matches.is_empty() => None,
-            Some(i) if i >= self.issue_matches.len() => Some(0),
-            other => other,
-        };
+        self.issue_highlight = clamp_highlight(self.issue_highlight, self.issue_matches.len());
     }
 
     /// Forget the issues and their search: the source was left, so any load in flight is stale.
@@ -574,14 +570,7 @@ impl WorktreeForm {
     pub(crate) fn rematch_branches(&mut self) {
         let query = Query::new(&self.branch_query);
         self.branch_matches = rank(&self.candidates, |c| c.name.as_str(), &query);
-        self.branch_highlight = match self.branch_highlight {
-            // The list shrank under the highlight. Dropping to the first row keeps the keyboard
-            // somewhere real; leaving it dangling would let the next Enter pick a row that is no
-            // longer shown.
-            Some(_) if self.branch_matches.is_empty() => None,
-            Some(i) if i >= self.branch_matches.len() => Some(0),
-            other => other,
-        };
+        self.branch_highlight = clamp_highlight(self.branch_highlight, self.branch_matches.len());
     }
 
     /// Clear everything the search owns, for when the picker is left or reopened. The search text

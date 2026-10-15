@@ -6,7 +6,9 @@
 //! can reach it, and the widget is left translating events in and applying answers out — the same
 //! line `micold-client`'s `keymap.rs` draws for the terminal.
 
-use micold_core::typeahead::{claims, intent_for, move_highlight, Direction, Intent, Key};
+use micold_core::typeahead::{
+    claims, clamp_highlight, intent_for, move_highlight, Direction, Intent, Key,
+};
 
 /// The common case: a list of five rows with the third highlighted and available.
 fn mid() -> (Option<usize>, usize, bool) {
@@ -216,4 +218,12 @@ fn tab_dismisses_and_still_travels_on() {
         Some(Intent::Dismiss)
     );
     assert!(claims(Key::Escape));
+}
+
+#[test]
+fn clamp_highlight_reseats_a_stale_index() {
+    assert_eq!(clamp_highlight(Some(2), 5), Some(2));
+    assert_eq!(clamp_highlight(None, 5), None);
+    assert_eq!(clamp_highlight(Some(5), 5), Some(0));
+    assert_eq!(clamp_highlight(Some(0), 0), None);
 }

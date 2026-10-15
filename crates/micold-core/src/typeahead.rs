@@ -557,6 +557,19 @@ pub fn move_highlight(
     })
 }
 
+/// Re-seat a highlight after the list under it was recomputed to `rows` rows.
+///
+/// An empty list leaves nothing to point at; a highlight past the end drops to the first row, which
+/// keeps the keyboard somewhere real (leaving it dangling would let the next Enter pick a row that is
+/// no longer shown). Anything else is kept.
+pub fn clamp_highlight(highlight: Option<usize>, rows: usize) -> Option<usize> {
+    match highlight {
+        Some(_) if rows == 0 => None,
+        Some(i) if i >= rows => Some(0),
+        other => other,
+    }
+}
+
 /// What `key` means, given where the highlight is, how many rows there are, and whether the
 /// highlighted row can be chosen. `None` means the key belongs to the field (FR-017, FR-017a).
 ///
