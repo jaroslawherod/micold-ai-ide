@@ -52,8 +52,9 @@ pub fn encode_png(image: &Rgba) -> Result<Vec<u8>, String> {
     if image.bytes.len() != image.width * image.height * 4 {
         return Err("the image data does not match its size".to_string());
     }
-    // tiny-skia holds premultiplied pixels and un-premultiplies on encode, so partly transparent
-    // pixels may move by one level.
+    // tiny-skia holds premultiplied 8-bit pixels and un-premultiplies on encode, so the colour of
+    // a partly transparent pixel is rounded (coarsely at low alpha) and a fully transparent
+    // pixel loses its colour. Opaque pixels are exact.
     let mut data = Vec::with_capacity(image.bytes.len());
     for px in image.bytes.chunks_exact(4) {
         let c = tiny_skia::ColorU8::from_rgba(px[0], px[1], px[2], px[3]).premultiply();
