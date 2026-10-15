@@ -79,6 +79,18 @@ fn declare(out: &mut String, name: &str, value: &str) {
     let _ = writeln!(out, "  {name}: {value};");
 }
 
+/// One declaration per `(name, value)` item: `{prefix}{name}: {value}{unit};`.
+fn declare_table<V: std::fmt::Display>(
+    out: &mut String,
+    prefix: &str,
+    unit: &str,
+    items: impl IntoIterator<Item = (impl std::fmt::Display, V)>,
+) {
+    for (name, value) in items {
+        declare(out, &format!("{prefix}{name}"), &format!("{value}{unit}"));
+    }
+}
+
 /// The identifier *is* the contract: renaming a token in this crate renames the variable, `site.css`
 /// stops finding it, and the site build fails. That coupling is the point — the alternative is a
 /// site that silently keeps painting last release's colours.
@@ -155,13 +167,7 @@ fn type_scale(out: &mut String) {
 }
 
 fn corner_radii(out: &mut String) {
-    for (name, value) in CORNER_RADII {
-        declare(
-            out,
-            &format!("--micold-shape-corner-{name}"),
-            &format!("{value}px"),
-        );
-    }
+    declare_table(out, "--micold-shape-corner-", "px", CORNER_RADII);
 }
 
 /// Each level emits **both** of its cues: the complete `box-shadow`, and the tonal surface it
@@ -197,58 +203,62 @@ fn elevations(out: &mut String, r: &Roles, scheme: ColorScheme) {
 }
 
 fn motion(out: &mut String) {
-    for (name, value) in [
-        ("short-1", motion::duration::SHORT_1),
-        ("short-2", motion::duration::SHORT_2),
-        ("short-3", motion::duration::SHORT_3),
-        ("short-4", motion::duration::SHORT_4),
-        ("medium-1", motion::duration::MEDIUM_1),
-        ("medium-2", motion::duration::MEDIUM_2),
-        ("medium-3", motion::duration::MEDIUM_3),
-        ("medium-4", motion::duration::MEDIUM_4),
-        ("long-1", motion::duration::LONG_1),
-        ("long-2", motion::duration::LONG_2),
-        ("long-3", motion::duration::LONG_3),
-        ("long-4", motion::duration::LONG_4),
-    ] {
-        declare(
-            out,
-            &format!("--micold-motion-duration-{name}"),
-            &format!("{value}ms"),
-        );
-    }
-    for (name, e) in [
-        ("standard", motion::STANDARD),
-        ("standard-accelerate", motion::STANDARD_ACCELERATE),
-        ("standard-decelerate", motion::STANDARD_DECELERATE),
-        ("emphasized", motion::EMPHASIZED),
-        ("emphasized-accelerate", motion::EMPHASIZED_ACCELERATE),
-        ("emphasized-decelerate", motion::EMPHASIZED_DECELERATE),
-    ] {
-        declare(
-            out,
-            &format!("--micold-motion-easing-{name}"),
-            &format!("cubic-bezier({}, {}, {}, {})", e.x1, e.y1, e.x2, e.y2),
-        );
-    }
+    declare_table(
+        out,
+        "--micold-motion-duration-",
+        "ms",
+        [
+            ("short-1", motion::duration::SHORT_1),
+            ("short-2", motion::duration::SHORT_2),
+            ("short-3", motion::duration::SHORT_3),
+            ("short-4", motion::duration::SHORT_4),
+            ("medium-1", motion::duration::MEDIUM_1),
+            ("medium-2", motion::duration::MEDIUM_2),
+            ("medium-3", motion::duration::MEDIUM_3),
+            ("medium-4", motion::duration::MEDIUM_4),
+            ("long-1", motion::duration::LONG_1),
+            ("long-2", motion::duration::LONG_2),
+            ("long-3", motion::duration::LONG_3),
+            ("long-4", motion::duration::LONG_4),
+        ],
+    );
+    declare_table(
+        out,
+        "--micold-motion-easing-",
+        "",
+        [
+            ("standard", motion::STANDARD),
+            ("standard-accelerate", motion::STANDARD_ACCELERATE),
+            ("standard-decelerate", motion::STANDARD_DECELERATE),
+            ("emphasized", motion::EMPHASIZED),
+            ("emphasized-accelerate", motion::EMPHASIZED_ACCELERATE),
+            ("emphasized-decelerate", motion::EMPHASIZED_DECELERATE),
+        ]
+        .map(|(name, e)| {
+            (
+                name,
+                format!("cubic-bezier({}, {}, {}, {})", e.x1, e.y1, e.x2, e.y2),
+            )
+        }),
+    );
 }
 
 fn states(out: &mut String) {
-    for (name, value) in [
-        ("hover", state::HOVER),
-        ("focus", state::FOCUS),
-        ("pressed", state::PRESSED),
-        ("dragged", state::DRAGGED),
-        ("selected", state::SELECTED),
-        ("disabled-content", state::DISABLED_CONTENT),
-        ("disabled-container", state::DISABLED_CONTAINER),
-    ] {
-        declare(
-            out,
-            &format!("--micold-state-{name}-opacity"),
-            &value.to_string(),
-        );
-    }
+    declare_table(
+        out,
+        "--micold-state-",
+        "",
+        [
+            ("hover", state::HOVER),
+            ("focus", state::FOCUS),
+            ("pressed", state::PRESSED),
+            ("dragged", state::DRAGGED),
+            ("selected", state::SELECTED),
+            ("disabled-content", state::DISABLED_CONTENT),
+            ("disabled-container", state::DISABLED_CONTAINER),
+        ]
+        .map(|(name, value)| (format!("{name}-opacity"), value)),
+    );
     declare(
         out,
         "--micold-state-focus-ring-width",
@@ -257,19 +267,18 @@ fn states(out: &mut String) {
 }
 
 fn spacing_scale(out: &mut String) {
-    for (name, value) in [
-        ("xs", spacing::XS),
-        ("sm", spacing::SM),
-        ("md", spacing::MD),
-        ("lg", spacing::LG),
-        ("xl", spacing::XL),
-    ] {
-        declare(
-            out,
-            &format!("--micold-spacing-{name}"),
-            &format!("{value}px"),
-        );
-    }
+    declare_table(
+        out,
+        "--micold-spacing-",
+        "px",
+        [
+            ("xs", spacing::XS),
+            ("sm", spacing::SM),
+            ("md", spacing::MD),
+            ("lg", spacing::LG),
+            ("xl", spacing::XL),
+        ],
+    );
 }
 
 #[cfg(test)]
