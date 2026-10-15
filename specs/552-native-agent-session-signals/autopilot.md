@@ -20,6 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #795 | M1 every worktree listed | merged | 4ba66482fc44ac820233512a21001fe2e8a5bbef |
 | #823 | M2 Claude sub-agent runs recorded, protocol 43 | merged | 6a8aacad57cd3a8648d6f1fa7cebbafa232dd83b |
 | #870 | M3 provenance and attach_worktree removed, protocol 46 | merged | 5a65464712ecce80c7aed79475c585912a54399d |
+| #881 | M4 provider gaps, provider table, superseded check | in review | |
 
 ## Milestones
 
@@ -28,7 +29,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T009 | full | every worktree listed, toggle and client name-based visibility removed, hook captures | #795 | merged |
 | M2 | T010–T021 | full | Claude sub-agent runs recorded from SubagentStart/Stop, protocol 43 | #823 | merged |
 | M3 | T022–T029 | full | provenance and attach_worktree removed, protocol 46 | #870 | merged |
-| M4 | T030–T033 | full | Copilot mapping or gap, provider table, docs check | | in progress |
+| M4 | T030–T033 | full | Copilot mapping or gap, provider table, docs check | #881 | in review |
 
 ## Decisions
 
