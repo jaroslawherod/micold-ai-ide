@@ -65,13 +65,13 @@
 **Goal**: Copilot mapped from its own event log if T001 confirmed an event; Pi, Codex, OpenCode are stated gaps; no guessing.
 **Independent test**: a Copilot `events.jsonl` fixture with a sub-agent event yields a run; a fixture session of a provider without a signal has empty `agents`.
 
-- [ ] T030 [US3] From T001's capture, write failing tests for `copilot_agent_event` in `crates/micold-daemon/src/activity.rs` (unit, with the captured lines as fixture under `crates/micold-daemon/tests/fixtures/`) and an integration case in `crates/micold-daemon/tests/agent_runs.rs`; if T001 found no Copilot event, instead add a test that a Copilot session never gains runs and skip T031.
-- [ ] T031 [US3] Implement `copilot_agent_event` and route it through `note_agent_signal` in `crates/micold-daemon/src/{activity,event_log}.rs`, never through `note_activity`.
-- [ ] T032 [US3] Reconcile with the earlier edits of these pages and add the per-provider table (Claude, Copilot per T001, Pi/Codex/OpenCode = no native signal, `claude --bg` gap) to `docs/user-guide/agent-tools.md`, `docs/user-guide/settings.md` and the entry in `docs/README.md` (FR-012).
+- [x] T030 [US3] From T001's capture, write failing tests for `copilot_agent_event` in `crates/micold-daemon/src/activity.rs` (unit, with the captured lines as fixture under `crates/micold-daemon/tests/fixtures/`) and an integration case in `crates/micold-daemon/tests/agent_runs.rs`; if T001 found no Copilot event, instead add a test that a Copilot session never gains runs and skip T031.
+- [x] T031 [US3] Implement `copilot_agent_event` and route it through `note_agent_signal` in `crates/micold-daemon/src/{activity,event_log}.rs`, never through `note_activity`.
+- [x] T032 [US3] Reconcile with the earlier edits of these pages and add the per-provider table (Claude, Copilot per T001, Pi/Codex/OpenCode = no native signal, `claude --bg` gap) to `docs/user-guide/agent-tools.md`, `docs/user-guide/settings.md` and the entry in `docs/README.md` (FR-012).
 
 ## Phase 7: User Story 4 - Superseded specs and docs say so (P3)
 
-- [ ] T033 [US4] First `grep -rln "Show agent worktrees\|show_agent_worktrees\|worktree-agent-" specs` to list every other spec whose rules this removes and mark each superseded (FR-013). Then add a docs check `scripts/tests/superseded-552.test.sh` asserting: no `Show agent worktrees`, `worktree-agent-` or `provenance` hit in `docs/user-guide` outside a superseded note; every spec found above starts with a note naming 552 (quickstart §A.2, §A.3). Register it where `mise run test-scripts` finds it.
+- [x] T033 [US4] First `grep -rln "Show agent worktrees\|show_agent_worktrees\|worktree-agent-" specs` to list every other spec whose rules this removes and mark each superseded (FR-013). Then add a docs check `scripts/tests/superseded-552.test.sh` asserting: no `Show agent worktrees`, `worktree-agent-` or `provenance` hit in `docs/user-guide` outside a superseded note; every spec found above starts with a note naming 552 (quickstart §A.2, §A.3). Register it where `mise run test-scripts` finds it.
 
 ## Dependencies
 

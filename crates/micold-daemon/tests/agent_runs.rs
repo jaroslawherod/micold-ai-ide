@@ -122,3 +122,25 @@ fn deleting_the_origin_removes_its_runs() {
     assert!(find_summary(&snapshot, a).is_none());
     assert_eq!(summary(&snapshot, b).agents.len(), 1);
 }
+
+/// FR-003, US3 scenario 2 (feature 552, M4): no Copilot sub-agent event was confirmed in a real
+/// log (research R8), so Copilot's event log never records a run, whatever it carries. Sub-agent
+/// looking lines map to no activity event and the session stays a user session.
+#[test]
+fn a_copilot_session_never_gains_runs_from_its_event_log() {
+    let id = session_id(0xC);
+    let service = Service::with_sessions_of(&[(id, AiCli::Copilot)]);
+    for line in [
+        r#"{"type":"subagent.started","data":{"agentName":"explore"}}"#,
+        r#"{"type":"subagent.completed","data":{"agentName":"explore"}}"#,
+        r#"{"type":"assistant.turn_start","data":{}}"#,
+        r#"{"type":"assistant.turn_end","data":{}}"#,
+    ] {
+        if let Some(event) = micold_daemon::activity::copilot_event(line) {
+            service.note(id, event);
+        }
+    }
+    assert!(summary(&service.state.catalog_snapshot(), id)
+        .agents
+        .is_empty());
+}

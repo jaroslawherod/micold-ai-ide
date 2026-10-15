@@ -260,7 +260,7 @@ worktrees the assistant made because you asked it to work on something.
 
 **The app lists every worktree git reports for the project**, including one you added from outside the
 `.claude/worktrees/` folder. It does not guess who made a worktree
-from its name, and there is no "Show agent worktrees" switch and no `agent` chip. A worktree
+from its name, and there is no `agent` chip. A worktree
 called `agent-something` is listed like `fix-the-parser`, and renaming a folder or branch never
 changes whether it shows or where it sits. Tag filters apply to every row alike.
 

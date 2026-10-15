@@ -34,7 +34,7 @@ These tools make changes, exactly as the sidebar does:
 
 | Tool | What it does |
 |---|---|
-| `create_worktree` | Creates a worktree for a branch, as the new-worktree dialog does: under `.claude/worktrees/`, named after the branch unless a name is given, and marked as created by the application. By default it makes a new branch; `existing_local` checks out a branch that exists and is free, and `track_remote` tracks a remote branch. Instead of a branch, it can take a `type`, a `ticket` and a `name`, as the new-worktree form does (see below); a worktree for an issue should be created this way, or with `github_issue`, so that it carries the issue reference. With `ai_cli` or `prompt` it also creates the worktree's one session in the same call (see below) |
+| `create_worktree` | Creates a worktree for a branch, as the new-worktree dialog does: under `.claude/worktrees/`, named after the branch unless a name is given. By default it makes a new branch; `existing_local` checks out a branch that exists and is free, and `track_remote` tracks a remote branch. Instead of a branch, it can take a `type`, a `ticket` and a `name`, as the new-worktree form does (see below); a worktree for an issue should be created this way, or with `github_issue`, so that it carries the issue reference. With `ai_cli` or `prompt` it also creates the worktree's one session in the same call (see below) |
 | `rename_worktree` | Gives a worktree a new name in the sidebar, as the sidebar's rename does. Its folder and branch stay as they are. The name cannot be empty, and `default` (the project folder) cannot be renamed |
 | `create_session` | Creates a session in a worktree (or in `default`, the project folder) and starts it. It runs the AI CLI the assistant names, or your default AI CLI from Settings. It can also be given a first prompt to type into the new session. A worktree holds at most one session by default: when it already has one, the call fails with a conflict that names the worktree's main session (its name and id), says that `start_session` on that id brings it back, and says to pass `allow_additional_session: true` to start another on purpose; nothing is created. With `allow_additional_session: true` (optional, default false) the call creates a second session beside the existing one and leaves that one untouched; the policy, the AI CLI check and every other check still apply |
 | `start_session` | Starts a session that is idle, failed, or waiting to be resumed, as **Start** in the sidebar does: a session that was running when the service last stopped resumes its conversation. Every window shows it starting, then running. A session that is already starting, running or restarting is left as it is, and the result says which it is |
@@ -146,6 +146,17 @@ still going at that point is marked stopped. A report that names no run, or come
 app does not know, is ignored. Sub-agent runs do not change the session's activity: a sub-agent
 finishing is not the end of the session's turn. Background sessions started with `claude --bg` are
 not reported this way and are not recognised.
+
+Which sessions the app can tell are agent work depends on the AI CLI:
+
+| AI CLI | Native signal the app uses |
+|---|---|
+| Claude Code | `SubagentStart` and `SubagentStop`, registered in each session the app starts |
+| GitHub Copilot | None known: no sub-agent event has been confirmed in its event log, so none is recorded |
+| Pi Coding Agent, Codex, OpenCode | None: they offer no such signal, so every session is shown as your own |
+| Claude Code started with `claude --bg` | Not covered: not reported through these events |
+
+The app never guesses from a worktree's name, its branch or when it appeared.
 
 ### The first prompt
 

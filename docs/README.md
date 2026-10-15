@@ -31,8 +31,8 @@ follows describes the version you are reading it from (constitution, Principle V
 - [Icons](user-guide/icons.md) — the shared Material icon set, where each icon appears, theming,
   licensing, and how to add a new icon.
 - [Worktrees & Sessions](user-guide/worktrees-and-sessions.md) — opening a git project, the
-  worktree sidebar (including why only the worktrees the app created are listed, how to reveal
-  the rest, and how to claim one you made yourself),
+  worktree sidebar (every worktree git reports is listed, with nothing hidden or guessed from
+  its name),
   creating worktrees (on a new branch, or by searching for one that already exists locally or on
   a remote),
   and running AI CLI sessions (`claude`, `copilot`, `pi`, `codex` or `opencode`) in the embedded terminal
@@ -45,6 +45,9 @@ follows describes the version you are reading it from (constitution, Principle V
 - [Reviewing a worktree's changes](user-guide/reviewing-changes.md) — the Changes view: opening it
   from a worktree or the Default entry, the changed-file list, the base line, and the
   Committed/Uncommitted toggles.
+- [Tools for the AI in your sessions](user-guide/agent-tools.md) — what an assistant can do through
+  the app's tool server, and which AI CLIs report their sub-agent runs (Claude Code does; Copilot,
+  Pi, Codex and OpenCode have no known signal, and `claude --bg` is not covered).
 - [Settings](user-guide/settings.md) — the Settings view: appearance, the terminal scrollback
   limit, environment-include (auto-picking up your shell environment for sessions, configuring or
   disabling it, and recovering from a failed script), and **Session service** — where sessions run,

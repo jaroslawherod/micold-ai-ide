@@ -1,5 +1,7 @@
 # Feature Specification: Attention Indicator on the Sidebar's Worktree Rows
 
+> **Partly superseded by [552-native-agent-session-signals](../552-native-agent-session-signals/spec.md).** Any "Show agent worktrees" toggle (`show_agent_worktrees`) mentioned in this feature's artifacts is gone: every worktree is listed. Such statements are kept as history only.
+
 **Feature Branch**: `claude/project-thread-8dnq8h`
 
 **Created**: 2026-10-05
