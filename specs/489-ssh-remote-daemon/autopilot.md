@@ -9,20 +9,21 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #489
 - **Worktree branch**: feat/489_run-the-session-daemon-on-a-remote-host-over-ssh
 - **Started**: 2026-10-12
-- **Phase**: implement M1
-- **Next step**: M1 implement, continue from Handover (fresh unit)
+- **Phase**: M1 PR open
+- **Next step**: wait for CI on #845, merge, then M2
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #789 | Design (spec, plan, tasks) | merged | 63838fce6f95ea5195529109ba0e0b1073530135 |
+| #845 | M1 | open (CI is the full gate) | — |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T027 | full | Remote over SSH daemon connects (add, start, Connected) | — | pending |
+| M1 | T001–T027 | full | Remote over SSH daemon connects (add, start, Connected) | #845 | in review |
 | M2 | T028–T038 | full | Remote projects, worktrees and sessions | — | pending |
 | M3 | T039–T050 | full | Reconnect after a network drop | — | pending |
 | M4 | T051–T055 | full | Local work unaffected, concurrent clients | — | pending |
@@ -71,7 +72,7 @@ None.
 
 ## Open escalation
 
-Push blocked by scripts/autopilot/gate-hook.sh: no green `mise run gate` stamp for HEAD, and the user authorised pushing on scoped checks (fmt, clippy, `cargo test --workspace --no-fail-fast` all green after rebase onto origin/main). Needs the user to push or authorise the hook bypass.
+None. (The push was done by the user; the full local gate was skipped by the user's choice.)
 
 ## Follow-ups not done
 
