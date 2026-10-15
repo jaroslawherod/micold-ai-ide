@@ -44,7 +44,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Declined review findings
 
-- Review A M1 (code-review high), fixed: form save now refreshes `sandbox_boot` and the in-memory legacy block; removal no longer re-targets the legacy block; `ViewModel.legacy_default` follows `sandbox_daemon`. Declined: capabilities not re-probed when the draft's runtime changes (same as the settings page, a probe needs a restart); retained archive path refused after switching image source (spec'd UnusedArchivePath); restart prompt on any profile change (FR-004 restart-on-save); Draft/ContainerView duplication and `groups()` page bool (taste, MINOR); stale open settings_draft baseline (page removed in M2).
+- Review A M1 (code-review high), fixed: form save now refreshes `sandbox_boot` (the in-memory legacy block is page state, left to M2); removal no longer re-targets the legacy block; `ViewModel.legacy_default` follows `sandbox_daemon`. Declined: capabilities not re-probed when the draft's runtime changes (same as the settings page, a probe needs a restart); retained archive path refused after switching image source (spec'd UnusedArchivePath); restart prompt on any profile change (FR-004 restart-on-save); Draft/ContainerView duplication and `groups()` page bool (taste, MINOR); stale open settings_draft baseline (page removed in M2).
 
 - Review B M1 F1 (MAJOR, no red-before-green evidence for T005-T007): cannot be produced after the fact; git history is one WIP commit. Recorded honestly in tdd/cycle-log.md. F2 fixed (T010 wording). F3 covered by the cycle log.
 

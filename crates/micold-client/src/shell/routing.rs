@@ -226,7 +226,6 @@ impl App {
         match outcome {
             Outcome::DaemonRegistryChanged(registry) => {
                 self.core.settings.daemons = registry.clone();
-                self.core.settings.sync_legacy_daemon();
                 self.refresh_sandbox_boot();
                 self.sync_links();
                 if let Some(store) = self.caps.settings() {
