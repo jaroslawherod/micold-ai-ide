@@ -78,8 +78,8 @@ the same values.
 - Invalid value (for example a limit out of range): the error shows beside the field in the
   daemon's form and blocks saving, as before.
 - Several windows or sessions running: saving restarts only the edited daemon.
-- Remote (SSH) daemon: [NEEDS CLARIFICATION: do container settings apply to a remote daemon, or are
-  they hidden for it?]
+- Remote (SSH) daemon: container settings do not apply and are not shown for it (FR-011); its
+  form keeps the host, user, port and key file it has today.
 - Windows, macOS and Linux behave the same; only the container runtimes available on each differ.
 - Saving a daemon's settings restarts that daemon; its running sessions are affected as they were
   by a restart-on-save before. Other daemons and their sessions are untouched.
@@ -101,17 +101,18 @@ the same values.
 - **FR-004**: Saving these settings MUST restart or re-apply the affected daemon with the same
   effect on its running sessions as the Session service section had before; which control saves
   is FR-010.
-- **FR-005**: Values saved before the change MUST appear unchanged: [NEEDS CLARIFICATION: with
-  several daemons, do the existing global values seed every daemon or only the migrated default
-  daemon, and does a daemon added later start from defaults or copy?]
+- **FR-005**: Values saved before the change MUST appear unchanged: the existing global values
+  belong to the one migrated daemon (id 1) only, as feature 491 already migrates them; no other
+  daemon is seeded. A daemon added later starts from the defaults, not a copy.
 - **FR-006**: All user-facing text that pointed at Settings > Session service MUST point at the
   Daemons manager.
 - **FR-007**: The rail MUST still signal, from any section, that credentials are being shared.
 - **FR-008**: Validation errors for these fields MUST show beside the field and block saving.
 - **FR-009**: The user guide MUST describe the new location and drop the Session service section.
-- **FR-010**: The save model MUST be [NEEDS CLARIFICATION: the Daemons form is saved by its own
-  form, the Session service page by the page Save; should these fields move to the daemon form's
-  save or keep the page Save?]
+- **FR-010**: The container fields MUST be saved by the Daemons form's own save, with its existing
+  restart confirmation when the daemon is running; they MUST NOT keep a separate page Save.
+- **FR-011**: For a daemon whose runtime is SSH, the container fields MUST NOT be shown and its
+  stored container settings MUST be left as they were.
 
 ### Key Entities
 
@@ -127,6 +128,14 @@ the same values.
 - **SC-002**: The settings rail lists no Session service entry, and no user-facing text names it.
 - **SC-003**: 100% of values saved before the change appear unchanged afterwards.
 - **SC-004**: The user guide has no stale reference to Session service.
+
+## Clarifications
+
+### Session 2026-10-15
+
+- Q: Do existing global values seed every daemon or only the migrated one, and does a later daemon copy? → A: only the migrated daemon (id 1); a later daemon starts from defaults. _(agent-resolved: specs/491-multi-session-daemons/research.md#R5-migration)_
+- Q: Which save do the fields use? → A: the Daemons form's own save with its running-daemon confirmation. _(agent-resolved: crates/micold-client/src/features/daemons.rs `save`)_
+- Q: Do container settings apply to an SSH daemon? → A: no; SSH settings are a target only, so the fields are hidden. _(agent-resolved: specs/489-ssh-remote-daemon/spec.md; crates/micold-client/src/features/daemons.rs `DaemonRuntime::Ssh`)_
 
 ## Assumptions
 
