@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #804
 - **Worktree branch**: feat/804_move-the-session-service-settings-container
 - **Started**: 2026-10-15
-- **Phase**: tasks
-- **Next step**: M1 after design PR merges
+- **Phase**: milestone M1 PR
+- **Next step**: orchestrator waits on CI and merges M1, then M2
 
 ## Pull requests
 
