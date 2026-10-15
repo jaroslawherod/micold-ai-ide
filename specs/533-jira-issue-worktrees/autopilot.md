@@ -24,7 +24,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T021, T034 | full | Jira switch, settings fields, protocol 45 and the opt-in gate | #819 | merged |
-| M2 | T022–T031 | full | Connect, change and remove a project's connection and token | (this PR) | in review |
+| M2 | T022–T031 | full | Connect, change and remove a project's connection and token | #871 | open |
 | M3 | T032–T033, T035–T053, T068–T069 | full | Start a worktree from a Jira issue (list, pick, notices); kept whole: core, adapter and dialog are one wired path (no half-wired UI) | | pending |
 | M4 | T054–T058, T070 | full | Search Jira issues incl. beyond the loaded list | | pending |
 | M5 | T059–T065 | full | GitHub / Jira source choice per project | | pending |
