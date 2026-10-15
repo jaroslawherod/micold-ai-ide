@@ -26,3 +26,11 @@ covered by the existing no-notice assertions.
 
 Deviation as for M1: part 1 hit its context cap mid-milestone and handed over uncompiled code, so
 no red phase was observed for M2; tdd-verify mutation testing in the close unit is the remedy.
+
+## M3 (T027-T031) and close
+
+M3 had no cycle-log entry when it merged: tests and source landed together in one commit, no red
+run was observed. `tdd/verification.md` (close unit) records the audit: verdict FAIL for missing red
+evidence, which cannot be repaired after the fact. Its 10 real mutation survivors (findings 1-9)
+got tests in the close PR; those tests were written against existing source and pass, so they are
+test-after by construction.

@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-12
 
-**Status**: Draft
+**Status**: Closed 2026-10-14 — shipped in PRs #782, #825, #832, #836 and the close PR (visual passes T015/T026/T033 not observed, accepted)
 
 **Input**: User description: "Diff view should show PRs created within sessions and worktrees (issue #775). When a session (e.g. an autopilot run) opens a PR from its worktree, the diff view only shows the working-tree/branch changes; there is no way to see the PR itself or its diff from there. The diff view lists PRs associated with the current session and its worktree (PRs whose head branch is the worktree's branch); selecting a PR shows its diff (base...head); PR state (open / merged / closed) is visible alongside the entry; a worktree with no active session still shows its PRs."
 

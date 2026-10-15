@@ -85,3 +85,37 @@ fn the_fake_answers_in_order_and_records_the_calls() {
         ]
     );
 }
+
+#[test]
+fn a_rate_limit_is_named_with_its_pause_and_a_missing_gh_is_unavailable() {
+    let limited = diff_outcome(
+        &exited(1, "", "gh: API rate limit exceeded (HTTP 403)\n"),
+        NOW,
+    );
+    assert_eq!(
+        limited,
+        Err(DiffReadFailure::Failed(ReadingFailure::RateLimited {
+            until: NOW + 60
+        }))
+    );
+    let missing = diff_outcome(
+        &RunOutcome::SpawnFailed("No such file or directory (os error 2)".into()),
+        NOW,
+    );
+    assert_eq!(
+        missing,
+        Err(DiffReadFailure::Failed(ReadingFailure::Unavailable))
+    );
+    let signed_out = diff_outcome(
+        &exited(
+            4,
+            "",
+            "To get started with GitHub CLI, please run:  gh auth login\n",
+        ),
+        NOW,
+    );
+    assert_eq!(
+        signed_out,
+        Err(DiffReadFailure::Failed(ReadingFailure::Unavailable))
+    );
+}

@@ -72,7 +72,9 @@ description: "Task list for feature 775: PRs in the diff view"
 
 ## Polish (no milestone)
 
-No code changes remain after T033: recording the quickstart Part A and Part B results in `quickstart.md` and ticking tasks is the close unit's work, in the close PR.
+No code changes remain after T033 (T034 below): recording the quickstart Part A and Part B results in `quickstart.md` and ticking tasks is the close unit's work, in the close PR.
+
+- [x] T034 Record the quickstart Part A and Part B results in `quickstart.md` (Part B not observed, accepted; see Results there)
 
 ## Dependencies
 
@@ -114,3 +116,16 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Verify**: `scripts/build-lock.sh cargo test -p micold-client --test pr_status_is_read_only_on_named_events --test features_pr_changes`; `scripts/build-lock.sh cargo test -p micold-client pr_list_refresh` (the T027 tests are named `pr_list_refresh_*`); quickstart §B steps 5, 6
 - **Depends on**: M2
 - **Tier**: full
+
+## Phase 6: TDD remediation
+
+Source: `specs/775-diff-view-session-prs/tdd/verification.md` (verdict FAIL). The feature is not done
+until R001-R006 are cleared. Tests only; no source change is needed unless a new test exposes a bug.
+
+- [x] R001 [US2] (finding 1, 9) In `crates/micold-client/tests/features_pr_changes.rs` assert that `SourceChosen(None)` forgets the remembered PR (`state.remembered` empty; switching away and back shows the working tree) and does so while the list is still awaited; proves `changes.rs:596-602`. Verify: `scripts/build-lock.sh cargo test -p micold-client --test features_pr_changes`
+- [x] R002 [US2] (finding 2, 3) Add tests for `SourceChosen(Some(n))`: an unlisted `n` returns `Effect::None` and changes nothing; choosing the shown PR again returns `Effect::None`; choosing a PR whose diff `Failed` reads again (`changes.rs:616-618`). Verify: same command.
+- [x] R003 [US2] (finding 4) In `crates/micold-core/tests/pull_request_diff.rs` pin `diff_failure` for a rate limit and an unavailable `gh` through `diff_outcome` (exact `DiffReadFailure::Failed(..)` values, not `matches!(Failed(_))`) (`pull_request.rs:896`). Verify: `scripts/build-lock.sh cargo test -p micold-core --test pull_request_diff`
+- [x] R004 [US2] (finding 5, 6, 7) In `crates/micold-core/tests/pr_diff_split.rs` add fixtures and tests: exactly 5000 changed lines is not large, 5001 is; a mode-only change is `ChangeKind::ModeOnly`; a `GIT binary patch` section is `Content::Binary` (`pr_diff.rs:78,94,111`). Verify: `scripts/build-lock.sh cargo test -p micold-core --test pr_diff_split`
+- [x] R005 [US2] (finding 8) Assert `PrFile.patch` equals the file's exact section bytes in `pr_diff_split.rs` (`pr_diff.rs:114`). Verify: same command as R004.
+- [x] R006a [US3] (finding 10) Added the M3 entry to `tdd/cycle-log.md`, stating no red was observed.
+- [ ] R006b [US3] (finding 11) `tdd/test-list.md`: declined, not added. The spec was not planned through the tdd extension; the FR traceability table in `tdd/verification.md` stands in.
