@@ -19,43 +19,43 @@ description: "Task list for the session tree of agent-spawned sessions (#551)"
 
 ## Phase 1: Setup
 
-- [ ] T001 Add the `origin` module to `crates/micold-core/src/lib.rs` and create `crates/micold-core/src/origin.rs` with `SessionOrigin { id: SessionId, status: OriginStatus }` and `OriginStatus = Known | Removed` (serde, `#[serde(rename_all = "snake_case")]`), no logic yet
+- [x] T001 Add the `origin` module to `crates/micold-core/src/lib.rs` and create `crates/micold-core/src/origin.rs` with `SessionOrigin { id: SessionId, status: OriginStatus }` and `OriginStatus = Known | Removed` (serde, `#[serde(rename_all = "snake_case")]`), no logic yet
 
-- [ ] T025 [P] [U15] Spike (runs here so M2 and M3 know its outcome; its fixtures are consumed by T026), before any provider reader: confirm the signals of research.md R2 (Claude Code `claude --bg` from a session, OpenCode `parentID`, Codex `session_meta.source`); record each real output as a fixture under `crates/micold-core/tests/fixtures/<provider>/` and update the R2 table in `specs/551-session-spawn-tree/research.md`, `contracts/provider-signals.md` and spec Assumptions with confirmed or "gap"
+- [x] T025 [P] [U15] Spike (runs here so M2 and M3 know its outcome), before any provider reader: confirm the signals of research.md R2 (Claude Code `claude --bg` from a session, OpenCode `parentID`, Codex `session_meta.source`) and update the R2 table in `specs/551-session-spawn-tree/research.md`, `contracts/provider-signals.md` and spec Assumptions with confirmed, source-confirmed (reader with a synthetic fixture built in T026/T029) or "gap". No real recording could be made on the spike host
 
 ## Phase 2: Foundational (blocks every story)
 
-- [ ] T002 [P] Write failing unit tests for `validate_origin(child, candidate, lookup, reported_by_provider) -> Result<(), OriginRejected>` in `crates/micold-core/src/origin.rs`: self rejected; candidate in another project/worktree (`SessionLocation` unequal) rejected; chain from candidate reaching the child (cycle, bounded walk) rejected; an unknown candidate (not in the lookup) is accepted only when the caller says it was reported by a provider reader (`reported_by_provider: bool` argument) and rejected otherwise (R4) [U1] [U2] [U3]
-- [ ] T003 Implement `origin::validate_origin` in `crates/micold-core/src/origin.rs` (one pure function used by every write path, R4; signature adds `reported_by_provider: bool`) [U1] [U2] [U3]
-- [ ] T004 [P] Write failing tests in `crates/micold-core/tests/store_roundtrip.rs`: a catalog file without the key loads with every session top-level and `SCHEMA_VERSION` stays 1 (FR-015); a stored `origin` survives save and load (FR-006) [U5]
-- [ ] T005 Add `StoredSession.origin: Option<SessionId>` (`#[serde(default, skip_serializing_if = "Option::is_none")]`) in `crates/micold-core/src/store.rs` and `Session.origin: Option<SessionOrigin>` in `crates/micold-core/src/session.rs` ("write-once; `None` for every session today"; only `id` is stored, `status` is runtime) and `StoredSession.origin_rejected: bool` (`#[serde(default, skip_serializing_if = "is_false")]`, set when a pending provider origin failed the full check) [U5]
-- [ ] T006 [P] Write failing tests in `crates/micold-core/tests/protocol_roundtrip.rs`: `SessionSummary.origin: Option<SessionOrigin>` (`#[serde(default)]`) round-trips in `SessionChanged` and snapshots; an older payload without it decodes to `None`; `PROTOCOL_VERSION` is 41 [U6]
-- [ ] T007 Add `SessionSummary.origin` in `crates/micold-core/src/protocol/messages.rs` and bump `PROTOCOL_VERSION` 40 to 41 in `crates/micold-core/src/protocol/version.rs` [U6]
+- [x] T002 [P] Write failing unit tests for `validate_origin(child, candidate, lookup, reported_by_provider) -> Result<(), OriginRejected>` in `crates/micold-core/src/origin.rs`: self rejected; candidate in another project/worktree (`SessionLocation` unequal) rejected; chain from candidate reaching the child (cycle, bounded walk) rejected; an unknown candidate (not in the lookup) is accepted only when the caller says it was reported by a provider reader (`reported_by_provider: bool` argument) and rejected otherwise (R4) [U1] [U2] [U3]
+- [x] T003 Implement `origin::validate_origin` in `crates/micold-core/src/origin.rs` (one pure function used by every write path, R4; signature adds `reported_by_provider: bool`) [U1] [U2] [U3]
+- [x] T004 [P] Write failing tests in `crates/micold-core/tests/store_roundtrip.rs`: a catalog file without the key loads with every session top-level and `SCHEMA_VERSION` stays 1 (FR-015); a stored `origin` survives save and load (FR-006) [U5]
+- [x] T005 Add `StoredSession.origin: Option<SessionId>` (`#[serde(default, skip_serializing_if = "Option::is_none")]`) in `crates/micold-core/src/store.rs` and `Session.origin: Option<SessionOrigin>` in `crates/micold-core/src/session.rs` ("write-once; `None` for every session today"; only `id` is stored, `status` is runtime) and `StoredSession.origin_rejected: bool` (`#[serde(default, skip_serializing_if = "is_false")]`, set when a pending provider origin failed the full check) [U5]
+- [x] T006 [P] Write failing tests in `crates/micold-core/tests/protocol_roundtrip.rs`: `SessionSummary.origin: Option<SessionOrigin>` (`#[serde(default)]`) round-trips in `SessionChanged` and snapshots; an older payload without it decodes to `None`; `PROTOCOL_VERSION` is 47 [U6]
+- [x] T007 Add `SessionSummary.origin` in `crates/micold-core/src/protocol/messages.rs` and bump `PROTOCOL_VERSION` 46 to 47 in `crates/micold-core/src/protocol/version.rs` [U6]
 
 ## Phase 3: User Story 1 + 2, daemon half (Priority: P1) 🎯 MVP
 
-**Goal**: A session started by an agent through the tool server is recorded as a child of the caller, the fact persists, and clients and assistants can read it.
+**Goal**: An origin recorded for a session persists, is validated and write-once, is removed-marked when its origin is deleted, and clients and assistants can read it. (Amended 2026-10-13: the tool server records none; providers do, in M3.)
 
-**Independent Test**: `cargo test -p micold-daemon --test mcp_create_session` and the restart/removal tests below.
+**Independent Test**: `cargo test -p micold-daemon --test mcp_create_session --test catalog_adoption --test session_origin_removal`.
 
 ### Tests
 
-- [ ] T008 [P] [US1] Write failing tests in `crates/micold-daemon/tests/mcp_create_session.rs`: `create_session` for the caller's own worktree returns a row with `origin` = caller `ref` and `origin_state: "known"` and the catalog stores it (FR-019); an archived caller records no origin; another worktree yields a top-level session with no origin (FR-009); no input parameter names an origin; `list_sessions` and `get_session` rows carry `origin`/`origin_state` and omit them for top-level sessions (FR-013); a caller that exited still records [U7] [U8] [U9] [A1]
-- [ ] T009 [P] [US1] Write failing tests in `crates/micold-core/tests/mcp_tools_catalog.rs` that the `list_sessions`/`get_session`/`create_session` tool descriptions name the `origin` and `origin_state` row fields (contracts/mcp-origin.md) [U9]
-- [ ] T010 [P] [US2] Write failing tests in `crates/micold-daemon/tests/catalog_adoption.rs`: `Catalog::load` after restart keeps every origin (SC-002); a live child becomes interrupted-resumable and stays nested under its origin (US2.2); the origin is persisted in the same `persist()` as the new session; `record_origin` on a session that already has an origin returns `Ok(false)` and keeps the first, and recording the same origin again is idempotent (FR-010) [U4] [U10] [A5] [A6]
-- [ ] T011 [P] [US2] Write failing tests in `crates/micold-daemon/tests/session_origin_removal.rs`: single delete (`Catalog::archive_session`), `archive_session_ids` and `archive_worktree_sessions` each emit a `SessionChanged` with `status: "removed"` for every direct child in the same step; the child is neither deleted nor stopped (FR-018); stopping an origin changes nothing; a snapshot after the archive carries `removed`; two subscribers see the same summary (FR-012) [U11] [A7]
+- [x] T008 [P] [US1] Write failing tests in `crates/micold-daemon/tests/mcp_create_session.rs` (amended 2026-10-13, FR-019): a session created through `create_session` has no origin and no input parameter names one (FR-009); `list_sessions` and `get_session` rows carry `origin`/`origin_state` for a session with a recorded origin and omit them for top-level sessions (FR-013) [U8] [U9]
+- [x] T009 [P] [US1] Write failing tests in `crates/micold-core/tests/mcp_tools_catalog.rs` that the `list_sessions`/`get_session` tool descriptions name the `origin` and `origin_state` row fields (contracts/mcp-origin.md) [U9]
+- [x] T010 [P] [US2] Write failing tests in `crates/micold-daemon/tests/catalog_adoption.rs`: `Catalog::load` after restart keeps every origin (SC-002); a live child becomes interrupted-resumable and stays nested under its origin (US2.2); the origin is persisted in the same `persist()` as the new session; `record_origin` on a session that already has an origin returns `Ok(false)` and keeps the first, and recording the same origin again is idempotent (FR-010) [U4] [U10] [A5] [A6]
+- [x] T011 [P] [US2] Write failing tests in `crates/micold-daemon/tests/session_origin_removal.rs`: single delete (`Catalog::archive_session`), `archive_session_ids` and `archive_worktree_sessions` each emit a `SessionChanged` with `status: "removed"` for every direct child in the same step; the child is neither deleted nor stopped (FR-018); stopping an origin changes nothing; a snapshot after the archive carries `removed`; two subscribers see the same summary (FR-012) [U11] [A7]
 
 ### Implementation
 
-- [ ] T012 [US1] Add `NewSession.origin: Option<SessionId>` in `crates/micold-daemon/src/ops.rs` (passed by `create_session_with_prompt`), `origin: None` at the existing caller in `crates/micold-daemon/src/runs.rs`, and an `origin` argument on `DaemonState::create_session` and the `NewSession` built in `crates/micold-daemon/src/state.rs` [U7]
-- [ ] T013 [US1] In `crates/micold-daemon/src/catalog.rs` make `Catalog::create_session` take `origin: Option<SessionId>`, validate with `validate_origin`, store it in the same `persist()`; add `record_origin` returning `Ok(false)` when an origin exists (FR-010) [U7] [U8] [U10] [U4]
-- [ ] T014 [US2] In `crates/micold-daemon/src/catalog.rs` overlay `OriginStatus` in `session_summary` (`Removed` when the origin's record is archived) and add one helper shared by the three archive paths that emits a child `SessionChanged` with `status: removed` [U11]
-- [ ] T015 [US1] In `crates/micold-daemon/src/mcp/tools.rs` pass `Some(caller)` to `Catalog::create_session` when the target worktree equals the caller's (`resolve_caller` location), else `None`; add `origin` and `origin_state` to `session_row`; update the row text in `crates/micold-core/src/mcp/tools.rs` [U7] [U8] [U9]
-- [ ] T016 [US1] Document the new row fields and the `create_session` nesting in `docs/user-guide/agent-tools.md` [U9]
+- [x] T012 [US1] (Amended 2026-10-13, FR-019: no origin parameter is added to `create_session` paths; feature 776's signatures stay.) Add `DaemonState` broadcast of origin-removed events in `crates/micold-daemon/src/state.rs` [U11]
+- [x] T013 [US1] In `crates/micold-daemon/src/catalog.rs` add `record_origin` (validated with `validate_origin`, persisted, returning `Ok(false)` when an origin exists, FR-010); `Catalog::create_session` is unchanged (FR-019) [U7] [U10] [U4]
+- [x] T014 [US2] In `crates/micold-daemon/src/catalog.rs` overlay `OriginStatus` in `session_summary` (`Removed` when the origin's record is archived) and add one helper shared by the three archive paths that emits a child `SessionChanged` with `status: removed` [U11]
+- [x] T015 [US1] In `crates/micold-daemon/src/mcp/tools.rs` add `origin` and `origin_state` to `session_row`; update the row text in `crates/micold-core/src/mcp/tools.rs`; `create_session` is unchanged [U9]
+- [x] T016 [US1] Document the new row fields in `docs/user-guide/agent-tools.md` [U9]
 
 ### Outer loop
 
-- [ ] T038 [US2] Run the M1 acceptance behaviors through the real entry points (`mcp_create_session`, `catalog_adoption`, `session_origin_removal`) and confirm each is green: [A5] [A6] (daemon half of [A1], [A7])
+- [x] T038 [US2] Run the M1 acceptance behaviors through the real entry points (`mcp_create_session`, `catalog_adoption`, `session_origin_removal`) and confirm each is green: [A5] [A6] (daemon half of [A1], [A7])
 
 ## Phase 4: User Story 1 + 2, sidebar half (Priority: P1)
 
@@ -89,7 +89,7 @@ description: "Task list for the session tree of agent-spawned sessions (#551)"
 
 ### Tests
 
-- [ ] T026 [P] [US3] Write failing tests in `crates/micold-core/tests/provider_origin.rs`: the default `reported_origin` is `None`; each confirmed provider's fixture yields `Some(parent)` and the same fixture without the field yields `None`; a name, path or timestamp never yields an origin (FR-002) [U15] [A8]
+- [ ] T026 [P] [US3] Write failing tests in `crates/micold-core/tests/provider_origin.rs`: the default `reported_origin` is `None`; each confirmed provider's fixture (recorded, or synthetic from the provider's own schema or source, marked as such) yields `Some(parent)` and the same fixture without the field yields `None`; a name, path or timestamp never yields an origin (FR-002) [U15] [A8]
 - [ ] T027 [P] [US3] Write failing tests in `crates/micold-daemon/tests/catalog_adoption.rs`: discovery records a reported origin once (FR-001, FR-010); a child adopted before its origin stays top-level pending and nests when the origin is adopted (FR-016); a pending origin that fails the full check (same-worktree, cycle) when it appears is cleared once, `origin_rejected` is persisted and no later pass re-records it (R4); an adopted session of a gap provider stays top-level [U16] [A8]
 - [ ] T028 [P] [US3] Write a failing test in `crates/micold-core/tests/provider_origin_docs.rs` that the provider table in `docs/user-guide/worktrees-and-sessions.md` lists every `AiCli` variant (SC-005) [U17] [A9]
 
@@ -131,7 +131,7 @@ Phase 1 then 2 block all. Phase 3 (daemon) before Phase 4 (client reads `Session
 
 ## Implementation Strategy
 
-MVP is M1: origin recorded, persisted and visible to assistants and clients. M2 makes it visible in the sidebar. Quickstart Part B (visual pass), recording its results and ticking tasks is left to the close unit (no code).
+MVP is M1: origin recorded, persisted and visible to assistants and clients. M2 makes it visible in the sidebar. Quickstart Part B (visual pass), recording its results and ticking tasks is left to the close unit (no code). Claude Code, the provider the issue names, stays a gap until a recording of a parent field exists.
 
 ## Milestones
 
@@ -140,18 +140,18 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 ### M1 — Origin recorded, persisted and exposed 🎯 MVP (data and tool API; M2 makes it visible in the sidebar)
 
 - **Tasks**: T001–T016, T025, T038
-- **Deliverable**: A session created through the tool server from a session in the same worktree is recorded as its child, survives a daemon restart, and `list_sessions`/`get_session` and the wire show its origin; deleting the origin leaves the child with status removed; the spike's result on provider signals is recorded in research.md R2.
-- **Satisfies**: US1 acceptance scenario 3 (unchanged top-level); US2 acceptance scenarios 1–2; FR-006, FR-009, FR-010, FR-012, FR-013, FR-015, FR-018, FR-019
-- **Verify**: `cargo test -p micold-daemon --test mcp_create_session --test catalog_adoption --test session_origin_removal` and `mise run test-core`; `ls crates/micold-core/tests/fixtures/` shows the spike's fixtures and research.md R2 marks each provider confirmed or gap
+- **Deliverable**: An origin recorded for a session (the daemon's `record_origin`, validated and write-once) survives a daemon restart, and `list_sessions`/`get_session` and the wire show it; deleting the origin leaves the child with status removed; the spike's result on provider signals is recorded in research.md R2. Nothing sets an origin yet: the tool server records none (FR-019) and the provider readers land in M3.
+- **Satisfies**: US1 acceptance scenario 3 (unchanged top-level); US2 acceptance scenarios 1–2; FR-006, FR-009, FR-010, FR-012, FR-013, FR-015, FR-018, FR-019 (as amended: the tool server records no origin)
+- **Verify**: `cargo test -p micold-daemon --test mcp_create_session --test catalog_adoption --test session_origin_removal` and `mise run test-core`; research.md R2 marks each provider reader-with-synthetic-fixture or gap
 - **Depends on**: —
 - **Tier**: full
 
 ### M2 — Sidebar shows the tree
 
 - **Tasks**: T017–T024, T039
-- **Deliverable**: The sidebar nests child sessions under their origin at any depth, in worktrees and the Default entry, with the child marker and the origin pending/removed markers.
+- **Deliverable**: The sidebar nests child sessions under their origin at any depth, in worktrees and the Default entry, with the child marker and the origin pending/removed markers. Until M3 nothing sets an origin: the tree is exercised by reducer/layout tests and a seeded project state file only.
 - **Satisfies**: US1 acceptance scenarios 1, 2, 4; US2 acceptance scenario 3; FR-003, FR-004, FR-005, FR-007, FR-008, FR-016; SC-001, SC-004
-- **Verify**: `cargo test -p micold-client --test sidebar_tree --test layout_snapshot`; quickstart Part B steps 1, 2, 5, 6, 7
+- **Verify**: `cargo test -p micold-client --test sidebar_tree --test layout_snapshot`; quickstart Part B steps 1, 2, 5, 6, 7 (children seeded in the project's state file)
 - **Depends on**: M1
 - **Tier**: full
 

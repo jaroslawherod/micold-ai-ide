@@ -258,6 +258,15 @@ struct StoredSession {
     /// so no `schema_version` bump, as for `attention_seq` (research R1).
     #[serde(default)]
     unread: bool,
+    /// The session that started this one (feature 551, FR-006). Additive and defaulted, absent
+    /// for a top-level session: no `schema_version` bump, a file without it loads every session
+    /// top-level (FR-015). Only the id is stored; the status is runtime.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    origin: Option<uuid::Uuid>,
+    /// A provider-reported origin that failed the full check was cleared once; set so no later
+    /// discovery pass records it again (research R4).
+    #[serde(default, skip_serializing_if = "is_false")]
+    origin_rejected: bool,
     /// The agent runs reported against the session (feature 552, FR-005). `#[serde(default)]` and
     /// skipped when empty, so a file written before the feature reads as it did and no
     /// `schema_version` bump is needed.
@@ -384,6 +393,8 @@ impl StoredSession {
             provider: session.provider.into(),
             attention_seq: session.attention_seq,
             unread: session.unread,
+            origin: session.origin.map(|o| o.id.0),
+            origin_rejected: session.origin_rejected,
             agents: session.agents.clone(),
             main: session.main,
         }
@@ -411,6 +422,11 @@ impl StoredSession {
         session.archived = self.archived;
         session.attention_seq = self.attention_seq;
         session.unread = self.unread;
+        session.origin = self.origin.map(|id| crate::origin::SessionOrigin {
+            id: SessionId::from_uuid(id),
+            status: crate::origin::OriginStatus::Known,
+        });
+        session.origin_rejected = self.origin_rejected;
         session.agents = self.agents;
         // The daemon that recorded a run as running is gone, so its stop report cannot arrive
         // (feature 552, FR-005).

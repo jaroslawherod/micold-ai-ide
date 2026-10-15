@@ -16,6 +16,7 @@ use micold_core::agent_run::AgentSignal;
 use micold_core::attach::{AttachOutcome, RefuseReason};
 use micold_core::attention::{NotificationKind, NotificationKinds};
 use micold_core::occupancy::{occupancy, refusal_text, Additional, ExistingSession, Occupancy};
+use std::collections::HashSet;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -23,9 +24,12 @@ use std::sync::{Arc, Mutex};
 
 use micold_core::fs_scan::FolderScanner;
 use micold_core::mcp::policy::CrossSessionAccess;
+use micold_core::origin::{
+    validate_origin, OriginNode, OriginRejected, OriginStatus, SessionOrigin,
+};
 use micold_core::project::Availability;
 use micold_core::protocol::messages::{
-    ActivitySignal, CatalogSnapshot, DaemonSettings, ProjectSnapshot, SessionSummary,
+    ActivitySignal, CatalogSnapshot, DaemonMsg, DaemonSettings, ProjectSnapshot, SessionSummary,
     WireLifecycle, WorktreeSnapshot, WorktreeStatus,
 };
 use micold_core::session::{
@@ -112,6 +116,10 @@ pub struct Catalog {
     load_status: LoadStatus,
     /// Where the load moved an unreadable catalog, when it did (002 BUG-007).
     recovered_backup: Option<PathBuf>,
+    /// `SessionChanged` messages the archive paths produced for the children of an archived origin
+    /// (feature 551, FR-012). The state drains them with [`Catalog::take_origin_events`] and sends
+    /// them in the step that archived, so no window infers a removal from an id leaving a list.
+    origin_events: Vec<DaemonMsg>,
 }
 
 impl Catalog {
@@ -129,6 +137,7 @@ impl Catalog {
             settings_store: Some(settings_store),
             load_status: loaded.status,
             recovered_backup: loaded.preserved,
+            origin_events: Vec::new(),
         }
     }
 
@@ -153,6 +162,7 @@ impl Catalog {
             settings_store: None,
             load_status: LoadStatus::Missing,
             recovered_backup: None,
+            origin_events: Vec::new(),
         }
     }
 
@@ -235,9 +245,10 @@ impl Catalog {
             .sessions
             .get(project)
             .map(|list| {
+                let removed = archived_ids(list);
                 list.iter()
                     .filter(|s| !s.archived)
-                    .map(session_summary)
+                    .map(|s| session_summary(s, &removed))
                     .collect()
             })
             .unwrap_or_default()
@@ -670,6 +681,71 @@ impl Catalog {
             .map_or(Occupancy::Free, |list| occupancy(list, location))
     }
 
+    /// Record `origin` as the session that started `id` (feature 551, FR-010). Written once: a
+    /// session that already has an origin, or whose provider-reported origin was rejected before,
+    /// keeps what it has and this returns `Ok(false)`, as it does for an origin that fails
+    /// [`validate_origin`]. `Ok(true)` when it was recorded and persisted.
+    pub fn record_origin(
+        &mut self,
+        id: SessionId,
+        origin: SessionId,
+        reported_by_provider: bool,
+    ) -> io::Result<bool> {
+        let Some((project, _)) = self.workspace.find_session(id) else {
+            return Ok(false);
+        };
+        let project = project.to_path_buf();
+        let list = self.workspace.sessions.get(&project).map(Vec::as_slice);
+        let list = list.unwrap_or(&[]);
+        let Some(session) = list.iter().find(|s| s.id == id) else {
+            return Ok(false);
+        };
+        if session.origin.is_some() || session.origin_rejected || session.archived {
+            return Ok(false);
+        }
+        if check_origin(list, session, origin, reported_by_provider).is_err() {
+            return Ok(false);
+        }
+        if let Some((_, session)) = self.workspace.find_session_mut(id) {
+            session.origin = Some(SessionOrigin {
+                id: origin,
+                status: OriginStatus::Known,
+            });
+        }
+        if let Err(e) = self.persist() {
+            if let Some((_, session)) = self.workspace.find_session_mut(id) {
+                session.origin = None;
+            }
+            return Err(e);
+        }
+        Ok(true)
+    }
+
+    /// The `SessionChanged` messages the archive paths queued for the children of archived
+    /// origins since the last call (feature 551, FR-012).
+    pub fn take_origin_events(&mut self) -> Vec<DaemonMsg> {
+        std::mem::take(&mut self.origin_events)
+    }
+
+    /// Queue one `SessionChanged`, carrying `status: removed`, for every live direct child of the
+    /// sessions just archived. The one helper the three archive paths share (R7).
+    fn queue_removed_children(&mut self, archived: &[SessionId]) {
+        if archived.is_empty() {
+            return;
+        }
+        for list in self.workspace.sessions.values() {
+            let removed = archived_ids(list);
+            for child in list.iter().filter(|s| !s.archived) {
+                if child.origin.is_some_and(|o| archived.contains(&o.id)) {
+                    self.origin_events.push(DaemonMsg::SessionChanged {
+                        session: child.id,
+                        summary: session_summary(child, &removed),
+                    });
+                }
+            }
+        }
+    }
+
     /// Set (or overwrite) a worktree's display-name override for `project`, persisting (FR-014,
     /// T053). Unlike `Workspace::set_worktree_name` (active-project scoped, for the single-project
     /// client), the daemon hosts many projects at once, so the target project is explicit. `name`
@@ -1009,6 +1085,7 @@ impl Catalog {
             }
         }
         self.persist()?;
+        self.queue_removed_children(&archived);
         Ok(archived)
     }
 
@@ -1111,6 +1188,7 @@ impl Catalog {
         if let Some(path) = &owner {
             self.promote_after_archive(path, &[session]);
             self.persist()?;
+            self.queue_removed_children(&[session]);
         }
         Ok(owner)
     }
@@ -1258,6 +1336,7 @@ impl Catalog {
         }
         if !archived.is_empty() {
             self.persist()?;
+            self.queue_removed_children(&archived);
         }
         Ok(archived)
     }
@@ -1600,7 +1679,11 @@ fn claim_main_if_free(list: &[Session], session: &mut Session) {
 /// see the live-session registry that owns the `InputReceiver`. A session with no live entry keeps
 /// the values set here, which for `input_serial` is correct: the daemon has accepted no input for
 /// it, so a client starting at `0` is exactly in step.
-fn session_summary(session: &Session) -> SessionSummary {
+///
+/// `removed` holds the archived sessions of the same project: an origin among them is reported
+/// `removed` (feature 551, FR-018); every other origin is `known`, including one not in the
+/// catalog yet, which the client reads as pending.
+fn session_summary(session: &Session, removed: &HashSet<SessionId>) -> SessionSummary {
     SessionSummary {
         id: session.id,
         worktree_dir: match &session.location {
@@ -1618,9 +1701,39 @@ fn session_summary(session: &Session) -> SessionSummary {
         live_shells: Vec::new(),
         attention_seq: session.attention_seq,
         unread: session.unread,
+        origin: session.origin.map(|o| SessionOrigin {
+            id: o.id,
+            status: if removed.contains(&o.id) {
+                OriginStatus::Removed
+            } else {
+                OriginStatus::Known
+            },
+        }),
         agents: session.agents.clone(),
         main: session.main,
     }
+}
+
+/// The ids of the archived sessions in one project's list.
+fn archived_ids(list: &[Session]) -> HashSet<SessionId> {
+    list.iter().filter(|s| s.archived).map(|s| s.id).collect()
+}
+
+/// [`validate_origin`] over one project's sessions.
+fn check_origin(
+    list: &[Session],
+    child: &Session,
+    candidate: SessionId,
+    reported_by_provider: bool,
+) -> Result<(), OriginRejected> {
+    let node = |s: &Session| OriginNode {
+        id: s.id,
+        location: s.location.clone(),
+        origin: s.origin.map(|o| o.id),
+        archived: s.archived,
+    };
+    let lookup = |id: SessionId| list.iter().find(|s| s.id == id).map(node);
+    validate_origin(&node(child), candidate, &lookup, reported_by_provider)
 }
 
 /// Map the in-process lifecycle to its wire form. The wire `Failed { reason, attempts }` carries a

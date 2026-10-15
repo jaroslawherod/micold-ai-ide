@@ -498,6 +498,7 @@ mod tests {
             live_shells: Vec::new(),
             attention_seq: seq,
             unread: false,
+            origin: None,
             agents: Vec::new(),
             main: false,
         }

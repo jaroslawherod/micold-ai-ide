@@ -2536,6 +2536,27 @@ impl DaemonState {
         self.broadcast(DaemonMsg::CatalogChanged { catalog });
     }
 
+    /// Send every client the `SessionChanged` the archive paths queued for the children of an
+    /// archived origin (feature 551, FR-012): each now reads `origin.status == removed`. Called in
+    /// the step that archived, so no window infers the removal from an id leaving its list.
+    fn broadcast_origin_events(&self) {
+        let events = {
+            let mut inner = self.lock();
+            let mut events = inner.catalog.take_origin_events();
+            // The catalog builds the summaries from persisted state; the live overlay keeps a
+            // running child's activity, shells and input serial intact on the wire.
+            for event in &mut events {
+                if let DaemonMsg::SessionChanged { summary, .. } = event {
+                    Self::overlay_live_summaries(&inner, std::slice::from_mut(summary));
+                }
+            }
+            events
+        };
+        for event in events {
+            self.broadcast(event);
+        }
+    }
+
     /// Send `msg` to every connected client (a mutation reaches all affected clients without further
     /// user action — FR-011).
     pub fn broadcast(&self, msg: DaemonMsg) {
@@ -3327,6 +3348,7 @@ impl DaemonState {
             let ptys = Self::remove_live_by_ids(&mut inner, ids.clone());
             (ids, ptys)
         };
+        self.broadcast_origin_events();
         self.revoke_tool_credentials(&ids);
         Ok(ptys)
     }
@@ -3454,6 +3476,7 @@ impl DaemonState {
             let ptys = Self::remove_live_by_ids(&mut inner, vec![session]);
             (owner, ptys, worktree)
         };
+        self.broadcast_origin_events();
         self.revoke_tool_credentials(&[session]);
         if owner.is_some() {
             self.remove_pasted_images(session, worktree.as_deref());
@@ -3577,6 +3600,7 @@ impl DaemonState {
             }
             archived
         };
+        self.broadcast_origin_events();
         // An archived session no longer answers as itself (FR-011).
         self.revoke_tool_credentials(&archived);
         Ok(archived)

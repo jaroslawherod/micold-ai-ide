@@ -33,6 +33,7 @@ fn session(id: SessionId, dir: &str) -> SessionSummary {
         unread: false,
         main: false,
         provider: AiCli::ClaudeCode,
+        origin: None,
         agents: Vec::new(),
     }
 }

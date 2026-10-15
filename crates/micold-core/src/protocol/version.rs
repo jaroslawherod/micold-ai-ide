@@ -162,7 +162,10 @@
 /// `WorktreeSnapshot::user_created`, `AttachItem::Worktree`, `AttachableWorktree`,
 /// `DiscoveryReport::worktrees`, `ResumableStatus::NeedsWorktreeAttach`, and the `owner` of
 /// `BlockReason::CheckedOutAt`.
-pub const PROTOCOL_VERSION: u32 = 46;
+///
+/// And 46 → 47 for feature 551's session tree: `origin` on `SessionSummary`
+/// (contracts/origin-protocol.md). An older peer would drop it and show every child top-level.
+pub const PROTOCOL_VERSION: u32 = 47;
 
 // `build.rs` emits `pub const SCHEMA_HASH: [u8; 32] = [...];` into this file.
 include!(concat!(env!("OUT_DIR"), "/schema_hash.rs"));

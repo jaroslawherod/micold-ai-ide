@@ -4,6 +4,7 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
+use micold_core::occupancy::Additional;
 use micold_core::project::{Availability, Project};
 use micold_core::protocol::messages::WireLifecycle;
 use micold_core::session::{
@@ -619,4 +620,146 @@ async fn a_connection_that_never_handshakes_still_writes_back_a_missing_catalog(
     let reread = JsonFileStore::at(projects_path).load();
     assert_eq!(reread.status, LoadStatus::Loaded);
     assert_eq!(reread.workspace.projects.len(), 1);
+}
+
+// --- Feature 551: the origin of a session (FR-006, FR-010) ---
+
+fn origin_paths(dir: &Path) -> (PathBuf, PathBuf, PathBuf) {
+    (
+        dir.join("projects.json"),
+        dir.join("settings.json"),
+        PathBuf::from("/repo/alpha"),
+    )
+}
+
+fn load_catalog(projects: &Path, settings: &Path) -> Catalog {
+    Catalog::load(
+        Box::new(JsonFileStore::at(projects.to_path_buf())),
+        Box::new(JsonFileSettingsStore::at(settings.to_path_buf())),
+    )
+}
+
+/// An empty catalog holding one project, saved to `projects`.
+fn empty_project_catalog(projects: &Path, settings: &Path, project: &Path) -> Catalog {
+    let workspace = Workspace {
+        projects: vec![Project::new(
+            project.to_path_buf(),
+            true,
+            Availability::Available,
+        )],
+        active: Some(project.to_path_buf()),
+        ..Workspace::empty()
+    };
+    JsonFileStore::at(projects.to_path_buf())
+        .save(&workspace)
+        .unwrap();
+    load_catalog(projects, settings)
+}
+
+fn origin_of(catalog: &Catalog, project: &Path, id: SessionId) -> Option<SessionId> {
+    catalog
+        .sessions_for(project)
+        .into_iter()
+        .find(|s| s.id == id)
+        .expect("session in catalog")
+        .origin
+        .map(|o| o.id)
+}
+
+/// A session the daemon found in a provider's own store, adopted into worktree `wt`: the only way a
+/// second session exists beside the user's own one (feature 776 refuses `create_session`), and so
+/// the only way a child of an origin appears.
+fn adopt_into(catalog: &mut Catalog, project: &Path, wt: &str) -> SessionId {
+    let id = SessionId::new();
+    let adopted = catalog.adopt_discovered_sessions(
+        project,
+        vec![Session::restored(
+            id,
+            SessionLocation::Worktree(wt.to_string()),
+            SessionLabel::Pending,
+            TerminalMode::AiCli,
+            AiCli::ClaudeCode,
+        )],
+    );
+    assert_eq!(adopted, 1);
+    id
+}
+
+/// [`adopt_into`], then the provider-reported origin recorded for it.
+fn adopt_child(catalog: &mut Catalog, project: &Path, wt: &str, origin: SessionId) -> SessionId {
+    let id = adopt_into(catalog, project, wt);
+    assert!(catalog.record_origin(id, origin, true).unwrap());
+    id
+}
+
+#[test]
+fn origins_and_nesting_survive_a_restart_and_a_live_child_comes_back_resumable() {
+    // SC-002, US2 scenarios 1 and 2: the origin is persisted in the same write as the session.
+    let dir = tempfile::tempdir().unwrap();
+    let (projects, settings, project) = origin_paths(dir.path());
+    let mut catalog = empty_project_catalog(&projects, &settings, &project);
+    let a = catalog
+        .create_session(&project, "feat-x", AiCli::ClaudeCode, Additional::No)
+        .unwrap();
+    let b = adopt_child(&mut catalog, &project, "feat-x", a);
+    let c = adopt_child(&mut catalog, &project, "feat-x", a);
+    let d = adopt_child(&mut catalog, &project, "feat-x", b);
+    catalog.mark_session_running(b);
+    drop(catalog);
+
+    // Read back from disk only: no `persist()` after the writes.
+    let mut restarted = load_catalog(&projects, &settings);
+    assert_eq!(origin_of(&restarted, &project, a), None);
+    assert_eq!(origin_of(&restarted, &project, b), Some(a));
+    assert_eq!(origin_of(&restarted, &project, c), Some(a));
+    assert_eq!(origin_of(&restarted, &project, d), Some(b));
+
+    restarted.present_interrupted_resumable(|id, _, _, _| id == b);
+    let after = restarted.sessions_for(&project);
+    let child = after.iter().find(|s| s.id == b).unwrap();
+    assert_eq!(child.lifecycle, WireLifecycle::InterruptedResumable);
+    assert_eq!(child.origin.map(|o| o.id), Some(a), "still nested");
+}
+
+#[test]
+fn an_origin_is_recorded_once_and_the_same_origin_again_is_idempotent() {
+    // FR-010: the first origin stands; a later, different one never replaces it.
+    let dir = tempfile::tempdir().unwrap();
+    let (projects, settings, project) = origin_paths(dir.path());
+    let mut catalog = empty_project_catalog(&projects, &settings, &project);
+    let a = catalog
+        .create_session(&project, "w", AiCli::ClaudeCode, Additional::No)
+        .unwrap();
+    let other = adopt_into(&mut catalog, &project, "w");
+    let child = adopt_into(&mut catalog, &project, "w");
+
+    assert!(catalog.record_origin(child, a, false).unwrap());
+    assert!(!catalog.record_origin(child, other, false).unwrap());
+    assert!(!catalog.record_origin(child, a, false).unwrap());
+    assert_eq!(origin_of(&catalog, &project, child), Some(a));
+    drop(catalog);
+    let restarted = load_catalog(&projects, &settings);
+    assert_eq!(origin_of(&restarted, &project, child), Some(a));
+}
+
+#[test]
+fn an_origin_that_fails_validation_leaves_the_session_top_level() {
+    // FR-009: another worktree, an archived session, and a session the catalog does not know.
+    let dir = tempfile::tempdir().unwrap();
+    let (projects, settings, project) = origin_paths(dir.path());
+    let mut catalog = empty_project_catalog(&projects, &settings, &project);
+    let elsewhere = catalog
+        .create_session(&project, "other", AiCli::ClaudeCode, Additional::No)
+        .unwrap();
+    let gone = catalog
+        .create_session(&project, "w", AiCli::ClaudeCode, Additional::No)
+        .unwrap();
+    catalog.archive_session(gone).unwrap();
+    let unknown = SessionId::from_uuid(Uuid::from_u128(0xdead));
+
+    for candidate in [elsewhere, gone, unknown] {
+        let child = adopt_into(&mut catalog, &project, "w");
+        assert!(!catalog.record_origin(child, candidate, false).unwrap());
+        assert_eq!(origin_of(&catalog, &project, child), None);
+    }
 }

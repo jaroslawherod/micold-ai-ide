@@ -464,6 +464,7 @@ mod tests {
                             unread: false,
                             main: false,
                             provider: micold_core::session::AiCli::ClaudeCode,
+                            origin: None,
                             agents: Vec::new(),
                         })
                         .collect(),

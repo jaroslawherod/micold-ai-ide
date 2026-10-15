@@ -30,9 +30,23 @@
   deleted with it. _(agent-resolved: this spec FR-006, FR-008 and User Story 2.3; deleting a
   session the user did not select would be destructive and no rule in the repo cascades deletes)_
 - Q: Does a `create_session` through the tool server make the new session a child of the caller?
-  → A: Yes, within one worktree. _(agent-resolved: specs/034-daemon-mcp-server/contracts/binding.md#2
-  and `crates/micold-daemon/src/mcp/tools.rs`, where every call carries the authenticated caller
-  session, `is_caller`)_
+  → A: Superseded (2026-10-13, below): no. _(first answer, "Yes, within one worktree", agent-resolved
+  from specs/034-daemon-mcp-server/contracts/binding.md#2, was made before feature 776 landed)_
+
+### Session 2026-10-13
+
+- Q: Feature 776 (merged) lets a worktree hold one session and refuses `create_session` into an
+  occupied one, so a child can no longer be created in the caller's worktree. What is a child
+  then? → A: "There should be one user session created. The sesssion created by claude agents
+  should be listed as one level in tree deeper." _(decided by user)_ So: the worktree's one user
+  session is the root, and sessions an agent started appear one level under it, in the same
+  worktree (one level is the expected case; a provider-reported grandchild still nests, FR-003).
+  They do not come from `create_session` (refused by 776) but are the provider-started
+  sessions the daemon discovers in the provider's own store; their origin is what the provider
+  reports (FR-001, FR-019).
+- Q: Should the one-session rule become soft (ask the user, then run a second session in
+  parallel)? → A: "you can record that as another github issue" _(decided by user)_; recorded as
+  issue #802. Out of scope here: this feature does not change 776's refusal.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -148,9 +162,9 @@ and the origin shows whether any child needs attention, then expand.
   origin stands; no duplicate entry appears.
 - Several Micold windows or daemons observe the same worktree (Principle II): every one shows the
   same tree, and an update in one reaches the others.
-- A session started by one session through Micold's own tool server (`create_session`): it is a
-  child of the calling session when both are in the same worktree (FR-019); aimed at another
-  worktree it stays top-level (FR-009).
+- A session started through Micold's own tool server (`create_session`): it is never given an
+  origin by the daemon (FR-019). Into the caller's worktree it is refused by feature 776; into
+  another worktree it is a top-level session of that worktree (FR-009).
 - Linux, macOS and Windows: the tree and its persistence behave the same on all three (Principle VI).
 
 ## Requirements *(mandatory)*
@@ -160,7 +174,8 @@ and the origin shows whether any child needs attention, then expand.
 - **FR-001**: The system MUST record, for a session, the origin session that a provider reports
   having started it from, when and only when the provider reports it through a native signal.
 - **FR-002**: The system MUST NOT infer an origin from a name, a path, a prefix or timing.
-- **FR-003**: The sidebar MUST show a child session nested under its origin session, at any depth.
+- **FR-003**: The sidebar MUST show a child session nested under its origin session, at any depth
+  (one level under the worktree's user session is the expected case).
 - **FR-004**: The sidebar MUST NOT show a session with a known, existing origin as a top-level
   session of its worktree.
 - **FR-005**: A session without a recorded origin MUST appear exactly as today.
@@ -191,10 +206,11 @@ and the origin shows whether any child needs attention, then expand.
 - **FR-018**: Deleting an origin session MUST NOT delete or stop its children; each child MUST
   stay visible top-level with the "origin removed" marker (FR-008). Stopping an origin MUST NOT
   change where its children are shown.
-- **FR-019**: A session created through the tool server's `create_session` MUST record the
-  authenticated calling session as its origin, when that session is in the same worktree
-  (FR-009 otherwise), because the daemon itself identifies the caller; this is a native signal,
-  not a guess (FR-002).
+- **FR-019**: A session created through the tool server's `create_session` MUST NOT be given an
+  origin by the daemon, and no tool input MAY name one: a worktree holds one user session
+  (feature 776), so a call into the caller's worktree is refused and a call into another worktree
+  creates that worktree's own session (FR-009). A session's origin is only what its provider
+  reports (FR-001). The `list_sessions`/`get_session` rows still show a recorded origin (FR-013).
 
 ### Key Entities
 
@@ -221,10 +237,18 @@ and the origin shows whether any child needs attention, then expand.
 
 ## Assumptions
 
-- Planning (research R2) found no confirmed native signal for Claude Code background sessions. The
-  live path is therefore the tool server's `create_session` (FR-019) for every provider, plus any
-  provider whose signal the spike in M1 confirms; US1 and SC-001 hold for those. A provider
-  without a signal is a documented gap (US3), and the user guide records the result.
+- The origin of an agent-spawned session comes only from its provider (FR-001); the tool server
+  is not a source (FR-019). The M1 spike (research R2, T025) found: Claude Code reports none
+  (gap); OpenCode (`session.parent_id`, schema read from a real `opencode.db`) and Codex
+  (`session_meta.source.subagent.thread_spawn.parent_thread_id`, from the provider's own source) name
+  the parent, so M3 gives them readers, with fixtures built from that schema or source and marked
+  as such where no real recording exists. A provider without a signal is a documented gap (US3);
+  US1 and SC-001 hold for the providers that report. Claude Code is the provider the issue names:
+  its gap is open until a recorded `claude --bg` session record shows a parent field (follow-up).
+- Feature 776 keeps one user-started session per worktree and refuses a second one through
+  `create_session`. Sessions an agent's provider started are adopted by discovery, which that rule
+  does not cap, so they list beside the user's session and nest under it. Making the rule soft is
+  issue #802, out of scope.
 - The tree applies within one worktree: an origin and its children share a worktree.
 - Removing name-based hiding of agent worktrees is the companion issue #552 and is out of scope
   here; this feature only supplies the session tree that work feeds.

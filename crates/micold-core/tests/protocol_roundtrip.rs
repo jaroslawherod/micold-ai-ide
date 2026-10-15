@@ -422,6 +422,11 @@ fn sample_summary() -> SessionSummary {
         attention_seq: 5,
         // `true`, for the same reason: a field that never encoded would read back as `false`.
         unread: true,
+        // Present on purpose: a field that never encoded would read back as `None` (feature 551).
+        origin: Some(micold_core::origin::SessionOrigin {
+            id: SessionId::from_uuid(Uuid::from_u128(0xabcd)),
+            status: micold_core::origin::OriginStatus::Removed,
+        }),
         // One run no default produces: a field that never encoded would read back empty (552).
         agents: vec![micold_core::agent_run::AgentRun {
             agent_id: "a15f822c8aa66a621".into(),
@@ -1786,6 +1791,28 @@ fn the_plan_usage_settings_round_trip_in_daemon_settings_and_settings_set() {
     }
 }
 
+#[test]
+fn a_session_summary_without_an_origin_decodes_to_none_and_the_protocol_is_44() {
+    // Feature 551, FR-013: a payload written before protocol 47 has no `origin` key.
+    let mut value = serde_json::to_value(sample_summary()).expect("encode");
+    value.as_object_mut().expect("object").remove("origin");
+    let decoded: SessionSummary = serde_json::from_value(value).expect("decodes without the field");
+    assert_eq!(decoded.origin, None);
+    assert_eq!(micold_core::protocol::version::PROTOCOL_VERSION, 47);
+}
+
+#[test]
+fn an_origin_survives_a_session_changed_and_a_snapshot() {
+    let summary = sample_summary();
+    json_roundtrip(&DaemonMsg::SessionChanged {
+        session: summary.id,
+        summary: summary.clone(),
+    });
+    let mut catalog = sample_catalog();
+    catalog.projects[0].sessions = vec![summary];
+    json_roundtrip(&catalog);
+}
+
 /// Feature 552: the agent runs travel on the summary, and a frame from before them decodes empty.
 #[test]
 fn a_session_summary_carries_its_agent_runs_and_defaults_to_none() {
@@ -1820,6 +1847,7 @@ fn the_main_marker_and_set_main_round_trip() {
         attention_seq: 0,
         unread: false,
         agents: Vec::new(),
+        origin: None,
         main: true,
     };
     let json = serde_json::to_value(&summary).expect("encode");

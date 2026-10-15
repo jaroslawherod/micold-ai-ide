@@ -1399,7 +1399,7 @@ async fn session_reply(
         why => why.message(session),
     });
     let st = Arc::clone(state);
-    let lifecycle = blocking(move || {
+    let row = blocking(move || {
         let project = caller_project(&st, caller)?;
         let modes = st.session_modes(&project.path);
         let context = Context {
@@ -1409,11 +1409,10 @@ async fn session_reply(
         };
         context.get_session(session)
     })
-    .await?["lifecycle"]
-        .clone();
+    .await?;
     let mut out = json!({
         "session": session.0.to_string(),
-        "lifecycle": lifecycle,
+        "lifecycle": row["lifecycle"].clone(),
         "prompt_delivered": prompt_given.then_some(undelivered.is_none()),
     });
     if let Some(reason) = undelivered {
@@ -1677,7 +1676,7 @@ impl Context<'_> {
     }
 
     fn session_row(&self, s: &SessionSummary) -> Value {
-        json!({
+        let mut row = json!({
             "ref": s.id.0.to_string(),
             "label": s.title.display(),
             "ai_cli": self.ai_cli(s),
@@ -1685,7 +1684,13 @@ impl Context<'_> {
             "activity": activity_name(&s.activity),
             "worktree": worktree_ref(s),
             "is_caller": s.id == self.caller,
-        })
+        });
+        // The session that started this one (feature 551, FR-013); both omitted when top-level.
+        if let Some(origin) = &s.origin {
+            row["origin"] = json!(origin.id.0.to_string());
+            row["origin_state"] = json!(origin.status.as_str());
+        }
+        row
     }
 
     /// The CLI a session runs, or `regular_terminal` when its pane is a plain shell.
