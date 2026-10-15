@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/533_create-worktrees-from-jira-issues
 - **Started**: 2026-10-12
 - **Phase**: milestone M2
-- **Next step**: M2 implemented, uncommitted tests unverified: see Handover
+- **Next step**: M2 PR open; orchestrator waits on CI and merges, then M3
 
 ## Pull requests
 
@@ -24,7 +24,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T021, T034 | full | Jira switch, settings fields, protocol 45 and the opt-in gate | #819 | merged |
-| M2 | T022–T031 | full | Connect, change and remove a project's connection and token | | pending |
+| M2 | T022–T031 | full | Connect, change and remove a project's connection and token | (this PR) | in review |
 | M3 | T032–T033, T035–T053, T068–T069 | full | Start a worktree from a Jira issue (list, pick, notices); kept whole: core, adapter and dialog are one wired path (no half-wired UI) | | pending |
 | M4 | T054–T058, T070 | full | Search Jira issues incl. beyond the loaded list | | pending |
 | M5 | T059–T065 | full | GitHub / Jira source choice per project | | pending |
@@ -61,28 +61,16 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M2 (T022-T031) code and tests are written on the branch (reset to origin/main, based on #819's merge) and
-`cargo check --workspace --all-targets` was green; nothing is gate-run, reviewed or pushed yet.
-Done: core `ApiToken`, `ConnectionAction`, `store::jira_token_dir/jira_token_path/jira_token_file_name`;
-client `shell/jira.rs` (apply/write/remove/probe), `Capabilities.jira_token_dir`, persist.rs save wiring
-(token file first, `ServiceChanges.jira_connection`, keep-or-remove prompt raised in `on_settings_saved`),
-`JiraDraft` form fields + `TokenInput` + `KeepOrRemovePrompt` + `Msg::Jira*`, `TextField::secure`,
-`ui/settings/jira.rs` form, `FieldId::SettingsJira{Site,Key,Email,Token}`, user guide (T031), tests:
-`core/tests/jira_connection.rs` additions, `features_settings.rs` `jira_connection_form`,
-`jira_connection_shell.rs`, `jira_token_never_leaks.rs`, `covered_states.rs` 3 states.
-Next: (1) run `UPDATE_LAYOUT_SNAPSHOT=1 cargo test -p micold-client --test layout_snapshot` via build-lock
-to regenerate `layout_snapshot.txt` (T026), commit it; (2) optionally add a `main_tests.rs` test of save ->
-token file + SettingsSet (use `connected_app()`, push a `Project`, set `app.caps` token dir needs a
-`#[cfg(test)] with_jira_token_dir` that was removed as unused); (3) tick T022-T031 in tasks.md; (4) scoped
-gate + review A (code-review high) + review B (conformance) per verify.md/review.md; (5) full `mise run
-gate` detached; (6) push and open PR "feat(533): connect, change and remove a Jira connection (#533)".
-Known gaps to check in review: ui text for status uses "Connected to {site} - {KEY}."; M1 declined MINORs
-(port range, key validation) are covered by `JiraConnection::parse` in the form; a Save of an invalid Jira
-form blocks the whole Settings save (by design, FR-006). Build lock is heavily contended (1h+ waits).
+None.
 
 ## Open escalation
 
 None.
+
+## M2 review notes
+
+- Review A (code-review high): CLEAN; MINOR F1 (failed token I/O still saves rest of settings) and F2 (orphan token file with no connection never removed) declined: MINOR, outside M2 scope.
+- Review B (sonnet): MAJOR F1 no cycle-log: recorded honestly in tdd/cycle-log.md as a process deviation (red not captured); MINOR F2 doc prompt text fixed; F3 same as A F1, declined.
 
 ## Follow-ups not done
 
