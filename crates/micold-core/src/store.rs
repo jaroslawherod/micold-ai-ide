@@ -666,6 +666,20 @@ pub(crate) fn temp_path_for(path: &Path) -> PathBuf {
     path.with_file_name(staging)
 }
 
+/// Read `path` and parse it; a missing or unreadable file yields `T::default()` and is left where
+/// it is, an unparseable one is kept aside as `<name>.corrupt` and `T::default()` loads.
+fn read_or_quarantine<T: Default, E>(path: &Path, parse: impl FnOnce(&str) -> Result<T, E>) -> T {
+    let Ok(text) = std::fs::read_to_string(path) else {
+        return T::default();
+    };
+    parse(&text).unwrap_or_else(|_| {
+        let mut aside = path.as_os_str().to_os_string();
+        aside.push(".corrupt");
+        let _ = std::fs::rename(path, PathBuf::from(aside));
+        T::default()
+    })
+}
+
 /// Path a corrupt file at `path` is moved to before recovery.
 fn backup_path_for(path: &Path) -> PathBuf {
     path.with_extension("json.bak")
@@ -827,20 +841,7 @@ impl JsonFileStore {
     /// review; an unparseable one is kept aside as `<name>.corrupt` and an empty review loads.
     pub fn load_reviews(&self, project_path: &Path) -> ReviewFile {
         let path = self.reviews_path(project_path);
-        let text = match std::fs::read_to_string(&path) {
-            Ok(text) => text,
-            // Missing, or unreadable for now: no comments, and the file is left where it is.
-            Err(_) => return ReviewFile::default(),
-        };
-        match ReviewFile::from_json(&text) {
-            Ok(file) => file,
-            Err(_) => {
-                let mut aside = path.as_os_str().to_os_string();
-                aside.push(".corrupt");
-                let _ = std::fs::rename(&path, PathBuf::from(aside));
-                ReviewFile::default()
-            }
-        }
+        read_or_quarantine(&path, ReviewFile::from_json)
     }
 
     /// Write a project's review comments atomically (temp file, then rename).
@@ -878,20 +879,7 @@ impl JsonFileStore {
     /// unparseable one is kept aside as `<name>.corrupt` and no groups load.
     pub fn load_runs(&self, project_path: &Path) -> RunsFile {
         let path = self.runs_path(project_path);
-        let text = match std::fs::read_to_string(&path) {
-            Ok(text) => text,
-            // Missing, or unreadable for now: no groups, and the file is left where it is.
-            Err(_) => return RunsFile::default(),
-        };
-        match RunsFile::from_json(&text) {
-            Ok(file) => file,
-            Err(_) => {
-                let mut aside = path.as_os_str().to_os_string();
-                aside.push(".corrupt");
-                let _ = std::fs::rename(&path, PathBuf::from(aside));
-                RunsFile::default()
-            }
-        }
+        read_or_quarantine(&path, RunsFile::from_json)
     }
 
     /// Write a project's run groups atomically (temp file, then rename).
