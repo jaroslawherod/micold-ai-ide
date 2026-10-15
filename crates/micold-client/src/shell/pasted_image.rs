@@ -52,16 +52,16 @@ pub fn encode_png(image: &Rgba) -> Result<Vec<u8>, String> {
     if image.bytes.len() != image.width * image.height * 4 {
         return Err("the image data does not match its size".to_string());
     }
-    let mut out = Vec::new();
-    let mut encoder = png::Encoder::new(&mut out, w, h);
-    encoder.set_color(png::ColorType::Rgba);
-    encoder.set_depth(png::BitDepth::Eight);
-    let mut writer = encoder.write_header().map_err(|e| e.to_string())?;
-    writer
-        .write_image_data(&image.bytes)
-        .map_err(|e| e.to_string())?;
-    writer.finish().map_err(|e| e.to_string())?;
-    Ok(out)
+    // tiny-skia holds premultiplied pixels and un-premultiplies on encode, so partly transparent
+    // pixels may move by one level.
+    let mut data = Vec::with_capacity(image.bytes.len());
+    for px in image.bytes.chunks_exact(4) {
+        let c = tiny_skia::ColorU8::from_rgba(px[0], px[1], px[2], px[3]).premultiply();
+        data.extend_from_slice(&[c.red(), c.green(), c.blue(), c.alpha()]);
+    }
+    let size = tiny_skia::IntSize::from_wh(w, h).ok_or("the image has no pixels")?;
+    let pixmap = tiny_skia::Pixmap::from_vec(data, size).ok_or("the image data is invalid")?;
+    pixmap.encode_png().map_err(|e| e.to_string())
 }
 
 /// Save `image` for a session and return the file's path.
@@ -189,11 +189,15 @@ mod tests {
     #[test]
     fn the_pixels_survive_the_png_round_trip() {
         let bytes = encode_png(&img()).unwrap();
-        let mut reader = png::Decoder::new(bytes.as_slice()).read_info().unwrap();
-        let mut buf = vec![0; reader.output_buffer_size()];
-        let info = reader.next_frame(&mut buf).unwrap();
-        assert_eq!((info.width, info.height), (2, 1));
-        assert_eq!(&buf[..8], img().bytes.as_slice());
+        let pixmap = tiny_skia::Pixmap::decode_png(&bytes).unwrap();
+        assert_eq!((pixmap.width(), pixmap.height()), (2, 1));
+        let px = pixmap.pixels();
+        let straight = |i: usize| {
+            let c = px[i].demultiply();
+            [c.red(), c.green(), c.blue(), c.alpha()]
+        };
+        assert_eq!(straight(0), [255, 0, 0, 255]);
+        assert_eq!(straight(1), [0, 255, 0, 128]);
     }
 
     #[test]
