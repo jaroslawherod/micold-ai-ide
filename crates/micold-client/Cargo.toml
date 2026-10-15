@@ -59,7 +59,6 @@ tiny-skia = { workspace = true }
 notify = { workspace = true }
 # Feature 487: a pasted clipboard image is read with `arboard` and saved as PNG.
 arboard = { workspace = true }
-png = { workspace = true }
 
 # Feature 031: `ShellExecuteW`, the Windows arm of the link opener (`shell/link_opener.rs`).
 [target.'cfg(windows)'.dependencies]
