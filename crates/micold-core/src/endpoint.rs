@@ -409,6 +409,11 @@ mod imp {
         String::from_utf16(chars).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
     }
 
+    /// Windows has one location, so the pinned endpoint is the ordinary one.
+    pub(super) fn resolve_pinned() -> io::Result<Endpoint> {
+        resolve()
+    }
+
     pub(super) fn resolve() -> io::Result<Endpoint> {
         let sid = user_sid()?;
         Ok(Endpoint {
