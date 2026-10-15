@@ -92,17 +92,12 @@ fn connection_form<'a>(
         token = token.supporting(TOKEN_STORED);
     }
 
-    let mut controls: Vec<Element<'a, Message>> = vec![
-        site.into(),
-        key.into(),
-        email.into(),
-        token.into(),
-    ];
+    let mut controls: Vec<Element<'a, Message>> =
+        vec![site.into(), key.into(), email.into(), token.into()];
     if jira.connection.is_some() || jira.remove_requested {
-        let remove = Button::outlined("Remove connection", roles)
-            .on_press_maybe((!jira.remove_requested).then_some(Message::Settings(
-                SettingsMsg::JiraRemoveRequested,
-            )));
+        let remove = Button::outlined("Remove connection", roles).on_press_maybe(
+            (!jira.remove_requested).then_some(Message::Settings(SettingsMsg::JiraRemoveRequested)),
+        );
         controls.push(remove.into());
         if jira.remove_requested {
             controls.push(note(

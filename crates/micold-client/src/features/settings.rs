@@ -601,9 +601,7 @@ impl JiraDraft {
 
     /// Whether the form holds typed connection input worth validating.
     fn has_input(&self) -> bool {
-        self.connection.is_some()
-            || self.typed() != ("", "", "")
-            || !self.token.as_str().is_empty()
+        self.connection.is_some() || self.typed() != ("", "", "") || !self.token.as_str().is_empty()
     }
 }
 
@@ -900,7 +898,7 @@ impl SettingsDraft {
     /// The connection form, checked last because its section is last in the rail (FR-006).
     fn jira_action(&self) -> Result<micold_core::jira::ConnectionAction, FieldError> {
         use micold_core::jira::{
-            ApiToken, ConnectionAction, JiraConnection, JiraField, FieldProblem,
+            ApiToken, ConnectionAction, FieldProblem, JiraConnection, JiraField,
         };
         let j = &self.jira;
         let Some(project) = j.project.clone() else {
