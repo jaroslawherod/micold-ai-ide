@@ -191,15 +191,22 @@ pub fn on_issues_loaded(
     if let Some((cwd, snapshot)) = resolved_env {
         app.env_include_cache.entry(cwd).or_insert(snapshot);
     }
-    let before = app.core.worktree_form.issue_description_request();
-    app.core
-        .update(Message::WorktreeForm(FormMsg::IssuesLoaded {
+    update_then_follow(
+        app,
+        FormMsg::IssuesLoaded {
             seq,
             result,
             resolved_env: None,
-        }));
+        },
+    )
+}
+
+/// Feed the form one message, then start the description read it newly awaits, if any.
+fn update_then_follow(app: &mut App, msg: FormMsg) -> Task<Message> {
+    let before = app.core.worktree_form.issue_description_request();
+    app.core.update(Message::WorktreeForm(msg));
     match newly_awaited_descriptions(app, before) {
-        Some(first) => start_issue_descriptions(app, first),
+        Some(next) => start_issue_descriptions(app, next),
         None => Task::none(),
     }
 }
@@ -212,17 +219,14 @@ pub fn on_issue_descriptions_loaded(
     cursor: Option<String>,
     result: Result<DescriptionPage, IssueLoadError>,
 ) -> Task<Message> {
-    let before = app.core.worktree_form.issue_description_request();
-    app.core
-        .update(Message::WorktreeForm(FormMsg::IssueDescriptionsLoaded {
+    update_then_follow(
+        app,
+        FormMsg::IssueDescriptionsLoaded {
             seq,
             cursor,
             result,
-        }));
-    match newly_awaited_descriptions(app, before) {
-        Some(next) => start_issue_descriptions(app, next),
-        None => Task::none(),
-    }
+        },
+    )
 }
 
 /// Up or Down moved the highlight (feature 038, FR-007). The reducer moves the index and nothing
