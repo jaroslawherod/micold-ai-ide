@@ -1,9 +1,9 @@
 //! Feature 034 (FR-007, SC-009; U30–U33): a session's binding file carries its bearer credential, so
-//! only the user who runs the service may read it. `platform::write_owner_only` creates the directory
+//! only the user who runs the service may read it. `owner_only::write` creates the directory
 //! and the file owner-only: modes `0700` / `0600` on Unix, a protected DACL whose one ACE is the
 //! current user's on Windows.
 
-use micold_daemon::platform::write_owner_only;
+use micold_core::owner_only::write as write_owner_only;
 
 const CONTENT: &[u8] = br#"{"mcpServers":{}}"#;
 

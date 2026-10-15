@@ -59,20 +59,3 @@ impl ProcessTree {
 pub async fn stop_requested() {
     std::future::pending().await
 }
-
-/// Write `bytes` to `dir/file` so that only the user running the service can read it, creating
-/// `dir` owner-only as well, and return the file's path (feature 034, FR-007).
-///
-/// A session's tool-server binding file carries its bearer credential, so another local account
-/// must not be able to read it: `0700` / `0600` on Unix, a protected DACL with one ACE for the
-/// current user on Windows. The bytes go to a temporary file that is made owner-only before it is
-/// renamed over `file`, so the credential is never readable under a wider mode, and a rewrite
-/// replaces the old content atomically. The work is `micold_core::owner_only::write`, which the
-/// saved terminal history shares (feature 041, R8).
-pub fn write_owner_only(
-    dir: &std::path::Path,
-    file: &str,
-    bytes: &[u8],
-) -> std::io::Result<std::path::PathBuf> {
-    micold_core::owner_only::write(dir, file, bytes)
-}
