@@ -146,21 +146,13 @@ impl HistoryStore {
         if state.unlisted && !state.enabled {
             return self.delete_all(&mut state);
         }
+        let state = &mut *state;
         let names: Vec<String> = state.undeleted.iter().cloned().collect();
         let mut failures = Vec::new();
         for name in names {
-            match std::fs::remove_file(self.dir.join(&name)) {
-                Ok(()) => {
-                    state.undeleted.remove(&name);
-                }
-                Err(error) if error.kind() == io::ErrorKind::NotFound => {
-                    state.undeleted.remove(&name);
-                }
-                Err(error) => failures.push(DeletionFailure {
-                    session: session_of(&name),
-                    error,
-                }),
-            }
+            let session = session_of(&name);
+            let path = self.dir.join(&name);
+            failures.extend(Self::remove_tracked(state, &path, &name, session, true));
         }
         failures
     }
@@ -170,28 +162,16 @@ impl HistoryStore {
     /// a save writes under, so a save in flight has either finished and is deleted, or finds the
     /// session forgotten. Returns the deletions that failed; those files stay in the retry set.
     pub fn forget(&self, ids: &[SessionId]) -> Vec<DeletionFailure> {
-        let mut state = self.lock();
+        let mut guard = self.lock();
+        let state = &mut *guard;
         let mut failures = Vec::new();
         for id in ids {
             state.forgotten.insert(*id);
             state.last_written.remove(id);
             let name = file_name(*id);
             for name in [format!(".{name}.tmp"), name] {
-                match std::fs::remove_file(self.dir.join(&name)) {
-                    Ok(()) => {
-                        state.undeleted.remove(&name);
-                    }
-                    Err(error) if error.kind() == io::ErrorKind::NotFound => {
-                        state.undeleted.remove(&name);
-                    }
-                    Err(error) => {
-                        state.undeleted.insert(name.clone());
-                        failures.push(DeletionFailure {
-                            session: Some(*id),
-                            error,
-                        });
-                    }
-                }
+                let path = self.dir.join(&name);
+                failures.extend(Self::remove_tracked(state, &path, &name, Some(*id), true));
             }
         }
         failures
@@ -202,7 +182,8 @@ impl HistoryStore {
     /// unknown session all go. Subdirectories are left alone. Returns the deletions that failed;
     /// those history files stay in the retry set.
     pub fn sweep(&self, keep: &HashSet<SessionId>) -> Vec<DeletionFailure> {
-        let mut state = self.lock();
+        let mut guard = self.lock();
+        let state = &mut *guard;
         let mut failures = Vec::new();
         let entries = match std::fs::read_dir(&self.dir) {
             Ok(entries) => entries,
@@ -223,21 +204,44 @@ impl HistoryStore {
             if kept || entry.file_type().is_ok_and(|kind| kind.is_dir()) {
                 continue;
             }
-            match std::fs::remove_file(entry.path()) {
-                Ok(()) => {
-                    state.undeleted.remove(&name);
-                }
-                Err(error) if error.kind() == io::ErrorKind::NotFound => {}
-                Err(error) => {
-                    state.undeleted.insert(name.clone());
-                    failures.push(DeletionFailure {
-                        session: session_of(&name),
-                        error,
-                    });
-                }
-            }
+            let session = session_of(&name);
+            failures.extend(Self::remove_tracked(
+                state,
+                &entry.path(),
+                &name,
+                session,
+                false,
+            ));
         }
         failures
+    }
+
+    /// Delete the file at `path`, called `name` in the retry set. Success leaves the retry set
+    /// without it; a failure puts it in and is returned. A file already gone leaves the retry
+    /// set only when `clear_missing`.
+    fn remove_tracked(
+        state: &mut State,
+        path: &Path,
+        name: &str,
+        session: Option<SessionId>,
+        clear_missing: bool,
+    ) -> Option<DeletionFailure> {
+        match std::fs::remove_file(path) {
+            Ok(()) => {
+                state.undeleted.remove(name);
+                None
+            }
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                if clear_missing {
+                    state.undeleted.remove(name);
+                }
+                None
+            }
+            Err(error) => {
+                state.undeleted.insert(name.to_owned());
+                Some(DeletionFailure { session, error })
+            }
+        }
     }
 
     /// Delete every saved and temporary file; the ones that stay go to the retry set.
@@ -262,19 +266,14 @@ impl HistoryStore {
             if !is_history_file(&name) {
                 continue;
             }
-            match std::fs::remove_file(entry.path()) {
-                Ok(()) => {
-                    state.undeleted.remove(&name);
-                }
-                Err(error) if error.kind() == io::ErrorKind::NotFound => {}
-                Err(error) => {
-                    state.undeleted.insert(name.clone());
-                    failures.push(DeletionFailure {
-                        session: session_of(&name),
-                        error,
-                    });
-                }
-            }
+            let session = session_of(&name);
+            failures.extend(Self::remove_tracked(
+                state,
+                &entry.path(),
+                &name,
+                session,
+                false,
+            ));
         }
         failures
     }
