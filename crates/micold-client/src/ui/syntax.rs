@@ -12,7 +12,6 @@
 
 use std::time::{Duration, Instant};
 
-use crate::ui::material::style;
 use iced::highlighter::{Settings, Stream, Theme};
 use micold_core::review::diff::{FileDiff, LoadedDiff, SchemeSpans, SideLines, SideSpans, Spans};
 use micold_core::theme::ColorScheme;
@@ -59,6 +58,16 @@ fn mix(from: Rgb, to: Rgb, t: f32) -> Rgb {
         r: channel(from.r, to.r),
         g: channel(from.g, to.g),
         b: channel(from.b, to.b),
+    }
+}
+
+/// An `iced` colour as the token type: both are 8-bit sRGB.
+fn rgb(c: iced::Color) -> Rgb {
+    let q = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
+    Rgb {
+        r: q(c.r),
+        g: q(c.g),
+        b: q(c.b),
     }
 }
 
@@ -114,7 +123,7 @@ fn highlight_lines_until<'a>(
                 let end = range.end.min(line.len() - 1);
                 (
                     range.start.min(end)..end,
-                    highlight.color().map(|c| legible(style::to_rgb(c), roles)),
+                    highlight.color().map(|c| legible(rgb(c), roles)),
                 )
             },
         )));
