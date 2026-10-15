@@ -25,7 +25,7 @@ Paths: `C` = `crates/micold-core/src`, `K` = `crates/micold-client/src`, `T` = `
 - [ ] T007a [US1] Test first: a settings save with unchanged `daemon` leaves the registry untouched after a form save synced the block (D3) in `T/daemons_feature.rs`
 - [x] T008 [US1] Add `image_path`, `cpus`, `memory_mib`, `pids`, `storage_mib` text mirrors, the Msgs for each field, and `runtime_of` parsing via `parse_budget` to `Draft` in `K/features/daemons.rs`; refusals return `FormError { field }`
 - [x] T009 [US1] Move the field helpers (`limits`, `network_warning`, `unshared_sign_in_notice`, `sharing_summary`, `survival_support`, option tables) from `K/ui/settings/daemon.rs` to new `K/ui/settings/container_fields.rs` taking `ContainerView<'_>`; register in `K/ui/settings/mod.rs`
-- [x] T010 [US1] Append the container groups under the container branch of `form` in `K/ui/settings/daemons.rs`, read capabilities and unshared sign-in from `app.sandbox`; host daemon shows them inert, SSH none
+- [x] T010 [US1] Append the container groups under the container branch of `form` in `K/ui/settings/daemons.rs`, read capabilities and unshared sign-in from `app.sandbox`; host daemon shows only the survive-logout note, SSH none
 - [x] T011 [US1] Call `sync_legacy_daemon` from the form save of the legacy-mirrored daemon in `K/features/daemons.rs` (covered by T007a)
 - [x] T012 [US1] Run the geometry gates (field-note column, form layout) for the longer form and fix overflow in `K/ui/settings/daemons.rs`
 - [x] T013 [US1] User guide: describe container runtime, image, shares, network, limits and survive-logout in the daemon form in `docs/user-guide/sandboxed-daemon.md`
