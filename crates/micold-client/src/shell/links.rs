@@ -146,12 +146,7 @@ fn facts_for(
 fn pathext() -> Vec<String> {
     #[cfg(windows)]
     {
-        std::env::var("PATHEXT")
-            .unwrap_or_default()
-            .split(';')
-            .filter(|entry| !entry.is_empty())
-            .map(|entry| entry.to_string())
-            .collect()
+        micold_core::provider::pathext()
     }
     #[cfg(not(windows))]
     Vec::new()

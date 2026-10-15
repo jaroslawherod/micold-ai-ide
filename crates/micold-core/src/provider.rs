@@ -522,6 +522,17 @@ fn resolves_on_path(command: &str, path: &OsStr) -> bool {
     resolve_on_path(command, path).is_some()
 }
 
+/// The `PATHEXT` entries of this process, each with its leading dot (`.EXE;.CMD;…`); empty where
+/// the variable is unset, as on Unix.
+pub fn pathext() -> Vec<String> {
+    std::env::var("PATHEXT")
+        .unwrap_or_default()
+        .split(';')
+        .filter(|entry| !entry.is_empty())
+        .map(str::to_string)
+        .collect()
+}
+
 /// The file `command` resolves to on `path` (same rules as [`resolves_on_path`]), so a spawn can
 /// use it directly: `Command::new` would not find a Windows `.cmd` shim by its bare name.
 fn resolve_on_path(command: &str, path: &OsStr) -> Option<PathBuf> {
@@ -530,12 +541,7 @@ fn resolve_on_path(command: &str, path: &OsStr) -> Option<PathBuf> {
             .map(|meta| meta.is_file())
             .unwrap_or(false)
     };
-    // `PATHEXT` entries include their own leading dot (`.EXE;.CMD;…`).
-    let extensions: Vec<String> = std::env::var("PATHEXT")
-        .ok()
-        .filter(|value| !value.is_empty())
-        .map(|value| value.split(';').map(str::to_string).collect())
-        .unwrap_or_default();
+    let extensions = pathext();
     // An empty component is dropped rather than walked. `split_paths("")` yields one empty path,
     // and joining a command onto it gives the bare relative name, which would resolve against the
     // process's current directory — so a `pi` file sitting in the service's working directory would
