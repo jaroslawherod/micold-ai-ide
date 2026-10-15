@@ -250,13 +250,15 @@ pub(crate) fn open_settings(app: &mut App) -> crate::shell::env_include::ScriptP
     // issue pick reads the store at the moment of the pick (feature 034, FR-014a).
     let current = settings_in_force(app);
     let mut draft = SettingsDraft::from_settings(&current);
-    draft.jira.follow(
-        app.core
-            .workspace
-            .active_project()
-            .map(|project| project.path.clone()),
-        &current.jira_connections,
-    );
+    let project = app
+        .core
+        .workspace
+        .active_project()
+        .map(|project| project.path.clone());
+    let token_stored = jira_token_stored(app, project.as_deref());
+    draft
+        .jira
+        .follow(project, &current.jira_connections, token_stored);
     // What this machine's runtime can enforce is not a setting and is not in the file — it is the
     // probe's answer, which lands on the sandbox state when a bring-up succeeds. The form needs it
     // to decide which limits are editable (FR-015), so it is carried across here rather than
@@ -470,6 +472,7 @@ struct ServiceChanges {
     long_task_threshold_secs: Option<u64>,
     pr_status_enabled: Option<bool>,
     jira_enabled: Option<bool>,
+    jira_connection: Option<micold_core::settings::JiraConnectionChange>,
     plan_usage_enabled: Option<bool>,
     plan_usage_warn_percent: Option<u8>,
 }
@@ -491,7 +494,7 @@ impl ServiceChanges {
             cross_session_access: self.cross_session_access,
             pr_status_enabled: self.pr_status_enabled,
             jira_enabled: self.jira_enabled,
-            jira_connection: None,
+            jira_connection: self.jira_connection,
             notification_kinds: self.notification_kinds,
             long_task_threshold_secs: self.long_task_threshold_secs,
             plan_usage_enabled: self.plan_usage_enabled,
@@ -523,6 +526,7 @@ fn service_changes(saved: &Settings, baseline: Option<&Settings>) -> Option<Serv
         long_task_threshold_secs: changed!(long_task_threshold_secs),
         pr_status_enabled: changed!(pr_status_enabled),
         jira_enabled: changed!(jira_enabled),
+        jira_connection: None,
         plan_usage_enabled: changed!(plan_usage_enabled),
         plan_usage_warn_percent: changed!(plan_usage_warn_percent),
     };
@@ -540,6 +544,15 @@ pub fn on_settings_saved(app: &mut App) -> Task<Message> {
     let Some(valid) = validated_draft(app) else {
         return Task::none();
     };
+
+    // US2 AS5: turning the switch off over a stored connection asks first and applies nothing
+    // until it is answered; the answer comes back here as another save.
+    if let Some(draft) = app.core.settings.settings_draft.as_mut() {
+        if draft.needs_keep_or_remove() {
+            draft.raise_keep_or_remove();
+            return Task::none();
+        }
+    }
 
     // BUG-003, FR-032a. Where sessions run is the one field on this form whose application ends
     // processes, so a save that moves it asks first and applies *nothing* until it is answered —
@@ -618,6 +631,7 @@ pub(crate) fn save_and_prepare_check(
     // (BUG-475). A field the store or the service changed since, with no refresh to show it here
     // (a save of file-only settings sends nothing to the service), would be undone by writing it
     // back.
+    let jira_action = valid.jira.clone();
     let settings = valid.into_settings();
     let baseline = app
         .core
@@ -661,12 +675,30 @@ pub(crate) fn save_and_prepare_check(
     );
 
     let mut written = true;
+    // Feature 533, contracts/jira-connection.md §4: the token file first, then the change that is
+    // stored and sent. A token that could not be stored sends no connection.
+    let jira_change = match crate::shell::jira::apply(app.caps.jira_token_dir(), &jira_action) {
+        Ok(change) => change,
+        Err(message) => {
+            app.core
+                .notify_error(format!("Couldn't save the Jira connection: {message}"));
+            None
+        }
+    };
+    if let Some(change) = &jira_change {
+        change.apply(&mut app.core.settings.jira_connections);
+    }
     if let Some(store) = app.caps.settings() {
         // Through `update` (BUG-025, T155), for the two things `save` alone cannot do: take the
         // lock the daemon's own write respects (FR-010b), and refuse when the stored document is
         // there but unreadable rather than replacing it (FR-010c). The refusal reaches the user
         // through the `notify_error` below, which is T160.
-        let write = store.update_reporting(&mut |stored| changed(stored));
+        let write = store.update_reporting(&mut |stored| {
+            changed(stored);
+            if let Some(change) = &jira_change {
+                change.apply(&mut stored.jira_connections);
+            }
+        });
         crate::log_line(&write.log_line("client"));
         if let Err(err) = write.result {
             app.core
@@ -691,7 +723,10 @@ pub(crate) fn save_and_prepare_check(
     //
     // `Some` only for a field the user changed, `None` for the rest (W4.1), and nothing at all
     // when the save changed none of them (BUG-570).
-    let told = service_changes(&settings, baseline.as_ref());
+    let mut told = service_changes(&settings, baseline.as_ref());
+    if jira_change.is_some() {
+        told.get_or_insert_with(ServiceChanges::default).jira_connection = jira_change.clone();
+    }
     if let (Some(daemon), Some(told)) = (app.active_outbox(), told) {
         let req = app.next_req;
         app.next_req += 1;
@@ -1432,5 +1467,14 @@ mod catalog_recovery_tests {
         let baseline = target.clone();
         set_changed(&mut target, &saved, Some(&baseline));
         assert_eq!(target.daemons, registry.entries().to_vec());
+    }
+}
+
+/// Whether `project` has a Jira token file: the probe run on Settings open and `SettingsChanged`
+/// (contracts/jira-connection.md §4).
+pub(crate) fn jira_token_stored(app: &App, project: Option<&std::path::Path>) -> bool {
+    match (app.caps.jira_token_dir(), project) {
+        (Some(dir), Some(project)) => crate::shell::jira::token_stored(dir, project),
+        _ => false,
     }
 }

@@ -655,6 +655,22 @@ pub fn project_id_of(path: &Path) -> String {
     project_id(path)
 }
 
+/// The directory the Jira token files live in: `<data_dir>/jira` (feature 533,
+/// contracts/jira-connection.md §3).
+pub fn jira_token_dir() -> Option<PathBuf> {
+    crate::paths::data_subdir("jira")
+}
+
+/// The token file of `project` in `dir`: `<dir>/<project_id_of(project)>.token`.
+pub fn jira_token_path(dir: &Path, project: &Path) -> PathBuf {
+    dir.join(jira_token_file_name(project))
+}
+
+/// The token file's name alone, for `owner_only::write`.
+pub fn jira_token_file_name(project: &Path) -> String {
+    format!("{}.token", project_id(project))
+}
+
 /// Path of the temporary file used for an atomic write to `path`.
 ///
 /// Unique per call, not derived from `path` alone (T153, BUG-025). A staging path that only the

@@ -601,6 +601,44 @@ The switch is one setting for the whole app, kept in `settings.json`, and a chan
 window shows in every other without a restart. A settings file written before the integration
 existed reads as off.
 
+### Connect a project
+
+With the switch on and a project open, the page shows four fields for that project:
+
+| Field | What to enter |
+| --- | --- |
+| **Site URL** | The address of your Jira Cloud site, for example `https://acme.atlassian.net` |
+| **Project key** | The key of the Jira project, for example `ABC` (letters, digits and `_`, 2 to 10 long) |
+| **Account email** | The email of your Atlassian account |
+| **API token** | An API token created at <https://id.atlassian.com/manage-profile/security/api-tokens> |
+
+Press **Save**. A field that is empty or cannot be used is marked with what to enter, and nothing
+is stored until every field is valid. Each project has its own connection; a project without one
+offers no Jira.
+
+The token is shown masked while you type, and never again: once stored, the field says **A token
+is stored**. Leave it blank to keep the stored token, or type a new one to replace it.
+
+### Change or remove a connection
+
+Edit any field and press **Save**. **Remove connection** deletes the site, project key, email and
+token when you press **Save**. Turning the switch off while the open project has a connection asks
+**Keep the Jira connection for this project?** — **Keep** leaves it stored, so turning the switch on
+again finds it, and **Remove** deletes it as above.
+
+### Where the token is stored
+
+The token is never written to `settings.json` or to a project file. It is kept in its own file,
+readable only by you, one per project, in the `jira` folder beside the settings file:
+
+| Platform | Folder |
+| --- | --- |
+| Linux | `~/.local/share/micold-ai-ide/jira/` (or under `$XDG_DATA_HOME`) |
+| macOS | `~/Library/Application Support/micold-ai-ide/jira/` |
+| Windows | `%APPDATA%\micold-ai-ide\data\jira\` |
+
+Removing the connection deletes the file.
+
 ## Where settings are stored
 
 Everything on this page is saved to a single file on your own computer — nothing is sent anywhere:

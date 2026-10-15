@@ -27,6 +27,7 @@ pub mod desktop_notify;
 pub mod drops;
 pub mod env_include;
 pub mod issues;
+pub mod jira;
 pub mod legacy_units;
 pub mod link_opener;
 pub mod links;

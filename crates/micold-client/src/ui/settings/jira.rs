@@ -1,17 +1,19 @@
-//! The Jira section: the one switch that turns the integration on (feature 533, FR-001, FR-002,
-//! FR-004, FR-005b).
+//! The Jira section: the switch that turns the integration on and, once on, the open project's
+//! connection (feature 533, FR-001, FR-002, FR-004, FR-005b, FR-006, FR-010).
 //!
 //! With the switch off this page holds only the switch and its description: no credential field,
 //! no request (FR-001). The line beside the switch says what enabling it contacts and sends
 //! (FR-005b), and the status line says whether the open project is connected (FR-004).
 
 use crate::app::Message;
-use crate::features::settings::Msg as SettingsMsg;
-use crate::features::settings::SettingsDraft;
+use crate::features::settings::{
+    KeepOrRemove, Msg as SettingsMsg, SettingsDraft, SettingsSection, TokenInput,
+};
 use crate::features::window::FieldId;
 use crate::ui::focus::TrackFocus;
-use crate::ui::material::Checkbox;
-use crate::ui::settings::{field_note, note, page};
+use crate::ui::material::{Button, Checkbox, TextField};
+use crate::ui::settings::{caution, error_for, field_note, note, page};
+use iced::widget::{column, row};
 use iced::Element;
 use micold_core::tokens::Roles;
 
@@ -26,13 +28,16 @@ pub const SWITCH_DESCRIPTION: &str = "Lets Micold read open issues of a Jira Clo
 /// What enabling contacts and sends (FR-005b).
 pub const DATA_USE: &str = "Once a project is connected, Micold contacts that connection's Jira site and sends the project key, the search text you type and your account email with its API token.";
 
+/// The placeholder of the token field while a token is stored (FR-010).
+pub const TOKEN_STORED: &str = "A token is stored";
+
 /// The Jira page.
 pub fn view<'a>(
     draft: &'a SettingsDraft,
     focused: Option<FieldId>,
     roles: Roles,
 ) -> Element<'a, Message> {
-    let mut controls: Vec<Element<'a, Message>> = Vec::with_capacity(3);
+    let mut controls: Vec<Element<'a, Message>> = Vec::with_capacity(8);
     controls.push(field_note(
         Checkbox::new("Enable Jira integration", draft.jira.enabled, roles)
             .track_focus(FieldId::SettingsJiraEnabled, focused)
@@ -44,10 +49,90 @@ pub fn view<'a>(
     if let Some(status) = draft.jira.status() {
         controls.push(note(status, roles));
     }
+    if draft.jira.enabled && draft.jira.project.is_some() {
+        controls.extend(connection_form(draft, focused, roles));
+    }
     page(
         "Jira",
         "Start worktrees from the issues of a Jira Cloud project. Applies to every project.",
         controls,
         roles,
     )
+}
+
+/// The open project's connection: the four fields, the removal and the Keep-or-Remove question.
+fn connection_form<'a>(
+    draft: &'a SettingsDraft,
+    focused: Option<FieldId>,
+    roles: Roles,
+) -> Vec<Element<'a, Message>> {
+    let jira = &draft.jira;
+    let field = |label: &'static str, value: &'a str, id: FieldId| {
+        TextField::new("", value, roles)
+            .label(label)
+            .error(error_for(draft, SettingsSection::Jira, id))
+            .track_focus(id, focused)
+    };
+    let site = field("Site URL", &jira.site, FieldId::SettingsJiraSite)
+        .supporting("For example https://acme.atlassian.net")
+        .on_input(|v| Message::Settings(SettingsMsg::JiraSiteChanged(v)))
+        .on_submit(Message::Settings(SettingsMsg::Saved));
+    let key = field("Project key", &jira.project_key, FieldId::SettingsJiraKey)
+        .supporting("For example ABC")
+        .on_input(|v| Message::Settings(SettingsMsg::JiraKeyChanged(v)))
+        .on_submit(Message::Settings(SettingsMsg::Saved));
+    let email = field("Account email", &jira.email, FieldId::SettingsJiraEmail)
+        .on_input(|v| Message::Settings(SettingsMsg::JiraEmailChanged(v)))
+        .on_submit(Message::Settings(SettingsMsg::Saved));
+    let mut token = field("API token", jira.token.as_str(), FieldId::SettingsJiraToken)
+        .secure(true)
+        .on_input(|v| Message::Settings(SettingsMsg::JiraTokenChanged(TokenInput::new(v))))
+        .on_submit(Message::Settings(SettingsMsg::Saved));
+    if jira.token_stored {
+        token = token.supporting(TOKEN_STORED);
+    }
+
+    let mut controls: Vec<Element<'a, Message>> = vec![
+        site.into(),
+        key.into(),
+        email.into(),
+        token.into(),
+    ];
+    if jira.connection.is_some() || jira.remove_requested {
+        let remove = Button::outlined("Remove connection", roles)
+            .on_press_maybe((!jira.remove_requested).then_some(Message::Settings(
+                SettingsMsg::JiraRemoveRequested,
+            )));
+        controls.push(remove.into());
+        if jira.remove_requested {
+            controls.push(note(
+                "The connection and its token are deleted when you save.",
+                roles,
+            ));
+        }
+    }
+    if let Some(prompt) = &jira.prompt {
+        let name = prompt
+            .project
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_else(|| prompt.project.display().to_string());
+        controls.push(
+            column![
+                caution(format!("Keep the Jira connection for {name}?"), roles),
+                row![
+                    Button::filled("Keep", roles).on_press(Message::Settings(
+                        SettingsMsg::JiraKeepOrRemoveChosen(KeepOrRemove::Keep)
+                    )),
+                    Button::outlined("Remove", roles).on_press(Message::Settings(
+                        SettingsMsg::JiraKeepOrRemoveChosen(KeepOrRemove::Remove)
+                    )),
+                ]
+                .spacing(8),
+            ]
+            .spacing(8)
+            .into(),
+        );
+    }
+    controls
 }

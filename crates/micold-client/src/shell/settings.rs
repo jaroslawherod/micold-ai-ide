@@ -31,6 +31,11 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
         // question deferred *and* moves the running service, both of which are effects.
         // Declining is not here, because declining does nothing but close the question.
         Msg::PlacementChangeConfirmed => persist::on_placement_change_confirmed(app),
+        // Feature 533: the answer to the Keep-or-Remove question is applied by the save it held.
+        Msg::JiraKeepOrRemoveChosen(_) => {
+            app.core.update(Message::Settings(msg));
+            persist::on_settings_saved(app)
+        }
         // The theme variant does not bind, so `msg` is still whole to re-wrap:
         // `on_theme_changed` applies it through the reducer and then persists.
         Msg::ThemePreferenceChanged(_) => persist::on_theme_changed(app, Message::Settings(msg)),

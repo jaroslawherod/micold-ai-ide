@@ -44,6 +44,7 @@ pub struct TextField<'a, M> {
     text: FieldText,
     active: bool,
     on_focus_change: Option<Box<dyn Fn(bool) -> M + 'a>>,
+    secure: bool,
 }
 
 impl<'a, M: Clone + 'a> TextField<'a, M> {
@@ -60,6 +61,7 @@ impl<'a, M: Clone + 'a> TextField<'a, M> {
             text: FieldText::default(),
             active: false,
             on_focus_change: None,
+            secure: false,
         }
     }
 
@@ -122,6 +124,12 @@ impl<'a, M: Clone + 'a> TextField<'a, M> {
         self
     }
 
+    /// Mask the value, for a secret such as an API token (feature 533, FR-009).
+    pub fn secure(mut self, secure: bool) -> Self {
+        self.secure = secure;
+        self
+    }
+
     /// The message emitted when the user presses Enter — for a field whose dialog has an obvious
     /// primary action.
     pub fn on_submit(mut self, message: M) -> Self {
@@ -146,6 +154,7 @@ impl<'a, M: Clone + 'a> From<TextField<'a, M>> for Element<'a, M> {
         let placeholder = if resting { "" } else { &f.placeholder };
         let mut widget = text_input(placeholder, f.value)
             .padding(0)
+            .secure(f.secure)
             .style(style::field_input(f.roles));
 
         if let Some(on_input) = f.on_input {

@@ -95,6 +95,9 @@ pub struct Capabilities {
     git: Option<Arc<dyn Git + Send + Sync>>,
     projects: Option<Arc<dyn ProjectStore + Send + Sync>>,
     settings: Option<Arc<dyn SettingsStore + Send + Sync>>,
+    /// Feature 533: where the Jira token files live (`<data_dir>/jira`), when a data directory
+    /// resolved.
+    jira_token_dir: Option<PathBuf>,
     scanner: Arc<dyn FolderScanner + Send + Sync>,
     browser: Arc<dyn FolderBrowser + Send + Sync>,
     env_include: Arc<dyn EnvIncludeResolver + Send + Sync>,
@@ -168,6 +171,7 @@ impl Capabilities {
                 .map(|store| Arc::new(store) as Arc<dyn ProjectStore + Send + Sync>),
             settings: JsonFileSettingsStore::default_location()
                 .map(|store| Arc::new(store) as Arc<dyn SettingsStore + Send + Sync>),
+            jira_token_dir: micold_core::store::jira_token_dir(),
             scanner: Arc::new(folders),
             browser: Arc::new(folders),
             env_include: Arc::new(SubprocessResolver),
@@ -227,6 +231,7 @@ impl Capabilities {
     #[cfg(test)]
     pub(crate) fn without_settings(mut self) -> Self {
         self.settings = None;
+        self.jira_token_dir = None;
         self
     }
 
@@ -314,6 +319,11 @@ impl Capabilities {
     /// The project catalog, or `None` when no data directory could be resolved.
     pub fn projects(&self) -> Option<&(dyn ProjectStore + Send + Sync)> {
         self.projects.as_deref()
+    }
+
+    /// The directory of the Jira token files, or `None` when no data directory resolved.
+    pub fn jira_token_dir(&self) -> Option<&std::path::Path> {
+        self.jira_token_dir.as_deref()
     }
 
     /// The settings file, or `None` when no data directory could be resolved.

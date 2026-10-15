@@ -1676,6 +1676,62 @@ pub fn covered_states() -> &'static [CoveredState] {
                 path: &[0, 0, 1, 0, 0, 0],
             }],
         },
+        // Settings -> Jira connection form (feature 533, US3): connected, a field refused, and the
+        // Keep-or-Remove question.
+        CoveredState {
+            name: "settings-view-jira-on-with-connection",
+            build: || StateUnderTest::new(jira_form_state(|draft| {
+                draft.jira.site = "https://acme.atlassian.net".to_owned();
+                draft.jira.project_key = "ABC".to_owned();
+                draft.jira.email = "me@acme.com".to_owned();
+                draft.jira.token_stored = true;
+                draft.jira.connection = micold_core::jira::JiraConnection::parse(
+                    "https://acme.atlassian.net",
+                    "ABC",
+                    "me@acme.com",
+                )
+                .ok();
+            })),
+            anchors: &[Anchor {
+                name: "settings.rail",
+                path: &[0, 0, 1, 0, 0, 0],
+            }],
+        },
+        CoveredState {
+            name: "settings-view-jira-on-field-error",
+            build: || StateUnderTest::new(jira_form_state(|draft| {
+                draft.jira.site = "acme".to_owned();
+                draft.error = Some(micold_client::features::settings::FieldError {
+                    field: micold_client::features::window::FieldId::SettingsJiraSite,
+                    section: SettingsSection::Jira,
+                    message: micold_core::jira::SITE_REFUSED.to_owned(),
+                });
+            })),
+            anchors: &[Anchor {
+                name: "settings.rail",
+                path: &[0, 0, 1, 0, 0, 0],
+            }],
+        },
+        CoveredState {
+            name: "settings-view-jira-keep-or-remove-prompt",
+            build: || StateUnderTest::new(jira_form_state(|draft| {
+                draft.jira.enabled = false;
+                draft.jira.connection = micold_core::jira::JiraConnection::parse(
+                    "https://acme.atlassian.net",
+                    "ABC",
+                    "me@acme.com",
+                )
+                .ok();
+                draft.jira.prompt = draft.jira.project.clone().map(|project| {
+                    micold_client::features::settings::KeepOrRemovePrompt { project }
+                });
+                draft.jira.enabled = true;
+            })),
+            anchors: &[Anchor {
+                name: "settings.rail",
+                path: &[0, 0, 1, 0, 0, 0],
+            }],
+        },
         // Feature 040 (UI §2, §6): the pull request indicator on a row, with the switch on. The
         // first row has an open pull request with failing checks (the widest form), the third a
         // merged one (the narrowest), and the second none — a row without one beside rows with, so
@@ -1776,4 +1832,24 @@ pub fn revealing_states() -> &'static [RevealingState] {
             expect_between: (0.2, 0.8),
         },
     ]
+}
+
+/// A state with Settings open on the Jira page, the switch on and the open project set; `shape`
+/// edits the draft (feature 533, US3).
+fn jira_form_state(shape: impl FnOnce(&mut SettingsDraft)) -> State {
+    let mut state = with_project();
+    let project = state
+        .workspace
+        .active_project()
+        .map(|project| project.path.clone());
+    let mut draft = SettingsDraft {
+        jira: Default::default(),
+        section: SettingsSection::Jira,
+        ..SettingsDraft::default()
+    };
+    draft.jira.enabled = true;
+    draft.jira.project = project;
+    shape(&mut draft);
+    state.settings.settings_draft = Some(draft);
+    state
 }

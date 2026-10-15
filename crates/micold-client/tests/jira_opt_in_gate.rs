@@ -47,7 +47,8 @@ fn the_jira_section_is_only_a_rail_entry_while_off() {
     )
     .unwrap();
     assert!(
-        !source.contains("TextField"),
-        "the page holds no credential or address field while the connection form is not built"
+        source.contains("if draft.jira.enabled && draft.jira.project.is_some() {")
+            && source.contains("fn connection_form"),
+        "the credential fields are built only by the connection form, behind the switch"
     );
 }
