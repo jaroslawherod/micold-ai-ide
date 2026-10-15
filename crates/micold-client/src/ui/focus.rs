@@ -156,16 +156,36 @@ impl<T> Operation<T> for ShowFocused {
             return;
         }
 
-        let delta = delta_into_view(
+        scroll_panel_to(
             self.focused,
-            bounds.height,
-            content_bounds.y,
-            translation.y,
             MARGIN,
+            bounds,
+            content_bounds,
+            translation,
+            state,
         );
-        if delta != 0.0 {
-            state.scroll_by(AbsoluteOffset { x: 0.0, y: delta }, bounds, content_bounds);
-        }
+    }
+}
+
+/// Scroll one panel just far enough for `target` to be inside it with `margin` to spare; a target
+/// already in view moves nothing. The shared tail of both passes that show a control or a row.
+pub(super) fn scroll_panel_to(
+    target: Rectangle,
+    margin: f32,
+    bounds: Rectangle,
+    content_bounds: Rectangle,
+    translation: Vector,
+    state: &mut dyn Scrollable,
+) {
+    let delta = delta_into_view(
+        target,
+        bounds.height,
+        content_bounds.y,
+        translation.y,
+        margin,
+    );
+    if delta != 0.0 {
+        state.scroll_by(AbsoluteOffset { x: 0.0, y: delta }, bounds, content_bounds);
     }
 }
 
