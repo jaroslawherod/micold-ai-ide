@@ -86,8 +86,9 @@ fn header<'a>(showcase: &'a Showcase, roles: Roles) -> Element<'a, Message> {
             material::TypeRole::Body,
             roles,
         ),
-        material::Button::with_content(
-            material::Text::new(scheme_label, material::TypeRole::Label, roles),
+        text_button(
+            scheme_label,
+            material::TypeRole::Label,
             material::ButtonVariant::Outlined,
             roles,
         )
@@ -261,6 +262,16 @@ pub fn arrange<'a>(instances: Vec<Element<'a, Message>>, layout: Layout) -> Elem
         stack = stack.push(line);
     }
     stack.into()
+}
+
+/// A button carrying `label` set at `role`, in `variant` — the showcase's one way to build a text button.
+pub fn text_button<'a, M: Clone + 'a>(
+    label: impl Into<std::borrow::Cow<'a, str>>,
+    role: material::TypeRole,
+    variant: material::ButtonVariant,
+    roles: Roles,
+) -> material::Button<'a, M> {
+    material::Button::with_content(material::Text::new(label, role, roles), variant, roles)
 }
 
 /// A labelled instance: the component, with the state it is posed in named under it.

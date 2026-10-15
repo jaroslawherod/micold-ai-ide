@@ -24,7 +24,7 @@ use iced::{Element, Length};
 use micold_core::tokens::{spacing, Roles};
 
 use crate::showcase::catalogue::{Layout, MotionEntry};
-use crate::showcase::gallery::{arrange, posed};
+use crate::showcase::gallery::{arrange, posed, text_button};
 use crate::showcase::samples;
 use crate::showcase::state::{Message, Showcase};
 use crate::ui::material::{self, SurfaceKind, TypeRole};
@@ -54,16 +54,18 @@ fn controls<'a>(showcase: &'a Showcase, roles: Roles, index: usize) -> Element<'
         "Reverse (play it in)"
     };
     iced::widget::row![
-        material::Button::with_content(
-            material::Text::new("Replay", TypeRole::Label, roles),
+        text_button(
+            "Replay",
+            TypeRole::Label,
             material::ButtonVariant::Filled,
-            roles,
+            roles
         )
         .on_press(Message::Replayed(index)),
-        material::Button::with_content(
-            material::Text::new(reverse_label, TypeRole::Label, roles),
+        text_button(
+            reverse_label,
+            TypeRole::Label,
             material::ButtonVariant::Outlined,
-            roles,
+            roles
         )
         .on_press(Message::Reversed(index)),
     ]
@@ -83,8 +85,9 @@ pub fn run_control<'a>(showcase: &'a Showcase, roles: Roles, index: usize) -> El
     } else {
         "Run"
     };
-    material::Button::with_content(
-        material::Text::new(label, TypeRole::Label, roles),
+    text_button(
+        label,
+        TypeRole::Label,
         material::ButtonVariant::Outlined,
         roles,
     )

@@ -18,7 +18,7 @@ use micold_core::tokens::{anatomy, spacing, Roles};
 
 use crate::icons::{icon_role, Icon, IconSurface};
 use crate::showcase::catalogue::Layout;
-use crate::showcase::gallery::{arrange, posed};
+use crate::showcase::gallery::{arrange, posed, text_button};
 use crate::showcase::samples;
 use crate::showcase::state::{Floating, Message, Showcase};
 use crate::ui::cdk;
@@ -64,8 +64,9 @@ fn project_rows(roles: Roles) -> Vec<material::MenuItem<Message>> {
 
 /// A button that opens `surface`, labelled so the page says what pressing it will do.
 fn opener<'a>(label: &'a str, surface: Floating, roles: Roles) -> Element<'a, Message> {
-    material::Button::with_content(
-        material::Text::new(label, TypeRole::Body, roles),
+    text_button(
+        label,
+        TypeRole::Body,
         material::ButtonVariant::Outlined,
         roles,
     )
@@ -183,10 +184,11 @@ fn modal_surface<'a>(roles: Roles) -> cdk::overlay::Surface<'a, Message> {
             iced::widget::column![
                 material::Text::new("A modal dialog", TypeRole::Title, roles),
                 material::Text::new(samples::BODY, TypeRole::Body, roles),
-                material::Button::with_content(
-                    material::Text::new("Close", TypeRole::Body, roles),
+                text_button(
+                    "Close",
+                    TypeRole::Body,
                     material::ButtonVariant::Filled,
-                    roles,
+                    roles
                 )
                 .on_press(Message::Dismissed),
             ]

@@ -16,7 +16,7 @@ use micold_core::tokens::{spacing, Roles};
 use crate::icons::Icon;
 use crate::notification_icon;
 use crate::showcase::catalogue::Layout;
-use crate::showcase::gallery::{arrange, posed};
+use crate::showcase::gallery::{arrange, posed, text_button};
 use crate::showcase::samples;
 use crate::showcase::state::{Message, Showcase};
 use crate::ui::material::{self, ButtonVariant, TypeRole};
@@ -39,12 +39,7 @@ pub fn button<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Mess
     for (label, variant) in variants {
         instances.push(posed(
             label,
-            material::Button::with_content(
-                material::Text::new(samples::LABEL, TypeRole::Body, roles),
-                *variant,
-                roles,
-            )
-            .on_press(Message::NoOp),
+            text_button(samples::LABEL, TypeRole::Body, *variant, roles).on_press(Message::NoOp),
             roles,
         ));
     }
@@ -52,11 +47,7 @@ pub fn button<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Mess
         instances.push(posed(
             label,
             // No `on_press`: disabled, the way the component says it.
-            material::Button::<Message>::with_content(
-                material::Text::new(samples::OTHER_LABEL, TypeRole::Body, roles),
-                *variant,
-                roles,
-            ),
+            text_button::<Message>(samples::OTHER_LABEL, TypeRole::Body, *variant, roles),
             roles,
         ));
     }
