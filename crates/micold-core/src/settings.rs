@@ -391,10 +391,12 @@ impl Settings {
     /// a container are kept.
     pub fn set_single_daemon(&mut self, config: DaemonConfig) {
         use crate::daemons::{ContainerSettings, DaemonRuntime};
-        let target = self
-            .legacy_default_daemon
-            .filter(|id| self.daemons.iter().any(|d| d.id == *id))
-            .or_else(|| self.daemons.first().map(|d| d.id));
+        // A default that names a removed entry leaves the block alone: removing a daemon must
+        // not re-target the single-daemon block at whatever is first.
+        let target = match self.legacy_default_daemon {
+            Some(id) => Some(id),
+            None => self.daemons.first().map(|d| d.id),
+        };
         if let Some(entry) = target.and_then(|id| self.daemons.iter_mut().find(|d| d.id == id)) {
             if entry.runtime.is_startable() {
                 entry.runtime = match config.placement {

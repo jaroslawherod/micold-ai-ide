@@ -250,7 +250,19 @@ pub fn views(state: &State, model: &Model<'_>) -> ViewModel {
     ViewModel {
         empty: rows.is_empty(),
         bind_choices: rows.iter().map(|r| (r.id, r.name.clone())).collect(),
-        legacy_default: model.legacy_default,
+        // The daemon whose container the machine facts describe: the legacy default when it is a
+        // container, else the first container entry (as `BootPlan::sandbox_daemon`).
+        legacy_default: {
+            let is_container = |e: &&micold_core::daemons::DaemonEntry| {
+                matches!(e.runtime, DaemonRuntime::Container(_))
+            };
+            model
+                .legacy_default
+                .and_then(|id| model.registry.get(id))
+                .filter(is_container)
+                .or_else(|| model.registry.entries().iter().find(is_container))
+                .map(|e| e.id)
+        },
         rows,
     }
 }
