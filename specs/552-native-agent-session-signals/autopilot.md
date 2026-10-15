@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #552
 - **Worktree branch**: feat/552_replace-name-based-hiding-of-agent-work-with-the
 - **Started**: 2026-10-12
-- **Phase**: milestone M2 (PR open)
-- **Next step**: orchestrator waits on CI and merges M2 PR, then M3
+- **Phase**: milestone M3 (rebased onto main 4ec233b8, protocol renumbered 44 -> 45; gate on the rebased tree pending, push by user)
+- **Next step**: gate on the rebased tree (`mise run gate`), user pushes, open M3 PR, wait for CI and merge, then M4
 
 ## Pull requests
 
@@ -18,7 +18,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #786 | design (spec, plan, tasks) | merged | 31a433b352e7301c5c860ea0cf64ca0c2f78eb1f |
 | #795 | M1 every worktree listed | merged | 4ba66482fc44ac820233512a21001fe2e8a5bbef |
-| #823 | M2 Claude sub-agent runs recorded, protocol 42 | open | |
+| #823 | M2 Claude sub-agent runs recorded, protocol 43 | merged | 6a8aacad57cd3a8648d6f1fa7cebbafa232dd83b |
 
 ## Milestones
 
@@ -26,7 +26,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T009 | full | every worktree listed, toggle and client name-based visibility removed, hook captures | #795 | merged |
 | M2 | T010–T021 | full | Claude sub-agent runs recorded from SubagentStart/Stop, protocol 42 | | in review |
-| M3 | T022–T029 | full | provenance and attach_worktree removed, protocol 42 | | pending |
+| M3 | T022–T029 | full | provenance and attach_worktree removed, protocol 46 | | in review |
 | M4 | T030–T033 | full | Copilot mapping or gap, provider table, docs check | | pending |
 
 ## Decisions
@@ -53,6 +53,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Diff B (conformance, sonnet) M1 | 1 | f56c31b32ec335c0bdd823ff595786a1465046db:9f92c4dc32aca6d3f2da21b9696ee7f1ecb2c94d | CLEAN (3 MINOR, fixed/none); Verify: worktree_visibility 7 passed, store_roundtrip 37 passed |
 | Diff A (code-review high) M2 | 1 | 0434104615196360d0d89b3d96283a701ad8ba5f:55510b15508ff8a97204e57a080d28b1eaba66cf | CLEAN (3 MINOR: eviction no longer drops the new run and field length bounded, fixed; late start after stop not reconciled until restart, accepted) |
 | Diff B (conformance, sonnet) M2 | 1 | same | CLEAN (3 MINOR: Verify queued behind build lock, covered by the full gate; no cycle-log kept for this feature; body-not-logged claim in a test comment, accepted) |
+| Diff A (code-review high) M3 | 1 | 1a1b0a3d8085a87152e9cc529d52daa901a25ad7:f1be454fc6e0888a59192a4b3da446d23dbb086e | CLEAN; 1 MINOR (AttachDiscover doc), fixed |
+| Review B (conformance sonnet) M3 | 1 | same | CLEAN; Verify passed |
 
 ## Declined review findings
 
@@ -61,11 +63,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M3 done and committed locally (71a1aa43); full gate green, reviews A and B clean. `git push` was denied by the permission classifier, so no PR is open. Next: push the branch (`git push --force-with-lease -u origin HEAD`), open the PR with title `feat(552): remove worktree provenance and attaching, protocol 44 (#552)` and a body per tasks/pr.md. origin/main has moved since the rebase: rebase if CI or the push needs it.
 
 ## Open escalation
 
 None.
+
+## M3 decisions
+
+- `AttachTarget::Worktree` kept (resumes a stored session in its worktree); `WorktreeClaim` removed with provenance; list_worktrees no longer accepts `include_hidden`; banner offers "Resume all" (stored sessions) else "Review".
 
 ## Follow-ups not done
 

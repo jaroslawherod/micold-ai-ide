@@ -138,9 +138,7 @@ impl std::fmt::Debug for NonEmptyText {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Operation {
     Whoami,
-    ListWorktrees {
-        include_hidden: bool,
-    },
+    ListWorktrees,
     ListBranches,
     ListSessions {
         worktree: Option<WorktreeRef>,
@@ -184,11 +182,6 @@ pub enum Operation {
     },
     DeleteSession {
         session: SessionRef,
-    },
-    /// Attach a provider's worktree: a `dir_name`, an absolute path or a branch, resolved by the
-    /// daemon (feature 582, FR-005).
-    AttachWorktree {
-        worktree: String,
     },
     /// Sessions in the provider stores that the catalog does not hold, newest first (FR-011).
     ListResumableSessions {
@@ -301,7 +294,7 @@ impl Operation {
     pub fn tool_name(&self) -> &'static str {
         match self {
             Operation::Whoami => "whoami",
-            Operation::ListWorktrees { .. } => "list_worktrees",
+            Operation::ListWorktrees => "list_worktrees",
             Operation::ListBranches => "list_branches",
             Operation::ListSessions { .. } => "list_sessions",
             Operation::GetSession { .. } => "get_session",
@@ -313,7 +306,6 @@ impl Operation {
             Operation::StopSession { .. } => "stop_session",
             Operation::InterruptSession { .. } => "interrupt_session",
             Operation::DeleteSession { .. } => "delete_session",
-            Operation::AttachWorktree { .. } => "attach_worktree",
             Operation::ListResumableSessions { .. } => "list_resumable_sessions",
             Operation::RenameWorktree { .. } => "rename_worktree",
             Operation::DeleteWorktree { .. } => "delete_worktree",
@@ -325,12 +317,11 @@ impl Operation {
     pub fn audit_target(&self) -> String {
         match self {
             Operation::Whoami | Operation::ListBranches => String::new(),
-            Operation::ListWorktrees { .. } => String::new(),
+            Operation::ListWorktrees => String::new(),
             Operation::ListResumableSessions { worktree, .. } => worktree
                 .as_ref()
                 .map(|w| w.as_str().to_string())
                 .unwrap_or_default(),
-            Operation::AttachWorktree { worktree } => worktree.clone(),
             Operation::ListSessions { worktree } => worktree
                 .as_ref()
                 .map(|w| w.as_str().to_string())
@@ -403,13 +394,9 @@ const TOOLS: &[Tool] = &[
     Tool {
         name: "list_worktrees",
         description: "List the project's worktrees as the app's sidebar shows them: \"default\" \
-            (the project root) first, then each worktree with its branch, status, whether the app \
-            created it, and how many sessions it hosts. Worktrees owned by an assistant are hidden \
-            unless include_hidden is true.",
-        properties: || {
-            json!({"include_hidden": {"type": "boolean", "default": false,
-                "description": "Also list worktrees owned by an assistant."}})
-        },
+            (the project root) first, then each worktree with its branch, status and how many \
+            sessions it hosts. Every worktree is listed.",
+        properties: no_properties,
         required: &[],
         read_only: true,
         destructive: false,
@@ -453,7 +440,7 @@ const TOOLS: &[Tool] = &[
         description: "List the sessions the AI CLIs recorded for this project that the app does \
             not hold (find them with list_sessions otherwise), newest first, with the worktree \
             each ran in and whether it can be resumed. Reads only; resuming one is the app's \
-            action. Attach its worktree with attach_worktree to bring its adopted sessions back.",
+            action.",
         properties: || {
             json!({
                 "limit": {"type": "integer", "minimum": 1, "maximum": MAX_RESUMABLE_LIMIT,
@@ -546,23 +533,6 @@ const TOOLS: &[Tool] = &[
             })
         },
         required: &[],
-        read_only: false,
-        destructive: false,
-        shipped: true,
-    },
-    Tool {
-        name: "attach_worktree",
-        description: "Attach a worktree an AI CLI created, so the sidebar lists it and its \
-            sessions, without deleting or recreating it. worktree is its directory name, its \
-            absolute path or its branch; nothing is checked out or moved. Reports whether it was \
-            attached or already attached. A session running in the project root (Default) is \
-            refused.",
-        properties: || {
-            json!({"worktree": {"type": "string", "minLength": 1,
-                "description": "A dir_name from list_worktrees (include_hidden), an absolute \
-                    path, or a branch name."}})
-        },
-        required: &["worktree"],
         read_only: false,
         destructive: false,
         shipped: true,
@@ -758,9 +728,7 @@ pub fn parse_operation(name: &str, arguments: &Value) -> Result<Operation, OpErr
     }
     Ok(match name {
         "whoami" => Operation::Whoami,
-        "list_worktrees" => Operation::ListWorktrees {
-            include_hidden: optional_bool(args, "include_hidden")?.unwrap_or(false),
-        },
+        "list_worktrees" => Operation::ListWorktrees,
         "list_branches" => Operation::ListBranches,
         "list_sessions" => Operation::ListSessions {
             worktree: optional_worktree(args, "worktree")?,
@@ -800,9 +768,6 @@ pub fn parse_operation(name: &str, arguments: &Value) -> Result<Operation, OpErr
         },
         "delete_session" => Operation::DeleteSession {
             session: required_session(args, "session")?,
-        },
-        "attach_worktree" => Operation::AttachWorktree {
-            worktree: required_string(args, "worktree")?,
         },
         "list_resumable_sessions" => Operation::ListResumableSessions {
             limit: bounded_count(

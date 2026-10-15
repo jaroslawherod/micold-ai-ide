@@ -103,13 +103,8 @@ const OWNERS: &[(&str, &str)] = &[
     ("workspace.pane_layouts", "session"),
     ("workspace.worktree_names", "worktree"),
     ("workspace.included_worktrees", "worktree"),
-    // Feature 029. The first two are the provenance record and its one-time migration marker: both
-    // are read only to decide whether a worktree is listed, so they answer to the same feature the
-    // visible set does. `unreadable_projects` is not about worktrees at all — it records that *this
-    // project's* state file could not be parsed, and the worktree feature only consults it to fail
-    // visible (FR-011).
-    ("workspace.worktree_provenance", "worktree"),
-    ("workspace.provenance_migrated", "worktree"),
+    // `unreadable_projects` is not about worktrees at all — it records that *this project's* state
+    // file could not be parsed, and the worktree feature only consults it to fail visible (FR-011).
     ("workspace.unreadable_projects", "project"),
     // Feature 491: which daemon each worktree runs on. Written only by the shell
     // (`Workspace::bind`, after a create); read for the sidebar label and the form.
@@ -243,7 +238,7 @@ const CORE_MEDIATED: &[(&str, &str, &str, &str)] = &[
         "Workspace::activate",
     ),
     // Forgetting a project drops everything held against its path, and three features hold
-    // something: its sessions and foreground choice, its worktree names, inclusions and provenance.
+    // something: its sessions and foreground choice, its worktree names, inclusions.
     (
         "project",
         "workspace.foreground_by_project",
@@ -272,12 +267,6 @@ const CORE_MEDIATED: &[(&str, &str, &str, &str)] = &[
     ),
     (
         "project",
-        "workspace.provenance_migrated",
-        "features/project.rs::forget_confirmed",
-        "Workspace::forget",
-    ),
-    (
-        "project",
         "workspace.sessions",
         "features/project.rs::forget_confirmed",
         "Workspace::forget",
@@ -285,12 +274,6 @@ const CORE_MEDIATED: &[(&str, &str, &str, &str)] = &[
     (
         "project",
         "workspace.worktree_names",
-        "features/project.rs::forget_confirmed",
-        "Workspace::forget",
-    ),
-    (
-        "project",
-        "workspace.worktree_provenance",
         "features/project.rs::forget_confirmed",
         "Workspace::forget",
     ),

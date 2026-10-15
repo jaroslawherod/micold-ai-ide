@@ -1,5 +1,7 @@
 # Feature Specification: Worktree Provenance
 
+> **Superseded by [552-native-agent-session-signals](../552-native-agent-session-signals/spec.md).** Worktree provenance records, their one-time migration and "Claim as mine" are gone: no worktree is classified by name or by a creation record, so every worktree is listed and nothing is claimed. Old state files still load, and the two keys are ignored. The rules below are kept as history only.
+
 **Feature Branch**: `feat/worktree-provenance`
 
 **Created**: 2026-08-31

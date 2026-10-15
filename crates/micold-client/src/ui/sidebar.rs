@@ -273,9 +273,9 @@ pub fn view<'a>(state: &'a State, scheme: micold_core::theme::ColorScheme) -> El
         .into()
 }
 
-/// The start-up offer's banner, when the active project is offered one (feature 582, FR-012).
-/// "Attach all" attaches the found worktrees; with only stored sessions found it opens the
-/// "Attach existing…" list instead, where they are resumed one at a time.
+/// The start-up offer's banner, when the active project is offered one (feature 582, FR-012;
+/// 552 FR-009): it is shown when discovery found stored sessions the catalog lacks. "Resume all"
+/// resumes the ones that can be; with none resumable it opens the "Attach existing…" list.
 fn offer_banner<'a>(
     state: &'a State,
     r: micold_core::tokens::Roles,
@@ -285,30 +285,21 @@ fn offer_banner<'a>(
         return None;
     }
     let offer = &state.attach.offer;
-    let worktrees = offer.targets().len();
+    let resumable = offer.targets().len();
     let sessions = offer.session_count();
-    let plural =
-        |n: usize, one: &str, many: &str| format!("{n} {}", if n == 1 { one } else { many });
-    let mut found = Vec::new();
-    if worktrees > 0 {
-        found.push(plural(worktrees, "worktree", "worktrees"));
-    }
-    if sessions > 0 {
-        found.push(plural(sessions, "session", "sessions"));
-    }
-    let banner = material::ConnectionBanner::new(
-        format!("Found {}", found.join(" and ")),
-        "This project has none attached yet.",
-        r,
-    )
-    .level(crate::features::notifications::NoticeLevel::Info);
-    // Once "Attach all" is pressed the banner shows no buttons until the daemon answers, so the
+    let found = format!(
+        "Found {sessions} stored {}",
+        if sessions == 1 { "session" } else { "sessions" }
+    );
+    let banner = material::ConnectionBanner::new(found, "This app has no record of them yet.", r)
+        .level(crate::features::notifications::NoticeLevel::Info);
+    // Once "Resume all" is pressed the banner shows no buttons until the daemon answers, so the
     // same targets cannot be sent twice.
     if !offer.in_flight.is_empty() {
         return Some(banner.into());
     }
-    let (label, press) = if worktrees > 0 {
-        ("Attach all", Msg::OfferAttachAll)
+    let (label, press) = if resumable > 0 {
+        ("Resume all", Msg::OfferAttachAll)
     } else {
         ("Review", Msg::Opened)
     };

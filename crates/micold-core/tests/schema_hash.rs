@@ -274,7 +274,8 @@ fn the_build_fingerprint_is_a_separate_mechanism_from_the_schema_hash() {
 ///
 /// And 44 → 45 for feature 533's Jira switch: `jira_enabled` and `jira_connections` on
 /// `DaemonSettings`, `jira_enabled` and `jira_connection` on `SettingsSet`, in one edit.
-const FEATURE_026_PROTOCOL_VERSION: u32 = 45;
+/// And 45 → 46 for feature 552's removal of worktree provenance and attaching.
+const FEATURE_026_PROTOCOL_VERSION: u32 = 46;
 
 #[test]
 fn the_wire_changes_for_this_feature_cost_exactly_one_version_bump() {

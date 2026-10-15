@@ -33,9 +33,6 @@ fn state() -> (State, DaemonId, DaemonId) {
         availability: Availability::Available,
     });
     state.workspace.active = Some(path.clone());
-    for dir in ["feat-a", "feat-b"] {
-        state.workspace.record_user_created(&path, dir);
-    }
     state.worktree.worktrees = vec![worktree("feat-a"), worktree("feat-b")];
     let mut registry = DaemonRegistry::new(Vec::new(), 1);
     let host = registry.add("Host", DaemonRuntime::Host, true).unwrap();

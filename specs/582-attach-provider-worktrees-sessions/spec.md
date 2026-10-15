@@ -1,5 +1,7 @@
 # Feature Specification: Attach a Provider's Existing Worktrees and Sessions
 
+> **Partly superseded by [552-native-agent-session-signals](../552-native-agent-session-signals/spec.md).** Attaching worktrees is removed: the `attach_worktree` tool, the dialog's worktree rows and the `needs_worktree_attach` status are gone, because every worktree is listed and a session whose worktree exists is simply resumable. Discovery and resume of stored provider sessions stay, and the start-up offer is triggered by stored sessions the catalog lacks, not by absent provenance. The rules below about worktrees are kept as history only.
+
 **Feature Branch**: `feat/582-attach-provider-worktrees-sessions`
 
 **Created**: 2026-10-05

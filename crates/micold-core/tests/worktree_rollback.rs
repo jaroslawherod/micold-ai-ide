@@ -6,7 +6,7 @@ use micold_core::git::{FakeGit, Git};
 use micold_core::naming::DerivedNames;
 use micold_core::worktree::{
     create_worktree, rollback_plan, CleanupStep, CreateError, CreateMode, CreateProgressEvent,
-    CreateStage, ProvenanceView,
+    CreateStage,
 };
 use std::path::PathBuf;
 
@@ -66,7 +66,6 @@ fn failed_create_rolls_back_leaving_no_orphan_branch_or_worktree() {
         false,
         &CreateMode::NewBranch,
         &[],
-        &ProvenanceView::none(),
         &mut |e| events.push(e),
     )
     .unwrap_err();
@@ -115,7 +114,6 @@ fn failed_submodule_fetch_rolls_back_the_whole_worktree() {
         false,
         &CreateMode::NewBranch,
         &[],
-        &ProvenanceView::none(),
         &mut |e| events.push(e),
     )
     .unwrap_err();
@@ -162,7 +160,6 @@ fn submodule_failure_message_is_preserved_verbatim_for_the_user() {
         false,
         &CreateMode::NewBranch,
         &[],
-        &ProvenanceView::none(),
         &mut |_| {},
     )
     .unwrap_err();
@@ -257,7 +254,6 @@ fn a_failed_reuse_preserves_the_pre_existing_branch() {
         false,
         &CreateMode::ReuseLocal,
         &[],
-        &ProvenanceView::none(),
         &mut |_| {},
     )
     .unwrap_err();
@@ -292,7 +288,6 @@ fn a_failed_overwrite_deletes_the_branch_it_created() {
         false,
         &CreateMode::Overwrite,
         &[],
-        &ProvenanceView::none(),
         &mut |_| {},
     )
     .unwrap_err();
@@ -327,7 +322,6 @@ fn a_failed_remote_track_deletes_the_local_branch_but_not_the_remote_one() {
             remote: "origin".to_string(),
         },
         &[],
-        &ProvenanceView::none(),
         &mut |_| {},
     )
     .unwrap_err();

@@ -90,7 +90,6 @@ fn dialogs() -> Vec<Dialog> {
                 state.attach.dialog = Some(micold_client::features::attach::Dialog {
                     project: std::path::PathBuf::from("/p"),
                     listing: micold_client::features::attach::Listing::Loading,
-                    selected: Default::default(),
                     in_flight: Vec::new(),
                     error: None,
                     sessions: Vec::new(),

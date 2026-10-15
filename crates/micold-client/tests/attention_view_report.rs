@@ -27,7 +27,6 @@ fn state_with_selected_session() -> (State, SessionId) {
         availability: Availability::Available,
     });
     state.workspace.active = Some(path.clone());
-    state.workspace.record_user_created(&path, "feat-x");
     state.worktree.worktrees.push(Worktree {
         dir_name: "feat-x".to_string(),
         path: PathBuf::from("/repo/.claude/worktrees/feat-x"),

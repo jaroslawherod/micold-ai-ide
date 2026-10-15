@@ -1,7 +1,7 @@
 //! Feature 034 (contracts/mcp-tools.md; US1 scenarios 2 and 3; A2, A3, U124–U140): the read-only
 //! tools, called through `POST /mcp` as a bound session would call them.
 //!
-//! The fixture is a real git repository with worktrees `a` and `b`, a hidden assistant worktree,
+//! The fixture is a real git repository with worktrees `a` and `b`, an agent-named worktree,
 //! and sessions S1 (project root), S2 (`a`) and S3 (`b`, the caller). A second project holds S9, so
 //! every scoping rule has something to leak.
 
@@ -132,7 +132,11 @@ async fn whoami_names_the_caller_its_project_worktree_and_cli() {
 async fn list_worktrees_is_default_then_the_sidebars_set() {
     let f = fixture().await;
     let out = f.ok(sid(3), "list_worktrees", json!({})).await;
-    assert_eq!(refs(&out, "worktrees"), ["default", "a", "b"]);
+    let listed = refs(&out, "worktrees");
+    assert_eq!(listed[0], "default");
+    for name in ["a", "b", AGENT_WORKTREE] {
+        assert!(listed.contains(&name.to_string()), "{name} is listed");
+    }
 
     let default = row(&out, "worktrees", "default");
     assert_eq!(default["branch"], Value::Null);
@@ -143,18 +147,13 @@ async fn list_worktrees_is_default_then_the_sidebars_set() {
     assert_eq!(b["branch"], "b");
     assert_eq!(b["status"], "clean");
     assert_eq!(b["display_name"], "b");
-    assert_eq!(
-        b["app_created"],
-        json!(true),
-        "a worktree with sessions is the user's"
-    );
-    assert_eq!(b["assistant_owned"], json!(false));
+    assert!(b.get("app_created").is_none() && b.get("assistant_owned").is_none());
     assert_eq!(
         b["path"],
         native(f.repo().join(".claude").join("worktrees").join("b"))
     );
 
-    // The same set the sidebar's snapshot holds, less the hidden row.
+    // The same set the sidebar's snapshot holds, every worktree, none hidden.
     let snapshot = f.state.catalog_snapshot();
     let project = snapshot
         .projects
@@ -165,7 +164,6 @@ async fn list_worktrees_is_default_then_the_sidebars_set() {
         .worktrees
         .iter()
         .map(|w| w.dir_name.clone())
-        .filter(|d| d != AGENT_WORKTREE)
         .collect();
     sidebar.insert(0, "default".into());
     assert_eq!(refs(&out, "worktrees"), sidebar);
@@ -187,17 +185,11 @@ async fn each_worktree_counts_the_sessions_it_hosts() {
 }
 
 #[tokio::test]
-async fn an_assistant_owned_worktree_is_listed_only_with_include_hidden() {
+async fn an_agent_named_worktree_is_listed_like_any_other() {
     let f = fixture().await;
-    let hidden = f.ok(sid(3), "list_worktrees", json!({})).await;
-    assert!(!refs(&hidden, "worktrees").contains(&AGENT_WORKTREE.to_string()));
-
-    let all = f
-        .ok(sid(3), "list_worktrees", json!({"include_hidden": true}))
-        .await;
-    let agent = row(&all, "worktrees", AGENT_WORKTREE);
-    assert_eq!(agent["assistant_owned"], json!(true));
-    assert_eq!(agent["app_created"], json!(false));
+    let out = f.ok(sid(3), "list_worktrees", json!({})).await;
+    let agent = row(&out, "worktrees", AGENT_WORKTREE);
+    assert!(agent.get("assistant_owned").is_none());
 }
 
 #[tokio::test]
@@ -213,9 +205,6 @@ async fn a_directory_git_does_not_know_is_prunable() {
     let f = fixture().await;
     let orphan = f.repo().join(".claude/worktrees/orphan");
     std::fs::create_dir_all(&orphan).unwrap();
-    f.state
-        .record_worktree_provenance(f.repo(), "orphan")
-        .unwrap();
     let out = f.ok(sid(3), "list_worktrees", json!({})).await;
     assert_eq!(row(&out, "worktrees", "orphan")["status"], "prunable");
 }

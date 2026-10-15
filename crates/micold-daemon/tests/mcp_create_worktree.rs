@@ -107,7 +107,7 @@ impl Fixture {
             self.addr,
             &credential(&self.state, sid(3)),
             "list_worktrees",
-            json!({"include_hidden": true}),
+            json!({}),
         )
         .await;
         out["worktrees"]
@@ -148,14 +148,12 @@ fn assert_retry_hint(error: &Value, branch: &str) {
 }
 
 /// The keys of a literal-branch result before feature 532 (FR-009).
-const LITERAL_RESULT_KEYS: [&str; 8] = [
+const LITERAL_RESULT_KEYS: [&str; 6] = [
     "ref",
     "display_name",
     "branch",
     "path",
     "status",
-    "app_created",
-    "assistant_owned",
     "session_count",
 ];
 
@@ -206,17 +204,10 @@ async fn create_worktree_makes_the_dialogs_worktree_and_every_window_sees_it() {
             "branch": "feat-x",
             "path": native(f.repo().join(".claude").join("worktrees").join("feat-x")),
             "status": "clean",
-            "app_created": true,
-            "assistant_owned": false,
             "session_count": 0,
         })
     );
     assert!(f.repo().join(".claude/worktrees/feat-x/.git").exists());
-    let (records, _) = f.state.provenance(f.repo());
-    assert!(
-        records.contains("feat-x"),
-        "recorded as created by the app, as the dialog's create is (FR-009)"
-    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -385,19 +376,12 @@ async fn a_default_session_creates_a_worktree_as_any_session_does() {
             "branch": "feat-x",
             "path": native(f.repo().join(".claude").join("worktrees").join("feat-x")),
             "status": "clean",
-            "app_created": true,
-            "assistant_owned": false,
             "session_count": 0,
         })
     );
     assert!(f.repo().join(".claude/worktrees/feat-x/.git").exists());
     assert_eq!(f.on_disk(), ["b", "feat-x"]);
     assert!(f.listed().await.contains(&"feat-x".to_string()));
-    let (records, _) = f.state.provenance(f.repo());
-    assert!(
-        records.contains("feat-x"),
-        "recorded as created by the app, as the dialog's create is (FR-009)"
-    );
     let repo = f.repo().to_path_buf();
     assert!(
         window_sees(&mut window, WINDOW_BOUND, |catalog| {
@@ -498,8 +482,6 @@ async fn type_ticket_and_name_create_the_forms_worktree() {
         .repo()
         .join(".claude/worktrees/fix-123_login-crash/.git")
         .exists());
-    let (records, _) = f.state.provenance(f.repo());
-    assert!(records.contains("fix-123_login-crash"));
     assert!(f
         .listed()
         .await

@@ -501,12 +501,6 @@ impl StoredCatalog {
             // Feature 025: never carried by the catalog itself. It lives in each project's own
             // state file and is filled in by `load` after this, alongside that project's sessions.
             foreground_by_project: BTreeMap::new(),
-            // Feature 029: same — per project, filled in by `load`. There is deliberately no
-            // legacy catalog fallback for these: the catalog never carried provenance, so a
-            // pre-029 file has none to migrate, and the project simply arrives unmigrated and
-            // goes through the one-time backfill.
-            worktree_provenance: BTreeMap::new(),
-            provenance_migrated: BTreeSet::new(),
             // Never persisted at all — it describes this run's reading of the disk (FR-011).
             unreadable_projects: BTreeSet::new(),
             // Feature 484: per project, filled in by `load` from each project's own state file.
@@ -549,24 +543,14 @@ struct StoredProjectState {
     /// and an older build reading one that carries it ignores an unknown field.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     included_worktrees: Vec<PathBuf>,
-    /// The worktrees this application created in this project (feature 029, FR-001).
-    ///
-    /// `#[serde(default)]` and no `schema_version` bump, for the reason `last_session` records —
-    /// but the consequence here is louder, so it is worth stating: absent means "recorded none",
-    /// and under 029 that would hide every worktree. What makes the upgrade survivable is not
-    /// this default but the one-time backfill that runs beside it (FR-006), which is why
-    /// `provenance_migrated` below is stored in the same file and written in the same save.
-    ///
-    /// A `Vec` on the wire and a `BTreeSet` in memory: `serde_json` has no set-shaped literal
-    /// worth the round-trip, and the in-memory set already guarantees the sorted, deduplicated
-    /// order this is written in.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    /// Read and ignored (feature 552, FR-010): worktree provenance, written by features 029 to
+    /// 582. Never written back, so a file that carried it is rewritten without it.
+    #[serde(default, skip_serializing)]
+    #[allow(dead_code)]
     created_worktrees: Vec<String>,
-    /// Whether the one-time provenance backfill has run for this project (feature 029, FR-006c).
-    ///
-    /// `#[serde(default)]` = `false` = "not yet", which is precisely the state every installation
-    /// upgrading into this feature is in.
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    /// Read and ignored (feature 552, FR-010): the one-time provenance backfill marker.
+    #[serde(default, skip_serializing)]
+    #[allow(dead_code)]
     provenance_migrated: bool,
     /// The project's terminal-pane layout (feature 484, FR-013), in the form of
     /// contracts/pane-layout-file.md.
@@ -608,12 +592,8 @@ impl StoredProjectState {
                 .get(project_path)
                 .cloned()
                 .unwrap_or_default(),
-            created_worktrees: ws
-                .worktree_provenance
-                .get(project_path)
-                .map(|set| set.iter().cloned().collect())
-                .unwrap_or_default(),
-            provenance_migrated: ws.provenance_migrated.contains(project_path),
+            created_worktrees: Vec::new(),
+            provenance_migrated: false,
             pane_layout: ws
                 .pane_layouts
                 .get(project_path)
@@ -1073,23 +1053,6 @@ impl ProjectStore for JsonFileStore {
                             .included_worktrees
                             .insert(project.path.clone(), state.included_worktrees);
                     }
-                    // Feature 029. Absent in a file written before the field existed, which is
-                    // "this app has created nothing here" — true of a project it has never
-                    // created a worktree in, and made survivable for every other project by the
-                    // one-time backfill the marker below gates.
-                    if state.created_worktrees.is_empty() {
-                        workspace.worktree_provenance.remove(&project.path);
-                    } else {
-                        workspace.worktree_provenance.insert(
-                            project.path.clone(),
-                            state.created_worktrees.into_iter().collect(),
-                        );
-                    }
-                    if state.provenance_migrated {
-                        workspace.provenance_migrated.insert(project.path.clone());
-                    } else {
-                        workspace.provenance_migrated.remove(&project.path);
-                    }
                     // Feature 025. Absent in a file written before this field existed, which is
                     // "no memory" — the behaviour this application had until now.
                     // Feature 484 (FR-014): a layout this build cannot honour is absent, and the
@@ -1132,19 +1095,8 @@ impl ProjectStore for JsonFileStore {
                     // nothing, for a project that never had sessions/overrides).
                 }
                 ProjectStateLoad::Corrupt => {
-                    // Feature 029, FR-011. Every other line in this arm drops data that degrades
-                    // to a smaller, still-correct app: fewer sessions, derived names, no included
-                    // worktrees. Provenance does not degrade that way — an empty record set reads
-                    // as "the app created none of these", i.e. hide them all, which would take the
-                    // user's own worktrees off the screen because a file failed to parse. So the
-                    // failure is *named* here, and the classifier treats a named project as all
-                    // the user's until the file can be read again.
+                    // The failure is named so a save does not overwrite the unreadable file.
                     workspace.unreadable_projects.insert(project.path.clone());
-                    workspace.worktree_provenance.remove(&project.path);
-                    // The marker goes too: a project we could not read has not been proven
-                    // migrated, and re-running the backfill on a readable file is idempotent
-                    // whereas skipping it on a lost marker is not recoverable.
-                    workspace.provenance_migrated.remove(&project.path);
                     workspace.sessions.remove(&project.path);
                     workspace.worktree_names.remove(&project.path);
                     // …and shows no worktree it could only have learned about from that file.

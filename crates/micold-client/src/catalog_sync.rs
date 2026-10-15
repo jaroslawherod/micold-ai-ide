@@ -275,39 +275,6 @@ pub fn reconcile_catalog(
                 }
                 let outcomes = core.set_worktrees(merged);
                 crate::app::drain(outcomes, |o| crate::app::interpret(core, o));
-                // Mirror the provenance record (feature 029, FR-001). Rebuilt from the snapshot
-                // rather than merged into, exactly as the display names below are: the daemon is
-                // the single writer, so a record it no longer reports — a worktree deleted from
-                // another window — must go here too. That is also why an optimistic record made
-                // by this client's own create (FR-010) is safe: the very next snapshot carries
-                // the durable one back, and if persistence failed the row simply reverts to
-                // hidden rather than lying about being the user's forever.
-                //
-                // Scoped to this daemon: another daemon's worktrees keep the records it reported.
-                let mut created: std::collections::BTreeSet<String> = core
-                    .workspace
-                    .worktree_provenance
-                    .get(&active)
-                    .into_iter()
-                    .flatten()
-                    .filter(|d| bound_elsewhere(core, &active, d, daemon))
-                    .cloned()
-                    .collect();
-                created.extend(
-                    project
-                        .worktrees
-                        .iter()
-                        .filter(|w| w.user_created)
-                        .filter(|w| !bound_elsewhere(core, &active, &w.dir_name, daemon))
-                        .map(|w| w.dir_name.clone()),
-                );
-                if created.is_empty() {
-                    core.workspace.worktree_provenance.remove(&active);
-                } else {
-                    core.workspace
-                        .worktree_provenance
-                        .insert(active.clone(), created);
-                }
                 // Mirror display-name overrides from the catalog (a second window sees a rename).
                 let mut names: std::collections::BTreeMap<String, String> = core
                     .workspace

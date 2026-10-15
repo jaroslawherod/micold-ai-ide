@@ -2,9 +2,8 @@
 //! protocol messages are callable without a client, with the same result.
 //!
 //! Each test runs the operation twice over two identical projects: once as the protocol message a
-//! window sends, once through `ops` directly, and compares what each left behind — the catalog, the
-//! provenance record and the directory on disk. `mutation_semantics.rs`, `mutation_atomicity.rs`
-//! and `worktree_provenance_rpc.rs` pin the protocol side itself (U141).
+//! window sends, once through `ops` directly, and compares what each left behind — the catalog and
+//! the directory on disk. `mutation_semantics.rs`, `mutation_atomicity.rs` pin the protocol side itself (U141).
 
 #[path = "support/mcp.rs"]
 mod mcp_support;
@@ -25,12 +24,8 @@ use micold_core::worktree::CreateMode;
 use micold_daemon::ops;
 use micold_daemon::state::DaemonState;
 
-/// Worktree rows (dir, branch, display name), provenance records, and directories on disk.
-type Outcome = (
-    Vec<(String, Option<String>, String)>,
-    Vec<String>,
-    Vec<String>,
-);
+/// Worktree rows (dir, branch, display name), and directories on disk.
+type Outcome = (Vec<(String, Option<String>, String)>, Vec<String>);
 
 /// One project with a store, as a window or the tool server would find it.
 struct Side {
@@ -77,7 +72,6 @@ impl Side {
             .iter()
             .map(|w| (w.dir_name.clone(), w.branch.clone(), w.display_name.clone()))
             .collect();
-        let (records, _) = self.state.provenance(self.repo());
         let mut on_disk: Vec<String> = std::fs::read_dir(self.repo().join(".claude/worktrees"))
             .map(|dir| {
                 dir.flatten()
@@ -86,7 +80,7 @@ impl Side {
             })
             .unwrap_or_default();
         on_disk.sort();
-        (worktrees, records.into_iter().collect(), on_disk)
+        (worktrees, on_disk)
     }
 }
 
@@ -146,7 +140,7 @@ async fn create_without_a_client_matches_the_protocol_create() {
     assert_eq!(
         agent.outcome(),
         window.outcome(),
-        "the same worktree, provenance record and directory as the dialog's create"
+        "the same worktree and directory as the dialog's create"
     );
     assert!(agent.outcome().1.contains(&"feat-x".to_string()));
 }
@@ -180,7 +174,7 @@ async fn delete_without_a_client_matches_the_protocol_delete() {
     assert!(deleted.is_ok(), "{deleted:?}");
     assert_eq!(agent.outcome(), window.outcome());
     assert_eq!(
-        agent.outcome().2,
+        agent.outcome().1,
         ["b"],
         "the deleted worktree's directory is gone"
     );

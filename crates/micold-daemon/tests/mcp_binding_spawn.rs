@@ -255,7 +255,6 @@ async fn a_claude_session_is_bound_and_answers_whoami_with_its_own_credential() 
         "list_resumable_sessions",
         "read_session_output",
         "create_worktree",
-        "attach_worktree",
         "rename_worktree",
         "delete_worktree",
         "create_session",

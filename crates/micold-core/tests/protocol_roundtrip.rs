@@ -7,9 +7,8 @@
 use std::path::PathBuf;
 
 use micold_core::attach::{
-    AttachItem, AttachOutcome, AttachResult, AttachTarget, AttachableWorktree, Availability,
-    DiscoveryNote, DiscoveryReport, RefuseReason, ResumableSession, ResumableStatus, SkipReason,
-    Unavailable, UnresumableReason,
+    AttachItem, AttachOutcome, AttachResult, AttachTarget, DiscoveryNote, DiscoveryReport,
+    RefuseReason, ResumableSession, ResumableStatus, SkipReason, UnresumableReason,
 };
 use micold_core::attention::{NotificationKind, NotificationKinds};
 use micold_core::cli_reason::SpawnEnv;
@@ -292,13 +291,6 @@ fn sample_client_msgs() -> Vec<ClientMsg> {
             req: 45,
             project: PathBuf::from("/a"),
         },
-        // Feature 029 (T060). Modelled on the rename above — durable catalog state, no git — and
-        // carried here so the claim cannot be added to one encoding and forgotten in the other.
-        ClientMsg::WorktreeClaim {
-            req: 61,
-            project: PathBuf::from("/a"),
-            dir_name: "agent-a885b42dc521fbda1".into(),
-        },
         // Feature 582 (T003): the attach messages, with both item kinds on the wire.
         ClientMsg::AttachDiscover {
             req: 82,
@@ -308,9 +300,6 @@ fn sample_client_msgs() -> Vec<ClientMsg> {
             req: 83,
             project: PathBuf::from("/a"),
             targets: vec![
-                AttachItem::Worktree {
-                    dir_name: "agent-a885b42dc521fbda1".into(),
-                },
                 AttachItem::Session {
                     id: Uuid::nil(),
                     replace: true,
@@ -462,9 +451,6 @@ fn sample_catalog() -> CatalogSnapshot {
                 status: WorktreeStatus::Clean,
                 path: PathBuf::from("/a/.claude/worktrees/feat-x"),
                 included: false,
-                // Feature 029. `true` on purpose: a field only ever encoded `false` would
-                // survive being dropped, which is the failure this file exists to catch.
-                user_created: true,
             }],
             sessions: vec![sample_summary()],
         }],
@@ -668,14 +654,6 @@ fn sample_daemon_msgs() -> Vec<DaemonMsg> {
         DaemonMsg::AttachReport {
             req: 82,
             report: DiscoveryReport {
-                worktrees: vec![AttachableWorktree {
-                    dir_name: "agent-a885b42dc521fbda1".into(),
-                    path: PathBuf::from("/a/.claude/worktrees/agent-a885b42dc521fbda1"),
-                    branch: Some("worktree-agent-a885b42dc521fbda1".into()),
-                    provider: Some(AiCli::ClaudeCode),
-                    session_count: 2,
-                    availability: Availability::Unavailable(Unavailable::Missing),
-                }],
                 sessions: vec![ResumableSession {
                     id: Uuid::nil(),
                     provider: AiCli::Pi,
@@ -704,13 +682,6 @@ fn sample_daemon_msgs() -> Vec<DaemonMsg> {
             req: 83,
             result: OperationResult::AttachApplied {
                 results: vec![
-                    AttachResult {
-                        item: AttachItem::Worktree {
-                            dir_name: "w".into(),
-                        },
-                        outcome: AttachOutcome::Refused(RefuseReason::NotAWorktreeOfProject),
-                        existing: None,
-                    },
                     AttachResult {
                         item: AttachItem::Session {
                             id: Uuid::nil(),
@@ -1280,15 +1251,6 @@ fn envelope_header_round_trips_and_rejects_garbage() {
     assert_eq!(HEADER_LEN, 4);
 }
 
-// ---------------------------------------------------------------------------------------
-// Feature 029 (T006): the provenance flag reaches the client.
-//
-// `sample_catalog` carries `user_created: true`, so the two blanket round-trip tests above
-// already cover both encodings. What is left is the compatibility half: a JSON payload written
-// before the field existed must decode as `false` rather than fail, which is what makes an
-// older daemon's snapshot readable at all.
-// ---------------------------------------------------------------------------------------
-
 #[test]
 fn an_availability_answer_round_trips_with_and_without_the_environment_state() {
     // Feature 037, contract A1: `env` says why a CLI is missing, and `None` says the service could
@@ -1323,24 +1285,6 @@ fn a_session_summary_carrying_a_derived_label_round_trips_on_both_wires() {
     };
     json_roundtrip(&summary);
     postcard_roundtrip(&summary);
-}
-
-#[test]
-fn a_worktree_snapshot_without_the_provenance_flag_decodes_as_not_user_created() {
-    let json = r#"{
-        "dir_name": "feat-x",
-        "branch": "feat/x",
-        "display_name": "X",
-        "status": "Clean",
-        "path": "/a/.claude/worktrees/feat-x",
-        "included": false
-    }"#;
-    let decoded: WorktreeSnapshot = serde_json::from_str(json).expect("decodes without the field");
-    assert!(
-        !decoded.user_created,
-        "absent means 'not known to be the user's', which is the safe reading for a payload \
-         that predates the record"
-    );
 }
 
 #[test]

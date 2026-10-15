@@ -8,7 +8,7 @@ use micold_core::daemons::{ContainerSettings, DaemonId, DaemonRegistry, DaemonRu
 use micold_core::project::{Availability, Project};
 use micold_core::sandbox::SandboxProfile;
 use micold_core::store::{JsonFileStore, ProjectStore};
-use micold_core::worktree::{BlockReason, Worktree, WorktreeOwner, WorktreeStatus};
+use micold_core::worktree::{BlockReason, Worktree, WorktreeStatus};
 use std::path::PathBuf;
 
 const PROJECT: &str = "/repo";
@@ -113,7 +113,6 @@ fn a_refusal_names_the_worktree_holding_the_branch_and_its_daemon() {
     let (mut state, _, boxed) = state_with_two_daemons();
     let project = PathBuf::from(PROJECT);
     let path = project.join(".claude/worktrees/feat-held");
-    state.workspace.record_user_created(&project, "feat-held");
     state.worktree.worktrees = vec![Worktree {
         dir_name: "feat-held".into(),
         path: path.clone(),
@@ -125,10 +124,7 @@ fn a_refusal_names_the_worktree_holding_the_branch_and_its_daemon() {
     open(&mut state);
     let form = state.worktree_form.form.as_ref().unwrap();
 
-    let reason = BlockReason::CheckedOutAt {
-        path: path.clone(),
-        owner: WorktreeOwner::User,
-    };
+    let reason = BlockReason::CheckedOutAt { path: path.clone() };
     let text = form.explain_block(&reason, "feat/held");
     assert!(text.contains("'feat-held'"), "{text}");
     assert!(text.contains("daemon 'Box'"), "{text}");

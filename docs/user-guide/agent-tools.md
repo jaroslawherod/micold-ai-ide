@@ -25,18 +25,16 @@ These tools only read. None of them changes anything.
 | `list_branches` | Every local and remote-tracking branch, the worktree it is checked out in, and, when a new worktree could not use it, the same explanation the new-worktree dialog gives |
 | `list_sessions` | The project's sessions with their label, AI CLI, state, activity and worktree. The calling session is marked. It can be narrowed to one worktree |
 | `get_session` | One session. A session that failed to start includes the reason |
-| `list_resumable_sessions` | Sessions the AI CLIs recorded for this project that the application does not list yet, newest first, with the worktree each ran in and whether it can be resumed (`resumable`, `needs_worktree_attach` or `unresumable`, with the reason). It takes `limit` (1 to 200, 50 unless given), `offset` and an optional `worktree`. It only reads (so a Default session may call it), and it touches none of the CLIs' files. `total` counts at most the 200 newest sessions, and `provider` names the AI CLI by its tool name, such as `claude_code`. Resuming one is done in the app; an assistant brings a session's worktree back with `attach_worktree` |
+| `list_resumable_sessions` | Sessions the AI CLIs recorded for this project that the application does not list yet, newest first, with the worktree each ran in and whether it can be resumed (`resumable` or `unresumable`, with the reason). It takes `limit` (1 to 200, 50 unless given), `offset` and an optional `worktree`. It only reads (so a Default session may call it), and it touches none of the CLIs' files. `total` counts at most the 200 newest sessions, and `provider` names the AI CLI by its tool name, such as `claude_code`. Resuming one is done in the app |
 | `read_session_output` | The most recent lines of another session's terminal, as plain text: 200 lines unless the assistant asks for a different number, and never more than 2,000. See [Reading and typing into other sessions](#reading-and-typing-into-other-sessions) |
 
-Worktrees an assistant created for itself are left out, as they are in the sidebar, unless the
-assistant asks for them with `include_hidden`.
+Every worktree is listed, as it is in the sidebar; no name hides one.
 
 These tools make changes, exactly as the sidebar does:
 
 | Tool | What it does |
 |---|---|
 | `create_worktree` | Creates a worktree for a branch, as the new-worktree dialog does: under `.claude/worktrees/`, named after the branch unless a name is given, and marked as created by the application. By default it makes a new branch; `existing_local` checks out a branch that exists and is free, and `track_remote` tracks a remote branch. Instead of a branch, it can take a `type`, a `ticket` and a `name`, as the new-worktree form does (see below); a worktree for an issue should be created this way, or with `github_issue`, so that it carries the issue reference. With `ai_cli` or `prompt` it also creates the worktree's one session in the same call (see below) |
-| `attach_worktree` | Attaches a worktree an AI CLI created, as **Attach existing...** in the app does, so it shows in the sidebar with its sessions and is no longer hidden. Give its folder name, its absolute path or its branch. Nothing is checked out, moved or deleted. The result says `attached` or `already_attached`. A path or branch that is not a worktree of this project is refused as not found, and `default`, an ambiguous branch, a worktree whose folder is missing or invalid, or one that is not under an AI CLI's worktree location, is refused as invalid input; nothing changes in any of those cases |
 | `rename_worktree` | Gives a worktree a new name in the sidebar, as the sidebar's rename does. Its folder and branch stay as they are. The name cannot be empty, and `default` (the project folder) cannot be renamed |
 | `create_session` | Creates a session in a worktree (or in `default`, the project folder) and starts it. It runs the AI CLI the assistant names, or your default AI CLI from Settings. It can also be given a first prompt to type into the new session. A worktree holds at most one session by default: when it already has one, the call fails with a conflict that names the worktree's main session (its name and id), says that `start_session` on that id brings it back, and says to pass `allow_additional_session: true` to start another on purpose; nothing is created. With `allow_additional_session: true` (optional, default false) the call creates a second session beside the existing one and leaves that one untouched; the policy, the AI CLI check and every other check still apply |
 | `start_session` | Starts a session that is idle, failed, or waiting to be resumed, as **Start** in the sidebar does: a session that was running when the service last stopped resumes its conversation. Every window shows it starting, then running. A session that is already starting, running or restarting is left as it is, and the result says which it is |
@@ -107,7 +105,7 @@ the same branch, one succeeds and the others are told the branch is taken.
 
 A session running in the project folder itself (`default`) can create a worktree, so an assistant
 there can hand work to a worktree of its own instead of doing it in your project folder. It cannot
-attach, rename or delete a worktree (attaching changes whose worktree it is): work in the
+rename or delete a worktree: work in the
 project folder is kept separate from the worktrees that exist, and an assistant there is refused
 with that reason. It can still list everything and create,
 start, stop and delete sessions.

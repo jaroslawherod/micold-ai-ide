@@ -165,8 +165,7 @@ impl Fixture {
     }
 
     async fn worktree_refs(&self) -> Vec<String> {
-        self.ok(CALLER, "list_worktrees", json!({"include_hidden": true}))
-            .await["worktrees"]
+        self.ok(CALLER, "list_worktrees", json!({})).await["worktrees"]
             .as_array()
             .unwrap()
             .iter()
@@ -175,9 +174,7 @@ impl Fixture {
     }
 
     async fn display_name_of(&self, worktree: &str) -> String {
-        let out = self
-            .ok(CALLER, "list_worktrees", json!({"include_hidden": true}))
-            .await;
+        let out = self.ok(CALLER, "list_worktrees", json!({})).await;
         out["worktrees"]
             .as_array()
             .unwrap()

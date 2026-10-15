@@ -4174,8 +4174,8 @@ const DEMO: &str = "/repo/demo";
 const FEAT_A: &str = "/repo/demo/.claude/worktrees/feat-a";
 const FEAT_B: &str = "/repo/demo/.claude/worktrees/feat-b";
 
-/// `/repo/demo` open with the given worktrees, each `(dir, status, created by this app)`. A
-/// worktree the app did not create is an agent's, hidden until revealed (029 FR-004).
+/// `/repo/demo` open with the given worktrees, each `(dir, status, _)`; every worktree is listed
+/// (552 FR-001), so the third element is ignored.
 fn app_on_demo(worktrees: &[(&str, micold_core::worktree::WorktreeStatus, bool)]) -> App {
     let mut app = base_app();
     let root = PathBuf::from(DEMO);
@@ -4188,11 +4188,6 @@ fn app_on_demo(worktrees: &[(&str, micold_core::worktree::WorktreeStatus, bool)]
             micold_core::project::Availability::Available,
         ));
     app.core.workspace.active = Some(root.clone());
-    for (dir, _, created) in worktrees {
-        if *created {
-            app.core.workspace.record_user_created(&root, dir);
-        }
-    }
     app.core.worktree.worktrees = worktrees
         .iter()
         .map(|(dir, status, _)| micold_core::worktree::Worktree {
@@ -4619,7 +4614,6 @@ fn catalog_with_worktree_in(
         status,
         path: PathBuf::from(DEMO).join(".claude/worktrees").join(dir),
         included: false,
-        user_created: true,
     });
     catalog
 }
@@ -8671,7 +8665,6 @@ mod pr_status {
                 status: micold_core::protocol::messages::WorktreeStatus::Clean,
                 path: PathBuf::from(DEMO).join(".claude/worktrees").join(dir),
                 included: false,
-                user_created: true,
             });
         }
         catalog

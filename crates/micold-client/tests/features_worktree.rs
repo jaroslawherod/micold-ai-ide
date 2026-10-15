@@ -42,13 +42,8 @@ fn agent_worktree() -> Worktree {
     )
 }
 
-/// A state holding `worktrees`, none of which the app recorded creating.
+/// A state holding `worktrees`.
 fn with_worktrees(worktrees: Vec<Worktree>) -> State {
-    with_records(worktrees, &[])
-}
-
-/// A state holding `worktrees`, of which the app recorded creating those named in `recorded`.
-fn with_records(worktrees: Vec<Worktree>, recorded: &[&str]) -> State {
     let path = PathBuf::from("/p");
     let mut state = State {
         worktree: worktree::State {
@@ -64,9 +59,6 @@ fn with_records(worktrees: Vec<Worktree>, recorded: &[&str]) -> State {
         availability: Availability::Available,
     });
     state.workspace.active = Some(path.clone());
-    for dir in recorded {
-        state.workspace.record_user_created(&path, dir);
-    }
     state
 }
 
@@ -82,23 +74,8 @@ fn an_agent_named_worktree_is_listed() {
 }
 
 #[test]
-fn a_recorded_worktree_is_listed() {
-    let mine = worktree("feat-thing", "feat/thing");
-
-    assert_eq!(
-        with_records(vec![mine], &["feat-thing"])
-            .worktree_tree()
-            .len(),
-        1
-    );
-}
-
-#[test]
 fn a_worktree_with_no_rename_falls_back_to_a_name_derived_from_its_directory() {
-    let st = with_records(
-        vec![worktree("feat-add-thing", "feat/add-thing")],
-        &["feat-add-thing"],
-    );
+    let st = with_worktrees(vec![worktree("feat-add-thing", "feat/add-thing")]);
 
     let name = st.worktree_display_name("feat-add-thing");
 

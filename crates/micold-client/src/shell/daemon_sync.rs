@@ -167,11 +167,6 @@ pub enum PendingOp {
     /// own as the `CatalogChanged` broadcast, and the only thing the reply adds is "it finished".
     /// Correlated all the same, because that "it finished" is what ends the control's busy state.
     WorktreeRefresh,
-    /// A `WorktreeClaim` (029 FR-020), carrying the directory name so a persistence failure can
-    /// name what it was about. The reducer already applied the record optimistically; this exists
-    /// so a failure to make it durable reaches the user rather than being discovered at the next
-    /// restart.
-    WorktreeClaim(String),
     ProjectAdd,
     /// A `ProjectActivate` (002 BUG-003): a known project reopened, recorded as last active.
     ProjectActivate,
@@ -248,7 +243,6 @@ impl PendingOp {
             }
             PendingOp::WorktreeDelete(_, d) => format!("delete the worktree \"{d}\""),
             PendingOp::WorktreeRename(d) => format!("rename the worktree \"{d}\""),
-            PendingOp::WorktreeClaim(d) => format!("claim the worktree \"{d}\""),
             PendingOp::WorktreeInclude(p) => format!("include the worktree at {}", p.display()),
             PendingOp::WorktreeExclude(p) => {
                 format!("stop showing the worktree at {}", p.display())
@@ -2328,28 +2322,6 @@ pub fn on_worktree_rename_confirmed(app: &mut App) -> Task<Message> {
     Task::none()
 }
 
-/// Tell the daemon the user claims this worktree as their own (029 FR-020).
-///
-/// The pure reducer runs first and has already recorded it, so the row is the user's in this
-/// frame; the RPC makes it durable. Nothing is validated on the way out — the directory name came
-/// off a row the sidebar is drawing, and there is no user-typed string here.
-pub fn on_worktree_claim_requested(app: &mut App, dir_name: String) -> Task<Message> {
-    app.core
-        .update(Message::Worktree(WorktreeMsg::ClaimRequested(
-            dir_name.clone(),
-        )));
-    project_op(
-        app,
-        PendingOp::WorktreeClaim(dir_name.clone()),
-        move |req, project| ClientMsg::WorktreeClaim {
-            req,
-            project,
-            dir_name,
-        },
-    );
-    Task::none()
-}
-
 /// Validate the form, then create the worktree (incl. any submodule fetch) via git,
 /// off the update() thread so a slow fetch doesn't freeze the UI (feature 010,
 /// research R4). AddWorktreeSubmitted/WorktreeCreated/WorktreeCreateFailed keep their
@@ -3772,18 +3744,12 @@ pub(crate) mod tests {
     /// T043: the dialog's apply answer routes to `Applied`: the dialog closes.
     #[test]
     fn the_dialog_apply_answer_routes_to_applied() {
+        let id = uuid::Uuid::from_u128(7);
         let (mut app, mut rx) = app_with_attach_dialog(DiscoveryReport {
-            worktrees: vec![micold_core::attach::AttachableWorktree {
-                dir_name: "a".into(),
-                path: attach_project().join(".claude/worktrees/a"),
-                branch: None,
-                provider: None,
-                session_count: 0,
-                availability: micold_core::attach::Availability::Attachable,
-            }],
+            sessions: vec![resumable(id)],
             ..Default::default()
         });
-        app.core.update(Message::Attach(AttachMsg::AttachAll));
+        app.core.update(Message::Attach(AttachMsg::ResumeAll));
         let _ = on_attach_apply(&mut app);
         let req = drain_sent(&mut rx)
             .into_iter()
@@ -3803,8 +3769,10 @@ pub(crate) mod tests {
             attach_answer(
                 req,
                 vec![AttachResult {
-                    item: AttachItem::Worktree {
-                        dir_name: "a".into(),
+                    item: AttachItem::Session {
+                        id,
+                        replace: false,
+                        allow_additional_session: false,
                     },
                     outcome: AttachOutcome::Attached,
                     existing: None,
@@ -3824,18 +3792,11 @@ pub(crate) mod tests {
     fn the_banner_apply_answer_routes_to_offer_applied() {
         let (mut app, mut rx) = connected_app();
         app.core.workspace.active = Some(attach_project());
-        let wt = micold_core::attach::AttachableWorktree {
-            dir_name: "a".into(),
-            path: attach_project().join(".claude/worktrees/a"),
-            branch: None,
-            provider: None,
-            session_count: 0,
-            availability: micold_core::attach::Availability::Attachable,
-        };
+        let id = uuid::Uuid::from_u128(7);
         app.core.update(Message::Attach(AttachMsg::OfferListed {
             project: attach_project(),
             report: DiscoveryReport {
-                worktrees: vec![wt],
+                sessions: vec![resumable(id)],
                 ..Default::default()
             },
         }));
@@ -3859,8 +3820,10 @@ pub(crate) mod tests {
             attach_answer(
                 req,
                 vec![AttachResult {
-                    item: AttachItem::Worktree {
-                        dir_name: "a".into(),
+                    item: AttachItem::Session {
+                        id,
+                        replace: false,
+                        allow_additional_session: false,
                     },
                     outcome: AttachOutcome::Attached,
                     existing: None,
