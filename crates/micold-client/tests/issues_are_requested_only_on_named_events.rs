@@ -91,15 +91,10 @@ const ALLOWED: &[(&str, &str, &str)] = &[
     ),
     (
         "crates/micold-client/src/shell/issues.rs",
-        "Some(first) => start_issue_descriptions(app, first),",
-        "038 U99 (FR-024): the reducer accepted a load (named events 1 and 2) and now awaits the \
-         first page of its descriptions. A stale or failed load awaits none.",
-    ),
-    (
-        "crates/micold-client/src/shell/issues.rs",
         "Some(next) => start_issue_descriptions(app, next),",
-        "038 U99 (FR-024): the reducer accepted a page of that pass and awaits the one after it. \
-         A stale page, the last page, the cap and a failure await none.",
+        "038 U99 (FR-024): `update_then_follow`, after the reducer accepted a load (named events \
+         1 and 2) or a page of that pass, starts the read it now awaits. A stale or failed load, \
+         a stale page, the last page, the cap and a failure await none.",
     ),
     (
         "crates/micold-client/src/shell/pr_status.rs",
