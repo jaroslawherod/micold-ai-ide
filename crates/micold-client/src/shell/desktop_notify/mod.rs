@@ -119,6 +119,21 @@ pub fn system(events: Events) -> Box<dyn DesktopNotifier> {
     Box::new(windows::Notifier::new(events, icon_files()))
 }
 
+/// The sample notification the macOS and Windows backends' tests share.
+#[cfg(all(test, any(target_os = "macos", target_os = "windows")))]
+fn notification(
+    title: &str,
+    body: &str,
+) -> micold_client::features::attention::DesktopNotification {
+    micold_client::features::attention::DesktopNotification {
+        kind: micold_core::attention::NotificationKind::NeedsPermission,
+        title: title.to_string(),
+        body: body.to_string(),
+        project: std::path::PathBuf::from("/repo"),
+        session: micold_core::session::SessionId::new(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

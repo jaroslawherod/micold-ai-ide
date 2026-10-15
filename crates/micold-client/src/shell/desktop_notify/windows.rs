@@ -125,21 +125,11 @@ impl DesktopNotifier for Notifier {
 
 #[cfg(test)]
 mod tests {
+    use super::super::notification;
     use super::*;
     use iced::futures::channel::mpsc;
     use micold_client::notification_icon::{write_files, IconFiles};
-    use micold_core::attention::NotificationKind;
     use tauri_winrt_notification::{Error, IconCrop};
-
-    fn notification(title: &str, body: &str) -> DesktopNotification {
-        DesktopNotification {
-            kind: NotificationKind::NeedsPermission,
-            title: title.to_string(),
-            body: body.to_string(),
-            project: PathBuf::from("/repo"),
-            session: SessionId::new(),
-        }
-    }
 
     #[test]
     fn the_toast_carries_the_title_and_the_body_as_its_first_line() {
