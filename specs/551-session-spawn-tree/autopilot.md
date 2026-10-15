@@ -42,6 +42,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | 8 | implement | Allow a fourth part of M1 (rebase, re-review, push, PR) | Allowed (decided by user) | user | orchestrator prompt: M1 part 4 |
 | 9 | plan | Claude Code `claude --bg` has no recorded parent signal; what then? | Document Claude Code as a provider gap; no user-supplied record (decided by user) | user | orchestrator prompt; research.md R2; Handover open question |
 | D-part5 | M1 | Allow a fifth M1 part to merge main again and re-gate (PR #824 CONFLICTING) | Allowed | user | orchestrator prompt |
+| D-part5b | M1 | Linearize the branch (wait-merge: cannot rebase merge commits) | Rebase and force-with-lease push allowed; the user ran the rebase and squash themselves; protocol 46 | decided by user | orchestrator prompt |
 
 ## Review rounds
 
@@ -69,8 +70,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-Done: PR #824 open (M1). Fifth part (user allowed it): merged origin/main a fourth time (776 took protocol 44 for `main`, so 551's `origin` is now 45; `is_false` deduplicated in store.rs; test pins, plan, tasks, docs/daemon.md renumbered). Full `mise run gate` green on the merge tree (run with MICOLD_NO_BUILD_LOCK=1 and the worktree's own target-shared: the shared target was clobbered by other worktrees' daemon binaries, giving spurious VersionMismatch).
-Next: confirm PR #824 is MERGEABLE and CI green; orchestrator merges.
+Done: PR #824 open (M1). The branch is one squash commit on origin/main d8bf85a2, made by the user (rebase, no conflicts); PROTOCOL_VERSION is 46 (feature 533 took 45), artifacts renumbered by the user. Full `mise run gate` green on this tree (MICOLD_NO_BUILD_LOCK=1, worktree's own target-shared).
+Next: the user runs `git push --force-with-lease` (the classifier denies the agent); then confirm PR #824 MERGEABLE, CI, wait-merge.
 
 ## Open escalation
 
