@@ -73,8 +73,8 @@ the same values.
 ### Edge Cases
 
 - No daemons configured: the manager offers Add daemon; there is nothing to configure per daemon.
-- A host daemon: container-only settings are shown but stay inert, and are kept if the user
-  switches the daemon back to a container.
+- A host daemon: container-only settings are shown but stay inert, and are kept while the form is
+  open if the user switches the daemon back to a container. A saved host daemon stores none (plan R4).
 - Invalid value (for example a limit out of range): the error shows beside the field in the
   daemon's form and blocks saving, as before.
 - Several windows or sessions running: saving restarts only the edited daemon.
@@ -86,7 +86,7 @@ the same values.
 - Unsaved edits in two daemons' forms at once are kept independently; saving one does not discard
   the other.
 - Removing a daemon discards its container settings; renaming it keeps them.
-- A remembered last-open section or link naming the removed section lands on Daemons.
+- No section name is persisted, so nothing remembered can point at the removed section.
 
 ## Requirements *(mandatory)*
 
@@ -112,7 +112,8 @@ the same values.
 - **FR-010**: The container fields MUST be saved by the Daemons form's own save, with its existing
   restart confirmation when the daemon is running; they MUST NOT keep a separate page Save.
 - **FR-011**: For a daemon whose runtime is SSH, the container fields MUST NOT be shown and its
-  stored container settings MUST be left as they were.
+  an unedited entry's stored settings MUST be left as they were; switching a container daemon to SSH
+  and saving drops its container settings (plan R4).
 
 ### Key Entities
 
