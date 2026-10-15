@@ -18,12 +18,12 @@
 //!   form under them in window coordinates without being inside the form's panel. This operation
 //!   therefore moves only the panel the row was found in.
 
-use iced::advanced::widget::operation::scrollable::{AbsoluteOffset, Scrollable};
+use iced::advanced::widget::operation::scrollable::Scrollable;
 use iced::advanced::widget::operation::Outcome;
 use iced::advanced::widget::{operate, Id, Operation};
 use iced::{Rectangle, Task, Vector};
 
-use super::focus::delta_into_view;
+use super::focus::scroll_panel_to;
 use super::material::PICKER_HIGHLIGHT;
 
 /// Scroll the open list so its highlighted row is wholly in view. A row already in view moves
@@ -138,15 +138,13 @@ impl<T> Operation<T> for ShowHighlight {
             return;
         }
 
-        let delta = delta_into_view(
+        scroll_panel_to(
             self.highlight.row,
-            bounds.height,
-            content_bounds.y,
-            translation.y,
             MARGIN,
+            bounds,
+            content_bounds,
+            translation,
+            state,
         );
-        if delta != 0.0 {
-            state.scroll_by(AbsoluteOffset { x: 0.0, y: delta }, bounds, content_bounds);
-        }
     }
 }
