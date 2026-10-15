@@ -22,7 +22,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T018 | full | … | #… | pending / in-progress / in-review / ci / merged |
+| M1 | T001–T013 | full | Container settings in the Daemons form | #… | pending |
+| M2 | T014–T021 | full | Session service section removed | #… | pending |
+| M3 | T022–T023 | light | Existing settings carry over | #… | pending |
 
 ## Decisions
 
