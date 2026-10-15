@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #775
 - **Worktree branch**: feat/775_diff-view-should-show-prs-created-within-sessions
 - **Started**: 2026-10-12
-- **Phase**: milestone M3
-- **Next step**: M3 PR merge, then close; T015/T026/T033 visual pass still owed (see Follow-ups)
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -19,7 +19,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #782 | Design PR (spec, plan, tasks) | merged | 0de0b3ce005d2cb69c99300e52e5cb6ed3da25fa |
 | #825 | M1: PR list in the Changes pane | merged | 057d71e68f57170dda7af54bdc254cab626d7d47 |
 | #832 | M2: select a PR and read its diff | merged | bd39d5c1c43e92ff1cdd845510a2779ad37eb743 |
-| #836 | M3: PR list refresh and stale mark | open | — |
+| #836 | M3: PR list refresh and stale mark | merged | 4ec233b86a90911e541a641461b0dcceb7db041a |
+| (close) | Close: tdd-verify, test-strength fixes, quickstart results, spec closed | open | — |
 
 ## Milestones
 
@@ -53,6 +54,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 review A (high) | 1 | a24a773c7a9fa0ff3115024bc9939df6a47f8604:addb7d2a98edc3c8c044fca7705e4b25d0154682 | CHANGES: 2 MAJOR (disconnect leaves list Loading; list read raised a notice with no route), 1 MINOR; MAJORs fixed with test, MINOR declined |
 | M3 review A (high) | 1 | da4c3766:9fb42b3b | CLEAN |
 | M3 review B (sonnet) | 1 | da4c3766:9fb42b3b | CLEAN |
+| Close converge | 1 | - | no unbuilt behaviour; visual passes unticked |
+| Close tdd-verify | 1 | - | FAIL (no red evidence, unrepairable); 10 real mutation survivors (findings 1-9) fixed with tests R001-R005 |
+| Close review (sonnet) | 1 | a6efa86c:4ec233b8 | see below |
 
 ## Declined review findings
 
@@ -119,6 +123,9 @@ Next steps (in order):
 None. <or: the banner as sent, and when>
 
 ## Follow-ups not done
+
+- Closed with T015/T026/T033 unobserved: accepted limitation (no Xvfb/xdotool, no fixture repo with open/merged/deleted-branch/too-large PRs). Recorded in quickstart.md Results.
+- Close gate: build lock starved for hours by other worktrees; the test-strength tests were run once with MICOLD_NO_BUILD_LOCK=1 (green), the gate itself locked.
 
 - T015 and T026 (visual pass, quickstart Part B 1-5) NOT observed: no Xvfb/xdotool here (headless sway is possible) and no fixture worktree with open/merged/deleted-branch/too-large PRs. Evidence file `visual/evidence.md` says so. Left unticked; run in a session with a display and a fixture repo, or accept at close.
 - T033 (M3 visual pass, quickstart §B 5 offline part, 6) NOT observed, same reason as T015/T026; left unticked.

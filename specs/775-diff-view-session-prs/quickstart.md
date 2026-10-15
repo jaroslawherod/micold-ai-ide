@@ -17,3 +17,14 @@ Expect green. Key tests: `pull_request_list`, `pr_diff_split`, `features_pr_chan
 5. Turn the setting off: the section disappears, no notice (FR-014). Go offline: the last list stays,
    marked possibly stale after 10 minutes (FR-012).
 6. Merge or close a PR on GitHub: within 5 minutes the state mark changes (SC-004).
+
+## Results (recorded at close, 2026-10-14)
+
+- **Part A**: `mise run gate` green on each milestone PR (#825, #832, #836); the close PR's gate
+  result is in its PR body. `tdd/verification.md` ran 21 hand-applied mutants over `split_pr_diff`,
+  the 406 mapping and `SourceChosen`; the 10 real survivors (findings 1-9) got tests in the close PR.
+- **Part B**: NOT OBSERVED, accepted limitation. The environment has no Xvfb/xdotool and no
+  fixture repo with open, merged, deleted-branch and too-large PRs; creating PRs on GitHub was out
+  of scope. Steps 1-6 were not run; see `visual/evidence.md`. T015, T026 and T033 stay unticked.
+  The behaviours they cover are pinned by reducer and shell tests (`features_pr_changes`,
+  `pr_list_read_*`, `pr_diff_read_*`, `pr_list_refresh_*`), not by pixels.

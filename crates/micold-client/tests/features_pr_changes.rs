@@ -457,6 +457,95 @@ fn an_answer_for_another_read_is_dropped() {
     assert!(matches!(p.diff, PrDiffLoad::Loading { .. }));
 }
 
+fn reopen(state: &mut State, entry: SessionLocation) {
+    changes::update(
+        state,
+        Msg::Opened {
+            project: project(),
+            entry,
+        },
+    );
+}
+
+#[test]
+fn choosing_the_working_tree_forgets_the_remembered_pull_request() {
+    let mut state = opened(true);
+    listed(&mut state, vec![pr(7, BranchPrState::Open)]);
+    chosen(&mut state, 7);
+    changes::update(&mut state, Msg::SourceChosen(None));
+    assert!(
+        state.remembered.is_empty(),
+        "the user left the pull request"
+    );
+    reopen(&mut state, SessionLocation::Worktree("feat-b".into()));
+    reopen(&mut state, worktree());
+    let seq = seq_of(wanted(&mut state, Some("feat/a")));
+    let effect = changes::update(
+        &mut state,
+        Msg::PullRequestsRead {
+            seq,
+            read_at: 2,
+            result: Ok(vec![pr(7, BranchPrState::Open)]),
+        },
+    );
+    assert_eq!(effect, Effect::None, "nothing reopens");
+    assert_eq!(source(&state), &Source::Changes);
+}
+
+#[test]
+fn choosing_an_unlisted_number_does_nothing() {
+    let mut state = opened(true);
+    listed(&mut state, vec![pr(7, BranchPrState::Open)]);
+    let effect = changes::update(&mut state, Msg::SourceChosen(Some(99)));
+    assert_eq!(effect, Effect::None);
+    assert_eq!(source(&state), &Source::Changes);
+    assert!(state.remembered.is_empty());
+}
+
+#[test]
+fn choosing_the_shown_pull_request_again_reads_nothing() {
+    let mut state = opened(true);
+    listed(&mut state, vec![pr(7, BranchPrState::Open)]);
+    chosen(&mut state, 7);
+    let effect = changes::update(&mut state, Msg::SourceChosen(Some(7)));
+    assert_eq!(effect, Effect::None);
+    assert!(matches!(source(&state), Source::PullRequest(p) if p.number == 7));
+}
+
+#[test]
+fn choosing_a_pull_request_whose_diff_failed_reads_it_again() {
+    let mut state = opened(true);
+    listed(&mut state, vec![pr(7, BranchPrState::Open)]);
+    let seq = diff_seq(changes::update(&mut state, Msg::SourceChosen(Some(7))), 7);
+    changes::update(
+        &mut state,
+        Msg::PullRequestDiffRead {
+            seq,
+            number: 7,
+            result: Err(DiffReadFailure::Failed(ReadingFailure::Passing)),
+        },
+    );
+    let Source::PullRequest(p) = source(&state) else {
+        panic!("pull request");
+    };
+    assert!(matches!(p.diff, PrDiffLoad::Failed));
+    let effect = changes::update(&mut state, Msg::SourceChosen(Some(7)));
+    diff_seq(effect, 7);
+}
+
+#[test]
+fn choosing_the_working_tree_while_on_it_keeps_a_remembered_pull_request() {
+    let mut state = opened(true);
+    listed(&mut state, vec![pr(7, BranchPrState::Open)]);
+    chosen(&mut state, 7);
+    reopen(&mut state, SessionLocation::Worktree("feat-b".into()));
+    reopen(&mut state, worktree());
+    assert_eq!(source(&state), &Source::Changes);
+    let effect = changes::update(&mut state, Msg::SourceChosen(None));
+    assert_eq!(effect, Effect::None);
+    assert_eq!(state.remembered.len(), 1, "still awaiting its list");
+}
+
 #[test]
 fn the_setting_turned_off_returns_to_the_working_tree() {
     let mut state = opened(true);

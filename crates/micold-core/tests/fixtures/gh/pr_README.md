@@ -76,6 +76,7 @@ lines beside a small one.
 | `pr_diff_rename.txt` | one rename with an edit |
 | `pr_diff_add.txt` / `pr_diff_delete.txt` | a new file; a deleted file |
 | `pr_diff_binary.txt` | a new binary file |
+| `pr_diff_mode.txt` | a mode change only (`old mode`/`new mode`, no hunk) |
 | `pr_diff_quoted.txt` | a path with a non-ASCII letter and quotes, C-quoted |
 | `pr_diff_large.txt` | a file above `limits::MAX_CHANGED_LINES` and a small one |
 | `pr_diff_empty.txt` | nothing (a PR with no change) |
