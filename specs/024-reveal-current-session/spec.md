@@ -1,5 +1,7 @@
 # Feature Specification: Reveal the current session in the sidebar
 
+> **Partly superseded by [552-native-agent-session-signals](../552-native-agent-session-signals/spec.md).** The "Show agent worktrees" toggle (`show_agent_worktrees`) this feature mentions is gone: every worktree is listed and nothing is classified by name. Statements about that toggle are kept as history only.
+
 **Feature Branch**: `feat/expand-a-current-session`
 
 **Created**: 2026-08-09

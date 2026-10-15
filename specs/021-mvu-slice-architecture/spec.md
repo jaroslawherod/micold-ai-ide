@@ -1,5 +1,7 @@
 # Feature Specification: Feature-Module MVU Architecture
 
+> **Partly superseded by [552-native-agent-session-signals](../552-native-agent-session-signals/spec.md).** The "Show agent worktrees" toggle (`show_agent_worktrees`) this feature mentions is gone: every worktree is listed and nothing is classified by name. Statements about that toggle are kept as history only.
+
 **Feature Branch**: `feat/mvp-arch-refactor`
 
 **Created**: 2026-07-28

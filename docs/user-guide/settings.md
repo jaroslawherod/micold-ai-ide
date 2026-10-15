@@ -195,6 +195,9 @@ their values; turn it on again and they are as you left them.
 Claude Code's helper agents (subagents) finishing inside a turn are not the end of the turn: they
 neither notify you nor mark the session unread.
 
+Which AI CLIs report their sub-agents, and which do not, is listed in
+[Sub-agent runs](agent-tools.md#sub-agent-runs).
+
 - **One switch for every AI CLI.** It applies alike to Claude Code, GitHub Copilot, Pi, Codex and OpenCode sessions.
   There is no switch per CLI.
 - **Every window at once.** The session service keeps the setting, so it holds for every open

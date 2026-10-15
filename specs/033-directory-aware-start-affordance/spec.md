@@ -1,5 +1,7 @@
 # Feature Specification: The start affordance answers for its own directory
 
+> **Partly superseded by [552-native-agent-session-signals](../552-native-agent-session-signals/spec.md).** The "Show agent worktrees" toggle (`show_agent_worktrees`) this feature mentions is gone: every worktree is listed and nothing is classified by name. Statements about that toggle are kept as history only.
+
 **Feature Branch**: `fix/a-project-local-cli-stays-unreachable-in-that-project`
 
 **Created**: 2026-09-27

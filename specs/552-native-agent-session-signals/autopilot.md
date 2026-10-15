@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #552
 - **Worktree branch**: feat/552_replace-name-based-hiding-of-agent-work-with-the
 - **Started**: 2026-10-12
-- **Phase**: milestone M3 (rebased onto main 4ec233b8, protocol renumbered 44 -> 45; gate on the rebased tree pending, push by user)
-- **Next step**: gate on the rebased tree (`mise run gate`), user pushes, open M3 PR, wait for CI and merge, then M4
+- **Phase**: milestone M4 (gate green, reviews done, PR open)
+- **Next step**: wait for CI and merge M4, then close
 
 ## Pull requests
 
@@ -19,15 +19,16 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #786 | design (spec, plan, tasks) | merged | 31a433b352e7301c5c860ea0cf64ca0c2f78eb1f |
 | #795 | M1 every worktree listed | merged | 4ba66482fc44ac820233512a21001fe2e8a5bbef |
 | #823 | M2 Claude sub-agent runs recorded, protocol 43 | merged | 6a8aacad57cd3a8648d6f1fa7cebbafa232dd83b |
+| #870 | M3 provenance and attach_worktree removed, protocol 46 | merged | 5a65464712ecce80c7aed79475c585912a54399d |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T009 | full | every worktree listed, toggle and client name-based visibility removed, hook captures | #795 | merged |
-| M2 | T010–T021 | full | Claude sub-agent runs recorded from SubagentStart/Stop, protocol 42 | | in review |
-| M3 | T022–T029 | full | provenance and attach_worktree removed, protocol 46 | | in review |
-| M4 | T030–T033 | full | Copilot mapping or gap, provider table, docs check | | pending |
+| M2 | T010–T021 | full | Claude sub-agent runs recorded from SubagentStart/Stop, protocol 43 | #823 | merged |
+| M3 | T022–T029 | full | provenance and attach_worktree removed, protocol 46 | #870 | merged |
+| M4 | T030–T033 | full | Copilot mapping or gap, provider table, docs check | | in progress |
 
 ## Decisions
 
@@ -63,7 +64,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M3 done and committed locally (71a1aa43); full gate green, reviews A and B clean. `git push` was denied by the permission classifier, so no PR is open. Next: push the branch (`git push --force-with-lease -u origin HEAD`), open the PR with title `feat(552): remove worktree provenance and attaching, protocol 44 (#552)` and a body per tasks/pr.md. origin/main has moved since the rebase: rebase if CI or the push needs it.
+None.
 
 ## Open escalation
 
@@ -76,3 +77,15 @@ None.
 ## Follow-ups not done
 
 None.
+
+## M4 decisions
+
+- T001 found no installed Copilot CLI and no sub-agent event (research R8), so Copilot is a stated gap: T030 became a test that a Copilot event log never gains runs; T031 skipped.
+- T033 also marks 021, 024, 025, 028, 033 and 575 (they mention the toggle) with a "Partly superseded" note; the script's list is derived by grep plus the three named specs.
+
+## M4 follow-ups from review A (code-review ran on HEAD = M3 commit, findings are M3 code, not fixed here)
+
+- runs.rs clean_half_created lost its app-created guard (deletes hand-made folder at the derived name on restart); stale doc comment.
+- attach.rs offer_visible dropped the user_created_worktrees gate: Resume banner every launch.
+- list_worktrees rejects a stale `include_hidden` argument.
+- Resume all re-runs provider discovery per item; dead `created_worktrees`/`provenance_migrated` store fields; unused `_focused` param in attach_dialog; stale ClaimRequested doc in worktree.rs.
