@@ -23,7 +23,7 @@ use micold_core::session::{AiCli, SessionId};
 use micold_core::terminal::LaunchMode;
 use micold_core::worktree::{
     create_worktree as git_create_worktree, preflight, remove_worktree, remove_worktree_dir,
-    BranchSituation, CreateError, CreateMode, CreateProgressEvent, Leftover, ProvenanceView,
+    BranchSituation, CreateError, CreateMode, CreateProgressEvent, Leftover,
 };
 
 use crate::server::refresh_worktrees_and_broadcast;
@@ -84,7 +84,6 @@ pub async fn branch_situation(
         return None;
     };
     let included = state.included_worktrees(project);
-    let (created, unreadable) = state.provenance(project);
     let names = names.clone();
     let situation = tokio::task::spawn_blocking(move || {
         let target = repo.join(".claude/worktrees").join(&names.dir_name);
@@ -99,10 +98,6 @@ pub async fn branch_situation(
             &names.branch,
             target_exists,
             &included,
-            &ProvenanceView {
-                records: &created,
-                state_unreadable: unreadable,
-            },
         )
     })
     .await
@@ -111,7 +106,7 @@ pub async fn branch_situation(
 }
 
 /// Create worktree `names.dir_name` on `names.branch` under `<project>/.claude/worktrees/`, record
-/// it as app-created, and broadcast the refreshed catalog.
+/// and broadcast the refreshed catalog.
 ///
 /// Serialized per project by `worktree_gate`, so two creates cannot interleave and a rolled-back
 /// one cannot remove the directory a racing one just populated (T120). `git worktree add` runs on
@@ -126,12 +121,9 @@ pub async fn create_worktree(
     let Some((repo, true)) = state.project_repo(&project) else {
         return Err(CreateFailure::NotARepository);
     };
-    let dir_name = names.dir_name.clone();
-    // Read before the blocking task: the included set and the provenance records decide how a
-    // blocked holder is described (016 BUG-002, FR-032; 029 FR-016), and the lock must not be held
-    // across the git work.
+    // Read before the blocking task: the included set decides how a blocked holder is described
+    // (016 BUG-002, FR-032), and the lock must not be held across the git work.
     let included = state.included_worktrees(&project);
-    let (created, unreadable) = state.provenance(&project);
     let gate = state.worktree_gate(&project);
     let _serialized = gate.lock().await;
     let result = tokio::task::spawn_blocking(move || {
@@ -156,10 +148,6 @@ pub async fn create_worktree(
             target_exists,
             &mode,
             &included,
-            &ProvenanceView {
-                records: &created,
-                state_unreadable: unreadable,
-            },
             &mut on_progress,
         );
         // `RolledBack` is the only outcome in which this attempt created anything at `target`.
@@ -173,18 +161,6 @@ pub async fn create_worktree(
     .await;
     match result {
         Ok(Ok(_worktree)) => {
-            // Feature 029 FR-002/FR-010: the record is written *before* the broadcast, so the very
-            // first snapshot a window renders already carries `user_created: true`. A persistence
-            // failure is not fatal: the worktree exists, and the next successful write, or the
-            // claim action, recovers the durable half.
-            if let Err(e) = state.record_worktree_provenance(&project, &dir_name) {
-                tracing::warn!(
-                    project = %project.display(),
-                    dir_name = %dir_name,
-                    error = %e,
-                    "could not record worktree provenance"
-                );
-            }
             refresh_worktrees_and_broadcast(state, project).await;
             Ok(())
         }
@@ -194,8 +170,8 @@ pub async fn create_worktree(
 }
 
 /// Delete worktree `dir_name`: refuse when it hosts live sessions and `stop_sessions` is false;
-/// otherwise remove it through git, archive its sessions and kill their processes, forget its
-/// provenance, and broadcast. `delete_branch` deletes the branch it had checked out.
+/// otherwise remove it through git, archive its sessions and kill their processes, and
+/// broadcast. `delete_branch` deletes the branch it had checked out.
 pub async fn delete_worktree(
     state: &Arc<DaemonState>,
     project: PathBuf,
@@ -292,21 +268,10 @@ pub async fn delete_worktree(
             // A confirmation still waiting to delete this worktree has nothing left to delete
             // (FR-014, EC-4): it fails `not_found` instead of reaching git.
             state.confirmations_worktree_gone(&project, &dir_name);
-            // Feature 029 FR-018: the record dies with the worktree, and only once git has released
-            // it. A directory name is reusable, so a record that outlived its worktree would hand
-            // the next thing created at that path an ownership nobody granted it.
             // Feature 482 (W11, FR-020): its review comments go with it, everywhere.
             state.forget_review_worktree(&project, &dir_name);
             // Feature 483 (W5, FR-008): its run leaves its group, and an emptied group goes.
             state.forget_run_worktree(&project, &dir_name);
-            if let Err(e) = state.forget_worktree_provenance(&project, &dir_name) {
-                tracing::warn!(
-                    project = %project.display(),
-                    worktree = %dir_name,
-                    error = %e,
-                    "could not forget the deleted worktree's provenance"
-                );
-            }
             if leftovers.is_empty() {
                 tracing::info!(
                     project = %project.display(),

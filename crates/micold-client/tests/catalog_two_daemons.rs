@@ -37,7 +37,7 @@ fn session(id: SessionId, dir: &str) -> SessionSummary {
     }
 }
 
-fn worktree(dir: &str, status: Wire, name: &str, user_created: bool) -> WorktreeSnapshot {
+fn worktree(dir: &str, status: Wire, name: &str) -> WorktreeSnapshot {
     WorktreeSnapshot {
         dir_name: dir.to_string(),
         branch: Some(format!("feat/{dir}")),
@@ -45,7 +45,6 @@ fn worktree(dir: &str, status: Wire, name: &str, user_created: bool) -> Worktree
         status,
         path: PathBuf::from(format!("{PROJECT}/.claude/worktrees/{dir}")),
         included: false,
-        user_created,
     }
 }
 
@@ -131,8 +130,8 @@ fn the_worktree_list_is_the_union_with_status_from_the_bound_daemon() {
         &snapshot(
             vec![],
             vec![
-                worktree("feat-a", Wire::Clean, "feat-a", false),
-                worktree("feat-b", Wire::Missing, "feat-b", false),
+                worktree("feat-a", Wire::Clean, "feat-a"),
+                worktree("feat-b", Wire::Missing, "feat-b"),
             ],
         ),
         true,
@@ -144,8 +143,8 @@ fn the_worktree_list_is_the_union_with_status_from_the_bound_daemon() {
         &snapshot(
             vec![],
             vec![
-                worktree("feat-a", Wire::Locked, "feat-a", false),
-                worktree("feat-b", Wire::Clean, "feat-b", false),
+                worktree("feat-a", Wire::Locked, "feat-a"),
+                worktree("feat-b", Wire::Clean, "feat-b"),
             ],
         ),
         true,
@@ -168,30 +167,26 @@ fn the_worktree_list_is_the_union_with_status_from_the_bound_daemon() {
 }
 
 #[test]
-fn provenance_and_display_names_are_scoped_to_the_snapshots_daemon() {
+fn display_names_are_scoped_to_the_snapshots_daemon() {
     let mut state = state();
     let project = PathBuf::from(PROJECT);
     reconcile_catalog(
         &mut state,
         A,
-        &snapshot(vec![], vec![worktree("feat-a", Wire::Clean, "Alpha", true)]),
+        &snapshot(vec![], vec![worktree("feat-a", Wire::Clean, "Alpha")]),
         true,
     );
-    // B's snapshot does not list feat-a at all; its records must remain.
+    // B's snapshot does not list feat-a at all; A's name must remain.
     reconcile_catalog(
         &mut state,
         B,
-        &snapshot(vec![], vec![worktree("feat-b", Wire::Clean, "Beta", true)]),
+        &snapshot(vec![], vec![worktree("feat-b", Wire::Clean, "Beta")]),
         true,
     );
-    assert!(state.workspace.worktree_provenance[&project].contains("feat-a"));
-    assert!(state.workspace.worktree_provenance[&project].contains("feat-b"));
     assert_eq!(state.workspace.worktree_names[&project]["feat-a"], "Alpha");
     assert_eq!(state.workspace.worktree_names[&project]["feat-b"], "Beta");
-    // A's own later snapshot dropping feat-a removes A's record, and only that.
+    // A's own later snapshot dropping feat-a removes A's name, and only that.
     reconcile_catalog(&mut state, A, &snapshot(vec![], vec![]), true);
-    assert!(!state.workspace.worktree_provenance[&project].contains("feat-a"));
-    assert!(state.workspace.worktree_provenance[&project].contains("feat-b"));
     assert!(!state.workspace.worktree_names[&project].contains_key("feat-a"));
     assert_eq!(state.workspace.worktree_names[&project]["feat-b"], "Beta");
 }

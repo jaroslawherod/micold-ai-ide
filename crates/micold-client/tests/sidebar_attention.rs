@@ -71,9 +71,6 @@ fn state_with_worktrees(recorded: Vec<Worktree>, sessions: Vec<Session>) -> Stat
         availability: Availability::Available,
     });
     state.workspace.active = Some(path.clone());
-    for w in &recorded {
-        state.workspace.record_user_created(&path, &w.dir_name);
-    }
     state.worktree.worktrees = recorded;
     state.workspace.sessions.insert(path, sessions);
     state

@@ -7,42 +7,12 @@
 use micold_core::git::FakeGit;
 use micold_core::worktree::{
     explain_directory_taken, preflight, BlockReason, BranchSituation, CreateError, CreateMode,
-    ProvenanceView, WorktreeOwner,
 };
-use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
-use std::sync::OnceLock;
 
 /// The app-managed holder shape, which is the common case in these tests.
 fn held_at(path: impl Into<PathBuf>) -> BlockReason {
-    BlockReason::CheckedOutAt {
-        path: path.into(),
-        owner: WorktreeOwner::User,
-    }
-}
-
-/// Every worktree directory these fixtures place under the managed root, recorded as app-created
-/// (029 FR-004) — except `agent-deadbeefdeadbeef`, which the two BUG-001 tests need to stay
-/// unrecorded.
-///
-/// 016's suite predates provenance and its subject is precedence and re-verification, not who
-/// created what; before 029 a holder under the root was `User` unless its name said otherwise.
-/// Recording them keeps every expectation here reading as it did — `held_at` still means
-/// `owner: User` — and confines the new question to the tests that actually ask it.
-fn app_made() -> ProvenanceView<'static> {
-    static SET: OnceLock<BTreeSet<String>> = OnceLock::new();
-    ProvenanceView::new(SET.get_or_init(|| {
-        [
-            "feat-login",
-            "feat-login-old",
-            "nested",
-            "other",
-            "renamed-by-hand",
-        ]
-        .into_iter()
-        .map(String::from)
-        .collect()
-    }))
+    BlockReason::CheckedOutAt { path: path.into() }
 }
 
 fn repo() -> PathBuf {
@@ -65,16 +35,7 @@ fn snapshot(git: &FakeGit, repo: &Path) -> (Vec<String>, Vec<(PathBuf, String)>)
 #[test]
 fn an_unused_name_is_free() {
     let git = FakeGit::new().with_repo("/repo");
-    let s = preflight(
-        &git,
-        &repo(),
-        &target(),
-        "feat/login",
-        false,
-        &[],
-        &app_made(),
-    )
-    .unwrap();
+    let s = preflight(&git, &repo(), &target(), "feat/login", false, &[]).unwrap();
     assert_eq!(s, BranchSituation::Free);
 }
 
@@ -85,16 +46,7 @@ fn an_existing_local_branch_is_available_not_an_error() {
     let git = FakeGit::new()
         .with_repo("/repo")
         .with_branch("/repo", "feat/login");
-    let s = preflight(
-        &git,
-        &repo(),
-        &target(),
-        "feat/login",
-        false,
-        &[],
-        &app_made(),
-    )
-    .unwrap();
+    let s = preflight(&git, &repo(), &target(), "feat/login", false, &[]).unwrap();
     assert_eq!(
         s,
         BranchSituation::LocalAvailable {
@@ -108,16 +60,7 @@ fn a_branch_only_on_a_remote_is_remote_only() {
     let git = FakeGit::new()
         .with_repo("/repo")
         .with_remote_branch("/repo", "origin", "feat/login");
-    let s = preflight(
-        &git,
-        &repo(),
-        &target(),
-        "feat/login",
-        false,
-        &[],
-        &app_made(),
-    )
-    .unwrap();
+    let s = preflight(&git, &repo(), &target(), "feat/login", false, &[]).unwrap();
     assert_eq!(
         s,
         BranchSituation::RemoteOnly {
@@ -135,16 +78,7 @@ fn a_branch_checked_out_in_another_worktree_is_blocked_and_names_it() {
         .with_branch("/repo", "feat/login")
         .with_worktree("/repo", &holder, "feat/login");
 
-    let s = preflight(
-        &git,
-        &repo(),
-        &target(),
-        "feat/login",
-        false,
-        &[],
-        &app_made(),
-    )
-    .unwrap();
+    let s = preflight(&git, &repo(), &target(), "feat/login", false, &[]).unwrap();
     assert_eq!(
         s,
         BranchSituation::Blocked {
@@ -176,16 +110,7 @@ fn a_branch_held_by_a_worktree_the_app_does_not_manage_is_blocked_as_outside_the
             .with_branch("/repo", "feat/login")
             .with_worktree("/repo", &holder, "feat/login");
 
-        let s = preflight(
-            &git,
-            &repo(),
-            &target(),
-            "feat/login",
-            false,
-            &[],
-            &app_made(),
-        )
-        .unwrap();
+        let s = preflight(&git, &repo(), &target(), "feat/login", false, &[]).unwrap();
         assert_eq!(
             s,
             BranchSituation::Blocked {
@@ -198,71 +123,6 @@ fn a_branch_held_by_a_worktree_the_app_does_not_manage_is_blocked_as_outside_the
             holder.display()
         );
     }
-}
-
-/// BUG-001 / FR-021b. An agent-owned holder IS one of the app's worktrees, so it stays
-/// `CheckedOutAt` — but the sidebar hides it by default, so the reason carries the owner and the
-/// message can say how to reveal it.
-#[test]
-fn a_branch_held_by_an_agent_worktree_is_blocked_and_says_who_owns_it() {
-    let holder = PathBuf::from("/repo/.claude/worktrees/agent-deadbeefdeadbeef");
-    let git = FakeGit::new()
-        .with_repo("/repo")
-        .with_branch("/repo", "feat/login")
-        .with_worktree("/repo", &holder, "feat/login");
-
-    let s = preflight(
-        &git,
-        &repo(),
-        &target(),
-        "feat/login",
-        false,
-        &[],
-        &app_made(),
-    )
-    .unwrap();
-    assert_eq!(
-        s,
-        BranchSituation::Blocked {
-            branch: "feat/login".to_string(),
-            reason: BlockReason::CheckedOutAt {
-                path: holder,
-                owner: WorktreeOwner::Agent,
-            },
-        }
-    );
-}
-
-/// The branch name is the other half of feature 014's rule (FR-005/FR-007): a worktree whose
-/// directory was renamed is still agent-owned if its branch says so.
-#[test]
-fn an_agent_holder_is_recognised_by_its_branch_when_its_directory_was_renamed() {
-    let holder = PathBuf::from("/repo/.claude/worktrees/renamed-by-hand");
-    let git = FakeGit::new()
-        .with_repo("/repo")
-        .with_branch("/repo", "worktree-agent-deadbeefdeadbeef")
-        .with_worktree("/repo", &holder, "worktree-agent-deadbeefdeadbeef");
-
-    let s = preflight(
-        &git,
-        &repo(),
-        &target(),
-        "worktree-agent-deadbeefdeadbeef",
-        false,
-        &[],
-        &ProvenanceView::none(),
-    )
-    .unwrap();
-    assert_eq!(
-        s,
-        BranchSituation::Blocked {
-            branch: "worktree-agent-deadbeefdeadbeef".to_string(),
-            reason: BlockReason::CheckedOutAt {
-                path: holder,
-                owner: WorktreeOwner::Agent,
-            },
-        }
-    );
 }
 
 /// The classification split must be `reconcile()`'s, so "described as one of your worktrees" and
@@ -285,16 +145,7 @@ fn only_holders_the_sidebar_would_list_are_described_as_the_apps_own() {
             .iter()
             .any(|w| w.path == holder);
         let described_as_ours = matches!(
-            preflight(
-                &git,
-                &repo(),
-                &target(),
-                "feat/login",
-                false,
-                &[],
-                &app_made()
-            )
-            .unwrap(),
+            preflight(&git, &repo(), &target(), "feat/login", false, &[],).unwrap(),
             BranchSituation::Blocked {
                 reason: BlockReason::CheckedOutAt { .. },
                 ..
@@ -320,7 +171,7 @@ fn a_branch_checked_out_in_the_project_root_is_blocked_as_the_project_checkout()
         .with_branch("/repo", "main")
         .with_worktree("/repo", "/repo", "main");
 
-    let s = preflight(&git, &repo(), &target(), "main", false, &[], &app_made()).unwrap();
+    let s = preflight(&git, &repo(), &target(), "main", false, &[]).unwrap();
     assert_eq!(
         s,
         BranchSituation::Blocked {
@@ -333,16 +184,7 @@ fn a_branch_checked_out_in_the_project_root_is_blocked_as_the_project_checkout()
 #[test]
 fn an_existing_target_directory_is_a_directory_clash() {
     let git = FakeGit::new().with_repo("/repo");
-    let s = preflight(
-        &git,
-        &repo(),
-        &target(),
-        "feat/login",
-        true,
-        &[],
-        &app_made(),
-    )
-    .unwrap();
+    let s = preflight(&git, &repo(), &target(), "feat/login", true, &[]).unwrap();
     assert_eq!(s, BranchSituation::DirectoryTaken { dir: target() });
 }
 
@@ -359,16 +201,7 @@ fn a_directory_clash_outranks_every_branch_situation() {
 
     // Branch is both existing AND checked out, but the directory is what blocks first: no branch
     // choice could resolve it (FR-022).
-    let s = preflight(
-        &git,
-        &repo(),
-        &target(),
-        "feat/login",
-        true,
-        &[],
-        &app_made(),
-    )
-    .unwrap();
+    let s = preflight(&git, &repo(), &target(), "feat/login", true, &[]).unwrap();
     assert_eq!(s, BranchSituation::DirectoryTaken { dir: target() });
 }
 
@@ -380,16 +213,7 @@ fn a_checked_out_branch_outranks_a_merely_existing_one() {
         .with_branch("/repo", "feat/login")
         .with_worktree("/repo", &holder, "feat/login");
 
-    let s = preflight(
-        &git,
-        &repo(),
-        &target(),
-        "feat/login",
-        false,
-        &[],
-        &app_made(),
-    )
-    .unwrap();
+    let s = preflight(&git, &repo(), &target(), "feat/login", false, &[]).unwrap();
     assert!(matches!(s, BranchSituation::Blocked { .. }));
 }
 
@@ -401,16 +225,7 @@ fn a_local_branch_outranks_a_remote_one_of_the_same_name() {
         .with_branch("/repo", "feat/login")
         .with_remote_branch("/repo", "origin", "feat/login");
 
-    let s = preflight(
-        &git,
-        &repo(),
-        &target(),
-        "feat/login",
-        false,
-        &[],
-        &app_made(),
-    )
-    .unwrap();
+    let s = preflight(&git, &repo(), &target(), "feat/login", false, &[]).unwrap();
     assert_eq!(
         s,
         BranchSituation::LocalAvailable {
@@ -428,16 +243,7 @@ fn the_same_name_on_several_remotes_reports_all_of_them() {
         .with_remote_branch("/repo", "upstream", "feat/login")
         .with_remote_branch("/repo", "origin", "feat/login");
 
-    let s = preflight(
-        &git,
-        &repo(),
-        &target(),
-        "feat/login",
-        false,
-        &[],
-        &app_made(),
-    )
-    .unwrap();
+    let s = preflight(&git, &repo(), &target(), "feat/login", false, &[]).unwrap();
     assert_eq!(
         s,
         BranchSituation::RemoteOnly {
@@ -495,7 +301,6 @@ fn an_unmanaged_holder_is_explained_by_its_full_path_and_said_to_be_outside_the_
 fn an_agent_holder_is_named_without_a_reveal_hint() {
     let sentence = BlockReason::CheckedOutAt {
         path: PathBuf::from("/repo/.claude/worktrees/agent-deadbeefdeadbeef"),
-        owner: WorktreeOwner::Agent,
     }
     .explain("feat/login");
 
@@ -518,7 +323,6 @@ fn every_holder_explanation_names_the_branch_and_locates_the_holder() {
         held_at("/repo/.claude/worktrees/feat-login-old"),
         BlockReason::CheckedOutAt {
             path: PathBuf::from("/repo/.claude/worktrees/agent-deadbeefdeadbeef"),
-            owner: WorktreeOwner::Agent,
         },
         BlockReason::CheckedOutOutsideApp {
             path: PathBuf::from("/elsewhere/feat-login"),
@@ -559,16 +363,7 @@ fn preflight_never_mutates_the_repository() {
         ("feat/nothing", false),
         ("feat/nothing", true),
     ] {
-        let _ = preflight(
-            &git,
-            &repo(),
-            &target(),
-            branch,
-            dir_taken,
-            &[],
-            &app_made(),
-        )
-        .unwrap();
+        let _ = preflight(&git, &repo(), &target(), branch, dir_taken, &[]).unwrap();
     }
     assert_eq!(snapshot(&git, &repo()), before);
 }
@@ -665,7 +460,6 @@ fn every_mode_situation_pair_matches_the_contract_and_incompatible_ones_never_mu
                 dir_taken,
                 mode,
                 &[],
-                &app_made(),
                 &mut |_| {},
             );
 
@@ -707,7 +501,6 @@ fn a_situation_that_changed_since_the_prompt_is_reported_as_such() {
         false,
         &CreateMode::ReuseLocal,
         &[],
-        &app_made(),
         &mut |_| {},
     )
     .unwrap_err();
@@ -737,7 +530,6 @@ fn a_blocked_branch_reports_who_holds_it_rather_than_a_raw_git_failure() {
         false,
         &CreateMode::ReuseLocal,
         &[],
-        &app_made(),
         &mut |_| {},
     )
     .unwrap_err();
@@ -794,7 +586,6 @@ fn tracking_the_second_remote_creates_a_branch_tracking_that_remote() {
             remote: "upstream".to_string(),
         },
         &[],
-        &app_made(),
         &mut |_| {},
     )
     .unwrap();
@@ -828,16 +619,7 @@ fn an_unincluded_holder_is_still_described_as_outside_the_app() {
     let git = held_by_the_outsider();
 
     assert_eq!(
-        preflight(
-            &git,
-            &repo(),
-            &target(),
-            "feat/login",
-            false,
-            &[],
-            &app_made()
-        )
-        .unwrap(),
+        preflight(&git, &repo(), &target(), "feat/login", false, &[],).unwrap(),
         BranchSituation::Blocked {
             branch: "feat/login".to_string(),
             reason: BlockReason::CheckedOutOutsideApp { path: outsider() },
@@ -853,22 +635,10 @@ fn an_included_holder_is_described_as_one_of_the_apps_own() {
     let included = [outsider()];
 
     assert_eq!(
-        preflight(
-            &git,
-            &repo(),
-            &target(),
-            "feat/login",
-            false,
-            &included,
-            &app_made()
-        )
-        .unwrap(),
+        preflight(&git, &repo(), &target(), "feat/login", false, &included,).unwrap(),
         BranchSituation::Blocked {
             branch: "feat/login".to_string(),
-            reason: BlockReason::CheckedOutAt {
-                path: outsider(),
-                owner: WorktreeOwner::User,
-            },
+            reason: BlockReason::CheckedOutAt { path: outsider() },
         },
         "including a worktree puts it in the list, so the explanation must stop sending the user \
          outside the app to find it (FR-032). Reuse and overwrite stay unavailable either way",
@@ -887,16 +657,7 @@ fn description_and_listing_agree_with_or_without_inclusion() {
             .iter()
             .any(|w| w.path == outsider());
         let described_as_ours = matches!(
-            preflight(
-                &git,
-                &repo(),
-                &target(),
-                "feat/login",
-                false,
-                &included,
-                &app_made()
-            )
-            .unwrap(),
+            preflight(&git, &repo(), &target(), "feat/login", false, &included,).unwrap(),
             BranchSituation::Blocked {
                 reason: BlockReason::CheckedOutAt { .. },
                 ..
@@ -917,16 +678,8 @@ fn description_and_listing_agree_with_or_without_inclusion() {
 fn including_a_holder_does_not_free_its_branch() {
     let git = held_by_the_outsider();
 
-    let situation = preflight(
-        &git,
-        &repo(),
-        &target(),
-        "feat/login",
-        false,
-        &[outsider()],
-        &app_made(),
-    )
-    .unwrap();
+    let situation =
+        preflight(&git, &repo(), &target(), "feat/login", false, &[outsider()]).unwrap();
 
     assert!(
         matches!(situation, BranchSituation::Blocked { .. }),
@@ -946,16 +699,7 @@ fn the_project_checkout_is_unaffected_by_inclusion() {
         .with_worktree("/repo", "/repo", "main");
 
     assert_eq!(
-        preflight(
-            &git,
-            &repo(),
-            &target(),
-            "main",
-            false,
-            &[repo()],
-            &app_made()
-        )
-        .unwrap(),
+        preflight(&git, &repo(), &target(), "main", false, &[repo()],).unwrap(),
         BranchSituation::Blocked {
             branch: "main".to_string(),
             reason: BlockReason::CheckedOutInProjectRoot,

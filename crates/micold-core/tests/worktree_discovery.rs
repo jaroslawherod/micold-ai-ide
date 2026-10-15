@@ -271,9 +271,7 @@ branch refs/heads/fix/olx
 #[cfg(unix)]
 mod through_a_symlink {
     use micold_core::git::GitCli;
-    use micold_core::worktree::{
-        branch_candidates, discover, BlockReason, ProvenanceView, WorktreeStatus,
-    };
+    use micold_core::worktree::{branch_candidates, discover, BlockReason, WorktreeStatus};
     use std::path::{Path, PathBuf};
     use std::process::Command;
 
@@ -343,8 +341,7 @@ mod through_a_symlink {
         let tmp = tempfile::tempdir().unwrap();
         let (link, main) = linked_repo(tmp.path());
 
-        let candidates =
-            branch_candidates(&GitCli::new(), &link, &[], &ProvenanceView::none()).unwrap();
+        let candidates = branch_candidates(&GitCli::new(), &link, &[]).unwrap();
         let reason = |name: &str| {
             candidates
                 .iter()

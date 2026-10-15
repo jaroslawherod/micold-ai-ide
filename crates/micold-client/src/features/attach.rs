@@ -1,16 +1,15 @@
 //! Attaching provider worktrees from the app (feature 582, FR-001 – FR-004, FR-016).
 //!
-//! The sidebar's "Attach existing…" button opens a modal list of the project's unattached provider
-//! worktrees. The user ticks some and presses "Attach selected", or presses "Attach all". Nothing
+//! The sidebar's "Attach existing…" button opens a modal list of the project's stored provider
+//! sessions the catalog lacks. The user resumes one, or presses "Resume all". Nothing
 //! about the listing is decided here: the daemon discovers the candidates (`AttachDiscover`) and
 //! applies the choice (`AttachApply`); this feature holds only what the dialog needs to draw.
 //!
 //! # The vocabulary
 //!
-//! [`Msg`] carries the user's actions (`Opened`, `Toggled`, `AttachSelected`, `AttachAll`,
-//! `Cancelled`) and the daemon's answers (`Listed`, `ListFailed`, `Applied`, `ApplyFailed`),
+//! [`Msg`] carries the user's actions (`Opened`, `Resume`, `ResumeAll`, `Cancelled`) and the daemon's answers (`Listed`, `ListFailed`, `Applied`, `ApplyFailed`),
 //! routed by [`update`], which is pure. The two requests leave the process from the shell, which
-//! intercepts `Opened`, `AttachSelected` and `AttachAll`, runs this reducer, then reads
+//! intercepts `Opened`, `Resume` and `ResumeAll`, runs this reducer, then reads
 //! [`State::dialog`] (`in_flight` for the targets) to build the wire message.
 //!
 //! # The state
@@ -23,8 +22,8 @@ use crate::floating_surface;
 use crate::overlay::registry::Registered;
 use crate::overlay::SurfaceId;
 use micold_core::attach::{
-    AttachItem, AttachOutcome, AttachResult, AttachableWorktree, Availability, DiscoveryNote,
-    DiscoveryReport, ResumableSession, ResumableStatus, SkipReason, UnresumableReason,
+    AttachItem, AttachOutcome, AttachResult, DiscoveryNote, DiscoveryReport, ResumableSession,
+    ResumableStatus, SkipReason, UnresumableReason,
 };
 use micold_core::notify::{Level, Notification};
 use std::collections::BTreeSet;
@@ -52,14 +51,16 @@ pub struct Offer {
 }
 
 impl Offer {
-    /// The report's worktrees that can be attached, as apply targets.
+    /// The report's stored sessions that can be resumed, as apply targets.
     pub fn targets(&self) -> Vec<AttachItem> {
         self.report
             .iter()
-            .flat_map(|(_, r)| r.worktrees.iter())
-            .filter(|w| w.availability == Availability::Attachable)
-            .map(|w| AttachItem::Worktree {
-                dir_name: w.dir_name.clone(),
+            .flat_map(|(_, r)| r.sessions.iter())
+            .filter(|s| can_resume(s))
+            .map(|s| AttachItem::Session {
+                id: s.id,
+                replace: false,
+                allow_additional_session: false,
             })
             .collect()
     }
@@ -70,10 +71,9 @@ impl Offer {
     }
 }
 
-/// Whether the banner is shown for the active project: no provenance records (nothing the user
-/// created, claimed or attached; catalog sessions adopted by feature 026 do not count), something
-/// found, and not dismissed this run (FR-012). A project whose records could not be read is not
-/// known to have none, so it is never offered.
+/// Whether the banner is shown for the active project: discovery found stored provider sessions
+/// the catalog lacks, and the offer was not dismissed this run (FR-009). A project whose records
+/// could not be read is never offered.
 pub fn offer_visible(state: &crate::app::State) -> bool {
     let Some(project) = state.workspace.active.as_ref() else {
         return false;
@@ -84,7 +84,6 @@ pub fn offer_visible(state: &crate::app::State) -> bool {
     asked == project
         && !report.is_empty()
         && !state.attach.offer.dismissed.contains(project)
-        && state.workspace.user_created_worktrees(project).is_empty()
         && !state.workspace.unreadable_projects.contains(project)
 }
 
@@ -93,10 +92,8 @@ pub fn offer_visible(state: &crate::app::State) -> bool {
 pub struct Dialog {
     /// The project the listing was asked for. A reply for another project is dropped.
     pub project: PathBuf,
-    /// What to draw in the list.
+    /// Whether the listing has arrived.
     pub listing: Listing,
-    /// The `dir_name`s ticked.
-    pub selected: BTreeSet<String>,
     /// The targets of an `AttachApply` that has been sent and not yet answered; empty when idle.
     pub in_flight: Vec<AttachItem>,
     /// Why the last apply failed; the listing stays so the user can retry.
@@ -112,8 +109,8 @@ pub struct Dialog {
 pub enum Listing {
     /// Waiting for the daemon's report.
     Loading,
-    /// The report: worktrees offered, attachable first.
-    Listed(Vec<AttachableWorktree>),
+    /// The report arrived; the sessions and notes are on the dialog.
+    Listed,
     /// The listing could not be read; the text says why.
     Failed(String),
 }
@@ -135,15 +132,9 @@ impl Dialog {
             .collect()
     }
 
-    /// The offered worktrees that can be attached (not missing or invalid).
-    pub fn attachable(&self) -> Vec<&AttachableWorktree> {
-        match &self.listing {
-            Listing::Listed(rows) => rows
-                .iter()
-                .filter(|w| w.availability == Availability::Attachable)
-                .collect(),
-            _ => Vec::new(),
-        }
+    /// The stored sessions that can be resumed from the dialog.
+    pub fn resumable(&self) -> Vec<&ResumableSession> {
+        self.sessions.iter().filter(|s| can_resume(s)).collect()
     }
 }
 
@@ -173,7 +164,6 @@ pub fn can_resume(session: &ResumableSession) -> bool {
 pub fn status_text(session: &ResumableSession) -> String {
     match session.status {
         ResumableStatus::Resumable => "Ready to resume".into(),
-        ResumableStatus::NeedsWorktreeAttach => "Resuming also attaches its worktree".into(),
         ResumableStatus::Unresumable(UnresumableReason::WorktreeMissing) => {
             "Cannot resume: its worktree folder is missing".into()
         }
@@ -214,17 +204,8 @@ pub enum Msg {
     },
     /// The listing request failed.
     ListFailed(String),
-    /// A row's checkbox changed.
-    Toggled {
-        /// The row's directory name.
-        dir_name: String,
-        /// The new state.
-        checked: bool,
-    },
-    /// "Attach selected" was pressed.
-    AttachSelected,
-    /// "Attach all" was pressed.
-    AttachAll,
+    /// "Resume all" was pressed.
+    ResumeAll,
     /// "Resume" was pressed on a stored session.
     Resume {
         /// The session's id.
@@ -262,7 +243,6 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<Outcome> {
             state.attach.dialog = Some(Dialog {
                 project,
                 listing: Listing::Loading,
-                selected: BTreeSet::new(),
                 in_flight: Vec::new(),
                 error: None,
                 sessions: Vec::new(),
@@ -282,10 +262,9 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<Outcome> {
         Msg::Listed { project, report } => {
             if let Some(dialog) = state.attach.dialog.as_mut() {
                 if dialog.project == project && dialog.listing == Listing::Loading {
-                    dialog.listing = Listing::Listed(report.worktrees);
+                    dialog.listing = Listing::Listed;
                     dialog.sessions = report.sessions;
                     dialog.notes = report.notes;
-                    dialog.selected.clear();
                 }
             }
             Vec::new()
@@ -298,28 +277,17 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<Outcome> {
             }
             Vec::new()
         }
-        Msg::Toggled { dir_name, checked } => {
+        Msg::ResumeAll => {
             if let Some(dialog) = state.attach.dialog.as_mut() {
-                let offered = dialog.attachable().iter().any(|w| w.dir_name == dir_name);
-                if offered && checked {
-                    dialog.selected.insert(dir_name);
-                } else {
-                    dialog.selected.remove(&dir_name);
-                }
-            }
-            Vec::new()
-        }
-        Msg::AttachSelected => {
-            if let Some(dialog) = state.attach.dialog.as_mut() {
-                let targets = worktree_targets(dialog.selected.iter().cloned());
-                begin_apply(dialog, targets);
-            }
-            Vec::new()
-        }
-        Msg::AttachAll => {
-            if let Some(dialog) = state.attach.dialog.as_mut() {
-                let targets =
-                    worktree_targets(dialog.attachable().iter().map(|w| w.dir_name.clone()));
+                let targets = dialog
+                    .resumable()
+                    .iter()
+                    .map(|s| AttachItem::Session {
+                        id: s.id,
+                        replace: false,
+                        allow_additional_session: false,
+                    })
+                    .collect();
                 begin_apply(dialog, targets);
             }
             Vec::new()
@@ -384,7 +352,7 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<Outcome> {
             state.attach.offer.in_flight.clear();
             vec![Outcome::NotificationRaised(Notification::new(
                 Level::Error,
-                format!("Couldn't attach the found worktrees: {reason}"),
+                format!("Couldn't resume the found sessions: {reason}"),
             ))]
         }
         Msg::Applied(results) => {
@@ -405,12 +373,6 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<Outcome> {
             Vec::new()
         }
     }
-}
-
-fn worktree_targets(names: impl Iterator<Item = String>) -> Vec<AttachItem> {
-    names
-        .map(|dir_name| AttachItem::Worktree { dir_name })
-        .collect()
 }
 
 /// An apply with nothing to attach, or one already running, sends nothing.
@@ -440,15 +402,7 @@ pub fn summary(results: &[AttachResult]) -> String {
     let attached = count(|o| matches!(o, AttachOutcome::Attached));
     let already = count(|o| matches!(o, AttachOutcome::AlreadyAttached));
     let refused = count(|o| matches!(o, AttachOutcome::Refused(_)));
-    let noun = if results
-        .iter()
-        .all(|r| matches!(r.item, AttachItem::Session { .. }))
-        && !results.is_empty()
-    {
-        ("session", "sessions")
-    } else {
-        ("worktree", "worktrees")
-    };
+    let noun = ("session", "sessions");
     let plural = |n: usize| if n == 1 { noun.0 } else { noun.1 };
     let mut parts = Vec::new();
     if attached > 0 {
@@ -461,8 +415,8 @@ pub fn summary(results: &[AttachResult]) -> String {
         // A session refusal says why: "already running" is the one the user can act on (FR-016).
         let why: Vec<&str> = results
             .iter()
-            .filter_map(|r| match (&r.item, &r.outcome) {
-                (AttachItem::Session { .. }, AttachOutcome::Refused(reason)) => Some(reason.text()),
+            .filter_map(|r| match &r.outcome {
+                AttachOutcome::Refused(reason) => Some(reason.text()),
                 _ => None,
             })
             .collect();

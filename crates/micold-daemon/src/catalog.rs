@@ -39,9 +39,7 @@ use micold_core::settings::{
 };
 use micold_core::store::{JsonFileStore, LoadStatus, ProjectStore};
 use micold_core::workspace::Workspace;
-use micold_core::worktree::{
-    durably_known_worktrees, plan_backfill, session_worktree_dirs, worktrees_root, Worktree,
-};
+use micold_core::worktree::worktrees_root;
 
 /// Record the durable, provider-side suppression marker for `session` (bugfix BUG-003, FR-020c)
 /// so reconciliation (FR-020b) never reconstructs it again, even if the catalog's own `archived`
@@ -255,24 +253,14 @@ impl Catalog {
             .map(|p| {
                 let sessions = self.sessions_for(&p.path);
                 let overrides = self.workspace.worktree_names.get(&p.path);
-                // Feature 029: what this app created here, for the flag each row carries.
-                let created = self.workspace.user_created_worktrees(&p.path);
-
                 // The durable knowledge of a worktree is its display-name override plus any
-                // session bound to it; live git status/branch is discovered by the worktree RPCs
-                // (T053). Only worktree-hosted sessions contribute a dir — Default (root) sessions
-                // don't belong to any worktree, which `durably_known_worktrees` handles for the
-                // core session type and the `filter_map` handles for this wire one.
-                //
-                // `sessions` came from `sessions_for`, which already dropped archived ones. That
-                // filter is about what belongs on screen, so it stays here at the display call
-                // site rather than moving into the shared helper — the FR-006 migration calls the
-                // same helper and must *count* archived sessions, because a session the user
-                // closed is still evidence they worked there (029 T037).
-                let dirs = durably_known_worktrees(
-                    overrides,
-                    sessions.iter().filter_map(|s| s.worktree_dir.as_deref()),
-                );
+                // session bound to it; live git status/branch is discovered by the worktree RPCs.
+                // `sessions` already dropped archived ones: this is what belongs on screen.
+                let dirs: std::collections::BTreeSet<String> = overrides
+                    .into_iter()
+                    .flat_map(|m| m.keys().cloned())
+                    .chain(sessions.iter().filter_map(|s| s.worktree_dir.clone()))
+                    .collect();
 
                 let worktrees = dirs
                     .into_iter()
@@ -281,7 +269,6 @@ impl Catalog {
                             .and_then(|m| m.get(&dir_name))
                             .cloned()
                             .unwrap_or_else(|| dir_name.clone());
-                        let user_created = created.contains(&dir_name);
                         WorktreeSnapshot {
                             // The durable half knows a worktree only by the key its sessions were
                             // stored against, so the location is the one the app manages. The live
@@ -293,7 +280,6 @@ impl Catalog {
                             display_name,
                             status: WorktreeStatus::Clean,
                             included: false,
-                            user_created,
                         }
                     })
                     .collect();
@@ -704,97 +690,6 @@ impl Catalog {
         self.persist()
     }
 
-    /// Record that this app created `dir_name` under `project`, persisting it (feature 029,
-    /// FR-002/FR-003).
-    ///
-    /// The one write that makes a worktree the user's. Called immediately after `create_worktree`
-    /// returns `Ok` and *before* the catalog is broadcast, so the first snapshot a client sees
-    /// already carries `user_created: true` and the row never appears hidden for a frame.
-    ///
-    /// Idempotent — recording what is already recorded still persists, which is cheap and keeps
-    /// the caller from having to know.
-    pub fn record_worktree_provenance(&mut self, project: &Path, dir_name: &str) -> io::Result<()> {
-        self.workspace.record_user_created(project, dir_name);
-        self.persist()
-    }
-
-    /// Claim `dir_name` under `project` as the user's own (feature 029, FR-020/FR-021).
-    ///
-    /// Deliberately the same write as [`Self::record_worktree_provenance`] rather than a parallel
-    /// one: a claimed worktree and a created one are the same thing afterwards — same record, same
-    /// durability, same removal on delete and on forget. A second kind of record would be a second
-    /// thing to keep in step, and the first divergence would be a worktree that is the user's for
-    /// one purpose and not for another.
-    ///
-    /// Unlike the migration, this does **not** consult `matches_reserved_convention` (FR-023): the
-    /// naming veto binds the automatic backfill, which guesses, and never the user, who is telling
-    /// the app what is theirs. Idempotent (FR-022).
-    pub fn claim_worktree(&mut self, project: &Path, dir_name: &str) -> io::Result<()> {
-        self.record_worktree_provenance(project, dir_name)
-    }
-
-    /// Attach `dir_names` under `project` in one action (feature 582, FR-002/FR-004/FR-016).
-    ///
-    /// Each name is the same provenance record [`Self::claim_worktree`] writes, so an attached
-    /// worktree is indistinguishable from a claimed one afterwards. `live` is the daemon's cached
-    /// discovery of the project's worktrees: a name absent from it, or one that lives outside the
-    /// managed directory, is refused so that a stale client list cannot record a non-worktree.
-    /// A name already recorded (or repeated within the batch) is `AlreadyAttached`.
-    ///
-    /// One result per name, in order. The catalog persists **once**, and only when something was
-    /// attached. Metadata only (FR-003): no git, no filesystem write. Concurrent attaches
-    /// serialize on the caller's catalog lock, so the second finds the record present.
-    pub fn attach_worktrees(
-        &mut self,
-        project: &Path,
-        live: &[Worktree],
-        dir_names: &[String],
-    ) -> io::Result<Vec<AttachOutcome>> {
-        // Records for an unreadable project are never written (`persist` skips it), so attaching
-        // would report success and lose the record on restart; refuse like `plan_backfill` does.
-        if self.workspace.unreadable_projects.contains(project) {
-            return Ok(vec![
-                AttachOutcome::Refused(RefuseReason::IoFailed);
-                dir_names.len()
-            ]);
-        }
-        let mut newly: Vec<&String> = Vec::new();
-        let mut outcomes = Vec::with_capacity(dir_names.len());
-        for dir_name in dir_names {
-            let outcome = if self
-                .workspace
-                .user_created_worktrees(project)
-                .contains(dir_name)
-            {
-                AttachOutcome::AlreadyAttached
-            } else {
-                match live.iter().find(|w| &w.dir_name == dir_name && !w.included) {
-                    None => AttachOutcome::Refused(RefuseReason::NotAWorktreeOfProject),
-                    Some(w) if !w.can_start_session() => {
-                        AttachOutcome::Refused(RefuseReason::Unavailable)
-                    }
-                    Some(_) => {
-                        self.workspace.record_user_created(project, dir_name);
-                        newly.push(dir_name);
-                        AttachOutcome::Attached
-                    }
-                }
-            };
-            outcomes.push(outcome);
-        }
-        if !newly.is_empty() {
-            if let Err(e) = self.persist() {
-                // Roll back, or a retry would answer "already attached" for records the disk
-                // never got.
-                for dir_name in newly {
-                    self.workspace.forget_user_created(project, dir_name);
-                }
-                return Err(e);
-            }
-        }
-        Ok(outcomes)
-    }
-
     /// Add `session` to `project` as it is, idle and never started (feature 582, FR-008).
     ///
     /// A session the catalog already holds is `AlreadyAttached`, unless it is starting, running or
@@ -835,63 +730,6 @@ impl Catalog {
             return Err(e);
         }
         Ok(AttachOutcome::Attached)
-    }
-
-    /// Run the one-time FR-006 backfill for `project`, given the worktrees discovery just found.
-    ///
-    /// Grandfathers the worktrees the user demonstrably already worked in — one they renamed, or
-    /// started a session in — so the inversion does not empty their list on the first launch after
-    /// the upgrade. [`plan_backfill`] decides; this applies.
-    ///
-    /// Returns `true` when it wrote (records, marker, or both). `false` means it did not run at
-    /// all: the project had already migrated (FR-006c), or its state was unreadable this run
-    /// (FR-011), which leaves its one chance intact for a later, readable run.
-    ///
-    /// **Records and marker are persisted together, in a single write.** Splitting them would let
-    /// a crash leave either records without the marker (harmless — the plan is idempotent) or the
-    /// marker without the records (not harmless — the project's grandfathered worktrees would be
-    /// hidden with no way back but the claim action). One `persist()` makes both impossible.
-    ///
-    /// The marker is written even when the plan is empty: "ran and found nothing" and "never ran"
-    /// are different states, and only the first stops 014's start-a-session-in-a-revealed-worktree
-    /// path from promoting that worktree later (FR-006d).
-    pub fn migrate_worktree_provenance(
-        &mut self,
-        project: &Path,
-        discovered: &[Worktree],
-    ) -> io::Result<bool> {
-        let evidence = {
-            let sessions = self
-                .workspace
-                .sessions
-                .get(project)
-                .map(Vec::as_slice)
-                .unwrap_or(&[]);
-            // Archived sessions count here — unlike in `snapshot`, the question is where the user
-            // worked, not what belongs on screen (029 T030).
-            durably_known_worktrees(
-                self.workspace.worktree_names.get(project),
-                session_worktree_dirs(sessions),
-            )
-        };
-        let Some(plan) = plan_backfill(
-            discovered,
-            &worktrees_root(project),
-            &evidence,
-            self.workspace.user_created_worktrees(project),
-            self.workspace.provenance_migrated.contains(project),
-            self.workspace.unreadable_projects.contains(project),
-        ) else {
-            return Ok(false);
-        };
-        for dir_name in &plan {
-            self.workspace.record_user_created(project, dir_name);
-        }
-        self.workspace
-            .provenance_migrated
-            .insert(project.to_path_buf());
-        self.persist()?;
-        Ok(true)
     }
 
     /// The worktrees `project` shows from outside the directory the app creates its own in
@@ -1145,23 +983,6 @@ impl Catalog {
                 self.workspace.worktree_names.remove(project);
             }
         }
-        self.persist()
-    }
-
-    /// Drop the provenance record for `project`'s `dir_name` worktree, persisting (feature 029,
-    /// FR-018/FR-019).
-    ///
-    /// The record dies with the worktree, for the same reason the display-name override does: the
-    /// record set is keyed by directory name, and a directory name is reusable. Leaving a record
-    /// behind would mean a *later* worktree at the same path — one an assistant made, or one
-    /// created from a terminal — inherited the user's ownership of a directory that no longer
-    /// exists. The set must hold no lies.
-    ///
-    /// Callers must invoke this **only after the git removal actually succeeds**, exactly as
-    /// [`Self::archive_worktree_sessions`] requires: a delete that failed left the worktree there,
-    /// and forgetting its record would hide a worktree the user still has.
-    pub fn forget_worktree_provenance(&mut self, project: &Path, dir_name: &str) -> io::Result<()> {
-        self.workspace.forget_user_created(project, dir_name);
         self.persist()
     }
 

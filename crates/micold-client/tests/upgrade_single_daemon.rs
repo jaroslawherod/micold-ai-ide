@@ -50,9 +50,6 @@ fn launch(settings: &JsonFileSettingsStore, projects: &JsonFileStore) -> State {
         ..State::default()
     };
     state.workspace.active = Some(PathBuf::from(PROJECT));
-    state
-        .workspace
-        .record_user_created(&PathBuf::from(PROJECT), "feature-x");
     state.worktree.worktrees = vec![Worktree {
         dir_name: "feature-x".into(),
         path: PathBuf::from(PROJECT).join(".claude/worktrees/feature-x"),

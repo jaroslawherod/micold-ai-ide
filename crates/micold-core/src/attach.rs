@@ -1,56 +1,21 @@
 //! Attaching a provider's existing worktrees and sessions (feature 582).
 //!
-//! Render-free and pure over the facts the daemon supplies: nothing here stores anything. The one
-//! durable effect of attaching a worktree is the existing per-project provenance record
-//! (`store.rs`), written by the daemon's `Catalog::attach_worktrees`.
+//! Render-free and pure over the facts the daemon supplies: nothing here stores anything. Worktrees
+//! are not attached: every discovered worktree is listed (feature 552), so only stored provider
+//! sessions the catalog lacks are discovered and resumed.
 //!
 //! The types are enums rather than flags (Principle V): a session never has "no location"
 //! ([`AttachTarget`]) and "resumable without a worktree" is not representable
 //! ([`ResumableStatus`]).
 
 use crate::provider::AiCliProvider;
-use crate::session::{AiCli, Session, SessionLocation};
-use crate::worktree::{classify_owner, ProvenanceView, Worktree, WorktreeOwner, WorktreeStatus};
+use crate::session::AiCli;
+use crate::worktree::{Worktree, WorktreeStatus};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 use uuid::Uuid;
-
-/// Why a worktree git lists cannot be attached right now.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum Unavailable {
-    /// Git lists it but its directory is gone (prunable).
-    Missing,
-    /// A directory under the worktrees root that git does not know as a worktree.
-    Invalid,
-}
-
-/// Whether an [`AttachableWorktree`] can be attached.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum Availability {
-    /// Valid on disk and known to git.
-    Attachable,
-    /// Listed so the user sees why it cannot be attached.
-    Unavailable(Unavailable),
-}
-
-/// A provider worktree the catalog has no provenance record for.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct AttachableWorktree {
-    /// Key of the provenance record; also the MCP reference.
-    pub dir_name: String,
-    /// Absolute path.
-    pub path: PathBuf,
-    /// Checked-out branch; `None` when detached.
-    pub branch: Option<String>,
-    /// The provider whose sessions are hosted here, when known.
-    pub provider: Option<AiCli>,
-    /// Catalog sessions hosted at this worktree, which attaching reveals.
-    pub session_count: usize,
-    /// Whether it can be attached.
-    pub availability: Availability,
-}
 
 /// Where a resumable session ran. Never "nowhere".
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -80,8 +45,6 @@ pub enum UnresumableReason {
 pub enum ResumableStatus {
     /// Its location is the root or a startable catalog worktree.
     Resumable,
-    /// Its worktree is attachable but not attached; resuming attaches it first.
-    NeedsWorktreeAttach,
     /// Never resumed elsewhere.
     Unresumable(UnresumableReason),
 }
@@ -130,8 +93,6 @@ pub struct DiscoveryNote {
 /// What a project offers to attach.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DiscoveryReport {
-    /// Provider worktrees without a provenance record.
-    pub worktrees: Vec<AttachableWorktree>,
     /// Stored sessions the catalog does not hold.
     pub sessions: Vec<ResumableSession>,
     /// Why something was skipped.
@@ -141,18 +102,13 @@ pub struct DiscoveryReport {
 impl DiscoveryReport {
     /// Nothing to attach (notes alone do not make a report non-empty).
     pub fn is_empty(&self) -> bool {
-        self.worktrees.is_empty() && self.sessions.is_empty()
+        self.sessions.is_empty()
     }
 }
 
 /// One thing the user or an agent asks to attach.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum AttachItem {
-    /// A worktree, by `dir_name`.
-    Worktree {
-        /// The worktree's directory name.
-        dir_name: String,
-    },
     /// A stored session, by id.
     Session {
         /// The CLI's own id.
@@ -220,41 +176,6 @@ pub struct AttachResult {
     pub existing: Option<crate::occupancy::ExistingSession>,
 }
 
-/// The worktrees `worktrees` (from [`crate::worktree::reconcile`]) offers to attach: those the
-/// catalog classifies [`WorktreeOwner::Agent`], so a recorded worktree is never listed (FR-004) and
-/// only worktrees directly under `.claude/worktrees/` can qualify (the rest are `included`, hence
-/// `User`). Pure: `sessions` are the catalog's sessions, from which `session_count` and `provider`
-/// are read.
-pub fn attachable_worktrees(
-    worktrees: &[Worktree],
-    provenance: &ProvenanceView<'_>,
-    sessions: &[Session],
-) -> Vec<AttachableWorktree> {
-    worktrees
-        .iter()
-        .filter(|w| classify_owner(w, provenance) == WorktreeOwner::Agent)
-        .map(|w| {
-            let here = || {
-                sessions.iter().filter(move |s| {
-                    matches!(&s.location, SessionLocation::Worktree(d) if *d == w.dir_name)
-                })
-            };
-            AttachableWorktree {
-                dir_name: w.dir_name.clone(),
-                path: w.path.clone(),
-                branch: w.branch.clone(),
-                provider: here().next().map(|s| s.provider),
-                session_count: here().count(),
-                availability: match w.status {
-                    WorktreeStatus::Valid => Availability::Attachable,
-                    WorktreeStatus::Missing => Availability::Unavailable(Unavailable::Missing),
-                    WorktreeStatus::Invalid => Availability::Unavailable(Unavailable::Invalid),
-                },
-            }
-        })
-        .collect()
-}
-
 /// A path as a comparison key: separators unified, no trailing separator, lower case. Windows and
 /// macOS file systems fold case and Windows writes `\`, so two spellings of one project path must
 /// meet; a case-only collision between two real Linux projects is vanishingly rare and would only
@@ -286,8 +207,6 @@ pub struct DiscoverInput<'a> {
     pub root: &'a Path,
     /// The worktrees git lists (from [`crate::worktree::discover`]).
     pub worktrees: &'a [Worktree],
-    /// The provenance records, deciding which listed worktrees are hidden.
-    pub provenance: &'a ProvenanceView<'a>,
     /// Session ids the catalog already holds; never listed (FR-007).
     pub known_ids: &'a BTreeSet<Uuid>,
     /// The most sessions to return, newest first (research R4).
@@ -415,10 +334,7 @@ fn locate(cwd: &Path, input: &DiscoverInput<'_>) -> Option<(AttachTarget, Resuma
             WorktreeStatus::Invalid => {
                 ResumableStatus::Unresumable(UnresumableReason::WorktreeInvalid)
             }
-            WorktreeStatus::Valid => match classify_owner(w, input.provenance) {
-                WorktreeOwner::Agent => ResumableStatus::NeedsWorktreeAttach,
-                _ => ResumableStatus::Resumable,
-            },
+            WorktreeStatus::Valid => ResumableStatus::Resumable,
         };
         return Some((target, status));
     }

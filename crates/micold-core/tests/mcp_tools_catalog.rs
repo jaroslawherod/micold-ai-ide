@@ -27,7 +27,7 @@ const READ_TOOLS: [&str; 7] = [
 ];
 
 /// The tools whose handlers ship by milestone M6, in catalog order.
-const SHIPPED: [&str; 17] = [
+const SHIPPED: [&str; 16] = [
     "whoami",
     "list_worktrees",
     "list_branches",
@@ -36,7 +36,6 @@ const SHIPPED: [&str; 17] = [
     "list_resumable_sessions",
     "read_session_output",
     "create_worktree",
-    "attach_worktree",
     "rename_worktree",
     "delete_worktree",
     "create_session",
@@ -149,15 +148,7 @@ fn the_read_tools_parse_their_arguments() {
     assert_eq!(parse_call("whoami", &json!({})).unwrap(), Operation::Whoami);
     assert_eq!(
         parse_call("list_worktrees", &json!({})).unwrap(),
-        Operation::ListWorktrees {
-            include_hidden: false
-        }
-    );
-    assert_eq!(
-        parse_call("list_worktrees", &json!({"include_hidden": true})).unwrap(),
-        Operation::ListWorktrees {
-            include_hidden: true
-        }
+        Operation::ListWorktrees
     );
     assert_eq!(
         parse_call("list_branches", &json!({})).unwrap(),
@@ -182,9 +173,9 @@ fn the_read_tools_parse_their_arguments() {
 }
 
 #[test]
-fn a_non_boolean_include_hidden_is_invalid_input() {
+fn include_hidden_is_no_longer_an_argument_of_list_worktrees() {
+    invalid("list_worktrees", json!({"include_hidden": true}));
     invalid("list_worktrees", json!({"include_hidden": "yes"}));
-    invalid("list_worktrees", json!({"include_hidden": 1}));
 }
 
 #[test]
@@ -848,34 +839,15 @@ fn only_send_session_input_is_a_mutating_cross_session_tool() {
     );
 }
 
-/// Feature 582, FR-005, FR-011, FR-015 (contracts/attach-worktree-tool.md,
-/// contracts/list-resumable-sessions-tool.md).
+/// Feature 552 (T022): attaching a worktree is gone, so neither the catalog nor the parser knows it.
 #[test]
-fn attach_worktree_takes_one_reference_and_is_audited_but_not_destructive() {
-    assert_eq!(
-        parse_call("attach_worktree", &json!({"worktree": "wt-a"})).unwrap(),
-        Operation::AttachWorktree {
-            worktree: "wt-a".into()
-        }
-    );
-    invalid("attach_worktree", json!({}));
-    invalid("attach_worktree", json!({"worktree": ""}));
-    invalid("attach_worktree", json!({"worktree": 3}));
-    invalid("attach_worktree", json!({"worktree": "a", "extra": true}));
-    assert!(is_mutating_tool("attach_worktree"));
-    let tools = tools_list();
-    let tool = tools
-        .iter()
-        .find(|t| t["name"] == "attach_worktree")
-        .unwrap();
-    assert_eq!(tool["annotations"]["readOnlyHint"], json!(false));
-    assert_eq!(tool["annotations"]["destructiveHint"], json!(false));
-    assert_eq!(tool["inputSchema"]["required"], json!(["worktree"]));
-    let description = tool["description"].as_str().unwrap();
+fn attach_worktree_is_not_in_the_catalog_and_does_not_parse() {
     assert!(
-        description.contains("(Default) is refused"),
-        "an agent in the project root is told up front: {description}"
+        tools_list().iter().all(|t| t["name"] != "attach_worktree"),
+        "the catalog must not advertise attach_worktree"
     );
+    assert!(!is_mutating_tool("attach_worktree"));
+    assert!(parse_call("attach_worktree", &json!({"worktree": "wt-a"})).is_err());
 }
 
 #[test]

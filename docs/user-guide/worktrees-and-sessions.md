@@ -280,34 +280,22 @@ sidebar yet: no worktree or session is hidden, moved or marked busy because of i
 Worktrees kept anywhere else on disk are listed only when you asked for them; see
 [Including a worktree that already exists](#including-a-worktree-that-already-exists).
 
-### Attaching worktrees an assistant made
+### Resuming stored sessions
 
-If you lost the app's notes (a new machine, a deleted data folder), or an assistant made worktrees
-the app never recorded, they are listed in the sidebar all the same. To have the app record them,
-press the folder button in the sidebar header (its tooltip reads **Attach existing…**). It needs a
-project to be open.
-
-The dialog lists the project's worktrees that the app has no record of, each with its branch. Tick
-the ones you want and press **Attach selected**, or press **Attach all**. Attached worktrees appear
-in the sidebar like any worktree you created. A worktree
-whose folder is gone, or that git no longer knows, is listed with the reason and can't be ticked.
-
-Attaching only records the worktree in the app. It never creates, deletes or checks out anything:
-the branch, the files and any uncommitted changes stay exactly as they were. Attaching a worktree
-that is already attached changes nothing, and the app tells you it was already attached. If two
-windows attach the same worktree at once, it is added once.
+Every worktree of the project is listed in the sidebar, whatever its name and whoever made it; the
+app keeps no separate record of which ones are "yours". What the app may not know about are
+sessions: to see the conversations an assistant stored for this project, press the folder button
+in the sidebar header (its tooltip reads **Attach existing…**). It needs a project to be open.
 
 #### Resuming sessions the app has no record of
 
-Below the worktrees the same dialog lists **Stored sessions**: conversations that Claude Code,
+The dialog lists **stored sessions**: conversations that Claude Code,
 Copilot or Pi recorded for this project (in its folder or one of its worktrees) and that the app
 does not show yet, newest first with their title. Press **Resume** on one to add it to the sidebar
 and continue it where you left off; the assistant is started with its own resume option, so the
 conversation carries on from what it stored.
 Codex and OpenCode sessions are not listed here: the app does not read their conversation stores.
 
-- A session that ran in a worktree the app has not attached yet resumes by attaching that worktree
-  first, as the row says.
 - A session that cannot be resumed is listed with the reason and has no **Resume** button: its
   worktree's folder is gone, its folder is not a worktree git knows, or it ran somewhere that is not
   a worktree of this project. It is never resumed in another folder instead.
@@ -324,16 +312,13 @@ Codex and OpenCode sessions are not listed here: the app does not read their con
 
 #### The offer when you open a project
 
-When you open a project the app has no record of any worktree for (a new machine, a deleted data
-folder) and it finds worktrees or stored sessions to attach, a banner at the top of the sidebar
-says what it found. Press **Attach all** to attach every worktree it found in one step; the banner
-goes away and a message says how many were attached. If it found only stored sessions, the button
-reads **Review** and opens the **Attach existing…** list, where you resume them one at a time.
-Nothing is attached until you press a button.
+When you open a project and the app finds stored sessions it does not list, a banner at the top of
+the sidebar says how many. Press **Resume all** to resume every one of them that can be, or, when
+none can, **Review** to open the **Attach existing…** list. Nothing is resumed until you press a
+button.
 
 Press **Dismiss** to hide the banner for that project until the app is restarted. Dismissing loses
-nothing: **Attach existing…** still lists everything. A project the app already has worktree records
-for never shows the banner.
+nothing: **Attach existing…** still lists everything.
 
 ### Resizing and hiding the sidebar
 

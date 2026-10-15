@@ -200,8 +200,6 @@ pub enum FieldId {
     SettingsNotificationKind(micold_core::attention::NotificationKind),
     /// Settings → GitHub issues: the label of the mapping entry at this index (feature 034).
     IssueMappingLabel(usize),
-    /// The attach dialog's checkbox for the row at this index (feature 582).
-    AttachWorktreeRow(usize),
     /// The cleanup offer's checkbox for run `n` (feature 483).
     CleanupLoser(u8),
     /// The cleanup offer's **Delete the branch too** checkbox for run `n` (feature 483).

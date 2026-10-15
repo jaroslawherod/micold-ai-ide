@@ -298,7 +298,7 @@ async fn after_a_restart_the_groups_runs_and_sessions_are_as_they_were() {
 }
 
 /// Make worktree `feat-login-page-3` the way a create that was killed after git finished leaves
-/// it: folder, branch and the app-created provenance record.
+/// it: folder and branch.
 async fn half_created(s: &Sandbox, client: &mut runs_support::Client) {
     let (answer, _) = request(
         client,

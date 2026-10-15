@@ -469,9 +469,6 @@ fn state_with(recorded: Vec<Worktree>, agent: Vec<Worktree>) -> State {
         availability: Availability::Available,
     });
     state.workspace.active = Some(root.clone());
-    for w in &recorded {
-        state.workspace.record_user_created(&root, &w.dir_name);
-    }
     state.worktree.worktrees = recorded.into_iter().chain(agent).collect();
     state
 }

@@ -32,13 +32,13 @@ use micold_core::mcp::tools::{
 use micold_core::naming::{self, DerivedNames, NamingError};
 use micold_core::protocol::messages::{
     ActivitySignal, ConfirmOperation, ProjectSnapshot, SessionSummary, WireLifecycle,
-    WorktreeSnapshot, WorktreeStatus,
+    WorktreeStatus,
 };
 use micold_core::session::{AiCli, SessionId, SessionLocation, TerminalMode};
 use micold_core::terminal::LaunchMode;
 use micold_core::worktree::{
     self, explain_directory_taken, BlockReason, BranchOrigin, BranchSituation, CreateError,
-    CreateMode, ProvenanceView, Worktree, WorktreeOwner,
+    CreateMode,
 };
 use serde_json::{json, Value};
 use tokio_util::sync::CancellationToken;
@@ -115,7 +115,6 @@ async fn dispatch(
             worktree,
             display_name,
         } => rename_worktree(&state, caller, worktree, display_name).await,
-        Operation::AttachWorktree { worktree } => attach_worktree(&state, caller, worktree).await,
         Operation::StopSession { session } => stop_session(&state, caller, session, hangup).await,
         Operation::InterruptSession { session } => {
             interrupt_session(&state, caller, session, hangup).await
@@ -172,9 +171,7 @@ fn read_call(
     };
     match operation {
         Operation::Whoami => Ok(context.whoami()),
-        Operation::ListWorktrees { include_hidden } => {
-            Ok(json!({"worktrees": context.worktree_rows(state, include_hidden)}))
-        }
+        Operation::ListWorktrees => Ok(json!({"worktrees": context.worktree_rows()})),
         Operation::ListBranches => context.list_branches(state),
         Operation::ListSessions { worktree } => context.list_sessions(worktree.as_ref()),
         Operation::GetSession { session } => context.get_session(SessionId::from_uuid(session.0)),
@@ -192,7 +189,6 @@ fn read_call(
         Operation::CreateWorktree(_)
         | Operation::CreateSession { .. }
         | Operation::StartSession { .. }
-        | Operation::AttachWorktree { .. }
         | Operation::RenameWorktree { .. }
         | Operation::SendSessionInput { .. }
         | Operation::StopSession { .. }
@@ -975,7 +971,7 @@ async fn worktree_row(
             modes: &modes,
         };
         context
-            .worktree_rows(&st, true)
+            .worktree_rows()
             .into_iter()
             .find(|row| row["ref"] == dir_name.as_str())
             .ok_or_else(|| {
@@ -1037,122 +1033,6 @@ async fn rename_worktree(
     worktree_row(state, caller, dir_name).await
 }
 
-/// `attach_worktree` (feature 582, contracts/attach-worktree-tool.md): policy first (FR-015, a
-/// Default caller is refused outright), then the reference is resolved against a live read of the
-/// project's worktrees, then the same attach the app's dialog performs. A refused or unknown
-/// reference changes nothing.
-async fn attach_worktree(
-    state: &Arc<DaemonState>,
-    caller: SessionId,
-    reference: String,
-) -> Result<Value, OpError> {
-    let st = Arc::clone(state);
-    let (who, project) = blocking(move || resolve_caller(&st, caller)).await?;
-    check_policy(
-        &who,
-        &Operation::AttachWorktree {
-            worktree: reference.clone(),
-        },
-    )?;
-    if reference == WorktreeRef::DEFAULT {
-        return Err(OpError::invalid_input(
-            "\"default\" is the project root, not a worktree; it cannot be attached",
-        ));
-    }
-
-    let st = Arc::clone(state);
-    blocking(move || {
-        use micold_core::attach::{AttachItem, AttachOutcome, RefuseReason};
-        // A live read, so a worktree removed since the last refresh cannot be attached.
-        st.refresh_worktrees(&project.path);
-        let (_, project) = resolve_caller(&st, caller)?;
-        let target = resolve_worktree_reference(&reference, &project.worktrees)?;
-        let results = st
-            .attach_apply(
-                &project.path,
-                &[AttachItem::Worktree {
-                    dir_name: target.dir_name.clone(),
-                }],
-            )
-            .map_err(|e| OpError::service_error(format!("could not save the attach: {e}")))?;
-        let outcome = match results.first().map(|r| r.outcome) {
-            Some(AttachOutcome::Attached) => {
-                st.broadcast_catalog();
-                "attached"
-            }
-            Some(AttachOutcome::AlreadyAttached) => "already_attached",
-            Some(AttachOutcome::Refused(RefuseReason::IoFailed)) | None => {
-                return Err(OpError::service_error(
-                    "the catalog could not be written; nothing was attached",
-                ))
-            }
-            Some(AttachOutcome::Refused(RefuseReason::Unavailable)) => {
-                return Err(OpError::invalid_input(format!(
-                    "worktree \"{}\" is not available ({}); nothing was attached",
-                    target.dir_name,
-                    match target.status {
-                        WorktreeStatus::Missing => "its directory is missing",
-                        _ => "its directory is not a valid worktree",
-                    }
-                )))
-            }
-            Some(AttachOutcome::Refused(_)) => {
-                return Err(OpError::invalid_input(format!(
-                    "worktree \"{}\" is not under a provider's worktree location, so there \
-                     is nothing to attach",
-                    target.dir_name
-                )))
-            }
-        };
-        Ok(json!({
-            "worktree": target.dir_name,
-            "path": native(&target.path),
-            "branch": target.branch,
-            "outcome": outcome,
-        }))
-    })
-    .await
-}
-
-/// The worktree `reference` names: a `dir_name`, else an absolute path, else a branch; the first
-/// kind that matches decides, and a branch that matches several is `invalid_input`.
-fn resolve_worktree_reference<'a>(
-    reference: &str,
-    worktrees: &'a [WorktreeSnapshot],
-) -> Result<&'a WorktreeSnapshot, OpError> {
-    if let Some(wt) = worktrees.iter().find(|w| w.dir_name == reference) {
-        return Ok(wt);
-    }
-    let path = std::path::Path::new(reference);
-    if path.is_absolute() {
-        let key = micold_core::attach::path_key(path);
-        let real = std::fs::canonicalize(path).ok();
-        let found = worktrees.iter().find(|w| {
-            micold_core::attach::path_key(&w.path) == key
-                || real
-                    .as_deref()
-                    .zip(std::fs::canonicalize(&w.path).ok())
-                    .is_some_and(|(a, b)| a == b)
-        });
-        return found.ok_or_else(|| {
-            OpError::not_found(format!("\"{reference}\" is not a worktree of this project"))
-        });
-    }
-    let mut by_branch = worktrees
-        .iter()
-        .filter(|w| w.branch.as_deref() == Some(reference));
-    match (by_branch.next(), by_branch.next()) {
-        (Some(wt), None) => Ok(wt),
-        (Some(_), Some(_)) => Err(OpError::invalid_input(format!(
-            "branch \"{reference}\" is checked out in more than one worktree; use a dir_name \
-             or a path"
-        ))),
-        _ => Err(OpError::not_found(format!(
-            "\"{reference}\" matches no worktree of this project"
-        ))),
-    }
-}
-
 /// `list_resumable_sessions` (feature 582, contracts/list-resumable-sessions-tool.md): what the
 /// provider stores hold for this project that the catalog does not, newest first. Read-only toward
 /// the stores. **Blocking.** Discovery caps at 200 sessions, so `total` counts at most those.
@@ -1181,10 +1061,6 @@ fn list_resumable_sessions(
         .map(|s| {
             let (status, reason) = match s.status {
                 ResumableStatus::Resumable => ("resumable", None),
-                ResumableStatus::NeedsWorktreeAttach => (
-                    "needs_worktree_attach",
-                    Some("its worktree is not attached; attach_worktree attaches it"),
-                ),
                 ResumableStatus::Unresumable(UnresumableReason::WorktreeMissing) => {
                     ("unresumable", Some("its worktree's directory is missing"))
                 }
@@ -1687,14 +1563,8 @@ impl Context<'_> {
         })
     }
 
-    /// `default` first, then the sidebar's set; assistant-owned rows only when asked for.
-    fn worktree_rows(&self, state: &DaemonState, include_hidden: bool) -> Vec<Value> {
-        let (records, unreadable) = state.provenance(&self.project.path);
-        let view = if unreadable {
-            ProvenanceView::unreadable()
-        } else {
-            ProvenanceView::new(&records)
-        };
+    /// `default` first, then every worktree the sidebar lists.
+    fn worktree_rows(&self) -> Vec<Value> {
         let root_count = self
             .project
             .sessions
@@ -1707,15 +1577,9 @@ impl Context<'_> {
             "branch": Value::Null,
             "path": native(&self.project.path),
             "status": "clean",
-            "app_created": false,
-            "assistant_owned": false,
             "session_count": root_count,
         })];
         for wt in &self.project.worktrees {
-            let assistant_owned = owner(wt, &view) == WorktreeOwner::Agent;
-            if assistant_owned && !include_hidden {
-                continue;
-            }
             let session_count = self
                 .project
                 .sessions
@@ -1728,8 +1592,6 @@ impl Context<'_> {
                 "branch": wt.branch,
                 "path": native(&wt.path),
                 "status": status_name(wt.status),
-                "app_created": wt.user_created,
-                "assistant_owned": assistant_owned,
                 "session_count": session_count,
             }));
         }
@@ -1742,22 +1604,14 @@ impl Context<'_> {
             return Ok(json!({"branches": []}));
         };
         let included = state.included_worktrees(path);
-        let (records, unreadable) = state.provenance(path);
-        let view = if unreadable {
-            ProvenanceView::unreadable()
-        } else {
-            ProvenanceView::new(&records)
-        };
         let candidates =
-            worktree::branch_candidates(&micold_core::git::GitCli::new(), &repo, &included, &view)
+            worktree::branch_candidates(&micold_core::git::GitCli::new(), &repo, &included)
                 .map_err(|e| OpError::service_error(format!("could not list the branches: {e}")))?;
         let branches: Vec<Value> = candidates
             .iter()
             .map(|c| {
                 let checked_out_in = match &c.blocked_by {
-                    Some(BlockReason::CheckedOutAt { path, .. }) => {
-                        Some(self.worktree_ref_at(path))
-                    }
+                    Some(BlockReason::CheckedOutAt { path }) => Some(self.worktree_ref_at(path)),
                     Some(BlockReason::CheckedOutInProjectRoot) => {
                         Some(WorktreeRef::DEFAULT.to_string())
                     }
@@ -1854,21 +1708,6 @@ fn native(path: &std::path::Path) -> String {
 
 fn worktree_ref(s: &SessionSummary) -> &str {
     s.worktree_dir.as_deref().unwrap_or(WorktreeRef::DEFAULT)
-}
-
-/// Who owns a sidebar row, by the one classification the sidebar itself uses. Health does not enter
-/// into it (`classify_owner` is health-blind), so the status given here is immaterial.
-fn owner(wt: &WorktreeSnapshot, view: &ProvenanceView<'_>) -> WorktreeOwner {
-    worktree::classify_owner(
-        &Worktree {
-            dir_name: wt.dir_name.clone(),
-            path: wt.path.clone(),
-            branch: wt.branch.clone(),
-            status: worktree::WorktreeStatus::Valid,
-            included: wt.included,
-        },
-        view,
-    )
 }
 
 fn status_name(status: WorktreeStatus) -> &'static str {

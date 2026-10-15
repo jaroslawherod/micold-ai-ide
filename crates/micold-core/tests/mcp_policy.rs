@@ -132,9 +132,7 @@ fn the_default_refusal_names_rename_and_delete_and_not_create() {
 fn a_default_caller_keeps_every_operation_that_touches_no_worktree() {
     for operation in [
         Operation::Whoami,
-        Operation::ListWorktrees {
-            include_hidden: false,
-        },
+        Operation::ListWorktrees,
         Operation::CreateSession {
             worktree: WorktreeRef::Named("b".into()),
             ai_cli: None,
@@ -155,9 +153,7 @@ fn a_default_caller_keeps_every_operation_that_touches_no_worktree() {
 fn the_read_only_operations_proceed_for_a_worktree_caller_and_a_default_caller() {
     for operation in [
         Operation::Whoami,
-        Operation::ListWorktrees {
-            include_hidden: true,
-        },
+        Operation::ListWorktrees,
         Operation::ListBranches,
         Operation::ListSessions { worktree: None },
         Operation::GetSession {
@@ -501,22 +497,9 @@ fn a_default_caller_gets_the_same_cross_session_decisions_as_a_worktree_caller()
     }
 }
 
-/// Feature 582, FR-015: attaching changes a worktree's ownership, so a Default caller is refused
-/// outright with the Principle III text; a worktree caller may attach, and listing resumable
-/// sessions is open to every caller.
+/// Listing resumable sessions is open to every caller (feature 582, FR-015).
 #[test]
-fn a_default_caller_is_refused_attach_worktree_and_may_list_resumable_sessions() {
-    let attach = Operation::AttachWorktree {
-        worktree: "wt-a".into(),
-    };
-    let error = refusal(decide_for(SessionLocation::Default, &attach));
-    assert_eq!(error.category, ErrorCategory::RefusedByPolicy);
-    assert!(error.message.contains("Principle III"), "{}", error.message);
-    assert!(error.message.contains("attach"), "{}", error.message);
-    assert_eq!(
-        decide_for(in_worktree("a"), &attach),
-        PolicyDecision::Proceed
-    );
+fn every_caller_may_list_resumable_sessions() {
     let list = Operation::ListResumableSessions {
         limit: 50,
         offset: 0,

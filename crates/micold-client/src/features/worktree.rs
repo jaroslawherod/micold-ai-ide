@@ -17,19 +17,18 @@
 //!
 //! # The vocabulary this feature declares
 //!
-//! Twenty-two transitions in [`Msg`]: the listing (`Loaded`, `RefreshRequested`,
+//! Twenty-one transitions in [`Msg`]: the listing (`Loaded`, `RefreshRequested`,
 //! `RefreshFinished`, `RefreshTimedOut`), the row menu
 //! (`MenuToggled`, `MenuDismissed`, `Hovered`, `Unhovered`), inclusion (`IncludeRequested`,
 //! `Included`, `ExcludeRequested`, `Excluded`), deletion and its confirmation (`DeleteRequested`,
 //! `DeleteConfirmed`, `DeleteCancelled`, `DeleteKeepBranchToggled`), the rename draft
 //! (`RenameStarted`, `RenameTextChanged`, `RenameConfirmed`, `RenameCancelled`),
-//! `TextCopyRequested`, and `ClaimRequested`.
+//! and `TextCopyRequested`.
 //!
-//! [`update`] is pure (data-model.md §1.1 shape A) and routes all twenty-two. Seven are matched a
+//! [`update`] is pure (data-model.md §1.1 shape A) and routes all twenty-one. Six are matched a
 //! second time in `main.rs`, because each additionally touches something outside the process —
 //! git, the catalog on disk, or the clipboard: `IncludeRequested`, `ExcludeRequested`,
-//! `DeleteConfirmed`, `RenameConfirmed`, `TextCopyRequested`, `RefreshRequested`,
-//! `ClaimRequested` (M2).
+//! `DeleteConfirmed`, `RenameConfirmed`, `TextCopyRequested`, `RefreshRequested`.
 //!
 //! # The state this feature remembers (feature 028, contract S1)
 //!
@@ -249,20 +248,7 @@ pub fn loaded(
 /// its caller can vouch for. [`included`] keys on path instead because the daemon answers an
 /// include with one. Reached only through `Outcome::WorktreeCreated` — the form that ran the
 /// create does not own this list.
-///
-/// **Records provenance optimistically** (feature 029, FR-010). The daemon writes the durable
-/// record and re-broadcasts, but this reducer runs first and cannot wait: without the record, a
-/// worktree the user just made would be classified `Agent` for the frames in between and flicker
-/// out of the list they are looking at. Recording here also means a *failed* durable write still
-/// leaves the worktree listed for this run — the user made it, so they must be able to see it,
-/// whatever the disk did. `catalog_sync` reconciles the map to the daemon's answer on the next
-/// snapshot, so this is an optimism the daemon corrects, not a second source of truth.
 pub fn created(state: &mut crate::app::State, worktree: Worktree) -> Vec<crate::features::Outcome> {
-    if let Some(project) = state.workspace.active_project().map(|p| p.path.clone()) {
-        state
-            .workspace
-            .record_user_created(&project, &worktree.dir_name);
-    }
     insert_sorted(state, worktree, |a, b| a.dir_name == b.dir_name)
 }
 
@@ -324,23 +310,6 @@ pub fn close_menu(state: &mut crate::app::State) {
 
 /// The worktree context menu was dismissed.
 pub fn menu_dismissed(state: &mut crate::app::State) {
-    state.worktree.menu_open = None;
-}
-
-/// The user claimed a revealed worktree as their own (feature 029, FR-020/FR-022).
-///
-/// Optimistic, for the reason `created()` is: the daemon writes the same record a moment later and
-/// the next catalog push confirms it, but the row has to be the user's *in this frame*. Waiting for
-/// the ack would leave the claim menu showing for a worktree the user has just claimed.
-///
-/// Touches `worktree_provenance` and `menu_open` and nothing else — not the
-/// filters, not `worktrees`. A claim states who a worktree belongs to; it does not change
-/// what the sidebar is showing or what it is filtered by.
-pub fn claim_requested(state: &mut crate::app::State, dir: String) {
-    if let Some(project) = state.workspace.active_project().map(|p| p.path.clone()) {
-        state.workspace.record_user_created(&project, &dir);
-    }
-    // Chosen from the row menu, so close it — the same courtesy every other menu action does.
     state.worktree.menu_open = None;
 }
 
@@ -549,7 +518,6 @@ pub enum Msg {
     ///
     /// Offered only on a row that classifies `Agent`, which — since a hidden worktree draws no row
     /// — means only while the reveal control is on. There is no inverse (FR-024).
-    ClaimRequested(String),
     /// Open the pull request of a worktree's branch in the browser (feature 040, FR-014), by
     /// `dir_name`. The address is read from the held status by the shell, which is the side that
     /// opens it; the reducer has nothing to change, so the application's state is untouched.
@@ -598,7 +566,6 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
         Msg::RenameCancelled => rename_cancelled(state),
         Msg::Hovered(dir) => hovered(state, dir),
         Msg::Unhovered(dir) => unhovered(state, dir),
-        Msg::ClaimRequested(dir) => claim_requested(state, dir),
         Msg::PullRequestOpenRequested(_) => {}
     }
     Vec::new()

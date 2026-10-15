@@ -1,15 +1,14 @@
-//! The attach-existing-worktrees dialog (feature 582, FR-001, FR-002, FR-004): the project's
-//! unattached provider worktrees as a checkbox list, with "Attach selected" and "Attach all".
-//! Attaching records the worktrees in the app and touches nothing on disk; the dialog says so.
+//! The attach-existing dialog (feature 582, reduced by 552): the project's stored provider sessions
+//! the catalog lacks, each with a Resume button, and "Resume all". Resuming touches nothing on
+//! disk but the session's own entry; worktrees are never attached (FR-009).
 
 use crate::app::{Message, State};
 use crate::features::attach::{can_resume, status_text, Dialog, Listing, Msg};
 use crate::features::window::FieldId;
-use crate::ui::focus::TrackFocus;
-use crate::ui::material::{self, Button, Checkbox, Scrollable, SurfaceKind, Text, TypeRole};
+use crate::ui::material::{self, Button, Scrollable, SurfaceKind, Text, TypeRole};
 use iced::widget::{column, row};
 use iced::{Element, Length};
-use micold_core::attach::{AttachableWorktree, Availability, ResumableSession, Unavailable};
+use micold_core::attach::ResumableSession;
 use micold_core::env_include::EnvIncludeOutcome;
 use micold_core::theme::ColorScheme;
 use micold_core::tokens::{self, spacing};
@@ -19,47 +18,41 @@ use micold_core::tokens::{self, spacing};
 pub fn modal<'a>(
     dialog: &'a Dialog,
     scheme: ColorScheme,
-    focused: Option<FieldId>,
+    _focused: Option<FieldId>,
 ) -> Element<'a, Message> {
     let r = tokens::roles(scheme);
 
     let mut fields = material::dialog::fields(column![
-        Text::new("Attach existing worktrees", TypeRole::Headline, r),
+        Text::new("Resume stored sessions", TypeRole::Headline, r),
         Text::new(
-            "Shows provider worktrees this app has no record of. Attaching only adds them to the \
-             sidebar — their branch, files and uncommitted changes are left untouched.",
+            "Shows provider sessions stored on this computer that this app has no record of. \
+             Resuming one adds it to the sidebar; nothing else is changed.",
             TypeRole::Body,
             r
         )
         .muted(),
     ]);
 
-    let offered = dialog.attachable().len();
+    let offered = dialog.resumable().len();
     match &dialog.listing {
         Listing::Loading => {
-            fields = fields.push(Text::new("Looking for worktrees…", TypeRole::Body, r).muted());
+            fields =
+                fields.push(Text::new("Looking for stored sessions…", TypeRole::Body, r).muted());
         }
         Listing::Failed(reason) => {
             fields = fields.push(
                 Text::new(
-                    format!("Could not read worktrees: {reason}"),
+                    format!("Could not read stored sessions: {reason}"),
                     TypeRole::Caption,
                     r,
                 )
                 .tint(r.error),
             );
         }
-        Listing::Listed(rows) if rows.is_empty() => {
-            fields =
-                fields.push(Text::new("No unattached worktrees found.", TypeRole::Body, r).muted());
+        Listing::Listed if dialog.sessions.is_empty() => {
+            fields = fields.push(Text::new("No stored sessions found.", TypeRole::Body, r).muted());
         }
-        Listing::Listed(rows) => {
-            let mut list = column![].spacing(spacing::XS);
-            for (index, w) in rows.iter().enumerate() {
-                list = list.push(row_view(dialog, w, index, focused, r));
-            }
-            fields = fields.push(Scrollable::new(list, r).height(Length::Fixed(240.0)));
-        }
+        Listing::Listed => {}
     }
 
     if !dialog.sessions.is_empty() {
@@ -67,9 +60,7 @@ pub fn modal<'a>(
         for session in &dialog.sessions {
             list = list.push(session_row(dialog, session, r));
         }
-        fields = fields
-            .push(Text::new("Stored sessions", TypeRole::Title, r))
-            .push(Scrollable::new(list, r).height(Length::Fixed(180.0)));
+        fields = fields.push(Scrollable::new(list, r).height(Length::Fixed(240.0)));
     }
     for note in dialog.footer_notes() {
         fields = fields.push(Text::new(note, TypeRole::Caption, r).muted());
@@ -77,18 +68,15 @@ pub fn modal<'a>(
 
     if let Some(reason) = &dialog.error {
         fields = fields.push(
-            Text::new(format!("Could not attach: {reason}"), TypeRole::Caption, r).tint(r.error),
+            Text::new(format!("Could not resume: {reason}"), TypeRole::Caption, r).tint(r.error),
         );
     }
 
     let busy = dialog.applying();
-    let select = Button::filled("Attach selected", r).on_press_maybe(
-        (!busy && !dialog.selected.is_empty()).then_some(Message::Attach(Msg::AttachSelected)),
-    );
-    let all = Button::outlined("Attach all", r)
-        .on_press_maybe((!busy && offered > 0).then_some(Message::Attach(Msg::AttachAll)));
+    let all = Button::filled("Resume all", r)
+        .on_press_maybe((!busy && offered > 0).then_some(Message::Attach(Msg::ResumeAll)));
     let cancel = Button::text("Cancel", r).on_press(Message::Attach(Msg::Cancelled));
-    let actions = material::dialog::actions(row![select, all, cancel]);
+    let actions = material::dialog::actions(row![all, cancel]);
 
     material::Surface::new(
         material::dialog::body(fields, actions),
@@ -97,34 +85,6 @@ pub fn modal<'a>(
     )
     .width(Length::Fixed(520.0))
     .into()
-}
-
-fn row_view<'a>(
-    dialog: &'a Dialog,
-    w: &'a AttachableWorktree,
-    index: usize,
-    focused: Option<FieldId>,
-    r: tokens::Roles,
-) -> Element<'a, Message> {
-    let branch = w.branch.as_deref().unwrap_or("detached HEAD");
-    let note = match w.availability {
-        Availability::Attachable => String::new(),
-        Availability::Unavailable(Unavailable::Missing) => " — folder is missing".into(),
-        Availability::Unavailable(Unavailable::Invalid) => " — not a usable worktree".into(),
-    };
-    let label = format!("{} ({branch}){note}", w.dir_name);
-    let name = w.dir_name.clone();
-    let mut checkbox = Checkbox::new(label, dialog.selected.contains(&w.dir_name), r)
-        .track_focus(FieldId::AttachWorktreeRow(index), focused);
-    if w.availability == Availability::Attachable && !dialog.applying() {
-        checkbox = checkbox.on_toggle(move |checked| {
-            Message::Attach(Msg::Toggled {
-                dir_name: name.clone(),
-                checked,
-            })
-        });
-    }
-    checkbox.into()
 }
 
 /// One stored session: its title, provider and what resuming it does, with a Resume button.

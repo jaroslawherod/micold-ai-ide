@@ -24,7 +24,7 @@ use micold_core::protocol::messages::{
 use micold_core::terminal::LaunchMode;
 use micold_core::worktree::{
     branch_candidates, explain_directory_taken, parse_worktrees, preflight, CreateError,
-    CreateProgressEvent, ProvenanceView,
+    CreateProgressEvent,
 };
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_util::codec::Framed;
@@ -1607,7 +1607,6 @@ where
                     continue;
                 };
                 let included = state.included_worktrees(&project);
-                let (created, unreadable) = state.provenance(&project);
                 let situation = tokio::task::spawn_blocking(move || {
                     let target = repo.join(".claude/worktrees").join(&dir_name);
                     let target_exists = target.exists()
@@ -1621,10 +1620,6 @@ where
                         &branch,
                         target_exists,
                         &included,
-                        &ProvenanceView {
-                            records: &created,
-                            state_unreadable: unreadable,
-                        },
                     )
                 })
                 .await;
@@ -1692,17 +1687,8 @@ where
                     continue;
                 };
                 let included = state.included_worktrees(&project);
-                let (created, unreadable) = state.provenance(&project);
                 let listed = tokio::task::spawn_blocking(move || {
-                    branch_candidates(
-                        &GitCli::new(),
-                        &repo,
-                        &included,
-                        &ProvenanceView {
-                            records: &created,
-                            state_unreadable: unreadable,
-                        },
-                    )
+                    branch_candidates(&GitCli::new(), &repo, &included)
                 })
                 .await;
                 match listed {
@@ -1956,44 +1942,6 @@ where
                             req,
                             kind: ErrorKind::IoFailed,
                             message: "failed to persist the attach".into(),
-                            detail: Some(e.to_string()),
-                        },
-                    ),
-                }
-            }
-            // --- 029 FR-020: the user telling the app a worktree is theirs ---
-            ClientMsg::WorktreeClaim {
-                req,
-                project,
-                dir_name,
-            } => {
-                // Durable catalog state with no git involved, like the rename above — and with no
-                // validation step, because there is no user-supplied string here, only a directory
-                // name the client picked off a row it is already drawing. Persistence is therefore
-                // the only thing that can fail.
-                //
-                // Nothing checks `matches_reserved_convention` (FR-023) and nothing touches the
-                // filesystem (FR-003): the user is stating a fact about authorship, and the app's
-                // job is to write it down.
-                match state.claim_worktree(&project, &dir_name) {
-                    Ok(()) => {
-                        // Broadcast so a second open window drops the `agent` chip too — the same
-                        // mechanism that already carries a rename between windows.
-                        state.broadcast_catalog();
-                        state.send(
-                            id,
-                            DaemonMsg::OperationOk {
-                                req,
-                                result: OperationResult::Ack,
-                            },
-                        );
-                    }
-                    Err(e) => state.send(
-                        id,
-                        DaemonMsg::OperationError {
-                            req,
-                            kind: ErrorKind::IoFailed,
-                            message: "failed to persist the claim".into(),
                             detail: Some(e.to_string()),
                         },
                     ),

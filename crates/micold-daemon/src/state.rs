@@ -1437,14 +1437,6 @@ impl DaemonState {
             Self::overlay_live_summaries(inner, &mut project.sessions);
             if let Some(discovered) = inner.worktrees.get(&project.path) {
                 let names = overrides.get(&project.path);
-                // Feature 029: the overlay replaces the durable list wholesale, so the provenance
-                // flag has to be re-derived here too — a worktree the catalog never heard of (no
-                // session, no rename) still appears in discovery, and its flag must come from the
-                // record rather than defaulting to `false` because this list was built elsewhere.
-                let created = inner
-                    .catalog
-                    .workspace()
-                    .user_created_worktrees(&project.path);
                 project.worktrees = discovered
                     .iter()
                     .map(|wt| WorktreeSnapshot {
@@ -1457,7 +1449,6 @@ impl DaemonState {
                         status: wire_worktree_status(wt.status),
                         path: wt.path.clone(),
                         included: wt.included,
-                        user_created: created.contains(&wt.dir_name),
                     })
                     .collect();
             }
@@ -2774,22 +2765,6 @@ impl DaemonState {
                 let included = self.included_worktrees(project);
                 let discovered = worktree::discover(&GitCli::new(), &repo, &included);
                 let mut inner = self.lock();
-                // Feature 029 FR-006: the one-time evidence backfill, here because this is the
-                // single point where the discovered list, the durable records and the marker are
-                // all in hand — already off the async runtime, and already on every path that can
-                // reveal a worktree to a user. It is a no-op after the first run per project
-                // (FR-006c) and refuses to run on an unreadable one (FR-011), so paying for the
-                // check on every refresh costs a set lookup.
-                if let Err(e) = inner
-                    .catalog
-                    .migrate_worktree_provenance(project, &discovered)
-                {
-                    tracing::warn!(
-                        project = %project.display(),
-                        error = %e,
-                        "could not persist the worktree provenance backfill"
-                    );
-                }
                 // Feature 482 (Edge Case "removed worktree"): a worktree removed outside the app
                 // takes its review comments with it. Only one that discovery no longer lists *and*
                 // whose directory is gone from a folder that can still be read counts, so neither a
@@ -2826,23 +2801,6 @@ impl DaemonState {
         self.lock().catalog.included_worktrees(project)
     }
 
-    /// What this app knows about who created `project`'s worktrees (029 FR-004), owned rather than
-    /// borrowed.
-    ///
-    /// Returned by value for the same reason as [`Self::included_worktrees`]: every caller hands it
-    /// to a `spawn_blocking` closure that shells out to git, and the lock must not be held across
-    /// that. The pair is reassembled into a [`ProvenanceView`] inside the closure, which is why
-    /// this returns the two facts rather than the view — the view borrows, and a borrow cannot
-    /// cross into a `'static` task.
-    pub fn provenance(&self, project: &Path) -> (BTreeSet<String>, bool) {
-        let inner = self.lock();
-        let workspace = inner.catalog.workspace();
-        (
-            workspace.user_created_worktrees(project).clone(),
-            workspace.unreadable_projects.contains(project),
-        )
-    }
-
     /// Each of `project`'s sessions and the mode its pane is in (feature 034: the tools report a
     /// Regular-terminal session as such). The wire summary does not carry `mode`, so the tools read
     /// it here.
@@ -2872,61 +2830,24 @@ impl DaemonState {
         self.lock().catalog.include_worktree(project, path)
     }
 
-    /// Record that this app created `dir_name` under `project` (feature 029, FR-002/FR-003).
-    pub fn record_worktree_provenance(&self, project: &Path, dir_name: &str) -> io::Result<()> {
-        self.lock()
-            .catalog
-            .record_worktree_provenance(project, dir_name)
-    }
-
-    /// Claim `dir_name` under `project` as the user's own (029 FR-020) — the same record a create
-    /// writes, requested by the user instead of by the app.
-    pub fn claim_worktree(&self, project: &Path, dir_name: &str) -> io::Result<()> {
-        self.lock().catalog.claim_worktree(project, dir_name)
-    }
-
-    /// What `project` offers to attach (feature 582, FR-001). **Blocking**: it re-reads git so the
-    /// list is live, then answers from that cache, the provenance records and the catalog's
-    /// sessions. Read-only toward the repository and the provider stores.
+    /// What `project` offers to attach: the stored provider sessions the catalog lacks (feature
+    /// 552, FR-009). **Blocking**: it re-reads git so the list is live. Read-only toward the
+    /// repository and the provider stores.
     pub fn attach_discover(&self, project: &Path) -> micold_core::attach::DiscoveryReport {
         self.refresh_worktrees(project);
-        let (records, unreadable, live, known, worktrees) = {
+        let (live, known) = {
             let inner = self.lock();
-            let workspace = inner.catalog.workspace();
-            let records = workspace.user_created_worktrees(project).clone();
-            let unreadable = workspace.unreadable_projects.contains(project);
-            let live = inner.worktrees.get(project).cloned().unwrap_or_default();
-            let provenance = if unreadable {
-                worktree::ProvenanceView::unreadable()
-            } else {
-                worktree::ProvenanceView::new(&records)
-            };
-            let sessions = workspace
-                .sessions
-                .get(project)
-                .map(Vec::as_slice)
-                .unwrap_or(&[]);
-            let worktrees = micold_core::attach::attachable_worktrees(&live, &provenance, sessions);
             (
-                records.clone(),
-                unreadable,
-                live,
+                inner.worktrees.get(project).cloned().unwrap_or_default(),
                 inner
                     .catalog
                     .known_session_ids(project)
                     .into_iter()
                     .collect::<BTreeSet<Uuid>>(),
-                worktrees,
             )
         };
-        let provenance = if unreadable {
-            worktree::ProvenanceView::unreadable()
-        } else {
-            worktree::ProvenanceView::new(&records)
-        };
-        let resumable = self.discover_resumable_sessions(project, &live, &provenance, &known, None);
+        let resumable = self.discover_resumable_sessions(project, &live, &known, None);
         micold_core::attach::DiscoveryReport {
-            worktrees,
             sessions: resumable.sessions,
             notes: resumable.notes,
         }
@@ -2939,7 +2860,6 @@ impl DaemonState {
         &self,
         project: &Path,
         live: &[Worktree],
-        provenance: &worktree::ProvenanceView<'_>,
         known: &std::collections::BTreeSet<Uuid>,
         only: Option<&std::collections::BTreeSet<Uuid>>,
     ) -> micold_core::attach::ResumableDiscovery {
@@ -2967,7 +2887,6 @@ impl DaemonState {
             &DiscoverInput {
                 root: project,
                 worktrees: live,
-                provenance,
                 known_ids: known,
                 page: 200,
                 only,
@@ -2978,11 +2897,9 @@ impl DaemonState {
     /// Attach `targets` under `project` (feature 582). **Blocking**: a session target reads the
     /// provider stores.
     ///
-    /// Worktree targets are validated against the cached live discovery (the caller refreshes it
-    /// just before) and claimed together by [`Catalog::attach_worktrees`], one write for the batch.
     /// A session target is found again in a fresh discovery limited to its id, so a stale list
-    /// cannot attach what is gone; its worktree is attached first when it needs it (FR-009), and
-    /// then it joins the catalog as an idle entry that no provider process backs (FR-008).
+    /// cannot attach what is gone; it then joins the catalog as an idle entry that no provider
+    /// process backs (FR-008).
     pub fn attach_apply(
         &self,
         project: &Path,
@@ -2991,115 +2908,59 @@ impl DaemonState {
         use micold_core::attach::{
             AttachItem, AttachOutcome, AttachResult, AttachTarget, RefuseReason, ResumableStatus,
         };
-        let dirs: Vec<String> = targets
-            .iter()
-            .filter_map(|t| match t {
-                AttachItem::Worktree { dir_name } => Some(dir_name.clone()),
-                AttachItem::Session { .. } => None,
-            })
-            .collect();
-        let mut outcomes = {
-            let mut inner = self.lock();
-            let live = inner.worktrees.get(project).cloned().unwrap_or_default();
-            inner
-                .catalog
-                .attach_worktrees(project, &live, &dirs)?
-                .into_iter()
-        };
         let mut results = Vec::with_capacity(targets.len());
         for item in targets {
-            let outcome = match item {
-                AttachItem::Worktree { .. } => {
-                    outcomes.next().expect("one outcome per worktree target")
-                }
-                AttachItem::Session { id, .. } => {
-                    let only: BTreeSet<Uuid> = [*id].into();
-                    let (records, unreadable, live, known) = {
-                        let inner = self.lock();
-                        let workspace = inner.catalog.workspace();
-                        (
-                            workspace.user_created_worktrees(project).clone(),
-                            workspace.unreadable_projects.contains(project),
-                            inner.worktrees.get(project).cloned().unwrap_or_default(),
-                            inner
-                                .catalog
-                                .known_session_ids(project)
-                                .into_iter()
-                                .collect::<BTreeSet<Uuid>>(),
-                        )
-                    };
-                    let provenance = if unreadable {
-                        worktree::ProvenanceView::unreadable()
-                    } else {
-                        worktree::ProvenanceView::new(&records)
-                    };
-                    let found = self
-                        .discover_resumable_sessions(
-                            project,
-                            &live,
-                            &provenance,
-                            &known,
-                            Some(&only),
-                        )
-                        .sessions
+            let AttachItem::Session { id, .. } = item;
+            let only: BTreeSet<Uuid> = [*id].into();
+            let (live, known) = {
+                let inner = self.lock();
+                (
+                    inner.worktrees.get(project).cloned().unwrap_or_default(),
+                    inner
+                        .catalog
+                        .known_session_ids(project)
                         .into_iter()
-                        .find(|s| s.id == *id);
-                    match found {
-                        // Already in the catalog: the catalog says whether it is running.
-                        None if known.contains(id) => self
-                            .lock()
-                            .catalog
-                            .attach_session(project, self.restored_stub(*id))
-                            .unwrap_or(AttachOutcome::Refused(RefuseReason::IoFailed)),
-                        None => AttachOutcome::Refused(RefuseReason::Unavailable),
-                        Some(s) if matches!(s.status, ResumableStatus::Unresumable(_)) => {
-                            AttachOutcome::Refused(RefuseReason::Unavailable)
+                        .collect::<BTreeSet<Uuid>>(),
+                )
+            };
+            let found = self
+                .discover_resumable_sessions(project, &live, &known, Some(&only))
+                .sessions
+                .into_iter()
+                .find(|s| s.id == *id);
+            let outcome = match found {
+                // Already in the catalog: the catalog says whether it is running.
+                None if known.contains(id) => self
+                    .lock()
+                    .catalog
+                    .attach_session(project, self.restored_stub(*id))
+                    .unwrap_or(AttachOutcome::Refused(RefuseReason::IoFailed)),
+                None => AttachOutcome::Refused(RefuseReason::Unavailable),
+                Some(s) if matches!(s.status, ResumableStatus::Unresumable(_)) => {
+                    AttachOutcome::Refused(RefuseReason::Unavailable)
+                }
+                Some(s) => {
+                    let location = match &s.target {
+                        AttachTarget::Default => SessionLocation::Default,
+                        AttachTarget::Worktree { dir_name } => {
+                            SessionLocation::Worktree(dir_name.clone())
                         }
-                        Some(s) => {
-                            let location = match &s.target {
-                                AttachTarget::Default => SessionLocation::Default,
-                                AttachTarget::Worktree { dir_name } => {
-                                    SessionLocation::Worktree(dir_name.clone())
-                                }
-                            };
-                            let worktree_outcome = match (&s.target, s.status) {
-                                (
-                                    AttachTarget::Worktree { dir_name },
-                                    ResumableStatus::NeedsWorktreeAttach,
-                                ) => {
-                                    let mut inner = self.lock();
-                                    inner
-                                        .catalog
-                                        .attach_worktrees(
-                                            project,
-                                            &live,
-                                            std::slice::from_ref(dir_name),
-                                        )?
-                                        .pop()
-                                }
-                                _ => None,
-                            };
-                            if let Some(AttachOutcome::Refused(_)) = worktree_outcome {
-                                AttachOutcome::Refused(RefuseReason::Unavailable)
-                            } else {
-                                let label = s
-                                    .title
-                                    .clone()
-                                    .map_or(SessionLabel::Pending, SessionLabel::Derived);
-                                let session = Session::restored(
-                                    SessionId::from_uuid(*id),
-                                    location,
-                                    label,
-                                    TerminalMode::AiCli,
-                                    s.provider,
-                                );
-                                self.lock()
-                                    .catalog
-                                    .attach_session(project, session)
-                                    .unwrap_or(AttachOutcome::Refused(RefuseReason::IoFailed))
-                            }
-                        }
-                    }
+                    };
+                    let label = s
+                        .title
+                        .clone()
+                        .map_or(SessionLabel::Pending, SessionLabel::Derived);
+                    let session = Session::restored(
+                        SessionId::from_uuid(*id),
+                        location,
+                        label,
+                        TerminalMode::AiCli,
+                        s.provider,
+                    );
+                    self.lock()
+                        .catalog
+                        .attach_session(project, session)
+                        .unwrap_or(AttachOutcome::Refused(RefuseReason::IoFailed))
                 }
             };
             results.push(AttachResult {
@@ -3121,13 +2982,6 @@ impl DaemonState {
             TerminalMode::AiCli,
             AiCli::ClaudeCode,
         )
-    }
-
-    /// Drop the provenance record for a worktree that has just been removed (029 FR-018/FR-019).
-    pub fn forget_worktree_provenance(&self, project: &Path, dir_name: &str) -> io::Result<()> {
-        self.lock()
-            .catalog
-            .forget_worktree_provenance(project, dir_name)
     }
 
     /// Stop showing `path` (016 BUG-002, FR-030).

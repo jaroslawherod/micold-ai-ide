@@ -10,7 +10,7 @@ use micold_core::sandbox::SandboxProfile;
 use micold_core::settings::{JsonFileSettingsStore, Settings, SettingsStore};
 use micold_core::store::{JsonFileStore, ProjectStore};
 use micold_core::workspace::Workspace;
-use micold_core::worktree::{explain_directory_taken_on, BlockReason, WorktreeOwner};
+use micold_core::worktree::{explain_directory_taken_on, BlockReason};
 use tempfile::tempdir;
 
 const PROJECT: &str = "/a/one";
@@ -225,7 +225,6 @@ fn a_binding_for_a_project_with_no_state_file_is_refused() {
 fn checked_out_at_feature_x() -> BlockReason {
     BlockReason::CheckedOutAt {
         path: PathBuf::from("/p/.claude/worktrees/feat-x"),
-        owner: WorktreeOwner::User,
     }
 }
 

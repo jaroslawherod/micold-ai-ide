@@ -86,13 +86,12 @@ fn an_agent_named_worktree_is_listed_like_an_ordinary_one() {
 }
 
 #[test]
-fn every_worktree_is_listed_whether_or_not_the_app_recorded_it() {
-    let mut st = state(vec![
+fn every_worktree_is_listed() {
+    let st = state(vec![
         managed("recorded", "feat/recorded"),
         managed("unrecorded", "feat/unrecorded"),
         elsewhere("borrowed"),
     ]);
-    st.workspace.record_user_created(&project(), "recorded");
     assert_eq!(st.worktree_tree().len(), 3);
 }
 

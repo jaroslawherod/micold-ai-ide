@@ -300,8 +300,6 @@ fn a_corrupt_project_state_file_marks_the_project_unreadable() {
     let mut ws = Workspace::empty();
     ws.projects.push(project("/a", "a", true));
     ws.projects.push(project("/b", "b", true));
-    ws.record_user_created(Path::new("/a"), "feat-x");
-    ws.record_user_created(Path::new("/b"), "feat-y");
     store.save(&ws).unwrap();
 
     std::fs::write(store.project_state_path(Path::new("/a")), "not json").unwrap();
@@ -314,16 +312,6 @@ fn a_corrupt_project_state_file_marks_the_project_unreadable() {
     assert!(
         !out.workspace.unreadable_projects.contains(Path::new("/b")),
         "and no other project is — the fault stays isolated (FR-012a)"
-    );
-    assert!(
-        !out.workspace
-            .worktree_provenance
-            .contains_key(Path::new("/a")),
-        "its records are still dropped; it is the *not knowing* that is now recorded"
-    );
-    assert!(
-        out.workspace.is_user_created(Path::new("/b"), "feat-y"),
-        "/b's own records survive intact"
     );
 }
 
@@ -374,7 +362,6 @@ fn a_corrupt_project_state_file_stays_unreadable_for_every_reader() {
 
     let mut ws = Workspace::empty();
     ws.projects.push(project("/a", "a", true));
-    ws.record_user_created(Path::new("/a"), "feat-x");
     store.save(&ws).unwrap();
 
     std::fs::write(store.project_state_path(Path::new("/a")), "not json").unwrap();
@@ -400,8 +387,6 @@ fn saving_never_overwrites_an_unreadable_projects_state_file() {
     let mut ws = Workspace::empty();
     ws.projects.push(project("/a", "a", true));
     ws.projects.push(project("/b", "b", true));
-    ws.record_user_created(Path::new("/a"), "feat-x");
-    ws.record_user_created(Path::new("/b"), "feat-y");
     store.save(&ws).unwrap();
 
     let a_state_path = store.project_state_path(Path::new("/a"));
@@ -426,7 +411,10 @@ fn saving_never_overwrites_an_unreadable_projects_state_file() {
         "so the next run fails visible too, rather than inheriting an empty record set"
     );
     assert!(
-        after.workspace.is_user_created(Path::new("/b"), "feat-y"),
+        !after
+            .workspace
+            .unreadable_projects
+            .contains(Path::new("/b")),
         "and the readable projects are still saved as usual"
     );
 }
@@ -465,13 +453,6 @@ fn a_project_state_file_without_a_version_number_loads_its_records() {
             .map(String::as_str),
         Some("Feature X")
     );
-    assert!(out.workspace.is_user_created(Path::new("/a"), "feat-x"));
-    assert!(out.workspace.is_user_created(Path::new("/a"), "feat-y"));
-    assert!(
-        out.workspace.provenance_migrated.contains(Path::new("/a")),
-        "the backfill is recorded as done, so it does not run again"
-    );
-
     // The file is rewritten on the next save — carrying the version and every record — so the
     // loss cannot recur on the following launch.
     store.save(&out.workspace).unwrap();
@@ -481,11 +462,6 @@ fn a_project_state_file_without_a_version_number_loads_its_records() {
     assert_eq!(written["schema_version"], 1);
     let again = store.load();
     assert!(again.workspace.unreadable_projects.is_empty());
-    assert!(again.workspace.is_user_created(Path::new("/a"), "feat-y"));
-    assert!(again
-        .workspace
-        .provenance_migrated
-        .contains(Path::new("/a")));
     assert_eq!(
         again
             .workspace

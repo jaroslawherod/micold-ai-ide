@@ -575,9 +575,6 @@ pub fn view_with<'a>(
                 dir,
                 &state.worktree_display_name(dir),
                 included,
-                // 552: no worktree is classified as the assistant's, so the claim is never
-                // offered; the item and its message go with provenance (M3).
-                false,
                 has_pull_request,
             );
             // Feature 491 (T036): a worktree with no daemon offers the explicit bind, above Delete
@@ -809,23 +806,10 @@ pub fn view_with<'a>(
 
 /// The items in a worktree's right-click context menu (feature 008, FR-013; "Copy name" added
 /// for cross-application clipboard access to labels the app doesn't render as selectable text).
-///
-/// # "Claim as mine" (feature 029, FR-020)
-///
-/// Offered when `claimable` — the row classifies `Agent`, meaning this app has no record of making
-/// it. Since a worktree with no record draws no row at all unless the reveal control is on, that is
-/// the same as "only on a revealed row", expressed as the classification rather than as the control
-/// so the two cannot disagree.
-///
-/// It goes in **this** menu and not in `row_actions_cluster()`. 014 FR-013 forbids the hover cluster
-/// being special-cased for an agent row and 029 FR-015 restates it: a revealed row offers exactly
-/// the same actions as any other, none hidden, reordered or given an extra confirmation. Adding an
-/// action to the cluster for one class of row is precisely what both forbid.
 pub fn worktree_menu_items(
     dir: &str,
     display_name: &str,
     included: bool,
-    claimable: bool,
     has_pull_request: bool,
 ) -> Vec<material::MenuItem<Message>> {
     let mut items = vec![
@@ -853,22 +837,7 @@ pub fn worktree_menu_items(
             Message::Worktree(WorktreeMsg::ExcludeRequested(dir.to_string())),
         ));
     }
-    // 029 FR-020. Above Delete, because it is the item a user who has just revealed a row is
-    // looking for, and because the destructive action stays last.
-    //
-    // `check_circle` rather than a new codepoint: the glyph already means "yes, this one" where the
-    // switcher marks the active project, and the vocabulary is deliberately closed — a new icon is
-    // a font entry, a `PROVENANCE.md` row and a regression-locked codepoint, which is a change to
-    // the icon set rather than to this feature.
-    if claimable {
-        items.push(material::MenuItem::new(
-            Icon::ActiveMarker,
-            "Claim as mine",
-            Message::Worktree(WorktreeMsg::ClaimRequested(dir.to_string())),
-        ));
-    }
-    // Feature 040 (FR-010, contract §4): for a row that shows a pull request, directly above Delete
-    // for the same reason as the claim above. No confirmation: it only opens a page (R15).
+    // Feature 040 (FR-010, contract §4): for a row that shows a pull request, directly above Delete. No confirmation: it only opens a page (R15).
     if has_pull_request {
         items.push(material::MenuItem::new(
             Icon::OpenInBrowser,

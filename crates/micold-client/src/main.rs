@@ -732,11 +732,6 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         Message::Worktree(WorktreeMsg::RenameConfirmed) => {
             shell::daemon_sync::on_worktree_rename_confirmed(app)
         }
-        // Feature 029 FR-020. The same split `RenameConfirmed` establishes: the pure reducer
-        // applies the record, this half makes it durable.
-        Message::Worktree(WorktreeMsg::ClaimRequested(dir_name)) => {
-            shell::daemon_sync::on_worktree_claim_requested(app, dir_name)
-        }
         // Feature 040 (FR-014): opens the held address and changes nothing else; the reducer has
         // nothing to apply, so the message is not passed on.
         Message::Worktree(WorktreeMsg::PullRequestOpenRequested(dir)) => {
@@ -980,9 +975,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             app.core.update(Message::Attach(msg));
             shell::daemon_sync::on_attach_offer_apply(app)
         }
-        Message::Attach(
-            msg @ (AttachMsg::AttachSelected | AttachMsg::AttachAll | AttachMsg::Resume { .. }),
-        ) => {
+        Message::Attach(msg @ (AttachMsg::ResumeAll | AttachMsg::Resume { .. })) => {
             app.core.update(Message::Attach(msg));
             shell::daemon_sync::on_attach_apply(app)
         }

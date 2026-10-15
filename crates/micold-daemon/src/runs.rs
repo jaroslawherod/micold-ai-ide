@@ -272,15 +272,6 @@ fn clean_half_created(
     if !folder.exists() {
         return None;
     }
-    if !catalog
-        .workspace()
-        .user_created_worktrees(project)
-        .contains(dir)
-    {
-        return Some(format!(
-            "the folder {dir} was left because this app did not record creating it"
-        ));
-    }
     // Any record counts, a closed session too: a worktree somebody worked in is not leftover.
     let hosts_session = catalog
         .workspace()
@@ -312,8 +303,6 @@ fn clean_half_created(
     }
     if !remove_worktree_dir(&folder).is_empty() {
         left.push(format!("part of the folder {dir} could not be removed"));
-    } else if let Err(err) = catalog.forget_worktree_provenance(project, dir) {
-        tracing::warn!(project = %project.display(), worktree = %dir, %err, "could not forget the removed worktree's provenance");
     }
     (!left.is_empty()).then(|| left.join("; "))
 }

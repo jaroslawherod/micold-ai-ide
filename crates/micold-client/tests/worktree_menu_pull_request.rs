@@ -3,8 +3,8 @@
 
 use micold_client::ui::worktree_menu_items;
 
-fn labels(dir: &str, included: bool, claimable: bool, has_pull_request: bool) -> Vec<String> {
-    worktree_menu_items(dir, "Feat a", included, claimable, has_pull_request)
+fn labels(dir: &str, included: bool, has_pull_request: bool) -> Vec<String> {
+    worktree_menu_items(dir, "Feat a", included, has_pull_request)
         .into_iter()
         .map(|item| item.label)
         .collect()
@@ -13,14 +13,14 @@ fn labels(dir: &str, included: bool, claimable: bool, has_pull_request: bool) ->
 /// U115 (A23): the entry sits directly above **Delete**, in every shape the menu takes.
 #[test]
 fn open_pull_request_is_directly_above_delete() {
-    for (included, claimable) in [(false, false), (true, false), (false, true), (true, true)] {
-        let items = labels("feat-a", included, claimable, true);
+    for included in [false, true] {
+        let items = labels("feat-a", included, true);
         let delete = items.iter().position(|l| l == "Delete").expect("Delete");
         assert_eq!(delete, items.len() - 1, "Delete stays last: {items:?}");
         assert_eq!(
             items[delete - 1],
             "Open pull request",
-            "included={included} claimable={claimable}: {items:?}"
+            "included={included}: {items:?}"
         );
         assert_eq!(
             items.iter().filter(|l| *l == "Open pull request").count(),
@@ -33,31 +33,30 @@ fn open_pull_request_is_directly_above_delete() {
 #[test]
 fn a_row_without_a_pull_request_has_todays_menu() {
     assert_eq!(
-        labels("feat-a", false, false, false),
+        labels("feat-a", false, false),
         ["Review changes", "Copy name", "Rename", "Delete"]
     );
     assert_eq!(
-        labels("feat-a", true, true, false),
+        labels("feat-a", true, false),
         [
             "Review changes",
             "Copy name",
             "Rename",
             "Stop showing",
-            "Claim as mine",
             "Delete"
         ]
     );
     // And with one, the same entries plus the one.
-    let mut with = labels("feat-a", true, true, true);
+    let mut with = labels("feat-a", true, true);
     with.retain(|l| l != "Open pull request");
-    assert_eq!(with, labels("feat-a", true, true, false));
+    assert_eq!(with, labels("feat-a", true, false));
 }
 
 /// FR-016 (A26): a removable row is a merged row with a pull request, and the menu has no input for
 /// the mark: **Delete** stays the last entry, and the menu is the one a pull request row has.
 #[test]
 fn the_menu_of_a_removable_row_offers_delete_last_and_nothing_to_remove_it_by() {
-    let items = labels("feat-a", false, false, true);
+    let items = labels("feat-a", false, true);
     assert_eq!(items.last().map(String::as_str), Some("Delete"));
     assert!(
         !items.iter().any(|l| l.to_lowercase().contains("remov")),

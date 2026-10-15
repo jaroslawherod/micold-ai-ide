@@ -30,11 +30,6 @@ fn state_with_active_project() -> State {
         availability: Availability::Available,
     });
     state.workspace.active = Some(path.clone());
-    // Both are inside the managed root, so each is listed only with a record saying this app
-    // created it (029 FR-004). These stand for ordinary worktrees made through the app; the
-    // fixtures that withhold a record on purpose are further down this file.
-    state.workspace.record_user_created(&path, "feat-a");
-    state.workspace.record_user_created(&path, "feat-b");
     state.worktree.worktrees = vec![
         worktree("feat-a", WorktreeStatus::Valid),
         worktree("feat-b", WorktreeStatus::Valid),
@@ -134,11 +129,6 @@ fn state_with_named_worktrees(dirs: &[(&str, WorktreeStatus)]) -> State {
         availability: Availability::Available,
     });
     state.workspace.active = Some(path.clone());
-    // Ordinary worktrees, made through the app, so each carries the record that makes it listed
-    // (029 FR-004). The unrecorded case has its own fixtures further down.
-    for (d, _) in dirs {
-        state.workspace.record_user_created(&path, d);
-    }
     state.worktree.worktrees = dirs.iter().map(|(d, s)| worktree(d, *s)).collect();
     state
 }
