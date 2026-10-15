@@ -17,12 +17,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #869 | Design | merged | 4b96bf2b526ca9b42e7dd9993d4b437016f49f18 |
+| #882 | M1 | open | - |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T013 | full | Container settings in the Daemons form | #… | in review |
+| M1 | T001–T013 | full | Container settings in the Daemons form | #882 | in review |
 | M2 | T014–T021 | full | Session service section removed | #… | pending |
 | M3 | T022–T023 | light | Existing settings carry over | #… | pending |
 
