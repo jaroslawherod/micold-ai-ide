@@ -39,8 +39,14 @@ use std::path::{Path, PathBuf};
 
 /// The ways a file reaches the conventional per-user data directory: the two store constructors
 /// (`JsonFileStore` for `projects.json`, `JsonFileSettingsStore` for `settings.json`) and the
-/// `directories` call they and the daemon's log and Pi paths are all built on.
-const RESOLVERS: &[&str] = &["default_location()", "ProjectDirs::from("];
+/// `directories` call they and the daemon's log and Pi paths are all built on, now `paths::*`.
+const RESOLVERS: &[&str] = &[
+    "default_location()",
+    "ProjectDirs::from(",
+    "paths::data_dir(",
+    "paths::data_subdir(",
+    "paths::project_dirs(",
+];
 
 /// The calls that redirect that resolution somewhere private, as a call rather than a mention: a
 /// comment naming the variable is not isolation. `HOME` is required alongside `XDG_DATA_HOME`

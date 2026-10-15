@@ -72,8 +72,7 @@ fn icon_files() -> &'static IconFiles {
     static FILES: OnceLock<IconFiles> = OnceLock::new();
     FILES.get_or_init(|| {
         // The data directory as `shell/startup.rs` resolves it.
-        let dir = directories::ProjectDirs::from("", "", "micold-ai-ide")
-            .map(|dirs| dirs.data_dir().to_path_buf());
+        let dir = micold_core::paths::data_dir();
         icon_files_in(dir.as_deref())
     })
 }

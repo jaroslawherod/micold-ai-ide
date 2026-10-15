@@ -457,8 +457,7 @@ const PI_ACTIVITY_COMPONENT: &str = include_str!("../assets/pi-activity.ts");
 /// an older one left behind and an unchanged file is not touched. It never goes near Pi's own
 /// extension directories, so a `pi` run outside this application does not load it (FR-012a).
 fn materialise_pi_activity_component() -> io::Result<PathBuf> {
-    let dir = directories::ProjectDirs::from("", "", "micold-ai-ide")
-        .map(|dirs| dirs.data_dir().join("pi"))
+    let dir = micold_core::paths::data_subdir("pi")
         .unwrap_or_else(|| std::env::temp_dir().join("micold-daemon-pi"));
     std::fs::create_dir_all(&dir)?;
     let path = dir.join("pi-activity.ts");

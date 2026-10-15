@@ -201,9 +201,7 @@ fn image_target(app: &App) -> Option<ImageTarget> {
     // take it (FR-010); otherwise it is the app's data directory.
     let data_dir = match &sandbox {
         Ok(Some(share)) => share.mounts.state.host.clone(),
-        _ => directories::ProjectDirs::from("", "", "micold-ai-ide")
-            .map(|d| d.data_dir().to_path_buf())
-            .unwrap_or_else(std::env::temp_dir),
+        _ => micold_core::paths::data_dir().unwrap_or_else(std::env::temp_dir),
     };
     let worktree = match &session.location {
         SessionLocation::Worktree(_) => {

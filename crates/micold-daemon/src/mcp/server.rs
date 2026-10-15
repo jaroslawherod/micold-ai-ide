@@ -99,8 +99,7 @@ impl ToolServer {
 /// to the system temporary directory when no data directory resolves — the rule the hook settings
 /// directory follows.
 pub fn default_binding_dir() -> PathBuf {
-    directories::ProjectDirs::from("", "", "micold-ai-ide")
-        .map(|dirs| dirs.data_dir().join("mcp"))
+    micold_core::paths::data_subdir("mcp")
         .unwrap_or_else(|| std::env::temp_dir().join("micold-daemon-mcp"))
 }
 

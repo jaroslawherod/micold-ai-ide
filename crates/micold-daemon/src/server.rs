@@ -192,8 +192,8 @@ pub async fn run() -> io::Result<()> {
 
     // Feature 487: images pasted into sessions are removed with their session. Whatever a crash
     // left behind goes now, before any session starts (FR-014).
-    if let Some(dirs) = directories::ProjectDirs::from("", "", "micold-ai-ide") {
-        state.set_pasted_data_dir(dirs.data_dir().to_path_buf());
+    if let Some(dir) = micold_core::paths::data_dir() {
+        state.set_pasted_data_dir(dir);
     }
     let sweeping = Arc::clone(&state);
     let _ = tokio::task::spawn_blocking(move || sweeping.sweep_pasted_images()).await;

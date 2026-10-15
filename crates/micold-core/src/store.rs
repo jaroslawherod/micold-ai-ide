@@ -768,8 +768,7 @@ impl JsonFileStore {
     /// application tuple MUST stay stable across releases (storage-schema contract).
     /// Returns `None` if no home/data directory can be determined.
     pub fn default_location() -> Option<Self> {
-        directories::ProjectDirs::from("", "", "micold-ai-ide")
-            .map(|dirs| Self::at(dirs.data_dir().join("projects.json")))
+        crate::paths::data_subdir("projects.json").map(Self::at)
     }
 
     /// Path of the temporary file used for the catalog's atomic write.

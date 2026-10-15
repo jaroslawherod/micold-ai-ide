@@ -267,9 +267,7 @@ fn boot() -> (App, Task<Message>) {
     {
         caps = caps.without_local_git();
     }
-    let state_dir = directories::ProjectDirs::from("", "", "micold-ai-ide")
-        .map(|d| d.data_dir().to_path_buf())
-        .unwrap_or_default();
+    let state_dir = micold_core::paths::data_dir().unwrap_or_default();
     let resolved_placement = micold_client::daemon::Placement {
         kind: placement,
         state_dir: state_dir.clone(),
