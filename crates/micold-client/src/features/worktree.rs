@@ -263,12 +263,17 @@ pub fn created(state: &mut crate::app::State, worktree: Worktree) -> Vec<crate::
             .workspace
             .record_user_created(&project, &worktree.dir_name);
     }
-    if !state
-        .worktree
-        .worktrees
-        .iter()
-        .any(|w| w.dir_name == worktree.dir_name)
-    {
+    insert_sorted(state, worktree, |a, b| a.dir_name == b.dir_name)
+}
+
+/// Push `worktree` unless `same` finds it already listed, keep the list sorted by `dir_name`, and
+/// report the list.
+fn insert_sorted(
+    state: &mut crate::app::State,
+    worktree: Worktree,
+    same: fn(&Worktree, &Worktree) -> bool,
+) -> Vec<crate::features::Outcome> {
+    if !state.worktree.worktrees.iter().any(|w| same(w, &worktree)) {
         state.worktree.worktrees.push(worktree);
         state
             .worktree
@@ -348,19 +353,7 @@ pub fn included(
     state: &mut crate::app::State,
     worktree: Worktree,
 ) -> Vec<crate::features::Outcome> {
-    if !state
-        .worktree
-        .worktrees
-        .iter()
-        .any(|w| w.path == worktree.path)
-    {
-        state.worktree.worktrees.push(worktree);
-        state
-            .worktree
-            .worktrees
-            .sort_by(|a, b| a.dir_name.cmp(&b.dir_name));
-    }
-    vec![list_changed(state)]
+    insert_sorted(state, worktree, |a, b| a.path == b.path)
 }
 
 /// An exclude was requested; the menu it was chosen from closes (016 BUG-002).
