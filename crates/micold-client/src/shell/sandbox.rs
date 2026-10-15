@@ -519,8 +519,8 @@ pub fn reread_container(
     held: micold_core::sandbox::runtime::ContainerId,
 ) -> iced::Task<micold_client::app::Message> {
     let plan = plan.clone();
-    iced::Task::future(async move {
-        let found = tokio::task::spawn_blocking(move || {
+    blocking_task(
+        move || {
             let facts = HostFacts::gather(plan.state_dir.clone());
             // A test runs the work an update returns, and must never reach the host's runtime.
             #[cfg(not(test))]
@@ -528,17 +528,37 @@ pub fn reread_container(
             #[cfg(test)]
             let runner = micold_core::sandbox::exec::RecordingRunner::new();
             reread(&plan, &facts, &held, runner)
-        })
-        .await
-        .ok()
-        .flatten();
-        match found {
+        },
+        |found| match found.flatten() {
             Some(found) => {
                 micold_client::app::Message::Sandbox(SandboxMsg::Replaced(Box::new(found)))
             }
             None => micold_client::app::Message::NoOp,
-        }
-    })
+        },
+    )
+}
+
+/// Run `work` on the blocking pool and turn its result into the message `then` names. `then` gets
+/// `None` when the blocking task panicked or was cancelled.
+fn blocking_task<T: Send + 'static>(
+    work: impl FnOnce() -> T + Send + 'static,
+    then: impl FnOnce(Option<T>) -> micold_client::app::Message + Send + 'static,
+) -> iced::Task<micold_client::app::Message> {
+    iced::Task::future(async move { then(tokio::task::spawn_blocking(work).await.ok()) })
+}
+
+/// [`blocking_task`] over the plan's own container runtime and container name.
+fn runtime_task<T: Send + 'static>(
+    plan: &BootPlan,
+    work: impl FnOnce(CliRuntime<SystemRunner>, &str) -> T + Send + 'static,
+    then: impl FnOnce(Option<T>) -> micold_client::app::Message + Send + 'static,
+) -> iced::Task<micold_client::app::Message> {
+    let runtime = plan.profile.runtime;
+    let container_name = plan.container_name.clone();
+    blocking_task(
+        move || work(CliRuntime::new(runtime, SystemRunner), &container_name),
+        then,
+    )
 }
 
 /// Everything a bring-up needs that the application has to remember in order to run it *again*.
@@ -848,25 +868,22 @@ fn finished(
 /// *not* an answer: reporting the sandbox lost because `docker` was briefly busy would replace a
 /// transient reconnect with a banner and a restart the user did not need.
 pub fn check_alive(plan: &BootPlan) -> iced::Task<micold_client::app::Message> {
-    let runtime = plan.profile.runtime;
-    let container_name = plan.container_name.clone();
-    iced::Task::future(async move {
-        let gone = tokio::task::spawn_blocking(move || {
+    runtime_task(
+        plan,
+        |rt, name| {
             use micold_core::sandbox::runtime::ContainerRuntime;
-            CliRuntime::new(runtime, SystemRunner)
-                .find(&container_name)
+            rt.find(name)
                 .map(|found| found.is_none_or(|facts| !facts.running))
                 .unwrap_or(false)
-        })
-        .await
-        .unwrap_or(false);
-
-        if gone {
-            micold_client::app::Message::Sandbox(SandboxMsg::Lost)
-        } else {
-            micold_client::app::Message::NoOp
-        }
-    })
+        },
+        |gone| {
+            if gone.unwrap_or(false) {
+                micold_client::app::Message::Sandbox(SandboxMsg::Lost)
+            } else {
+                micold_client::app::Message::NoOp
+            }
+        },
+    )
 }
 
 /// Read the service's own log out of the container (FR-038, US6 scenario 6).
@@ -879,22 +896,20 @@ pub fn check_alive(plan: &BootPlan) -> iced::Task<micold_client::app::Message> {
 /// and it has said nothing" is itself the diagnosis, and reporting it as an error would send the
 /// user looking for a problem with the log rather than with the service.
 pub fn diagnostics(plan: &BootPlan) -> iced::Task<micold_client::app::Message> {
-    let runtime = plan.profile.runtime;
-    let container_name = plan.container_name.clone();
-    iced::Task::future(async move {
-        let lines = tokio::task::spawn_blocking(move || {
+    runtime_task(
+        plan,
+        |rt, name| {
             use micold_core::sandbox::runtime::ContainerRuntime;
-            let rt = CliRuntime::new(runtime, SystemRunner);
-            let facts = rt.find(&container_name).ok().flatten()?;
+            let facts = rt.find(name).ok().flatten()?;
             rt.logs(&micold_core::sandbox::runtime::ContainerId(facts.id), 50)
                 .ok()
-        })
-        .await
-        .ok()
-        .flatten()
-        .unwrap_or_default();
-        micold_client::app::Message::Sandbox(SandboxMsg::Diagnostics(lines))
-    })
+        },
+        |lines| {
+            micold_client::app::Message::Sandbox(SandboxMsg::Diagnostics(
+                lines.flatten().unwrap_or_default(),
+            ))
+        },
+    )
 }
 
 /// Stop the sandbox and remove its container (US6 scenario 4, FR-036).
@@ -908,21 +923,18 @@ pub fn diagnostics(plan: &BootPlan) -> iced::Task<micold_client::app::Message> {
 /// design, because the sessions inside it are meant to outlive the window that opened them — which
 /// is the whole reason the service is a separate process in the first place.
 pub fn stop(plan: &BootPlan) -> iced::Task<micold_client::app::Message> {
-    let runtime = plan.profile.runtime;
-    let container_name = plan.container_name.clone();
-    iced::Task::future(async move {
-        let _ = tokio::task::spawn_blocking(move || {
+    runtime_task(
+        plan,
+        |rt, name| {
             use micold_core::sandbox::runtime::ContainerRuntime;
-            let rt = CliRuntime::new(runtime, SystemRunner);
-            if let Ok(Some(facts)) = rt.find(&container_name) {
+            if let Ok(Some(facts)) = rt.find(name) {
                 let id = micold_core::sandbox::runtime::ContainerId(facts.id);
                 let _ = rt.stop(&id);
                 let _ = rt.remove(&id);
             }
-        })
-        .await;
-        micold_client::app::Message::Sandbox(SandboxMsg::Lost)
-    })
+        },
+        |_| micold_client::app::Message::Sandbox(SandboxMsg::Lost),
+    )
 }
 
 /// This feature's entry point: one arm in `main.rs` routes here (feature 028, contract M2).
