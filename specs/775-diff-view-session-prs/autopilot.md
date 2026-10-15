@@ -20,7 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #825 | M1: PR list in the Changes pane | merged | 057d71e68f57170dda7af54bdc254cab626d7d47 |
 | #832 | M2: select a PR and read its diff | merged | bd39d5c1c43e92ff1cdd845510a2779ad37eb743 |
 | #836 | M3: PR list refresh and stale mark | merged | 4ec233b86a90911e541a641461b0dcceb7db041a |
-| (close) | Close: tdd-verify, test-strength fixes, quickstart results, spec closed | open | — |
+| #861 | Close: tdd-verify, test-strength fixes, quickstart results, spec closed | open | — |
 
 ## Milestones
 
@@ -56,7 +56,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 review B (sonnet) | 1 | da4c3766:9fb42b3b | CLEAN |
 | Close converge | 1 | - | no unbuilt behaviour; visual passes unticked |
 | Close tdd-verify | 1 | - | FAIL (no red evidence, unrepairable); 10 real mutation survivors (findings 1-9) fixed with tests R001-R005 |
-| Close review (sonnet) | 1 | a6efa86c:4ec233b8 | see below |
+| Close review (sonnet) | 1 | a6efa86c:4ec233b8 | CHANGES: 2 MAJOR (R006 tick, unproven gate claim), 3 MINOR; fixed, prose only |
 
 ## Declined review findings
 
