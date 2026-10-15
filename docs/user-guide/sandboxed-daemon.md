@@ -47,6 +47,20 @@ Add, edit, start, stop and remove daemons in **Settings, Daemons** ([the
 section](settings.md#daemons)). Names, container names and ports must be unique, and there can be
 only one host daemon; the form refuses a duplicate and names the field.
 
+**Container settings** sit in the same form, under the fields they apply to, for a container daemon:
+
+- **Container runtime**: Docker (default) or Podman.
+- **Image**: the image reference, or an image archive path to import.
+- **Shares, network and AI CLI sign-in**: what the container can see and reach, with the credential
+  path it shares; see [What the container can see](#what-the-container-can-see).
+- **Limits**: CPU, memory, process count and writable storage. Leave a field empty for no limit;
+  an invalid value is refused and the field is named. See [Limits](#limits).
+- **Survive logout**: keep the container running after you log out.
+
+A host daemon shows only *Survive logout*, and an SSH daemon none of these: they have no container
+here. The Daemons form and **Settings → Session service** edit the same values, so a change in one
+shows in the other.
+
 **Removing a daemon** asks first and states how many worktrees are bound to it and how many sessions
 are running on it. Confirming stops those sessions and removes the entry. Its worktrees are kept
 and show `no daemon` until you bind each one again with **Bind to daemon...** in its right-click
