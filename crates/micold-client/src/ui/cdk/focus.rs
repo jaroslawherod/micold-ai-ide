@@ -10,7 +10,7 @@ use iced::advanced::widget::{Id, Operation};
 use iced::Rectangle;
 
 /// What to do to every focusable under the traversed widget.
-pub enum FocusOp {
+pub(crate) enum FocusOp {
     /// Whether the control holds the keyboard — asked of the control, not guessed from the pointer.
     ///
     /// A field cannot infer this: a press in its padding lands on the container and not on the
