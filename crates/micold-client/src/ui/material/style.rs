@@ -15,6 +15,17 @@ pub fn color(c: Rgb) -> Color {
     Color::from_rgb8(c.r, c.g, c.b)
 }
 
+/// An iced color as the token type: both are 8-bit sRGB, so this changes representation, not value
+/// (alpha is dropped). The inverse of [`color`].
+pub fn to_rgb(c: Color) -> Rgb {
+    let q = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
+    Rgb {
+        r: q(c.r),
+        g: q(c.g),
+        b: q(c.b),
+    }
+}
+
 /// The same color at a given alpha (for state layers and disabled states).
 fn alpha(c: Color, a: f32) -> Color {
     Color { a, ..c }

@@ -77,7 +77,7 @@ impl<'a, M: 'a> Divider<'a, M> {
 impl<'a, M: 'a> From<Divider<'a, M>> for Element<'a, M> {
     fn from(d: Divider<'a, M>) -> Self {
         let color = match d.tint {
-            Some(rgb) => iced::Color::from_rgb8(rgb.r, rgb.g, rgb.b),
+            Some(rgb) => style::color(rgb),
             None => style::separator(d.roles),
         };
 
