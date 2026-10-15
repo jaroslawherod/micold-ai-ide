@@ -281,6 +281,14 @@ pub fn send_op(app: &mut App, op: PendingOp, build: impl FnOnce(u64) -> ClientMs
     send_op_bound(app, binding, op, build);
 }
 
+/// [`send_op`] for an op that names the active project: `build` gets it. A no-op with no active
+/// project, as the guard it replaces was at each caller.
+fn project_op(app: &mut App, op: PendingOp, build: impl FnOnce(u64, PathBuf) -> ClientMsg) {
+    if let Some(project) = app.core.workspace.active.clone() {
+        send_op(app, op, move |req| build(req, project));
+    }
+}
+
 /// [`send_op`] for an op bound by `binding`. A daemon that is down, or no daemon, notifies the user
 /// with the route's message and sends nothing (contract rule P-2).
 pub fn send_op_bound(
@@ -2327,17 +2335,15 @@ pub fn on_worktree_claim_requested(app: &mut App, dir_name: String) -> Task<Mess
         .update(Message::Worktree(WorktreeMsg::ClaimRequested(
             dir_name.clone(),
         )));
-    if let Some(project) = app.core.workspace.active.clone() {
-        send_op(
-            app,
-            PendingOp::WorktreeClaim(dir_name.clone()),
-            move |req| ClientMsg::WorktreeClaim {
-                req,
-                project,
-                dir_name,
-            },
-        );
-    }
+    project_op(
+        app,
+        PendingOp::WorktreeClaim(dir_name.clone()),
+        move |req, project| ClientMsg::WorktreeClaim {
+            req,
+            project,
+            dir_name,
+        },
+    );
     Task::none()
 }
 
@@ -2857,16 +2863,16 @@ pub fn on_terminal_resized(app: &mut App, cols: u16, rows: u16) -> Task<Message>
 /// the worktree stays exactly where it is. The reply carries the row as the daemon's own discovery
 /// sees it, so the client renders that rather than deriving a second answer to the same question.
 pub fn on_worktree_include_requested(app: &mut App, path: PathBuf) -> Task<Message> {
-    if let Some(project) = app.core.workspace.active.clone() {
-        let p = path.clone();
-        send_op(app, PendingOp::WorktreeInclude(path), move |req| {
-            ClientMsg::WorktreeInclude {
-                req,
-                project,
-                path: p,
-            }
-        });
-    }
+    let p = path.clone();
+    project_op(
+        app,
+        PendingOp::WorktreeInclude(path),
+        move |req, project| ClientMsg::WorktreeInclude {
+            req,
+            project,
+            path: p,
+        },
+    );
     Task::none()
 }
 
@@ -3047,15 +3053,17 @@ pub fn on_worktree_exclude_requested(app: &mut App, dir: String) -> Task<Message
         .iter()
         .find(|w| w.dir_name == dir && w.included)
         .map(|w| w.path.clone());
-    if let (Some(path), Some(project)) = (path, app.core.workspace.active.clone()) {
+    if let Some(path) = path {
         let p = path.clone();
-        send_op(app, PendingOp::WorktreeExclude(path), move |req| {
-            ClientMsg::WorktreeExclude {
+        project_op(
+            app,
+            PendingOp::WorktreeExclude(path),
+            move |req, project| ClientMsg::WorktreeExclude {
                 req,
                 project,
                 path: p,
-            }
-        });
+            },
+        );
     }
     app.core
         .update(Message::Worktree(WorktreeMsg::ExcludeRequested(dir)));
