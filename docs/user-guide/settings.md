@@ -623,7 +623,7 @@ is stored**. Leave it blank to keep the stored token, or type a new one to repla
 
 Edit any field and press **Save**. **Remove connection** deletes the site, project key, email and
 token when you press **Save**. Turning the switch off while the open project has a connection asks
-**Keep the Jira connection for this project?** — **Keep** leaves it stored, so turning the switch on
+**Keep the Jira connection for <project folder>?** — **Keep** leaves it stored, so turning the switch on
 again finds it, and **Remove** deletes it as above.
 
 ### Where the token is stored
