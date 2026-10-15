@@ -452,8 +452,8 @@ mod sync_legacy_daemon_tests {
 
     use super::*;
     use crate::daemons::DaemonRuntime;
-    use crate::ssh::SshSettings;
     use crate::sandbox::runtime::RuntimeKind;
+    use crate::ssh::SshSettings;
 
     fn with_runtime(runtime: DaemonRuntime) -> Settings {
         let mut s = Settings::default();
@@ -466,11 +466,13 @@ mod sync_legacy_daemon_tests {
         let mut profile = SandboxProfile::default();
         profile.runtime = RuntimeKind::Podman;
         profile.survive_logout = true;
-        let mut s = with_runtime(DaemonRuntime::Container(crate::daemons::ContainerSettings {
-            profile: profile.clone(),
-            container_name: "c".into(),
-            port: 1234,
-        }));
+        let mut s = with_runtime(DaemonRuntime::Container(
+            crate::daemons::ContainerSettings {
+                profile: profile.clone(),
+                container_name: "c".into(),
+                port: 1234,
+            },
+        ));
         s.daemon.placement = PlacementKind::HostProcess;
         s.sync_legacy_daemon();
         assert_eq!(s.daemon.placement, PlacementKind::LocalSandbox);

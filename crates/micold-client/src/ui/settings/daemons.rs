@@ -16,16 +16,16 @@ use crate::app::Message;
 use crate::features::daemons::{
     DaemonDetails, Draft, DraftRuntime, FormError, Msg as DaemonsMsg, State, ViewModel,
 };
-use crate::features::window::FieldId;
 use crate::features::settings::DaemonDraft;
+use crate::features::window::FieldId;
 use crate::ui::focus::TrackFocus;
-use crate::ui::settings::container_fields::{self, ContainerView, FieldErrors, Surface};
-use micold_core::sandbox::placement::PlacementKind;
 use crate::ui::material::{Button, Checkbox, Select, Tag, TextField};
+use crate::ui::settings::container_fields::{self, ContainerView, FieldErrors, Surface};
 use crate::ui::settings::{caution, group, name_of, note, page, Named};
 use iced::widget::{column, row};
 use iced::{Element, Length};
 use micold_core::daemons::{DaemonId, DaemonState, DaemonView};
+use micold_core::sandbox::placement::PlacementKind;
 use micold_core::tokens::{spacing, Roles};
 
 const RUNTIMES: &[Named<DraftRuntime>] = &[

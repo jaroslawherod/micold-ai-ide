@@ -313,7 +313,10 @@ use micold_core::sandbox::image::ImageSourceKind;
 use micold_core::sandbox::runtime::RuntimeKind;
 use micold_core::sandbox::{CredentialShare, NetworkPosture};
 
-fn profile_of(w: &World, id: micold_core::daemons::DaemonId) -> micold_core::sandbox::SandboxProfile {
+fn profile_of(
+    w: &World,
+    id: micold_core::daemons::DaemonId,
+) -> micold_core::sandbox::SandboxProfile {
     match &w.registry.get(id).unwrap().runtime {
         DaemonRuntime::Container(c) => c.profile.clone(),
         other => panic!("not a container: {other:?}"),
@@ -349,7 +352,10 @@ fn profile_fields_round_trip_through_save() {
     let p = profile_of(&w, boxed);
     assert_eq!(p.runtime, RuntimeKind::Podman);
     assert_eq!(p.image.kind, ImageSourceKind::ImportedFile);
-    assert_eq!(p.image.path.as_deref(), Some(std::path::Path::new("/tmp/image.tar")));
+    assert_eq!(
+        p.image.path.as_deref(),
+        Some(std::path::Path::new("/tmp/image.tar"))
+    );
     assert!(p.credentials.contains(&CredentialShare::GitConfig));
     assert_eq!(p.network, NetworkPosture::NoOutbound);
     assert_eq!(p.budget.cpus_milli.map(|c| c.0), Some(1500));
@@ -360,7 +366,12 @@ fn profile_fields_round_trip_through_save() {
     // Reopened, the form shows what was stored.
     let d = daemons::begin_edit(&mut state, &w.model(), boxed).unwrap();
     assert_eq!(
-        (d.cpus.as_str(), d.memory_mib.as_str(), d.pids.as_str(), d.storage_mib.as_str()),
+        (
+            d.cpus.as_str(),
+            d.memory_mib.as_str(),
+            d.pids.as_str(),
+            d.storage_mib.as_str()
+        ),
         ("1.5", "2048", "600", "4096")
     );
     assert_eq!(d.image_path, "/tmp/image.tar");
@@ -412,7 +423,10 @@ fn two_daemons_edit_independently_and_drafts_are_kept_apart() {
     send(&mut state, &mut w, Msg::CpuLimitEdited("2".into()));
     let d = daemons::begin_edit(&mut state, &w.model(), three).unwrap();
     assert_eq!(d.cpus, "");
-    assert_eq!(d.pids, three_before.map(|p| p.to_string()).unwrap_or_default());
+    assert_eq!(
+        d.pids,
+        three_before.map(|p| p.to_string()).unwrap_or_default()
+    );
     let _ = host;
 
     // Renaming keeps the profile; removing discards it.
@@ -438,7 +452,11 @@ fn a_running_daemon_asks_before_new_container_settings_apply() {
     let out = send(&mut state, &mut w, Msg::Saved);
     assert!(out.is_empty());
     assert!(state.prompt().is_some(), "FR-004, FR-010");
-    assert_eq!(profile_of(&w, boxed).budget.pids, pids_before, "not applied yet");
+    assert_eq!(
+        profile_of(&w, boxed).budget.pids,
+        pids_before,
+        "not applied yet"
+    );
     send(&mut state, &mut w, Msg::RemovalConfirmed);
     assert_eq!(profile_of(&w, boxed).budget.pids, Some(300));
 }
