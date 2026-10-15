@@ -133,3 +133,31 @@ fn a_stored_connection_is_re_validated_on_read() {
     )
     .is_err());
 }
+
+#[test]
+fn an_api_token_refuses_blank_input_and_redacts_in_debug() {
+    use micold_core::jira::{ApiToken, TOKEN_REFUSED};
+    for blank in ["", "   ", "\t\n"] {
+        let problem = ApiToken::parse(blank).expect_err("blank refused");
+        assert_eq!(problem.field, JiraField::Token);
+        assert_eq!(problem.reason, TOKEN_REFUSED);
+    }
+    let token = ApiToken::parse("  secret-value ").unwrap();
+    assert_eq!(token.expose(), "secret-value");
+    assert_eq!(format!("{token:?}"), "ApiToken(<redacted>)");
+}
+
+#[test]
+fn the_token_file_is_named_after_the_project_in_the_jira_directory() {
+    use micold_core::store::{jira_token_dir, jira_token_path, project_id_of};
+    use std::path::Path;
+    let project = Path::new("/work/app");
+    let dir = Path::new("/data/jira");
+    assert_eq!(
+        jira_token_path(dir, project),
+        dir.join(format!("{}.token", project_id_of(project)))
+    );
+    if let Some(data) = micold_core::paths::data_dir() {
+        assert_eq!(jira_token_dir(), Some(data.join("jira")));
+    }
+}

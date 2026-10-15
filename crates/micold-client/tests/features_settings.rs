@@ -2092,7 +2092,7 @@ mod jira_switch {
             .as_mut()
             .unwrap()
             .jira
-            .follow(Some(project.clone()), &connections);
+            .follow(Some(project.clone()), &connections, false);
         assert_eq!(
             draft(&state).jira.status().as_deref(),
             Some("Enabled. This project has no Jira connection yet.")
@@ -2108,7 +2108,7 @@ mod jira_switch {
             .as_mut()
             .unwrap()
             .jira
-            .follow(Some(project), &connections);
+            .follow(Some(project), &connections, false);
         let status = draft(&state).jira.status().unwrap();
         assert!(status.contains("https://acme.atlassian.net"), "{status}");
         assert!(status.contains("ABC"), "{status}");
@@ -2129,5 +2129,196 @@ mod jira_switch {
     #[test]
     fn the_section_is_titled_jira() {
         assert_eq!(SettingsSection::Jira.label(), "Jira");
+    }
+}
+
+// --- Feature 533 US3: connect, change and remove (T023) ----------------------------------------
+
+mod jira_connection_form {
+    use micold_client::app::State;
+    use micold_client::features::settings::{
+        update, KeepOrRemove, Msg, SettingsDraft, SettingsSection, TokenInput,
+    };
+    use micold_client::features::window::FieldId;
+    use micold_core::jira::{ApiToken, ConnectionAction, JiraConnection};
+    use micold_core::settings::Settings;
+    use std::collections::BTreeMap;
+    use std::path::PathBuf;
+
+    const SENTINEL: &str = "sentinel-token-value-9f3a";
+
+    fn connection() -> JiraConnection {
+        JiraConnection::parse("https://acme.atlassian.net", "ABC", "me@acme.com").unwrap()
+    }
+
+    /// Settings open on `/work/app` with the switch `enabled`; a connection and token when asked.
+    fn open(enabled: bool, stored: bool) -> State {
+        let settings = Settings {
+            jira_enabled: enabled,
+            ..Settings::default()
+        };
+        let mut draft = SettingsDraft::from_settings(&settings);
+        let mut connections = BTreeMap::new();
+        if stored {
+            connections.insert("/work/app".to_owned(), connection());
+        }
+        draft
+            .jira
+            .follow(Some(PathBuf::from("/work/app")), &connections, stored);
+        let mut state = State::default();
+        state.settings.settings_draft = Some(draft);
+        state
+    }
+
+    fn draft(state: &State) -> &SettingsDraft {
+        state.settings.settings_draft.as_ref().unwrap()
+    }
+
+    fn type_all(state: &mut State, site: &str, key: &str, email: &str, token: &str) {
+        update(state, Msg::JiraSiteChanged(site.to_owned()));
+        update(state, Msg::JiraKeyChanged(key.to_owned()));
+        update(state, Msg::JiraEmailChanged(email.to_owned()));
+        update(state, Msg::JiraTokenChanged(TokenInput::new(token.to_owned())));
+    }
+
+    #[test]
+    fn a_complete_form_saves_the_connection_and_the_new_token() {
+        let mut state = open(true, false);
+        type_all(&mut state, "https://acme.atlassian.net/", "abc", "me@acme.com", SENTINEL);
+        let valid = draft(&state).validate().unwrap();
+        assert_eq!(
+            valid.jira,
+            ConnectionAction::Save {
+                project: PathBuf::from("/work/app"),
+                connection: connection(),
+                token: Some(ApiToken::parse(SENTINEL).unwrap()),
+            }
+        );
+    }
+
+    /// US3 AS5: each refused field is marked, in the Jira section, and nothing is stored.
+    #[test]
+    fn a_refused_field_is_marked_and_nothing_is_saved() {
+        let cases = [
+            ("http://acme.atlassian.net", "ABC", "me@acme.com", SENTINEL, FieldId::SettingsJiraSite),
+            ("https://acme.atlassian.net", "1", "me@acme.com", SENTINEL, FieldId::SettingsJiraKey),
+            ("https://acme.atlassian.net", "ABC", "me", SENTINEL, FieldId::SettingsJiraEmail),
+            ("https://acme.atlassian.net", "ABC", "me@acme.com", "   ", FieldId::SettingsJiraToken),
+        ];
+        for (site, key, email, token, field) in cases {
+            let mut state = open(true, false);
+            type_all(&mut state, site, key, email, token);
+            let error = draft(&state).validate().unwrap_err();
+            assert_eq!(error.field, field, "{site} {key} {email}");
+            assert_eq!(error.section, SettingsSection::Jira);
+        }
+    }
+
+    /// A blank token keeps the stored one; the connection is unchanged, so nothing is saved.
+    #[test]
+    fn a_blank_token_keeps_the_stored_one() {
+        let mut state = open(true, true);
+        update(&mut state, Msg::JiraKeyChanged("xyz".to_owned()));
+        let valid = draft(&state).validate().unwrap();
+        let ConnectionAction::Save { token, connection, .. } = valid.jira else {
+            panic!("a changed key is saved");
+        };
+        assert_eq!(token, None);
+        assert_eq!(connection.project_key.as_str(), "XYZ");
+
+        let untouched = open(true, true);
+        assert_eq!(
+            draft(&untouched).validate().unwrap().jira,
+            ConnectionAction::Keep
+        );
+    }
+
+    #[test]
+    fn a_stored_connection_prefills_the_form_and_shows_a_token_is_stored() {
+        let state = open(true, true);
+        let jira = &draft(&state).jira;
+        assert_eq!(jira.site, "https://acme.atlassian.net");
+        assert_eq!(jira.project_key, "ABC");
+        assert_eq!(jira.email, "me@acme.com");
+        assert!(jira.token_stored);
+        assert_eq!(jira.token.as_str(), "", "the token itself is never held");
+    }
+
+    /// US3 AS3, FR-010: Remove connection deletes on save.
+    #[test]
+    fn remove_connection_removes_on_save() {
+        let mut state = open(true, true);
+        update(&mut state, Msg::JiraRemoveRequested);
+        assert!(draft(&state).jira.remove_requested);
+        assert_eq!(
+            draft(&state).validate().unwrap().jira,
+            ConnectionAction::Remove {
+                project: PathBuf::from("/work/app")
+            }
+        );
+    }
+
+    /// US2 AS5, US3 AS4: switching off over a stored connection asks, and applies nothing yet.
+    #[test]
+    fn switching_off_over_a_connection_raises_the_question() {
+        let mut state = open(true, true);
+        update(&mut state, Msg::JiraEnabledToggled(false));
+        assert!(draft(&state).needs_keep_or_remove());
+        let draft_mut = state.settings.settings_draft.as_mut().unwrap();
+        draft_mut.raise_keep_or_remove();
+        assert!(draft(&state).jira.prompt.is_some());
+        assert_eq!(draft(&state).section, SettingsSection::Jira);
+    }
+
+    #[test]
+    fn keep_leaves_it_stored_and_does_not_ask_again() {
+        let mut state = open(true, true);
+        update(&mut state, Msg::JiraEnabledToggled(false));
+        state.settings.settings_draft.as_mut().unwrap().raise_keep_or_remove();
+        update(&mut state, Msg::JiraKeepOrRemoveChosen(KeepOrRemove::Keep));
+        assert!(!draft(&state).needs_keep_or_remove());
+        assert_eq!(draft(&state).jira.prompt, None);
+        assert_eq!(draft(&state).validate().unwrap().jira, ConnectionAction::Keep);
+    }
+
+    #[test]
+    fn remove_deletes_it_with_the_switch_off() {
+        let mut state = open(true, true);
+        update(&mut state, Msg::JiraEnabledToggled(false));
+        update(&mut state, Msg::JiraKeepOrRemoveChosen(KeepOrRemove::Remove));
+        assert!(!draft(&state).needs_keep_or_remove());
+        let valid = draft(&state).validate().unwrap();
+        assert!(!valid.jira_enabled);
+        assert_eq!(
+            valid.jira,
+            ConnectionAction::Remove {
+                project: PathBuf::from("/work/app")
+            }
+        );
+    }
+
+    #[test]
+    fn with_no_connection_switching_off_asks_nothing() {
+        let mut state = open(true, false);
+        update(&mut state, Msg::JiraEnabledToggled(false));
+        assert!(!draft(&state).needs_keep_or_remove());
+    }
+
+    /// FR-009: the typed token never shows in `Debug`.
+    #[test]
+    fn the_token_message_and_draft_redact_in_debug() {
+        let mut state = open(true, false);
+        type_all(&mut state, "https://acme.atlassian.net", "ABC", "me@acme.com", SENTINEL);
+        let message = Msg::JiraTokenChanged(TokenInput::new(SENTINEL.to_owned()));
+        assert!(!format!("{message:?}").contains(SENTINEL));
+        assert!(!format!("{:?}", draft(&state)).contains(SENTINEL));
+        let valid = draft(&state).validate().unwrap();
+        assert!(!format!("{valid:?}").contains(SENTINEL));
+    }
+
+    #[test]
+    fn no_connection_is_required_while_the_form_is_empty() {
+        let state = open(true, false);
+        assert_eq!(draft(&state).validate().unwrap().jira, ConnectionAction::Keep);
     }
 }

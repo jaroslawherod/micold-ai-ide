@@ -995,9 +995,12 @@ fn refresh_open_settings(app: &mut App) {
         .workspace
         .active_project()
         .map(|project| project.path.clone());
+    let token_stored = crate::shell::persist::jira_token_stored(app, project.as_deref());
     if let Some(draft) = app.core.settings.settings_draft.as_mut() {
         draft.refresh_untouched(&now);
-        draft.jira.follow(project, &now.jira_connections);
+        draft
+            .jira
+            .follow(project, &now.jira_connections, token_stored);
     }
 }
 

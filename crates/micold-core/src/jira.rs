@@ -252,6 +252,60 @@ impl JiraConnection {
     }
 }
 
+/// An Atlassian API token. Never serialised, never displayed: `Debug` redacts it and
+/// [`ApiToken::expose`] is the one way to the text, used only where a request is built
+/// (FR-009, contracts/jira-connection.md §3).
+#[derive(Clone, PartialEq, Eq)]
+pub struct ApiToken(String);
+
+impl ApiToken {
+    /// Parse a token: trimmed, and not empty (FR-006).
+    pub fn parse(input: &str) -> Result<Self, FieldProblem> {
+        let token = input.trim();
+        if token.is_empty() {
+            Err(FieldProblem {
+                field: JiraField::Token,
+                reason: TOKEN_REFUSED,
+            })
+        } else {
+            Ok(Self(token.to_owned()))
+        }
+    }
+
+    /// The token text, for the one place that builds a request or writes the token file.
+    pub fn expose(&self) -> &str {
+        &self.0
+    }
+}
+
+impl std::fmt::Debug for ApiToken {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("ApiToken(<redacted>)")
+    }
+}
+
+/// What saving the Settings form does to one project's connection (feature 533, US3).
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub enum ConnectionAction {
+    /// The form leaves the connection as it is.
+    #[default]
+    Keep,
+    /// Store this connection, and the token when a new one was typed.
+    Save {
+        /// The project the connection belongs to.
+        project: std::path::PathBuf,
+        /// The validated connection.
+        connection: JiraConnection,
+        /// A newly typed token; `None` keeps the stored one.
+        token: Option<ApiToken>,
+    },
+    /// Delete the project's connection and its stored token.
+    Remove {
+        /// The project whose connection goes.
+        project: std::path::PathBuf,
+    },
+}
+
 /// The connections that still parse, entry by entry; a value that is not a map reads as empty.
 /// One bad hand edit must not send the whole document to `.bak`.
 pub(crate) fn known_connections<'de, D>(

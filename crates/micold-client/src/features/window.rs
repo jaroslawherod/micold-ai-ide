@@ -147,6 +147,14 @@ pub enum FieldId {
     SettingsPrStatus,
     /// Settings -> Jira: the **Enable Jira integration** switch (feature 533).
     SettingsJiraEnabled,
+    /// Settings -> Jira: **Site URL** (feature 533).
+    SettingsJiraSite,
+    /// Settings -> Jira: **Project key**.
+    SettingsJiraKey,
+    /// Settings -> Jira: **Account email**.
+    SettingsJiraEmail,
+    /// Settings -> Jira: **API token**.
+    SettingsJiraToken,
     /// Settings → Daemons: the form's name field (feature 491).
     DaemonName,
     /// Settings → Daemons: the form's container name field (feature 491).

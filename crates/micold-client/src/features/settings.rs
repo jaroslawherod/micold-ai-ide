@@ -448,11 +448,49 @@ impl Default for GithubDraft {
     }
 }
 
-/// The Jira section (feature 533, FR-002, FR-004).
+/// An API token as typed. Its `Debug` redacts, so a draft, a message or a log line holding it
+/// never shows it (FR-009).
+#[derive(Clone, Default, PartialEq, Eq)]
+pub struct TokenInput(String);
+
+impl TokenInput {
+    /// What the user typed.
+    pub fn new(text: String) -> Self {
+        Self(text)
+    }
+
+    /// The text, for the masked field and for validation.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl std::fmt::Debug for TokenInput {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("TokenInput(<redacted>)")
+    }
+}
+
+/// The question raised when the switch is turned off over a stored connection (US2 AS5, US3 AS4).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KeepOrRemovePrompt {
+    /// The project whose connection is at stake; the prompt names it.
+    pub project: std::path::PathBuf,
+}
+
+/// The answer to a [`KeepOrRemovePrompt`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum KeepOrRemove {
+    /// Leave the connection and its token stored.
+    Keep,
+    /// Delete them.
+    Remove,
+}
+
+/// The Jira section (feature 533, FR-002, FR-004, FR-006, FR-010).
 ///
-/// Holds the switch and, for the status line, the open project and the connection stored for it.
-/// With the switch off the page renders only the switch and its description (FR-001); the
-/// connection form arrives with the connect milestone.
+/// Holds the switch, the open project and the connection stored for it, and the connection form
+/// as typed. With the switch off the page renders only the switch and its description (FR-001).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct JiraDraft {
     /// The switch **Enable Jira integration**. Off until the user turns it on (FR-002).
@@ -461,6 +499,22 @@ pub struct JiraDraft {
     pub project: Option<std::path::PathBuf>,
     /// The connection stored for [`Self::project`], when there is one.
     pub connection: Option<micold_core::jira::JiraConnection>,
+    /// **Site URL**, as typed.
+    pub site: String,
+    /// **Project key**, as typed.
+    pub project_key: String,
+    /// **Account email**, as typed.
+    pub email: String,
+    /// **API token**, as typed; blank keeps a stored one.
+    pub token: TokenInput,
+    /// Whether a token file exists for the project (FR-010); the token itself is never held.
+    pub token_stored: bool,
+    /// **Remove connection** was pressed; the save deletes the connection and its token.
+    pub remove_requested: bool,
+    /// Keep-or-remove question awaiting an answer; nothing is applied meanwhile.
+    pub prompt: Option<KeepOrRemovePrompt>,
+    /// The user answered **Keep** to the question, so the save does not raise it again.
+    pub kept: bool,
 }
 
 impl JiraDraft {
@@ -472,24 +526,84 @@ impl JiraDraft {
         Some(match (&self.project, &self.connection) {
             (None, _) => "Open a project to connect it to Jira.".to_owned(),
             (Some(_), None) => "Enabled. This project has no Jira connection yet.".to_owned(),
-            (Some(_), Some(c)) => format!(
-                "Enabled. Connected to {} (project {}).",
-                c.site, c.project_key
-            ),
+            (Some(_), Some(c)) => {
+                format!("Enabled. Connected to {} - {}.", c.site, c.project_key)
+            }
         })
     }
 
-    /// Point the status at `project` and the connection `connections` holds for it.
+    fn typed(&self) -> (&str, &str, &str) {
+        (&self.site, &self.project_key, &self.email)
+    }
+
+    fn fill_from(&mut self, connection: Option<&micold_core::jira::JiraConnection>) {
+        let (site, key, email) = connection
+            .map(|c| {
+                (
+                    c.site.to_string(),
+                    c.project_key.to_string(),
+                    c.email.to_string(),
+                )
+            })
+            .unwrap_or_default();
+        self.site = site;
+        self.project_key = key;
+        self.email = email;
+        self.token = TokenInput::default();
+    }
+
+    /// Point the form at `project` and the connection `connections` holds for it; `token_stored`
+    /// is the probe's answer for that project. Typed text is kept unless the form still shows
+    /// the previous connection untouched.
     pub fn follow(
         &mut self,
         project: Option<std::path::PathBuf>,
         connections: &std::collections::BTreeMap<String, micold_core::jira::JiraConnection>,
+        token_stored: bool,
     ) {
-        self.connection = project
+        let connection = project
             .as_deref()
             .and_then(|p| connections.get(&micold_core::jira::connection_key(p)))
             .cloned();
+        let previous = self.connection.as_ref().map(|c| {
+            (
+                c.site.to_string(),
+                c.project_key.to_string(),
+                c.email.to_string(),
+            )
+        });
+        let untouched = match previous {
+            Some((site, key, email)) => {
+                self.typed() == (site.as_str(), key.as_str(), email.as_str())
+                    && self.token.as_str().is_empty()
+            }
+            None => self.typed() == ("", "", "") && self.token.as_str().is_empty(),
+        };
+        let moved = self.project != project;
+        if (untouched || moved) && !self.remove_requested {
+            self.fill_from(connection.as_ref());
+        }
+        if moved {
+            self.remove_requested = false;
+            self.prompt = None;
+            self.kept = false;
+        }
+        self.token_stored = token_stored && !self.remove_requested;
+        self.connection = connection;
         self.project = project;
+    }
+
+    /// An edit of a connection field: a pending removal or question no longer describes the form.
+    fn edited(&mut self) {
+        self.remove_requested = false;
+        self.prompt = None;
+    }
+
+    /// Whether the form holds typed connection input worth validating.
+    fn has_input(&self) -> bool {
+        self.connection.is_some()
+            || self.typed() != ("", "", "")
+            || !self.token.as_str().is_empty()
     }
 }
 
@@ -596,6 +710,8 @@ pub struct ValidSettings {
     pub pr_status_enabled: bool,
     /// Jira: whether the integration is on (feature 533, FR-002).
     pub jira_enabled: bool,
+    /// Jira: what the save does to the open project's connection (feature 533, US3).
+    pub jira: micold_core::jira::ConnectionAction,
 }
 
 impl ValidSettings {
@@ -742,6 +858,7 @@ impl SettingsDraft {
         };
         profile.budget = self.budget()?;
         self.mapping()?;
+        let jira = self.jira_action()?;
 
         Ok(ValidSettings {
             theme: self.appearance.theme,
@@ -776,7 +893,72 @@ impl SettingsDraft {
                 .collect(),
             pr_status_enabled: self.github.pr_status_enabled,
             jira_enabled: self.jira.enabled,
+            jira,
         })
+    }
+
+    /// The connection form, checked last because its section is last in the rail (FR-006).
+    fn jira_action(&self) -> Result<micold_core::jira::ConnectionAction, FieldError> {
+        use micold_core::jira::{
+            ApiToken, ConnectionAction, JiraConnection, JiraField, FieldProblem,
+        };
+        let j = &self.jira;
+        let Some(project) = j.project.clone() else {
+            return Ok(ConnectionAction::Keep);
+        };
+        // A removal wins over the switch: answering **Remove** to the question arrives with the
+        // switch already off.
+        if j.remove_requested {
+            return Ok(if j.connection.is_some() {
+                ConnectionAction::Remove { project }
+            } else {
+                ConnectionAction::Keep
+            });
+        }
+        if !j.enabled || !j.has_input() {
+            return Ok(ConnectionAction::Keep);
+        }
+        let refuse = |problem: FieldProblem| FieldError {
+            field: match problem.field {
+                JiraField::Site => FieldId::SettingsJiraSite,
+                JiraField::ProjectKey => FieldId::SettingsJiraKey,
+                JiraField::Email => FieldId::SettingsJiraEmail,
+                JiraField::Token => FieldId::SettingsJiraToken,
+            },
+            section: SettingsSection::Jira,
+            message: problem.reason.to_owned(),
+        };
+        let connection = JiraConnection::parse(&j.site, &j.project_key, &j.email)
+            .map_err(|problems| refuse(problems[0]))?;
+        let token = if j.token.as_str().trim().is_empty() && j.token_stored {
+            None
+        } else {
+            Some(ApiToken::parse(j.token.as_str()).map_err(refuse)?)
+        };
+        if token.is_none() && j.connection.as_ref() == Some(&connection) {
+            return Ok(ConnectionAction::Keep);
+        }
+        Ok(ConnectionAction::Save {
+            project,
+            connection,
+            token,
+        })
+    }
+
+    /// Whether saving now must first ask the Keep-or-Remove question: the switch goes off over a
+    /// stored connection that was not already answered (US2 AS5).
+    pub fn needs_keep_or_remove(&self) -> bool {
+        let j = &self.jira;
+        let was_on = self.baseline.as_ref().is_none_or(|b| b.jira_enabled);
+        !j.enabled && was_on && j.connection.is_some() && !j.remove_requested && !j.kept
+    }
+
+    /// Raise the question and show the section it is in; nothing is applied until it is answered.
+    pub fn raise_keep_or_remove(&mut self) {
+        if let Some(project) = self.jira.project.clone() {
+            self.jira.prompt = Some(KeepOrRemovePrompt { project });
+            self.section = SettingsSection::Jira;
+        }
     }
 
     /// The label-to-type mapping, checked last because its section is last in the rail (FR-019).
@@ -1038,6 +1220,14 @@ impl SettingsDraft {
                     enabled: _,
                     project: _,
                     connection: _,
+                    site: _,
+                    project_key: _,
+                    email: _,
+                    token: _,
+                    token_stored: _,
+                    remove_requested: _,
+                    prompt: _,
+                    kept: _,
                 },
             error: _,
             baseline: _,
@@ -1165,8 +1355,7 @@ impl SettingsDraft {
             },
             jira: JiraDraft {
                 enabled: settings.jira_enabled,
-                project: None,
-                connection: None,
+                ..JiraDraft::default()
             },
             error: None,
             baseline: Some(settings.clone()),
@@ -1335,6 +1524,18 @@ pub enum Msg {
     PrStatusToggled(bool),
     /// The **Enable Jira integration** switch was toggled (feature 533, FR-002).
     JiraEnabledToggled(bool),
+    /// **Site URL** was edited (feature 533, FR-006).
+    JiraSiteChanged(String),
+    /// **Project key** was edited.
+    JiraKeyChanged(String),
+    /// **Account email** was edited.
+    JiraEmailChanged(String),
+    /// **API token** was edited; the text never shows in `Debug` (FR-009).
+    JiraTokenChanged(TokenInput),
+    /// **Remove connection** was pressed (FR-010).
+    JiraRemoveRequested,
+    /// The Keep-or-Remove question was answered (US2 AS5, US3 AS4).
+    JiraKeepOrRemoveChosen(KeepOrRemove),
     /// Save the Settings form (validated + persisted by the shell) (FR-020, FR-021).
     Saved,
     /// Dismiss the Settings form without saving (Cancel or Esc).
@@ -1437,7 +1638,43 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
             edit_mapping(state, |entries| *entries = default_mapping())
         }
         Msg::PrStatusToggled(on) => edit(state, |draft| draft.github.pr_status_enabled = on),
-        Msg::JiraEnabledToggled(on) => edit(state, |draft| draft.jira.enabled = on),
+        Msg::JiraEnabledToggled(on) => edit(state, |draft| {
+            draft.jira.enabled = on;
+            draft.jira.prompt = None;
+            draft.jira.kept = false;
+        }),
+        Msg::JiraSiteChanged(text) => edit(state, |draft| {
+            draft.jira.edited();
+            draft.jira.site = text;
+        }),
+        Msg::JiraKeyChanged(text) => edit(state, |draft| {
+            draft.jira.edited();
+            draft.jira.project_key = text;
+        }),
+        Msg::JiraEmailChanged(text) => edit(state, |draft| {
+            draft.jira.edited();
+            draft.jira.email = text;
+        }),
+        Msg::JiraTokenChanged(text) => edit(state, |draft| {
+            draft.jira.edited();
+            draft.jira.token = text;
+        }),
+        Msg::JiraRemoveRequested => edit(state, |draft| {
+            draft.jira.fill_from(None);
+            draft.jira.token_stored = false;
+            draft.jira.remove_requested = true;
+        }),
+        Msg::JiraKeepOrRemoveChosen(choice) => edit(state, |draft| {
+            draft.jira.prompt = None;
+            match choice {
+                KeepOrRemove::Keep => draft.jira.kept = true,
+                KeepOrRemove::Remove => {
+                    draft.jira.fill_from(None);
+                    draft.jira.token_stored = false;
+                    draft.jira.remove_requested = true;
+                }
+            }
+        }),
         Msg::Saved => saved(state),
         Msg::Cancelled => cancelled(state),
         Msg::ScriptPathCheckStarted {
