@@ -547,9 +547,10 @@ mod tests {
     use super::*;
 
     fn sharing(shares: &[CredentialShare]) -> SandboxProfile {
-        let mut profile = SandboxProfile::default();
-        profile.credentials = shares.iter().copied().collect();
-        profile
+        SandboxProfile {
+            credentials: shares.iter().copied().collect(),
+            ..SandboxProfile::default()
+        }
     }
 
     fn view_of<'a>(profile: &'a SandboxProfile, unshared: Option<&'a str>) -> ContainerView<'a> {

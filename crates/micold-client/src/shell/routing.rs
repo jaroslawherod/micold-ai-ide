@@ -198,6 +198,25 @@ impl App {
         }
     }
 
+    /// Bring the boot plan the restart and image checks read in step with the registry entry it
+    /// describes, so a form save applies on the next restart rather than at the next launch.
+    fn refresh_sandbox_boot(&mut self) {
+        use crate::shell::sandbox::BootPlan;
+        use micold_core::daemons::DaemonRuntime;
+        let registry = &self.core.settings.daemons;
+        let legacy = self.core.settings.legacy_default_daemon;
+        let Some(plan) = self.sandbox_boot.as_mut() else {
+            return;
+        };
+        let (name, port) = BootPlan::identity_of(registry, legacy);
+        plan.container_name = name;
+        plan.port = port;
+        let entry = BootPlan::sandbox_daemon(registry, legacy).and_then(|id| registry.get(id));
+        if let Some(DaemonRuntime::Container(c)) = entry.map(|e| &e.runtime) {
+            plan.profile = c.profile.clone();
+        }
+    }
+
     /// Interpret what the Daemons feature reported (feature 491, M3): a registry change is kept in
     /// the window's settings, written to the settings file and brought into `links`; a binding is
     /// kept in the workspace and in the project's state file. Sessions ended by a removal are stopped by
@@ -207,6 +226,8 @@ impl App {
         match outcome {
             Outcome::DaemonRegistryChanged(registry) => {
                 self.core.settings.daemons = registry.clone();
+                self.core.settings.sync_legacy_daemon();
+                self.refresh_sandbox_boot();
                 self.sync_links();
                 if let Some(store) = self.caps.settings() {
                     let write = store.update_reporting(&mut |settings| {
