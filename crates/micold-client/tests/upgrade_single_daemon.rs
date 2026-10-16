@@ -7,6 +7,8 @@ use micold_client::features::settings::daemons_loaded;
 use micold_client::features::sidebar::NO_DAEMON_LABEL;
 use micold_core::daemons::{Binding, DaemonRuntime};
 use micold_core::project::{Availability, Project};
+use micold_core::sandbox::runtime::RuntimeKind;
+use micold_core::sandbox::{Bytes, CredentialShare, MilliCpus, NetworkPosture, SandboxProfile};
 use micold_core::settings::{JsonFileSettingsStore, SettingsStore};
 use micold_core::store::{JsonFileStore, ProjectStore};
 use micold_core::workspace::Workspace;
@@ -17,6 +19,8 @@ use tempfile::TempDir;
 const HOST: &str = include_str!("../../micold-core/tests/fixtures/daemons/settings_host.json");
 const CONTAINER: &str =
     include_str!("../../micold-core/tests/fixtures/daemons/settings_container.json");
+const TUNED: &str =
+    include_str!("../../micold-core/tests/fixtures/daemons/settings_container_tuned.json");
 const LEGACY_PROJECT: &str =
     include_str!("../../micold-core/tests/fixtures/daemons/project_state_legacy.json");
 const PROJECT: &str = "/legacy/project";
@@ -136,4 +140,64 @@ fn closing_and_reopening_keeps_the_daemons_the_bindings_and_the_settings() {
         saved,
         "the settings are unchanged"
     );
+}
+
+/// Feature 804 (US3, FR-005, SC-003): every container value a 491-migrated file held shows in
+/// entry 1's profile, and nothing else is seeded.
+#[test]
+fn a_tuned_container_install_shows_every_legacy_value_in_the_one_migrated_daemon() {
+    let (_dir, settings, projects) = legacy_install(TUNED);
+    let state = launch(&settings, &projects);
+    let entries = state.settings.daemons.entries();
+    assert_eq!(entries.len(), 1, "no other daemon is seeded");
+    assert_eq!(entries[0].id, micold_core::daemons::DaemonId(1));
+    assert_eq!(
+        state.settings.legacy_default_daemon,
+        Some(entries[0].id),
+        "the legacy placement is the migrated daemon"
+    );
+    let DaemonRuntime::Container(c) = &entries[0].runtime else {
+        panic!("placement local_sandbox is a container daemon");
+    };
+    let p = &c.profile;
+    assert_eq!(p.runtime, RuntimeKind::Podman);
+    assert_eq!(p.network, NetworkPosture::Outbound);
+    assert_eq!(
+        p.credentials,
+        [CredentialShare::GitConfig, CredentialShare::AiCliAuth].into()
+    );
+    assert_eq!(p.budget.cpus_milli, Some(MilliCpus(3500)));
+    assert_eq!(p.budget.memory_bytes, Some(Bytes(8 << 30)));
+    assert_eq!(p.budget.pids, Some(1024));
+    assert_eq!(p.budget.storage_bytes, Some(Bytes(20 << 30)));
+    assert!(p.survive_logout);
+}
+
+#[test]
+fn a_daemon_added_after_the_upgrade_starts_at_defaults_not_a_copy() {
+    let (_dir, settings, projects) = legacy_install(TUNED);
+    let state = launch(&settings, &projects);
+    let migrated = state.settings.daemons.entries()[0].clone();
+    let DaemonRuntime::Container(c) = &migrated.runtime else {
+        panic!("container daemon");
+    };
+    assert_ne!(c.profile, SandboxProfile::default(), "the file was tuned");
+    let mut registry = state.settings.daemons.clone();
+    let id = registry
+        .add(
+            "second",
+            DaemonRuntime::Container(micold_core::daemons::ContainerSettings {
+                profile: SandboxProfile::default(),
+                container_name: "second".into(),
+                port: 7800,
+            }),
+            false,
+        )
+        .unwrap();
+    assert_eq!(registry.get(id).map(|e| e.id), Some(id));
+    assert_eq!(registry.entries()[0], migrated, "entry 1 is untouched");
+    let DaemonRuntime::Container(second) = &registry.get(id).unwrap().runtime else {
+        panic!("container daemon");
+    };
+    assert_eq!(second.profile, SandboxProfile::default());
 }

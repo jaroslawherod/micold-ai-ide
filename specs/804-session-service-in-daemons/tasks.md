@@ -50,8 +50,8 @@ Paths: `C` = `crates/micold-core/src`, `K` = `crates/micold-client/src`, `T` = `
 
 **Goal**: a pre-change settings file shows the same values in the migrated daemon.
 
-- [ ] T022 [US3] Test first, then retarget: a 491-migrated file shows legacy placement, runtime, shares, limits and survive-logout in entry 1's profile, no other daemon seeded, a later daemon starts at defaults, in `T/upgrade_single_daemon.rs`
-- [ ] T023 [US3] User guide: state that existing values moved to the migrated daemon in `docs/user-guide/sandboxed-daemon.md`
+- [x] T022 [US3] Test first, then retarget: a 491-migrated file shows legacy placement, runtime, shares, limits and survive-logout in entry 1's profile, no other daemon seeded, a later daemon starts at defaults, in `T/upgrade_single_daemon.rs`
+- [x] T023 [US3] User guide: state that existing values moved to the migrated daemon in `docs/user-guide/sandboxed-daemon.md`
 
 ## Phase 5: Polish
 
