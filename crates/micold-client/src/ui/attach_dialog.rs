@@ -3,7 +3,7 @@
 //! disk but the session's own entry; worktrees are never attached (FR-009).
 
 use crate::app::{Message, State};
-use crate::features::attach::{can_resume, status_text, Dialog, Listing, Msg};
+use crate::features::attach::{can_resume, status_text, Confirm, Dialog, Listing, Msg};
 use crate::features::window::FieldId;
 use crate::ui::material::{self, Button, Scrollable, SurfaceKind, Text, TypeRole};
 use iced::widget::{column, row};
@@ -21,6 +21,10 @@ pub fn modal<'a>(
     _focused: Option<FieldId>,
 ) -> Element<'a, Message> {
     let r = tokens::roles(scheme);
+
+    if let Some(confirm) = &dialog.confirm {
+        return confirm_modal(confirm, r);
+    }
 
     let mut fields = material::dialog::fields(column![
         Text::new("Resume stored sessions", TypeRole::Headline, r),
@@ -78,6 +82,27 @@ pub fn modal<'a>(
     let cancel = Button::text("Cancel", r).on_press(Message::Attach(Msg::Cancelled));
     let actions = material::dialog::actions(row![all, cancel]);
 
+    material::Surface::new(
+        material::dialog::body(fields, actions),
+        SurfaceKind::Dialog,
+        r,
+    )
+    .width(Length::Fixed(520.0))
+    .into()
+}
+
+/// The question a refused resume leads to: replace the worktree's session, keep both, or cancel
+/// (feature 776, FR-008b, FR-008c).
+fn confirm_modal<'a>(confirm: &'a Confirm, r: tokens::Roles) -> Element<'a, Message> {
+    let fields = material::dialog::fields(column![
+        Text::new("Replace the session?", TypeRole::Headline, r),
+        Text::new(confirm.text(), TypeRole::Body, r).muted(),
+    ]);
+    let actions = material::dialog::actions(row![
+        Button::filled("Replace", r).on_press(Message::Attach(Msg::ConfirmReplace)),
+        Button::outlined("Keep both", r).on_press(Message::Attach(Msg::ConfirmKeepBoth)),
+        Button::text("Cancel", r).on_press(Message::Attach(Msg::Cancelled)),
+    ]);
     material::Surface::new(
         material::dialog::body(fields, actions),
         SurfaceKind::Dialog,

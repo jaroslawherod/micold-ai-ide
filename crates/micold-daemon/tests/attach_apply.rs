@@ -418,3 +418,266 @@ fn the_resume_launch_carries_the_right_argument_and_session_id_for_each_provider
         .expect("pi flag");
     assert_eq!(pi[at + 1], id.to_string());
 }
+
+// ---------------------------------------------------------------------------
+// T024 [US3] — resume into an occupied location (feature 776, FR-007, FR-008b, FR-008c, FR-012)
+// ---------------------------------------------------------------------------
+
+use micold_core::session::{SessionLabel, TerminalMode};
+
+fn item(id: Uuid, replace: bool, allow_additional_session: bool) -> AttachItem {
+    AttachItem::Session {
+        id,
+        replace,
+        allow_additional_session,
+    }
+}
+
+fn occupant(dir: &str, name: &str) -> Session {
+    Session::restored(
+        SessionId::from_uuid(Uuid::new_v4()),
+        SessionLocation::Worktree(dir.into()),
+        SessionLabel::Named(name.into()),
+        TerminalMode::AiCli,
+        AiCli::ClaudeCode,
+    )
+}
+
+/// A project with a git worktree `alpha` that already has `occupant`, as a state and a client.
+async fn occupied_alpha() -> (
+    tempfile::TempDir,
+    tempfile::TempDir,
+    Arc<DaemonState>,
+    Client,
+    Session,
+) {
+    provider_home();
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    init_git_repo(project.path());
+    provider_worktree(project.path(), "alpha");
+    let mut catalog = catalog_at(store.path(), project.path());
+    let old = occupant("alpha", "Old");
+    catalog.attach_session(project.path(), old.clone()).unwrap();
+    let state = Arc::new(DaemonState::new(catalog));
+    let client = connect_and_attach(&state, project.path()).await;
+    (project, store, state, client, old)
+}
+
+fn alpha_cwd(project: &Path) -> PathBuf {
+    project.join(".claude/worktrees/alpha")
+}
+
+/// `(id, main)` of the project's listed sessions.
+fn listed(state: &DaemonState, project: &Path) -> Vec<(Uuid, bool)> {
+    state
+        .sessions_for(project)
+        .into_iter()
+        .map(|s| (s.id.0, s.main))
+        .collect()
+}
+
+#[tokio::test]
+async fn both_replace_and_keep_both_on_one_item_is_refused_and_changes_nothing() {
+    let (project, _store, state, mut client, old) = occupied_alpha().await;
+    let new = seed_claude(&alpha_cwd(project.path()));
+    let (_, results) =
+        apply_items(&mut client, project.path(), 1, vec![item(new, true, true)]).await;
+    assert!(matches!(results[0].outcome, AttachOutcome::Refused(_)));
+    assert_eq!(listed(&state, project.path()), [(old.id.0, true)]);
+}
+
+#[tokio::test]
+async fn resuming_into_an_occupied_worktree_is_refused_naming_the_occupant() {
+    let (project, _store, state, mut client, old) = occupied_alpha().await;
+    let new = seed_claude(&alpha_cwd(project.path()));
+    let (_, results) = apply_items(
+        &mut client,
+        project.path(),
+        1,
+        vec![item(new, false, false)],
+    )
+    .await;
+    assert_eq!(
+        results[0].outcome,
+        AttachOutcome::Refused(RefuseReason::LocationHasSession)
+    );
+    let existing = results[0].existing.as_ref().expect("names the occupant");
+    assert_eq!((existing.id, existing.name.as_str()), (old.id, "Old"));
+    assert_eq!(listed(&state, project.path()), [(old.id.0, true)]);
+}
+
+#[tokio::test]
+async fn replace_lists_only_the_resumed_session_and_it_inherits_main() {
+    let (project, _store, state, mut client, old) = occupied_alpha().await;
+    let new = seed_claude(&alpha_cwd(project.path()));
+    let (_, results) =
+        apply_items(&mut client, project.path(), 1, vec![item(new, true, false)]).await;
+    assert_eq!(results[0].outcome, AttachOutcome::Attached);
+    assert_eq!(listed(&state, project.path()), [(new, true)]);
+    assert!(
+        state.live_session(old.id).is_none(),
+        "nothing of the replaced session runs"
+    );
+}
+
+#[tokio::test]
+async fn keep_both_adds_a_helper_beside_the_occupant_and_stops_nothing() {
+    let (project, _store, state, mut client, old) = occupied_alpha().await;
+    let new = seed_claude(&alpha_cwd(project.path()));
+    let (_, results) =
+        apply_items(&mut client, project.path(), 1, vec![item(new, false, true)]).await;
+    assert_eq!(results[0].outcome, AttachOutcome::Attached);
+    assert_eq!(
+        listed(&state, project.path()),
+        [(old.id.0, true), (new, false)],
+        "the occupant stays main, the resumed one is a helper"
+    );
+}
+
+#[tokio::test]
+async fn keep_both_on_a_free_location_is_ignored() {
+    provider_home();
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    init_git_repo(project.path());
+    provider_worktree(project.path(), "alpha");
+    let state = fresh_state(store.path(), project.path());
+    let mut client = connect_and_attach(&state, project.path()).await;
+    let new = seed_claude(&alpha_cwd(project.path()));
+    let (_, results) =
+        apply_items(&mut client, project.path(), 1, vec![item(new, false, true)]).await;
+    assert_eq!(results[0].outcome, AttachOutcome::Attached);
+    assert_eq!(listed(&state, project.path()), [(new, true)]);
+}
+
+/// A write that fails leaves the replaced session listed and the new one absent (research R7).
+#[test]
+fn a_failed_write_on_replace_leaves_the_old_session_listed() {
+    let project = PathBuf::from("/p");
+    let old = occupant("alpha", "Old");
+    let mut workspace = Workspace {
+        projects: vec![Project::new(project.clone(), true, Availability::Available)],
+        ..Default::default()
+    };
+    workspace
+        .sessions
+        .insert(project.clone(), vec![old.clone()]);
+    let store = micold_core::store::FakeProjectStore::loaded(workspace)
+        .failing_save(std::io::ErrorKind::PermissionDenied);
+    let store_dir = tempfile::tempdir().unwrap();
+    let mut catalog = Catalog::load(
+        Box::new(store),
+        Box::new(JsonFileSettingsStore::at(
+            store_dir.path().join("settings.json"),
+        )),
+    );
+    let new = occupant("alpha", "New");
+    assert!(catalog.replace_session(&project, old.id, new).is_err());
+    let ids: Vec<_> = catalog
+        .sessions_for(&project)
+        .into_iter()
+        .map(|s| s.id)
+        .collect();
+    assert_eq!(
+        ids,
+        [old.id],
+        "the old session is still listed, un-archived"
+    );
+}
+
+#[tokio::test]
+async fn a_batch_keeps_the_most_recent_session_per_location_and_a_single_resume_is_never_capped() {
+    provider_home();
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    init_git_repo(project.path());
+    provider_worktree(project.path(), "alpha");
+    provider_worktree(project.path(), "beta");
+    let mut catalog = catalog_at(store.path(), project.path());
+    let beta_owner = occupant("beta", "Beta");
+    catalog
+        .attach_session(project.path(), beta_owner.clone())
+        .unwrap();
+    let state = Arc::new(DaemonState::new(catalog));
+    let mut client = connect_and_attach(&state, project.path()).await;
+    let alpha = alpha_cwd(project.path());
+    let older = seed_claude(&alpha);
+    let newer = seed_claude(&alpha);
+    let beta_new = seed_claude(&project.path().join(".claude/worktrees/beta"));
+    let touch = |cwd: &Path, id: Uuid, secs: u64| {
+        let encoded: String = cwd
+            .to_string_lossy()
+            .chars()
+            .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+            .collect();
+        let file = std::fs::File::options()
+            .write(true)
+            .open(
+                provider_home()
+                    .join(".claude/projects")
+                    .join(encoded)
+                    .join(format!("{id}.jsonl")),
+            )
+            .unwrap();
+        file.set_modified(std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(secs))
+            .unwrap();
+    };
+    touch(&alpha, older, 1_000);
+    touch(&alpha, newer, 2_000);
+
+    let (_, results) = apply_items(
+        &mut client,
+        project.path(),
+        1,
+        vec![
+            item(older, false, false),
+            item(newer, false, false),
+            item(beta_new, false, false),
+        ],
+    )
+    .await;
+    assert_eq!(
+        results[0].outcome,
+        AttachOutcome::Refused(RefuseReason::LocationHasSession)
+    );
+    assert_eq!(
+        results[1].outcome,
+        AttachOutcome::Attached,
+        "the most recent"
+    );
+    assert_eq!(
+        results[2].outcome,
+        AttachOutcome::Refused(RefuseReason::LocationHasSession),
+        "an occupied location catalogues none"
+    );
+    let ids: Vec<Uuid> = listed(&state, project.path())
+        .into_iter()
+        .map(|(i, _)| i)
+        .collect();
+    assert!(ids.contains(&newer) && !ids.contains(&older) && !ids.contains(&beta_new));
+    let again = discover(&mut client, project.path(), 2).await;
+    assert!(
+        again.sessions.iter().any(|s| s.id == older),
+        "the capped session stays resumable"
+    );
+
+    // A single explicit resume is the user's pick: free location, older session, not capped.
+    let store2 = tempfile::tempdir().unwrap();
+    let project2 = tempfile::tempdir().unwrap();
+    init_git_repo(project2.path());
+    provider_worktree(project2.path(), "alpha");
+    let state2 = fresh_state(store2.path(), project2.path());
+    let mut client2 = connect_and_attach(&state2, project2.path()).await;
+    let a = alpha_cwd(project2.path());
+    let first = seed_claude(&a);
+    let _second = seed_claude(&a);
+    let (_, results) = apply_items(
+        &mut client2,
+        project2.path(),
+        1,
+        vec![item(first, false, false)],
+    )
+    .await;
+    assert_eq!(results[0].outcome, AttachOutcome::Attached);
+}

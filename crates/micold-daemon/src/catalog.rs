@@ -13,14 +13,15 @@
 //! External-modification detection is out of scope (spec Out of Scope).
 
 use micold_core::agent_run::AgentSignal;
-use micold_core::attach::{AttachOutcome, RefuseReason};
+use micold_core::attach::{cap_per_location, AttachOutcome, RefuseReason};
 use micold_core::attention::{NotificationKind, NotificationKinds};
 use micold_core::occupancy::{occupancy, refusal_text, Additional, ExistingSession, Occupancy};
-use std::collections::HashSet;
+use std::collections::{BTreeSet, HashSet};
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
+use std::time::SystemTime;
 
 use micold_core::fs_scan::FolderScanner;
 use micold_core::mcp::policy::CrossSessionAccess;
@@ -769,15 +770,31 @@ impl Catalog {
     /// Add `session` to `project` as it is, idle and never started (feature 582, FR-008).
     ///
     /// A session the catalog already holds is `AlreadyAttached`, unless it is starting, running or
-    /// restarting, which is refused: a session is resumed in one place at a time (FR-016). The
+    /// restarting, which is refused: a session is resumed in one place at a time (FR-016). A
+    /// location that already has another session refuses it too (feature 776, FR-008b). The
     /// write is rolled back when it cannot be persisted, so a retry attaches.
     pub fn attach_session(
         &mut self,
         project: &Path,
         session: Session,
     ) -> io::Result<AttachOutcome> {
+        self.attach_session_as(project, session, Additional::No)
+            .map(|(outcome, _)| outcome)
+    }
+
+    /// [`Self::attach_session`], where `additional` says the user chose to keep both (FR-008c): the
+    /// session then joins an occupied location as a helper. Without it an occupied location
+    /// refuses with `LocationHasSession`, and the second value names the session it has. The
+    /// occupancy check and the push happen under this one `&mut self` (FR-005).
+    pub fn attach_session_as(
+        &mut self,
+        project: &Path,
+        session: Session,
+        additional: Additional,
+    ) -> io::Result<(AttachOutcome, Option<ExistingSession>)> {
+        let refused = |reason| Ok((AttachOutcome::Refused(reason), None));
         if self.workspace.unreadable_projects.contains(project) {
-            return Ok(AttachOutcome::Refused(RefuseReason::IoFailed));
+            return refused(RefuseReason::IoFailed);
         }
         if let Some(existing) = self
             .workspace
@@ -785,13 +802,30 @@ impl Catalog {
             .get(project)
             .and_then(|list| list.iter().find(|s| s.id == session.id))
         {
-            return Ok(if existing.lifecycle.is_live() {
-                AttachOutcome::Refused(RefuseReason::AlreadyRunning)
-            } else {
-                AttachOutcome::AlreadyAttached
-            });
+            return Ok((
+                if existing.lifecycle.is_live() {
+                    AttachOutcome::Refused(RefuseReason::AlreadyRunning)
+                } else {
+                    AttachOutcome::AlreadyAttached
+                },
+                None,
+            ));
         }
-        let mut session = session;
+        if !additional.is_yes() {
+            if let Occupancy::Taken(existing) = self.occupancy(project, &session.location) {
+                return Ok((
+                    AttachOutcome::Refused(RefuseReason::LocationHasSession),
+                    Some(existing),
+                ));
+            }
+        }
+        self.push_session(project, session)?;
+        Ok((AttachOutcome::Attached, None))
+    }
+
+    /// Push `session` (main when its location is free) and persist, taking the push back when the
+    /// write fails.
+    fn push_session(&mut self, project: &Path, mut session: Session) -> io::Result<()> {
         let list = self
             .workspace
             .sessions
@@ -804,6 +838,89 @@ impl Catalog {
                 list.pop();
             }
             return Err(e);
+        }
+        Ok(())
+    }
+
+    /// Resume `new` in the place of `old`, the session its location has (feature 776, FR-007,
+    /// research R7). `new` takes `old`'s main role. The caller has stopped `old`'s processes.
+    ///
+    /// In order: `new` is pushed and persisted (a failed write takes the push back and leaves
+    /// `old` listed); only then `old` is archived, with its durable provider marker last. If that
+    /// second write fails both stay listed and the failure is logged. `new`'s id must not be in
+    /// the catalog already.
+    pub fn replace_session(
+        &mut self,
+        project: &Path,
+        old: SessionId,
+        new: Session,
+    ) -> io::Result<AttachOutcome> {
+        if self.workspace.unreadable_projects.contains(project) {
+            return Ok(AttachOutcome::Refused(RefuseReason::IoFailed));
+        }
+        let Some(location) = self
+            .workspace
+            .sessions
+            .get(project)
+            .and_then(|list| list.iter().find(|s| s.id == old && !s.archived))
+            .map(|s| s.location.clone())
+        else {
+            return Ok(AttachOutcome::Refused(RefuseReason::Unavailable));
+        };
+        let was_main =
+            self.workspace.sessions.get(project).is_some_and(|list| {
+                micold_core::occupancy::main_session(list, &location) == Some(old)
+            });
+        let mut new = new;
+        new.location = location;
+        let list = self
+            .workspace
+            .sessions
+            .entry(project.to_path_buf())
+            .or_default();
+        new.main = was_main;
+        list.push(new);
+        if let Err(e) = self.persist() {
+            if let Some(list) = self.workspace.sessions.get_mut(project) {
+                list.pop();
+            }
+            return Err(e);
+        }
+        // The new record is durable: now the old one goes.
+        let archived = self
+            .workspace
+            .sessions
+            .get_mut(project)
+            .and_then(|list| list.iter_mut().find(|s| s.id == old))
+            .map(|s| {
+                let before = (s.lifecycle.clone(), s.archived, s.main);
+                s.archive();
+                s.main = false;
+                before
+            });
+        if let Err(err) = self.persist() {
+            tracing::warn!(session = %old.0, %err, "could not archive the replaced session; both stay listed");
+            if let Some((lifecycle, archived, main)) = archived {
+                if let Some(s) = self
+                    .workspace
+                    .sessions
+                    .get_mut(project)
+                    .and_then(|list| list.iter_mut().find(|s| s.id == old))
+                {
+                    s.lifecycle = lifecycle;
+                    s.archived = archived;
+                    s.main = main;
+                }
+            }
+            return Ok(AttachOutcome::Attached);
+        }
+        if let Some(s) = self
+            .workspace
+            .sessions
+            .get(project)
+            .and_then(|list| list.iter().find(|s| s.id == old))
+        {
+            mark_archived_durable(project, s);
         }
         Ok(AttachOutcome::Attached)
     }
@@ -1546,6 +1663,23 @@ impl Catalog {
             .into_iter()
             .filter(|session| !known.contains(&session.id.0))
             .collect();
+        if fresh.is_empty() {
+            return 0;
+        }
+        // At most one session per location, and none where one is already catalogued (FR-012):
+        // the caller orders `found` newest first, and the first of a location wins.
+        let occupied: BTreeSet<SessionLocation> = self
+            .workspace
+            .sessions
+            .get(project)
+            .into_iter()
+            .flatten()
+            .filter(|s| !s.archived)
+            .map(|s| s.location.clone())
+            .collect();
+        let fresh = cap_per_location(fresh, &occupied, |s| {
+            (s.location.clone(), SystemTime::UNIX_EPOCH)
+        });
         if fresh.is_empty() {
             return 0;
         }

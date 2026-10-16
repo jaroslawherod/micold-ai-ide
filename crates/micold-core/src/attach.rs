@@ -18,7 +18,7 @@ use std::time::SystemTime;
 use uuid::Uuid;
 
 /// Where a resumable session ran. Never "nowhere".
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum AttachTarget {
     /// The project root.
     Default,
@@ -174,6 +174,37 @@ pub struct AttachResult {
     /// confirmation can name it (feature 776). Absent means `None`.
     #[serde(default)]
     pub existing: Option<crate::occupancy::ExistingSession>,
+}
+
+/// Keep one candidate per location (feature 776, FR-012): the one with the greatest activity time
+/// (the first of equals), and none for a location in `occupied`. Survivors keep their order.
+///
+/// `key` names a candidate's location and its last activity. Generic so the attach batch (keyed by
+/// [`AttachTarget`]) and the catalog's adoption (keyed by the session's location) share one rule.
+pub fn cap_per_location<T, K: Ord + Clone>(
+    candidates: Vec<T>,
+    occupied: &BTreeSet<K>,
+    key: impl Fn(&T) -> (K, SystemTime),
+) -> Vec<T> {
+    let mut best: std::collections::BTreeMap<K, (usize, SystemTime)> = Default::default();
+    for (i, c) in candidates.iter().enumerate() {
+        let (location, at) = key(c);
+        if occupied.contains(&location) {
+            continue;
+        }
+        match best.get(&location) {
+            Some((_, kept)) if *kept >= at => {}
+            _ => {
+                best.insert(location, (i, at));
+            }
+        }
+    }
+    let keep: BTreeSet<usize> = best.values().map(|(i, _)| *i).collect();
+    candidates
+        .into_iter()
+        .enumerate()
+        .filter_map(|(i, c)| keep.contains(&i).then_some(c))
+        .collect()
 }
 
 /// A path as a comparison key: separators unified, no trailing separator, lower case. Windows and

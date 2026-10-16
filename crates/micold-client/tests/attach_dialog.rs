@@ -422,3 +422,97 @@ fn notes_are_a_footer_when_nothing_was_found_and_for_real_problems() {
     assert!(notes[0].contains("Copilot"), "{}", notes[0]);
     assert!(notes[1].contains("sandbox"), "{}", notes[1]);
 }
+
+// ---------------------------------------------------------------------------------------
+// T027 [US3]: resuming into a worktree that has a session asks first (feature 776, FR-008b/c)
+// ---------------------------------------------------------------------------------------
+
+fn refused_with_existing(n: u128) -> AttachResult {
+    AttachResult {
+        item: target(n),
+        outcome: AttachOutcome::Refused(RefuseReason::LocationHasSession),
+        existing: Some(micold_core::occupancy::ExistingSession {
+            id: micold_core::session::SessionId::from_uuid(Uuid::from_u128(99)),
+            name: "Old work".into(),
+        }),
+    }
+}
+
+fn resumed_and_refused(n: u128) -> State {
+    let mut state = open_state();
+    attach::update(
+        &mut state,
+        Msg::Resume {
+            id: Uuid::from_u128(n),
+        },
+    );
+    let outcomes = attach::update(&mut state, Msg::Applied(vec![refused_with_existing(n)]));
+    assert!(
+        outcomes.is_empty(),
+        "no notification: a question is asked instead"
+    );
+    state
+}
+
+#[test]
+fn a_refused_resume_opens_a_confirmation_naming_both_sessions() {
+    let state = resumed_and_refused(2);
+    let dialog = state.attach.dialog.as_ref().expect("the dialog stays open");
+    assert!(!dialog.applying());
+    let text = dialog.confirm.as_ref().expect("a confirmation").text();
+    assert!(
+        text.contains("Old work") && text.contains("session 2"),
+        "{text}"
+    );
+}
+
+#[test]
+fn replace_sends_the_item_again_with_replace() {
+    let mut state = resumed_and_refused(2);
+    attach::update(&mut state, Msg::ConfirmReplace);
+    let dialog = state.attach.dialog.as_ref().unwrap();
+    assert_eq!(
+        dialog.in_flight,
+        vec![AttachItem::Session {
+            id: Uuid::from_u128(2),
+            replace: true,
+            allow_additional_session: false,
+        }]
+    );
+    assert!(dialog.confirm.is_none());
+}
+
+#[test]
+fn keep_both_sends_the_item_again_with_allow_additional_session() {
+    let mut state = resumed_and_refused(2);
+    attach::update(&mut state, Msg::ConfirmKeepBoth);
+    assert_eq!(
+        state.attach.dialog.as_ref().unwrap().in_flight,
+        vec![AttachItem::Session {
+            id: Uuid::from_u128(2),
+            replace: false,
+            allow_additional_session: true,
+        }]
+    );
+}
+
+#[test]
+fn cancelling_the_confirmation_sends_nothing_and_keeps_the_list() {
+    let mut state = resumed_and_refused(2);
+    attach::update(&mut state, Msg::Cancelled);
+    let dialog = state.attach.dialog.as_ref().expect("back to the list");
+    assert!(dialog.confirm.is_none() && dialog.in_flight.is_empty());
+    assert_eq!(dialog.sessions.len(), 3);
+}
+
+#[test]
+fn a_refusal_inside_a_batch_is_summarised_not_asked_about() {
+    let mut state = open_state();
+    attach::update(&mut state, Msg::ResumeAll);
+    let outcomes = attach::update(
+        &mut state,
+        Msg::Applied(vec![refused_with_existing(1), refused_with_existing(2)]),
+    );
+    assert!(state.attach.dialog.is_none());
+    assert_eq!(outcomes.len(), 1);
+}
