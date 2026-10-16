@@ -19,6 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #869 | Design | merged | 4b96bf2b526ca9b42e7dd9993d4b437016f49f18 |
 | #882 | M1 | merged | ebf69d4be76163577384bf9fc921ff66cb8eb957 |
 | #889 | M2 | merged | bf0910213b7555c49ad0524ab880ddee40069806 |
+| #900 | M3 | open | |
 
 ## Milestones
 
@@ -26,7 +27,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T013 | full | Container settings in the Daemons form | #882 | merged |
 | M2 | T014–T021 | full | Session service section removed | #889 | merged |
-| M3 | T022–T023 | light | Existing settings carry over | #… | PR open |
+| M3 | T022–T023 | light | Existing settings carry over | #900 | PR open |
 
 ## Decisions
 
