@@ -49,3 +49,30 @@ Lone-main and helper deletion wording (no successor line) not rendered. Both ses
 "New session", so the successor sentence is not distinguishable by name in this fixture. Row menus
 open on right-press only; the earlier left-press click with no preceding hover did not register in
 this pointer setup (tool artefact, not the app).
+
+# Visual pass, feature 776 (quickstart Part B item 3, M6)
+
+2026-10-16. Real client + daemon (fresh build of this worktree at 20d031f7, pinned copies), private
+headless sway 1600x1200 + lavapipe, private data dir and `CLAUDE_CONFIG_DIR`, throwaway git repo.
+Dark scheme only; light not exercised. Seeding: two Claude transcripts with `cwd` = the repo root in
+the private config dir. The first was adopted into the catalog as the Default worktree's session
+("Refactor the parser module"); the second ("Fix the login bug") stayed stored, so "Attach existing..."
+offered it for the occupied Default worktree.
+
+| Item | Result | Evidence |
+|---|---|---|
+| B3 resume into an occupied worktree shows a confirmation | pass | `m6-b3-confirm-dark.png`: "Replace the session?" modal replaces the list at the dialog's width; text names both sessions ("Refactor the parser module" existing, "Fix the login bug" resumed) |
+| B3 Replace / Keep both / Cancel visible and legible | pass | same image: filled Replace, outlined Keep both, text Cancel, one row, nothing clipped |
+| B3 Cancel changes nothing | pass | `m6-b3-cancel-back-to-list-dark.png`: back on the stored-sessions list, "Fix the login bug" still offered; catalog file still holds only the first session |
+| Replace and Keep both outcomes | NOT EXERCISED | out of scope for this item (covered by `attach_apply.rs` / client tests) |
+
+## Observations
+`m6-b3-sidebar-banner-dark.png`: the "Found 1 stored session" banner above Default. With an older
+pinned binary (built before the last M6 commits) pressing Resume closed the dialog with no
+confirmation and no attach; the fresh build shows the modal, so that was most likely the stale binary (not confirmed).
+Right after pressing Resume the list stays up until the daemon answers; a screenshot taken a few
+seconds later showed the modal. The Default row of an occupied worktree has no visible session sub-row
+in the sidebar (no start action either), as B2 expects.
+
+## Defects
+None.
