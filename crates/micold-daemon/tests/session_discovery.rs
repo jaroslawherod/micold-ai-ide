@@ -113,9 +113,8 @@ impl ProviderStores {
         std::fs::create_dir_all(&dir).unwrap();
         let lines = [
             format!(r#"{{"type":"mode","mode":"normal","sessionId":"{id}"}}"#),
-            format!(
-                r#"{{"type":"file-history-snapshot","messageId":"m1","snapshot":{{}},"isSnapshotUpdate":false}}"#
-            ),
+            r#"{"type":"file-history-snapshot","messageId":"m1","snapshot":{},"isSnapshotUpdate":false}"#
+                .to_string(),
             format!(
                 r#"{{"type":"user","sessionId":"{id}","message":{{"role":"user","content":"<command-name>/clear</command-name>\n<command-message>clear</command-message>\n<command-args></command-args>"}}}}"#
             ),
