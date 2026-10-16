@@ -23,6 +23,7 @@ use crate::ui::material::{
 use iced::widget::{column, row, Space};
 use iced::{Element, Length};
 use micold_core::env_include::EnvIncludeOutcome;
+use micold_core::jira::IssueProvider;
 use micold_core::naming::ConventionalType;
 use micold_core::theme::ColorScheme;
 use micold_core::tokens::{self, spacing, Roles};
@@ -42,6 +43,10 @@ pub fn modal<'a>(
     let heading = Text::new("New worktree", TypeRole::Headline, r);
 
     let mut fields = material::dialog::fields(column![heading, source_switch(form, r)]);
+    // Feature 533 (FR-016): a project with both a GitHub remote and a Jira connection chooses.
+    if form.offers_issue_provider_choice() {
+        fields = fields.push(provider_switch(form, r));
+    }
 
     // Why the GitHub issue chip is disabled, or — before it is chosen — which repository choosing
     // it reads from GitHub (feature 034, FR-002, FR-025).
@@ -266,7 +271,7 @@ fn source_switch<'a>(form: &WorktreeForm, r: Roles) -> Element<'a, Message> {
         // the switch says why (FR-002).
         // Feature 533: "Issue" while Jira is the provider, with the same disabled rule.
         ToggleChip::new(
-            if form.jira_site().is_some() {
+            if form.jira_site().is_some() || form.offers_issue_provider_choice() {
                 "Issue"
             } else {
                 "GitHub issue"
@@ -276,6 +281,27 @@ fn source_switch<'a>(form: &WorktreeForm, r: Roles) -> Element<'a, Message> {
         )
         .active(form.source == BranchSource::Issue)
         .disabled(!form.issue_source_ready()),
+    ]
+    .spacing(spacing::SM)
+    .into()
+}
+
+/// The GitHub / Jira choice under the source chips (feature 533, FR-016), shown only when both
+/// sources are available.
+fn provider_switch<'a>(form: &WorktreeForm, r: Roles) -> Element<'a, Message> {
+    row![
+        ToggleChip::new(
+            "GitHub",
+            Message::WorktreeForm(FormMsg::IssueProviderChanged(IssueProvider::Github)),
+            r
+        )
+        .active(form.provider == IssueProvider::Github),
+        ToggleChip::new(
+            "Jira",
+            Message::WorktreeForm(FormMsg::IssueProviderChanged(IssueProvider::Jira)),
+            r
+        )
+        .active(form.provider == IssueProvider::Jira),
     ]
     .spacing(spacing::SM)
     .into()

@@ -57,6 +57,7 @@ pub fn interpret(outcome: Outcome) -> Task<Message> {
         | Outcome::DaemonRegistryChanged(_)
         | Outcome::DaemonSessionsEnded { .. }
         | Outcome::DaemonBound { .. }
+        | Outcome::IssueSourceChosen { .. }
         | Outcome::RemoteRepositoryRequested { .. }
         | Outcome::SurfaceOpened(_) => Task::none(),
     }

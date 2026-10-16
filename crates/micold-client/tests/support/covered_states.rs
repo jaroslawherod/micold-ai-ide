@@ -617,6 +617,20 @@ pub fn covered_states() -> &'static [CoveredState] {
             },
             anchors: ADD_WORKTREE_ANCHORS,
         },
+        // Feature 533 (FR-016): a project with both sources shows the GitHub / Jira choice.
+        CoveredState {
+            name: "add-worktree-dialog-source-choice",
+            build: || {
+                let mut state = with_project();
+                let mut form = jira_form(IssueList::NotRequested);
+                form.source = BranchSource::New;
+                form.github = github_repo();
+                form.provider = IssueProvider::Github;
+                state.worktree_form.form = Some(form);
+                StateUnderTest::new(state)
+            },
+            anchors: ADD_WORKTREE_ANCHORS,
+        },
         // Feature 533: the Jira source loading, refused, loaded past the cap and empty.
         CoveredState {
             name: "add-worktree-dialog-jira-loading",

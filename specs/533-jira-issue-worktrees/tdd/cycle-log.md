@@ -39,3 +39,12 @@ failed (`a_jira_listing_never_starts_a_description_pass` caption, `search_only_w
 `a_failed_search_keeps_...`). Already green on `origin/main` (M3 built them): `search_jql` and the
 `search_open` source and adapter, the local narrowing case, the `jira_jql.rs` cases (T054, T057).
 Green: reducer allows the Jira search, `start_jira_search` behind the shared `jira_request` gate.
+
+## M5 (T059-T065)
+
+Tests (`store_issue_source.rs`, five new cases in `jira_source_state.rs`, the covered state
+`add-worktree-dialog-source-choice`) were written before the code and reference `issue_sources`,
+`save_issue_source`, `offers_issue_provider_choice`, `Msg::IssueProviderChanged` and
+`Outcome::IssueSourceChosen`, so the red run was a compile failure of both test targets; no output
+was kept. Green: the same two targets (4 and 19 tests) and `layout_snapshot` (60) after the
+reducer, store and view changes. Full `mise run gate`: see the PR body.
