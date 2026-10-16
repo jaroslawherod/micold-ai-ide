@@ -61,7 +61,7 @@ description: "Task list for the session tree of agent-spawned sessions (#551)"
 
 **Goal**: The sidebar shows children nested under their origin at any depth, in every location, with the child marker and the pending/removed markers.
 
-**Independent Test**: `cargo test -p micold-client --test sidebar_tree --test layout_snapshot`.
+**Independent Test**: `cargo test -p micold-client --test sidebar_spawn_tree --test layout_snapshot`.
 
 ### Tests
 
@@ -79,7 +79,7 @@ description: "Task list for the session tree of agent-spawned sessions (#551)"
 
 ### Outer loop
 
-- [x] T039 [US1] Run the sidebar acceptance behaviors (`sidebar_tree`, `layout_snapshot`) and confirm each is green: [A1] [A2] [A3] [A4] [A7]
+- [x] T039 [US1] Run the sidebar acceptance behaviors (`sidebar_spawn_tree`, `layout_snapshot`) and confirm each is green: [A1] [A2] [A3] [A4] [A7]
 
 ## Phase 5: User Story 3 (Priority: P2)
 
@@ -107,7 +107,7 @@ description: "Task list for the session tree of agent-spawned sessions (#551)"
 
 **Goal**: A busy origin folds, shows its child count and attention, and keeps its fold across restarts.
 
-**Independent Test**: `cargo test -p micold-client --test sidebar_tree` fold cases and the settings round trip.
+**Independent Test**: `cargo test -p micold-client --test sidebar_spawn_tree` fold cases and the settings round trip.
 
 ### Tests
 
@@ -123,7 +123,7 @@ description: "Task list for the session tree of agent-spawned sessions (#551)"
 
 ### Outer loop
 
-- [ ] T041 [US4] Run the fold acceptance behaviors (`sidebar_tree`, `settings_roundtrip`) and confirm each is green: [A10] [A11] [A12]
+- [ ] T041 [US4] Run the fold acceptance behaviors (`sidebar_spawn_tree`, `settings_roundtrip`) and confirm each is green: [A10] [A11] [A12]
 
 ## Dependencies & Order
 
@@ -151,7 +151,7 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Tasks**: T017–T024, T039
 - **Deliverable**: The sidebar nests child sessions under their origin at any depth, in worktrees and the Default entry, with the child marker and the origin pending/removed markers. Until M3 nothing sets an origin: the tree is exercised by reducer/layout tests and a seeded project state file only.
 - **Satisfies**: US1 acceptance scenarios 1, 2, 4; US2 acceptance scenario 3; FR-003, FR-004, FR-005, FR-007, FR-008, FR-016; SC-001, SC-004
-- **Verify**: `cargo test -p micold-client --test sidebar_tree --test layout_snapshot`; quickstart Part B steps 1, 2, 5, 6, 7 (children seeded in the project's state file)
+- **Verify**: `cargo test -p micold-client --test sidebar_spawn_tree --test layout_snapshot`; quickstart Part B steps 1, 2, 5, 6, 7 (children seeded in the project's state file)
 - **Depends on**: M1
 - **Tier**: full
 
@@ -169,6 +169,6 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Tasks**: T032–T037, T041
 - **Deliverable**: The user collapses an origin to hide its children, sees the child count and an attention marker, and the fold survives an app restart.
 - **Satisfies**: US4 acceptance scenarios 1–3; FR-011, FR-017
-- **Verify**: `cargo test -p micold-client --test sidebar_tree`, `cargo test -p micold-core --test settings_roundtrip`; quickstart Part B steps 3, 4
+- **Verify**: `cargo test -p micold-client --test sidebar_spawn_tree`, `cargo test -p micold-core --test settings_roundtrip`; quickstart Part B steps 3, 4
 - **Depends on**: M2
 - **Tier**: full

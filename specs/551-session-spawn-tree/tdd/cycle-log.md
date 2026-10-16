@@ -28,6 +28,6 @@ Append only.
 
 ## M2 (2026-10-16)
 
-- Tests written with the code in one pass (U12 in origin.rs, U13 in tests/sidebar_tree.rs, U14 in layout_snapshot.rs); no per-behaviour red output captured, as in M1.
-- Green: `cargo test -p micold-core --lib origin`, `-p micold-client --lib sidebar`, `--test sidebar_tree --test layout_snapshot --test features_sidebar`.
+- Tests written with the code in one pass (U12 in origin.rs, U13 in tests/sidebar_spawn_tree.rs, U14 in layout_snapshot.rs); no per-behaviour red output captured, as in M1.
+- Green: `cargo test -p micold-core --lib origin`, `-p micold-client --lib sidebar`, `--test sidebar_spawn_tree --test layout_snapshot --test features_sidebar`.
 - The child marker is the word `agent` leading the row annotation (text, not a glyph), so row height is unchanged.
