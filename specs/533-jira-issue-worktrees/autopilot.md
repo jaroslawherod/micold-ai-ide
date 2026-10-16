@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/533_create-worktrees-from-jira-issues
 - **Started**: 2026-10-12
 - **Phase**: milestone M4
-- **Next step**: wait for CI and merge of the M4 PR, then M5
+- **Next step**: wait for CI and merge M4, then M5
 
 ## Pull requests
 
