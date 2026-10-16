@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/533_create-worktrees-from-jira-issues
 - **Started**: 2026-10-12
 - **Phase**: milestone M4
-- **Next step**: finish M4 (verify, review, gate, PR)
+- **Next step**: wait for CI and merge of the M4 PR, then M5
 
 ## Pull requests
 
@@ -55,6 +55,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Code A (M1, sonnet, post-rebase fixes) | 2 | 5b7730bd1c00e525627e260e6bdb497674bc4c91:5f00fbbe33617bf46639612eba895030677f8d3c | CLEAN (3 MINOR: F2 wire-leniency test added, F3 version pin dropped from the 776 test; F1 write-order declined, same order as every other field) |
 | Code A (M3) | 1 | 381d7ce6cfbc1bdb1e4c686a2038e0df6654729b:74e4a024022983bf0306f44cc7555edbb1c6828b | 10 findings, none rated BLOCKER by the skill: 2 fixed (start_jira_load answered nothing when refused; remotes_listed provider flip did not reset the list), 8 declined (below) |
 | Conformance B (M3, sonnet) | 1 | 381d7ce6cfbc1bdb1e4c686a2038e0df6654729b:74e4a024022983bf0306f44cc7555edbb1c6828b | CHANGES: 3 MAJOR (cycle-log, T041 gaps, T042 location); resolved as recorded deviations in tdd/cycle-log.md, no code change |
+| Code A (M4) | 1 | 4d108a37176a38efc2e05f655513651e26575c72:7b492eabc40b1dea808d1033b9681d7495ea3ebc | CLEAN |
+| Conformance B (M4, sonnet) | 1 | 4d108a37176a38efc2e05f655513651e26575c72:7b492eabc40b1dea808d1033b9681d7495ea3ebc | CLEAN (Verify tests green: typeahead_budget 11, jira_source_state 14, jira_http_adapter 8, named_events 7, jira_jql 9, issue_jira_rows 5) |
 | Tasks | 1 | bae8666f588552c1c7a2447bfe65696f43efeeae:c779f5c824f46d2e9d3649c1647476dc206ab227 | CLEAN (2 MINOR fixed; speckit-analyze 2 HIGH, 4 MEDIUM fixed before review) |
 
 ## Declined review findings
