@@ -57,16 +57,32 @@ Paths: `C` = `crates/micold-core/src`, `K` = `crates/micold-client/src`, `T` = `
 
 - [ ] T024 Quickstart §B visual pass: the long Daemons form scrolls and fits; record the result in `specs/804-session-service-in-daemons/quickstart.md`
 
+## Phase 6: User Story 4 - Collapsible container sections (P3, amendment M4, #890)
+
+**Goal**: the daemon form's container settings sit in titled collapsible sections from a new shared Material component.
+**Independent test**: open a container daemon, toggle sections by pointer and keyboard, trigger a limit error in a closed Limits section and see it open.
+
+- [ ] T025 [US4] Test first: `AccordionSection` shows its title, a chevron for open/closed, reveals its body only when open, emits `on_toggle` on press and on Space/Enter with focus, draws the focus ring, in both themes, in `K/ui/material/accordion_section.rs` tests (patterns: `K/ui/material/accordion.rs`, `keyboard_focus.rs`, `style_states.rs`)
+- [ ] T026 [US4] Implement `AccordionSection` (builder `new(title, body, roles).open().on_toggle()`, `From` into `Element`) composing `Accordion`, in `K/ui/material/accordion_section.rs`; register in `K/ui/material/mod.rs`
+- [ ] T027 [US4] Add the component showcase entry (closed, open, live toggle) in `K/showcase/catalogue.rs` and `K/showcase/sections/surfaces.rs`
+- [ ] T028 [US4] Test first: section toggle changes only the open set; default is Container only; a section holding a `FormError` field is open; the draft and saved settings are untouched by toggling (FR-012, FR-014, FR-015) in `T/daemons_feature.rs`
+- [ ] T029 [US4] Add the open-section set and `DaemonsMsg::SectionToggled` to `K/features/daemons.rs`, with the pure "open or has error" rule
+- [ ] T030 [US4] Split `container_fields::groups` into five section bodies and wrap each in `AccordionSection` in `K/ui/settings/container_fields.rs`, `K/ui/settings/daemons.rs`; keep focus-tracking ids
+- [ ] T031 [US4] Run the geometry gates `T/daemons_section_geometry.rs` and `T/a_field_note_shares_its_fields_column.rs` with the sections and fix overflow in `K/ui/settings/daemons.rs`
+- [ ] T032 [US4] User guide: describe the collapsible sections in the daemon form in `docs/user-guide/sandboxed-daemon.md`
+
+**Checkpoint**: the form is shorter at first open; nothing hidden by a closed section can fail silently.
+
 ## Dependencies
 
-Phase 1 before all. US1 before US2 (the form must carry the fields before the page goes). US3 after US2.
+Phase 1 before all. US1 before US2 (the form must carry the fields before the page goes). US3 after US2. US4 after US3 (T025–T027 are independent of the form; T030 needs T026 and T029).
 T001, T003 parallel; T005–T007 parallel.
 
 ## Implementation Strategy
 
 MVP is US1: the form edits every field while the page still exists (interim two homes over one
 registry entry). US2 then removes the page and retargets pointers. T024 has no code: left to the
-close unit.
+close unit; its visual pass also covers the M4 sections.
 
 ## Milestones
 
@@ -98,3 +114,12 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Verify**: `cargo test -p micold-client --test upgrade_single_daemon`
 - **Depends on**: M2
 - **Tier**: light
+
+### M4 — Collapsible container sections
+
+- **Tasks**: T025–T032
+- **Deliverable**: the daemon form's container settings sit in five titled collapsible sections (Container open, rest closed) built from a new reusable `AccordionSection` Material component, shown in the component showcase; a field error opens its section.
+- **Satisfies**: US4 acceptance scenarios 1–5; FR-012, FR-013, FR-014, FR-015; SC-005
+- **Verify**: `cargo test -p micold-client --test daemons_feature` and `cargo test -p micold-client accordion_section`, `--test daemons_section_geometry` and `--test a_field_note_shares_its_fields_column`
+- **Depends on**: M3
+- **Tier**: full
