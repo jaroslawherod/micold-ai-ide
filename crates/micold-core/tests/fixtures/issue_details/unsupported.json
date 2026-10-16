@@ -1,0 +1,79 @@
+{
+ "data": {
+  "repository": {
+   "issue": {
+    "number": 12,
+    "issueDependenciesSummary": {
+     "blockedBy": 0,
+     "totalBlockedBy": 0,
+     "blocking": 0,
+     "totalBlocking": 0
+    },
+    "blockedBy": null,
+    "blocking": {
+     "totalCount": 0,
+     "nodes": []
+    },
+    "parent": null,
+    "subIssuesSummary": {
+     "total": 0,
+     "completed": 0
+    },
+    "subIssues": null,
+    "labels": {
+     "totalCount": 0,
+     "nodes": []
+    },
+    "assignees": {
+     "totalCount": 0,
+     "nodes": []
+    },
+    "milestone": null,
+    "projectItems": {
+     "totalCount": 0,
+     "nodes": []
+    },
+    "closedByPullRequestsReferences": {
+     "totalCount": 0,
+     "nodes": []
+    },
+    "timelineItems": {
+     "pageInfo": {
+      "hasNextPage": false,
+      "endCursor": "c1"
+     },
+     "nodes": []
+    }
+   }
+  }
+ },
+ "errors": [
+  {
+   "type": "SERVICE_UNAVAILABLE",
+   "path": [
+    "repository",
+    "issue",
+    "blockedBy"
+   ],
+   "message": "not available"
+  },
+  {
+   "type": "SERVICE_UNAVAILABLE",
+   "path": [
+    "repository",
+    "issue",
+    "subIssues"
+   ],
+   "message": "not available"
+  },
+  {
+   "type": "SERVICE_UNAVAILABLE",
+   "path": [
+    "repository",
+    "issue",
+    "parent"
+   ],
+   "message": "not available"
+  }
+ ]
+}

@@ -411,3 +411,16 @@ fn a_named_error_keeps_githubs_words() {
         "not `gh exited with status 1`"
     );
 }
+
+/// 837 contracts/details-read.md §1: a details read whose deadline has passed starts no `gh` run
+/// (one would fail to spawn this path and say `gh` is missing) and reports the timeout.
+#[test]
+fn read_details_past_its_deadline_runs_no_gh() {
+    use micold_core::issue_details::IssueDetailsSource;
+    let gh = GhCli::new(PathBuf::from("/nonexistent/micold-test/gh"));
+    assert_eq!(
+        gh.read_details(&repo(), 12, Instant::now()).unwrap_err(),
+        IssueLoadError::TimedOut,
+        "no run starts after the deadline"
+    );
+}

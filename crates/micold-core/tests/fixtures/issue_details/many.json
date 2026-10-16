@@ -1,0 +1,235 @@
+{
+ "data": {
+  "repository": {
+   "issue": {
+    "number": 12,
+    "issueDependenciesSummary": {
+     "blockedBy": 4,
+     "totalBlockedBy": 5,
+     "blocking": 0,
+     "totalBlocking": 0
+    },
+    "blockedBy": {
+     "totalCount": 3,
+     "nodes": [
+      {
+       "number": 40,
+       "title": "Visible blocker",
+       "state": "OPEN",
+       "repository": {
+        "nameWithOwner": "acme/widgets"
+       }
+      },
+      null,
+      {
+       "number": 41,
+       "title": "Another blocker",
+       "state": "OPEN",
+       "repository": {
+        "nameWithOwner": "acme/widgets"
+       }
+      }
+     ]
+    },
+    "blocking": {
+     "totalCount": 0,
+     "nodes": []
+    },
+    "parent": null,
+    "subIssuesSummary": {
+     "total": 200,
+     "completed": 30
+    },
+    "subIssues": {
+     "totalCount": 25,
+     "nodes": [
+      {
+       "number": 100,
+       "title": "Sub-issue 0",
+       "state": "OPEN",
+       "repository": {
+        "nameWithOwner": "acme/widgets"
+       }
+      },
+      {
+       "number": 101,
+       "title": "Sub-issue 1",
+       "state": "OPEN",
+       "repository": {
+        "nameWithOwner": "acme/widgets"
+       }
+      },
+      {
+       "number": 102,
+       "title": "Sub-issue 2",
+       "state": "OPEN",
+       "repository": {
+        "nameWithOwner": "acme/widgets"
+       }
+      },
+      {
+       "number": 103,
+       "title": "Sub-issue 3",
+       "state": "OPEN",
+       "repository": {
+        "nameWithOwner": "acme/widgets"
+       }
+      },
+      {
+       "number": 104,
+       "title": "Sub-issue 4",
+       "state": "OPEN",
+       "repository": {
+        "nameWithOwner": "acme/widgets"
+       }
+      },
+      {
+       "number": 105,
+       "title": "Sub-issue 5",
+       "state": "OPEN",
+       "repository": {
+        "nameWithOwner": "acme/widgets"
+       }
+      },
+      {
+       "number": 106,
+       "title": "Sub-issue 6",
+       "state": "OPEN",
+       "repository": {
+        "nameWithOwner": "acme/widgets"
+       }
+      },
+      {
+       "number": 107,
+       "title": "Sub-issue 7",
+       "state": "OPEN",
+       "repository": {
+        "nameWithOwner": "acme/widgets"
+       }
+      },
+      {
+       "number": 108,
+       "title": "Sub-issue 8",
+       "state": "OPEN",
+       "repository": {
+        "nameWithOwner": "acme/widgets"
+       }
+      },
+      {
+       "number": 109,
+       "title": "Sub-issue 9",
+       "state": "OPEN",
+       "repository": {
+        "nameWithOwner": "acme/widgets"
+       }
+      },
+      {
+       "number": 110,
+       "title": "Sub-issue 10",
+       "state": "OPEN",
+       "repository": {
+        "nameWithOwner": "acme/widgets"
+       }
+      },
+      {
+       "number": 111,
+       "title": "Sub-issue 11",
+       "state": "OPEN",
+       "repository": {
+        "nameWithOwner": "acme/widgets"
+       }
+      },
+      {
+       "number": 112,
+       "title": "Sub-issue 12",
+       "state": "OPEN",
+       "repository": {
+        "nameWithOwner": "acme/widgets"
+       }
+      },
+      {
+       "number": 113,
+       "title": "Sub-issue 13",
+       "state": "OPEN",
+       "repository": {
+        "nameWithOwner": "acme/widgets"
+       }
+      },
+      {
+       "number": 114,
+       "title": "Sub-issue 14",
+       "state": "OPEN",
+       "repository": {
+        "nameWithOwner": "acme/widgets"
+       }
+      },
+      {
+       "number": 115,
+       "title": "Sub-issue 15",
+       "state": "OPEN",
+       "repository": {
+        "nameWithOwner": "acme/widgets"
+       }
+      },
+      {
+       "number": 116,
+       "title": "Sub-issue 16",
+       "state": "OPEN",
+       "repository": {
+        "nameWithOwner": "acme/widgets"
+       }
+      },
+      {
+       "number": 117,
+       "title": "Sub-issue 17",
+       "state": "OPEN",
+       "repository": {
+        "nameWithOwner": "acme/widgets"
+       }
+      },
+      {
+       "number": 118,
+       "title": "Sub-issue 18",
+       "state": "OPEN",
+       "repository": {
+        "nameWithOwner": "acme/widgets"
+       }
+      },
+      {
+       "number": 119,
+       "title": "Sub-issue 19",
+       "state": "OPEN",
+       "repository": {
+        "nameWithOwner": "acme/widgets"
+       }
+      }
+     ]
+    },
+    "labels": {
+     "totalCount": 0,
+     "nodes": []
+    },
+    "assignees": {
+     "totalCount": 0,
+     "nodes": []
+    },
+    "milestone": null,
+    "projectItems": {
+     "totalCount": 0,
+     "nodes": []
+    },
+    "closedByPullRequestsReferences": {
+     "totalCount": 0,
+     "nodes": []
+    },
+    "timelineItems": {
+     "pageInfo": {
+      "hasNextPage": false,
+      "endCursor": "c1"
+     },
+     "nodes": []
+    }
+   }
+  }
+ }
+}

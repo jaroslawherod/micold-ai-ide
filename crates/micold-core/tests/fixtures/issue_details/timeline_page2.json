@@ -1,0 +1,28 @@
+{
+ "data": {
+  "repository": {
+   "issue": {
+    "timelineItems": {
+     "pageInfo": {
+      "hasNextPage": false,
+      "endCursor": "c2"
+     },
+     "nodes": [
+      {
+       "source": {
+        "number": 31,
+        "title": "Second page PR",
+        "state": "CLOSED",
+        "repository": {
+         "nameWithOwner": "acme/widgets"
+        },
+        "isDraft": false,
+        "merged": false
+       }
+      }
+     ]
+    }
+   }
+  }
+ }
+}

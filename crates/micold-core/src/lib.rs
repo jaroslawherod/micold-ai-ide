@@ -28,6 +28,7 @@ pub mod github;
 pub mod hostname;
 pub mod input;
 pub mod install_location;
+pub mod issue_details;
 pub mod issue_types;
 pub mod jira;
 pub mod link;
