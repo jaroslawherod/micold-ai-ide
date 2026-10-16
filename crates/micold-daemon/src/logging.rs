@@ -9,7 +9,7 @@
 //! | Foreground / dev | stderr `is_terminal()` | stderr, pretty + ANSI |
 //! | Auto-spawned (detached) | neither | rotating file under the user data dir |
 //!
-//! **Disk use is hard-capped** (FR-044): `file-rotate` bounds each file *and* the number of files,
+//! **Disk use is hard-capped** (FR-044): [`RotatingFile`] bounds each file *and* the number of files,
 //! so total log size cannot exceed [`MAX_LOG_BYTES`] × ([`LOG_FILES`] + 1). `tracing-appender` was
 //! rejected precisely because it cannot bound total disk.
 //!
@@ -21,12 +21,12 @@
 //! operations with a sentinel and grepping it against a captured in-memory log stream.
 
 use std::collections::VecDeque;
+use std::fs::File;
 use std::io;
 use std::io::IsTerminal;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-use file_rotate::{compression::Compression, suffix::AppendCount, ContentLimit, FileRotate};
 use micold_core::protocol::messages::{LogEntry, LogSink};
 use tracing::field::{Field, Visit};
 use tracing::{Event, Level, Subscriber};
@@ -174,7 +174,7 @@ impl Logging {
 
 /// A cloneable handle to the rotating writer, so it can be used as a `MakeWriter`.
 #[derive(Clone)]
-struct RotateHandle(Arc<Mutex<FileRotate<AppendCount>>>);
+struct RotateHandle(Arc<Mutex<RotatingFile>>);
 
 impl io::Write for RotateHandle {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
@@ -273,7 +273,8 @@ pub fn init() -> io::Result<Logging> {
         if let Some(parent) = file.parent() {
             std::fs::create_dir_all(parent)?;
         }
-        let handle = RotateHandle(Arc::new(Mutex::new(rotating_file(&file))));
+        let rotating = RotatingFile::open(&file, LOG_FILES, MAX_LOG_BYTES)?;
+        let handle = RotateHandle(Arc::new(Mutex::new(rotating)));
         path = Some(file);
         (
             LogSink::File,
@@ -304,31 +305,96 @@ pub fn init() -> io::Result<Logging> {
     })
 }
 
-/// The rotating writer. Bounds each file AND the file count, so total disk use is capped (FR-044).
-fn rotating_file(path: &PathBuf) -> FileRotate<AppendCount> {
-    FileRotate::new(
-        path,
-        AppendCount::new(LOG_FILES),
-        ContentLimit::Bytes(MAX_LOG_BYTES),
-        Compression::None,
-        owner_only_open_options(),
-    )
+/// A log file that rotates by size: `path` is the live file, `path.1` the previous one, up to
+/// `path.<keep>`; the oldest falls off. Bounds each file AND the file count, so total disk use is
+/// capped (FR-044). A write never splits: it rotates first when it would push a non-empty live file
+/// past `limit`, so a file exceeds `limit` only by a single write larger than `limit` on its own.
+struct RotatingFile {
+    path: PathBuf,
+    keep: usize,
+    limit: usize,
+    /// `None` only inside `rotate`, so the live file is closed before it is renamed (Windows).
+    file: Option<File>,
+    written: usize,
 }
 
-/// Logs may name projects and worktrees, so keep the file owner-only on Unix.
-#[cfg(unix)]
-fn owner_only_open_options() -> Option<std::fs::OpenOptions> {
-    use std::os::unix::fs::OpenOptionsExt;
+impl RotatingFile {
+    /// Open (or continue) the live file at `path`, counting what it already holds toward `limit`.
+    fn open(path: &Path, keep: usize, limit: usize) -> io::Result<Self> {
+        let file = open_log(path)?;
+        let written = usize::try_from(file.metadata()?.len()).unwrap_or(usize::MAX);
+        Ok(Self {
+            path: path.to_path_buf(),
+            keep,
+            limit,
+            file: Some(file),
+            written,
+        })
+    }
+
+    fn numbered(&self, n: usize) -> PathBuf {
+        let mut name = self.path.clone().into_os_string();
+        name.push(format!(".{n}"));
+        PathBuf::from(name)
+    }
+
+    /// Shift `path.<n>` to `path.<n+1>` from the oldest down, drop the one past `keep`, and start
+    /// an empty live file.
+    fn rotate(&mut self) -> io::Result<()> {
+        if let Some(mut file) = self.file.take() {
+            io::Write::flush(&mut file)?;
+        }
+        if self.keep == 0 {
+            std::fs::remove_file(&self.path)?;
+        } else {
+            match std::fs::remove_file(self.numbered(self.keep)) {
+                Err(e) if e.kind() != io::ErrorKind::NotFound => return Err(e),
+                _ => {}
+            }
+            for n in (1..self.keep).rev() {
+                match std::fs::rename(self.numbered(n), self.numbered(n + 1)) {
+                    Err(e) if e.kind() != io::ErrorKind::NotFound => return Err(e),
+                    _ => {}
+                }
+            }
+            std::fs::rename(&self.path, self.numbered(1))?;
+        }
+        self.file = Some(open_log(&self.path)?);
+        self.written = 0;
+        Ok(())
+    }
+}
+
+impl io::Write for RotatingFile {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        if self.written > 0 && self.written.saturating_add(buf.len()) > self.limit {
+            self.rotate()?;
+        }
+        // A rotate that failed part-way left no live file: reopen it rather than lose the log.
+        let file = match &mut self.file {
+            Some(file) => file,
+            None => self.file.insert(open_log(&self.path)?),
+        };
+        let n = io::Write::write(file, buf)?;
+        self.written += n;
+        Ok(n)
+    }
+    fn flush(&mut self) -> io::Result<()> {
+        self.file.as_mut().map_or(Ok(()), io::Write::flush)
+    }
+}
+
+/// Open the live log for appending. Logs may name projects and worktrees, so the file is
+/// owner-only on Unix.
+fn open_log(path: &Path) -> io::Result<File> {
     let mut opts = std::fs::OpenOptions::new();
-    // `file-rotate` requires the caller-supplied options to open for read+append+create; we only
-    // add the owner-only mode on top (its docs mandate this exact trio).
-    opts.read(true).create(true).append(true).mode(0o600);
-    Some(opts)
-}
-
-#[cfg(not(unix))]
-fn owner_only_open_options() -> Option<std::fs::OpenOptions> {
-    None
+    opts.create(true).append(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        opts.mode(0o600);
+    }
+    opts.open(path)
 }
 
 #[cfg(test)]
@@ -430,23 +496,65 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("test.log");
         // A tiny limit so a few writes force several rotations.
-        let mut rotate = FileRotate::new(
-            &path,
-            AppendCount::new(2),
-            ContentLimit::Bytes(64),
-            Compression::None,
-            owner_only_open_options(),
-        );
+        let mut rotate = RotatingFile::open(&path, 2, 64).unwrap();
+        // One write per line, as the fmt layer writes one formatted event at a time.
         for i in 0..200 {
-            writeln!(rotate, "line {i} with some padding to force rotation").unwrap();
+            let line = format!("line {i} with some padding to force rotation\n");
+            rotate.write_all(line.as_bytes()).unwrap();
         }
         rotate.flush().unwrap();
 
-        let count = std::fs::read_dir(dir.path()).unwrap().count();
-        assert!(
-            count <= 3,
-            "rotation must keep at most live + 2 files, found {count}"
+        let mut names: Vec<_> = std::fs::read_dir(dir.path())
+            .unwrap()
+            .map(|e| e.unwrap().file_name().into_string().unwrap())
+            .collect();
+        names.sort();
+        assert_eq!(
+            names,
+            ["test.log", "test.log.1", "test.log.2"],
+            "rotation must keep the live file + 2"
         );
+        for name in &names {
+            let len = std::fs::metadata(dir.path().join(name)).unwrap().len();
+            assert!(len <= 64, "{name} is {len} bytes, past the 64-byte limit");
+        }
+        let newest = std::fs::read_to_string(&path).unwrap();
+        assert!(newest.ends_with("line 199 with some padding to force rotation\n"));
+        let previous = std::fs::read_to_string(dir.path().join("test.log.1")).unwrap();
+        assert!(
+            previous.contains("line 198 "),
+            "the previous file holds the line before"
+        );
+    }
+
+    #[test]
+    fn reopening_continues_the_live_file_toward_its_limit() {
+        use std::io::Write;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test.log");
+        std::fs::write(&path, [b'x'; 60]).unwrap();
+        // 60 bytes are already there, so the next 10-byte write starts a new file.
+        let mut rotate = RotatingFile::open(&path, 2, 64).unwrap();
+        rotate.write_all(&[b'y'; 10]).unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), [b'y'; 10]);
+        assert_eq!(
+            std::fs::read(dir.path().join("test.log.1")).unwrap(),
+            [b'x'; 60]
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_rotated_in_log_file_is_owner_only() {
+        use std::io::Write;
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test.log");
+        let mut rotate = RotatingFile::open(&path, 1, 8).unwrap();
+        rotate.write_all(b"12345678").unwrap();
+        rotate.write_all(b"9").unwrap();
+        let mode = std::fs::metadata(&path).unwrap().permissions().mode();
+        assert_eq!(mode & 0o777, 0o600);
     }
 
     fn entry(message: &str) -> LogEntry {
