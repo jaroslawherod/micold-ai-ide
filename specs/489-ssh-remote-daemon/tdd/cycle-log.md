@@ -51,3 +51,16 @@ the UI; `RemoteRepositoryRequested` only when connected; geometry of the reposit
 worktree and shell output through a real sshd), and review A and B read each against the
 behaviour. Mutants to apply if audited: "wrap_path skips `cwd`", "canonicalize_best_effort touches
 the local filesystem for a remote identity", "add_repository ignores a non-connected daemon".
+
+## M3 (T039-T050): test-after deviation
+
+The M3 behaviours (`Backoff` sequence and reset, the `Reconnecting`/`GiveUp`/`Reconnect` state
+machine, the client reconnect loop with an injected sleep, the disconnected/lost labels, the
+Reconnecting badge and its actions, the fault proxy and the real-sshd cut-and-restore test) were
+written together with their tests; no red run was captured and none is claimed. What backs them:
+the tests assert observables (the delays 1, 2, 4, 8, 15; the state after each event; the epoch
+bump; the label strings; the badge geometry; over a real `ssh` the same daemon pid, an unbroken
+tick sequence, recovery within 30 s, stop trying then Reconnect), and review A and B read each
+against the behaviour. Mutants to apply if audited: "Backoff never caps", "GiveUp leaves
+`should_dial` true", "Reconnect does not bump the epoch", "an SSH drop after `established` is not
+retried".
