@@ -342,7 +342,72 @@ pub struct IssueDetails {
     pub linked_prs: Kind<RelatedList<RelatedPr>>,
 }
 
+/// One row of the New worktree form's details (data-model §7).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DetailLine {
+    pub label: &'static str,
+    pub text: String,
+    pub warning: bool,
+}
+
 impl IssueDetails {
+    /// The form's rows, in a fixed order, a kind with nothing in it left out (form-details §3).
+    pub fn display_lines(&self) -> Vec<DetailLine> {
+        let mut lines = Vec::new();
+        let blocked = self.is_blocked();
+        push_line(&mut lines, "Blocked by", &self.blocked_by, |b| {
+            let head = if blocked {
+                format!("{} open of {}: ", b.open, b.list.total())
+            } else {
+                String::new()
+            };
+            (
+                format!("{head}{}", list_text(&b.list, ", ", issue_text)),
+                blocked,
+            )
+        });
+        push_line(&mut lines, "Blocking", &self.blocking, |l| {
+            (list_text(l, ", ", issue_text), false)
+        });
+        push_line(&mut lines, "Parent", &self.parent, |p| {
+            (p.as_ref().map(issue_text).unwrap_or_default(), false)
+        });
+        push_line(&mut lines, "Sub-issues", &self.sub_issues, |s| {
+            let head = format!("{} of {} closed: ", s.closed, s.list.total());
+            (
+                format!("{head}{}", list_text(&s.list, ", ", issue_text)),
+                false,
+            )
+        });
+        push_line(
+            &mut lines,
+            "Closing pull requests",
+            &self.closing_prs,
+            |l| (list_text(l, ", ", pr_text), false),
+        );
+        push_line(&mut lines, "Linked pull requests", &self.linked_prs, |l| {
+            let head = if l.total_is_lower_bound() {
+                format!("at least {}: ", l.total())
+            } else {
+                String::new()
+            };
+            (format!("{head}{}", list_text(l, ", ", pr_text)), false)
+        });
+        push_line(&mut lines, "Assignees", &self.assignees, |l| {
+            (list_text(l, ", ", |a| a.to_string()), false)
+        });
+        push_line(&mut lines, "Milestone", &self.milestone, |m| {
+            (
+                m.as_ref().map(ToString::to_string).unwrap_or_default(),
+                false,
+            )
+        });
+        push_line(&mut lines, "Projects", &self.projects, |l| {
+            (list_text(l, "; ", project_text), false)
+        });
+        lines
+    }
+
     /// Whether an open issue blocks it (FR-003, SC-003). A blocker kind that cannot be read is
     /// never blocked.
     pub fn is_blocked(&self) -> bool {
@@ -437,6 +502,70 @@ impl IssueDetails {
         }
         Value::Object(out)
     }
+}
+
+/// Append a kind's row: its text when read with something in it, `Not readable: <reason>` when
+/// not, nothing when empty. `text` gives the row's text and whether it is a warning.
+fn push_line<T: Contents>(
+    lines: &mut Vec<DetailLine>,
+    label: &'static str,
+    kind: &Kind<T>,
+    text: impl FnOnce(&T) -> (String, bool),
+) {
+    match kind {
+        Kind::NotReadable(reason) => lines.push(DetailLine {
+            label,
+            text: format!("Not readable: {reason}"),
+            warning: false,
+        }),
+        Kind::Read(value) if value.has_any() => {
+            let (text, warning) = text(value);
+            lines.push(DetailLine {
+                label,
+                text,
+                warning,
+            });
+        }
+        Kind::Read(_) => {}
+    }
+}
+
+/// A list's shown items joined by `separator`, then ` and N more` and `; N you can't see`.
+fn list_text<T>(list: &RelatedList<T>, separator: &str, item: impl Fn(&T) -> String) -> String {
+    let mut text = list
+        .shown()
+        .iter()
+        .map(item)
+        .collect::<Vec<_>>()
+        .join(separator);
+    if list.more() > 0 {
+        text.push_str(&format!(" and {} more", list.more()));
+    }
+    if list.hidden() > 0 {
+        text.push_str(&format!("; {} you can't see", list.hidden()));
+    }
+    text
+}
+
+fn issue_text(issue: &RelatedIssue) -> String {
+    let state = if issue.open { "open" } else { "closed" };
+    format!("{} {} ({state})", issue.reference, issue.title)
+}
+
+fn pr_text(pr: &RelatedPr) -> String {
+    format!("{} {} ({})", pr.reference, pr.title, pr.state.as_str())
+}
+
+fn project_text(project: &ProjectMembership) -> String {
+    if project.fields.is_empty() {
+        return project.name.to_string();
+    }
+    let fields: Vec<String> = project
+        .fields
+        .iter()
+        .map(|(name, value)| format!("{name} {value}"))
+        .collect();
+    format!("{}: {}", project.name, fields.join(", "))
 }
 
 /// A kind's value when it was read and has something in it.

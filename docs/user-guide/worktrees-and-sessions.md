@@ -496,8 +496,9 @@ service. Before you choose the chip, the line under the chips names the reposito
 **Retry** after a failure, asks GitHub for the repository's open issues. The request carries the
 repository's owner and name and nothing else from your project. When more than 1,000 issues are
 open, typing in **Issue** also searches GitHub (see below); that request carries the text you typed
-as well. The same notice stays at the top of
-the issue list while the source is chosen.
+as well. Picking an issue asks GitHub once more, for that issue's relationships (see below); that
+request carries the repository's owner and name and the issue's number. The same notice stays at
+the top of the issue list while the source is chosen.
 
 **The list.** Issues are listed most recently updated first. Each takes two lines: its number and
 title, then who reported it and its labels. Long text wraps onto further lines instead of being cut
@@ -538,6 +539,36 @@ open issues says "*owner/name* has no open issues."
 | "GitHub's rate limit was reached. Wait a minute, then retry." | Wait a minute, then retry. |
 | "GitHub didn't answer within 10 seconds." | Retry. If it keeps happening, check `gh` works from a terminal. |
 | "Couldn't read issues: …" | Read the detail `gh` reported, then retry. |
+
+**The issue's relationships.** Right after you pick an issue, the form reads what GitHub knows
+about it and shows it below the **Issue** field, one row per kind, in this order, and only the
+kinds the issue has:
+
+| Row | What it shows |
+|---|---|
+| **Blocked by** | The issues blocking it, each with its number, title and whether it is open or closed. When at least one is open the row is a warning: its label is red and its text starts "Blocked:" and says how many are open, as in "Blocked: 1 open of 2: …". |
+| **Blocking** | The issues it blocks. |
+| **Parent** | Its parent issue, with the repository when it lives elsewhere (*owner/name*#3). |
+| **Sub-issues** | "1 of 2 closed:" and then the sub-issues. |
+| **Closing pull requests** | The pull requests that will close it, each marked open, draft, merged or closed. |
+| **Linked pull requests** | The other pull requests that mention it. When GitHub has more than the app read, the row says "at least *N*". |
+| **Assignees** | Their GitHub logins. |
+| **Milestone** | Its title. |
+| **Projects** | Each project it is in, with its filled-in fields: "Roadmap: Status In progress, Estimate 3; Backlog". |
+
+An issue with none of these shows nothing extra. Its labels have no row, because the issue's row in
+the list already shows them. A row names at most 20 items and then says "and *N* more"; items you
+have no permission to see are not named and are counted: "; *N* you can't see". With more than five
+rows, the block scrolls. When your GitHub sign-in cannot read one kind, for example projects, that
+row says "Not readable:" and why, so a kind that cannot be read is never mistaken for one that is
+empty. When the whole read fails, the form shows one grey line, "Couldn't read this issue's details:
+…", and nothing else changes.
+
+The relationships are only information. **Create** never waits for them, and is never refused or
+changed by them: a blocked issue gets its worktree like any other, and the same goes while the read
+is still running, after it fails, and when it takes longer than 10 seconds. Picking another issue,
+or leaving the **GitHub issue** chip, drops the relationships of the earlier pick. The worktree's
+row in the sidebar looks as it always did; the relationships are shown in the form only.
 
 ### The issue's labels choose the type
 

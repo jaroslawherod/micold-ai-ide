@@ -12,8 +12,8 @@ use crate::features::window::FieldId;
 use crate::features::worktree::Msg as WorktreeMsg;
 use crate::features::worktree_form::Msg as FormMsg;
 use crate::features::worktree_form::{
-    BranchSource, IssueList, ResolutionState, SearchState, SessionChoice, WorktreeForm,
-    WorktreeFormStatus,
+    BranchSource, IssueDetailsState, IssueList, ResolutionState, SearchState, SessionChoice,
+    WorktreeForm, WorktreeFormStatus,
 };
 use crate::ui::focus::TrackFocus;
 use crate::ui::material::{
@@ -511,7 +511,72 @@ fn issue_picker<'a>(form: &'a WorktreeForm, r: Roles) -> Element<'a, Message> {
             }
         }
     }
+    if let Some(details) = issue_details(form, r) {
+        col = col.push(details);
+    }
     col.into()
+}
+
+/// The width the label column of the picked issue's details takes: "Closing pull requests" at the
+/// caption size fits it.
+const DETAIL_LABEL_WIDTH: f32 = 148.0;
+
+/// How many rows of details the form shows before they scroll. The form is the tallest dialog and
+/// the window has a fixed height: nine rows, with the form's own fields, would push the dialog
+/// over the app bar (`gates/panel_placement.rs`) and the footer out of reach.
+const DETAIL_ROWS_SHOWN: usize = 5;
+
+/// One row of the details block: a body line at [`TypeRole::Body`]'s height plus the gap below it.
+const DETAIL_ROW_HEIGHT: f32 = 24.0;
+
+/// The picked GitHub issue's relationships, directly below the picker (837, contracts/form-details
+/// §3). Nothing while they are awaited, one muted line when the read failed, and one row per
+/// display line when it succeeded: a caption-role label, then the text in body role. A blocked
+/// issue's line has its label tinted as an error and its text led by "Blocked:". The row never
+/// gates Create (FR-006).
+fn issue_details<'a>(form: &'a WorktreeForm, r: Roles) -> Option<Element<'a, Message>> {
+    if form.jira_site().is_some() {
+        return None;
+    }
+    match &form.issue_details {
+        IssueDetailsState::Idle | IssueDetailsState::Loading { .. } => None,
+        IssueDetailsState::Failed { message, .. } => Some(
+            Text::new(
+                format!("Couldn't read this issue's details: {message}."),
+                TypeRole::Caption,
+                r,
+            )
+            .muted()
+            .into(),
+        ),
+        IssueDetailsState::Loaded { details, .. } => {
+            let mut col = column![].spacing(spacing::XS);
+            for line in details.display_lines() {
+                let label = Text::new(line.label, TypeRole::Caption, r)
+                    .width(Length::Fixed(DETAIL_LABEL_WIDTH));
+                let (label, text) = if line.warning {
+                    (label.tint(r.error), format!("Blocked: {}", line.text))
+                } else {
+                    (label.muted(), line.text)
+                };
+                col = col.push(
+                    row![
+                        label,
+                        Text::new(text, TypeRole::Body, r).width(Length::Fill)
+                    ]
+                    .spacing(spacing::SM),
+                );
+            }
+            if details.display_lines().len() > DETAIL_ROWS_SHOWN {
+                return Some(
+                    material::Scrollable::new(col, r)
+                        .height(Length::Fixed(DETAIL_ROWS_SHOWN as f32 * DETAIL_ROW_HEIGHT))
+                        .into(),
+                );
+            }
+            Some(col.into())
+        }
+    }
 }
 
 /// The ordinary Create / Cancel row.

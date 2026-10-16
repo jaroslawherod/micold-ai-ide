@@ -1409,6 +1409,7 @@ pub struct FakeIssueSource {
     >,
     details_delay: std::time::Duration,
     details_calls: std::sync::Mutex<Vec<(String, u32)>>,
+    details_deadlines: std::sync::Mutex<Vec<std::time::Instant>>,
 }
 
 impl FakeIssueSource {
@@ -1479,6 +1480,14 @@ impl FakeIssueSource {
     /// Every `read_details` call so far, as (`owner/name`, number).
     pub fn details_calls(&self) -> Vec<(String, u32)> {
         self.details_calls
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
+    }
+
+    /// The deadline each `read_details` call was given, in call order.
+    pub fn details_deadlines(&self) -> Vec<std::time::Instant> {
+        self.details_deadlines
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .clone()
@@ -1586,8 +1595,12 @@ impl crate::issue_details::IssueDetailsSource for FakeIssueSource {
         &self,
         repo: &GithubRepo,
         number: u32,
-        _deadline: std::time::Instant,
+        deadline: std::time::Instant,
     ) -> Result<crate::issue_details::IssueDetails, IssueLoadError> {
+        self.details_deadlines
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push(deadline);
         self.details_calls
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
