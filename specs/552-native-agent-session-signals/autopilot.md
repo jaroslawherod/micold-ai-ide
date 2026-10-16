@@ -21,6 +21,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #823 | M2 Claude sub-agent runs recorded, protocol 43 | merged | 6a8aacad57cd3a8648d6f1fa7cebbafa232dd83b |
 | #870 | M3 provenance and attach_worktree removed, protocol 46 | merged | 5a65464712ecce80c7aed79475c585912a54399d |
 | #881 | M4 provider gaps, provider table, superseded check | merged | 0d0655eb3085dcd1453215832a1ba2a3db221aad |
+| #884 | close the spec | open | |
 
 ## Milestones
 
