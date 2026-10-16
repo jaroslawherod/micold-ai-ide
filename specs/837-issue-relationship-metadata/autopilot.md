@@ -10,19 +10,20 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-tw6sph
 - **Started**: 2026-10-16
 - **Phase**: milestone M1
-- **Next step**: M1 verify (gate, review A, review B), then PR
+- **Next step**: orchestrator opens the M1 PR (branch pushed; title and body in the unit's scratchpad), waits on CI and merges; review B for M1 was not run (no subagent tool in unit 3): dispatch it on the PR before merge if wanted; then M2
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #906 | Design: spec, plan, research, contracts, tasks | merged | d24fd3223f0d74d045690100555d88bc28c13900 |
+| pending | M1: tool reports the issue object | to open | — |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T018, T027, T029 | full | create_worktree with github_issue returns the issue object (relationships, not_readable, details_error); agent-tools guide | — | in progress |
+| M1 | T001–T018, T027, T029 | full | create_worktree with github_issue returns the issue object (relationships, not_readable, details_error); agent-tools guide | pending (orchestrator opens) | gate green at bdf71a68 |
 | M2 | T019–T026, T028, T030, T031 | full | New worktree form shows a picked issue's relationships, blocked warning, failure line; worktrees guide; visual pass | — | planned |
 
 ## Decisions
