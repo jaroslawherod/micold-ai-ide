@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #804
 - **Worktree branch**: feat/804_move-the-session-service-settings-container
 - **Started**: 2026-10-15
-- **Phase**: milestones (M4 spec amendment PR open; M4 pending)
-- **Next step**: merge the M4 amendment PR, then milestone M4 (T025–T032)
+- **Phase**: milestones (M4 implemented, in review)
+- **Next step**: open the M4 PR, wait for CI and merge, then close
 
 ## Pull requests
 
@@ -29,7 +29,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T013 | full | Container settings in the Daemons form | #882 | merged |
 | M2 | T014–T021 | full | Session service section removed | #889 | merged |
 | M3 | T022–T023 | light | Existing settings carry over | #900 | merged |
-| M4 | T025–T032 | full | Collapsible container sections (accordion, #890) | | pending |
+| M4 | T025–T032 | full | Collapsible container sections (accordion, #890) | | in review |
 
 ## Decisions
 
@@ -50,6 +50,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review B M1 | 1 | ef3356982b2d:e016b011a15f | CHANGES: 1 MAJOR declined (no red evidence), 1 MINOR fixed |
 | Review B M3 | 1 | 280cc5ee2819 | CLEAN (1 MINOR: guide said "image", not tested; dropped the word, prose only) |
 | Spec amendment M4 | 1 | 330332e3287d:030ddb2ab98c | CLEAN (3 MINOR fixed, prose/task names) |
+| M4 review A | 1 | 2b8390eddd30:20bda6cfa20d | CHANGES: 1 MAJOR (Tab reached fields of closed sections) fixed in Expand::operate, test added |
+| M4 review B | 1 | 2416be2b6d16:e468d7a54cae | pending |
 
 ## Declined review findings
 
@@ -62,7 +64,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M4 (T025-T032) is implemented and ticked; scoped gate green at commit "test(804): section tests use a named duration token". Review A round 1 done (1 MAJOR fixed: `Expand::operate` skips hidden children; `Accordion::width` added so the section body fills width). Left for the next unit:
+
+1. Review B (conformance, sonnet) was dispatched against snapshot 2416be2b6d16:e468d7a54cae; its result may not have reached this unit. Dispatch it again (once) and act on findings.
+2. Visual pass did not run: the forked skill got no brief. Dispatch an `autopilot-worker` with a full brief: headless sway + grim (no Xvfb), showcase `AccordionSection` entry (closed/open/live) and Settings > Daemons container form, light and dark; quickstart.md Part B.
+3. Full gate (`mise run gate`, detached), then commit, push, open the PR per pr.md: title `feat(804): collapsible container sections (#804)`, body ends `Refs #804` and `Refs #890`. Record the PR number.
 
 ## Open escalation
 
