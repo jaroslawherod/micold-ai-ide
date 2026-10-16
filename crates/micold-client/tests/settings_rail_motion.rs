@@ -729,7 +729,7 @@ fn rows_keep_their_height_and_icons_their_line() {
 }
 
 /// The destination the covered state badges: Session service, sharing a credential.
-const BADGED: SettingsSection = SettingsSection::Daemon;
+const BADGED: SettingsSection = SettingsSection::Daemons;
 
 /// A slot of a sliding row: its labelled form, the same form with its glyph tinted, and its
 /// icons-only form, in that order (contract §3).

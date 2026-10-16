@@ -2,9 +2,8 @@
 //! survive-logout (feature 027, FR-028; moved into the Daemons form by feature 804).
 //!
 //! One copy of the fields and of the decisions about them (which limit is editable, what is said
-//! about an unshared sign-in), drawn by two surfaces: the Daemons form ([`Surface::Form`]) and,
-//! until it is removed, the Session service page ([`Surface::Page`]). Both hand the fields a
-//! [`ContainerView`] instead of a settings draft, so neither owns the other's state.
+//! about an unshared sign-in), drawn by the Daemons form. The form hands the fields a
+//! [`ContainerView`] instead of a settings draft, so the fields own no state.
 //!
 //! # Why an unsupported limit is disabled rather than hidden
 //!
@@ -17,7 +16,6 @@
 use crate::app::Message;
 use crate::features::daemons::Msg as DaemonsMsg;
 use crate::features::sandbox::SandboxLimit;
-use crate::features::settings::Msg as SettingsMsg;
 use crate::features::window::FieldId;
 use crate::ui::focus::TrackFocus;
 use crate::ui::material::{Checkbox, Select, TextField};
@@ -69,15 +67,6 @@ pub struct ContainerView<'a> {
     pub placement: PlacementKind,
 }
 
-/// Which screen draws the fields, which decides the messages and focus ids they use.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Surface {
-    /// The Session service page (saved by the page's Save).
-    Page,
-    /// The Daemons form (saved by the form's Save daemon).
-    Form,
-}
-
 /// Errors to show beside the fields, looked up by the caller in its own error store.
 #[derive(Debug, Clone, Default)]
 pub struct FieldErrors {
@@ -105,7 +94,7 @@ fn unshared_sign_in<'a>(view: &ContainerView<'a>) -> Option<&'a str> {
 /// It names the path, because "not shared" alone sends the user looking for why. It offers the two
 /// ways that work and not a restart: a restart adopts the same container, which keeps the mounts
 /// it was created with. Moving the service to this computer removes the container, so moving it
-/// back creates one with the token (`apply_placement`, `shell::sandbox::stop`).
+/// back creates one with the token (`shell::sandbox::stop`).
 ///
 /// The Keychain is named on macOS only, where it is the usual reason (FR-004g).
 pub fn unshared_sign_in_notice(view: &ContainerView<'_>) -> Option<String> {
@@ -198,38 +187,21 @@ impl LimitControl<'_> {
     }
 }
 
-impl Surface {
-    fn limit_field(self, index: usize) -> FieldId {
-        match (self, index) {
-            (Self::Page, 0) => FieldId::SettingsCpuLimit,
-            (Self::Page, 1) => FieldId::SettingsMemoryLimit,
-            (Self::Page, 2) => FieldId::SettingsPidLimit,
-            (Self::Page, _) => FieldId::SettingsStorageLimit,
-            (Self::Form, 0) => FieldId::DaemonCpuLimit,
-            (Self::Form, 1) => FieldId::DaemonMemoryLimit,
-            (Self::Form, 2) => FieldId::DaemonPidLimit,
-            (Self::Form, _) => FieldId::DaemonStorageLimit,
-        }
-    }
+/// The four limits' fields, in the order they are shown.
+const LIMIT_FIELDS: [FieldId; 4] = [
+    FieldId::DaemonCpuLimit,
+    FieldId::DaemonMemoryLimit,
+    FieldId::DaemonPidLimit,
+    FieldId::DaemonStorageLimit,
+];
 
-    fn limit_input(self, index: usize) -> fn(String) -> Message {
-        match (self, index) {
-            (Self::Page, 0) => |v| Message::Settings(SettingsMsg::CpuLimitChanged(v)),
-            (Self::Page, 1) => |v| Message::Settings(SettingsMsg::MemoryLimitChanged(v)),
-            (Self::Page, 2) => |v| Message::Settings(SettingsMsg::PidLimitChanged(v)),
-            (Self::Page, _) => |v| Message::Settings(SettingsMsg::StorageLimitChanged(v)),
-            (Self::Form, 0) => |v| Message::Daemons(DaemonsMsg::CpuLimitEdited(v)),
-            (Self::Form, 1) => |v| Message::Daemons(DaemonsMsg::MemoryLimitEdited(v)),
-            (Self::Form, 2) => |v| Message::Daemons(DaemonsMsg::PidLimitEdited(v)),
-            (Self::Form, _) => |v| Message::Daemons(DaemonsMsg::StorageLimitEdited(v)),
-        }
-    }
-
-    fn submit(self) -> Message {
-        match self {
-            Self::Page => Message::Settings(SettingsMsg::Saved),
-            Self::Form => Message::Daemons(DaemonsMsg::Saved),
-        }
+/// The message typing in the `index`th limit emits.
+fn limit_input(index: usize) -> fn(String) -> Message {
+    match index {
+        0 => |v| Message::Daemons(DaemonsMsg::CpuLimitEdited(v)),
+        1 => |v| Message::Daemons(DaemonsMsg::MemoryLimitEdited(v)),
+        2 => |v| Message::Daemons(DaemonsMsg::PidLimitEdited(v)),
+        _ => |v| Message::Daemons(DaemonsMsg::StorageLimitEdited(v)),
     }
 }
 
@@ -237,7 +209,7 @@ impl Surface {
 ///
 /// Unsupported is disabled rather than hidden (see the module docs). Capabilities are `Option`
 /// because "not probed yet" is a real state: unknown means editable.
-pub fn limits<'a>(view: &ContainerView<'a>, surface: Surface) -> [LimitControl<'a>; 4] {
+pub fn limits<'a>(view: &ContainerView<'a>) -> [LimitControl<'a>; 4] {
     let caps = view.capabilities;
     // Three of the four labels come from `SandboxLimit`, because a session stopped by one of them
     // is reported by naming its setting (T088) and a report that used a different name than the
@@ -277,10 +249,10 @@ pub fn limits<'a>(view: &ContainerView<'a>, surface: Surface) -> [LimitControl<'
             Some(LimitSupport::Unsupported { reason }) => {
                 (format!("Cannot be enforced here: {reason}"), None)
             }
-            _ => (hint.to_string(), Some(surface.limit_input(i))),
+            _ => (hint.to_string(), Some(limit_input(i))),
         };
         LimitControl {
-            field: surface.limit_field(i),
+            field: LIMIT_FIELDS[i],
             label,
             value,
             supporting,
@@ -333,26 +305,18 @@ pub fn survival_note<'a>(placement: PlacementKind, roles: Roles) -> Element<'a, 
 /// notice that the image running now lacks an AI CLI (FR-023b), attached to the reference field.
 pub fn groups<'a>(
     view: &ContainerView<'a>,
-    surface: Surface,
     errors: FieldErrors,
     missing_cli: Option<String>,
     focused: Option<FieldId>,
     roles: Roles,
 ) -> Vec<Element<'a, Message>> {
-    let page = surface == Surface::Page;
     let runtime = Select::new(
         RUNTIMES,
         Some(Named(
             view.profile.runtime,
             name_of(RUNTIMES, view.profile.runtime),
         )),
-        move |chosen: Named<RuntimeKind>| {
-            if page {
-                Message::Settings(SettingsMsg::RuntimeChanged(chosen.0))
-            } else {
-                Message::Daemons(DaemonsMsg::ContainerRuntimeChosen(chosen.0))
-            }
-        },
+        |chosen: Named<RuntimeKind>| Message::Daemons(DaemonsMsg::ContainerRuntimeChosen(chosen.0)),
         roles,
     )
     .label("Container runtime");
@@ -363,13 +327,7 @@ pub fn groups<'a>(
             view.profile.image.kind,
             name_of(IMAGE_SOURCES, view.profile.image.kind),
         )),
-        move |chosen: Named<ImageSourceKind>| {
-            if page {
-                Message::Settings(SettingsMsg::ImageKindChanged(chosen.0))
-            } else {
-                Message::Daemons(DaemonsMsg::ImageKindChosen(chosen.0))
-            }
-        },
+        |chosen: Named<ImageSourceKind>| Message::Daemons(DaemonsMsg::ImageKindChosen(chosen.0)),
         roles,
     )
     .label("Image source")
@@ -379,43 +337,21 @@ pub fn groups<'a>(
         ImageSourceKind::LocalBuild => "Built by `mise run image` from this working tree",
     });
 
-    let reference_id = if page {
-        FieldId::SettingsImageReference
-    } else {
-        FieldId::DaemonImage
-    };
     let reference = TextField::new("", &view.profile.image.reference, roles)
         .label("Image reference")
         .supporting("A digest or an exact tag; a moving tag cannot be reported in a bug")
         .error(errors.reference)
-        .track_focus(reference_id, focused)
-        .on_input(move |v| {
-            if page {
-                Message::Settings(SettingsMsg::ImageReferenceChanged(v))
-            } else {
-                Message::Daemons(DaemonsMsg::ImageEdited(v))
-            }
-        })
-        .on_submit(surface.submit());
+        .track_focus(FieldId::DaemonImage, focused)
+        .on_input(|v| Message::Daemons(DaemonsMsg::ImageEdited(v)))
+        .on_submit(Message::Daemons(DaemonsMsg::Saved));
 
-    let archive_id = if page {
-        FieldId::SettingsImagePath
-    } else {
-        FieldId::DaemonImagePath
-    };
     let archive = TextField::new("", view.image_path, roles)
         .label("Image file")
         .supporting("The archive to load, when the image comes from a file")
         .error(errors.path)
-        .track_focus(archive_id, focused)
-        .on_input(move |v| {
-            if page {
-                Message::Settings(SettingsMsg::ImagePathChanged(v))
-            } else {
-                Message::Daemons(DaemonsMsg::ImagePathEdited(v))
-            }
-        })
-        .on_submit(surface.submit());
+        .track_focus(FieldId::DaemonImagePath, focused)
+        .on_input(|v| Message::Daemons(DaemonsMsg::ImagePathEdited(v)))
+        .on_submit(Message::Daemons(DaemonsMsg::Saved));
 
     // Feature 028: the service also stops itself after 30 continuous minutes with nothing
     // connected, and this opt-in is the one thing that suppresses that too — so the label names
@@ -425,21 +361,8 @@ pub fn groups<'a>(
         view.profile.survive_logout,
         roles,
     )
-    .track_focus(
-        if page {
-            FieldId::SettingsSurviveLogout
-        } else {
-            FieldId::DaemonSurviveLogout
-        },
-        focused,
-    )
-    .on_toggle(move |v| {
-        if page {
-            Message::Settings(SettingsMsg::SurviveLogoutToggled(v))
-        } else {
-            Message::Daemons(DaemonsMsg::SurviveLogoutToggled(v))
-        }
-    });
+    .track_focus(FieldId::DaemonSurviveLogout, focused)
+    .on_toggle(|v| Message::Daemons(DaemonsMsg::SurviveLogoutToggled(v)));
 
     // FR-023b, at the point the image is chosen: the note is about that field's value, so it shares
     // the column the field's own supporting line sits in (see `field_note`).
@@ -460,20 +383,9 @@ pub fn groups<'a>(
         let on = view.profile.credentials.contains(&share);
         controls.push(
             Checkbox::new(share.label(), on, roles)
-                .track_focus(
-                    if page {
-                        FieldId::SettingsCredential(share)
-                    } else {
-                        FieldId::DaemonCredential(share)
-                    },
-                    focused,
-                )
+                .track_focus(FieldId::DaemonCredential(share), focused)
                 .on_toggle(move |checked| {
-                    if page {
-                        Message::Settings(SettingsMsg::CredentialToggled(share, checked))
-                    } else {
-                        Message::Daemons(DaemonsMsg::CredentialToggled(share, checked))
-                    }
+                    Message::Daemons(DaemonsMsg::CredentialToggled(share, checked))
                 })
                 .into(),
         );
@@ -495,13 +407,7 @@ pub fn groups<'a>(
             view.profile.network,
             name_of(NETWORKS, view.profile.network),
         )),
-        move |chosen: Named<NetworkPosture>| {
-            if page {
-                Message::Settings(SettingsMsg::NetworkChanged(chosen.0))
-            } else {
-                Message::Daemons(DaemonsMsg::NetworkChosen(chosen.0))
-            }
-        },
+        |chosen: Named<NetworkPosture>| Message::Daemons(DaemonsMsg::NetworkChosen(chosen.0)),
         roles,
     )
     .label("Network");
@@ -524,14 +430,14 @@ pub fn groups<'a>(
         roles,
     ));
     let [e0, e1, e2, e3] = errors.limits;
-    for (l, error) in limits(view, surface).into_iter().zip([e0, e1, e2, e3]) {
+    for (l, error) in limits(view).into_iter().zip([e0, e1, e2, e3]) {
         let mut input = TextField::new("", l.value, roles)
             .label(l.label)
             .supporting(l.supporting)
             .error(error)
             .track_focus(l.field, focused);
         if let Some(on_input) = l.on_input {
-            input = input.on_input(on_input).on_submit(surface.submit());
+            input = input.on_input(on_input).on_submit(Message::Daemons(DaemonsMsg::Saved));
         }
         controls.push(input.into());
     }
@@ -682,16 +588,14 @@ mod tests {
         );
     }
 
-    /// The form and the page address different fields, but each edits all four limits.
+    /// The form edits all four limits, each through its own field.
     #[test]
-    fn both_surfaces_offer_four_editable_limits() {
+    fn the_form_offers_four_editable_limits() {
         let profile = SandboxProfile::default();
-        for surface in [Surface::Page, Surface::Form] {
-            let controls = limits(&view_of(&profile, None), surface);
-            assert!(controls.iter().all(LimitControl::editable));
-            let mut ids: Vec<_> = controls.iter().map(|c| format!("{:?}", c.field)).collect();
-            ids.dedup();
-            assert_eq!(ids.len(), 4);
-        }
+        let controls = limits(&view_of(&profile, None));
+        assert!(controls.iter().all(LimitControl::editable));
+        let mut ids: Vec<_> = controls.iter().map(|c| format!("{:?}", c.field)).collect();
+        ids.dedup();
+        assert_eq!(ids.len(), 4);
     }
 }

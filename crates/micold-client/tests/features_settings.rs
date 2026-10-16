@@ -81,7 +81,7 @@ fn an_unsaved_edit_survives_a_section_change() {
     draft.terminal.scrollback_lines = "12345".into();
 
     draft.show(SettingsSection::Environment);
-    draft.show(SettingsSection::Daemon);
+    draft.show(SettingsSection::Daemons);
     draft.show(SettingsSection::Terminal);
 
     assert_eq!(
@@ -108,7 +108,7 @@ fn a_save_applies_every_visited_section_together() {
     draft.environment.enabled = true;
     draft.environment.script_path = "/p/env.sh".into();
     draft.environment.timeout_secs = "7".into();
-    draft.show(SettingsSection::Daemon);
+    draft.show(SettingsSection::Daemons);
     draft.daemon.placement = PlacementKind::LocalSandbox;
 
     let valid = draft.validate().expect("every field is in range");
@@ -182,7 +182,7 @@ fn a_rejected_save_names_the_field_and_its_section() {
 #[test]
 fn reporting_a_failure_shows_the_offending_section() {
     let mut draft = valid();
-    draft.show(SettingsSection::Daemon);
+    draft.show(SettingsSection::Daemons);
     draft.environment.timeout_secs = "not a number".into();
 
     let error = draft.validate().expect_err("the timeout does not parse");
@@ -751,12 +751,12 @@ mod issue_mapping {
     #[test]
     fn the_section_is_fifth_and_named() {
         assert_eq!(
-            SettingsSection::ALL.get(5),
+            SettingsSection::ALL.get(4),
             Some(&SettingsSection::GithubIssues),
-            "GitHub is fifth in the rail, after Daemons and Session service (AS1); Jira follows it (feature 533)"
+            "GitHub is fifth in the rail, after Daemons (AS1); Jira follows it (feature 533)"
         );
-        assert_eq!(SettingsSection::ALL.len(), 7);
-        assert_eq!(SettingsSection::ALL.get(6), Some(&SettingsSection::Jira));
+        assert_eq!(SettingsSection::ALL.len(), 6);
+        assert_eq!(SettingsSection::ALL.get(5), Some(&SettingsSection::Jira));
         // Feature 040 (FR-029): the page also holds the pull request switch, so it is "GitHub".
         assert_eq!(SettingsSection::GithubIssues.label(), "GitHub");
         assert_eq!(

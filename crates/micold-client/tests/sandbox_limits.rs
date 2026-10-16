@@ -261,7 +261,7 @@ fn a_limit_below_the_workable_minimum_is_refused_by_its_own_field() {
         );
         assert_eq!(
             error.section,
-            SettingsSection::Daemon,
+            SettingsSection::Daemons,
             "the rejection has to name the section holding the field, or the user is shown a \
              message about a control they cannot see (FR-029)"
         );

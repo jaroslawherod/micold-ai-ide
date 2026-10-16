@@ -25,16 +25,15 @@ use crate::features::settings::Msg as SettingsMsg;
 use crate::features::settings::{ScriptCheck, SettingsDraft, SettingsSection};
 use crate::features::window::FieldId;
 use crate::ui::material::{self, Button, Scrollable, Section, SectionList, SurfaceKind};
-use crate::ui::settings::{appearance, daemon, daemons, environment, github, jira, terminal};
+use crate::ui::settings::{appearance, daemons, environment, github, jira, terminal};
 use iced::widget::{column, row, Space};
 use iced::{Element, Length};
 use micold_core::env_include::EnvIncludeOutcome;
 use micold_core::protocol::messages::EnvIncludeFailure;
-use micold_core::sandbox::placement::PlacementKind;
 use micold_core::theme::ColorScheme;
 use micold_core::tokens::{self, spacing};
 
-/// The badge on the session-service row while any credential is shared (FR-004c).
+/// The badge on the Daemons row while any daemon shares a credential (FR-004c, FR-007).
 ///
 /// The rail carries it as well as the section, so that "am I sharing anything?" is answerable from
 /// wherever the user happens to be — the question is about the application, not about the page.
@@ -51,9 +50,6 @@ pub fn view<'a>(
     script_check: &'a ScriptCheck,
     // Each session directory where the service's resolution failed (011 FR-022, BUG-454).
     env_include_failures: &'a [EnvIncludeFailure],
-    // Where sessions run **now**, which is not always what the draft or the file says — the
-    // Session service section reports it (FR-035b, BUG-003).
-    in_force: PlacementKind,
     availability: Option<&'a CliAvailability>,
     focused: Option<FieldId>,
     rail_collapsed: bool,
@@ -74,7 +70,7 @@ pub fn view<'a>(
                 Message::Settings(SettingsMsg::SectionShown(*section)),
             );
             row.icon = Some(section.icon());
-            if *section == SettingsSection::Daemon && draft.shares_credentials() {
+            if *section == SettingsSection::Daemons && daemons.1.shares_credentials {
                 row.badge = Some(SHARING.to_string());
             }
             row
@@ -110,13 +106,12 @@ pub fn view<'a>(
             };
             daemons::view(daemons.0, daemons.1, facts, focused, r)
         }
-        SettingsSection::Daemon => daemon::view(draft, in_force, availability, focused, r),
         SettingsSection::GithubIssues => github::view(draft, focused, r),
         SettingsSection::Jira => jira::view(draft, focused, r),
     };
 
     // Scrolled, and only the page is: the rail and the actions stay where the user left them while
-    // the section under them moves, which is what makes a long section (the service's) usable
+    // the section under them moves, which is what makes a long section usable
     // without losing the way out of it.
     let body = Scrollable::new(page, r)
         .width(Length::Fill)
