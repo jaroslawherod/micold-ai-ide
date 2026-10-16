@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #776
 - **Worktree branch**: feat/776_one-session-per-worktree-chosen-at-start
 - **Started**: 2026-10-12
-- **Phase**: M6 gating and review
-- **Next step**: scoped gate, review A, review B, visual pass, full gate, M6 PR
+- **Phase**: M6 full gate
+- **Next step**: full gate green, then push and open the M6 PR
 
 ## Pull requests
 
@@ -74,8 +74,12 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Conformance B M3 | 1 | 0a6031f8335591c7c59a02840b354249dbd6dbfd:5b9d4e5a05a02a467f79cf38e5dfcc04d159f07c | CLEAN (1 MINOR declined) |
 | Code A M5 | 1 | 8c0bc7a3395f96b5838a9319c8536ede00f5daaf:bb0458f6bed51342b3ac261670cc0be8989cc198 | CLEAN |
 | Conformance B M5 | 2 | same snapshot | round 1 CHANGES: 2 MAJOR (no menu/wire tests: added m5_menus + allow-flag unit test; Verify line lacked `--`: fixed), 2 MINOR fixed; round 2 CLEAN |
+| Conformance B M6 | 1 | b346eb3e4a20fa06b4f5359cb6c3dc484c68db05:1b8c7897e96789108f226c0afd5bf46fcba8e865 | CHANGES: 1 MAJOR (no red evidence; declined, see Declined), 2 MINOR (T030 tick committed; visual pass scope noted). Verify green |
+| Code A M6 | 1 | same snapshot | CLEAN (1 MINOR left: nested if-let in Catalog::replace_session) |
 
 ## Declined review findings
+
+- B M6 F1 (MAJOR, no tdd/cycle-log.md red evidence for T023-T028): declined. Tests landed with the implementation as for M1-M5 (see Follow-ups); red-before-green cannot be reconstructed honestly after the fact, and the tests do fail without the change by construction (they assert refusal/replace outcomes absent on main). Left to the user as a recorded waiver.
 
 - M5 review B round 2 F1 (MINOR: rename a test so the Verify filter matches it): declined, the Verify command passes and the test runs in the full gate.
 

@@ -199,55 +199,67 @@ fn recorded(state: &DaemonState, project: &Path) -> Vec<(SessionId, AiCli)> {
 fn discovery_finds_what_the_clis_recorded_and_nothing_else() {
     let stores = ProviderStores::new();
 
-    // --- A previously-unknown conversation per CLI is listed as that CLI's session ---
-    {
+    // --- A previously-unknown conversation is listed as the session of the CLI whose store it came from ---
+    // One session per location (feature 776, FR-012): each CLI gets its own project here, because
+    // a location catalogues at most one discovered session.
+    for (scenario, cli) in [
+        ("claude-only", AiCli::ClaudeCode),
+        ("copilot-only", AiCli::Copilot),
+    ] {
         // The project root — the `Default` location. Worktrees would come from the git cache, which
         // is empty for a state built without a real repository, so every scenario uses the root of
         // its own project.
-        let project = project_for("both-clis");
+        let project = project_for(scenario);
         let cwd = SessionLocation::Default.cwd(&project);
-        let claude_id = Uuid::from_u128(0xC1);
-        let copilot_id = Uuid::from_u128(0xC0);
-        stores.claude_conversation(&cwd, claude_id);
-        stores.copilot_conversations(&cwd, &[copilot_id]);
+        let id = Uuid::from_u128(0xC1);
+        match cli {
+            AiCli::ClaudeCode => stores.claude_conversation(&cwd, id),
+            _ => stores.copilot_conversations(&cwd, &[id]),
+        }
 
         let data_dir = tempfile::tempdir().unwrap();
         let state = state_with(data_dir.path(), &project, Vec::new());
 
-        assert_eq!(state.discover_external_sessions(&project), 2);
+        assert_eq!(state.discover_external_sessions(&project), 1);
         assert_eq!(
             recorded(&state, &project),
-            {
-                let mut expected = vec![
-                    (SessionId::from_uuid(claude_id), AiCli::ClaudeCode),
-                    (SessionId::from_uuid(copilot_id), AiCli::Copilot),
-                ];
-                expected.sort();
-                expected
-            },
-            "each id came back as a session of the CLI whose store it was found in"
+            vec![(SessionId::from_uuid(id), cli)],
+            "the id came back as a session of the CLI whose store it was found in"
         );
 
         // --- It runs on a reopen, and a reopen adds nothing ---
         assert_eq!(
             state.discover_external_sessions(&project),
             0,
-            "a second pass finds both ids already known: a discovered session's id IS the CLI's \
+            "a second pass finds the id already known: a discovered session's id IS the CLI's \
              own conversation uuid, so a reopen is a no-op rather than a duplicate"
         );
-        assert_eq!(recorded(&state, &project).len(), 2);
 
-        // --- ...but a conversation started between opens IS surfaced ---
-        // This is the half a first-open-only rule would miss, and it is the ordinary case: the
-        // user starts a second session outside the application while the project is open.
+        // --- ...a conversation started between opens is not added beside it (FR-012) ---
+        // The location is occupied, so the later conversation stays resumable, not catalogued.
         let later = Uuid::from_u128(0xC2);
-        stores.copilot_conversations(&cwd, &[copilot_id, later]);
+        stores.copilot_conversations(&cwd, &[later]);
         assert_eq!(
             state.discover_external_sessions(&project),
-            1,
-            "discovery runs on every open, not only the first"
+            0,
+            "an occupied location catalogues no second session"
         );
-        assert_eq!(recorded(&state, &project).len(), 3);
+        assert_eq!(recorded(&state, &project).len(), 1);
+    }
+
+    // --- Two CLIs' conversations in one location catalogue only one session ---
+    {
+        let project = project_for("both-clis");
+        let cwd = SessionLocation::Default.cwd(&project);
+        stores.claude_conversation(&cwd, Uuid::from_u128(0xD1));
+        stores.copilot_conversations(&cwd, &[Uuid::from_u128(0xD0)]);
+
+        let data_dir = tempfile::tempdir().unwrap();
+        let state = state_with(data_dir.path(), &project, Vec::new());
+
+        assert_eq!(state.discover_external_sessions(&project), 1);
+        assert_eq!(recorded(&state, &project).len(), 1);
+        assert_eq!(state.discover_external_sessions(&project), 0);
     }
 
     // --- A Pi conversation had outside the application is listed as a Pi session (feature 029) ---
@@ -270,15 +282,11 @@ fn discovery_finds_what_the_clis_recorded_and_nothing_else() {
             "the id came back as a session of the CLI whose store it was found in"
         );
 
-        // A reopen adds nothing, and a conversation started between opens is surfaced.
+        // A reopen adds nothing, and a conversation started between opens is not added beside it.
         assert_eq!(state.discover_external_sessions(&project), 0);
         let later = Uuid::parse_str("01920000-0000-7000-8000-000000000002").unwrap();
         stores.pi_conversation(&cwd, later);
-        assert_eq!(
-            state.discover_external_sessions(&project),
-            1,
-            "discovery runs on every open, not only the first"
-        );
+        assert_eq!(state.discover_external_sessions(&project), 0);
 
         // The cost is one listing per location. Conversations whose ids are already known are
         // subtracted before anything else, so planting a marker for a known one changes nothing —
@@ -291,7 +299,7 @@ fn discovery_finds_what_the_clis_recorded_and_nothing_else() {
         )
         .unwrap();
         assert_eq!(state.discover_external_sessions(&project), 0);
-        assert_eq!(recorded(&state, &project).len(), 2);
+        assert_eq!(recorded(&state, &project).len(), 1);
     }
 
     // --- A closed session stays closed, on the durable marker alone ---
@@ -374,7 +382,7 @@ fn discovery_finds_what_the_clis_recorded_and_nothing_else() {
         }
     }
 
-    // --- A long history is neither capped nor aged out, and costs nothing per conversation ---
+    // --- A long history catalogues one session, and costs nothing per conversation ---
     {
         let project = project_for("long-history");
         let cwd = SessionLocation::Default.cwd(&project);
@@ -385,28 +393,26 @@ fn discovery_finds_what_the_clis_recorded_and_nothing_else() {
         let state = state_with(data_dir.path(), &project, Vec::new());
         assert_eq!(
             state.discover_external_sessions(&project),
-            250,
-            "every recorded conversation is surfaced — nothing dropped by count or by age"
+            1,
+            "one session per location is catalogued (FR-012); the other 249 stay resumable"
         );
 
-        // The ordering R15 depends on, asserted where it is observable: with all 250 now known,
-        // a second pass must not stat a marker for any of them. Make that measurable by planting a
-        // marker for one *known* session — if the archived check ran before the known-ids
-        // subtraction, that session would be dropped from the catalog on the next open.
+        // With the location occupied, a second pass catalogues nothing, and a marker planted for
+        // the known session does not drop it: known ids are subtracted before any per-id probe.
+        let known = recorded(&state, &project)[0].0;
+        let known_uuid = ids
+            .iter()
+            .copied()
+            .find(|u| SessionId::from_uuid(*u) == known)
+            .unwrap();
         micold_core::provider::AiCliProvider::mark_archived(
             AiCli::Copilot.provider(),
             &stores.copilot,
             &cwd,
-            ids[0],
+            known_uuid,
         )
         .unwrap();
         assert_eq!(state.discover_external_sessions(&project), 0);
-        assert_eq!(
-            recorded(&state, &project).len(),
-            250,
-            "the known ids were subtracted before any per-id filesystem probe, so the marker was \
-             never consulted — which is what keeps the pass proportional to *locations* rather \
-             than to conversations (FR-014, R15)"
-        );
+        assert_eq!(recorded(&state, &project).len(), 1);
     }
 }
