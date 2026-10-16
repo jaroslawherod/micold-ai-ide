@@ -893,21 +893,21 @@ impl Catalog {
             .get_mut(project)
             .and_then(|list| list.iter_mut().find(|s| s.id == old))
             .map(|s| {
-                let before = (s.lifecycle.clone(), s.archived);
+                let before = s.archived;
                 s.archive();
                 s.main = false;
                 before
             });
         if let Err(err) = self.persist() {
             tracing::warn!(session = %old.0, %err, "could not archive the replaced session; both stay listed");
-            if let Some((lifecycle, archived)) = archived {
+            if let Some(archived) = archived {
                 if let Some(s) = self
                     .workspace
                     .sessions
                     .get_mut(project)
                     .and_then(|list| list.iter_mut().find(|s| s.id == old))
                 {
-                    s.lifecycle = lifecycle;
+                    // Its process is stopped either way, so it reads idle, not running.
                     s.archived = archived;
                     // The old one stays listed as a helper: the new one is the main session.
                 }
