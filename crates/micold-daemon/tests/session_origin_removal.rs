@@ -7,9 +7,7 @@ use micold_core::occupancy::Additional;
 use micold_core::origin::OriginStatus;
 use micold_core::project::{Availability, Project};
 use micold_core::protocol::messages::{DaemonMsg, SessionSummary};
-use micold_core::session::{
-    AiCli, Session, SessionId, SessionLabel, SessionLocation, TerminalMode,
-};
+use micold_core::session::{AiCli, SessionId};
 use micold_core::settings::JsonFileSettingsStore;
 use micold_core::store::{JsonFileStore, ProjectStore};
 use micold_core::workspace::Workspace;
