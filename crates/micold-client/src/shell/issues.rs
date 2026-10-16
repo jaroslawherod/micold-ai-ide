@@ -42,12 +42,16 @@ use std::path::PathBuf;
 
 use iced::Task;
 use micold_client::app::Message;
-use micold_client::features::worktree_form::{BranchSource, DescriptionRequest, Msg as FormMsg};
+use micold_client::features::worktree_form::{
+    BranchSource, DescriptionRequest, JiraAvailability, Msg as FormMsg,
+};
 use micold_core::env_include::EnvIncludeSnapshot;
 use micold_core::github::{
     env_include_path, load_listing, DescriptionPage, IssueListing, IssueLoadError,
 };
+use micold_core::jira::{connection_key, ApiToken};
 use micold_core::protocol::messages::ClientMsg;
+use micold_core::store::jira_token_path;
 
 use crate::shell::daemon_sync::{on_add_worktree_source_changed, send_op, PendingOp};
 use crate::shell::env_include::resolve_env_include;
@@ -268,8 +272,87 @@ fn newly_awaited_descriptions(
         .filter(|request| before.as_ref() != Some(request))
 }
 
+/// The settings now in force changed what Jira makes of the open form (feature 533, FR-005): tell
+/// the form, which drops a Jira list and discards a load in flight when the switch went off or the
+/// connection went away.
+pub fn sync_jira_availability(app: &mut App) {
+    if app.core.worktree_form.form.is_none() {
+        return;
+    }
+    let jira = JiraAvailability::from_settings(
+        app.core.settings.jira_enabled,
+        &app.core.settings.jira_connections,
+        app.core.workspace.active.as_deref(),
+    );
+    app.core
+        .update(Message::WorktreeForm(FormMsg::JiraSettingsChanged(jira)));
+}
+
+/// Why a Jira load asked nothing: no token file on this host (plan risks, multi-daemon).
+const NO_TOKEN: &str = "no API token is stored on this computer for this project: enter your token in Settings > Jira.";
+
+/// Read the connected project's open Jira issues on a blocking thread, answering
+/// `IssuesLoaded { seq }`. The integration's switch and the project's connection are checked here,
+/// in the function that calls the source (FR-001, FR-020); the token is read from its file only
+/// inside the request's thread.
+fn start_jira_load(app: &mut App, seq: u64) -> Task<Message> {
+    let Some(project) = app.core.workspace.active.clone() else {
+        return Task::none();
+    };
+    let connection = app
+        .core
+        .settings
+        .jira_connections
+        .get(&connection_key(&project))
+        .cloned();
+    let (true, Some(connection)) = (app.core.settings.jira_enabled, connection) else {
+        return Task::none();
+    };
+    let dir = app.caps.jira_token_dir().map(std::path::Path::to_path_buf);
+    let source = app.caps.jira_source();
+    Task::perform(
+        async move {
+            tokio::task::spawn_blocking(move || {
+                let Some(source) = source else {
+                    return Err(IssueLoadError::Other(
+                        "Jira isn't available in this build.".to_string(),
+                    ));
+                };
+                let token = dir
+                    .and_then(|dir| std::fs::read_to_string(jira_token_path(&dir, &project)).ok())
+                    .and_then(|text| ApiToken::parse(text.trim()).ok())
+                    .ok_or_else(|| IssueLoadError::Other(NO_TOKEN.to_string()))?;
+                micold_core::jira::load(&*source, &connection, &token)
+                    .map(|listing| (listing, PathBuf::new()))
+            })
+            .await
+        },
+        move |joined| {
+            let result = joined.unwrap_or_else(|stopped| {
+                Err(IssueLoadError::Other(format!(
+                    "the issue load stopped unexpectedly: {stopped}"
+                )))
+            });
+            Message::WorktreeForm(FormMsg::IssuesLoaded {
+                seq,
+                result,
+                resolved_env: None,
+            })
+        },
+    )
+}
+
 /// Locate `gh` and read the open issues on a blocking thread, answering `IssuesLoaded { seq }`.
 fn start_issue_load(app: &mut App, seq: u64) -> Task<Message> {
+    if app
+        .core
+        .worktree_form
+        .form
+        .as_ref()
+        .is_some_and(|form| form.jira_site().is_some())
+    {
+        return start_jira_load(app, seq);
+    }
     let Some(repo) = app
         .core
         .worktree_form

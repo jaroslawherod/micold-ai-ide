@@ -27,9 +27,11 @@ use micold_client::features::settings::{
 use micold_client::features::window::FieldId;
 use micold_client::features::worktree::WorktreeMenu;
 use micold_client::features::worktree_form::{
-    BranchSource, GithubAvailability, IssueList, SearchState, WorktreeForm,
+    BranchSource, GithubAvailability, IssueList, JiraAvailability, JiraSite, SearchState,
+    WorktreeForm,
 };
 use micold_core::github::{GithubRepo, Issue, IssueListing, IssueLoadError};
+use micold_core::jira::{IssueProvider, JiraConnection};
 use micold_core::project::Availability;
 use micold_core::session::{
     AiCli, Session, SessionId, SessionLabel, SessionLocation, TerminalMode,
@@ -80,6 +82,21 @@ fn issue_form(issues: IssueList) -> WorktreeForm {
     WorktreeForm {
         source: BranchSource::Issue,
         github: github_repo(),
+        issues,
+        ..WorktreeForm::default()
+    }
+}
+
+/// A form on the Jira source of a project with no GitHub remote (feature 533), its list in
+/// `issues`.
+fn jira_form(issues: IssueList) -> WorktreeForm {
+    let connection = JiraConnection::parse("https://acme.atlassian.net", "ABC", "me@acme.com")
+        .expect("a Jira connection");
+    WorktreeForm {
+        source: BranchSource::Issue,
+        github: GithubAvailability::Unavailable("This repository has no GitHub remote.".into()),
+        jira: JiraAvailability::Connected(JiraSite::of(&connection)),
+        provider: IssueProvider::Jira,
         issues,
         ..WorktreeForm::default()
     }
@@ -595,6 +612,83 @@ pub fn covered_states() -> &'static [CoveredState] {
                 let mut state = with_project();
                 state.worktree_form.form = Some(issue_form(IssueList::Failed {
                     error: IssueLoadError::NotSignedIn,
+                }));
+                StateUnderTest::new(state)
+            },
+            anchors: ADD_WORKTREE_ANCHORS,
+        },
+        // Feature 533: the Jira source loading, refused, loaded past the cap and empty.
+        CoveredState {
+            name: "add-worktree-dialog-jira-loading",
+            build: || {
+                let mut state = with_project();
+                state.worktree_form.form = Some(jira_form(IssueList::Loading { seq: 1 }));
+                StateUnderTest::new(state)
+            },
+            anchors: ADD_WORKTREE_ANCHORS,
+        },
+        CoveredState {
+            name: "add-worktree-dialog-jira-credentials-refused",
+            build: || {
+                let mut state = with_project();
+                state.worktree_form.form = Some(jira_form(IssueList::Failed {
+                    error: IssueLoadError::CredentialsRefused,
+                }));
+                StateUnderTest::new(state)
+            },
+            anchors: ADD_WORKTREE_ANCHORS,
+        },
+        CoveredState {
+            name: "add-worktree-dialog-jira-loaded",
+            build: || {
+                let mut state = with_project();
+                let issue = |key: &str, number: u64, title: &str, labels: &[&str]| {
+                    Issue::jira(
+                        key,
+                        number,
+                        title.to_string(),
+                        labels.iter().map(|l| l.to_string()).collect(),
+                        "2026-09-29T00:00:00Z".to_string(),
+                    )
+                };
+                let issues = vec![
+                    issue("ABC-123", 123, "Add login rate limit", &["backend"]),
+                    issue("ABC-42", 42, "Crash when opening empty project", &["bug"]),
+                ];
+                let issue_matches = rank(&issues, |i| i.row_text(), &Query::new(""));
+                let mut form = jira_form(IssueList::Loaded {
+                    listing: IssueListing {
+                        issues,
+                        total_open: 2,
+                        complete: false,
+                    },
+                    gh: std::path::PathBuf::new(),
+                    searched: Vec::new(),
+                    search: SearchState::Idle,
+                    descriptions: Default::default(),
+                });
+                form.issue_matches = issue_matches;
+                form.ticket = "ABC-42".to_string();
+                form.picked_issue = Some(42);
+                state.worktree_form.form = Some(form);
+                StateUnderTest::new(state)
+            },
+            anchors: ADD_WORKTREE_ANCHORS,
+        },
+        CoveredState {
+            name: "add-worktree-dialog-jira-no-open-issues",
+            build: || {
+                let mut state = with_project();
+                state.worktree_form.form = Some(jira_form(IssueList::Loaded {
+                    listing: IssueListing {
+                        issues: Vec::new(),
+                        total_open: 0,
+                        complete: true,
+                    },
+                    gh: std::path::PathBuf::new(),
+                    searched: Vec::new(),
+                    search: SearchState::Idle,
+                    descriptions: Default::default(),
                 }));
                 StateUnderTest::new(state)
             },

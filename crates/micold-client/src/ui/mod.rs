@@ -59,6 +59,8 @@ pub(crate) mod rename_dialog;
 mod sandbox_status;
 /// The Settings sections — one module per page of the full-surface view (feature 027, FR-026).
 pub(crate) mod settings;
+// The GitHub page's intro, re-exported for `tests/features_settings.rs` (feature 533, FR-014).
+pub use settings::github::GITHUB_ISSUES_INTRO;
 // The limits' *decision* — which appear, which are editable, what a disabled one says — re-exported
 // like `stage_line` above, because `tests/sandbox_limits.rs` checks it and a view function is the
 // one thing in this crate a test cannot look inside.
@@ -85,7 +87,7 @@ mod toolbar;
 pub(crate) mod worktree_form;
 /// The issue picker's rows, named individually for `tests/issue_picker_rows.rs` (feature 038): the
 /// test reads what the view hands the picker for each issue, and the module stays `pub(crate)`.
-pub use worktree_form::{issue_rows, ISSUE_SEARCH_PLACEHOLDER};
+pub use worktree_form::{issue_rows, ISSUE_SEARCH_PLACEHOLDER, JIRA_ISSUE_SEARCH_PLACEHOLDER};
 pub(crate) mod worktree_rename;
 
 use crate::app::{Message, State};

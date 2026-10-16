@@ -765,6 +765,22 @@ mod issue_mapping {
         );
     }
 
+    /// FR-014: the list also serves Jira issues, and the page says so; the defaults still map
+    /// `Bug` (a Jira issue type name) to `fix`.
+    #[test]
+    fn the_intro_says_the_list_also_applies_to_jira_issues() {
+        assert!(
+            micold_client::ui::GITHUB_ISSUES_INTRO.contains(
+                "Also applies to Jira issues: an issue's type name and labels are matched against this list."
+            ),
+            "{}",
+            micold_client::ui::GITHUB_ISSUES_INTRO
+        );
+        let bug =
+            micold_core::issue_types::type_for_labels(&default_mapping(), &["Bug".to_string()]);
+        assert_eq!(bug, Some(ConventionalType::Fix));
+    }
+
     #[test]
     fn the_draft_loads_the_mapping() {
         let stored = Settings {

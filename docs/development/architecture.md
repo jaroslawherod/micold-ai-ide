@@ -524,6 +524,22 @@ remote spelled through a global `insteadOf` alias is not recognised as GitHub.
 
 The decision record is `specs/034-github-issue-worktree/research.md` R4 and R5.
 
+### The Jira issue fetch runs in the client too (feature 533)
+
+Jira's request runs in the client's `shell/jira_http.rs`, for the same placement reason as `gh`: the
+client is on the host, next to the user, and a sandboxed daemon has neither the user's network
+settings nor a reason to hold their credentials. Unlike GitHub there is no CLI that owns the
+sign-in, so the adapter makes the HTTPS call itself with `ureq` 3 (rustls with the platform
+verifier, no JSON feature) and `base64` for the Basic header. The blocking client runs inside
+`spawn_blocking`, like the `gh` call, so no async runtime is coupled to it.
+
+`micold-daemon` and `micold-core` do not depend on `ureq` or `rustls` (Constitution VII): both are
+built for Windows-host sandbox placements and stay free of a TLS stack. The daemon only stores and
+echoes the two settings fields (the integration switch and the per-project connection without its
+token); it never contacts Jira. The pure parts (site origin, JQL, response parsing, failure
+classification) are in `micold_core::jira`. The decision record is
+`specs/533-jira-issue-worktrees/research.md` R2.
+
 ### What you do *not* do
 
 **Name a real implementation outside `shell/`.** The guard

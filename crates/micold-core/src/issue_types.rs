@@ -40,6 +40,22 @@ pub fn type_for_labels(mapping: &[LabelTypeEntry], labels: &[String]) -> Option<
         .map(|entry| entry.type_)
 }
 
+/// The type of an issue that may carry a type name besides its labels (feature 533): the first
+/// mapping entry matching the type name or any label, like [`type_for_labels`] over
+/// `[type_name] ++ labels`.
+pub fn type_for_issue(
+    mapping: &[LabelTypeEntry],
+    type_name: Option<&str>,
+    labels: &[String],
+) -> Option<ConventionalType> {
+    let matched: Vec<String> = type_name
+        .into_iter()
+        .map(str::to_owned)
+        .chain(labels.iter().cloned())
+        .collect();
+    type_for_labels(mapping, &matched)
+}
+
 /// The first entry, in order, that cannot be saved (FR-019).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MappingError {

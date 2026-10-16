@@ -1,0 +1,100 @@
+{
+  "issues": [
+    {
+      "expand": "",
+      "id": "10042",
+      "self": "https://acme.atlassian.net/rest/api/3/issue/10042",
+      "key": "ABC-123",
+      "fields": {
+        "summary": "Add login rate limit",
+        "issuetype": { "id": "10004", "name": "Bug", "subtask": false },
+        "labels": ["backend", "security"],
+        "reporter": {
+          "accountId": "5b10a2844c20165700ede21g",
+          "displayName": "Mia Jansen",
+          "emailAddress": "mia@acme.example",
+          "active": true
+        },
+        "description": {
+          "type": "doc",
+          "version": 1,
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                { "type": "text", "text": "Throttle failed logins" },
+                { "type": "hardBreak" },
+                { "type": "text", "text": "per account.", "marks": [{ "type": "strong" }] }
+              ]
+            },
+            {
+              "type": "bulletList",
+              "content": [
+                {
+                  "type": "listItem",
+                  "content": [
+                    { "type": "paragraph", "content": [{ "type": "text", "text": "five tries" }] }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "updated": "2026-10-14T09:30:11.123+0200"
+      }
+    },
+    {
+      "id": "10043",
+      "key": "ABC-124",
+      "fields": {
+        "summary": "Tidy the docs",
+        "issuetype": { "name": "Task" },
+        "labels": [],
+        "reporter": {
+          "accountId": "5b10a2844c20165700ede21h",
+          "emailAddress": "noah.k@acme.example"
+        },
+        "description": null,
+        "updated": "2026-10-13T17:02:00.000+0200"
+      }
+    },
+    {
+      "id": "10044",
+      "key": "ABC-125",
+      "fields": {
+        "summary": "Reporter is gone",
+        "issuetype": { "name": "Story" },
+        "labels": ["ui"],
+        "reporter": null,
+        "description": null,
+        "updated": "2026-10-12T08:00:00.000+0200"
+      }
+    },
+    {
+      "id": "10045",
+      "key": "ABC-126",
+      "fields": {
+        "summary": "Only an account id",
+        "issuetype": { "name": "Task" },
+        "labels": [],
+        "reporter": { "accountId": "5b10a2844c20165700ede21i" },
+        "description": null,
+        "updated": "2026-10-11T08:00:00.000+0200"
+      }
+    },
+    {
+      "id": "10046",
+      "key": "NOT-A-KEY",
+      "fields": {
+        "summary": "A node whose key has no number",
+        "issuetype": { "name": "Task" },
+        "labels": [],
+        "reporter": null,
+        "description": null,
+        "updated": "2026-10-10T08:00:00.000+0200"
+      }
+    }
+  ],
+  "nextPageToken": "CAEaAggD",
+  "isLast": false
+}

@@ -74,6 +74,7 @@ use micold_core::env_include::{EnvIncludeResolver, SubprocessResolver};
 use micold_core::fs_scan::{FolderBrowser, FolderScanner, StdFolderScanner};
 use micold_core::git::{Git, GitCli};
 use micold_core::github::{locate_gh_on_host, GhCli, IssueSource};
+use micold_core::jira::JiraSource;
 use micold_core::pull_request::PullRequestSource;
 use micold_core::script_path_check::{ScriptPathProbe, StdScriptPathProbe};
 use micold_core::settings::{JsonFileSettingsStore, SettingsStore};
@@ -104,6 +105,9 @@ pub struct Capabilities {
     script_path_probe: Arc<dyn ScriptPathProbe + Send + Sync>,
     link_opener: Arc<dyn LinkOpener>,
     issue_tooling: IssueTooling,
+    /// Feature 533: the Jira Cloud source (`None` in a fake `Capabilities`, so no test can reach
+    /// a Jira site).
+    jira_source: Option<Arc<dyn JiraSource>>,
     /// Feature 039: the system's desktop notifications (research R4).
     notifier: Arc<dyn DesktopNotifier>,
 }
@@ -186,6 +190,7 @@ impl Capabilities {
                     move |gh: PathBuf| -> Arc<dyn PullRequestSource + Send + Sync> { gh_cli(gh) },
                 ),
             },
+            jira_source: Some(Arc::new(crate::shell::jira_http::JiraCloud::new())),
             notifier: Arc::from(crate::shell::desktop_notify::system(
                 crate::shell::desktop_notify::events(),
             )),
@@ -324,6 +329,11 @@ impl Capabilities {
     /// The directory of the Jira token files, or `None` when no data directory resolved.
     pub fn jira_token_dir(&self) -> Option<&std::path::Path> {
         self.jira_token_dir.as_deref()
+    }
+
+    /// The Jira Cloud source, only in the real capabilities (feature 533).
+    pub fn jira_source(&self) -> Option<Arc<dyn JiraSource>> {
+        self.jira_source.clone()
     }
 
     /// The settings file, or `None` when no data directory could be resolved.

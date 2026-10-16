@@ -108,15 +108,15 @@ impl WorktreeNaming {
 }
 
 /// What the form's issue pick and the MCP tool's `github_issue` both fill in for `issue` (550
-/// FR-005, FR-016): the number as the ticket, the title cut by [`name_from_title`] as the name, and
+/// FR-005, FR-016): the number (a Jira issue's key) as the ticket, the title cut by [`name_from_title`] as the name, and
 /// the type of the first `mapping` entry matching one of its labels, ignoring case.
 pub fn naming_for_issue(
     issue: &crate::github::Issue,
     mapping: &[crate::issue_types::LabelTypeEntry],
 ) -> WorktreeNaming {
     WorktreeNaming {
-        type_: crate::issue_types::type_for_labels(mapping, issue.labels()),
-        ticket: Some(issue.number().to_string()),
+        type_: crate::issue_types::type_for_issue(mapping, issue.type_name(), issue.labels()),
+        ticket: Some(issue.ticket()),
         name: name_from_title(issue.title()),
     }
 }
