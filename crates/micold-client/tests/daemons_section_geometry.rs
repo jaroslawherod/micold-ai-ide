@@ -262,3 +262,54 @@ fn the_repository_field_paints_its_label_and_a_refusal_without_overflow() {
     state.update(Message::Daemons(DaemonsMsg::RepositoryAdded(ssh)));
     assert_no_text_overflows(&state, "the repository field with a refusal");
 }
+
+/// Feature 489, T042: a reconnecting SSH row paints its badge, its reason and its actions without
+/// overflow, and the row after the user stopped trying paints the contract's sentence.
+#[test]
+fn a_reconnecting_ssh_row_paints_its_badge_reason_and_actions_without_overflow() {
+    let (mut state, _) = with_daemons();
+    let target = micold_core::ssh::SshTarget::new(
+        "a-rather-long-host-name.internal.example.com",
+        Some("deploy"),
+        Some(2222),
+        None,
+    )
+    .unwrap();
+    let ssh = state
+        .settings
+        .daemons
+        .add(
+            "Remote over SSH",
+            DaemonRuntime::Ssh(micold_core::ssh::SshSettings { target }),
+            true,
+        )
+        .unwrap();
+    state.settings.links = DaemonLinks::at_launch(&state.settings.daemons);
+    state.settings.links.apply(ssh, DaemonEvent::Connected);
+    state
+        .settings
+        .links
+        .apply(ssh, DaemonEvent::Lost("Connection timed out".into()));
+    let rows = painted(&state);
+    for needle in [
+        "Reconnecting",
+        "reconnecting to deploy@a-rather-long-host-name.internal.example.com:2222: Connection timed out",
+        "Stop trying",
+        "Reconnect",
+    ] {
+        assert!(has(&rows, needle), "{needle:?} missing: {rows:?}");
+    }
+    assert_no_text_overflows(&state, "a reconnecting SSH row");
+
+    state.update(Message::Daemons(DaemonsMsg::GaveUp(ssh)));
+    let rows = painted(&state);
+    assert!(
+        has(
+            &rows,
+            "not connected to deploy@a-rather-long-host-name.internal.example.com:2222: attempts stopped"
+        ),
+        "{rows:?}"
+    );
+    assert!(!has(&rows, "Stop trying"), "{rows:?}");
+    assert_no_text_overflows(&state, "an SSH row after stopping the attempts");
+}

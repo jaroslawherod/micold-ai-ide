@@ -23,7 +23,7 @@ use crate::ui::settings::container_fields::{self, ContainerView, FieldErrors};
 use crate::ui::settings::{caution, group, name_of, note, page, Named};
 use iced::widget::{column, row};
 use iced::{Element, Length};
-use micold_core::daemons::{DaemonId, DaemonState, DaemonView};
+use micold_core::daemons::{DaemonId, DaemonState, DaemonView, ATTEMPTS_STOPPED};
 use micold_core::sandbox::placement::PlacementKind;
 use micold_core::tokens::{spacing, Roles};
 
@@ -44,6 +44,7 @@ fn state_tag<'a>(state: &DaemonState, roles: Roles) -> Element<'a, Message> {
         DaemonState::Connected => ("Connected", roles.primary),
         DaemonState::Starting => ("Starting", roles.secondary),
         DaemonState::Stopped => ("Stopped", roles.secondary),
+        DaemonState::Reconnecting { .. } => ("Reconnecting", roles.secondary),
         DaemonState::Unreachable { .. } => ("Unreachable", roles.error),
         DaemonState::VersionMismatch { .. } => ("Version mismatch", roles.error),
     };
@@ -53,6 +54,14 @@ fn state_tag<'a>(state: &DaemonState, roles: Roles) -> Element<'a, Message> {
 /// The sentence under a row that is not plainly fine.
 fn state_note(view: &DaemonView) -> Option<String> {
     match &view.state {
+        DaemonState::Reconnecting { reason } => Some(format!(
+            "reconnecting to {}: {reason}",
+            view.endpoint
+        )),
+        DaemonState::Unreachable { reason } if reason == ATTEMPTS_STOPPED => Some(format!(
+            "not connected to {}: {ATTEMPTS_STOPPED}",
+            view.endpoint
+        )),
         DaemonState::Unreachable { reason } => {
             Some(format!("Daemon {} unreachable: {reason}", view.name))
         }
@@ -95,6 +104,20 @@ fn actions<'a>(view: &DaemonView, open: bool, roles: Roles) -> Element<'a, Messa
         DaemonState::Stopped => {
             buttons = buttons.push(
                 Button::text("Start", roles).on_press(Message::Daemons(DaemonsMsg::Started(id))),
+            );
+        }
+        // Stop the attempts, or skip the wait and try now.
+        DaemonState::Reconnecting { .. } => {
+            buttons = buttons.push(
+                Button::text("Stop trying", roles)
+                    .on_press(Message::Daemons(DaemonsMsg::GaveUp(id))),
+            );
+            buttons = buttons.push(
+                Button::text("Reconnect", roles)
+                    .on_press(Message::Daemons(DaemonsMsg::Reconnected(id))),
+            );
+            buttons = buttons.push(
+                Button::text("Stop", roles).on_press(Message::Daemons(DaemonsMsg::Stopped(id))),
             );
         }
         DaemonState::Unreachable { .. } | DaemonState::VersionMismatch { .. } => {

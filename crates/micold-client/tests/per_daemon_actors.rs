@@ -127,7 +127,7 @@ fn one_transport_failing_changes_no_other_daemons_status_or_outbox() {
     assert_eq!(change.id, boxed);
     assert!(matches!(
         links.state(boxed),
-        Some(DaemonState::Unreachable { .. })
+        Some(DaemonState::Reconnecting { .. })
     ));
     assert!(
         links.outbox(boxed).is_none(),

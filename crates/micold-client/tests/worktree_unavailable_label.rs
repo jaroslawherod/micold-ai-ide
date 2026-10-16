@@ -6,7 +6,7 @@ use micold_client::app::State;
 use micold_client::daemon::Outbox;
 use micold_client::links::{session_lost_label, unavailable_label, DaemonLinks, LabelFacts};
 use micold_core::daemons::{
-    Binding, ContainerSettings, DaemonEvent, DaemonId, DaemonRegistry, DaemonRuntime,
+    Binding, ContainerSettings, DaemonEvent, DaemonId, DaemonRegistry, DaemonRuntime, DaemonState,
 };
 use micold_core::sandbox::SandboxProfile;
 use micold_core::session::SessionLifecycle;
@@ -101,7 +101,7 @@ fn paths_mapped_shows_only_while_the_daemon_is_connected() {
 }
 
 #[test]
-fn lost_sessions_name_the_unreachable_daemon() {
+fn lost_sessions_are_disconnected_while_the_daemon_reconnects() {
     let (registry, mut links, _, boxed) = fixture();
     let lost = LabelFacts {
         lost_sessions: true,
@@ -113,6 +113,32 @@ fn lost_sessions_name_the_unreachable_daemon() {
         "still connected"
     );
     links.lost(boxed, "gone");
+    assert_eq!(
+        label(&registry, &links, boxed, lost).as_deref(),
+        Some("disconnected"),
+        "FR-019: it may return"
+    );
+    links.apply(boxed, DaemonEvent::GiveUp);
+    assert_eq!(
+        label(&registry, &links, boxed, lost).as_deref(),
+        Some("disconnected"),
+        "unreachable after a connection was established"
+    );
+}
+
+#[test]
+fn lost_sessions_of_a_daemon_that_never_connected_name_it() {
+    let (registry, mut links, _, boxed) = fixture();
+    links.insert(
+        boxed,
+        DaemonState::Unreachable {
+            reason: "refused".into(),
+        },
+    );
+    let lost = LabelFacts {
+        lost_sessions: true,
+        ..Default::default()
+    };
     assert_eq!(
         label(&registry, &links, boxed, lost).as_deref(),
         Some("lost to daemon Box")
@@ -152,13 +178,43 @@ fn a_row_with_no_daemon_says_so() {
 fn a_session_on_a_dropped_daemon_is_lost_not_finished() {
     let (registry, mut links, host, boxed) = fixture();
     let running = SessionLifecycle::Running;
-    assert_eq!(session_lost_label(&registry, &links, boxed, &running), None);
+    let label = |links: &DaemonLinks, id, absent| {
+        session_lost_label(&registry, links, id, &running, absent)
+    };
+    assert_eq!(label(&links, boxed, false), None);
     links.lost(boxed, "gone");
+    assert_eq!(label(&links, boxed, false).as_deref(), Some("disconnected"));
+    assert_eq!(label(&links, host, false), None);
+    // Only live sessions are labelled.
+    let idle = SessionLifecycle::Idle;
     assert_eq!(
-        session_lost_label(&registry, &links, boxed, &running).as_deref(),
+        session_lost_label(&registry, &links, boxed, &idle, true),
+        None
+    );
+}
+
+/// T042, FR-019: reconnected, a session the daemon no longer has is lost to it, not disconnected;
+/// so is one on a daemon that was stopped.
+#[test]
+fn a_session_missing_after_a_reconnect_is_lost_to_its_daemon() {
+    let (registry, mut links, _, boxed) = fixture();
+    let running = SessionLifecycle::Running;
+    links.lost(boxed, "gone");
+    links.connected(boxed, Outbox::new(mpsc::unbounded().0));
+    assert_eq!(
+        session_lost_label(&registry, &links, boxed, &running, false),
+        None,
+        "present in the fresh catalog: running again"
+    );
+    assert_eq!(
+        session_lost_label(&registry, &links, boxed, &running, true).as_deref(),
         Some("lost to daemon Box")
     );
-    assert_eq!(session_lost_label(&registry, &links, host, &running), None);
+    links.apply(boxed, DaemonEvent::Stop);
+    assert_eq!(
+        session_lost_label(&registry, &links, boxed, &running, false).as_deref(),
+        Some("lost to daemon Box")
+    );
 }
 
 /// A window state whose worktrees `feat-a` (on Box) and `feat-b` (on Host) are in the active

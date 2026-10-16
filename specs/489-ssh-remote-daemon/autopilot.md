@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #489
 - **Worktree branch**: feat/489_run-the-session-daemon-on-a-remote-host-over-ssh
 - **Started**: 2026-10-12
-- **Phase**: M2 implementing
-- **Next step**: implement M2 (T028–T038)
+- **Phase**: M3 implementing
+- **Next step**: implement M3 (T039–T050)
 
 ## Pull requests
 
@@ -18,14 +18,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #789 | Design (spec, plan, tasks) | merged | 63838fce6f95ea5195529109ba0e0b1073530135 |
 | #845 | M1 | merged | cf40ca917492368b043af1fe321c15715e919b2d |
+| #883 | M2 | merged | ce4dbafccc49cfe6ad011d64b556c1ac5c9e9214 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T027 | full | Remote over SSH daemon connects (add, start, Connected) | #845 | done |
-| M2 | T028–T038 | full | Remote projects, worktrees and sessions | #883 | in review |
-| M3 | T039–T050 | full | Reconnect after a network drop | — | pending |
+| M2 | T028–T038 | full | Remote projects, worktrees and sessions | #883 | done |
+| M3 | T039–T050 | full | Reconnect after a network drop | — | in progress |
 | M4 | T051–T055 | full | Local work unaffected, concurrent clients | — | pending |
 | M5 | T056–T065 | full | Host picker, failure reasons, daemon management | — | pending |
 | M6 | T066–T072 | full | Version mismatch explained | — | pending |
@@ -69,7 +70,19 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M2 PR #883 open (unit 3). Gate green, test-ssh green. Review B F1 fixed (cycle-log deviation), F2 observed green, F3 MINOR declined. Next: orchestrator waits on CI and merges, then M3.
+M3 (T039-T050) unit 1: branch reset onto origin/main (M2 #883 merged). Nothing compiled or run yet. Code is written but UNVERIFIED. First step of the next unit: `mise run test-core`, then `scripts/autopilot/scoped-gate.sh`, both detached and held with `hold.sh` (another worktree held the build lock; a stale detached `mise run test-core` of unit 1 may still wait on it: check `ps` and kill only the one whose cwd is this worktree).
+
+Done (uncommitted until this commit):
+- core: `ssh/reconnect.rs` (Backoff + inline tests, T039/T045); `daemons.rs` (`Reconnecting{reason}`, `ATTEMPTS_STOPPED`, `DaemonEvent::GiveUp/Reconnect`, private `Link` with established/attempts_stopped/epoch, `DaemonStates::established/epoch/should_dial`, T046); `tests/daemon_reconnect.rs` (T040); one test in `tests/daemon_state.rs` renamed to Reconnecting. Tests and code were written together, no separate red run: record this deviation in `specs/489-ssh-remote-daemon/tdd/cycle-log.md` as M2 did.
+- client: `daemon.rs` (`ActorSpec.epoch`, `LinkLife`, `reconnect_loop` with injected sleep, an SSH failure after `established` reports `ConnectFailed` and retries; T041/T047 plus tests); `links.rs` (`DISCONNECTED`, `established()`, `unavailable_label`, `session_lost_label(.., absent_from_catalog)`, T048); `features/daemons.rs` (`reconnect` sends `DaemonEvent::Reconnect`, `give_up`, `Msg::GaveUp`); `ui/settings/daemons.rs` (Reconnecting badge, `reconnecting to <endpoint>: <reason>`, `not connected to <endpoint>: attempts stopped`, `Stop trying` and `Reconnect` buttons, T049); updated `per_daemon_actors.rs`, `daemons_feature.rs`, `worktree_unavailable_label.rs`; new geometry test in `daemons_section_geometry.rs` (T042).
+
+Not done:
+- T043 fault proxy `crates/micold-daemon/tests/ssh_real_support/proxy.rs`: TCP proxy between ssh and sshd with `cut()` / `restore()`; make `Sshd::start` point the ssh_config `Port` and the known_hosts line at the proxy port.
+- T044 `crates/micold-daemon/tests/ssh_real_reconnect.rs`: stand-in `claude` printing TICK-n each second; cut; reconnect with core `connect` + `Backoff` within 30 s; output intact; same daemon pid; a fresh `connect` finds the session; stop trying then Reconnect. sshd is installed here. Run with `mise run test-ssh`.
+- T050 `docs/user-guide/remote-daemons.md`; tick T039-T050 in tasks.md; cycle-log entries.
+- Wire the `absent_from_catalog` fact of `session_lost_label` (no caller yet): wire it or list it under Follow-ups.
+- Compile fixes: other `ActorSpec { .. }` constructors, exhaustive matches on `DaemonState`, `DaemonEvent`, `features::daemons::Msg` in `shell/`, `main.rs`, `main_tests.rs`.
+- Then: Review A (high) and B (sonnet), full gate, PR "feat(489): reconnect a remote daemon after a network drop (M3, #489)", body ends `Refs #489`. Issue #687 duplicates this scope: close it with the final PR, not this one.
 
 ## Open escalation
 

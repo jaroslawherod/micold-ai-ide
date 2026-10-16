@@ -74,13 +74,13 @@ fn a_success_resets_the_debounce() {
 }
 
 #[test]
-fn an_established_connection_lost_is_unreachable_at_once() {
+fn an_established_connection_lost_is_reconnecting_at_once() {
     let mut states = two();
     states.apply(id(1), DaemonEvent::Connected);
     let change = states.apply(id(1), lost("eof")).unwrap();
     assert_eq!(
         change.to,
-        DaemonState::Unreachable {
+        DaemonState::Reconnecting {
             reason: "eof".into()
         }
     );
