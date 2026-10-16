@@ -115,11 +115,8 @@ pub fn subscription(app: &App) -> Subscription<Message> {
     }
     // Feature 490 (R7): the plan-usage clock, **only while a reading is shown**. It redraws so a
     // window whose reset has passed drops out; with nothing shown there is nothing to drop.
-    if app
-        .core
-        .plan_usage
-        .ticks(micold_core::unix_time::unix_secs() as i64)
-    {
+    let now = micold_core::unix_time::unix_secs() as i64;
+    if app.core.plan_usage.ticks(now) {
         subs.push(every(PLAN_USAGE_TICK).map(|_| Message::NoOp));
     }
     // The terminal output poll is gone — the daemon streams grid frames over the connection. Worktree
