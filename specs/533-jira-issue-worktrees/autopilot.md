@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/533_create-worktrees-from-jira-issues
 - **Started**: 2026-10-12
 - **Phase**: milestone M5
-- **Next step**: implement M5 (T059–T065)
+- **Next step**: wait for CI and merge M5, then Close
 
 ## Pull requests
 
@@ -30,7 +30,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T022–T031 | full | Connect, change and remove a project's connection and token | #871 | merged |
 | M3 | T032–T033, T035–T053, T068–T069 | full | Start a worktree from a Jira issue (list, pick, notices); kept whole: core, adapter and dialog are one wired path (no half-wired UI) | #894 | merged |
 | M4 | T054–T058, T070 | full | Search Jira issues incl. beyond the loaded list | #903 | merged |
-| M5 | T059–T065 | full | GitHub / Jira source choice per project | | in progress |
+| M5 | T059–T065 | full | GitHub / Jira source choice per project | | open |
 
 ## Decisions
 
@@ -59,6 +59,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Code A (M4) | 1 | 4d108a37176a38efc2e05f655513651e26575c72:7b492eabc40b1dea808d1033b9681d7495ea3ebc | CLEAN |
 | Conformance B (M4, sonnet) | 1 | 4d108a37176a38efc2e05f655513651e26575c72:7b492eabc40b1dea808d1033b9681d7495ea3ebc | CLEAN (Verify tests green: typeahead_budget 11, jira_source_state 14, jira_http_adapter 8, named_events 7, jira_jql 9, issue_jira_rows 5) |
 | Tasks | 1 | bae8666f588552c1c7a2447bfe65696f43efeeae:c779f5c824f46d2e9d3649c1647476dc206ab227 | CLEAN (2 MINOR fixed; speckit-analyze 2 HIGH, 4 MEDIUM fixed before review) |
+| Code A (M5) | 1 | 49a404c7bb63f7867eb675cfe36caada0985a331:b6c38e8f20351df17ba252d088def630e00811a9 | 9 findings: lenient unknown issue_source value, clone, duplicated read-modify-write fixed; rest declined; visual-pass toast fixed (NotFound silent) |
+| Conformance B (M5, sonnet) | 1 | 49a404c7bb63f7867eb675cfe36caada0985a331:b6c38e8f20351df17ba252d088def630e00811a9 | CLEAN (2 MINOR fixed, prose only) |
 
 ## Declined review findings
 
@@ -69,6 +71,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 | A | empty page with a cursor stops the load; key-prefix collision; ADF attrs dropped; fresh ureq Agent per page; token-read errors share one notice | edge cases or taste, no failing flow in M3; the load is capped and keys come from one project query |
 | M3 | A | no Jira search beyond the cap | declared M3 deviation; M4 |
 | M3 | B | F2/F3 test gaps (no-token path, rotation, leak extension) | recorded in tdd/cycle-log.md with where the behaviour is covered; follow-up |
+| M5 | A | blocking save in the update handler; disk value wins over memory; chips shown for every branch source; outcome only with an active project | same as save_binding (feature 491) precedent; the chip row is the remembered choice, visible with both sources (T064) |
 
 ## Handover
 
