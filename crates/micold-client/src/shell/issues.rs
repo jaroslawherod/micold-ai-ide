@@ -296,8 +296,15 @@ const NO_TOKEN: &str = "no API token is stored on this computer for this project
 /// in the function that calls the source (FR-001, FR-020); the token is read from its file only
 /// inside the request's thread.
 fn start_jira_load(app: &mut App, seq: u64) -> Task<Message> {
+    let refused = |why: &str| {
+        Task::done(Message::WorktreeForm(FormMsg::IssuesLoaded {
+            seq,
+            result: Err(IssueLoadError::Other(why.to_string())),
+            resolved_env: None,
+        }))
+    };
     let Some(project) = app.core.workspace.active.clone() else {
-        return Task::none();
+        return refused("no project is open.");
     };
     let connection = app
         .core
@@ -306,7 +313,7 @@ fn start_jira_load(app: &mut App, seq: u64) -> Task<Message> {
         .get(&connection_key(&project))
         .cloned();
     let (true, Some(connection)) = (app.core.settings.jira_enabled, connection) else {
-        return Task::none();
+        return refused("Jira isn't connected for this project: check Settings > Jira.");
     };
     let dir = app.caps.jira_token_dir().map(std::path::Path::to_path_buf);
     let source = app.caps.jira_source();

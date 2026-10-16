@@ -52,6 +52,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Conformance B (M1, sonnet) | 1 | 0382303712ba5169e5a0b928a79cbcec442fa916:5bd6892383a878b47a76d49455fc3e8bf7809d3c | CHANGES: 1 MAJOR (no client test for FR-022 adopt/save), 2 MINOR declined; fixed with 2 tests |
 | Conformance B (M1, sonnet) | 2 | e9271b767957cb77284ebf522020edafcff7229e:5bd6892383a878b47a76d49455fc3e8bf7809d3c | CLEAN |
 | Code A (M1, sonnet, post-rebase fixes) | 2 | 5b7730bd1c00e525627e260e6bdb497674bc4c91:5f00fbbe33617bf46639612eba895030677f8d3c | CLEAN (3 MINOR: F2 wire-leniency test added, F3 version pin dropped from the 776 test; F1 write-order declined, same order as every other field) |
+| Code A (M3) | 1 | 381d7ce6cfbc1bdb1e4c686a2038e0df6654729b:74e4a024022983bf0306f44cc7555edbb1c6828b | 10 findings, none rated BLOCKER by the skill: 2 fixed (start_jira_load answered nothing when refused; remotes_listed provider flip did not reset the list), 8 declined (below) |
+| Conformance B (M3, sonnet) | 1 | 381d7ce6cfbc1bdb1e4c686a2038e0df6654729b:74e4a024022983bf0306f44cc7555edbb1c6828b | CHANGES: 3 MAJOR (cycle-log, T041 gaps, T042 location); resolved as recorded deviations in tdd/cycle-log.md, no code change |
 | Tasks | 1 | bae8666f588552c1c7a2447bfe65696f43efeeae:c779f5c824f46d2e9d3649c1647476dc206ab227 | CLEAN (2 MINOR fixed; speckit-analyze 2 HIGH, 4 MEDIUM fixed before review) |
 
 ## Declined review findings
@@ -59,6 +61,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
 | M1 | A | MINOR F1-F3 (port u16 range; non-absolute project key; silent drop log) | MINOR only; port and project validation are covered by M2's connect form (T022+) which owns site/key input; no new round needed |
+| M3 | A | 400/404 all NoAccess; JQL text-search escaping | Jira answers 400 for an unknown project in JQL; search_jql has no caller in M3 (search is M4) |
+| M3 | A | empty page with a cursor stops the load; key-prefix collision; ADF attrs dropped; fresh ureq Agent per page; token-read errors share one notice | edge cases or taste, no failing flow in M3; the load is capped and keys come from one project query |
+| M3 | A | no Jira search beyond the cap | declared M3 deviation; M4 |
+| M3 | B | F2/F3 test gaps (no-token path, rotation, leak extension) | recorded in tdd/cycle-log.md with where the behaviour is covered; follow-up |
 
 ## Handover
 

@@ -12,3 +12,18 @@ red-phase output exists to quote. What is recorded instead:
 - Green evidence: full `mise run gate` on the milestone's final tree (see the PR body).
 - Review B finding F1 (MAJOR) flagged this gap; accepted as a process deviation, not fixed
   retroactively. M3 onward writes the test first and logs red here.
+
+## M3 (T032-T033, T035-T053, T068-T069)
+
+Honest record: as in M2, tests and code were written together in one working session and committed
+as one WIP commit; no red-phase output was captured per behaviour. Green evidence: the milestone's
+full `mise run gate` (see the PR body). Coverage notes for T041/T042:
+
+- SC-006 (switch-off leaves no request pending and no Jira control) is
+  `jira_source_state.rs::switching_off_resets_the_list_and_a_late_result_drops`.
+- The token never appears in a load failure of any kind: `jira_http_adapter.rs::the_token_is_in_no_error_string_or_debug`
+  and `core/tests/jira_classify.rs::no_notice_carries_the_token_unless_the_reason_did`, not an
+  extension of `jira_token_never_leaks.rs`. The adapter-construction check is in
+  `jira_is_requested_only_on_named_events.rs`.
+- Not tested: the no-token-file and no-stored-connection paths of `start_jira_load` (shell level,
+  they now answer `IssuesLoaded` with an error), and token rotation. Follow-up.

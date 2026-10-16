@@ -737,7 +737,7 @@ fn the_threshold_field_sits_under_the_long_task_row() {
 fn the_github_page_is_titled_github_and_claims_the_pull_request_switch() {
     let src = read(&client_dir().join("src/ui/settings/github.rs"));
     assert!(
-        src.contains("page(\n        \"GitHub\","),
+        src.contains("page(\"GitHub\","),
         "the page's title is \"GitHub\""
     );
     assert!(
