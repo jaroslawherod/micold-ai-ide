@@ -24,6 +24,7 @@ pub struct Accordion<'a, M> {
     content: Element<'a, M>,
     roles: Roles,
     open: bool,
+    width: Length,
 }
 
 impl<'a, M: Clone + 'a> Accordion<'a, M> {
@@ -33,7 +34,15 @@ impl<'a, M: Clone + 'a> Accordion<'a, M> {
             content: content.into(),
             roles,
             open: false,
+            width: Length::Shrink,
         }
+    }
+
+    /// How wide the panel is: `Length::Shrink` (the default) wraps its content, `Length::Fill`
+    /// takes the width it is given, which content that itself fills needs.
+    pub fn width(mut self, width: Length) -> Self {
+        self.width = width;
+        self
     }
 
     /// Whether the panel is open.
@@ -50,7 +59,7 @@ impl<'a, M: Clone + 'a> From<Accordion<'a, M>> for Element<'a, M> {
             // controls rather than a list of menu items, so §7.5's vertical-only padding — which
             // exists so an item's state layer can run edge to edge — would leave its content flush
             // against the sides.
-            super::menu_panel(a.content, Length::Shrink, a.roles, false, spacing::XS),
+            super::menu_panel(a.content, a.width, a.roles, false, spacing::XS),
             a.open,
             REVEAL,
         )

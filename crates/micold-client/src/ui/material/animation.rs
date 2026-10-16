@@ -352,6 +352,11 @@ macro_rules! operate_nested_child {
             renderer: &Renderer,
             operation: &mut dyn Operation,
         ) {
+            // A fully hidden wrapper offers nothing to focus: a closed accordion's fields have no
+            // height, and Tab must not land in them (feature 804 M4).
+            if Motion::<Message>::value(tree) <= HIDDEN {
+                return;
+            }
             if let Some(child) = layout.children().next() {
                 self.content.as_widget_mut().operate(
                     &mut tree.children[0],
