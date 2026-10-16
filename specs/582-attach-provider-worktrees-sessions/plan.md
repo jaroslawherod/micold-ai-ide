@@ -78,13 +78,16 @@ bounded page for the tool).
 | FR-001 list attachable | `attach::attachable_worktrees` (core); `ClientMsg::AttachDiscover` (R6); `list_worktrees` unchanged |
 | FR-002, FR-003, FR-004 | `Catalog::attach_worktrees` over `claim_worktree`; client `Message::Attach` |
 | FR-005, FR-015 | `attach_worktree` in `mcp/tools.rs` (core), `mcp/policy.rs`, daemon `mcp/tools.rs`; [contracts/attach-worktree-tool.md](contracts/attach-worktree-tool.md) |
-| FR-006, FR-007, FR-014 | `attach::discover_resumable` over `AiCliProvider`; per-provider stores in research R3 |
+| FR-006, FR-007 (see FR-017), FR-014 | `attach::discover_resumable` over `AiCliProvider`; per-provider stores in research R3 |
 | FR-008 | resume = `start_session(LaunchMode::Resume)` after `attach_worktrees` for its worktree; [contracts/attach-protocol.md](contracts/attach-protocol.md) |
 | FR-009, FR-010 | `DiscoveryReport.notes`; the pass only calls read methods |
 | FR-011 | `list_resumable_sessions`; [contracts/list-resumable-sessions-tool.md](contracts/list-resumable-sessions-tool.md) |
 | FR-012 | offer banner state in `features/attach.rs`; dismissal R5 |
 | FR-013 | `classify_owner` untouched; test that an unattached provider worktree stays hidden |
 | FR-016 | daemon catalog lock (single writer) plus `begin_start` guard, R7 |
+| FR-017 | `AiCliProvider::starts_as_continuation` (Claude: leading `/clear` record); `DaemonState::discover_external_sessions` skips and `mark_archived`s it; BUG-904 |
+
+**Bugfix**: 2026-10-16 — BUG-904: a transcript that continues a catalogued session (Claude `/clear`) is detected by `AiCliProvider::starts_as_continuation` (default false) and, when a non-archived same-provider session holds its location, skipped and marked archived instead of adopted; the session keeps its id.
 
 ## Project Structure
 
