@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-tw6sph
 - **Started**: 2026-10-16
 - **Phase**: milestone M1
-- **Next step**: M1 implement continues from Handover (T012/T027 daemon tests, T013/T017, T018), then verify and PR
+- **Next step**: M1 verify (gate, review A, review B), then PR
 
 ## Pull requests
 
@@ -50,11 +50,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M1 unit 2 hit the 150k cap during implement. `branch-start.sh` skipped (no `gh`); branch is on #906's merge d24fd322 plus local commits, not pushed.
-
-**Done**: T002–T011, T014, T015 (core module `crates/micold-core/src/issue_details.rs`; `github.rs` gained `visible_words`/`VisibleChars` shared with `description_from`, `numbered_args`, `answer_of`, `GhCli::outcome_within`, `pub(crate) graphql_error`, Fake `with_details`/`with_details_delay`/`details_calls`; traits `IssueLookup`/`IssueSource` now have supertrait `IssueDetailsSource`). Red then green recorded in `tdd/cycle-log.md`: `cargo test -p micold-core --test issue_details --test github_gh_cli --test github_description` all green. `details_bound`/`set_details_bound` in daemon `state.rs`. T016/T029 code is written in daemon `mcp/tools.rs` (`PendingDetails::start/finish`, `resolve_naming` returns `(naming, Option<PendingDetails>)`, the row gets `issue`; elapsed bound maps to `IssueLoadError::TimedOut`); `cargo check -p micold-daemon -p micold-client --tests` passes. Not ticked: its tests (T012, T027) are not written yet.
-
-**Next**: T012 and T027 tests in `crates/micold-daemon/tests/mcp_create_worktree.rs` (fake via `with_details(Ok(parse_details(include_bytes!(".../every_kind.json"), &repo)))`; existing `github_issue` rows now carry `issue.details_error` "Couldn't read issues: no details scripted" — check no existing test compares a whole row), run them, tick T016/T029; then T013+T017 (published text in `crates/micold-core/src/mcp/tools.rs`, test in `tests/mcp_tools_catalog.rs`), T018 guide; then verify (scoped gate + review A, review B) and pr step.
+None.
 
 ## Open escalation
 

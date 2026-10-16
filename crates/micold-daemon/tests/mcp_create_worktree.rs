@@ -999,4 +999,228 @@ mod github_issue {
         assert_eq!(mixed["category"], "invalid_input", "{mixed}");
         assert!(fake.lookup_calls().is_empty(), "{:?}", fake.lookup_calls());
     }
+
+    // ---- Feature 837: the issue's relationships in the result (tool-result.md) ----
+
+    use micold_core::github::GithubRepo;
+    use micold_core::issue_details::{parse_details, IssueDetails, Kind};
+    use std::time::{Duration, Instant};
+
+    const EVERY_KIND: &[u8] =
+        include_bytes!("../../micold-core/tests/fixtures/issue_details/every_kind.json");
+
+    fn repo() -> GithubRepo {
+        GithubRepo::from_remote_url("https://github.com/o/r.git").expect("a GitHub remote")
+    }
+
+    /// Issue #12 of the recorded answer with every kind, read as an issue of `o/r`, so references
+    /// into the recording's own `acme/widgets` carry their repository.
+    fn every_kind() -> IssueDetails {
+        parse_details(EVERY_KIND, &repo()).expect("the recorded answer parses")
+    }
+
+    /// `fake` answering #12's lookup as an open `bug` issue, and its details with `details`.
+    fn issue_12(details: Result<IssueDetails, IssueLoadError>) -> FakeIssueSource {
+        FakeIssueSource::new()
+            .with_lookup(Ok(snapshot(12, "Parser crash", &["bug"])))
+            .with_details(details)
+    }
+
+    fn states(list: &Value) -> Vec<String> {
+        list["items"]
+            .as_array()
+            .unwrap_or_else(|| panic!("no items in {list}"))
+            .iter()
+            .map(|item| item["state"].as_str().unwrap_or_default().to_string())
+            .collect()
+    }
+
+    /// US1 s1–s4, FR-002, FR-003: the result carries every kind the issue has, as the model
+    /// reports it, beside the worktree's own keys.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_github_issue_call_reports_every_relationship() {
+        let f = Fixture::new().await;
+        let fake = on_github(&f, issue_12(Ok(every_kind())));
+        let row = f.ok(sid(3), json!({"github_issue": 12})).await;
+        assert_eq!(row["branch"], "fix/12_parser-crash");
+        let issue = &row["issue"];
+        assert_eq!(*issue, every_kind().to_json(), "{issue}");
+        // US1 s1: one open and one closed blocker.
+        assert_eq!(issue["blocked"], true);
+        assert_eq!(issue["blocked_by"]["open"], 1);
+        assert_eq!(states(&issue["blocked_by"]), ["open", "closed"]);
+        // US1 s2: blocking, parent and sub-issues with their counts.
+        assert_eq!(issue["blocking"]["total"], 1);
+        assert_eq!(issue["parent"]["title"], "Q4 epic");
+        assert_eq!(issue["sub_issues"]["closed"], 1);
+        assert_eq!(issue["sub_issues"]["total"], 2);
+        // US1 s3: labels, assignees, milestone, projects with field values.
+        assert_eq!(issue["labels"]["items"], json!(["bug", "parser"]));
+        assert_eq!(issue["assignees"]["items"], json!(["octocat"]));
+        assert_eq!(issue["milestone"], "v1.4");
+        assert_eq!(issue["projects"][0]["fields"]["Status"], "In progress");
+        // US1 s4: closing and linked pull requests with their states.
+        assert_eq!(
+            issue["closing_pull_requests"]["items"][0]["ref"],
+            "acme/widgets#20"
+        );
+        assert_eq!(states(&issue["closing_pull_requests"]), ["draft"]);
+        assert_eq!(
+            issue["linked_pull_requests"]["items"][0]["ref"],
+            "acme/widgets#21"
+        );
+        assert_eq!(states(&issue["linked_pull_requests"]), ["merged"]);
+        assert_eq!(fake.details_calls(), vec![("o/r".to_string(), 12)]);
+    }
+
+    /// US1 s5: an issue with no relationships reports only its number.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn an_issue_with_nothing_reports_only_its_number() {
+        let empty = parse_details(
+            include_bytes!("../../micold-core/tests/fixtures/issue_details/empty.json"),
+            &repo(),
+        )
+        .expect("the recorded answer parses");
+        let f = Fixture::new().await;
+        on_github(&f, issue_12(Ok(empty)));
+        let row = f.ok(sid(3), json!({"github_issue": 12})).await;
+        assert_eq!(row["issue"], json!({"number": 12}));
+    }
+
+    /// US1 s6, FR-010, SC-006: calls without `github_issue` read no details and carry no `issue`.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn calls_without_github_issue_read_no_details() {
+        let f = Fixture::new().await;
+        let fake = on_github(&f, FakeIssueSource::new().with_details(Ok(every_kind())));
+        let literal = f.ok(sid(3), json!({"branch": "feat-lit"})).await;
+        assert!(literal.get("issue").is_none(), "{literal}");
+        let derived = f
+            .ok(
+                sid(3),
+                json!({"type": "fix", "ticket": "ABC-1", "name": "plain"}),
+            )
+            .await;
+        assert_eq!(derived["branch"], "fix/abc-1_plain");
+        assert!(derived.get("issue").is_none(), "{derived}");
+        assert!(
+            fake.details_calls().is_empty(),
+            "{:?}",
+            fake.details_calls()
+        );
+    }
+
+    /// US1 s6, FR-006: explicit values with `github_issue` name as today and still carry `issue`.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn explicit_values_with_github_issue_still_carry_the_issue() {
+        let f = Fixture::new().await;
+        on_github(&f, issue_12(Ok(every_kind())));
+        let row = f
+            .ok(
+                sid(3),
+                json!({"github_issue": 12, "type": "chore", "ticket": "ABC-1", "name": "other thing"}),
+            )
+            .await;
+        assert_eq!(row["branch"], "chore/abc-1_other-thing");
+        assert_eq!(row["issue"], every_kind().to_json());
+    }
+
+    /// FR-010: a refused `github_issue` call returns its error and no `issue`.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_refused_github_issue_call_carries_no_issue() {
+        let f = Fixture::new().await;
+        on_github(
+            &f,
+            FakeIssueSource::new()
+                .with_lookup(Err(IssueLookupError::NotOpenIssue { closed: true }))
+                .with_details(Ok(every_kind())),
+        );
+        let before = f.snapshot().await;
+        let error = f.err(sid(3), json!({"github_issue": 12})).await;
+        assert_eq!(error["category"], "invalid_input", "{error}");
+        assert!(error.get("issue").is_none(), "{error}");
+        f.assert_unchanged(&before).await;
+
+        let f = Fixture::new().await;
+        on_github(&f, issue_12(Ok(every_kind())));
+        occupy(&f, "fix-12_parser-crash");
+        let error = f.err(sid(3), json!({"github_issue": 12})).await;
+        assert!(error.get("issue").is_none(), "{error}");
+    }
+
+    /// US3 s1, FR-012: a kind that cannot be read is listed under `not_readable`; the rest stay.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_kind_that_cannot_be_read_is_listed_and_the_rest_reported() {
+        let mut details = every_kind();
+        details.projects = Kind::NotReadable("no read:project scope".into());
+        let f = Fixture::new().await;
+        on_github(&f, issue_12(Ok(details)));
+        let row = f.ok(sid(3), json!({"github_issue": 12})).await;
+        let issue = &row["issue"];
+        assert_eq!(issue["not_readable"]["projects"], "no read:project scope");
+        assert!(issue.get("projects").is_none(), "{issue}");
+        for kind in [
+            "blocked_by",
+            "blocking",
+            "parent",
+            "sub_issues",
+            "labels",
+            "assignees",
+            "milestone",
+            "closing_pull_requests",
+            "linked_pull_requests",
+        ] {
+            assert!(issue.get(kind).is_some(), "{kind} missing: {issue}");
+        }
+    }
+
+    /// US3 s2, FR-012: a failed read is one `details_error` and the worktree is still created.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_failed_read_is_a_details_error_and_the_worktree_is_created() {
+        let f = Fixture::new().await;
+        on_github(&f, issue_12(Err(IssueLoadError::RateLimited)));
+        let row = f.ok(sid(3), json!({"github_issue": 12})).await;
+        assert_eq!(
+            row["issue"],
+            json!({"number": 12, "details_error": IssueLoadError::RateLimited.message(&repo())})
+        );
+        assert!(
+            row["path"].as_str().is_some_and(|p| Path::new(p).is_dir()),
+            "{row}"
+        );
+    }
+
+    /// US3 s2, FR-011, SC-005: a read slower than the bound returns within it with the production
+    /// bound's timeout sentence, and the worktree is created.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_slow_read_is_cut_at_the_bound() {
+        let f = Fixture::new().await;
+        on_github(
+            &f,
+            issue_12(Ok(every_kind())).with_details_delay(Duration::from_secs(5)),
+        );
+        f.state.set_details_bound(Duration::from_millis(200));
+        let started = Instant::now();
+        let row = f.ok(sid(3), json!({"github_issue": 12})).await;
+        let took = started.elapsed();
+        assert!(took < Duration::from_millis(2200), "took {took:?}");
+        assert_eq!(
+            row["issue"]["details_error"],
+            IssueLoadError::TimedOut.message(&repo())
+        );
+        assert!(
+            row["path"].as_str().is_some_and(|p| Path::new(p).is_dir()),
+            "{row}"
+        );
+    }
+
+    /// US3 s4, FR-003: an issue blocked by an open issue is created, reported blocked, not refused.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_blocked_issue_is_created_and_reported_blocked() {
+        let f = Fixture::new().await;
+        on_github(&f, issue_12(Ok(every_kind())));
+        let before = f.snapshot().await;
+        let row = f.ok(sid(3), json!({"github_issue": 12})).await;
+        assert_eq!(row["issue"]["blocked"], true);
+        assert_ne!(f.snapshot().await, before, "the worktree is created");
+    }
 }

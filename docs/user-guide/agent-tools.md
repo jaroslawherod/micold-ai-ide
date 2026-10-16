@@ -34,7 +34,7 @@ These tools make changes, exactly as the sidebar does:
 
 | Tool | What it does |
 |---|---|
-| `create_worktree` | Creates a worktree for a branch, as the new-worktree dialog does: under `.claude/worktrees/`, named after the branch unless a name is given. By default it makes a new branch; `existing_local` checks out a branch that exists and is free, and `track_remote` tracks a remote branch. Instead of a branch, it can take a `type`, a `ticket` and a `name`, as the new-worktree form does (see below); a worktree for an issue should be created this way, or with `github_issue`, so that it carries the issue reference. With `ai_cli` or `prompt` it also creates the worktree's one session in the same call (see below) |
+| `create_worktree` | Creates a worktree for a branch, as the new-worktree dialog does: under `.claude/worktrees/`, named after the branch unless a name is given. By default it makes a new branch; `existing_local` checks out a branch that exists and is free, and `track_remote` tracks a remote branch. Instead of a branch, it can take a `type`, a `ticket` and a `name`, as the new-worktree form does (see below); a worktree for an issue should be created this way, or with `github_issue`, so that it carries the issue reference; a `github_issue` call also reports what blocks the issue and its other relationships (see below). With `ai_cli` or `prompt` it also creates the worktree's one session in the same call (see below) |
 | `rename_worktree` | Gives a worktree a new name in the sidebar, as the sidebar's rename does. Its folder and branch stay as they are. The name cannot be empty, and `default` (the project folder) cannot be renamed |
 | `create_session` | Creates a session in a worktree (or in `default`, the project folder) and starts it. It runs the AI CLI the assistant names, or your default AI CLI from Settings. It can also be given a first prompt to type into the new session. A worktree holds at most one session by default: when it already has one, the call fails with a conflict that names the worktree's main session (its name and id), says that `start_session` on that id brings it back, and says to pass `allow_additional_session: true` to start another on purpose; nothing is created. With `allow_additional_session: true` (optional, default false) the call creates a second session beside the existing one and leaves that one untouched; the policy, the AI CLI check and every other check still apply |
 | `start_session` | Starts a session that is idle, failed, or waiting to be resumed, as **Start** in the sidebar does: a session that was running when the service last stopped resumes its conversation. Every window shows it starting, then running. A session that is already starting, running or restarting is left as it is, and the result says which it is |
@@ -97,6 +97,34 @@ It is refused, and nothing is created, with the same explanation the form gives,
 closed, is a pull request or does not exist, the project has no GitHub remote, `gh` is not
 installed or not signed in, the sign-in cannot see the repository, GitHub cannot be reached or its
 rate limit is reached, or GitHub does not answer within 10 seconds.
+
+#### What a `github_issue` call reports
+
+When a `github_issue` call creates the worktree, its result also carries an `issue` object, so the
+agent knows what it is starting on. It holds the issue's `number` and, for each kind the issue has,
+that kind's data:
+
+- `blocked_by` (with how many of the blockers are still `open`) and `blocking`;
+- `parent` and `sub_issues` (with how many are `closed` of the `total`);
+- `labels`, `assignees`, `milestone`, and `projects` with each project's non-empty field values;
+- `closing_pull_requests` and `linked_pull_requests`, each with its state: open, draft, merged or
+  closed.
+
+A kind the issue does not have is left out, so an issue with none of them reports only its number.
+`blocked: true` appears when at least one blocking issue is still open. Being blocked is reported,
+never enforced: the worktree is created all the same.
+
+Each list shows at most 20 items. `more` says how many are not shown, and `hidden` how many your
+sign-in cannot see (they still count in the total). When the linked pull requests could not all be
+counted in time, `total_is_lower_bound` says the total is at least that many.
+
+A kind your sign-in cannot read (projects need the `read:project` scope) is listed under
+`not_readable` with the reason, and the other kinds are still reported. When nothing could be read
+at all (GitHub cannot be reached, its rate limit is reached, or it does not answer within 10
+seconds), the object holds only the number and a `details_error` sentence; the worktree is still
+created. The details are read beside the lookup, so the call waits for them at most 10 seconds
+after the read starts, and usually not beyond the time the worktree takes to create. A call without
+`github_issue` reads nothing more, and a refused call carries no `issue` object.
 
 A request the dialog would refuse is refused the same way, with the dialog's own explanation: a
 branch that already exists or is checked out elsewhere, a name the naming rules reject, or a branch

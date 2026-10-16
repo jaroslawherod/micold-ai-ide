@@ -289,6 +289,36 @@ fn create_worktree_guidance_states_the_issue_reference_convention() {
     }
 }
 
+/// Feature 837, FR-014: the tool says what a `github_issue` call's result reports
+/// (contracts/tool-result.md, "Published text").
+#[test]
+fn create_worktree_publishes_the_issue_object() {
+    let listing = micold_core::mcp::tools::list_result();
+    let tool = listing["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|t| t["name"] == "create_worktree")
+        .unwrap();
+    let description = tool["description"].as_str().unwrap();
+    let published = "A github_issue call's result also carries issue: what blocks the issue and \
+        what it blocks, its parent and sub-issues, labels, assignees, milestone, project fields and \
+        linked pull requests (only the kinds it has; a kind that cannot be read is listed under \
+        not_readable; details_error when none could be read). Being blocked is reported, never \
+        enforced.";
+    assert!(
+        description.contains(published),
+        "the description must carry the published text: {description}"
+    );
+    let github_issue = tool["inputSchema"]["properties"]["github_issue"]["description"]
+        .as_str()
+        .unwrap();
+    assert!(
+        github_issue.contains("The result's issue object reports its relationships."),
+        "{github_issue}"
+    );
+}
+
 #[test]
 fn derived_inputs_parse_to_a_derived_request() {
     assert_eq!(
