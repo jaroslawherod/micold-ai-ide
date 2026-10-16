@@ -31,10 +31,10 @@
 //! outlive its reason. The rule is not "every field has a control today"; it is that no field sits
 //! in the state where the requirement is neither met nor waived.
 
+use micold_client::features::settings::SettingsSection;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
-use micold_client::features::settings::SettingsSection;
 
 /// Settings this feature renders in a later phase, and the task that does it. Keyed by the same
 /// dotted path the persisted shape produces.
@@ -476,10 +476,8 @@ fn nothing_points_at_the_removed_session_service_section() {
             let path = entry.path();
             if path.is_dir() {
                 stack.push(path);
-            } else if matches!(
-                path.extension().and_then(|e| e.to_str()),
-                Some("md" | "rs")
-            ) && !path.ends_with("tests/settings_sections.rs")
+            } else if matches!(path.extension().and_then(|e| e.to_str()), Some("md" | "rs"))
+                && !path.ends_with("tests/settings_sections.rs")
                 && !path.ends_with("tests/sandbox_limits.rs")
             {
                 files.push(path);

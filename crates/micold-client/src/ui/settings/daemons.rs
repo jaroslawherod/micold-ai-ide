@@ -320,8 +320,7 @@ fn form<'a>(
             machine.and(facts.missing_cli.clone()),
             focused,
             roles,
-        )
-        {
+        ) {
             fields = fields.push(control);
         }
     }

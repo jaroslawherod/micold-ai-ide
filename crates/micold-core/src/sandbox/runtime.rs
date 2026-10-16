@@ -401,8 +401,7 @@ impl RuntimeError {
                     .to_string()
             }
             RuntimeError::PortUnavailable { .. } => {
-                "Stop whatever holds the port, or choose another in Settings → Daemons."
-                    .to_string()
+                "Stop whatever holds the port, or choose another in Settings → Daemons.".to_string()
             }
             RuntimeError::MountRejected { .. } => {
                 "Move the project to a path the runtime can share, or unregister it.".to_string()
