@@ -341,6 +341,7 @@ fn states_opening_each_surface() -> Vec<micold_client::app::State> {
         session: session::State {
             terminal_context_menu: Some((4, 2)),
             remove_target: Some(SessionId::new()),
+            additional_target: Some(micold_core::session::SessionLocation::Default),
             menu_open: Some(micold_client::features::session::SessionMenu {
                 id: SessionId::new(),
                 anchor: (120, 340),

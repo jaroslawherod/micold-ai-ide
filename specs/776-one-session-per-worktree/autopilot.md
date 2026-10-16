@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #776
 - **Worktree branch**: feat/776_one-session-per-worktree-chosen-at-start
 - **Started**: 2026-10-12
-- **Phase**: M4 PR open, awaiting CI
-- **Next step**: orchestrator waits on CI and merges M4
+- **Phase**: M5 PR open, awaiting CI
+- **Next step**: orchestrator waits on CI and merges M5
 
 ## Pull requests
 
@@ -22,6 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #821 | M2 | merged | 08e3a36dc925bffd3e44623701a9cbade577cf57 |
 | #827 | Amendment: main session and helpers (specs only) | merged | fa395078be20e60fa40eacb8d45b52beb683d37d |
 | #828 | M3 | merged | 5ac2e0a2648abd82f8f95bbbf52d6f0309c193ca |
+| #880 | M4 | merged | bb0458f6bed51342b3ac261670cc0be8989cc198 |
 
 ## Milestones
 
@@ -30,8 +31,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T013 | full | Second session refused by daemon (RPC, create_session, review send); wire fields + v41 | #794 | merged (#794) |
 | M2 | T037–T042 | full | Soft limit: `allow_additional_session` on create_session, wire v42 (the start flag lands with the start block in M7) | #821 | merged (#821) |
 | M3 | T014–T016, T021, T050–T054 | full | create_worktree / WorktreeCreate define the session at start (WIP at tag wip-776-m3, cherry-picked after M2); main session persisted, moved, promoted; wire v44 | | pending |
-| M4 | T017–T020, T022, T036, T043–T045 | full | Dialog fields; worktree rows only; row press opens the main session; helpers marked | | #880 | PR open |
-| M5 | T046–T049, T055–T057 | full | Row menu "Start another session..." (adds a helper) with confirmation; "Make main session"; delete names successor | | pending |
+| M4 | T017–T020, T022, T036, T043–T045 | full | Dialog fields; worktree rows only; row press opens the main session; helpers marked | #880 | merged (#880) |
+| M5 | T046–T049, T055–T057 | full | Row menu "Start another session..." (adds a helper) with confirmation; "Make main session"; delete names successor | PR pending | gate green, PR being opened |
 | M6 | T023–T030 | full | Resume replaces (resumed becomes main) or keeps both (helper); attach cap | | pending |
 | M7 | T031–T035 | full | Several sessions intact; start beside a live one needs confirmation | | pending |
 
@@ -70,8 +71,12 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Amendment 2026-10-14 (main session) | 1 | ec2345907f0bee18669772be003f4096e916dd99:08e3a36dc925bffd3e44623701a9cbade577cf57 | CLEAN (3 MINOR, fixed, prose only) |
 | Code A M3 | 1 | 0a6031f8335591c7c59a02840b354249dbd6dbfd:5b9d4e5a05a02a467f79cf38e5dfcc04d159f07c | CLEAN (2 MINOR: set_main rollback fixed; RPC prompt-undelivered declined) |
 | Conformance B M3 | 1 | 0a6031f8335591c7c59a02840b354249dbd6dbfd:5b9d4e5a05a02a467f79cf38e5dfcc04d159f07c | CLEAN (1 MINOR declined) |
+| Code A M5 | 1 | 8c0bc7a3395f96b5838a9319c8536ede00f5daaf:bb0458f6bed51342b3ac261670cc0be8989cc198 | CLEAN |
+| Conformance B M5 | 2 | same snapshot | round 1 CHANGES: 2 MAJOR (no menu/wire tests: added m5_menus + allow-flag unit test; Verify line lacked `--`: fixed), 2 MINOR fixed; round 2 CLEAN |
 
 ## Declined review findings
+
+- M5 review B round 2 F1 (MINOR: rename a test so the Verify filter matches it): declined, the Verify command passes and the test runs in the full gate.
 
 - M4 review B F2 (row-press wiring untested at the widget level): declined; the node-level main_session and start_offered tests plus the layout snapshot cover it, and iced TreeItem messages are not inspectable here. F4 wrap: prose only. Visual pass: items 1,2,4 (one session) pass; two-session expander not reachable until M5 adds the row menu entry (evidence: tdd/visual-pass.md).
 

@@ -2488,6 +2488,55 @@ pub fn on_session_start_requested(
     Task::none()
 }
 
+/// The create request of a confirmed additional session (feature 776, FR-016): a start like any
+/// other, except that the user asked for one more beside the existing session.
+fn additional_session_request(
+    req: u64,
+    project: PathBuf,
+    location: &SessionLocation,
+    provider: micold_core::session::AiCli,
+) -> ClientMsg {
+    let worktree_dir = match location {
+        SessionLocation::Worktree(dir) => dir.clone(),
+        SessionLocation::Default => String::new(),
+    };
+    ClientMsg::SessionCreate {
+        req,
+        project,
+        worktree_dir,
+        provider,
+        allow_additional_session: true,
+    }
+}
+
+/// The additional-session confirmation was accepted (feature 776, FR-016, FR-017): ask the daemon
+/// for the helper. The reply's `SessionCreated` selects it like any created session.
+pub fn on_additional_session_confirmed(app: &mut App) -> Task<Message> {
+    if let (Some((location, provider)), Some(project)) = (
+        app.core.additional_request(),
+        app.core.workspace.active.clone(),
+    ) {
+        send_op(app, PendingOp::CreateSession, move |req| {
+            additional_session_request(req, project, &location, provider)
+        });
+    }
+    app.core
+        .update(Message::Session(SessionMsg::AdditionalConfirmed));
+    Task::none()
+}
+
+/// "Make main session" was chosen (feature 776, FR-021): fire-and-forget to the daemon holding the
+/// session; the catalog update is the answer.
+pub fn on_make_main_requested(app: &mut App, id: SessionId) -> Task<Message> {
+    app.core
+        .update(Message::Session(SessionMsg::MakeMainRequested(id)));
+    let binding = app.session_binding_of(id);
+    if let Some(daemon) = app.outbox_of(binding) {
+        daemon.send(ClientMsg::SessionSetMain { id });
+    }
+    Task::none()
+}
+
 /// Selecting a session reattaches/resumes whichever process its persisted mode selects
 /// (FR-005, FR-011) — an Idle AI CLI session resumes via `claude --resume` (FR-023a); a
 /// session last left in Regular mode gets a fresh shell instead.
@@ -3338,7 +3387,29 @@ fn forget_worktree_binding(app: &mut App, project: &std::path::Path, dir_name: &
 
 #[cfg(test)]
 pub(crate) mod tests {
+
     use super::*;
+
+    /// FR-016: the confirmed request is an explicit additional session, and a plain start is not.
+    #[test]
+    fn a_confirmed_additional_session_carries_the_allow_flag() {
+        use micold_core::protocol::messages::ClientMsg;
+        let location = SessionLocation::Worktree("wt".into());
+        let msg = super::additional_session_request(
+            7,
+            PathBuf::from("/p"),
+            &location,
+            micold_core::session::AiCli::ClaudeCode,
+        );
+        assert!(matches!(
+            msg,
+            ClientMsg::SessionCreate {
+                allow_additional_session: true,
+                ref worktree_dir,
+                ..
+            } if worktree_dir == "wt"
+        ));
+    }
     // The wire/domain types the fixtures below build. They were in scope via the module's own
     // imports until the fold moved to `micold_client::catalog_sync`; the production code here no
     // longer names them, so the tests import them for themselves rather than the module carrying

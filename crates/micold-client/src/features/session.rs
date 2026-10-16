@@ -134,6 +134,10 @@ pub struct State {
     /// FR-015c). Its presence *is* the confirm dialog being shown (T037). Mirrors
     /// `worktree.delete_target`.
     pub remove_target: Option<SessionId>,
+    /// The occupied location a helper session is being added to, shown in the confirm dialog
+    /// (feature 776, FR-016). Its presence *is* the confirm dialog being shown, as
+    /// [`Self::remove_target`]'s is.
+    pub additional_target: Option<SessionLocation>,
     /// A sandboxed file open awaiting the user's confirmation (feature 031, FR-018a).
     ///
     /// Its presence *is* the confirm surface being shown, mirroring [`Self::remove_target`]. It
@@ -999,6 +1003,25 @@ impl Registered for ConfirmSessionRemoveDialog {
     }
 }
 
+/// The confirm-additional-session dialog, as a floating surface (feature 776, FR-016). Built
+/// like [`ConfirmSessionRemoveDialog`]: Escape and a scrim click cancel, which changes nothing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ConfirmAdditionalSessionDialog;
+
+floating_surface!(ConfirmAdditionalSessionDialog, id: SurfaceId::new("confirm_additional_session"), layer: Dialog, cancelled_by: Message::Session(Msg::AdditionalCancelled));
+
+impl Registered for ConfirmAdditionalSessionDialog {
+    fn open_in(state: &crate::app::State) -> Option<Self> {
+        // Open only while the location still holds a session: the dialog names it.
+        state
+            .session
+            .additional_target
+            .as_ref()
+            .filter(|location| !state.start_offered(location))
+            .map(|_| ConfirmAdditionalSessionDialog)
+    }
+}
+
 /// A session was started (feature 005, FR-020).
 ///
 /// The started session's location joins the user's own open set, as it always has. Feature 024
@@ -1207,6 +1230,33 @@ pub fn remove_confirmed(state: &mut crate::app::State) -> Vec<crate::features::O
         }
     }
     outcomes
+}
+
+/// "Start another session..." was chosen on `location`: the confirmation opens (feature 776,
+/// FR-016). A free location has the start action instead, so nothing opens for it.
+pub fn additional_requested(state: &mut crate::app::State, location: SessionLocation) {
+    if state.start_offered(&location) {
+        return;
+    }
+    state.clear_for_dialog();
+    state.session.additional_target = Some(location);
+}
+
+/// The additional-session confirmation was dismissed: nothing changes (FR-016).
+pub fn additional_cancelled(state: &mut crate::app::State) {
+    state.session.additional_target = None;
+}
+
+/// The additional-session confirmation was accepted. The request itself is built from
+/// [`crate::app::State::additional_request`] by the binary, which reads it before this runs.
+pub fn additional_confirmed(state: &mut crate::app::State) {
+    state.session.additional_target = None;
+}
+
+/// "Make main session" was chosen: the daemon's catalog update is the answer (FR-021), so only the
+/// menu closes here.
+pub fn make_main_requested(state: &mut crate::app::State) {
+    state.session.menu_open = None;
 }
 
 /// The removal confirmation was dismissed.
@@ -1568,6 +1618,17 @@ pub enum Msg {
     /// Dismiss the remove confirmation without removing anything.
     RemoveCancelled,
 
+    // ---- Feature 776: helper sessions and the main session ----
+    /// "Start another session..." was chosen on an occupied location; opens the confirmation.
+    AdditionalRequested(SessionLocation),
+    /// The confirmation was accepted. The binary sends `SessionCreate` with
+    /// `allow_additional_session: true`.
+    AdditionalConfirmed,
+    /// The confirmation was dismissed; nothing changes.
+    AdditionalCancelled,
+    /// "Make main session" was chosen on a helper's row. The binary sends `SessionSetMain`.
+    MakeMainRequested(SessionId),
+
     // ---- Feature 010: switchable regular terminal mode ----
     // The mode toggle's `TerminalModeToggled` lived here until feature 027 deleted the control.
     // The tab strip is the only route between a session's panes now, so a message meaning "switch
@@ -1873,6 +1934,10 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
         Msg::MenuDismissed => menu_dismissed(state),
         Msg::RemoveRequested(id) => remove_requested(state, id),
         Msg::RemoveCancelled => remove_cancelled(state),
+        Msg::AdditionalRequested(location) => additional_requested(state, location),
+        Msg::AdditionalConfirmed => additional_confirmed(state),
+        Msg::AdditionalCancelled => additional_cancelled(state),
+        Msg::MakeMainRequested(_) => make_main_requested(state),
         Msg::TerminalFocusReleased => state.release_terminal(),
         Msg::TerminalContextMenuOpened { x, y, link } => context_menu_opened(state, x, y, link),
         Msg::TerminalContextMenuClosed => context_menu_closed(state),
@@ -2244,6 +2309,40 @@ impl crate::app::State {
             micold_core::occupancy::occupancy(self.active_sessions(), location),
             micold_core::occupancy::Occupancy::Free
         )
+    }
+
+    /// The location and CLI of the session the open additional-session confirmation would start
+    /// (feature 776, FR-016): the default CLI, as a start with no override uses.
+    pub fn additional_request(&self) -> Option<(SessionLocation, AiCli)> {
+        let location = self.session.additional_target.clone()?;
+        Some((location, self.session.provider_for_start(None)))
+    }
+
+    /// Whether `id` is a helper: an un-archived session of a location whose main is another
+    /// (feature 776, FR-021). Only a helper's menu offers "Make main session".
+    pub fn is_helper(&self, id: SessionId) -> bool {
+        let sessions = self.active_sessions();
+        sessions
+            .iter()
+            .find(|s| s.id == id && !s.archived)
+            .is_some_and(|s| {
+                micold_core::occupancy::main_session(sessions, &s.location)
+                    .is_some_and(|main| main != id)
+            })
+    }
+
+    /// The session that becomes main when `id` is removed: the first other un-archived session of
+    /// its location, in list order, when `id` is the main (feature 776, FR-022). `None` for a
+    /// helper or a lone main.
+    pub fn successor_on_removal(&self, id: SessionId) -> Option<&Session> {
+        let sessions = self.active_sessions();
+        let location = &sessions.iter().find(|s| s.id == id)?.location;
+        if micold_core::occupancy::main_session(sessions, location) != Some(id) {
+            return None;
+        }
+        sessions
+            .iter()
+            .find(|s| s.id != id && !s.archived && &s.location == location)
     }
 }
 

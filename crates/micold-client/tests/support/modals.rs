@@ -91,6 +91,24 @@ pub fn modals() -> Vec<Modal> {
             |s| s.session.remove_target = Some(SessionId::new()),
         ),
         row(
+            "confirm_additional_session",
+            Message::Session(SessionMsg::AdditionalCancelled),
+            |s| {
+                // The dialog is open only while its location holds a session.
+                let location = micold_core::session::SessionLocation::Worktree("wt".to_string());
+                let path = PathBuf::from("/p");
+                s.workspace.active = Some(path.clone());
+                s.workspace.sessions.insert(
+                    path,
+                    vec![micold_core::session::Session::start_new(
+                        location.clone(),
+                        micold_core::session::AiCli::ClaudeCode,
+                    )],
+                );
+                s.session.additional_target = Some(location);
+            },
+        ),
+        row(
             "confirm_discard_pending",
             Message::Changes(micold_client::features::changes::Msg::DiscardCancelled),
             open_discard_pending,

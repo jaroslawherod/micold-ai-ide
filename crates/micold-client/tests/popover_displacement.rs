@@ -195,7 +195,8 @@ fn every_popover_is_in_the_table() {
     // Sixteen with `confirm_pick_run`, the question Pick this one asks (feature 483).
     // Eighteen with `run_cleanup_offer` and its `run_cleanup_second_confirm` (feature 483).
     // Twenty with `confirm_daemon_removal` and `bind_daemon` (feature 491).
-    const DIALOGS: usize = 20;
+    // Twenty-one with `confirm_additional_session` (feature 776).
+    const DIALOGS: usize = 21;
     assert_eq!(
         micold_client::overlay::registry::probes().len(),
         DIALOGS + DISPLACES.len(),

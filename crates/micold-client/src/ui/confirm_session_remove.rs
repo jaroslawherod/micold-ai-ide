@@ -13,17 +13,33 @@ use micold_core::tokens::{self};
 
 /// The confirm-remove dialog for a session (shown by its sidebar `label`) as a modal surface, as the dialog body; `ui::view` wraps it
 /// in the shared [`Modal`](crate::ui::material::Modal) transition.
-pub fn modal<'a>(label: &str, scheme: ColorScheme) -> Element<'a, Message> {
+pub fn modal<'a>(
+    label: &str,
+    successor: Option<&str>,
+    scheme: ColorScheme,
+) -> Element<'a, Message> {
     let r = tokens::roles(scheme);
 
     let warning = "This permanently deletes the session. Unlike Close, it cannot be recovered — \
                    the underlying `claude` conversation itself is untouched, but the app will \
                    never show or resume it again.";
 
-    let fields = column![
+    // Feature 776, FR-022: deleting a main names the session that takes over.
+    let handover = successor.map(|name| {
+        Text::new(
+            format!("“{name}” becomes the main session of this worktree."),
+            TypeRole::Body,
+            r,
+        )
+    });
+
+    let mut fields = column![
         Text::new(format!("Remove “{label}”?"), TypeRole::Headline, r),
         Text::new(warning, TypeRole::Body, r).muted(),
     ];
+    if let Some(handover) = handover {
+        fields = fields.push(handover);
+    }
 
     material::dialog::confirm(
         r,
@@ -49,6 +65,13 @@ pub fn dialog<'a>(
     state
         .session
         .remove_target
-        .and_then(|id| state.workspace.find_session(id))
-        .map(|(_, session)| modal(session.label.display(), scheme))
+        .and_then(|id| state.workspace.find_session(id).map(|(_, s)| (id, s)))
+        .map(|(id, session)| {
+            let successor = state.successor_on_removal(id);
+            modal(
+                session.label.display(),
+                successor.map(|s| s.label.display()),
+                scheme,
+            )
+        })
 }

@@ -819,6 +819,15 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         Message::Session(SessionMsg::CloseRequested(id)) => {
             shell::daemon_sync::on_session_close_requested(app, id)
         }
+        // Feature 776 (FR-016): the confirmed request goes on the wire as an explicit additional
+        // session; the created one is selected by the reply as any created session is.
+        Message::Session(SessionMsg::AdditionalConfirmed) => {
+            shell::daemon_sync::on_additional_session_confirmed(app)
+        }
+        // Feature 776 (FR-021): fire-and-forget; the catalog update is the answer.
+        Message::Session(SessionMsg::MakeMainRequested(id)) => {
+            shell::daemon_sync::on_make_main_requested(app, id)
+        }
         Message::Session(SessionMsg::RemoveConfirmed) => {
             shell::daemon_sync::on_session_remove_confirmed(app)
         }
