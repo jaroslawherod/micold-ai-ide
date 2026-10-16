@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #776
 - **Worktree branch**: feat/776_one-session-per-worktree-chosen-at-start
 - **Started**: 2026-10-12
-- **Phase**: M5 PR open, awaiting CI
-- **Next step**: orchestrator waits on CI and merges M5
+- **Phase**: M6 gating and review
+- **Next step**: scoped gate, review A, review B, visual pass, full gate, M6 PR
 
 ## Pull requests
 
@@ -23,7 +23,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #827 | Amendment: main session and helpers (specs only) | merged | fa395078be20e60fa40eacb8d45b52beb683d37d |
 | #828 | M3 | merged | 5ac2e0a2648abd82f8f95bbbf52d6f0309c193ca |
 | #880 | M4 | merged | bb0458f6bed51342b3ac261670cc0be8989cc198 |
-| #891 | M5 | open | rebased onto main (one test-file append conflict in features_sidebar.rs, both sides kept); full gate green; review B not re-run, diff unchanged |
+| #891 | M5 | merged | 2a1e24637014dfbfb417a1b201d88ceaaa11a755 |
 
 ## Milestones
 
@@ -33,7 +33,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T037–T042 | full | Soft limit: `allow_additional_session` on create_session, wire v42 (the start flag lands with the start block in M7) | #821 | merged (#821) |
 | M3 | T014–T016, T021, T050–T054 | full | create_worktree / WorktreeCreate define the session at start (WIP at tag wip-776-m3, cherry-picked after M2); main session persisted, moved, promoted; wire v44 | | pending |
 | M4 | T017–T020, T022, T036, T043–T045 | full | Dialog fields; worktree rows only; row press opens the main session; helpers marked | #880 | merged (#880) |
-| M5 | T046–T049, T055–T057 | full | Row menu "Start another session..." (adds a helper) with confirmation; "Make main session"; delete names successor | #891 | PR open |
+| M5 | T046–T049, T055–T057 | full | Row menu "Start another session..." (adds a helper) with confirmation; "Make main session"; delete names successor | #891 | merged (#891) |
 | M6 | T023–T030 | full | Resume replaces (resumed becomes main) or keeps both (helper); attach cap | | pending |
 | M7 | T031–T035 | full | Several sessions intact; start beside a live one needs confirmation | | pending |
 
@@ -90,9 +90,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M6 (T023-T030) in progress, uncommitted work is committed as WIP on the branch, no PR yet, not pushed. #891 (M5) is merged (SHA 2a1e2463...).
-Done (code written, compiles, targeted tests green): core `attach::cap_per_location` (+ `AttachTarget: Ord`) with tests in `micold-core/tests/attach_discovery.rs`; daemon `Catalog::attach_session_as` / `replace_session` / adoption cap, `DaemonState::attach_apply` rewrite + `resume_into` (state.rs), adoption ordered newest first; daemon tests appended to `attach_apply.rs` (all pass) and `one_session_per_worktree.rs` (`start_stop_and_restart_keep_the_one_session`, passes); client `Confirm`, `Msg::ConfirmReplace/ConfirmKeepBoth`, dialog confirm modal, tests appended to `attach_dialog.rs` (pass); user-guide paragraph (T029). Both-flags-on-one-item returns `Refused(Unavailable)` (no new wire reason).
-Next: (1) `crates/micold-daemon/tests/untitled_session_labels.rs` tests `discovery_adopts_a_titled_session_named_an_untitled_one_labelled_and_an_empty_one_pending` (line ~353, expects 3 adopted into one location) and `a_failed_read_or_a_failed_label_write_changes_nothing_else` (line ~515, adopts 2 in one location via adopt_discovered_sessions) now fail by design (FR-012 cap): rewrite them to one session per location (or expect 1 adopted); also run `session_name_persistence`, `session_archive_durable_marker`, `catalog_adoption` tests and add a `catalog_adoption.rs` test for the adoption cap (T025: at most one per location, none where occupied); (2) tick T023-T029 in tasks.md; (3) scoped gate, review A (code-review high), review B (conformance, sonnet), T030 visual pass of quickstart Part B item 3 via autopilot-worker (evidence in specs/776-one-session-per-worktree/tdd/), full gate, PR "feat(776): resume replaces or keeps both, attach cap (#776)". Do not run `mise run build` (release build, pointless).
+None.
 
 ## Open escalation
 
