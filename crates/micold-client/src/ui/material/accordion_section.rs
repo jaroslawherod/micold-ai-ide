@@ -65,7 +65,9 @@ impl<'a, M: Clone + 'a> From<AccordionSection<'a, M>> for Element<'a, M> {
             Button::with_content(header, ButtonVariant::Text, s.roles)
                 .width(Length::Fill)
                 .on_press_maybe(s.on_toggle),
-            Accordion::new(s.body, s.roles).open(s.open),
+            Accordion::new(s.body, s.roles)
+                .width(Length::Fill)
+                .open(s.open),
         ]
         .spacing(spacing::XS)
         .into()
@@ -74,7 +76,9 @@ impl<'a, M: Clone + 'a> From<AccordionSection<'a, M>> for Element<'a, M> {
 
 #[cfg(test)]
 mod tests {
-    use super::super::test_support::{dark_roles, named_key, roles, size_of, Mounted, WINDOW};
+    use super::super::test_support::{
+        bounds_at, dark_roles, named_key, roles, size_of, Mounted, WINDOW,
+    };
     use super::*;
     use iced::advanced::mouse;
     use iced::keyboard::key::Named;
@@ -115,6 +119,96 @@ mod tests {
                 "open {open:?} must be taller than closed {closed:?}"
             );
         }
+    }
+
+    /// An open section is still open after the frames a screen would run: it starts settled.
+    #[test]
+    fn an_open_section_stays_open_through_the_first_frames() {
+        let r = roles();
+        let mut m = Mounted::new(section(true, r));
+        let before = m.node.size().height;
+        for _ in 0..40 {
+            m.frame += 1;
+            let at = m.origin + std::time::Duration::from_millis(16) * m.frame;
+            m.send(
+                Event::Window(iced::window::Event::RedrawRequested(at)),
+                mouse::Cursor::Unavailable,
+            );
+            m.relayout();
+        }
+        assert_eq!(
+            m.node.size().height,
+            before,
+            "an open section must not collapse"
+        );
+    }
+
+    /// A body that fills its width gets the section's width, not the padding alone.
+    #[test]
+    fn a_body_that_fills_gets_the_sections_width() {
+        let r = roles();
+        let body = crate::ui::material::TextField::<String>::new("", "value", r).label("Label");
+        let size = size_of(
+            AccordionSection::new("Network", body, r).open(true).into(),
+            WINDOW,
+        );
+        let panel = bounds_at(
+            AccordionSection::new(
+                "Network",
+                crate::ui::material::TextField::<String>::new("", "value", r).label("Label"),
+                r,
+            )
+            .open(true)
+            .into(),
+            WINDOW,
+            &[1],
+        );
+        assert_eq!(size.width, WINDOW.width);
+        assert_eq!(panel.width, WINDOW.width, "the panel must span the section");
+    }
+
+    /// Counts what a focus traversal would be offered.
+    struct Count(usize);
+    impl iced::advanced::widget::Operation for Count {
+        fn traverse(
+            &mut self,
+            operate: &mut dyn FnMut(&mut dyn iced::advanced::widget::Operation),
+        ) {
+            operate(self);
+        }
+        fn focusable(
+            &mut self,
+            _id: Option<&iced::advanced::widget::Id>,
+            _bounds: iced::Rectangle,
+            _state: &mut dyn iced::advanced::widget::operation::Focusable,
+        ) {
+            self.0 += 1;
+        }
+    }
+
+    fn focus_stops(open: bool) -> usize {
+        let r = roles();
+        let body = crate::ui::material::TextField::<String>::new("", "v", r).label("Label");
+        let mut m = Mounted::new(AccordionSection::new("Network", body, r).open(open));
+        let mut count = Count(0);
+        m.element.as_widget_mut().operate(
+            &mut m.tree,
+            iced::advanced::Layout::new(&m.node),
+            &m.renderer,
+            &mut count,
+        );
+        count.0
+    }
+
+    /// Tab must not walk into the fields of a closed section.
+    #[test]
+    fn a_closed_section_offers_no_focus_stops_in_its_body() {
+        assert!(
+            focus_stops(true) > focus_stops(false),
+            "open {} vs closed {}",
+            focus_stops(true),
+            focus_stops(false)
+        );
     }
 
     /// A press on the header, and Space or Enter once it holds the keyboard, each emit the toggle.

@@ -623,7 +623,7 @@ fn sections_open_by_toggle_and_by_error_without_touching_the_draft() {
         "the section holding the error is open"
     );
 
-    daemons::discard_draft(&mut state);
-    add_container(&mut state, "Sec", "sec-ctr", "7050");
+    send(&mut state, &mut w, daemons::Msg::DraftDiscarded);
+    send(&mut state, &mut w, daemons::Msg::AddOpened);
     assert_eq!(open(&state), [true, false, false, false, false]);
 }
