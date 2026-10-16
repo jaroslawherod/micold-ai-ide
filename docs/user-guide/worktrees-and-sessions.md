@@ -605,7 +605,11 @@ nothing else from your project. In a project that has a GitHub remote the picker
 choosing between the two sources ships in a later release of this feature.
 
 **The list.** Open issues are listed most recently updated first, up to 1,000. When the project has
-more, typing in **Issue** also searches on the Jira site, beyond the loaded issues. Pick an issue
+more, typing in **Issue** also searches on the Jira site, beyond the loaded issues, and the line
+under the list says so. Typing narrows the list at once to issues whose key (`ABC-123`), summary or
+any label contains the text, ignoring letter case; the Jira site is asked only when the list is
+capped and you have paused typing for a moment. A search that fails leaves the matches already
+loaded and offers **Retry**. Pick an issue
 with the pointer or with the arrow keys and Enter; a pick replaces the ticket and name, which stay
 editable.
 

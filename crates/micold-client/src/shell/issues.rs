@@ -288,23 +288,22 @@ pub fn sync_jira_availability(app: &mut App) {
         .update(Message::WorktreeForm(FormMsg::JiraSettingsChanged(jira)));
 }
 
-/// Why a Jira load asked nothing: no token file on this host (plan risks, multi-daemon).
+/// Why a Jira request asked nothing: no token file on this host (plan risks, multi-daemon).
 const NO_TOKEN: &str = "no API token is stored on this computer for this project: enter your token in Settings > Jira.";
 
-/// Read the connected project's open Jira issues on a blocking thread, answering
-/// `IssuesLoaded { seq }`. The integration's switch and the project's connection are checked here,
-/// in the function that calls the source (FR-001, FR-020); the token is read from its file only
-/// inside the request's thread.
-fn start_jira_load(app: &mut App, seq: u64) -> Task<Message> {
-    let refused = |why: &str| {
-        Task::done(Message::WorktreeForm(FormMsg::IssuesLoaded {
-            seq,
-            result: Err(IssueLoadError::Other(why.to_string())),
-            resolved_env: None,
-        }))
-    };
+/// What a Jira request needs, taken only once the integration's switch and the project's
+/// connection allow one (FR-001, FR-020): the one gate every Jira request passes.
+struct JiraRequest {
+    project: PathBuf,
+    connection: micold_core::jira::JiraConnection,
+    dir: Option<PathBuf>,
+    source: Option<std::sync::Arc<dyn micold_core::jira::JiraSource>>,
+}
+
+/// The gate: `Err` is the reason nothing is asked.
+fn jira_request(app: &mut App) -> Result<JiraRequest, &'static str> {
     let Some(project) = app.core.workspace.active.clone() else {
-        return refused("no project is open.");
+        return Err("no project is open.");
     };
     let connection = app
         .core
@@ -313,27 +312,66 @@ fn start_jira_load(app: &mut App, seq: u64) -> Task<Message> {
         .get(&connection_key(&project))
         .cloned();
     let (true, Some(connection)) = (app.core.settings.jira_enabled, connection) else {
-        return refused("Jira isn't connected for this project: check Settings > Jira.");
+        return Err("Jira isn't connected for this project: check Settings > Jira.");
     };
     let dir = app.caps.jira_token_dir().map(std::path::Path::to_path_buf);
     let source = app.caps.jira_source();
+    Ok(JiraRequest {
+        project,
+        connection,
+        dir,
+        source,
+    })
+}
+
+impl JiraRequest {
+    /// Run `ask` on a blocking thread with the source and the token read from its file, which is
+    /// done only here, inside the request's thread.
+    async fn run<T: Send + 'static>(
+        self,
+        ask: impl FnOnce(
+                &dyn micold_core::jira::JiraSource,
+                &micold_core::jira::JiraConnection,
+                &ApiToken,
+            ) -> Result<T, IssueLoadError>
+            + Send
+            + 'static,
+    ) -> Result<Result<T, IssueLoadError>, tokio::task::JoinError> {
+        tokio::task::spawn_blocking(move || {
+            let Some(source) = self.source else {
+                return Err(IssueLoadError::Other(
+                    "Jira isn't available in this build.".to_string(),
+                ));
+            };
+            let token = self
+                .dir
+                .and_then(|dir| std::fs::read_to_string(jira_token_path(&dir, &self.project)).ok())
+                .and_then(|text| ApiToken::parse(text.trim()).ok())
+                .ok_or_else(|| IssueLoadError::Other(NO_TOKEN.to_string()))?;
+            ask(&*source, &self.connection, &token)
+        })
+        .await
+    }
+}
+
+/// Read the connected project's open Jira issues on a blocking thread, answering
+/// `IssuesLoaded { seq }`.
+fn start_jira_load(app: &mut App, seq: u64) -> Task<Message> {
+    let request = match jira_request(app) {
+        Ok(request) => request,
+        Err(why) => {
+            return Task::done(Message::WorktreeForm(FormMsg::IssuesLoaded {
+                seq,
+                result: Err(IssueLoadError::Other(why.to_string())),
+                resolved_env: None,
+            }))
+        }
+    };
     Task::perform(
-        async move {
-            tokio::task::spawn_blocking(move || {
-                let Some(source) = source else {
-                    return Err(IssueLoadError::Other(
-                        "Jira isn't available in this build.".to_string(),
-                    ));
-                };
-                let token = dir
-                    .and_then(|dir| std::fs::read_to_string(jira_token_path(&dir, &project)).ok())
-                    .and_then(|text| ApiToken::parse(text.trim()).ok())
-                    .ok_or_else(|| IssueLoadError::Other(NO_TOKEN.to_string()))?;
-                micold_core::jira::load(&*source, &connection, &token)
-                    .map(|listing| (listing, PathBuf::new()))
-            })
-            .await
-        },
+        request.run(|source, connection, token| {
+            micold_core::jira::load(source, connection, token)
+                .map(|listing| (listing, PathBuf::new()))
+        }),
         move |joined| {
             let result = joined.unwrap_or_else(|stopped| {
                 Err(IssueLoadError::Other(format!(
@@ -345,6 +383,31 @@ fn start_jira_load(app: &mut App, seq: u64) -> Task<Message> {
                 result,
                 resolved_env: None,
             })
+        },
+    )
+}
+
+/// Search the connected Jira project beyond the loaded issues on a blocking thread, answering
+/// `IssueSearched { seq }` (FR-012). Behind the same gate as the load.
+fn start_jira_search(app: &mut App, seq: u64, text: String) -> Task<Message> {
+    let request = match jira_request(app) {
+        Ok(request) => request,
+        Err(why) => {
+            return Task::done(Message::WorktreeForm(FormMsg::IssueSearched {
+                seq,
+                result: Err(IssueLoadError::Other(why.to_string())),
+            }))
+        }
+    };
+    Task::perform(
+        request.run(move |source, connection, token| source.search_open(connection, token, &text)),
+        move |joined| {
+            let result = joined.unwrap_or_else(|stopped| {
+                Err(IssueLoadError::Other(format!(
+                    "the issue search stopped unexpectedly: {stopped}"
+                )))
+            });
+            Message::WorktreeForm(FormMsg::IssueSearched { seq, result })
         },
     )
 }
@@ -428,6 +491,9 @@ fn start_issue_load(app: &mut App, seq: u64) -> Task<Message> {
 ///
 /// The source runs the `gh` the load located: a search never looks for `gh` again (research R3).
 fn start_issue_search(app: &mut App, seq: u64) -> Task<Message> {
+    if let Some(text) = app.core.worktree_form.jira_search_text() {
+        return start_jira_search(app, seq, text);
+    }
     let Some((repo, text, gh)) = app.core.worktree_form.issue_search_request() else {
         return Task::none();
     };

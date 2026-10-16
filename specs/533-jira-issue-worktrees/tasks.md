@@ -150,16 +150,16 @@ GUI exception (quickstart §B).
 
 ### Tests first
 
-- [ ] T054 [P] [US1] Extend `crates/micold-core/tests/jira_jql.rs`: `search_jql(key, text)` is `... AND (summary ~ "<t>*" OR labels = "<t>" [OR key = "<KEY-n>"])`; `text` trimmed, `\` and `"` escaped, control characters removed, at most 100 chars; the `key =` clause only when text matches `^[A-Za-z][A-Za-z0-9_]+-\d+$` after upper-casing with the project's prefix; empty text builds no search (FR-012, FR-020).
-- [ ] T055 [P] [US1] Extend `crates/micold-core/tests/issue_jira_rows.rs` and the existing 1,000-row case in `crates/micold-core/tests/typeahead_budget.rs` with Jira rows (release budget, SC-003); extend `jira_source_state.rs`: local narrowing by key, summary and label ignoring case (US1 AS2); a server search runs only when the listing is incomplete and the query non-empty after the 300 ms debounce, merges de-duplicated by number and keeps only locally matching results.
-- [ ] T056 [P] [US1] Extend `crates/micold-client/tests/jira_http_adapter.rs` and `jira_is_requested_only_on_named_events.rs`: the search request body carries only the search JQL; `search_open` is called only from the search-due arm under the same gate.
+- [x] T054 [P] [US1] Extend `crates/micold-core/tests/jira_jql.rs`: `search_jql(key, text)` is `... AND (summary ~ "<t>*" OR labels = "<t>" [OR key = "<KEY-n>"])`; `text` trimmed, `\` and `"` escaped, control characters removed, at most 100 chars; the `key =` clause only when text matches `^[A-Za-z][A-Za-z0-9_]+-\d+$` after upper-casing with the project's prefix; empty text builds no search (FR-012, FR-020).
+- [x] T055 [P] [US1] Extend `crates/micold-core/tests/issue_jira_rows.rs` and the existing 1,000-row case in `crates/micold-core/tests/typeahead_budget.rs` with Jira rows (release budget, SC-003); extend `jira_source_state.rs`: local narrowing by key, summary and label ignoring case (US1 AS2); a server search runs only when the listing is incomplete and the query non-empty after the 300 ms debounce, merges de-duplicated by number and keeps only locally matching results.
+- [x] T056 [P] [US1] Extend `crates/micold-client/tests/jira_http_adapter.rs` and `jira_is_requested_only_on_named_events.rs`: the search request body carries only the search JQL; `search_open` is called only from the search-due arm under the same gate.
 
 ### Implementation
 
-- [ ] T057 [US1] `crates/micold-core/src/jira.rs`: `search_jql` and `search_open` on `JiraSource` and `FakeJiraSource` (T054 green).
-- [ ] T058 [US1] `crates/micold-client/src/shell/jira_http.rs` and `shell/jira.rs`: the search effect with the debounce and `merge_searched`, behind the same gate (T055, T056 green).
+- [x] T057 [US1] `crates/micold-core/src/jira.rs`: `search_jql` and `search_open` on `JiraSource` and `FakeJiraSource` (T054 green).
+- [x] T058 [US1] `crates/micold-client/src/shell/jira_http.rs` and `shell/jira.rs`: the search effect with the debounce and `merge_searched`, behind the same gate (T055, T056 green).
 
-- [ ] T070 [P] [US1] User guide: extend "From a Jira issue" in `docs/user-guide/worktrees-and-sessions.md` with searching by key, summary and label and that Jira is asked beyond the 1,000 loaded issues.
+- [x] T070 [P] [US1] User guide: extend "From a Jira issue" in `docs/user-guide/worktrees-and-sessions.md` with searching by key, summary and label and that Jira is asked beyond the 1,000 loaded issues.
 
 **Checkpoint**: US1 AS1-7 hold.
 

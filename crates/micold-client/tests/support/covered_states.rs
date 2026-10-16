@@ -837,7 +837,7 @@ pub fn covered_states() -> &'static [CoveredState] {
             },
             anchors: ADD_WORKTREE_ANCHORS,
         },
-        // The search beyond the cap, running (FR-005a): "Searching GitHub…" under the picker.
+        // The search beyond the cap, running (FR-005a): "Searching GitHub…" (or "Searching Jira…") under the picker.
         CoveredState {
             name: "add-worktree-dialog-issue-searching",
             build: || issue_search_state(SearchState::Searching { seq: 2 }),

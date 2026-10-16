@@ -63,12 +63,10 @@ fn the_source_is_asked_for_only_inside_the_load_function() {
 }
 
 #[test]
-fn the_load_function_checks_the_switch_and_the_connection_before_the_source() {
+fn the_one_gate_checks_the_switch_and_the_connection_before_the_source() {
     let path = root().join("crates/micold-client/src/shell/issues.rs");
     let text = fs::read_to_string(path).unwrap();
-    let start = text
-        .find("fn start_jira_load(")
-        .expect("start_jira_load exists");
+    let start = text.find("fn jira_request(").expect("jira_request exists");
     let body = &text[start..];
     let source = body.find(".jira_source()").expect("asks for the source");
     let switch = body.find("jira_enabled").expect("checks the switch");
@@ -92,6 +90,54 @@ fn the_load_function_is_called_only_by_the_general_load_path() {
         )],
         "{calls:?}"
     );
+}
+
+/// The body of `name` in the shell's issue module, up to the next top-level item.
+fn function_body(name: &str) -> String {
+    let path = root().join("crates/micold-client/src/shell/issues.rs");
+    let text = fs::read_to_string(path).unwrap();
+    let start = text.find(name).unwrap_or_else(|| panic!("{name} exists"));
+    let rest = &text[start..];
+    rest[..rest.find("\n}\n").expect("the function ends")].to_string()
+}
+
+#[test]
+fn the_search_is_asked_for_only_inside_the_search_function_behind_the_gate() {
+    let uses = occurrences(".search_open(connection");
+    let files: Vec<_> = uses.iter().map(|(file, _)| file.as_str()).collect();
+    assert_eq!(
+        files,
+        ["crates/micold-client/src/shell/issues.rs"],
+        "{uses:?}"
+    );
+    let search = function_body("fn start_jira_search(");
+    assert!(
+        search.contains("jira_request("),
+        "the search goes through the same gate as the load"
+    );
+    assert!(
+        search.find("jira_request(") < search.find(".search_open(connection"),
+        "the gate comes first"
+    );
+    assert!(function_body("fn start_jira_load(").contains("jira_request("));
+}
+
+#[test]
+fn the_search_function_is_called_only_when_a_search_is_due() {
+    let calls: Vec<_> = occurrences("start_jira_search(")
+        .into_iter()
+        .filter(|(_, line)| !line.starts_with("fn start_jira_search("))
+        .collect();
+    assert_eq!(calls.len(), 1, "{calls:?}");
+    let dispatcher = function_body("fn start_issue_search(");
+    assert!(dispatcher.contains("start_jira_search("), "{dispatcher}");
+    let reached_from = ["on_issue_search_due", "retry_issue_search"];
+    for name in reached_from {
+        assert!(
+            function_body(&format!("fn {name}(")).contains("start_issue_search("),
+            "{name}"
+        );
+    }
 }
 
 #[test]

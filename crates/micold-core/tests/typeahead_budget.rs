@@ -365,3 +365,38 @@ fn ranking_1000_issue_rows_for_a_short_query_fits_the_budget() {
         "ranking 1,000 issue rows for \"cra\" took {took:.2}ms, over SC-003's {ISSUE_BUDGET_MS}ms"
     );
 }
+
+/// 1,000 Jira issue rows (`<KEY> <summary>`, labels), as the picker ranks them (533 SC-003).
+fn jira_rows() -> Vec<String> {
+    (0..micold_core::github::ISSUE_LOAD_CAP)
+        .map(|i| {
+            micold_core::github::Issue::jira(
+                &format!("ABC-{}", 12_000 - i),
+                (12_000 - i) as u64,
+                format!("Crash when opening project {}", i % 97),
+                vec![["bug", "ui", "backend"][i % 3].to_string()],
+                "2026-10-01T00:00:00Z".to_string(),
+            )
+            .reported_by(REPORTERS[i % REPORTERS.len()])
+            .row_text()
+            .to_string()
+        })
+        .collect()
+}
+
+/// 533 SC-003: ranking the 1,000 loaded Jira issues by key, summary or label fits the same budget.
+#[test]
+#[cfg_attr(debug_assertions, ignore = "a release-build budget (BUG-003)")]
+fn ranking_1000_jira_rows_fits_the_budget() {
+    let rows = jira_rows();
+    assert_eq!(rows.len(), 1_000);
+    for query in ["abc-1", "cra", "backend"] {
+        let matched = rank(&rows, |s| s.as_str(), &Query::new(query)).len();
+        assert!(matched > 0, "{query:?} matches some rows");
+        let took = millis(&rows, query);
+        assert!(
+            took < ISSUE_BUDGET_MS,
+            "ranking 1,000 Jira rows for {query:?} took {took:.2}ms, over {ISSUE_BUDGET_MS}ms"
+        );
+    }
+}

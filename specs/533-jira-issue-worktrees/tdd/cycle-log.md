@@ -27,3 +27,15 @@ full `mise run gate` (see the PR body). Coverage notes for T041/T042:
   `jira_is_requested_only_on_named_events.rs`.
 - Not tested: the no-token-file and no-stored-connection paths of `start_jira_load` (shell level,
   they now answer `IssuesLoaded` with an error), and token rotation. Follow-up.
+
+## M4 (T054-T058, T070)
+
+Tests first this time. Red run (tests written, implementation reverted to `origin/main` plus a stub
+`jira_search_text() -> None`): `jira_is_requested_only_on_named_events` 3 failed
+(`the_one_gate_checks_...`, `the_search_function_is_called_only_when_a_search_is_due`,
+`the_search_is_asked_for_only_inside_the_search_function_behind_the_gate`); `jira_source_state` 5
+failed (`a_jira_listing_never_starts_a_description_pass` caption, `search_only_when_incomplete_...`,
+`a_search_answer_merges_...`, `a_newer_keystroke_discards_an_older_search_answer`,
+`a_failed_search_keeps_...`). Already green on `origin/main` (M3 built them): `search_jql` and the
+`search_open` source and adapter, the local narrowing case, the `jira_jql.rs` cases (T054, T057).
+Green: reducer allows the Jira search, `start_jira_search` behind the shared `jira_request` gate.
