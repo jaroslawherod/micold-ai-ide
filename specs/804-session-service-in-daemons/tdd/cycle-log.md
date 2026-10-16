@@ -13,3 +13,10 @@ No red run was captured for them, so test-first is not shown by git history.
 | T007 | SSH shows no container profile; switch drops it | none captured | `an_ssh_entry_shows_no_container_profile_and_switching_to_ssh_drops_it` |
 
 Later milestones (M2, M3) write red before green and record it here.
+
+## M4 (T025, T028)
+
+The M4 unit wrote `accordion_section` and `daemons_feature` section tests alongside the code; no red
+run was captured, so test-first is not shown for them. Green: `cargo test -p micold-client
+accordion_section` (6) and `--test daemons_feature`. Review A's MAJOR (Tab reached closed
+sections' fields) was fixed with a test added in the same commit.

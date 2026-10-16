@@ -51,7 +51,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review B M3 | 1 | 280cc5ee2819 | CLEAN (1 MINOR: guide said "image", not tested; dropped the word, prose only) |
 | Spec amendment M4 | 1 | 330332e3287d:030ddb2ab98c | CLEAN (3 MINOR fixed, prose/task names) |
 | M4 review A | 1 | 2b8390eddd30:20bda6cfa20d | CHANGES: 1 MAJOR (Tab reached fields of closed sections) fixed in Expand::operate, test added |
-| M4 review B | 1 | 2416be2b6d16:e468d7a54cae | pending |
+| M4 review B | 1 | d13d7c993531:6e49a8943740 | CHANGES: 1 MAJOR (no red evidence for T025/T028) declined, recorded in cycle-log; 1 MINOR declined |
 
 ## Declined review findings
 
@@ -59,16 +59,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 - Review B M1 F1 (MAJOR, no red-before-green evidence for T005-T007): cannot be produced after the fact; git history is one WIP commit. Recorded honestly in tdd/cycle-log.md. F2 fixed (T010 wording). F3 covered by the cycle log.
 
+- Review B M4 F1 (MAJOR, no red-before-green for T025/T028): cannot be produced after the fact; recorded honestly in tdd/cycle-log.md. F2 (MINOR, no focus-ring/chevron test): ring comes from Button and was seen in the visual pass; declined.
+
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
 
 ## Handover
 
-M4 (T025-T032) is implemented and ticked; scoped gate green at commit "test(804): section tests use a named duration token". Review A round 1 done (1 MAJOR fixed: `Expand::operate` skips hidden children; `Accordion::width` added so the section body fills width). Left for the next unit:
-
-1. Review B (conformance, sonnet) was dispatched against snapshot 2416be2b6d16:e468d7a54cae; its result may not have reached this unit. Dispatch it again (once) and act on findings.
-2. Visual pass did not run: the forked skill got no brief. Dispatch an `autopilot-worker` with a full brief: headless sway + grim (no Xvfb), showcase `AccordionSection` entry (closed/open/live) and Settings > Daemons container form, light and dark; quickstart.md Part B.
-3. Full gate (`mise run gate`, detached), then commit, push, open the PR per pr.md: title `feat(804): collapsible container sections (#804)`, body ends `Refs #804` and `Refs #890`. Record the PR number.
+None.
 
 ## Open escalation
 
