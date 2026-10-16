@@ -42,11 +42,20 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Spec review | 1 | 939e5694d83a882c00de3c9ff98235ef44a95c5d:8a04f4206330fa7552531e4694e2244b186d345f | CLEAN: 3 MINOR, all fixed (F1, F3 prose only; F2 added FR-011/SC-005 tool-call bound, no new round needed after CLEAN) |
 | Plan review | 1 | a8e72b879aa633e947404ec746d63f19b023f49e:43b70bc145326616180860e5edd7b9dc6af331d9 | CLEAN: 3 MINOR, all fixed (F1 layout snapshot row in test strategy, F2 FR map table, F3 u32::try_from in form-details §2; prose/plan text only, no new round) |
 | Tasks review | 1 | 260d2c07b1b94129a9328339d2423d85175cff4b:f76fc297161ba35ca11d21a56082b7c2c25ff1af | CLEAN: 3 MINOR, all fixed (F1 [P] dropped on T003; F2 T030 gains a Failed layout snapshot case; F3 stale checklist note; task text only, no new round) |
+| Review A M1 (code-review high) | 1 | ab97d95509aaf33fa9330bbbcc3623ec52b7e9a7:50869c2ec6b2d574c4f8ccb2a8231984f4fb8bdc | 10 findings: F1 fixed (500 ms grace past the bound so a read cut at its own deadline keeps what it read), F4 fixed (typed GraphQL error beside a null issue, + test); rest declined or MINOR, see Declined |
 
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| M1 | A | F2 details read keeps running after a refused call | By design (plan, FR-011): the read starts beside the lookup to hide its latency; it is bounded by the 10 s deadline and its result is dropped. |
+| M1 | A | F3 private projects / invisible labels count in `more` | Matches contracts/tool-result.md: `more = total - len(items)`, hidden items included. MINOR. |
+| M1 | A | F5 `hasNextPage` with null cursor not a lower bound | GitHub always sends a cursor with `hasNextPage: true`; MINOR edge. |
+| M1 | A | F6 open-blocker fallback when the summary is missing | The summary is always selected; fallback only on a partial answer. MINOR. |
+| M1 | A | F7 absent `parent`/`milestone` key read as none | GraphQL returns every selected field (null when none); an omission comes with an `errors[]` entry, already mapped to NotReadable. |
+| M1 | A | F8 two queries per call | Plan decision: the lookup's query is 550's, unchanged (SC-004); details read separately and in parallel. |
+| M1 | A | F9 `IssueSource: IssueDetailsSource` unused | M2's form reads details through `IssueSource` (T020–T022). |
+| M1 | A | F10 `VisibleChars` two buffers | Taste, MINOR. |
 
 ## Handover
 

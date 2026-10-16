@@ -877,7 +877,7 @@ fn issue_node(json: &Value) -> Result<&Value, IssueLoadError> {
     }
     let issue = &repository["issue"];
     if issue.is_null() {
-        return Err(no_issue());
+        return Err(graphql_error(json).unwrap_or_else(no_issue));
     }
     Ok(issue)
 }

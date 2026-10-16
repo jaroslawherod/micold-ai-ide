@@ -741,6 +741,10 @@ async fn create_derived_worktree(
 }
 
 /// An issue's details read started beside the lookup (837 contracts/tool-result.md "Timing").
+/// How long past the bound [`PendingDetails::finish`] waits for a read that is ending at its own
+/// deadline (review A M1, finding 1).
+const DETAILS_GRACE: std::time::Duration = std::time::Duration::from_millis(500);
+
 struct PendingDetails {
     handle: tokio::task::JoinHandle<Result<IssueDetails, IssueLoadError>>,
     started: tokio::time::Instant,
@@ -772,9 +776,11 @@ impl PendingDetails {
 
     /// The result's `issue` object: the details, or the one sentence of a failed read. It waits
     /// at most what is left of the bound (FR-011); a read still running then is the timeout 550's
-    /// lookup reports, whose words name the production bound whatever a test set (T029).
+    /// lookup reports, whose words name the production bound whatever a test set (T029). The read
+    /// bounds itself by the same deadline and, when a timeline page is cut there, still returns
+    /// what it read just after it: [`DETAILS_GRACE`] lets that answer win over the timeout.
     async fn finish(self) -> Value {
-        let left = self.bound.saturating_sub(self.started.elapsed());
+        let left = self.bound.saturating_sub(self.started.elapsed()) + DETAILS_GRACE;
         let result = match tokio::time::timeout(left, self.handle).await {
             Ok(Ok(result)) => result,
             Ok(Err(_)) => Err(IssueLoadError::Other(
