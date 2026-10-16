@@ -84,7 +84,7 @@ pub struct State {
     /// The names this machine answers to: its hostname and that name's first DNS label (feature
     /// 031, FR-012).
     ///
-    /// Filled once at boot by `shell::startup::boot` from `link::host_names_from(gethostname())` — reading the
+    /// Filled once at boot by `shell::startup::boot` from `link::host_names_from(hostname())` — reading the
     /// hostname is I/O, which the shell owns, and the names never change while the window is open.
     /// A `file://` link whose host is one of these names points at this machine, so it opens; every
     /// other name is another machine and is no link at all. Empty by `Default`, which is the safe

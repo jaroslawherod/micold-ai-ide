@@ -25,6 +25,7 @@ pub mod frame_probe;
 pub mod fs_scan;
 pub mod git;
 pub mod github;
+pub mod hostname;
 pub mod input;
 pub mod install_location;
 pub mod issue_types;
