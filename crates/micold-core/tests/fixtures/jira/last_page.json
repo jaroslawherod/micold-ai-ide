@@ -1,0 +1,17 @@
+{
+  "issues": [
+    {
+      "id": "10050",
+      "key": "ABC-7",
+      "fields": {
+        "summary": "Oldest open issue",
+        "issuetype": { "name": "Task" },
+        "labels": [],
+        "reporter": { "displayName": "Mia Jansen" },
+        "description": null,
+        "updated": "2025-01-02T03:04:05.000+0000"
+      }
+    }
+  ],
+  "isLast": true
+}

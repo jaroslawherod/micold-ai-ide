@@ -606,3 +606,90 @@ mod from_issue {
         assert_eq!(got.name, "short");
     }
 }
+
+// --- 533: naming from a Jira issue (contracts/issue-naming.md §1) --------------------------------
+
+mod from_jira_issue {
+    use super::*;
+    use micold_core::github::Issue;
+    use micold_core::issue_types::default_mapping;
+    use micold_core::jira::ProjectKey;
+    use micold_core::naming::{derive, naming_for_issue, parse_tags, Tag};
+
+    fn jira(key: &str, number: u64, summary: &str) -> Issue {
+        Issue::jira(key, number, summary.to_string(), vec![], String::new())
+    }
+
+    #[test]
+    fn the_key_is_the_ticket_and_the_issue_type_the_worktree_type() {
+        let issue = jira("ABC-123", 123, "Add login rate limit").with_type_name("Bug");
+        let got = naming_for_issue(&issue, &default_mapping());
+        assert_eq!(
+            got,
+            naming(
+                Some(ConventionalType::Fix),
+                Some("ABC-123"),
+                "Add login rate limit"
+            )
+        );
+        let names = derive(&got).unwrap();
+        assert_eq!(names.branch, "fix/abc-123_add-login-rate-limit");
+        assert_eq!(names.dir_name, "fix-abc-123_add-login-rate-limit");
+        assert_eq!(
+            parse_tags(&names.dir_name),
+            [
+                Tag::Type(ConventionalType::Fix),
+                Tag::Issue("ABC-123".into())
+            ],
+            "the sidebar tag upper-cases the key again"
+        );
+    }
+
+    #[test]
+    fn without_a_matching_type_name_or_label_no_type_is_chosen() {
+        let got = naming_for_issue(
+            &jira("ABC-1", 1, "x").with_type_name("Task"),
+            &default_mapping(),
+        );
+        assert_eq!(got.type_, None);
+    }
+
+    #[test]
+    fn the_naming_rule_accepts_every_key_a_project_can_have() {
+        // ProjectKey allows [A-Z][A-Z0-9_]{1,9}: two to ten characters. `derive` slugifies any
+        // ticket, so none is refused; an underscore becomes a dash and the tag reads back upper-case.
+        let mut seen = 0;
+        for project in ["AB", "A1", "A_B", "ABCDEFGHIJ", "X9_Z"] {
+            let key = ProjectKey::parse(project).expect("a valid project key");
+            let ticket = format!("{key}-7");
+            let issue = jira(&ticket, 7, "Fix it").with_type_name("Bug");
+            let names = derive(&naming_for_issue(&issue, &default_mapping())).unwrap();
+            let slug = ticket.to_ascii_lowercase().replace('_', "-");
+            assert_eq!(names.branch, format!("fix/{slug}_fix-it"));
+            assert_eq!(
+                parse_tags(&names.dir_name)[1],
+                Tag::Issue(slug.to_ascii_uppercase())
+            );
+            seen += 1;
+        }
+        assert_eq!(seen, 5);
+    }
+
+    #[test]
+    fn a_one_letter_project_key_is_never_a_valid_key_but_its_ticket_still_names_a_worktree() {
+        assert!(ProjectKey::parse("A").is_err(), "the connection refuses it");
+        // An issue read from a site whose key is shorter than that still has a visible,
+        // editable ticket and a creatable worktree.
+        let issue = jira("A-1", 1, "Short key");
+        assert_eq!(issue.ticket(), "A-1");
+        let got = naming_for_issue(&issue, &default_mapping());
+        assert_eq!(got.ticket.as_deref(), Some("A-1"));
+        let names = derive(&WorktreeNaming {
+            type_: Some(ConventionalType::Feat),
+            ..got
+        })
+        .unwrap();
+        assert_eq!(names.branch, "feat/a-1_short-key");
+        assert_eq!(parse_tags(&names.dir_name)[1], Tag::Issue("A-1".into()));
+    }
+}

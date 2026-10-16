@@ -569,6 +569,7 @@ waiting for you.
 When you create a worktree from a GitHub issue, the issue's labels choose its **Type** (see [The
 issue's labels choose the type](worktrees-and-sessions.md#the-issues-labels-choose-the-type)). This
 section is that label-to-type mapping: one list, applied to every project.
+Also applies to Jira issues: an issue's type name and labels are matched against this list.
 
 Each row is one entry: a **Label**, the **Type** it selects, and buttons to move the entry up or
 down, or to delete it. Order matters: when an issue carries several mapped labels, the entry nearest

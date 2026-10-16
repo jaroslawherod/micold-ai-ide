@@ -12,8 +12,8 @@ use crate::features::window::FieldId;
 use crate::features::worktree::Msg as WorktreeMsg;
 use crate::features::worktree_form::Msg as FormMsg;
 use crate::features::worktree_form::{
-    BranchSource, GithubAvailability, IssueList, ResolutionState, SearchState, SessionChoice,
-    WorktreeForm, WorktreeFormStatus,
+    BranchSource, IssueList, ResolutionState, SearchState, SessionChoice, WorktreeForm,
+    WorktreeFormStatus,
 };
 use crate::ui::focus::TrackFocus;
 use crate::ui::material::{
@@ -264,13 +264,18 @@ fn source_switch<'a>(form: &WorktreeForm, r: Roles) -> Element<'a, Message> {
         .active(form.source == BranchSource::Existing),
         // Feature 034: disabled until the repository is known to be on GitHub; the caption under
         // the switch says why (FR-002).
+        // Feature 533: "Issue" while Jira is the provider, with the same disabled rule.
         ToggleChip::new(
-            "GitHub issue",
+            if form.jira_site().is_some() {
+                "Issue"
+            } else {
+                "GitHub issue"
+            },
             Message::WorktreeForm(FormMsg::SourceChanged(BranchSource::Issue)),
             r
         )
         .active(form.source == BranchSource::Issue)
-        .disabled(!matches!(form.github, GithubAvailability::Available(_))),
+        .disabled(!form.issue_source_ready()),
     ]
     .spacing(spacing::SM)
     .into()
@@ -385,6 +390,9 @@ fn branch_picker<'a>(form: &'a WorktreeForm, r: Roles) -> Element<'a, Message> {
 /// The issue search field's hint: what the search covers (034 FR-005, 038 FR-011).
 pub const ISSUE_SEARCH_PLACEHOLDER: &str = "Search by number, title, label or reporter";
 
+/// The same hint for a Jira list (feature 533): the key stands where the number does.
+pub const JIRA_ISSUE_SEARCH_PLACEHOLDER: &str = "Search by key, summary or label";
+
 /// The issue picker's rows and the position of the picked one (feature 038, FR-006).
 ///
 /// The one place a row is built, for every issue the form holds: the listing's, then the ones a
@@ -425,26 +433,42 @@ fn issue_picker<'a>(form: &'a WorktreeForm, r: Roles) -> Element<'a, Message> {
     if let Some(notice) = form.issue_notice() {
         col = col.push(Text::new(notice, TypeRole::Caption, r).muted());
     }
-    let Some(repo) = form.github_repo() else {
+    let Some(source) = form.notice_source() else {
         return col.into();
+    };
+    let jira = form.jira_site();
+    let placeholder = if jira.is_some() {
+        JIRA_ISSUE_SEARCH_PLACEHOLDER
+    } else {
+        ISSUE_SEARCH_PLACEHOLDER
     };
     match &form.issues {
         IssueList::NotRequested => {}
         // The switch and the inputs below stay live while this runs (FR-006).
         IssueList::Loading { .. } => {
-            col = col.push(StageProgress::new("Loading issues from GitHub…", r));
+            let loading = match jira {
+                Some(site) => format!("Loading issues from {}…", site.host),
+                None => "Loading issues from GitHub…".to_string(),
+            };
+            col = col.push(StageProgress::new(loading, r));
         }
         IssueList::Failed { error } => {
             col = col
-                .push(Text::new(error.message(repo), TypeRole::Caption, r).tint(r.error))
+                .push(Text::new(error.message(source), TypeRole::Caption, r).tint(r.error))
                 .push(
                     Button::text("Retry", r).on_press(Message::WorktreeForm(FormMsg::IssueRetry)),
                 );
         }
         IssueList::Loaded { listing, .. } if listing.issues.is_empty() => {
-            col = col.push(
-                Text::new(format!("{repo} has no open issues."), TypeRole::Caption, r).muted(),
-            );
+            let empty = match jira {
+                Some(site) => format!("{} has no open issues.", site.key),
+                None => format!(
+                    "{} has no open issues.",
+                    form.github_repo()
+                        .map_or_else(String::new, ToString::to_string)
+                ),
+            };
+            col = col.push(Text::new(empty, TypeRole::Caption, r).muted());
         }
         IssueList::Loaded { .. } => {
             let (rows, selected) = issue_rows(form);
@@ -455,7 +479,7 @@ fn issue_picker<'a>(form: &'a WorktreeForm, r: Roles) -> Element<'a, Message> {
                     |a0| Message::WorktreeForm(FormMsg::IssueQueryChanged(a0)),
                     r,
                 )
-                .placeholder(ISSUE_SEARCH_PLACEHOLDER)
+                .placeholder(placeholder)
                 .label("Issue")
                 .open(form.issue_list_open)
                 .highlighted(form.issue_highlight)

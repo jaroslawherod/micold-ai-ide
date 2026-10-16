@@ -30,9 +30,10 @@ use micold_core::env_include::EnvIncludeSnapshot;
 use micold_core::git::GitRemote;
 use micold_core::github::{
     choose_remote, describe_listed, merge_searched, next_description_cursor, DescriptionPage,
-    GithubRepo, Issue, IssueListing, IssueLoadError, RemoteChoice,
+    GithubRepo, Issue, IssueListing, IssueLoadError, NoticeSource, RemoteChoice,
 };
 use micold_core::issue_types::LabelTypeEntry;
+use micold_core::jira::{connection_key, IssueProvider, JiraConnection};
 use micold_core::naming::{
     derive, dir_name_from_branch, naming_for_issue, ConventionalType, DerivedNames, NamingError,
     WorktreeNaming,
@@ -222,6 +223,64 @@ pub enum BranchSource {
     Existing,
     /// Pick an open GitHub issue; its number and title fill the new-branch inputs (feature 034).
     Issue,
+}
+
+/// The Jira site and project a connected form reads, as the notice names them (feature 533,
+/// data-model §4). Holds no credential: the shell looks the connection up again at each request.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct JiraSite {
+    /// The site's origin, `https://host`, as the notice shows it.
+    pub origin: String,
+    /// The site's host, as the loading line and the failure notices name it.
+    pub host: String,
+    /// The connected project's key.
+    pub key: String,
+}
+
+impl JiraSite {
+    /// The site a connection names.
+    pub fn of(connection: &JiraConnection) -> JiraSite {
+        let origin = connection.site.as_str().to_string();
+        let host = origin
+            .split_once("://")
+            .map_or(origin.as_str(), |(_, host)| host)
+            .to_string();
+        JiraSite {
+            origin,
+            host,
+            key: connection.project_key.as_str().to_string(),
+        }
+    }
+}
+
+/// Whether Jira can be the issue source of this form (feature 533, data-model §4): derived from
+/// the settings when the form opens and again on every `SettingsChanged`.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum JiraAvailability {
+    /// The switch is off, or this project has no connection: the form is the GitHub form of 034.
+    #[default]
+    Off,
+    /// The switch is on and this project has a connection.
+    Connected(JiraSite),
+}
+
+impl JiraAvailability {
+    /// What the settings in force make of `project` (FR-001, FR-020): `Connected` only when the
+    /// integration is on and the project has a connection.
+    pub fn from_settings(
+        enabled: bool,
+        connections: &std::collections::BTreeMap<String, JiraConnection>,
+        project: Option<&std::path::Path>,
+    ) -> JiraAvailability {
+        if !enabled {
+            return JiraAvailability::Off;
+        }
+        project
+            .and_then(|project| connections.get(&connection_key(project)))
+            .map_or(JiraAvailability::Off, |connection| {
+                JiraAvailability::Connected(JiraSite::of(connection))
+            })
+    }
 }
 
 /// Whether this repository has a GitHub remote the issue source can read (feature 034,
@@ -443,6 +502,12 @@ pub struct WorktreeForm {
     pub interrupted: Option<String>,
     /// Whether the issue source may be chosen (feature 034, FR-002).
     pub github: GithubAvailability,
+    /// Whether Jira can be an issue source here (feature 533).
+    pub jira: JiraAvailability,
+    /// Which provider the Issue source lists (feature 533). Jira only while `jira` is
+    /// `Connected` and the repository has no GitHub remote: the source choice for a project with
+    /// both comes with the per-project choice of a later milestone.
+    pub provider: IssueProvider,
     /// The issue source's list (feature 034).
     pub issues: IssueList,
     /// The issue search text, exactly as typed (FR-005).
@@ -513,6 +578,12 @@ impl WorktreeForm {
     /// before it is chosen — which repository choosing it reads from GitHub. `None` once the issue
     /// source is chosen, when [`Self::issue_notice`] says it instead.
     pub fn source_caption(&self) -> Option<String> {
+        if self.provider == IssueProvider::Jira {
+            return match self.source {
+                BranchSource::Issue => None,
+                _ => self.jira_notice(),
+            };
+        }
         match &self.github {
             GithubAvailability::Checking => Some("Checking for a GitHub remote…".to_string()),
             GithubAvailability::Unavailable(reason) => Some(reason.clone()),
@@ -525,6 +596,12 @@ impl WorktreeForm {
 
     /// The issue source's own notice, naming the repository it reads (FR-025).
     pub fn issue_notice(&self) -> Option<String> {
+        if self.provider == IssueProvider::Jira {
+            return match self.source {
+                BranchSource::Issue => self.jira_notice(),
+                _ => None,
+            };
+        }
         match (&self.github, self.source) {
             (GithubAvailability::Available(repo), BranchSource::Issue) => {
                 Some(format!("Reads open issues of {repo} from GitHub."))
@@ -533,10 +610,65 @@ impl WorktreeForm {
         }
     }
 
+    /// What the Jira source reads and sends, shown before, during and after a load (FR-005b).
+    fn jira_notice(&self) -> Option<String> {
+        let JiraAvailability::Connected(site) = &self.jira else {
+            return None;
+        };
+        Some(format!(
+            "Reads open issues of project {} from {}. Sends the project key, your search text and your credentials.",
+            site.key, site.origin
+        ))
+    }
+
+    /// The Jira site the Issue source reads, while Jira is the provider.
+    pub fn jira_site(&self) -> Option<&JiraSite> {
+        match (&self.jira, self.provider) {
+            (JiraAvailability::Connected(site), IssueProvider::Jira) => Some(site),
+            _ => None,
+        }
+    }
+
+    /// Whether the Issue source can be chosen: the repository is on GitHub, or Jira is the
+    /// provider (feature 533, US4 AS3).
+    pub fn issue_source_ready(&self) -> bool {
+        self.github_repo().is_some() || self.jira_site().is_some()
+    }
+
+    /// Where the provider's failure notices name the source (feature 533, FR-018).
+    pub fn notice_source(&self) -> Option<NoticeSource<'_>> {
+        match self.jira_site() {
+            Some(site) => Some(NoticeSource::Jira {
+                host: &site.host,
+                key: &site.key,
+            }),
+            None => self.github_repo().map(NoticeSource::from),
+        }
+    }
+
+    /// Choose the provider the Issue source lists from what is known now: Jira when it is
+    /// connected and the repository is known to have no GitHub remote, else GitHub.
+    fn resolve_provider(&mut self) {
+        let no_github = matches!(self.github, GithubAvailability::Unavailable(_));
+        self.provider = if no_github && matches!(self.jira, JiraAvailability::Connected(_)) {
+            IssueProvider::Jira
+        } else {
+            IssueProvider::Github
+        };
+    }
+
     /// The caption under a list that does not hold every open issue (FR-004): how many were loaded
     /// and how many are open. `None` when every open issue is held.
     pub fn issue_cap_caption(&self) -> Option<String> {
         match &self.issues {
+            IssueList::Loaded { listing, .. }
+                if !listing.complete && self.provider == IssueProvider::Jira =>
+            {
+                Some(format!(
+                    "Showing the {} most recently updated open issues.",
+                    thousands(listing.issues.len() as u64)
+                ))
+            }
             IssueList::Loaded { listing, .. } if !listing.complete => Some(format!(
                 "Showing the {} most recently updated of {} open issues — search also looks on GitHub.",
                 thousands(listing.issues.len() as u64),
@@ -549,23 +681,17 @@ impl WorktreeForm {
     /// The line under the picker while the search beyond the loaded issues runs or after it failed
     /// (FR-005a, FR-007). `None` otherwise.
     pub fn issue_search_status(&self) -> Option<String> {
-        match (&self.issues, &self.github) {
-            (
-                IssueList::Loaded {
-                    search: SearchState::Searching { .. },
-                    ..
-                },
-                _,
-            ) => Some("Searching GitHub…".to_string()),
-            (
-                IssueList::Loaded {
-                    search: SearchState::Failed { error },
-                    ..
-                },
-                GithubAvailability::Available(repo),
-            ) => Some(format!(
+        match &self.issues {
+            IssueList::Loaded {
+                search: SearchState::Searching { .. },
+                ..
+            } => Some("Searching GitHub…".to_string()),
+            IssueList::Loaded {
+                search: SearchState::Failed { error },
+                ..
+            } => Some(format!(
                 "Search beyond the loaded issues failed — {}",
-                error.message(repo)
+                error.message(self.notice_source()?)
             )),
             _ => None,
         }
@@ -820,7 +946,13 @@ pub fn opened(state: &mut crate::app::State) {
         .map(SessionChoice::Cli)
         .chain(std::iter::once(SessionChoice::NoSession))
         .collect();
+    let jira = JiraAvailability::from_settings(
+        state.settings.jira_enabled,
+        &state.settings.jira_connections,
+        state.workspace.active.as_deref(),
+    );
     state.worktree_form.form = Some(WorktreeForm {
+        jira,
         daemons,
         daemon,
         holder_daemons,
@@ -949,7 +1081,7 @@ pub fn source_changed(state: &mut crate::app::State, source: BranchSource) {
     let mut started = false;
     while_editing_unprompted(state, |form| {
         if source == BranchSource::Issue
-            && (form.source == BranchSource::Issue || form.github_repo().is_none())
+            && (form.source == BranchSource::Issue || !form.issue_source_ready())
         {
             return;
         }
@@ -984,7 +1116,34 @@ pub fn remotes_listed(state: &mut crate::app::State, remotes: Result<Vec<GitRemo
                 "Couldn't read this repository's remotes: {detail}"
             )),
         };
+        form.resolve_provider();
     });
+}
+
+/// What the settings in force now make of Jira changed while the form is open (feature 533,
+/// data-model §4, FR-005): the provider is chosen again, and a Jira list that no longer applies is
+/// forgotten with its in-flight load, which a bumped seq makes stale (invariants 1 and 4).
+pub fn jira_settings_changed(state: &mut crate::app::State, jira: JiraAvailability) {
+    let next_seq = state.worktree_form.issue_request_seq + 1;
+    let mut bumped = false;
+    with_form(state, |form| {
+        if form.jira == jira {
+            return;
+        }
+        let was_jira = form.provider == IssueProvider::Jira;
+        form.jira = jira;
+        form.resolve_provider();
+        if was_jira || form.provider == IssueProvider::Jira {
+            form.reset_issues();
+            if form.source == BranchSource::Issue {
+                form.source = BranchSource::New;
+            }
+            bumped = true;
+        }
+    });
+    if bumped {
+        state.worktree_form.issue_request_seq = next_seq;
+    }
 }
 
 /// An issue load finished. Only the awaited one applies (invariant 2, FR-007a).
@@ -1001,15 +1160,16 @@ pub fn issues_loaded(
             Ok((listing, gh)) => {
                 // The list arrived without descriptions; they follow under this load's seq, so
                 // a later load's pass can never take this one's pages (038 FR-024).
-                let descriptions = if listing.issues.is_empty() {
-                    DescriptionPass::Done
-                } else {
-                    DescriptionPass::Loading {
-                        seq,
-                        cursor: None,
-                        pages: 0,
-                    }
-                };
+                let descriptions =
+                    if listing.issues.is_empty() || form.provider == IssueProvider::Jira {
+                        DescriptionPass::Done
+                    } else {
+                        DescriptionPass::Loading {
+                            seq,
+                            cursor: None,
+                            pages: 0,
+                        }
+                    };
                 form.issues = IssueList::Loaded {
                     listing,
                     gh,
@@ -1114,6 +1274,7 @@ pub fn issue_query_changed(state: &mut crate::app::State, text: String) {
         let same_search = form.issue_query.trim() == text.trim();
         form.issue_query = text;
         form.issue_list_open = true;
+        let provider = form.provider;
         let typed = !form.issue_query.trim().is_empty();
         if let IssueList::Loaded {
             listing,
@@ -1126,7 +1287,7 @@ pub fn issue_query_changed(state: &mut crate::app::State, text: String) {
                 // Nothing typed: the list is the loaded issues alone again.
                 searched.clear();
                 *search = SearchState::Idle;
-            } else if !listing.complete && !same_search {
+            } else if !listing.complete && !same_search && provider == IssueProvider::Github {
                 started = true;
                 *search = SearchState::Pending { seq: next_seq };
             }
@@ -1231,7 +1392,7 @@ pub fn issue_picked(state: &mut crate::app::State, number: u64, mapping: &[Label
         else {
             return;
         };
-        form.ticket = number.to_string();
+        form.ticket = naming.ticket.unwrap_or_default();
         form.name = naming.name;
         form.type_ = naming.type_;
         form.error = None;
@@ -1568,6 +1729,8 @@ pub enum Msg {
         result: Result<(IssueListing, PathBuf), IssueLoadError>,
         resolved_env: Option<(PathBuf, EnvIncludeSnapshot)>,
     },
+    /// The settings now make Jira available or not to this form (feature 533, FR-005).
+    JiraSettingsChanged(JiraAvailability),
     /// Retry a failed issue load (FR-007).
     IssueRetry,
     /// The issue search text changed (FR-005).
@@ -1643,6 +1806,7 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
         Msg::CreateInterrupted(message) => create_interrupted(state, message),
         Msg::RemotesListed(remotes) => remotes_listed(state, remotes),
         Msg::IssuesLoaded { seq, result, .. } => issues_loaded(state, seq, result),
+        Msg::JiraSettingsChanged(jira) => jira_settings_changed(state, jira),
         Msg::IssueRetry => issue_retry(state),
         Msg::IssueQueryChanged(text) => issue_query_changed(state, text),
         Msg::IssueFocused => issue_focused(state),

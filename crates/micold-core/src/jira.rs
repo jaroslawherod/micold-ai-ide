@@ -9,6 +9,7 @@
 
 use serde::{Deserialize, Deserializer, Serialize};
 
+use crate::github::{load_pages, Issue, IssueListing, IssueLoadError, IssuePage, GHOST_LOGIN};
 use crate::settings::Settings;
 
 /// Which field of a connection a [`FieldProblem`] is about.
@@ -332,4 +333,318 @@ pub fn connection_key(project: &std::path::Path) -> String {
 /// The one gate every Jira control and request checks: the integration is on (FR-001).
 pub fn jira_visible(settings: &Settings) -> bool {
     settings.jira_enabled
+}
+
+/// Which tracker a project's issues come from (feature 533): GitHub unless Jira is chosen.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum IssueProvider {
+    /// The repository's GitHub issues.
+    #[default]
+    Github,
+    /// The connected Jira project's issues.
+    Jira,
+}
+
+/// The JQL for the open issues of `key`'s project, most recently updated first
+/// (contracts/jira-cloud-source.md §3).
+pub fn list_jql(key: &ProjectKey) -> String {
+    format!("project = \"{key}\" AND statusCategory != Done ORDER BY updated DESC")
+}
+
+/// Longest search text a query carries, in characters.
+const SEARCH_TEXT_MAX_CHARS: usize = 100;
+
+/// The JQL that searches `key`'s open issues for `text`, or `None` when `text` is empty once
+/// cleaned: control characters are removed, the text trimmed and cut at 100 characters, then `\`
+/// and `"` escaped, so the text is only ever a JQL string. A text that is an issue key of this
+/// project adds a `key = ` clause (contracts/jira-cloud-source.md §3).
+pub fn search_jql(key: &ProjectKey, text: &str) -> Option<String> {
+    let cleaned: String = text.chars().filter(|c| !c.is_control()).collect();
+    let cleaned: String = cleaned.trim().chars().take(SEARCH_TEXT_MAX_CHARS).collect();
+    let cleaned = cleaned.trim_end();
+    if cleaned.is_empty() {
+        return None;
+    }
+    let escaped = cleaned.replace('\\', "\\\\").replace('"', "\\\"");
+    let upper = cleaned.to_ascii_uppercase();
+    let key_clause = if is_key_of(&upper, key) {
+        format!(" OR key = \"{upper}\"")
+    } else {
+        String::new()
+    };
+    Some(format!(
+        "project = \"{key}\" AND statusCategory != Done AND \
+         (summary ~ \"{escaped}*\" OR labels = \"{escaped}\"{key_clause}) ORDER BY updated DESC"
+    ))
+}
+
+/// `text` (upper-cased) is `<KEY>-<digits>` of this project.
+fn is_key_of(text: &str, key: &ProjectKey) -> bool {
+    text.rsplit_once('-').is_some_and(|(prefix, digits)| {
+        prefix == key.as_str() && !digits.is_empty() && digits.chars().all(|c| c.is_ascii_digit())
+    })
+}
+
+/// Labels held per issue, as for GitHub.
+const LABELS_PER_ISSUE: usize = 20;
+/// Deepest ADF nesting flattened; deeper content is dropped.
+const ADF_MAX_DEPTH: usize = 32;
+/// Most text taken from one ADF document: far more than a description keeps.
+const ADF_MAX_BYTES: usize = 8 * 1024;
+
+/// Parse the body of `POST /rest/api/3/search/jql` into a page (contracts/jira-cloud-source.md
+/// §4). A body that is not JSON or has no `issues` array is [`IssueLoadError::NotJiraCloud`]; a
+/// node whose key is not `<PROJECT>-<digits>` is skipped. Jira has no total, so `total_open` is the
+/// number of issues on the page.
+pub fn parse_page(body: &[u8]) -> Result<IssuePage, IssueLoadError> {
+    let json: serde_json::Value =
+        serde_json::from_slice(body).map_err(|_| IssueLoadError::NotJiraCloud)?;
+    let nodes = json["issues"]
+        .as_array()
+        .ok_or(IssueLoadError::NotJiraCloud)?;
+    let issues: Vec<Issue> = nodes.iter().filter_map(issue_from_node).collect();
+    let last = json["isLast"].as_bool().unwrap_or(false);
+    let next_cursor = json["nextPageToken"]
+        .as_str()
+        .filter(|token| !last && !token.is_empty())
+        .map(str::to_owned);
+    Ok(IssuePage {
+        total_open: issues.len() as u64,
+        issues,
+        next_cursor,
+    })
+}
+
+/// One issue node, or `None` when its key or summary is unusable.
+fn issue_from_node(node: &serde_json::Value) -> Option<Issue> {
+    let key = node["key"].as_str()?;
+    let (project, digits) = key.rsplit_once('-')?;
+    if project.is_empty() || digits.is_empty() || !digits.chars().all(|c| c.is_ascii_digit()) {
+        return None;
+    }
+    let fields = &node["fields"];
+    let labels = fields["labels"]
+        .as_array()
+        .map(|labels| {
+            labels
+                .iter()
+                .filter_map(|label| label.as_str().map(str::to_owned))
+                .take(LABELS_PER_ISSUE)
+                .collect()
+        })
+        .unwrap_or_default();
+    let mut issue = Issue::jira(
+        key,
+        digits.parse().ok()?,
+        fields["summary"].as_str()?.to_owned(),
+        labels,
+        fields["updated"].as_str().unwrap_or_default().to_owned(),
+    );
+    if let Some(name) = fields["issuetype"]["name"].as_str() {
+        issue = issue.with_type_name(name);
+    }
+    let mut text = String::new();
+    flatten_adf(&fields["description"], 0, &mut text);
+    Some(
+        issue
+            .reported_by(&reporter_of(&fields["reporter"]))
+            .described(&text),
+    )
+}
+
+/// The reporter's display name, else the local part of their email, else [`GHOST_LOGIN`]; never
+/// the account id.
+fn reporter_of(reporter: &serde_json::Value) -> String {
+    let name = reporter["displayName"]
+        .as_str()
+        .map(str::trim)
+        .unwrap_or_default();
+    if !name.is_empty() {
+        return name.to_owned();
+    }
+    reporter["emailAddress"]
+        .as_str()
+        .and_then(|email| email.split_once('@'))
+        .map(|(local, _)| local.trim())
+        .filter(|local| !local.is_empty())
+        .unwrap_or(GHOST_LOGIN)
+        .to_owned()
+}
+
+/// Walk an Atlassian Document Format node, taking `text` nodes and a space for every `hardBreak`
+/// and every end of a node with content (a paragraph, a list item), so words of neighbouring
+/// blocks do not run together.
+fn flatten_adf(node: &serde_json::Value, depth: usize, out: &mut String) {
+    if depth > ADF_MAX_DEPTH || out.len() >= ADF_MAX_BYTES {
+        return;
+    }
+    match node["type"].as_str() {
+        Some("text") => out.push_str(node["text"].as_str().unwrap_or_default()),
+        Some("hardBreak") => out.push(' '),
+        _ => {
+            if let Some(children) = node["content"].as_array() {
+                for child in children {
+                    flatten_adf(child, depth + 1, out);
+                }
+                out.push(' ');
+            }
+        }
+    }
+}
+
+/// What a Jira request came to, before any body is read: the input of [`classify`]. The shell
+/// maps its HTTP client's result onto it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Outcome {
+    /// Connect, DNS, TLS or proxy failure, with the transport's reason.
+    Unreachable(String),
+    /// No answer within 10 seconds.
+    TimedOut,
+    /// The site answered with a redirect, which is not followed.
+    Redirected,
+    /// An HTTP status other than success.
+    Status(u16),
+    /// A success whose body is not a Jira Cloud listing.
+    BadBody,
+}
+
+/// Longest transport reason a notice carries, in characters.
+const REASON_MAX_CHARS: usize = 80;
+
+/// The failure a request outcome is (contracts/jira-cloud-source.md §6).
+pub fn classify(outcome: &Outcome) -> IssueLoadError {
+    match outcome {
+        Outcome::Unreachable(reason) => {
+            IssueLoadError::Unreachable(reason.chars().take(REASON_MAX_CHARS).collect())
+        }
+        Outcome::TimedOut => IssueLoadError::TimedOut,
+        Outcome::Redirected | Outcome::BadBody => IssueLoadError::NotJiraCloud,
+        Outcome::Status(401 | 403) => IssueLoadError::CredentialsRefused,
+        Outcome::Status(400 | 404) => IssueLoadError::NoAccess,
+        Outcome::Status(429) => IssueLoadError::RateLimited,
+        Outcome::Status(status) => {
+            IssueLoadError::Other(format!("Jira returned an error ({status})."))
+        }
+    }
+}
+
+/// Where a project's Jira issues come from: the client's HTTP source in production,
+/// [`FakeJiraSource`] in tests. Paging, cap and classification are pure functions of this module.
+pub trait JiraSource: Send + Sync {
+    /// One page of open issues, most recently updated first; `cursor` is Jira's `nextPageToken`.
+    fn list_open(
+        &self,
+        conn: &JiraConnection,
+        token: &ApiToken,
+        cursor: Option<&str>,
+    ) -> Result<IssuePage, IssueLoadError>;
+
+    /// Open issues matching `text` on Jira's side; the caller applies the local match rule.
+    fn search_open(
+        &self,
+        conn: &JiraConnection,
+        token: &ApiToken,
+        text: &str,
+    ) -> Result<Vec<Issue>, IssueLoadError>;
+}
+
+/// Load a project's open issues page by page up to the load cap, through the paging rule GitHub
+/// shares. Jira has no total, so `total_open` is the number held and the listing is `complete`
+/// only when the last page left no cursor.
+pub fn load(
+    source: &dyn JiraSource,
+    conn: &JiraConnection,
+    token: &ApiToken,
+) -> Result<IssueListing, IssueLoadError> {
+    let paged = load_pages(|cursor| source.list_open(conn, token, cursor))?;
+    Ok(IssueListing {
+        total_open: paged.issues.len() as u64,
+        complete: paged.exhausted,
+        issues: paged.issues,
+    })
+}
+
+type Script<T> = std::sync::Mutex<std::collections::VecDeque<Result<T, IssueLoadError>>>;
+
+fn locked<T>(mutex: &std::sync::Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+    mutex
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+/// A scripted [`JiraSource`] for tests: answers each call with the next scripted page, search
+/// result or error, and records every call. Public (not `#[cfg(test)]`) so every crate's tests can
+/// use it, like [`crate::github::FakeIssueSource`].
+#[derive(Debug, Default)]
+pub struct FakeJiraSource {
+    pages: Script<IssuePage>,
+    calls: std::sync::Mutex<Vec<Option<String>>>,
+    searches: Script<Vec<Issue>>,
+    search_calls: std::sync::Mutex<Vec<String>>,
+}
+
+impl FakeJiraSource {
+    /// A source with nothing scripted.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Answer the next unanswered `list_open` call with `page`.
+    pub fn with_page(self, page: IssuePage) -> Self {
+        locked(&self.pages).push_back(Ok(page));
+        self
+    }
+
+    /// Answer the next unanswered `list_open` call with `error`.
+    pub fn with_error(self, error: IssueLoadError) -> Self {
+        locked(&self.pages).push_back(Err(error));
+        self
+    }
+
+    /// Answer the next unanswered `search_open` call with `result`.
+    pub fn with_search(self, result: Result<Vec<Issue>, IssueLoadError>) -> Self {
+        locked(&self.searches).push_back(result);
+        self
+    }
+
+    /// Every `list_open` call so far, as its cursor.
+    pub fn calls(&self) -> Vec<Option<String>> {
+        locked(&self.calls).clone()
+    }
+
+    /// Every `search_open` call so far, as its text.
+    pub fn search_calls(&self) -> Vec<String> {
+        locked(&self.search_calls).clone()
+    }
+}
+
+impl JiraSource for FakeJiraSource {
+    fn list_open(
+        &self,
+        _conn: &JiraConnection,
+        _token: &ApiToken,
+        cursor: Option<&str>,
+    ) -> Result<IssuePage, IssueLoadError> {
+        locked(&self.calls).push(cursor.map(str::to_owned));
+        locked(&self.pages).pop_front().unwrap_or_else(|| {
+            Err(IssueLoadError::Other(
+                "FakeJiraSource: no page scripted for this call".into(),
+            ))
+        })
+    }
+
+    fn search_open(
+        &self,
+        _conn: &JiraConnection,
+        _token: &ApiToken,
+        text: &str,
+    ) -> Result<Vec<Issue>, IssueLoadError> {
+        locked(&self.search_calls).push(text.to_owned());
+        locked(&self.searches).pop_front().unwrap_or_else(|| {
+            Err(IssueLoadError::Other(
+                "FakeJiraSource: no search scripted for this call".into(),
+            ))
+        })
+    }
 }

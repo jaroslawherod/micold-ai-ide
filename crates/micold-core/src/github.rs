@@ -343,6 +343,10 @@ pub struct Issue {
     /// The start of the body as plain text ([`description_from`]); empty when there is none.
     description: String,
     row_text: String,
+    /// The Jira key (`ABC-123`) of an issue read from Jira; `None` for a GitHub issue.
+    key: Option<String>,
+    /// The Jira issue type's name (`Bug`); `None` for a GitHub issue and for one without a type.
+    type_name: Option<String>,
 }
 
 /// Where a match's emphasis lands on a row's two lines (038 data-model §3): byte ranges of
@@ -385,9 +389,47 @@ impl Issue {
             reporter: GHOST_LOGIN.to_string(),
             description: String::new(),
             row_text: String::new(),
+            key: None,
+            type_name: None,
         };
         issue.row_text = issue.match_text();
         issue
+    }
+
+    /// A Jira issue: shown and ticketed by `key` (`ABC-123`) where a GitHub issue has `#number`.
+    /// `number` is the key's numeric part, what picks and merges identify the issue by.
+    pub fn jira(
+        key: &str,
+        number: u64,
+        summary: String,
+        labels: Vec<String>,
+        updated_at: String,
+    ) -> Issue {
+        let mut issue = Issue::new(number, summary, labels, updated_at);
+        issue.key = Some(key.to_string());
+        issue.row_text = issue.match_text();
+        issue
+    }
+
+    /// The same issue with its Jira issue type's name, which joins the labels when a type is chosen.
+    pub fn with_type_name(mut self, name: &str) -> Issue {
+        self.type_name = Some(name.to_string());
+        self
+    }
+
+    /// The Jira key, when the issue comes from Jira.
+    pub fn key(&self) -> Option<&str> {
+        self.key.as_deref()
+    }
+
+    /// The Jira issue type's name, when there is one.
+    pub fn type_name(&self) -> Option<&str> {
+        self.type_name.as_deref()
+    }
+
+    /// The ticket a worktree for this issue carries: the Jira key, else the decimal number.
+    pub fn ticket(&self) -> String {
+        self.key.clone().unwrap_or_else(|| self.number.to_string())
     }
 
     /// The same issue, reported by `login`. An empty login is no author: [`GHOST_LOGIN`].
@@ -453,9 +495,12 @@ impl Issue {
         &self.row_text
     }
 
-    /// A row's first line: `#<number> <title>` (038 FR-001).
+    /// A row's first line: `#<number> <title>` (038 FR-001), `<key> <summary>` for a Jira issue.
     pub fn title_line(&self) -> String {
-        format!("#{} {}", self.number, self.title)
+        match &self.key {
+            Some(key) => format!("{key} {}", self.title),
+            None => format!("#{} {}", self.number, self.title),
+        }
     }
 
     /// A row's second line: the reporter, then `  ·  <l1>, <l2>` when labelled (038 FR-002,
@@ -665,6 +710,7 @@ impl fmt::Debug for Issue {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Issue")
             .field("number", &self.number)
+            .field("key", &self.key)
             .field("title", &self.title)
             .field("labels", &self.labels)
             .field("updated_at", &self.updated_at)
@@ -692,10 +738,16 @@ pub enum IssueLoadError {
     ToolMissing,
     /// Not signed in to GitHub, or the sign-in is no longer valid.
     NotSignedIn,
-    /// The sign-in cannot see the repository.
+    /// The sign-in cannot see the repository, or the account cannot see the Jira project.
     NoAccess,
     /// GitHub could not be reached.
     Offline,
+    /// Jira could not be reached: the transport's reason, at most 80 characters.
+    Unreachable(String),
+    /// Jira refused the email and API token (401, 403).
+    CredentialsRefused,
+    /// The site did not answer like Jira Cloud (a redirect, Data Center, another body).
+    NotJiraCloud,
     /// GitHub's rate limit was reached.
     RateLimited,
     /// No answer within 10 seconds; `gh` was killed (research R6).
@@ -1015,25 +1067,50 @@ pub fn load_listing(
     source: &dyn IssueSource,
     repo: &GithubRepo,
 ) -> Result<IssueListing, IssueLoadError> {
+    let paged = load_pages(|cursor| source.list_open(repo, cursor))?;
+    Ok(IssueListing {
+        complete: paged.issues.len() as u64 >= paged.total_open,
+        issues: paged.issues,
+        total_open: paged.total_open,
+    })
+}
+
+/// What [`load_pages`] gathered.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PagedIssues {
+    /// The issues, in the order the pages came, at most [`ISSUE_LOAD_CAP`].
+    pub issues: Vec<Issue>,
+    /// The last page's `total_open`.
+    pub total_open: u64,
+    /// The last page held no cursor and nothing was cut: the source has nothing more to give.
+    pub exhausted: bool,
+}
+
+/// The paging and cap rule both providers share: ask `fetch` for pages (with the previous page's
+/// cursor) until there is no next cursor or [`ISSUE_LOAD_CAP`] issues are held, truncating the page
+/// that crosses the cap. The first error aborts the load: a partial list is never shown as the list.
+pub fn load_pages(
+    mut fetch: impl FnMut(Option<&str>) -> Result<IssuePage, IssueLoadError>,
+) -> Result<PagedIssues, IssueLoadError> {
     let mut issues: Vec<Issue> = Vec::new();
     let mut cursor: Option<String> = None;
-    let total_open = loop {
-        let page = source.list_open(repo, cursor.as_deref())?;
+    loop {
+        let page = fetch(cursor.as_deref())?;
         // A page that adds nothing, or hands back the cursor it was asked with, would be asked
         // for again forever: end the load with what is held.
         let stalled = page.issues.is_empty() || page.next_cursor == cursor;
         issues.extend(page.issues);
         if stalled || issues.len() >= ISSUE_LOAD_CAP || page.next_cursor.is_none() {
+            let cut = issues.len() > ISSUE_LOAD_CAP;
             issues.truncate(ISSUE_LOAD_CAP);
-            break page.total_open;
+            return Ok(PagedIssues {
+                exhausted: page.next_cursor.is_none() && !cut,
+                total_open: page.total_open,
+                issues,
+            });
         }
         cursor = page.next_cursor;
-    };
-    Ok(IssueListing {
-        complete: issues.len() as u64 >= total_open,
-        issues,
-        total_open,
-    })
+    }
 }
 
 /// The GraphQL document for one page of the description pass (038 contracts/issue-fields.md §6):
@@ -1432,10 +1509,38 @@ impl IssueLookup for FakeIssueSource {
     }
 }
 
+/// Whose voice a notice is written in: the GitHub repository, or the Jira site and project.
+#[derive(Debug, Clone, Copy)]
+pub enum NoticeSource<'a> {
+    /// Issues of a GitHub repository.
+    Github(&'a GithubRepo),
+    /// Issues of a Jira project on a site.
+    Jira {
+        /// The site's host, e.g. `acme.atlassian.net`.
+        host: &'a str,
+        /// The project key.
+        key: &'a str,
+    },
+}
+
+impl<'a> From<&'a GithubRepo> for NoticeSource<'a> {
+    fn from(repo: &'a GithubRepo) -> Self {
+        NoticeSource::Github(repo)
+    }
+}
+
 impl IssueLoadError {
     /// The plain-language text the form shows: the cause, and what to do (FR-007,
-    /// contracts/github-issue-source.md §5).
-    pub fn message(&self, repo: &GithubRepo) -> String {
+    /// contracts/github-issue-source.md §5, 533 contracts/jira-cloud-source.md §6). A variant
+    /// that belongs to the other provider gets a generic text.
+    pub fn message<'a>(&self, source: impl Into<NoticeSource<'a>>) -> String {
+        match source.into() {
+            NoticeSource::Github(repo) => self.github_message(repo),
+            NoticeSource::Jira { host, key } => self.jira_message(host, key),
+        }
+    }
+
+    fn github_message(&self, repo: &GithubRepo) -> String {
         match self {
             Self::ToolMissing => "Couldn't read issues: the GitHub CLI (`gh`) isn't installed. \
                                   Install it from cli.github.com, then sign in with `gh auth login`."
@@ -1450,6 +1555,31 @@ impl IssueLoadError {
             }
             Self::TimedOut => "GitHub didn't answer within 10 seconds.".to_owned(),
             Self::Other(detail) => format!("Couldn't read issues: {detail}"),
+            Self::Unreachable(_) | Self::CredentialsRefused | Self::NotJiraCloud => {
+                "Couldn't read issues. Check your connection and settings, then retry.".to_owned()
+            }
+        }
+    }
+
+    fn jira_message(&self, host: &str, key: &str) -> String {
+        match self {
+            Self::Unreachable(reason) => format!("Couldn't reach {host}: {reason}."),
+            Self::TimedOut => format!("{host} did not answer within 10 seconds."),
+            Self::CredentialsRefused => format!(
+                "{host} refused the credentials. Check the email and API token in Settings > Jira."
+            ),
+            Self::NoAccess => format!(
+                "{host} does not show project {key} to this account. Check the project key and your access in Settings > Jira."
+            ),
+            Self::RateLimited => format!("{host} is limiting requests. Try again in a minute."),
+            Self::NotJiraCloud => format!(
+                "{host} did not answer like Jira Cloud. Jira Data Center and Server are not supported."
+            ),
+            Self::Other(detail) => detail.clone(),
+            Self::Offline => format!("Couldn't reach {host}. Check your connection, then retry."),
+            Self::ToolMissing | Self::NotSignedIn => {
+                format!("Couldn't read issues from {host}. Check Settings > Jira, then retry.")
+            }
         }
     }
 }

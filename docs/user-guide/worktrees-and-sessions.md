@@ -588,6 +588,47 @@ loaded issues failed —" followed by one of the reasons above, with a **Retry**
 same search again. GitHub allows about 30 searches a minute; if you hit that, wait a minute, then
 retry.
 
+### From a Jira issue
+
+A project connected to Jira Cloud can start a worktree from one of its open issues, the way a GitHub
+issue does. Pick one and its key becomes the **Ticket**, its summary (shortened to 50 characters)
+becomes the **Name**, and the **Type** is chosen from the issue's type name and labels. Everything
+else works as for a new branch.
+
+**What you need.** A Jira Cloud site (Jira Data Center and Server are not supported), an API token
+from your Atlassian account, the Jira integration switched on, and a connection for the project, all
+in **Settings → Jira** (see [Jira](settings.md#jira)).
+
+**What is sent, and where.** Only the connection's own site is contacted. The request carries the
+project key, the search text you typed and your credentials (account email and API token), and
+nothing else from your project. In a project that has a GitHub remote the picker stays on GitHub:
+choosing between the two sources ships in a later release of this feature.
+
+**The list.** Open issues are listed most recently updated first, up to 1,000. When the project has
+more, typing in **Issue** also searches on the Jira site, beyond the loaded issues. Pick an issue
+with the pointer or with the arrow keys and Enter; a pick replaces the ticket and name, which stay
+editable.
+
+**The type.** The issue's type name and labels are matched against the label-to-type list in
+**Settings → GitHub** (see [GitHub issues](settings.md#github-issues)); the entry nearest the top
+wins. With the defaults, a `Bug` issue selects fix. When nothing matches, the type is left for you
+to choose.
+
+**The branch and the tag.** The branch is `${type}/${KEY-123}_${name}`, for example
+`fix/ABC-123_login-fails`, and the sidebar shows the key as the worktree's issue tag.
+
+**When the issues can't be read.** The list shows what went wrong and a **Retry** button. Creating a
+worktree by hand keeps working whatever the notice says.
+
+| Message | What to do |
+|---|---|
+| "Couldn't reach *host*: *reason*." | Check the network connection, proxy and the site address, then retry. |
+| "*host* did not answer within 10 seconds." | Retry. If it keeps happening, check the site opens in a browser. |
+| "*host* refused the credentials. Check the email and API token in Settings > Jira." | Correct the email or create a new API token, save, then retry. |
+| "*host* does not show project *KEY* to this account. Check the project key and your access in Settings > Jira." | Correct the project key, or ask for access to the project, then retry. |
+| "*host* is limiting requests. Try again in a minute." | Wait a minute, then retry. |
+| "*host* did not answer like Jira Cloud. Jira Data Center and Server are not supported." | Check the site address is a Jira Cloud site; Data Center and Server cannot be used. |
+
 To send one prompt to several AI CLIs at once, each in its own new worktree, use **Run in
 parallel** beside **Add a worktree**; see [Running a prompt in parallel](parallel-runs.md).
 

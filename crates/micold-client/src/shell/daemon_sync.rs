@@ -940,6 +940,7 @@ fn adopt_daemon_settings(app: &mut App, settings: micold_core::protocol::message
     // Feature 533: the Jira switch and connections in force, in every window (FR-022).
     app.core.settings.jira_enabled = settings.jira_enabled;
     app.core.settings.jira_connections = settings.jira_connections;
+    crate::shell::issues::sync_jira_availability(app);
     // Feature 490: the switch and threshold in force; off forgets the reading (FR-002).
     app.core.plan_usage.settings(
         settings.plan_usage_enabled,

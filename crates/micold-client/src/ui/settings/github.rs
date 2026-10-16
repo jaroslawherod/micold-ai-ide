@@ -30,6 +30,11 @@ pub const SETTINGS: &[(&str, &str)] = &[
     ("issue_label_types", "IssueMappingLabelChanged"),
 ];
 
+/// The page's intro. A constant so `tests/features_settings.rs` can check what it says.
+pub const GITHUB_ISSUES_INTRO: &str = "Pull request status on worktree rows. When you create a worktree from a GitHub issue, the first entry whose label the issue \
+     carries sets the worktree's type. Applies to every project. \
+     Also applies to Jira issues: an issue's type name and labels are matched against this list.";
+
 /// The GitHub page.
 pub fn view<'a>(
     draft: &'a SettingsDraft,
@@ -131,11 +136,5 @@ pub fn view<'a>(
         .into(),
     );
 
-    page(
-        "GitHub",
-        "Pull request status on worktree rows. When you create a worktree from a GitHub issue, the first entry whose label the issue \
-         carries sets the worktree's type. Applies to every project.",
-        controls,
-        roles,
-    )
+    page("GitHub", GITHUB_ISSUES_INTRO, controls, roles)
 }

@@ -177,3 +177,45 @@ connection. Rejected: TLS on the fake (needs a CA installed into the OS store); 
 holds: the Basic header is `email:token`, the body carries only the JQL, fields and page token, the
 redirect is not followed, a stalled server times out, and a sentinel token is absent from every
 error string and `Debug` output.
+
+### R2 addendum - dependency vetting (T032, T033)
+
+Resolved with `cargo tree -p micold-client -e normal` after adding the dependencies.
+
+**Versions and features**: `ureq 3.4.2` with `default-features = false, features = ["rustls",
+"platform-verifier"]` (no `json`, no `gzip`, no cookies; declared once in the root
+`[workspace.dependencies]`, used only by `micold-client`) and `base64 0.22.1` (already in
+`Cargo.lock`; ureq 3 uses the same one). ureq's `rustls` feature is `rustls-no-provider` + `_ring` +
+`rustls-webpki-roots`, so the crypto backend is **`ring` 0.17.14**, not `aws-lc-rs`; the Jira
+adapter selects `RootCerts::PlatformVerifier` so the OS store is used (`webpki-roots` is linked but
+not the chosen root set).
+
+**New crates and licences** (all from `cargo metadata`): `ureq`, `ureq-proto`,
+`rustls-platform-verifier`, `-android`, `http`, `httparse`, `utf8-zero`, `rustls-pki-types`,
+`rustls-native-certs`, `openssl-probe`, `security-framework(-sys)`, `schannel`, `zeroize`:
+MIT or Apache-2.0 (schannel MIT). `rustls`: Apache-2.0 OR ISC OR MIT. `rustls-webpki`, `untrusted`:
+ISC. `ring`: Apache-2.0 AND ISC (its OpenSSL/BoringSSL-derived assembly is permissive). `subtle`:
+BSD-3-Clause. **Flags**: `webpki-roots` and `webpki-root-certs` are CDLA-Permissive-2.0 (a
+permissive data licence for the Mozilla root list, not on the MIT/Apache/ISC list; `webpki-roots`
+cannot be dropped without giving up ureq's `rustls` feature); `subtle` is BSD-3-Clause. Both are
+permissive; the lead decides whether to accept them. The repository has **no `deny.toml`** and no
+`cargo deny` step, so nothing in CI fails on them.
+
+**CI matrix**: `ring` needs only a C compiler (and, on Windows ARM64, the MSVC ARM64 assembler
+that the `windows-11-arm` runner's Visual Studio provides); `cc` is already in `Cargo.lock`. The
+legs (`ubuntu-latest`, `macos-latest`, `windows-latest`, `windows-11-arm` for the package job) all
+have one. `aws-lc-rs` was rejected: it needs `cmake` and, on Windows, NASM, which are new CI
+toolchain steps. No new CI step is required.
+
+**Daemon and core stay free** (plan Re-check): `cargo tree -p micold-daemon -e normal` and
+`cargo tree -p micold-core -e normal` show neither `ureq` nor `rustls`.
+
+**Agent construction (ureq 3.4.2)**: `ureq::Agent::new_with_config(ureq::config::Config::builder()
+.timeout_global(Some(Duration::from_secs(10))).max_redirects(0).http_status_as_error(false)
+.tls_config(ureq::tls::TlsConfig::builder().provider(TlsProvider::Rustls)
+.root_certs(RootCerts::PlatformVerifier).build()).build())`. The builder starts from
+`Config::default()`, which reads the proxy from the environment (`ALL_PROXY`, `HTTPS_PROXY`,
+`HTTP_PROXY`; `Proxy::try_from_env()`); leave `.proxy(..)` unset. With `max_redirects(0)` a 3xx comes
+back as a response and is not followed; with `http_status_as_error(false)` 4xx/5xx are `Ok`
+responses whose status the adapter classifies. Transport failures are `ureq::Error::Timeout(_)`,
+`Io(_)`, `Tls`-family variants and so on.

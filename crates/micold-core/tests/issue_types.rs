@@ -150,3 +150,55 @@ fn validation() {
         "the same type twice is valid (spec Edge Cases)"
     );
 }
+
+// --- 533: a Jira issue's type name joins its labels (contracts/issue-naming.md §2) -------------------
+
+#[test]
+fn a_type_name_is_matched_like_a_label() {
+    let mapping = issue_types::default_mapping();
+    assert_eq!(
+        issue_types::type_for_issue(&mapping, Some("Bug"), &[]),
+        Some(ConventionalType::Fix),
+        "a Jira `Bug` issue type maps to `fix` by default"
+    );
+    assert_eq!(
+        issue_types::type_for_issue(&mapping, Some(" BUG "), &[]),
+        Some(ConventionalType::Fix),
+        "trimmed and case-insensitive"
+    );
+    assert_eq!(
+        issue_types::type_for_issue(&mapping, Some("Story"), &labels(&["enhancement"])),
+        Some(ConventionalType::Feat),
+        "a label still counts when the type name maps to nothing"
+    );
+    assert_eq!(
+        issue_types::type_for_issue(&mapping, Some("Task"), &[]),
+        None
+    );
+}
+
+#[test]
+fn the_first_mapping_entry_wins_whether_the_match_is_the_type_name_or_a_label() {
+    let mapping = issue_types::default_mapping();
+    assert_eq!(
+        issue_types::type_for_issue(&mapping, Some("Task"), &labels(&["documentation", "bug"])),
+        Some(ConventionalType::Fix),
+        "`bug` is listed before `documentation`"
+    );
+    assert_eq!(
+        issue_types::type_for_issue(&mapping, Some("documentation"), &labels(&["bug"])),
+        Some(ConventionalType::Fix),
+        "the mapping's order decides, not type-name-first"
+    );
+}
+
+#[test]
+fn without_a_type_name_it_is_type_for_labels() {
+    let mapping = issue_types::default_mapping();
+    for set in [&["bug"][..], &["enhancement", "bug"], &["question"], &[]] {
+        assert_eq!(
+            issue_types::type_for_issue(&mapping, None, &labels(set)),
+            type_for_labels(&mapping, &labels(set))
+        );
+    }
+}
