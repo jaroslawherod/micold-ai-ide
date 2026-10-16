@@ -129,7 +129,9 @@ mod tests {
         let before = m.node.size().height;
         for _ in 0..40 {
             m.frame += 1;
-            let at = m.origin + std::time::Duration::from_millis(16) * m.frame;
+            let at = m.origin
+                + std::time::Duration::from_millis(micold_core::tokens::motion::duration::SHORT_1)
+                    * m.frame;
             m.send(
                 Event::Window(iced::window::Event::RedrawRequested(at)),
                 mouse::Cursor::Unavailable,
