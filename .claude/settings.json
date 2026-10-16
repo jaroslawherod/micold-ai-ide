@@ -16,7 +16,8 @@
     }
   },
   "enabledPlugins": {
-    "caveman@caveman": true
+    "caveman@caveman": true,
+    "rust-analyzer-lsp@claude-plugins-official": true
   },
   "hooks": {
     "PreToolUse": [
