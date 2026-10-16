@@ -23,7 +23,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #827 | Amendment: main session and helpers (specs only) | merged | fa395078be20e60fa40eacb8d45b52beb683d37d |
 | #828 | M3 | merged | 5ac2e0a2648abd82f8f95bbbf52d6f0309c193ca |
 | #880 | M4 | merged | bb0458f6bed51342b3ac261670cc0be8989cc198 |
-| #891 | M5 | open | |
+| #891 | M5 | open | rebased onto main (one test-file append conflict in features_sidebar.rs, both sides kept); full gate green; review B not re-run, diff unchanged |
 
 ## Milestones
 
