@@ -378,6 +378,17 @@ fn whole_answer_failures_are_load_errors() {
     );
 }
 
+/// Review A M1: a typed error beside a `null` issue names that error, not "no issue".
+#[test]
+fn a_null_issue_with_a_typed_error_reports_that_error() {
+    let answer = json!({"data": {"repository": {"issue": null}},
+        "errors": [{"type": "RATE_LIMITED", "path": ["repository", "issue"], "message": "slow down"}]});
+    assert_eq!(
+        parse_details(answer.to_string().as_bytes(), &repo()).unwrap_err(),
+        IssueLoadError::RateLimited
+    );
+}
+
 #[test]
 fn text_from_github_is_neutralised_and_emptied_values_are_left_out() {
     let d = parsed("bidi_titles.json");
