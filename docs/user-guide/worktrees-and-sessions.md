@@ -669,8 +669,14 @@ in **Settings → Jira** (see [Jira](settings.md#jira)).
 
 **What is sent, and where.** Only the connection's own site is contacted. The request carries the
 project key, the search text you typed and your credentials (account email and API token), and
-nothing else from your project. In a project that has a GitHub remote the picker stays on GitHub:
-choosing between the two sources ships in a later release of this feature.
+nothing else from your project.
+
+**GitHub or Jira.** A project with a Jira connection and no GitHub remote lists Jira and shows no
+choice. A project with both shows a **GitHub / Jira** choice under the branch chips; GitHub is the
+default. Choosing the other source replaces the list and clears the search text, and the dialog
+opens on that source the next time you use it in the same project. Each project remembers its own
+choice. With the Jira integration off, or no connection for the project, the dialog has no choice
+and lists GitHub as before.
 
 **The list.** Open issues are listed most recently updated first, up to 1,000. When the project has
 more, typing in **Issue** also searches on the Jira site, beyond the loaded issues, and the line

@@ -50,7 +50,7 @@ use micold_core::github::{
     env_include_path, load_listing, DescriptionPage, IssueListing, IssueLoadError,
 };
 use micold_core::issue_details::DETAILS_BOUND;
-use micold_core::jira::{connection_key, ApiToken};
+use micold_core::jira::{connection_key, ApiToken, IssueProvider};
 use micold_core::protocol::messages::ClientMsg;
 use micold_core::store::jira_token_path;
 
@@ -101,6 +101,31 @@ pub fn on_source_changed(app: &mut App, source: BranchSource) -> Task<Message> {
     match newly_awaited(app, before) {
         Some(chosen) => start_issue_load(app, chosen),
         None => listed,
+    }
+}
+
+/// The GitHub / Jira choice changed (feature 533, FR-016, FR-017). When the reducer accepted it, the
+/// choice is written to the project's state file and, with the Issue source showing, the new
+/// provider's load starts.
+pub fn on_issue_provider_changed(app: &mut App, provider: IssueProvider) -> Task<Message> {
+    let before = app.core.worktree_form.issue_request_seq;
+    let remembered = app.core.workspace.issue_sources.clone();
+    app.core
+        .update(Message::WorktreeForm(FormMsg::IssueProviderChanged(provider)));
+    if app.core.worktree_form.issue_request_seq == before {
+        return Task::none();
+    }
+    if let (Some(project), Some(store)) = (app.core.workspace.active.clone(), app.caps.projects()) {
+        if remembered.get(&project) != Some(&provider) {
+            if let Err(err) = store.save_issue_source(&project, provider) {
+                app.core
+                    .notify_error(format!("Couldn't remember the issue source: {err}"));
+            }
+        }
+    }
+    match newly_awaited(app, before) {
+        Some(chosen) => start_issue_load(app, chosen),
+        None => Task::none(),
     }
 }
 

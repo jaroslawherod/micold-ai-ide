@@ -161,6 +161,15 @@ pub enum Outcome {
         /// The daemon it now runs on.
         daemon: micold_core::daemons::DaemonId,
     },
+    /// The user chose which issue source the add-worktree dialog lists in `project` (feature 533,
+    /// FR-016): the root keeps it in memory for the next open and the shell writes it to the
+    /// project's state file (`ProjectStore::save_issue_source`).
+    IssueSourceChosen {
+        /// The project the dialog is open in.
+        project: std::path::PathBuf,
+        /// The source chosen.
+        provider: micold_core::jira::IssueProvider,
+    },
     /// A repository on a remote daemon's host was named (feature 489, FR-012): the shell asks that
     /// daemon whether it is one and opens it as a project when it is.
     RemoteRepositoryRequested {

@@ -100,6 +100,19 @@ pub trait ProjectStore {
         Ok(())
     }
 
+    /// Remember which issue source the add-worktree dialog last used in a project (feature 533,
+    /// FR-016): a read-modify-write of the one `issue_source` field of the project's state file,
+    /// written by the client alone and kept by [`Self::save`], like a binding. A missing or
+    /// unreadable file is refused for the reason [`Self::save_binding`] gives. The default, for
+    /// stores that persist nothing, succeeds without writing.
+    fn save_issue_source(
+        &self,
+        _project_path: &Path,
+        _source: crate::jira::IssueProvider,
+    ) -> io::Result<()> {
+        Ok(())
+    }
+
     /// Drop the binding of `key` from the project's state file (feature 491): the location it
     /// named was deleted, so a later worktree reusing the name does not inherit it. Idempotent; a
     /// missing or unreadable file has no binding to drop and is success. The default, for stores
@@ -523,6 +536,8 @@ impl StoredCatalog {
             pane_layouts: BTreeMap::new(),
             // Feature 491: per project, filled in by `load` from each project's own state file.
             bindings: BTreeMap::new(),
+            // Feature 533: per project, filled in by `load` from each project's own state file.
+            issue_sources: BTreeMap::new(),
         }
     }
 }
@@ -586,6 +601,14 @@ struct StoredProjectState {
     /// never rewritten (FR-014).
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     bindings: BTreeMap<String, DaemonId>,
+    /// The issue source the add-worktree dialog last used in this project (feature 533, FR-016).
+    ///
+    /// `#[serde(default)]` and no `schema_version` bump, for the reason `last_session` records:
+    /// `None` reads as GitHub, which is the dialog before the field existed, and an older build
+    /// reading a file that carries it ignores one unknown field. Written by the client alone
+    /// ([`ProjectStore::save_issue_source`]), like `bindings`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    issue_source: Option<crate::jira::IssueProvider>,
 }
 
 impl StoredProjectState {
@@ -615,6 +638,7 @@ impl StoredProjectState {
                 .get(project_path)
                 .map(PaneLayout::to_json_value),
             bindings: ws.bindings.get(project_path).cloned().unwrap_or_default(),
+            issue_source: ws.issue_sources.get(project_path).copied(),
         }
     }
 }
@@ -978,6 +1002,23 @@ impl ProjectStore for JsonFileStore {
         write_project_state(&path, &state)
     }
 
+    fn save_issue_source(
+        &self,
+        project_path: &Path,
+        source: crate::jira::IssueProvider,
+    ) -> io::Result<()> {
+        let path = self.project_state_path(project_path);
+        let _lock = lock_project_state(&path)?;
+        let ProjectStateLoad::Found(mut state) = load_project_state(&path) else {
+            return Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                "the project's state file is not readable yet",
+            ));
+        };
+        state.issue_source = Some(source);
+        write_project_state(&path, &state)
+    }
+
     fn remove_binding(&self, project_path: &Path, key: &str) -> io::Result<()> {
         let path = self.project_state_path(project_path);
         let _lock = lock_project_state(&path)?;
@@ -1095,6 +1136,16 @@ impl ProjectStore for JsonFileStore {
                             .bindings
                             .insert(project.path.clone(), state.bindings);
                     }
+                    match state.issue_source {
+                        Some(source) => {
+                            workspace
+                                .issue_sources
+                                .insert(project.path.clone(), source);
+                        }
+                        None => {
+                            workspace.issue_sources.remove(&project.path);
+                        }
+                    }
                     match state.last_session {
                         Some(id) => {
                             workspace
@@ -1123,6 +1174,7 @@ impl ProjectStore for JsonFileStore {
                     workspace.foreground_by_project.remove(&project.path);
                     workspace.pane_layouts.remove(&project.path);
                     workspace.bindings.remove(&project.path);
+                    workspace.issue_sources.remove(&project.path);
                 }
             }
         }
@@ -1172,6 +1224,8 @@ impl ProjectStore for JsonFileStore {
             };
             if let ProjectStateLoad::Found(on_disk) = load_project_state(&path) {
                 state.bindings.extend(on_disk.bindings);
+                // Feature 533: likewise the issue source, which the client writes alone.
+                state.issue_source = on_disk.issue_source.or(state.issue_source);
             }
             if let Err(err) = write_project_state(&path, &state) {
                 first_err.get_or_insert(err);
@@ -1321,6 +1375,20 @@ impl ProjectStore for FakeProjectStore {
             .entry(project_path.to_path_buf())
             .or_default()
             .insert(key.to_string(), daemon);
+        Ok(())
+    }
+
+    fn save_issue_source(
+        &self,
+        project_path: &Path,
+        source: crate::jira::IssueProvider,
+    ) -> io::Result<()> {
+        self.inner
+            .lock()
+            .expect("fake lock")
+            .workspace
+            .issue_sources
+            .insert(project_path.to_path_buf(), source);
         Ok(())
     }
 

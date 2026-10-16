@@ -754,6 +754,9 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         Message::WorktreeForm(FormMsg::SourceChanged(source)) => {
             shell::issues::on_source_changed(app, source)
         }
+        Message::WorktreeForm(FormMsg::IssueProviderChanged(provider)) => {
+            shell::issues::on_issue_provider_changed(app, provider)
+        }
         Message::WorktreeForm(FormMsg::IssueRetry) => shell::issues::on_issue_retry(app),
         Message::WorktreeForm(FormMsg::IssueQueryChanged(text)) => {
             shell::issues::on_issue_query_changed(app, text)

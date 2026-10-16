@@ -574,6 +574,9 @@ pub struct WorktreeForm {
     /// `Connected` and the repository has no GitHub remote: the source choice for a project with
     /// both comes with the per-project choice of a later milestone.
     pub provider: IssueProvider,
+    /// The source this project last used, from its state file or chosen in this form (feature 533,
+    /// FR-016). `None` opens on GitHub. Only read while both sources are available.
+    pub remembered_provider: Option<IssueProvider>,
     /// The issue source's list (feature 034).
     pub issues: IssueList,
     /// The issue search text, exactly as typed (FR-005).
@@ -719,12 +722,23 @@ impl WorktreeForm {
     /// Choose the provider the Issue source lists from what is known now: Jira when it is
     /// connected and the repository is known to have no GitHub remote, else GitHub.
     fn resolve_provider(&mut self) {
+        let connected = matches!(self.jira, JiraAvailability::Connected(_));
         let no_github = matches!(self.github, GithubAvailability::Unavailable(_));
-        self.provider = if no_github && matches!(self.jira, JiraAvailability::Connected(_)) {
+        self.provider = if connected
+            && (no_github
+                || (self.offers_issue_provider_choice()
+                    && self.remembered_provider == Some(IssueProvider::Jira)))
+        {
             IssueProvider::Jira
         } else {
             IssueProvider::Github
         };
+    }
+
+    /// Whether the dialog offers the GitHub / Jira choice: the repository has a GitHub remote and
+    /// Jira is connected (feature 533, FR-016). With one source only, no choice is shown.
+    pub fn offers_issue_provider_choice(&self) -> bool {
+        self.github_repo().is_some() && matches!(self.jira, JiraAvailability::Connected(_))
     }
 
     /// The caption under a list that does not hold every open issue (FR-004): how many were loaded
@@ -1043,8 +1057,15 @@ pub fn opened(state: &mut crate::app::State) {
         &state.settings.jira_connections,
         state.workspace.active.as_deref(),
     );
+    let remembered_provider = state
+        .workspace
+        .active
+        .as_ref()
+        .and_then(|project| state.workspace.issue_sources.get(project))
+        .copied();
     state.worktree_form.form = Some(WorktreeForm {
         jira,
+        remembered_provider,
         daemons,
         daemon,
         holder_daemons,
@@ -1192,6 +1213,44 @@ pub fn source_changed(state: &mut crate::app::State, source: BranchSource) {
     if started {
         state.worktree_form.issue_request_seq = next_seq;
     }
+}
+
+/// The user chose which issue source the dialog lists (feature 533, FR-016, FR-017).
+///
+/// Only offered, and so only accepted, while both sources are available, and a repeat of the
+/// provider already chosen changes nothing. The list and the search are forgotten and a fresh
+/// load seq is handed out, so the other provider's load still in flight is stale (invariant 2);
+/// with the Issue source showing, the new provider's load starts at once. The choice is reported
+/// so it is remembered for the project.
+pub fn issue_provider_changed(
+    state: &mut crate::app::State,
+    provider: IssueProvider,
+) -> Vec<crate::features::Outcome> {
+    let next_seq = state.worktree_form.issue_request_seq + 1;
+    let mut changed = false;
+    while_editing_unprompted(state, |form| {
+        if !form.offers_issue_provider_choice() || form.provider == provider {
+            return;
+        }
+        form.provider = provider;
+        form.remembered_provider = Some(provider);
+        form.reset_issues();
+        if form.source == BranchSource::Issue {
+            form.issues = IssueList::Loading { seq: next_seq };
+        }
+        changed = true;
+    });
+    if !changed {
+        return Vec::new();
+    }
+    state.worktree_form.issue_request_seq = next_seq;
+    state
+        .workspace
+        .active
+        .clone()
+        .map(|project| crate::features::Outcome::IssueSourceChosen { project, provider })
+        .into_iter()
+        .collect()
 }
 
 /// The daemon answered the form's `RemoteList` (feature 034, FR-002).
@@ -1860,6 +1919,8 @@ pub enum Msg {
     },
     /// The settings now make Jira available or not to this form (feature 533, FR-005).
     JiraSettingsChanged(JiraAvailability),
+    /// The GitHub / Jira choice of a project with both sources (feature 533, FR-016, FR-017).
+    IssueProviderChanged(IssueProvider),
     /// Retry a failed issue load (FR-007).
     IssueRetry,
     /// The issue search text changed (FR-005).
@@ -1943,6 +2004,7 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
         Msg::RemotesListed(remotes) => remotes_listed(state, remotes),
         Msg::IssuesLoaded { seq, result, .. } => issues_loaded(state, seq, result),
         Msg::JiraSettingsChanged(jira) => jira_settings_changed(state, jira),
+        Msg::IssueProviderChanged(provider) => return issue_provider_changed(state, provider),
         Msg::IssueRetry => issue_retry(state),
         Msg::IssueQueryChanged(text) => issue_query_changed(state, text),
         Msg::IssueFocused => issue_focused(state),
