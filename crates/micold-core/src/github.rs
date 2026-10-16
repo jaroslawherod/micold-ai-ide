@@ -899,6 +899,21 @@ pub(crate) fn graphql_error(json: &serde_json::Value) -> Option<IssueLoadError> 
     json["errors"].as_array()?.first().map(graphql_error_of)
 }
 
+/// The GraphQL error for the field at `path`, or else the first one.
+pub(crate) fn graphql_error_at(json: &serde_json::Value, path: &[&str]) -> Option<IssueLoadError> {
+    let errors = json["errors"].as_array()?;
+    let at_path = |error: &&serde_json::Value| {
+        error["path"]
+            .as_array()
+            .is_some_and(|p| p.len() == path.len() && p.iter().zip(path).all(|(a, b)| a == b))
+    };
+    errors
+        .iter()
+        .find(at_path)
+        .or_else(|| errors.first())
+        .map(graphql_error_of)
+}
+
 /// What one GraphQL `errors[]` entry means for the user.
 fn graphql_error_of(error: &serde_json::Value) -> IssueLoadError {
     match error["type"].as_str() {

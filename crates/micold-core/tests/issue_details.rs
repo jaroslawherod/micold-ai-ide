@@ -387,6 +387,15 @@ fn a_null_issue_with_a_typed_error_reports_that_error() {
         parse_details(answer.to_string().as_bytes(), &repo()).unwrap_err(),
         IssueLoadError::RateLimited
     );
+    let behind_another = json!({"data": {"repository": {"issue": null}},
+        "errors": [
+            {"type": "FORBIDDEN", "path": ["repository", "issue", "projectItems"], "message": "scope"},
+            {"type": "NOT_FOUND", "path": ["repository", "issue"], "message": "gone"}]});
+    assert_eq!(
+        parse_details(behind_another.to_string().as_bytes(), &repo()).unwrap_err(),
+        IssueLoadError::NoAccess,
+        "the issue's own error wins over a field's"
+    );
 }
 
 #[test]

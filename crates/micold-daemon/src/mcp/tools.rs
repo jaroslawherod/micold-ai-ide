@@ -740,11 +740,13 @@ async fn create_derived_worktree(
     Ok(row)
 }
 
-/// An issue's details read started beside the lookup (837 contracts/tool-result.md "Timing").
-/// How long past the bound [`PendingDetails::finish`] waits for a read that is ending at its own
-/// deadline (review A M1, finding 1).
-const DETAILS_GRACE: std::time::Duration = std::time::Duration::from_millis(500);
+/// How much earlier than the bound the read itself must end, so that a read whose last run is cut
+/// at its own deadline still returns what it read before [`PendingDetails::finish`] stops waiting:
+/// a run's overrun past its deadline, and time to parse (review A M1, finding 1).
+const DETAILS_MARGIN: std::time::Duration =
+    micold_core::process::RUN_OVERRUN.saturating_add(std::time::Duration::from_millis(200));
 
+/// An issue's details read started beside the lookup (837 contracts/tool-result.md "Timing").
 struct PendingDetails {
     handle: tokio::task::JoinHandle<Result<IssueDetails, IssueLoadError>>,
     started: tokio::time::Instant,
@@ -761,7 +763,7 @@ impl PendingDetails {
         number: u32,
         bound: std::time::Duration,
     ) -> Self {
-        let deadline = std::time::Instant::now() + bound;
+        let deadline = std::time::Instant::now() + bound.saturating_sub(DETAILS_MARGIN);
         let read_repo = repo.clone();
         Self {
             handle: tokio::task::spawn_blocking(move || {
@@ -777,10 +779,9 @@ impl PendingDetails {
     /// The result's `issue` object: the details, or the one sentence of a failed read. It waits
     /// at most what is left of the bound (FR-011); a read still running then is the timeout 550's
     /// lookup reports, whose words name the production bound whatever a test set (T029). The read
-    /// bounds itself by the same deadline and, when a timeline page is cut there, still returns
-    /// what it read just after it: [`DETAILS_GRACE`] lets that answer win over the timeout.
+    /// ends [`DETAILS_MARGIN`] before the bound, so a read cut at its own deadline still wins.
     async fn finish(self) -> Value {
-        let left = self.bound.saturating_sub(self.started.elapsed()) + DETAILS_GRACE;
+        let left = self.bound.saturating_sub(self.started.elapsed());
         let result = match tokio::time::timeout(left, self.handle).await {
             Ok(Ok(result)) => result,
             Ok(Err(_)) => Err(IssueLoadError::Other(

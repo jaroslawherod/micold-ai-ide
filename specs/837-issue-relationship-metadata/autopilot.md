@@ -43,6 +43,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Plan review | 1 | a8e72b879aa633e947404ec746d63f19b023f49e:43b70bc145326616180860e5edd7b9dc6af331d9 | CLEAN: 3 MINOR, all fixed (F1 layout snapshot row in test strategy, F2 FR map table, F3 u32::try_from in form-details §2; prose/plan text only, no new round) |
 | Tasks review | 1 | 260d2c07b1b94129a9328339d2423d85175cff4b:f76fc297161ba35ca11d21a56082b7c2c25ff1af | CLEAN: 3 MINOR, all fixed (F1 [P] dropped on T003; F2 T030 gains a Failed layout snapshot case; F3 stale checklist note; task text only, no new round) |
 | Review A M1 (code-review high) | 1 | ab97d95509aaf33fa9330bbbcc3623ec52b7e9a7:50869c2ec6b2d574c4f8ccb2a8231984f4fb8bdc | 10 findings: F1 fixed (500 ms grace past the bound so a read cut at its own deadline keeps what it read), F4 fixed (typed GraphQL error beside a null issue, + test); rest declined or MINOR, see Declined |
+| Review A M1 (code-review medium, fix diff) | 2 | ab97d95509aaf33fa9330bbbcc3623ec52b7e9a7:50869c2ec6b2d574c4f8ccb2a8231984f4fb8bdc..5af600b3 | 8 findings on the grace fix: replaced it, the read now ends `DETAILS_MARGIN` (`process::RUN_OVERRUN` + 200 ms) before the bound and the waiter waits exactly the bound (FR-011 holds); doc comment placement fixed; null-issue error prefers the error at `repository.issue` (+ test). No regression test for a read cut at its deadline (needs a real `gh`; MINOR). |
 
 ## Declined review findings
 
