@@ -1,0 +1,102 @@
+{
+ "data": {
+  "repository": {
+   "issue": {
+    "number": 12,
+    "issueDependenciesSummary": {
+     "blockedBy": 1,
+     "totalBlockedBy": 1,
+     "blocking": 0,
+     "totalBlocking": 0
+    },
+    "blockedBy": {
+     "totalCount": 1,
+     "nodes": [
+      {
+       "number": 10,
+       "title": "Fix‮evil​\u0007 a‍b",
+       "state": "OPEN",
+       "repository": {
+        "nameWithOwner": "acme/widgets"
+       }
+      }
+     ]
+    },
+    "blocking": {
+     "totalCount": 0,
+     "nodes": []
+    },
+    "parent": null,
+    "subIssuesSummary": {
+     "total": 0,
+     "completed": 0
+    },
+    "subIssues": {
+     "totalCount": 0,
+     "nodes": []
+    },
+    "labels": {
+     "totalCount": 2,
+     "nodes": [
+      {
+       "name": "bu​g"
+      },
+      {
+       "name": "‮​"
+      }
+     ]
+    },
+    "assignees": {
+     "totalCount": 1,
+     "nodes": [
+      {
+       "login": "oct\u0007ocat"
+      }
+     ]
+    },
+    "milestone": {
+     "title": "v1⁦.4"
+    },
+    "projectItems": {
+     "totalCount": 1,
+     "nodes": [
+      {
+       "project": {
+        "title": "Road‮map"
+       },
+       "fieldValues": {
+        "nodes": [
+         {
+          "__typename": "ProjectV2ItemFieldTextValue",
+          "text": "ok‭!",
+          "field": {
+           "name": "Sta​tus"
+          }
+         },
+         {
+          "__typename": "ProjectV2ItemFieldTextValue",
+          "text": "​‮",
+          "field": {
+           "name": "Notes"
+          }
+         }
+        ]
+       }
+      }
+     ]
+    },
+    "closedByPullRequestsReferences": {
+     "totalCount": 0,
+     "nodes": []
+    },
+    "timelineItems": {
+     "pageInfo": {
+      "hasNextPage": false,
+      "endCursor": "c1"
+     },
+     "nodes": []
+    }
+   }
+  }
+ }
+}

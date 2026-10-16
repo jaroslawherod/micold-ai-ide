@@ -53,6 +53,15 @@ Each entry: Decision, Rationale, Alternatives considered.
   titles replaced. A field name that differs from this list is corrected in the contract in that
   task. A field GitHub does not offer is answered by an `undefinedField` error. That fails the whole
   query, so the query must contain only fields confirmed by that recording.
+- **Confirmed (M1, T001)**: `gh` was not signed in where M1 was built, so the fields were checked
+  against GitHub's published GraphQL schema (`github/docs` `src/graphql/data/fpt/schema.docs.graphql`,
+  2026-10-16): `Issue` has `blockedBy`, `blocking`, `issueDependenciesSummary { blockedBy blocking
+  totalBlockedBy totalBlocking }`, `parent`, `subIssues`, `subIssuesSummary { total completed }`,
+  `projectItems`, `closedByPullRequestsReferences(includeClosedPrs:)` and `timelineItems`; the value
+  types carry `text`, `number` (a float), `date`, `name` (single select) and `title` (iteration),
+  each with `field: ProjectV2FieldConfiguration`, whose members implement `ProjectV2FieldCommon {
+  name }`. No name differs from this list. The fixtures in
+  `crates/micold-core/tests/fixtures/issue_details/` are written to that schema, not recorded.
 - **Enterprise**: `GithubRepo` is constructed only for github.com remotes (034 FR-022), so a GitHub
   Enterprise repository never reaches the read. 550 already refuses `github_issue` there and the
   form offers no GitHub source. The spec's "server without dependencies" edge case reduces to the

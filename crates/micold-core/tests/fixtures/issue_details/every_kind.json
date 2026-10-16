@@ -1,0 +1,200 @@
+{
+ "data": {
+  "repository": {
+   "issue": {
+    "number": 12,
+    "issueDependenciesSummary": {
+     "blockedBy": 1,
+     "totalBlockedBy": 2,
+     "blocking": 1,
+     "totalBlocking": 1
+    },
+    "blockedBy": {
+     "totalCount": 2,
+     "nodes": [
+      {
+       "number": 10,
+       "title": "Parser rewrite",
+       "state": "OPEN",
+       "repository": {
+        "nameWithOwner": "acme/widgets"
+       }
+      },
+      {
+       "number": 9,
+       "title": "Old spike",
+       "state": "CLOSED",
+       "repository": {
+        "nameWithOwner": "acme/widgets"
+       }
+      }
+     ]
+    },
+    "blocking": {
+     "totalCount": 1,
+     "nodes": [
+      {
+       "number": 14,
+       "title": "Release notes",
+       "state": "OPEN",
+       "repository": {
+        "nameWithOwner": "acme/widgets"
+       }
+      }
+     ]
+    },
+    "parent": {
+     "number": 3,
+     "title": "Q4 epic",
+     "state": "OPEN",
+     "repository": {
+      "nameWithOwner": "acme/roadmap"
+     }
+    },
+    "subIssuesSummary": {
+     "total": 2,
+     "completed": 1
+    },
+    "subIssues": {
+     "totalCount": 2,
+     "nodes": [
+      {
+       "number": 15,
+       "title": "Tokenizer",
+       "state": "CLOSED",
+       "repository": {
+        "nameWithOwner": "acme/widgets"
+       }
+      },
+      {
+       "number": 16,
+       "title": "Grammar",
+       "state": "OPEN",
+       "repository": {
+        "nameWithOwner": "acme/widgets"
+       }
+      }
+     ]
+    },
+    "labels": {
+     "totalCount": 2,
+     "nodes": [
+      {
+       "name": "bug"
+      },
+      {
+       "name": "parser"
+      }
+     ]
+    },
+    "assignees": {
+     "totalCount": 1,
+     "nodes": [
+      {
+       "login": "octocat"
+      }
+     ]
+    },
+    "milestone": {
+     "title": "v1.4"
+    },
+    "projectItems": {
+     "totalCount": 2,
+     "nodes": [
+      {
+       "project": {
+        "title": "Roadmap"
+       },
+       "fieldValues": {
+        "nodes": [
+         {
+          "__typename": "ProjectV2ItemFieldSingleSelectValue",
+          "name": "In progress",
+          "field": {
+           "name": "Status"
+          }
+         },
+         {
+          "__typename": "ProjectV2ItemFieldNumberValue",
+          "number": 3.0,
+          "field": {
+           "name": "Estimate"
+          }
+         },
+         {
+          "__typename": "ProjectV2ItemFieldTextValue",
+          "text": "",
+          "field": {
+           "name": "Notes"
+          }
+         },
+         {
+          "__typename": "ProjectV2ItemFieldLabelValue"
+         }
+        ]
+       }
+      },
+      {
+       "project": {
+        "title": "Backlog"
+       },
+       "fieldValues": {
+        "nodes": []
+       }
+      }
+     ]
+    },
+    "closedByPullRequestsReferences": {
+     "totalCount": 1,
+     "nodes": [
+      {
+       "number": 20,
+       "title": "Fix the parser",
+       "state": "OPEN",
+       "repository": {
+        "nameWithOwner": "acme/widgets"
+       },
+       "isDraft": true,
+       "merged": false
+      }
+     ]
+    },
+    "timelineItems": {
+     "pageInfo": {
+      "hasNextPage": false,
+      "endCursor": "c1"
+     },
+     "nodes": [
+      {
+       "source": {
+        "number": 21,
+        "title": "Refactor lexer",
+        "state": "MERGED",
+        "repository": {
+         "nameWithOwner": "acme/widgets"
+        },
+        "isDraft": false,
+        "merged": true
+       }
+      },
+      {
+       "source": {
+        "number": 20,
+        "title": "Fix the parser",
+        "state": "OPEN",
+        "repository": {
+         "nameWithOwner": "acme/widgets"
+        },
+        "isDraft": true,
+        "merged": false
+       }
+      },
+      {
+       "source": {}
+      }
+     ]
+    }
+   }
+  }
+ }
+}
