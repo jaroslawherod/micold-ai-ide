@@ -177,7 +177,9 @@ def over_cap(ctx, cap, step, agent, who):
                 "(run checkpoint.sh, write *Handover* in the ledger, commit, return `STATUS: HANDOVER`). "
                 "Any other subagent: stop exploring and return your answer.")
     return (f"autopilot context: {ctx} tokens, over the {cap} cap. Tell the user in one line that `/clear` then "
-            "`/speckit-autopilot resume` would restart the orchestrator small, and carry on.")
+            "`/speckit-autopilot resume` would restart the orchestrator small, and carry on. If a question for "
+            "the user is next, do not call `AskUserQuestion` (it blocks the session, so they cannot `/clear`): "
+            "tasks/ask.md, *Restart small*.")
 
 
 if __name__ == "__main__":

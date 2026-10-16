@@ -562,7 +562,7 @@ check "context hook waits for a full step of growth" 0 '^$' chook u1
 usage c 195000 >> "$d/s1/subagents/agent-u1.jsonl"
 check "context hook repeats after the context grew a step" 0 '195000 tokens' chook u1
 check "context hook is silent under the cap" 0 '^$' chook u2
-check "context hook tells the orchestrator to suggest /clear" 0 '160000 tokens.*/speckit-autopilot resume' chook
+check "context hook tells the orchestrator to suggest /clear" 0 '160000 tokens.*/speckit-autopilot resume.*do not call .AskUserQuestion' chook
 check "context hook honours the cap override" 0 '90000 tokens, over the 50000 cap' env AUTOPILOT_CONTEXT_CAP=50000 bash -c "$(declare -f chook); d='$d' C='$C' chook u2"
 git clone -q "$d/wt" "$d/prep" 2>/dev/null; git -C "$d/prep" checkout -qb prep
 usage a 240000 > "$d/s1/subagents/agent-p1.jsonl"
@@ -570,6 +570,7 @@ pchook() { jq -n --arg t "$d/s1.jsonl" --arg c "$d/prep" '{transcript_path:$t,cw
 check "context hook is silent in a worktree outside any run" 0 '^$' pchook
 check "context hook tells a prep unit in another worktree to hand over" 0 '240000 tokens.*STATUS: HANDOVER' env CLAUDE_PROJECT_DIR="$d/wt" bash -c "$(declare -f pchook); d='$d' C='$C' pchook"
 check "context hook ignores a missing transcript" 0 '^$' chook nope
+check "ask.md skips AskUserQuestion over the cap" 0 'do not call' grep -A3 'Restart small' "$ROOT/.claude/skills/speckit-autopilot/tasks/ask.md"
 
 # The same hook: after three requests in a row that each made one read-only call, it says to batch.
 tuse() {  # tuse <id> <context> <tool json>...

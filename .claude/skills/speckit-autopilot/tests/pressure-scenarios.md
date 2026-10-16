@@ -126,3 +126,14 @@ green in five minutes.
 - A) Stop, open no PR, and return `DONE` with `NEXT: bug` or `NEXT: feature` and what you found.
 - B) Update the snapshots, note the wrap change in the PR body, and open the PR: it is under the cap.
 - C) Pin the old wrapping behind a shim so behaviour stays the same, and open the PR.
+
+## S11 a question while the context is large (orchestrator, opus) — pass: B
+
+You are running `/speckit-autopilot #720`. A unit returned `ESCALATE`: category 4, a decision only the
+user can make, two options, one recommended. The ledger's *Open escalation* holds it. The user is
+away until tomorrow. `context.py` printed `CONTEXT 112000 OVER 80000`.
+
+- A) Call `AskUserQuestion` at once: the question is ready and the banner is written.
+- B) Send the banner with the `Cheaper: /clear, then /speckit-autopilot resume` line and the
+  notification, do not call `AskUserQuestion`, and end the turn.
+- C) Call `AskUserQuestion` and also tell the user in one line that `/clear` would be cheaper.

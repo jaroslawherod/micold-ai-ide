@@ -12,6 +12,11 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+# crates/micold-core/tests/github_locate_desktop_launch.rs fails where `gh` is on PATH only through a
+# version manager (mise), which a desktop launch cannot see. This opt-out skips it there; it still
+# runs wherever a launch finds `gh`, and CI ignores the variable.
+export MICOLD_SKIP_GH_LAUNCH_TEST="${MICOLD_SKIP_GH_LAUNCH_TEST:-1}"
+
 # The tree this gate saw; recorded on success.
 snap=$(scripts/autopilot/review-snapshot.sh)
 
