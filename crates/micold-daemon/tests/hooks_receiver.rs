@@ -82,6 +82,43 @@ fn register_cat(state: &DaemonState, id: SessionId) -> Arc<PtySession> {
     state.register_session(session)
 }
 
+/// Everything a receiver test needs: the catalog session `id` (live as a `cat` PTY), the listener's
+/// `addr`, the session's hook `token`, its `state` and the `cat` process to kill at the end. The
+/// directory guards keep the catalog's files for the test's lifetime.
+struct Receiver {
+    id: SessionId,
+    addr: String,
+    token: String,
+    state: Arc<DaemonState>,
+    cat: Arc<PtySession>,
+    _dirs: (tempfile::TempDir, tempfile::TempDir),
+}
+
+/// Bind a receiver for a fresh live session and serve it.
+async fn spawn_receiver() -> Receiver {
+    let id = SessionId::from_uuid(Uuid::from_u128(SESSION_U128));
+    let (state, project, store) = state_with_session(id);
+    let cat = register_cat(&state, id);
+    let (receiver, listener) = HookReceiver::bind(std::env::temp_dir().join("micold-hooks-test"))
+        .await
+        .expect("bind receiver");
+    let token = receiver.token_for(id);
+    let addr = listener.local_addr().unwrap().to_string();
+    tokio::spawn(micold_daemon::hooks::serve(
+        listener,
+        receiver.tokens(),
+        Arc::clone(&state),
+    ));
+    Receiver {
+        id,
+        addr,
+        token,
+        state,
+        cat,
+        _dirs: (project, store),
+    }
+}
+
 fn activity(state: &DaemonState, id: SessionId) -> ActivitySignal {
     state
         .catalog_snapshot()
@@ -128,21 +165,14 @@ async fn post_hook_declaring(
 
 #[tokio::test]
 async fn an_authenticated_hook_drives_activity() {
-    let id = SessionId::from_uuid(Uuid::from_u128(SESSION_U128));
-    let (state, _project, _store) = state_with_session(id);
-    let cat = register_cat(&state, id);
-
-    let (receiver, listener) = HookReceiver::bind(std::env::temp_dir().join("micold-hooks-test"))
-        .await
-        .expect("bind receiver");
-    let token = receiver.token_for(id);
-    let addr = listener.local_addr().unwrap().to_string();
-    let tokens = receiver.tokens();
-    tokio::spawn(micold_daemon::hooks::serve(
-        listener,
-        tokens,
-        Arc::clone(&state),
-    ));
+    let Receiver {
+        id,
+        addr,
+        token,
+        state,
+        cat,
+        _dirs,
+    } = spawn_receiver().await;
 
     // Before any hook: Unknown (H1).
     assert_eq!(activity(&state, id), ActivitySignal::Unknown);
@@ -168,21 +198,14 @@ async fn an_authenticated_hook_drives_activity() {
 
 #[tokio::test]
 async fn a_wrong_token_is_forbidden_and_changes_nothing() {
-    let id = SessionId::from_uuid(Uuid::from_u128(SESSION_U128));
-    let (state, _project, _store) = state_with_session(id);
-    let cat = register_cat(&state, id);
-
-    let (receiver, listener) = HookReceiver::bind(std::env::temp_dir().join("micold-hooks-test"))
-        .await
-        .expect("bind receiver");
-    let _real_token = receiver.token_for(id);
-    let addr = listener.local_addr().unwrap().to_string();
-    let tokens = receiver.tokens();
-    tokio::spawn(micold_daemon::hooks::serve(
-        listener,
-        tokens,
-        Arc::clone(&state),
-    ));
+    let Receiver {
+        id,
+        addr,
+        token: _token,
+        state,
+        cat,
+        _dirs,
+    } = spawn_receiver().await;
 
     // Wrong token → 403, no state change.
     let status = post_hook(
@@ -232,21 +255,14 @@ fn agent_sized_payload(event: &str, filler: usize) -> String {
 /// raising the bound out of reach would satisfy the first and quietly abandon the second.
 #[tokio::test]
 async fn an_agent_sized_payload_is_accepted_and_an_over_bound_one_is_refused() {
-    let id = SessionId::from_uuid(Uuid::from_u128(SESSION_U128));
-    let (state, _project, _store) = state_with_session(id);
-    let cat = register_cat(&state, id);
-
-    let (receiver, listener) = HookReceiver::bind(std::env::temp_dir().join("micold-hooks-test"))
-        .await
-        .expect("bind receiver");
-    let token = receiver.token_for(id);
-    let addr = listener.local_addr().unwrap().to_string();
-    let tokens = receiver.tokens();
-    tokio::spawn(micold_daemon::hooks::serve(
-        listener,
-        tokens,
-        Arc::clone(&state),
-    ));
+    let Receiver {
+        id,
+        addr,
+        token,
+        state,
+        cat,
+        _dirs,
+    } = spawn_receiver().await;
 
     // The reported symptom: `PostToolUse` after editing a large file. 40 KiB of file contents lands
     // ~120 KB on the wire, past the 64 KiB bound that shipped and past the measured 97,087 B maximum.
@@ -302,21 +318,14 @@ async fn an_agent_sized_payload_is_accepted_and_an_over_bound_one_is_refused() {
 /// other unauthenticated request.
 #[tokio::test]
 async fn an_over_bound_body_from_an_unauthenticated_caller_is_forbidden_not_too_large() {
-    let id = SessionId::from_uuid(Uuid::from_u128(SESSION_U128));
-    let (state, _project, _store) = state_with_session(id);
-    let cat = register_cat(&state, id);
-
-    let (receiver, listener) = HookReceiver::bind(std::env::temp_dir().join("micold-hooks-test"))
-        .await
-        .expect("bind receiver");
-    let _real_token = receiver.token_for(id);
-    let addr = listener.local_addr().unwrap().to_string();
-    let tokens = receiver.tokens();
-    tokio::spawn(micold_daemon::hooks::serve(
-        listener,
-        tokens,
-        Arc::clone(&state),
-    ));
+    let Receiver {
+        id,
+        addr,
+        token: _token,
+        state: _,
+        cat,
+        _dirs,
+    } = spawn_receiver().await;
 
     let status = post_hook_declaring(
         &addr,
@@ -336,21 +345,14 @@ async fn an_over_bound_body_from_an_unauthenticated_caller_is_forbidden_not_too_
 
 #[tokio::test]
 async fn session_start_is_accepted_without_a_transition() {
-    let id = SessionId::from_uuid(Uuid::from_u128(SESSION_U128));
-    let (state, _project, _store) = state_with_session(id);
-    let cat = register_cat(&state, id);
-
-    let (receiver, listener) = HookReceiver::bind(std::env::temp_dir().join("micold-hooks-test"))
-        .await
-        .expect("bind receiver");
-    let token = receiver.token_for(id);
-    let addr = listener.local_addr().unwrap().to_string();
-    let tokens = receiver.tokens();
-    tokio::spawn(micold_daemon::hooks::serve(
-        listener,
-        tokens,
-        Arc::clone(&state),
-    ));
+    let Receiver {
+        id,
+        addr,
+        token,
+        state,
+        cat,
+        _dirs,
+    } = spawn_receiver().await;
 
     let status = post_hook(
         &addr,
@@ -543,20 +545,14 @@ mod status_line_block {
 /// The activity state is not touched, and the body is not echoed.
 #[tokio::test]
 async fn sub_agent_reports_are_recorded_on_the_origin_session() {
-    let id = SessionId::from_uuid(Uuid::from_u128(SESSION_U128));
-    let (state, _project, _store) = state_with_session(id);
-    let cat = register_cat(&state, id);
-
-    let (receiver, listener) = HookReceiver::bind(std::env::temp_dir().join("micold-hooks-test"))
-        .await
-        .expect("bind receiver");
-    let token = receiver.token_for(id);
-    let addr = listener.local_addr().unwrap().to_string();
-    tokio::spawn(micold_daemon::hooks::serve(
-        listener,
-        receiver.tokens(),
-        Arc::clone(&state),
-    ));
+    let Receiver {
+        id,
+        addr,
+        token,
+        state,
+        cat,
+        _dirs,
+    } = spawn_receiver().await;
     let agents = || {
         state
             .catalog_snapshot()
