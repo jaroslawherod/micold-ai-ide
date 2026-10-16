@@ -75,7 +75,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M5 is implemented, reviewed (A, B), visual-passed and gated green at the pushed HEAD of
+`feat/533_create-worktrees-from-jira-issues` (rebased on origin/main d24fd322; gate run as
+`MISE_DISABLE_TOOLS=usage mise run gate` because mise could not install `usage` under a GitHub rate
+limit). Branch is pushed. `gh pr create` failed repeatedly (api.github.com GraphQL i/o timeout), so no
+PR exists yet. Next step: open the PR (`gh pr create --base main --title "feat(533): choose between
+GitHub and Jira issues per project (#533)"`, body: milestone M5, reviews A/B as in the Review rounds
+table, gate and visual-pass B4 pass, `Refs #533`), record its number in the PR table and the M5 row,
+then return DONE.
 
 ## Open escalation
 
