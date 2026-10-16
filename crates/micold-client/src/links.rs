@@ -28,6 +28,9 @@ use crate::daemon::Outbox;
 pub const NO_DAEMON_MESSAGE: &str = "no daemon";
 /// Shown when a container daemon cannot start because no container runtime is installed.
 pub const RUNTIME_NOT_FOUND: &str = "container runtime not found";
+/// What a session says while its daemon is being reconnected, or was unreachable after it had
+/// connected: it may return, so it is never shown as running or finished (FR-019).
+pub const DISCONNECTED: &str = "disconnected";
 /// Shown for a container daemon whose paths are mapped (a Windows host, R7).
 pub const PATHS_MAPPED: &str = "paths are mapped";
 
@@ -104,6 +107,11 @@ impl DaemonLinks {
     /// Whether `id` is connected.
     pub fn is_connected(&self, id: DaemonId) -> bool {
         self.state(id) == Some(&DaemonState::Connected)
+    }
+
+    /// Whether a connection to `id` succeeded since it was last started (FR-019).
+    pub fn established(&self, id: DaemonId) -> bool {
+        self.states.established(id)
     }
 
     /// Whether the client should be dialling `id` (tracked and not stopped).
@@ -283,6 +291,13 @@ pub fn unavailable_label(
         _ if facts.runtime_missing && matches!(entry.runtime, DaemonRuntime::Container(_)) => {
             Some(RUNTIME_NOT_FOUND.to_string())
         }
+        // Its sessions may return: they are disconnected, not gone (FR-019).
+        Some(DaemonState::Reconnecting { .. }) if facts.lost_sessions => {
+            Some(DISCONNECTED.to_string())
+        }
+        Some(DaemonState::Unreachable { .. }) if facts.lost_sessions && links.established(id) => {
+            Some(DISCONNECTED.to_string())
+        }
         Some(DaemonState::Unreachable { .. }) if facts.lost_sessions => {
             Some(format!("lost to daemon {name}"))
         }
@@ -290,13 +305,19 @@ pub fn unavailable_label(
     }
 }
 
-/// What a session row says when its daemon dropped: it is "lost to its daemon", and its lifecycle
-/// is left as the daemon last reported it, never `finished`.
+/// What a session row says when its daemon is not plainly there (FR-019).
+///
+/// While the daemon is reconnecting, or unreachable after it had connected, a live session is
+/// `disconnected`: it may return. Once the client has reconnected and the daemon is found restarted
+/// or without the session (`absent_from_catalog`), or the daemon was stopped or never connected, it
+/// is `lost to daemon <name>`. The lifecycle is left as the daemon last reported it, never
+/// `finished`.
 pub fn session_lost_label(
     registry: &DaemonRegistry,
     links: &DaemonLinks,
     daemon: DaemonId,
     lifecycle: &SessionLifecycle,
+    absent_from_catalog: bool,
 ) -> Option<String> {
     let live = matches!(
         lifecycle,
@@ -304,12 +325,20 @@ pub fn session_lost_label(
             | SessionLifecycle::Starting
             | SessionLifecycle::Restarting { .. }
     );
-    let dropped = matches!(
-        links.state(daemon),
-        Some(DaemonState::Unreachable { .. } | DaemonState::Stopped)
-    );
     let entry = registry.get(daemon)?;
-    (live && dropped).then(|| format!("lost to daemon {}", entry.name.as_str()))
+    if !live {
+        return None;
+    }
+    let lost = || Some(format!("lost to daemon {}", entry.name.as_str()));
+    match links.state(daemon) {
+        Some(DaemonState::Reconnecting { .. }) => Some(DISCONNECTED.to_string()),
+        Some(DaemonState::Unreachable { .. }) if links.established(daemon) => {
+            Some(DISCONNECTED.to_string())
+        }
+        Some(DaemonState::Unreachable { .. } | DaemonState::Stopped) => lost(),
+        Some(DaemonState::Connected) if absent_from_catalog => lost(),
+        _ => None,
+    }
 }
 
 /// What launch does with one daemon.

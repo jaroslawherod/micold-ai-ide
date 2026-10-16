@@ -279,7 +279,14 @@ pub enum DaemonState {
     Starting,
     /// Handshake done; sessions can run.
     Connected,
-    /// Not reachable now; the client keeps retrying.
+    /// A connection that was established was lost and automatic attempts to restore it are in
+    /// progress (feature 489, FR-008).
+    Reconnecting {
+        /// What the last attempt, or the loss, reported.
+        reason: String,
+    },
+    /// No connection. A local daemon keeps retrying after a failed start; a remote one makes one
+    /// try per start, and none after the user stopped the attempts ([`ATTEMPTS_STOPPED`]).
     Unreachable {
         /// What the last attempt reported.
         reason: String,
@@ -294,6 +301,9 @@ pub enum DaemonState {
     /// Neither spawned nor reconnected until started.
     Stopped,
 }
+
+/// The reason an [`DaemonState::Unreachable`] daemon shows after the user stopped the attempts.
+pub const ATTEMPTS_STOPPED: &str = "attempts stopped";
 
 /// Something that happened to one daemon's connection.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -318,6 +328,10 @@ pub enum DaemonEvent {
     /// A bring-up attempt that makes exactly one try (an SSH daemon) failed: unreachable at once,
     /// with no further dial until the user starts it again.
     StartFailed(String),
+    /// The user stopped the reconnect attempts of a [`DaemonState::Reconnecting`] daemon.
+    GiveUp,
+    /// The user asked to reconnect now: the attempts start again with the first delay.
+    Reconnect,
 }
 
 /// A state change of exactly one daemon: the only thing a transition reports (FR-007).
@@ -329,10 +343,104 @@ pub struct StateChange {
     pub to: DaemonState,
 }
 
+/// One daemon's state and the bookkeeping its transitions need.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Link {
+    state: DaemonState,
+    /// Consecutive failed dials since the last start or success.
+    failures: u32,
+    /// A connection succeeded since the last `Start` (FR-019: a drop is then `disconnected`).
+    established: bool,
+    /// The user stopped the attempts, so an unreachable daemon is not dialled.
+    attempts_stopped: bool,
+    /// Bumped when the user reconnects, so the daemon's actor restarts with the first delay.
+    epoch: u32,
+}
+
+impl Link {
+    fn new(state: DaemonState) -> Self {
+        Self {
+            state,
+            failures: 0,
+            established: false,
+            attempts_stopped: false,
+            epoch: 0,
+        }
+    }
+
+    /// The state this link moves to on `event`, with its bookkeeping updated.
+    fn next_state(&mut self, event: DaemonEvent) -> Option<DaemonState> {
+        match (&self.state, event) {
+            (DaemonState::Stopped, DaemonEvent::Start) => {
+                self.established = false;
+                self.attempts_stopped = false;
+                Some(DaemonState::Starting)
+            }
+            (DaemonState::Stopped, _) => None,
+            (_, DaemonEvent::Stop) => Some(DaemonState::Stopped),
+            (DaemonState::Connected, DaemonEvent::Start | DaemonEvent::Reconnect) => None,
+            (_, DaemonEvent::Start) => {
+                self.failures = 0;
+                self.established = false;
+                self.attempts_stopped = false;
+                Some(DaemonState::Starting)
+            }
+            // Attempts are in progress: restart them with the first delay, the state unchanged.
+            (DaemonState::Reconnecting { .. }, DaemonEvent::Reconnect) => {
+                self.epoch += 1;
+                None
+            }
+            (_, DaemonEvent::Reconnect) => {
+                self.failures = 0;
+                self.attempts_stopped = false;
+                self.epoch += 1;
+                Some(DaemonState::Starting)
+            }
+            (DaemonState::Reconnecting { .. }, DaemonEvent::GiveUp) => {
+                self.attempts_stopped = true;
+                Some(DaemonState::Unreachable {
+                    reason: ATTEMPTS_STOPPED.to_string(),
+                })
+            }
+            (_, DaemonEvent::GiveUp) => None,
+            (_, DaemonEvent::Connected) => {
+                self.failures = 0;
+                self.established = true;
+                self.attempts_stopped = false;
+                Some(DaemonState::Connected)
+            }
+            (_, DaemonEvent::Refused { client, daemon }) => {
+                Some(DaemonState::VersionMismatch { client, daemon })
+            }
+            // A mismatch is not cured by a dial that fails again.
+            (DaemonState::VersionMismatch { .. }, _) => None,
+            (_, DaemonEvent::StartFailed(reason)) => Some(DaemonState::Unreachable { reason }),
+            // The user stopped the attempts: a late report restarts nothing.
+            (DaemonState::Unreachable { .. }, _) if self.attempts_stopped => None,
+            (
+                DaemonState::Connected,
+                DaemonEvent::Lost(reason) | DaemonEvent::DialFailed(reason),
+            ) => Some(DaemonState::Reconnecting { reason }),
+            // The end of an attempt follows its failure; it must not erase the failure's reason.
+            (DaemonState::Reconnecting { .. }, DaemonEvent::Lost(_)) => None,
+            (DaemonState::Reconnecting { .. }, DaemonEvent::DialFailed(reason)) => {
+                Some(DaemonState::Reconnecting { reason })
+            }
+            (_, DaemonEvent::Lost(reason) | DaemonEvent::DialFailed(reason)) => {
+                self.failures += 1;
+                match self.state {
+                    DaemonState::Starting if self.failures < UNREACHABLE_AFTER_FAILURES => None,
+                    _ => Some(DaemonState::Unreachable { reason }),
+                }
+            }
+        }
+    }
+}
+
 /// The state of every daemon, each folded independently of the others.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct DaemonStates {
-    states: BTreeMap<DaemonId, (DaemonState, u32)>,
+    states: BTreeMap<DaemonId, Link>,
 }
 
 impl DaemonStates {
@@ -353,7 +461,7 @@ impl DaemonStates {
 
     /// Track `id` in `state`.
     pub fn insert(&mut self, id: DaemonId, state: DaemonState) {
-        self.states.insert(id, (state, 0));
+        self.states.insert(id, Link::new(state));
     }
 
     /// Forget `id`.
@@ -368,50 +476,33 @@ impl DaemonStates {
 
     /// The daemon's state, when tracked.
     pub fn state(&self, id: DaemonId) -> Option<&DaemonState> {
-        self.states.get(&id).map(|(state, _)| state)
+        self.states.get(&id).map(|link| &link.state)
     }
 
-    /// Whether the client should be dialling this daemon: tracked and not stopped.
+    /// Whether a connection to `id` succeeded since it was last started.
+    pub fn established(&self, id: DaemonId) -> bool {
+        self.states.get(&id).is_some_and(|link| link.established)
+    }
+
+    /// The restart counter of `id`'s actor: it changes when the user reconnects.
+    pub fn epoch(&self, id: DaemonId) -> u32 {
+        self.states.get(&id).map_or(0, |link| link.epoch)
+    }
+
+    /// Whether the client should be dialling this daemon: tracked, not stopped, and not left
+    /// unreachable by the user stopping the attempts.
     pub fn should_dial(&self, id: DaemonId) -> bool {
-        matches!(self.state(id), Some(s) if *s != DaemonState::Stopped)
+        self.states.get(&id).is_some_and(|link| {
+            link.state != DaemonState::Stopped
+                && !(link.attempts_stopped && matches!(link.state, DaemonState::Unreachable { .. }))
+        })
     }
 
     /// Fold `event` into `id`'s state, touching no other daemon. `None` when nothing changed.
     pub fn apply(&mut self, id: DaemonId, event: DaemonEvent) -> Option<StateChange> {
-        let (state, failures) = self.states.get_mut(&id)?;
-        let next = match (&*state, event) {
-            (DaemonState::Stopped, DaemonEvent::Start) => Some(DaemonState::Starting),
-            (DaemonState::Stopped, _) => None,
-            (_, DaemonEvent::Stop) => Some(DaemonState::Stopped),
-            (DaemonState::Connected, DaemonEvent::Start) => None,
-            (_, DaemonEvent::Start) => {
-                *failures = 0;
-                Some(DaemonState::Starting)
-            }
-            (_, DaemonEvent::Connected) => {
-                *failures = 0;
-                Some(DaemonState::Connected)
-            }
-            (_, DaemonEvent::Refused { client, daemon }) => {
-                Some(DaemonState::VersionMismatch { client, daemon })
-            }
-            // A mismatch is not cured by a dial that fails again.
-            (DaemonState::VersionMismatch { .. }, _) => None,
-            (_, DaemonEvent::StartFailed(reason)) => Some(DaemonState::Unreachable { reason }),
-            (
-                DaemonState::Connected,
-                DaemonEvent::Lost(reason) | DaemonEvent::DialFailed(reason),
-            ) => Some(DaemonState::Unreachable { reason }),
-            (_, DaemonEvent::Lost(reason) | DaemonEvent::DialFailed(reason)) => {
-                *failures += 1;
-                match state {
-                    DaemonState::Starting if *failures < UNREACHABLE_AFTER_FAILURES => None,
-                    _ => Some(DaemonState::Unreachable { reason }),
-                }
-            }
-        };
-        let next = next.filter(|n| n != state)?;
-        *state = next.clone();
+        let link = self.states.get_mut(&id)?;
+        let next = link.next_state(event).filter(|n| *n != link.state)?;
+        link.state = next.clone();
         Some(StateChange { id, to: next })
     }
 }

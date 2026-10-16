@@ -70,7 +70,7 @@ fn live_events_update_the_row_and_the_version_is_shown() {
     let row = vm.rows.iter().find(|r| r.id == boxed).unwrap();
     assert_eq!(
         row.state,
-        DaemonState::Unreachable {
+        DaemonState::Reconnecting {
             reason: "eof".into()
         }
     );
@@ -92,8 +92,16 @@ fn start_stop_and_reconnect_touch_one_daemon() {
         boxed,
         DaemonEvent::Lost("x".into()),
     );
+    assert!(matches!(
+        w.links.state(boxed),
+        Some(DaemonState::Reconnecting { .. })
+    ));
+    // Reconnect restarts the attempts of a reconnecting daemon; it does not start another.
     daemons::reconnect(&mut state, &mut w.model(), boxed);
-    assert_eq!(w.links.state(boxed), Some(&DaemonState::Starting));
+    assert!(matches!(
+        w.links.state(boxed),
+        Some(DaemonState::Reconnecting { .. })
+    ));
     assert_eq!(w.links.state(host), Some(&DaemonState::Stopped));
 
     daemons::stop(&mut state, &mut w.model(), boxed);

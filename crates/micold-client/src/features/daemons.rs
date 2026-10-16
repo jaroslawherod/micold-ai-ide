@@ -353,9 +353,19 @@ pub fn start(state: &mut State, model: &mut Model<'_>, id: DaemonId) -> Option<S
     daemon_event(state, model.links, id, DaemonEvent::Start)
 }
 
-/// Reconnect `id` now rather than at the next backoff.
+/// Reconnect `id` now rather than at the next backoff: the attempts start again with the first
+/// delay, and a daemon whose attempts were stopped is dialled again (feature 489, FR-007).
 pub fn reconnect(state: &mut State, model: &mut Model<'_>, id: DaemonId) -> Option<StateChange> {
-    start(state, model, id)
+    if !model.registry.get(id)?.runtime.is_startable() {
+        return None;
+    }
+    state.runtime_missing.remove(&id);
+    daemon_event(state, model.links, id, DaemonEvent::Reconnect)
+}
+
+/// Stop trying to reconnect `id`: it shows unreachable until the user reconnects it.
+pub fn give_up(state: &mut State, model: &mut Model<'_>, id: DaemonId) -> Option<StateChange> {
+    daemon_event(state, model.links, id, DaemonEvent::GiveUp)
 }
 
 /// Stop `id`, and only `id`: it is neither dialled nor respawned until started.
@@ -841,6 +851,8 @@ pub enum Msg {
     Stopped(DaemonId),
     /// Reconnect this daemon now.
     Reconnected(DaemonId),
+    /// The user stopped the reconnect attempts of a daemon.
+    GaveUp(DaemonId),
     /// Ask to remove this daemon: opens the counted confirmation.
     RemovalRequested(DaemonId),
     /// Confirm the removal (or the counted edit).
@@ -978,6 +990,9 @@ pub fn update(state: &mut State, model: &mut Model<'_>, msg: Msg) -> Vec<Outcome
         }
         Msg::Reconnected(id) => {
             reconnect(state, model, id);
+        }
+        Msg::GaveUp(id) => {
+            give_up(state, model, id);
         }
         Msg::RemovalRequested(id) => {
             request_removal(state, model, id);

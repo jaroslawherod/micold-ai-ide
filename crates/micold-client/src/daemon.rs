@@ -27,6 +27,7 @@ use micold_core::protocol::messages::{ClientMsg, DaemonMsg};
 use micold_core::sandbox::placement::PlacementKind;
 use micold_core::ssh::argv::{current_build_id, DEFAULT_CONNECT_TIMEOUT_SECS};
 use micold_core::ssh::provision::{connect as ssh_connect, ProvisionOptions};
+use micold_core::ssh::reconnect::Backoff;
 use micold_core::ssh::remote_path;
 use micold_core::ssh::{ClientPlatform, ProvisionProgress, ReasonContext, SshHost, SshTarget};
 
@@ -148,7 +149,9 @@ pub enum Dial {
         token_path: PathBuf,
     },
     /// Provision and bridge to a daemon on a remote host with the user's own `ssh` (feature 489).
-    /// One try per start: a failure is reported and not retried until the user starts it again.
+    /// One try per start while it has never connected: that failure is reported and not retried
+    /// until the user starts it again. Once connected, a lost link is retried with a growing delay
+    /// until it returns or the user stops the attempts.
     Ssh {
         /// The host and connection settings.
         target: SshTarget,
@@ -165,6 +168,9 @@ pub struct ActorSpec {
     pub dial: Dial,
     /// Whether a build-fingerprint mismatch refuses the connection (a locally built image, R8).
     pub strict_fingerprint: bool,
+    /// Bumped when the user reconnects, so the actor restarts with the first delay of its backoff
+    /// and a daemon is never dialled by two actors at once.
+    pub epoch: u32,
 }
 
 /// The key of every daemon this build can run, one per entry. An `Unsupported` runtime has none.
@@ -220,6 +226,7 @@ pub fn actor_specs(
                 key,
                 dial,
                 strict_fingerprint,
+                epoch: states.epoch(entry.id),
             })
         })
         .collect()
@@ -252,10 +259,11 @@ pub fn connections(
     )
 }
 
-/// How long to wait after a lost connection before trying to re-establish it. Short enough that a
-/// restarted (or freed) daemon is picked up promptly; long enough not to spin on a hard failure. The
-/// connection banner is what the user sees during the gap (FR-027); the reconnect itself is automatic
-/// (FR-028 — the fresh `Welcome` catalog is the resync).
+/// How long a local daemon's actor waits after a lost connection before trying again. Short enough
+/// that a restarted (or freed) daemon is picked up promptly; long enough not to spin on a hard
+/// failure. The connection banner is what the user sees during the gap (FR-027); the reconnect
+/// itself is automatic (FR-028 — the fresh `Welcome` catalog is the resync). A remote daemon's
+/// actor paces itself with [`Backoff`] instead (feature 489, FR-007).
 const RECONNECT_BACKOFF: std::time::Duration = std::time::Duration::from_secs(1);
 
 /// Consecutive failed connects, so a single transient one never reaches the user (feature 028,
@@ -277,6 +285,19 @@ const RECONNECT_BACKOFF: std::time::Duration = std::time::Duration::from_secs(1)
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 struct ConnectFailures {
     consecutive: u32,
+}
+
+/// What the attempts of one actor so far have shown. Owned by the reconnect loop rather than by
+/// one attempt: the whole point is what the *previous* attempt did.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+struct LinkLife {
+    /// The streak of failed connects (feature 028).
+    failures: ConnectFailures,
+    /// A handshake has succeeded since this actor started: a failed attempt now is a lost link
+    /// being retried, not a start that failed (feature 489, FR-008).
+    established: bool,
+    /// The latest attempt reached `Connected`: the next delay starts again from the first.
+    connected: bool,
 }
 
 impl ConnectFailures {
@@ -346,28 +367,73 @@ fn actor(spec: ActorSpec) -> impl Stream<Item = Message> {
             // Reconnect loop: connect, pump until the link drops, surface it, back off, repeat. A
             // half-open connection is caught by the keepalive inside `pump`, so the client never sits
             // forever presenting stale content as live (FR-026/027).
-            // Owned by the reconnect loop rather than by one attempt: the whole point is what the
-            // *previous* attempt did.
-            let mut failures = ConnectFailures::default();
-            loop {
-                match connect_and_pump(id, &spec, endpoint.as_ref(), &mut output, &mut failures)
-                    .await
-                {
-                    PumpEnd::AppGone | PumpEnd::Ended => return,
-                    PumpEnd::Disconnected => {
-                        if output
-                            .send(Message::daemon(id, ConnectionMsg::Disconnected))
-                            .await
-                            .is_err()
-                        {
-                            return;
-                        }
-                        tokio::time::sleep(RECONNECT_BACKOFF).await;
+            let remote = matches!(spec.dial, Dial::Ssh { .. });
+            let (spec_ref, endpoint_ref) = (&spec, endpoint.as_ref());
+            let mut loop_output = output.clone();
+            reconnect_loop(
+                id,
+                &mut loop_output,
+                remote,
+                |mut life| {
+                    let mut output = output.clone();
+                    async move {
+                        let end =
+                            connect_and_pump(id, spec_ref, endpoint_ref, &mut output, &mut life)
+                                .await;
+                        (end, life)
                     }
-                }
-            }
+                },
+                tokio::time::sleep,
+            )
+            .await;
         },
     )
+}
+
+/// Run `attempt` until the app is gone or a one-try bring-up has failed: after each lost link or
+/// failed attempt, tell the app and wait before the next. A remote daemon waits 1, 2, 4, 8, then 15
+/// seconds, starting over after a connection that held (feature 489, FR-007); a local daemon waits
+/// [`RECONNECT_BACKOFF`] every time. `sleep` is the clock, so a test needs no real delay.
+async fn reconnect_loop<A, Fut, S, Wait>(
+    id: DaemonId,
+    output: &mut mpsc::Sender<Message>,
+    remote: bool,
+    mut attempt: A,
+    sleep: S,
+) where
+    A: FnMut(LinkLife) -> Fut,
+    Fut: std::future::Future<Output = (PumpEnd, LinkLife)>,
+    S: Fn(std::time::Duration) -> Wait,
+    Wait: std::future::Future<Output = ()>,
+{
+    let mut life = LinkLife::default();
+    let mut backoff = Backoff::new();
+    loop {
+        life.connected = false;
+        let (end, after) = attempt(life).await;
+        life = after;
+        match end {
+            PumpEnd::AppGone | PumpEnd::Ended => return,
+            PumpEnd::Disconnected => {
+                if life.connected {
+                    backoff.reset();
+                }
+                if output
+                    .send(Message::daemon(id, ConnectionMsg::Disconnected))
+                    .await
+                    .is_err()
+                {
+                    return;
+                }
+                let delay = if remote {
+                    backoff.next_delay()
+                } else {
+                    RECONNECT_BACKOFF
+                };
+                sleep(delay).await;
+            }
+        }
+    }
 }
 
 /// Connect (spawning the daemon on a cold start), announce `DaemonConnected`, then pump both
@@ -378,7 +444,7 @@ async fn connect_and_pump(
     spec: &ActorSpec,
     endpoint: Option<&endpoint::Endpoint>,
     output: &mut mpsc::Sender<Message>,
-    failures: &mut ConnectFailures,
+    life: &mut LinkLife,
 ) -> PumpEnd {
     let attempt = match (&spec.dial, endpoint) {
         // Unchanged: auto-spawn a detached host process and poll until it accepts. Only the host
@@ -394,6 +460,11 @@ async fn connect_and_pump(
             let progress = copy_progress(id, output);
             match ssh_attempt(SSH_HOST.get().map(|h| &**h), target, Some(progress)).await {
                 Ok(c) => Ok(c),
+                // A link that was up and is down is retried; a start that never connected is
+                // reported once and ends the actor.
+                Err(reason) if life.established => {
+                    return report(id, output, ConnectionMsg::ConnectFailed(reason)).await;
+                }
                 Err(reason) => {
                     return report(id, output, ConnectionMsg::StartFailed(reason))
                         .await
@@ -422,12 +493,13 @@ async fn connect_and_pump(
     let connected = match attempt {
         Ok(c) => c,
         Err(err) => {
-            return report_transient_connect_failure(id, output, err.to_string(), failures).await;
+            return report_transient_connect_failure(id, output, err.to_string(), &mut life.failures)
+                .await;
         }
     };
     // We reached *a* daemon. A refusal below is still a connection, and a connection is what the
     // streak counts — the mismatch banners are its own state and say something specific.
-    failures.record_success();
+    life.failures.record_success();
     let (conn, welcome) = match connected {
         Connected::Ready(conn, welcome) => (conn, welcome),
         // A contract mismatch is its own recoverable state (US6, FR-021/022): surface both versions
@@ -532,6 +604,8 @@ async fn connect_and_pump(
     {
         return PumpEnd::AppGone;
     }
+    life.established = true;
+    life.connected = true;
 
     // Keepalive: poll on a fixed cadence; any inbound frame proves life, and the deadline turns a
     // silent half-open link into an explicit disconnect within the SC-011 budget (FR-026).
@@ -723,9 +797,15 @@ async fn report(id: DaemonId, output: &mut mpsc::Sender<Message>, msg: Connectio
 #[cfg(test)]
 mod tests {
     use super::{
-        actor_specs, ssh_attempt, stale_dev_image_advice, ConnectFailures, Dial, RECONNECT_BACKOFF,
+        actor_specs, reconnect_loop, ssh_attempt, stale_dev_image_advice, ConnectFailures, Dial,
+        LinkLife, PumpEnd, RECONNECT_BACKOFF,
     };
-    use micold_core::daemons::{DaemonRegistry, DaemonRuntime, DaemonState, DaemonStates};
+    use iced::futures::channel::mpsc;
+    use micold_core::daemons::{
+        DaemonEvent, DaemonId, DaemonRegistry, DaemonRuntime, DaemonState, DaemonStates,
+    };
+    use std::sync::{Arc, Mutex};
+    use std::time::Duration;
     use micold_core::ssh::{
         Artefacts, SshCommand, SshOutput, SshRunner, SshSettings, SshStdio, SshTarget,
     };
@@ -893,5 +973,117 @@ mod tests {
             advice.contains("aaaa1111") && advice.contains("bbbb2222"),
             "{advice}"
         );
+    }
+
+    /// One scripted attempt of the stand-in transport.
+    #[derive(Clone, Copy)]
+    enum Step {
+        /// Connects, then the link drops.
+        Held,
+        /// Fails to connect.
+        Failed,
+        /// A one-try bring-up that failed and ended the actor.
+        Ended,
+    }
+
+    /// Run the reconnect loop over `steps` (then the app goes away) with a clock that does not
+    /// wait. Returns the delays it asked for, the attempts made and the disconnects it reported.
+    async fn run_script(remote: bool, steps: &[Step]) -> (Vec<u64>, usize, usize) {
+        let script = Arc::new(Mutex::new(
+            steps.iter().copied().collect::<std::collections::VecDeque<_>>(),
+        ));
+        let delays = Arc::new(Mutex::new(Vec::new()));
+        let attempts = Arc::new(Mutex::new(0usize));
+        let (mut tx, mut rx) = mpsc::channel(64);
+        reconnect_loop(
+            DaemonId(1),
+            &mut tx,
+            remote,
+            |mut life: LinkLife| {
+                let (script, attempts) = (script.clone(), attempts.clone());
+                async move {
+                    *attempts.lock().unwrap() += 1;
+                    let step = script.lock().unwrap().pop_front();
+                    match step {
+                        Some(Step::Held) => {
+                            life.established = true;
+                            life.connected = true;
+                            (PumpEnd::Disconnected, life)
+                        }
+                        Some(Step::Failed) => (PumpEnd::Disconnected, life),
+                        Some(Step::Ended) => (PumpEnd::Ended, life),
+                        None => (PumpEnd::AppGone, life),
+                    }
+                }
+            },
+            |delay: Duration| {
+                delays.lock().unwrap().push(delay.as_secs());
+                async {}
+            },
+        )
+        .await;
+        drop(tx);
+        let mut reported = 0;
+        while let Ok(Some(_)) = rx.try_next() {
+            reported += 1;
+        }
+        let delays = delays.lock().unwrap().clone();
+        let attempts = *attempts.lock().unwrap();
+        (delays, attempts, reported)
+    }
+
+    /// T041: a remote daemon is retried after 1, 2, 4, 8, then 15 s; a connection that held starts
+    /// the sequence over; every lost attempt is reported.
+    #[tokio::test]
+    async fn a_remote_actor_backs_off_and_starts_over_after_a_connection() {
+        use Step::{Failed, Held};
+        let steps = [
+            Held, Failed, Failed, Failed, Failed, Failed, Failed, Held, Failed,
+        ];
+        let (delays, attempts, reported) = run_script(true, &steps).await;
+        assert_eq!(delays, [1, 2, 4, 8, 15, 15, 15, 1, 2]);
+        assert_eq!(attempts, steps.len() + 1, "the last attempt ends the loop");
+        assert_eq!(reported, delays.len(), "each lost attempt reaches the app");
+    }
+
+    /// T041: a local daemon keeps its fixed pause.
+    #[tokio::test]
+    async fn a_local_actor_keeps_the_fixed_pause() {
+        use Step::{Failed, Held};
+        let (delays, ..) = run_script(false, &[Held, Failed, Failed, Failed]).await;
+        assert_eq!(delays, [1, 1, 1, 1]);
+    }
+
+    /// T041: a start that never connected is reported once and the actor ends: no second connect.
+    #[tokio::test]
+    async fn a_failed_start_ends_the_actor_without_another_attempt() {
+        let (delays, attempts, reported) =
+            run_script(true, &[Step::Ended, Step::Held, Step::Held]).await;
+        assert_eq!((delays.len(), attempts, reported), (0, 1, 0));
+    }
+
+    /// T041: the user's Reconnect gives the actor a new identity (one restart, one actor), stopping
+    /// the attempts removes it, and neither leaves two actors for one daemon.
+    #[test]
+    fn a_reconnect_replaces_the_actor_and_giving_up_removes_it() {
+        let (registry, id) = ssh_registry();
+        let dir = std::path::Path::new("/nonexistent");
+        let mut states = DaemonStates::default();
+        states.insert(id, DaemonState::Starting);
+        states.apply(id, DaemonEvent::Connected);
+        states.apply(id, DaemonEvent::Lost("eof".into()));
+        let before = actor_specs(&registry, &states, dir, None, false);
+        assert_eq!(before.len(), 1, "the attempts run in one actor");
+
+        states.apply(id, DaemonEvent::Reconnect);
+        let after = actor_specs(&registry, &states, dir, None, false);
+        assert_eq!(after.len(), 1);
+        assert_ne!(after[0], before[0], "a new epoch restarts the one actor");
+        assert_eq!(after[0].key, before[0].key);
+
+        states.apply(id, DaemonEvent::GiveUp);
+        assert!(actor_specs(&registry, &states, dir, None, false).is_empty());
+        states.apply(id, DaemonEvent::Reconnect);
+        assert_eq!(actor_specs(&registry, &states, dir, None, false).len(), 1);
     }
 }
