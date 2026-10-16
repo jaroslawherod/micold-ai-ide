@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #805
 - **Worktree branch**: feat/805_container-daemon-without-a-port-should-pick-a
 - **Started**: 2026-10-16
-- **Phase**: plan
-- **Next step**: tasks unit
+- **Phase**: tasks
+- **Next step**: milestone M1
 
 ## Pull requests
 
@@ -21,8 +21,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
+| M1 | T001–T012 | full | Empty container port picks, saves and keeps a free port; taken port reported at start | | pending |
 
 ## Decisions
+
+One milestone: US1 and US2 share `runtime_of`; US3 is test-only. No split.
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
@@ -34,6 +37,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Spec 805 | 1 | a3fef32e0108516be5d206a1e2d19e01ff36177d:8a04f4206330fa7552531e4694e2244b186d345f | CHANGES: 3 MAJOR (fixed) |
 | Plan 805 | 1 | f793ec5df3477aa9d581720b42f47ba474e6a2b9:ee944ffa41778bb9cfadeee6c8ea9bc95db4677e | CHANGES: 1 MAJOR (fixed) |
 | Plan 805 | 2 | 4c72070b7194209d3ea7d8d4a9652178aa4dddd5:ee944ffa41778bb9cfadeee6c8ea9bc95db4677e | CHANGES: 1 MAJOR (fixed: taken_elsewhere moved to shell/daemons.rs caller; verified by grep, not re-reviewed, design detail only) |
+| Tasks 805 | 1 | 30b4c926f36e42cdd89f210bbe75f293f55897bc:99178fc09a5891d2d4a728d47c88ee68d53085ab | CLEAN (2 MINOR fixed prose only: test file daemons_feature.rs, compile-step note). speckit-analyze: I1 declined (spec says earlier saved saves; plan accepts only same-instant), others fixed |
 | Spec 805 | 2 | 0ff26f022abefc0f43afb7749457cd129609b76f:8a04f4206330fa7552531e4694e2244b186d345f | CLEAN (3 MINOR, 2 fixed prose only) |
 
 ## Declined review findings

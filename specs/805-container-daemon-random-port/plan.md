@@ -16,7 +16,7 @@ I/O is one tiny function that asks the OS for a free loopback port.
 **Language/Version**: Rust (workspace edition), iced 0.14 (untouched).
 **Primary Dependencies**: none new (std `TcpListener` only; no `rand`).
 **Storage**: `settings.json` via the existing registry. No schema change, no `settings_version` bump.
-**Testing**: core unit tests (`mise run test-core`); client tests in `crates/micold-client/tests/features_daemons.rs`.
+**Testing**: core unit tests (`mise run test-core`); client tests in `crates/micold-client/tests/daemons_feature.rs`.
 **Target Platform**: Linux, macOS, Windows: `bind(127.0.0.1:0)` behaves the same on all three.
 **Project Type**: desktop app, two crates.
 **Constraints**: a refused save leaves the registry unchanged (existing probe-copy in `save`).
@@ -104,7 +104,7 @@ is reported at start.
 | Requirement | Layer | Test |
 |---|---|---|
 | FR-001, FR-009 | core unit | `crates/micold-core/tests/daemons_registry.rs`: `pick_free_port` skips taken and zero, fails after 16 misses and on `Err`; `os_free_loopback_port` returns a non-zero port that binds |
-| FR-001, FR-002, FR-004, FR-007, FR-010 | client | `crates/micold-client/tests/features_daemons.rs`: add empty -> stored port in 1..=65535, not another daemon's; reopen edit shows it; explicit stored as given; `0` rejected; explicit duplicate rejected |
+| FR-001, FR-002, FR-004, FR-007, FR-010 | client | `crates/micold-client/tests/daemons_feature.rs`: add empty -> stored port in 1..=65535, not another daemon's; reopen edit shows it; explicit stored as given; `0` rejected; explicit duplicate rejected |
 | edge: Host/SSH edit switched to Container, empty port | client | a port is picked, as on add |
 | edge: other window | client | reducer with injected `taken_elsewhere`: that port is never picked |
 | FR-006, story 2 | client | edit with cleared port and edit without touching it keep the stored port |
