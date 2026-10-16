@@ -21,6 +21,18 @@ derived type, ticket, branch and directory. So a user or an agent can start work
 on an issue that is blocked by another open issue, that is one sub-issue of a larger parent, or that
 already has a pull request open against it, and find out only later.
 
+## Clarifications
+
+### Session 2026-10-16
+
+- Q: Does a `create_worktree` call with `github_issue` wait for the details before it returns, or
+  may it return without them? → A: It waits, within the 10-second bound, so its result carries
+  the details or the reason they could not be read. _(agent-resolved:
+  specs/837-issue-relationship-metadata/spec.md#user-story-1, FR-004, FR-007)_
+- Q: When does the form read the details: when the user picks the issue, or when Create is pressed?
+  → A: When the issue is picked, so they show before Create; pressing Create never waits for them.
+  _(agent-resolved: specs/837-issue-relationship-metadata/spec.md#user-story-2, scenarios 1 and 4)_
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - An agent learns an issue is blocked when it creates the worktree (Priority: P1)
@@ -151,8 +163,9 @@ that the whole details read times out; create a worktree both ways each time.
 
 ### Functional Requirements
 
-- **FR-001**: When a worktree is created for a GitHub issue, through the agent tool's `github_issue`
-  or the form's GitHub issue source, the issue's details MUST be read: the issues blocking it, the
+- **FR-001**: When a worktree is created for a GitHub issue, the issue's details MUST be read: by
+  the agent tool during a `github_issue` call, and by the form when the user picks the issue in its
+  GitHub issue source, before **Create**. The details are: the issues blocking it, the
   issues it blocks, its parent issue, its sub-issues, its labels, assignees and milestone, the
   projects it belongs to with its field values in each, and the pull requests linked to it,
   separated into those that will close it and others.
@@ -181,7 +194,8 @@ that the whole details read times out; create a worktree both ways each time.
   and make no request to GitHub.
 - **FR-011**: The read MUST finish or be abandoned within 10 seconds, the bound feature 550 sets for
   the issue lookup; an abandoned read is a failure under FR-007. The worktree created does not
-  depend on the read; a tool call MAY wait for it within that bound before returning.
+  depend on the read; a `github_issue` tool call MUST wait for it within that bound before
+  returning, so its result carries the details or the FR-007 failure.
 - **FR-012**: Details shown for an issue MUST be those of the issue currently picked; an answer for an
   earlier pick or a closed form MUST be dropped.
 - **FR-013**: Text taken from GitHub (titles, labels, milestone, field values, logins) MUST be shown
