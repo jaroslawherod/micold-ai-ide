@@ -10,18 +10,50 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use futures_util::{SinkExt, StreamExt};
-use micold_core::protocol::codec::{ClientCodec, Frame};
+use micold_core::protocol::codec::Frame;
 use micold_core::protocol::grid::GridFrame;
 use micold_core::protocol::messages::{ClientMsg, DaemonMsg};
-use micold_core::protocol::version::{
-    BUILD_FINGERPRINT, PACKAGE_VERSION, PROTOCOL_VERSION, SCHEMA_HASH,
-};
 use micold_core::session::SessionId;
 use micold_daemon::catalog::Catalog;
 use micold_daemon::state::DaemonState;
 use micold_daemon::supervisor::PtySession;
 use portable_pty::CommandBuilder;
 use tokio_util::codec::Framed;
+
+#[path = "support/conn.rs"]
+mod conn;
+use conn::{connect, Client};
+
+/// Register a live session of `cmd` with `scrollback` lines of history, 80x24, under a new id.
+fn spawn_session(state: &DaemonState, mut cmd: CommandBuilder, scrollback: usize) -> SessionId {
+    let sid = SessionId::new();
+    cmd.cwd(std::env::temp_dir());
+    let session = PtySession::spawn(sid, cmd, scrollback, Some((80, 24))).expect("spawn session");
+    state.register_session(session);
+    sid
+}
+
+/// Ask the daemon to stream `sid` (under `project`) to `client`.
+async fn view_session(client: &mut Client, project: PathBuf, sid: SessionId) {
+    client
+        .send(Frame::Control(ClientMsg::SetViewedSession {
+            project,
+            session: Some(sid),
+        }))
+        .await
+        .unwrap();
+}
+
+/// Say goodbye, then stop the test-owned process so nothing leaks.
+async fn finish(mut client: Client, state: &DaemonState, sid: SessionId) {
+    client
+        .send(Frame::Control(ClientMsg::Goodbye))
+        .await
+        .unwrap();
+    if let Some(pty) = state.live_session(sid) {
+        let _ = pty.kill();
+    }
+}
 
 fn frame_has_text(frame: &GridFrame, needle: &str) -> bool {
     frame.lines.iter().any(|l| l.text.contains(needle))
@@ -87,53 +119,15 @@ where
 
 #[tokio::test]
 async fn a_viewing_client_receives_frames_and_can_drive_the_session() {
-    let (server_io, client_io) = tokio::io::duplex(256 * 1024);
     let state = std::sync::Arc::new(DaemonState::new(Catalog::ephemeral()));
 
     // A live echoing session: whatever input is written to its PTY comes back as output.
-    let sid = SessionId::new();
-    let mut cmd = echo_sink();
-    cmd.cwd(std::env::temp_dir());
-    let session = PtySession::spawn(sid, cmd, 1_000, Some((80, 24))).expect("spawn cat session");
-    state.register_session(session);
+    let sid = spawn_session(&state, echo_sink(), 1_000);
 
-    let server = tokio::spawn(micold_daemon::server::serve_connection(
-        std::sync::Arc::clone(&state),
-        server_io,
-    ));
-    let mut client = Framed::new(client_io, ClientCodec::new());
-
-    // Handshake.
-    client
-        .send(Frame::Control(ClientMsg::Hello {
-            protocol_version: PROTOCOL_VERSION,
-            schema_hash: SCHEMA_HASH,
-            client_build: "test-client".into(),
-            client_instance: micold_core::protocol::messages::ClientInstance::current(),
-            client_package_version: PACKAGE_VERSION.into(),
-            // Feature 027: the host-process placement presents no token, and a fingerprint
-            // mismatch is not a refusal there. `BUILD_FINGERPRINT` because these tests compile
-            // against the same core as the daemon they drive.
-            auth_token: None,
-            client_fingerprint: BUILD_FINGERPRINT.into(),
-            require_fingerprint_match: false,
-        }))
-        .await
-        .unwrap();
-    match client.next().await.unwrap().unwrap() {
-        Frame::Control(DaemonMsg::Welcome { .. }) => {}
-        other => panic!("expected Welcome, got {other:?}"),
-    }
+    let mut client = connect(&state).await;
 
     // View the session: the daemon streams a full snapshot first (the current — here blank — screen).
-    let project = PathBuf::from("/repo/demo");
-    client
-        .send(Frame::Control(ClientMsg::SetViewedSession {
-            project,
-            session: Some(sid),
-        }))
-        .await
-        .unwrap();
+    view_session(&mut client, PathBuf::from("/repo/demo"), sid).await;
     assert!(
         wait_for_grid(&mut client, |f| f.full).await,
         "viewing a session must yield a full snapshot frame first"
@@ -156,62 +150,18 @@ async fn a_viewing_client_receives_frames_and_can_drive_the_session() {
         "typed input must drive the session and stream back the echoed output"
     );
 
-    client
-        .send(Frame::Control(ClientMsg::Goodbye))
-        .await
-        .unwrap();
-    let _ = server.await;
-
-    // Test-owned process: stop it so nothing leaks.
-    if let Some(pty) = state.live_session(sid) {
-        let _ = pty.kill();
-    }
+    finish(client, &state, sid).await;
 }
 
 #[tokio::test]
 async fn session_resize_reframes_at_the_new_size() {
     // Regression (code review): the daemon must honour ClientMsg::SessionResize; before the fix it
     // fell into `_ => {}` and every session stayed at the 100×30 spawn seed.
-    let (server_io, client_io) = tokio::io::duplex(256 * 1024);
     let state = std::sync::Arc::new(DaemonState::new(Catalog::ephemeral()));
-    let sid = SessionId::new();
-    let mut cmd = echo_sink();
-    cmd.cwd(std::env::temp_dir());
-    let session = PtySession::spawn(sid, cmd, 1_000, Some((80, 24))).expect("spawn");
-    state.register_session(session);
+    let sid = spawn_session(&state, echo_sink(), 1_000);
 
-    let server = tokio::spawn(micold_daemon::server::serve_connection(
-        std::sync::Arc::clone(&state),
-        server_io,
-    ));
-    let mut client = Framed::new(client_io, ClientCodec::new());
-    client
-        .send(Frame::Control(ClientMsg::Hello {
-            protocol_version: PROTOCOL_VERSION,
-            schema_hash: SCHEMA_HASH,
-            client_build: "test-client".into(),
-            client_instance: micold_core::protocol::messages::ClientInstance::current(),
-            client_package_version: PACKAGE_VERSION.into(),
-            // Feature 027: the host-process placement presents no token, and a fingerprint
-            // mismatch is not a refusal there. `BUILD_FINGERPRINT` because these tests compile
-            // against the same core as the daemon they drive.
-            auth_token: None,
-            client_fingerprint: BUILD_FINGERPRINT.into(),
-            require_fingerprint_match: false,
-        }))
-        .await
-        .unwrap();
-    match client.next().await.unwrap().unwrap() {
-        Frame::Control(DaemonMsg::Welcome { .. }) => {}
-        other => panic!("expected Welcome, got {other:?}"),
-    }
-    client
-        .send(Frame::Control(ClientMsg::SetViewedSession {
-            project: PathBuf::from("/repo/demo"),
-            session: Some(sid),
-        }))
-        .await
-        .unwrap();
+    let mut client = connect(&state).await;
+    view_session(&mut client, PathBuf::from("/repo/demo"), sid).await;
     assert!(
         wait_for_grid(&mut client, |f| f.cols == 80).await,
         "first snapshot is at the 80-col spawn size"
@@ -231,14 +181,7 @@ async fn session_resize_reframes_at_the_new_size() {
         "after SessionResize the stream must re-frame at the new size"
     );
 
-    client
-        .send(Frame::Control(ClientMsg::Goodbye))
-        .await
-        .unwrap();
-    let _ = server.await;
-    if let Some(pty) = state.live_session(sid) {
-        let _ = pty.kill();
-    }
+    finish(client, &state, sid).await;
 }
 
 /// Read frames until a full-snapshot `Grid` frame arrives, returning it (or `None` on timeout).
@@ -264,46 +207,11 @@ where
 async fn a_client_can_fetch_scrollback_history_over_the_wire() {
     // A session that emits ~100 lines then idles — far more than the 24-row screen, so most of it
     // is scrollback the daemon retains but does not stream.
-    let (server_io, client_io) = tokio::io::duplex(256 * 1024);
     let state = std::sync::Arc::new(DaemonState::new(Catalog::ephemeral()));
-    let sid = SessionId::new();
-    let mut cmd = hundred_lines_then_idle();
-    cmd.cwd(std::env::temp_dir());
-    let session = PtySession::spawn(sid, cmd, 10_000, Some((80, 24))).expect("spawn");
-    state.register_session(session);
+    let sid = spawn_session(&state, hundred_lines_then_idle(), 10_000);
 
-    let server = tokio::spawn(micold_daemon::server::serve_connection(
-        std::sync::Arc::clone(&state),
-        server_io,
-    ));
-    let mut client = Framed::new(client_io, ClientCodec::new());
-    client
-        .send(Frame::Control(ClientMsg::Hello {
-            protocol_version: PROTOCOL_VERSION,
-            schema_hash: SCHEMA_HASH,
-            client_build: "test-client".into(),
-            client_instance: micold_core::protocol::messages::ClientInstance::current(),
-            client_package_version: PACKAGE_VERSION.into(),
-            // Feature 027: the host-process placement presents no token, and a fingerprint
-            // mismatch is not a refusal there. `BUILD_FINGERPRINT` because these tests compile
-            // against the same core as the daemon they drive.
-            auth_token: None,
-            client_fingerprint: BUILD_FINGERPRINT.into(),
-            require_fingerprint_match: false,
-        }))
-        .await
-        .unwrap();
-    match client.next().await.unwrap().unwrap() {
-        Frame::Control(DaemonMsg::Welcome { .. }) => {}
-        other => panic!("expected Welcome, got {other:?}"),
-    }
-    client
-        .send(Frame::Control(ClientMsg::SetViewedSession {
-            project: std::path::PathBuf::from("/repo/demo"),
-            session: Some(sid),
-        }))
-        .await
-        .unwrap();
+    let mut client = connect(&state).await;
+    view_session(&mut client, PathBuf::from("/repo/demo"), sid).await;
 
     // Wait until the last emitted line reaches the screen — that proves all 100 lines have been
     // processed into the Term (and thus into history), robust to load-dependent timing.
@@ -312,13 +220,7 @@ async fn a_client_can_fetch_scrollback_history_over_the_wire() {
         "the session's output must be fully processed"
     );
     // Re-view for a fresh full snapshot to learn the watermark.
-    client
-        .send(Frame::Control(ClientMsg::SetViewedSession {
-            project: std::path::PathBuf::from("/repo/demo"),
-            session: Some(sid),
-        }))
-        .await
-        .unwrap();
+    view_session(&mut client, PathBuf::from("/repo/demo"), sid).await;
     let snap = read_full_snapshot(&mut client)
         .await
         .expect("full snapshot");
@@ -364,14 +266,7 @@ async fn a_client_can_fetch_scrollback_history_over_the_wire() {
         "the served lines are the scrolled-off content"
     );
 
-    client
-        .send(Frame::Control(ClientMsg::Goodbye))
-        .await
-        .unwrap();
-    let _ = server.await;
-    if let Some(pty) = state.live_session(sid) {
-        let _ = pty.kill();
-    }
+    finish(client, &state, sid).await;
 }
 
 /// A catalog holding one Regular (shell) session at `project`, so `SessionStart` can spawn it.
@@ -425,38 +320,12 @@ async fn a_client_can_start_view_and_drive_a_session_from_cold_over_the_wire() {
     let project = tempfile::tempdir().unwrap();
     let store = tempfile::tempdir().unwrap();
     let sid = SessionId::new();
-    let (server_io, client_io) = tokio::io::duplex(256 * 1024);
     let state = std::sync::Arc::new(DaemonState::new(catalog_with_shell(
         project.path(),
         store.path(),
         sid,
     )));
-    let server = tokio::spawn(micold_daemon::server::serve_connection(
-        std::sync::Arc::clone(&state),
-        server_io,
-    ));
-    let mut client = Framed::new(client_io, ClientCodec::new());
-
-    client
-        .send(Frame::Control(ClientMsg::Hello {
-            protocol_version: PROTOCOL_VERSION,
-            schema_hash: SCHEMA_HASH,
-            client_build: "test-client".into(),
-            client_instance: micold_core::protocol::messages::ClientInstance::current(),
-            client_package_version: PACKAGE_VERSION.into(),
-            // Feature 027: the host-process placement presents no token, and a fingerprint
-            // mismatch is not a refusal there. `BUILD_FINGERPRINT` because these tests compile
-            // against the same core as the daemon they drive.
-            auth_token: None,
-            client_fingerprint: BUILD_FINGERPRINT.into(),
-            require_fingerprint_match: false,
-        }))
-        .await
-        .unwrap();
-    match client.next().await.unwrap().unwrap() {
-        Frame::Control(DaemonMsg::Welcome { .. }) => {}
-        other => panic!("expected Welcome, got {other:?}"),
-    }
+    let mut client = connect(&state).await;
 
     // Bring the session to life, then view it — the daemon spawns the shell and streams a snapshot.
     client
@@ -466,13 +335,7 @@ async fn a_client_can_start_view_and_drive_a_session_from_cold_over_the_wire() {
         }))
         .await
         .unwrap();
-    client
-        .send(Frame::Control(ClientMsg::SetViewedSession {
-            project: project.path().to_path_buf(),
-            session: Some(sid),
-        }))
-        .await
-        .unwrap();
+    view_session(&mut client, project.path().to_path_buf(), sid).await;
     assert!(
         wait_for_grid(&mut client, |f| f.full).await,
         "starting + viewing a session must yield a full snapshot"
@@ -493,12 +356,5 @@ async fn a_client_can_start_view_and_drive_a_session_from_cold_over_the_wire() {
         "a cold-started session must be drivable end to end"
     );
 
-    client
-        .send(Frame::Control(ClientMsg::Goodbye))
-        .await
-        .unwrap();
-    let _ = server.await;
-    if let Some(pty) = state.live_session(sid) {
-        let _ = pty.kill();
-    }
+    finish(client, &state, sid).await;
 }
