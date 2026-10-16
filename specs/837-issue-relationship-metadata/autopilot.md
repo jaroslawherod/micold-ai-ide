@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-tw6sph
 - **Started**: 2026-10-16
 - **Phase**: milestone M2
-- **Next step**: M2 unit 2: full gate, reviews A and B, visual pass T031, PR files (see Handover)
+- **Next step**: M2: record visual pass T031, final full gate, commit, push, PR files
 
 ## Pull requests
 
@@ -24,7 +24,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T018, T027, T029 | full | create_worktree with github_issue returns the issue object (relationships, not_readable, details_error); agent-tools guide | #907 | merged |
-| M2 | T019–T026, T028, T030, T031 | full | New worktree form shows a picked issue's relationships, blocked warning, failure line; worktrees guide; visual pass | — | implemented, not yet gated or reviewed |
+| M2 | T019–T026, T028, T030, T031 | full | New worktree form shows a picked issue's relationships, blocked warning, failure line; worktrees guide; visual pass | — | gated and reviewed, visual pass T031 and PR files pending |
 
 ## Decisions
 
@@ -45,6 +45,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Tasks review | 1 | 260d2c07b1b94129a9328339d2423d85175cff4b:f76fc297161ba35ca11d21a56082b7c2c25ff1af | CLEAN: 3 MINOR, all fixed (F1 [P] dropped on T003; F2 T030 gains a Failed layout snapshot case; F3 stale checklist note; task text only, no new round) |
 | Review A M1 (code-review high) | 1 | ab97d95509aaf33fa9330bbbcc3623ec52b7e9a7:50869c2ec6b2d574c4f8ccb2a8231984f4fb8bdc | 10 findings: F1 fixed (500 ms grace past the bound so a read cut at its own deadline keeps what it read), F4 fixed (typed GraphQL error beside a null issue, + test); rest declined or MINOR, see Declined |
 | Review A M1 (code-review medium, fix diff) | 2 | ab97d95509aaf33fa9330bbbcc3623ec52b7e9a7:50869c2ec6b2d574c4f8ccb2a8231984f4fb8bdc..5af600b3 | 8 findings on the grace fix: replaced it, the read now ends `DETAILS_MARGIN` (`process::RUN_OVERRUN` + 200 ms) before the bound and the waiter waits exactly the bound (FR-011 holds); doc comment placement fixed; null-issue error prefers the error at `repository.issue` (+ test). No regression test for a read cut at its deadline (needs a real `gh`; MINOR). |
+| Review A M2 (code-review high) | 1 | 97a5f99eccb04dd056f7984d86f09a1dd8ba2ced:618752f67fc1cff6a4f14bf9092a9f8d7329f257 | 10 findings: failure line prefix fixed (F1), details lines computed once (F7); rest declined, see Declined |
+| Review B M2 (conformance, sonnet) | 1 | 91190d7a451fdce4a34e5573fb4025549c72cb37:618752f67fc1cff6a4f14bf9092a9f8d7329f257 | CHANGES: F1 MAJOR (my row-length scroll heuristic untested) fixed by removing it; F2 (uncommitted fixes) fixed by committing; F3/F4 MINOR (double "Couldn't read" lead-in; accepted, the message is the daemon's plain sentence; guide matches the row-count rule again) |
 
 ## Declined review findings
 
@@ -58,18 +60,20 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | A | F8 two queries per call | Plan decision: the lookup's query is 550's, unchanged (SC-004); details read separately and in parallel. |
 | M1 | A | F9 `IssueSource: IssueDetailsSource` unused | M2's form reads details through `IssueSource` (T020–T022). |
 | M1 | A | F10 `VisibleChars` two buffers | Taste, MINOR. |
+| M2 | A | `list_text` says "and N more; N you can't see" for the same hidden items | The text is the contract's (form-details §3 and issue_details tests); the tool result uses the same `more`/`hidden` split. MINOR wording. |
+| M2 | A | Details block height unbounded when five rows wrap | Rows hold at most 20 items; a row-length heuristic was tried and removed (untested, B F1). Known limit: more than 5 rows scrolls. |
+| M2 | A | Unknown repo leaves `Loading` | Unreachable: `issue_details_request` requires the repo. |
+| M2 | A | Re-pick of the same issue re-reads | Wanted: a re-pick refreshes; one `gh` call. |
+| M2 | A | One blocking read per pick, not cancelled | Each is bounded by 10 s and its answer dropped by seq; same as the description pass. |
+| M2 | A | `start_issue_details` repeats `start_issue_descriptions` | Different request, result type and single-shot shape; the shared part is two lines. |
+| M2 | A | Positional paths in the containment exemption | Same style as every other exemption in containment.rs; the gate fails loudly if the layout moves. |
+| M2 | A | `details_seq` bump in `reset_issues` | Harmless (u64). |
 
 ## Handover
 
-M2 unit 1 stopped at the context cap (about 178k). Done, uncommitted until this commit: T019–T026, T028, T030 ticked in tasks.md; `tdd/cycle-log.md` has the M2 section (tests written and run red first).
+None.
 
-- Core: `DetailLine`, `IssueDetails::display_lines` (issue_details.rs); `FakeIssueSource::details_deadlines`.
-- Client: `IssueDetailsState`, `DetailsRequest`, `set_picked_issue` (the one writer), `issue_details_request`, `Msg::IssueDetailsLoaded` (features/worktree_form.rs); `shell::issues::on_issue_picked` + `start_issue_details` (main.rs routes `IssuePicked`); view `issue_details` inside `issue_picker` (ui/worktree_form.rs), scrolls past 5 rows because 9 rows pushed the dialog over the app bar (panel_placement); new gate exemption `ISSUE_DETAILS_CONTENT` in tests/gates/containment.rs; three covered states `add-worktree-dialog-issue-details-{loading,loaded,failed}` and the regenerated layout fixture.
-- Docs: worktrees-and-sessions.md "The issue's relationships" and a sentence in "What is sent to GitHub".
-- Green so far: core `issue_details` 44, client `issue_source` 47, `layout_snapshot` 62. Full client and workspace tests, clippy and the shell tests NOT run yet.
-
-Next, in order: (1) `CARGO_INCREMENTAL=0 scripts/gate.sh` detached (setsid nohup, log in scratchpad), with review A (`code-review` skill, high, on origin/main...HEAD) in its shadow; (2) review B (autopilot-reviewer, model sonnet, conformance rubric, brief M2) and the visual pass T031 (cloud-visual-pass notes: Xvfb, ICED_BACKEND=tiny-skia, python ctypes XTest; save screenshots and notes in specs/837-issue-relationship-metadata/visual-pass/, tick T031); (3) record review rounds with review-snapshot.sh; (4) rerun the full gate on the final tree, commit (feat(837): …), push with `git push --force-with-lease -u origin HEAD`, write SCRATCH/pr-title.txt and pr-body.md (title `#837: Show all GitHub issue metadata (blocked by, blocking, parent, sub-issues…) when a worktree is created (M2)`, body ends `Refs #837`); return `PR: pending (orchestrator opens)`.
-Open findings: none yet. Review rounds: none counted.
+Visual pass T031 (specs/837-issue-relationship-metadata/visual-pass/notes.md): checks 1, 2, 3, 5, 6 PASS on a fake `gh`, tiny-skia, Xvfb. Not confirmed: the 7-row dialog at the 1024x768 default window (stale repaints; the containment and panel_placement gates cover it at layout level); step 4 not run.
 
 ## Open escalation
 

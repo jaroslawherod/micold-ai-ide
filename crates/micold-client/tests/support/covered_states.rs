@@ -973,7 +973,7 @@ pub fn covered_states() -> &'static [CoveredState] {
             build: || {
                 issue_details_state(IssueDetailsState::Loaded {
                     number: 17,
-                    details: every_kind_details(),
+                    details: Box::new(every_kind_details()),
                 })
             },
             anchors: ADD_WORKTREE_ANCHORS,

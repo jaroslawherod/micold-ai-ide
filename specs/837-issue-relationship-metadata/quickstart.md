@@ -36,7 +36,7 @@ Run the client (`mise run run`, or the `visual-pass` skill on the showcase or cl
 4. Run `gh auth refresh -r` without `read:project` (or use a token without it), then pick
    I-blocked. Projects reads "Not readable: …" and the other rows show.
 5. Disconnect the network, then pick an issue. One caption reads "Couldn't read this issue's
-   details: …". **Create** still works.
+   details. …". **Create** still works.
 6. Check light and dark themes: the warning label is legible in both.
 
 Agent path: in a session, ask the agent to call `create_worktree` with `github_issue: <I-blocked>`.

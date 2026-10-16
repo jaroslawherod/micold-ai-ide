@@ -6411,7 +6411,7 @@ mod issue_source {
         FormMsg::IssueDetailsLoaded {
             seq,
             number,
-            result: Ok(details),
+            result: Ok(Box::new(details)),
         }
     }
 
@@ -6494,7 +6494,7 @@ mod issue_source {
             FormMsg::IssueDetailsLoaded {
                 seq: first,
                 number: 42,
-                result: Ok(blocked(42)),
+                result: Ok(Box::new(blocked(42))),
             },
         );
         assert_eq!(*details_of(&rig.app), awaited, "the older seq is dropped");
@@ -6506,7 +6506,7 @@ mod issue_source {
             FormMsg::IssueDetailsLoaded {
                 seq,
                 number: 42,
-                result: Ok(blocked(42)),
+                result: Ok(Box::new(blocked(42))),
             },
         );
         assert_eq!(*details_of(&rig.app), awaited, "another number is dropped");
@@ -6534,7 +6534,7 @@ mod issue_source {
             FormMsg::IssueDetailsLoaded {
                 seq,
                 number: 42,
-                result: Ok(blocked(42)),
+                result: Ok(Box::new(blocked(42))),
             },
         );
         assert_eq!(*details_of(&rig.app), IssueDetailsState::Idle);
@@ -6554,7 +6554,7 @@ mod issue_source {
             FormMsg::IssueDetailsLoaded {
                 seq,
                 number: 42,
-                result: Ok(blocked(42)),
+                result: Ok(Box::new(blocked(42))),
             },
         );
         assert!(rig.app.core.worktree_form.form.is_none());

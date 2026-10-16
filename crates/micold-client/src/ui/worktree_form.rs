@@ -542,7 +542,7 @@ fn issue_details<'a>(form: &'a WorktreeForm, r: Roles) -> Option<Element<'a, Mes
         IssueDetailsState::Idle | IssueDetailsState::Loading { .. } => None,
         IssueDetailsState::Failed { message, .. } => Some(
             Text::new(
-                format!("Couldn't read this issue's details: {message}."),
+                format!("Couldn't read this issue's details. {message}"),
                 TypeRole::Caption,
                 r,
             )
@@ -551,7 +551,9 @@ fn issue_details<'a>(form: &'a WorktreeForm, r: Roles) -> Option<Element<'a, Mes
         ),
         IssueDetailsState::Loaded { details, .. } => {
             let mut col = column![].spacing(spacing::XS);
-            for line in details.display_lines() {
+            let lines = details.display_lines();
+            let scrolls = lines.len() > DETAIL_ROWS_SHOWN;
+            for line in lines {
                 let label = Text::new(line.label, TypeRole::Caption, r)
                     .width(Length::Fixed(DETAIL_LABEL_WIDTH));
                 let (label, text) = if line.warning {
@@ -567,7 +569,7 @@ fn issue_details<'a>(form: &'a WorktreeForm, r: Roles) -> Option<Element<'a, Mes
                     .spacing(spacing::SM),
                 );
             }
-            if details.display_lines().len() > DETAIL_ROWS_SHOWN {
+            if scrolls {
                 return Some(
                     material::Scrollable::new(col, r)
                         .height(Length::Fixed(DETAIL_ROWS_SHOWN as f32 * DETAIL_ROW_HEIGHT))

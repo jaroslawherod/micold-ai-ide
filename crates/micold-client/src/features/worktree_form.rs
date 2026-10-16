@@ -207,7 +207,10 @@ pub enum IssueDetailsState {
     /// The read is awaited; only the answer carrying this `seq` and `number` applies.
     Loading { seq: u64, number: u64 },
     /// The details of the picked issue.
-    Loaded { number: u64, details: IssueDetails },
+    Loaded {
+        number: u64,
+        details: Box<IssueDetails>,
+    },
     /// The read failed; `message` is the plain sentence naming the reason.
     Failed { number: u64, message: String },
 }
@@ -1508,7 +1511,7 @@ pub fn issue_details_loaded(
     state: &mut crate::app::State,
     seq: u64,
     number: u64,
-    result: Result<IssueDetails, IssueLoadError>,
+    result: Result<Box<IssueDetails>, IssueLoadError>,
 ) {
     with_form(state, |form| {
         if form.issue_details != (IssueDetailsState::Loading { seq, number }) {
@@ -1896,7 +1899,7 @@ pub enum Msg {
     IssueDetailsLoaded {
         seq: u64,
         number: u64,
-        result: Result<IssueDetails, IssueLoadError>,
+        result: Result<Box<IssueDetails>, IssueLoadError>,
     },
 }
 

@@ -49,7 +49,7 @@ use micold_core::env_include::EnvIncludeSnapshot;
 use micold_core::github::{
     env_include_path, load_listing, DescriptionPage, IssueListing, IssueLoadError,
 };
-use micold_core::issue_details::{IssueDetailsSource as _, DETAILS_BOUND};
+use micold_core::issue_details::DETAILS_BOUND;
 use micold_core::jira::{connection_key, ApiToken};
 use micold_core::protocol::messages::ClientMsg;
 use micold_core::store::jira_token_path;
@@ -584,8 +584,12 @@ fn start_issue_details(app: &mut App, request: DetailsRequest) -> Task<Message> 
     let deadline = std::time::Instant::now() + DETAILS_BOUND;
     Task::perform(
         async move {
-            tokio::task::spawn_blocking(move || source(gh).read_details(&repo, number, deadline))
-                .await
+            tokio::task::spawn_blocking(move || {
+                source(gh)
+                    .read_details(&repo, number, deadline)
+                    .map(Box::new)
+            })
+            .await
         },
         move |joined| {
             let result = joined.unwrap_or_else(|stopped| {
