@@ -19,8 +19,7 @@ holding it and marks the field — press **Cancel**, or Esc, to leave without sa
 | [Appearance](#appearance) | The theme |
 | [Terminal](#terminal) | The embedded terminal's scrollback limit, and whether its history is saved to disk |
 | [Environment](#environment) | Which AI CLI a session runs, whether Pi sessions report activity, whether AI sessions get the app's tools, and the script sourced before it starts |
-| [Daemons](#daemons) | The session services you have set up: add, edit, start, stop and remove them |
-| [Session service](#session-service) | Where sessions run, and what that service can reach |
+| [Daemons](#daemons) | The session services you have set up: add, edit, start, stop and remove them, and each container daemon's runtime, image, credentials and limits |
 | [GitHub](#github) | Whether worktrees show their pull request, and which worktree type an issue's labels choose |
 | [Jira](#jira) | Whether Jira issues can start worktrees, and whether the open project is connected |
 
@@ -70,7 +69,7 @@ stop and start](./worktrees-and-sessions.md#earlier-output-after-a-stop-and-star
 Which AI coding CLI a new session runs when you don't choose one for it.
 
 - **The choices** are the CLIs you actually have installed where sessions run: on this computer, or
-  in the container's image when the [session service](#session-service) runs in one. If only one is
+  in the container's image when the [session service](#container-daemons) runs in one. If only one is
   installed, that is the only option — and nothing else about starting a session changes for you.
 - **"Installed" means a session would find it.** A CLI is offered when it is on the `PATH` a session
   starts with, and that includes what
@@ -460,34 +459,29 @@ asks nothing and changes nothing else.
 The section explains what a daemon is and offers **Add daemon**. The new-worktree form offers no
 daemon either and says where to add one.
 
-## Session service
+### Container daemons
 
-Everything about the process that actually runs your sessions is here, because it is one decision:
-sharing your SSH agent means nothing when the service is a plain process on this computer, and means
-a great deal when it is a container.
+Everything about the process that actually runs your sessions is in the daemon's form, because it is
+one decision: sharing your SSH agent means nothing when the service is a plain process on this
+computer, and means a great deal when it is a container.
 
-**Where sessions run** — directly on this computer (the default), or inside a container that sees
-only your registered projects. Takes effect the next time the application starts. See [Running the
-session service in a container](sandboxed-daemon.md) for what changes, what it can and cannot
-reach, and how to work offline.
+A daemon runs either directly on this computer (the default) or inside a container that sees only
+your registered projects. See [Running the session service in a container](sandboxed-daemon.md) for
+what changes, what it can and cannot reach, and how to work offline. Worktrees show the daemon they
+run on in the sidebar, and the New worktree form offers the daemon to use (see [Which session
+service a worktree runs on](worktrees-and-sessions.md#which-session-service-a-worktree-runs-on)).
 
-Your existing choice is migrated, once, into a list of session services (daemons) holding exactly
-one entry with the same placement and container settings, and every worktree is bound to it. The
-placement above keeps changing that one entry. Worktrees show the daemon they run on in the sidebar,
-and the New worktree form offers the daemon to use (see [Which session service a worktree runs
-on](worktrees-and-sessions.md#which-session-service-a-worktree-runs-on)).
+You can run a host daemon and several container daemons together, each worktree bound to one. The
+limits (one host daemon at most, unique names, container names and ports) and what an unavailable
+daemon looks like are in [Running a host daemon and container daemons
+together](sandboxed-daemon.md#running-a-host-daemon-and-container-daemons-together). A daemon can
+also run on another computer: see [Running the session service on another
+computer over SSH](remote-daemons.md).
 
-You can run a host daemon and several container daemons together, each worktree bound to one. Add,
-edit, start, stop and remove them in [Daemons](#daemons); the limits (one host daemon at most,
-unique names, container names and ports) and what an unavailable daemon looks like are in
-[Running a host daemon and container daemons
-together](sandboxed-daemon.md#running-a-host-daemon-and-container-daemons-together). A daemon can also run on another computer: see [Running the session service on another computer over SSH](remote-daemons.md).
+Each container daemon keeps its own settings, and they are kept if you switch it to the host and
+back. A change to a running daemon asks before it restarts it.
 
-The container settings stay visible and editable whichever placement you pick, and are kept if you
-switch back — configuring the container and then trying the host process first doesn't mean setting
-it up again.
-
-### Container
+#### Container
 
 - **Container runtime** — Docker (the default) or Podman.
 - **Image source** — pull from a registry, load from a local archive (the fully offline path), or
@@ -501,7 +495,12 @@ it up again.
   unsaved or not-yet-started reference: a new image is used from the next time the service starts.
 - **Image file** — the archive to load, when the image comes from a file.
 
-### Credentials
+#### Limits
+
+Caps on what the sandbox may consume (CPU, memory, process count and writable storage); see
+[Limits](sandboxed-daemon.md#limits). Blank uses the runtime's own default.
+
+#### Credentials
 
 The container starts with **none** of your credentials, and upgrading the app never opts you in.
 Each share is separate, and only what you tick is passed in:
@@ -511,11 +510,11 @@ Each share is separate, and only what you tick is passed in:
 - **Git credentials** — the git credential helper's store.
 - **AI CLI sign-in** — the AI CLI's own authentication material.
 
-While any of these is on, the section lists exactly which ones by name, and the rail marks
-**Session service** with a *Sharing* badge — so you can tell at a glance, from any section, that
+While any of these is on, the form lists exactly which ones by name, and the rail marks
+**Daemons** with a *Sharing* badge — so you can tell at a glance, from any section, that
 something is being shared.
 
-### Sessions
+#### Sessions
 
 - **Keep the service running when I'm signed out or away** — off by default. It answers one
   question, and changes two things.

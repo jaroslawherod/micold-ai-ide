@@ -37,14 +37,14 @@ Paths: `C` = `crates/micold-core/src`, `K` = `crates/micold-client/src`, `T` = `
 **Goal**: no Session service rail entry, hint texts and badge retargeted.
 **Independent test**: rail lists no Session service; hint names Settings > Daemons; badge from any section.
 
-- [ ] T014 [US2] Test first: rail has no Session service entry; badge shows when any daemon (or the open form) shares a credential, none otherwise, from any section (FR-002, FR-007) in `T/settings_sections.rs`, `T/settings_rail_motion.rs`
-- [ ] T015 [US2] Test first: limit, runtime, image and port hints name Settings > Daemons and no user-facing string names Session service (FR-006): `C/sandbox/runtime.rs` tests, `T/sandbox_limits.rs`
-- [ ] T016 [US2] Add `ViewModel::shares_credentials` in `K/features/daemons.rs` views and read it for the `Daemons` rail row in `K/ui/settings_view.rs`
-- [ ] T017 [US2] Retarget hint texts to "Settings → Daemons" in `K/features/sandbox.rs` and `C/sandbox/runtime.rs`
-- [ ] T019 [US2] Retarget or delete tests naming `SettingsSection::Daemon` or the placement path: `T/features_settings.rs`, `T/settings_rail_motion.rs`, `T/a_field_note_shares_its_fields_column.rs`, `T/sandbox_limits.rs`, `T/saving_a_placement_moves_the_daemon.rs`, `T/settings_reports_the_live_placement.rs`, `T/settings_draft_tracks_the_live_theme.rs`, `T/overlay_registry.rs`, `T/popover_displacement.rs` (done before T018 so the tree compiles)
-- [ ] T018 [US2] Remove `SettingsSection::Daemon` (enum, `ALL`, `label`, `icon`, `FieldError.section`), delete `K/ui/settings/daemon.rs`, drop `ConfirmPlacementDialog`, `pending_placement`, `placement_note` and the page-only Msgs and `DaemonDraft` mirrors in `K/features/settings.rs`, `K/ui/settings_view.rs`; remove `mod daemon` in `K/ui/settings/mod.rs`; delete `K/ui/confirm_placement.rs` with its `mod` line in `K/ui/mod.rs` and its entry in `K/overlay/registry.rs` (check `K/ui/confirm_daemon_removal.rs` only borrows from it)
-- [ ] T021 [US2] Grep test that `docs/` and the hint strings have no stale "Session service" reference (FR-009, SC-004), beside the doc-text tests in `T/`
-- [ ] T020 [US2] User guide and daemon doc: drop the Session service section and update references in `docs/user-guide/settings.md`, `docs/user-guide/worktrees-and-sessions.md`, `docs/user-guide/install-macos.md`, `docs/install.md`, `docs/README.md`, `docs/daemon.md`
+- [x] T014 [US2] Test first: rail has no Session service entry; badge shows when any daemon (or the open form) shares a credential, none otherwise, from any section (FR-002, FR-007) in `T/settings_sections.rs`, `T/settings_rail_motion.rs`
+- [x] T015 [US2] Test first: limit, runtime, image and port hints name Settings > Daemons and no user-facing string names Session service (FR-006): `C/sandbox/runtime.rs` tests, `T/sandbox_limits.rs`
+- [x] T016 [US2] Add `ViewModel::shares_credentials` in `K/features/daemons.rs` views and read it for the `Daemons` rail row in `K/ui/settings_view.rs`
+- [x] T017 [US2] Retarget hint texts to "Settings → Daemons" in `K/features/sandbox.rs` and `C/sandbox/runtime.rs`
+- [x] T019 [US2] Retarget or delete tests naming `SettingsSection::Daemon` or the placement path: `T/features_settings.rs`, `T/settings_rail_motion.rs`, `T/a_field_note_shares_its_fields_column.rs`, `T/sandbox_limits.rs`, `T/saving_a_placement_moves_the_daemon.rs`, `T/settings_reports_the_live_placement.rs`, `T/settings_draft_tracks_the_live_theme.rs`, `T/overlay_registry.rs`, `T/popover_displacement.rs` (done before T018 so the tree compiles)
+- [x] T018 [US2] Remove `SettingsSection::Daemon` (enum, `ALL`, `label`, `icon`, `FieldError.section`), delete `K/ui/settings/daemon.rs`, drop `ConfirmPlacementDialog`, `pending_placement`, `placement_note` and the page-only Msgs and `DaemonDraft` mirrors in `K/features/settings.rs`, `K/ui/settings_view.rs`; remove `mod daemon` in `K/ui/settings/mod.rs`; delete `K/ui/confirm_placement.rs` with its `mod` line in `K/ui/mod.rs` and its entry in `K/overlay/registry.rs` (check `K/ui/confirm_daemon_removal.rs` only borrows from it)
+- [x] T021 [US2] Grep test that `docs/` and the hint strings have no stale "Session service" reference (FR-009, SC-004), beside the doc-text tests in `T/`
+- [x] T020 [US2] User guide and daemon doc: drop the Session service section and update references in `docs/user-guide/settings.md`, `docs/user-guide/worktrees-and-sessions.md`, `docs/user-guide/install-macos.md`, `docs/install.md`, `docs/README.md`, `docs/daemon.md`
 
 ## Phase 4: User Story 3 - Existing settings carry over (P2)
 

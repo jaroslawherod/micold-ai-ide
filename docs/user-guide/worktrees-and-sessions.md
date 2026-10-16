@@ -1049,7 +1049,7 @@ guess; if you do run the same conversation in two places at once, both write to 
 - **Restart fails the same way until that is fixed.** So the pane does not suggest *restart* for
   this failure, as it does after a crash loop. Once you have fixed the cause, or the service runs
   from an image that has the CLI, press **restart** in the bar. The service has to restart before a
-  newly chosen image is used, as described under [Session service](./settings.md#session-service).
+  newly chosen image is used, as described under [Container daemons](./settings.md#container-daemons).
 - The banner appears once per failure. Pressing **restart** again with nothing changed fails again
   without a second banner, and the bar's `failed` is what remains.
 

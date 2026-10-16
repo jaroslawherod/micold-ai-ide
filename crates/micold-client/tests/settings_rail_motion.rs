@@ -728,7 +728,7 @@ fn rows_keep_their_height_and_icons_their_line() {
     }
 }
 
-/// The destination the covered state badges: Session service, sharing a credential.
+/// The destination the covered state badges: Daemons, when a daemon shares a credential.
 const BADGED: SettingsSection = SettingsSection::Daemons;
 
 /// A slot of a sliding row: its labelled form, the same form with its glyph tinted, and its
@@ -1049,22 +1049,22 @@ fn badged_index() -> usize {
         .expect("the badged section is not in the rail")
 }
 
-/// Share or stop sharing the credential that badges the session-service row, and rebuild.
+/// Share or stop sharing the credential that badges the Daemons row, and rebuild. The credential is
+/// set in the open container daemon form, which is where it is chosen now (804).
 fn share_credential(surface: &mut Surface, share: bool) {
-    let credentials = &mut surface
-        .under
-        .state
-        .settings
-        .settings_draft
-        .as_mut()
-        .expect("precondition: Settings is open")
-        .daemon
-        .profile
-        .credentials;
+    let list = &mut surface.under.state.daemon_list;
+    if list.draft.is_none() {
+        micold_client::features::daemons::begin_add(list);
+    }
+    let draft = list.draft.as_mut().unwrap();
+    draft.runtime = micold_client::features::daemons::DraftRuntime::Container;
     if share {
-        credentials.insert(micold_core::sandbox::CredentialShare::GitConfig);
+        draft
+            .profile
+            .credentials
+            .insert(micold_core::sandbox::CredentialShare::GitConfig);
     } else {
-        credentials.clear();
+        draft.profile.credentials.clear();
     }
     surface.rebuild();
 }

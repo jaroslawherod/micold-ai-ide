@@ -90,15 +90,8 @@ pub enum Icon {
     /// control opens a list. Distinct from [`Icon::ShowSidebar`]'s panel glyph: this one says
     /// "there is more to choose from here", not "there is a panel to reveal".
     SelectChevron,
-    /// The settings section that configures the session service (feature 027, FR-026b).
-    ///
-    /// Material's `dns` — the stacked-server glyph. Distinct from [`Icon::Settings`] on purpose:
-    /// the gear is what *opens* Settings, and a rail row inside Settings drawn with the gear reads
-    /// as "settings" rather than as one section of them.
-    SessionService,
     /// The settings section that lists the configured daemons (feature 491, M3) — Material's
-    /// `lan`, the connected-nodes glyph. Distinct from [`Icon::SessionService`], which is the one
-    /// daemon's own settings.
+    /// `lan`, the connected-nodes glyph.
     Daemons,
     /// Re-read the project's worktree list on demand (feature 029, FR-001).
     ///
@@ -185,7 +178,6 @@ impl Icon {
         Icon::ActivityWorking,
         Icon::ActivityEnded,
         Icon::SelectChevron,
-        Icon::SessionService,
         Icon::Daemons,
         Icon::Refresh,
         Icon::IssueMapping,
@@ -251,8 +243,6 @@ impl Icon {
             // `expand_more` — Material's own chevron for "this opens a list", and what M3's filled
             // select carries in its trailing slot.
             Icon::SelectChevron => '\u{e5cf}',
-            // `dns`.
-            Icon::SessionService => '\u{e875}',
             // `lan`.
             Icon::Daemons => '\u{eb2f}',
             Icon::Refresh => '\u{e5d5}',

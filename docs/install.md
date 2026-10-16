@@ -22,7 +22,7 @@ $ sudo apt install ./micold-client_{{MICOLD_VERSION}}-1_amd64.deb
 That gives you `micold-ai-ide` on your path, a desktop entry with the application's icon, and the
 session service — `micold-daemon`, plus the systemd user units it can be started from. The units are
 shipped but not enabled: the application enables them for you when you ask it to, in
-[Settings → Session service](user-guide/settings.md).
+[Settings → Daemons](user-guide/settings.md).
 
 Start it from your desktop's application menu, or run `micold-ai-ide`. There is nothing else to
 configure — the application spawns the session service itself the first time it needs one

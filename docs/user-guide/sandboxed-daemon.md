@@ -11,7 +11,7 @@ what a session can reach when it goes looking.
 
 ## Turning it on
 
-Settings → **Session service** → "Run the service in a container", then restart the application.
+Settings → **Daemons** → add or edit a daemon and choose **Container** for what it runs in, then restart the application.
 
 You need a container runtime installed — Docker or Podman; see **Container runtimes** below.
 
@@ -58,8 +58,7 @@ only one host daemon; the form refuses a duplicate and names the field.
 - **Survive logout**: keep the container running after you log out.
 
 A host daemon shows only *Survive logout*, and an SSH daemon none of these: they have no container
-here. The Daemons form and **Settings → Session service** edit the same values, so a change in one
-shows in the other.
+here. The Daemons form is the only place these values are edited.
 
 **Removing a daemon** asks first and states how many worktrees are bound to it and how many sessions
 are running on it. Confirming stops those sessions and removes the entry. Its worktrees are kept
@@ -69,7 +68,7 @@ stopped or deleted by the application.
 
 ## Container runtimes
 
-Settings → **Session service** → **Container runtime** chooses between them. Docker is the default;
+Settings → **Daemons** → the form's **Container runtime** chooses between them. Docker is the default;
 nothing changes runtime on your behalf, and only the one you selected is ever run.
 
 | | Docker | Podman |
@@ -158,7 +157,7 @@ the session's worktree, or in the service's data directory when the worktree can
 A session runs its AI CLI inside the container. That means the CLI comes from the image, and the one
 installed on your computer is not used. The published image, and one built from this checkout, ship
 Claude Code, GitHub Copilot, Pi Coding Agent, Codex CLI and OpenCode at pinned versions. If you choose an image that
-lacks one, that CLI is not offered, and **Settings → Session service** names it under *Image
+lacks one, that CLI is not offered, and **Settings → Daemons** names it under *Image
 reference*, with the same note that appears under **Default AI CLI**. The note says the image lacks
 the CLI only when the environment a session starts in was applied: environment-include is on and
 the startup script succeeded. Otherwise it gives the environment-include reason (the switch is off,
@@ -210,7 +209,7 @@ A few limits of the sign-in share:
   share stays on and mounts nothing; sign in inside a session instead, with `/login`. The same is
   true anywhere the token file is missing, such as before your first sign-in or when you
   authenticate with an API key. When the running sandbox has no token from the share,
-  **Settings → Session service** says so under *AI CLI sign-in*, names the path it shares the token
+  **Settings → Daemons** says so under *AI CLI sign-in*, names the path it shares the token
   from, and stops listing the sign-in as shared. The running container keeps the mounts it was
   created with, and restarting the sandbox keeps the same container. To share a token you put at
   that path later, set *Where sessions run* to *On this computer* and back: that removes the
@@ -252,7 +251,7 @@ time in UTC. Set *Where sessions run* to *On this computer* and back to recreate
 
 ## Limits
 
-Settings → **Session service** → **Limits** caps what the sandbox may consume. A session that tries
+Settings → **Daemons** → the form's **Limits** caps what the sandbox may consume. A session that tries
 to use every core does not make your machine unusable, and one that forks without bound does not take
 your desktop with it.
 
@@ -405,15 +404,15 @@ reading the detail.
 
 | Cause | What the application says | What to do |
 |---|---|---|
-| No runtime on `PATH` | *Docker is not installed.* | Install it, or choose another runtime in **Settings → Session service**. |
+| No runtime on `PATH` | *Docker is not installed.* | Install it, or choose another runtime in **Settings → Daemons**. |
 | The runtime is installed but its service is down | *Docker is installed but not running.* | Start it, then retry. For rootless Podman this is the user service or `podman machine`. |
 | The runtime refuses this user | *Docker is running, but this user is not permitted to use it.* | Docker: add your user to the `docker` group and log in again. Podman: initialise rootless Podman (`podman system migrate`) — this is also what a missing subuid/subgid range looks like. |
 | The runtime is too old | *This runtime is version 19.03; the sandbox needs 20.10 or newer.* | Upgrade the runtime. Docker needs 20.10, Podman 4.0. |
-| The image is not present and cannot be resolved | *The image `ghcr.io/…` was not found.* | Check the reference in **Settings → Session service**, or import an image archive. |
+| The image is not present and cannot be resolved | *The image `ghcr.io/…` was not found.* | Check the reference in **Settings → Daemons**, or import an image archive. |
 | The image is present remotely but the fetch failed | *`ghcr.io/…` could not be fetched: …* | Rate limit, sign-in, or a proxy. Import the image from a file instead — the sandbox does not need a registry. |
-| Something else holds the control port | *Port 7373 is already in use, so the sandbox has no control channel.* | Stop whatever holds it, or choose another port in **Settings → Session service**. |
+| Something else holds the control port | *Port 7373 is already in use, so the sandbox has no control channel.* | Stop whatever holds it, or choose another port in **Settings → Daemons**. |
 | A project is on a path the runtime will not bind | *`/mnt/team-share/webapp` cannot be shared with the sandbox: …* | Move the project to a path the runtime can share, or unregister it. Network shares and FUSE mounts are the usual cause. |
-| The runtime rejected a resource limit | *The runtime refused the storage limit: …* | Clear that limit in **Settings → Session service**, then retry. See [Limits](#limits) — the writable-storage cap is the one most often unavailable. |
+| The runtime rejected a resource limit | *The runtime refused the storage limit: …* | Clear that limit in **Settings → Daemons**, then retry. See [Limits](#limits) — the writable-storage cap is the one most often unavailable. |
 | The container was stopped or removed from outside | *The sandbox container `micold-sandbox` is no longer running.* | Usually nothing: the application brings it back up on its own (see [It comes back on its own](#it-comes-back-on-its-own-while-the-application-is-open)). If that fails three times, restart the sandbox. Sessions resume from where they were — their processes stopped with the container, but their history and layout did not. |
 | A step did not finish | *Pulling the image did not finish in time.* | Retry; if it persists, restart the runtime. |
 | Anything else | *The runtime reported: `<its first line of output>`* | Retry. The runtime's full output is in the diagnostics. |

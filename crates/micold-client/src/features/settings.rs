@@ -47,7 +47,6 @@
 //! at the I/O boundary; what this struct holds is the in-flight edit and the two theme inputs the
 //! resolution needs.
 
-use std::collections::BTreeSet;
 use std::path::PathBuf;
 
 use crate::features::session::CliAvailability;
@@ -506,7 +505,7 @@ impl JiraDraft {
     }
 }
 
-/// The Session service section's fields (feature 027, FR-028).
+/// The legacy daemon block the settings file still carries (feature 027, FR-028); no page edits it (804).
 ///
 /// The sandbox profile is held whole rather than field by field, so that a setting this section
 /// does not render yet — the network posture, which arrives with T087 — survives a save instead of
@@ -601,7 +600,7 @@ pub struct ValidSettings {
     pub plan_usage_warn_percent: u8,
     /// Environment.
     pub cross_session_access: CrossSessionAccess,
-    /// Session service.
+    /// The legacy daemon block, kept for the migration; no page edits it (804).
     pub daemon: DaemonConfig,
     /// GitHub issues: the label-to-type mapping (feature 034).
     pub issue_label_types: Vec<LabelTypeEntry>,
@@ -673,7 +672,7 @@ pub struct SettingsDraft {
     pub terminal: TerminalDraft,
     /// Environment.
     pub environment: EnvironmentDraft,
-    /// Session service.
+    /// The legacy daemon block, mirrored for the migration; no page edits it (804).
     pub daemon: DaemonDraft,
     /// GitHub issues (feature 034).
     pub github: GithubDraft,

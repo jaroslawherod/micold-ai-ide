@@ -1101,7 +1101,7 @@ mod tests {
         vec![
             Section::new("Appearance", ()),
             Section::new("Terminal", ()),
-            Section::new("Session service", ()),
+            Section::new("Daemons", ()),
         ]
     }
 

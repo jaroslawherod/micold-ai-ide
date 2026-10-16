@@ -50,8 +50,8 @@ follows describes the version you are reading it from (constitution, Principle V
   Pi, Codex and OpenCode have no known signal, and `claude --bg` is not covered).
 - [Settings](user-guide/settings.md) — the Settings view: appearance, the terminal scrollback
   limit, environment-include (auto-picking up your shell environment for sessions, configuring or
-  disabling it, and recovering from a failed script), and **Session service** — where sessions run,
-  which credentials the service may reach, and the resource limits it runs under.
+  disabling it, and recovering from a failed script), and **Daemons** — the session services, where each
+  runs, which credentials it may reach, and the resource limits it runs under.
 - [Running the session service in a container](user-guide/sandboxed-daemon.md) — turning the
   container placement on, which runtimes work (and how Podman differs), what the container can and
   cannot see, credentials, limits, network posture, working offline, what happens across restarts
