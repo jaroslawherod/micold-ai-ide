@@ -299,6 +299,14 @@ pub trait AiCliProvider {
     /// Whether this provider has recorded a conversation for this session.
     fn has_recorded_conversation(&self, config_dir: &Path, cwd: &Path, session_id: Uuid) -> bool;
 
+    /// Whether this conversation only continues another one the CLI had running in `cwd`
+    /// (BUG-904, FR-017): `claude`'s `/clear` gives the same process a new conversation id, whose
+    /// transcript opens with the `/clear` command. Best-effort, bounded read; defaults to `false`,
+    /// the answer for a CLI whose conversation id never changes under a live session.
+    fn starts_as_continuation(&self, _config_dir: &Path, _cwd: &Path, _session_id: Uuid) -> bool {
+        false
+    }
+
     /// The latest title this provider has recorded, read from disk (best-effort I/O). NEVER
     /// errors: any missing file / read / parse failure yields `None`, so a title read never fails
     /// the session (FR-017).
@@ -771,6 +779,11 @@ impl AiCliProvider for ClaudeProvider {
 
     fn has_recorded_conversation(&self, config_dir: &Path, cwd: &Path, session_id: Uuid) -> bool {
         self.transcript_path(config_dir, cwd, session_id).exists()
+    }
+
+    fn starts_as_continuation(&self, config_dir: &Path, cwd: &Path, session_id: Uuid) -> bool {
+        crate::first_turn::read_prefix(&self.transcript_path(config_dir, cwd, session_id))
+            .is_some_and(|prefix| crate::first_turn::claude_starts_with_clear(&prefix))
     }
 
     fn read_title(&self, config_dir: &Path, cwd: &Path, session_id: Uuid) -> Option<String> {
