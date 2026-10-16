@@ -39,3 +39,15 @@ is claimed. What backs them instead:
 Follow-up if the milestone's strength is to be audited: apply the mutants "drop `auto_start` for
 `Ssh`", "dial an Unreachable `Ssh` entry" and "bridge skips the daemon start" and record that each
 test fails (`speckit-tdd-verify`).
+
+## M2 (T028-T038): test-after deviation
+
+The M2 behaviours (remote identity encode/decode in `ssh::remote_path`, boundary translation of
+daemon messages, the repository step, remote worktree location display, add-repository over a
+connected daemon, the real-sshd project/worktree/session end-to-end) were written together with
+their tests under a starved build lock and first executed green. No red run was captured and none
+is claimed. What backs them: tests assert the observables (identity round trip and never shown in
+the UI; `RemoteRepositoryRequested` only when connected; geometry of the repository field;
+worktree and shell output through a real sshd), and review A and B read each against the
+behaviour. Mutants to apply if audited: "wrap_path skips `cwd`", "canonicalize_best_effort touches
+the local filesystem for a remote identity", "add_repository ignores a non-connected daemon".

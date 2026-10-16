@@ -53,6 +53,10 @@ exactly one — the host process or the container you already used — and every
 "Default" entry, runs on it; nothing is asked and nothing is shared that was not shared before. A
 worktree whose daemon was removed stays listed and says **no daemon** until it is moved to another.
 
+A worktree on a remote daemon ([Remote daemons](remote-daemons.md)) shows its path on the host,
+not a local one, and its tooltip names the daemon it runs on. Its sessions and terminals run on that
+host; you create, rename and delete such a worktree the same way as a local one.
+
 ### Refreshing the list
 
 The sidebar's worktree list is not live. It is rebuilt when you open or switch to a project, and

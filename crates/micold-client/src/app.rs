@@ -1146,7 +1146,9 @@ pub fn interpret(
         Outcome::FieldFocusCleared => crate::features::window::field_focus_cleared(state),
         Outcome::ClipboardWrite(_) | Outcome::OpenLink(_) | Outcome::Insert { .. } => {}
         // The shell's: it persists the registry and the binding (`App::apply_daemon_outcome`).
-        Outcome::DaemonRegistryChanged(_) | Outcome::DaemonBound { .. } => {}
+        Outcome::DaemonRegistryChanged(_)
+        | Outcome::DaemonBound { .. }
+        | Outcome::RemoteRepositoryRequested { .. } => {}
         // Sessions of a removed daemon are gone from the window; those of an edited one are
         // stopped by the shell and stay, so the catalog's next report reconciles them. Nothing is
         // deleted on disk either way.

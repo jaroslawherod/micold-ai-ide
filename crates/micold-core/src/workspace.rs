@@ -99,12 +99,16 @@ impl Workspace {
     pub fn open_or_activate(&mut self, path: PathBuf, scanner: &dyn FolderScanner) {
         let path = canonicalize_best_effort(&path);
         if !self.projects.iter().any(|p| p.path == path) {
-            let availability = if scanner.is_available(&path) {
+            // A remote project's folder is the host's to judge, never this machine's scanner's
+            // (feature 489): it was verified over the wire before it got here.
+            let remote = crate::ssh::RemoteLocation::parse(&path).is_some();
+            let availability = if remote || scanner.is_available(&path) {
                 Availability::Available
             } else {
                 Availability::Unavailable
             };
-            let project = Project::new(path.clone(), scanner.is_git_repo(&path), availability);
+            let is_git = remote || scanner.is_git_repo(&path);
+            let project = Project::new(path.clone(), is_git, availability);
             self.projects.push(project);
         }
         self.active = Some(path);
@@ -235,6 +239,9 @@ impl Workspace {
     /// the app was closed are correctly shown as unavailable.
     pub fn refresh_availability(&mut self, scanner: &dyn FolderScanner) {
         for project in &mut self.projects {
+            if crate::ssh::RemoteLocation::parse(&project.path).is_some() {
+                continue;
+            }
             project.availability = if scanner.is_available(&project.path) {
                 Availability::Available
             } else {

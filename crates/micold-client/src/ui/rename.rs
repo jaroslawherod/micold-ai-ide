@@ -21,7 +21,7 @@ pub fn modal<'a>(
     rename_dialog::view(
         RenameSpec {
             title: "Rename project",
-            caption: draft.path.display().to_string(),
+            caption: micold_core::ssh::remote_path::display_path(&draft.path),
             label: "Project name",
             field: FieldId::RenameProjectName,
             text: &draft.text,

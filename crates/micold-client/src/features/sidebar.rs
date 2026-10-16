@@ -718,11 +718,16 @@ pub fn worktree_tooltip(
     }
 
     if let Some(root) = project_root {
-        let mut location = worktree
-            .path
-            .strip_prefix(root)
-            .map(|rel| rel.display().to_string())
-            .unwrap_or_else(|_| worktree.path.display().to_string());
+        // A remote worktree is known by the host's own path (feature 489, FR-012).
+        let mut location = if micold_core::ssh::RemoteLocation::parse(&worktree.path).is_some() {
+            micold_core::ssh::remote_path::display_path(&worktree.path)
+        } else {
+            worktree
+                .path
+                .strip_prefix(root)
+                .map(|rel| rel.display().to_string())
+                .unwrap_or_else(|_| worktree.path.display().to_string())
+        };
         // On the location line rather than a line of its own, because the location is the thing it
         // explains: an included worktree's path is absolute by construction (BUG-002), and among
         // the relative ones that reads as an oddity until something says why (FR-007). The phrase
@@ -933,7 +938,9 @@ impl crate::app::State {
             .and_then(|project| self.workspace.bindings.get(project))
             .cloned()
             .unwrap_or_default();
-        micold_core::daemons::Binding::resolve(
+        let project = self.workspace.active.clone().unwrap_or_default();
+        micold_core::daemons::Binding::resolve_for(
+            &project,
             &stored,
             key,
             &self.settings.daemons,

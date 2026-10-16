@@ -9,22 +9,22 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #489
 - **Worktree branch**: feat/489_run-the-session-daemon-on-a-remote-host-over-ssh
 - **Started**: 2026-10-12
-- **Phase**: M1 PR open
-- **Next step**: wait for CI on #845, merge, then M2
+- **Phase**: M2 implementing
+- **Next step**: implement M2 (T028–T038)
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #789 | Design (spec, plan, tasks) | merged | 63838fce6f95ea5195529109ba0e0b1073530135 |
-| #845 | M1 | open (CI is the full gate) | — |
+| #845 | M1 | merged | cf40ca917492368b043af1fe321c15715e919b2d |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T027 | full | Remote over SSH daemon connects (add, start, Connected) | #845 | in review |
-| M2 | T028–T038 | full | Remote projects, worktrees and sessions | — | pending |
+| M1 | T001–T027 | full | Remote over SSH daemon connects (add, start, Connected) | #845 | done |
+| M2 | T028–T038 | full | Remote projects, worktrees and sessions | #883 | in review |
 | M3 | T039–T050 | full | Reconnect after a network drop | — | pending |
 | M4 | T051–T055 | full | Local work unaffected, concurrent clients | — | pending |
 | M5 | T056–T065 | full | Host picker, failure reasons, daemon management | — | pending |
@@ -60,6 +60,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Declined review findings
 
+- M2 A F2 (log in through_json fallback): declined; the fallback is documented and a wrap failure is not reachable for serde-derived messages.
 - B F2 (assert user@host:port in ssh_real test): declined; the stand-in test drives `provision::connect`, not the view; the rendering is asserted in `daemons_feature.rs` (T020).
 - B F3 (copy has no deadline of its own): declined; the copy step already runs with `deadline = None` and progress, and `ServerAliveInterval/CountMax` now bound a dead network.
 
@@ -68,11 +69,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M2 PR #883 open (unit 3). Gate green, test-ssh green. Review B F1 fixed (cycle-log deviation), F2 observed green, F3 MINOR declined. Next: orchestrator waits on CI and merges, then M3.
 
 ## Open escalation
 
-None. (The push was done by the user; the full local gate was skipped by the user's choice.)
+None.
 
 ## Follow-ups not done
 

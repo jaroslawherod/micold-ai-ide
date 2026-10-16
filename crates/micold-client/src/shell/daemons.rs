@@ -35,6 +35,7 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
     let outcomes = app.core.update_daemons(msg);
     let mut rest = Vec::new();
     let mut bound = Vec::new();
+    let mut gate = Vec::new();
     for outcome in outcomes {
         match &outcome {
             Outcome::DaemonRegistryChanged(_) => app.apply_daemon_outcome(&outcome),
@@ -49,6 +50,10 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
                     }
                 }
                 rest.push(outcome);
+            }
+            Outcome::RemoteRepositoryRequested { path } => {
+                // Judged by the daemon it names, then opened as a project bound to it.
+                gate.push(path.clone());
             }
             _ => rest.push(outcome),
         }
@@ -80,6 +85,9 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
     micold_client::app::drain(rest, |outcome| {
         micold_client::app::interpret(&mut app.core, outcome)
     });
+    for path in gate {
+        let _ = crate::shell::workspace::on_folder_chosen(app, path);
+    }
     Task::none()
 }
 

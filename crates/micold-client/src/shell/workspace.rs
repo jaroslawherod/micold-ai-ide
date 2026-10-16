@@ -89,6 +89,10 @@ fn scan(browser: &dyn FolderBrowser, dir: PathBuf) -> Message {
 /// *container* paths would not be a faster version of the truth — it would be a different list,
 /// briefly shown, and then replaced.
 pub(crate) fn discover_worktrees(git: Option<&dyn Git>, repo: &Path) -> Vec<Worktree> {
+    // A remote project's folders are on the host: never read through this machine's git (489).
+    if micold_core::ssh::RemoteLocation::parse(repo).is_some() {
+        return Vec::new();
+    }
     match git {
         Some(git) => micold_core::worktree::discover(git, repo, &[]),
         None => Vec::new(),
@@ -130,6 +134,18 @@ pub(crate) fn on_folder_chosen(app: &mut App, path: PathBuf) -> Task<Message> {
     // every modal wraps behind its scrim, so a refusal reported while the selector was
     // still open would be dimmed out of view.
     app.core.project.selector = None;
+    // A remote repository is always judged by its own daemon, whatever git this machine has
+    // (feature 489, FR-012): the identity names the daemon, and the answer comes back echoing it.
+    if let Some(remote) = micold_core::ssh::RemoteLocation::parse(&path) {
+        let asked = path.clone();
+        crate::shell::daemon_sync::send_op_bound(
+            app,
+            micold_core::daemons::Binding::Bound(remote.daemon),
+            PendingOp::RepoRootQuery(path),
+            move |req| ClientMsg::RepoRootQuery { req, path: asked },
+        );
+        return Task::none();
+    }
     let Some(git) = app.caps.git() else {
         // No local git: ask the side that has one. Nothing is opened, refused, or persisted until
         // the answer lands — the gate has not been passed, only deferred.

@@ -488,3 +488,46 @@ fn an_ssh_entry_shows_no_container_profile_and_switching_to_ssh_drops_it() {
         DaemonRuntime::Ssh(_)
     ));
 }
+
+/// Feature 489, T036, FR-012: the repository step refuses a relative path and an unconnected
+/// daemon with a sentence under the field, and a connected daemon's absolute path becomes the
+/// identity of a remote project.
+#[test]
+fn the_repository_step_refuses_what_it_cannot_ask_and_names_a_connected_daemons_path() {
+    let mut w = World::new();
+    let mut state = State::default();
+    fill_ssh(&mut state, "Remote", false);
+    daemons::save(&mut state, &mut w.model()).unwrap();
+    let id = w.registry.entries()[2].id;
+
+    let set = |state: &mut State, path: &str| {
+        state.repositories.insert(id, path.to_string());
+    };
+    set(&mut state, "relative/repo");
+    let out = daemons::add_repository(&mut state, &w.model(), id);
+    assert!(out.is_empty());
+    assert!(state.repository_error.is_some(), "a relative path is named");
+
+    set(&mut state, "/home/dev/repo");
+    let out = daemons::add_repository(&mut state, &w.model(), id);
+    assert!(out.is_empty(), "the daemon is not connected");
+    let (for_id, message) = state.repository_error.clone().unwrap();
+    assert_eq!(for_id, id);
+    assert!(message.contains("not connected"), "{message}");
+
+    daemons::daemon_event(&mut state, &mut w.links, id, DaemonEvent::Start);
+    daemons::daemon_event(&mut state, &mut w.links, id, DaemonEvent::Connected);
+    let out = daemons::add_repository(&mut state, &w.model(), id);
+    let [Outcome::RemoteRepositoryRequested { path }] = out.as_slice() else {
+        panic!("one request: {out:?}")
+    };
+    assert_eq!(
+        micold_core::ssh::RemoteLocation::parse(path)
+            .unwrap()
+            .daemon,
+        id
+    );
+    assert!(path.to_string_lossy().ends_with("/home/dev/repo"));
+    assert!(state.repository_error.is_none());
+    assert!(!state.repositories.contains_key(&id), "the field empties");
+}

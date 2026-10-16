@@ -229,3 +229,36 @@ fn the_ssh_form_and_ssh_rows_paint_their_fields_and_badges_without_overflow() {
     assert!(has(&form, "Host"), "{form:?}");
     assert_no_text_overflows(&state, "the SSH add form with a refused host");
 }
+
+/// Feature 489, T031: the repository field of a connected SSH row paints its label and a refusal
+/// without overflow.
+#[test]
+fn the_repository_field_paints_its_label_and_a_refusal_without_overflow() {
+    let (mut state, _) = with_daemons();
+    let target =
+        micold_core::ssh::SshTarget::new("devbox.internal.example.com", None, None, None).unwrap();
+    let ssh = state
+        .settings
+        .daemons
+        .add(
+            "Remote over SSH",
+            DaemonRuntime::Ssh(micold_core::ssh::SshSettings { target }),
+            true,
+        )
+        .unwrap();
+    state.settings.links = DaemonLinks::at_launch(&state.settings.daemons);
+    state.settings.links.apply(ssh, DaemonEvent::Connected);
+    let painted_rows = painted(&state);
+    assert!(
+        has(&painted_rows, "Repository on the host"),
+        "{painted_rows:?}"
+    );
+    assert_no_text_overflows(&state, "the repository field");
+
+    state.update(Message::Daemons(DaemonsMsg::RepositoryEdited(
+        ssh,
+        "relative/path/that/is/rather/long/for/a/repository/on/a/remote/host".into(),
+    )));
+    state.update(Message::Daemons(DaemonsMsg::RepositoryAdded(ssh)));
+    assert_no_text_overflows(&state, "the repository field with a refusal");
+}

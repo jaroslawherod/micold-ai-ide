@@ -20,6 +20,19 @@ it. When the handshake succeeds the row shows **Connected**, the daemon's versio
 `user@host:port`. Nothing is listening on a network port on either machine: the connection is the
 SSH session itself.
 
+## Adding a repository that lives on the host
+
+Once the row shows **Connected**, a **Repository on the host** field appears under it. Type the
+absolute path of a git repository on that computer (for example `/home/dev/project`) and choose
+**Add repository**. Micold asks the host whether the folder is a git repository and, when it is,
+adds it to your projects. A relative path, or a daemon that is not connected, is refused with a
+sentence under the field. Nothing is read from your own disk for a remote repository.
+
+The project, its worktrees and their sessions run on that daemon alone. Wherever a remote worktree
+appears its path is the path on the host, and its tooltip names the daemon (`Remote over SSH:
+/home/dev/project`). Creating a worktree, starting a session and opening a terminal work as for a
+local project, on the host.
+
 ## When it does not connect
 
 The row shows **Unreachable** with the reason: the host could not be found, refused the connection,
