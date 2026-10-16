@@ -125,7 +125,7 @@ User stories: US1 refused second session unless really requested (P1), US2 defin
 - [x] T027 [P] [US3] Client tests in `crates/micold-client/tests/features_attach.rs` and `attach_dialog.rs`: a `Refused(LocationHasSession)` result opens a confirmation naming both sessions with Replace and Keep both; Replace re-sends the item with `replace: true`, Keep both with `allow_additional_session: true`; cancel changes nothing *(amended)*.
 - [x] T028 [US3] Add the confirm step (replace or keep both, *amended*) in `crates/micold-client/src/features/attach.rs` and render it in `crates/micold-client/src/ui/attach_dialog.rs`.
 - [x] T029 [P] [US3] Document resume-replaces and its confirmation in `docs/user-guide/worktrees-and-sessions.md`.
-- [ ] T030 [US3] Visual pass of quickstart Part B item 3 (confirmation naming both sessions, cancel) via `visual-pass`; evidence in `specs/776-one-session-per-worktree/tdd/`.
+- [x] T030 [US3] Visual pass of quickstart Part B item 3 (confirmation naming both sessions, cancel) via `visual-pass`; evidence in `specs/776-one-session-per-worktree/tdd/`.
 
 ## Phase 6: User Story 4 - Worktrees that hold several sessions (P3)
 
