@@ -179,7 +179,8 @@ that the whole details read times out; create a worktree both ways each time.
   the kinds the issue has; a kind with nothing in it MUST be omitted, so an issue with no
   relationships adds nothing but what is required to identify the issue.
 - **FR-005**: The New worktree form MUST show the picked issue's details before **Create**, showing
-  only the kinds present, with an open blocker presented as a warning.
+  only the kinds present, with an open blocker presented as a warning. Labels are the one exception:
+  the picked issue's row already shows them (034/038), so the details add no second labels line.
 - **FR-006**: The details MUST NOT gate creation: a blocked issue, a slow read or a failed read MUST
   NOT refuse, delay or change the worktree that would be created without this feature.
 - **FR-007**: A kind that cannot be read (permission, unsupported by the server) MUST be reported as
@@ -218,7 +219,7 @@ that the whole details read times out; create a worktree both ways each time.
 ### Measurable Outcomes
 
 - **SC-001**: For an issue with every kind of relationship, 100% of the kinds appear in both the
-  tool's result and the form, with the content FR-002 and FR-003 require.
+  tool's result and the form (labels in the form on the picked issue's row, FR-005), with the content FR-002 and FR-003 require.
 - **SC-002**: For an issue with no relationships and no optional metadata, the tool's result and the
   form show nothing beyond what they show today, in every tested case.
 - **SC-003**: An issue blocked by at least one open issue is reported as blocked in 100% of tested
