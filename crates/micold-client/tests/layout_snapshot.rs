@@ -844,6 +844,10 @@ fn every_child_row_carries_the_child_marker_and_no_user_started_row_does() {
         annotations.iter().any(|c| c.as_str() == "claude"),
         "the user-started session is not: {annotations:?}"
     );
-    assert!(annotations.iter().any(|c| c.contains("origin pending")));
-    assert!(annotations.iter().any(|c| c.contains("origin removed")));
+    assert!(annotations
+        .iter()
+        .any(|c| c.as_str() == "agent, origin pending, claude"));
+    assert!(annotations
+        .iter()
+        .any(|c| c.as_str() == "agent, origin removed, claude"));
 }

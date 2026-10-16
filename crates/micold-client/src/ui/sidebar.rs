@@ -30,6 +30,10 @@ use micold_core::worktree::WorktreeStatus;
 pub static SIDEBAR_SCROLL_ID: std::sync::LazyLock<iced::advanced::widget::Id> =
     std::sync::LazyLock::new(|| iced::advanced::widget::Id::new("sidebar-list"));
 
+/// The deepest indent a nested session row takes; deeper rows keep their order but not their indent,
+/// so the child marker at the end of the row stays on screen (feature 551).
+const MAX_NESTING: usize = 4;
+
 /// Width of the collapsed strip that hosts the "show sidebar" button.
 const STRIP_WIDTH: f32 = 32.0;
 
@@ -759,7 +763,7 @@ fn build_items(
             let main = node.main_session();
             for row in node.session_rows() {
                 items.push(session_tree_item(
-                    depth + 1 + row.depth as u16,
+                    depth + 1 + row.depth.min(MAX_NESTING) as u16,
                     row.session,
                     state.session.active,
                     in_view,
@@ -1018,7 +1022,7 @@ fn build_default_item(
         let main = node.main_session();
         for row in node.session_rows() {
             items.push(session_tree_item(
-                1 + row.depth as u16,
+                1 + row.depth.min(MAX_NESTING) as u16,
                 row.session,
                 state.session.active,
                 in_view,
@@ -1116,5 +1120,28 @@ mod tests {
         assert_eq!(tint(SessionLifecycle::Idle), r.on_surface_variant);
         assert_eq!(tint(SessionLifecycle::InterruptedResumable), r.primary);
         assert_eq!(tint(SessionLifecycle::Running), r.on_surface);
+    }
+
+    /// FR-007: a child row's select and close messages are the ones a top-level row's are, for its
+    /// own session; only the marker and the annotation tell them apart.
+    #[test]
+    fn a_child_row_acts_like_a_top_level_row() {
+        use micold_core::origin::{Orphan, TreePlace};
+        let r = tokens::roles(ColorScheme::Dark);
+        let s = session(ActivitySignal::Unknown, SessionLifecycle::Running);
+        let row = |place| session_tree_item(1, &s, None, None, false, place, r);
+        let top = row(TreePlace::Root);
+        for place in [TreePlace::Child, TreePlace::Orphan(Orphan::Pending)] {
+            let child = row(place);
+            assert!(child.child && !top.child);
+            assert_eq!(
+                format!("{:?}", child.on_press),
+                format!("{:?}", top.on_press)
+            );
+            assert_eq!(
+                format!("{:?}", child.trailing),
+                format!("{:?}", top.trailing)
+            );
+        }
     }
 }
