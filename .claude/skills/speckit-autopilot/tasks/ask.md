@@ -12,7 +12,14 @@ phone notification, hours later, with no scrollback. What may be asked:
    why and cites a path, a measurement or a principle.
 3. **Notify.** Load `PushNotification` with `ToolSearch("select:PushNotification")`. Send
    `🛑 <issue> needs a decision: <topic>`.
-4. **Record.** The escalation is in the ledger's *Open escalation* before you ask (the unit wrote
+4. **Restart small.** Before the `AskUserQuestion`, run
+   `AUTOPILOT_CONTEXT_CAP=80000 scripts/autopilot/context.py`. On `OVER`, do not call
+   `AskUserQuestion`: it blocks the session, so the user cannot `/clear` while it is open, and an
+   answer hours later re-writes your whole context to the cache. Confirm the ledger's *Open
+   escalation* holds the question with its options and your recommendation, send the banner
+   with the extra line `Cheaper: /clear, then /speckit-autopilot resume — it asks this again from
+   the ledger.`, send the notification, and end the turn. `tasks/resume.md` re-asks it.
+5. **Record.** The escalation is in the ledger's *Open escalation* before you ask (the unit wrote
    it; the flow question at entry has no ledger yet). When the answer arrives, the unit moves it to *Decisions* as `decided by user`.
 
 The message text right before the `AskUserQuestion` call is exactly this banner:
