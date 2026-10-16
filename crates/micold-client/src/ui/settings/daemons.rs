@@ -147,7 +147,12 @@ fn details_block<'a>(details: DaemonDetails, roles: Roles) -> Element<'a, Messag
     block.into()
 }
 
-fn daemon_row<'a>(view: DaemonView, state: &State, roles: Roles) -> Element<'a, Message> {
+fn daemon_row<'a>(
+    view: DaemonView,
+    state: &'a State,
+    focused: Option<FieldId>,
+    roles: Roles,
+) -> Element<'a, Message> {
     let open = state.details_shown.contains(&view.id);
     let header = row![
         crate::ui::material::Text::new(
@@ -177,6 +182,9 @@ fn daemon_row<'a>(view: DaemonView, state: &State, roles: Roles) -> Element<'a, 
     if let Some(sentence) = state_note(&view) {
         body = body.push(caution(sentence, roles));
     }
+    if view.runtime_label == micold_core::daemons::SSH_RUNTIME_LABEL {
+        body = body.push(repository_step(&view, state, focused, roles));
+    }
     body = body.push(actions(&view, open, roles));
     if open {
         body = body.push(details_block(
@@ -185,6 +193,37 @@ fn daemon_row<'a>(view: DaemonView, state: &State, roles: Roles) -> Element<'a, 
         ));
     }
     body.into()
+}
+
+/// The repository step under a remote daemon (feature 489, FR-012): the path on the host and the
+/// action that adds it, which is available once the daemon is connected.
+fn repository_step<'a>(
+    view: &DaemonView,
+    state: &'a State,
+    focused: Option<FieldId>,
+    roles: Roles,
+) -> Element<'a, Message> {
+    let id = view.id;
+    let typed = state.repositories.get(&id).map_or("", String::as_str);
+    let error = state
+        .repository_error
+        .as_ref()
+        .filter(|(for_id, _)| *for_id == id)
+        .map(|(_, message)| message.clone());
+    let mut add = Button::text("Add repository", roles);
+    if view.state == DaemonState::Connected {
+        add = add.on_press(Message::Daemons(DaemonsMsg::RepositoryAdded(id)));
+    }
+    row![
+        TextField::new("/path/to/repository on the host", typed, roles)
+            .label("Repository on the host")
+            .error(error)
+            .track_focus(FieldId::DaemonRepository, focused)
+            .on_input(move |v| Message::Daemons(DaemonsMsg::RepositoryEdited(id, v))),
+        add,
+    ]
+    .spacing(spacing::SM)
+    .into()
 }
 
 fn error_of(state: &State, field: &str) -> Option<String> {
@@ -366,7 +405,7 @@ pub fn view<'a>(
         controls.push(empty_state(roles));
     }
     for view in list.rows {
-        controls.push(daemon_row(view, state, roles));
+        controls.push(daemon_row(view, state, focused, roles));
     }
     match &state.draft {
         Some(draft) => controls.push(form(draft, state, facts, focused, roles)),

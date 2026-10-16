@@ -27,6 +27,7 @@ use micold_core::protocol::messages::{ClientMsg, DaemonMsg};
 use micold_core::sandbox::placement::PlacementKind;
 use micold_core::ssh::argv::{current_build_id, DEFAULT_CONNECT_TIMEOUT_SECS};
 use micold_core::ssh::provision::{connect as ssh_connect, ProvisionOptions};
+use micold_core::ssh::remote_path;
 use micold_core::ssh::{ClientPlatform, ProvisionProgress, ReasonContext, SshHost, SshTarget};
 
 use crate::app::Message;
@@ -505,6 +506,14 @@ async fn connect_and_pump(
         }
     };
 
+    // A daemon on a remote host knows its own paths only; the client keys everything by identities
+    // that name the daemon too. The translation is this one seam (feature 489, research R5).
+    let remote = matches!(spec.dial, Dial::Ssh { .. });
+    let welcome_catalog = if remote {
+        remote_path::wrap_catalog(welcome.catalog, id)
+    } else {
+        welcome.catalog
+    };
     // Hand the App a fresh Outbox and the welcome state (the resync on every (re)connect, FR-028).
     let (mut sink, incoming) = conn.split();
     let (tx, rx) = mpsc::unbounded::<ClientMsg>();
@@ -513,7 +522,7 @@ async fn connect_and_pump(
             id,
             ConnectionMsg::Connected {
                 outbox: Outbox::new(tx),
-                catalog: welcome.catalog,
+                catalog: welcome_catalog,
                 settings: welcome.settings,
                 plan_usage: welcome.plan_usage,
             },
@@ -539,6 +548,11 @@ async fn connect_and_pump(
     while let Some(io) = events.next().await {
         match io {
             Io::Outgoing(msg) => {
+                let msg = if remote {
+                    remote_path::outgoing(msg, id)
+                } else {
+                    msg
+                };
                 if sink.send(Frame::Control(msg)).await.is_err() {
                     return PumpEnd::Disconnected; // socket closed under us
                 }
@@ -546,7 +560,14 @@ async fn connect_and_pump(
             Io::Incoming(Ok(frame)) => {
                 keepalive.on_daemon_frame(Instant::now());
                 let msg = match frame {
-                    Frame::Control(dm) => Message::daemon(id, ConnectionMsg::Event(dm)),
+                    Frame::Control(dm) => {
+                        let dm = if remote {
+                            remote_path::incoming(dm, id)
+                        } else {
+                            dm
+                        };
+                        Message::daemon(id, ConnectionMsg::Event(dm))
+                    }
                     Frame::Grid(frame) => Message::daemon(id, ConnectionMsg::GridFrame(frame)),
                 };
                 if output.send(msg).await.is_err() {

@@ -261,3 +261,30 @@ fn a_directory_clash_names_the_daemon() {
     assert!(clash.fact.contains("feat-x"), "{}", clash.fact);
     assert!(clash.fact.contains("'Host'"), "{}", clash.fact);
 }
+
+#[test]
+fn a_remote_project_is_bound_to_its_own_daemon_whatever_is_stored_or_defaulted() {
+    let (r, id) = one_daemon();
+    let other = DaemonId(id.0 + 100);
+    let project = micold_core::ssh::RemoteLocation::new(id, "/srv/r")
+        .unwrap()
+        .identity();
+    assert_eq!(
+        Binding::resolve_for(&project, &bindings(&[]), "feature-x", &r, Some(other)),
+        Binding::Bound(id),
+        "a discovered worktree never falls to the legacy default"
+    );
+    let gone = micold_core::ssh::RemoteLocation::new(other, "/srv/r")
+        .unwrap()
+        .identity();
+    assert_eq!(
+        Binding::resolve_for(&gone, &bindings(&[]), "", &r, Some(id)),
+        Binding::NoDaemon,
+        "an identity of a removed daemon is no daemon, not the default"
+    );
+    assert_eq!(
+        Binding::resolve_for(&PathBuf::from("/local"), &bindings(&[]), "w", &r, Some(id)),
+        Binding::Bound(id),
+        "a local project resolves as before"
+    );
+}

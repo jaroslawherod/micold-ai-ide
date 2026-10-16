@@ -1759,3 +1759,23 @@ fn recorded_check_outcomes_reach_the_row() {
         );
     }
 }
+
+// --- Feature 489: a remote worktree is shown by the host's own path ---
+
+#[test]
+fn a_remote_worktrees_location_is_the_hosts_path() {
+    let id = micold_core::daemons::DaemonId(3);
+    let root = micold_core::ssh::RemoteLocation::new(id, "/srv/repo")
+        .unwrap()
+        .identity();
+    let mut remote = worktree("feat-a");
+    remote.path = micold_core::ssh::RemoteLocation::new(id, "/srv/repo-feat-a")
+        .unwrap()
+        .identity();
+    let tip = worktree_tooltip(Some(&root), &remote, "Feat a", None);
+    assert_eq!(line(&tip, "Location").as_deref(), Some("/srv/repo-feat-a"));
+    assert!(
+        !tip.contains("micold-remote"),
+        "the identity is never shown: {tip}"
+    );
+}

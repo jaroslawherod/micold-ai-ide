@@ -157,6 +157,12 @@ pub enum Outcome {
         /// The daemon it now runs on.
         daemon: micold_core::daemons::DaemonId,
     },
+    /// A repository on a remote daemon's host was named (feature 489, FR-012): the shell asks that
+    /// daemon whether it is one and opens it as a project when it is.
+    RemoteRepositoryRequested {
+        /// The repository's identity (`micold-remote://<daemon><path>`).
+        path: std::path::PathBuf,
+    },
 }
 
 /// What an activated link asks the operating system to open (feature 031, data-model §3).

@@ -57,6 +57,7 @@ pub fn interpret(outcome: Outcome) -> Task<Message> {
         | Outcome::DaemonRegistryChanged(_)
         | Outcome::DaemonSessionsEnded { .. }
         | Outcome::DaemonBound { .. }
+        | Outcome::RemoteRepositoryRequested { .. }
         | Outcome::SurfaceOpened(_) => Task::none(),
     }
 }
@@ -196,6 +197,11 @@ fn image_target(app: &App) -> Option<ImageTarget> {
         return None;
     }
     let (repo, session) = app.core.workspace.find_session(terminal.session)?;
+    // A remote session's shell cannot read a local file, and its identity is not a local path:
+    // the paste goes through as text (feature 489).
+    if micold_core::ssh::RemoteLocation::parse(repo).is_some() {
+        return None;
+    }
     let sandbox = crate::shell::sandbox::share(app);
     // A sandbox sees the state directory, so that is where an image goes when its worktree cannot
     // take it (FR-010); otherwise it is the app's data directory.

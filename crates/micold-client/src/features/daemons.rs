@@ -172,6 +172,10 @@ pub struct State {
     runtime_missing: BTreeMap<DaemonId, String>,
     /// How much of the build has been copied to an SSH daemon's host, in percent (feature 489).
     copy_progress: BTreeMap<DaemonId, u8>,
+    /// The repository path typed under each remote daemon (feature 489, FR-012).
+    pub repositories: BTreeMap<DaemonId, String>,
+    /// The sentence under the repository field the last refused add was about.
+    pub repository_error: Option<(DaemonId, String)>,
     ended: Vec<SessionId>,
 }
 
@@ -210,7 +214,13 @@ fn bound_to(model: &Model<'_>, id: DaemonId) -> Vec<WorktreeRef> {
 fn resolve(model: &Model<'_>, loc: &WorktreeRef) -> Binding {
     let empty = BTreeMap::new();
     let stored = model.bindings.get(&loc.project).unwrap_or(&empty);
-    Binding::resolve(stored, &loc.worktree, model.registry, model.legacy_default)
+    Binding::resolve_for(
+        &loc.project,
+        stored,
+        &loc.worktree,
+        model.registry,
+        model.legacy_default,
+    )
 }
 
 /// The list, its empty state and the daemons a worktree can bind to.
@@ -817,6 +827,10 @@ pub enum Msg {
     SshPortEdited(String),
     /// The SSH key file field changed.
     SshKeyFileEdited(String),
+    /// The repository path under a remote daemon was edited (feature 489).
+    RepositoryEdited(DaemonId, String),
+    /// Add the typed repository path of this remote daemon as a project (feature 489).
+    RepositoryAdded(DaemonId),
     /// The share of the build copied to an SSH daemon's host, in percent.
     CopyProgress(DaemonId, u8),
     /// The connect-at-launch box changed.
@@ -857,6 +871,40 @@ pub enum Msg {
         /// The daemon.
         daemon: DaemonId,
     },
+}
+
+/// The repository step of a remote daemon (feature 489, FR-012): the typed path, made the identity
+/// of a project bound to this daemon alone. Refused, with the sentence under the field, for a path
+/// that is not absolute and for a daemon that is not connected: the open-project gate is asked of
+/// the host, so nothing is guessed while it cannot answer.
+pub fn add_repository(state: &mut State, model: &Model<'_>, id: DaemonId) -> Vec<Outcome> {
+    let typed = state.repositories.get(&id).cloned().unwrap_or_default();
+    let located = micold_core::ssh::RemoteLocation::new(id, &typed);
+    let outcome = match located {
+        Err(e) => Err(e.to_string()),
+        Ok(_) if !model.links.is_connected(id) => {
+            let name = model
+                .registry
+                .get(id)
+                .map(|e| e.name.as_str().to_string())
+                .unwrap_or_default();
+            Err(format!("Daemon {name} is not connected yet."))
+        }
+        Ok(location) => Ok(location),
+    };
+    match outcome {
+        Ok(location) => {
+            state.repository_error = None;
+            state.repositories.remove(&id);
+            vec![Outcome::RemoteRepositoryRequested {
+                path: location.identity(),
+            }]
+        }
+        Err(message) => {
+            state.repository_error = Some((id, message));
+            Vec::new()
+        }
+    }
 }
 
 /// Apply one message. The registry, the links and the bindings change through `model`; what the
@@ -913,6 +961,11 @@ pub fn update(state: &mut State, model: &mut Model<'_>, msg: Msg) -> Vec<Outcome
         Msg::SshUserEdited(v) => edit(state, &|d| d.ssh_user = v.clone()),
         Msg::SshPortEdited(v) => edit(state, &|d| d.ssh_port = v.clone()),
         Msg::SshKeyFileEdited(v) => edit(state, &|d| d.ssh_key_file = v.clone()),
+        Msg::RepositoryEdited(id, v) => {
+            state.repositories.insert(id, v);
+            state.repository_error = None;
+        }
+        Msg::RepositoryAdded(id) => return add_repository(state, model, id),
         Msg::CopyProgress(id, percent) => {
             state.copy_progress.insert(id, percent);
         }

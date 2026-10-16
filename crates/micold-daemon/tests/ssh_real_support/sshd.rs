@@ -93,10 +93,11 @@ impl Sshd {
                 "Port {port}\nListenAddress 127.0.0.1\nHostKey {}\nPidFile {}\n\
                  AuthorizedKeysFile {}\nStrictModes no\nUsePAM no\nPasswordAuthentication no\n\
                  KbdInteractiveAuthentication no\nPubkeyAuthentication yes\nLogLevel ERROR\n\
-                 SetEnv HOME={}\n",
+                 SetEnv HOME={} PATH={}/bin:/usr/local/bin:/usr/bin:/bin\n",
                 host_key.display(),
                 dir.join("sshd.pid").display(),
                 authorized.display(),
+                remote_home.display(),
                 remote_home.display(),
             ),
         )

@@ -9,6 +9,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::sandbox::SandboxProfile;
 
+/// What a remote-over-SSH daemon's runtime is called wherever a row shows it.
+pub const SSH_RUNTIME_LABEL: &str = "Remote over SSH";
+
 /// Stable key of a daemon. Allocated from the registry's counter and never reused, so removing a
 /// daemon and adding another of the same name cannot inherit its bindings.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -126,7 +129,7 @@ impl DaemonRuntime {
         match self {
             DaemonRuntime::Host => "Host",
             DaemonRuntime::Container(_) => "Container",
-            DaemonRuntime::Ssh(_) => "Remote over SSH",
+            DaemonRuntime::Ssh(_) => SSH_RUNTIME_LABEL,
             DaemonRuntime::Unsupported { .. } => "Unsupported",
         }
     }
@@ -579,6 +582,25 @@ impl Binding {
         match id {
             Some(id) if registry.get(id).is_some() => Binding::Bound(id),
             _ => Binding::NoDaemon,
+        }
+    }
+}
+
+impl Binding {
+    /// [`Binding::resolve`] for a location of `project`: a worktree of a remote project (feature
+    /// 489) is always bound to the daemon whose host it is on, whatever is stored, so a location
+    /// discovered rather than created cannot fall to another daemon.
+    pub fn resolve_for(
+        project: &std::path::Path,
+        bindings: &BTreeMap<String, DaemonId>,
+        key: &str,
+        registry: &DaemonRegistry,
+        legacy_default: Option<DaemonId>,
+    ) -> Binding {
+        match crate::ssh::RemoteLocation::parse(project) {
+            Some(remote) if registry.get(remote.daemon).is_some() => Binding::Bound(remote.daemon),
+            Some(_) => Binding::NoDaemon,
+            None => Binding::resolve(bindings, key, registry, legacy_default),
         }
     }
 }

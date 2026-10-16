@@ -43,7 +43,12 @@ pub fn view(state: &State, scheme: ColorScheme) -> Element<'_, Message> {
                     TypeRole::Headline,
                     r
                 ),
-                Text::new(project.path.display().to_string(), TypeRole::Caption, r).muted(),
+                Text::new(
+                    micold_core::ssh::remote_path::display_path(&project.path),
+                    TypeRole::Caption,
+                    r
+                )
+                .muted(),
                 Button::outlined("Open another project", r)
                     .leading(Icon::OpenProject)
                     .on_press(Message::Project(ProjectMsg::SelectorOpened)),

@@ -122,8 +122,14 @@ pub fn validate_rename(raw: &str) -> Result<String, RenameError> {
 /// resolves to a real `\\?\D:\a`, silently rewriting it). Lexical normalization still dedupes
 /// equivalent spellings (trailing separators, `.`/`..`) reliably on every platform; it does not
 /// resolve symlinks (an acceptable trade-off for a stable, testable identity).
+///
+/// A remote identity (`micold-remote://<daemon><path>`, feature 489) is returned verbatim: the walk
+/// below would collapse its `//` and use the local separator, and its path is the host's to judge.
 pub fn canonicalize_best_effort(path: &Path) -> PathBuf {
     use std::path::Component;
+    if crate::ssh::RemoteLocation::parse(path).is_some() {
+        return path.to_path_buf();
+    }
     let mut out = PathBuf::new();
     for component in path.components() {
         match component {
@@ -142,4 +148,29 @@ pub fn canonicalize_best_effort(path: &Path) -> PathBuf {
         out.push(".");
     }
     out
+}
+
+#[cfg(test)]
+mod remote_identity_tests {
+    use super::*;
+
+    #[test]
+    fn a_remote_identity_is_kept_verbatim() {
+        let id = Path::new("micold-remote://3/home/u/repo");
+        assert_eq!(canonicalize_best_effort(id), id);
+        let dotted = Path::new("micold-remote://3/home/u/../repo");
+        assert_eq!(
+            canonicalize_best_effort(dotted),
+            dotted,
+            "the host's path is not ours to normalise"
+        );
+    }
+
+    #[test]
+    fn a_local_path_is_still_normalised() {
+        assert_eq!(
+            canonicalize_best_effort(Path::new("/a/./b/../c")),
+            PathBuf::from("/a/c")
+        );
+    }
 }

@@ -32,7 +32,8 @@ impl App {
             .get(project)
             .cloned()
             .unwrap_or_default();
-        Binding::resolve(
+        Binding::resolve_for(
+            project,
             &stored,
             key,
             &self.core.settings.daemons,

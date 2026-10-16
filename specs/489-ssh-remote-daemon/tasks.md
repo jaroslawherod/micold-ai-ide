@@ -63,17 +63,17 @@ rootless `sshd` and are off by default (`mise run test-ssh`).
 
 ### Scenarios 2-4: remote projects, worktrees, sessions (M2)
 
-- [ ] T028 [P] [US1] Test `RemoteLocation` and the namespaced identity path round trip, including Windows separators, in `core/ssh/remote_path.rs`
-- [ ] T029 [P] [US1] Test that `canonicalize_best_effort` returns a `micold-remote://` identity verbatim in `core/project.rs`
-- [ ] T030 [P] [US1] Test add-repository binding to its one daemon, never guessed, and boundary path translation in `client/features/daemons.rs` and `client/shell/daemon_sync.rs`
-- [ ] T031 [P] [US1] Test that a remote worktree shows the host path and the daemon name in row labels in `client/links.rs` and `client/features/sidebar.rs`, and add the geometry-gate case for the repository field in `client/ui/settings/daemons.rs`
-- [ ] T032 [US1] Extend `daemon/tests/ssh_real_endtoend.rs`: add repository, list and create a worktree, session with the fake AI CLI, input and output, terminal command
-- [ ] T033 [US1] Implement `RemoteLocation` and the identity mapping in `core/ssh/remote_path.rs`
-- [ ] T034 [US1] Keep a remote identity verbatim in `canonicalize_best_effort` in `core/project.rs`
-- [ ] T035 [US1] Translate paths at the daemon boundary in `client/shell/daemon_sync.rs` and pass the open-project gate over the wire in `client/shell/workspace.rs`
-- [ ] T036 [US1] Add the repository path step to `client/features/daemons.rs` and show host name and remote path in `client/links.rs` and `client/features/sidebar.rs`
-- [ ] T037 [US1] Add the repository field to `client/ui/settings/daemons.rs`
-- [ ] T038 [US1] Document remote repositories and worktrees in `docs/user-guide/remote-daemons.md` and `docs/user-guide/worktrees-and-sessions.md`
+- [x] T028 [P] [US1] Test `RemoteLocation` and the namespaced identity path round trip, including Windows separators, in `core/ssh/remote_path.rs`
+- [x] T029 [P] [US1] Test that `canonicalize_best_effort` returns a `micold-remote://` identity verbatim in `core/project.rs`
+- [x] T030 [P] [US1] Test add-repository binding to its one daemon, never guessed, and boundary path translation in `client/features/daemons.rs` and `client/shell/daemon_sync.rs`
+- [x] T031 [P] [US1] Test that a remote worktree shows the host path and the daemon name in row labels in `client/links.rs` and `client/features/sidebar.rs`, and add the geometry-gate case for the repository field in `client/ui/settings/daemons.rs`
+- [x] T032 [US1] Extend `daemon/tests/ssh_real_endtoend.rs`: add repository, list and create a worktree, session with the fake AI CLI, input and output, terminal command
+- [x] T033 [US1] Implement `RemoteLocation` and the identity mapping in `core/ssh/remote_path.rs`
+- [x] T034 [US1] Keep a remote identity verbatim in `canonicalize_best_effort` in `core/project.rs`
+- [x] T035 [US1] Translate paths at the daemon boundary in `client/shell/daemon_sync.rs` and pass the open-project gate over the wire in `client/shell/workspace.rs`
+- [x] T036 [US1] Add the repository path step to `client/features/daemons.rs` and show host name and remote path in `client/links.rs` and `client/features/sidebar.rs`
+- [x] T037 [US1] Add the repository field to `client/ui/settings/daemons.rs`
+- [x] T038 [US1] Document remote repositories and worktrees in `docs/user-guide/remote-daemons.md` and `docs/user-guide/worktrees-and-sessions.md`
 
 ## Phase 4: User Story 2 - A network drop loses nothing (P1)
 
