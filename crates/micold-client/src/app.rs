@@ -1170,6 +1170,11 @@ pub fn interpret(
         Outcome::ProjectEntered => state.project_entered(),
         Outcome::RevealSuppressed(suppressed) => state.reveal_suppression_set(suppressed),
         Outcome::FieldFocusCleared => crate::features::window::field_focus_cleared(state),
+        // Held for the next open of the dialog; the shell writes it to disk
+        // (`shell::issues::on_issue_provider_changed`).
+        Outcome::IssueSourceChosen { project, provider } => {
+            state.workspace.issue_sources.insert(project, provider);
+        }
         Outcome::ClipboardWrite(_) | Outcome::OpenLink(_) | Outcome::Insert { .. } => {}
         // The shell's: it persists the registry and the binding (`App::apply_daemon_outcome`).
         Outcome::DaemonRegistryChanged(_)

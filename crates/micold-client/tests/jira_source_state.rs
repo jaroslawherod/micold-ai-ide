@@ -404,3 +404,139 @@ fn a_site_that_is_not_reachable_names_the_host() {
     let text = IssueLoadError::Unreachable("dns error".into()).message(source);
     assert_eq!(text, "Couldn't reach acme.atlassian.net: dns error.");
 }
+
+// ---- Feature 533, US4: the source choice of a project with both (FR-016, FR-017) ----
+
+fn github_remote() -> Vec<GitRemote> {
+    vec![GitRemote {
+        name: "origin".into(),
+        url: "git@github.com:o/r.git".into(),
+    }]
+}
+
+/// A project with a GitHub remote and a Jira connection, `remembered` already chosen in it.
+fn both_form(remembered: Option<IssueProvider>) -> State {
+    let mut state = settings_with_jira();
+    if let Some(provider) = remembered {
+        state.workspace.issue_sources.insert(project(), provider);
+    }
+    send(&mut state, Msg::Opened);
+    send(&mut state, Msg::RemotesListed(Ok(github_remote())));
+    state
+}
+
+#[test]
+fn both_sources_offer_the_choice_and_open_on_the_remembered_one_else_github() {
+    let fresh = both_form(None);
+    assert!(form(&fresh).offers_issue_provider_choice());
+    assert_eq!(form(&fresh).provider, IssueProvider::Github);
+
+    let jira = both_form(Some(IssueProvider::Jira));
+    assert!(form(&jira).offers_issue_provider_choice());
+    assert_eq!(form(&jira).provider, IssueProvider::Jira);
+
+    let github = both_form(Some(IssueProvider::Github));
+    assert_eq!(form(&github).provider, IssueProvider::Github);
+}
+
+#[test]
+fn a_single_source_offers_no_choice() {
+    // Jira only, GitHub only, the switch off: the 034 dialog or the Jira-only one (US4 AS3, AS4).
+    assert!(!form(&jira_form()).offers_issue_provider_choice());
+    let mut github_only = State::default();
+    github_only.workspace.active = Some(project());
+    send(&mut github_only, Msg::Opened);
+    send(&mut github_only, Msg::RemotesListed(Ok(github_remote())));
+    assert!(!form(&github_only).offers_issue_provider_choice());
+    let mut no_connection = State::default();
+    no_connection.workspace.active = Some(project());
+    no_connection.settings.jira_enabled = true;
+    send(&mut no_connection, Msg::Opened);
+    send(&mut no_connection, Msg::RemotesListed(Ok(github_remote())));
+    assert!(!form(&no_connection).offers_issue_provider_choice());
+    // A remembered Jira does not select Jira once it is not connected.
+    no_connection
+        .workspace
+        .issue_sources
+        .insert(project(), IssueProvider::Jira);
+    send(&mut no_connection, Msg::Opened);
+    send(&mut no_connection, Msg::RemotesListed(Ok(github_remote())));
+    assert_eq!(form(&no_connection).provider, IssueProvider::Github);
+}
+
+#[test]
+fn choosing_a_provider_resets_the_list_drops_the_other_result_and_is_remembered() {
+    let mut state = both_form(None);
+    send(&mut state, Msg::SourceChanged(BranchSource::Issue));
+    let stale = awaited(&state);
+    send(&mut state, Msg::IssueQueryChanged("login".into()));
+    let before = state.worktree_form.issue_request_seq;
+
+    let outcomes = micold_client::features::worktree_form::update(
+        &mut state,
+        Msg::IssueProviderChanged(IssueProvider::Jira),
+    );
+    assert_eq!(
+        outcomes,
+        vec![micold_client::features::Outcome::IssueSourceChosen {
+            project: project(),
+            provider: IssueProvider::Jira,
+        }]
+    );
+    assert_eq!(form(&state).provider, IssueProvider::Jira);
+    assert!(form(&state).issue_query.is_empty());
+    assert!(form(&state).issue_matches.is_empty());
+    assert!(state.worktree_form.issue_request_seq > before);
+    let fresh = awaited(&state);
+    assert_ne!(fresh, stale);
+
+    // The GitHub load that was in flight answers late and is dropped.
+    send(&mut state, loaded_result(stale, true));
+    assert_eq!(form(&state).issues, IssueList::Loading { seq: fresh });
+    send(&mut state, loaded_result(fresh, true));
+    assert!(matches!(form(&state).issues, IssueList::Loaded { .. }));
+
+    // Through the root the choice is also held for the next open of the dialog.
+    let mut root = both_form(None);
+    root.update(Message::WorktreeForm(Msg::IssueProviderChanged(
+        IssueProvider::Jira,
+    )));
+    assert_eq!(root.workspace.issue_sources[&project()], IssueProvider::Jira);
+    send(&mut root, Msg::Cancelled);
+    send(&mut root, Msg::Opened);
+    send(&mut root, Msg::RemotesListed(Ok(github_remote())));
+    assert_eq!(form(&root).provider, IssueProvider::Jira);
+}
+
+#[test]
+fn jira_is_never_chosen_without_a_connected_site_and_a_repeat_changes_nothing() {
+    // Integration off: the choice is refused.
+    let mut off = State::default();
+    off.workspace.active = Some(project());
+    send(&mut off, Msg::Opened);
+    send(&mut off, Msg::RemotesListed(Ok(github_remote())));
+    let outcomes = micold_client::features::worktree_form::update(
+        &mut off,
+        Msg::IssueProviderChanged(IssueProvider::Jira),
+    );
+    assert!(outcomes.is_empty());
+    assert_eq!(form(&off).provider, IssueProvider::Github);
+
+    // Choosing the provider already chosen is a no-op: no seq bump, no outcome.
+    let mut state = both_form(None);
+    let before = state.worktree_form.issue_request_seq;
+    let outcomes = micold_client::features::worktree_form::update(
+        &mut state,
+        Msg::IssueProviderChanged(IssueProvider::Github),
+    );
+    assert!(outcomes.is_empty());
+    assert_eq!(state.worktree_form.issue_request_seq, before);
+}
+
+#[test]
+fn switching_the_connection_off_in_settings_drops_a_remembered_jira_choice_from_the_form() {
+    let mut state = both_form(Some(IssueProvider::Jira));
+    send(&mut state, Msg::JiraSettingsChanged(JiraAvailability::Off));
+    assert_eq!(form(&state).provider, IssueProvider::Github);
+    assert!(!form(&state).offers_issue_provider_choice());
+}

@@ -171,16 +171,16 @@ GUI exception (quickstart §B).
 
 ### Tests first (US4)
 
-- [ ] T059 [P] [US4] Extend `crates/micold-core/tests/` (store round trip, e.g. `crates/micold-core/tests/store_issue_source.rs`): `StoredProjectState.issue_source: Option<IssueProvider>` is additive, `None` reads as GitHub, a pre-feature project file loads unchanged.
-- [ ] T060 [P] [US4] Extend `crates/micold-client/tests/jira_source_state.rs`: with a GitHub remote and `Connected` the form offers the choice and opens on the remembered source, default GitHub (US4 AS1-2); `IssueProviderChanged(p)` resets issues, clears query, matches and `searched`, bumps the seq so the other provider's in-flight result drops, and asks the shell to remember `p` (invariant 2, FR-016, FR-017); with the integration off or no connection the dialog is exactly the 034 dialog with no choice (US4 AS4); `Jira` is never selected while not `Connected` (invariant 1).
-- [ ] T061 [P] [US4] Extend `crates/micold-client/tests/support/covered_states.rs` with "dialog with source choice (GitHub shown)" and regenerate `layout_snapshot.txt`.
+- [x] T059 [P] [US4] Extend `crates/micold-core/tests/` (store round trip, e.g. `crates/micold-core/tests/store_issue_source.rs`): `StoredProjectState.issue_source: Option<IssueProvider>` is additive, `None` reads as GitHub, a pre-feature project file loads unchanged.
+- [x] T060 [P] [US4] Extend `crates/micold-client/tests/jira_source_state.rs`: with a GitHub remote and `Connected` the form offers the choice and opens on the remembered source, default GitHub (US4 AS1-2); `IssueProviderChanged(p)` resets issues, clears query, matches and `searched`, bumps the seq so the other provider's in-flight result drops, and asks the shell to remember `p` (invariant 2, FR-016, FR-017); with the integration off or no connection the dialog is exactly the 034 dialog with no choice (US4 AS4); `Jira` is never selected while not `Connected` (invariant 1).
+- [x] T061 [P] [US4] Extend `crates/micold-client/tests/support/covered_states.rs` with "dialog with source choice (GitHub shown)" and regenerate `layout_snapshot.txt`.
 
 ### Implementation (US4)
 
-- [ ] T062 [US4] `crates/micold-core/src/store.rs`: add `issue_source: Option<micold_core::jira::IssueProvider>` to `StoredProjectState` with its load/save accessors (T059 green).
-- [ ] T063 [US4] `crates/micold-client/src/features/worktree_form.rs` and `shell/jira.rs`: `IssueProviderChanged`, default from the remembered choice, remembering through the project state file (T060 green).
-- [ ] T064 [US4] `crates/micold-client/src/ui/worktree_form.rs`: the second `ToggleChip` row **GitHub / Jira** under the chips, shown only when both sources are available (T061 green).
-- [ ] T065 [P] [US4] User guide: extend "From a Jira issue" in `docs/user-guide/worktrees-and-sessions.md` with the source choice, its per-project memory and that GitHub stays the default.
+- [x] T062 [US4] `crates/micold-core/src/store.rs`: add `issue_source: Option<micold_core::jira::IssueProvider>` to `StoredProjectState` with its load/save accessors (T059 green).
+- [x] T063 [US4] `crates/micold-client/src/features/worktree_form.rs` and `shell/jira.rs`: `IssueProviderChanged`, default from the remembered choice, remembering through the project state file (T060 green).
+- [x] T064 [US4] `crates/micold-client/src/ui/worktree_form.rs`: the second `ToggleChip` row **GitHub / Jira** under the chips, shown only when both sources are available (T061 green).
+- [x] T065 [P] [US4] User guide: extend "From a Jira issue" in `docs/user-guide/worktrees-and-sessions.md` with the source choice, its per-project memory and that GitHub stays the default.
 
 **Checkpoint**: US4 AS1-4 hold; AS5-7 held since Phase 5.
 

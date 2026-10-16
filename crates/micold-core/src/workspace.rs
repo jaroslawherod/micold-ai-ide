@@ -75,6 +75,12 @@ pub struct Workspace {
     /// [`crate::daemons::Binding::resolve`]: an absent key is not "no daemon" but the legacy
     /// default's, and a key naming an unknown id reads as no daemon without being rewritten.
     pub bindings: BTreeMap<PathBuf, BTreeMap<String, crate::daemons::DaemonId>>,
+    /// The issue source the add-worktree dialog last used in each project (feature 533, FR-016),
+    /// keyed by project path. A project without an entry opens on GitHub.
+    ///
+    /// Written by the **client** through [`crate::store::ProjectStore::save_issue_source`], like
+    /// [`Self::bindings`].
+    pub issue_sources: BTreeMap<PathBuf, crate::jira::IssueProvider>,
 }
 
 impl Workspace {
@@ -155,6 +161,7 @@ impl Workspace {
         self.unreadable_projects.remove(&path);
         // Feature 484 (FR-013): the panes go with the project.
         self.pane_layouts.remove(&path);
+        self.issue_sources.remove(&path);
         // Feature 491: so do its daemon bindings.
         self.bindings.remove(&path);
         if self.active.as_ref() == Some(&path) {
