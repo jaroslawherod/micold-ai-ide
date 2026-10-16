@@ -227,14 +227,14 @@ fn a_dropped_daemons_sessions_stay_unfinished_and_read_as_lost() {
     );
     assert_eq!(state.daemon_row_label("feat-a"), "Alpha");
 
-    // The real drop: the link goes unreachable. Nothing is folded into the session, which stays
-    // what the daemon last said; the row reads "lost" from the link state alone.
+    // The real drop: the link goes to reconnecting. Nothing is folded into the session, which stays
+    // what the daemon last said; the row reads "disconnected" from the link state alone (FR-019).
     state.settings.links.lost(A, "gone");
 
     let project = PathBuf::from(PROJECT);
     let kept = &state.workspace.sessions[&project][0];
     assert_eq!(kept.lifecycle, SessionLifecycle::Running);
     assert_eq!(session_daemon(&state, &project, kept), Some(A));
-    assert_eq!(state.daemon_row_label("feat-a"), "lost to daemon Alpha");
+    assert_eq!(state.daemon_row_label("feat-a"), "disconnected");
     assert_eq!(state.daemon_row_label("feat-b"), "Beta", "B is unaffected");
 }
