@@ -561,8 +561,8 @@ the list already shows them. A row names at most 20 items and then says "and *N*
 have no permission to see are not named and are counted: "; *N* you can't see". With more than five
 rows, the block scrolls. When your GitHub sign-in cannot read one kind, for example projects, that
 row says "Not readable:" and why, so a kind that cannot be read is never mistaken for one that is
-empty. When the whole read fails, the form shows one grey line, "Couldn't read this issue's details:
-…", and nothing else changes.
+empty. When the whole read fails, the form shows one grey line, "Couldn't read this issue's details." followed by what went
+wrong, and nothing else changes.
 
 The relationships are only information. **Create** never waits for them, and is never refused or
 changed by them: a blocked issue gets its worktree like any other, and the same goes while the read

@@ -38,7 +38,7 @@ picked.
 | State | Shown |
 |---|---|
 | `Idle`, `Loading` | nothing |
-| `Failed` | one muted caption: "Couldn't read this issue's details: <message>." (US3-3) |
+| `Failed` | one muted caption: "Couldn't read this issue's details. <message>" (US3-3) |
 | `Loaded` | one row per `display_lines()` entry: a caption-role label, then the text in body role. A warning line has its label tinted `r.error` and its text led by "Blocked:" |
 
 Line texts (`IssueDetails::display_lines`, core, tested):

@@ -120,7 +120,7 @@ description: "Task list for 837 issue relationship metadata"
 
 - [x] T029 [US3] In `crates/micold-daemon/src/mcp/tools.rs`, map an elapsed `details_bound` to `details_error_json` with the existing `IssueLoadError::TimedOut` (`crates/micold-core/src/github.rs`, message "GitHub didn't answer within 10 seconds."); the message names the production bound and is not changed by a shortened test bound. Makes T027 pass.
 - [x] T030 [US3] In `crates/micold-client/src/ui/worktree_form.rs`, `issue_details` draws `Failed { message }` as one muted caption "Couldn't read this issue's details: <message>." (form-details §3). Its check is the T031 visual pass (quickstart Part B step 5), plus a second `layout_snapshot.rs` case beside T021's with the form in `Failed`, written first.
-- [ ] T031 [US2] Run quickstart Part B steps 1–3, 5 and 6 with the `visual-pass` skill (showcase or client with a scripted source) and save its screenshots and notes in `specs/837-issue-relationship-metadata/visual-pass/`; record the result in the ledger.
+- [x] T031 [US2] Run quickstart Part B steps 1–3, 5 and 6 with the `visual-pass` skill (showcase or client with a scripted source) and save its screenshots and notes in `specs/837-issue-relationship-metadata/visual-pass/`; record the result in the ledger.
 
 **Checkpoint**: all three stories work through both paths.
 

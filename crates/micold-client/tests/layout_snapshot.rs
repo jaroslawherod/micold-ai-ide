@@ -459,7 +459,7 @@ fn records_named<'a>(all: &'a [Vec<lay::LayoutRecord>], name: &str) -> &'a [lay:
 fn the_details_rows_add_height_and_the_footer_keeps_its_place() {
     let renderer = lay::renderer();
     let all = lay::cached_records(covered_states(), &renderer, RECORDED_SCHEME);
-    let waiting = records_named(&all, "add-worktree-dialog-issue-details-loading");
+    let waiting = records_named(all, "add-worktree-dialog-issue-details-loading");
     let actions: &[usize] = &[6, 0, 0, 1];
     let place = |records: &[lay::LayoutRecord]| {
         let r = records
@@ -474,7 +474,7 @@ fn the_details_rows_add_height_and_the_footer_keeps_its_place() {
         ("add-worktree-dialog-issue-details-loaded", 9),
         ("add-worktree-dialog-issue-details-failed", 1),
     ] {
-        let shown = records_named(&all, name);
+        let shown = records_named(all, name);
         assert!(
             shown.len() >= waiting.len() + rows,
             "{name}: expected at least {rows} more nodes than while the details are awaited \
