@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #837
 - **Worktree branch**: claude/project-thread-tw6sph
 - **Started**: 2026-10-16
-- **Phase**: clarify
-- **Next step**: clarify unit: apply the user's answer to the open escalation (US2 scenario 6), then run the next clarify round
+- **Phase**: plan
+- **Next step**: plan unit
 
 ## Pull requests
 
@@ -24,6 +24,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Decisions
 
+- Clarify: US2 scenario 6, form only, the sidebar row is unchanged (option A). Default chosen by the orchestrator, pending user confirmation. If the user picks B or C, the orchestrator continues the run with that change.
+- Clarify: FR-001, the form reads the details when the issue is picked; FR-011, a github_issue tool call waits up to 10 s for them (agent-resolved).
+- Clarify round 2: no critical ambiguities.
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
 
@@ -44,17 +47,7 @@ None.
 
 ## Open escalation
 
-Clarify round 1, category 1 (product/scope decision the repo does not settle). Question: After a
-worktree is created from a picked GitHub issue, should the issue's relationships (blocked by,
-parent, sub-issues, linked PRs...) stay visible on that worktree in the sidebar, or is showing them
-in the New worktree form before Create enough? (spec US2 scenario 6)
-- A (Recommended): Form only. The issue's motivation ("see that an issue is blocked before starting
-  work") is met at pick time; the sidebar holds no issue data today (its issue tag is parsed from
-  the branch name, docs/user-guide/worktrees-and-sessions.md:103), and spec Assumptions put
-  "keeping details fresh after creation" out of scope.
-- B: Also on the sidebar row: a "blocked" marker on the created worktree's row, with the details
-  in its tooltip; needs storing the details per worktree and decides when they go stale.
-- C: Also on the sidebar row and refreshed: as B, re-read from GitHub periodically or on demand.
+None. (Sidebar question: option A applied as orchestrator default, pending user confirmation; see Decisions.)
 
 ## Follow-ups not done
 

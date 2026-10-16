@@ -32,6 +32,9 @@ already has a pull request open against it, and find out only later.
 - Q: When does the form read the details: when the user picks the issue, or when Create is pressed?
   → A: When the issue is picked, so they show before Create; pressing Create never waits for them.
   _(agent-resolved: specs/837-issue-relationship-metadata/spec.md#user-story-2, scenarios 1 and 4)_
+- Q: After a worktree is created from a picked issue, do its relationships stay visible on that
+  worktree's sidebar row, or only in the form before Create? → A: Form only; the sidebar row is
+  unchanged. _(default chosen by orchestrator, pending user confirmation)_
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -100,10 +103,7 @@ and read the form; pick one without and check nothing extra appears.
 5. **Given** the user picks another issue, or clears the pick, **When** details for the earlier pick
    arrive, **Then** they are not shown for the new pick.
 6. **Given** a worktree created from a picked issue, **When** it appears in the sidebar, **Then**
-   its row looks as it does today: the details are shown in the form only. [NEEDS CLARIFICATION:
-   should the relationships also stay visible on the created worktree (for example on its sidebar
-   row or its issue tag), or is showing them in the form before Create enough? Default: the form
-   only, since the sidebar holds no issue data today.]
+   its row looks as it does today: the details are shown in the form only.
 
 ---
 
