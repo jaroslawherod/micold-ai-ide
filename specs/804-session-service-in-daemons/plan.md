@@ -112,6 +112,26 @@ scope.
   `ui/toolbar.rs` "Session service diagnostics" is a different thing (the service's diagnostics
   action) and is kept.
 
+### D5. Collapsible sections in the form (M4, FR-012 to FR-015; tracker #890)
+
+New shared component `AccordionSection` in `ui/material/accordion_section.rs` (Principle VIII
+builder: `AccordionSection::new(title, body, roles).open(flag).on_toggle(msg)`, ends `.into()`).
+`material::Accordion` (`ui/material/accordion.rs`) stays the reveal-only panel; the section composes it for
+the downward reveal and adds a header: title, open/closed chevron glyph, state layer and focus
+ring like the other controls (follow `ui/material/section_list.rs`, `labelled_toggle.rs` and
+`keyboard_focus.rs` for focus and press handling; `FilterTrigger` in `filter_panel.rs` for the
+trigger-plus-panel pairing). Register it in `ui/material/mod.rs` and the component showcase
+(`showcase/catalogue.rs`, `showcase/sections/surfaces.rs`), as `Accordion` is.
+
+`container_fields::groups` (a flat `Vec` of controls under `group(...)` headings) is split into
+five section bodies; `ui/settings/daemons.rs::form` wraps each in an `AccordionSection`. Open
+state lives in `features/daemons.rs` form state beside the draft (a set of open section ids;
+default Container only; toggled by a `DaemonsMsg::SectionToggled(id)`), is never written to
+settings (FR-015), and a section whose field has a `FormError` is treated as open (FR-014) by a
+pure function of (open set, errors), so collapsing never touches the draft (FR-012). Field ids
+for focus tracking (`FieldId::DaemonImage` etc.) are unchanged. The host "Sessions" note and the SSH
+branch are untouched.
+
 ## Requirement map
 
 | Req | Where |
@@ -125,6 +145,8 @@ scope.
 | FR-007 | D4 badge |
 | FR-008 | D1 `FormError.field` |
 | FR-011 | D2 (SSH branch shows none); D1 stored profile of an SSH entry not touched |
+| FR-012, FR-014, FR-015 | D5 (`features/daemons.rs` open set, `ui/settings/daemons.rs`, `container_fields.rs`) |
+| FR-013 | D5 (`ui/material/accordion_section.rs`, showcase entry) |
 
 ## Test strategy
 
@@ -135,6 +157,8 @@ scope.
 | client UI tests (`tests/features_settings.rs`, `settings_sections.rs`, `settings_rail_motion.rs`, `a_field_note_shares_its_fields_column.rs`, `sandbox_limits.rs`) | moved to the Daemons form; rail has no Session service; badge from registry; gate lists `daemon.*` as chosen in the Daemons form |
 | client tests moved or deleted with the placement path | `saving_a_placement_moves_the_daemon.rs`, `settings_reports_the_live_placement.rs`, `upgrade_single_daemon.rs` (FR-005 carry-over kept, retargeted to the registry; asserts a 491-migrated file shows the legacy values in entry 1's profile), `settings_draft_tracks_the_live_theme.rs`, `daemons_feature.rs` (extended); tests naming `SettingsSection::Daemon` (`features_settings.rs`, `settings_rail_motion.rs`, `a_field_note_shares_its_fields_column.rs`, `sandbox_limits.rs`) are retargeted to the Daemons form or `Daemons`; FR-009 and FR-006 doc/text claims are checked by a grep test over `docs/` and the hint strings; new test: a settings save with unchanged `daemon` leaves the registry untouched after a form save synced the block (D3) |
 | geometry gates | field-note column, form layout |
+| material component tests (`ui/material/accordion_section.rs` unit, style/anatomy beside `Accordion`'s) | header, chevron, open/closed, keyboard toggle, focus ring, themes; showcase entry (M4) |
+| `features::daemons` tests | section toggle changes only the open set; error opens its section; draft untouched (M4) |
 | quickstart §B visual pass | the long form in Daemons scrolls and fits |
 
 ## Project Structure
@@ -145,6 +169,7 @@ crates/micold-core/src/settings.rs      sync_legacy_daemon
 crates/micold-core/src/sandbox/runtime.rs  hint texts
 crates/micold-client/src/features/{daemons,settings,sandbox}.rs
 crates/micold-client/src/ui/settings/{daemons,container_fields,daemon(deleted)}.rs
+crates/micold-client/src/ui/material/accordion_section.rs   (M4)
 crates/micold-client/src/ui/settings_view.rs
 docs/daemon.md, user guide
 ```

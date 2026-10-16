@@ -70,6 +70,32 @@ the same values.
 2. **Given** the user guide, **When** read, **Then** it describes the daemon manager as the place
    for these settings and has no Session service section.
 
+### User Story 4 - The container settings are grouped in collapsible sections (Priority: P3)
+
+Amendment M4 (tracker #890, requested during the run). A daemon's container settings make the form
+long. A user sees them as a short list of titled sections (Container, Credentials, Network, Limits,
+Sessions) and opens only the ones they need.
+
+**Why this priority**: it is a readability improvement on top of the move; every setting is already
+reachable without it.
+
+**Independent Test**: open a container daemon in Settings > Daemons, collapse and open a section
+with the pointer and with the keyboard, and enter an invalid limit while Limits is collapsed.
+
+**Acceptance Scenarios**:
+
+1. **Given** a container daemon's form, **When** it opens, **Then** the container settings appear as
+   titled sections, each with a header that shows whether it is open, and the Container section is
+   open and the others are closed.
+2. **Given** a section header, **When** the user presses it (pointer, or Space or Enter with the
+   header focused), **Then** that section opens or closes and no other section changes.
+3. **Given** a section holding a field with a validation error, **When** the form shows that error
+   (FR-008), **Then** the section is open, so the error is never hidden.
+4. **Given** a value typed into a section, **When** that section is collapsed and opened again, **Then**
+   the value is kept and is saved with the form (collapsing never discards an edit).
+5. **Given** the component showcase, **When** it is opened, **Then** the titled section is listed in
+   its closed and open states (FR-013).
+
 ### Edge Cases
 
 - No daemons configured: the manager offers Add daemon; there is nothing to configure per daemon.
@@ -86,6 +112,10 @@ the same values.
 - Unsaved edits in two daemons' forms at once are kept independently; saving one does not discard
   the other.
 - Removing a daemon discards its container settings; renaming it keeps them.
+- A section that is closed while its field has an error opens on that error and stays open until
+  the error is resolved or the form closes (US4 scenario 3).
+- A host daemon (survive-logout note only) and an SSH daemon (no container fields) show no
+  accordion sections beyond what they show today.
 - No section name is persisted, so nothing remembered can point at the removed section.
 
 ## Requirements *(mandatory)*
@@ -114,6 +144,19 @@ the same values.
 - **FR-011**: For a daemon whose runtime is SSH, the container fields MUST NOT be shown and its
   an unedited entry's stored settings MUST be left as they were; switching a container daemon to SSH
   and saving drops its container settings (plan R4).
+- **FR-012**: The container fields of FR-001 MUST be grouped, in a daemon's form, in titled
+  collapsible sections: Container (runtime, image), Credentials, Network, Limits, Sessions
+  (survive-logout). Container is open when the form opens; the others are closed. Opening or closing
+  a section MUST NOT change any field value, draft or saved state.
+- **FR-013**: The collapsible titled section MUST be a shared Material component usable by other
+  settings views, not specific to the daemon form. It shows a title header with an open/closed
+  indicator, opens and closes by pointer press and by keyboard (focusable header, Space/Enter), shows
+  keyboard focus like the other Material controls, reveals its body downward, and follows light and
+  dark themes.
+- **FR-014**: A section holding a field with a validation error MUST be shown open while that error
+  stands (extends FR-008).
+- **FR-015**: Open/closed state is view state only: it MUST NOT be persisted in settings (extends the
+  no-persisted-section-name edge case) and is kept per form while the form is open.
 
 ### Key Entities
 
@@ -129,6 +172,8 @@ the same values.
 - **SC-002**: The settings rail lists no Session service entry, and no user-facing text names it.
 - **SC-003**: 100% of values saved before the change appear unchanged afterwards.
 - **SC-004**: The user guide has no stale reference to Session service.
+- **SC-005**: In a container daemon's form the five container sections are listed with their titles
+  and only one is open at first; an error in a closed section opens it (100% of the five sections).
 
 ## Clarifications
 
@@ -137,6 +182,9 @@ the same values.
 - Q: Do existing global values seed every daemon or only the migrated one, and does a later daemon copy? → A: only the migrated daemon (id 1); a later daemon starts from defaults. _(agent-resolved: specs/491-multi-session-daemons/research.md#R5-migration)_
 - Q: Which save do the fields use? → A: the Daemons form's own save with its running-daemon confirmation. _(agent-resolved: crates/micold-client/src/features/daemons.rs `save`)_
 - Q: Do container settings apply to an SSH daemon? → A: no; SSH settings are a target only, so the fields are hidden. _(agent-resolved: specs/489-ssh-remote-daemon/spec.md; crates/micold-client/src/features/daemons.rs `DaemonRuntime::Ssh`)_
+
+- Q (M4): Which sections, and which start open? → A: the five groups the form already draws (Container, Credentials, Network, Limits, Sessions); Container open, rest closed. _(agent-resolved: crates/micold-client/src/ui/settings/container_fields.rs `groups`)_
+- Q (M4): New component or reuse? → A: `material::Accordion` is only the reveal panel (no header; the sidebar pairs it with `FilterTrigger`), so a titled section component is added that composes it. _(agent-resolved: crates/micold-client/src/ui/material/accordion.rs)_
 
 ## Assumptions
 
@@ -147,4 +195,6 @@ the same values.
 ## Out of Scope
 
 - New container settings, new runtimes, changes to what a limit means.
+- Persisting which sections are open; accordion use in other settings views (the component is
+  reusable, adopting it elsewhere is a later change).
 - Remote daemon behaviour beyond the clarification above.
