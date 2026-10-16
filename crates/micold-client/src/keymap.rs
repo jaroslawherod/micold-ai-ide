@@ -184,10 +184,11 @@ fn printable_or_ignore(input: &KeyInput) -> KeyOutput {
     KeyOutput::Ignore
 }
 
-/// Whether the press is the reserved focus-out chord (macOS `Cmd+Shift+E`, else `Ctrl+Shift+E`).
-fn is_release_chord(key: &Key, mods: Mods) -> bool {
-    let is_e = matches!(key, Key::Char(c) if c.eq_ignore_ascii_case(&'e'));
-    if !is_e || !mods.shift {
+/// Whether the press is `letter` with the platform primary modifier and Shift (macOS `Cmd+Shift`,
+/// else `Ctrl+Shift`): the shape of the reserved focus-out (`E`) and new-terminal (`T`) chords.
+fn is_primary_shift_chord(key: &Key, mods: Mods, letter: char) -> bool {
+    let is_letter = matches!(key, Key::Char(c) if c.eq_ignore_ascii_case(&letter));
+    if !is_letter || !mods.shift {
         return false;
     }
     #[cfg(target_os = "macos")]
@@ -200,22 +201,15 @@ fn is_release_chord(key: &Key, mods: Mods) -> bool {
     }
 }
 
+/// Whether the press is the reserved focus-out chord (macOS `Cmd+Shift+E`, else `Ctrl+Shift+E`).
+fn is_release_chord(key: &Key, mods: Mods) -> bool {
+    is_primary_shift_chord(key, mods, 'e')
+}
+
 /// Whether the press is the reserved "open a new Regular Terminal instance" chord (feature 011,
-/// FR-019; macOS `Cmd+Shift+T`, else `Ctrl+Shift+T`) — structurally identical to
-/// [`is_release_chord`] above (contracts/keyboard-shortcut.md).
+/// FR-019; macOS `Cmd+Shift+T`, else `Ctrl+Shift+T`; contracts/keyboard-shortcut.md).
 fn is_new_terminal_chord(key: &Key, mods: Mods) -> bool {
-    let is_t = matches!(key, Key::Char(c) if c.eq_ignore_ascii_case(&'t'));
-    if !is_t || !mods.shift {
-        return false;
-    }
-    #[cfg(target_os = "macos")]
-    {
-        mods.logo && !mods.ctrl && !mods.alt
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        mods.ctrl && !mods.logo && !mods.alt
-    }
+    is_primary_shift_chord(key, mods, 't')
 }
 
 /// Pane chords (macOS `Cmd+Shift+D/H/W/Arrow`, else `Ctrl+Shift+D/H/W/Arrow`), built like

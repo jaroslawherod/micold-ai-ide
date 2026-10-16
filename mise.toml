@@ -89,7 +89,7 @@ run = "scripts/gate.sh"
 
 # Duplication budget (issue #645). Not part of `gate`: jscpd is an npx download and similarity-rs a
 # `cargo install`, both outside the pinned toolchain, and the gate must stay offline and reproducible.
-# Measured 2026-10-14: jscpd 1.86% duplicated lines (280 clones, after #720), similarity-rs 691 pairs. The budgets
+# Measured 2026-10-14: jscpd 1.86% duplicated lines (280 clones, after #720), similarity-rs 688 pairs (after #723). The budgets
 # sit just above that, so the task fails when a change adds duplication, never on today's tree. When a
 # refactor lowers a number, lower the budget with it. Tools: docs/development/duplication.md.
 [tasks.duplication]
@@ -98,7 +98,7 @@ dir = "{{config_root}}"
 run = """
 set -e
 max_pct=1.87
-max_pairs=692
+max_pairs=688
 command -v similarity-rs >/dev/null 2>&1 || { echo "duplication: run 'cargo install similarity-rs' first" >&2; exit 1; }
 npx -y jscpd@4 crates --format rust --min-lines 8 --min-tokens 80 --gitignore --threshold "$max_pct"
 pairs=$(similarity-rs crates/*/src --skip-test -t 0.85 -m 8 | sed -n 's/^Total duplicate pairs found: //p')
