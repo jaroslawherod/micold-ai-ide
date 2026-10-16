@@ -1,0 +1,19 @@
+{
+  "settings_version": 4,
+  "theme": "dark",
+  "daemon": {
+    "placement": "local_sandbox",
+    "sandbox": {
+      "runtime": "podman",
+      "network": "outbound",
+      "credentials": ["git_config", "ai_cli_auth"],
+      "budget": {
+        "cpus_milli": 3500,
+        "memory_bytes": 8589934592,
+        "pids": 1024,
+        "storage_bytes": 21474836480
+      },
+      "survive_logout": true
+    }
+  }
+}

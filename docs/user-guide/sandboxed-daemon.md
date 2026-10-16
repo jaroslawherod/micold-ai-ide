@@ -60,6 +60,11 @@ only one host daemon; the form refuses a duplicate and names the field.
 A host daemon shows only *Survive logout*, and an SSH daemon none of these: they have no container
 here. The Daemons form is the only place these values are edited.
 
+**If you set these before**, nothing is lost: the values you had saved (runtime, shares, network,
+limits and survive logout) moved to the one daemon your existing setup became, and show unchanged in
+its form. No other daemon is created for them, and a daemon you add later starts from the defaults,
+not a copy of those values.
+
 **Removing a daemon** asks first and states how many worktrees are bound to it and how many sessions
 are running on it. Confirming stops those sessions and removes the entry. Its worktrees are kept
 and show `no daemon` until you bind each one again with **Bind to daemon...** in its right-click
