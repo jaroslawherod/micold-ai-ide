@@ -1104,7 +1104,10 @@ pub fn source_changed(state: &mut crate::app::State, source: BranchSource) {
 
 /// The daemon answered the form's `RemoteList` (feature 034, FR-002).
 pub fn remotes_listed(state: &mut crate::app::State, remotes: Result<Vec<GitRemote>, String>) {
+    let next_seq = state.worktree_form.issue_request_seq + 1;
+    let mut bumped = false;
     with_form(state, |form| {
+        let before = form.provider;
         form.github = match remotes {
             Ok(remotes) => match choose_remote(&remotes) {
                 RemoteChoice::Github { repo, .. } => GithubAvailability::Available(repo),
@@ -1117,7 +1120,17 @@ pub fn remotes_listed(state: &mut crate::app::State, remotes: Result<Vec<GitRemo
             )),
         };
         form.resolve_provider();
+        if form.provider != before {
+            form.reset_issues();
+            if form.source == BranchSource::Issue {
+                form.source = BranchSource::New;
+            }
+            bumped = true;
+        }
     });
+    if bumped {
+        state.worktree_form.issue_request_seq = next_seq;
+    }
 }
 
 /// What the settings in force now make of Jira changed while the form is open (feature 533,
