@@ -113,6 +113,9 @@ impl State {
     /// What a running search asks: the repository, the text and the `gh` the list was read with.
     pub fn issue_search_request(&self) -> Option<(GithubRepo, String, PathBuf)> {
         let form = self.form.as_ref()?;
+        if form.jira_site().is_some() {
+            return None;
+        }
         match &form.issues {
             IssueList::Loaded {
                 gh,
@@ -123,6 +126,20 @@ impl State {
                 form.issue_query.trim().to_string(),
                 gh.clone(),
             )),
+            _ => None,
+        }
+    }
+
+    /// What a running Jira search asks: the typed text. `None` unless Jira is the provider and a
+    /// search beyond the loaded issues is running (533 FR-012).
+    pub fn jira_search_text(&self) -> Option<String> {
+        let form = self.form.as_ref()?;
+        form.jira_site()?;
+        match &form.issues {
+            IssueList::Loaded {
+                search: SearchState::Searching { .. },
+                ..
+            } => Some(form.issue_query.trim().to_string()),
             _ => None,
         }
     }
@@ -685,7 +702,7 @@ impl WorktreeForm {
             IssueList::Loaded {
                 search: SearchState::Searching { .. },
                 ..
-            } => Some("Searching GitHub…".to_string()),
+            } => Some(format!("Searching {}…", self.provider_name())),
             IssueList::Loaded {
                 search: SearchState::Failed { error },
                 ..
@@ -694,6 +711,14 @@ impl WorktreeForm {
                 error.message(self.notice_source()?)
             )),
             _ => None,
+        }
+    }
+
+    /// What the provider is called in a status line.
+    fn provider_name(&self) -> &'static str {
+        match self.provider {
+            IssueProvider::Jira => "Jira",
+            IssueProvider::Github => "GitHub",
         }
     }
 
@@ -1287,7 +1312,6 @@ pub fn issue_query_changed(state: &mut crate::app::State, text: String) {
         let same_search = form.issue_query.trim() == text.trim();
         form.issue_query = text;
         form.issue_list_open = true;
-        let provider = form.provider;
         let typed = !form.issue_query.trim().is_empty();
         if let IssueList::Loaded {
             listing,
@@ -1300,7 +1324,7 @@ pub fn issue_query_changed(state: &mut crate::app::State, text: String) {
                 // Nothing typed: the list is the loaded issues alone again.
                 searched.clear();
                 *search = SearchState::Idle;
-            } else if !listing.complete && !same_search && provider == IssueProvider::Github {
+            } else if !listing.complete && !same_search {
                 started = true;
                 *search = SearchState::Pending { seq: next_seq };
             }

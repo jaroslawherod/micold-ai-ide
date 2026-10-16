@@ -186,7 +186,7 @@ fn switching_off_resets_the_list_and_a_late_result_drops() {
 }
 
 #[test]
-fn a_jira_listing_never_starts_a_description_pass_or_a_search() {
+fn a_jira_listing_never_starts_a_description_pass() {
     let (mut state, seq) = loading();
     send(&mut state, loaded_result(seq, false));
     let IssueList::Loaded { descriptions, .. } = &form(&state).issues else {
@@ -194,17 +194,159 @@ fn a_jira_listing_never_starts_a_description_pass_or_a_search() {
     };
     assert_eq!(*descriptions, DescriptionPass::Done);
     assert!(state.worktree_form.issue_description_request().is_none());
-
-    send(&mut state, Msg::IssueQueryChanged("login".into()));
-    let IssueList::Loaded { search, .. } = &form(&state).issues else {
-        panic!("loaded");
-    };
-    assert_eq!(*search, SearchState::Idle);
-    assert!(state.worktree_form.pending_issue_search().is_none());
     assert_eq!(
         form(&state).issue_cap_caption().as_deref(),
         Some("Showing the 2 most recently updated open issues.")
     );
+}
+
+fn capped() -> State {
+    let (mut state, seq) = loading();
+    send(&mut state, loaded_result(seq, false));
+    state
+}
+
+fn search(state: &State) -> SearchState {
+    match &form(state).issues {
+        IssueList::Loaded { search, .. } => search.clone(),
+        other => panic!("not loaded: {other:?}"),
+    }
+}
+
+fn query(state: &mut State, text: &str) {
+    send(state, Msg::IssueQueryChanged(text.into()));
+}
+
+fn shown(state: &State) -> Vec<u64> {
+    (0..form(state).issue_matches.len())
+        .map(|row| form(state).issue_number_at(row).unwrap())
+        .collect()
+}
+
+/// Type `text` and let its debounce fire; returns the running search's seq.
+fn searching(state: &mut State, text: &str) -> u64 {
+    query(state, text);
+    let SearchState::Pending { seq } = search(state) else {
+        panic!("no search pending: {:?}", search(state));
+    };
+    send(state, Msg::IssueSearchDue { seq });
+    assert_eq!(search(state), SearchState::Searching { seq });
+    seq
+}
+
+/// US1 AS2 — the loaded issues narrow by key, summary and label, ignoring case.
+#[test]
+fn typing_narrows_by_key_summary_and_label_ignoring_case() {
+    let mut state = loaded();
+    for (text, expected) in [
+        ("abc-123", vec![123]),
+        ("LOGIN", vec![123]),
+        ("Rate Limit", vec![123]),
+        ("UI", vec![9]),
+        ("nothing like it", vec![]),
+    ] {
+        query(&mut state, text);
+        assert_eq!(shown(&state), expected, "for {text:?}");
+    }
+    query(&mut state, "");
+    assert_eq!(shown(&state), vec![123, 9]);
+}
+
+/// Invariant 6 — only a capped list with something typed may reach Jira.
+#[test]
+fn search_only_when_incomplete_and_something_is_typed() {
+    let mut state = loaded();
+    query(&mut state, "login");
+    assert_eq!(
+        search(&state),
+        SearchState::Idle,
+        "every open issue is held"
+    );
+
+    let mut state = capped();
+    query(&mut state, "login");
+    let SearchState::Pending { seq: first } = search(&state) else {
+        panic!("a capped list waits out the debounce");
+    };
+    query(&mut state, "login r");
+    let SearchState::Pending { seq: second } = search(&state) else {
+        panic!("still pending");
+    };
+    assert!(second > first, "each keystroke restarts the wait");
+    send(&mut state, Msg::IssueSearchDue { seq: first });
+    assert!(matches!(search(&state), SearchState::Pending { .. }));
+    query(&mut state, "  ");
+    assert_eq!(
+        search(&state),
+        SearchState::Idle,
+        "nothing typed, nothing asked"
+    );
+}
+
+/// A running search asks Jira for the trimmed text; an answer merges de-duplicated by number and
+/// only the issues that match the query locally are shown (FR-012).
+#[test]
+fn a_search_answer_merges_without_duplicates_and_keeps_local_matches() {
+    let mut state = capped();
+    let seq = searching(&mut state, " login ");
+    assert_eq!(
+        state.worktree_form.jira_search_text().as_deref(),
+        Some("login")
+    );
+    assert_eq!(
+        form(&state).issue_search_status().as_deref(),
+        Some("Searching Jira…")
+    );
+    let beyond = issue("ABC-2001", 2001, "Login page flashes", &[], "Bug");
+    let unrelated = issue("ABC-2002", 2002, "Unrelated", &[], "Task");
+    let duplicate = issue("ABC-123", 123, "Add login rate limit", &[], "Bug");
+    send(
+        &mut state,
+        Msg::IssueSearched {
+            seq,
+            result: Ok(vec![beyond, unrelated, duplicate]),
+        },
+    );
+    assert_eq!(search(&state), SearchState::Idle);
+    assert_eq!(shown(&state).len(), 2);
+    assert!(shown(&state).contains(&123) && shown(&state).contains(&2001));
+}
+
+/// FR-007a — an older search's answer is dropped.
+#[test]
+fn a_newer_keystroke_discards_an_older_search_answer() {
+    let mut state = capped();
+    let old = searching(&mut state, "login");
+    let new = searching(&mut state, "login r");
+    send(
+        &mut state,
+        Msg::IssueSearched {
+            seq: old,
+            result: Ok(vec![issue("ABC-2001", 2001, "Login", &[], "Bug")]),
+        },
+    );
+    assert_eq!(search(&state), SearchState::Searching { seq: new });
+    assert!(!shown(&state).contains(&2001));
+}
+
+/// A failed search leaves the loaded matches and says so; retry searches again.
+#[test]
+fn a_failed_search_keeps_the_loaded_matches_and_retry_searches_again() {
+    let mut state = capped();
+    let seq = searching(&mut state, "login");
+    send(
+        &mut state,
+        Msg::IssueSearched {
+            seq,
+            result: Err(IssueLoadError::RateLimited),
+        },
+    );
+    assert_eq!(shown(&state), vec![123]);
+    assert!(form(&state)
+        .issue_search_status()
+        .is_some_and(|line| line.starts_with("Search beyond the loaded issues failed")));
+    send(&mut state, Msg::IssueRetry);
+    assert!(state.worktree_form.jira_search_text().is_some());
 }
 
 #[test]

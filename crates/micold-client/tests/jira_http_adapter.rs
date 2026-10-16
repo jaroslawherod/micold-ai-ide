@@ -140,6 +140,35 @@ fn the_request_is_the_documented_post_with_four_headers_and_a_jql_only_body() {
 }
 
 #[test]
+fn a_search_body_carries_only_the_search_jql_and_the_page_size() {
+    let (origin, rx) = serve(Some(ok(PAGE)));
+    let found = JiraCloud::new()
+        .search_open(&connection(&origin), &token(), "login \"x\"")
+        .expect("issues");
+    assert_eq!(found.len(), 1);
+    let raw = rx.recv().unwrap();
+    let (_, body) = raw.split_once("\r\n\r\n").unwrap();
+    let json: serde_json::Value = serde_json::from_str(body).unwrap();
+    let keys: std::collections::BTreeSet<_> = json.as_object().unwrap().keys().cloned().collect();
+    let expected: std::collections::BTreeSet<_> = ["jql", "fields", "maxResults"]
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
+    assert_eq!(keys, expected);
+    assert_eq!(
+        json["jql"].as_str(),
+        micold_core::jira::search_jql(&connection(&origin).project_key, "login \"x\"").as_deref()
+    );
+    assert!(!body.contains(SENTINEL));
+}
+
+#[test]
+fn an_empty_search_sends_nothing() {
+    let found = JiraCloud::new().search_open(&connection("http://127.0.0.1:9"), &token(), "  ");
+    assert_eq!(found, Ok(Vec::new()));
+}
+
+#[test]
 fn a_redirect_is_not_followed() {
     let (origin, _rx) = serve(Some(
         "HTTP/1.1 302 Found\r\nLocation: http://127.0.0.1:1/elsewhere\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_string(),
