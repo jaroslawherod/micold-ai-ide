@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #804
 - **Worktree branch**: feat/804_move-the-session-service-settings-container
 - **Started**: 2026-10-15
-- **Phase**: milestone M2 gate and review
-- **Next step**: full gate, open M2 PR
+- **Phase**: milestone M2 PR open
+- **Next step**: wait for CI and merge #889, then M3
 
 ## Pull requests
 
@@ -18,13 +18,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #869 | Design | merged | 4b96bf2b526ca9b42e7dd9993d4b437016f49f18 |
 | #882 | M1 | merged | ebf69d4be76163577384bf9fc921ff66cb8eb957 |
+| #889 | M2 | open | |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T013 | full | Container settings in the Daemons form | #882 | merged |
-| M2 | T014–T021 | full | Session service section removed | #… | reviewing |
+| M2 | T014–T021 | full | Session service section removed | #889 | PR open |
 | M3 | T022–T023 | light | Existing settings carry over | #… | pending |
 
 ## Decisions
