@@ -41,3 +41,16 @@ changed (check it with `ssh <host>` once, then try again). Micold never accepts 
 on its own. Choose **Reconnect** once it is fixed.
 
 Host key and permission problems need your action; the daemon is not retried until you start it.
+
+## When the network drops
+
+If a connection that was working is lost (a laptop sleeps, Wi-Fi changes), the row shows
+**Reconnecting** with the reason, for example `reconnecting to dev@host: connection closed`. Micold
+tries again after 1, 2, 4 and 8 seconds, then every 15 seconds, for as long as it takes; it does
+not start a second daemon. The sessions keep running on the host, their worktrees show
+`disconnected` meanwhile, and when the connection is back the same daemon serves them and their
+output is complete.
+
+Choose **Stop trying** to end the attempts: the row then shows `not connected to dev@host:
+attempts stopped` and nothing is dialled. **Reconnect** dials again at once and starts the delays
+over. A session whose daemon was stopped, or restarted without it, shows `lost to daemon <name>`.

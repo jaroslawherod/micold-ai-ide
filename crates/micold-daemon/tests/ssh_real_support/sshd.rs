@@ -15,6 +15,8 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 
+use super::proxy::Proxy;
+
 /// The `Host` alias in the private `ssh` configuration.
 pub const ALIAS: &str = "micold-test";
 
@@ -25,8 +27,10 @@ pub struct Sshd {
     pub dir: PathBuf,
     /// The `$HOME` the remote sessions see.
     pub remote_home: PathBuf,
-    /// The loopback port it listens on.
+    /// The loopback port the client dials: the fault proxy in front of `sshd`.
     pub port: u16,
+    /// Cut and restore the network between the client's `ssh` and `sshd`.
+    pub proxy: Proxy,
     /// A script that is `ssh -F <private config> "$@"`.
     pub ssh_wrapper: PathBuf,
 }
@@ -81,16 +85,18 @@ impl Sshd {
         fs::set_permissions(&authorized, fs::Permissions::from_mode(0o600))
             .map_err(|e| e.to_string())?;
 
-        let port = TcpListener::bind("127.0.0.1:0")
+        let sshd_port = TcpListener::bind("127.0.0.1:0")
             .and_then(|l| l.local_addr())
             .map_err(|e| e.to_string())?
             .port();
+        let proxy = Proxy::start(sshd_port)?;
+        let port = proxy.port;
 
         let config = dir.join("sshd_config");
         fs::write(
             &config,
             format!(
-                "Port {port}\nListenAddress 127.0.0.1\nHostKey {}\nPidFile {}\n\
+                "Port {sshd_port}\nListenAddress 127.0.0.1\nHostKey {}\nPidFile {}\n\
                  AuthorizedKeysFile {}\nStrictModes no\nUsePAM no\nPasswordAuthentication no\n\
                  KbdInteractiveAuthentication no\nPubkeyAuthentication yes\nLogLevel ERROR\n\
                  SetEnv HOME={} PATH={}/bin:/usr/local/bin:/usr/bin:/bin\n",
@@ -150,10 +156,11 @@ impl Sshd {
             dir,
             remote_home,
             port,
+            proxy,
             ssh_wrapper,
         };
         let deadline = Instant::now() + Duration::from_secs(10);
-        while TcpStream::connect(("127.0.0.1", port)).is_err() {
+        while TcpStream::connect(("127.0.0.1", sshd_port)).is_err() {
             if let Ok(Some(status)) = host.child.try_wait() {
                 let log = fs::read_to_string(host.dir.join("sshd.log")).unwrap_or_default();
                 return Err(format!("sshd exited ({status}): {}", log.trim()));

@@ -80,18 +80,18 @@ rootless `sshd` and are off by default (`mise run test-ssh`).
 **Goal**: sessions survive a drop and the client reconnects by itself.
 **Independent test**: break the SSH connection with a running session, restore it, see the session and its output.
 
-- [ ] T039 [P] [US2] Test `Backoff` (1, 2, 4, 8, 15, 15 s; reset) in `core/ssh/reconnect.rs`
-- [ ] T040 [P] [US2] Test the state-machine delta (`Reconnecting`, `Attempts`, `GiveUp`, `Reconnect`, `Unreachable` meaning, local runtimes unchanged) in `core/daemons.rs`
-- [ ] T041 [P] [US2] Test the actor loop with a stand-in transport: drop, backoff, explicit reconnect bumps the epoch, no second connect, in `client/daemon.rs`
-- [ ] T042 [P] [US2] Test `session_lost_label`: `disconnected` while reconnecting, `lost to daemon <name>` after a restart (strings per contracts/remote-daemon.md; spec FR-019 term `lost to its daemon`), in `client/links.rs`, and add the geometry-gate case for the `Reconnecting` badge and its actions in `client/ui/settings/daemons.rs`
-- [ ] T043 [US2] Add the fault proxy `daemon/tests/ssh_real_support/proxy.rs` (cut and restore the connection)
-- [ ] T044 [US2] Write `daemon/tests/ssh_real_reconnect.rs`: drop, sessions keep running, reconnect within 30 s with output intact, relaunch finds sessions, stop trying then Reconnect, no second daemon
-- [ ] T045 [US2] Implement `Backoff` in `core/ssh/reconnect.rs`
-- [ ] T046 [US2] Add `DaemonState::Reconnecting`, `Attempts`, `GiveUp` and `Reconnect` to `core/daemons.rs`
-- [ ] T047 [US2] Implement the reconnect loop, per-actor backoff, epoch and give-up in `client/daemon.rs`
-- [ ] T048 [US2] Implement the session labels in `client/links.rs`
-- [ ] T049 [US2] Show the `Reconnecting` badge with reason and the stop-trying and Reconnect actions in `client/ui/settings/daemons.rs`
-- [ ] T050 [US2] Document reconnection in `docs/user-guide/remote-daemons.md`
+- [x] T039 [P] [US2] Test `Backoff` (1, 2, 4, 8, 15, 15 s; reset) in `core/ssh/reconnect.rs`
+- [x] T040 [P] [US2] Test the state-machine delta (`Reconnecting`, `Attempts`, `GiveUp`, `Reconnect`, `Unreachable` meaning, local runtimes unchanged) in `core/daemons.rs`
+- [x] T041 [P] [US2] Test the actor loop with a stand-in transport: drop, backoff, explicit reconnect bumps the epoch, no second connect, in `client/daemon.rs`
+- [x] T042 [P] [US2] Test `session_lost_label`: `disconnected` while reconnecting, `lost to daemon <name>` after a restart (strings per contracts/remote-daemon.md; spec FR-019 term `lost to its daemon`), in `client/links.rs`, and add the geometry-gate case for the `Reconnecting` badge and its actions in `client/ui/settings/daemons.rs`
+- [x] T043 [US2] Add the fault proxy `daemon/tests/ssh_real_support/proxy.rs` (cut and restore the connection)
+- [x] T044 [US2] Write `daemon/tests/ssh_real_reconnect.rs`: drop, sessions keep running, reconnect within 30 s with output intact, relaunch finds sessions, stop trying then Reconnect, no second daemon
+- [x] T045 [US2] Implement `Backoff` in `core/ssh/reconnect.rs`
+- [x] T046 [US2] Add `DaemonState::Reconnecting`, `Attempts`, `GiveUp` and `Reconnect` to `core/daemons.rs`
+- [x] T047 [US2] Implement the reconnect loop, per-actor backoff, epoch and give-up in `client/daemon.rs`
+- [x] T048 [US2] Implement the session labels in `client/links.rs`
+- [x] T049 [US2] Show the `Reconnecting` badge with reason and the stop-trying and Reconnect actions in `client/ui/settings/daemons.rs`
+- [x] T050 [US2] Document reconnection in `docs/user-guide/remote-daemons.md`
 
 ## Phase 5: User Story 4 - Local work is unaffected (P1)
 

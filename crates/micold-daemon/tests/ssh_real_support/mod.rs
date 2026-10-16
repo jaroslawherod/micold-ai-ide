@@ -6,6 +6,8 @@
 
 #![allow(dead_code)]
 
+pub mod proxy;
+pub mod remote;
 pub mod sshd;
 
 pub use sshd::Sshd;

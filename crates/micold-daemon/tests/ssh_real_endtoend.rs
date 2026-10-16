@@ -9,29 +9,10 @@
 #[path = "ssh_real_support/mod.rs"]
 mod ssh_real_support;
 
-use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
-
 use futures_util::{SinkExt, StreamExt};
-use micold_core::connect::{Connected, DaemonConnection, Welcome};
 use micold_core::protocol::codec::Frame;
-use micold_core::protocol::messages::{ClientMsg, DaemonMsg, OperationResult};
-use micold_core::ssh::argv::current_build_id;
-use micold_core::ssh::provision::{connect, ProvisionOptions};
-use micold_core::ssh::{ClientPlatform, SshTarget, SystemSsh};
-
-/// The daemon pid a test started on the stand-in host, killed when the test ends.
-struct RemoteDaemon(Option<u32>);
-
-impl Drop for RemoteDaemon {
-    fn drop(&mut self) {
-        if let Some(pid) = self.0 {
-            let _ = std::process::Command::new("kill")
-                .arg(pid.to_string())
-                .status();
-        }
-    }
-}
+use micold_core::protocol::messages::{ClientMsg, OperationResult};
+use ssh_real_support::remote::{request, start};
 
 /// Inodes of the sockets a process holds open.
 fn socket_inodes(pid: u32) -> Vec<String> {
@@ -70,65 +51,6 @@ fn listening_inodes() -> Vec<String> {
                 .collect::<Vec<_>>()
         })
         .collect()
-}
-
-/// A daemon provisioned on the stand-in host and connected to; the remote daemon is killed on drop.
-struct Started {
-    connection: Box<DaemonConnection>,
-    welcome: Welcome,
-    build: String,
-    progress: Arc<Mutex<Vec<u8>>>,
-    pid: Option<u32>,
-    _cleanup: RemoteDaemon,
-}
-
-/// Provision and connect, or `None` (printing why) when the stand-in host or the endpoint is not
-/// available. The remote helper starts its daemon on the pinned endpoint; a daemon already there
-/// would be reached instead of the one this test provisions.
-async fn start(host: &ssh_real_support::sshd::Sshd, test: &str) -> Option<Started> {
-    let endpoint = micold_core::endpoint::resolve_pinned().expect("pinned endpoint");
-    if micold_core::spawn::running_daemon_pid(&endpoint).is_some() {
-        eprintln!(
-            "SKIP {test}: a daemon already listens on {}",
-            endpoint.socket_path.display()
-        );
-        return None;
-    }
-    let runner = SystemSsh {
-        own_daemon: PathBuf::from(env!("CARGO_BIN_EXE_micold-daemon")),
-        bundled_dir: None,
-        ssh_path: Some(host.ssh_wrapper.clone()),
-    };
-    let target = SshTarget::new(ssh_real_support::sshd::ALIAS, None, None, None).expect("target");
-    let build = current_build_id();
-    let opts = ProvisionOptions {
-        platform: ClientPlatform::current(),
-        client_arch: std::env::consts::ARCH.to_string(),
-        timeout_secs: 30,
-        build_id: build.clone(),
-        client_build: "micold-ai-ide/ssh-real".to_string(),
-    };
-    let progress = Arc::new(Mutex::new(Vec::<u8>::new()));
-    let sink = progress.clone();
-    let report: micold_core::ssh::ProvisionProgress =
-        Arc::new(move |pct| sink.lock().unwrap().push(pct));
-
-    let connected = connect(&runner, &target, &opts, Some(report)).await;
-    let pid = micold_core::spawn::running_daemon_pid(&endpoint);
-    let cleanup = RemoteDaemon(pid);
-    let (connection, welcome) = match connected {
-        Ok(Connected::Ready(connection, welcome)) => (connection, welcome),
-        Ok(Connected::Refused(_)) => panic!("the daemon refused the handshake"),
-        Err(e) => panic!("connect failed: {e:?}"),
-    };
-    Some(Started {
-        connection,
-        welcome,
-        build,
-        progress,
-        pid,
-        _cleanup: cleanup,
-    })
 }
 
 #[tokio::test]
@@ -173,44 +95,6 @@ async fn ssh_real_add_start_copies_the_build_and_connects() {
     );
 }
 
-/// Send one correlated request and wait for its answer, collecting the text of every grid frame
-/// that arrives meanwhile.
-async fn request(
-    connection: &mut DaemonConnection,
-    msg: ClientMsg,
-    req: u64,
-    seen: &mut String,
-) -> OperationResult {
-    connection
-        .send(Frame::Control(msg))
-        .await
-        .expect("send the request");
-    let deadline = std::time::Duration::from_secs(30);
-    loop {
-        let frame = tokio::time::timeout(deadline, connection.next())
-            .await
-            .unwrap_or_else(|_| panic!("no answer to request {req}"))
-            .expect("the connection stays open")
-            .expect("a decodable frame");
-        match frame {
-            Frame::Control(DaemonMsg::OperationOk { req: r, result }) if r == req => return result,
-            Frame::Control(DaemonMsg::OperationError { req: r, .. }) if r == req => {
-                panic!("request {req} was refused")
-            }
-            Frame::Grid(grid) => {
-                for line in &grid.lines {
-                    seen.push_str(&line.text);
-                    seen.push('\n');
-                }
-            }
-            _ => {}
-        }
-    }
-}
-
-/// Feature 489, T032, FR-012/FR-013: over the real `ssh`, a repository on the host is added as a
-/// project, a worktree is created in it, a session with a stand-in AI CLI runs there, and its
-/// input and a shell command's output come back.
 #[tokio::test]
 async fn ssh_real_repository_worktree_session_and_terminal_work_on_the_host() {
     use micold_core::protocol::messages::SessionProcess;
@@ -221,36 +105,10 @@ async fn ssh_real_repository_worktree_session_and_terminal_work_on_the_host() {
     let Some(host) = ssh_real_support::host_or_skip(name) else {
         return;
     };
-    // The stand-in host's sessions find this `claude` first (`SetEnv PATH` of the harness).
-    let bin = host.remote_home.join("bin");
-    std::fs::create_dir_all(&bin).expect("a bin directory on the host");
-    let claude = bin.join("claude");
-    std::fs::write(&claude, "#!/bin/sh\necho STAND-IN-AI-READY\nexec cat\n").expect("stand-in");
-    std::fs::set_permissions(&claude, std::os::unix::fs::PermissionsExt::from_mode(0o755))
-        .expect("executable");
-    let repo = host.remote_home.join("repo");
-    std::fs::create_dir_all(&repo).expect("repo directory");
-    for args in [
-        vec!["init", "-q", "-b", "main"],
-        vec![
-            "-c",
-            "user.name=t",
-            "-c",
-            "user.email=t@t",
-            "commit",
-            "-q",
-            "--allow-empty",
-            "-m",
-            "init",
-        ],
-    ] {
-        let status = std::process::Command::new("git")
-            .args(&args)
-            .current_dir(&repo)
-            .status()
-            .expect("run git");
-        assert!(status.success(), "git {args:?}");
-    }
+    let repo = ssh_real_support::remote::stand_in_repo(
+        &host,
+        "#!/bin/sh\necho STAND-IN-AI-READY\nexec cat\n",
+    );
 
     let Some(mut started) = start(&host, name).await else {
         return;

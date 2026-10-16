@@ -55,10 +55,9 @@ fn state_tag<'a>(state: &DaemonState, roles: Roles) -> Element<'a, Message> {
 /// The sentence under a row that is not plainly fine.
 fn state_note(view: &DaemonView) -> Option<String> {
     match &view.state {
-        DaemonState::Reconnecting { reason } => Some(format!(
-            "reconnecting to {}: {reason}",
-            view.endpoint
-        )),
+        DaemonState::Reconnecting { reason } => {
+            Some(format!("reconnecting to {}: {reason}", view.endpoint))
+        }
         DaemonState::Unreachable { reason } if reason == ATTEMPTS_STOPPED => Some(format!(
             "not connected to {}: {ATTEMPTS_STOPPED}",
             view.endpoint

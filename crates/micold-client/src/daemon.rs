@@ -493,8 +493,13 @@ async fn connect_and_pump(
     let connected = match attempt {
         Ok(c) => c,
         Err(err) => {
-            return report_transient_connect_failure(id, output, err.to_string(), &mut life.failures)
-                .await;
+            return report_transient_connect_failure(
+                id,
+                output,
+                err.to_string(),
+                &mut life.failures,
+            )
+            .await;
         }
     };
     // We reached *a* daemon. A refusal below is still a connection, and a connection is what the
@@ -804,11 +809,11 @@ mod tests {
     use micold_core::daemons::{
         DaemonEvent, DaemonId, DaemonRegistry, DaemonRuntime, DaemonState, DaemonStates,
     };
-    use std::sync::{Arc, Mutex};
-    use std::time::Duration;
     use micold_core::ssh::{
         Artefacts, SshCommand, SshOutput, SshRunner, SshSettings, SshStdio, SshTarget,
     };
+    use std::sync::{Arc, Mutex};
+    use std::time::Duration;
 
     /// A runner standing in for `ssh`: it cannot be started, as on a machine with no OpenSSH.
     struct NoSsh;
@@ -990,7 +995,10 @@ mod tests {
     /// wait. Returns the delays it asked for, the attempts made and the disconnects it reported.
     async fn run_script(remote: bool, steps: &[Step]) -> (Vec<u64>, usize, usize) {
         let script = Arc::new(Mutex::new(
-            steps.iter().copied().collect::<std::collections::VecDeque<_>>(),
+            steps
+                .iter()
+                .copied()
+                .collect::<std::collections::VecDeque<_>>(),
         ));
         let delays = Arc::new(Mutex::new(Vec::new()));
         let attempts = Arc::new(Mutex::new(0usize));
@@ -1024,7 +1032,7 @@ mod tests {
         .await;
         drop(tx);
         let mut reported = 0;
-        while let Ok(Some(_)) = rx.try_next() {
+        while rx.try_recv().is_ok() {
             reported += 1;
         }
         let delays = delays.lock().unwrap().clone();
