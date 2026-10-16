@@ -20,7 +20,10 @@ use std::sync::Arc;
 
 use micold_core::git::parse_remote_list;
 use micold_core::git::{Git, GitCli};
-use micold_core::github::{choose_remote, IssueLoadError, IssueLookupError, RemoteChoice};
+use micold_core::github::{
+    choose_remote, GithubRepo, IssueLoadError, IssueLookup, IssueLookupError, RemoteChoice,
+};
+use micold_core::issue_details::{details_error_json, IssueDetails};
 use micold_core::mcp::errors::{ErrorCategory, OpError};
 use micold_core::mcp::policy::{
     self, Caller, ConfirmedOp, CrossSessionAccess, PolicyDecision, TargetFacts,
@@ -658,7 +661,7 @@ async fn create_derived_worktree(
     };
     check_policy(&who, &Operation::CreateWorktree(request.clone()))?;
 
-    let naming = resolve_naming(state, &project.path, &repo, &request).await?;
+    let (naming, details) = resolve_naming(state, &project.path, &repo, &request).await?;
     let names = naming::derive(&naming).map_err(|e| OpError::invalid_input(e.to_string()))?;
     let checked = names.branch.clone();
     let probe_repo = repo.clone();
@@ -728,7 +731,65 @@ async fn create_derived_worktree(
             row.insert("ticket".into(), ticket.into());
         }
     }
+    if let Some(details) = details {
+        let issue = details.finish().await;
+        if let Some(row) = row.as_object_mut() {
+            row.insert("issue".into(), issue);
+        }
+    }
     Ok(row)
+}
+
+/// An issue's details read started beside the lookup (837 contracts/tool-result.md "Timing").
+struct PendingDetails {
+    handle: tokio::task::JoinHandle<Result<IssueDetails, IssueLoadError>>,
+    started: tokio::time::Instant,
+    bound: std::time::Duration,
+    number: u32,
+    repo: GithubRepo,
+}
+
+impl PendingDetails {
+    /// Start reading issue `number`'s details on the blocking pool, due `bound` from now.
+    fn start(
+        lookup: Arc<dyn IssueLookup>,
+        repo: GithubRepo,
+        number: u32,
+        bound: std::time::Duration,
+    ) -> Self {
+        let deadline = std::time::Instant::now() + bound;
+        let read_repo = repo.clone();
+        Self {
+            handle: tokio::task::spawn_blocking(move || {
+                lookup.read_details(&read_repo, number, deadline)
+            }),
+            started: tokio::time::Instant::now(),
+            bound,
+            number,
+            repo,
+        }
+    }
+
+    /// The result's `issue` object: the details, or the one sentence of a failed read. It waits
+    /// at most what is left of the bound (FR-011); a read still running then is the timeout 550's
+    /// lookup reports, whose words name the production bound whatever a test set (T029).
+    async fn finish(self) -> Value {
+        let left = self.bound.saturating_sub(self.started.elapsed());
+        let result = match tokio::time::timeout(left, self.handle).await {
+            Ok(Ok(result)) => result,
+            Ok(Err(_)) => Err(IssueLoadError::Other(
+                "the details read failed unexpectedly".into(),
+            )),
+            Err(_) => Err(IssueLoadError::TimedOut),
+        };
+        match result {
+            Ok(mut details) => {
+                details.number = u64::from(self.number);
+                details.to_json()
+            }
+            Err(error) => details_error_json(u64::from(self.number), &error, &self.repo),
+        }
+    }
 }
 
 /// The form's inputs of a derived request. With `github_issue` the issue fills them as the form's
@@ -740,7 +801,7 @@ async fn resolve_naming(
     project: &Path,
     repo: &Path,
     request: &CreateWorktreeRequest,
-) -> Result<naming::WorktreeNaming, OpError> {
+) -> Result<(naming::WorktreeNaming, Option<PendingDetails>), OpError> {
     let explicit = request.naming().expect("a derived request has form inputs");
     let CreateWorktreeRequest::Derived {
         github_issue: Some(number),
@@ -750,7 +811,7 @@ async fn resolve_naming(
         ..
     } = request
     else {
-        return Ok(explicit);
+        return Ok((explicit, None));
     };
     let number = *number;
 
@@ -769,20 +830,25 @@ async fn resolve_naming(
     .await?;
 
     let (st, project) = (Arc::clone(state), project.to_path_buf());
+    let (lookup, mapping) =
+        blocking(move || Ok((st.issue_lookup(&project), st.label_mapping()))).await?;
+    // The details are read beside the lookup and the create, and awaited last (837 FR-011).
+    let details = lookup.as_ref().map(|lookup| {
+        PendingDetails::start(
+            Arc::clone(lookup),
+            github.clone(),
+            number,
+            state.details_bound(),
+        )
+    });
     let lookup_repo = github.clone();
-    let looked_up = blocking(move || {
-        let lookup = st.issue_lookup(&project);
-        let mapping = st.label_mapping();
-        Ok((
-            match lookup {
-                Some(lookup) => lookup.read_issue(&lookup_repo, number),
-                None => Err(IssueLookupError::Load(IssueLoadError::ToolMissing)),
-            },
-            mapping,
-        ))
+    let result = blocking(move || {
+        Ok(match lookup {
+            Some(lookup) => lookup.read_issue(&lookup_repo, number),
+            None => Err(IssueLookupError::Load(IssueLoadError::ToolMissing)),
+        })
     })
     .await?;
-    let (result, mapping) = looked_up;
     let issue = result.map_err(|e| {
         let message = e.message(&github, number);
         match e {
@@ -790,13 +856,12 @@ async fn resolve_naming(
             IssueLookupError::Load(_) => OpError::service_error(message),
         }
     })?;
-    Ok(
-        naming::naming_for_issue(&issue.into_issue(), &mapping).overridden_by(
-            *type_,
-            ticket.clone(),
-            name.clone(),
-        ),
-    )
+    let naming = naming::naming_for_issue(&issue.into_issue(), &mapping).overridden_by(
+        *type_,
+        ticket.clone(),
+        name.clone(),
+    );
+    Ok((naming, details))
 }
 
 /// A literal branch: scope, then the naming rules and git's ref check, then policy (FR-015a), then

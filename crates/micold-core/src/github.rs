@@ -637,10 +637,7 @@ pub fn description_from(body_text: &str) -> String {
 
     let mut description = String::new();
     let mut kept = 0usize;
-    for word in body_text.split_whitespace() {
-        if !word.chars().any(|c| !is_invisible(c) && !is_joiner(c)) {
-            continue;
-        }
+    for word in visible_words(body_text) {
         if !description.is_empty() {
             if kept == DESCRIPTION_MAX_CHARS {
                 // More text follows the limit: cut before the space.
@@ -649,27 +646,69 @@ pub fn description_from(body_text: &str) -> String {
             description.push(' ');
             kept += 1;
         }
-        // Joiners met since the word's last visible character: kept only once another follows.
-        let mut joiners: Vec<char> = Vec::new();
-        let mut seen_visible = false;
-        for c in word.chars().filter(|c| !is_invisible(*c)) {
-            if is_joiner(c) {
-                if seen_visible {
-                    joiners.push(c);
-                }
-                continue;
+        for c in word {
+            if kept == DESCRIPTION_MAX_CHARS {
+                return cut(description);
             }
-            for c in joiners.drain(..).chain(std::iter::once(c)) {
-                if kept == DESCRIPTION_MAX_CHARS {
-                    return cut(description);
-                }
-                description.push(c);
-                kept += 1;
-            }
-            seen_visible = true;
+            description.push(c);
+            kept += 1;
         }
     }
     description
+}
+
+/// The words of `text` as they are shown: split on Unicode whitespace, each word's characters
+/// without the invisible ones ([`is_invisible`]) and with a joiner only between two visible
+/// characters ([`is_joiner`]); a word with nothing visible is left out. The one rule the 038
+/// description ([`description_from`]) and 837's `PlainText` follow. Lazy, so a caller reads no more
+/// of a word than it keeps.
+pub(crate) fn visible_words(text: &str) -> impl Iterator<Item = VisibleChars<'_>> {
+    text.split_whitespace()
+        .filter(|word| word.chars().any(|c| !is_invisible(c) && !is_joiner(c)))
+        .map(|word| VisibleChars {
+            rest: word.chars(),
+            seen_visible: false,
+            joiners: Vec::new(),
+            ready: std::collections::VecDeque::new(),
+        })
+}
+
+/// One word's visible characters ([`visible_words`]).
+pub(crate) struct VisibleChars<'a> {
+    rest: std::str::Chars<'a>,
+    seen_visible: bool,
+    /// Joiners met since the word's last visible character: kept only once another follows.
+    joiners: Vec<char>,
+    /// Joiners and the visible character after them, still to be yielded.
+    ready: std::collections::VecDeque<char>,
+}
+
+impl Iterator for VisibleChars<'_> {
+    type Item = char;
+
+    fn next(&mut self) -> Option<char> {
+        loop {
+            if let Some(c) = self.ready.pop_front() {
+                return Some(c);
+            }
+            let c = self.rest.next()?;
+            if is_invisible(c) {
+                continue;
+            }
+            if is_joiner(c) {
+                if self.seen_visible {
+                    self.joiners.push(c);
+                }
+                continue;
+            }
+            self.seen_visible = true;
+            if self.joiners.is_empty() {
+                return Some(c);
+            }
+            self.ready.extend(self.joiners.drain(..));
+            self.ready.push_back(c);
+        }
+    }
 }
 
 /// Whether `c` is drawn as nothing and shapes nothing: a control character, or one of Unicode's
@@ -856,7 +895,7 @@ fn issue_from_node(node: &serde_json::Value) -> Option<Issue> {
 }
 
 /// The error a GraphQL `errors[]` array reports, if it has one.
-fn graphql_error(json: &serde_json::Value) -> Option<IssueLoadError> {
+pub(crate) fn graphql_error(json: &serde_json::Value) -> Option<IssueLoadError> {
     json["errors"].as_array()?.first().map(graphql_error_of)
 }
 
@@ -1038,7 +1077,7 @@ pub struct IssueListing {
 
 /// Where open issues come from (research R7): [`GhCli`] in production, [`FakeIssueSource`] in
 /// tests. The paging, cap and classification around it are pure functions in this module.
-pub trait IssueSource {
+pub trait IssueSource: crate::issue_details::IssueDetailsSource {
     /// One page of open issues, most recently updated first.
     fn list_open(
         &self,
@@ -1264,7 +1303,7 @@ impl IssueLookupError {
 }
 
 /// Reading one issue by number (550 contracts/issue-lookup.md).
-pub trait IssueLookup: Send + Sync {
+pub trait IssueLookup: crate::issue_details::IssueDetailsSource {
     fn read_issue(&self, repo: &GithubRepo, number: u32)
         -> Result<IssueSnapshot, IssueLookupError>;
 }
@@ -1277,13 +1316,19 @@ labels(first: 20) { nodes { name } } } } }";
 /// The arguments after `gh` for one issue: only the owner, the name and the number leave the
 /// machine (FR-008). The number is the only typed (`-F`) variable.
 pub fn lookup_args(repo: &GithubRepo, number: u32) -> Vec<String> {
+    numbered_args(ISSUE_QUERY, repo, number)
+}
+
+/// The arguments after `gh` for `query` about issue `number`: the owner, the name and the number,
+/// the only typed (`-F`) variable. The lookup's shape, shared by 837's details read.
+pub(crate) fn numbered_args(query: &str, repo: &GithubRepo, number: u32) -> Vec<String> {
     [
         "api".to_string(),
         "graphql".to_string(),
         "--hostname".to_string(),
         "github.com".to_string(),
         "-f".to_string(),
-        format!("query={ISSUE_QUERY}"),
+        format!("query={query}"),
         "-f".to_string(),
         format!("owner={}", repo.owner),
         "-f".to_string(),
@@ -1344,6 +1389,11 @@ pub struct FakeIssueSource {
     description_calls: std::sync::Mutex<Vec<(String, Option<String>)>>,
     lookups: std::sync::Mutex<std::collections::VecDeque<Result<IssueSnapshot, IssueLookupError>>>,
     lookup_calls: std::sync::Mutex<Vec<(String, u32)>>,
+    details: std::sync::Mutex<
+        std::collections::VecDeque<Result<crate::issue_details::IssueDetails, IssueLoadError>>,
+    >,
+    details_delay: std::time::Duration,
+    details_calls: std::sync::Mutex<Vec<(String, u32)>>,
 }
 
 impl FakeIssueSource {
@@ -1389,6 +1439,34 @@ impl FakeIssueSource {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .push_back(result);
         self
+    }
+
+    /// Answer the next unanswered `read_details` call with `result` (837 details-read §1).
+    pub fn with_details(
+        self,
+        result: Result<crate::issue_details::IssueDetails, IssueLoadError>,
+    ) -> Self {
+        self.details
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push_back(result);
+        self
+    }
+
+    /// Answer every `read_details` call only after `delay`.
+    pub fn with_details_delay(self, delay: std::time::Duration) -> Self {
+        Self {
+            details_delay: delay,
+            ..self
+        }
+    }
+
+    /// Every `read_details` call so far, as (`owner/name`, number).
+    pub fn details_calls(&self) -> Vec<(String, u32)> {
+        self.details_calls
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
     }
 
     /// Every `read_issue` call so far, as (`owner/name`, number).
@@ -1484,6 +1562,27 @@ impl IssueSource for FakeIssueSource {
                     "FakeIssueSource: no descriptions scripted for this call".into(),
                 ))
             })
+    }
+}
+
+/// With nothing scripted it answers "no details scripted", so a test that does not care still runs.
+impl crate::issue_details::IssueDetailsSource for FakeIssueSource {
+    fn read_details(
+        &self,
+        repo: &GithubRepo,
+        number: u32,
+        _deadline: std::time::Instant,
+    ) -> Result<crate::issue_details::IssueDetails, IssueLoadError> {
+        self.details_calls
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push((repo.to_string(), number));
+        std::thread::sleep(self.details_delay);
+        self.details
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .pop_front()
+            .unwrap_or_else(|| Err(IssueLoadError::Other("no details scripted".into())))
     }
 }
 
@@ -1677,6 +1776,16 @@ impl GhCli {
 impl GhCli {
     /// Run `gh` with `args`, bounded and non-interactive, from the user's home.
     fn outcome(&self, args: Vec<String>) -> crate::process::RunOutcome {
+        self.outcome_within(args, self.timeout)
+    }
+
+    /// [`Self::outcome`], bounded by `left` when that is shorter than this source's bound (837's
+    /// details read runs every page within one deadline).
+    pub(crate) fn outcome_within(
+        &self,
+        args: Vec<String>,
+        left: std::time::Duration,
+    ) -> crate::process::RunOutcome {
         let mut cmd = std::process::Command::new(&self.gh);
         crate::process::no_window(&mut cmd)
             .args(args)
@@ -1692,38 +1801,45 @@ impl GhCli {
         if let Some(dirs) = directories::BaseDirs::new() {
             cmd.current_dir(dirs.home_dir());
         }
-        crate::process::run_bounded(cmd, self.timeout)
+        crate::process::run_bounded(cmd, left.min(self.timeout))
     }
 
-    /// Run `gh` with `args` and read its answer with `parse`.
-    ///
-    /// `gh` exits non-zero on any GraphQL error, including the numbered lookup's NOT_FOUND beside
-    /// good search hits, so an answer `parse` accepts is used whatever the exit status
-    /// (contracts/github-issue-source.md §3), and so is an error it types exactly. An answer it
-    /// cannot type is classified from the exit status and stderr, which name what GraphQL's error
-    /// types do not (SAML, missing scopes).
+    /// Run `gh` with `args` and read its answer with `parse` ([`answer_of`]).
     fn run<T>(
         &self,
         args: Vec<String>,
         parse: fn(&[u8]) -> Result<T, IssueLoadError>,
     ) -> Result<T, IssueLoadError> {
-        let outcome = self.outcome(args);
-        match &outcome {
-            crate::process::RunOutcome::Exited {
-                code: 0, stdout, ..
-            } => parse(stdout),
-            // An error the answer types exactly (NOT_FOUND, RATE_LIMITED) stands; one it only
-            // names (`Other`) is classified from stderr, which knows SAML and scope refusals, and
-            // keeps GitHub's own words when stderr adds nothing better.
-            crate::process::RunOutcome::Exited { stdout, .. } => match parse(stdout) {
-                Err(named @ IssueLoadError::Other(_)) => match classify(&outcome) {
-                    IssueLoadError::Other(_) if !stdout.is_empty() => Err(named),
-                    typed => Err(typed),
-                },
-                answer => answer,
+        answer_of(&self.outcome(args), parse)
+    }
+}
+
+/// The answer of one `gh` run, read with `parse`.
+///
+/// `gh` exits non-zero on any GraphQL error, including the numbered lookup's NOT_FOUND beside
+/// good search hits, so an answer `parse` accepts is used whatever the exit status
+/// (contracts/github-issue-source.md §3), and so is an error it types exactly. An answer it
+/// cannot type is classified from the exit status and stderr, which name what GraphQL's error
+/// types do not (SAML, missing scopes).
+pub(crate) fn answer_of<T>(
+    outcome: &crate::process::RunOutcome,
+    parse: impl Fn(&[u8]) -> Result<T, IssueLoadError>,
+) -> Result<T, IssueLoadError> {
+    match outcome {
+        crate::process::RunOutcome::Exited {
+            code: 0, stdout, ..
+        } => parse(stdout),
+        // An error the answer types exactly (NOT_FOUND, RATE_LIMITED) stands; one it only
+        // names (`Other`) is classified from stderr, which knows SAML and scope refusals, and
+        // keeps GitHub's own words when stderr adds nothing better.
+        crate::process::RunOutcome::Exited { stdout, .. } => match parse(stdout) {
+            Err(named @ IssueLoadError::Other(_)) => match classify(outcome) {
+                IssueLoadError::Other(_) if !stdout.is_empty() => Err(named),
+                typed => Err(typed),
             },
-            _ => Err(classify(&outcome)),
-        }
+            answer => answer,
+        },
+        _ => Err(classify(outcome)),
     }
 }
 
