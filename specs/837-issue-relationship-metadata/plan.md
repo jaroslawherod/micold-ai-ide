@@ -148,6 +148,25 @@ creates a handle (FR-010).
 - `docs/user-guide/worktrees-and-sessions.md` ("From a GitHub issue"): what the form shows after a
   pick, the blocked warning, the 20-item cap, "not readable", and that **Create** never waits.
 
+## Requirement map
+
+| FR | Where |
+|---|---|
+| FR-001 | Design: Core (query), Daemon, Client. [details-read.md](contracts/details-read.md) §2 |
+| FR-002 | data-model §2-3 (`Reference`, `RelatedIssue`, `RelatedPr`) |
+| FR-003 | data-model §5 (`open`, `closed`, `is_blocked`) |
+| FR-004 | [tool-result.md](contracts/tool-result.md) Rules |
+| FR-005 | [form-details.md](contracts/form-details.md) §3, data-model §7 |
+| FR-006 | Design: Daemon (awaited after the create), Client (`submitted` untouched) |
+| FR-007 | data-model §5 `Kind::NotReadable`; details-read §3; tool-result `not_readable` / `details_error`; form-details §3 |
+| FR-008 | data-model §4 `RelatedList`; research R4-R5 |
+| FR-009 | details-read §2 (owner, name, number only); research R9 |
+| FR-010 | Design: Daemon (no handle without `github_issue`); form-details §2 "Never started" |
+| FR-011 | research R6; Design: Daemon (`details_bound`) |
+| FR-012 | data-model §6; form-details §1 |
+| FR-013 | data-model §1 `PlainText`; research R8 |
+| FR-014 | Design: Documentation; tool-result "Published text" |
+
 ## Test Strategy
 
 | Layer | Where | What |
@@ -155,7 +174,7 @@ creates a handle (FR-010).
 | Core unit | `crates/micold-core/tests/issue_details.rs` + fixtures | Parsing every kind. Blocked exactly when open blockers > 0. Sub-issue closed/total. Cap 20 with "N more". Hidden count. `owner/name#N` cross-repo references. Closing-and-mentioning PR listed once. Empty project fields left out. Per-kind not readable from an error path. Whole-read errors mapped to `IssueLoadError`. Neutralising. `to_json` omission. `display_lines` content and warning flag. Query arguments carry only owner, name and number. |
 | Daemon integration | `crates/micold-daemon/tests/mcp_create_worktree.rs` | US1 1-6 through the real tool path with a fake. US3-1, US3-2, US3-4. A hanging fake with a 200 ms bound: the call returns within bound plus slack and reports the failure. A refused (collision) call has no `issue`. A literal call makes no details call. The 550/532 suites unchanged (SC-004). |
 | Client reducer and shell | form tests, `main_tests.rs` | A pick moves to Loading and the shell starts one read. A stale `seq`/number is dropped. A cleared pick goes Idle. A closed form drops the answer. Create during Loading submits at once. A failure shows one line. A Jira pick and the New/Existing sources start no read (SC-006). |
-| View | quickstart Part B | The blocked warning reads as a warning. The list layout. The failure line. |
+| View | `crates/micold-client/tests/layout_snapshot.rs` + quickstart Part B | One form snapshot in the `Loaded` state with every line, to check the added rows keep **Create** and the footer in place. Part B covers the look: the warning reads as a warning, the list layout, the failure line. |
 
 ## Project Structure
 

@@ -26,6 +26,8 @@ Extends 034-github-issue-worktree contracts/issue-picker-ui.md.
   `IssueDetailsLoaded { seq, number, result }`. This is the `update_then_follow` pattern the
   description pass uses. The comparison is made once, in a helper shared by those handlers, not
   repeated in each.
+- **Number**: `read_details` takes `u32`, as `IssueLookup` does. `issue_details_request()` converts
+  the picked `u64` with `u32::try_from`; a number that does not fit gives `None`, so no read starts.
 - **Never started**: for the New or Existing source, for a Jira pick, or before a pick (SC-006).
 
 ## 3. View (`ui::worktree_form::issue_details`, GUI glue)
