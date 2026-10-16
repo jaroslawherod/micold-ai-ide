@@ -259,8 +259,9 @@ fn settle_interrupted(catalog: &mut Catalog, project: &Path, groups: &mut [RunGr
     changed
 }
 
-/// Remove the folder and branch an interrupted create may have left (research R10): only an
-/// app-created worktree that hosts no session. `None` when nothing is left behind; otherwise what
+/// Remove the folder and branch an interrupted create may have left (research R10): only a
+/// worktree that hosts no session. A `Creating` run's folder at its derived name is the app's,
+/// because create refuses a taken directory. `None` when nothing is left behind; otherwise what
 /// was left, for the run's reason.
 fn clean_half_created(
     catalog: &mut Catalog,

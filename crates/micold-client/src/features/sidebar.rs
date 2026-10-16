@@ -1213,11 +1213,6 @@ impl crate::app::State {
                     }
                     Tag::Issue(_) => has_issue = true,
                     Tag::Status(_) => {}
-                    // Feature 014: label only, never a filter (research R5). Note what the empty
-                    // arm implies: carrying no `Type`, a REVEALED agent worktree still counts as
-                    // untyped and so can be matched by an `Untyped` chip — correct, and required
-                    // by FR-010d (filters apply to revealed rows exactly as to user-created ones).
-                    Tag::Agent => {}
                 }
             }
             if !typed {

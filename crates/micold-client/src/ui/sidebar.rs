@@ -418,9 +418,6 @@ fn tag_chip(tag: &Tag, r: Roles) -> (String, Rgb) {
         // constructed — `worktree_tags` only emits the tag for an unhealthy worktree — so this is
         // a total match on a case that does not arise, not a blank chip anyone can see.
         Tag::Status(status) => (status.label().unwrap_or_default().to_string(), r.error),
-        // Feature 014 (FR-010b): a neutral accent, not `error` — an agent worktree is
-        // informational, not a fault condition.
-        Tag::Agent => ("agent".to_string(), r.on_surface_variant),
     }
 }
 
@@ -634,10 +631,8 @@ fn build_items(
         // It survived a filter it does not match, and the user is the one who set that filter — an
         // unexplained row is worse than a hidden one, because it reads as the filter being broken.
         //
-        // In the row's existing chip slot rather than a new badge: `Tag::Agent` is the precedent
-        // for a label-only chip that is never a filter, so this is the idiom already here. Only its
-        // source differs — it is a fact about this run's session state, not about a branch name,
-        // which is why it does not become a `Tag` in the core (research R5).
+        // In the row's existing chip slot rather than a new badge. It is a fact about this run's
+        // session state, not about a branch name, which is why it is not a `Tag` in the core.
         if node.shown_for_current_session {
             tags.push(("current session".to_string(), r.secondary));
         }

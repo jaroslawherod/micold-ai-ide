@@ -83,3 +83,43 @@ fn stopping_every_running_run_leaves_the_stopped_ones_alone() {
     assert_eq!(state_of(&runs, "a2").transcript.as_deref(), Some("/t/a2"));
     assert!(!stop_running(&mut runs), "nothing left to stop");
 }
+
+#[test]
+fn a_full_list_of_running_runs_drops_the_oldest_running_run() {
+    let mut runs = Vec::new();
+    for i in 0..=MAX_RUNS_PER_ORIGIN {
+        apply_signal(&mut runs, start(&format!("r{i}")));
+    }
+    assert_eq!(runs.len(), MAX_RUNS_PER_ORIGIN);
+    assert!(runs.iter().all(|r| r.agent_id != "r0"));
+    assert_eq!(runs[0].agent_id, "r1");
+    assert_eq!(
+        runs.last().unwrap().agent_id,
+        format!("r{MAX_RUNS_PER_ORIGIN}")
+    );
+}
+
+#[test]
+fn a_stop_fills_an_agent_type_the_start_lacked() {
+    let mut runs = Vec::new();
+    apply_signal(
+        &mut runs,
+        AgentSignal::Started {
+            provider: AiCli::ClaudeCode,
+            agent_id: "a".into(),
+            agent_type: None,
+        },
+    );
+    assert_eq!(state_of(&runs, "a").agent_type, None);
+    let changed = apply_signal(
+        &mut runs,
+        AgentSignal::Stopped {
+            provider: AiCli::ClaudeCode,
+            agent_id: "a".into(),
+            agent_type: Some("Explore".into()),
+            transcript: None,
+        },
+    );
+    assert!(changed);
+    assert_eq!(state_of(&runs, "a").agent_type.as_deref(), Some("Explore"));
+}

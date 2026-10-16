@@ -127,3 +127,11 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Verify**: `scripts/tests/superseded-552.test.sh` and `cargo test -p micold-daemon --test agent_runs`
 - **Depends on**: M2, M3
 - **Tier**: full
+
+## Phase 8: TDD remediation
+
+Verdict PASS_WITH_GAPS (`specs/552-native-agent-session-signals/tdd/verification.md`); no blocking findings.
+
+- [x] T034 [US2] (M-2) Add tests in `crates/micold-core/tests/agent_run.rs`: a cap overflow with only `Running` runs evicts the oldest; a stop carrying `agent_type` fills a start that had none. Proof: `mise run test-core` and the two survived mutants (`unwrap_or(last)`, `if false`) now fail.
+- [x] T035 [US1] (M-3) Remove the unproduced `Tag::Agent` from `crates/micold-core/src/naming.rs:320`, `crates/micold-client/src/ui/sidebar.rs:423`, `crates/micold-client/src/features/sidebar.rs:1220` and its negative assertions in `worktree_visibility.rs:85`, `sidebar_tree.rs:523-525`. Proof: `mise run gate`.
+- [x] T036 [US1] (S-1, S-2) In `crates/micold-client/tests/worktree_visibility.rs` replace the `include_str!` grep with an assertion on the view model, and assert row names and order instead of `len()`. Proof: `cargo test -p micold-client --test worktree_visibility`.

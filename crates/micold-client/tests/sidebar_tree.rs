@@ -515,17 +515,6 @@ fn an_agent_named_only_project_lists_its_worktrees() {
 }
 
 #[test]
-fn no_row_carries_an_agent_badge() {
-    let tree = mixed_state().worktree_tree();
-    for hex in AGENT_HEXES {
-        assert!(!node(&tree, &format!("agent-{hex}"))
-            .tags
-            .contains(&Tag::Agent));
-    }
-    assert!(!node(&tree, "feat-a").tags.contains(&Tag::Agent));
-}
-
-#[test]
 fn tag_filters_treat_agent_named_rows_like_any_other() {
     // An agent-named worktree carries no conventional type, so `Untyped` matches it and `feat`
     // does not.
