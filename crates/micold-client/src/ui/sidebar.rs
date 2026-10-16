@@ -757,13 +757,14 @@ fn build_items(
 
         if node.sessions_shown() {
             let main = node.main_session();
-            for session in node.listed_sessions() {
+            for row in node.session_rows() {
                 items.push(session_tree_item(
-                    depth + 1,
-                    session,
+                    depth + 1 + row.depth as u16,
+                    row.session,
                     state.session.active,
                     in_view,
-                    Some(session.id) != main,
+                    Some(row.session.id) != main && !row.place.is_child(),
+                    row.place,
                     r,
                 ));
             }
@@ -871,8 +872,10 @@ fn session_tree_item(
     active_session: Option<micold_core::session::SessionId>,
     in_view: Option<micold_core::session::SessionId>,
     helper: bool,
+    place: micold_core::origin::TreePlace,
     r: Roles,
 ) -> TreeItem<'static, Message> {
+    use micold_core::origin::{Orphan, TreePlace};
     let tint = match session.lifecycle {
         SessionLifecycle::Failed { .. } => r.error,
         SessionLifecycle::Idle => r.on_surface_variant,
@@ -907,13 +910,20 @@ fn session_tree_item(
         // a session row is one line. The label changes the row's content, never its height.
         .annotation(
             // A helper says so (FR-017); the main session is the unmarked one.
-            if helper {
-                format!("helper, {}", session.provider.provider().command())
-            } else {
-                session.provider.provider().command().to_string()
+            {
+                let command = session.provider.provider().command();
+                match place {
+                    // An orphan says why it is not nested (FR-016, FR-018).
+                    TreePlace::Orphan(Orphan::Pending) => format!("origin pending, {command}"),
+                    TreePlace::Orphan(Orphan::Removed) => format!("origin removed, {command}"),
+                    _ if helper => format!("helper, {command}"),
+                    _ => command.to_string(),
+                }
             },
             r.on_surface_variant,
         )
+        // The child marker (feature 551, FR-007): on every session an agent started, nested or not.
+        .child(place.is_child())
         // The unread mark (feature 039, FR-018, contract `unread-mark.md` U5): on the row of an
         // unread session this window does not have in view.
         .unread(crate::features::attention::row_unread(session, in_view))
@@ -1006,13 +1016,14 @@ fn build_default_item(
     if node.sessions_shown() {
         let in_view = crate::features::attention::in_view(&state.attention);
         let main = node.main_session();
-        for session in node.listed_sessions() {
+        for row in node.session_rows() {
             items.push(session_tree_item(
-                1,
-                session,
+                1 + row.depth as u16,
+                row.session,
                 state.session.active,
                 in_view,
-                Some(session.id) != main,
+                Some(row.session.id) != main && !row.place.is_child(),
+                row.place,
                 r,
             ));
         }
@@ -1063,7 +1074,15 @@ mod tests {
             SessionLifecycle::InterruptedResumable,
         ] {
             let s = session(ActivitySignal::Unknown, lifecycle.clone());
-            let item: TreeItem<'_, Message> = session_tree_item(1, &s, None, None, false, r);
+            let item: TreeItem<'_, Message> = session_tree_item(
+                1,
+                &s,
+                None,
+                None,
+                false,
+                micold_core::origin::TreePlace::Root,
+                r,
+            );
             assert!(
                 item.icon.is_none(),
                 "session row for {lifecycle:?} still carries a leading icon"
@@ -1087,6 +1106,7 @@ mod tests {
                 None,
                 None,
                 false,
+                micold_core::origin::TreePlace::Root,
                 r,
             )
             .tint

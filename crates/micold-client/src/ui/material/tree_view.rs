@@ -92,6 +92,10 @@ pub struct TreeItem<'a, M> {
     /// ordering is deliberate — the annotation is the identification, and it must not be what a
     /// narrow row drops.
     pub annotation: Option<(String, Rgb)>,
+    /// Whether the row is a session an agent started (feature 551, FR-007): the word `agent` leads
+    /// the annotation. Text rather than a glyph, so the marker needs no legend and the row keeps
+    /// its height.
+    pub child: bool,
     /// Whether the row is unread (feature 039, FR-018): the [`UnreadMark`](super::UnreadMark) at
     /// the trailing edge, before any trailing action, and the label in the view's emphasised role
     /// ([`TreeView::selected_label_role`]). The badge slot is not touched, and the row keeps its
@@ -131,6 +135,7 @@ impl<'a, M> TreeItem<'a, M> {
             row_tooltip: None,
             badge: None,
             annotation: None,
+            child: false,
             unread: RowUnread::Read,
             state_icon: None,
             _marker: std::marker::PhantomData,
@@ -183,6 +188,12 @@ impl<'a, M> TreeItem<'a, M> {
     /// [`TreeItem::annotation`] for why this is not a tag chip.
     pub fn annotation(mut self, text: impl Into<String>, tint: Rgb) -> Self {
         self.annotation = Some((text.into(), tint));
+        self
+    }
+
+    /// Mark the row as a session an agent started (feature 551, FR-007).
+    pub fn child(mut self, child: bool) -> Self {
+        self.child = child;
         self
     }
 
@@ -449,7 +460,12 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
             // The row's own short annotation (feature 026): after the name, before the actions, on
             // the same line. It takes its natural width and the name takes the remainder, which is
             // what makes the *name* what a narrow row shortens.
-            if let Some((text, tint)) = item.annotation {
+            let annotation = match (item.child, item.annotation) {
+                (true, Some((text, tint))) => Some((format!("agent, {text}"), tint)),
+                (true, None) => Some(("agent".to_string(), item.tint)),
+                (false, annotation) => annotation,
+            };
+            if let Some((text, tint)) = annotation {
                 line = line.push(super::Text::new(text, TypeRole::Caption, r).tint(tint));
             }
 

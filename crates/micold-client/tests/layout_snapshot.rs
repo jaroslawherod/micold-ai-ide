@@ -800,3 +800,50 @@ fn describe_difference(recorded: &str, observed: &str) -> String {
 
     out
 }
+
+// --- Feature 551 (T019): the child marker ------------------------------------------------------
+
+/// SC-004: every child row, orphans included, carries the child marker and no user-started row does.
+#[test]
+fn every_child_row_carries_the_child_marker_and_no_user_started_row_does() {
+    use micold_core::origin::OriginStatus;
+    use micold_core::session::{SessionId, SessionLocation};
+    use support::spawn_tree::{known, session, state_with, wt, DIR};
+
+    let location: SessionLocation = wt();
+    let mut user = session(&location, None);
+    user.main = true;
+    let child = session(&location, known(&user));
+    let grandchild = session(&location, known(&child));
+    let orphan = session(&location, Some((SessionId::new(), OriginStatus::Known)));
+    let removed = session(&location, Some((SessionId::new(), OriginStatus::Removed)));
+    let mut state = state_with(vec![user, child, grandchild, orphan, removed]);
+    state.sidebar.expanded.insert(DIR.to_string());
+
+    let under = lay::StateUnderTest::new(state);
+    let mut renderer = lay::renderer();
+    let painted: Vec<String> = lay::painted_text(lay::view_of(&under), &mut renderer)
+        .into_iter()
+        .map(|p| p.content)
+        .collect();
+    let annotations: Vec<&String> = painted.iter().filter(|c| c.contains("claude")).collect();
+    assert_eq!(
+        annotations.len(),
+        5,
+        "one annotation per session: {painted:?}"
+    );
+    let marked = annotations
+        .iter()
+        .filter(|c| c.starts_with("agent"))
+        .count();
+    assert_eq!(
+        marked, 4,
+        "the four children and orphans are marked: {annotations:?}"
+    );
+    assert!(
+        annotations.iter().any(|c| c.as_str() == "claude"),
+        "the user-started session is not: {annotations:?}"
+    );
+    assert!(annotations.iter().any(|c| c.contains("origin pending")));
+    assert!(annotations.iter().any(|c| c.contains("origin removed")));
+}

@@ -9,21 +9,21 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #551
 - **Worktree branch**: feat/551_show-sessions-spawned-by-an-agent-as-a-tree-under
 - **Started**: 2026-10-12
-- **Phase**: milestone-M1
-- **Next step**: M1 PR CI and merge, then M2
+- **Phase**: milestone-M2
+- **Next step**: M2 reviews, full gate, PR
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #787 | Design PR | merged | 8e1cdcce24199789f214b1ae153a9199863cb2e4 |
-| #824 | M1 | open | |
+| #824 | M1 | merged | 6f578693808230b11552a7a47db3bc7214a40e84 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T016, T025, T038 | full | Origin recorded by the daemon's `record_origin` (nothing sets it until M3), persisted, exposed on wire and MCP; spike T025 outcome recorded | | in review |
+| M1 | T001–T016, T025, T038 | full | Origin recorded by the daemon's `record_origin` (nothing sets it until M3), persisted, exposed on wire and MCP; spike T025 outcome recorded | #824 | merged |
 | M2 | T017–T024, T039 | full | Sidebar nests children with child/pending/removed markers | | pending |
 | M3 | T026–T031, T040 | full | Provider readers for spike-confirmed providers, discovery, provider table | | pending |
 | M4 | T032–T037, T041 | full | Fold, count, attention rollup, persisted fold | | pending |
@@ -42,7 +42,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | 8 | implement | Allow a fourth part of M1 (rebase, re-review, push, PR) | Allowed (decided by user) | user | orchestrator prompt: M1 part 4 |
 | 9 | plan | Claude Code `claude --bg` has no recorded parent signal; what then? | Document Claude Code as a provider gap; no user-supplied record (decided by user) | user | orchestrator prompt; research.md R2; Handover open question |
 | D-part5 | M1 | Allow a fifth M1 part to merge main again and re-gate (PR #824 CONFLICTING) | Allowed | user | orchestrator prompt |
-| D-part5b | M1 | Linearize the branch (wait-merge: cannot rebase merge commits) | Rebase and force-with-lease push allowed; the user ran the rebase and squash themselves; protocol 46 | decided by user | orchestrator prompt |
+| D-part5b | M1 | Linearize the branch (wait-merge: cannot rebase merge commits) | Rebase and force-with-lease push allowed; the user ran the rebase and squash themselves; protocol 47 (main took 46 for feature 552) | decided by user | orchestrator prompt |
 
 ## Review rounds
 
@@ -70,7 +70,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-Done: PR #824 open (M1). The branch is one squash commit on origin/main d8bf85a2, made by the user (rebase, no conflicts); PROTOCOL_VERSION is 46 (feature 533 took 45), artifacts renumbered by the user. Full `mise run gate` green on this tree (MICOLD_NO_BUILD_LOCK=1, worktree's own target-shared).
+Done: PR #824 open (M1). The branch is one squash commit on origin/main d8bf85a2, made by the user (rebase, no conflicts); PROTOCOL_VERSION is 47 (feature 533 took 45, feature 552 took 46), artifacts renumbered by the user. Full `mise run gate` green on this tree (MICOLD_NO_BUILD_LOCK=1, worktree's own target-shared).
 Next: the user runs `git push --force-with-lease` (the classifier denies the agent); then confirm PR #824 MERGEABLE, CI, wait-merge.
 
 ## Open escalation

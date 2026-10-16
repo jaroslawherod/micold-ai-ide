@@ -1192,6 +1192,27 @@ ready to type in, with no clicks.
 - **Forgetting a project** forgets which session it was on, along with everything else the app kept
   about it.
 
+### Sessions an agent started
+
+When an agent starts another session, the new session is listed one level under the session that
+started it, not beside it as if you had started it. A session started by a session that was itself
+started by an agent nests one level further down. The same tree is shown under a worktree and under
+**Default**.
+
+- **The marker.** Every session an agent started carries the word `agent` before the name of its AI
+  CLI, for example `agent, claude`. A session you started has no such word.
+- **It behaves like any other session.** Select it to open it, type into it, stop it, resume it or
+  close it exactly as you would a session you started.
+- **Origin pending.** If the session that started it is not in the list yet, the session is shown at
+  the top level of its worktree and reads `agent, origin pending, ...`. It moves under its origin as
+  soon as the origin appears.
+- **Origin removed.** If the session that started it was deleted, the session stays at the top level
+  and reads `agent, origin removed, ...`. It is never dropped.
+- **No manual reparenting.** The nesting follows what the agent reported; you cannot drag a session
+  under another.
+- **Which providers.** Only a provider that reports which session started a session shows the tree.
+  Claude Code does not yet report it, so its agent-started sessions are listed as ordinary sessions.
+
 ### Finding the session you are on
 
 The session the terminal is showing is the **current** session, and the sidebar always says which

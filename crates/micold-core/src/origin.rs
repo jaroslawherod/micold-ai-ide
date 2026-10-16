@@ -4,6 +4,8 @@
 //! holds the pure half: the wire/runtime shape ([`SessionOrigin`], [`OriginStatus`]) and the one
 //! check every write path runs before an origin is recorded ([`validate_origin`], research R4).
 
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
 
 use crate::session::{SessionId, SessionLocation};
@@ -105,6 +107,113 @@ pub fn validate_origin(
         next = lookup(id).and_then(|n| n.origin);
     }
     Err(OriginRejected::Cycle)
+}
+
+/// Why a session with an origin is shown top-level: its origin is not among the sessions listed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Orphan {
+    /// The origin has not appeared yet (FR-016).
+    Pending,
+    /// The origin was deleted (FR-018).
+    Removed,
+}
+
+/// Where a session sits in the tree.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TreePlace {
+    /// A session with no origin, or the member where a cycle was cut.
+    Root,
+    /// Nested under its origin.
+    Child,
+    /// Top-level, with its origin missing from the list.
+    Orphan(Orphan),
+}
+
+impl TreePlace {
+    /// Whether the row carries the child marker (FR-007, SC-004): children and orphans do.
+    pub fn is_child(self) -> bool {
+        !matches!(self, TreePlace::Root)
+    }
+}
+
+/// One session in display order.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TreeRow {
+    pub id: SessionId,
+    /// 0 for a top-level row, one more for each origin above it.
+    pub depth: usize,
+    pub place: TreePlace,
+}
+
+/// The sessions of one location as a forest, derived from their origins and never stored.
+///
+/// Every session appears exactly once (FR-008), children follow their origin depth-first, and
+/// roots and siblings keep the input order.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct SessionTree {
+    pub rows: Vec<TreeRow>,
+}
+
+impl SessionTree {
+    /// Build the forest from `(id, origin)` pairs in catalog order.
+    pub fn build(sessions: &[(SessionId, Option<SessionOrigin>)]) -> Self {
+        let index: HashMap<SessionId, usize> = sessions
+            .iter()
+            .enumerate()
+            .map(|(i, (id, _))| (*id, i))
+            .collect();
+        // The listed parent of each session, cut where a chain comes back to itself.
+        let mut parent: Vec<Option<usize>> = sessions
+            .iter()
+            .map(|(_, o)| o.and_then(|o| index.get(&o.id).copied()))
+            .collect();
+        let mut settled = vec![false; sessions.len()];
+        for start in 0..sessions.len() {
+            let mut walk = Vec::new();
+            let mut at = Some(start);
+            while let Some(i) = at {
+                if settled[i] {
+                    break;
+                }
+                if walk.contains(&i) {
+                    // `i` is the first member seen twice: it becomes the root of the loop.
+                    parent[i] = None;
+                    break;
+                }
+                walk.push(i);
+                at = parent[i];
+            }
+            for i in walk {
+                settled[i] = true;
+            }
+        }
+        let mut children: Vec<Vec<usize>> = vec![Vec::new(); sessions.len()];
+        let mut roots = Vec::new();
+        for (i, p) in parent.iter().enumerate() {
+            match p {
+                Some(p) => children[*p].push(i),
+                None => roots.push(i),
+            }
+        }
+        let mut rows = Vec::with_capacity(sessions.len());
+        let mut stack: Vec<(usize, usize)> = roots.iter().rev().map(|&r| (r, 0)).collect();
+        while let Some((i, depth)) = stack.pop() {
+            let (id, origin) = sessions[i];
+            let place = match (parent[i], origin) {
+                (Some(_), _) => TreePlace::Child,
+                (None, Some(o)) if !index.contains_key(&o.id) => {
+                    TreePlace::Orphan(match o.status {
+                        OriginStatus::Known => Orphan::Pending,
+                        OriginStatus::Removed => Orphan::Removed,
+                    })
+                }
+                (None, _) => TreePlace::Root,
+            };
+            rows.push(TreeRow { id, depth, place });
+            stack.extend(children[i].iter().rev().map(|&c| (c, depth + 1)));
+        }
+        SessionTree { rows }
+    }
 }
 
 #[cfg(test)]
@@ -211,5 +320,76 @@ mod tests {
             check(&child, 2, &[gone], false),
             Err(OriginRejected::Unknown)
         );
+    }
+
+    fn origin_of(n: u128, status: OriginStatus) -> Option<SessionOrigin> {
+        Some(SessionOrigin { id: id(n), status })
+    }
+
+    fn known(n: u128) -> Option<SessionOrigin> {
+        origin_of(n, OriginStatus::Known)
+    }
+
+    fn rows(sessions: &[(u128, Option<SessionOrigin>)]) -> Vec<(u128, usize, TreePlace)> {
+        let input: Vec<_> = sessions.iter().map(|(n, o)| (id(*n), *o)).collect();
+        SessionTree::build(&input)
+            .rows
+            .iter()
+            .map(|r| (r.id.0.as_u128(), r.depth, r.place))
+            .collect()
+    }
+
+    #[test]
+    fn a_tree_nests_to_any_depth_and_keeps_catalog_order() {
+        // 3 is a child of 2, which is a child of 1; 4 is another child of 1; 5 is a root.
+        let got = rows(&[
+            (1, None),
+            (5, None),
+            (3, known(2)),
+            (4, known(1)),
+            (2, known(1)),
+        ]);
+        assert_eq!(
+            got,
+            vec![
+                (1, 0, TreePlace::Root),
+                (4, 1, TreePlace::Child),
+                (2, 1, TreePlace::Child),
+                (3, 2, TreePlace::Child),
+                (5, 0, TreePlace::Root),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_cycle_breaks_at_the_first_repeat_and_every_session_appears_once() {
+        let got = rows(&[(1, known(2)), (2, known(1)), (3, known(3))]);
+        assert_eq!(
+            got,
+            vec![
+                (1, 0, TreePlace::Root),
+                (2, 1, TreePlace::Child),
+                (3, 0, TreePlace::Root),
+            ]
+        );
+    }
+
+    #[test]
+    fn an_absent_origin_is_pending_or_removed_by_its_status() {
+        let got = rows(&[
+            (1, known(9)),
+            (2, origin_of(8, OriginStatus::Removed)),
+            (3, known(1)),
+        ]);
+        assert_eq!(
+            got,
+            vec![
+                (1, 0, TreePlace::Orphan(Orphan::Pending)),
+                (3, 1, TreePlace::Child),
+                (2, 0, TreePlace::Orphan(Orphan::Removed)),
+            ]
+        );
+        assert!(TreePlace::Orphan(Orphan::Pending).is_child());
+        assert!(!TreePlace::Root.is_child());
     }
 }
