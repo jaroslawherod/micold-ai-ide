@@ -761,6 +761,10 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         Message::WorktreeForm(FormMsg::IssueSearchDue { seq }) => {
             shell::issues::on_issue_search_due(app, seq)
         }
+        // Feature 837: a pick starts the read of the issue's details, which Create never waits for.
+        Message::WorktreeForm(FormMsg::IssuePicked { number, mapping }) => {
+            shell::issues::on_issue_picked(app, number, mapping)
+        }
         Message::WorktreeForm(FormMsg::IssueRowPicked(index)) => {
             shell::issues::on_issue_row_picked(app, index)
         }

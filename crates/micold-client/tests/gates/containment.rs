@@ -187,6 +187,30 @@ fn is_settings_page_scroll(state: &str, escape: &lay::Escape) -> bool {
         && escape.edge == "bottom"
 }
 
+/// The **picked issue's details** taller than their five-row viewport (feature 837, T025).
+///
+/// A fifth site of the same mechanism. The New worktree form is the tallest dialog, so its details
+/// block shows five rows and scrolls the rest rather than pushing the footer out of the window; only
+/// `add-worktree-dialog-issue-details-loaded` holds more than five rows, and fires it.
+///
+/// Like [`SETTINGS_PAGE_CONTENT`] it holds only for what a scrolling block does: in an
+/// `add-worktree-dialog-issue-details…` state, past the **bottom** edge of the block's `Scrollable`
+/// ([`ISSUE_DETAILS_VIEWPORT`]). `the_recorded_details_overflow_is_the_loaded_state` shows the other
+/// details states come clean.
+const ISSUE_DETAILS_CONTENT: &[&str] = &["0/6/0/0/0/2/2/0"];
+
+/// The `Scrollable` the details scroll in: the parent of [`ISSUE_DETAILS_CONTENT`].
+const ISSUE_DETAILS_VIEWPORT: &str = "0/6/0/0/0/2/2";
+
+/// Whether `escape`, in the covered state `state`, is the picked issue's details outgrowing their
+/// viewport downwards, which is the only overhang [`ISSUE_DETAILS_CONTENT`] allows.
+fn is_issue_details_scroll(state: &str, escape: &lay::Escape) -> bool {
+    state.starts_with("add-worktree-dialog-issue-details")
+        && ISSUE_DETAILS_CONTENT.contains(&escape.child_path.as_str())
+        && escape.parent_path == ISSUE_DETAILS_VIEWPORT
+        && escape.edge == "bottom"
+}
+
 /// Every overhang this gate does not treat as a finding, with the reason it is allowed.
 fn clips_deliberately(state: &str, escape: &lay::Escape) -> Option<&'static str> {
     let child_path = escape.child_path.as_str();
@@ -200,6 +224,8 @@ fn clips_deliberately(state: &str, escape: &lay::Escape) -> Option<&'static str>
         Some("TAB_STRIP_CONTENT")
     } else if is_settings_page_scroll(state, escape) {
         Some("SETTINGS_PAGE_CONTENT")
+    } else if is_issue_details_scroll(state, escape) {
+        Some("ISSUE_DETAILS_CONTENT")
     } else {
         None
     }
@@ -238,6 +264,7 @@ fn no_layout_node_escapes_its_parent() {
         .chain(SCROLL_CONTENT)
         .chain(PICKER_LIST_CONTENT)
         .chain(SETTINGS_PAGE_CONTENT)
+        .chain(ISSUE_DETAILS_CONTENT)
         .filter(|path| !fired.contains(**path))
         .collect();
     assert!(
@@ -258,6 +285,34 @@ fn no_layout_node_escapes_its_parent() {
         unexpected.len(),
         unexpected.join("\n  "),
     );
+}
+
+/// The details exemption is attributed from the records: of the three details states, only the one
+/// with more than five rows overhangs the details viewport, and it does so downwards (837).
+#[test]
+fn the_recorded_details_overflow_is_the_loaded_state() {
+    let renderer = lay::renderer();
+    let all = lay::cached_records(covered_states(), &renderer, RECORDED_SCHEME);
+    let overhangs = |name: &str| -> Vec<lay::Escape> {
+        let index = covered_states()
+            .iter()
+            .position(|s| s.name == name)
+            .unwrap_or_else(|| panic!("no covered state {name:?}"));
+        lay::escapes(&all[index], TOLERANCE)
+            .into_iter()
+            .filter(|e| ISSUE_DETAILS_CONTENT.contains(&e.child_path.as_str()))
+            .collect()
+    };
+    let loaded = overhangs("add-worktree-dialog-issue-details-loaded");
+    assert_eq!(loaded.len(), 1, "the loaded state scrolls: {loaded:?}");
+    assert_eq!(loaded[0].parent_path, ISSUE_DETAILS_VIEWPORT);
+    assert_eq!(loaded[0].edge, "bottom");
+    for name in [
+        "add-worktree-dialog-issue-details-loading",
+        "add-worktree-dialog-issue-details-failed",
+    ] {
+        assert!(overhangs(name).is_empty(), "{name} has nothing to scroll");
+    }
 }
 
 /// Containment holds *during* a reveal too, for everything the reveal is not itself clipping.

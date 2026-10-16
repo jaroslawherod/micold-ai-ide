@@ -441,6 +441,60 @@ fn the_action_row_anchors_are_action_rows() {
     );
 }
 
+// --- 837: the picked issue's details leave Create and the footer in place -------------------------
+
+/// The records of the covered state called `name`.
+fn records_named<'a>(all: &'a [Vec<lay::LayoutRecord>], name: &str) -> &'a [lay::LayoutRecord] {
+    let index = covered_states()
+        .iter()
+        .position(|s| s.name == name)
+        .unwrap_or_else(|| panic!("no covered state {name:?}"));
+    &all[index]
+}
+
+/// US2-1, US2-2, US3-3: with the details read, or failed, the form draws rows under the picker that
+/// it does not draw while they are awaited — and the action row stays the form's last child, its
+/// buttons side by side at the same width and never above where they were (SC-001, FR-006).
+#[test]
+fn the_details_rows_add_height_and_the_footer_keeps_its_place() {
+    let renderer = lay::renderer();
+    let all = lay::cached_records(covered_states(), &renderer, RECORDED_SCHEME);
+    let waiting = records_named(&all, "add-worktree-dialog-issue-details-loading");
+    let actions: &[usize] = &[6, 0, 0, 1];
+    let place = |records: &[lay::LayoutRecord]| {
+        let r = records
+            .iter()
+            .find(|r| r.path == actions)
+            .expect("the action row is laid out");
+        (r.x, r.y, r.width)
+    };
+    let (wait_x, wait_y, wait_width) = place(waiting);
+
+    for (name, rows) in [
+        ("add-worktree-dialog-issue-details-loaded", 9),
+        ("add-worktree-dialog-issue-details-failed", 1),
+    ] {
+        let shown = records_named(&all, name);
+        assert!(
+            shown.len() >= waiting.len() + rows,
+            "{name}: expected at least {rows} more nodes than while the details are awaited \
+             ({} vs {})",
+            shown.len(),
+            waiting.len()
+        );
+        let (x, y, width) = place(shown);
+        assert_eq!(
+            (x, width),
+            (wait_x, wait_width),
+            "{name}: the action row moved sideways or changed width"
+        );
+        assert!(
+            y >= wait_y,
+            "{name}: the action row moved up ({y} < {wait_y})"
+        );
+    }
+}
+
 // --- The overlay pass is exercised, not merely present (FR-009) ---------------------------------
 
 /// Some covered state must actually produce overlay records.

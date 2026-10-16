@@ -27,10 +27,14 @@ use micold_client::features::settings::{
 use micold_client::features::window::FieldId;
 use micold_client::features::worktree::WorktreeMenu;
 use micold_client::features::worktree_form::{
-    BranchSource, GithubAvailability, IssueList, JiraAvailability, JiraSite, SearchState,
-    WorktreeForm,
+    BranchSource, GithubAvailability, IssueDetailsState, IssueList, JiraAvailability, JiraSite,
+    SearchState, WorktreeForm,
 };
 use micold_core::github::{GithubRepo, Issue, IssueListing, IssueLoadError};
+use micold_core::issue_details::{
+    Blockers, IssueDetails, Kind, PlainText, PrListState, ProjectMembership, Reference,
+    RelatedIssue, RelatedList, RelatedPr, SubIssues,
+};
 use micold_core::jira::{IssueProvider, JiraConnection};
 use micold_core::project::Availability;
 use micold_core::session::{
@@ -73,6 +77,120 @@ fn issue_search_state(search: SearchState) -> StateUnderTest {
     form.issue_query = query.to_string();
     form.issue_matches = issue_matches;
     form.type_ = None;
+    state.worktree_form.form = Some(form);
+    StateUnderTest::new(state)
+}
+
+/// A related issue, for the details states.
+fn related(number: u64, title: &str, open: bool) -> RelatedIssue {
+    RelatedIssue {
+        reference: Reference::Here(number),
+        title: PlainText::new(title),
+        open,
+    }
+}
+
+/// A pull request, for the details states.
+fn related_pr(number: u64, title: &str, state: PrListState) -> RelatedPr {
+    RelatedPr {
+        reference: Reference::Here(number),
+        title: PlainText::new(title),
+        state,
+    }
+}
+
+/// An issue with every kind of relationship, one of its blockers open (837 US2-1, US2-2).
+fn every_kind_details() -> IssueDetails {
+    let list = |items: Vec<RelatedIssue>| {
+        let total = items.len() as u32;
+        RelatedList::new(items, total, 0)
+    };
+    let prs = |items: Vec<RelatedPr>| {
+        let total = items.len() as u32;
+        RelatedList::new(items, total, 0)
+    };
+    let names = |items: &[&str]| {
+        RelatedList::new(
+            items.iter().map(|n| PlainText::new(n)).collect(),
+            items.len() as u32,
+            0,
+        )
+    };
+    IssueDetails {
+        number: 17,
+        blocked_by: Kind::Read(Blockers {
+            list: list(vec![
+                related(10, "Parser rewrite", true),
+                related(9, "Old spike", false),
+            ]),
+            open: 1,
+        }),
+        blocking: Kind::Read(list(vec![related(14, "Release notes", true)])),
+        parent: Kind::Read(Some(related(3, "Q4 epic", true))),
+        sub_issues: Kind::Read(SubIssues {
+            list: list(vec![
+                related(15, "Tokenizer", false),
+                related(16, "Grammar", true),
+            ]),
+            closed: 1,
+        }),
+        labels: Kind::Read(names(&["bug"])),
+        assignees: Kind::Read(names(&["octocat", "hubot"])),
+        milestone: Kind::Read(Some(PlainText::new("v1.4"))),
+        projects: Kind::Read(RelatedList::new(
+            vec![
+                ProjectMembership {
+                    name: PlainText::new("Roadmap"),
+                    fields: vec![(PlainText::new("Status"), PlainText::new("In progress"))],
+                },
+                ProjectMembership {
+                    name: PlainText::new("Backlog"),
+                    fields: Vec::new(),
+                },
+            ],
+            2,
+            0,
+        )),
+        closing_prs: Kind::Read(prs(vec![related_pr(
+            20,
+            "Fix the parser",
+            PrListState::Draft,
+        )])),
+        linked_prs: Kind::Read(prs(vec![related_pr(
+            21,
+            "Refactor lexer",
+            PrListState::Merged,
+        )])),
+    }
+}
+
+/// The issue form with issue #17 picked and its details in `details` (837).
+fn issue_details_state(details: IssueDetailsState) -> StateUnderTest {
+    let mut state = with_project();
+    let issues = vec![Issue::new(
+        17,
+        "Follow-up to the parser".to_string(),
+        vec!["bug".to_string()],
+        "2026-09-29T00:00:00Z".to_string(),
+    )];
+    let issue_matches = rank(&issues, |i| i.row_text(), &Query::new(""));
+    let mut form = issue_form(IssueList::Loaded {
+        listing: IssueListing {
+            issues,
+            total_open: 1,
+            complete: true,
+        },
+        gh: std::path::PathBuf::from("/usr/bin/gh"),
+        searched: Vec::new(),
+        search: SearchState::Idle,
+        descriptions: Default::default(),
+    });
+    form.issue_matches = issue_matches;
+    form.ticket = "17".to_string();
+    form.name = "Follow-up to the parser".to_string();
+    form.type_ = None;
+    form.picked_issue = Some(17);
+    form.issue_details = details;
     state.worktree_form.form = Some(form);
     StateUnderTest::new(state)
 }
@@ -841,6 +959,36 @@ pub fn covered_states() -> &'static [CoveredState] {
         CoveredState {
             name: "add-worktree-dialog-issue-searching",
             build: || issue_search_state(SearchState::Searching { seq: 2 }),
+            anchors: ADD_WORKTREE_ANCHORS,
+        },
+        // 837: the picked issue's details awaited (nothing shown), read (every kind, the blocked
+        // one a warning) and failed (one muted line). Create and the footer keep their place.
+        CoveredState {
+            name: "add-worktree-dialog-issue-details-loading",
+            build: || issue_details_state(IssueDetailsState::Loading { seq: 1, number: 17 }),
+            anchors: ADD_WORKTREE_ANCHORS,
+        },
+        CoveredState {
+            name: "add-worktree-dialog-issue-details-loaded",
+            build: || {
+                issue_details_state(IssueDetailsState::Loaded {
+                    number: 17,
+                    details: every_kind_details(),
+                })
+            },
+            anchors: ADD_WORKTREE_ANCHORS,
+        },
+        CoveredState {
+            name: "add-worktree-dialog-issue-details-failed",
+            build: || {
+                issue_details_state(IssueDetailsState::Failed {
+                    number: 17,
+                    message: IssueLoadError::Offline.message(
+                        &GithubRepo::from_remote_url("git@github.com:octo/widgets.git")
+                            .expect("a GitHub URL"),
+                    ),
+                })
+            },
             anchors: ADD_WORKTREE_ANCHORS,
         },
         // The search beyond the cap, failed: the error and Retry under the loaded matches.

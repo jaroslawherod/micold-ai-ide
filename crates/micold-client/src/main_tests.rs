@@ -6338,6 +6338,346 @@ mod issue_source {
         );
     }
 
+    // --- 837: the picked issue's details (US2, US3) ---------------------------------------------
+
+    use micold_client::features::worktree_form::IssueDetailsState;
+    use micold_core::issue_details::{
+        Blockers, IssueDetails, Kind, PlainText, Reference, RelatedIssue, RelatedList,
+        DETAILS_BOUND,
+    };
+
+    /// Details with every kind read and empty.
+    fn nothing(number: u64) -> IssueDetails {
+        IssueDetails {
+            number,
+            blocked_by: Kind::Read(Blockers {
+                list: RelatedList::new(Vec::new(), 0, 0),
+                open: 0,
+            }),
+            blocking: Kind::Read(RelatedList::new(Vec::new(), 0, 0)),
+            parent: Kind::Read(None),
+            sub_issues: Kind::Read(micold_core::issue_details::SubIssues {
+                list: RelatedList::new(Vec::new(), 0, 0),
+                closed: 0,
+            }),
+            labels: Kind::Read(RelatedList::new(Vec::new(), 0, 0)),
+            assignees: Kind::Read(RelatedList::new(Vec::new(), 0, 0)),
+            milestone: Kind::Read(None),
+            projects: Kind::Read(RelatedList::new(Vec::new(), 0, 0)),
+            closing_prs: Kind::Read(RelatedList::new(Vec::new(), 0, 0)),
+            linked_prs: Kind::Read(RelatedList::new(Vec::new(), 0, 0)),
+        }
+    }
+
+    /// Details of `number`, blocked by one open issue (#10).
+    fn blocked(number: u64) -> IssueDetails {
+        IssueDetails {
+            blocked_by: Kind::Read(Blockers {
+                list: RelatedList::new(
+                    vec![RelatedIssue {
+                        reference: Reference::Here(10),
+                        title: PlainText::new("Parser rewrite"),
+                        open: true,
+                    }],
+                    1,
+                    0,
+                ),
+                open: 1,
+            }),
+            ..nothing(number)
+        }
+    }
+
+    /// Pick `number` the way the shell hands the pick to the reducer, and leave the work it returns
+    /// for the test to run (or not): the read is then still awaited.
+    fn pick_without_settling(app: &mut App, number: u64) -> Task<Message> {
+        update_inner(
+            app,
+            Message::WorktreeForm(FormMsg::IssuePicked {
+                number,
+                mapping: vec![],
+            }),
+        )
+    }
+
+    fn details_of(app: &App) -> &IssueDetailsState {
+        &form(app).issue_details
+    }
+
+    fn loaded_details(rig: &IssueRig, number: u64, details: IssueDetails) -> FormMsg {
+        let IssueDetailsState::Loading { seq, .. } = details_of(&rig.app).clone() else {
+            panic!("the form awaits no details: {:?}", details_of(&rig.app));
+        };
+        FormMsg::IssueDetailsLoaded {
+            seq,
+            number,
+            result: Ok(details),
+        }
+    }
+
+    /// T020 — picking a GitHub issue moves the details to `Loading` and starts exactly one read
+    /// with the list's `gh`, the repository and the number; its answer moves them to `Loaded`
+    /// (US2-1, FR-001).
+    #[test]
+    fn details_a_pick_starts_one_read_and_its_answer_is_shown() {
+        let source = FakeIssueSource::new()
+            .with_page(page(issues()))
+            .with_details(Ok(blocked(42)));
+        let mut rig = issue_rig(Some(FAKE_GH), source);
+        open_with(&mut rig, github_remote());
+        send(&mut rig.app, FormMsg::SourceChanged(BranchSource::Issue));
+        assert_eq!(*details_of(&rig.app), IssueDetailsState::Idle);
+
+        let work = pick_without_settling(&mut rig.app, 42);
+        assert!(
+            matches!(
+                details_of(&rig.app),
+                IssueDetailsState::Loading { number: 42, .. }
+            ),
+            "{:?}",
+            details_of(&rig.app)
+        );
+        settle(&mut rig.app, work);
+        assert_eq!(
+            rig.source.details_calls(),
+            [("o/r".to_string(), 42)],
+            "exactly one read, for the picked number"
+        );
+        assert_eq!(
+            rig.constructed.lock().unwrap().last(),
+            Some(&PathBuf::from(FAKE_GH)),
+            "the read runs the gh the list was read with"
+        );
+        assert!(
+            matches!(
+                details_of(&rig.app),
+                IssueDetailsState::Loaded { number: 42, details } if details.is_blocked()
+            ),
+            "{:?}",
+            details_of(&rig.app)
+        );
+    }
+
+    /// T020 — the read is bound: its deadline is `DETAILS_BOUND` after the pick (FR-006, SC-005).
+    #[test]
+    fn details_the_read_is_given_the_details_bound() {
+        let mut rig = loaded_rig();
+        let before = std::time::Instant::now();
+        let work = pick_without_settling(&mut rig.app, 42);
+        settle(&mut rig.app, work);
+        let after = std::time::Instant::now();
+        let deadlines = rig.source.details_deadlines();
+        assert_eq!(deadlines.len(), 1);
+        assert!(
+            deadlines[0] >= before + DETAILS_BOUND && deadlines[0] <= after + DETAILS_BOUND,
+            "the deadline is DETAILS_BOUND after the pick"
+        );
+    }
+
+    /// T020 — an answer for an earlier pick, or for another number, is dropped after a re-pick
+    /// (US2-5, FR-012).
+    #[test]
+    fn details_an_answer_for_an_earlier_pick_is_dropped() {
+        let mut rig = loaded_rig();
+        let _first = pick_without_settling(&mut rig.app, 42);
+        let IssueDetailsState::Loading { seq: first, .. } = details_of(&rig.app).clone() else {
+            panic!("loading");
+        };
+        let _second = pick_without_settling(&mut rig.app, 7);
+        let awaited = details_of(&rig.app).clone();
+        assert!(
+            matches!(awaited, IssueDetailsState::Loading { number: 7, seq } if seq > first),
+            "{awaited:?}"
+        );
+        send(
+            &mut rig.app,
+            FormMsg::IssueDetailsLoaded {
+                seq: first,
+                number: 42,
+                result: Ok(blocked(42)),
+            },
+        );
+        assert_eq!(*details_of(&rig.app), awaited, "the older seq is dropped");
+        let IssueDetailsState::Loading { seq, .. } = awaited.clone() else {
+            panic!("loading");
+        };
+        send(
+            &mut rig.app,
+            FormMsg::IssueDetailsLoaded {
+                seq,
+                number: 42,
+                result: Ok(blocked(42)),
+            },
+        );
+        assert_eq!(*details_of(&rig.app), awaited, "another number is dropped");
+        let msg = loaded_details(&rig, 7, nothing(7));
+        send(&mut rig.app, msg);
+        assert!(matches!(
+            details_of(&rig.app),
+            IssueDetailsState::Loaded { number: 7, .. }
+        ));
+    }
+
+    /// T020 — leaving the issue source clears the pick: the state goes `Idle` and a late answer is
+    /// dropped (FR-012).
+    #[test]
+    fn details_a_cleared_pick_drops_the_late_answer() {
+        let mut rig = loaded_rig();
+        let _work = pick_without_settling(&mut rig.app, 42);
+        let IssueDetailsState::Loading { seq, .. } = details_of(&rig.app).clone() else {
+            panic!("loading");
+        };
+        send(&mut rig.app, FormMsg::SourceChanged(BranchSource::New));
+        assert_eq!(*details_of(&rig.app), IssueDetailsState::Idle);
+        send(
+            &mut rig.app,
+            FormMsg::IssueDetailsLoaded {
+                seq,
+                number: 42,
+                result: Ok(blocked(42)),
+            },
+        );
+        assert_eq!(*details_of(&rig.app), IssueDetailsState::Idle);
+    }
+
+    /// T020 — an answer that arrives after the form closed is dropped, with no form to land on.
+    #[test]
+    fn details_a_closed_form_drops_the_answer() {
+        let mut rig = loaded_rig();
+        let _work = pick_without_settling(&mut rig.app, 42);
+        let IssueDetailsState::Loading { seq, .. } = details_of(&rig.app).clone() else {
+            panic!("loading");
+        };
+        send(&mut rig.app, FormMsg::Cancelled);
+        send(
+            &mut rig.app,
+            FormMsg::IssueDetailsLoaded {
+                seq,
+                number: 42,
+                result: Ok(blocked(42)),
+            },
+        );
+        assert!(rig.app.core.worktree_form.form.is_none());
+    }
+
+    /// T020 — Create while the details load submits at once, with what it submits without them
+    /// (US2-4, FR-006).
+    #[test]
+    fn details_create_does_not_wait_for_them() {
+        let mut rig = loaded_rig();
+        let _work = pick_without_settling(&mut rig.app, 42);
+        send(&mut rig.app, FormMsg::TypeSelected(ConventionalType::Fix));
+        let _ = remote_lists_sent(&mut rig.rx);
+        send(&mut rig.app, FormMsg::Submitted);
+        assert_eq!(
+            preflights_sent(&mut rig.rx),
+            vec!["fix/42_crash-when-opening-empty-project".to_string()],
+            "the same request as issue_submit_creates_like_a_new_branch"
+        );
+        assert!(
+            matches!(details_of(&rig.app), IssueDetailsState::Loading { .. }),
+            "the read is still out"
+        );
+    }
+
+    /// T020 — the New and Existing sources start no read (SC-006, FR-010).
+    #[test]
+    fn details_other_sources_start_no_read() {
+        let mut rig = loaded_rig();
+        send(&mut rig.app, FormMsg::SourceChanged(BranchSource::New));
+        send(&mut rig.app, FormMsg::SourceChanged(BranchSource::Existing));
+        send(&mut rig.app, FormMsg::TicketChanged("42".into()));
+        assert!(rig.source.details_calls().is_empty());
+        assert_eq!(*details_of(&rig.app), IssueDetailsState::Idle);
+    }
+
+    /// T020 — a Jira pick starts no read and a picked number above `u32::MAX` has no request
+    /// (SC-006, form-details §2).
+    #[test]
+    fn details_a_jira_pick_or_a_huge_number_has_no_request() {
+        let mut rig = loaded_rig();
+        let state = &mut rig.app.core.worktree_form;
+        let form = state.form.as_mut().expect("the form is open");
+        form.set_picked_issue(Some(u64::from(u32::MAX) + 1));
+        assert!(
+            matches!(form.issue_details, IssueDetailsState::Loading { .. }),
+            "the state still follows the pick"
+        );
+        assert_eq!(state.issue_details_request(), None, "no number to ask for");
+
+        let state = &mut rig.app.core.worktree_form;
+        let form = state.form.as_mut().expect("the form is open");
+        form.provider = micold_core::jira::IssueProvider::Jira;
+        form.set_picked_issue(Some(42));
+        assert_eq!(form.issue_details, IssueDetailsState::Idle);
+        assert_eq!(state.issue_details_request(), None);
+        assert!(rig.source.details_calls().is_empty());
+    }
+
+    /// T028 / US3-3 — a failed read is a `Failed` state with the reason's sentence, and Create
+    /// works as without it (FR-006, FR-007).
+    #[test]
+    fn details_a_failed_read_is_one_sentence_and_create_still_works() {
+        let source = FakeIssueSource::new()
+            .with_page(page(issues()))
+            .with_details(Err(IssueLoadError::NotSignedIn));
+        let mut rig = issue_rig(Some(FAKE_GH), source);
+        open_with(&mut rig, github_remote());
+        send(&mut rig.app, FormMsg::SourceChanged(BranchSource::Issue));
+        let work = pick_without_settling(&mut rig.app, 42);
+        settle(&mut rig.app, work);
+        let repo = form(&rig.app).github_repo().cloned().expect("a repo");
+        assert_eq!(
+            *details_of(&rig.app),
+            IssueDetailsState::Failed {
+                number: 42,
+                message: IssueLoadError::NotSignedIn.message(&repo),
+            }
+        );
+        send(&mut rig.app, FormMsg::TypeSelected(ConventionalType::Fix));
+        let _ = remote_lists_sent(&mut rig.rx);
+        send(&mut rig.app, FormMsg::Submitted);
+        assert_eq!(
+            preflights_sent(&mut rig.rx),
+            vec!["fix/42_crash-when-opening-empty-project".to_string()]
+        );
+    }
+
+    /// T028 / US3-1 — a kind that cannot be read is a "Not readable: …" line among the others.
+    #[test]
+    fn details_a_not_readable_kind_is_a_line_beside_the_others() {
+        let mut rig = loaded_rig();
+        let _work = pick_without_settling(&mut rig.app, 42);
+        let mut details = blocked(42);
+        details.projects = Kind::NotReadable("GitHub refused access".into());
+        let msg = loaded_details(&rig, 42, details);
+        send(&mut rig.app, msg);
+        let IssueDetailsState::Loaded { details, .. } = details_of(&rig.app) else {
+            panic!("loaded");
+        };
+        let lines = details.display_lines();
+        assert_eq!(lines.len(), 2, "{lines:?}");
+        assert_eq!(lines[0].label, "Blocked by");
+        assert_eq!(lines[1].label, "Projects");
+        assert_eq!(lines[1].text, "Not readable: GitHub refused access");
+    }
+
+    /// T028 / US3-4 — Create with a blocked issue loaded submits as today.
+    #[test]
+    fn details_a_blocked_issue_is_still_created() {
+        let mut rig = loaded_rig();
+        let _work = pick_without_settling(&mut rig.app, 42);
+        let msg = loaded_details(&rig, 42, blocked(42));
+        send(&mut rig.app, msg);
+        send(&mut rig.app, FormMsg::TypeSelected(ConventionalType::Fix));
+        let _ = remote_lists_sent(&mut rig.rx);
+        send(&mut rig.app, FormMsg::Submitted);
+        assert_eq!(
+            preflights_sent(&mut rig.rx),
+            vec!["fix/42_crash-when-opening-empty-project".to_string()]
+        );
+    }
+
     // --- T022: the shell's half -----------------------------------------------------------------
 
     /// U58 — opening the form sends one `RemoteList` for the active project; its answer decides the

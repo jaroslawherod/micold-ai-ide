@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 
 use micold_core::github::{FakeIssueSource, GithubRepo, IssueLoadError};
 use micold_core::issue_details::{
-    details_args, details_error_json, parse_details, read_details_with, timeline_args,
+    details_args, details_error_json, parse_details, read_details_with, timeline_args, DetailLine,
     IssueDetails, IssueDetailsSource, Kind, PlainText, PrListState, Reference, RelatedIssue,
     RelatedList, DETAILS_BOUND, LIST_CAP,
 };
@@ -707,4 +707,148 @@ fn a_whole_read_failure_is_one_sentence() {
         details_error_json(12, &IssueLoadError::TimedOut, &repo()),
         json!({"number": 12, "details_error": IssueLoadError::TimedOut.message(&repo())})
     );
+}
+
+// ---- Display lines (form-details §3, data-model §7; US2, SC-002) ----
+
+fn line(label: &'static str, text: &str, warning: bool) -> DetailLine {
+    DetailLine {
+        label,
+        text: text.into(),
+        warning,
+    }
+}
+
+fn labels_of(lines: &[DetailLine]) -> Vec<&'static str> {
+    lines.iter().map(|l| l.label).collect()
+}
+
+#[test]
+fn every_kind_gives_one_line_each_in_the_fixed_order_and_no_labels_line() {
+    let lines = parsed("every_kind.json").display_lines();
+    assert_eq!(
+        lines,
+        [
+            line(
+                "Blocked by",
+                "1 open of 2: #10 Parser rewrite (open), #9 Old spike (closed)",
+                true
+            ),
+            line("Blocking", "#14 Release notes (open)", false),
+            line("Parent", "acme/roadmap#3 Q4 epic (open)", false),
+            line(
+                "Sub-issues",
+                "1 of 2 closed: #15 Tokenizer (closed), #16 Grammar (open)",
+                false
+            ),
+            line("Closing pull requests", "#20 Fix the parser (draft)", false),
+            line("Linked pull requests", "#21 Refactor lexer (merged)", false),
+            line("Assignees", "octocat", false),
+            line("Milestone", "v1.4", false),
+            line(
+                "Projects",
+                "Roadmap: Status In progress, Estimate 3; Backlog",
+                false
+            ),
+        ]
+    );
+}
+
+#[test]
+fn an_issue_with_nothing_adds_no_line() {
+    assert_eq!(parsed("empty.json").display_lines(), []);
+}
+
+#[test]
+fn only_an_open_blocker_makes_the_blocked_by_line_a_warning() {
+    let mut closed_only = parsed("every_kind.json");
+    if let Kind::Read(blockers) = &mut closed_only.blocked_by {
+        blockers.open = 0;
+    }
+    let lines = closed_only.display_lines();
+    assert_eq!(
+        lines[0],
+        line(
+            "Blocked by",
+            "#10 Parser rewrite (open), #9 Old spike (closed)",
+            false
+        ),
+        "a closed-only list is a plain list"
+    );
+    assert!(
+        lines.iter().all(|l| !l.warning),
+        "no other line is a warning"
+    );
+}
+
+#[test]
+fn a_long_list_says_how_many_more_and_how_many_are_hidden() {
+    let lines = parsed("many.json").display_lines();
+    let blocked = lines
+        .iter()
+        .find(|l| l.label == "Blocked by")
+        .expect("line");
+    assert!(blocked.warning);
+    assert!(
+        blocked.text.starts_with("4 open of 5: "),
+        "{}",
+        blocked.text
+    );
+    assert!(
+        blocked.text.ends_with(" and 3 more; 3 you can't see"),
+        "{}",
+        blocked.text
+    );
+    let subs = lines
+        .iter()
+        .find(|l| l.label == "Sub-issues")
+        .expect("line");
+    assert!(
+        subs.text.ends_with(" and 180 more; 175 you can't see"),
+        "{}",
+        subs.text
+    );
+    assert_eq!(
+        subs.text.matches(" (").count(),
+        LIST_CAP,
+        "twenty are named"
+    );
+}
+
+#[test]
+fn a_kind_that_is_not_readable_says_so_in_its_own_place() {
+    let lines = parsed("projects_scope.json").display_lines();
+    let projects = lines
+        .iter()
+        .position(|l| l.label == "Projects")
+        .expect("line");
+    assert_eq!(projects, lines.len() - 1, "Projects is the last row");
+    assert_eq!(
+        lines[projects].text,
+        "Not readable: your GitHub sign-in can't read projects (it lacks the read:project scope)"
+    );
+    let mut blocked = parsed("every_kind.json");
+    blocked.blocked_by = Kind::NotReadable("GitHub refused access".into());
+    let lines = blocked.display_lines();
+    assert_eq!(
+        lines[0],
+        line("Blocked by", "Not readable: GitHub refused access", false),
+        "an unreadable blocker kind is never a warning"
+    );
+    assert_eq!(labels_of(&lines)[1], "Blocking");
+}
+
+#[test]
+fn linked_pull_requests_read_at_least_when_the_timeline_was_cut() {
+    let mut d = parsed("every_kind.json");
+    d.linked_prs = match d.linked_prs {
+        Kind::Read(list) => Kind::Read(list.lower_bound()),
+        other => other,
+    };
+    let lines = d.display_lines();
+    let linked = lines
+        .iter()
+        .find(|l| l.label == "Linked pull requests")
+        .expect("line");
+    assert_eq!(linked.text, "at least 1: #21 Refactor lexer (merged)");
 }

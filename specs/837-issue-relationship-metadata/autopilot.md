@@ -9,22 +9,22 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #837
 - **Worktree branch**: claude/project-thread-tw6sph
 - **Started**: 2026-10-16
-- **Phase**: milestone M1
-- **Next step**: orchestrator opens the M1 PR (branch pushed; title and body in the unit's scratchpad), waits on CI and merges; review B for M1 was not run (no subagent tool in unit 3): dispatch it on the PR before merge if wanted; then M2
+- **Phase**: milestone M2
+- **Next step**: M2 unit 2: full gate, reviews A and B, visual pass T031, PR files (see Handover)
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #906 | Design: spec, plan, research, contracts, tasks | merged | d24fd3223f0d74d045690100555d88bc28c13900 |
-| pending | M1: tool reports the issue object | to open | — |
+| #907 | M1: tool reports the issue object | merged | 31cc373f6365636e21a56afc9474c247927d6c9d |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T018, T027, T029 | full | create_worktree with github_issue returns the issue object (relationships, not_readable, details_error); agent-tools guide | pending (orchestrator opens) | gate green at bdf71a68 |
-| M2 | T019–T026, T028, T030, T031 | full | New worktree form shows a picked issue's relationships, blocked warning, failure line; worktrees guide; visual pass | — | planned |
+| M1 | T001–T018, T027, T029 | full | create_worktree with github_issue returns the issue object (relationships, not_readable, details_error); agent-tools guide | #907 | merged |
+| M2 | T019–T026, T028, T030, T031 | full | New worktree form shows a picked issue's relationships, blocked warning, failure line; worktrees guide; visual pass | — | implemented, not yet gated or reviewed |
 
 ## Decisions
 
@@ -61,7 +61,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M2 unit 1 stopped at the context cap (about 178k). Done, uncommitted until this commit: T019–T026, T028, T030 ticked in tasks.md; `tdd/cycle-log.md` has the M2 section (tests written and run red first).
+
+- Core: `DetailLine`, `IssueDetails::display_lines` (issue_details.rs); `FakeIssueSource::details_deadlines`.
+- Client: `IssueDetailsState`, `DetailsRequest`, `set_picked_issue` (the one writer), `issue_details_request`, `Msg::IssueDetailsLoaded` (features/worktree_form.rs); `shell::issues::on_issue_picked` + `start_issue_details` (main.rs routes `IssuePicked`); view `issue_details` inside `issue_picker` (ui/worktree_form.rs), scrolls past 5 rows because 9 rows pushed the dialog over the app bar (panel_placement); new gate exemption `ISSUE_DETAILS_CONTENT` in tests/gates/containment.rs; three covered states `add-worktree-dialog-issue-details-{loading,loaded,failed}` and the regenerated layout fixture.
+- Docs: worktrees-and-sessions.md "The issue's relationships" and a sentence in "What is sent to GitHub".
+- Green so far: core `issue_details` 44, client `issue_source` 47, `layout_snapshot` 62. Full client and workspace tests, clippy and the shell tests NOT run yet.
+
+Next, in order: (1) `CARGO_INCREMENTAL=0 scripts/gate.sh` detached (setsid nohup, log in scratchpad), with review A (`code-review` skill, high, on origin/main...HEAD) in its shadow; (2) review B (autopilot-reviewer, model sonnet, conformance rubric, brief M2) and the visual pass T031 (cloud-visual-pass notes: Xvfb, ICED_BACKEND=tiny-skia, python ctypes XTest; save screenshots and notes in specs/837-issue-relationship-metadata/visual-pass/, tick T031); (3) record review rounds with review-snapshot.sh; (4) rerun the full gate on the final tree, commit (feat(837): …), push with `git push --force-with-lease -u origin HEAD`, write SCRATCH/pr-title.txt and pr-body.md (title `#837: Show all GitHub issue metadata (blocked by, blocking, parent, sub-issues…) when a worktree is created (M2)`, body ends `Refs #837`); return `PR: pending (orchestrator opens)`.
+Open findings: none yet. Review rounds: none counted.
 
 ## Open escalation
 

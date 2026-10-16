@@ -32,6 +32,7 @@ use micold_core::github::{
     choose_remote, describe_listed, merge_searched, next_description_cursor, DescriptionPage,
     GithubRepo, Issue, IssueListing, IssueLoadError, NoticeSource, RemoteChoice,
 };
+use micold_core::issue_details::IssueDetails;
 use micold_core::issue_types::LabelTypeEntry;
 use micold_core::jira::{connection_key, IssueProvider, JiraConnection};
 use micold_core::naming::{
@@ -144,6 +145,27 @@ impl State {
         }
     }
 
+    /// The read of the picked issue's details the open form awaits (837 form-details §1).
+    ///
+    /// `Some` only while `Loading`, the list is loaded and the repository known, so the shell can
+    /// tell a message that moved the pick (the request changed) from one the reducer dropped. A
+    /// number above `u32::MAX` has no request: `read_details` takes a `u32`, as `IssueLookup` does.
+    pub fn issue_details_request(&self) -> Option<DetailsRequest> {
+        let form = self.form.as_ref()?;
+        let IssueDetailsState::Loading { seq, number } = form.issue_details else {
+            return None;
+        };
+        let IssueList::Loaded { gh, .. } = &form.issues else {
+            return None;
+        };
+        Some(DetailsRequest {
+            seq,
+            number: u32::try_from(number).ok()?,
+            repo: form.github_repo()?.clone(),
+            gh: gh.clone(),
+        })
+    }
+
     /// The page of descriptions the open form awaits, and what asks for it (038 FR-024).
     ///
     /// `Some` only while a loaded list's pass awaits a page, so the shell can tell a message that
@@ -164,6 +186,30 @@ impl State {
             _ => None,
         }
     }
+}
+
+/// The read of the picked GitHub issue's details: `number` of `repo`, with the `gh` the list was
+/// read with, answered under `seq` (837 contracts/form-details.md §1).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DetailsRequest {
+    pub seq: u64,
+    pub number: u32,
+    pub repo: GithubRepo,
+    pub gh: PathBuf,
+}
+
+/// Where the picked issue's details are (837 data-model §6).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum IssueDetailsState {
+    /// No GitHub issue is picked.
+    #[default]
+    Idle,
+    /// The read is awaited; only the answer carrying this `seq` and `number` applies.
+    Loading { seq: u64, number: u64 },
+    /// The details of the picked issue.
+    Loaded { number: u64, details: IssueDetails },
+    /// The read failed; `message` is the plain sentence naming the reason.
+    Failed { number: u64, message: String },
 }
 
 /// One request of the description pass: the page after `cursor` of `repo`'s open issues, read with
@@ -537,6 +583,10 @@ pub struct WorktreeForm {
     pub issue_highlight: Option<usize>,
     /// The issue last picked, if any (FR-010a).
     pub picked_issue: Option<u64>,
+    /// The picked GitHub issue's relationships (837). Never read by Create (FR-006).
+    pub issue_details: IssueDetailsState,
+    /// The last details seq handed out; bumped on every change of the pick.
+    pub details_seq: u64,
     /// The AI CLI the worktree's session starts on (feature 776, FR-006); `None` creates the
     /// worktree with no session. Preselected to the default CLI when the form opens.
     pub session_cli: Option<AiCli>,
@@ -738,6 +788,20 @@ impl WorktreeForm {
         self.issue_highlight = clamp_highlight(self.issue_highlight, self.issue_matches.len());
     }
 
+    /// The one writer of `picked_issue` (837 data-model §6): moves the details with the pick. A GitHub
+    /// pick awaits its details under a fresh seq; a cleared pick or a Jira one has none.
+    pub fn set_picked_issue(&mut self, picked: Option<u64>) {
+        self.picked_issue = picked;
+        self.details_seq += 1;
+        self.issue_details = match picked {
+            Some(number) if self.provider == IssueProvider::Github => IssueDetailsState::Loading {
+                seq: self.details_seq,
+                number,
+            },
+            _ => IssueDetailsState::Idle,
+        };
+    }
+
     /// Forget the issues and their search: the source was left, so any load in flight is stale.
     fn reset_issues(&mut self) {
         self.issues = IssueList::NotRequested;
@@ -745,7 +809,7 @@ impl WorktreeForm {
         self.issue_matches.clear();
         self.issue_list_open = false;
         self.issue_highlight = None;
-        self.picked_issue = None;
+        self.set_picked_issue(None);
     }
 
     /// Recompute the search results from `candidates` and `branch_query`, and re-seat the keyboard
@@ -1433,8 +1497,33 @@ pub fn issue_picked(state: &mut crate::app::State, number: u64, mapping: &[Label
         form.name = naming.name;
         form.type_ = naming.type_;
         form.error = None;
-        form.picked_issue = Some(number);
+        form.set_picked_issue(Some(number));
         form.issue_list_open = false;
+    });
+}
+
+/// The picked issue's details answered (837). Applies only while the form awaits exactly this
+/// `seq` and `number`; anything else is an answer for an earlier pick or a closed form (FR-012).
+pub fn issue_details_loaded(
+    state: &mut crate::app::State,
+    seq: u64,
+    number: u64,
+    result: Result<IssueDetails, IssueLoadError>,
+) {
+    with_form(state, |form| {
+        if form.issue_details != (IssueDetailsState::Loading { seq, number }) {
+            return;
+        }
+        let Some(repo) = form.github_repo().cloned() else {
+            return;
+        };
+        form.issue_details = match result {
+            Ok(details) => IssueDetailsState::Loaded { number, details },
+            Err(error) => IssueDetailsState::Failed {
+                number,
+                message: error.message(&repo),
+            },
+        };
     });
 }
 
@@ -1802,6 +1891,13 @@ pub enum Msg {
         cursor: Option<String>,
         result: Result<DescriptionPage, IssueLoadError>,
     },
+    /// The picked issue's details answered (837). Applies only while the form awaits exactly this
+    /// `seq` and `number`.
+    IssueDetailsLoaded {
+        seq: u64,
+        number: u64,
+        result: Result<IssueDetails, IssueLoadError>,
+    },
 }
 
 /// The form's own reducer: one entry point, thirty-five answers (FR-004a).
@@ -1859,6 +1955,11 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
             cursor,
             result,
         } => issue_descriptions_loaded(state, seq, cursor, result),
+        Msg::IssueDetailsLoaded {
+            seq,
+            number,
+            result,
+        } => issue_details_loaded(state, seq, number, result),
     }
     Vec::new()
 }

@@ -43,12 +43,13 @@ use std::path::PathBuf;
 use iced::Task;
 use micold_client::app::Message;
 use micold_client::features::worktree_form::{
-    BranchSource, DescriptionRequest, JiraAvailability, Msg as FormMsg,
+    BranchSource, DescriptionRequest, DetailsRequest, JiraAvailability, Msg as FormMsg,
 };
 use micold_core::env_include::EnvIncludeSnapshot;
 use micold_core::github::{
     env_include_path, load_listing, DescriptionPage, IssueListing, IssueLoadError,
 };
+use micold_core::issue_details::{IssueDetailsSource as _, DETAILS_BOUND};
 use micold_core::jira::{connection_key, ApiToken};
 use micold_core::protocol::messages::ClientMsg;
 use micold_core::store::jira_token_path;
@@ -173,12 +174,35 @@ pub fn on_issue_row_picked(app: &mut App, index: usize) -> Task<Message> {
             .map_or_else(micold_core::issue_types::default_mapping, |store| {
                 store.load().settings.issue_label_types
             });
-        app.core.update(Message::WorktreeForm(FormMsg::IssuePicked {
-            number,
-            mapping,
-        }));
+        return on_issue_picked(app, number, mapping);
     }
     Task::none()
+}
+
+/// An issue was picked: the reducer takes the pick, and the read of its details starts when the pick
+/// is what made the form await them (837, form-details §2). Create never waits for it (FR-006).
+///
+/// The pick is the only message that starts a read: leaving the source, a provider change and a
+/// closed form all clear the pick, which leaves the form awaiting nothing.
+pub fn on_issue_picked(
+    app: &mut App,
+    number: u64,
+    mapping: Vec<micold_core::issue_types::LabelTypeEntry>,
+) -> Task<Message> {
+    let before = app.core.worktree_form.issue_details_request();
+    app.core.update(Message::WorktreeForm(FormMsg::IssuePicked {
+        number,
+        mapping,
+    }));
+    match app
+        .core
+        .worktree_form
+        .issue_details_request()
+        .filter(|request| before.as_ref() != Some(request))
+    {
+        Some(request) => start_issue_details(app, request),
+        None => Task::none(),
+    }
 }
 
 /// A load finished: keep the environment-include snapshot it resolved, then let the reducer decide
@@ -540,6 +564,38 @@ fn start_issue_descriptions(app: &mut App, request: DescriptionRequest) -> Task<
             Message::WorktreeForm(FormMsg::IssueDescriptionsLoaded {
                 seq,
                 cursor,
+                result,
+            })
+        },
+    )
+}
+
+/// Read the picked issue's details on a blocking thread, answering `IssueDetailsLoaded` under the
+/// request's seq and number (837). Like the search, it runs the `gh` the load located, and it is
+/// bound: the source is handed a deadline [`DETAILS_BOUND`] from now (FR-006, SC-005).
+fn start_issue_details(app: &mut App, request: DetailsRequest) -> Task<Message> {
+    let source = app.caps.issue_tooling().source;
+    let DetailsRequest {
+        seq,
+        number,
+        repo,
+        gh,
+    } = request;
+    let deadline = std::time::Instant::now() + DETAILS_BOUND;
+    Task::perform(
+        async move {
+            tokio::task::spawn_blocking(move || source(gh).read_details(&repo, number, deadline))
+                .await
+        },
+        move |joined| {
+            let result = joined.unwrap_or_else(|stopped| {
+                Err(IssueLoadError::Other(format!(
+                    "reading the issue's details stopped unexpectedly: {stopped}"
+                )))
+            });
+            Message::WorktreeForm(FormMsg::IssueDetailsLoaded {
+                seq,
+                number: u64::from(number),
                 result,
             })
         },
