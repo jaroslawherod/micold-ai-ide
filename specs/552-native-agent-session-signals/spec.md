@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-12
 
-**Status**: Draft
+**Status**: Closed 2026-10-16 — shipped in PRs #786, #795, #823, #870, #881 and the close PR
 
 **Input**: User description: "Implement GitHub issue #552: Replace name-based hiding of agent work with the AI CLI's native hooks. The app keeps agent-created work out of the user's view with heuristics: classifying worktrees by the `agent-` directory prefix and `worktree-agent-` branch prefix, plus the `show_agent_worktrees` sidebar toggle and the worktree provenance records from feature 029. These guess from names and miss cases, and do not address sessions that a background agent creates in an existing worktree. Remove the name-based hiding code and the toggle. Learn about sub-agent and background-agent sessions from the mechanism the CLI itself provides (for Claude, lifecycle hooks such as SubagentStart / SubagentStop with the session id and transcript path in each payload; for other providers the equivalent native hook, event or session metadata). Feed that into the session tree from the companion issue #551. Acceptance: no code classifies a worktree or session as agent-made from its name; sub-agent and background-agent sessions are identified only from provider-native signals; the related specs and docs (014-hide-agent-worktrees, 029-worktree-provenance, user guide) are updated or marked superseded."
 

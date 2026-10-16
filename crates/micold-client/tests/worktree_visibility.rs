@@ -5,8 +5,8 @@
 //! tags it carries, and there is no control that reveals anything.
 
 use micold_client::app::State;
+use micold_client::features::sidebar::SidebarEntry;
 use micold_client::features::worktree;
-use micold_core::naming::Tag;
 use micold_core::project::{Availability, Project};
 use micold_core::worktree::{Worktree, WorktreeStatus};
 use std::path::PathBuf;
@@ -78,11 +78,10 @@ fn an_agent_named_worktree_is_listed_like_an_ordinary_one() {
         managed(AGENT_DIR, AGENT_BRANCH),
         managed("fix-the-parser", "fix/parser"),
     ]);
-    assert_eq!(st.worktree_tree().len(), 3);
-    assert!(st
-        .worktree_tree()
-        .iter()
-        .all(|node| !node.tags.contains(&Tag::Agent)));
+    assert_eq!(
+        listed(&st),
+        vec!["Login", "Agent 0123456789abcdef0", "The parser"]
+    );
 }
 
 #[test]
@@ -92,7 +91,7 @@ fn every_worktree_is_listed() {
         managed("unrecorded", "feat/unrecorded"),
         elsewhere("borrowed"),
     ]);
-    assert_eq!(st.worktree_tree().len(), 3);
+    assert_eq!(listed(&st), vec!["Recorded", "Unrecorded", "Borrowed"]);
 }
 
 #[test]
@@ -107,8 +106,11 @@ fn renaming_to_or_from_the_old_convention_changes_neither_listing_nor_order() {
         managed("bbb", "feat/bbb"),
         managed("ccc", "worktree-agent-ffffffffffffffff0"),
     ]);
-    assert_eq!(before.worktree_tree().len(), after.worktree_tree().len());
-    assert_eq!(listed(&before).len(), listed(&after).len());
+    assert_eq!(listed(&before), vec!["Aaa", "Bbb", "Ccc"]);
+    assert_eq!(
+        listed(&after),
+        vec!["Agent 0123456789abcdef0", "Bbb", "Ccc"]
+    );
     // The order is the discovered order, unchanged by any name.
     assert_eq!(dirs(&after), vec![AGENT_DIR, "bbb", "ccc"]);
     assert_eq!(
@@ -123,29 +125,29 @@ fn renaming_to_or_from_the_old_convention_changes_neither_listing_nor_order() {
 
 #[test]
 fn the_sidebar_view_has_no_reveal_control() {
-    for (file, source) in [
-        ("ui/sidebar.rs", include_str!("../src/ui/sidebar.rs")),
-        (
-            "features/sidebar.rs",
-            include_str!("../src/features/sidebar.rs"),
-        ),
-    ] {
-        assert!(
-            !source.contains("Show agent worktrees"),
-            "{file} still names the reveal control"
-        );
-        assert!(
-            !source.contains("show_agent_worktrees"),
-            "{file} still carries the reveal state"
-        );
-    }
+    let st = state(vec![
+        managed("feat-login", "feat/login"),
+        managed(AGENT_DIR, AGENT_BRANCH),
+    ]);
+    // The rows are the project root then one row per worktree, in order: no extra entry stands
+    // for a "show agent worktrees" control.
+    let rows: Vec<String> = st
+        .sidebar_entries()
+        .iter()
+        .map(|entry| match entry {
+            SidebarEntry::Default(d) => d.display_name.to_string(),
+            SidebarEntry::Worktree(w) => w.display_name.clone(),
+            SidebarEntry::Group(g) => panic!("unexpected group row {}", g.name),
+        })
+        .collect();
+    assert_eq!(rows, vec!["Default", "Login", "Agent 0123456789abcdef0"]);
 }
 
 #[test]
 fn a_created_worktree_is_listed_in_the_frame_it_appears() {
     let mut st = state(vec![]);
     worktree::created(&mut st, managed("feat-login", "feat/login"));
-    assert_eq!(st.worktree_tree().len(), 1);
+    assert_eq!(listed(&st), vec!["Login"]);
 }
 
 #[test]
@@ -155,11 +157,20 @@ fn a_refresh_keeps_every_worktree_listed() {
         managed("feat-login", "feat/login"),
         managed(AGENT_DIR, AGENT_BRANCH),
     ]);
-    assert_eq!(st.worktree_tree().len(), 2);
+    assert_eq!(listed(&st), vec!["Login", "Agent 0123456789abcdef0"]);
 }
 
 #[test]
 fn the_project_root_is_listed_beside_every_worktree() {
     let st = state(vec![managed(AGENT_DIR, AGENT_BRANCH)]);
-    assert_eq!(st.sidebar_entries().len(), 2);
+    let rows: Vec<String> = st
+        .sidebar_entries()
+        .iter()
+        .map(|entry| match entry {
+            SidebarEntry::Default(d) => d.display_name.to_string(),
+            SidebarEntry::Worktree(w) => w.display_name.clone(),
+            SidebarEntry::Group(g) => g.name.clone(),
+        })
+        .collect();
+    assert_eq!(rows, vec!["Default", "Agent 0123456789abcdef0"]);
 }

@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #552
 - **Worktree branch**: feat/552_replace-name-based-hiding-of-agent-work-with-the
 - **Started**: 2026-10-12
-- **Phase**: milestone M4 (gate green, reviews done, PR open)
-- **Next step**: wait for CI and merge M4, then close
+- **Phase**: done (close PR open)
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -20,7 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #795 | M1 every worktree listed | merged | 4ba66482fc44ac820233512a21001fe2e8a5bbef |
 | #823 | M2 Claude sub-agent runs recorded, protocol 43 | merged | 6a8aacad57cd3a8648d6f1fa7cebbafa232dd83b |
 | #870 | M3 provenance and attach_worktree removed, protocol 46 | merged | 5a65464712ecce80c7aed79475c585912a54399d |
-| #881 | M4 provider gaps, provider table, superseded check | in review | |
+| #881 | M4 provider gaps, provider table, superseded check | merged | 0d0655eb3085dcd1453215832a1ba2a3db221aad |
 
 ## Milestones
 
@@ -29,7 +29,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T009 | full | every worktree listed, toggle and client name-based visibility removed, hook captures | #795 | merged |
 | M2 | T010–T021 | full | Claude sub-agent runs recorded from SubagentStart/Stop, protocol 43 | #823 | merged |
 | M3 | T022–T029 | full | provenance and attach_worktree removed, protocol 46 | #870 | merged |
-| M4 | T030–T033 | full | Copilot mapping or gap, provider table, docs check | #881 | in review |
+| M4 | T030–T033 | full | Copilot mapping or gap, provider table, docs check | #881 | merged |
 
 ## Decisions
 
@@ -57,6 +57,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Diff B (conformance, sonnet) M2 | 1 | same | CLEAN (3 MINOR: Verify queued behind build lock, covered by the full gate; no cycle-log kept for this feature; body-not-logged claim in a test comment, accepted) |
 | Diff A (code-review high) M3 | 1 | 1a1b0a3d8085a87152e9cc529d52daa901a25ad7:f1be454fc6e0888a59192a4b3da446d23dbb086e | CLEAN; 1 MINOR (AttachDiscover doc), fixed |
 | Review B (conformance sonnet) M3 | 1 | same | CLEAN; Verify passed |
+| Close diff review (sonnet) | 1 | working tree | CLEAN; 4 MINOR (comment typo fixed, per-item discovery accepted) |
 
 ## Declined review findings
 
@@ -84,9 +85,13 @@ None.
 - T001 found no installed Copilot CLI and no sub-agent event (research R8), so Copilot is a stated gap: T030 became a test that a Copilot event log never gains runs; T031 skipped.
 - T033 also marks 021, 024, 025, 028, 033 and 575 (they mention the toggle) with a "Partly superseded" note; the script's list is derived by grep plus the three named specs.
 
-## M4 follow-ups from review A (code-review ran on HEAD = M3 commit, findings are M3 code, not fixed here)
+## Close verification of the M4 follow-ups from review A
 
-- runs.rs clean_half_created lost its app-created guard (deletes hand-made folder at the derived name on restart); stale doc comment.
-- attach.rs offer_visible dropped the user_created_worktrees gate: Resume banner every launch.
-- list_worktrees rejects a stale `include_hidden` argument.
-- Resume all re-runs provider discovery per item; dead `created_worktrees`/`provenance_migrated` store fields; unused `_focused` param in attach_dialog; stale ClaimRequested doc in worktree.rs.
+Checked against main in the close unit; no new milestones:
+
+- clean_half_created guard: not a defect. Run creation refuses a taken directory (`DuplicateDir`), so a folder at a `Creating` run's derived name is the app's; provenance is gone by FR-009. Stale doc comment fixed.
+- offer_visible gate: not a defect. FR-009 says the offer is triggered by stored sessions the catalog lacks, not by absent provenance, and stays dismissable.
+- list_worktrees rejecting `include_hidden`: by design (M3 decision; `mcp_tools_catalog.rs` asserts it).
+- store fields `created_worktrees`/`provenance_migrated`: kept read-and-ignored on purpose (FR-010). `_focused`, ClaimRequested doc: no longer present.
+- Resume all re-runs provider discovery per item: a performance nicety, no spec requirement; accepted.
+- tdd-verify PASS_WITH_GAPS: T034-T036 (agent_run mutants, dead `Tag::Agent`, worktree_visibility strength) done in the close PR. M-1 (no cycle log) accepted.
