@@ -32,6 +32,9 @@
 
 #![allow(dead_code)]
 
+#[path = "../support/source_scan.rs"]
+mod source_scan;
+
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -207,34 +210,7 @@ pub fn core_src() -> PathBuf {
 
 /// Strips comments so prose is never mistaken for a declaration.
 pub fn code_only(src: &str) -> String {
-    let mut out = String::with_capacity(src.len());
-    let mut chars = src.chars().peekable();
-    let mut in_block = false;
-    while let Some(c) = chars.next() {
-        if in_block {
-            if c == '*' && chars.peek() == Some(&'/') {
-                chars.next();
-                in_block = false;
-            }
-            continue;
-        }
-        match (c, chars.peek()) {
-            ('/', Some('/')) => {
-                for c in chars.by_ref() {
-                    if c == '\n' {
-                        out.push('\n');
-                        break;
-                    }
-                }
-            }
-            ('/', Some('*')) => {
-                chars.next();
-                in_block = true;
-            }
-            _ => out.push(c),
-        }
-    }
-    out
+    source_scan::strip_comments(src)
 }
 
 /// Components that terminate somewhere other than `.into()` on an element, with where.

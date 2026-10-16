@@ -32,6 +32,11 @@
 //! [`Button::leading`]: micold_client::ui::material::Button::leading
 //! [`IconLabel`]: micold_client::ui::material::IconLabel
 
+#[path = "support/source_scan.rs"]
+mod source_scan;
+
+use source_scan::strip_comments_keep_lines;
+
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -93,40 +98,6 @@ fn feature_modules() -> BTreeMap<String, String> {
         }
     }
     walk(&showcase_dir(), "showcase/", &mut out);
-    out
-}
-
-/// Strip comments, so the commentary explaining a composite is free to name its parts.
-fn code_only(src: &str) -> String {
-    let mut out = String::with_capacity(src.len());
-    let mut chars = src.chars().peekable();
-    let mut in_block = false;
-    while let Some(c) = chars.next() {
-        if in_block {
-            if c == '*' && chars.peek() == Some(&'/') {
-                chars.next();
-                in_block = false;
-            } else if c == '\n' {
-                out.push('\n');
-            }
-            continue;
-        }
-        match (c, chars.peek()) {
-            ('/', Some('/')) => {
-                for c in chars.by_ref() {
-                    if c == '\n' {
-                        out.push('\n');
-                        break;
-                    }
-                }
-            }
-            ('/', Some('*')) => {
-                chars.next();
-                in_block = true;
-            }
-            _ => out.push(c),
-        }
-    }
     out
 }
 
@@ -243,7 +214,7 @@ fn names_call(s: &str, name: &str) -> bool {
 fn violations() -> Vec<String> {
     let mut out = Vec::new();
     for (name, src) in feature_modules() {
-        let code = code_only(&src);
+        let code = strip_comments_keep_lines(&src);
         for c in composites(&code) {
             if builds_glyph(&c.direct_children) && builds_text(&c.direct_children) {
                 out.push(format!("{name}:{}", c.line));
@@ -310,7 +281,7 @@ fn the_library_is_excluded_because_it_owns_the_composite() {
     // would not trip the full rule anyway. What matters is that the leading slot is still a row
     // here; if it stops being one, this exemption is protecting nothing and should be re-examined.
     let button = fs::read_to_string(ui_dir().join("material/button.rs")).expect("read button.rs");
-    let code = code_only(&button);
+    let code = strip_comments_keep_lines(&button);
     assert!(
         composites(&code)
             .iter()
@@ -330,7 +301,7 @@ fn the_guard_actually_works() {
             ]
         }
     "#;
-    let found = composites(&code_only(offending));
+    let found = composites(&strip_comments_keep_lines(offending));
     assert_eq!(found.len(), 1, "expected one row span");
     assert!(
         builds_glyph(&found[0].direct_children) && builds_text(&found[0].direct_children),
@@ -342,7 +313,7 @@ fn the_guard_actually_works() {
         "row![Text::new(a, role, r), Text::new(b, role, r)]",
         "row![Glyph::new(a, role, r), Glyph::new(b, role, r)]",
     ] {
-        let c = composites(&code_only(benign));
+        let c = composites(&strip_comments_keep_lines(benign));
         assert_eq!(c.len(), 1);
         assert!(
             !(builds_glyph(&c[0].direct_children) && builds_text(&c[0].direct_children)),
@@ -359,7 +330,7 @@ fn a_commented_out_composite_is_not_a_violation() {
         let x = 1;
     "#;
     assert!(
-        composites(&code_only(commented)).is_empty(),
+        composites(&strip_comments_keep_lines(commented)).is_empty(),
         "comments are stripped before the scan, so prose about the shape is free to name it"
     );
 }
@@ -369,7 +340,7 @@ fn a_nested_composite_is_reported_once_and_against_the_inner_row() {
     // The outer row holds a labelled icon and nothing else of its own. Only the inner row is a
     // violation; reporting the outer one too would turn one defect into two.
     let nested = "row![some_button, row![Glyph::new(a, role, r), Text::new(b, role, r)]]";
-    let found: Vec<usize> = composites(&code_only(nested))
+    let found: Vec<usize> = composites(&strip_comments_keep_lines(nested))
         .into_iter()
         .filter(|c| builds_glyph(&c.direct_children) && builds_text(&c.direct_children))
         .map(|c| c.line)
@@ -385,7 +356,7 @@ fn a_nested_composite_is_reported_once_and_against_the_inner_row() {
 fn a_call_whose_name_merely_ends_in_a_widgets_is_not_a_construction() {
     // `icon_role(..)` resolves a tint and `subtext(..)` is somebody's helper; neither builds one.
     let benign = "row![icon_role(IconSurface::Badge, r), subtext(label)]";
-    let c = composites(&code_only(benign));
+    let c = composites(&strip_comments_keep_lines(benign));
     assert_eq!(c.len(), 1);
     assert!(
         !builds_glyph(&c[0].direct_children),
