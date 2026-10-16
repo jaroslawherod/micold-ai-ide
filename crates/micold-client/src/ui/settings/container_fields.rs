@@ -437,7 +437,9 @@ pub fn groups<'a>(
             .error(error)
             .track_focus(l.field, focused);
         if let Some(on_input) = l.on_input {
-            input = input.on_input(on_input).on_submit(Message::Daemons(DaemonsMsg::Saved));
+            input = input
+                .on_input(on_input)
+                .on_submit(Message::Daemons(DaemonsMsg::Saved));
         }
         controls.push(input.into());
     }

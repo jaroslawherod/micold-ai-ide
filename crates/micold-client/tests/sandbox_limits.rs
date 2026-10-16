@@ -19,10 +19,10 @@
 use micold_client::features::sandbox::{SandboxLimit, StoppedByLimit};
 use micold_client::features::window::FieldId;
 use micold_client::ui::{network_warning, sandbox_limits, ContainerView};
+use micold_core::sandbox::placement::PlacementKind;
 use micold_core::sandbox::runtime::{
     IdentityMapping, LimitSupport, RuntimeCapabilities, RuntimeKind,
 };
-use micold_core::sandbox::placement::PlacementKind;
 use micold_core::sandbox::{NetworkPosture, SandboxProfile};
 
 fn caps(storage: LimitSupport) -> RuntimeCapabilities {

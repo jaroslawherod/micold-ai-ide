@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/804_move-the-session-service-settings-container
 - **Started**: 2026-10-15
 - **Phase**: milestone M2 gate and review
-- **Next step**: scoped gate, review A (high), review B, full gate, open M2 PR
+- **Next step**: full gate, open M2 PR
 
 ## Pull requests
 
@@ -41,6 +41,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Spec | 2 | 23e1dba8160d1800dfdd6d8915d4550176991274:1bf62326e8f9f29b3ef9df261c3ddba110f6ae54 | CLEAN (1 MINOR: remote-daemon marker has no FR; for clarify) |
 | Plan | 1 | e8b9da12b0d78a98730b2678305343a44c3e1daa:506df1d556f5f8a14ab742264002c269ec5851fa | CHANGES: 2 MAJOR (badge source, budget error type) fixed; 3 MINOR fixed |
 | Plan | 2 | 2ae1b02bed2b8ad66a62b54a31fda380948a8911:d0659308fae210beb1fdf3989b8f0b8d68845619 | CLEAN (1 MINOR: name parse_budget in plan D1, in data-model) |
+| Review A M2 | 1 | 6b63e4a8c23f | CLEAN |
+| Review B M2 | 1 | ed0dedca24e9:6b63e4a8c23f | CLEAN (1 MINOR: fmt uncommitted, committed) |
 | Review B M1 | 1 | ef3356982b2d:e016b011a15f | CHANGES: 1 MAJOR declined (no red evidence), 1 MINOR fixed |
 
 ## Declined review findings

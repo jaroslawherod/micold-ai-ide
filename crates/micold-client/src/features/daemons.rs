@@ -268,9 +268,8 @@ pub fn views(state: &State, model: &Model<'_>) -> ViewModel {
         !edited
             && matches!(&e.runtime, DaemonRuntime::Container(c) if !c.profile.credentials.is_empty())
     });
-    let form_shares = form.is_some_and(|d| {
-        d.runtime == DraftRuntime::Container && !d.profile.credentials.is_empty()
-    });
+    let form_shares = form
+        .is_some_and(|d| d.runtime == DraftRuntime::Container && !d.profile.credentials.is_empty());
     ViewModel {
         shares_credentials: stored_shares || form_shares,
         empty: rows.is_empty(),
