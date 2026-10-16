@@ -3141,14 +3141,19 @@ impl DaemonState {
                     .unwrap_or((io_failed(), None));
             }
         };
-        // The old session's processes go first, so no two of them ever run (FR-008a); the record
-        // is archived only once the new one is durable (research R7).
+        // The record is archived once the new one is durable (research R7), and the old session's
+        // processes stop only then: a failed replace leaves the running session untouched. The
+        // new session starts no process here, so no two of them ever run (FR-008a).
         let worktree = inner.catalog.session_worktree_dir(old.id);
-        let ptys = Self::remove_live_by_ids(&mut inner, vec![old.id]);
         let outcome = inner
             .catalog
             .replace_session(project, old.id, session)
             .unwrap_or_else(|_| io_failed());
+        let ptys = if outcome == AttachOutcome::Attached {
+            Self::remove_live_by_ids(&mut inner, vec![old.id])
+        } else {
+            Vec::new()
+        };
         drop(inner);
         for pty in ptys {
             let _ = pty.kill();
@@ -3284,7 +3289,7 @@ impl DaemonState {
             return 0;
         }
         // Newest first: the catalog keeps the first session of each location (FR-012).
-        found.sort_by(|a, b| b.0.cmp(&a.0));
+        found.sort_by_key(|a| std::cmp::Reverse(a.0));
         let found = found.into_iter().map(|(_, session)| session).collect();
         self.lock()
             .catalog
