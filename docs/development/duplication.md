@@ -3,10 +3,10 @@
 `mise run duplication` fails when duplicated code grows past a budget (issue #645). It needs `node`
 (pinned in `mise.toml`; jscpd runs through `npx`) and `cargo install similarity-rs`; it does not build the workspace and takes about 30 s.
 
-| Tool | Finds | Budget | Measured 2026-10-10 |
+| Tool | Finds | Budget | Measured 2026-10-16 |
 |---|---|---|---|
-| `jscpd` (`--min-lines 8 --min-tokens 80`) | exact token clones | 2.0 % duplicated lines | 1.95 % (289 clones, after #703) |
-| `similarity-rs` (`-t 0.85 -m 8 --skip-test`) | near-duplicate functions | 700 pairs | 700 pairs |
+| `jscpd` (`--min-lines 8 --min-tokens 80`) | exact token clones | 1.82 % duplicated lines | 1.81 % (272 clones, after #645) |
+| `similarity-rs` (`-t 0.85 -m 8 --skip-test`) | near-duplicate functions | 702 pairs | 701 pairs |
 
 The budgets are in `mise.toml`, just above the measurement. Lower them when a refactor lowers the
 number; never raise one to land a change; extract the shared helper instead.
