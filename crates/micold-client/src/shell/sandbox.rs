@@ -69,9 +69,7 @@ impl HostFacts {
             gid,
             state_dir,
             history_dir: micold_core::terminal_history::history_dir(),
-            time_zone: iana_time_zone::get_timezone()
-                .ok()
-                .filter(|z| !z.is_empty()),
+            time_zone: super::time_zone::host(),
             // Probed here, at the boundary that is allowed to read the host, rather than in
             // `conventional` — which stays pure and names the path whether or not it is there.
             layout: drop_absent_sign_in(CredentialLayout::conventional(
@@ -1653,9 +1651,7 @@ mod tests {
     fn gather_records_the_hosts_iana_time_zone() {
         assert_eq!(
             HostFacts::gather(std::env::temp_dir()).time_zone,
-            iana_time_zone::get_timezone()
-                .ok()
-                .filter(|zone| !zone.is_empty())
+            crate::shell::time_zone::host()
         );
     }
 

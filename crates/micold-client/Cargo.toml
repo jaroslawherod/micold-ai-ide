@@ -42,8 +42,6 @@ dark-light = { workspace = true }
 alacritty_terminal = { workspace = true }
 uuid = { workspace = true }
 directories = { workspace = true }
-# Feature 041 (R11): the host's IANA zone, passed to a sandbox as `TZ`.
-iana-time-zone = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 # Timer for the connection keepalive (US5, FR-026). The client already runs on tokio via iced's
@@ -61,6 +59,9 @@ arboard = { workspace = true }
 # Feature 031: `ShellExecuteW`, the Windows arm of the link opener (`shell/link_opener.rs`).
 [target.'cfg(windows)'.dependencies]
 windows-sys = { workspace = true }
+# Feature 041 (R11): the host's IANA zone, passed to a sandbox as `TZ`. Windows only: it carries the
+# Windows-to-IANA zone table; Unix reads the zone itself (`shell::time_zone`).
+iana-time-zone = { workspace = true }
 # Feature 039: the desktop notification on Windows (`shell/desktop_notify/windows.rs`, research R4).
 tauri-winrt-notification = { workspace = true }
 
