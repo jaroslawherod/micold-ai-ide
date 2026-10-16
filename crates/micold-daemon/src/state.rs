@@ -3070,7 +3070,7 @@ impl DaemonState {
     /// Returns how many sessions were adopted (`0` ⇒ no write happened).
     pub fn discover_external_sessions(&self, project: &Path) -> usize {
         // Locations, and the ids we already know — both read under the lock, once.
-        let (locations, known) = {
+        let (locations, known, occupied) = {
             let inner = self.lock();
             let mut locations = vec![SessionLocation::Default];
             if let Some(worktrees) = inner.worktrees.get(project) {
@@ -3081,7 +3081,12 @@ impl DaemonState {
                         .map(|wt| SessionLocation::Worktree(wt.dir_name.clone())),
                 );
             }
-            (locations, inner.catalog.known_session_ids(project))
+            let occupied = inner.catalog.occupied_slots(project);
+            (
+                locations,
+                inner.catalog.known_session_ids(project),
+                occupied,
+            )
         };
 
         // Off the lock: everything below touches the providers' stores.
@@ -3100,6 +3105,14 @@ impl DaemonState {
                         continue;
                     }
                     if provider.is_archived(&config_dir, &cwd, id) {
+                        continue;
+                    }
+                    // A `/clear` successor of a live session is not a second session (BUG-904,
+                    // FR-017). Archive it durably so later passes skip it at the check above.
+                    if occupied.contains(&(which, location.clone()))
+                        && provider.starts_as_continuation(&config_dir, &cwd, id)
+                    {
+                        let _ = provider.mark_archived(&config_dir, &cwd, id);
                         continue;
                     }
                     // A title wins; with none, the first typed turn (feature 032, C6.1). Both are

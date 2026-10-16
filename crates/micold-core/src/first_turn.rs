@@ -115,6 +115,18 @@ pub fn claude_first_turn(prefix: &[u8]) -> Option<String> {
     None
 }
 
+/// Whether the first user record of a `claude` transcript prefix is the `/clear` command, so the
+/// conversation continues one that was cleared (BUG-904). Not line 1: `claude` writes `mode` and
+/// snapshot lines before it.
+pub fn claude_starts_with_clear(prefix: &[u8]) -> bool {
+    complete_lines(prefix)
+        .filter_map(|line| serde_json::from_slice::<Value>(line).ok())
+        .find_map(|record| claude_candidate_text(&record))
+        .is_some_and(|text| {
+            matches!(ClaudeTurn::of(&text), ClaudeTurn::Command { name, .. } if name == "/clear")
+        })
+}
+
 /// The label of a Copilot event-log prefix: its first typed turn, shaped (C4), or `None`.
 ///
 /// Copilot's log is flatter than `claude`'s — one `user.message` record per turn, with the text of

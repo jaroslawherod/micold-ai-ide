@@ -684,3 +684,38 @@ mod minted_identity_seam {
         assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 0);
     }
 }
+
+#[test]
+fn claude_starts_as_continuation_only_for_a_leading_clear_command() {
+    let config = tempfile::tempdir().unwrap();
+    let cwd = Path::new(CWD);
+    let clear = r#"{"type":"user","message":{"role":"user","content":"<command-name>/clear</command-name>\n<command-message>clear</command-message>\n<command-args></command-args>"}}"#;
+    let preamble = "{\"type\":\"mode\",\"mode\":\"normal\"}\n{\"type\":\"file-history-snapshot\",\"snapshot\":{}}\n";
+
+    let after_clear = Uuid::from_u128(1);
+    write_transcript(
+        config.path(),
+        CWD,
+        after_clear,
+        &format!("{preamble}{clear}\n"),
+    );
+    assert!(ClaudeProvider.starts_as_continuation(config.path(), cwd, after_clear));
+
+    let ordinary = Uuid::from_u128(2);
+    let typed = r#"{"type":"user","message":{"role":"user","content":"fix the bug"}}"#;
+    write_transcript(
+        config.path(),
+        CWD,
+        ordinary,
+        &format!("{preamble}{typed}\n{clear}\n"),
+    );
+    assert!(
+        !ClaudeProvider.starts_as_continuation(config.path(), cwd, ordinary),
+        "a /clear after a first turn is not a continuation"
+    );
+
+    let empty = Uuid::from_u128(3);
+    write_transcript(config.path(), CWD, empty, "");
+    assert!(!ClaudeProvider.starts_as_continuation(config.path(), cwd, empty));
+    assert!(!ClaudeProvider.starts_as_continuation(config.path(), cwd, Uuid::from_u128(4)));
+}

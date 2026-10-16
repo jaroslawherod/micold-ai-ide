@@ -101,6 +101,28 @@ impl ProviderStores {
         .unwrap();
     }
 
+    /// Record the transcript `claude` writes after a `/clear` (BUG-904): a `mode` line and a
+    /// snapshot line first, then the `/clear` command as the first user record. Not line 1.
+    fn claude_clear_successor(&self, cwd: &Path, id: Uuid) {
+        let encoded: String = cwd
+            .to_string_lossy()
+            .chars()
+            .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+            .collect();
+        let dir = self.claude.join("projects").join(encoded);
+        std::fs::create_dir_all(&dir).unwrap();
+        let lines = [
+            format!(r#"{{"type":"mode","mode":"normal","sessionId":"{id}"}}"#),
+            format!(
+                r#"{{"type":"file-history-snapshot","messageId":"m1","snapshot":{{}},"isSnapshotUpdate":false}}"#
+            ),
+            format!(
+                r#"{{"type":"user","sessionId":"{id}","message":{{"role":"user","content":"<command-name>/clear</command-name>\n<command-message>clear</command-message>\n<command-args></command-args>"}}}}"#
+            ),
+        ];
+        std::fs::write(dir.join(format!("{id}.jsonl")), lines.join("\n") + "\n").unwrap();
+    }
+
     /// Record Copilot conversations for `cwd`: the per-cwd index plus each session's event log.
     fn copilot_conversations(&self, cwd: &Path, ids: &[Uuid]) {
         let hashed = micold_core::protocol::hashing::sha256_hex(cwd.to_string_lossy().as_bytes());
@@ -407,6 +429,63 @@ fn discovery_finds_what_the_clis_recorded_and_nothing_else() {
             "the known ids were subtracted before any per-id filesystem probe, so the marker was \
              never consulted — which is what keeps the pass proportional to *locations* rather \
              than to conversations (FR-014, R15)"
+        );
+    }
+
+    // --- A `/clear` successor is not a second session (BUG-904, FR-017) ---
+    {
+        let project = project_for("clear-successor");
+        let cwd = SessionLocation::Default.cwd(&project);
+        let original = Uuid::from_u128(0xA0);
+        let successor = Uuid::from_u128(0xA1);
+        stores.claude_conversation(&cwd, original);
+        stores.claude_clear_successor(&cwd, successor);
+
+        let data_dir = tempfile::tempdir().unwrap();
+        let known = Session::restored(
+            SessionId::from_uuid(original),
+            SessionLocation::Default,
+            SessionLabel::Named("Live".to_string()),
+            TerminalMode::AiCli,
+            AiCli::ClaudeCode,
+        );
+        let state = state_with(data_dir.path(), &project, vec![known]);
+
+        assert_eq!(state.discover_external_sessions(&project), 0);
+        assert_eq!(
+            recorded(&state, &project),
+            vec![(SessionId::from_uuid(original), AiCli::ClaudeCode)]
+        );
+        assert!(
+            micold_core::provider::AiCliProvider::is_archived(
+                AiCli::ClaudeCode.provider(),
+                &stores.claude,
+                &cwd,
+                successor
+            ),
+            "the successor is marked archived so later passes skip it"
+        );
+        assert_eq!(state.discover_external_sessions(&project), 0);
+
+        // An unknown id that is not a continuation is still adopted.
+        stores.claude_conversation(&cwd, Uuid::from_u128(0xA2));
+        assert_eq!(state.discover_external_sessions(&project), 1);
+        assert_eq!(recorded(&state, &project).len(), 2);
+    }
+
+    // --- A `/clear` transcript where no session exists is adopted as before ---
+    {
+        let project = project_for("clear-no-session");
+        let cwd = SessionLocation::Default.cwd(&project);
+        let lone = Uuid::from_u128(0xB1);
+        stores.claude_clear_successor(&cwd, lone);
+
+        let data_dir = tempfile::tempdir().unwrap();
+        let state = state_with(data_dir.path(), &project, Vec::new());
+        assert_eq!(state.discover_external_sessions(&project), 1);
+        assert_eq!(
+            recorded(&state, &project),
+            vec![(SessionId::from_uuid(lone), AiCli::ClaudeCode)]
         );
     }
 }

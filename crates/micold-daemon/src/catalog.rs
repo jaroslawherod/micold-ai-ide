@@ -1527,6 +1527,24 @@ impl Catalog {
             .unwrap_or_default()
     }
 
+    /// The `(provider, location)` pairs that hold a non-archived session of `project` (BUG-904):
+    /// where a `/clear` successor transcript is a continuation rather than a new session.
+    pub fn occupied_slots(
+        &self,
+        project: &Path,
+    ) -> std::collections::BTreeSet<(AiCli, SessionLocation)> {
+        self.workspace
+            .sessions
+            .get(project)
+            .map(|list| {
+                list.iter()
+                    .filter(|s| !s.archived)
+                    .map(|s| (s.provider, s.location.clone()))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
     /// Add sessions found in a provider's own store that this catalog has no record of (FR-014),
     /// persisting once if anything was added. Returns how many were adopted.
     ///
