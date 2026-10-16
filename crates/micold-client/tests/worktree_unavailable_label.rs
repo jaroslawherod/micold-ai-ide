@@ -262,10 +262,10 @@ fn the_sidebar_row_label_shows_the_status_in_place_of_the_chip() {
 }
 
 #[test]
-fn a_running_session_on_a_dropped_daemon_makes_its_row_lost() {
+fn a_running_session_on_a_dropped_daemon_makes_its_row_disconnected() {
     let (mut state, _, boxed) = window(&[SessionLifecycle::Running]);
     state.settings.links.lost(boxed, "gone");
-    assert_eq!(state.daemon_row_label("feat-a"), "lost to daemon Box");
+    assert_eq!(state.daemon_row_label("feat-a"), "disconnected");
     assert_eq!(state.daemon_row_label("feat-b"), "Host");
 }
 
