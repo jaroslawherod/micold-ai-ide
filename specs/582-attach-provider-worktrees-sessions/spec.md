@@ -176,7 +176,7 @@ found worktrees and sessions at once.
 - **FR-007**: Discovery MUST NOT list another project's sessions and MUST NOT list a session
   (feature 026's open-time adoption counts as already in the catalog: sessions it adopted are visible
   as sessions and are not listed again; attaching their hidden worktree is what shows them)
-  already in the catalog.
+  already in the catalog (a continuation of a catalogued session is FR-017, BUG-904).
 - **FR-008**: Users MUST be able to resume a listed session, and the provider MUST continue that
   conversation in the session's worktree. If that worktree is attachable but not attached, resuming
   attaches it first. Attaching a session only adds an idle catalog entry; it never starts the
@@ -205,6 +205,13 @@ found worktrees and sessions at once.
   in exactly one catalog entry, and a session MUST be resumed in at most one place at a time; a
   second resume request is refused with a clear reason.
 
+- **FR-017** (BUG-904): A conversation that continues a catalogued session under a new id (Claude
+  Code's `/clear`: a transcript whose first record is the `/clear` command) MUST NOT be adopted as a second
+  session (and so is not listed as one) when a session of that provider already exists at the same location.
+  It is recorded as handled in the provider's own archived marker, so later passes skip it; the
+  session keeps its id. Duplicates already in a catalog are left for the user to archive. Accepted trade-off: a later restart
+  resumes the pre-clear conversation, because the session keeps its id.
+
 ### Key Entities
 
 - **Attachable worktree**: a provider worktree present in git but not in the catalog; attributes:
@@ -227,6 +234,8 @@ found worktrees and sessions at once.
   delete-and-recreate.
 - **SC-005**: A corrupt provider store entry never prevents a project from opening or any other
   session from being listed.
+
+**Bugfix**: 2026-10-16 — BUG-904 added FR-017 (a `/clear` continuation is not a second session).
 
 ## Out of Scope
 

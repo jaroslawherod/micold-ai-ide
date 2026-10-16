@@ -176,3 +176,23 @@ Deferred at close (T046-T050): MED/LOW test hygiene, no behaviour at risk; the H
 - [ ] T048 Finding 9: have every test in `attach_apply.rs` and `attach_mcp.rs` that runs discovery call `provider_home()` first (or move it into the daemon `tests/support/` and have `connect_and_attach` call it). Proof: `HOME=/nonexistent CLAUDE_CONFIG_DIR= cargo test -p micold-daemon --test attach_apply` reads nothing outside the scratch home.
 - [ ] T049 Findings 10, 11: assert the notification text and `Level` in `attach_offer.rs:196,206`, assert `Level::Error` in `attach_dialog.rs` `a_refusal_is_reported_as_an_error`, and assert the note's reason in `attach_discovery.rs:316`. Proof: each fails with the message or level changed in `features/attach.rs`; `cargo test -p micold-client --test attach_offer --test attach_dialog` and `-p micold-core --test attach_discovery`.
 - [ ] T050 Findings 13, 14, 15, 16: move `provider_home`/`seed_claude` into `crates/micold-daemon/tests/support/`, and add a Copilot or Pi store case to `attach_discovery.rs::resumable`. Proof: `mise run gate`.
+
+## Phase 9: Bugfix BUG-904 — A `/clear` continuation is not a second session
+
+**Purpose**: Discovery stops adopting a Claude `/clear` successor transcript as a second session (FR-017). See `bugs/BUG-904.md`.
+
+- [ ] T051 [P] Failing regression test (BUG-904) in `crates/micold-daemon/tests/session_discovery.rs`: seed a store with a catalogued session's transcript and a second transcript shaped like the real one (a `mode` line, a snapshot line, then the first user record being the `/clear` command), same cwd; assert `discover_external_sessions` adopts nothing, the successor's archived marker exists, and a second pass still adopts nothing. Also assert an unknown non-`/clear` id is still adopted, and a `/clear` transcript at a location with no session is adopted. Must fail on `origin/main`.
+- [ ] T052 [P] Unit test in `crates/micold-core/tests/ai_cli_provider.rs`: Claude `starts_as_continuation` is true for a transcript opening with the `/clear` command record and false for an ordinary first turn, an empty or missing file.
+- [ ] T053 Add `starts_as_continuation` to `AiCliProvider` in `crates/micold-core/src/provider.rs` (default `false`, beside `has_recorded_conversation`); Claude reads `first_turn::read_prefix` and checks the first user record for `<command-name>/clear</command-name>` (depends on T052).
+- [ ] T054 In `discover_external_sessions` (`crates/micold-daemon/src/state.rs`), skip a found id that `starts_as_continuation` when a non-archived same-provider session exists at its location, calling `mark_archived` for it; keep the cost rule (test only ids that survive `seen.insert`) (depends on T051, T053).
+
+**Bugfix**: 2026-10-16 — BUG-904 added Phase 9 (T051–T054). No task reopened. See `bugs/BUG-904.md`.
+
+### M6 — BUG-904: a `/clear` continuation is not a second session
+
+- **Tasks**: T051–T054
+- **Deliverable**: discovery does not adopt a `/clear` successor transcript next to an existing session of the same provider and location, and does not on a later pass.
+- **Satisfies**: FR-017; FR-007; US2 acceptance scenario 3
+- **Verify**: `cargo test -p micold-daemon --test session_discovery`; `cargo test -p micold-core`
+- **Depends on**: M2
+- **Tier**: light
