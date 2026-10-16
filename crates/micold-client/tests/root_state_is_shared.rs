@@ -135,6 +135,12 @@ const COMPONENT_LOCAL: &[(&str, &str)] = &[
          `app::State`, so a resize that moves nothing closes no popover (002 BUG-005)",
     ),
     (
+        "session.additional_target",
+        "tests/features_session.rs::the_confirmation_survives_a_refusal_arriving_first — the \
+         location being confirmed outlives the dialog widget and a refusal arriving first must \
+         not clear it, so it is asserted on `app::State` (feature 776, FR-016)",
+    ),
+    (
         "session.menu_link",
         "tests/features_session_links.rs::choosing_open_link_opens_the_captured_link_and_closes_\
          the_menu — the link is captured on the right press and acted on when an item is chosen, \

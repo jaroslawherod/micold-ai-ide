@@ -1779,3 +1779,72 @@ fn a_remote_worktrees_location_is_the_hosts_path() {
         "the identity is never shown: {tip}"
     );
 }
+
+// --- Feature 776 (M5): the row menus and the delete confirmation --------------------------------
+
+mod m5_menus {
+    use micold_client::app::{Message, State};
+    use micold_client::features::session::Msg as SessionMsg;
+    use micold_client::ui::{additional_session_item, session_menu_items};
+    use micold_core::project::{Availability, Project};
+    use micold_core::session::{AiCli, Session, SessionLocation};
+    use std::path::PathBuf;
+
+    fn state_with(sessions: Vec<Session>) -> State {
+        let mut st = State::default();
+        let path = PathBuf::from("/a");
+        st.workspace.projects.push(Project {
+            path: path.clone(),
+            display_name: "a".into(),
+            is_git_repo: true,
+            availability: Availability::Available,
+        });
+        st.workspace.active = Some(path.clone());
+        st.workspace.sessions.insert(path, sessions);
+        st
+    }
+
+    #[test]
+    fn start_another_session_is_offered_only_where_a_session_exists() {
+        let taken = SessionLocation::Worktree("feat-a".into());
+        let free = SessionLocation::Worktree("feat-b".into());
+        let st = state_with(vec![
+            Session::start_new(taken.clone(), AiCli::ClaudeCode),
+            Session::start_new(SessionLocation::Default, AiCli::ClaudeCode),
+        ]);
+        let item = additional_session_item(&st, &taken).expect("occupied worktree");
+        assert_eq!(item.label, "Start another session...");
+        assert!(matches!(
+            item.message,
+            Some(Message::Session(SessionMsg::AdditionalRequested(ref l))) if *l == taken
+        ));
+        assert!(additional_session_item(&st, &free).is_none());
+        assert!(
+            additional_session_item(&st, &SessionLocation::Default).is_some(),
+            "the project root follows the same rule"
+        );
+    }
+
+    #[test]
+    fn make_main_is_in_a_helpers_menu_and_not_the_mains() {
+        let location = SessionLocation::Worktree("feat-a".into());
+        let mut main = Session::start_new(location.clone(), AiCli::ClaudeCode);
+        main.main = true;
+        let helper = Session::start_new(location, AiCli::ClaudeCode);
+        let (main_id, helper_id) = (main.id, helper.id);
+        let st = state_with(vec![main, helper]);
+
+        let helper_menu = session_menu_items(&st, helper_id);
+        let entry = helper_menu
+            .iter()
+            .find(|i| i.label == "Make main session")
+            .unwrap();
+        assert!(matches!(
+            entry.message,
+            Some(Message::Session(SessionMsg::MakeMainRequested(id))) if id == helper_id
+        ));
+        assert!(!session_menu_items(&st, main_id)
+            .iter()
+            .any(|i| i.label == "Make main session"));
+    }
+}

@@ -112,7 +112,7 @@ fn every_variant_is_covered() {
     // Bump deliberately: a new dialog needs a row in `modals()`.
     assert_eq!(
         every_snapshot().len(),
-        11,
+        12,
         "a dialog was added or removed — update modals()"
     );
 }

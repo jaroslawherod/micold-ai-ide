@@ -21,7 +21,7 @@
 #[path = "support/mod.rs"]
 mod support;
 
-use micold_client::app::State;
+use micold_client::app::{Message, State};
 use micold_client::features::session::Msg as SessionMsg;
 use micold_client::features::session::{
     AvailabilitySource, CliAvailability, ForegroundChoice, SelectKind,
@@ -1222,4 +1222,109 @@ fn the_dialog_preselects_the_default_cli_and_offers_none_last() {
     let form = st.worktree_form.form.as_ref().unwrap();
     assert_eq!(form.session_definition(), None);
     assert!(form.first_prompt.is_empty());
+}
+
+// --- Feature 776 (M5): another session on purpose; making a session main -----------------------
+
+/// A state whose project `/a` holds a main and a helper at `feat-a`, in that list order.
+fn worktree_with_main_and_helper() -> (State, SessionId, SessionId) {
+    let (mut st, _, _) = two_projects(0, 0);
+    let location = SessionLocation::Worktree("feat-a".into());
+    let mut main = Session::start_new(location.clone(), AiCli::ClaudeCode);
+    main.main = true;
+    let helper = Session::start_new(location, AiCli::ClaudeCode);
+    let (main_id, helper_id) = (main.id, helper.id);
+    st.workspace
+        .sessions
+        .get_mut(Path::new("/a"))
+        .unwrap()
+        .extend([main, helper]);
+    (st, main_id, helper_id)
+}
+
+#[test]
+fn another_session_is_confirmed_on_an_occupied_location_and_cancel_changes_nothing() {
+    let (mut st, _, _) = worktree_with_main_and_helper();
+    let taken = SessionLocation::Worktree("feat-a".into());
+    let before = st.workspace.sessions.clone();
+
+    st.update(Message::Session(SessionMsg::AdditionalRequested(
+        taken.clone(),
+    )));
+    assert_eq!(st.session.additional_target, Some(taken.clone()));
+    let (location, provider) = st.additional_request().expect("a request is pending");
+    assert_eq!(location, taken);
+    assert_eq!(provider, st.session.default_ai_cli);
+
+    st.update(Message::Session(SessionMsg::AdditionalCancelled));
+    assert_eq!(st.session.additional_target, None);
+    assert_eq!(st.additional_request(), None);
+    assert_eq!(st.workspace.sessions, before);
+}
+
+#[test]
+fn another_session_is_not_offered_for_a_free_location() {
+    let (mut st, _, _) = two_projects(0, 0);
+    st.update(Message::Session(SessionMsg::AdditionalRequested(
+        SessionLocation::Worktree("feat-a".into()),
+    )));
+    assert_eq!(st.session.additional_target, None);
+}
+
+#[test]
+fn the_confirmation_survives_a_refusal_arriving_first() {
+    // US6 s4: the confirmed request still creates its session.
+    let (mut st, _, _) = worktree_with_main_and_helper();
+    let taken = SessionLocation::Worktree("feat-a".into());
+    st.update(Message::Session(SessionMsg::AdditionalRequested(
+        taken.clone(),
+    )));
+    st.notify_error("feat-a already has a main session");
+    assert_eq!(st.session.additional_target, Some(taken));
+    st.update(Message::Session(SessionMsg::AdditionalConfirmed));
+    assert_eq!(st.session.additional_target, None);
+}
+
+#[test]
+fn make_main_is_offered_to_a_helper_and_not_to_the_main() {
+    let (st, main, helper) = worktree_with_main_and_helper();
+    assert!(st.is_helper(helper));
+    assert!(!st.is_helper(main));
+}
+
+#[test]
+fn a_lone_session_is_not_a_helper() {
+    let (st, ids, _) = two_projects(1, 0);
+    assert!(!st.is_helper(ids[0]));
+}
+
+#[test]
+fn deleting_a_main_names_the_session_that_takes_over() {
+    let (st, main, helper) = worktree_with_main_and_helper();
+    assert_eq!(st.successor_on_removal(main).map(|s| s.id), Some(helper));
+    assert!(st.successor_on_removal(helper).is_none(), "a helper's");
+}
+
+#[test]
+fn deleting_a_lone_main_names_nobody() {
+    let (st, ids, _) = two_projects(1, 0);
+    assert!(st.successor_on_removal(ids[0]).is_none());
+}
+
+#[test]
+fn the_row_press_opens_the_new_main_after_the_catalog_update() {
+    let (mut st, main, helper) = worktree_with_main_and_helper();
+    let location = SessionLocation::Worktree("feat-a".into());
+    st.update(Message::Session(SessionMsg::MakeMainRequested(helper)));
+    // The daemon's catalog update is the answer: the marker moves in one change.
+    for s in st.workspace.sessions.get_mut(Path::new("/a")).unwrap() {
+        s.main = s.id == helper;
+    }
+    let sessions = st.active_sessions();
+    assert_eq!(
+        micold_core::occupancy::main_session(sessions, &location),
+        Some(helper)
+    );
+    assert!(st.is_helper(main));
+    assert!(!st.is_helper(helper));
 }

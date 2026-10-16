@@ -24,3 +24,28 @@ control is gone from an occupied row, so the expander and the "helper, <cli>" an
 ## Defects
 None attributable to 776. Observation: the "Existing branch" tab shows the selected outline on first
 open of New worktree while Create produced a new branch (feat/<name>); likely pre-existing, not 776.
+
+# Visual pass, feature 776 (quickstart Part B items 5 and 6, T049)
+
+2026-10-16. Real client + daemon (pinned copies of this worktree's build, both contain
+`allow_additional_session`), private headless sway 1600x1200 + lavapipe, private data dir,
+throwaway git repo. Dark scheme only; light not exercised. Right-press needed for row menus, so the
+pointer client was a copy of `vptr.py` with an `rclick` command (not committed). Claude Code was the
+CLI; sessions sat at its trust prompt, which does not matter here.
+
+| Item | Result | Evidence |
+|---|---|---|
+| B2 Default with a session: no start action | pass | row shows no "+" or chevron once a session runs |
+| B5 menu of an occupied Default row has "Start another session..." | pass | seen in the pass (Review changes, Start another session..., Close session, Remove session); crop not kept |
+| B5 confirmation names the existing session, explains helper | pass | `b5-start-another-confirmation-dark.png` |
+| B5 Cancel changes nothing | pass | daemon log: still one `session started` |
+| B5 Start adds a second, selected, marked "helper, claude", expander shown | pass | `b5-helper-added-selected.png` |
+| B6 helper sub-row menu: Make main session / Close / Remove; main's: Close / Remove | pass | `b6-menus-helper-vs-main.png` |
+| B6 Make main session: promoted row first and selected, former main "helper, claude" | pass | `b6-after-make-main.png`; project file shows `main: true` on the promoted id |
+| B6 Remove on a main with helpers names the successor; Cancel keeps both | pass | `b6-delete-main-with-helper.png` |
+
+## Not covered / observations
+Lone-main and helper deletion wording (no successor line) not rendered. Both sessions are titled
+"New session", so the successor sentence is not distinguishable by name in this fixture. Row menus
+open on right-press only; the earlier left-press click with no preceding hover did not register in
+this pointer setup (tool artefact, not the app).

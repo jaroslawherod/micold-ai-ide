@@ -755,6 +755,11 @@ Right-click a worktree in the sidebar to open its context menu:
   that worktree first, then removes the directory, sessions, and (unless unchecked) the branch —
   this cannot be undone. Cancelling removes nothing, including any change you made to the
   checkbox. (A worktree that is already missing/invalid can still be cleaned up this way.)
+- **Start another session...** — only on a worktree that already has a session (the **Default**
+  entry offers it too). A confirmation names the worktree and its existing session. Confirming
+  starts a **helper** session beside it, selected and shown; the existing session stays the main
+  one. Cancelling changes nothing. The confirmation still starts the session if another window or
+  an agent added one while it was open.
 - **Review changes** — opens the Changes view: every file the worktree changed against its base
   branch, committed and uncommitted. The **Default** entry offers this item too. See
   [Reviewing a worktree's changes](reviewing-changes.md).
@@ -769,6 +774,9 @@ Right-click a worktree in the sidebar to open its context menu:
   non-interfering tasks.
 - **Switch** between sessions by selecting them in the sidebar. Background sessions keep running;
   only the displayed terminal changes.
+- Right-click a helper session for **Make main session**: it becomes the worktree's main session
+  and the former main becomes a helper, in the same step. Selecting the worktree then opens it.
+  The main session's menu does not offer it.
 - Right-click a session for **Close** and **Remove**:
   - **Close** stops its AI CLI process and hides it from the sidebar. It does not reappear —
     including on a later restart, even though the underlying conversation itself still exists on
@@ -776,7 +784,9 @@ Right-click a worktree in the sidebar to open its context menu:
   - **Remove** permanently deletes the session's record, after a confirmation step. Unlike Close,
     there is no possible recovery path back into the sidebar either. Remove is only offered on a
     still-visible session — a closed session can't be removed separately, since it's already
-    hidden.
+    hidden. When you remove a worktree's main session and others remain, the confirmation names
+    the first remaining session, which becomes the main session; removing a helper never changes
+    the main.
   - Close, Remove, deleting a worktree and forgetting a project also delete the session's
     [saved terminal history](settings.md#terminal) from the disk, before the action is done. **Stopping** a
     session keeps it: the earlier output is shown again when the session is started.

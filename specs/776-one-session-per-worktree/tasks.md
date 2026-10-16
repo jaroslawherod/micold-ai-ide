@@ -104,13 +104,13 @@ User stories: US1 refused second session unless really requested (P1), US2 defin
 
 **Independent test**: `cargo test -p micold-client --test features_session additional`.
 
-- [ ] T046 [P] [US6] Client tests in `crates/micold-client/tests/features_session.rs`: the worktree row menu has "Start another session..." only for an occupied location (Default included); it opens a confirmation naming the worktree and the existing session; confirm sends `SessionCreate { allow_additional_session: true }` and the created session is selected; cancel changes nothing; the confirmation survives a refusal arriving first (US6 s4).
-- [ ] T047 [US6] Add the menu entry and the confirmation state in `crates/micold-client/src/features/session.rs` and `crates/micold-client/src/features/worktree.rs`, and `crates/micold-client/src/ui/confirm_additional_session.rs` (pattern of `ui/confirm_session_remove.rs`) rendered from `crates/micold-client/src/ui/mod.rs` / the sidebar menu; send in `crates/micold-client/src/shell/daemon_sync.rs`.
-- [ ] T048 [P] [US6] Update `docs/user-guide/worktrees-and-sessions.md`: "Start another session..." and its confirmation.
-- [ ] T055 [P] [US7] Client tests in `crates/micold-client/tests/features_session.rs` and `features_sidebar.rs`: a helper sub-row menu has "Make main session" and the main's does not; choosing it sends `SessionSetMain` and, on the catalog update, the row press opens the new main and the old is listed as a helper; the delete confirmation of a main that has helpers names `main_session` of the remaining sessions, and of a helper or a lone main does not (FR-021, FR-022).
-- [ ] T056 [US7] Implement the menu entry and the delete-confirmation wording in `crates/micold-client/src/features/session.rs`, `crates/micold-client/src/ui/sidebar.rs` and the existing confirmation view; send in `crates/micold-client/src/shell/daemon_sync.rs`.
-- [ ] T057 [P] [US7] Update `docs/user-guide/worktrees-and-sessions.md`: "Make main session" and the promotion on delete.
-- [ ] T049 [US6] Visual pass of quickstart Part B items 5 and 6 via `visual-pass`; evidence in `specs/776-one-session-per-worktree/tdd/`.
+- [x] T046 [P] [US6] Client tests in `crates/micold-client/tests/features_session.rs`: the worktree row menu has "Start another session..." only for an occupied location (Default included); it opens a confirmation naming the worktree and the existing session; confirm sends `SessionCreate { allow_additional_session: true }` and the created session is selected; cancel changes nothing; the confirmation survives a refusal arriving first (US6 s4).
+- [x] T047 [US6] Add the menu entry and the confirmation state in `crates/micold-client/src/features/session.rs` and `crates/micold-client/src/features/worktree.rs`, and `crates/micold-client/src/ui/confirm_additional_session.rs` (pattern of `ui/confirm_session_remove.rs`) rendered from `crates/micold-client/src/ui/mod.rs` / the sidebar menu; send in `crates/micold-client/src/shell/daemon_sync.rs`.
+- [x] T048 [P] [US6] Update `docs/user-guide/worktrees-and-sessions.md`: "Start another session..." and its confirmation.
+- [x] T055 [P] [US7] Client tests in `crates/micold-client/tests/features_session.rs` and `features_sidebar.rs`: a helper sub-row menu has "Make main session" and the main's does not; choosing it sends `SessionSetMain` and, on the catalog update, the row press opens the new main and the old is listed as a helper; the delete confirmation of a main that has helpers names `main_session` of the remaining sessions, and of a helper or a lone main does not (FR-021, FR-022).
+- [x] T056 [US7] Implement the menu entry and the delete-confirmation wording in `crates/micold-client/src/features/session.rs`, `crates/micold-client/src/ui/sidebar.rs` and the existing confirmation view; send in `crates/micold-client/src/shell/daemon_sync.rs`.
+- [x] T057 [P] [US7] Update `docs/user-guide/worktrees-and-sessions.md`: "Make main session" and the promotion on delete.
+- [x] T049 [US6] Visual pass of quickstart Part B items 5 and 6 via `visual-pass`; evidence in `specs/776-one-session-per-worktree/tdd/`.
 
 ## Phase 5: User Story 3 - Resume and restart replace, never add (P2)
 
@@ -196,7 +196,7 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot). 
 - **Tasks**: T046–T049, T055–T057
 - **Deliverable**: The worktree row menu offers "Start another session..." on an occupied worktree; confirming adds a helper session and shows it. A helper's menu offers "Make main session"; deleting a main names the session that takes over.
 - **Satisfies**: US6 acceptance scenarios 1–4; US7 acceptance scenarios 2–3 (app half); FR-016 (menu entry), FR-021, FR-022 (confirmation); SC-007, SC-008
-- **Verify**: `cargo test -p micold-client --test features_session --test features_sidebar additional main` and quickstart §B items 5, 6
+- **Verify**: `cargo test -p micold-client --test features_session --test features_sidebar -- additional main` and quickstart §B items 5, 6
 - **Depends on**: M2, M4
 - **Tier**: full
 

@@ -7,6 +7,7 @@ pub mod cdk;
 /// The Changes view (feature 482): shown in place of the terminal pane while open.
 pub(crate) mod changes;
 pub mod compare;
+pub(crate) mod confirm_additional_session;
 pub(crate) mod confirm_agent_request;
 pub mod confirm_daemon_removal;
 pub(crate) mod confirm_delete;
@@ -546,6 +547,10 @@ pub fn view_with<'a>(
                 let mut items = vec![review_changes_item(
                     micold_core::session::SessionLocation::Default,
                 )];
+                items.extend(additional_session_item(
+                    state,
+                    &micold_core::session::SessionLocation::Default,
+                ));
                 items.extend(single_session_items(
                     state,
                     &micold_core::session::SessionLocation::Default,
@@ -584,6 +589,10 @@ pub fn view_with<'a>(
             // FR-019: the sub-row's actions for the one session of a worktree, above Delete.
             let at = items.len() - 1;
             let location = micold_core::session::SessionLocation::Worktree(dir.to_string());
+            if let Some(item) = additional_session_item(state, &location) {
+                items.insert(at, item);
+            }
+            let at = items.len() - 1;
             for (offset, item) in single_session_items(state, &location)
                 .into_iter()
                 .enumerate()
@@ -660,7 +669,7 @@ pub fn view_with<'a>(
     // menu is open. Same anchor rule and the same clamping as the worktree menu above.
     let session_menu: Option<cdk::overlay::Surface<'a, Message>> =
         state.session.menu_open.map(|menu| {
-            let items = session_menu_items(menu.id);
+            let items = session_menu_items(state, menu.id);
             let (x, y) = crate::features::project::clamp_menu_anchor(
                 menu.anchor,
                 material::menu_panel_size(items.len()),
@@ -1030,8 +1039,32 @@ fn single_session_items(
     }
 }
 
-fn session_menu_items(id: SessionId) -> Vec<material::MenuItem<Message>> {
-    vec![
+/// **Start another session...** for an occupied `location` (feature 776, FR-016): the explicit
+/// request of a second session, which a free row's start action does not need.
+pub fn additional_session_item(
+    state: &State,
+    location: &micold_core::session::SessionLocation,
+) -> Option<material::MenuItem<Message>> {
+    (!state.start_offered(location)).then(|| {
+        material::MenuItem::new(
+            Icon::AddSession,
+            "Start another session...",
+            Message::Session(SessionMsg::AdditionalRequested(location.clone())),
+        )
+    })
+}
+
+pub fn session_menu_items(state: &State, id: SessionId) -> Vec<material::MenuItem<Message>> {
+    let mut items = Vec::new();
+    // FR-021: only a helper can be made main.
+    if state.is_helper(id) {
+        items.push(material::MenuItem::new(
+            Icon::ActiveMarker,
+            "Make main session",
+            Message::Session(SessionMsg::MakeMainRequested(id)),
+        ));
+    }
+    items.extend([
         material::MenuItem::new(
             Icon::Close,
             "Close",
@@ -1042,7 +1075,8 @@ fn session_menu_items(id: SessionId) -> Vec<material::MenuItem<Message>> {
             "Remove",
             Message::Session(SessionMsg::RemoveRequested(id)),
         ),
-    ]
+    ]);
+    items
 }
 
 /// The identity of the main content area, so the view fades when what it shows changes rather than
