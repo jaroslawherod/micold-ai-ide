@@ -79,6 +79,14 @@ If the saved port is occupied when the daemon starts, the user is told so clearl
 - SSH and host daemons have no container port and are unaffected.
 - Windows, macOS and Linux behave the same (FR-008).
 
+## Clarifications
+
+### Session 2026-10-16
+
+- Q: What does clearing the port field on edit do? -> A: Keeps the stored port, never re-rolls. _(agent-resolved: specs/805-container-daemon-random-port/spec.md#Requirements FR-006)_
+- Q: An explicit port held by another process at save? -> A: Accepted; reported at start. _(agent-resolved: specs/805-container-daemon-random-port/spec.md#Edge Cases, FR-005)_
+- Q: An explicit port equal to another daemon's? -> A: Rejected by the existing duplicate-port rule. _(agent-resolved: specs/805-container-daemon-random-port/spec.md#Requirements FR-010)_
+
 ## Requirements *(mandatory)*
 
 ### Functional Requirements

@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #805
 - **Worktree branch**: feat/805_container-daemon-without-a-port-should-pick-a
 - **Started**: 2026-10-16
-- **Phase**: spec
-- **Next step**: clarify unit (no open markers; may pass straight to plan)
+- **Phase**: clarify
+- **Next step**: plan unit (clarify round 1 clean)
 
 ## Pull requests
 
