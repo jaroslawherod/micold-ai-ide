@@ -80,3 +80,19 @@ fn a_failed_start_is_unreachable_at_once() {
         }
     );
 }
+
+/// T052 (FR-013, FR-020): launch is a plain fold over the registry. An auto-start remote is
+/// `Starting` without any dial having happened (the function is not async and takes no runner),
+/// a remote not set to connect at launch is `Stopped`, and the local daemon is `Starting` either way.
+#[test]
+fn launch_marks_a_remote_by_its_connect_at_launch_choice_with_no_dial() {
+    let mut registry = DaemonRegistry::new(Vec::new(), 1);
+    let local = registry.add("Local", DaemonRuntime::Host, true).unwrap();
+    let eager = registry.add("Eager", ssh("a.invalid"), true).unwrap();
+    let lazy = registry.add("Lazy", ssh("b.invalid"), false).unwrap();
+    let states = DaemonStates::at_launch(&registry);
+    assert_eq!(states.state(local), Some(&DaemonState::Starting));
+    assert_eq!(states.state(eager), Some(&DaemonState::Starting));
+    assert_eq!(states.state(lazy), Some(&DaemonState::Stopped));
+    assert!(!states.established(eager), "nothing has connected yet");
+}

@@ -160,4 +160,31 @@ mod tests {
         );
         assert_eq!(locate_windows_ssh(&path_var, None, &system_only), None);
     }
+
+    /// T052 (FR-013, FR-020): launch only reads the registry. Tracking an auto-start remote and
+    /// building its connection subscription are plain calls with no runtime to await on, so the
+    /// window never waits for the remote's dial; the dial belongs to its actor.
+    #[test]
+    fn launch_tracks_and_subscribes_a_remote_without_awaiting_its_dial() {
+        use micold_core::daemons::{DaemonRegistry, DaemonRuntime, DaemonState};
+        use micold_core::ssh::{SshSettings, SshTarget};
+        let mut registry = DaemonRegistry::default();
+        let local = registry.add("Local", DaemonRuntime::Host, true).unwrap();
+        let target = SshTarget::new("unreachable.invalid", None, None, None).unwrap();
+        let remote = registry
+            .add("Remote", DaemonRuntime::Ssh(SshSettings { target }), true)
+            .unwrap();
+        let links = micold_client::links::DaemonLinks::at_launch(&registry);
+        assert_eq!(links.state(local), Some(&DaemonState::Starting));
+        assert_eq!(links.state(remote), Some(&DaemonState::Starting));
+        let started = std::time::Instant::now();
+        let _subscription = micold_client::daemon::connections(
+            &registry,
+            links.states(),
+            Path::new("/nonexistent"),
+            None,
+            false,
+        );
+        assert!(started.elapsed() < std::time::Duration::from_secs(1));
+    }
 }
