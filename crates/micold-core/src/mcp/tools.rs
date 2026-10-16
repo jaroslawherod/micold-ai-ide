@@ -503,7 +503,12 @@ const TOOLS: &[Tool] = &[
             sidebar's issue tag and filter then work. With ai_cli or prompt the worktree's one \
             session is created in it in the same call, and the result also carries session, \
             lifecycle and prompt_delivered as create_session returns them; a missing CLI creates \
-            nothing. Without them the worktree has no session, and create_session starts its one.",
+            nothing. Without them the worktree has no session, and create_session starts its one. \
+            A github_issue call's result also carries issue: what blocks the issue and what it \
+            blocks, its parent and sub-issues, labels, assignees, milestone, project fields and \
+            linked pull requests (only the kinds it has; a kind that cannot be read is listed under \
+            not_readable; details_error when none could be read). Being blocked is reported, never \
+            enforced.",
         properties: || {
             json!({
                 "branch": {"type": "string", "minLength": 1,
@@ -526,7 +531,8 @@ const TOOLS: &[Tool] = &[
                         blank means none. It is what makes the sidebar issue tag and the issue \
                         filter work: a worktree without it gets neither."},
                 "github_issue": {"type": "integer", "minimum": 1,
-                    "description": "Derived only: a GitHub issue number. Fills ticket, name and type from the open issue; explicit values win."},
+                    "description": "Derived only: a GitHub issue number. Fills ticket, name and type from the open issue; explicit values win. \
+                        The result's issue object reports its relationships."},
                 "ai_cli": {"type": "string",
                     "enum": AiCli::ALL.map(AiCli::tool_name),
                     "description": "The AI CLI of the worktree's session; with it or prompt the \

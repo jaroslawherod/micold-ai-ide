@@ -11,3 +11,11 @@
 The tests were written by the first M1 unit (commit 7d2ed276); the second unit added the API as
 `todo!()` stubs, ran them red (38 failures, all `not yet implemented`), then implemented T007–T010
 and T014 and ran them green in one step.
+
+## Unit 3: tool path and published text
+
+| Task | Behaviour | Red evidence | Green |
+|---|---|---|---|
+| T012, T016 | `github_issue` result carries `issue`; calls without it read nothing; refused calls carry none | T016's code predates these tests (unit 2). Red shown by mutation: with `row.insert("issue", …)` removed, 7 of 18 `github_issue` tests fail; restored | `cargo test -p micold-daemon --test mcp_create_worktree`: 41 passed |
+| T027, T029 | `not_readable`, `details_error`, 200 ms bound cut with the 10 s sentence, blocked issue still created | same mutation run (the 4 US3 tests among the 7) | same green run |
+| T013, T017 | published text in the tool and `github_issue` schema descriptions | `create_worktree_publishes_the_issue_object` failed before T017 | `cargo test -p micold-core --test mcp_tools_catalog`: 48 passed |
