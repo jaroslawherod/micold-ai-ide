@@ -31,8 +31,7 @@ returned, run it again. Stop on `STOP`, when the unit returns, and while you wai
 - **A notification with nothing new** (a subagent you no longer wait on, a review you have already
   read) needs no reply and no tool call: end the turn in one line. Each wake re-reads the whole
   context, and re-writes it when the last call was over an hour ago.
-- **Before a long wait on the human** (`AskUserQuestion`, a manual step): run
-  `AUTOPILOT_CONTEXT_CAP=80000 scripts/autopilot/context.py`. On `OVER`, make sure the ledger holds
-  the open escalation and the next step, and add to the banner: `Cheaper: /clear, then
-  /speckit-autopilot resume. The ledger is current.` An answer hours later otherwise re-writes your
-  whole context to the cache.
+- **Before a long wait on the human** (`AskUserQuestion`, a manual step): [../tasks/ask.md](../tasks/ask.md),
+  *Restart small*. Over 80k, the question goes out as a banner and a notification and the turn
+  ends, so the user can `/clear` and `/speckit-autopilot resume`; an answer hours later otherwise
+  re-writes your whole context to the cache.
