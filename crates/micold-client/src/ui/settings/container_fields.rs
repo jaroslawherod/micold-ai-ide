@@ -14,18 +14,19 @@
 //! carrying the runtime's own reason is the only arrangement that does all three.
 
 use crate::app::Message;
-use crate::features::daemons::Msg as DaemonsMsg;
+use crate::features::daemons::{Msg as DaemonsMsg, Section};
 use crate::features::sandbox::SandboxLimit;
 use crate::features::window::FieldId;
 use crate::ui::focus::TrackFocus;
-use crate::ui::material::{Checkbox, Select, TextField};
-use crate::ui::settings::{caution, field_note, group, name_of, note, Named};
+use crate::ui::material::{AccordionSection, Checkbox, Select, TextField};
+use crate::ui::settings::{caution, field_note, name_of, note, Named};
+use iced::widget::column;
 use iced::Element;
 use micold_core::sandbox::image::ImageSourceKind;
 use micold_core::sandbox::placement::PlacementKind;
 use micold_core::sandbox::runtime::{LimitSupport, RuntimeCapabilities, RuntimeKind};
 use micold_core::sandbox::{CredentialShare, NetworkPosture, SandboxProfile};
-use micold_core::tokens::Roles;
+use micold_core::tokens::{spacing, Roles};
 
 const RUNTIMES: &[Named<RuntimeKind>] = &[
     Named(RuntimeKind::Docker, "Docker"),
@@ -301,13 +302,15 @@ pub fn survival_note<'a>(placement: PlacementKind, roles: Roles) -> Element<'a, 
     }
 }
 
-/// Every container group, from the runtime to the survive-logout opt-in. `missing_cli` is the
-/// notice that the image running now lacks an AI CLI (FR-023b), attached to the reference field.
-pub fn groups<'a>(
+/// The five container sections, from the runtime to the survive-logout opt-in, each a titled
+/// [`AccordionSection`] open as `is_open` says (FR-012). `missing_cli` is the notice that the image
+/// running now lacks an AI CLI (FR-023b), attached to the reference field.
+pub fn sections<'a>(
     view: &ContainerView<'a>,
     errors: FieldErrors,
     missing_cli: Option<String>,
     focused: Option<FieldId>,
+    is_open: impl Fn(Section) -> bool,
     roles: Roles,
 ) -> Vec<Element<'a, Message>> {
     let runtime = Select::new(
@@ -366,22 +369,21 @@ pub fn groups<'a>(
 
     // FR-023b, at the point the image is chosen: the note is about that field's value, so it shares
     // the column the field's own supporting line sits in (see `field_note`).
-    let mut controls: Vec<Element<'a, Message>> = vec![
-        group("Container", roles),
+    let container: Vec<Element<'a, Message>> = vec![
         runtime.into(),
         image_kind.into(),
         field_note(reference, missing_cli, roles),
         archive.into(),
-        group("Credentials", roles),
-        note(
-            "The container starts with none of your credentials. Share only what the agent needs.",
-            roles,
-        ),
     ];
+
+    let mut credentials: Vec<Element<'a, Message>> = vec![note(
+        "The container starts with none of your credentials. Share only what the agent needs.",
+        roles,
+    )];
 
     for share in CredentialShare::ALL {
         let on = view.profile.credentials.contains(&share);
-        controls.push(
+        credentials.push(
             Checkbox::new(share.label(), on, roles)
                 .track_focus(FieldId::DaemonCredential(share), focused)
                 .on_toggle(move |checked| {
@@ -392,13 +394,13 @@ pub fn groups<'a>(
         // FR-004g: directly under the share it is about, so it cannot be read as the next one's.
         if share == CredentialShare::AiCliAuth {
             if let Some(notice) = unshared_sign_in_notice(view) {
-                controls.push(caution(notice, roles));
+                credentials.push(caution(notice, roles));
             }
         }
     }
 
     if let Some(summary) = sharing_summary(view) {
-        controls.push(caution(summary, roles));
+        credentials.push(caution(summary, roles));
     }
 
     let network = Select::new(
@@ -412,23 +414,21 @@ pub fn groups<'a>(
     )
     .label("Network");
 
-    controls.push(group("Network", roles));
-    controls.push(network.into());
+    let mut net: Vec<Element<'a, Message>> = vec![network.into()];
     if let Some(warning) = network_warning(view) {
-        controls.push(caution(warning, roles));
+        net.push(caution(warning, roles));
     }
-    controls.push(note(
+    net.push(note(
         "Names still resolve either way — the runtime's resolver answers from the host side. \
          Blocked means connections fail, not that nothing leaves the container.",
         roles,
     ));
 
-    controls.push(group("Limits", roles));
-    controls.push(note(
+    let mut limit_fields: Vec<Element<'a, Message>> = vec![note(
         "What the sandbox may consume. A limit the runtime cannot enforce is shown, and says so, \
          rather than being quietly dropped.",
         roles,
-    ));
+    )];
     let [e0, e1, e2, e3] = errors.limits;
     for (l, error) in limits(view).into_iter().zip([e0, e1, e2, e3]) {
         let mut input = TextField::new("", l.value, roles)
@@ -441,13 +441,31 @@ pub fn groups<'a>(
                 .on_input(on_input)
                 .on_submit(Message::Daemons(DaemonsMsg::Saved));
         }
-        controls.push(input.into());
+        limit_fields.push(input.into());
     }
 
-    controls.push(group("Sessions", roles));
-    controls.push(survive.into());
-    controls.push(survival_note(view.placement, roles));
-    controls
+    let sessions: Vec<Element<'a, Message>> =
+        vec![survive.into(), survival_note(view.placement, roles)];
+
+    [
+        (Section::Container, container),
+        (Section::Credentials, credentials),
+        (Section::Network, net),
+        (Section::Limits, limit_fields),
+        (Section::Sessions, sessions),
+    ]
+    .into_iter()
+    .map(|(section, controls)| {
+        AccordionSection::new(
+            section.title(),
+            column(controls).spacing(spacing::SM),
+            roles,
+        )
+        .open(is_open(section))
+        .on_toggle(Message::Daemons(DaemonsMsg::SectionToggled(section)))
+        .into()
+    })
+    .collect()
 }
 
 #[cfg(test)]

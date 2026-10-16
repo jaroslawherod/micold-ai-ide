@@ -336,11 +336,12 @@ fn form<'a>(
                 error_of(state, "storage"),
             ],
         };
-        for control in container_fields::groups(
+        for control in container_fields::sections(
             &view,
             errors,
             machine.and(facts.missing_cli.clone()),
             focused,
+            |section| state.section_open(section),
             roles,
         ) {
             fields = fields.push(control);

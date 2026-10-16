@@ -57,6 +57,13 @@ only one host daemon; the form refuses a duplicate and names the field.
   an invalid value is refused and the field is named. See [Limits](#limits).
 - **Survive logout**: keep the container running after you log out.
 
+The settings are grouped in five titled sections: **Container**, **Credentials**, **Network**,
+**Limits** and **Sessions**. Only **Container** is open when the form opens; press a section's
+header, or focus it and press Space or Enter, to open or close it. Closing a section keeps what you
+typed in it and saves it with the form. A section holding a field the form refused opens by itself
+and stays open while the error stands, so an error is never hidden. Which sections are open is not
+saved.
+
 A host daemon shows only *Survive logout*, and an SSH daemon none of these: they have no container
 here. The Daemons form is the only place these values are edited.
 
