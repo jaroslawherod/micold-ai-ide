@@ -355,6 +355,9 @@ struct Link {
     attempts_stopped: bool,
     /// Bumped when the user reconnects, so the daemon's actor restarts with the first delay.
     epoch: u32,
+    /// Whether the connection had been established when `epoch` was last bumped: the restarted
+    /// actor then retries a failed first dial instead of reporting a failed start.
+    resumed: bool,
 }
 
 impl Link {
@@ -365,6 +368,7 @@ impl Link {
             established: false,
             attempts_stopped: false,
             epoch: 0,
+            resumed: false,
         }
     }
 
@@ -373,6 +377,7 @@ impl Link {
         match (&self.state, event) {
             (DaemonState::Stopped, DaemonEvent::Start) => {
                 self.established = false;
+                self.resumed = false;
                 self.attempts_stopped = false;
                 Some(DaemonState::Starting)
             }
@@ -382,18 +387,21 @@ impl Link {
             (_, DaemonEvent::Start) => {
                 self.failures = 0;
                 self.established = false;
+                self.resumed = false;
                 self.attempts_stopped = false;
                 Some(DaemonState::Starting)
             }
             // Attempts are in progress: restart them with the first delay, the state unchanged.
             (DaemonState::Reconnecting { .. }, DaemonEvent::Reconnect) => {
                 self.epoch += 1;
+                self.resumed = self.established;
                 None
             }
             (_, DaemonEvent::Reconnect) => {
                 self.failures = 0;
                 self.attempts_stopped = false;
                 self.epoch += 1;
+                self.resumed = self.established;
                 Some(DaemonState::Starting)
             }
             (DaemonState::Reconnecting { .. }, DaemonEvent::GiveUp) => {
@@ -487,6 +495,11 @@ impl DaemonStates {
     /// The restart counter of `id`'s actor: it changes when the user reconnects.
     pub fn epoch(&self, id: DaemonId) -> u32 {
         self.states.get(&id).map_or(0, |link| link.epoch)
+    }
+
+    /// Whether `id`'s current actor continues a connection that had been established.
+    pub fn resumed(&self, id: DaemonId) -> bool {
+        self.states.get(&id).is_some_and(|link| link.resumed)
     }
 
     /// Whether the client should be dialling this daemon: tracked, not stopped, and not left
