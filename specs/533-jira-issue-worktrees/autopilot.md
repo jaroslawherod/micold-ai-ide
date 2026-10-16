@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/533_create-worktrees-from-jira-issues
 - **Started**: 2026-10-12
 - **Phase**: milestone M3
-- **Next step**: M3 implement continues from Handover (T032–T033, T035–T053, T068–T069)
+- **Next step**: wait for CI and merge of #894 (M3), then M4
 
 ## Pull requests
 
@@ -19,6 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #785 | Design (spec, plan, tasks) | merged | a9ea34a2d7d101cbf3b9ce52a88ad9d6e59aeb61 |
 | #819 | M1 | merged | 270c5480611867f8038b9a7a2d4e21bbca6f7b8b |
 | #871 | M2 | merged | bcc36d0bf1c2908d967f669178733d1cb2865fd3 |
+| #894 | M3 | open | |
 
 ## Milestones
 
@@ -26,7 +27,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T021, T034 | full | Jira switch, settings fields, protocol 45 and the opt-in gate | #819 | merged |
 | M2 | T022–T031 | full | Connect, change and remove a project's connection and token | #871 | merged |
-| M3 | T032–T033, T035–T053, T068–T069 | full | Start a worktree from a Jira issue (list, pick, notices); kept whole: core, adapter and dialog are one wired path (no half-wired UI) | | pending |
+| M3 | T032–T033, T035–T053, T068–T069 | full | Start a worktree from a Jira issue (list, pick, notices); kept whole: core, adapter and dialog are one wired path (no half-wired UI) | #894 | in review |
 | M4 | T054–T058, T070 | full | Search Jira issues incl. beyond the loaded list | | pending |
 | M5 | T059–T065 | full | GitHub / Jira source choice per project | | pending |
 
@@ -68,10 +69,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M3 implementation is COMPLETE and committed locally (not pushed, no PR yet); all tasks T032-T033, T035-T053, T068-T069 are ticked. `cargo check --workspace --all-targets` was green before the last edits; the new tests (jira_http_adapter 6, jira_source_state 9, jira_is_requested_only_on_named_events 5, layout_snapshot regenerated, no_concrete_implementations, issues_are_requested_only_on_named_events, features_settings) pass.
-Deviations to record in the PR body: no `count_open` in `JiraSource` (`total_open` = issues on page, `complete` = no cursor left); new `IssueLoadError::Unreachable(String)` for Jira transport failures; Jira shows only for a project without a GitHub remote; no Jira search beyond the cap and no description pass in M3; `start_jira_load` lives in `shell/issues.rs` (not `shell/jira.rs`, which is included by path in tests and must stay std+core only); the missing-token ("enter your token in Settings > Jira") path is in `start_jira_load` and has no reducer-level test.
-NEXT (verify.md flow): 1) `scripts/autopilot/scoped-gate.sh` detached + review A (`code-review` skill, `high`) on `origin/main...HEAD`; 2) review B (conformance rubric, background) and a visual pass via an autopilot-worker (quickstart B3, B5-B7 with `cargo run -p micold-client --example fake_jira`); 3) full `mise run gate` once; 4) ledger (M3 row, Review rounds), push, open PR per tasks/pr.md. Run `scripts/autopilot/branch-start.sh 871`-style rebase is NOT needed (M2 merged, branch already on it).
-Review rounds so far: none for M3.
+None.
 
 ## Open escalation
 
