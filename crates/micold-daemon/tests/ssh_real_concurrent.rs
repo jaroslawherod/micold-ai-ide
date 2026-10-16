@@ -15,7 +15,9 @@ use std::time::{Duration, Instant};
 use futures_util::{SinkExt, StreamExt};
 use micold_core::connect::{Connected, DaemonConnection};
 use micold_core::protocol::codec::Frame;
-use micold_core::protocol::messages::{ClientMsg, OperationResult, SessionProcess, TerminalRef};
+use micold_core::protocol::messages::{
+    ClientMsg, DaemonMsg, OperationResult, SessionProcess, TerminalRef,
+};
 use micold_core::session::{AiCli, SessionId};
 use micold_core::worktree::CreateMode;
 use ssh_real_support::remote::{request, start};
@@ -161,6 +163,8 @@ async fn ssh_real_two_clients_share_one_daemon_and_one_leaving_leaves_the_other(
     let on_first = drain(&mut first.connection, Duration::from_secs(3)).await;
     assert!(on_first.contains("GOT-hello"), "{on_first}");
     view(&mut first.connection, &repo, two).await;
+    // Frames of session one still in flight are not session two's.
+    drain(&mut first.connection, Duration::from_secs(1)).await;
     let other = drain(&mut first.connection, Duration::from_secs(2)).await;
     assert!(
         !other.contains("GOT-hello"),
@@ -175,6 +179,18 @@ async fn ssh_real_two_clients_share_one_daemon_and_one_leaving_leaves_the_other(
         .send(Frame::Control(ClientMsg::Ping { nonce: 7 }))
         .await
         .expect("the first client is still connected");
+    let pong = async {
+        loop {
+            if let Some(Ok(Frame::Control(DaemonMsg::Pong { nonce: 7 }))) =
+                first.connection.next().await
+            {
+                break;
+            }
+        }
+    };
+    tokio::time::timeout(Duration::from_secs(10), pong)
+        .await
+        .expect("the first client still gets answers after the other left");
     first
         .connection
         .send(Frame::Control(ClientMsg::SessionInput {
@@ -278,11 +294,15 @@ async fn ssh_real_a_local_session_runs_on_while_the_remote_link_is_cut() {
     // The remote link is cut; its session is gone from view, the local one is not.
     let _ = remote_repo;
     host.proxy.cut();
-    let _ = remote.connection.next().await;
+    let _ = tokio::time::timeout(Duration::from_secs(10), remote.connection.next()).await;
     let during = drain(&mut local, Duration::from_secs(4)).await;
-    let ticks = |t: &str| t.lines().filter(|l| l.trim().starts_with("TICK-")).count();
+    let newest = |t: &str| {
+        t.lines()
+            .filter_map(|l| l.trim().strip_prefix("TICK-")?.trim().parse::<u32>().ok())
+            .max()
+    };
     assert!(
-        ticks(&during) >= 2,
+        newest(&during) > newest(&before),
         "the local session kept running through the cut: {during}"
     );
     local

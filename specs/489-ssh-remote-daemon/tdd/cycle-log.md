@@ -64,3 +64,15 @@ tick sequence, recovery within 30 s, stop trying then Reconnect), and review A a
 against the behaviour. Mutants to apply if audited: "Backoff never caps", "GiveUp leaves
 `should_dial` true", "Reconnect does not bump the epoch", "an SSH drop after `established` is not
 retried".
+
+## M4 (T051-T055): test-after deviation
+
+Deviation: the isolation and launch behaviour already existed (one iced subscription actor per
+daemon, `DaemonStates::at_launch` a synchronous registry fold, per-id `DaemonLinks`), so T051, T052
+and T053 passed on first run; no red phase was possible. T054 needed no code change. T052's core
+half lives in the integration file `crates/micold-core/tests/daemons_ssh.rs`.
+
+Mutants each test would fail: a remote event that writes to the local link or outbox (T051); an
+`at_launch` that marks a lazy remote `Starting` or an eager one `Stopped` (T052); a daemon that
+serves a second bridge from a different process, delivers input to every session, or drops the
+other client when one leaves; a cut remote link that stalls a local session (T053).
