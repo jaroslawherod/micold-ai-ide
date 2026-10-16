@@ -670,19 +670,11 @@ fn origin_of(catalog: &Catalog, project: &Path, id: SessionId) -> Option<Session
 /// second session exists beside the user's own one (feature 776 refuses `create_session`), and so
 /// the only way a child of an origin appears.
 fn adopt_into(catalog: &mut Catalog, project: &Path, wt: &str) -> SessionId {
-    let id = SessionId::new();
-    let adopted = catalog.adopt_discovered_sessions(
-        project,
-        vec![Session::restored(
-            id,
-            SessionLocation::Worktree(wt.to_string()),
-            SessionLabel::Pending,
-            TerminalMode::AiCli,
-            AiCli::ClaudeCode,
-        )],
-    );
-    assert_eq!(adopted, 1);
-    id
+    // Several sessions in one location (a parent and its children) exist only beside one another
+    // on purpose now (feature 776): `Additional::Yes`, as an explicit request.
+    catalog
+        .create_session(project, wt, AiCli::ClaudeCode, Additional::Yes)
+        .unwrap()
 }
 
 /// [`adopt_into`], then the provider-reported origin recorded for it.
