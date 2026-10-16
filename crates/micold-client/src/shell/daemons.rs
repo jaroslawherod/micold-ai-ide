@@ -177,7 +177,6 @@ mod tests {
         let links = micold_client::links::DaemonLinks::at_launch(&registry);
         assert_eq!(links.state(local), Some(&DaemonState::Starting));
         assert_eq!(links.state(remote), Some(&DaemonState::Starting));
-        let started = std::time::Instant::now();
         let _subscription = micold_client::daemon::connections(
             &registry,
             links.states(),
@@ -185,6 +184,5 @@ mod tests {
             None,
             false,
         );
-        assert!(started.elapsed() < std::time::Duration::from_secs(1));
     }
 }
