@@ -1,16 +1,16 @@
 //! Feature 490, T028: what the window holds of the plan's usage, and what it shows of it
 //! (data-model *Client state*; US1 s1–s4, US3 s1–s4, s6, s7).
 
-use chrono::FixedOffset;
 use micold_client::features::plan_usage::State;
+use micold_core::local_time::UtcOffset;
 use micold_core::plan_usage::{LimitWindow, UsageReading, WarnPercent};
 
 /// 2026-10-11 12:00:00 UTC.
 const NOON: i64 = 1_791_720_000;
 const HOUR: i64 = 3600;
 
-fn utc() -> FixedOffset {
-    FixedOffset::east_opt(0).unwrap()
+fn utc() -> UtcOffset {
+    UtcOffset::east(0).unwrap()
 }
 
 fn window(key: &str, percent: u32, resets_at: Option<i64>) -> LimitWindow {
@@ -93,7 +93,7 @@ fn the_view_is_the_headline_label_and_every_window_in_the_details() {
 fn reset_times_follow_the_given_offset() {
     let mut state = State::default();
     state.received(Some(reading(NOON)));
-    let cest = FixedOffset::east_opt(2 * HOUR as i32).unwrap();
+    let cest = UtcOffset::east(2 * HOUR as i32).unwrap();
     assert_eq!(
         state.view(NOON, cest).unwrap().label,
         "42% · 17:30",

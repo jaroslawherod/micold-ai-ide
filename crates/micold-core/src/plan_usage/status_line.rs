@@ -46,9 +46,11 @@ fn window(key: &str, value: &Value, obtained_at: i64) -> Option<LimitWindow> {
         None | Some(Value::Null) => None,
         // A reset that is not a number, or not a time, is a window that cannot be read: kept, it
         // would never stop being current (FR-009).
-        Some(at) => Some(at.as_f64().map(|at| at as i64).filter(|at| {
-            *at > obtained_at && chrono::DateTime::from_timestamp(*at, 0).is_some()
-        })?),
+        Some(at) => Some(
+            at.as_f64()
+                .map(|at| at as i64)
+                .filter(|at| *at > obtained_at && crate::local_time::in_range(*at))?,
+        ),
     };
     Some(LimitWindow {
         key: key.to_owned(),

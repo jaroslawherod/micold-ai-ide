@@ -1077,8 +1077,9 @@ fn list_resumable_sessions(
                 "session": s.id.to_string(),
                 "provider": s.provider.tool_name(),
                 "title": s.title,
-                "last_activity": chrono::DateTime::<chrono::Utc>::from(s.last_activity)
-                    .to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+                "last_activity": micold_core::local_time::rfc3339_utc(
+                    micold_core::local_time::unix_secs_of(s.last_activity),
+                ),
                 "worktree": target_ref(&s.target),
                 "status": status,
                 "reason": reason,

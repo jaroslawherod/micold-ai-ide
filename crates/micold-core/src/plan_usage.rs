@@ -12,7 +12,7 @@
 pub mod status_line;
 pub mod user_status_line;
 
-use chrono::{DateTime, FixedOffset};
+use crate::local_time::{LocalTime, UtcOffset};
 use serde::{Deserialize, Serialize};
 
 /// Whether **Show Claude plan usage** is on in a fresh install (FR-001, Decision 2). The one
@@ -140,7 +140,7 @@ impl CurrentUsage {
     }
 
     /// The indicator's label: `"42% · 15:30"`, or `"42%"` when the headline has no reset.
-    pub fn label(&self, now: i64, offset: FixedOffset) -> String {
+    pub fn label(&self, now: i64, offset: UtcOffset) -> String {
         let headline = self.headline();
         match headline.resets_at {
             Some(at) => format!(
@@ -154,7 +154,7 @@ impl CurrentUsage {
 
     /// The details: one line per window, the windows at or above `threshold` when any, and when
     /// the reading was obtained (FR-006, FR-009, FR-010).
-    pub fn details(&self, threshold: WarnPercent, now: i64, offset: FixedOffset) -> Vec<String> {
+    pub fn details(&self, threshold: WarnPercent, now: i64, offset: UtcOffset) -> Vec<String> {
         let mut lines: Vec<String> = self
             .windows
             .iter()
@@ -179,7 +179,7 @@ impl CurrentUsage {
         }
         lines.push(format!(
             "Updated {}",
-            local(self.obtained_at, offset).format("%H:%M")
+            LocalTime::at(self.obtained_at, offset).hh_mm()
         ));
         lines
     }
@@ -187,19 +187,13 @@ impl CurrentUsage {
 
 /// A reset time in the user's time zone: `HH:MM` within 24 hours of `now`, else `Mon HH:MM`
 /// (FR-008, research R11).
-pub fn format_reset(resets_at: i64, now: i64, offset: FixedOffset) -> String {
-    let at = local(resets_at, offset);
+pub fn format_reset(resets_at: i64, now: i64, offset: UtcOffset) -> String {
+    let at = LocalTime::at(resets_at, offset);
     if resets_at - now <= 24 * 3600 {
-        at.format("%H:%M").to_string()
+        at.hh_mm()
     } else {
-        at.format("%a %H:%M").to_string()
+        format!("{} {}", at.weekday_abbr(), at.hh_mm())
     }
-}
-
-fn local(secs: i64, offset: FixedOffset) -> DateTime<FixedOffset> {
-    DateTime::from_timestamp(secs, 0)
-        .unwrap_or_default()
-        .with_timezone(&offset)
 }
 
 /// The warning threshold, a whole percent from 50 to 100 (FR-005).
