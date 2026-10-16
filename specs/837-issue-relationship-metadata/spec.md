@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-16
 
-**Status**: Draft
+**Status**: Closed 2026-10-16 — shipped in PRs #906, #907, #908 (design, M1, M2) and the close PR
 
 **Input**: GitHub issue #837, "Show all GitHub issue metadata (blocked by, blocking, parent,
 sub-issues…) when a worktree is created". Labels: enhancement, effort:high, flow:feature.
@@ -34,7 +34,7 @@ already has a pull request open against it, and find out only later.
   _(agent-resolved: specs/837-issue-relationship-metadata/spec.md#user-story-2, scenarios 1 and 4)_
 - Q: After a worktree is created from a picked issue, do its relationships stay visible on that
   worktree's sidebar row, or only in the form before Create? → A: Form only; the sidebar row is
-  unchanged. _(default chosen by orchestrator, pending user confirmation)_
+  unchanged. _(decided by the user, 2026-10-16, decision card)_
 
 ## User Scenarios & Testing *(mandatory)*
 

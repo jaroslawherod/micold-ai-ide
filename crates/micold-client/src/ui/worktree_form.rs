@@ -23,9 +23,10 @@ use crate::ui::material::{
 use iced::widget::{column, row, Space};
 use iced::{Element, Length};
 use micold_core::env_include::EnvIncludeOutcome;
+use micold_core::issue_details::DetailLine;
 use micold_core::naming::ConventionalType;
 use micold_core::theme::ColorScheme;
-use micold_core::tokens::{self, spacing, Roles};
+use micold_core::tokens::{self, spacing, Rgb, Roles};
 use micold_core::worktree::{BlockReason, BranchOrigin, BranchSituation, CreateMode};
 
 /// The add-worktree form as the dialog body; `ui::view` wraps it in the shared
@@ -541,25 +542,22 @@ fn issue_details<'a>(form: &'a WorktreeForm, r: Roles) -> Option<Element<'a, Mes
     match &form.issue_details {
         IssueDetailsState::Idle | IssueDetailsState::Loading { .. } => None,
         IssueDetailsState::Failed { message, .. } => Some(
-            Text::new(
-                format!("Couldn't read this issue's details. {message}"),
-                TypeRole::Caption,
-                r,
-            )
-            .muted()
-            .into(),
+            Text::new(failure_caption(message), TypeRole::Caption, r)
+                .muted()
+                .into(),
         ),
         IssueDetailsState::Loaded { details, .. } => {
             let mut col = column![].spacing(spacing::XS);
             let lines = details.display_lines();
             let scrolls = lines.len() > DETAIL_ROWS_SHOWN;
             for line in lines {
-                let label = Text::new(line.label, TypeRole::Caption, r)
+                let label_text = line.label;
+                let (text, tint) = detail_cells(line, r);
+                let label = Text::new(label_text, TypeRole::Caption, r)
                     .width(Length::Fixed(DETAIL_LABEL_WIDTH));
-                let (label, text) = if line.warning {
-                    (label.tint(r.error), format!("Blocked: {}", line.text))
-                } else {
-                    (label.muted(), line.text)
+                let label = match tint {
+                    Some(color) => label.tint(color),
+                    None => label.muted(),
                 };
                 col = col.push(
                     row![
@@ -578,6 +576,21 @@ fn issue_details<'a>(form: &'a WorktreeForm, r: Roles) -> Option<Element<'a, Mes
             }
             Some(col.into())
         }
+    }
+}
+
+/// The caption shown when the issue's details could not be read.
+fn failure_caption(message: &str) -> String {
+    format!("Couldn't read this issue's details. {message}")
+}
+
+/// A details row's text and its label tint: a blocked line leads with "Blocked: " and tints its
+/// label as an error; any other line is untouched and its label muted (`None`).
+fn detail_cells(line: DetailLine, r: Roles) -> (String, Option<Rgb>) {
+    if line.warning {
+        (format!("Blocked: {}", line.text), Some(r.error))
+    } else {
+        (line.text, None)
     }
 }
 
@@ -822,4 +835,43 @@ pub fn dialog<'a>(
             state.window.focused_field,
         )
     })
+}
+
+#[cfg(test)]
+mod issue_details_tests {
+    use super::*;
+
+    fn line(warning: bool) -> DetailLine {
+        DetailLine {
+            label: "Blocked by",
+            text: "#10 Parser rewrite".to_string(),
+            warning,
+        }
+    }
+
+    #[test]
+    fn a_blocked_line_leads_with_blocked_and_tints_its_label_as_an_error() {
+        let r = tokens::roles(ColorScheme::Dark);
+        let (text, tint) = detail_cells(line(true), r);
+        assert!(text.starts_with("Blocked: "), "{text}");
+        assert!(text.ends_with("#10 Parser rewrite"), "{text}");
+        assert_eq!(tint, Some(r.error));
+    }
+
+    #[test]
+    fn an_ordinary_line_keeps_its_text_and_has_no_tint() {
+        let r = tokens::roles(ColorScheme::Dark);
+        assert_eq!(
+            detail_cells(line(false), r),
+            ("#10 Parser rewrite".to_string(), None)
+        );
+    }
+
+    #[test]
+    fn a_failed_read_shows_the_caption_with_the_message() {
+        assert_eq!(
+            failure_caption("You are offline."),
+            "Couldn't read this issue's details. You are offline."
+        );
+    }
 }

@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #837
 - **Worktree branch**: claude/project-thread-tw6sph
 - **Started**: 2026-10-16
-- **Phase**: milestone M2
-- **Next step**: M2: record visual pass T031, final full gate, commit, push, PR files
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -18,17 +18,18 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #906 | Design: spec, plan, research, contracts, tasks | merged | d24fd3223f0d74d045690100555d88bc28c13900 |
 | #907 | M1: tool reports the issue object | merged | 31cc373f6365636e21a56afc9474c247927d6c9d |
+| #908 | M2: form shows the relationships | merged | c21d06c6e54075dc3b66ab576008ee8b2ab97825 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T018, T027, T029 | full | create_worktree with github_issue returns the issue object (relationships, not_readable, details_error); agent-tools guide | #907 | merged |
-| M2 | T019–T026, T028, T030, T031 | full | New worktree form shows a picked issue's relationships, blocked warning, failure line; worktrees guide; visual pass | — | gated and reviewed, visual pass T031 and PR files pending |
+| M2 | T019–T026, T028, T030, T031 | full | New worktree form shows a picked issue's relationships, blocked warning, failure line; worktrees guide; visual pass | #908 | merged |
 
 ## Decisions
 
-- Clarify: US2 scenario 6, form only, the sidebar row is unchanged (option A). Default chosen by the orchestrator, pending user confirmation. If the user picks B or C, the orchestrator continues the run with that change.
+- Clarify: US2 scenario 6, form only, the sidebar row is unchanged (option A). Decided by the user (jaro) on 2026-10-16 via a decision card: form only.
 - Clarify: FR-001, the form reads the details when the issue is picked; FR-011, a github_issue tool call waits up to 10 s for them (agent-resolved).
 - Clarify round 2: no critical ambiguities.
 - Tasks: US3 spans both paths, so its tool-side tasks (T027, T029) ship in M1 and its form-side tasks (T028, T030) in M2; the visual pass T031 runs last in M2, beside the code they test (milestones rule 7 over rule 2); no US3 milestone. M1 cannot be split below ~800 lines: the shared core read (one query) is the first thing anything observable needs, and the tool result is its first observable. Polish T032–T034 change no code: left to the close unit.
@@ -47,6 +48,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A M1 (code-review medium, fix diff) | 2 | ab97d95509aaf33fa9330bbbcc3623ec52b7e9a7:50869c2ec6b2d574c4f8ccb2a8231984f4fb8bdc..5af600b3 | 8 findings on the grace fix: replaced it, the read now ends `DETAILS_MARGIN` (`process::RUN_OVERRUN` + 200 ms) before the bound and the waiter waits exactly the bound (FR-011 holds); doc comment placement fixed; null-issue error prefers the error at `repository.issue` (+ test). No regression test for a read cut at its deadline (needs a real `gh`; MINOR). |
 | Review A M2 (code-review high) | 1 | 97a5f99eccb04dd056f7984d86f09a1dd8ba2ced:618752f67fc1cff6a4f14bf9092a9f8d7329f257 | 10 findings: failure line prefix fixed (F1), details lines computed once (F7); rest declined, see Declined |
 | Review B M2 (conformance, sonnet) | 1 | 91190d7a451fdce4a34e5573fb4025549c72cb37:618752f67fc1cff6a4f14bf9092a9f8d7329f257 | CHANGES: F1 MAJOR (my row-length scroll heuristic untested) fixed by removing it; F2 (uncommitted fixes) fixed by committing; F3/F4 MINOR (double "Couldn't read" lead-in; accepted, the message is the daemon's plain sentence; guide matches the row-count rule again) |
+| Review B M2 (conformance, sonnet, scoped) | 2 | 8663350c | CLEAN |
+| Close diff review | 1 | bc83494a4eb24b4d0cd551f81f959da5735caaf4:c21d06c6e54075dc3b66ab576008ee8b2ab97825 | CHANGES: 2 MAJOR (task ticks), fixed prose only; 2 MINOR |
 
 ## Declined review findings
 
@@ -69,6 +72,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | A | Positional paths in the containment exemption | Same style as every other exemption in containment.rs; the gate fails loudly if the layout moves. |
 | M2 | A | `details_seq` bump in `reset_issues` | Harmless (u64). |
 
+## Close results
+
+- converge (worker, sonnet): no unbuilt behaviour (a Review B for M1 is not in the ledger, so converge ran).
+- tdd-verify: verdict FAIL before fixes. HIGH finding 1 (view's "Blocked: " prefix and tint untested) fixed: `detail_cells` and `failure_caption` extracted in `ui/worktree_form.rs`, 3 unit tests; deleting the prefix now fails one. Finding 2 (T012/T027 written test-after) is process, cannot be redone, recorded. MED/LOW findings 3-11 not fixed (taste; no behaviour risk). Finding 12 (T030 wording) fixed in tasks.md. Idle/Loading drawing no rows and a swapped `.tint()` call in the view stay untested (needs a form harness).
+- T032: ticked for Part A only; quickstart Part A suites ran inside tdd-verify (6793 passed, 7 failed: six root-only permission tests that `scripts/gate.sh` runs as a normal user (the gate passed with them run that way), and `ten_concurrent_creates_of_one_branch_leave_one_worktree`, which passed 3 of 3 alone). `mise run duplication` not run: mise and jscpd are not installed in the cloud; CI does not gate it.
+- T033: left unticked: not re-queried (`gh` unauthenticated); the orchestrator confirms the close PR's CI (Linux, macOS, Windows) before merging. M1 (#907) and M2 (#908) were merged by the orchestrator after green CI; the close PR's CI is watched by the orchestrator.
+- T034: both guide pages re-read against the shipped behaviour; no wording change needed.
+- Review of the close diff: round 1 CHANGES (F1/F2 MAJOR: T032/T033 ticked on unverified claims, fixed by leaving T033 unticked and scoping T032; F3 MINOR accepted, F4 MINOR row added); prose-only fixes, no new round.
+
 ## Handover
 
 None.
@@ -77,7 +89,7 @@ Visual pass T031 (specs/837-issue-relationship-metadata/visual-pass/notes.md): c
 
 ## Open escalation
 
-None. (Sidebar question: option A applied as orchestrator default, pending user confirmation; see Decisions.)
+None. (Sidebar question decided by the user on 2026-10-16: form only; see Decisions.)
 
 ## Follow-ups not done
 
