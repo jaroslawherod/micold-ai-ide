@@ -27,10 +27,6 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
     match msg {
         Msg::Opened => persist::on_settings_opened(app),
         Msg::Saved => persist::on_settings_saved(app),
-        // BUG-003, FR-033a. The fourth: confirming a placement change performs the save the
-        // question deferred *and* moves the running service, both of which are effects.
-        // Declining is not here, because declining does nothing but close the question.
-        Msg::PlacementChangeConfirmed => persist::on_placement_change_confirmed(app),
         // Feature 533: the answer to the Keep-or-Remove question is applied by the save it held.
         Msg::JiraKeepOrRemoveChosen(_) => {
             app.core.update(Message::Settings(msg));

@@ -61,7 +61,8 @@ const DEFERRED: &[(&str, &str)] = &[("jira_connections", "M2 (T022) connect form
 ///
 /// Feature 491's daemon registry is edited in the Daemons section, which saves it with its own form
 /// and not through the settings draft, so the section declares no `SETTINGS`; the registry, its id
-/// counter and the legacy default it was migrated into are chosen there (T034).
+/// counter and the legacy default it was migrated into are chosen there (T034). Feature 804 moved
+/// the legacy `daemon` block's controls into that form, so they are chosen there too.
 const CHOSEN_ELSEWHERE: &[(&str, &str, &str)] = &[
     ("diff_layout", "src/ui/changes.rs", "Msg::LayoutChosen("),
     ("daemons", "src/ui/settings/daemons.rs", "DaemonsMsg::Saved"),
@@ -74,6 +75,42 @@ const CHOSEN_ELSEWHERE: &[(&str, &str, &str)] = &[
         "legacy_default_daemon",
         "src/ui/settings/daemons.rs",
         "DaemonsMsg::Saved",
+    ),
+    // Feature 804: the legacy block's controls moved into the Daemons form, which sends these.
+    (
+        "daemon.placement",
+        "src/ui/settings/daemons.rs",
+        "DaemonsMsg::RuntimeChosen",
+    ),
+    (
+        "daemon.sandbox.runtime",
+        "src/ui/settings/container_fields.rs",
+        "DaemonsMsg::ContainerRuntimeChosen",
+    ),
+    (
+        "daemon.sandbox.image",
+        "src/ui/settings/container_fields.rs",
+        "DaemonsMsg::ImageKindChosen",
+    ),
+    (
+        "daemon.sandbox.budget",
+        "src/ui/settings/container_fields.rs",
+        "DaemonsMsg::CpuLimitEdited",
+    ),
+    (
+        "daemon.sandbox.network",
+        "src/ui/settings/container_fields.rs",
+        "DaemonsMsg::NetworkChosen",
+    ),
+    (
+        "daemon.sandbox.credentials",
+        "src/ui/settings/container_fields.rs",
+        "DaemonsMsg::CredentialToggled",
+    ),
+    (
+        "daemon.sandbox.survive_logout",
+        "src/ui/settings/container_fields.rs",
+        "DaemonsMsg::SurviveLogoutToggled",
     ),
 ];
 
@@ -162,12 +199,6 @@ fn section_sources() -> BTreeMap<String, String> {
             continue;
         }
         out.insert(name, read(&path));
-    }
-    // The Session service page draws its controls through the container fields it shares with the
-    // Daemons form (feature 804), so that file is where its controls are, and counts as the page's.
-    if let Some(fields) = out.remove("container_fields.rs") {
-        let page = out.get_mut("daemon.rs").expect("the Session service page");
-        page.push_str(&fields);
     }
     out
 }
@@ -399,19 +430,18 @@ fn every_declared_message_exists_on_the_application_message() {
     assert!(violations.is_empty(), "{}", violations.join("\n"));
 }
 
-/// FR-028: the service's settings are together, and only together.
+/// Feature 804: no Settings section renders the service's settings any more, which the Daemons
+/// form owns (FR-001, FR-002).
 #[test]
-fn every_session_service_setting_is_in_the_daemon_section() {
+fn no_settings_section_renders_the_legacy_daemon_block() {
     let stray: Vec<_> = claims()
         .into_iter()
         .filter(|(setting, _)| setting.starts_with("daemon."))
-        .filter(|(_, modules)| modules.iter().any(|m| m != "daemon.rs"))
         .collect();
     assert!(
         stray.is_empty(),
-        "session-service settings rendered outside the daemon section: {stray:?}\n\
-         FR-028 asks for one place to reason about what the service does, which a setting \
-         scattered into Terminal or Appearance defeats."
+        "a Settings section renders the daemon block again: {stray:?}\n\
+         It is chosen in the Daemons form (feature 804)."
     );
 }
 

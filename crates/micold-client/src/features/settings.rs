@@ -52,9 +52,6 @@ use std::path::PathBuf;
 
 use crate::features::session::CliAvailability;
 use crate::features::window::FieldId;
-use crate::floating_surface;
-use crate::overlay::registry::Registered;
-use crate::overlay::SurfaceId;
 use micold_core::attention::{NotificationKind, NotificationKinds};
 use micold_core::cli_reason::{explain, AttemptDir, Explanation};
 use micold_core::issue_types::{
@@ -119,9 +116,6 @@ pub struct State {
     pub daemons: micold_core::daemons::DaemonRegistry,
     /// The daemon a worktree without a stored binding runs on (feature 491, FR-017).
     pub legacy_default_daemon: Option<micold_core::daemons::DaemonId>,
-    /// The placement change the user is being asked to confirm, while the question is open
-    /// (FR-032; BUG-003). `None` the rest of the time, which is what closes the dialog.
-    pub pending_placement: Option<PendingPlacementChange>,
     /// What the latest check of the stored environment-include script path found (spec 035).
     ///
     /// Not a setting and never persisted (FR-010): it describes the file as it is now, and is
@@ -168,94 +162,6 @@ pub enum ScriptCheck {
     Done(CheckedScriptPath),
 }
 
-/// A placement change that has been asked about and not yet answered (FR-032).
-///
-/// Carries both ends because the dialog names both: "sessions will move from the host to a
-/// container" is answerable, "the placement will change" is not. `from` is the placement in force
-/// rather than the stored one for the same reason [`State::placement_in_force`] exists.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct PendingPlacementChange {
-    /// Where sessions run now.
-    pub from: PlacementKind,
-    /// Where this save would move them.
-    pub to: PlacementKind,
-}
-
-/// What a save has to do about where the service runs (FR-032a, FR-033a; BUG-003).
-///
-/// The shape is deliberately `survival_step`'s: that decision — arrange for sessions to outlive a
-/// logout, or don't — is the other setting in this form whose value has to be *acted on* rather
-/// than written, and it already established the rule this one needs. Act on a change, and only on
-/// a change.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PlacementStep {
-    /// The save leaves sessions where they are. Write it and move nothing.
-    Leave,
-    /// The save moves the service. Ask first, and write nothing until the answer comes back.
-    Confirm {
-        /// Where sessions run now.
-        from: PlacementKind,
-        /// Where this save would move them.
-        to: PlacementKind,
-    },
-}
-
-/// Whether saving `saved` moves a service currently running at `in_force` (FR-032a).
-///
-/// Pure, and the whole of "only when it actually differs": a user who opens Settings, changes a
-/// scrollback size and presses Save must not be asked about the session service, and a user who
-/// re-selects the placement they already have has not asked for a restart either.
-pub fn placement_step(in_force: PlacementKind, saved: PlacementKind) -> PlacementStep {
-    if in_force == saved {
-        PlacementStep::Leave
-    } else {
-        PlacementStep::Confirm {
-            from: in_force,
-            to: saved,
-        }
-    }
-}
-
-/// The line under the placement select: where sessions run **now** (FR-035b).
-///
-/// It takes the placement in force and nothing else, and that signature is the fix. The note used
-/// to read the draft — the same value the select directly above it already shows — so the instant
-/// a user chose *In a container* it told them they were currently in one, about a service still
-/// running on the host. A control cannot report the state of the world by echoing the question.
-/// What the confirmation tells the user they are about to lose (FR-033).
-///
-/// Pure and here rather than inside the dialog's view, because it is the only part of that dialog
-/// anyone can be wrong about: the count, its plural, and whether a move with nothing running still
-/// has something to warn about. A view returning an `Element` can be looked at; a `String` can be
-/// asserted.
-///
-/// `live_sessions` is how many sessions the application currently knows are running — all of them,
-/// across every project, because the service that hosts them is one process and the move stops it.
-pub fn placement_move_consequence(
-    from: PlacementKind,
-    to: PlacementKind,
-    live_sessions: usize,
-) -> String {
-    let ends = match live_sessions {
-        // Nothing running, so nothing is lost, and saying "0 sessions stop" would be a warning
-        // about an absence — the kind that teaches people to click through dialogs unread.
-        0 => String::new(),
-        1 => " Your 1 session stops and becomes resumable.".to_string(),
-        n => format!(" Your {n} sessions stop and become resumable."),
-    };
-
-    format!(
-        "Sessions run {} now. Saving stops the session service and starts it again {}.{ends} Your \
-         projects and their history are untouched.",
-        from.label().to_lowercase(),
-        to.label().to_lowercase(),
-    )
-}
-
-pub fn placement_note(in_force: PlacementKind) -> String {
-    format!("Currently {}.", in_force.label().to_lowercase())
-}
-
 /// One page of the Settings view (FR-026).
 ///
 /// Ordered as the rail shows them: the two that describe the window the user is looking at, then
@@ -271,8 +177,6 @@ pub enum SettingsSection {
     Environment,
     /// The configured daemons: their state, and add, edit and remove (feature 491, FR-010).
     Daemons,
-    /// Where the session service runs and what it may reach (FR-028).
-    Daemon,
     /// How an issue's labels choose a worktree's type (feature 034, FR-018).
     GithubIssues,
     /// The Jira integration's switch and the open project's connection (feature 533, FR-002).
@@ -286,7 +190,6 @@ impl SettingsSection {
         SettingsSection::Terminal,
         SettingsSection::Environment,
         SettingsSection::Daemons,
-        SettingsSection::Daemon,
         SettingsSection::GithubIssues,
         SettingsSection::Jira,
     ];
@@ -298,7 +201,6 @@ impl SettingsSection {
             SettingsSection::Terminal => "Terminal",
             SettingsSection::Environment => "Environment",
             SettingsSection::Daemons => "Daemons",
-            SettingsSection::Daemon => "Session service",
             SettingsSection::GithubIssues => "GitHub",
             SettingsSection::Jira => "Jira",
         }
@@ -320,7 +222,6 @@ impl SettingsSection {
             // a user is looking for when they come here.
             SettingsSection::Environment => Icon::AiCli,
             SettingsSection::Daemons => Icon::Daemons,
-            SettingsSection::Daemon => Icon::SessionService,
             SettingsSection::GithubIssues => Icon::IssueMapping,
             SettingsSection::Jira => Icon::JiraIssues,
         }
@@ -978,14 +879,6 @@ impl SettingsDraft {
         self.error = Some(error);
     }
 
-    /// Whether the user has shared any host credential with the sandbox (FR-004c).
-    ///
-    /// Asked by the rail, which marks the section, and by the section itself. One question with
-    /// one answer, so the badge and the summary cannot disagree.
-    pub fn shares_credentials(&self) -> bool {
-        !self.daemon.profile.credentials.is_empty()
-    }
-
     /// Parse and range-check every section together.
     ///
     /// Total: it reports, and never panics, for anything that can be typed. The order the fields
@@ -1157,7 +1050,7 @@ impl SettingsDraft {
         parse_budget(&d.cpus, &d.memory_mib, &d.pids, &d.storage_mib).map_err(|(field, message)| {
             FieldError {
                 field: field.field_id(),
-                section: SettingsSection::Daemon,
+                section: SettingsSection::Daemons,
                 message,
             }
         })
@@ -1385,11 +1278,6 @@ impl SettingsDraft {
             baseline: Some(settings.clone()),
         }
     }
-
-    /// The credentials the user has shared, in a stable order (rule N-2).
-    pub fn shared_credentials(&self) -> &BTreeSet<micold_core::sandbox::CredentialShare> {
-        &self.daemon.profile.credentials
-    }
 }
 
 /// Everything the user can do to their settings (feature 028, FR-001).
@@ -1477,54 +1365,6 @@ pub enum Msg {
     /// The Settings **Let agents read and type into other sessions** select changed
     /// (feature 034, FR-016).
     CrossSessionAccessChanged(CrossSessionAccess),
-    /// Where the session service runs (feature 027, FR-001).
-    PlacementChanged(PlacementKind),
-    /// Which container runtime drives the sandbox (feature 027, FR-021).
-    RuntimeChanged(micold_core::sandbox::runtime::RuntimeKind),
-    /// How the sandbox image is obtained (feature 027, FR-024).
-    ImageKindChanged(micold_core::sandbox::image::ImageSourceKind),
-    /// The sandbox image's reference changed (feature 027, FR-024).
-    ImageReferenceChanged(String),
-    /// The archive an imported image is loaded from changed (feature 027, FR-024a).
-    ImagePathChanged(String),
-    /// One host credential's share was opted into or out of (feature 027, FR-004c).
-    CredentialToggled(micold_core::sandbox::CredentialShare, bool),
-    /// Whether sessions outlive the user's sign-out (feature 027, FR-014a).
-    SurviveLogoutToggled(bool),
-    /// Whether the sandbox may open outbound connections (feature 027, FR-017, FR-018).
-    NetworkChanged(micold_core::sandbox::NetworkPosture),
-    /// The sandbox's processor limit changed, in cores as typed (feature 027, FR-012).
-    ///
-    /// Four variants rather than one carrying which limit it is, unlike [`Msg::CredentialToggled`]:
-    /// the four credentials are one control repeated over a set, while these four are four
-    /// different quantities in three different units, and a single variant would only move the
-    /// `match` from here into the reducer.
-    CpuLimitChanged(String),
-    /// The sandbox's memory limit changed, in MiB as typed (feature 027, FR-013).
-    MemoryLimitChanged(String),
-    /// The sandbox's process-count limit changed, as typed (feature 027, FR-014).
-    PidLimitChanged(String),
-    /// The sandbox's writable-storage limit changed, in MiB as typed (feature 027, FR-015).
-    StorageLimitChanged(String),
-    /// Saving would move sessions, so the user is asked first (feature 027, FR-032; BUG-003).
-    ///
-    /// Raised by the shell rather than by a control: whether a save is a *change* is a comparison
-    /// against the placement in force, and the save path is the only thing holding both sides of
-    /// it. Everything about it is pure from here on.
-    PlacementChangeRequested {
-        /// Where sessions run now.
-        from: PlacementKind,
-        /// Where the save would move them.
-        to: PlacementKind,
-    },
-    /// The user agreed to move the service (feature 027, FR-033a; BUG-003). The shell performs the
-    /// deferred save and restarts the service in the new placement.
-    PlacementChangeConfirmed,
-    /// The user declined the move, or dismissed the question (FR-032b; BUG-003).
-    ///
-    /// The whole save goes with it: the surface stays open and the draft keeps every edit, because
-    /// a declined restart is not a declined form.
-    PlacementChangeCancelled,
     /// The service is now running here (FR-035b; BUG-003).
     ///
     /// Reported by the shell after a move it has actually performed — the save path, and the
@@ -1614,21 +1454,6 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
         Msg::PlanUsageToggled(on) => plan_usage_toggled(state, on),
         Msg::PlanUsageWarnChanged(text) => plan_usage_warn_changed(state, text),
         Msg::CrossSessionAccessChanged(access) => cross_session_access_changed(state, access),
-        Msg::PlacementChanged(placement) => placement_changed(state, placement),
-        Msg::RuntimeChanged(runtime) => runtime_changed(state, runtime),
-        Msg::ImageKindChanged(kind) => image_kind_changed(state, kind),
-        Msg::ImageReferenceChanged(text) => image_reference_changed(state, text),
-        Msg::ImagePathChanged(text) => image_path_changed(state, text),
-        Msg::CredentialToggled(share, shared) => credential_toggled(state, share, shared),
-        Msg::SurviveLogoutToggled(survive) => survive_logout_toggled(state, survive),
-        Msg::NetworkChanged(posture) => network_changed(state, posture),
-        Msg::CpuLimitChanged(text) => cpu_limit_changed(state, text),
-        Msg::MemoryLimitChanged(text) => memory_limit_changed(state, text),
-        Msg::PidLimitChanged(text) => pid_limit_changed(state, text),
-        Msg::StorageLimitChanged(text) => storage_limit_changed(state, text),
-        Msg::PlacementChangeRequested { from, to } => placement_change_requested(state, from, to),
-        Msg::PlacementChangeConfirmed => placement_change_confirmed(state),
-        Msg::PlacementChangeCancelled => placement_change_cancelled(state),
         Msg::PlacementMoved(kind) => placement_in_force_changed(state, kind),
         Msg::DaemonsLoaded {
             daemons,
@@ -1872,89 +1697,6 @@ pub fn cross_session_access_changed(state: &mut crate::app::State, access: Cross
     });
 }
 
-/// Session service: where sessions run (feature 027, FR-001).
-pub fn placement_changed(state: &mut crate::app::State, placement: PlacementKind) {
-    edit(state, |draft| draft.daemon.placement = placement);
-}
-
-/// Session service: which container runtime the sandbox uses (feature 027, FR-002).
-pub fn runtime_changed(
-    state: &mut crate::app::State,
-    runtime: micold_core::sandbox::runtime::RuntimeKind,
-) {
-    edit(state, |draft| draft.daemon.profile.runtime = runtime);
-}
-
-/// Session service: where the sandbox image comes from (feature 027, FR-006).
-pub fn image_kind_changed(
-    state: &mut crate::app::State,
-    kind: micold_core::sandbox::image::ImageSourceKind,
-) {
-    edit(state, |draft| draft.daemon.profile.image.kind = kind);
-}
-
-/// Session service: the image's reference (feature 027, FR-006).
-pub fn image_reference_changed(state: &mut crate::app::State, text: String) {
-    edit(state, |draft| draft.daemon.profile.image.reference = text);
-}
-
-/// Session service: the archive an imported image is loaded from (feature 027, FR-006).
-pub fn image_path_changed(state: &mut crate::app::State, text: String) {
-    edit(state, |draft| draft.daemon.image_path = text);
-}
-
-/// Session service: one host credential's share opt-in (feature 027, FR-004c).
-pub fn credential_toggled(
-    state: &mut crate::app::State,
-    share: micold_core::sandbox::CredentialShare,
-    shared: bool,
-) {
-    edit(state, |draft| {
-        // A set, so opting in twice is opting in once (rule N-2) and the order the section lists
-        // them in is the order it always lists them in.
-        if shared {
-            draft.daemon.profile.credentials.insert(share);
-        } else {
-            draft.daemon.profile.credentials.remove(&share);
-        }
-    });
-}
-
-/// Session service: whether sessions outlive the sign-out that started them (feature 027, FR-014).
-pub fn survive_logout_toggled(state: &mut crate::app::State, survive: bool) {
-    edit(state, |draft| {
-        draft.daemon.profile.survive_logout = survive;
-    });
-}
-
-/// Session service: the sandbox's network posture (feature 027, FR-011).
-pub fn network_changed(
-    state: &mut crate::app::State,
-    posture: micold_core::sandbox::NetworkPosture,
-) {
-    edit(state, |draft| draft.daemon.profile.network = posture);
-}
-
-/// Session service: the processor limit, in cores (feature 027, FR-012).
-pub fn cpu_limit_changed(state: &mut crate::app::State, text: String) {
-    edit(state, |draft| draft.daemon.cpus = text);
-}
-
-/// Session service: the memory limit, in MiB (feature 027, FR-013).
-pub fn memory_limit_changed(state: &mut crate::app::State, text: String) {
-    edit(state, |draft| draft.daemon.memory_mib = text);
-}
-
-/// Session service: the process-count limit (feature 027, FR-014).
-pub fn pid_limit_changed(state: &mut crate::app::State, text: String) {
-    edit(state, |draft| draft.daemon.pids = text);
-}
-
-/// Session service: the writable-storage limit, in MiB (feature 027, FR-015).
-pub fn storage_limit_changed(state: &mut crate::app::State, text: String) {
-    edit(state, |draft| draft.daemon.storage_mib = text);
-}
-
 /// GitHub issues: one edit to the mapping (feature 034, FR-018). An index past the end — a
 /// message from a row that is gone — changes nothing.
 fn edit_mapping(state: &mut crate::app::State, change: impl FnOnce(&mut Vec<LabelTypeEntry>)) {
@@ -1994,7 +1736,6 @@ fn edit(state: &mut crate::app::State, change: impl FnOnce(&mut SettingsDraft)) 
 /// exists is a dialog with nothing behind it, and leaving it representable is how it would appear.
 pub fn saved(state: &mut crate::app::State) {
     state.settings.settings_draft = None;
-    state.settings.pending_placement = None;
 }
 
 /// A check of the stored script path is starting (spec 035, contract S1).
@@ -2084,41 +1825,6 @@ fn save_notice(checked: &CheckedScriptPath) -> Option<String> {
 /// The form was dismissed without saving.
 pub fn cancelled(state: &mut crate::app::State) {
     state.settings.settings_draft = None;
-    state.settings.pending_placement = None;
-}
-
-// --- Moving the service the form is about (BUG-003 — FR-032, FR-032b, FR-033a, FR-035b) ---
-
-/// The save wants to move sessions; ask before anything is applied (FR-032).
-///
-/// Nothing else happens here, and that is the requirement rather than an omission: FR-032b makes
-/// the confirmation a gate on the *whole* save, so the draft is untouched, the view stays open
-/// behind the dialog, and not one field has been written when this returns.
-pub fn placement_change_requested(
-    state: &mut crate::app::State,
-    from: PlacementKind,
-    to: PlacementKind,
-) {
-    state.settings.pending_placement = Some(PendingPlacementChange { from, to });
-}
-
-/// The user agreed to the move (FR-033a).
-///
-/// The reducer's half is to stop asking. Performing the deferred save and restarting the service
-/// in the new placement is an effect, so it belongs to `shell/persist.rs`, which reads the pending
-/// change before dispatching this.
-pub fn placement_change_confirmed(state: &mut crate::app::State) {
-    state.settings.pending_placement = None;
-}
-
-/// The user declined the move (FR-032b).
-///
-/// Only the question is dropped. The draft is deliberately *not* reverted to the placement in
-/// force: the user chose a placement and then declined to apply it now, which is a decision to
-/// reconsider rather than an edit to undo, and silently resetting the select would leave them
-/// looking at a form that disagrees with what they just did.
-pub fn placement_change_cancelled(state: &mut crate::app::State) {
-    state.settings.pending_placement = None;
 }
 
 /// Take the daemon registry and the legacy default from stored settings (feature 491), at boot
@@ -2149,30 +1855,6 @@ pub fn daemons_loaded(stored: &Settings) -> Msg {
 /// when it is saved. Everything that tells the user where their sessions are reads this.
 pub fn placement_in_force_changed(state: &mut crate::app::State, kind: PlacementKind) {
     state.settings.placement_in_force = kind;
-}
-
-/// The confirm-move dialog, as a floating surface (FR-032; BUG-003).
-///
-/// The first surface this feature registers since Settings stopped being one (FR-026). That is not
-/// a reversal: Settings is a *view* because it is a destination the user navigates to, and this is
-/// a dialog because it is a question about an action already taken, with no way past it but an
-/// answer. Being a registered surface is what puts it above the view in the z-order and gives
-/// Escape somewhere to go that is not "close the form".
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ConfirmPlacementDialog;
-
-// Dismissing is declining, and declining leaves the whole save unapplied (FR-032b) — so
-// the scrim and Escape both reach the same reducer the Cancel button does, and none of the
-// three can leave a half-applied save behind.
-floating_surface!(ConfirmPlacementDialog, id: SurfaceId::new("confirm_placement"), layer: Dialog, cancelled_by: crate::app::Message::Settings(Msg::PlacementChangeCancelled));
-
-impl Registered for ConfirmPlacementDialog {
-    fn open_in(state: &crate::app::State) -> Option<Self> {
-        state
-            .settings
-            .pending_placement
-            .map(|_| ConfirmPlacementDialog)
-    }
 }
 
 // --- What the Environment page says about the script path (spec 035, FR-002, FR-005) ---

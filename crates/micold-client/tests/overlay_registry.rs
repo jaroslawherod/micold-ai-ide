@@ -44,7 +44,6 @@ use micold_client::features::project;
 use micold_client::features::project::Msg as ProjectMsg;
 use micold_client::features::session;
 use micold_client::features::settings::Msg as SettingsMsg;
-use micold_client::features::settings::PendingPlacementChange;
 use micold_client::features::sidebar;
 use micold_client::features::sidebar::Msg as SidebarMsg;
 use micold_client::features::worktree::Msg as WorktreeMsg;
@@ -52,7 +51,6 @@ use micold_client::features::worktree::Msg as WorktreeMsg;
 use micold_client::app::{on_escape, Message, State};
 use micold_client::overlay::registry::{self, Probe};
 use micold_core::overlay::{Layer, Trigger};
-use micold_core::sandbox::placement::PlacementKind;
 
 mod support;
 use support::modals::{an_agent_request, modals, Modal as Dialog};
@@ -69,19 +67,7 @@ fn dialogs() -> Vec<Dialog> {
     // bespoke to the registry's own view checks.
     let mut all = modals();
     all.extend([
-        // Settings itself is not here and will not be — it is a view (FR-026). This is the one
-        // question it asks before applying a change that ends processes (BUG-003, FR-032), and a
-        // question with no way past it but an answer is exactly what this registry is a list of.
-        Dialog {
-            id: "confirm_placement",
-            cancel: Message::Settings(SettingsMsg::PlacementChangeCancelled),
-            open: |state| {
-                state.settings.pending_placement = Some(PendingPlacementChange {
-                    from: PlacementKind::HostProcess,
-                    to: PlacementKind::LocalSandbox,
-                })
-            },
-        },
+        // Settings itself is not here and will not be — it is a view (FR-026).
         // Attach existing worktrees (feature 582).
         Dialog {
             id: "attach_worktrees",
@@ -249,21 +235,19 @@ fn every_dialog_is_in_the_list() {
     // dialogs. An eleventh dialog registered without a row here fails on the second assertion, and
     // the twenty-two states this file covers stay twenty-two.
     //
-    // Nine, then eight, then nine again. Settings was the largest of the original nine and is no
-    // longer a dialog at all — it is a view (FR-026), so it neither floats nor takes Escape. The
-    // count coming back up is not that decision reversed: `confirm_placement` is the question the
-    // view asks before it moves where sessions run (BUG-003, FR-032), which floats over the view
-    // and does take Escape. Thirteen with the Changes view's discard confirmation (feature 482). Fourteen with Run in parallel (feature 483). Fifteen with Dismiss group's question (feature 483). Sixteen with Pick this one's question (feature 483). Eighteen with the cleanup offer and its second confirmation (feature 483). Nineteen with the additional-session confirmation (feature 776).
+    // Nine, then eight. Settings was the largest of the original nine and is no longer a dialog at
+    // all — it is a view (FR-026), so it neither floats nor takes Escape. Feature 804 removed the
+    // placement question the view used to ask (`confirm_placement`). Thirteen with the Changes view's discard confirmation (feature 482). Fourteen with Run in parallel (feature 483). Fifteen with Dismiss group's question (feature 483). Sixteen with Pick this one's question (feature 483). Eighteen with the cleanup offer and its second confirmation (feature 483). Eighteen again with the additional-session confirmation (feature 776) replacing `confirm_placement`.
     assert_eq!(
         dialogs().len(),
-        19,
+        18,
         "the dialog list has drifted. Add the new dialog here, or the twenty-two states this file \
          is meant to cover are no longer twenty-two"
     );
     assert_eq!(
         every_state().len(),
-        40,
-        "nineteen dialogs plus nothing open, each with the filter panel open and closed"
+        38,
+        "eighteen dialogs plus nothing open, each with the filter panel open and closed"
     );
 
     let registered_dialogs = registry::probes()
@@ -729,12 +713,6 @@ fn a_dialog_draws_from_its_own_state() {
             s.update(Message::Project(ProjectMsg::ForgetRequested(
                 std::path::PathBuf::from("/p"),
             )))
-        }),
-        ("confirm_placement", |s| {
-            s.update(Message::Settings(SettingsMsg::PlacementChangeRequested {
-                from: PlacementKind::HostProcess,
-                to: PlacementKind::LocalSandbox,
-            }))
         }),
     ];
 

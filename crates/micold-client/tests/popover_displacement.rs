@@ -183,8 +183,7 @@ fn every_popover_is_in_the_table() {
     // Ten of the nineteen registrations are dialogs;
     // `overlay_registry.rs::every_dialog_is_in_the_list` is what holds that half. It was nine, then
     // eight when feature 027 made Settings a full-surface view rather than a floating one (FR-026),
-    // and nine again with `confirm_placement` — the question that view asks before it moves where
-    // sessions run (BUG-003, FR-032), which is a floating surface even though the form is not. Ten
+    // and nine again with `confirm_placement`, which feature 804 removed again. Ten
     // with `confirm_link_open`, the question a sandboxed file link asks before this machine opens
     // it (FR-018a).
     // Eleven with `confirm_agent_request`, an agent's destructive request (034 FR-014).
@@ -195,8 +194,8 @@ fn every_popover_is_in_the_table() {
     // Sixteen with `confirm_pick_run`, the question Pick this one asks (feature 483).
     // Eighteen with `run_cleanup_offer` and its `run_cleanup_second_confirm` (feature 483).
     // Twenty with `confirm_daemon_removal` and `bind_daemon` (feature 491).
-    // Twenty-one with `confirm_additional_session` (feature 776).
-    const DIALOGS: usize = 21;
+    // Twenty with `confirm_additional_session` (feature 776) replacing `confirm_placement` (feature 804).
+    const DIALOGS: usize = 20;
     assert_eq!(
         micold_client::overlay::registry::probes().len(),
         DIALOGS + DISPLACES.len(),

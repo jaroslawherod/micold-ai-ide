@@ -123,7 +123,7 @@ fn the_missing_cli_notice_lines_up_with_the_select_it_is_about() {
 #[test]
 fn and_so_does_the_one_under_the_image_reference() {
     let painted = painted(&settings_showing(
-        SettingsSection::Daemon,
+        SettingsSection::Daemons,
         AvailabilitySource::Image("ghcr.io/example/my-own-image:3".to_string()),
     ));
 
@@ -161,7 +161,7 @@ fn the_two_notes_are_one_sentence() {
 
     assert_eq!(
         note_in(SettingsSection::Environment),
-        note_in(SettingsSection::Daemon),
+        note_in(SettingsSection::Daemons),
         "the two points of choice read one answer and must say one thing about it"
     );
 }
@@ -184,7 +184,7 @@ fn each_section_under_test_is_the_one_on_screen() {
     );
 
     let daemon = painted(&settings_showing(
-        SettingsSection::Daemon,
+        SettingsSection::Daemons,
         AvailabilitySource::Image("ghcr.io/example/my-own-image:3".to_string()),
     ));
     assert!(

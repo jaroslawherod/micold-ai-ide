@@ -153,6 +153,11 @@ pub struct ViewModel {
     /// The daemon an unbound location resolves to: the one whose container the machine facts
     /// (probed limits, an unmounted sign-in) describe.
     pub legacy_default: Option<DaemonId>,
+    /// Whether any container daemon shares a host credential, counting the open form's unsaved
+    /// choice in place of its daemon's stored one (feature 804, FR-007). The settings rail's
+    /// *Sharing* badge on the Daemons row reads it, so "am I sharing anything?" is answerable from
+    /// any section.
+    pub shares_credentials: bool,
 }
 
 /// What the Daemons feature remembers.
@@ -257,7 +262,17 @@ pub fn views(state: &State, model: &Model<'_>) -> ViewModel {
             },
         })
         .collect::<Vec<_>>();
+    let form = state.draft.as_ref();
+    let stored_shares = model.registry.entries().iter().any(|e| {
+        let edited = form.is_some_and(|d| d.editing == Some(e.id));
+        !edited
+            && matches!(&e.runtime, DaemonRuntime::Container(c) if !c.profile.credentials.is_empty())
+    });
+    let form_shares = form.is_some_and(|d| {
+        d.runtime == DraftRuntime::Container && !d.profile.credentials.is_empty()
+    });
     ViewModel {
+        shares_credentials: stored_shares || form_shares,
         empty: rows.is_empty(),
         bind_choices: rows.iter().map(|r| (r.id, r.name.clone())).collect(),
         // The daemon whose container the machine facts describe: the legacy default when it is a

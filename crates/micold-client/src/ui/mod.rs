@@ -15,7 +15,6 @@ pub(crate) mod confirm_dismiss_group;
 pub(crate) mod confirm_forget;
 pub(crate) mod confirm_link_open;
 pub(crate) mod confirm_pick_run;
-pub(crate) mod confirm_placement;
 pub(crate) mod confirm_session_remove;
 mod focus;
 /// The install-me screen (feature 028, FR-019): shown instead of everything else when this copy
@@ -64,8 +63,8 @@ pub use settings::github::GITHUB_ISSUES_INTRO;
 // The limits' *decision* — which appear, which are editable, what a disabled one says — re-exported
 // like `stage_line` above, because `tests/sandbox_limits.rs` checks it and a view function is the
 // one thing in this crate a test cannot look inside.
-pub use settings::daemon::{
-    limits as sandbox_limits, network_warning, LimitControl, NO_OUTBOUND_WARNING,
+pub use settings::container_fields::{
+    limits as sandbox_limits, network_warning, ContainerView, LimitControl, NO_OUTBOUND_WARNING,
 };
 pub(crate) mod settings_view;
 mod shell;
@@ -349,7 +348,6 @@ pub fn view_with<'a>(
                 env_include_outcome,
                 &state.settings.script_check,
                 &state.settings.env_include_failures,
-                state.settings.placement_in_force,
                 state.session.availability.home(),
                 state.window.focused_field,
                 state.settings.settings_rail_collapsed,

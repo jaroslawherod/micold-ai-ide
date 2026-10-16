@@ -90,7 +90,7 @@ fn feature_modules() -> BTreeMap<String, String> {
 }
 
 /// Every `.rs` file under `dir`, recursively, keyed by its path relative to `src/` — so
-/// `showcase/gallery.rs` and `ui/settings/daemon.rs`. The key says which side of the crate a
+/// `showcase/gallery.rs` and `ui/settings/container_fields.rs`. The key says which side of the crate a
 /// failure came from, which a bare file name would not.
 fn collect_tree(dir: &Path, out: &mut BTreeMap<String, String>) {
     let entries = fs::read_dir(dir).unwrap_or_else(|e| panic!("read {}: {e}", dir.display()));
@@ -314,7 +314,7 @@ fn the_scan_actually_finds_the_feature_modules() {
     // Feature 027: Settings became a directory of sections. A feature module that grows into one
     // is the case this scan's flat `read_dir` could not see, and the sections are where the
     // sandbox's controls live — the newest hand-styling temptation in the crate.
-    for expected in ["ui/settings/daemon.rs", "ui/settings/terminal.rs"] {
+    for expected in ["ui/settings/container_fields.rs", "ui/settings/terminal.rs"] {
         assert!(
             modules.contains_key(expected),
             "the settings sections are not being scanned — a feature module that became a \

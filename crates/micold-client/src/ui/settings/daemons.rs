@@ -20,7 +20,7 @@ use crate::features::settings::DaemonDraft;
 use crate::features::window::FieldId;
 use crate::ui::focus::TrackFocus;
 use crate::ui::material::{Button, Checkbox, Select, Tag, TextField};
-use crate::ui::settings::container_fields::{self, ContainerView, FieldErrors, Surface};
+use crate::ui::settings::container_fields::{self, ContainerView, FieldErrors};
 use crate::ui::settings::{caution, group, name_of, note, page, Named};
 use iced::widget::{column, row};
 use iced::{Element, Length};
@@ -313,7 +313,7 @@ fn form<'a>(
                 error_of(state, "storage"),
             ],
         };
-        for control in container_fields::groups(&view, Surface::Form, errors, None, focused, roles)
+        for control in container_fields::groups(&view, errors, None, focused, roles)
         {
             fields = fields.push(control);
         }
