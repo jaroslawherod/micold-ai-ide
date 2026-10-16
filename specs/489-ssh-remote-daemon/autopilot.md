@@ -88,3 +88,5 @@ None.
 - Issue #687 duplicates this feature's scope; close it with the final PR.
 - Spec 491's tree shows SSH as out of scope; no change needed.
 - Plan R3: macOS/Windows clients need a bundled `linux-x86_64` daemon to reach Linux hosts (adds daemon size to those packages); tasks sequence it last and separable. Owner to confirm packaging size.
+
+- M3 red CI attempt 1 (run 38879088808): sandbox_real_multi_daemon expected Unreachable after a stopped container daemon; since M3 a lost connection reads Reconnecting. Test now expects Reconnecting. Gate green locally.
