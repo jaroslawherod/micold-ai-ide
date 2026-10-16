@@ -45,25 +45,15 @@ struct Tree {
 }
 
 fn tree(catalog: &mut Catalog, project: &Path) -> Tree {
-    // The origin is the worktree's one session; its children are sessions the daemon adopted from
-    // the provider's store, each with the origin the provider reported (feature 776 refuses a
-    // second `create_session` in the worktree).
+    // The origin is the worktree's main session; its children are helpers added beside it on
+    // purpose (feature 776), each with the origin the provider reported.
     let origin = catalog
         .create_session(project, WT, AiCli::ClaudeCode, Additional::No)
         .unwrap();
     let mut child = |origin| {
-        let id = SessionId::new();
-        let adopted = catalog.adopt_discovered_sessions(
-            project,
-            vec![Session::restored(
-                id,
-                SessionLocation::Worktree(WT.to_string()),
-                SessionLabel::Pending,
-                TerminalMode::AiCli,
-                AiCli::ClaudeCode,
-            )],
-        );
-        assert_eq!(adopted, 1);
+        let id = catalog
+            .create_session(project, WT, AiCli::ClaudeCode, Additional::Yes)
+            .unwrap();
         assert!(catalog.record_origin(id, origin, true).unwrap());
         id
     };
