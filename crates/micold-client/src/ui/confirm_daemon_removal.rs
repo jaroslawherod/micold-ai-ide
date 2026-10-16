@@ -1,7 +1,7 @@
 //! The confirmation before a daemon is removed, or before a running daemon's runtime settings are
 //! applied (feature 491, T035, FR-012, FR-014).
 //!
-//! Modelled on [`crate::ui::confirm_placement`]: a question about an action already taken, with no
+//! Modelled on [`crate::ui::confirm_session_remove`]: a question about an action already taken, with no
 //! way past it but an answer. The sentence is built in the feature, from the counts, so a test can
 //! read it; this only lays it out.
 
