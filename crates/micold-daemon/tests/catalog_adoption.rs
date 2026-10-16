@@ -797,6 +797,12 @@ fn adoption_takes_at_most_one_session_per_location_and_none_where_one_exists() {
         .collect();
     assert!(ids.contains(&existing.0));
     assert!(ids.contains(&Uuid::from_u128(0xA2)));
-    assert!(!ids.contains(&Uuid::from_u128(0xA1)), "the occupied location");
-    assert!(!ids.contains(&Uuid::from_u128(0xA3)), "the location's second");
+    assert!(
+        !ids.contains(&Uuid::from_u128(0xA1)),
+        "the occupied location"
+    );
+    assert!(
+        !ids.contains(&Uuid::from_u128(0xA3)),
+        "the location's second"
+    );
 }
