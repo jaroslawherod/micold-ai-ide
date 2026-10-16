@@ -94,6 +94,53 @@ pub struct Draft {
     pub ssh_key_file: String,
 }
 
+/// The five titled sections a container daemon's settings are grouped in (feature 804 M4, FR-012).
+/// View state only: which are open is never saved (FR-015).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Section {
+    /// Container runtime and image.
+    Container,
+    /// What the container may use of the user's credentials.
+    Credentials,
+    /// The network posture.
+    Network,
+    /// Processor, memory, process and storage limits.
+    Limits,
+    /// Survive-logout.
+    Sessions,
+}
+
+impl Section {
+    /// Every section, in the order the form lists them.
+    pub const ALL: [Section; 5] = [
+        Section::Container,
+        Section::Credentials,
+        Section::Network,
+        Section::Limits,
+        Section::Sessions,
+    ];
+
+    /// The header text.
+    pub fn title(self) -> &'static str {
+        match self {
+            Section::Container => "Container",
+            Section::Credentials => "Credentials",
+            Section::Network => "Network",
+            Section::Limits => "Limits",
+            Section::Sessions => "Sessions",
+        }
+    }
+
+    /// Whether `field` (a [`FormError::field`]) is one of this section's.
+    fn holds(self, field: &str) -> bool {
+        match self {
+            Section::Container => matches!(field, "image" | "image_path"),
+            Section::Limits => matches!(field, "cpus" | "memory" | "pids" | "storage"),
+            _ => false,
+        }
+    }
+}
+
 /// A refused save: the field at fault and what to tell the user.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FormError {
@@ -167,6 +214,9 @@ pub struct State {
     pub draft: Option<Draft>,
     /// The sentence beside the form field the last refused save was about.
     pub form_error: Option<FormError>,
+    /// The sections the user has flipped from how the form opens them (Container open, the rest
+    /// closed). View state: never persisted, forgotten when the form closes (FR-015).
+    flipped_sections: BTreeSet<Section>,
     /// The daemons whose details (errors and log tail) are open.
     pub details_shown: BTreeSet<DaemonId>,
     /// The location the `Bind to daemon...` picker is open for.
@@ -185,6 +235,17 @@ pub struct State {
 }
 
 impl State {
+    /// Whether `section` is shown open: opened by the user, or holding the field the last refused
+    /// save was about, so an error is never hidden (FR-012, FR-014).
+    pub fn section_open(&self, section: Section) -> bool {
+        let by_user = (section == Section::Container) != self.flipped_sections.contains(&section);
+        by_user
+            || self
+                .form_error
+                .as_ref()
+                .is_some_and(|e| section.holds(e.field))
+    }
+
     /// The confirmation waiting for an answer.
     pub fn prompt(&self) -> Option<&RemovalPrompt> {
         self.pending.as_ref().map(|(_, prompt)| prompt)
@@ -389,6 +450,7 @@ pub fn stop(state: &mut State, model: &mut Model<'_>, id: DaemonId) -> Option<St
 
 /// Open the form for a new daemon.
 pub fn begin_add(state: &mut State) {
+    state.flipped_sections.clear();
     state.draft = Some(Draft {
         editing: None,
         name: String::new(),
@@ -453,6 +515,7 @@ pub fn begin_edit<'s>(state: &'s mut State, model: &Model<'_>, id: DaemonId) -> 
         ),
     };
     let texts = ProfileTexts::of(&profile);
+    state.flipped_sections.clear();
     state.draft = Some(Draft {
         editing: Some(id),
         name: entry.name.as_str().to_string(),
@@ -476,6 +539,7 @@ pub fn begin_edit<'s>(state: &'s mut State, model: &Model<'_>, id: DaemonId) -> 
 
 /// Close the form without saving.
 pub fn discard_draft(state: &mut State) {
+    state.flipped_sections.clear();
     state.draft = None;
 }
 
@@ -813,6 +877,8 @@ pub enum Msg {
     Saved,
     /// Close the form without saving.
     DraftDiscarded,
+    /// A section header was pressed: that section opens or closes and nothing else changes.
+    SectionToggled(Section),
     /// The name field changed.
     NameEdited(String),
     /// The runtime choice changed.
@@ -961,6 +1027,11 @@ pub fn update(state: &mut State, model: &mut Model<'_>, msg: Msg) -> Vec<Outcome
         Msg::DraftDiscarded => {
             discard_draft(state);
             state.form_error = None;
+        }
+        Msg::SectionToggled(section) => {
+            if !state.flipped_sections.remove(&section) {
+                state.flipped_sections.insert(section);
+            }
         }
         Msg::NameEdited(v) => edit(state, &|d| d.name = v.clone()),
         Msg::RuntimeChosen(v) => edit(state, &|d| d.runtime = v),

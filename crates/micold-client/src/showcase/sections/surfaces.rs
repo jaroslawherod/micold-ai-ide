@@ -176,6 +176,29 @@ pub fn accordion<'a>(showcase: &'a Showcase, roles: Roles, index: usize) -> Elem
     )
 }
 
+/// `AccordionSection` — a titled section, closed and open, and one that toggles live.
+pub fn accordion_section<'a>(
+    showcase: &'a Showcase,
+    roles: Roles,
+    index: usize,
+) -> Element<'a, Message> {
+    let body = |roles: Roles| material::Text::new(samples::BODY, TypeRole::Body, roles);
+    let section =
+        |open: bool| material::AccordionSection::new("Network", body(roles), roles).open(open);
+    arrange(
+        vec![
+            posed("closed", section(false), roles),
+            posed("open", section(true), roles),
+            posed(
+                "press the header, or focus it and press Space or Enter",
+                section(showcase.shown(index)).on_toggle(Message::Reversed(index)),
+                roles,
+            ),
+        ],
+        Layout::FullWidth,
+    )
+}
+
 /// `Toolbar` — a title alone, and a title with actions.
 pub fn toolbar<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
     arrange(

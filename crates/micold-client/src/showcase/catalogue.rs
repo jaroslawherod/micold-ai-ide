@@ -592,6 +592,18 @@ pub const COMPONENTS: &[Entry] = &[
         render: sections::surfaces::accordion,
     },
     Entry {
+        module: "material/accordion_section.rs",
+        component: "AccordionSection",
+        variants: &[],
+        density: &[],
+        posed: &["closed", "open"],
+        live: &["press the header, or focus it and press Space or Enter"],
+        interactive: true,
+        section: Section::Components,
+        layout: Layout::FullWidth,
+        render: sections::surfaces::accordion_section,
+    },
+    Entry {
         module: "material/toolbar.rs",
         component: "Toolbar",
         variants: &[],

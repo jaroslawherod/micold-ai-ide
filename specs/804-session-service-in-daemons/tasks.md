@@ -62,14 +62,14 @@ Paths: `C` = `crates/micold-core/src`, `K` = `crates/micold-client/src`, `T` = `
 **Goal**: the daemon form's container settings sit in titled collapsible sections from a new shared Material component.
 **Independent test**: open a container daemon, toggle sections by pointer and keyboard, trigger a limit error in a closed Limits section and see it open.
 
-- [ ] T025 [US4] Test first: `AccordionSection` shows its title, a chevron for open/closed, reveals its body only when open, emits `on_toggle` on press and on Space/Enter with focus, draws the focus ring, in both themes, in `K/ui/material/accordion_section.rs` tests (patterns: `K/ui/material/accordion.rs`, `keyboard_focus.rs`, `style_states.rs`)
-- [ ] T026 [US4] Implement `AccordionSection` (builder `new(title, body, roles).open().on_toggle()`, `From` into `Element`) composing `Accordion`, in `K/ui/material/accordion_section.rs`; register in `K/ui/material/mod.rs`
-- [ ] T027 [US4] Add the component showcase entry (closed, open, live toggle) in `K/showcase/catalogue.rs` and `K/showcase/sections/surfaces.rs`
-- [ ] T028 [US4] Test first: section toggle changes only the open set; default is Container only; a section holding a `FormError` field is open; the draft and saved settings are untouched by toggling (FR-012, FR-014, FR-015) in `T/daemons_feature.rs`
-- [ ] T029 [US4] Add the open-section set and `DaemonsMsg::SectionToggled` to `K/features/daemons.rs`, with the pure "open or has error" rule
-- [ ] T030 [US4] Split `container_fields::groups` into five section bodies and wrap each in `AccordionSection` in `K/ui/settings/container_fields.rs`, `K/ui/settings/daemons.rs`; keep focus-tracking ids
-- [ ] T031 [US4] Run the geometry gates `T/daemons_section_geometry.rs` and `T/a_field_note_shares_its_fields_column.rs` with the sections and fix overflow in `K/ui/settings/daemons.rs`
-- [ ] T032 [US4] User guide: describe the collapsible sections in the daemon form in `docs/user-guide/sandboxed-daemon.md`
+- [x] T025 [US4] Test first: `AccordionSection` shows its title, a chevron for open/closed, reveals its body only when open, emits `on_toggle` on press and on Space/Enter with focus, draws the focus ring, in both themes, in `K/ui/material/accordion_section.rs` tests (patterns: `K/ui/material/accordion.rs`, `keyboard_focus.rs`, `style_states.rs`)
+- [x] T026 [US4] Implement `AccordionSection` (builder `new(title, body, roles).open().on_toggle()`, `From` into `Element`) composing `Accordion`, in `K/ui/material/accordion_section.rs`; register in `K/ui/material/mod.rs`
+- [x] T027 [US4] Add the component showcase entry (closed, open, live toggle) in `K/showcase/catalogue.rs` and `K/showcase/sections/surfaces.rs`
+- [x] T028 [US4] Test first: section toggle changes only the open set; default is Container only; a section holding a `FormError` field is open; the draft and saved settings are untouched by toggling (FR-012, FR-014, FR-015) in `T/daemons_feature.rs`
+- [x] T029 [US4] Add the open-section set and `DaemonsMsg::SectionToggled` to `K/features/daemons.rs`, with the pure "open or has error" rule
+- [x] T030 [US4] Split `container_fields::groups` into five section bodies and wrap each in `AccordionSection` in `K/ui/settings/container_fields.rs`, `K/ui/settings/daemons.rs`; keep focus-tracking ids
+- [x] T031 [US4] Run the geometry gates `T/daemons_section_geometry.rs` and `T/a_field_note_shares_its_fields_column.rs` with the sections and fix overflow in `K/ui/settings/daemons.rs`
+- [x] T032 [US4] User guide: describe the collapsible sections in the daemon form in `docs/user-guide/sandboxed-daemon.md`
 
 **Checkpoint**: the form is shorter at first open; nothing hidden by a closed section can fail silently.
 
