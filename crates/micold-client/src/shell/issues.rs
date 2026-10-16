@@ -108,15 +108,30 @@ pub fn on_source_changed(app: &mut App, source: BranchSource) -> Task<Message> {
 /// provider's load starts.
 pub fn on_issue_provider_changed(app: &mut App, provider: IssueProvider) -> Task<Message> {
     let before = app.core.worktree_form.issue_request_seq;
-    let remembered = app.core.workspace.issue_sources.clone();
+    let project = app.core.workspace.active.clone();
+    let previous = project
+        .as_ref()
+        .and_then(|project| app.core.workspace.issue_sources.get(project))
+        .copied();
     app.core
-        .update(Message::WorktreeForm(FormMsg::IssueProviderChanged(provider)));
+        .update(Message::WorktreeForm(FormMsg::IssueProviderChanged(
+            provider,
+        )));
     if app.core.worktree_form.issue_request_seq == before {
         return Task::none();
     }
-    if let (Some(project), Some(store)) = (app.core.workspace.active.clone(), app.caps.projects()) {
-        if remembered.get(&project) != Some(&provider) {
-            if let Err(err) = store.save_issue_source(&project, provider) {
+    if let (Some(project), Some(store)) = (project, app.caps.projects()) {
+        if previous != Some(provider) {
+            // A project with no state file yet cannot keep it on disk (the store refuses to create
+            // one); the choice still holds for this run, so that is not worth a toast.
+            if let Err(err) =
+                store
+                    .save_issue_source(&project, provider)
+                    .or_else(|err| match err.kind() {
+                        std::io::ErrorKind::NotFound => Ok(()),
+                        _ => Err(err),
+                    })
+            {
                 app.core
                     .notify_error(format!("Couldn't remember the issue source: {err}"));
             }

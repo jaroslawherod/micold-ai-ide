@@ -501,7 +501,10 @@ fn choosing_a_provider_resets_the_list_drops_the_other_result_and_is_remembered(
     root.update(Message::WorktreeForm(Msg::IssueProviderChanged(
         IssueProvider::Jira,
     )));
-    assert_eq!(root.workspace.issue_sources[&project()], IssueProvider::Jira);
+    assert_eq!(
+        root.workspace.issue_sources[&project()],
+        IssueProvider::Jira
+    );
     send(&mut root, Msg::Cancelled);
     send(&mut root, Msg::Opened);
     send(&mut root, Msg::RemotesListed(Ok(github_remote())));

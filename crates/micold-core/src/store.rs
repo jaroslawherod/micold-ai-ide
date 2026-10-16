@@ -607,8 +607,22 @@ struct StoredProjectState {
     /// `None` reads as GitHub, which is the dialog before the field existed, and an older build
     /// reading a file that carries it ignores one unknown field. Written by the client alone
     /// ([`ProjectStore::save_issue_source`]), like `bindings`.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "lenient_issue_source"
+    )]
     issue_source: Option<crate::jira::IssueProvider>,
+}
+
+/// A stored issue source this build cannot read is no memory (feature 533, FR-016): it reads as
+/// GitHub, and does not fail the whole file, which also holds the project's sessions.
+fn lenient_issue_source<'de, D>(d: D) -> Result<Option<crate::jira::IssueProvider>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = serde_json::Value::deserialize(d)?;
+    Ok(serde_json::from_value(value).ok())
 }
 
 impl StoredProjectState {
@@ -800,6 +814,32 @@ pub struct JsonFileStore {
 }
 
 impl JsonFileStore {
+    /// Read-modify-write one field of a project's state file under its lock, for the fields the
+    /// client writes alone (a binding, the issue source).
+    ///
+    /// A missing file is refused rather than created: a state file with only that field in it
+    /// would be authoritative on the next load and hide the sessions a pre-split catalog still
+    /// carries. A corrupt one is refused for the reason `save` skips it.
+    fn edit_existing_state(
+        &self,
+        project_path: &Path,
+        edit: impl FnOnce(&mut StoredProjectState),
+    ) -> io::Result<()> {
+        let path = self.project_state_path(project_path);
+        let _lock = lock_project_state(&path)?;
+        let mut state = match load_project_state(&path) {
+            ProjectStateLoad::Found(state) => state,
+            ProjectStateLoad::Missing | ProjectStateLoad::Corrupt => {
+                return Err(io::Error::new(
+                    io::ErrorKind::NotFound,
+                    "the project's state file is not readable yet",
+                ));
+            }
+        };
+        edit(&mut state);
+        write_project_state(&path, &state)
+    }
+
     /// A store backed by an explicit file path (used by tests with a temp directory).
     pub fn at(path: PathBuf) -> Self {
         Self { path }
@@ -984,22 +1024,9 @@ impl ProjectStore for JsonFileStore {
     }
 
     fn save_binding(&self, project_path: &Path, key: &str, daemon: DaemonId) -> io::Result<()> {
-        let path = self.project_state_path(project_path);
-        let _lock = lock_project_state(&path)?;
-        // A missing file is refused rather than created: a state file with only bindings in it
-        // would be authoritative on the next load and hide the sessions a pre-split catalog still
-        // carries. A corrupt one is refused for the reason `save` skips it.
-        let mut state = match load_project_state(&path) {
-            ProjectStateLoad::Found(state) => state,
-            ProjectStateLoad::Missing | ProjectStateLoad::Corrupt => {
-                return Err(io::Error::new(
-                    io::ErrorKind::NotFound,
-                    "the project's state file is not readable yet",
-                ));
-            }
-        };
-        state.bindings.insert(key.to_string(), daemon);
-        write_project_state(&path, &state)
+        self.edit_existing_state(project_path, |state| {
+            state.bindings.insert(key.to_string(), daemon);
+        })
     }
 
     fn save_issue_source(
@@ -1007,16 +1034,7 @@ impl ProjectStore for JsonFileStore {
         project_path: &Path,
         source: crate::jira::IssueProvider,
     ) -> io::Result<()> {
-        let path = self.project_state_path(project_path);
-        let _lock = lock_project_state(&path)?;
-        let ProjectStateLoad::Found(mut state) = load_project_state(&path) else {
-            return Err(io::Error::new(
-                io::ErrorKind::NotFound,
-                "the project's state file is not readable yet",
-            ));
-        };
-        state.issue_source = Some(source);
-        write_project_state(&path, &state)
+        self.edit_existing_state(project_path, |state| state.issue_source = Some(source))
     }
 
     fn remove_binding(&self, project_path: &Path, key: &str) -> io::Result<()> {
@@ -1138,9 +1156,7 @@ impl ProjectStore for JsonFileStore {
                     }
                     match state.issue_source {
                         Some(source) => {
-                            workspace
-                                .issue_sources
-                                .insert(project.path.clone(), source);
+                            workspace.issue_sources.insert(project.path.clone(), source);
                         }
                         None => {
                             workspace.issue_sources.remove(&project.path);

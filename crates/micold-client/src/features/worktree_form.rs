@@ -522,8 +522,8 @@ pub struct WorktreeForm {
     /// Whether Jira can be an issue source here (feature 533).
     pub jira: JiraAvailability,
     /// Which provider the Issue source lists (feature 533). Jira only while `jira` is
-    /// `Connected` and the repository has no GitHub remote: the source choice for a project with
-    /// both comes with the per-project choice of a later milestone.
+    /// `Connected` and the repository has no GitHub remote, or the project has both and Jira is the
+    /// remembered choice (`remembered_provider`, set by `IssueProviderChanged`).
     pub provider: IssueProvider,
     /// The source this project last used, from its state file or chosen in this form (feature 533,
     /// FR-016). `None` opens on GitHub. Only read while both sources are available.

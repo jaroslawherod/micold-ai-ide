@@ -46,5 +46,5 @@ Tests (`store_issue_source.rs`, five new cases in `jira_source_state.rs`, the co
 `add-worktree-dialog-source-choice`) were written before the code and reference `issue_sources`,
 `save_issue_source`, `offers_issue_provider_choice`, `Msg::IssueProviderChanged` and
 `Outcome::IssueSourceChosen`, so the red run was a compile failure of both test targets; no output
-was kept. Green: the same two targets (4 and 19 tests) and `layout_snapshot` (60) after the
+was kept. Green: the same two targets (5 and 19 tests) and `layout_snapshot` (60) after the
 reducer, store and view changes. Full `mise run gate`: see the PR body.
