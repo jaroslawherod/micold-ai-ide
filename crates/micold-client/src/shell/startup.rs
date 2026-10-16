@@ -443,7 +443,7 @@ fn boot() -> (App, Task<Message>) {
 ///
 /// Reading the hostname is I/O, so it happens here and `micold_core::link` stays pure.
 fn host_names_at_boot() -> Vec<String> {
-    micold_core::link::host_names_from(&gethostname::gethostname().to_string_lossy())
+    micold_core::link::host_names_from(&micold_core::hostname::hostname())
 }
 
 #[cfg(test)]
@@ -733,7 +733,7 @@ mod tests {
         let names = host_names_at_boot();
         assert_eq!(
             names,
-            micold_core::link::host_names_from(&gethostname::gethostname().to_string_lossy()),
+            micold_core::link::host_names_from(&micold_core::hostname::hostname()),
             "the names are this machine's hostname and that name's first DNS label (FR-012)"
         );
         assert!(

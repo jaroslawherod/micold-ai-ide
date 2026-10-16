@@ -2166,7 +2166,6 @@ dependencies = [
  "dark-light",
  "directories",
  "embed-resource",
- "gethostname",
  "iana-time-zone",
  "iced",
  "iced_renderer",
