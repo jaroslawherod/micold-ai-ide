@@ -66,7 +66,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M4 done: review A and B recorded, visual pass passed, full gate green (`mise run --skip-tools gate`; mise tool install failed offline), branch pushed. Left: `gh pr create` failed (api.github.com unreachable, git over ssh works). Open the PR when the API is back: title `feat(804): collapsible container sections (#804)`, body from the PR body in the unit's return (M4 summary, reviews, gate, ends `Refs #804` and `Refs #890`). Branch is 6 commits behind origin/main; code-wise rebase if desired, rerun the gate.
 
 ## Open escalation
 
