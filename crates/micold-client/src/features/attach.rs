@@ -22,10 +22,11 @@ use crate::floating_surface;
 use crate::overlay::registry::Registered;
 use crate::overlay::SurfaceId;
 use micold_core::attach::{
-    AttachItem, AttachOutcome, AttachResult, DiscoveryNote, DiscoveryReport, ResumableSession,
-    ResumableStatus, SkipReason, UnresumableReason,
+    AttachItem, AttachOutcome, AttachResult, DiscoveryNote, DiscoveryReport, RefuseReason,
+    ResumableSession, ResumableStatus, SkipReason, UnresumableReason,
 };
 use micold_core::notify::{Level, Notification};
+use micold_core::occupancy::ExistingSession;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 
@@ -102,6 +103,32 @@ pub struct Dialog {
     pub sessions: Vec<ResumableSession>,
     /// What discovery skipped, and why.
     pub notes: Vec<DiscoveryNote>,
+    /// The question asked when a resume met a worktree that already has a session (feature 776,
+    /// FR-008b, FR-008c); `None` when none is open.
+    pub confirm: Option<Confirm>,
+}
+
+/// A resume the daemon refused because its worktree has a session: replace that session, keep
+/// both, or leave things as they are.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Confirm {
+    /// The stored session the user chose to resume.
+    pub id: uuid::Uuid,
+    /// What the dialog called it.
+    pub title: String,
+    /// The session the worktree has, as the daemon named it.
+    pub existing: ExistingSession,
+}
+
+impl Confirm {
+    /// The question, naming both sessions.
+    pub fn text(&self) -> String {
+        format!(
+            "This worktree already has the session \"{}\". Replace it with \"{}\" (the old \
+             session is stopped and removed), or keep both?",
+            self.existing.name, self.title
+        )
+    }
 }
 
 /// The dialog's list area.
@@ -211,6 +238,10 @@ pub enum Msg {
         /// The session's id.
         id: uuid::Uuid,
     },
+    /// "Replace" was pressed on the confirmation: resume again with `replace` (FR-008b).
+    ConfirmReplace,
+    /// "Keep both" was pressed on the confirmation: resume again beside the session (FR-008c).
+    ConfirmKeepBoth,
     /// The discovery report asked for at project open.
     OfferListed {
         /// The project the report is about.
@@ -247,10 +278,16 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<Outcome> {
                 error: None,
                 sessions: Vec::new(),
                 notes: Vec::new(),
+                confirm: None,
             });
             Vec::new()
         }
         Msg::Cancelled => {
+            // The confirmation is answered "no": back to the list, nothing sent.
+            if let Some(dialog) = state.attach.dialog.as_mut().filter(|d| d.confirm.is_some()) {
+                dialog.confirm = None;
+                return Vec::new();
+            }
             // While an apply is outstanding the dialog stays, so its answer has somewhere to land
             // and a reopened dialog can never receive a stale one.
             if state.attach.dialog.as_ref().is_some_and(Dialog::applying) {
@@ -301,6 +338,22 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<Outcome> {
                             id,
                             replace: false,
                             allow_additional_session: false,
+                        }],
+                    );
+                }
+            }
+            Vec::new()
+        }
+        Msg::ConfirmReplace | Msg::ConfirmKeepBoth => {
+            if let Some(dialog) = state.attach.dialog.as_mut() {
+                if let Some(confirm) = dialog.confirm.take() {
+                    let replace = msg == Msg::ConfirmReplace;
+                    begin_apply(
+                        dialog,
+                        vec![AttachItem::Session {
+                            id: confirm.id,
+                            replace,
+                            allow_additional_session: !replace,
                         }],
                     );
                 }
@@ -359,6 +412,13 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<Outcome> {
             if !state.attach.dialog.as_ref().is_some_and(Dialog::applying) {
                 return Vec::new();
             }
+            if let Some(dialog) = state.attach.dialog.as_mut() {
+                if let Some(confirm) = confirmation_for(dialog, &results) {
+                    dialog.in_flight.clear();
+                    dialog.confirm = Some(confirm);
+                    return Vec::new();
+                }
+            }
             state.attach.dialog = None;
             vec![Outcome::NotificationRaised(Notification::new(
                 summary_level(&results),
@@ -373,6 +433,29 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<Outcome> {
             Vec::new()
         }
     }
+}
+
+/// The question to ask when the one session the user chose to resume was refused because its
+/// worktree has a session. A batch is never asked about: its refusals are in the summary.
+fn confirmation_for(dialog: &Dialog, results: &[AttachResult]) -> Option<Confirm> {
+    let [AttachResult {
+        item: AttachItem::Session { id, .. },
+        outcome: AttachOutcome::Refused(RefuseReason::LocationHasSession),
+        existing: Some(existing),
+    }] = results
+    else {
+        return None;
+    };
+    (dialog.in_flight.len() == 1).then(|| Confirm {
+        id: *id,
+        title: dialog
+            .sessions
+            .iter()
+            .find(|s| s.id == *id)
+            .and_then(|s| s.title.clone())
+            .unwrap_or_else(|| "Untitled session".into()),
+        existing: existing.clone(),
+    })
 }
 
 /// An apply with nothing to attach, or one already running, sends nothing.

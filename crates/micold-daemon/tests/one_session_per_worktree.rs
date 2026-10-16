@@ -849,3 +849,79 @@ async fn main_session_the_refusal_names_the_marked_main_not_the_first() {
         other => panic!("expected a refusal: {other:?}"),
     }
 }
+
+/// Wait until `session` has (or has not) a hosting process.
+async fn until_live(state: &DaemonState, session: SessionId, live: bool) {
+    tokio::time::timeout(BOUND, async {
+        while state.live_session(session).is_some() != live {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("the process reaches the expected state");
+}
+
+/// US3 s1, s2 and FR-008a, FR-009 at the wire: stopping, starting and restarting a worktree's own
+/// session keep its id and never add a second one; starting a running one is a no-op.
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn start_stop_and_restart_keep_the_one_session() {
+    let _guard = PATH_LOCK.lock().await;
+    let bin = tempfile::tempdir().unwrap();
+    stand_in_claude(bin.path());
+    let _path = PathGuard::set(bin.path());
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    init_repo(project.path());
+    add_worktree(project.path(), "wt");
+    let own = Session::restored(
+        sid(1),
+        SessionLocation::Worktree("wt".into()),
+        SessionLabel::Named("Own".into()),
+        TerminalMode::AiCli,
+        AiCli::ClaudeCode,
+    );
+    let state = state_with(project.path(), store.path(), vec![own], &[]);
+    let mut client = connect(&state).await;
+    let one = |state: &DaemonState| {
+        let ids: Vec<_> = state
+            .sessions_for(project.path())
+            .iter()
+            .map(|s| s.id)
+            .collect();
+        assert_eq!(ids, [sid(1)], "exactly the one session, same id");
+    };
+
+    let start = |allow| ClientMsg::SessionStart {
+        session: sid(1),
+        allow_additional_session: allow,
+    };
+    send(&mut client, start(false)).await;
+    until_live(&state, sid(1), true).await;
+    one(&state);
+
+    // A running session: starting it again is a no-op that succeeds.
+    send(&mut client, start(false)).await;
+    send(&mut client, ClientMsg::SessionStop { session: sid(1) }).await;
+    until_live(&state, sid(1), false).await;
+    one(&state);
+
+    // Stopped: start brings back the same session.
+    send(&mut client, start(false)).await;
+    until_live(&state, sid(1), true).await;
+    one(&state);
+
+    // Restart replaces the process of the same session.
+    send(
+        &mut client,
+        ClientMsg::SessionRestart {
+            session: sid(1),
+            allow_additional_session: false,
+        },
+    )
+    .await;
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    until_live(&state, sid(1), true).await;
+    one(&state);
+    kill_all(&state, project.path());
+}

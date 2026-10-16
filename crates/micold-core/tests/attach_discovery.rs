@@ -291,3 +291,65 @@ mod resumable {
         );
     }
 }
+
+// ---------------------------------------------------------------------------------------
+// T025 [US3]: one candidate per location (feature 776, FR-012)
+// ---------------------------------------------------------------------------------------
+
+mod cap {
+    use micold_core::attach::{cap_per_location, AttachTarget};
+    use std::collections::BTreeSet;
+    use std::time::{Duration, SystemTime};
+
+    fn at(secs: u64) -> SystemTime {
+        SystemTime::UNIX_EPOCH + Duration::from_secs(secs)
+    }
+
+    fn wt(name: &str) -> AttachTarget {
+        AttachTarget::Worktree {
+            dir_name: name.into(),
+        }
+    }
+
+    fn cap(
+        candidates: Vec<(&'static str, AttachTarget, u64)>,
+        occupied: &[AttachTarget],
+    ) -> Vec<&'static str> {
+        let occupied: BTreeSet<_> = occupied.iter().cloned().collect();
+        cap_per_location(candidates, &occupied, |(_, t, secs)| (t.clone(), at(*secs)))
+            .into_iter()
+            .map(|(name, _, _)| name)
+            .collect()
+    }
+
+    #[test]
+    fn the_most_recent_candidate_of_each_location_is_kept() {
+        let kept = cap(
+            vec![
+                ("old-a", wt("a"), 1),
+                ("new-a", wt("a"), 9),
+                ("only-b", wt("b"), 2),
+                ("root", AttachTarget::Default, 5),
+            ],
+            &[],
+        );
+        assert_eq!(kept, ["new-a", "only-b", "root"]);
+    }
+
+    #[test]
+    fn an_occupied_location_keeps_no_candidate() {
+        let kept = cap(
+            vec![("a1", wt("a"), 1), ("a2", wt("a"), 2), ("b", wt("b"), 1)],
+            &[wt("a")],
+        );
+        assert_eq!(kept, ["b"]);
+    }
+
+    #[test]
+    fn equal_times_keep_the_first() {
+        assert_eq!(
+            cap(vec![("first", wt("a"), 3), ("second", wt("a"), 3)], &[]),
+            ["first"]
+        );
+    }
+}

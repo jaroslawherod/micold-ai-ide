@@ -319,6 +319,13 @@ Codex and OpenCode sessions are not listed here: the app does not read their con
 
 **Resume** adds the session to the sidebar and then starts it, so the conversation opens at once.
 
+A worktree has one main session. When the worktree you resume into already has one, **Resume** asks
+first, naming both sessions: **Replace** stops the worktree's session, removes it from the sidebar and
+makes the resumed one the main session; **Keep both** adds the resumed session beside it as a
+helper and stops nothing; **Cancel** changes nothing. Restarting or starting a session you already
+have never adds another. **Resume all** adds only the most recent stored session of each worktree
+that has none, and leaves the others listed so you can resume them one at a time.
+
 #### The offer when you open a project
 
 When you open a project and the app finds stored sessions it does not list, a banner at the top of

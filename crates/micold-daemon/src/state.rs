@@ -2935,17 +2935,50 @@ impl DaemonState {
     /// A session target is found again in a fresh discovery limited to its id, so a stale list
     /// cannot attach what is gone; it then joins the catalog as an idle entry that no provider
     /// process backs (FR-008).
+    ///
+    /// Into a location that has a session (feature 776) the item is refused with
+    /// `LocationHasSession`, naming the occupant, unless it carries `replace` (the occupant's
+    /// processes are stopped, the resumed session takes its place and its main role, FR-007) or
+    /// `allow_additional_session` (it is added beside as a helper, FR-008c); both on one item is
+    /// malformed and refused. A batch of several items catalogues only the most recent session per
+    /// location (FR-012); a single item is the user's pick and is never capped.
     pub fn attach_apply(
         &self,
         project: &Path,
         targets: &[micold_core::attach::AttachItem],
     ) -> io::Result<Vec<micold_core::attach::AttachResult>> {
         use micold_core::attach::{
-            AttachItem, AttachOutcome, AttachResult, AttachTarget, RefuseReason, ResumableStatus,
+            cap_per_location, AttachItem, AttachOutcome, AttachResult, AttachTarget, RefuseReason,
+            ResumableSession, ResumableStatus,
         };
-        let mut results = Vec::with_capacity(targets.len());
+        use micold_core::occupancy::{ExistingSession, Occupancy};
+
+        /// What the discovery step made of one item.
+        enum Step {
+            Settled(AttachOutcome, Option<ExistingSession>),
+            Known,
+            Candidate(ResumableSession),
+        }
+        use micold_core::occupancy::Additional;
+        let location_of = |target: &AttachTarget| match target {
+            AttachTarget::Default => SessionLocation::Default,
+            AttachTarget::Worktree { dir_name } => SessionLocation::Worktree(dir_name.clone()),
+        };
+
+        let mut steps = Vec::with_capacity(targets.len());
         for item in targets {
-            let AttachItem::Session { id, .. } = item;
+            let AttachItem::Session {
+                id,
+                replace,
+                allow_additional_session,
+            } = item;
+            if *replace && *allow_additional_session {
+                steps.push(Step::Settled(
+                    AttachOutcome::Refused(RefuseReason::Unavailable),
+                    None,
+                ));
+                continue;
+            }
             let only: BTreeSet<Uuid> = [*id].into();
             let (live, known) = {
                 let inner = self.lock();
@@ -2963,48 +2996,168 @@ impl DaemonState {
                 .sessions
                 .into_iter()
                 .find(|s| s.id == *id);
-            let outcome = match found {
+            steps.push(match found {
                 // Already in the catalog: the catalog says whether it is running.
-                None if known.contains(id) => self
-                    .lock()
-                    .catalog
-                    .attach_session(project, self.restored_stub(*id))
-                    .unwrap_or(AttachOutcome::Refused(RefuseReason::IoFailed)),
-                None => AttachOutcome::Refused(RefuseReason::Unavailable),
+                None if known.contains(id) => Step::Known,
+                None => Step::Settled(AttachOutcome::Refused(RefuseReason::Unavailable), None),
                 Some(s) if matches!(s.status, ResumableStatus::Unresumable(_)) => {
-                    AttachOutcome::Refused(RefuseReason::Unavailable)
+                    Step::Settled(AttachOutcome::Refused(RefuseReason::Unavailable), None)
                 }
-                Some(s) => {
-                    let location = match &s.target {
-                        AttachTarget::Default => SessionLocation::Default,
-                        AttachTarget::Worktree { dir_name } => {
-                            SessionLocation::Worktree(dir_name.clone())
-                        }
-                    };
+                Some(s) => Step::Candidate(s),
+            });
+        }
+
+        // A batch keeps the most recent candidate per location and none for an occupied one; the
+        // others stay resumable (FR-012). An item that asked for replace or keep both is explicit.
+        if targets.len() > 1 {
+            let plain = |i: usize| {
+                matches!(
+                    &targets[i],
+                    AttachItem::Session {
+                        replace: false,
+                        allow_additional_session: false,
+                        ..
+                    }
+                )
+            };
+            let candidates: Vec<(usize, AttachTarget, std::time::SystemTime)> = steps
+                .iter()
+                .enumerate()
+                .filter_map(|(i, step)| match step {
+                    Step::Candidate(s) if plain(i) => Some((i, s.target.clone(), s.last_activity)),
+                    _ => None,
+                })
+                .collect();
+            let occupied: BTreeSet<AttachTarget> = {
+                let inner = self.lock();
+                candidates
+                    .iter()
+                    .filter(|(_, t, _)| {
+                        matches!(
+                            inner.catalog.occupancy(project, &location_of(t)),
+                            Occupancy::Taken(_)
+                        )
+                    })
+                    .map(|(_, t, _)| t.clone())
+                    .collect()
+            };
+            let kept: BTreeSet<usize> =
+                cap_per_location(candidates.clone(), &occupied, |(_, t, at)| (t.clone(), *at))
+                    .into_iter()
+                    .map(|(i, _, _)| i)
+                    .collect();
+            for (i, target, _) in &candidates {
+                if kept.contains(i) {
+                    continue;
+                }
+                let existing = match self.lock().catalog.occupancy(project, &location_of(target)) {
+                    Occupancy::Taken(existing) => Some(existing),
+                    // Another candidate of this batch took the location.
+                    Occupancy::Free => candidates
+                        .iter()
+                        .find(|(k, t, _)| kept.contains(k) && t == target)
+                        .and_then(|(k, _, _)| match &steps[*k] {
+                            Step::Candidate(s) => Some(ExistingSession {
+                                id: SessionId::from_uuid(s.id),
+                                name: s.title.clone().unwrap_or_default(),
+                            }),
+                            _ => None,
+                        }),
+                };
+                steps[*i] = Step::Settled(
+                    AttachOutcome::Refused(RefuseReason::LocationHasSession),
+                    existing,
+                );
+            }
+        }
+
+        let mut results = Vec::with_capacity(targets.len());
+        for (item, step) in targets.iter().zip(steps) {
+            let AttachItem::Session {
+                id,
+                replace,
+                allow_additional_session,
+            } = item;
+            let (outcome, existing) = match step {
+                Step::Settled(outcome, existing) => (outcome, existing),
+                Step::Known => (
+                    self.lock()
+                        .catalog
+                        .attach_session(project, self.restored_stub(*id))
+                        .unwrap_or(AttachOutcome::Refused(RefuseReason::IoFailed)),
+                    None,
+                ),
+                Step::Candidate(s) => {
                     let label = s
                         .title
                         .clone()
                         .map_or(SessionLabel::Pending, SessionLabel::Derived);
                     let session = Session::restored(
                         SessionId::from_uuid(*id),
-                        location,
+                        location_of(&s.target),
                         label,
                         TerminalMode::AiCli,
                         s.provider,
                     );
-                    self.lock()
-                        .catalog
-                        .attach_session(project, session)
-                        .unwrap_or(AttachOutcome::Refused(RefuseReason::IoFailed))
+                    self.resume_into(
+                        project,
+                        session,
+                        *replace,
+                        Additional::from(*allow_additional_session),
+                    )
                 }
             };
             results.push(AttachResult {
                 item: item.clone(),
                 outcome,
-                existing: None,
+                existing,
             });
         }
         Ok(results)
+    }
+
+    /// Put one resumed `session` into the catalog (feature 776): refused when its location has a
+    /// session, replacing it when `replace`, beside it when `additional`.
+    fn resume_into(
+        &self,
+        project: &Path,
+        session: Session,
+        replace: bool,
+        additional: micold_core::occupancy::Additional,
+    ) -> (
+        micold_core::attach::AttachOutcome,
+        Option<micold_core::occupancy::ExistingSession>,
+    ) {
+        use micold_core::attach::{AttachOutcome, RefuseReason};
+        use micold_core::occupancy::Occupancy;
+        let io_failed = || AttachOutcome::Refused(RefuseReason::IoFailed);
+        let mut inner = self.lock();
+        let old = match (replace, inner.catalog.occupancy(project, &session.location)) {
+            (true, Occupancy::Taken(old)) => old,
+            _ => {
+                return inner
+                    .catalog
+                    .attach_session_as(project, session, additional)
+                    .unwrap_or((io_failed(), None));
+            }
+        };
+        // The old session's processes go first, so no two of them ever run (FR-008a); the record
+        // is archived only once the new one is durable (research R7).
+        let worktree = inner.catalog.session_worktree_dir(old.id);
+        let ptys = Self::remove_live_by_ids(&mut inner, vec![old.id]);
+        let outcome = inner
+            .catalog
+            .replace_session(project, old.id, session)
+            .unwrap_or_else(|_| io_failed());
+        drop(inner);
+        for pty in ptys {
+            let _ = pty.kill();
+        }
+        if outcome == AttachOutcome::Attached {
+            self.revoke_tool_credentials(&[old.id]);
+            self.remove_pasted_images(old.id, worktree.as_deref());
+        }
+        (outcome, None)
     }
 
     /// A placeholder entry for [`Catalog::attach_session`] when the id is already in the catalog:
@@ -3110,12 +3263,18 @@ impl DaemonState {
                             .read_label(&config_dir, &cwd, id)
                             .map_or(SessionLabel::Pending, SessionLabel::Derived),
                     };
-                    found.push(Session::restored(
-                        SessionId::from_uuid(id),
-                        location.clone(),
-                        label,
-                        TerminalMode::AiCli,
-                        which,
+                    let at = provider
+                        .last_activity(&config_dir, &cwd, id)
+                        .unwrap_or(std::time::SystemTime::UNIX_EPOCH);
+                    found.push((
+                        at,
+                        Session::restored(
+                            SessionId::from_uuid(id),
+                            location.clone(),
+                            label,
+                            TerminalMode::AiCli,
+                            which,
+                        ),
                     ));
                 }
             }
@@ -3124,6 +3283,9 @@ impl DaemonState {
         if found.is_empty() {
             return 0;
         }
+        // Newest first: the catalog keeps the first session of each location (FR-012).
+        found.sort_by(|a, b| b.0.cmp(&a.0));
+        let found = found.into_iter().map(|(_, session)| session).collect();
         self.lock()
             .catalog
             .adopt_discovered_sessions(project, found)

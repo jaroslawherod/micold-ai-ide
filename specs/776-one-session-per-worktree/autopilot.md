@@ -90,7 +90,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M6 (T023-T030) in progress, uncommitted work is committed as WIP on the branch, no PR yet, not pushed. #891 (M5) is merged (SHA 2a1e2463...).
+Done (code written, compiles, targeted tests green): core `attach::cap_per_location` (+ `AttachTarget: Ord`) with tests in `micold-core/tests/attach_discovery.rs`; daemon `Catalog::attach_session_as` / `replace_session` / adoption cap, `DaemonState::attach_apply` rewrite + `resume_into` (state.rs), adoption ordered newest first; daemon tests appended to `attach_apply.rs` (all pass) and `one_session_per_worktree.rs` (`start_stop_and_restart_keep_the_one_session`, passes); client `Confirm`, `Msg::ConfirmReplace/ConfirmKeepBoth`, dialog confirm modal, tests appended to `attach_dialog.rs` (pass); user-guide paragraph (T029). Both-flags-on-one-item returns `Refused(Unavailable)` (no new wire reason).
+Next: (1) `crates/micold-daemon/tests/untitled_session_labels.rs` tests `discovery_adopts_a_titled_session_named_an_untitled_one_labelled_and_an_empty_one_pending` (line ~353, expects 3 adopted into one location) and `a_failed_read_or_a_failed_label_write_changes_nothing_else` (line ~515, adopts 2 in one location via adopt_discovered_sessions) now fail by design (FR-012 cap): rewrite them to one session per location (or expect 1 adopted); also run `session_name_persistence`, `session_archive_durable_marker`, `catalog_adoption` tests and add a `catalog_adoption.rs` test for the adoption cap (T025: at most one per location, none where occupied); (2) tick T023-T029 in tasks.md; (3) scoped gate, review A (code-review high), review B (conformance, sonnet), T030 visual pass of quickstart Part B item 3 via autopilot-worker (evidence in specs/776-one-session-per-worktree/tdd/), full gate, PR "feat(776): resume replaces or keeps both, attach cap (#776)". Do not run `mise run build` (release build, pointless).
 
 ## Open escalation
 

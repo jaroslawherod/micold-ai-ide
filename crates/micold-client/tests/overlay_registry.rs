@@ -79,6 +79,7 @@ fn dialogs() -> Vec<Dialog> {
                     error: None,
                     sessions: Vec::new(),
                     notes: Vec::new(),
+                    confirm: None,
                 })
             },
         },

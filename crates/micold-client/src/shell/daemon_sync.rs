@@ -1512,12 +1512,10 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
                             AttachItem::Session { id, .. },
                             AttachOutcome::Attached | AttachOutcome::AlreadyAttached,
                         ) if app.core.attach.dialog.as_ref().is_some_and(|d| {
-                            d.in_flight
-                                == [AttachItem::Session {
-                                    id: *id,
-                                    replace: false,
-                                    allow_additional_session: false,
-                                }]
+                            matches!(
+                                d.in_flight.as_slice(),
+                                [AttachItem::Session { id: sent, .. }] if sent == id
+                            )
                         }) =>
                         {
                             Some(*id)
