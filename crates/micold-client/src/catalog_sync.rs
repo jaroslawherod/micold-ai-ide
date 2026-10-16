@@ -546,9 +546,6 @@ mod tests {
         assert!(core.settings.env_include_failures.is_empty());
     }
 
-    /// Feature 039 (FR-001): the count of attention events a session has raised is the service's,
-    /// and a window learns it from the catalog — for a session it sees for the first time, and for
-    /// one it already holds.
     /// Feature 551: the origin the daemon reports reaches the client's session, on first sight and
     /// on a later snapshot, or the sidebar tree would show roots only.
     #[test]
@@ -571,6 +568,9 @@ mod tests {
         assert_eq!(core.workspace.sessions[&project][0].origin, None);
     }
 
+    /// Feature 039 (FR-001): the count of attention events a session has raised is the service's,
+    /// and a window learns it from the catalog — for a session it sees for the first time, and for
+    /// one it already holds.
     #[test]
     fn a_catalog_snapshots_attention_seq_reaches_the_clients_session() {
         let project = PathBuf::from("/a");
