@@ -763,3 +763,40 @@ fn an_origin_that_fails_validation_leaves_the_session_top_level() {
         assert_eq!(origin_of(&catalog, &project, child), None);
     }
 }
+
+// --- Feature 776: adoption keeps one session per location (FR-012, T025) -----------------------
+
+fn found(id: u128, location: SessionLocation) -> Session {
+    Session::restored(
+        SessionId::from_uuid(Uuid::from_u128(id)),
+        location,
+        SessionLabel::Pending,
+        TerminalMode::AiCli,
+        AiCli::ClaudeCode,
+    )
+}
+
+#[test]
+fn adoption_takes_at_most_one_session_per_location_and_none_where_one_exists() {
+    let (_dir, mut catalog, project, existing) = catalog_with_one_session();
+    let worktree = || SessionLocation::Worktree("w".into());
+
+    let adopted = catalog.adopt_discovered_sessions(
+        &project,
+        vec![
+            found(0xA1, SessionLocation::Default), // occupied by the catalogued session
+            found(0xA2, worktree()),
+            found(0xA3, worktree()), // second for the same free location
+        ],
+    );
+
+    assert_eq!(adopted, 1, "only the first session of the free location");
+    let ids: Vec<Uuid> = catalog.workspace().sessions[&project]
+        .iter()
+        .map(|s| s.id.0)
+        .collect();
+    assert!(ids.contains(&existing.0));
+    assert!(ids.contains(&Uuid::from_u128(0xA2)));
+    assert!(!ids.contains(&Uuid::from_u128(0xA1)), "the occupied location");
+    assert!(!ids.contains(&Uuid::from_u128(0xA3)), "the location's second");
+}

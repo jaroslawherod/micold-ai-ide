@@ -335,38 +335,44 @@ fn label_of(state: &DaemonState, id: Uuid) -> SessionLabel {
 
 #[test]
 fn discovery_adopts_a_titled_session_named_an_untitled_one_labelled_and_an_empty_one_pending() {
-    let stores = ProviderStores::new();
-    let titled = Uuid::from_u128(0x3211);
-    let untitled = Uuid::from_u128(0x3212);
-    let nothing_typed = Uuid::from_u128(0x3213);
-    stores.claude_transcript(&cwd(), titled, &claude_fixture("bare_skill.jsonl"));
-    stores.claude_titles(&cwd(), titled, "Autopilot the spec flow");
-    stores.claude_transcript(&cwd(), untitled, &claude_fixture("skill_with_args.jsonl"));
-    stores.claude_transcript(
-        &cwd(),
-        nothing_typed,
-        &claude_fixture("injected_only.jsonl"),
-    );
+    // One session per location (FR-012): each case finds exactly one transcript.
+    let cases = [
+        (
+            0x3211,
+            "bare_skill.jsonl",
+            Some("Autopilot the spec flow"),
+            SessionLabel::Named("Autopilot the spec flow".into()),
+            "a title wins over a label (C6.1, FR-005)",
+        ),
+        (
+            0x3212,
+            "skill_with_args.jsonl",
+            None,
+            SessionLabel::Derived("the name of past session is still not shown".into()),
+            "no title, so the first typed turn (C6.1, FR-001)",
+        ),
+        (
+            0x3213,
+            "injected_only.jsonl",
+            None,
+            SessionLabel::Pending,
+            "nothing typed, nothing to show but \"New session\" (FR-004)",
+        ),
+    ];
+    for (n, fixture, title, expected, why) in cases {
+        let stores = ProviderStores::new();
+        let id = Uuid::from_u128(n);
+        stores.claude_transcript(&cwd(), id, &claude_fixture(fixture));
+        if let Some(title) = title {
+            stores.claude_titles(&cwd(), id, title);
+        }
 
-    let data = tempfile::tempdir().unwrap();
-    let state = state_with(data.path(), Vec::new());
-    assert_eq!(state.discover_external_sessions(&project()), 3);
+        let data = tempfile::tempdir().unwrap();
+        let state = state_with(data.path(), Vec::new());
+        assert_eq!(state.discover_external_sessions(&project()), 1);
 
-    assert_eq!(
-        label_of(&state, titled),
-        SessionLabel::Named("Autopilot the spec flow".into()),
-        "a title wins over a label (C6.1, FR-005)"
-    );
-    assert_eq!(
-        label_of(&state, untitled),
-        SessionLabel::Derived("the name of past session is still not shown".into()),
-        "no title, so the first typed turn (C6.1, FR-001)"
-    );
-    assert_eq!(
-        label_of(&state, nothing_typed),
-        SessionLabel::Pending,
-        "nothing typed, nothing to show but \"New session\" (FR-004)"
-    );
+        assert_eq!(label_of(&state, id), expected, "{why}");
+    }
 }
 
 #[test]
@@ -515,7 +521,14 @@ fn a_failed_read_or_a_failed_label_write_changes_nothing_else() {
     catalog.adopt_discovered_sessions(
         &project(),
         vec![
-            session(unreadable, SessionLabel::Pending),
+            // A location holds one session (FR-012): the unreadable one lives in a worktree.
+            Session::restored(
+                SessionId::from_uuid(unreadable),
+                SessionLocation::Worktree("w".into()),
+                SessionLabel::Pending,
+                TerminalMode::AiCli,
+                AiCli::ClaudeCode,
+            ),
             session(unwritable, SessionLabel::Pending),
         ],
     );
