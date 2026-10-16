@@ -171,6 +171,9 @@ pub struct ActorSpec {
     /// Bumped when the user reconnects, so the actor restarts with the first delay of its backoff
     /// and a daemon is never dialled by two actors at once.
     pub epoch: u32,
+    /// The restart continues an established connection, so a failed first dial is retried.
+    /// Changes only together with `epoch`.
+    pub resumed: bool,
 }
 
 /// The key of every daemon this build can run, one per entry. An `Unsupported` runtime has none.
@@ -227,6 +230,7 @@ pub fn actor_specs(
                 dial,
                 strict_fingerprint,
                 epoch: states.epoch(entry.id),
+                resumed: states.resumed(entry.id),
             })
         })
         .collect()
@@ -374,6 +378,7 @@ fn actor(spec: ActorSpec) -> impl Stream<Item = Message> {
                 id,
                 &mut loop_output,
                 remote,
+                spec.resumed,
                 |mut life| {
                     let mut output = output.clone();
                     async move {
@@ -398,6 +403,7 @@ async fn reconnect_loop<A, Fut, S, Wait>(
     id: DaemonId,
     output: &mut mpsc::Sender<Message>,
     remote: bool,
+    resumed: bool,
     mut attempt: A,
     sleep: S,
 ) where
@@ -406,7 +412,10 @@ async fn reconnect_loop<A, Fut, S, Wait>(
     S: Fn(std::time::Duration) -> Wait,
     Wait: std::future::Future<Output = ()>,
 {
-    let mut life = LinkLife::default();
+    let mut life = LinkLife {
+        established: resumed,
+        ..LinkLife::default()
+    };
     let mut backoff = Backoff::new();
     loop {
         life.connected = false;
@@ -1007,6 +1016,7 @@ mod tests {
             DaemonId(1),
             &mut tx,
             remote,
+            false,
             |mut life: LinkLife| {
                 let (script, attempts) = (script.clone(), attempts.clone());
                 async move {
@@ -1038,6 +1048,27 @@ mod tests {
         let delays = delays.lock().unwrap().clone();
         let attempts = *attempts.lock().unwrap();
         (delays, attempts, reported)
+    }
+
+    /// A reconnect pressed during an outage restarts the actor; it must treat a failed first dial
+    /// as a lost link being retried, not as a failed start (which would end the attempts).
+    #[tokio::test]
+    async fn a_resumed_actor_starts_as_established() {
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let (mut tx, _rx) = mpsc::channel(8);
+        reconnect_loop(
+            DaemonId(1),
+            &mut tx,
+            true,
+            true,
+            |life: LinkLife| {
+                seen.lock().unwrap().push(life.established);
+                async move { (PumpEnd::AppGone, life) }
+            },
+            |_| async {},
+        )
+        .await;
+        assert_eq!(*seen.lock().unwrap(), [true]);
     }
 
     /// T041: a remote daemon is retried after 1, 2, 4, 8, then 15 s; a connection that held starts
@@ -1087,6 +1118,7 @@ mod tests {
         let after = actor_specs(&registry, &states, dir, None, false);
         assert_eq!(after.len(), 1);
         assert_ne!(after[0], before[0], "a new epoch restarts the one actor");
+        assert!(!before[0].resumed && after[0].resumed, "the restart continues an established link");
         assert_eq!(after[0].key, before[0].key);
 
         states.apply(id, DaemonEvent::GiveUp);
