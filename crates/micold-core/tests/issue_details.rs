@@ -74,13 +74,21 @@ fn plain_text_keeps_a_joiner_between_two_visible_characters_only() {
 #[test]
 fn an_all_invisible_input_is_empty() {
     let text = PlainText::new("\u{202E}\u{200B}\u{0007}\u{200D}");
-    assert!(text.is_empty(), "nothing visible is left: {:?}", text.as_str());
+    assert!(
+        text.is_empty(),
+        "nothing visible is left: {:?}",
+        text.as_str()
+    );
 }
 
 #[test]
 fn plain_text_displays_its_neutralised_text() {
     let text = PlainText::new("Fix\u{202E} it");
-    assert_eq!(text.to_string(), "Fix it", "Display shows what as_str holds");
+    assert_eq!(
+        text.to_string(),
+        "Fix it",
+        "Display shows what as_str holds"
+    );
     assert_eq!(text.as_str(), "Fix it");
 }
 
@@ -123,7 +131,11 @@ fn a_related_list_is_empty_exactly_when_its_total_is_zero() {
 #[test]
 fn a_reference_is_local_when_the_repository_matches_ignoring_ascii_case() {
     let here = Reference::of("ACME/Widgets", 12, &repo());
-    assert_eq!(here, Reference::Here(12), "GitHub compares names without case");
+    assert_eq!(
+        here,
+        Reference::Here(12),
+        "GitHub compares names without case"
+    );
     assert_eq!(here.to_string(), "#12");
     let other = Reference::of("acme/roadmap", 3, &repo());
     assert_eq!(other.to_string(), "acme/roadmap#3");
@@ -131,10 +143,22 @@ fn a_reference_is_local_when_the_repository_matches_ignoring_ascii_case() {
 
 #[test]
 fn a_pull_requests_state_follows_merged_closed_draft_open() {
-    assert_eq!(PrListState::from_fields("MERGED", false, true), PrListState::Merged);
-    assert_eq!(PrListState::from_fields("CLOSED", true, false), PrListState::Closed);
-    assert_eq!(PrListState::from_fields("OPEN", true, false), PrListState::Draft);
-    assert_eq!(PrListState::from_fields("OPEN", false, false), PrListState::Open);
+    assert_eq!(
+        PrListState::from_fields("MERGED", false, true),
+        PrListState::Merged
+    );
+    assert_eq!(
+        PrListState::from_fields("CLOSED", true, false),
+        PrListState::Closed
+    );
+    assert_eq!(
+        PrListState::from_fields("OPEN", true, false),
+        PrListState::Draft
+    );
+    assert_eq!(
+        PrListState::from_fields("OPEN", false, false),
+        PrListState::Open
+    );
 }
 
 #[test]
@@ -145,7 +169,10 @@ fn an_issue_is_blocked_exactly_when_an_open_blocker_is_counted() {
     if let Kind::Read(blockers) = &mut closed_only.blocked_by {
         blockers.open = 0;
     }
-    assert!(!closed_only.is_blocked(), "closed blockers block nothing (SC-003)");
+    assert!(
+        !closed_only.is_blocked(),
+        "closed blockers block nothing (SC-003)"
+    );
     let mut unreadable = parsed("every_kind.json");
     unreadable.blocked_by = Kind::NotReadable("GitHub refused access".into());
     assert!(
@@ -158,7 +185,14 @@ fn an_issue_is_blocked_exactly_when_an_open_blocker_is_counted() {
 fn debug_prints_the_number_and_counts_but_no_title_or_login() {
     let shown = format!("{:?}", parsed("every_kind.json"));
     assert!(shown.contains("12"), "{shown}");
-    for secret in ["Parser rewrite", "octocat", "Q4 epic", "Roadmap", "v1.4", "bug"] {
+    for secret in [
+        "Parser rewrite",
+        "octocat",
+        "Q4 epic",
+        "Roadmap",
+        "v1.4",
+        "bug",
+    ] {
         assert!(!shown.contains(secret), "Debug leaked {secret:?}: {shown}");
     }
 }
@@ -190,7 +224,11 @@ fn every_kind_is_read_from_a_full_answer() {
         (1, 2),
         "subIssuesSummary.completed and total"
     );
-    let labels: Vec<&str> = read(&d.labels).shown().iter().map(PlainText::as_str).collect();
+    let labels: Vec<&str> = read(&d.labels)
+        .shown()
+        .iter()
+        .map(PlainText::as_str)
+        .collect();
     assert_eq!(labels, ["bug", "parser"]);
     let assignees: Vec<&str> = read(&d.assignees)
         .shown()
@@ -198,7 +236,10 @@ fn every_kind_is_read_from_a_full_answer() {
         .map(PlainText::as_str)
         .collect();
     assert_eq!(assignees, ["octocat"]);
-    assert_eq!(read(&d.milestone).as_ref().map(PlainText::as_str), Some("v1.4"));
+    assert_eq!(
+        read(&d.milestone).as_ref().map(PlainText::as_str),
+        Some("v1.4")
+    );
 }
 
 #[test]
@@ -237,7 +278,10 @@ fn a_pull_request_that_closes_the_issue_is_not_also_linked() {
     assert_eq!(linked_refs, ["#21"], "#20 appears once, under closing");
     assert_eq!(linked.shown()[0].state, PrListState::Merged);
     assert_eq!(linked.total(), 1);
-    assert!(!linked.total_is_lower_bound(), "the timeline was read to its end");
+    assert!(
+        !linked.total_is_lower_bound(),
+        "the timeline was read to its end"
+    );
 }
 
 #[test]
@@ -283,7 +327,10 @@ fn a_missing_scope_marks_only_projects_not_readable() {
             "your GitHub sign-in can't read projects (it lacks the read:project scope)".into()
         )
     );
-    assert!(matches!(d.blocked_by, Kind::Read(_)), "every other kind is read");
+    assert!(
+        matches!(d.blocked_by, Kind::Read(_)),
+        "every other kind is read"
+    );
     assert!(matches!(d.labels, Kind::Read(_)));
     assert!(matches!(d.linked_prs, Kind::Read(_)));
 }
@@ -291,9 +338,8 @@ fn a_missing_scope_marks_only_projects_not_readable() {
 #[test]
 fn kinds_the_server_cannot_provide_are_not_readable() {
     let d = parsed("unsupported.json");
-    let reason = Kind::NotReadable("GitHub could not provide it".to_string());
     assert!(matches!(&d.blocked_by, Kind::NotReadable(r) if *r == "GitHub could not provide it"));
-    assert_eq!(format!("{:?}", d.sub_issues.reason()), format!("{:?}", reason.reason()));
+    assert_eq!(d.sub_issues.reason(), Some("GitHub could not provide it"));
     assert_eq!(d.parent.reason(), Some("GitHub could not provide it"));
     assert!(matches!(d.blocking, Kind::Read(_)), "blocking was answered");
 }
@@ -312,10 +358,9 @@ fn a_forbidden_kind_says_github_refused_access() {
 #[test]
 fn whole_answer_failures_are_load_errors() {
     match parse_details(b"<html>", &repo()) {
-        Err(IssueLoadError::Other(m)) => assert!(
-            m.starts_with("GitHub's answer could not be read: "),
-            "{m}"
-        ),
+        Err(IssueLoadError::Other(m)) => {
+            assert!(m.starts_with("GitHub's answer could not be read: "), "{m}")
+        }
         other => panic!("not JSON: {other:?}"),
     }
     assert_eq!(
@@ -340,10 +385,17 @@ fn text_from_github_is_neutralised_and_emptied_values_are_left_out() {
         read(&d.blocked_by).list.shown()[0].title.as_str(),
         "Fixevil a\u{200D}b"
     );
-    let labels: Vec<&str> = read(&d.labels).shown().iter().map(PlainText::as_str).collect();
+    let labels: Vec<&str> = read(&d.labels)
+        .shown()
+        .iter()
+        .map(PlainText::as_str)
+        .collect();
     assert_eq!(labels, ["bug"], "a label with nothing visible is left out");
     assert_eq!(read(&d.assignees).shown()[0].as_str(), "octocat");
-    assert_eq!(read(&d.milestone).as_ref().map(PlainText::as_str), Some("v1.4"));
+    assert_eq!(
+        read(&d.milestone).as_ref().map(PlainText::as_str),
+        Some("v1.4")
+    );
     let project = &read(&d.projects).shown()[0];
     assert_eq!(project.name.as_str(), "Roadmap");
     let fields: Vec<(&str, &str)> = project
@@ -351,7 +403,11 @@ fn text_from_github_is_neutralised_and_emptied_values_are_left_out() {
         .iter()
         .map(|(k, v)| (k.as_str(), v.as_str()))
         .collect();
-    assert_eq!(fields, [("Status", "ok!")], "a value with nothing visible is left out");
+    assert_eq!(
+        fields,
+        [("Status", "ok!")],
+        "a value with nothing visible is left out"
+    );
 }
 
 // ---- Request, paging, sources (details-read §1, §2, §4) ----
@@ -364,15 +420,25 @@ fn the_request_sends_only_owner_name_and_number() {
         .chunks(2)
         .map(|pair| pair[1].split('=').next().unwrap_or_default())
         .collect();
-    assert_eq!(vars, ["query", "owner", "name", "n"], "FR-009: nothing else leaves");
+    assert_eq!(
+        vars,
+        ["query", "owner", "name", "n"],
+        "FR-009: nothing else leaves"
+    );
     assert!(args.contains(&"owner=acme".to_string()));
     assert!(args.contains(&"name=widgets".to_string()));
     assert!(args.contains(&"n=12".to_string()));
-    assert!(args.iter().all(|a| !a.contains('\n')), "one line per argument");
+    assert!(
+        args.iter().all(|a| !a.contains('\n')),
+        "one line per argument"
+    );
     let timeline = timeline_args(&repo(), 12, "c1");
     let extra: Vec<&String> = timeline.iter().filter(|a| !args.contains(a)).collect();
     assert_eq!(
-        extra.iter().filter(|a| !a.starts_with("query=")).collect::<Vec<_>>(),
+        extra
+            .iter()
+            .filter(|a| !a.starts_with("query="))
+            .collect::<Vec<_>>(),
         [&&"after=c1".to_string()],
         "the timeline adds only the cursor"
     );
@@ -400,7 +466,11 @@ fn linked_refs(d: &IssueDetails) -> Vec<String> {
 
 #[test]
 fn the_timeline_is_paged_while_github_has_more() {
-    let mut pages = vec![fixture("timeline_page1.json"), fixture("timeline_page2.json")].into_iter();
+    let mut pages = vec![
+        fixture("timeline_page1.json"),
+        fixture("timeline_page2.json"),
+    ]
+    .into_iter();
     let mut seen: Vec<Vec<String>> = Vec::new();
     let d = read_details_with(&repo(), 12, later(), |args, _left| {
         seen.push(args);
@@ -438,7 +508,10 @@ fn paging_stops_at_the_deadline_and_marks_a_lower_bound() {
     let mut runs = 0;
     let d = read_details_with(&repo(), 12, deadline, |_, left| {
         runs += 1;
-        assert!(left <= Duration::from_millis(50), "each run is bounded by the time left");
+        assert!(
+            left <= Duration::from_millis(50),
+            "each run is bounded by the time left"
+        );
         std::thread::sleep(Duration::from_millis(60));
         answered(fixture("timeline_page1.json"))
     })
@@ -493,7 +566,10 @@ fn the_fake_returns_the_scripted_details_after_its_delay() {
         .with_details_delay(Duration::from_millis(100));
     let began = Instant::now();
     let d = fake.read_details(&repo(), 12, later()).expect("scripted");
-    assert!(began.elapsed() >= Duration::from_millis(100), "the delay applies");
+    assert!(
+        began.elapsed() >= Duration::from_millis(100),
+        "the delay applies"
+    );
     assert!(d.is_blocked());
     assert_eq!(fake.details_calls(), [("acme/widgets".to_string(), 12)]);
 }
@@ -554,7 +630,10 @@ fn lists_cap_items_and_report_more_and_hidden() {
     assert_eq!(subs["hidden"], 175);
     assert_eq!(value["blocked_by"]["hidden"], 3);
     let every = parsed("every_kind.json").to_json();
-    assert!(every["blocking"].get("hidden").is_none(), "hidden 0 is omitted");
+    assert!(
+        every["blocking"].get("hidden").is_none(),
+        "hidden 0 is omitted"
+    );
 }
 
 #[test]

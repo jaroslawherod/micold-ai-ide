@@ -107,6 +107,8 @@ pub struct DaemonState {
     /// How long `create_session` waits for a new session to be ready for its first prompt,
     /// counted from the request (feature 034, FR-017). [`FIRST_PROMPT_BOUND`] outside tests.
     first_prompt_bound: Mutex<std::time::Duration>,
+    /// How long a `github_issue` call waits for the issue's details (837 FR-011).
+    details_bound: Mutex<std::time::Duration>,
     /// Where `create_worktree`'s `github_issue` reads the issue (550): `None` outside tests, which
     /// locates the user's `gh` per call.
     issue_lookup: Mutex<Option<IssueLookupFactory>>,
@@ -699,6 +701,7 @@ impl DaemonState {
             hooks: std::sync::OnceLock::new(),
             tool_server: std::sync::OnceLock::new(),
             first_prompt_bound: Mutex::new(FIRST_PROMPT_BOUND),
+            details_bound: Mutex::new(micold_core::issue_details::DETAILS_BOUND),
             issue_lookup: Mutex::new(None),
             session_started: tokio::sync::broadcast::channel(64).0,
             auth_token: std::sync::OnceLock::new(),
@@ -819,6 +822,17 @@ impl DaemonState {
     pub fn announce_session_started(&self, session: SessionId) {
         // No listener (no window connected) is not an error.
         let _ = self.session_started.send(session);
+    }
+
+    /// How long a `github_issue` call waits for the issue's details after the read starts (837
+    /// FR-011): `micold_core::issue_details::DETAILS_BOUND` unless a test shortened it.
+    pub fn details_bound(&self) -> std::time::Duration {
+        *self.details_bound.lock().expect("details bound poisoned")
+    }
+
+    /// Shorten (or lengthen) the details bound, so a test need not wait 10 s to see it pass.
+    pub fn set_details_bound(&self, bound: std::time::Duration) {
+        *self.details_bound.lock().expect("details bound poisoned") = bound;
     }
 
     /// Shorten (or lengthen) the first-prompt bound, so a test need not wait 60 s to see it pass.

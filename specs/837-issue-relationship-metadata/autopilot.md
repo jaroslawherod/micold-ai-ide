@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-tw6sph
 - **Started**: 2026-10-16
 - **Phase**: milestone M1
-- **Next step**: M1 implement continues from Handover (T002 finish, red run, T007+), then verify and PR
+- **Next step**: M1 implement continues from Handover (T012/T027 daemon tests, T013/T017, T018), then verify and PR
 
 ## Pull requests
 
@@ -50,38 +50,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M1 unit 1 hit the 150k cap during implement. `branch-start.sh` was skipped: `gh` is not signed in here, and HEAD already equalled origin/main = #906's merge d24fd322.
+M1 unit 2 hit the 150k cap during implement. `branch-start.sh` skipped (no `gh`); branch is on #906's merge d24fd322 plus local commits, not pushed.
 
-**Done**: T001 (fixtures in `crates/micold-core/tests/fixtures/issue_details/`, field names confirmed against GitHub's published schema, recorded in research.md R3). T002 partly done: `pub mod issue_details;` added and the module doc written; the test file exists. The T003–T006 and T011 tests are written in `crates/micold-core/tests/issue_details.rs`, plus `read_details_past_its_deadline_runs_no_gh` in `tests/github_gh_cli.rs`. They do not compile yet, because the module has no items. That is the red step. No red run has been recorded yet.
+**Done**: T002–T011, T014, T015 (core module `crates/micold-core/src/issue_details.rs`; `github.rs` gained `visible_words`/`VisibleChars` shared with `description_from`, `numbered_args`, `answer_of`, `GhCli::outcome_within`, `pub(crate) graphql_error`, Fake `with_details`/`with_details_delay`/`details_calls`; traits `IssueLookup`/`IssueSource` now have supertrait `IssueDetailsSource`). Red then green recorded in `tdd/cycle-log.md`: `cargo test -p micold-core --test issue_details --test github_gh_cli --test github_description` all green. `details_bound`/`set_details_bound` in daemon `state.rs`. T016/T029 code is written in daemon `mcp/tools.rs` (`PendingDetails::start/finish`, `resolve_naming` returns `(naming, Option<PendingDetails>)`, the row gets `issue`; elapsed bound maps to `IssueLoadError::TimedOut`); `cargo check -p micold-daemon -p micold-client --tests` passes. Not ticked: its tests (T012, T027) are not written yet.
 
-**Next**: for TDD evidence, add the API as `todo!()` stubs, run `cargo test -p micold-core --test issue_details`, and record the panics in `tdd/cycle-log.md`, keyed by task as specs/804 does. Then implement T007–T010 and T014, then the daemon tasks T012/T015/T016/T027/T029, then T013/T017, then T018.
-
-**API the tests expect** (`micold_core::issue_details`):
-- `PlainText::new/as_str/is_empty`, `Display`.
-- `Reference::{Here(u64), Other{owner,name,number}}`, with `Reference::of(name_with_owner, number, &repo)` that ignores ASCII case, and `Display`.
-- `RelatedIssue{pub reference, pub title, pub open}` and `RelatedPr{reference, title, state}`.
-- `PrListState::from_fields(state, is_draft, merged)`.
-- `pub const LIST_CAP = 20`.
-- `RelatedList::new(items, total, hidden)`: truncates to 20 and sets total = max(total, shown+hidden). Accessors `shown() total() hidden() more() is_empty() total_is_lower_bound()`.
-- `Kind<T>{Read, NotReadable(String)}` (PartialEq, Debug), with `.reason() -> Option<&str>`.
-- `Blockers{pub list, pub open}` and `SubIssues{pub list, pub closed}`.
-- `labels`, `assignees` and `projects` are `Kind<RelatedList<..>>`, not the `Vec` data-model shows, because they need total and more.
-- `ProjectMembership{pub name, pub fields: Vec<(PlainText,PlainText)>}`.
-- `IssueDetails` has pub fields `number`, `blocked_by`, `blocking`, `parent`, `sub_issues`, `labels`, `assignees`, `milestone`, `projects`, `closing_prs`, `linked_prs`. It has `is_blocked()`, `to_json()` and a hand-written `Debug` that prints counts only.
-- `DETAILS_BOUND`, `details_args(repo,u32)`, `timeline_args(repo,u32,after)`, `parse_details(&[u8],&repo)` and `details_error_json(u64,&err,&repo)`.
-- `read_details_with(repo, number, deadline, FnMut(Vec<String>, Duration) -> RunOutcome)` is the paging driver. It returns TimedOut before a first run past the deadline, runs at most 10 runs in all, and a failed or late page sets the lower bound.
-- The `IssueDetailsSource` trait.
-- `FakeIssueSource::{with_details (a queue), with_details_delay, details_calls}`.
-
-**Design notes**:
-- Extract `GhCli::run`'s outcome handling into `pub(crate) fn answer_of(outcome, parse: impl Fn)`. Add a `GhCli` runner with an explicit timeout of min(left, self.timeout). The GhCli impl is `read_details_with(.., |a,l| self.outcome_within(a,l))`.
-- T007: one `pub(crate) fn visible_chars(&str) -> impl Iterator<Item=char>` in github.rs holds the joiner logic. `description_from` (its per-word loop and the skip check) and `PlainText::new` both use it.
-- Error path: `["repository","issue",<field>]` maps a field to its kind. For `issueDependenciesSummary`, a subfield containing "locking" goes to blocking and "lockedBy" to blocked_by.
-- Reason for `INSUFFICIENT_SCOPES`: "your GitHub sign-in can't read projects (it lacks the read:project scope)". Another kind gets "can't read <noun>" without the scope clause.
-- Field values: the value comes from the first of text, number, date, name or title. A whole number is formatted without ".0".
-- A timeline source without `number` is an issue, and is skipped.
-- Daemon: in `resolve_naming`, a first blocking call gets the lookup Arc and the mapping. Then, if there is a lookup, `spawn_blocking` the details read with deadline = now + `details_bound`. Then a blocking `read_issue`. The function returns `(naming, Option<PendingDetails{handle, started, number, repo}>)`. In `create_derived_worktree`, after `worktree_row`, await `timeout(bound - elapsed)`. On elapsed, or on a join error, report `details_error_json` with `TimedOut` or `Other`.
-- Daemon tests: build `IssueDetails` with `parse_details(include_bytes!("../../micold-core/tests/fixtures/issue_details/every_kind.json"), acme/widgets)`. Existing rows of `github_issue` calls now carry `issue.details_error` "no details scripted". Check whether any existing test compares a whole row.
+**Next**: T012 and T027 tests in `crates/micold-daemon/tests/mcp_create_worktree.rs` (fake via `with_details(Ok(parse_details(include_bytes!(".../every_kind.json"), &repo)))`; existing `github_issue` rows now carry `issue.details_error` "Couldn't read issues: no details scripted" — check no existing test compares a whole row), run them, tick T016/T029; then T013+T017 (published text in `crates/micold-core/src/mcp/tools.rs`, test in `tests/mcp_tools_catalog.rs`), T018 guide; then verify (scoped gate + review A, review B) and pr step.
 
 ## Open escalation
 
