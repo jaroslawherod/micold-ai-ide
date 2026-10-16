@@ -153,8 +153,8 @@ async fn sandbox_real_multi_daemon_stopping_one_leaves_the_other_working() {
     }
 
     assert!(
-        matches!(states.state(box_id), Some(DaemonState::Unreachable { .. })),
-        "the stopped daemon is unreachable, got {:?}",
+        matches!(states.state(box_id), Some(DaemonState::Reconnecting { .. })),
+        "the stopped daemon is reconnecting, got {:?}",
         states.state(box_id)
     );
     assert_eq!(
