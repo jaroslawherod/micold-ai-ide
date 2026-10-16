@@ -1,7 +1,7 @@
 //! The plan-usage model (feature 490, data-model *UsageReading*, *LimitWindow*, *CurrentUsage*;
 //! research R7, R11, R12).
 
-use chrono::FixedOffset;
+use micold_core::local_time::UtcOffset;
 use micold_core::plan_usage::{format_reset, LimitWindow, UsageReading, WarnPercent};
 
 /// 2026-10-10 14:00:00 UTC, a Saturday.
@@ -23,8 +23,8 @@ fn reading(windows: Vec<LimitWindow>) -> UsageReading {
     }
 }
 
-fn utc() -> FixedOffset {
-    FixedOffset::east_opt(0).unwrap()
+fn utc() -> UtcOffset {
+    UtcOffset::east(0).unwrap()
 }
 
 fn threshold(percent: u8) -> WarnPercent {
@@ -237,9 +237,9 @@ fn a_reset_within_a_day_is_a_time_and_beyond_it_has_its_day() {
 
 #[test]
 fn reset_times_are_shown_in_the_given_offset() {
-    let cest = FixedOffset::east_opt(2 * 3600).unwrap();
+    let cest = UtcOffset::east(2 * 3600).unwrap();
     assert_eq!(format_reset(NOW + 90 * 60, NOW, cest), "17:30", "FR-008");
-    let new_york = FixedOffset::west_opt(4 * 3600).unwrap();
+    let new_york = UtcOffset::west(4 * 3600).unwrap();
     assert_eq!(format_reset(NOW + 11 * HOUR, NOW, new_york), "21:00");
     assert_eq!(format_reset(NOW + 48 * HOUR, NOW, new_york), "Mon 10:00");
 }

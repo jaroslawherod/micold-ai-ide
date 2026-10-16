@@ -93,8 +93,8 @@ pub fn view<'a>(state: &State, scheme: ColorScheme) -> Element<'a, Message> {
     // is a current reading to show; without one the bar is exactly as before (FR-015).
     // The clock and zone are read only when a reading is held: most redraws have none.
     if state.plan_usage.reading.is_some() {
-        let now = chrono::Utc::now().timestamp();
-        let offset = *chrono::Local::now().offset();
+        let now = micold_core::unix_time::unix_secs() as i64;
+        let offset = micold_core::local_time::UtcOffset::local_at(now);
         if let Some(usage) = usage_indicator(state, now, offset, &r) {
             bar = bar.action(usage);
         }
@@ -107,7 +107,7 @@ pub fn view<'a>(state: &State, scheme: ColorScheme) -> Element<'a, Message> {
 fn usage_indicator<'a>(
     state: &State,
     now: i64,
-    offset: chrono::FixedOffset,
+    offset: micold_core::local_time::UtcOffset,
     roles: &micold_core::tokens::Roles,
 ) -> Option<Element<'a, Message>> {
     let view = state.plan_usage.view(now, offset)?;
@@ -126,8 +126,8 @@ mod tests {
 
     const NOON: i64 = 1_791_720_000;
 
-    fn utc() -> chrono::FixedOffset {
-        chrono::FixedOffset::east_opt(0).unwrap()
+    fn utc() -> micold_core::local_time::UtcOffset {
+        micold_core::local_time::UtcOffset::UTC
     }
 
     fn reading() -> UsageReading {

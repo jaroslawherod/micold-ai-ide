@@ -11,7 +11,7 @@ use alacritty_terminal::index::{Column, Line};
 use alacritty_terminal::term::cell::{Cell, Flags};
 use alacritty_terminal::term::Term;
 use alacritty_terminal::vte::ansi::{Attr, ClearMode, Color, Handler, NamedColor, Rgb};
-use chrono::{DateTime, Local};
+use micold_core::local_time::LocalTime;
 use micold_core::session::SessionId;
 use micold_core::terminal_history::schedule::{SaveSchedule, SAVE_SPACING};
 use micold_core::terminal_history::text::{notice_line, separator_line};
@@ -193,7 +193,7 @@ pub enum Seed {
     /// The earlier history, then the separator naming `at`, the time of this start.
     History {
         snapshot: HistorySnapshot,
-        at: DateTime<Local>,
+        at: LocalTime,
     },
     /// The saved history could not be read: one line saying so, in place of history and separator.
     Notice,
@@ -210,7 +210,11 @@ pub fn seed<T: EventListener>(term: &mut Term<T>, seed: Seed, limit: usize) {
             for line in &snapshot.lines[skip..] {
                 write_line(term, line);
             }
-            separator_line(&at.format(SEPARATOR_TIME).to_string(), term.columns())
+            // The separator's time: `YYYY-MM-DD HH:MM ±HH:MM`.
+            separator_line(
+                &format!("{} {}", at.date_hh_mm(), at.offset),
+                term.columns(),
+            )
         }
         Seed::Notice => notice_line(term.columns()),
     };
@@ -232,9 +236,6 @@ pub fn seed<T: EventListener>(term: &mut Term<T>, seed: Seed, limit: usize) {
     term.clear_screen(ClearMode::All);
     term.goto(0, 0);
 }
-
-/// The separator's time: `YYYY-MM-DD HH:MM ±HH:MM`.
-const SEPARATOR_TIME: &str = "%Y-%m-%d %H:%M %:z";
 
 /// Each style flag and the attribute that sets it.
 const FLAG_ATTRIBUTES: [(StyleFlags, Attr); 7] = [
@@ -459,7 +460,6 @@ mod tests {
     use alacritty_terminal::index::Point;
     use alacritty_terminal::term::Config;
     use alacritty_terminal::vte::ansi::Processor;
-    use chrono::TimeZone;
     use micold_core::terminal_history::text::{notice_line, separator_line};
     use micold_core::terminal_history::{HistoryColor, HistoryStyle, StyleFlags, StyleRun};
 
@@ -683,14 +683,17 @@ mod tests {
     }
 
     /// The time of the start a seed is for, in the local zone.
-    fn at() -> DateTime<Local> {
-        Local.with_ymd_and_hms(2026, 10, 2, 14, 31, 0).unwrap()
+    fn at() -> LocalTime {
+        // 2026-10-02 12:31 UTC, shown at +02:00.
+        LocalTime::at(
+            1_790_944_260,
+            micold_core::local_time::UtcOffset::east(2 * 3600).unwrap(),
+        )
     }
 
     /// The separator `seed` writes for `at()` at `columns`, in the dim style.
     fn separator(columns: usize) -> LogicalLine {
-        let offset = at().format("%:z");
-        let text = separator_line(&format!("2026-10-02 14:31 {offset}"), columns);
+        let text = separator_line("2026-10-02 14:31 +02:00", columns);
         LogicalLine {
             runs: vec![run(text.chars().count() as u32, flags(StyleFlags::DIM))],
             text,

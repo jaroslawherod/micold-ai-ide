@@ -42,8 +42,6 @@ bytes = { workspace = true }
 tokio = { workspace = true }
 interprocess = { workspace = true }
 futures-util = { workspace = true }
-# Feature 490: reset times in the user's local time zone (research R11). Already the daemon's.
-chrono = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
 # `geteuid`/`setsid` for endpoint ownership verification + detached spawn, and

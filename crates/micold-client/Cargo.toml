@@ -35,8 +35,6 @@ path = "src/showcase/main.rs"
 # Feature 533 (research R2): the Jira Cloud request (`shell/jira_http.rs`) and its Basic header.
 ureq = { workspace = true }
 base64 = { workspace = true }
-# Feature 490: the local time zone offset for plan-usage reset times (research R11).
-chrono = { workspace = true }
 micold-core = { workspace = true }
 iced = { workspace = true }
 dark-light = { workspace = true }

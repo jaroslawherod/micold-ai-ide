@@ -8,7 +8,7 @@
 //!
 //! Render-free: the app bar maps [`View`] to a `UsageIndicator`.
 
-use chrono::FixedOffset;
+use micold_core::local_time::UtcOffset;
 use micold_core::plan_usage::{UsageReading, WarnPercent, DEFAULT_PLAN_USAGE_ENABLED};
 
 /// The window's plan-usage state.
@@ -69,7 +69,7 @@ impl State {
 
     /// What to draw at `now` in the zone `offset`, or `None` when nothing is shown: the switch
     /// is off, there is no reading, or none of its windows is still current (FR-009, FR-015).
-    pub fn view(&self, now: i64, offset: FixedOffset) -> Option<View> {
+    pub fn view(&self, now: i64, offset: UtcOffset) -> Option<View> {
         if !self.enabled {
             return None;
         }
@@ -85,7 +85,6 @@ impl State {
     /// window whose reset passes (research R7). Once every window has reset there is nothing left
     /// to drop, so an idle window is not woken for it.
     pub fn ticks(&self, now: i64) -> bool {
-        self.view(now, FixedOffset::east_opt(0).expect("zero offset"))
-            .is_some()
+        self.view(now, UtcOffset::UTC).is_some()
     }
 }

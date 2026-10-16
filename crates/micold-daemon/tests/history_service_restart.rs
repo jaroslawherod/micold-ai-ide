@@ -118,9 +118,9 @@ fn a1_a2_after_a_service_restart_a_start_shows_the_lines_one_separator_and_the_n
 
     let state = service_saving(project.path(), vec![session], saved.path());
     script(project.path(), "print new output\nwait\n");
-    let before = chrono::Local::now().format("%Y-%m-%d %H:%M").to_string();
+    let before = micold_core::local_time::LocalTime::now().date_hh_mm();
     state.start_session(id, LaunchMode::Fresh).expect("starts");
-    let after = chrono::Local::now().format("%Y-%m-%d %H:%M").to_string();
+    let after = micold_core::local_time::LocalTime::now().date_hh_mm();
     let lines = history_showing(&state, id, "new output");
 
     let first = at(&lines, "line 1");

@@ -4947,7 +4947,7 @@ impl DaemonState {
             Some(snapshot) if !snapshot.is_empty() => (
                 Seed::History {
                     snapshot: (*snapshot).clone(),
-                    at: chrono::Local::now(),
+                    at: micold_core::local_time::LocalTime::now(),
                 },
                 Some(snapshot),
             ),
@@ -4966,7 +4966,7 @@ impl DaemonState {
         match store.load(id) {
             LoadOutcome::History(snapshot) if !snapshot.is_empty() => Seed::History {
                 snapshot,
-                at: chrono::Local::now(),
+                at: micold_core::local_time::LocalTime::now(),
             },
             LoadOutcome::History(_) | LoadOutcome::None => Seed::None,
             LoadOutcome::Damaged(reason) => {
