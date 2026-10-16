@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #489
 - **Worktree branch**: feat/489_run-the-session-daemon-on-a-remote-host-over-ssh
 - **Started**: 2026-10-12
-- **Phase**: M3 verifying
-- **Next step**: scoped gate + Review A in its shadow, then Review B, full gate, PR
+- **Phase**: M3 PR open
+- **Next step**: orchestrator waits on CI and merges M3, then M4
 
 ## Pull requests
 
@@ -26,7 +26,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T027 | full | Remote over SSH daemon connects (add, start, Connected) | #845 | done |
 | M2 | T028–T038 | full | Remote projects, worktrees and sessions | #883 | done |
-| M3 | T039–T050 | full | Reconnect after a network drop | — | in progress |
+| M3 | T039–T050 | full | Reconnect after a network drop | PR | in review |
 | M4 | T051–T055 | full | Local work unaffected, concurrent clients | — | pending |
 | M5 | T056–T065 | full | Host picker, failure reasons, daemon management | — | pending |
 | M6 | T066–T072 | full | Version mismatch explained | — | pending |
@@ -59,6 +59,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Code A | 1 | 575310e1c7993dc68f2fafa530e09dd835035320:4ef2cba18ab0513f2d054751ad72c07e34988385 | CHANGES: 1 MAJOR (bridge hangs on stdin at runtime drop), 3 MINOR (UpdateHostKeys, ServerAlive, comment order); all fixed |
 | Conformance B | 1 | 63a975671eae50a8aec5a9d00f1b2f1f30e15cc4:b3098a8a0a49c93ac8ad31fe0dcc292ba48f1fe3 | CHANGES: 1 MAJOR (no red-before-green recorded outside core/ssh: deviation now written in cycle-log, no red run fabricated), 2 MINOR declined |
 
+| Code A M3 | 1 | 8e76f42d25b6f3cb4abdbba133fccaa69d6b52c9:cc041d5055f93d89b924ad57eb1114474c83cf85 | CHANGES: 1 MAJOR (Reconnect during outage ended the attempts; fixed with ActorSpec.resumed), 2 MINOR declined |
+| Conformance B M3 | 1 | a6a3a59724167f056348879bfc89da0d364ddddc:009e6393a452cac9a09765bfc662b80b107e19cc | CLEAN (test-ssh and test-core green), 2 MINOR noted |
+
 ## Declined review findings
 
 - M2 A F2 (log in through_json fallback): declined; the fallback is documented and a wrap failure is not reachable for serde-derived messages.
@@ -67,6 +70,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+- M3 A F2/B F1 (local runtimes show Reconnecting): FR-008 says both; kept for every runtime, spec owner may narrow.
+- M3 A F3 (generic `connection lost` reason until the first dial fails): MINOR, the reason updates on the first failed attempt.
 
 ## Handover
 
