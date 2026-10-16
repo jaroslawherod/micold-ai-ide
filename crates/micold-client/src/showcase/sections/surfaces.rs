@@ -391,8 +391,28 @@ pub fn tree_view<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, M
         }
         material::TreeView::new(items, roles)
     };
+    // Sessions an agent started (feature 551): nested under their origin, and an orphan whose
+    // origin has not appeared, each carrying the child marker.
+    let spawned = {
+        let session = |depth: u16, label: &str, child: bool, note: &str| {
+            material::TreeItem::new(depth, label.to_string(), roles.on_surface)
+                .annotation(note.to_string(), roles.on_surface_variant)
+                .child(child)
+                .on_press(Message::NoOp)
+        };
+        material::TreeView::new(
+            vec![
+                session(1, samples::LABEL, false, "claude"),
+                session(2, "background agent", true, "claude"),
+                session(3, "its helper", true, "claude"),
+                session(1, "orphaned agent", true, "origin pending, claude"),
+            ],
+            roles,
+        )
+    };
     arrange(
         vec![
+            posed("sessions started by an agent", spawned, roles),
             posed("run group, expanded", group(true), roles),
             posed("run group, collapsed", group(false), roles),
             posed(

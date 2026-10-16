@@ -25,3 +25,9 @@ Append only.
 - Correction after the rebase onto feature 776: `PROTOCOL_VERSION` is 42 (not 41) and `schema_hash` is pinned to it; `DaemonState::create_session` has no `origin` argument (FR-019 amended: the tool server records none), so the call sites keep their three arguments.
 - Correction after the merge of main (feature 776's soft limit took 42): the origin bump is 42 to 43; `PROTOCOL_VERSION` is 43.
 - Correction after the second merge of main (feature 552's agents took 43): the origin bump is 44 to 45 after 776 took 44; `PROTOCOL_VERSION` is 45.
+
+## M2 (2026-10-16)
+
+- Tests written with the code in one pass (U12 in origin.rs, U13 in tests/sidebar_tree.rs, U14 in layout_snapshot.rs); no per-behaviour red output captured, as in M1.
+- Green: `cargo test -p micold-core --lib origin`, `-p micold-client --lib sidebar`, `--test sidebar_tree --test layout_snapshot --test features_sidebar`.
+- The child marker is the word `agent` leading the row annotation (text, not a glyph), so row height is unchanged.

@@ -65,21 +65,21 @@ description: "Task list for the session tree of agent-spawned sessions (#551)"
 
 ### Tests
 
-- [ ] T017 [P] [US1] Write failing unit tests for `SessionTree` in `crates/micold-core/src/origin.rs`: each session appears exactly once (FR-008); nested origin yields depth 2+ (US1.2); a cycle breaks at the first repeat with the repeated member as a root and the build terminates; children and roots keep catalog order; an origin not in the input is `Orphan::Pending` when status `known` and `Orphan::Removed` when status `removed` [U12] [A2]
-- [ ] T018 [P] [US1] Write failing reducer tests in `crates/micold-client/tests/sidebar_tree.rs`: `worktree_tree` nests children (FR-003, FR-004); a session without origin is exactly as today (FR-005, SC-003); orphans are top-level at depth 1 with "origin pending"/"origin removed" (FR-016, US2.3); a pending child moves under its origin when the origin appears; the Default group nests the same way; a child's select, stop, resume and delete messages are the same as a top-level session's (FR-007) [U13] [A1] [A2] [A3] [A7]
-- [ ] T019 [P] [US1] Write failing layout-gate rows in `crates/micold-client/tests/layout_snapshot.rs`: every child row, orphans included, carries the child marker and no user-started top-level row does (FR-007, SC-004) [U14] [A4]
+- [x] T017 [P] [US1] Write failing unit tests for `SessionTree` in `crates/micold-core/src/origin.rs`: each session appears exactly once (FR-008); nested origin yields depth 2+ (US1.2); a cycle breaks at the first repeat with the repeated member as a root and the build terminates; children and roots keep catalog order; an origin not in the input is `Orphan::Pending` when status `known` and `Orphan::Removed` when status `removed` [U12] [A2]
+- [x] T018 [P] [US1] Write failing reducer tests in `crates/micold-client/tests/sidebar_tree.rs`: `worktree_tree` nests children (FR-003, FR-004); a session without origin is exactly as today (FR-005, SC-003); orphans are top-level at depth 1 with "origin pending"/"origin removed" (FR-016, US2.3); a pending child moves under its origin when the origin appears; the Default group nests the same way; a child's select, stop, resume and delete messages are the same as a top-level session's (FR-007) [U13] [A1] [A2] [A3] [A7]
+- [x] T019 [P] [US1] Write failing layout-gate rows in `crates/micold-client/tests/layout_snapshot.rs`: every child row, orphans included, carries the child marker and no user-started top-level row does (FR-007, SC-004) [U14] [A4]
 
 ### Implementation
 
-- [ ] T020 [US1] Implement `SessionTree` (derived, never stored; Root / Child / Orphan{Pending|Removed}) in `crates/micold-core/src/origin.rs` [U12]
-- [ ] T021 [US1] Build the nesting from `SessionTree` in `crates/micold-client/src/features/sidebar.rs` (`worktree_tree` and the Default group), depth-first in catalog order [U13]
-- [ ] T022 [US1] Add the child-marker builder method to `TreeItem` in `crates/micold-client/src/ui/material/tree_view.rs` and an entry in the component showcase (Constitution VIII) [U14]
-- [ ] T023 [US1] Recurse over children in `crates/micold-client/src/ui/sidebar.rs` (`group_items`, `build_default_item`, `session_tree_item(depth, ..)`), marker on children, muted annotation on orphans [U13] [U14]
-- [ ] T024 [US1] Add the session-tree section to `docs/user-guide/worktrees-and-sessions.md` (what nests, markers, removed origin, no manual reparenting) [U13]
+- [x] T020 [US1] Implement `SessionTree` (derived, never stored; Root / Child / Orphan{Pending|Removed}) in `crates/micold-core/src/origin.rs` [U12]
+- [x] T021 [US1] Build the nesting from `SessionTree` in `crates/micold-client/src/features/sidebar.rs` (`worktree_tree` and the Default group), depth-first in catalog order [U13]
+- [x] T022 [US1] Add the child-marker builder method to `TreeItem` in `crates/micold-client/src/ui/material/tree_view.rs` and an entry in the component showcase (Constitution VIII) [U14]
+- [x] T023 [US1] Recurse over children in `crates/micold-client/src/ui/sidebar.rs` (`group_items`, `build_default_item`, `session_tree_item(depth, ..)`), marker on children, muted annotation on orphans [U13] [U14]
+- [x] T024 [US1] Add the session-tree section to `docs/user-guide/worktrees-and-sessions.md` (what nests, markers, removed origin, no manual reparenting) [U13]
 
 ### Outer loop
 
-- [ ] T039 [US1] Run the sidebar acceptance behaviors (`sidebar_tree`, `layout_snapshot`) and confirm each is green: [A1] [A2] [A3] [A4] [A7]
+- [x] T039 [US1] Run the sidebar acceptance behaviors (`sidebar_tree`, `layout_snapshot`) and confirm each is green: [A1] [A2] [A3] [A4] [A7]
 
 ## Phase 5: User Story 3 (Priority: P2)
 

@@ -331,9 +331,19 @@ impl WorktreeNode {
         micold_core::occupancy::main_session(&self.sessions, &self.location())
     }
 
-    /// The sessions in the order the expander lists them: the main one first, then the helpers.
+    /// The sessions in the order the expander lists them: the main one first, then the helpers,
+    /// each followed by the sessions it started (feature 551).
     pub fn listed_sessions(&self) -> Vec<&Session> {
-        main_first(&self.sessions, self.main_session())
+        session_rows(&self.sessions, self.main_session())
+            .into_iter()
+            .map(|row| row.session)
+            .collect()
+    }
+
+    /// [`listed_sessions`](Self::listed_sessions) with each session's depth below the location and
+    /// its place in the tree (feature 551, FR-003, FR-004, FR-016).
+    pub fn session_rows(&self) -> Vec<SessionRow<'_>> {
+        session_rows(&self.sessions, self.main_session())
     }
 
     /// The worktree's state for its row's state icon (feature 905, FR-001, FR-004): taken from
@@ -359,9 +369,18 @@ impl DefaultNode {
         micold_core::occupancy::main_session(&self.sessions, &SessionLocation::Default)
     }
 
-    /// The sessions in the order the expander lists them: the main one first.
+    /// The sessions in the order the expander lists them: the main one first, each followed by the
+    /// sessions it started (feature 551).
     pub fn listed_sessions(&self) -> Vec<&Session> {
-        main_first(&self.sessions, self.main_session())
+        session_rows(&self.sessions, self.main_session())
+            .into_iter()
+            .map(|row| row.session)
+            .collect()
+    }
+
+    /// [`listed_sessions`](Self::listed_sessions) with depth and place (feature 551).
+    pub fn session_rows(&self) -> Vec<SessionRow<'_>> {
+        session_rows(&self.sessions, self.main_session())
     }
 
     /// The project root's state for the Default row's state icon, by the worktree rows' rules
@@ -371,11 +390,34 @@ impl DefaultNode {
     }
 }
 
-/// `sessions` with the one `main` first, the rest in their order.
-fn main_first(sessions: &[Session], main: Option<SessionId>) -> Vec<&Session> {
+/// One session row of a location: the session, its depth below the location's own sessions
+/// (0 = listed directly) and its place in the origin tree (feature 551).
+#[derive(Debug, Clone, Copy)]
+pub struct SessionRow<'a> {
+    pub session: &'a Session,
+    pub depth: usize,
+    pub place: micold_core::origin::TreePlace,
+}
+
+/// `sessions` as the origin tree, the one `main` first among the roots, the rest in their order,
+/// children after the session that started them (feature 551).
+fn session_rows(sessions: &[Session], main: Option<SessionId>) -> Vec<SessionRow<'_>> {
     let (first, rest): (Vec<&Session>, Vec<&Session>) =
         sessions.iter().partition(|s| Some(s.id) == main);
-    first.into_iter().chain(rest).collect()
+    let ordered: Vec<&Session> = first.into_iter().chain(rest).collect();
+    let input: Vec<_> = ordered.iter().map(|s| (s.id, s.origin)).collect();
+    micold_core::origin::SessionTree::build(&input)
+        .rows
+        .into_iter()
+        .filter_map(|row| {
+            let session = ordered.iter().find(|s| s.id == row.id)?;
+            Some(SessionRow {
+                session,
+                depth: row.depth,
+                place: row.place,
+            })
+        })
+        .collect()
 }
 
 impl SidebarEntry {
