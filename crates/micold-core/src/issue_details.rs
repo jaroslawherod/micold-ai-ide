@@ -10,7 +10,9 @@ use std::time::{Duration, Instant};
 
 use serde_json::{json, Map, Value};
 
-use crate::github::{answer_of, graphql_error, visible_words, GithubRepo, IssueLoadError};
+use crate::github::{
+    answer_of, graphql_error, graphql_error_at, visible_words, GithubRepo, IssueLoadError,
+};
 use crate::process::RunOutcome;
 
 /// How long a details read may take (FR-011): the bound 550 sets for the issue lookup. The daemon's
@@ -877,7 +879,7 @@ fn issue_node(json: &Value) -> Result<&Value, IssueLoadError> {
     }
     let issue = &repository["issue"];
     if issue.is_null() {
-        return Err(graphql_error(json).unwrap_or_else(no_issue));
+        return Err(graphql_error_at(json, &["repository", "issue"]).unwrap_or_else(no_issue));
     }
     Ok(issue)
 }

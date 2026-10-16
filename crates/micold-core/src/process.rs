@@ -133,6 +133,10 @@ fn kill_process_group(pid: u32) {
 /// they have. Covers a descendant that left the group and still holds a pipe.
 const READER_GRACE: Duration = Duration::from_millis(500);
 
+/// How long past its deadline a bounded run may still return: one poll, then [`READER_GRACE`] for
+/// the pipes. A caller that waits for a run by the same deadline gives the run this much less.
+pub const RUN_OVERRUN: Duration = POLL_INTERVAL.saturating_add(READER_GRACE);
+
 /// Run `cmd`, waiting up to `timeout` for it to exit (research R2: `spawn()` + `try_wait()`
 /// poll, not the blocking `.output()`). On Unix, `cmd` is spawned in its own process group so
 /// that on timeout — or even after a natural exit — the ENTIRE group (not just the top-level
