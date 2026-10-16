@@ -1118,7 +1118,10 @@ mod tests {
         let after = actor_specs(&registry, &states, dir, None, false);
         assert_eq!(after.len(), 1);
         assert_ne!(after[0], before[0], "a new epoch restarts the one actor");
-        assert!(!before[0].resumed && after[0].resumed, "the restart continues an established link");
+        assert!(
+            !before[0].resumed && after[0].resumed,
+            "the restart continues an established link"
+        );
         assert_eq!(after[0].key, before[0].key);
 
         states.apply(id, DaemonEvent::GiveUp);
