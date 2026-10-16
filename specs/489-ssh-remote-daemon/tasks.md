@@ -98,11 +98,11 @@ rootless `sshd` and are off by default (`mise run test-ssh`).
 **Goal**: no remote state or failure touches a local daemon or its sessions.
 **Independent test**: with a connected local daemon, make the remote unreachable and keep typing locally.
 
-- [ ] T051 [P] [US4] Test a remote daemon in every non-connected state beside a connected local one: local `DaemonView` and outbox untouched, in `client/daemon.rs`
-- [ ] T052 [P] [US4] Test that app start never awaits a remote dial (`DaemonStates::at_launch`) in `core/daemons.rs` and `client/shell/daemons.rs`
-- [ ] T053 [US4] Write `daemon/tests/ssh_real_concurrent.rs`: two bridges on one daemon see the same sessions, input reaches one session, one client leaving leaves the other; local session unaffected while the remote is cut
-- [ ] T054 [US4] Fix any cross-daemon coupling the tests find and spawn every remote dial asynchronously at launch in `client/daemon.rs` and `client/shell/daemons.rs`
-- [ ] T055 [US4] Document the isolation guarantee in `docs/user-guide/remote-daemons.md`
+- [x] T051 [P] [US4] Test a remote daemon in every non-connected state beside a connected local one: local `DaemonView` and outbox untouched, in `client/daemon.rs`
+- [x] T052 [P] [US4] Test that app start never awaits a remote dial (`DaemonStates::at_launch`) in `core/daemons.rs` and `client/shell/daemons.rs`
+- [x] T053 [US4] Write `daemon/tests/ssh_real_concurrent.rs`: two bridges on one daemon see the same sessions, input reaches one session, one client leaving leaves the other; local session unaffected while the remote is cut
+- [x] T054 [US4] Fix any cross-daemon coupling the tests find and spawn every remote dial asynchronously at launch in `client/daemon.rs` and `client/shell/daemons.rs`
+- [x] T055 [US4] Document the isolation guarantee in `docs/user-guide/remote-daemons.md`
 
 ## Phase 6: User Story 3 - See and manage the connection (P2)
 

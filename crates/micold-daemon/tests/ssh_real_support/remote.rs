@@ -158,7 +158,13 @@ pub fn stand_in_repo(host: &super::sshd::Sshd, claude_script: &str) -> PathBuf {
     std::fs::set_permissions(&claude, std::os::unix::fs::PermissionsExt::from_mode(0o755))
         .expect("executable");
     let repo = host.remote_home.join("repo");
-    std::fs::create_dir_all(&repo).expect("repo directory");
+    git_repo_at(&repo);
+    repo
+}
+
+/// A git repository with one commit at `repo`.
+pub fn git_repo_at(repo: &std::path::Path) {
+    std::fs::create_dir_all(repo).expect("repo directory");
     for args in [
         vec!["init", "-q", "-b", "main"],
         vec![
@@ -175,10 +181,9 @@ pub fn stand_in_repo(host: &super::sshd::Sshd, claude_script: &str) -> PathBuf {
     ] {
         let status = std::process::Command::new("git")
             .args(&args)
-            .current_dir(&repo)
+            .current_dir(repo)
             .status()
             .expect("run git");
         assert!(status.success(), "git {args:?}");
     }
-    repo
 }

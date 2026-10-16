@@ -1129,4 +1129,52 @@ mod tests {
         states.apply(id, DaemonEvent::Reconnect);
         assert_eq!(actor_specs(&registry, &states, dir, None, false).len(), 1);
     }
+
+    /// T051 (FR-013): a remote daemon in every state but connected changes nothing of a connected
+    /// local daemon: its state, its outbox handle and the actor that serves it.
+    #[test]
+    fn a_remote_in_any_state_leaves_a_connected_local_daemon_untouched() {
+        use crate::links::DaemonLinks;
+        let dir = std::path::Path::new("/nonexistent");
+        let (mut registry, remote) = ssh_registry();
+        let local = registry.add("Local", DaemonRuntime::Host, true).unwrap();
+        let outbox = crate::daemon::Outbox::new(mpsc::unbounded().0);
+        let refused = DaemonEvent::Refused {
+            client: "1.0".into(),
+            daemon: "2.0".into(),
+        };
+        let remote_paths: [Vec<DaemonEvent>; 6] = [
+            vec![],
+            vec![DaemonEvent::Connected, DaemonEvent::Lost("eof".into())],
+            vec![DaemonEvent::StartFailed("no route".into())],
+            vec![refused],
+            vec![
+                DaemonEvent::Connected,
+                DaemonEvent::Lost("eof".into()),
+                DaemonEvent::GiveUp,
+            ],
+            vec![DaemonEvent::Stop],
+        ];
+        let mut baseline = DaemonLinks::default();
+        baseline.insert(local, DaemonState::Starting);
+        assert!(baseline.connected(local, outbox.clone()));
+        let local_spec = |links: &DaemonLinks| {
+            actor_specs(&registry, links.states(), dir, None, false)
+                .into_iter()
+                .find(|s| s.key.id == local)
+        };
+        let expected = local_spec(&baseline).expect("the local daemon has an actor");
+
+        for events in remote_paths {
+            let mut links = baseline.clone();
+            links.insert(remote, DaemonState::Starting);
+            for event in events {
+                links.apply(remote, event);
+            }
+            assert_ne!(links.state(remote), Some(&DaemonState::Connected));
+            assert_eq!(links.state(local), Some(&DaemonState::Connected));
+            assert_eq!(links.outbox(local), Some(&outbox), "the same handle");
+            assert_eq!(local_spec(&links).as_ref(), Some(&expected));
+        }
+    }
 }

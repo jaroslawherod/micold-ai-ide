@@ -54,3 +54,19 @@ output is complete.
 Choose **Stop trying** to end the attempts: the row then shows `not connected to dev@host:
 attempts stopped` and nothing is dialled. **Reconnect** dials again at once and starts the delays
 over. A session whose daemon was stopped, or restarted without it, shows `lost to daemon <name>`.
+
+## Your local work is not affected
+
+A remote daemon that is starting, reconnecting, unreachable, on a different version or failed never
+changes your local daemon, its worktrees, sessions or terminals. Each daemon has its own
+connection, so a remote that is down only changes its own row.
+
+When Micold starts, your local projects open at once. A remote daemon set to **Connect when the
+application starts** is dialled in the background and its row shows **Starting** until it answers
+or shows why it did not; the window never waits for it.
+
+## Several Micold windows on one host
+
+Several computers or windows can connect to the same remote daemon. Each sees the same sessions,
+what you type in one goes only to the session you typed it in, and closing one leaves the others
+connected.
