@@ -56,8 +56,9 @@ pub fn encode_png(image: &Rgba) -> Result<Vec<u8>, String> {
     // a partly transparent pixel is rounded (coarsely at low alpha) and a fully transparent
     // pixel loses its colour. Opaque pixels are exact.
     let mut data = Vec::with_capacity(image.bytes.len());
-    for px in image.bytes.chunks_exact(4) {
-        let c = tiny_skia::ColorU8::from_rgba(px[0], px[1], px[2], px[3]).premultiply();
+    let (pixels, _) = image.bytes.as_chunks::<4>();
+    for &[r, g, b, a] in pixels {
+        let c = tiny_skia::ColorU8::from_rgba(r, g, b, a).premultiply();
         data.extend_from_slice(&[c.red(), c.green(), c.blue(), c.alpha()]);
     }
     let size = tiny_skia::IntSize::from_wh(w, h).ok_or("the image has no pixels")?;
