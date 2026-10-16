@@ -22,7 +22,7 @@
 use crate::app::Message;
 use crate::features::session::CliAvailability;
 use crate::features::settings::Msg as SettingsMsg;
-use crate::features::settings::{ScriptCheck, SettingsDraft, SettingsSection};
+use crate::features::settings::{missing_cli_notice, ScriptCheck, SettingsDraft, SettingsSection};
 use crate::features::window::FieldId;
 use crate::ui::material::{self, Button, Scrollable, Section, SectionList, SurfaceKind};
 use crate::ui::settings::{appearance, daemons, environment, github, jira, terminal};
@@ -103,6 +103,7 @@ pub fn view<'a>(
             let facts = daemons::MachineFacts {
                 draft: Some(&draft.daemon),
                 legacy_default: daemons.1.legacy_default,
+                missing_cli: missing_cli_notice(availability),
             };
             daemons::view(daemons.0, daemons.1, facts, focused, r)
         }

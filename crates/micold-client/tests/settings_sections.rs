@@ -34,6 +34,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
+use micold_client::features::settings::SettingsSection;
 
 /// Settings this feature renders in a later phase, and the task that does it. Keyed by the same
 /// dotted path the persisted shape produces.
@@ -443,6 +444,60 @@ fn no_settings_section_renders_the_legacy_daemon_block() {
         "a Settings section renders the daemon block again: {stray:?}\n\
          It is chosen in the Daemons form (feature 804)."
     );
+}
+
+/// 804 FR-002: the rail lists no Session service entry.
+#[test]
+fn the_rail_has_no_session_service_entry() {
+    let labels: Vec<&str> = SettingsSection::ALL.iter().map(|s| s.label()).collect();
+    assert!(
+        !labels.iter().any(|l| l.contains("Session service")),
+        "the rail still lists it: {labels:?}"
+    );
+    assert!(labels.contains(&"Daemons"), "{labels:?}");
+}
+
+/// 804 FR-006, FR-009, SC-002, SC-004: nothing the user reads points at the removed section, in the
+/// user guide or in a source string.
+#[test]
+fn nothing_points_at_the_removed_session_service_section() {
+    const STALE: [&str; 5] = [
+        "Settings \\u{203a} Session service",
+        "Settings → Session service",
+        "Settings › Session service",
+        "**Session service**",
+        "#session-service",
+    ];
+    let root = client_dir().join("../..");
+    let mut files = Vec::new();
+    let mut stack = vec![root.join("docs"), root.join("crates")];
+    while let Some(dir) = stack.pop() {
+        for entry in fs::read_dir(&dir).unwrap().flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                stack.push(path);
+            } else if matches!(
+                path.extension().and_then(|e| e.to_str()),
+                Some("md" | "rs")
+            ) && !path.ends_with("tests/settings_sections.rs")
+                && !path.ends_with("tests/sandbox_limits.rs")
+            {
+                files.push(path);
+            }
+        }
+    }
+    let stale: Vec<String> = files
+        .iter()
+        .flat_map(|path| {
+            let text = read(path);
+            STALE
+                .iter()
+                .filter(|needle| text.contains(**needle))
+                .map(|needle| format!("{}: {needle}", path.display()))
+                .collect::<Vec<_>>()
+        })
+        .collect();
+    assert!(stale.is_empty(), "stale references: {stale:#?}");
 }
 
 // ---------------------------------------------------------------------------------------------

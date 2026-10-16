@@ -178,7 +178,7 @@ The sessions themselves are not. They come back listed as interrupted, with thei
 click resumes each one.
 
 If you need more than that, run the session service in a container instead of on the computer — the
-setting is in **Settings › Session service**. The container runtime keeps it going across logout and
+setting is in **Settings › Daemons**. The container runtime keeps it going across logout and
 reboot, because the runtime is itself a service the system already keeps running. See
 [the session service guide](../daemon.md#surviving-logout-run-the-service-in-a-container) for
 what that placement changes.

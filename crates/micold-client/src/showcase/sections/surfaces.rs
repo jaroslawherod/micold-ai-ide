@@ -468,7 +468,7 @@ pub fn section_list<'a>(showcase: &'a Showcase, roles: Roles, _i: usize) -> Elem
         material::Section::new("Appearance", Message::SectionShown(0)),
         material::Section::new("Terminal", Message::SectionShown(1)),
         material::Section::new("Environment", Message::SectionShown(2)),
-        material::Section::new("Session service", Message::SectionShown(3)),
+        material::Section::new("Daemons", Message::SectionShown(3)),
     ];
     // The settings surface's own four icons, so the page shows the glyphs a reader will actually
     // meet rather than four stand-ins that happen to be distinguishable.
@@ -476,7 +476,7 @@ pub fn section_list<'a>(showcase: &'a Showcase, roles: Roles, _i: usize) -> Elem
         Icon::LightMode,
         Icon::RegularTerminal,
         Icon::AiCli,
-        Icon::SessionService,
+        Icon::Daemons,
     ]) {
         row.icon = Some(icon);
     }

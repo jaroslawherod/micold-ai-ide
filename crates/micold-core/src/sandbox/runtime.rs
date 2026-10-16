@@ -375,7 +375,7 @@ impl RuntimeError {
     pub fn remedy(&self) -> String {
         match self {
             RuntimeError::NotInstalled { kind } => {
-                format!("Install {kind}, or choose another runtime in Settings → Session service.")
+                format!("Install {kind}, or choose another runtime in Settings → Daemons.")
             }
             RuntimeError::NotRunning { kind } => {
                 format!("Start {kind}, then retry.")
@@ -392,7 +392,7 @@ impl RuntimeError {
                 format!("Upgrade the runtime to {needed} or newer.")
             }
             RuntimeError::ImageNotFound { .. } => {
-                "Check the image reference in Settings → Session service, or import an image \
+                "Check the image reference in Settings → Daemons, or import an image \
                  archive."
                     .to_string()
             }
@@ -401,14 +401,14 @@ impl RuntimeError {
                     .to_string()
             }
             RuntimeError::PortUnavailable { .. } => {
-                "Stop whatever holds the port, or choose another in Settings → Session service."
+                "Stop whatever holds the port, or choose another in Settings → Daemons."
                     .to_string()
             }
             RuntimeError::MountRejected { .. } => {
                 "Move the project to a path the runtime can share, or unregister it.".to_string()
             }
             RuntimeError::LimitRejected { field, .. } => {
-                format!("Clear the {field} limit in Settings → Session service, then retry.")
+                format!("Clear the {field} limit in Settings → Daemons, then retry.")
             }
             RuntimeError::SandboxStopped { .. } => {
                 "Restart the sandbox. Sessions resume from where they were — their processes \
@@ -630,6 +630,30 @@ mod tests {
         let before = profile.clone();
         let _ = reconcile(&profile, &caps(LimitSupport::unsupported("no")));
         assert_eq!(profile, before);
+    }
+
+    #[test]
+    fn hints_that_point_at_a_setting_name_the_daemons_manager() {
+        // 804 FR-006: the runtime, image, port and limit hints send the user to Settings → Daemons,
+        // and no user-facing hint names the removed Session service section.
+        let pointing = [
+            RuntimeError::NotInstalled {
+                kind: RuntimeKind::Docker,
+            },
+            RuntimeError::ImageNotFound {
+                reference: "x".into(),
+            },
+            RuntimeError::PortUnavailable { port: 7727 },
+            RuntimeError::LimitRejected {
+                field: "storage".into(),
+                detail: "d".into(),
+            },
+        ];
+        for e in pointing {
+            let remedy = e.remedy();
+            assert!(remedy.contains("Settings → Daemons"), "{remedy:?}");
+            assert!(!remedy.contains("Session service"), "{remedy:?}");
+        }
     }
 
     #[test]

@@ -2,8 +2,7 @@
 //! to start, stop, reconnect, edit and remove it (feature 491, M3: US3, FR-010 to FR-015).
 //!
 //! A container daemon's form carries its runtime, image, credential shares, network, limits and
-//! survive-logout (feature 804), saved by the form's own save with its restart confirmation. The
-//! Session service section still edits the legacy block until it is removed.
+//! survive-logout (feature 804), saved by the form's own save with its restart confirmation.
 //!
 //! A row says what a daemon runs in as a plain label (FR-015): nothing here branches on the kind
 //! of runtime except the form's container fields.
@@ -235,12 +234,14 @@ fn error_of(state: &State, field: &str) -> Option<String> {
 }
 
 /// What the machine says about the running container, which only the legacy default daemon is.
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct MachineFacts<'a> {
     /// The settings draft's seed of the sandbox's probed capabilities and unshared sign-in.
     pub draft: Option<&'a DaemonDraft>,
     /// The daemon those facts describe.
     pub legacy_default: Option<DaemonId>,
+    /// What a session would not find in the running image (FR-023b), shown under *Image reference*.
+    pub missing_cli: Option<String>,
 }
 
 fn form<'a>(
@@ -313,7 +314,13 @@ fn form<'a>(
                 error_of(state, "storage"),
             ],
         };
-        for control in container_fields::groups(&view, errors, None, focused, roles)
+        for control in container_fields::groups(
+            &view,
+            errors,
+            machine.and(facts.missing_cli.clone()),
+            focused,
+            roles,
+        )
         {
             fields = fields.push(control);
         }

@@ -131,7 +131,7 @@ impl StoppedByLimit {
     pub fn message(&self) -> String {
         format!(
             "The session {} and was stopped by the sandbox. \u{2018}{}\u{2019} is set to {} \
-             \u{2014} raise it in Settings \u{203a} Session service \u{203a} Limits, or clear it \
+             \u{2014} raise it in Settings \u{203a} Daemons, or clear it \
              to use the runtime\u{2019}s own default.",
             self.limit.what_happened(),
             self.limit.setting(),

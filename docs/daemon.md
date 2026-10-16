@@ -427,7 +427,7 @@ not lost; they come back as **interrupted-resumable** the next time you open the
 after any other service restart (see [Interrupted-resumable sessions](#interrupted-resumable-sessions-after-any-service-restart)).
 
 **A service running directly on your computer does not survive logout, on any platform.** The app
-does not offer to make it. Settings → Session service still has a *Keep sessions running after I
+does not offer to make it. A container daemon's form in Settings → Daemons still has a *Keep sessions running after I
 sign out* checkbox, but it is the **container's** setting: with the direct placement selected the
 control says plainly that it cannot be honoured there, rather than quietly doing nothing.
 
@@ -441,7 +441,7 @@ there. That sentence is the one `docs/user-guide/install-macos.md` and
 
 Run the session service **in a container**. A container runtime is a service the platform already
 keeps running across logout and reboot, so a sandbox with its keep-running setting on comes back on
-its own — on Linux, macOS and Windows alike. Turn it on in Settings → Session service; see
+its own — on Linux, macOS and Windows alike. Turn it on in Settings → Daemons; see
 [Running the session service in a container](user-guide/sandboxed-daemon.md) for what it can and
 cannot see, which runtimes work, and what to do when it will not start.
 
@@ -474,8 +474,8 @@ assumed rather than described.
 This section is the *model*. For turning the container placement on, what it can and cannot see,
 which runtimes work, and what to do when it will not start, see
 [Running the session service in a container](user-guide/sandboxed-daemon.md); the switch itself
-lives in Settings → Session service, described in
-[Settings](user-guide/settings.md#session-service).
+lives in Settings → Daemons, described in
+[Settings](user-guide/settings.md#container-daemons).
 
 | Placement | What it is | Reached over |
 |---|---|---|

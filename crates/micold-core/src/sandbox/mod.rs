@@ -989,7 +989,7 @@ impl MissingCredential {
     pub fn message(&self) -> String {
         format!(
             "The sandbox has no {} of yours, so {} could not complete. Share it under \
-             Settings → Session service if you want the sandbox to use it.",
+             Settings → Daemons if you want the sandbox to use it.",
             self.share.label().to_lowercase(),
             self.operation
         )

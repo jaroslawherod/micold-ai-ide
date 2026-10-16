@@ -531,3 +531,43 @@ fn the_repository_step_refuses_what_it_cannot_ask_and_names_a_connected_daemons_
     assert!(state.repository_error.is_none());
     assert!(!state.repositories.contains_key(&id), "the field empties");
 }
+
+// Feature 804, M2: the Daemons rail row's Sharing badge follows the daemons, from any section.
+
+#[test]
+fn the_sharing_badge_follows_the_stored_daemons_and_the_open_form() {
+    use daemons::Msg;
+    let mut w = World::new();
+    let mut state = State::default();
+    let boxed = w.boxed;
+    assert!(
+        !daemons::views(&state, &w.model()).shares_credentials,
+        "no daemon shares, so no badge"
+    );
+
+    // The open form counts before it is saved.
+    daemons::begin_edit(&mut state, &w.model(), boxed);
+    send(
+        &mut state,
+        &mut w,
+        Msg::CredentialToggled(CredentialShare::GitConfig, true),
+    );
+    assert!(daemons::views(&state, &w.model()).shares_credentials);
+
+    // Saved, it counts with the form closed.
+    send(&mut state, &mut w, Msg::Saved);
+    state.draft = None;
+    assert!(
+        daemons::views(&state, &w.model()).shares_credentials,
+        "a stored daemon shares, so the badge stays"
+    );
+
+    // The form replaces its own daemon's stored shares: unticking in the form clears the badge.
+    daemons::begin_edit(&mut state, &w.model(), boxed);
+    send(
+        &mut state,
+        &mut w,
+        Msg::CredentialToggled(CredentialShare::GitConfig, false),
+    );
+    assert!(!daemons::views(&state, &w.model()).shares_credentials);
+}

@@ -35,7 +35,7 @@ const TOLERANCE: f32 = 0.5;
 /// The supporting line under the Default AI CLI select.
 const CLI_SUPPORTING: &str = "Used for new sessions unless you choose otherwise";
 
-/// The supporting line under Image reference, in the Session service section.
+/// The supporting line under Image reference, in the open Daemons form.
 const IMAGE_SUPPORTING: &str = "A digest or an exact tag; a moving tag cannot be reported in a bug";
 
 fn settings_showing(section: SettingsSection, source: AvailabilitySource) -> State {
@@ -64,7 +64,27 @@ fn settings_showing_in(
         section,
         ..SettingsDraft::default()
     });
-    state.window.window_size = (1280, 900);
+    if section == SettingsSection::Daemons {
+        // The image note lives in the container daemon's form (804): the one the running service
+        // is, opened for editing.
+        let id = state
+            .settings
+            .daemons
+            .add(
+                "Box",
+                micold_core::daemons::DaemonRuntime::Container(
+                    micold_core::daemons::ContainerSettings {
+                        container_name: "box-ctr".into(),
+                        port: 7001,
+                        profile: Default::default(),
+                    },
+                ),
+                false,
+            )
+            .unwrap();
+        let _ = state.update_daemons(micold_client::features::daemons::Msg::EditOpened(id));
+    }
+    state.window.window_size = (1280, 2400);
     state
 }
 
@@ -81,7 +101,10 @@ fn painted(state: &State) -> Vec<(String, f32)> {
         &ConnectionStatus::Connected,
         &micold_client::features::sandbox::Sandbox::default(),
     );
-    lay::painted_text(element, &mut renderer)
+    // Tall enough for a daemon list and the form under it: the image note is below the fold of the
+    // canonical window.
+    lay::painted_text_settled_at(element, &mut renderer, iced::Size::new(1280.0, 2400.0))
+        .0
         .into_iter()
         .map(|drawn| (drawn.content, drawn.origin.x))
         .collect()
@@ -189,7 +212,7 @@ fn each_section_under_test_is_the_one_on_screen() {
     ));
     assert!(
         daemon.iter().any(|(c, _)| c == IMAGE_SUPPORTING),
-        "Session service must be the shown section — painted: {:?}",
+        "The Daemons form must be the shown section — painted: {:?}",
         daemon.iter().map(|(c, _)| c).collect::<Vec<_>>()
     );
 }
