@@ -109,6 +109,9 @@ const OWNERS: &[(&str, &str)] = &[
     // Feature 491: which daemon each worktree runs on. Written only by the shell
     // (`Workspace::bind`, after a create); read for the sidebar label and the form.
     ("workspace.bindings", "worktree"),
+    // Feature 533: the issue source the add-worktree dialog last used in a project; written by the
+    // root's interpretation of `IssueSourceChosen`, read when the dialog opens.
+    ("workspace.issue_sources", "worktree"),
 ];
 
 /// Cross-feature writes that exist today, each with the feature that performs it and the path it
@@ -255,6 +258,13 @@ const CORE_MEDIATED: &[(&str, &str, &str, &str)] = &[
     (
         "project",
         "workspace.bindings",
+        "features/project.rs::forget_confirmed",
+        "Workspace::forget",
+    ),
+    // Feature 533: so does the remembered issue source (FR-016).
+    (
+        "project",
+        "workspace.issue_sources",
         "features/project.rs::forget_confirmed",
         "Workspace::forget",
     ),

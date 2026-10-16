@@ -82,3 +82,25 @@ fn a_missing_state_file_is_refused_rather_than_created() {
         .save_issue_source(&PathBuf::from(PROJECT), IssueProvider::Github)
         .is_err());
 }
+
+#[test]
+fn a_source_this_build_cannot_read_is_no_memory_and_does_not_fail_the_file() {
+    let (_d, store) = store();
+    store.save(&workspace()).unwrap();
+    std::fs::write(
+        state_path(&store),
+        r#"{"schema_version":1,"issue_source":"gitlab","worktree_display_names":{"wt":"Kept"}}"#,
+    )
+    .unwrap();
+    let out = store.load();
+    assert_eq!(out.status, LoadStatus::Loaded);
+    assert!(out.workspace.issue_sources.is_empty());
+    assert!(!out
+        .workspace
+        .unreadable_projects
+        .contains(&PathBuf::from(PROJECT)));
+    assert_eq!(
+        out.workspace.worktree_names[&PathBuf::from(PROJECT)]["wt"],
+        "Kept"
+    );
+}
