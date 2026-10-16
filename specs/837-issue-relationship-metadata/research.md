@@ -142,7 +142,7 @@ Each entry: Decision, Rationale, Alternatives considered.
 
 ## R10. Sidebar extensibility (not planned)
 
-- **Decision**: no sidebar change (spec US2-6, pending user confirmation). The model sits in core
+- **Decision**: no sidebar change (spec US2-6, decided by the user, 2026-10-16). The model sits in core
   with a pure `is_blocked()` and no dependence on the form, so a later sidebar marker needs only a
   holder for an `IssueDetails` per worktree and a refresh policy. The read and the model would not
   change.

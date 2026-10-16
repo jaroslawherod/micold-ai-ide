@@ -32,5 +32,5 @@
 ## Notes
 
 - The one [NEEDS CLARIFICATION] marker (User Story 2, scenario 6: details on the created worktree)
-  was resolved in clarify: form only, sidebar row unchanged (orchestrator default, pending user
-  confirmation).
+  was resolved in clarify: form only, sidebar row unchanged (decided by the user,
+  2026-10-16).
