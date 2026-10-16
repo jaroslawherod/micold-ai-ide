@@ -73,8 +73,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-Done: PR #824 open (M1). The branch is one squash commit on origin/main d8bf85a2, made by the user (rebase, no conflicts); PROTOCOL_VERSION is 47 (feature 533 took 45, feature 552 took 46), artifacts renumbered by the user. Full `mise run gate` green on this tree (MICOLD_NO_BUILD_LOCK=1, worktree's own target-shared).
-Next: the user runs `git push --force-with-lease` (the classifier denies the agent); then confirm PR #824 MERGEABLE, CI, wait-merge.
+Done: M2 implemented (T017-T024, T039 ticked), committed on the branch (3 commits, rebased on origin/main). Review A (0 upheld) and B (fixed) done and recorded; scoped gate green. Visual pass 1 found the client never copied `origin` (fixed in catalog_sync.rs with a test); the pass has NOT been re-run on the fixed tree (showcase pose "sessions started by an agent", then the client with a seeded project state file).
+Full `mise run gate` on the rebased tree: red on one test, `tests::pr_status::pr_status_tick_and_refreshes_during_a_reading_add_one_call_when_it_ends` (main_tests.rs:3119, unrelated to this diff, timing-looking). Next: re-run `mise run gate` (detached, hold.sh); if that test fails again alone, run it on origin/main to see if it is a flake and report; then optional visual-pass re-run via autopilot-worker, rebase (branch-start.sh 824), push, open the PR per tasks/pr.md (title `feat(551): show agent-started sessions as a tree in the sidebar (#551)`, body from pr.md template, Review A: 10 findings, none upheld, indent clamp fixed; Review B: 1 MAJOR fixed). No PR open yet.
 
 ## Open escalation
 
