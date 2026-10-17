@@ -110,6 +110,12 @@ specs/**      micold-docs
 # sets the attribute.
 /docs/daemon.md -micold-docs
 
+# Read by a test, so a test input rather than documentation: this page's provider table must list
+# every `AiCli` variant, which `crates/micold-core/tests/provider_origin_docs.rs` checks (feature
+# 551, SC-005). If it stayed documentation, a provider added without a row would skip the pipeline
+# that catches it. Must stay after `docs/**`, which sets the attribute.
+/docs/user-guide/worktrees-and-sessions.md -micold-docs
+
 # The download-page trust notice, appended to a release's body before it is published (feature
 # 028, SC-001). It is prose about the download, read only by the `publish` job at release time --
 # nothing in the build, the suite or the package opens it. Listed explicitly because `/*.md`
