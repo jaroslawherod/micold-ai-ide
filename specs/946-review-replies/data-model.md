@@ -28,7 +28,7 @@ listed.
 ### `CommentRef`
 
 `C-` + first 8 lowercase hex digits of `CommentId`'s UUID. `ReviewComment::reference()`. Parsing
-accepts upper or lower case hex and an optional surrounding backtick-free whitespace.
+accepts the prefix `C-` or `c-`, upper or lower case hex, and optional surrounding whitespace.
 
 ### `ReviewComment` (extends 482's)
 
