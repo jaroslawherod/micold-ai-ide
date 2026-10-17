@@ -12,7 +12,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-2lmupk
 - **Started**: 2026-10-17
 - **Phase**: milestones
-- **Next step**: M2 implement (T024–T030)
+- **Next step**: M2 full gate, push, PR title/body written (gh unavailable)
 
 ## Pull requests
 
@@ -65,6 +65,8 @@ counts are split off as M2 along acceptance scenario 3. Polish T070–T071 chang
 | M1 review A (code-review high) | 2 | a788a747a73dad0b4fd79f50fe1e929c9fa9b067:a9d57c2caafecd4e3dbdade759c913e7ede04768 → c75653a03639e42b0f8ff27ed47da14a6f605c1e:dd716a91e83a5147a1ed8428014219cbdce9dedb | CLEAN (sonnet, scoped; 1 MINOR: Toggled unguarded, for M3 shortcut) |
 | M1 review B (conformance) | 1 | c75653a03639e42b0f8ff27ed47da14a6f605c1e:dd716a91e83a5147a1ed8428014219cbdce9dedb | CHANGES (F1/F2 MAJOR missing assertion reds in cycle-log, fixed by mutation reds; F3/F4 MINOR log headings and T002 run, fixed) |
 | M2 review A (code-review high) | 1 | 6b1655982fe593202311c406f2f377a670100338:c8a49970814fedf44a35826d742201d0fc715771 | 8 findings, all declined (spec-mandated or pre-existing pattern; see Declined) |
+| M2 review B (conformance) | 1 | 25f177cecaf3a5717b2501e8410e56404959bb28:4f5c655a6df6e2bc340fd8b1d358f9ffdba67b6c | CLEAN (sonnet; Verify green; 2 MINOR unfixed) |
+| M2 visual pass | 1 | 7f83ac90 | B4, B5 PASS (evidence visual-pass/m2/); showcase lacks PR-off card |
 | M1 visual pass | 1 | dd716a91 | B15 states/grid/greyscale PASS, B1 reduced PASS; type word only in tooltip FAIL (FR-002), fixed test-first |
 
 ## Declined review findings
