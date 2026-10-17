@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-h057j5
 - **Started**: 2026-10-17
 - **Phase**: plan
-- **Next step**: plan unit (clarify CLEAN: round 1 settled 3 markers from the repo; round 2 found no critical ambiguity)
+- **Next step**: plan unit (continue handover: plan review round 1)
 
 ## Pull requests
 
@@ -44,7 +44,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+- **Done**: `speckit-plan` ran; plan.md, research.md (R1–R9), data-model.md, contracts/wire.md, contracts/state-icon.md, quickstart.md written and committed. Key design: `TurnClock::paused_on_user()` carried as `SessionSummary::paused_on_user` (protocol 48); core `location_state.rs`; new `StateIcon` in a new `TreeItem::state_icon` slot (worktree rows always have tags, so `badge` is barred by tree_view's debug_assert); glyphs play_arrow U+E037 / report U+E160 / pause U+E034 (present in the font's cmap; names to be confirmed against upstream .codepoints).
+- **Next step**: plan task step 2 — round-1 plan review (review.md + rubrics/plan.md, no model override), then step 3 (set Next step to `tasks unit`, commit).
+- **Open findings**: none yet. No PR.
 
 ## Open escalation
 
