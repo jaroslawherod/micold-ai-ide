@@ -428,7 +428,11 @@ async fn w6_w8_one_prompt_reaches_the_running_session_and_the_comments_become_se
         format!("{}{}", submitted(&expected), submitted(&second)),
         "the second send is one submission of the Drafts' batch alone (US2 s1, FR-009)"
     );
-    assert_eq!(second.matches("### Comment ").count(), 2, "one block per Draft");
+    assert_eq!(
+        second.matches("### Comment ").count(),
+        2,
+        "one block per Draft"
+    );
     for draft in &drafts {
         assert!(
             second.contains(&format!("### Comment {}: ", draft.reference())),
@@ -441,10 +445,14 @@ async fn w6_w8_one_prompt_reaches_the_running_session_and_the_comments_become_se
             "nothing about a Sent comment: {second}"
         );
     }
-    assert!(!second.contains("Rename a."), "no sent comment is sent again");
+    assert!(
+        !second.contains("Rename a."),
+        "no sent comment is sent again"
+    );
     let last = &seen.last().unwrap().1;
     assert!(
-        last.iter().all(|c| matches!(c.state, CommentState::Sent { .. })),
+        last.iter()
+            .all(|c| matches!(c.state, CommentState::Sent { .. })),
         "the two Drafts became Sent (FR-015): {last:?}"
     );
 }

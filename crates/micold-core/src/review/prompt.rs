@@ -165,7 +165,16 @@ mod tests {
     }
 
     fn one(n: u128, path: &str, side: Side, start: u32, created: u64) -> ReviewComment {
-        comment(n, path, side, start, start, &["x"], &format!("text {n}"), created)
+        comment(
+            n,
+            path,
+            side,
+            start,
+            start,
+            &["x"],
+            &format!("text {n}"),
+            created,
+        )
     }
 
     /// P1: contracts/batch-format.md's example, byte for byte.
@@ -175,7 +184,16 @@ mod tests {
     #[test]
     fn p1_the_contract_example_gives_the_exact_bytes() {
         let comments = [
-            comment(3, "src/b.rs", Side::New, 7, 7, &["let x = 1;"], "Name this.", 30),
+            comment(
+                3,
+                "src/b.rs",
+                Side::New,
+                7,
+                7,
+                &["let x = 1;"],
+                "Name this.",
+                30,
+            ),
             comment(
                 1,
                 "src/a.rs",
@@ -186,7 +204,16 @@ mod tests {
                 "Why clone here?",
                 10,
             ),
-            comment(2, "src/a.rs", Side::Old, 3, 3, &["use std::io;"], "Keep this import.", 20),
+            comment(
+                2,
+                "src/a.rs",
+                Side::Old,
+                3,
+                3,
+                &["use std::io;"],
+                "Keep this import.",
+                20,
+            ),
         ];
         let expected = "Please work through these review comments on the changes in this worktree. Each block below is one comment: its reference, the file (relative to the worktree root), the lines it is about, the code on those lines when the comment was written, and the comment itself.
 
@@ -237,7 +264,16 @@ Name this.";
         let end = u32::try_from(count).expect("small");
         build(
             EntryKind::Worktree,
-            &[comment(1, "a.rs", Side::New, 1, end, &lines, "Split this.", 1)],
+            &[comment(
+                1,
+                "a.rs",
+                Side::New,
+                1,
+                end,
+                &lines,
+                "Split this.",
+                1,
+            )],
             &[],
         )
     }
@@ -252,7 +288,10 @@ Name this.";
             "51 lines: first, elision, last; the heading keeps the full range"
         );
         let whole = quoting(50);
-        assert!(whole.contains("line 25\nline 26\n"), "50 lines are quoted whole");
+        assert!(
+            whole.contains("line 25\nline 26\n"),
+            "50 lines are quoted whole"
+        );
         assert!(!whole.contains("not shown"), "{whole}");
     }
 
@@ -260,7 +299,16 @@ Name this.";
     fn p4_a_quote_holding_three_backticks_gets_a_four_backtick_fence() {
         let batch = build(
             EntryKind::Worktree,
-            &[comment(1, "a.md", Side::New, 2, 2, &["```rust"], "Fence?", 1)],
+            &[comment(
+                1,
+                "a.md",
+                Side::New,
+                2,
+                2,
+                &["```rust"],
+                "Fence?",
+                1,
+            )],
             &[],
         );
         assert!(
@@ -273,11 +321,23 @@ Name this.";
     fn p5_no_carriage_return_reaches_the_batch() {
         let batch = build(
             EntryKind::Worktree,
-            &[comment(1, "a.rs", Side::New, 1, 2, &["one\r", "t\rwo"], "a\r\nb\rc", 1)],
+            &[comment(
+                1,
+                "a.rs",
+                Side::New,
+                1,
+                2,
+                &["one\r", "t\rwo"],
+                "a\r\nb\rc",
+                1,
+            )],
             &[],
         );
         assert!(!batch.contains('\r'), "{batch:?}");
-        assert!(batch.ends_with("```\none\nt\nwo\n```\na\nb\nc"), "{batch:?}");
+        assert!(
+            batch.ends_with("```\none\nt\nwo\n```\na\nb\nc"),
+            "{batch:?}"
+        );
     }
 
     fn references(batch: &str) -> Vec<String> {
@@ -299,7 +359,13 @@ Name this.";
         ];
         assert_eq!(
             references(&build(EntryKind::Worktree, &comments, &[])),
-            ["C-00000003", "C-00000004", "C-00000005", "C-00000002", "C-00000001"],
+            [
+                "C-00000003",
+                "C-00000004",
+                "C-00000005",
+                "C-00000002",
+                "C-00000001"
+            ],
             "same path and start: current first; same side: earlier creation, then id"
         );
     }
@@ -324,7 +390,11 @@ Name this.";
         let batch = build(EntryKind::Worktree, &comments, &[]);
         let refs = references(&batch);
         assert_eq!(refs.len(), 20, "one block per comment (SC-002)");
-        assert_eq!(refs.iter().collect::<BTreeSet<_>>().len(), 20, "distinct references");
+        assert_eq!(
+            refs.iter().collect::<BTreeSet<_>>().len(),
+            20,
+            "distinct references"
+        );
         for n in 1..=20 {
             assert_eq!(batch.matches(&format!("comment number {n}.")).count(), 1);
         }
@@ -332,7 +402,10 @@ Name this.";
 
     #[test]
     fn p8_built_twice_the_bytes_are_equal() {
-        let comments = [one(2, "b.rs", Side::Old, 3, 2), one(1, "a.rs", Side::New, 9, 1)];
+        let comments = [
+            one(2, "b.rs", Side::Old, 3, 2),
+            one(1, "a.rs", Side::New, 9, 1),
+        ];
         assert_eq!(
             build(EntryKind::Worktree, &comments, &[id(1)]),
             build(EntryKind::Worktree, &comments, &[id(1)])
@@ -349,7 +422,11 @@ Name this.";
 
     #[test]
     fn paths_with_spaces_and_non_ascii_are_kept_verbatim() {
-        let batch = build(EntryKind::Worktree, &[one(1, "docs/a b é.md", Side::New, 4, 1)], &[]);
+        let batch = build(
+            EntryKind::Worktree,
+            &[one(1, "docs/a b é.md", Side::New, 4, 1)],
+            &[],
+        );
         assert!(batch.contains("### Comment C-00000001: docs/a b é.md, line 4 (current)\n"));
     }
 
