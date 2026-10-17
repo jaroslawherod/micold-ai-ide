@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #551
 - **Worktree branch**: feat/551_show-sessions-spawned-by-an-agent-as-a-tree-under
 - **Started**: 2026-10-12
-- **Phase**: milestone-M2
-- **Next step**: wait for CI on PR #916, merge, then M3
+- **Phase**: milestone-M3
+- **Next step**: M3 implemented; gate, reviews, PR
 
 ## Pull requests
 
@@ -18,14 +18,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #787 | Design PR | merged | 8e1cdcce24199789f214b1ae153a9199863cb2e4 |
 | #824 | M1 | merged | 6f578693808230b11552a7a47db3bc7214a40e84 |
+| #916 | M2 | merged | 6898a677ce98be25a1fca4a55af813ad36955170 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T016, T025, T038 | full | Origin recorded by the daemon's `record_origin` (nothing sets it until M3), persisted, exposed on wire and MCP; spike T025 outcome recorded | #824 | merged |
-| M2 | T017–T024, T039 | full | Sidebar nests children with child/pending/removed markers | #916 | in review |
-| M3 | T026–T031, T040 | full | Provider readers for spike-confirmed providers, discovery, provider table | | pending |
+| M2 | T017–T024, T039 | full | Sidebar nests children with child/pending/removed markers | #916 | merged |
+| M3 | T026–T031, T040 | full | Provider readers for spike-confirmed providers, discovery, provider table | | in progress |
 | M4 | T032–T037, T041 | full | Fold, count, attention rollup, persisted fold | | pending |
 
 ## Decisions
@@ -63,6 +64,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Amendment fix 551 | 4 (sonnet) | a68e498d5b9c43aaea5c6bc312397d7d3a0cea7f:64875b6b7a9a5fa719e5c3448f02c144d22709dd | CHANGES: 1 MAJOR (quickstart seeded projects.json, not the project state file), 1 MINOR; fixed (wording of seeding instructions and ledger row, prose only); round 3 F1-F3 confirmed fixed |
 | Code A M1 551 (rebased) | 2 (sonnet) | 45c07d7d1709df3cfdffcb90075eeb6db86ba71e:35a170e47eea873fd8569b79ef57ab11de1f4baa | CHANGES: 2 MAJOR (F1 removed-child event lacked live overlay, F2 dead worktree_ref_of), 1 MINOR (F3 origin rollback on persist failure); all fixed in 35a170e4 |
 | Code B M1 551 (rebased) | 2 (sonnet) | 45c07d7d1709df3cfdffcb90075eeb6db86ba71e:35a170e47eea873fd8569b79ef57ab11de1f4baa | CHANGES: 1 BLOCKER (4 test call sites kept a dropped 4th create_session argument; fixed), 1 MAJOR (Verify unobserved: lock held 15 min; the full gate's cargo test --workspace covers it), 1 MINOR (protocol 42 in artifacts, fixed); no re-run of B for the fixes |
+| Code A M3 551 | 1 | c5b0216fe24c6f3862fbbf81960a018a707a9366:6898a677ce98be25a1fca4a55af813ad36955170 (pre-edit tree) | 10 findings: fixed #4 (provider-reported failing origin now sets origin_rejected in record_origin), #7 (shared `bindings` iterator in provider.rs), #10 (guide says readers not yet checked against a recording); rest declined, see Declined; fixes since need a scoped round-2 only if the scoped gate shows code changes beyond these |
 
 ## Declined review findings
 
@@ -72,10 +74,20 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| M3 | A | per-pass OpenCode `export` / Codex rollout walk for every origin-less session (#1, #3), export 256 KiB/2 s cap (#2) | Spec R3 asks for a read on each later pass; the signal is only readable through `opencode export` (no sqlite dep, R2). Bounded by the 2 s timeout. Recorded as a follow-up, not changed in M3 |
+| M3 | A | settle_pending_origins re-validates non-provider origins (#5) | Location and chain are write-once, so a valid origin cannot later fail; only a never-valid one is cleared (R4) |
+| M3 | A | origin bound to a session of another project stays pending (#6) | That is the specified pending/orphan state (FR-016) |
+| M3 | A | single-client refresh does not broadcast (#8) | Same behaviour as adopted sessions today; the catalog snapshot carries the origin |
+| M3 | A | first line over 64 KiB hides the Codex parent (#9, first half) | Same limit as the existing `rollout_cwd` reader; revisit when a recording exists |
+
 
 ## Handover
 
-Done: M2 rebased, full gate green, PR #916 open. Next: orchestrator waits on CI and merges, then M3. The pr_status flake did not occur in the gate (green).
+Done (M3, uncommitted before this commit, nothing pushed, no PR yet): T026-T031 code. Core: `reported_origin` default + Codex/OpenCode readers + `bindings`/`session_bound_to` helpers in `provider.rs`; tests `provider_origin.rs`, `provider_origin_docs.rs`, fixtures `fixtures/{codex,opencode}`. Daemon: `Catalog::origin_candidates`, `settle_pending_origins`, `record_origin` sets `origin_rejected` on a failing provider report, `DaemonState::discover_origins` (called in `refresh_worktrees_off_runtime`), tests in `catalog_adoption.rs` and `provider_origin_discovery.rs`. Docs: provider table in `docs/user-guide/worktrees-and-sessions.md`. Review A round 1 done and acted on (see Review rounds / Declined).
+
+Verified green: `cargo test -p micold-core --test provider_origin --test provider_origin_docs` (7 passed). NOT yet run: `micold-daemon --test catalog_adoption --test provider_origin_discovery` (build-lock queue was long; code edited after the compile), scoped gate, full gate.
+
+Next: (1) run the two daemon tests, fix; (2) T040 tick T026-T031, T040 in tasks.md and update tdd/test-list.md U15-U17/A8/A9 + cycle-log; (3) scoped gate, review B (conformance, sonnet, once), no visual pass needed (docs only); (4) full gate `mise run gate`; (5) push and open the PR titled `feat(551): providers report the session that started them (#551)`, body ending `Refs #551`, record PR in the ledger. Follow-up to note in PR: per-pass cost of OpenCode `export` per origin-less session; quickstart Part B step 8 is for the close unit. Protocol version unchanged by M3 (main is at 48).
 
 ## Open escalation
 

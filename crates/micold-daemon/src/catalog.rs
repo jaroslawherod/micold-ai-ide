@@ -107,6 +107,14 @@ pub fn location_of(worktree_dir: &str) -> SessionLocation {
     }
 }
 
+/// A session discovery may ask its provider for an origin (feature 551, T030).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OriginCandidate {
+    pub id: SessionId,
+    pub location: SessionLocation,
+    pub provider: AiCli,
+}
+
 /// The durable aggregate the daemon owns. The single writer of `projects.json`, and one of two
 /// writers of `settings.json` — see [`Catalog::persist_service_settings`] for what that costs.
 pub struct Catalog {
@@ -685,7 +693,8 @@ impl Catalog {
     /// Record `origin` as the session that started `id` (feature 551, FR-010). Written once: a
     /// session that already has an origin, or whose provider-reported origin was rejected before,
     /// keeps what it has and this returns `Ok(false)`, as it does for an origin that fails
-    /// [`validate_origin`]. `Ok(true)` when it was recorded and persisted.
+    /// [`validate_origin`]; a provider-reported one that fails also sets `origin_rejected`, so
+    /// discovery stops asking. `Ok(true)` when it was recorded and persisted.
     pub fn record_origin(
         &mut self,
         id: SessionId,
@@ -705,6 +714,14 @@ impl Catalog {
             return Ok(false);
         }
         if check_origin(list, session, origin, reported_by_provider).is_err() {
+            if reported_by_provider {
+                // The provider's own answer can never become valid (another worktree, a cycle):
+                // remember it so no later discovery pass asks and fails again (R4).
+                if let Some((_, session)) = self.workspace.find_session_mut(id) {
+                    session.origin_rejected = true;
+                }
+                self.persist()?;
+            }
             return Ok(false);
         }
         if let Some((_, session)) = self.workspace.find_session_mut(id) {
@@ -720,6 +737,64 @@ impl Catalog {
             return Err(e);
         }
         Ok(true)
+    }
+
+    /// The open AI CLI sessions of `project` that may still be given a provider-reported origin:
+    /// none yet, and not rejected before (feature 551, T030). What discovery asks each provider
+    /// about on every pass.
+    pub fn origin_candidates(&self, project: &Path) -> Vec<OriginCandidate> {
+        self.workspace
+            .sessions
+            .get(project)
+            .into_iter()
+            .flatten()
+            .filter(|s| {
+                s.mode == TerminalMode::AiCli
+                    && !s.archived
+                    && s.origin.is_none()
+                    && !s.origin_rejected
+            })
+            .map(|s| OriginCandidate {
+                id: s.id,
+                location: s.location.clone(),
+                provider: s.provider,
+            })
+            .collect()
+    }
+
+    /// Run the full origin check on every origin of `project` whose session has appeared, and
+    /// clear the ones that fail (feature 551, R4): the only mutation of an origin, allowed because
+    /// the fact was never valid. `origin_rejected` is set, so no later pass records it again.
+    /// Returns how many were cleared; the write happens only then.
+    pub fn settle_pending_origins(&mut self, project: &Path) -> io::Result<usize> {
+        let Some(list) = self.workspace.sessions.get(project) else {
+            return Ok(0);
+        };
+        let failed: Vec<SessionId> = list
+            .iter()
+            .filter_map(|s| {
+                let origin = s.origin?.id;
+                let appeared = list.iter().any(|o| o.id == origin);
+                (appeared && check_origin(list, s, origin, true).is_err()).then_some(s.id)
+            })
+            .collect();
+        if failed.is_empty() {
+            return Ok(0);
+        }
+        let before = list.clone();
+        for id in &failed {
+            if let Some((_, session)) = self.workspace.find_session_mut(*id) {
+                session.origin = None;
+                session.origin_rejected = true;
+            }
+        }
+        if let Err(e) = self.persist() {
+            self.workspace
+                .sessions
+                .insert(project.to_path_buf(), before);
+            return Err(e);
+        }
+        Ok(failed.len())
     }
 
     /// The `SessionChanged` messages the archive paths queued for the children of archived
