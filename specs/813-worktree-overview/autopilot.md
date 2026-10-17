@@ -12,7 +12,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-2lmupk
 - **Started**: 2026-10-17
 - **Phase**: milestones
-- **Next step**: M5 scoped re-review, client tests, full gate, push (PR title/body in scratchpad)
+- **Next step**: M5 PR (orchestrator opens from scratchpad title/body), CI, merge; then M6. Visual pass for M5 (quickstart §B2–B4, ProgressBar/OverviewCard showcase) NOT run: no xdotool/Vulkan in the cloud container; see visual-pass-m5.md. Run it where a display exists.
 
 ## Pull requests
 
@@ -32,7 +32,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T024–T030 | full | PR counts and merge conflict on cards | #932 | merged |
 | M3 | T031–T039 | full | Ctrl/Cmd+Shift+O and attention badge | #936 | merged |
 | M4 | T040–T049 | full | Card activation and keyboard traversal | #951 | merged |
-| M5 | T050–T060 | full | Task summary and progress on cards | — | gate |
+| M5 | T050–T060 | full | Task summary and progress on cards | pending (title/body written) | PR to open |
 | M6 | T061–T069 | full | Hook-fed agent activity (protocol 49) | — | pending |
 
 M1 holds 18 US1 tasks plus setup and foundational: kept whole because no smaller cut has an
