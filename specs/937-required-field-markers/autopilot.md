@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-rkhzho
 - **Started**: 2026-10-17
 - **Phase**: clarify
-- **Next step**: clarify unit: resolve the FR-006 [NEEDS CLARIFICATION] (on-blur required error); D1 already settles the marker convention
+- **Next step**: clarify unit round 1: apply the user's answers to the open escalation (Q1 disabled submit buttons, Q2 on-blur error) to spec.md, then run round 2
 
 ## Pull requests
 
@@ -45,7 +45,15 @@ None.
 
 ## Open escalation
 
-None.
+Clarify round 1 (category 1, product/UX decision the repo does not settle):
+
+- **Q1**: Create (add-worktree form, `crates/micold-client/src/ui/worktree_form.rs:602`, `can_submit()`) and Confirm (run-in-parallel, `crates/micold-client/src/ui/parallel_dialog.rs:125`, `validate().is_ok()`) are disabled while a required field is empty, so FR-006's "submit attempt" can never happen there (and US3 scenario 1 cannot run). What should these buttons do?
+  - A (Recommended): enable them; a press with empty required fields shows the required errors (FR-006) and does not submit. Evidence: rename (`rename_dialog.rs:53`), Save daemon (`settings/daemons.rs:403`) and Settings Save (`settings_view.rs:128`) are already always enabled; one behaviour across forms is the issue's "consistent across forms".
+  - B: keep them disabled; in those two forms the required error appears only on blur (forces Q2 = on blur there).
+- **Q2**: Should an empty required field also show the required error when the user leaves it after focusing it, before any submit attempt? (FR-006 [NEEDS CLARIFICATION])
+  - A (Recommended): yes, on blur as well as on a submit attempt; never on a freshly opened form. Evidence: the issue says "when a required field is left empty"; fields already report focus (`crates/micold-client/src/ui/material/field_focus.rs`), so blur is detectable.
+  - B: no, submit attempt only (the spec's default).
+
 
 ## Follow-ups not done
 
