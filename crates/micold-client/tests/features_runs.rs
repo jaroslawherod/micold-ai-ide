@@ -1296,3 +1296,85 @@ fn the_choice_is_frozen_while_confirm_re_reads_and_a_late_read_keeps_the_users_u
     let sent = deletes(answer(&mut state, &fresh[0], Ok(summary(1, 1, 0))));
     assert_eq!(sent, [("feat-a-3".to_string(), true)], "the choice is frozen while confirm re reads and a late read keeps the users untick (checking sent)");
 }
+
+// ---------------------------------------------------------------------------------------------
+// Required fields (feature 937, FR-002, R5)
+// ---------------------------------------------------------------------------------------------
+
+mod required {
+    use super::{dialog, opened, update, Invalid, Msg};
+    use micold_client::features::runs::ParallelDialog;
+    use micold_client::features::window::FieldId;
+    use micold_core::naming::ConventionalType;
+
+    const FIELDS: [FieldId; 4] = [
+        FieldId::RunPrompt,
+        FieldId::RunType,
+        FieldId::RunName,
+        FieldId::RunBaseBranch,
+    ];
+
+    fn empty_of(d: &ParallelDialog, id: FieldId) -> bool {
+        d.required_fields()
+            .into_iter()
+            .find(|(f, _)| *f == id)
+            .map(|(_, r)| r.required && r.empty)
+            .unwrap_or_else(|| panic!("{id:?} is listed"))
+    }
+
+    #[test]
+    fn prompt_type_name_and_base_branch_are_listed_in_display_order() {
+        let state = opened();
+        let d = dialog(&state);
+        let ids: Vec<FieldId> = d.required_fields().iter().map(|(id, _)| *id).collect();
+        assert_eq!(ids, FIELDS, "Ticket and per-run Provider are not listed");
+        assert!(d.required_fields().iter().all(|(_, r)| r.required));
+    }
+
+    /// Each field is empty exactly when `validate` reports its emptiness error. `validate` stops at
+    /// the first failure, so each is checked with the fields before it filled.
+    #[test]
+    fn each_field_is_empty_exactly_when_validate_reports_it() {
+        let mut state = opened();
+        update(&mut state, Msg::BaseBranchChanged(String::new()));
+        let steps: [(Option<Msg>, Invalid); 4] = [
+            (None, Invalid::EmptyPrompt),
+            (
+                Some(Msg::PromptChanged("  add login ".into())),
+                Invalid::NoType,
+            ),
+            (
+                Some(Msg::TypeChanged(ConventionalType::Feat)),
+                Invalid::EmptyName,
+            ),
+            (
+                Some(Msg::NameChanged("login".into())),
+                Invalid::NoBaseBranch,
+            ),
+        ];
+        for (i, (msg, refused)) in steps.into_iter().enumerate() {
+            if let Some(msg) = msg {
+                update(&mut state, msg);
+            }
+            let d = dialog(&state);
+            assert_eq!(d.validate(), Err(refused.clone()));
+            for (j, id) in FIELDS.iter().enumerate() {
+                assert_eq!(
+                    empty_of(d, *id),
+                    j >= i,
+                    "refused with {refused:?}: {id:?} empty is {}",
+                    j >= i
+                );
+            }
+        }
+        update(&mut state, Msg::BaseBranchChanged("trunk".into()));
+        let d = dialog(&state);
+        assert_eq!(d.validate(), Ok(()));
+        assert!(FIELDS.iter().all(|id| !empty_of(d, *id)));
+
+        update(&mut state, Msg::PromptChanged("   ".into()));
+        let d = dialog(&state);
+        assert_eq!(d.validate(), Err(Invalid::EmptyPrompt), "the prompt trims");
+        assert!(empty_of(d, FieldId::RunPrompt));
+    }
+}

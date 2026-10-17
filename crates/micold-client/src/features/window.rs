@@ -104,7 +104,7 @@ pub struct State {
 /// One enum for the whole application rather than a focus flag on each of the four drafts: at most
 /// one field can hold the keyboard, and this is the shape that says so. `Option<FieldId>` also makes "two fields focused at once" unrepresentable
 /// (Principle V), where four booleans would have needed a rule keeping them apart.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum FieldId {
     /// The rename-project dialog's name field.
     RenameProjectName,
@@ -114,6 +114,10 @@ pub enum FieldId {
     AddWorktreeTicket,
     /// The add-worktree form's branch-name field.
     AddWorktreeName,
+    /// The add-worktree form's Type select (feature 937: it reports leaving it).
+    AddWorktreeType,
+    /// The add-worktree form's existing-branch picker (feature 937).
+    AddWorktreeBranch,
     /// The add-worktree form's first-prompt field.
     AddWorktreeFirstPrompt,
     /// The Run in parallel dialog's prompt field.
@@ -122,6 +126,10 @@ pub enum FieldId {
     RunTicket,
     /// The Run in parallel dialog's name field.
     RunName,
+    /// The Run in parallel dialog's Type select (feature 937).
+    RunType,
+    /// The Run in parallel dialog's Base branch select (feature 937).
+    RunBaseBranch,
     /// Settings: the terminal scrollback limit.
     SettingsScrollback,
     /// The confirm-worktree-delete dialog's "also delete the branch" checkbox.

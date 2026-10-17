@@ -52,10 +52,12 @@
 //! [`crate::app::State::set_worktrees`] explains why the obvious shorthand is wrong.
 
 use crate::app::Message;
+use crate::features::window::FieldId;
 use crate::floating_surface;
 use crate::overlay::registry::Registered;
 use crate::overlay::SurfaceId;
 use micold_core::naming::{display_name, parse_tags, Tag};
+use micold_core::required::{RequiredMarks, Requirement};
 use micold_core::worktree::{Worktree, WorktreeStatus};
 
 /// What this feature remembers (feature 028, contract S1).
@@ -115,6 +117,19 @@ pub struct WorktreeRenameDraft {
     pub text: String,
     /// The last validation error, if the user tried to confirm an invalid name.
     pub error: Option<micold_core::project::RenameError>,
+    /// Whether the user left the name field or attempted a confirm (feature 937).
+    pub required: RequiredMarks<FieldId>,
+}
+
+impl WorktreeRenameDraft {
+    /// The dialog's one required field, empty exactly when
+    /// [`micold_core::project::validate_rename`] refuses it (feature 937, R4).
+    pub fn required_fields(&self) -> Vec<(FieldId, Requirement)> {
+        vec![(
+            FieldId::RenameWorktreeName,
+            Requirement::text(true, &self.text),
+        )]
+    }
 }
 
 /// The tags for a worktree: the derived type + issue tags, plus a status tag when the
@@ -375,6 +390,7 @@ pub fn rename_started(state: &mut crate::app::State, dir: String) {
     let text = state.worktree_display_name(&dir);
     state.clear_for_dialog();
     state.worktree.rename_draft = Some(WorktreeRenameDraft {
+        required: Default::default(),
         dir_name: dir,
         text,
         error: None,

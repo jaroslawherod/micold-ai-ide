@@ -89,6 +89,7 @@ fn dialogs() -> Vec<Dialog> {
             cancel: Message::Runs(micold_client::features::runs::Msg::Dismissed),
             open: |state| {
                 state.runs.dialog = Some(micold_client::features::runs::ParallelDialog {
+                    required: Default::default(),
                     project: std::path::PathBuf::from("/p"),
                     naming: micold_core::naming::WorktreeNaming {
                         type_: None,

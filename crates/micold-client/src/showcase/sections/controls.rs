@@ -11,6 +11,7 @@
 use iced::widget::column;
 use iced::{Element, Length};
 use micold_core::naming::ConventionalType;
+use micold_core::required::FieldRequirement;
 use micold_core::tokens::{spacing, Roles};
 
 use crate::icons::Icon;
@@ -365,6 +366,27 @@ pub fn form_field<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, 
                 roles,
             ),
             posed("no label", control(), roles),
+            // The required marker (feature 937, contract C6): a `TextField` and a `Select`, each
+            // required and empty (the label resting) and required and filled (the label floated),
+            // so the marker can be checked in both label positions without opening a form.
+            posed(
+                "required",
+                control().label("Name").required(FieldRequirement::Required),
+                roles,
+            ),
+            posed(
+                "required, filled",
+                material::TextField::new(samples::PLACEHOLDER, samples::FILLED, roles)
+                    .label("Name")
+                    .required(FieldRequirement::Required),
+                roles,
+            ),
+            posed("required select", required_select(None, roles), roles),
+            posed(
+                "required select, filled",
+                required_select(samples::CHOICES.first().copied(), roles),
+                roles,
+            ),
             // The four state layers (BUG-002, FR-035, SC-012). Posed rather than driven, and here
             // that is not a compromise: hover and focus are *transient*, so a live instance shows
             // one of them at a time and never two together — while the question these answer is
@@ -381,6 +403,15 @@ pub fn form_field<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, 
         ],
         Layout::FullWidth,
     )
+}
+
+/// A required `Select`, empty or with `choice` picked, for the required-field poses above.
+fn required_select<'a>(choice: Option<&'static str>, roles: Roles) -> Element<'a, Message> {
+    material::Select::new(samples::CHOICES, choice, |_: &str| Message::NoOp, roles)
+        .placeholder("Choose a theme…")
+        .label("Theme")
+        .required(FieldRequirement::Required)
+        .into()
 }
 
 /// One field wearing one state layer, for the four poses above.

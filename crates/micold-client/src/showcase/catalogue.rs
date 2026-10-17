@@ -452,7 +452,18 @@ pub const COMPONENTS: &[Entry] = &[
         // show one of them at a time.
         variants: &["None", "Hovered", "Focused", "Pressed"],
         density: &[],
-        posed: &["label + supporting", "active", "error", "no label"],
+        posed: &[
+            "label + supporting",
+            "active",
+            "error",
+            "no label",
+            // Feature 937 (C6): the required marker, resting and floated, on a text field and a
+            // select.
+            "required",
+            "required, filled",
+            "required select",
+            "required select, filled",
+        ],
         live: &[],
         interactive: false,
         section: Section::Components,

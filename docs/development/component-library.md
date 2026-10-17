@@ -77,6 +77,28 @@ Modal::new(dialog, roles).shown(state.overlay != Overlay::None)
 fade(dialog, progress)   // ← what this used to look like
 ```
 
+## Required fields: `.required(FieldRequirement)`
+
+A form says which fields it refuses empty; the shared field draws the mark. `TextField`, `Select`
+and `Typeahead` each take `.required(micold_core::required::FieldRequirement)`:
+
+- `Optional` (the default) leaves the label as it is.
+- `Required` appends `required::MARKER` (`*`) to the label. The marker is a character of the label,
+  so it rests and floats with it, in its role and tint, and is still there when the label is read
+  as text. A field with no label gets no marker.
+- `Missing` is `Required` plus the required error (feature 937, later milestones).
+
+A form does not compute the state itself: its draft lists `required_fields()` — `(FieldId,
+Requirement)` pairs mirroring its own validation — and keeps a `RequiredMarks<FieldId>`, and the
+view passes `draft.required.state_in(&draft.required_fields(), id)`. Never write `*` into a label
+string: `tests/required_call_sites.rs` fails on a `.label("…*")` outside `ui/material/`.
+
+```rust
+TextField::new("", &form.name, roles)
+    .label("Name")
+    .required(form.required.state_in(&form.required_fields(), FieldId::AddWorktreeName))
+```
+
 ## `UnreadMark`: one mark for three places
 
 `UnreadMark` (`ui/material/unread_mark.rs`, contract `specs/039-session-attention-notifications/contracts/unread-mark.md`)

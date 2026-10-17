@@ -19,6 +19,9 @@ with these fields:
 - **Runs** — a numbered list (#1, #2, ...). Each row has a provider select, which offers only the
   AI CLIs installed on this computer, and a remove button. **Add run** adds another row.
 
+Fields marked `*` must be filled: **Prompt**, **Type**, **Name** and **Base branch**. Ticket is
+optional and carries no mark.
+
 Under the list the dialog shows the names it will create, for example
 `feat/login-page-1 → .claude/worktrees/feat-login-page-1`: the branch, then the worktree folder.
 

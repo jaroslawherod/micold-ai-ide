@@ -51,6 +51,7 @@ fn parallel_dialog_pose(error: bool) -> &'static crate::features::runs::Parallel
     static VALID: OnceLock<crate::features::runs::ParallelDialog> = OnceLock::new();
     static INVALID: OnceLock<crate::features::runs::ParallelDialog> = OnceLock::new();
     let make = |error: bool| crate::features::runs::ParallelDialog {
+        required: Default::default(),
         project: std::path::PathBuf::from("/p"),
         naming: micold_core::naming::WorktreeNaming {
             type_: Some(ConventionalType::Feat),

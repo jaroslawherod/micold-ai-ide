@@ -118,3 +118,119 @@ fn none_sends_no_session_and_a_prompt_with_none_is_not_representable() {
     assert_eq!(form.session_definition(), None);
     assert_eq!(form.session_choice(), SessionChoice::NoSession);
 }
+
+// ---------------------------------------------------------------------------------------------
+// Required fields (feature 937, FR-002, R5)
+// ---------------------------------------------------------------------------------------------
+
+mod required {
+    use micold_client::features::window::FieldId;
+    use micold_client::features::worktree_form::{BranchSource, WorktreeForm};
+    use micold_core::naming::{ConventionalType, NamingError};
+    use micold_core::worktree::{BranchCandidate, BranchOrigin};
+
+    fn ids(form: &WorktreeForm) -> Vec<FieldId> {
+        form.required_fields().iter().map(|(id, _)| *id).collect()
+    }
+
+    fn requirement(form: &WorktreeForm, id: FieldId) -> micold_core::required::Requirement {
+        form.required_fields()
+            .into_iter()
+            .find(|(f, _)| *f == id)
+            .map(|(_, r)| r)
+            .unwrap_or_else(|| panic!("{id:?} is listed"))
+    }
+
+    #[test]
+    fn new_and_issue_sources_list_type_and_name_in_display_order() {
+        for source in [BranchSource::New, BranchSource::Issue] {
+            let form = WorktreeForm {
+                source,
+                ..WorktreeForm::default()
+            };
+            assert_eq!(
+                ids(&form),
+                vec![FieldId::AddWorktreeType, FieldId::AddWorktreeName],
+                "{source:?}: Type and Name are what preview() refuses empty; Ticket, daemon, AI \
+                 CLI and first prompt are optional"
+            );
+            assert!(form.required_fields().iter().all(|(_, r)| r.required));
+        }
+    }
+
+    #[test]
+    fn the_existing_source_lists_the_branch_only() {
+        let form = WorktreeForm {
+            source: BranchSource::Existing,
+            ..WorktreeForm::default()
+        };
+        assert_eq!(ids(&form), vec![FieldId::AddWorktreeBranch]);
+        assert!(requirement(&form, FieldId::AddWorktreeBranch).required);
+    }
+
+    /// For a table of form states, a listed field is `required && empty` exactly when `preview()`
+    /// refuses it for emptiness.
+    #[test]
+    fn a_field_is_empty_exactly_when_preview_refuses_it_for_emptiness() {
+        let types = [None, Some(ConventionalType::Feat)];
+        let names = ["", "   ", "login", " a "];
+        for type_ in types {
+            for name in names {
+                let form = WorktreeForm {
+                    type_,
+                    name: name.into(),
+                    ..WorktreeForm::default()
+                };
+                let preview = form.preview();
+                let t = requirement(&form, FieldId::AddWorktreeType);
+                assert_eq!(
+                    t.required && t.empty,
+                    preview == Err(NamingError::NoType),
+                    "type {type_:?}, name {name:?}"
+                );
+                let n = requirement(&form, FieldId::AddWorktreeName);
+                assert_eq!(
+                    n.required && n.empty,
+                    name.trim().is_empty(),
+                    "type {type_:?}, name {name:?}: Name is empty when blank after trim"
+                );
+                if type_.is_some() {
+                    assert_eq!(
+                        n.empty,
+                        preview == Err(NamingError::EmptyNameAfterSlug),
+                        "type set, name {name:?}: preview refuses a blank name for emptiness"
+                    );
+                }
+            }
+        }
+
+        let existing = |selected_branch| WorktreeForm {
+            source: BranchSource::Existing,
+            selected_branch,
+            ..WorktreeForm::default()
+        };
+        let none = existing(None);
+        assert!(requirement(&none, FieldId::AddWorktreeBranch).empty);
+        assert_eq!(none.preview(), Err(NamingError::EmptyNameAfterSlug));
+        let picked = existing(Some(BranchCandidate {
+            name: "feat/login".into(),
+            origin: BranchOrigin::Local,
+            blocked_by: None,
+        }));
+        assert!(!requirement(&picked, FieldId::AddWorktreeBranch).empty);
+        assert!(picked.preview().is_ok());
+    }
+
+    /// A non-blank name that slugs to nothing is not empty: preview() refuses it with its own
+    /// non-emptiness error, which the field shows instead of the required one (FR-010).
+    #[test]
+    fn a_name_that_slugs_to_nothing_is_not_empty() {
+        let form = WorktreeForm {
+            type_: Some(ConventionalType::Feat),
+            name: "!!!".into(),
+            ..WorktreeForm::default()
+        };
+        assert!(!requirement(&form, FieldId::AddWorktreeName).empty);
+        assert_eq!(form.preview(), Err(NamingError::EmptyNameAfterSlug));
+    }
+}

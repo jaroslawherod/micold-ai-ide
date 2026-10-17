@@ -340,6 +340,27 @@ fn all_rules(lib: &Library, cat: &Catalogue) -> Vec<String> {
 // The real library against the real gallery
 // ---------------------------------------------------------------------------------------------
 
+/// The required marker is posed on the shared field chrome, on a text field and a select, resting
+/// and filled (feature 937, contract C6, FR-011).
+#[test]
+fn the_required_field_is_posed() {
+    let entry = COMPONENTS
+        .iter()
+        .find(|e| e.module == "material/form_field.rs" && e.component == "FormField")
+        .expect("the gallery has a FormField entry");
+    for pose in [
+        "required",
+        "required, filled",
+        "required select",
+        "required select, filled",
+    ] {
+        assert!(
+            entry.posed.contains(&pose),
+            "the FormField entry does not pose `{pose}` (feature 937, C6)"
+        );
+    }
+}
+
 /// SC-002, SC-003 and SC-003a in one statement.
 #[test]
 fn the_gallery_is_complete() {

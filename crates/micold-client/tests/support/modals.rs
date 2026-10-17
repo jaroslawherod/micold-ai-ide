@@ -58,6 +58,7 @@ pub fn modals() -> Vec<Modal> {
             Message::Project(ProjectMsg::RenameCancelled),
             |s| {
                 s.project.rename_draft = Some(RenameDraft {
+                    required: Default::default(),
                     path: PathBuf::from("/tmp"),
                     text: String::new(),
                     error: None,
@@ -79,6 +80,7 @@ pub fn modals() -> Vec<Modal> {
             Message::Worktree(WorktreeMsg::RenameCancelled),
             |s| {
                 s.worktree.rename_draft = Some(WorktreeRenameDraft {
+                    required: Default::default(),
                     dir_name: "wt".to_string(),
                     text: String::new(),
                     error: None,

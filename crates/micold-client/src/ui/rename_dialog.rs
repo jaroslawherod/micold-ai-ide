@@ -8,6 +8,7 @@ use crate::ui::material::{self, Button, SurfaceKind, Text, TextField, TypeRole};
 use iced::widget::{column, row};
 use iced::{Element, Length};
 use micold_core::project::RenameError;
+use micold_core::required::FieldRequirement;
 use micold_core::theme::ColorScheme;
 use micold_core::tokens;
 
@@ -18,6 +19,8 @@ pub(crate) struct RenameSpec<'a> {
     pub label: &'static str,
     pub field: FieldId,
     pub text: &'a str,
+    /// How the name field is marked (feature 937): required, and missing once left or confirmed.
+    pub required: FieldRequirement,
     pub error: Option<RenameError>,
     pub on_input: fn(String) -> Message,
     pub on_confirm: Message,
@@ -34,6 +37,7 @@ pub(crate) fn view<'a>(
 
     let input = TextField::new("", spec.text, r)
         .label(spec.label)
+        .required(spec.required)
         .track_focus(spec.field, focused)
         .on_input(spec.on_input)
         .on_submit(spec.on_confirm.clone());

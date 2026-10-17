@@ -30,6 +30,7 @@
 use iced::advanced::renderer::Headless as _;
 use iced::advanced::{clipboard, layout, mouse, renderer, Layout, Renderer as _};
 use iced::{Color, Event, Point, Rectangle, Size, Vector};
+use micold_core::required::FieldRequirement;
 use micold_core::tokens::{anatomy, Roles};
 
 use super::test_support::{named_key, roles, Mounted, WINDOW};
@@ -710,4 +711,32 @@ fn a_press_outside_closes_the_list() {
     );
     assert!(!field.has_list(), "a press outside left the list open (§2)");
     assert!(published.is_empty(), "dismissing published {published:?}");
+}
+
+// ---------------------------------------------------------------------------------------------
+// The required marker (feature 937, contract C1)
+// ---------------------------------------------------------------------------------------------
+
+/// A required select draws its label followed by the marker, with nothing chosen (resting) and
+/// with a choice (floating), in the label's own role and tint.
+#[test]
+fn a_required_select_draws_the_marker_after_its_label() {
+    let r = roles();
+    let shot = |label: &'static str, selected: Option<&'static str>, req: FieldRequirement| {
+        let field = Select::new(OPTIONS, selected, |t: &str| t.to_string(), r)
+            .label(label)
+            .required(req);
+        Mounted::new(field).screenshot(Color::WHITE, Color::BLACK)
+    };
+    for selected in [None, Some("two")] {
+        let required = shot("Type", selected, FieldRequirement::Required);
+        assert!(
+            required == shot("Type*", selected, FieldRequirement::Optional),
+            "{selected:?}: a required select's label is drawn as \"Type*\""
+        );
+        assert!(
+            required != shot("Type", selected, FieldRequirement::Optional),
+            "{selected:?}: the marker is ink in the label"
+        );
+    }
 }

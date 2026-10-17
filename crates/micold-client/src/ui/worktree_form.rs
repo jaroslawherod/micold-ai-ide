@@ -199,6 +199,8 @@ fn naming_inputs<'a>(
 ) -> iced::widget::Column<'a, Message> {
     // Type selector: a Material select list, not a row of buttons (feature 013,
     // FR-001–FR-004).
+    let required = form.required_fields();
+    let state = |id| form.required.state_in(&required, id);
     let type_select = Select::new(
         ConventionalType::ALL,
         form.type_,
@@ -209,7 +211,8 @@ fn naming_inputs<'a>(
     // §7.7: the label moves *inside* the control's container, where every other field
     // carries its own. It used to be a free-standing muted line above the select, which is
     // the arrangement FR-031a replaces.
-    .label("Type");
+    .label("Type")
+    .required(state(FieldId::AddWorktreeType));
 
     // No placeholder: §7.7's migration table moves the whole of the old one into the label
     // and the supporting text. Keeping the example in the placeholder as well would print
@@ -222,6 +225,7 @@ fn naming_inputs<'a>(
 
     let name = TextField::new("", &form.name, r)
         .label("Name")
+        .required(state(FieldId::AddWorktreeName))
         .supporting("e.g. login page")
         .track_focus(FieldId::AddWorktreeName, focused)
         .on_input(|a0| Message::WorktreeForm(FormMsg::NameChanged(a0)))
@@ -376,6 +380,10 @@ fn branch_picker<'a>(form: &'a WorktreeForm, r: Roles) -> Element<'a, Message> {
         )
         .placeholder("Search branches…")
         .label("Branch")
+        .required(
+            form.required
+                .state_in(&form.required_fields(), FieldId::AddWorktreeBranch),
+        )
         .open(form.branch_list_open)
         .highlighted(form.branch_highlight)
         .selected(selected)

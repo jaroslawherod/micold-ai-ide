@@ -436,6 +436,10 @@ When the app knows more than one daemon, a **Daemon** select in the form chooses
 worktree runs; it starts on the daemon your existing setup used. The choice is remembered with the
 project, so it is the same after a restart. With no daemon registered the select is left out.
 
+**Required fields.** Fields marked `*` must be filled before the worktree can be created: **Type**
+and **Name** for a new branch or a GitHub issue, **Branch** when you work from an existing one.
+Ticket and the session's fields are optional and carry no mark.
+
 ### Creating a new branch
 
 With **New branch** selected:
