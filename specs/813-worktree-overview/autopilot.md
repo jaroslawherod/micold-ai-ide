@@ -61,6 +61,9 @@ counts are split off as M2 along acceptance scenario 3. Polish T070–T071 chang
 | Tasks | 1 | 0434f4af333fc87f0250ee05e67d0bda684de551:86d6baaac0c3f6bc0d2544cb19bad7681f594131 | CHANGES (F1 MAJOR: M5 Verify gave cargo two filters, fixed; F2 MINOR checklist note, F3 MINOR [P] on T007/T008, fixed; F4 MINOR declined) |
 | Tasks | 2 | 5f969cc13bac9d5706f57bb7d0cc3b1de8c919c0:86d6baaac0c3f6bc0d2544cb19bad7681f594131 | CLEAN (sonnet, scoped) |
 | M1 review A (code-review high) | 1 | a788a747a73dad0b4fd79f50fe1e929c9fa9b067:a9d57c2caafecd4e3dbdade759c913e7ede04768 | CHANGES (F1 MAJOR nested scrollable, F2 MAJOR other main-area openers leave Overview open, F3/F4 MINOR fixed; F5 F6 MINOR declined) |
+| M1 review A (code-review high) | 2 | a788a747a73dad0b4fd79f50fe1e929c9fa9b067:a9d57c2caafecd4e3dbdade759c913e7ede04768 → c75653a03639e42b0f8ff27ed47da14a6f605c1e:dd716a91e83a5147a1ed8428014219cbdce9dedb | CLEAN (sonnet, scoped; 1 MINOR: Toggled unguarded, for M3 shortcut) |
+| M1 review B (conformance) | 1 | c75653a03639e42b0f8ff27ed47da14a6f605c1e:dd716a91e83a5147a1ed8428014219cbdce9dedb | CHANGES (F1/F2 MAJOR missing assertion reds in cycle-log, fixed by mutation reds; F3/F4 MINOR log headings and T002 run, fixed) |
+| M1 visual pass | 1 | dd716a91 | B15 states/grid/greyscale PASS, B1 reduced PASS; type word only in tooltip FAIL (FR-002), fixed test-first |
 
 ## Declined review findings
 

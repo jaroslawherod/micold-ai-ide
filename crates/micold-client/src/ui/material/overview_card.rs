@@ -73,7 +73,7 @@ pub fn type_icon(kind: LocationType) -> Icon {
 pub struct Words {
     /// The type icon.
     pub type_icon: Icon,
-    /// The type's word, the type icon's tooltip.
+    /// The type's word: the footer's first words and the type icon's tooltip.
     pub type_label: &'static str,
     /// The name's tooltip: the whole display name, however much of it shows.
     pub name_tooltip: String,
@@ -97,8 +97,10 @@ pub fn words(model: &CardModel) -> Words {
         state_label: model.state.label(),
         reason_tooltip: model.reason.label(),
         footer: format!(
-            "{} sessions, {} running",
-            model.sessions.0, model.sessions.1
+            "{} · {} sessions, {} running",
+            model.kind.label(),
+            model.sessions.0,
+            model.sessions.1
         ),
     }
 }
@@ -288,7 +290,8 @@ mod tests {
         }
         assert_eq!(
             words(&model(CardState::Idle, "n")).footer,
-            "3 sessions, 2 running"
+            "Feature · 3 sessions, 2 running",
+            "FR-002: the type's word is visible text on the card, not only a tooltip"
         );
     }
 }

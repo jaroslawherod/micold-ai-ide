@@ -22,10 +22,10 @@ list. Append only.
   `warning_and_success_roles_are_legible_on_their_fills`.
 - **Red**: `scripts/build-lock.sh cargo test -p micold-core --lib tokens::` →
   `every_colour_role_is_emitted_as_a_hex_triple ... FAILED` (`light: --micold-warning is not emitted`).
-- **Green**: roles + palette tones added → `test result: ok. 11 passed; 0 failed`. The client
-  contrast test was not yet run (client build in progress at handover).
+- **Green**: roles + palette tones added → `test result: ok. 11 passed; 0 failed`. Client: `cargo test -p micold-client --lib composition_contrast` → `test result: ok. 9 passed; 0 failed`
+  (9, not 8, now the card-state pairs are in).
 
-## M2 / T010 + T017 (Overview state and cards)
+## M1 / T010 + T017 (Overview state and cards)
 
 - **Tests**: `crates/micold-client/tests/overview.rs` (15 tests: toggle/close, R2, project switch,
   one card per sidebar entry and order, counts, R5 agent request, R6 PR states, Default never
@@ -36,14 +36,14 @@ list. Append only.
 - **Green**: `cards` built from `sidebar_entries()`, sessions, agent prompts and `pr_status` →
   `test result: ok. 15 passed; 0 failed`.
 
-## M2 / T014 (+ T022 routing) (selecting a session closes the Overview)
+## M1 / T014 (+ T022 routing) (selecting a session closes the Overview)
 
 - **Test**: `main_tests.rs` `selecting_a_session_closes_the_overview_and_shows_it`.
 - **Red**: `assertion failed: !app.core.overview.open`.
 - **Green**: the `SessionMsg::Selected` arm sends `overview::Msg::Closed` →
   `test result: ok. 1 passed`.
 
-## M2 / T011–T013, T018–T020 (OverviewCard, CardGrid, contrast, showcase)
+## M1 / T011–T013, T018–T020 (OverviewCard, CardGrid, contrast, showcase)
 
 - **Tests**: `overview_card.rs` (one height ×5 states, no overlap at 280 px with a long name, name
   tooltip, type/state icon + word), `card_grid.rs` (columns formula, columns when laid out, no card
@@ -75,3 +75,46 @@ list. Append only.
   `the_overview_button_needs_an_active_project_and_no_settings` (toolbar.rs) were written with the
   fix, no recorded red. The key-order test moved into `ui::overview::tests` (G1: `ui/mod.rs` keeps
   no inline test module). `leaves`/`overlap` now live in `test_support`. Green: `--lib`: `657 passed`.
+
+## M1 / Visual-pass finding (FR-002: the type's word is visible text on the card)
+
+- **Test**: `a_card_shows_its_type_and_state_with_their_words` now expects the footer
+  `"Feature · 3 sessions, 2 running"`.
+- **Red**: `assertion left == right failed: FR-002 …` (`left: "3 sessions, 2 running"`,
+  `right: "Feature · 3 sessions, 2 running"`); `test result: FAILED. 4 passed; 1 failed`.
+- **Green**: `words().footer` leads with `kind.label()` (tooltip kept) →
+  `--lib overview_card`: `test result: ok. 5 passed; 0 failed` (height ×5 and 280 px tests unchanged).
+
+## M1 / Assertion-red evidence, after the fact (red by mutation, after the fact)
+
+Each line of implementation was broken once, the test run, the code restored byte-for-byte and the
+test rerun green.
+
+1. `card_state` (core): deleted the `agent_request` row. `cargo test -p micold-core overview`:
+   `card_state_follows_the_table_… panicked … left: (Idle, Idle) right: (NeedsAction, AgentRequest)`.
+   Green: `test result: ok. 15 passed`.
+2. `OverviewCard`: `Fixed(HEIGHT + 1.0)` → `the_card_has_one_height_in_all_five_states` panicked with
+   `[137.0, 137.0, 137.0, 137.0, 137.0]`; `state_label: model.kind.label()` →
+   `a_card_shows_its_type_and_state_with_their_words … left: "Feature" right: "Needs action"`.
+   Green: `--lib overview_card`: `ok. 5 passed`.
+3. `palette(Done)` text role = fill role → `an_overview_cards_text_and_icon_are_legible_on_its_state_fill`:
+   `Light / Done text: 1.00:1 (needs 4.5)`. Green: `--lib composition_contrast`: `ok. 9 passed`.
+4. `main_content_key` returning `u64::MAX - 2` → `the_overview_key_sits_between_settings_and_changes`:
+   `left: 18446744073709551613 right: 18446744073709551612`. Green: `--lib`: `ok. 657 passed`.
+5. `CardGrid` without its own `Scrollable` (the grid unbounded, as under an outer scrollable):
+   `thirty_cards_scroll_vertically` and `the_laid_out_grid_has_the_columns_its_width_gives` went red
+   (`left: 0 right: 6`), but **`thirty_cards_lay_out_bounded_in_a_short_window` stayed green**: it
+   builds its own `container(...Length::Fill)`, which clamps the height whatever the grid does, and
+   it never calls `view`, so it cannot see an outer scrollable. No assertion-red for it; a stronger
+   test needs `view` with a `State` (left open).
+6. `overview_press` without the `workspace.active` check →
+   `the_overview_button_needs_an_active_project_and_no_settings` panicked `no project`.
+   Green: `--lib`: `ok. 657 passed`.
+7. `TypeOrphan` mapped to `TypeIncluded`'s `\u{e157}`: `--test icons`:
+   `TypeOrphan must map to its pinned codepoint`, `TypeIncluded must not share a glyph with
+   TypeOrphan`; `test result: FAILED. 2 passed; 3 failed`. Green: `ok. 5 passed`.
+8. `Prompt.session` = `SessionId(Default::default())` in `daemon_sync.rs`: bin test
+   `a_queued_prompt_names_the_calling_session`: `the prompt carries the wire's caller`
+   (`left: Some(SessionId(0000…)) right: Some(SessionId(dcd777dd-…))`). Green: `ok. 1 passed`.
+   `--test features_agent_confirm` stayed green under the mutation (`ok. 12 passed`): it builds
+   its own `Prompt`, so it does not pin the caller; the bin test is the pin.
