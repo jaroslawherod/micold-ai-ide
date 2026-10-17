@@ -1181,12 +1181,9 @@ mod tests {
     #[test]
     fn a_stored_report_its_operations_could_not_build_is_refused() {
         let stored = |reply: &str, first: u64, last: u64| {
-            let mut value = serde_json::to_value(sample(reported(
-                Outcome::Answered,
-                "why",
-                Reporter::User,
-            )))
-            .expect("serialises");
+            let mut value =
+                serde_json::to_value(sample(reported(Outcome::Answered, "why", Reporter::User)))
+                    .expect("serialises");
             value["state"]["reported"]["reply"] = json!(reply);
             value["state"]["reported"]["first_at"] = json!(first);
             value["state"]["reported"]["last_at"] = json!(last);

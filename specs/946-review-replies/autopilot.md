@@ -56,8 +56,8 @@ split along s6 (M3) is the only scenario split with a deliverable on each side.
 | Plan | 1 | e3ecccba79f5e3b40a507a17e457b890bfcdbd6d:6992724c29035e9298018a753f72c3f8dacc111d | CLEAN (2 MINOR, fixed, prose only) |
 | Tasks | 1 | 4380837765014bf8cc3452af063dd049edc1dded:e28ca8bb81d4de0489768de261204c9c857a5300 | CLEAN (3 MINOR, fixed, prose only; checklist item confirmed and ticked) |
 | Review A M1 | 1 | 69eede8cc3bef883e825ffe7ee48a68dc903fa34:7fed368b72a9f602c7bae2b326591610623df30e | CHANGES: F4 MAJOR fixed (stored report validated on load), F6 MINOR fixed (wording); F1–F3 MAJOR declined; F5 MINOR left |
-| Review A M1 | 2 | 548fdaf3ddac4e7745d3d235831aa23e6c1946f2:2fde8de8aaaece00bd3722d3616afa038422f4fc | running (sonnet, fix diff) |
-| Review B M1 | 1 | 548fdaf3ddac4e7745d3d235831aa23e6c1946f2:2fde8de8aaaece00bd3722d3616afa038422f4fc | running (sonnet) |
+| Review A M1 | 2 | 548fdaf3ddac4e7745d3d235831aa23e6c1946f2:2fde8de8aaaece00bd3722d3616afa038422f4fc | CLEAN |
+| Review B M1 | 1 | 548fdaf3ddac4e7745d3d235831aa23e6c1946f2:2fde8de8aaaece00bd3722d3616afa038422f4fc | CHANGES: F2 MAJOR fixed (T012/T016 red shown by mutation, cycle-log); F1 BLOCKER declined; F3/F4 MINOR accepted |
 
 ## Declined review findings
 
@@ -68,6 +68,8 @@ split along s6 (M3) is the only scenario split with a deliverable on each side.
 | M1 | Review A r1 | F2 every save writes v2, an older build quarantines the file | research.md R-store (lines 137–142) chose v2 knowingly over optional v1 fields; T004/T005 require it |
 | M1 | Review A r1 | F3 Mark/Reanchor answered with generic `Refused` | T008/T009 specify exactly that placeholder; T040/T063 replace it in M3/M5 |
 | M1 | Review A r1 | F5 MINOR re-id not saved, O(n²) check | MINOR; re-id is persisted on the next save, n per entry is small |
+| M1 | Review B r1 | F1 BLOCKER could not run Verify (headless reviewer lacked command approval, tmp ENOSPC) | environment, not the code: the full gate (`scripts/gate.sh`, all workspace tests incl. review_edit/review_send/features_changes) runs Verify on the final tree; no B fix needed a re-run |
+| M1 | Review B r1 | F3 MINOR some T002/T010 tests passed at declaration | accepted: they pin serde shapes and arms written in the same core commit (T003); recorded as not red-first in cycle-log |
 
 ## Handover
 
