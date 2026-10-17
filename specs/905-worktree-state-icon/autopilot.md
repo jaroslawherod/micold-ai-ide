@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-h057j5
 - **Started**: 2026-10-17
 - **Phase**: implement
-- **Next step**: M1 verify.md from *Handover* (all T001–T017 ticked)
+- **Next step**: orchestrator opens the M1 PR (pushed, title/body in the unit's scratchpad), waits on CI and merges; then M2
 
 ## Pull requests
 
@@ -22,7 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T017 | full | Worktree and Default rows show a live state icon; showcase, contrast gate, user guide and icon reference | — | in progress |
+| M1 | T001–T017 | full | Worktree and Default rows show a live state icon; showcase, contrast gate, user guide and icon reference | pending (pushed) | review |
 | M2 | T018–T026 | full | A mid-turn permission stop makes its worktree Blocked (protocol 48) | — | pending |
 
 M1 holds 17 tasks (over the ~10 of milestones.md rule 3): it is Foundational + US1 + US3, because the shared `StateIcon` must ship with its showcase entry, contrast proof and icon-reference rows (Principles VII, VIII; speckit-analyze C1, C2). US1 has no acceptance-scenario split that leaves a deliverable without the component. T027–T028 (visual pass, §C) go to the close unit.
@@ -47,6 +47,7 @@ M1 holds 17 tasks (over the ~10 of milestones.md rule 3): it is Foundational + U
 | Plan review | 1 | 7ff73d272ce69913ac4b831931834346e5e5a681:7093a3877e09df8c0b61a273d62ad507a90888f6 | CLEAN: no findings |
 | Tasks review | 1 | 09001da43f215b58f9b3a1028df23f2279894dc7:cd966ec8f3b1df26c9b4c8ee1af19cfe0bbb0fcd | CLEAN: 1 MINOR (checklist item ticked, prose only) |
 | M1 review A (code-review high) | 1 | 97ffd4d5cc34738266086384efb135f33b0e7a2f:f12d11f7f1acb515dbabdb7c6a9d9a0807eaa1a5 | CLEAN: 8 MINOR (1 SidebarName prose, 2 square slot, 6 state bound once: fixed; 3, 4, 5, 7, 8 left) |
+| M1 review B (conformance, sonnet) | 1 | d43d0d4d6cd81558d89b5e55317f781934e0895d:dd75137e9525130f84bb95106c977d91fde2c6a6 | CLEAN; Verify: core location_state 6 passed, client icons/icons_font/sidebar_state_icon/showcase_completeness/layout_snapshot ok |
 
 ## Declined review findings
 
@@ -56,13 +57,12 @@ M1 holds 17 tasks (over the ~10 of milestones.md rule 3): it is Foundational + U
 
 ## Handover
 
-M1 unit 2 stopped at the 150k cap after implement. Not pushed, no PR. Base origin/main a09e5237.
+None.
 
-- **Done**: T001–T017 all ticked and green locally: `cargo test -p micold-client --lib` (637), `--test icons icons_font sidebar_state_icon showcase_completeness showcase_captions material_boundary` all ok; `cargo fmt --all` run. Core `location_state` tests green from unit 1.
-- **Not yet run**: `cargo test -p micold-core`, clippy, the full gate, any review.
-- **Next**: verify.md from step 1: scoped gate (`scripts/autopilot/scoped-gate.sh`) detached + review A (`code-review` high on `origin/main...HEAD`), then review B (conformance, sonnet) and the visual pass (showcase `StateIcon` entry; sidebar rows), then full gate `scripts/gate.sh` detached, then pr.md (cloud overrides: push, write PR title/body to scratchpad, orchestrator opens PR).
-- **Visible change**: yes (sidebar rows, showcase) → visual pass required.
-- Build helper: detached `scripts/build-lock.sh cargo …` with `CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0`. `$SCRATCHPAD` is unset in this env; use the session scratchpad path.
+## M1 verification
+
+- Full gate (`scripts/gate.sh`) green at dd75137e.
+- Visual pass (showcase `StateIcon`, quickstart B9 showcase part): `visual-pass.md`, `visual/`. All PASS except the Blocked octagon, inconclusive at ~10 px under tiny-skia (distinct from the other two shapes; glyph pinned to `report` by `tests/icons.rs`); the larger-render check and the client sidebar rows (B1–B11) go to the close unit's T027–T028.
 
 ## Open escalation
 
