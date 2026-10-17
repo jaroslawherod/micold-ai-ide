@@ -49,12 +49,15 @@ M1 holds 17 tasks (over the ~10 of milestones.md rule 3): it is Foundational + U
 | Tasks review | 1 | 09001da43f215b58f9b3a1028df23f2279894dc7:cd966ec8f3b1df26c9b4c8ee1af19cfe0bbb0fcd | CLEAN: 1 MINOR (checklist item ticked, prose only) |
 | M1 review A (code-review high) | 1 | 97ffd4d5cc34738266086384efb135f33b0e7a2f:f12d11f7f1acb515dbabdb7c6a9d9a0807eaa1a5 | CLEAN: 8 MINOR (1 SidebarName prose, 2 square slot, 6 state bound once: fixed; 3, 4, 5, 7, 8 left) |
 | M1 review B (conformance, sonnet) | 1 | d43d0d4d6cd81558d89b5e55317f781934e0895d:dd75137e9525130f84bb95106c977d91fde2c6a6 | CLEAN; Verify: core location_state 6 passed, client icons/icons_font/sidebar_state_icon/showcase_completeness/layout_snapshot ok |
+| M2 review A (headless autopilot-reviewer, high) | 1 | 8b3a44548167dac4bb3fb4beab0b33deea6a6d23:1c855023fb931347e4f9ba708c9cc595ecd776e1 | CLEAN |
+| M2 review B (conformance, sonnet) | 1 | 8b3a44548167dac4bb3fb4beab0b33deea6a6d23:1c855023fb931347e4f9ba708c9cc595ecd776e1 | CHANGES: F2 MAJOR fixed (W5 attention/unread assertions); F1 MAJOR declined; F3 MINOR (T020 tests live in tests/activity_pipeline.rs, where the note_activity tests are). Verify: core attention 67, protocol_roundtrip 31, schema_hash 22, activity_pipeline 16, sidebar_state_icon 9 passed |
 
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
 | M1 | A | F7 Starting→Running+Unknown shows a blank slot until the first hook | Decision 3 / data-model rule 7: unknown activity is never guessed; a CLI that reports activity reports it at once |
+| M2 | B | F1 no tdd/cycle-log.md for T018-T022 | The feature has no tdd/ directory (M1 neither); tests were written before the code and failed to compile without it |
 
 ## Handover
 
