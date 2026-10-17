@@ -466,7 +466,14 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
                 (false, annotation) => annotation,
             };
             if let Some((text, tint)) = annotation {
-                line = line.push(super::Text::new(text, TypeRole::Caption, r).tint(tint));
+                if item.child {
+                    // A child's marker ("agent, origin pending, claude") is long enough to take the
+                    // whole row at its natural width and squeeze the name to "C…". Ellipsized, it
+                    // shares the remainder with the name, so neither vanishes.
+                    line = line.push(super::Ellipsized::at_role(text, TypeRole::Caption, tint));
+                } else {
+                    line = line.push(super::Text::new(text, TypeRole::Caption, r).tint(tint));
+                }
             }
 
             // The unread mark (feature 039): at the trailing edge, before any trailing action. It
