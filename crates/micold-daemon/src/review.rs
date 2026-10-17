@@ -123,7 +123,14 @@ impl Reviews {
             ReviewEditOp::Delete { id } => edited.delete(id)?,
             ReviewEditOp::ClearSent => edited.clear_sent(),
             ReviewEditOp::DiscardPending => edited.discard_pending(),
-            ReviewEditOp::Mark { .. } | ReviewEditOp::Reanchor { .. } => {}
+            // Feature 946's later milestones answer these (T040, T063); until then they store
+            // nothing.
+            ReviewEditOp::Mark { .. } | ReviewEditOp::Reanchor { .. } => {
+                return Err(Refusal::new(
+                    ErrorKind::Refused,
+                    "this review action is not available in this build",
+                ));
+            }
         }
 
         catalog.save_reviews(project, &file_with(entries, dir, &edited)).map_err(|err| {

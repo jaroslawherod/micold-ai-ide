@@ -485,7 +485,8 @@ async fn us4_s4_comments_and_their_states_are_back_after_a_restart_and_pushed_on
 /// A comment of entry `feat` in state `state`, as the file holds it.
 fn stored(n: u128, state: CommentState) -> ReviewComment {
     ReviewComment {
-        id: CommentId(uuid::Uuid::from_u128(n)),
+        // Distinct leading digits, so each comment has its own reference (946 research R4).
+        id: CommentId(uuid::Uuid::from_u128(n << 96)),
         state,
         ..serde_json::from_value(serde_json::json!({
             "id": "01234567-89ab-4def-8123-456789abcdef", "path": "src/a.rs", "side": "new",
@@ -540,6 +541,41 @@ async fn request(client: &mut Client, req: u64, msg: ClientMsg) -> (DaemonMsg, V
         }
     }
     (answer, seen)
+}
+
+/// Feature 946 T008 (placeholder): `Mark` and `Reanchor` are refused and store nothing until their
+/// milestones (T040 retires the `Mark` assertion, T063 the `Reanchor` one).
+#[tokio::test]
+async fn mark_and_reanchor_are_refused_and_store_nothing_in_this_build() {
+    use micold_core::review::comment::{Move, Outcome};
+    use micold_core::review::LineRange;
+
+    let f = Fixture::new();
+    let sent = stored(1, CommentState::Sent { at: 1_790_000_100 });
+    seed(&f, vec![sent.clone()]);
+    let before = f.on_disk();
+    let state = f.service();
+    let mut a = connect(&state).await;
+    attach(&mut a, &f.project()).await;
+
+    let line = LineRange::new(2, 2).unwrap();
+    let ops = [
+        ReviewEditOp::Mark {
+            id: sent.id,
+            outcome: Outcome::Answered,
+            note: "kept".into(),
+        },
+        ReviewEditOp::Reanchor {
+            moves: vec![Move::new(sent.id, line, LineRange::new(5, 5).unwrap()).unwrap()],
+        },
+    ];
+    for (req, op) in (1..).zip(ops) {
+        let (result, seen) = edit(&mut a, req, &f.project(), "feat", op).await;
+        let (kind, _) = result.expect_err("refused in this build");
+        assert_eq!(kind, ErrorKind::Refused);
+        assert!(seen.is_empty(), "nothing is pushed");
+        assert_eq!(f.on_disk(), before, "nothing is stored");
+    }
 }
 
 #[tokio::test]
