@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/551_show-sessions-spawned-by-an-agent-as-a-tree-under
 - **Started**: 2026-10-12
 - **Phase**: milestone-M2
-- **Next step**: M2 full gate, push, PR
+- **Next step**: wait for CI on PR #916, merge, then M3
 
 ## Pull requests
 
@@ -24,7 +24,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T016, T025, T038 | full | Origin recorded by the daemon's `record_origin` (nothing sets it until M3), persisted, exposed on wire and MCP; spike T025 outcome recorded | #824 | merged |
-| M2 | T017–T024, T039 | full | Sidebar nests children with child/pending/removed markers | | pending |
+| M2 | T017–T024, T039 | full | Sidebar nests children with child/pending/removed markers | #916 | in review |
 | M3 | T026–T031, T040 | full | Provider readers for spike-confirmed providers, discovery, provider table | | pending |
 | M4 | T032–T037, T041 | full | Fold, count, attention rollup, persisted fold | | pending |
 
@@ -75,8 +75,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-Done: M2 implemented (T017-T024, T039), reviews A and B done, scoped gate green. Visual-pass fixes committed (child annotation is `Ellipsized` in tree_view.rs, layout test asserts the stable prefix; screenshots in specs/551-session-spawn-tree/visual/). Branch is 6 commits ahead, 15 behind origin/main; no PR yet. A stale full gate may still be running: kill it first.
-Next (fresh unit): `scripts/autopilot/branch-start.sh 824` (rebase; on a denied rewrite return ESCALATE with the command), `mise run gate` detached + hold.sh. Known red: `tests::pr_status::pr_status_tick_and_refreshes_during_a_reading_add_one_call_when_it_ends` (main_tests.rs:3119) looks like a flake: if it fails alone, run it on origin/main, report, file a GitHub issue with diagnostics if flaky. Then push and open the PR per tasks/pr.md: title `feat(551): show agent-started sessions as a tree in the sidebar (#551)`; Review A: 10 findings, none upheld, indent clamp fixed; Review B: 1 MAJOR (FR-007 message test) fixed; visual pass: found catalog_sync gap, fixed, final re-run optional.
+Done: M2 rebased, full gate green, PR #916 open. Next: orchestrator waits on CI and merges, then M3. The pr_status flake did not occur in the gate (green).
 
 ## Open escalation
 
