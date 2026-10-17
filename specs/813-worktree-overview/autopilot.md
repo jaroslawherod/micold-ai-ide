@@ -12,20 +12,21 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-2lmupk
 - **Started**: 2026-10-17
 - **Phase**: milestones
-- **Next step**: M1 PR open (title/body written, gh unavailable here), then CI and merge
+- **Next step**: M2 implement (T024–T030)
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #927 | design (spec, plan, tasks) | merged | 0e3b543ff7eaf73840eea4e07d00a2f7e93e1248 |
+| #930 | M1 | merged | 6cf261efc3ae0a1d4e35b1ad157a63644acf327e |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T023 | full | Overview grid from the top-bar button, session-derived card states | — | in progress |
-| M2 | T024–T030 | full | PR counts and merge conflict on cards | — | pending |
+| M1 | T001–T023 | full | Overview grid from the top-bar button, session-derived card states | #930 | merged |
+| M2 | T024–T030 | full | PR counts and merge conflict on cards | — | in progress |
 | M3 | T031–T039 | full | Ctrl/Cmd+Shift+O and attention badge | — | pending |
 | M4 | T040–T049 | full | Card activation and keyboard traversal | — | pending |
 | M5 | T050–T060 | full | Task summary and progress on cards | — | pending |
