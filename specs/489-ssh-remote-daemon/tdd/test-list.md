@@ -24,3 +24,13 @@ M2..M8 add their rows when their units start.
 | I6 | `remote bridge` relays bytes to the daemon socket, starts it when none runs, reuses a running one; `remote prune` | FR-004, FR-005 | T010 | `daemon/src/remote.rs` |
 | I7 | Actor: `Dial::Ssh` goes `Starting` to `Connected` with version and endpoint; a permanent failure is `Unreachable{reason}` with no retry | FR-009, FR-017 | T011 | `client/daemon.rs` |
 | I8 | `SshStdio` relays bytes both ways | FR-004 | T003 | `core/ssh/stdio.rs` |
+
+## M5 (unit and outer)
+
+| ID | Behaviour | Traces to | Task | Where |
+|---|---|---|---|---|
+| I20 | `ssh -G` output parsing and the host list from `~/.ssh/config` (wildcards skipped) | FR-002, FR-016 | T056 | `core/ssh/config_hosts.rs` |
+| I21 | `SshDuplicate{other}` over resolved (host, user, port); `InvalidField` names the field | FR-010, FR-016 | T057 | `core/tests/daemons_ssh_duplicates.rs` |
+| I22 | Picker fills only the host; refused port and duplicate name their field; recent errors; edit; remove with confirmation | US3.1-4, FR-014 | T058 | `client/tests/daemons_feature.rs` |
+| I23 | Picker and error rows paint without overflow | FR-002 | T059 | `client/tests/daemons_section_geometry.rs` |
+| O3 | Unknown or changed host key, refused auth, missing key, unreachable host each fail with a named reason within the timeout; no key recorded | FR-009, SC-003 | T060 | `daemon/tests/ssh_real_hostkey_auth.rs` (`mise run test-ssh`) |
