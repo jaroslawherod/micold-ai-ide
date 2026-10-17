@@ -132,8 +132,8 @@ daemon and read the state and reason in Settings → Daemons.
    starts, **Then** it shows a failure with the scheduler's reason.
 4. **Given** the kube context is missing from the kubeconfig or the cluster is unreachable, **When**
    the daemon starts, **Then** it shows a failure naming the context or the connection error.
-5. **Given** any of these failures, **When** it occurs, **Then** the reason is shown within the start
-   timeout (FR-012) and other daemons are unaffected.
+5. **Given** any of these failures, **When** it occurs, **Then** the reason is shown within the
+   applicable phase bound (FR-012) and other daemons are unaffected.
 
 ---
 
@@ -182,7 +182,7 @@ pass with no sign-in, provider network access or cost.
    drives it with the stand-in AI CLI, **Then** pod creation, tunnelling, a session's input and output,
    reconnect, stop (volume kept) and remove pass.
 2. **Given** the same cluster, **When** RBAC denial, image pull failure and an unschedulable pod are
-   provoked, **Then** each is reported with its reason within the timeout.
+   provoked, **Then** each is reported with its reason within the applicable phase bound (FR-012).
 3. **Given** no cluster or no opt-in, **When** a developer runs the normal test task, **Then** these
    tests do not run; a documented task runs them on demand and CI runs them on changes that can
    affect them.
@@ -341,7 +341,8 @@ pass with no sign-in, provider network access or cost.
 - **SC-002**: After the client is away for 10 minutes, 100% of sessions still running in the pod are
   shown running with their output since disconnection.
 - **SC-003**: RBAC denial, image pull failure and an unschedulable pod are each reported with their
-  reason within the start timeout in 100% of CI runs; none ends as an indefinite `starting`.
+  reason within the applicable phase bound (FR-012) in 100% of CI runs; none ends as an indefinite
+  `starting`.
 - **SC-004**: The pod has 0 secrets mounted beyond those the user allowed, and runs as non-root with a
   read-only root filesystem.
 - **SC-005**: After **Stop** and a new start, 100% of the daemon's worktrees are present; after
