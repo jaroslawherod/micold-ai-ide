@@ -21,6 +21,7 @@
 //! budget is the user's mistake, an unenforceable one is the environment's limitation.
 
 pub mod argv;
+pub mod basic_image;
 pub mod cli;
 pub mod dialect;
 pub mod exec;

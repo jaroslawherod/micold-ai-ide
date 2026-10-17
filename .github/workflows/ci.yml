@@ -485,6 +485,11 @@ jobs:
               exit 1
               ;;
           esac
+      # Feature 806: `sandbox_real_basic_image` checks the basic image (sshd, Node, no daemon or AI
+      # CLI, FR-002) and starts from `micold-basic:dev`. Built from this tree, so a change under
+      # `packaging/basic/` is tested before `basic-image.yml` publishes it on merge.
+      - name: Build the :dev basic image
+        run: docker build -f packaging/basic/Containerfile -t micold-basic:dev packaging/basic
       # `sandbox_real_` is a *test-name* filter, not a file filter: cargo matches it against the
       # test function's path, and an integration target's name is not part of that path. So a test
       # in `tests/sandbox_real_*.rs` whose function is not also named `sandbox_real_*` runs locally

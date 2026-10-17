@@ -1,0 +1,72 @@
+# The basic image: an SSH server and what a session needs, and no session daemon or AI CLI (feature
+# 806, FR-002). The client copies its own daemon build in over SSH and installs the AI CLIs the user
+# selected, so this image does not depend on the app's version and is published on its own by
+# `.github/workflows/basic-image.yml`, tagged with the content hash of this directory.
+#
+# What is deliberately NOT here: the daemon, any AI CLI, any key, token or credential, and any host
+# path. The image is the same for every user; identity (`--user <uid>:<gid>`), the SSH keys
+# (`/run/micold/ssh`, mounted read-only) and the credential shares the user allowed are applied at
+# run time (FR-013). `scripts/tests/basic-image-hash.test.sh` refuses a COPY of a key, credential,
+# token or the daemon, and any `npm install`.
+#
+# `node:24-trixie-slim`, as `packaging/sandbox/Containerfile` explains: Node 24 for the
+# npm-distributed AI CLIs the client installs (Claude Code needs Node >= 22, trixie ships 20), and
+# trixie for glibc 2.41, no older than the glibc daemon builds link against.
+FROM docker.io/library/node:24-trixie-slim
+
+# Session tooling, as the sandbox image has it, plus the SSH server the client provisions through
+# and `util-linux` for `flock`, which serialises the AI CLI installs.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      ca-certificates \
+      git \
+      openssh-client \
+      openssh-server \
+      util-linux \
+      procps \
+      less \
+      bash \
+      tzdata \
+ && rm -rf /var/lib/apt/lists/* \
+ && rm -f /etc/ssh/ssh_host_*
+
+# The daemon's state directory, bind-mounted from the host at run time (feature 027, FR-011), and
+# found through `XDG_DATA_HOME` the way the daemon looks for it everywhere.
+RUN mkdir -p /var/lib/micold-ai-ide && chmod 0777 /var/lib/micold-ai-ide
+ENV XDG_DATA_HOME=/var/lib
+
+# Pi and OpenCode keep the same offline posture when run by hand inside the container (Principle
+# IV); the session service sets these per launch too.
+ENV PI_OFFLINE=1 \
+    PI_SKIP_VERSION_CHECK=1 \
+    PI_TELEMETRY=0 \
+    OPENCODE_DISABLE_AUTOUPDATE=1
+
+# The container runs as the host uid, which has no passwd entry, and sshd refuses a user
+# `getpwuid` cannot resolve (research R3). The entrypoint appends one, so passwd and group are
+# writable by gid 0. `/run/sshd` is the privilege-separation directory sshd checks for at start.
+RUN chgrp 0 /etc/passwd /etc/group \
+ && chmod g+w /etc/passwd /etc/group \
+ && mkdir -p /etc/micold /run/sshd \
+ && chmod 0755 /run/sshd
+
+COPY sshd_config /etc/micold/sshd_config
+COPY entrypoint.sh /usr/local/bin/micold-entrypoint
+RUN chmod 0644 /etc/micold/sshd_config && chmod 0755 /usr/local/bin/micold-entrypoint
+
+# No USER directive: the uid is supplied at run time so the image works for every user.
+# sshd listens here inside the container; the runtime publishes it on host loopback only.
+EXPOSE 2222
+
+# `image.source` links the GHCR package to this repository, so it inherits the repository's
+# visibility (see packaging/sandbox/README.md, "Visibility needs no hand step"). The content label
+# is the hash `scripts/basic-image-hash.sh` prints for this directory; the publish workflow passes
+# it, since a file cannot carry its own hash.
+ARG BASIC_CONTENT_HASH=dev
+LABEL org.opencontainers.image.source="https://github.com/jaroslawherod/micold-ai-ide"
+LABEL org.opencontainers.image.title="micold-basic"
+LABEL org.opencontainers.image.description="Basic image for Micold AI IDE container daemons: sshd and session tools; the client copies its daemon in and installs AI CLIs (feature 806)."
+LABEL org.opencontainers.image.licenses="Apache-2.0"
+LABEL org.micold.basic.content="${BASIC_CONTENT_HASH}"
+
+ENTRYPOINT ["/usr/local/bin/micold-entrypoint"]
