@@ -165,7 +165,10 @@
 ///
 /// And 46 → 47 for feature 551's session tree: `origin` on `SessionSummary`
 /// (contracts/origin-protocol.md). An older peer would drop it and show every child top-level.
-pub const PROTOCOL_VERSION: u32 = 47;
+///
+/// And 47 → 48 for feature 905's worktree state icon: `paused_on_user` on `SessionSummary`
+/// (contracts/wire.md), serde-defaulted, so an older frame decodes to `false`.
+pub const PROTOCOL_VERSION: u32 = 48;
 
 // `build.rs` emits `pub const SCHEMA_HASH: [u8; 32] = [...];` into this file.
 include!(concat!(env!("OUT_DIR"), "/schema_hash.rs"));

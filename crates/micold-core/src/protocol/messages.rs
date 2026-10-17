@@ -1291,6 +1291,11 @@ pub struct SessionSummary {
     /// (`occupancy::main_session`). Absent on an older frame means `false`.
     #[serde(default)]
     pub main: bool,
+    /// Whether the session stopped mid-turn to ask for a permission or an answer and has not
+    /// carried on (feature 905, W1): the turn clock is paused on the user. Live only, like
+    /// `activity`: the catalog stores `false`. Absent on an older frame means `false`.
+    #[serde(default)]
+    pub paused_on_user: bool,
 }
 
 /// One agent run on a [`SessionSummary`] — the stored form, unchanged (feature 552).
@@ -1844,6 +1849,7 @@ mod attention_wire_tests {
             origin: None,
             agents: Vec::new(),
             main: false,
+            paused_on_user: false,
         };
 
         assert_eq!(
@@ -1871,6 +1877,7 @@ mod attention_wire_tests {
             origin: None,
             agents: Vec::new(),
             main: false,
+            paused_on_user: false,
         };
 
         assert!(

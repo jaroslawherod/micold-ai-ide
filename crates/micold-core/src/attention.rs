@@ -319,6 +319,12 @@ impl TurnClock {
         self.state = next;
         kind
     }
+
+    /// Whether the session stopped mid-turn to ask the user for a permission or an answer and has
+    /// not carried on since (feature 905, D2): exactly the paused state.
+    pub fn paused_on_user(&self) -> bool {
+        matches!(self.state, TurnState::Paused { .. })
+    }
 }
 
 /// The text of a desktop notification.
@@ -501,6 +507,7 @@ mod tests {
             origin: None,
             agents: Vec::new(),
             main: false,
+            paused_on_user: false,
         }
     }
 
@@ -1107,6 +1114,27 @@ mod turn_clock_tests {
         let mut clock = working_since(secs);
         clock.change(TurnChange::AskedUser, at(secs + 1), THRESHOLD);
         clock
+    }
+
+    /// Feature 905 (R1): the clock is paused on the user exactly between `AskedUser` and the next
+    /// change of the turn.
+    #[test]
+    fn paused_on_user_is_true_only_after_working_then_asked_user() {
+        assert!(paused_since(10).paused_on_user());
+        for next in [
+            TurnChange::Working,
+            TurnChange::Finished,
+            TurnChange::PromptSubmitted,
+        ] {
+            let mut clock = paused_since(10);
+            clock.change(next, at(20), THRESHOLD);
+            assert!(!clock.paused_on_user(), "{next:?} ends the pause");
+        }
+        let mut no_turn = not_in_turn();
+        no_turn.change(TurnChange::AskedUser, at(5), THRESHOLD);
+        assert!(!no_turn.paused_on_user(), "AskedUser with no turn");
+        assert!(!not_in_turn().paused_on_user(), "a fresh clock");
+        assert!(!working_since(1).paused_on_user(), "working");
     }
 
     /// The kind a `Finished` at `secs` returns: shows when the clock thinks the turn started.

@@ -1505,6 +1505,7 @@ impl DaemonState {
         for summary in summaries {
             if let Some(live) = inner.sessions.get(&summary.id) {
                 summary.activity = live.activity.signal().clone();
+                summary.paused_on_user = live.turn.paused_on_user();
                 summary.input_serial = live.input.expected();
                 // `012` FR-008/BUG-003: which shell instances exist is durable-ish client state,
                 // but which are *alive* is only knowable here. The client cannot infer it — no
@@ -4656,11 +4657,15 @@ impl DaemonState {
         let event_for_turn = event.clone();
         live.activity.apply(event);
         let changed = live.activity.signal() != &before;
+        let paused_before = live.turn.paused_on_user();
         live.name_stale |= changed || first_turn_evidence;
         // The turn clock sees every event, before the attention event is decided (feature 613,
         // C2); its kind is used only if the session began waiting just now.
         let kind = turn_change(&event_for_turn, changed)
             .and_then(|change| live.turn.change(change, turn_now, threshold));
+        // A change of the paused flag alone is a change the windows must see (feature 905, W3):
+        // a `Stop` after a permission stop leaves the signal `AwaitingInput` but ends the pause.
+        let paused_changed = live.turn.paused_on_user() != paused_before;
         if changed {
             live.last_active = micold_core::clock::now();
         }
@@ -4699,7 +4704,7 @@ impl DaemonState {
         if let Some((target, notice)) = notice {
             self.send(target, notice);
         }
-        changed
+        changed || paused_changed
     }
 
     /// Record a provider-native agent report against its origin `session` (feature 552, FR-004).

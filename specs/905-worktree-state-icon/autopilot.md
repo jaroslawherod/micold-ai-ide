@@ -10,20 +10,21 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-h057j5
 - **Started**: 2026-10-17
 - **Phase**: implement
-- **Next step**: orchestrator opens the M1 PR (pushed, title/body in the unit's scratchpad), waits on CI and merges; then M2
+- **Next step**: M2 implemented (main was at protocol 47, now 48); scoped gate, reviews A and B, full gate, push, then the orchestrator opens the M2 PR
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #913 | design (spec, plan, tasks) | merged | a09e523796e7d9b571b410bce28848745c1e9734 |
+| #915 | M1 (also the stale BUG-904 session_discovery test fix, refs #904) | merged | b872f2677f4b69092a8591b9bc72bbeb182a3b29 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T017 | full | Worktree and Default rows show a live state icon; showcase, contrast gate, user guide and icon reference | pending (pushed) | review |
-| M2 | T018–T026 | full | A mid-turn permission stop makes its worktree Blocked (protocol 48) | — | pending |
+| M1 | T001–T017 | full | Worktree and Default rows show a live state icon; showcase, contrast gate, user guide and icon reference | #915 | merged |
+| M2 | T018–T026 | full | A mid-turn permission stop makes its worktree Blocked (protocol 48) | — | implemented, verifying |
 
 M1 holds 17 tasks (over the ~10 of milestones.md rule 3): it is Foundational + US1 + US3, because the shared `StateIcon` must ship with its showcase entry, contrast proof and icon-reference rows (Principles VII, VIII; speckit-analyze C1, C2). US1 has no acceptance-scenario split that leaves a deliverable without the component. T027–T028 (visual pass, §C) go to the close unit.
 

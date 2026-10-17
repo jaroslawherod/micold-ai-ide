@@ -436,6 +436,7 @@ fn sample_summary() -> SessionSummary {
             provider: AiCli::ClaudeCode,
         }],
         main: false,
+        paused_on_user: false,
     }
 }
 
@@ -1792,13 +1793,12 @@ fn the_plan_usage_settings_round_trip_in_daemon_settings_and_settings_set() {
 }
 
 #[test]
-fn a_session_summary_without_an_origin_decodes_to_none_and_the_protocol_is_44() {
+fn a_session_summary_without_an_origin_decodes_to_none() {
     // Feature 551, FR-013: a payload written before protocol 47 has no `origin` key.
     let mut value = serde_json::to_value(sample_summary()).expect("encode");
     value.as_object_mut().expect("object").remove("origin");
     let decoded: SessionSummary = serde_json::from_value(value).expect("decodes without the field");
     assert_eq!(decoded.origin, None);
-    assert_eq!(micold_core::protocol::version::PROTOCOL_VERSION, 47);
 }
 
 #[test]
@@ -1849,6 +1849,7 @@ fn the_main_marker_and_set_main_round_trip() {
         agents: Vec::new(),
         origin: None,
         main: true,
+        paused_on_user: false,
     };
     let json = serde_json::to_value(&summary).expect("encode");
     assert_eq!(json["main"], true);
@@ -1862,6 +1863,24 @@ fn the_main_marker_and_set_main_round_trip() {
     postcard_roundtrip(&ClientMsg::SessionSetMain {
         id: SessionId::new(),
     });
+}
+
+/// Feature 905 (W1): `paused_on_user` rides the summary, and a frame without it decodes `false`.
+#[test]
+fn paused_on_user_round_trips_and_defaults_to_false() {
+    let summary = SessionSummary {
+        paused_on_user: true,
+        ..sample_summary()
+    };
+    json_roundtrip(&summary);
+    postcard_roundtrip(&summary);
+    let mut json = serde_json::to_value(&summary).expect("encode");
+    assert_eq!(json["paused_on_user"], true);
+    json.as_object_mut()
+        .expect("object")
+        .remove("paused_on_user");
+    let older: SessionSummary = serde_json::from_value(json).expect("decode without the field");
+    assert!(!older.paused_on_user);
 }
 
 /// Feature 533 (T006): the Jira switch and one project's connection change cross the wire, both

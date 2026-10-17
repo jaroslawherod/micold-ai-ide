@@ -106,6 +106,7 @@ fn summary(id: SessionId, seq: u64, activity: ActivitySignal) -> SessionSummary 
         origin: None,
         agents: Vec::new(),
         main: false,
+        paused_on_user: false,
     }
 }
 

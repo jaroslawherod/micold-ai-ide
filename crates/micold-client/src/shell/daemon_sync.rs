@@ -3478,6 +3478,7 @@ pub(crate) mod tests {
             origin: None,
             agents: Vec::new(),
             main: false,
+            paused_on_user: false,
         }
     }
 

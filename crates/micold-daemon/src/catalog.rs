@@ -1863,6 +1863,7 @@ fn session_summary(session: &Session, removed: &HashSet<SessionId>) -> SessionSu
         }),
         agents: session.agents.clone(),
         main: session.main,
+        paused_on_user: false,
     }
 }
 

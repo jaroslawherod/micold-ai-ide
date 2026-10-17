@@ -57,17 +57,21 @@ them apart without relying on colour:
 | Icon | State | What puts a worktree in it |
 |------|-------|----------------------------|
 | Triangle | **Running** | A session is working on a prompt, or is starting or restarting |
-| Octagon | **Blocked** | A session failed (its start failed or its restarts ran out), or is waiting to be resumed after the session service restarted |
+| Octagon | **Blocked** | A session stopped mid-turn to ask for a permission or an answer, failed (its start failed or its restarts ran out), or is waiting to be resumed after the session service restarted |
 | Two bars | **Idle / waiting** | The session finished its turn and waits for your next prompt, has no process running, or its process ended — or the worktree has no session at all |
 
 - **Unknown.** When the app cannot read what a session is doing (for example, a session on a CLI
   that does not report its activity), the icon's place stays empty, and the row does not claim
   to be idle or blocked. The name stays where it is.
+- **Asking for a permission.** A session that stops mid-turn to ask for a permission or an
+  answer makes its worktree **Blocked** (*Blocked: needs permission*) until it carries on: the
+  icon turns to the triangle as soon as the session works again. A turn that simply ended stays
+  **Idle / waiting**.
 - **Several sessions.** A worktree with a main session and helpers shows one icon for all of
   them: **Blocked** if any is blocked, else **Running** if any is running, else unknown if any is
   unknown, else **Idle / waiting**. Closed (archived) sessions do not count.
 - **The tooltip.** Hover a row to read its state in words on a line of its own — *Running*,
-  *Blocked: failed*, *Blocked: resumable*, *Idle* or *State unknown* — above the unread line,
+  *Blocked: needs permission*, *Blocked: failed*, *Blocked: resumable*, *Idle* or *State unknown* — above the unread line,
   if the row has one.
 - **The Default entry** shows the state of the project root's sessions by the same rules; its
   house icon and everything else about it stay the same.

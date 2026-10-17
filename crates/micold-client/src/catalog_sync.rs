@@ -152,6 +152,7 @@ pub fn reconcile_catalog(
                 }
                 existing.lifecycle = lifecycle;
                 existing.activity = summary.activity.clone();
+                existing.paused_on_user = summary.paused_on_user;
                 existing.attention_seq = summary.attention_seq;
                 existing.unread = summary.unread;
                 // The daemon owns which session of a location is main (feature 776, R14).
@@ -203,6 +204,7 @@ pub fn reconcile_catalog(
                 );
                 s.lifecycle = lifecycle;
                 s.activity = summary.activity.clone();
+                s.paused_on_user = summary.paused_on_user;
                 s.attention_seq = summary.attention_seq;
                 s.unread = summary.unread;
                 s.main = summary.main;
@@ -466,6 +468,7 @@ mod tests {
                             provider: micold_core::session::AiCli::ClaudeCode,
                             origin: None,
                             agents: Vec::new(),
+                            paused_on_user: false,
                         })
                         .collect(),
                 })
