@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-uwrpqv
 - **Started**: 2026-10-17
 - **Phase**: plan
-- **Next step**: plan unit. Clarify CLEAN after 2 rounds (D2-D4, agent-resolved). Plan must cover the first publish of the basic image before a client can pin its digest (publishing is an outward action: escalate category 3 if it needs a release or a manual push).
+- **Next step**: plan unit (continue the handover: plan review round 1).
 
 ## Pull requests
 
@@ -46,7 +46,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-Plan unit 1 handed over at the context cap after exploring the code. Done: `research.md` DRAFT (code map + decisions R1-R7 + "Still to research"); `plan.md` is still the uncommitted template (re-run `setup-plan.sh` or fill it). Next: plan unit continues — verify and finish research.md (rejected alternatives, the "Still to research" items), write plan.md, data-model.md, contracts/ (incl. `provisioning.md` for #686 reuse), quickstart.md; review per tasks/plan.md. R1 (first publish of `micold-basic` via a new on-merge workflow instead of D2's release jobs) is an outward action: escalate category 3 with options after the plan review, unless the plan finds a publish needing neither a release nor a hand push. No review rounds yet. Clarify commit e62c174b and this commit are local, not pushed. No PR.
+Plan unit 2 handed over at the context cap with every plan artifact written, not yet reviewed. Done: `research.md` complete (R1-R14, each with rejected alternatives), `plan.md` (constitution table, FR map, design, test strategy, delivery order), `data-model.md`, `contracts/{provisioning,basic-image,daemon-settings}.md`, `quickstart.md`. Next: plan unit continues with step 2 of tasks/plan.md: plan review round 1 (no rounds run yet; run `review-snapshot.sh` first), act on findings, commit, set Next step to `tasks unit`. R1 per the orchestrator: plan on the merge-to-main publish workflow (`basic-image.yml`); do not escalate it again. Notable design choices a reviewer may probe: R8 install relay (client CONNECT proxy over `ssh -R`, npm registry only) for the default no-outbound posture; R11 the 489 target keeps its unbounded copy as a per-target bound; R10 `Adoption::Legacy`. No PR.
 
 ## Open escalation
 
