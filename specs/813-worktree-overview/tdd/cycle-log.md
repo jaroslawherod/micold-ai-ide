@@ -56,3 +56,14 @@ list. Append only.
 - **Green**: `columns` = `max(1, floor((w+gap)/(min+gap)))` →
   `--lib overview_card card_grid composition_contrast`: `17 passed; 0 failed`;
   `--test showcase_completeness`: `38 passed; 0 failed`.
+
+## T021–T023 — placement, button, docs, architecture fix
+
+- **Architecture**: `feature_registration_cost` failed 3 (cross-feature names, no isolation test,
+  `update` not shape A). `cards` moved to `ui::overview::cards`; `features::overview::update` now
+  returns `Vec<Outcome>`; `tests/features_overview.rs` added. Green: `--test
+  feature_registration_cost --test overview --test features_overview`: `7 + 15 + 2 passed`.
+- **Key order**: `main_content_key` test (`overview_placement_tests`) was written with its
+  implementation, so no recorded red. Green: `--lib overview_placement`: `1 passed`.
+- **Button/docs**: toolbar button has no unit test (built from `Button`/`Tooltip`); docs checked by
+  `documentation-set` and `check-user-guide-updated` scripts and `--test icons`: all pass.

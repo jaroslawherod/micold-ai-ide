@@ -918,7 +918,10 @@ impl State {
                 let outcomes = crate::features::worktree::update(self, msg);
                 drain(outcomes, |outcome| interpret(self, outcome));
             }
-            Message::Overview(msg) => crate::features::overview::update(&mut self.overview, msg),
+            Message::Overview(msg) => {
+                let outcomes = crate::features::overview::update(&mut self.overview, msg);
+                drain(outcomes, |outcome| interpret(self, outcome));
+            }
             Message::Runs(msg) => {
                 let outcomes = crate::features::runs::routed(self, msg);
                 drain(outcomes, |outcome| interpret(self, outcome));

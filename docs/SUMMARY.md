@@ -16,6 +16,7 @@
 - [Appearance & theming](user-guide/appearance-theming.md)
 - [Icons](user-guide/icons.md)
 - [Worktrees & sessions](user-guide/worktrees-and-sessions.md)
+- [The worktree Overview](user-guide/overview.md)
 - [Running a prompt in parallel](user-guide/parallel-runs.md)
 - [Terminal panes](user-guide/terminal-panes.md)
 - [Reviewing a worktree's changes](user-guide/reviewing-changes.md)

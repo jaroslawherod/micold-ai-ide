@@ -27,6 +27,7 @@ mod install_location;
 /// site. `tests/material_boundary.rs` scans the showcase at the same zero budgets it holds these
 /// feature modules to, so the wider visibility cannot become a way to style a widget by hand.
 pub(crate) mod material;
+pub mod overview;
 pub mod panes;
 mod picker_scroll;
 /// The reference scene's ripple, for the frame probe (feature 018, FR-039b).
@@ -359,7 +360,10 @@ pub fn view_with<'a>(
         .showing(main_content_key(state))
         .into()
     } else if state.workspace.active_project().is_some() {
-        let main_inner: Element<'a, Message> = if let Some(view) = state.changes.open.as_ref() {
+        let main_inner: Element<'a, Message> = if state.overview.open {
+            // Feature 813, U1: the Overview takes the main area, ahead of Changes and Compare.
+            overview::view(state, scheme)
+        } else if let Some(view) = state.changes.open.as_ref() {
             // Feature 482, V1: the Changes view takes the terminal pane's place while open.
             changes::view(state, view, scheme, composer)
         } else if let Some(compare) = compare::view(state, scheme) {
@@ -1090,6 +1094,10 @@ fn main_content_key(state: &State) -> u64 {
     if state.settings.settings_draft.is_some() {
         return u64::MAX;
     }
+    // Feature 813: the Overview sits under Settings and over Changes and Compare.
+    if state.overview.open {
+        return u64::MAX - 3;
+    }
     // Feature 482: opening and closing the Changes view crossfades like any other content switch.
     if state.changes.open.is_some() {
         return u64::MAX - 1;
@@ -1215,5 +1223,23 @@ pub fn focus_move_message(event: iced::keyboard::Event) -> Option<Message> {
             forward: !modifiers.shift(),
         }),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod overview_placement_tests {
+    use super::*;
+
+    /// U1: the Overview outranks Changes and Compare in the crossfade key, and Settings outranks it.
+    #[test]
+    fn the_overview_key_sits_between_settings_and_changes() {
+        let mut state = State::default();
+        state.overview.open = true;
+        assert_eq!(main_content_key(&state), u64::MAX - 3);
+        state.settings.settings_draft = Some(Default::default());
+        assert_eq!(main_content_key(&state), u64::MAX, "Settings first");
+        state.settings.settings_draft = None;
+        state.overview.open = false;
+        assert_ne!(main_content_key(&state), u64::MAX - 3);
     }
 }

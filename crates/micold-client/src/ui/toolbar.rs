@@ -19,11 +19,12 @@ use crate::app::{Message, State};
 use crate::features::connection::Msg as ConnectionMsg;
 use crate::features::help::help_actions;
 use crate::features::help::Msg as HelpMsg;
+use crate::features::overview::Msg as OverviewMsg;
 use crate::features::project::Msg as ProjectMsg;
 use crate::features::settings::Msg as SettingsMsg;
 use crate::icons::Icon;
 use crate::ui::material::{
-    unread_total_tooltip, Button, MenuItem, MenuTrigger, Toolbar, UsageIndicator,
+    unread_total_tooltip, Button, MenuItem, MenuTrigger, Toolbar, Tooltip, UsageIndicator,
 };
 use iced::Element;
 use micold_core::metadata::APP_NAME;
@@ -99,7 +100,22 @@ pub fn view<'a>(state: &State, scheme: ColorScheme) -> Element<'a, Message> {
             bar = bar.action(usage);
         }
     }
-    bar.action(switcher).action(menu).into()
+    bar.action(switcher)
+        .action(overview_button(state, r))
+        .action(menu)
+        .into()
+}
+
+/// The Overview button (feature 813, contract U2): after the project switcher, shown whether or not
+/// the Overview is open, and inert while Settings is open (research R2).
+fn overview_button<'a>(state: &State, r: tokens::Roles) -> Element<'a, Message> {
+    let settings_open = state.settings.settings_draft.is_some();
+    let button = Button::text("Overview", r)
+        .leading(Icon::Overview)
+        .on_press_maybe(
+            (!settings_open).then_some(Message::Overview(OverviewMsg::Toggled { settings_open })),
+        );
+    Tooltip::new(button, "Overview", r).into()
 }
 
 /// The usage indicator for `now` in the zone `offset`, or `None` when nothing is shown (feature
