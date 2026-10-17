@@ -9,7 +9,7 @@ use std::collections::BTreeMap;
 use iced::widget::{column, container, row, text_editor, Space};
 use iced::{Alignment, Element, Length};
 use micold_core::review::changes::{ChangeKind, ChangedFile, Content};
-use micold_core::review::comment::ReviewComment;
+use micold_core::review::comment::{ReviewComment, Status};
 use micold_core::review::Side;
 use micold_core::session::SessionLocation;
 use micold_core::settings::DiffLayout;
@@ -18,9 +18,10 @@ use micold_core::tokens::{self, spacing, Rgb, Roles};
 
 use crate::app::{EditorAction, Message, State};
 use crate::features::changes::{
-    base_line, can_pick, committed_available, composer_placed, diff_body, discard_prompt,
-    file_comments, is_pending, list_body, pending_counts, review_of, selected_file, send_action,
-    tidy_actions, ComposerTarget, DiffBody, ListBody, Msg, OpenView, Source, DEFAULT_ENTRY_NOTE,
+    base_line, can_pick, card_model, committed_available, composer_placed, diff_body,
+    discard_prompt, file_comments, list_body, pending_counts, review_of, selected_file,
+    send_action, tidy_actions, ComposerTarget, DiffBody, ListBody, Msg, OpenView, Source,
+    DEFAULT_ENTRY_NOTE,
 };
 use crate::icons::Icon;
 use crate::ui::material::{
@@ -467,8 +468,8 @@ pub fn range_label(comment: &ReviewComment) -> String {
     }
 }
 
-/// A comment's card, or the composer editing it (C2, C3). Edit and Delete only on a pending
-/// comment no send has taken.
+/// A comment's card, or the composer editing it (C2, C3): its status and reply (946 FR-007), and
+/// Edit and Delete only on a pending comment no send has taken.
 fn comment_or_editor<'a>(
     view: &'a OpenView,
     comment: &'a ReviewComment,
@@ -481,14 +482,20 @@ fn comment_or_editor<'a>(
             return composer_box(&open.text, composer, true, r);
         }
     }
-    let state = match (is_pending(comment), sending) {
-        (false, _) => CardState::Sent,
-        (true, true) => CardState::InSend,
-        (true, false) => CardState::Draft,
+    let model = card_model(comment, sending);
+    let state = match model.status {
+        Status::Draft if model.in_send => CardState::InSend,
+        Status::Draft => CardState::Draft,
+        Status::Sent => CardState::Sent,
+        Status::Applied => CardState::Applied,
+        Status::Answered => CardState::Answered,
     };
     let mut card = ReviewCommentCard::new(&comment.text, state, r)
         .outdated(view.outdated.contains(&comment.id));
-    if state == CardState::Draft {
+    if let Some((reply, shortened)) = model.reply {
+        card = card.reply(reply, shortened);
+    }
+    if model.editable {
         card = card
             .on_edit(Message::Changes(Msg::EditComment(comment.id)))
             .on_delete(Message::Changes(Msg::DeleteComment(comment.id)));

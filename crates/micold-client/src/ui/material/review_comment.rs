@@ -9,6 +9,8 @@
 //! Builder form: `ReviewCommentCard::new(&text, CardState::Draft, roles).outdated(false)
 //! .reply(&reply, shortened).on_edit(Msg::Edit(id)).on_delete(Msg::Delete(id)).into()`.
 
+use std::borrow::Cow;
+
 use iced::widget::{column, container, row, Space};
 use iced::{Alignment, Border, Element, Length};
 use micold_core::tokens::{spacing, Roles};
@@ -66,7 +68,7 @@ pub struct ReviewCommentCard<'a, M> {
     state: CardState,
     roles: Roles,
     outdated: bool,
-    reply: Option<(&'a str, bool)>,
+    reply: Option<(Cow<'a, str>, bool)>,
     on_edit: Option<M>,
     on_delete: Option<M>,
 }
@@ -93,7 +95,8 @@ impl<'a, M: Clone + 'a> ReviewCommentCard<'a, M> {
 
     /// Draw `reply` (already made displayable) under the text; `shortened` adds "Show all". An
     /// empty reply draws nothing.
-    pub fn reply(mut self, reply: &'a str, shortened: bool) -> Self {
+    pub fn reply(mut self, reply: impl Into<Cow<'a, str>>, shortened: bool) -> Self {
+        let reply = reply.into();
         self.reply = (!reply.is_empty()).then_some((reply, shortened));
         self
     }
@@ -121,7 +124,7 @@ impl<'a, M: Clone + 'a> ReviewCommentCard<'a, M> {
             },
             tag: matches!(self.state, CardState::Applied | CardState::Answered),
             reply: self.reply.is_some(),
-            show_all: self.reply.is_some_and(|(_, shortened)| shortened),
+            show_all: self.reply.as_ref().is_some_and(|(_, shortened)| *shortened),
             outdated: self.outdated,
             actions: self.state == CardState::Draft
                 && (self.on_edit.is_some() || self.on_delete.is_some()),

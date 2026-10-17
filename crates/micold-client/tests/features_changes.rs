@@ -1688,3 +1688,95 @@ fn a_selection_the_list_does_not_have_is_not_left_loading() {
         diff_body(state.open.as_ref().unwrap())
     );
 }
+
+// ---- Agent reports on the cards (946 M2, T028, FR-002, FR-007) ----
+
+use micold_client::features::changes::{card_model, CardModel};
+use micold_core::review::comment::{EntryReview, Outcome, Reporter, Status};
+use micold_core::review::reply::CARD_CHARS;
+
+/// `comment` sent at 5, then reported `outcome` with `reply` by a session at 9.
+fn reported(comment: ReviewComment, outcome: Outcome, reply: &str) -> ReviewComment {
+    let reference = comment.reference();
+    let mut entry = EntryReview::from_comments(vec![comment]);
+    entry
+        .report(
+            reference,
+            outcome,
+            reply,
+            Reporter::Agent {
+                session: uuid::Uuid::nil(),
+            },
+            9,
+        )
+        .unwrap();
+    entry.comments()[0].clone()
+}
+
+fn card_of(state: &State) -> CardModel {
+    let view = state.open.as_ref().unwrap();
+    let review = changes::review_of(state, view).unwrap();
+    card_model(&review.comments[0], review.sending)
+}
+
+/// US1 s1–s2. A pushed report shows its status and its reply made displayable; a reported card
+/// has no Edit or Delete. Both windows given the same push show the same card.
+#[test]
+fn a_pushed_report_shows_its_status_and_reply_in_every_window() {
+    let sent = comment("b.rs", Side::New, 2, 2, CommentState::Sent { at: 5 });
+    for (outcome, status) in [
+        (Outcome::Applied, Status::Applied),
+        (Outcome::Answered, Status::Answered),
+    ] {
+        let pushed = reported(sent.clone(), outcome, "Renamed\tas \u{1b}asked\nok");
+        let mut first = showing(commentable());
+        let mut second = showing(commentable());
+        push(&mut first, "feat-a", vec![pushed.clone()]);
+        push(&mut second, "feat-a", vec![pushed]);
+        let card = card_of(&first);
+        assert_eq!(
+            card,
+            CardModel {
+                status,
+                in_send: false,
+                reply: Some(("Renamed␉as ␛asked\nok".to_owned(), false)),
+                editable: false,
+            }
+        );
+        assert_eq!(card_of(&second), card);
+    }
+}
+
+/// Edge Cases "very long reply": over `CARD_CHARS` the card shows the start and is marked shortened.
+#[test]
+fn a_reply_over_the_card_limit_is_shortened() {
+    let sent = comment("b.rs", Side::New, 2, 2, CommentState::Sent { at: 5 });
+    let long = "x".repeat(CARD_CHARS + 1);
+    let model = card_model(&reported(sent.clone(), Outcome::Answered, &long), false);
+    assert_eq!(model.reply, Some(("x".repeat(CARD_CHARS), true)));
+    let exact = "x".repeat(CARD_CHARS);
+    let model = card_model(&reported(sent, Outcome::Answered, &exact), false);
+    assert_eq!(model.reply, Some((exact, false)));
+}
+
+/// The 482 states keep their cards: an applied report with no reply draws none; a draft is
+/// editable only outside a send.
+#[test]
+fn drafts_and_sent_comments_keep_their_cards() {
+    let sent = comment("b.rs", Side::New, 2, 2, CommentState::Sent { at: 5 });
+    let applied = card_model(&reported(sent.clone(), Outcome::Applied, ""), false);
+    assert_eq!((applied.status, applied.reply), (Status::Applied, None));
+    let model = card_model(&sent, true);
+    assert_eq!(
+        (model.status, model.editable, model.in_send),
+        (Status::Sent, false, false)
+    );
+    let draft = comment("b.rs", Side::New, 2, 2, CommentState::Draft);
+    let model = card_model(&draft, false);
+    assert_eq!(
+        (model.status, model.editable, model.in_send),
+        (Status::Draft, true, false)
+    );
+    let model = card_model(&draft, true);
+    assert_eq!((model.editable, model.in_send), (false, true));
+}
