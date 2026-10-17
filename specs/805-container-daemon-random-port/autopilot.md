@@ -17,12 +17,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #910 | Design | merged | 59cd8f77356153f09a73586392e703384c345066 |
+| #926 | M1 | open | |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T012 | full | Empty container port picks, saves and keeps a free port; taken port reported at start | | in review |
+| M1 | T001–T012 | full | Empty container port picks, saves and keeps a free port; taken port reported at start | #926 | in review |
 
 ## Decisions
 
