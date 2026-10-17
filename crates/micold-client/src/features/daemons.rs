@@ -16,12 +16,14 @@ use micold_core::daemons::{
     Binding, ConnectionError, DaemonDiagnostics, DaemonEvent, DaemonId, DaemonName, DaemonRegistry,
     DaemonRuntime, DaemonState, DaemonView, RegistryError, StateChange, WorktreeRef,
 };
+use micold_core::required::{RequiredMarks, Requirement};
 use micold_core::sandbox::image::{ImageSourceKind, ImageSourceProblem};
 use micold_core::sandbox::runtime::RuntimeKind;
 use micold_core::sandbox::{CredentialShare, NetworkPosture, SandboxProfile};
 use micold_core::session::SessionId;
 
 use super::settings::{parse_budget, LimitField, ProfileTexts};
+use super::window::FieldId;
 use super::Outcome;
 use crate::floating_surface;
 use crate::links::{route, DaemonLinks, Route};
@@ -96,6 +98,44 @@ pub struct Draft {
     pub ssh_port: String,
     /// The private key file; blank takes it from the SSH configuration (SSH runtime only).
     pub ssh_key_file: String,
+    /// Which fields the user has left and whether a save was attempted, for the required errors
+    /// (feature 937). Fresh when the form opens, dropped with it.
+    pub required: RequiredMarks<FieldId>,
+}
+
+impl Draft {
+    /// The fields the form refuses empty for the runtime chosen now, in display order, with
+    /// whether each is empty (feature 937, FR-002). Mirrors [`runtime_of`] and the registry's
+    /// validation: the SSH host only over SSH, the container name and image reference for a
+    /// container, the image file only for an imported-file image source. Port, SSH user and key
+    /// file are never required: each has a default.
+    pub fn required_fields(&self) -> Vec<(FieldId, Requirement)> {
+        let mut fields = vec![(FieldId::DaemonName, Requirement::text(true, &self.name))];
+        match self.runtime {
+            DraftRuntime::Host => {}
+            DraftRuntime::Ssh => fields.push((
+                FieldId::DaemonSshHost,
+                Requirement::text(true, &self.ssh_host),
+            )),
+            DraftRuntime::Container => {
+                fields.push((
+                    FieldId::DaemonContainerName,
+                    Requirement::text(true, &self.container_name),
+                ));
+                fields.push((
+                    FieldId::DaemonImage,
+                    Requirement::text(true, &self.profile.image.reference),
+                ));
+                if self.profile.image.kind == ImageSourceKind::ImportedFile {
+                    fields.push((
+                        FieldId::DaemonImagePath,
+                        Requirement::text(true, &self.image_path),
+                    ));
+                }
+            }
+        }
+        fields
+    }
 }
 
 /// The five titled sections a container daemon's settings are grouped in (feature 804 M4, FR-012).
@@ -235,6 +275,9 @@ pub struct State {
     pub repositories: BTreeMap<DaemonId, String>,
     /// The sentence under the repository field the last refused add was about.
     pub repository_error: Option<(DaemonId, String)>,
+    /// Which repository fields the user has left, for the required error (feature 937). Keyed by
+    /// [`FieldId::DaemonRepository`], so each remote daemon's step is its own field.
+    pub repository_marks: RequiredMarks<FieldId>,
     ended: Vec<SessionId>,
 }
 
@@ -248,6 +291,16 @@ impl State {
                 .form_error
                 .as_ref()
                 .is_some_and(|e| section.holds(e.field))
+    }
+
+    /// The repository step of remote daemon `id`: required, and empty exactly when the path is
+    /// (feature 937; `RemotePathError::Empty`).
+    pub fn repository_field(&self, id: DaemonId) -> (FieldId, Requirement) {
+        let typed = self.repositories.get(&id).map_or("", String::as_str);
+        (
+            FieldId::DaemonRepository(id),
+            Requirement::text(true, typed),
+        )
     }
 
     /// The confirmation waiting for an answer.
@@ -474,6 +527,7 @@ pub fn begin_add(state: &mut State) {
         ssh_user: String::new(),
         ssh_port: String::new(),
         ssh_key_file: String::new(),
+        required: Default::default(),
     });
 }
 
@@ -539,6 +593,7 @@ pub fn begin_edit<'s>(state: &'s mut State, model: &Model<'_>, id: DaemonId) -> 
         ssh_user: ssh.1,
         ssh_port: ssh.2,
         ssh_key_file: ssh.3,
+        required: Default::default(),
     });
     state.draft.as_ref()
 }

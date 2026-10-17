@@ -181,8 +181,9 @@ pub enum FieldId {
     DaemonSshPort,
     /// Settings → Daemons: the form's SSH key file field (feature 489).
     DaemonSshKeyFile,
-    /// Settings → Daemons: a remote daemon's repository path field (feature 489, FR-012).
-    DaemonRepository,
+    /// Settings → Daemons: one remote daemon's repository path field (feature 489, FR-012; per
+    /// daemon since 937, so two daemons' marks are distinct).
+    DaemonRepository(micold_core::daemons::DaemonId),
     /// Settings → Daemons: the form's connect-at-launch checkbox (feature 491).
     DaemonAutoStart,
     /// Settings → Daemons: the form's image archive field (feature 804).

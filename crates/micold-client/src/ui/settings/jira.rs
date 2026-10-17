@@ -67,9 +67,11 @@ fn connection_form<'a>(
     roles: Roles,
 ) -> Vec<Element<'a, Message>> {
     let jira = &draft.jira;
+    let required = draft.required_fields(SettingsSection::Jira);
     let field = |label: &'static str, value: &'a str, id: FieldId| {
         TextField::new("", value, roles)
             .label(label)
+            .required(draft.required.state_in(&required, id))
             .error(error_for(draft, SettingsSection::Jira, id))
             .track_focus(id, focused)
     };

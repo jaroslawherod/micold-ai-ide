@@ -231,6 +231,10 @@ fn repository_step<'a>(
         .as_ref()
         .filter(|(for_id, _)| *for_id == id)
         .map(|(_, message)| message.clone());
+    let repository = state.repository_field(id);
+    let repository_state = state
+        .repository_marks
+        .state_in(std::slice::from_ref(&repository), repository.0);
     let mut add = Button::text("Add repository", roles);
     if view.state == DaemonState::Connected {
         add = add.on_press(Message::Daemons(DaemonsMsg::RepositoryAdded(id)));
@@ -238,8 +242,9 @@ fn repository_step<'a>(
     row![
         TextField::new("/path/to/repository on the host", typed, roles)
             .label("Repository on the host")
+            .required(repository_state)
             .error(error)
-            .track_focus(FieldId::DaemonRepository, focused)
+            .track_focus(FieldId::DaemonRepository(id), focused)
             .on_input(move |v| Message::Daemons(DaemonsMsg::RepositoryEdited(id, v))),
         add,
     ]
@@ -277,10 +282,13 @@ fn form<'a>(
         Some(_) => "Edit daemon",
         None => "Add a daemon",
     };
+    let required = draft.required_fields();
+    let marker = |id| draft.required.state_in(&required, id);
     let mut fields = column![
         group(title, roles),
         TextField::new("", &draft.name, roles)
             .label("Name")
+            .required(marker(FieldId::DaemonName))
             .track_focus(FieldId::DaemonName, focused)
             .error(error_of(state, "name"))
             .on_input(|v| Message::Daemons(DaemonsMsg::NameEdited(v))),
@@ -302,6 +310,7 @@ fn form<'a>(
             .push(
                 TextField::new("", &draft.container_name, roles)
                     .label("Container name")
+                    .required(marker(FieldId::DaemonContainerName))
                     .track_focus(FieldId::DaemonContainerName, focused)
                     .error(error_of(state, "container_name"))
                     .on_input(|v| Message::Daemons(DaemonsMsg::ContainerNameEdited(v))),
@@ -327,6 +336,8 @@ fn form<'a>(
             placement: PlacementKind::LocalSandbox,
         };
         let errors = FieldErrors {
+            reference_required: marker(FieldId::DaemonImage),
+            path_required: marker(FieldId::DaemonImagePath),
             reference: error_of(state, "image"),
             path: error_of(state, "image_path"),
             limits: [
@@ -362,6 +373,7 @@ fn form<'a>(
             .push(
                 TextField::new("", &draft.ssh_host, roles)
                     .label("Host")
+                    .required(marker(FieldId::DaemonSshHost))
                     .track_focus(FieldId::DaemonSshHost, focused)
                     .error(error_of(state, "host"))
                     .on_input(|v| Message::Daemons(DaemonsMsg::SshHostEdited(v))),
