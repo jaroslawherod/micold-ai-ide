@@ -174,7 +174,7 @@ impl Fixture {
             .call(
                 caller,
                 "start_session",
-                json!({"session": target.0.to_string()}),
+                json!({"session": target.0.to_string(), "allow_additional_session": true}),
             )
             .await;
         assert_eq!(started["isError"], json!(false), "{started}");

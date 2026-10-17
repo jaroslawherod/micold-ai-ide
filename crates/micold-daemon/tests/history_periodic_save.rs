@@ -70,7 +70,13 @@ fn running(state: &DaemonState, project: &Path, id: SessionId, first: &str, at: 
         project,
         &format!("print {first}\ntouch {}\nwait\n", ready.display()),
     );
-    state.start_session(id, LaunchMode::Fresh).expect("starts");
+    state
+        .start_session_gated(
+            id,
+            LaunchMode::Fresh,
+            micold_core::occupancy::Additional::Yes,
+        )
+        .expect("starts");
     wait_file(&ready);
     history_showing(state, id, first);
     state.save_due_at(at - SAVE_SPACING);

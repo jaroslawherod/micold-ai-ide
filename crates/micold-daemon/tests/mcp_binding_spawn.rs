@@ -379,7 +379,13 @@ async fn bound_spawns_leave_every_user_configuration_file_byte_identical() {
     );
     serve_tool_server(&state, sandbox.binding_dir()).await;
     for (n, (id, cli)) in ids.iter().enumerate() {
-        state.start_session(*id, LaunchMode::Fresh).unwrap();
+        state
+            .start_session_gated(
+                *id,
+                LaunchMode::Fresh,
+                micold_core::occupancy::Additional::Yes,
+            )
+            .unwrap();
         let args = sandbox.launch(*cli, n / 2).await;
         kill(&state, *id);
         assert!(
@@ -413,7 +419,13 @@ async fn bound_spawns_create_no_user_configuration_file_that_was_absent() {
     ]);
     serve_tool_server(&state, sandbox.binding_dir()).await;
     for (id, cli) in [(claude, AiCli::ClaudeCode), (copilot, AiCli::Copilot)] {
-        state.start_session(id, LaunchMode::Fresh).unwrap();
+        state
+            .start_session_gated(
+                id,
+                LaunchMode::Fresh,
+                micold_core::occupancy::Additional::Yes,
+            )
+            .unwrap();
         let args = sandbox.launch(cli, 0).await;
         kill(&state, id);
         assert!(

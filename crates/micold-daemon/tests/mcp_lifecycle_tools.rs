@@ -130,7 +130,7 @@ impl Fixture {
         self.ok(
             CALLER,
             "start_session",
-            json!({"session": sid(target).0.to_string()}),
+            json!({"session": sid(target).0.to_string(), "allow_additional_session": true}),
         )
         .await
     }
@@ -275,7 +275,7 @@ async fn a_start_that_fails_is_reported_failed_not_left_starting() {
         .err(
             CALLER,
             "start_session",
-            json!({"session": sid(UNRESUMABLE).0.to_string()}),
+            json!({"session": sid(UNRESUMABLE).0.to_string(), "allow_additional_session": true}),
         )
         .await;
     assert_eq!(error["category"], "service_error", "{error}");

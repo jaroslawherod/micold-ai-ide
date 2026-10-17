@@ -193,7 +193,13 @@ async fn ten_busy_sessions_are_all_saved_within_the_bound() {
     let count = if cfg!(windows) { 500 } else { 10_000 };
     script(project.path(), &format!("lines {count} {prefix}\nwait\n"));
     for id in &ids {
-        state.start_session(*id, LaunchMode::Fresh).expect("starts");
+        state
+            .start_session_gated(
+                *id,
+                LaunchMode::Fresh,
+                micold_core::occupancy::Additional::Yes,
+            )
+            .expect("starts");
     }
     for id in &ids {
         history_showing(&state, *id, &format!("{prefix}{count}"));

@@ -110,7 +110,8 @@ impl Sandbox {
             &self.state,
             id,
             LaunchMode::Fresh,
-            micold_core::occupancy::Additional::No,
+            // The helper is used to run several sessions of one entry side by side on purpose.
+            micold_core::occupancy::Additional::Yes,
         )
         .await
         .unwrap();
