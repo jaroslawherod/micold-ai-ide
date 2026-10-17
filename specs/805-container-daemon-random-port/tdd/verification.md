@@ -101,7 +101,7 @@ Score: 9 caught of 10; M1 is equivalent, so 8 of 9 non-equivalent mutants were c
 | FR-010 explicit duplicate | `zero_and_an_explicit_duplicate_...` (weak, finding 5) | Reducer entry |
 | SC-001 starts and connects with no port entered | none automated | visual pass only; start not run in an image-less environment |
 
-Untested or weakly tested criteria: SC-001, FR-007 out-of-range, FR-005 end to end. `criteria_covered: 9 # SC-001 and FR-008 have no automated test; US2.1, US3.1 partial
+Untested or weakly tested criteria: SC-001, FR-007 out-of-range, FR-005 end to end. Untested or weakly tested: SC-001, FR-008 (no automated test); US2.1, US3.1 (partial).
 
 ## What was not audited
 
@@ -111,4 +111,3 @@ Untested or weakly tested criteria: SC-001, FR-007 out-of-range, FR-005 end to e
 - Client tests beyond `daemons_feature` and the client lib were not run, so M10 may be caught by a test outside the scope run.
 - Visual pass evidence (`visual/*.png`, `results.md`) was read, not re-run; step 5 there is inconclusive.
 - Performance, flakiness over repeated runs, and Windows/macOS behavior: not assessed. `the_os_port_is_non_zero_and_binds` binds a real loopback socket and can race with other processes in principle; not observed to flake.
-- Unrelated working-tree change: `specs/805-container-daemon-random-port/autopilot.md` is modified and uncommitted; I did not edit it.
