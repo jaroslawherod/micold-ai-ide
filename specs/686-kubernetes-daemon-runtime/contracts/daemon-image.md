@@ -26,7 +26,7 @@ holds one ceiling per resource and cannot express a request.
    `Containerfile`. With a user Dockerfile: its directory is the context and the temporary directory
    is passed as `--build-context micold=<tmp>`; the Dockerfile copies `--from=micold micold-daemon`.
 3. Tag: `<registry>/micold-daemon:<version>-<inputs12>` (data model `ImageInputs`).
-Steps 4-5 run through `sandbox::cli::CliRuntime` (`program_of(kind)` picks docker or podman): the
+Steps 4-5 run through `sandbox::cli::CliRuntime` (the free function `sandbox::cli::program_of(kind)` picks docker or podman): the
 presence check is the `ContainerRuntime::inspect_image` it already implements; build, push and
 digest are new inherent methods `build_image`, `push_image`, `repo_digest` over its `CommandRunner`
 (`run_streaming` for 4-5's output), tested with `RecordingRunner`.

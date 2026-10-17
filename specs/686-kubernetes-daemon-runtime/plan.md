@@ -37,8 +37,8 @@ for the Settings form.
 **Primary Dependencies**: new, `micold-client` only: `kube` 4.2 (`client`, `config`, `rustls-tls`,
 `ring`, `ws`) and `k8s-openapi` 0.28 (`v1_32`), both Apache-2.0 (vetting in research K0). Existing: `tokio`, `serde_json`,
 `protocol::hashing::sha256_hex` (daemon key K5, image-inputs hash K2; no new hash crate),
-`sandbox::cli::CliRuntime<R: CommandRunner>` (the docker/podman `ContainerRuntime` impl, with
-`program_of(RuntimeKind)`), 489's `ssh::provision` artefact rule, `ssh::remote_path`,
+`sandbox::cli::CliRuntime<R: CommandRunner>` (the docker/podman `ContainerRuntime` impl) and the
+free function `sandbox::cli::program_of(RuntimeKind)`, 489's `ssh::provision` artefact rule, `ssh::remote_path`,
 `ssh::reconnect::Backoff`.
 
 **Storage**: local only. `settings.json` `daemons[].runtime = {"kind":"kubernetes",...}` (additive, no
