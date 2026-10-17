@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #905
 - **Worktree branch**: claude/project-thread-h057j5
 - **Started**: 2026-10-17
-- **Phase**: plan
-- **Next step**: plan unit (continue handover: plan review round 1)
+- **Phase**: tasks
+- **Next step**: tasks unit
 
 ## Pull requests
 
@@ -36,6 +36,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | Spec review | 1 | 2148471a6892a9acfe8441d5914d9cacd029f1e4:bfdc456e3ecbab4afa9c30045923409081433f23 | CHANGES: 1 MAJOR, 2 MINOR (all fixed) |
 | Spec review | 2 | 047d8dca47a8242fd7e54bccd72425e87b1e87dc:bfdc456e3ecbab4afa9c30045923409081433f23 | CLEAN: 2 MINOR (fixed, prose only) |
+| Plan review | 1 | 7ff73d272ce69913ac4b831931834346e5e5a681:7093a3877e09df8c0b61a273d62ad507a90888f6 | CLEAN: no findings |
 
 ## Declined review findings
 
@@ -44,9 +45,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-- **Done**: `speckit-plan` ran; plan.md, research.md (R1–R9), data-model.md, contracts/wire.md, contracts/state-icon.md, quickstart.md written and committed. Key design: `TurnClock::paused_on_user()` carried as `SessionSummary::paused_on_user` (protocol 48); core `location_state.rs`; new `StateIcon` in a new `TreeItem::state_icon` slot (worktree rows always have tags, so `badge` is barred by tree_view's debug_assert); glyphs play_arrow U+E037 / report U+E160 / pause U+E034 (present in the font's cmap; names to be confirmed against upstream .codepoints).
-- **Next step**: plan task step 2 — round-1 plan review (review.md + rubrics/plan.md, no model override), then step 3 (set Next step to `tasks unit`, commit).
-- **Open findings**: none yet. No PR.
+None.
 
 ## Open escalation
 
