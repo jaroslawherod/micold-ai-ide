@@ -6,10 +6,10 @@ use std::sync::Mutex;
 
 use tokio::io::DuplexStream;
 
+use super::AsyncReadWrite;
 use super::{
     ApiFailure, Cluster, ClusterFuture, Created, EventView, ObjectKind, ObjectView, PodStatusView,
 };
-use crate::connect::AsyncReadWrite;
 
 type Key = (String, ObjectKind, String);
 
