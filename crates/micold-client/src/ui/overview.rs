@@ -11,7 +11,7 @@ use iced::{Element, Length};
 use micold_core::location_state::location_state;
 use micold_core::overview::{
     card_state, location_type, order, session_counts, CardModel, CardSignals, CurrentPr,
-    LocationType, PrSignal,
+    LocationType, PrDisplay, PrSignal, PrUnknown,
 };
 use micold_core::session::{Session, SessionLocation};
 use micold_core::theme::ColorScheme;
@@ -102,6 +102,7 @@ fn card(app: &State, place: &Place) -> CardModel {
         (_, Some(branch)) => branch.clone(),
         (_, None) => display_name.clone(),
     };
+    let branch_ref = branch.clone();
     CardModel {
         location,
         display_name,
@@ -111,6 +112,7 @@ fn card(app: &State, place: &Place) -> CardModel {
         state,
         reason,
         summary,
+        prs: pr_display(&app.pr_status, branch_ref),
     }
 }
 
@@ -123,6 +125,29 @@ fn pr_signal(pr: &crate::features::pr_status::State, branch: Option<&str>) -> Pr
             removable: pr.removable.contains(branch),
         },
         _ => PrSignal::Unknown,
+    }
+}
+
+/// What a card's footer shows of its branch's pull requests: nothing without a branch, else the
+/// counts of the last reading or the reason there are none (FR-004).
+fn pr_display(pr: &crate::features::pr_status::State, branch: Option<String>) -> PrDisplay {
+    let Some(branch) = branch else {
+        return PrDisplay::Hidden;
+    };
+    if !pr.enabled {
+        return PrDisplay::Unknown(PrUnknown::Off);
+    }
+    if let Some(counts) = pr.counts.get(&branch) {
+        return PrDisplay::Counts(*counts);
+    }
+    if pr.unreachable {
+        return PrDisplay::Unknown(PrUnknown::Unreachable);
+    }
+    match pr.pause_until {
+        Some(until) if until > crate::ui::sidebar::unix_now() => {
+            PrDisplay::Unknown(PrUnknown::RateLimited { until })
+        }
+        _ => PrDisplay::Unknown(PrUnknown::NotReadYet),
     }
 }
 
@@ -163,6 +188,7 @@ mod tests {
                 state: micold_core::overview::CardState::Idle,
                 reason: micold_core::overview::CardReason::Idle,
                 summary: "s".into(),
+                prs: micold_core::overview::PrDisplay::Hidden,
             })
             .collect();
         let element: Element<'_, ()> = container(CardGrid::new(

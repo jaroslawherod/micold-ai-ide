@@ -354,6 +354,12 @@ fn card_model(
         state,
         reason,
         summary: "Adds the worktree overview".to_string(),
+        prs: micold_core::overview::PrDisplay::Counts(micold_core::overview::PrCounts {
+            open: 1,
+            merged: 2,
+            open_capped: false,
+            merged_capped: false,
+        }),
     }
 }
 
@@ -375,6 +381,10 @@ pub fn overview_card<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'
         R::MergeConflict,
     );
     orphan.branch = None;
+    orphan.prs = micold_core::overview::PrDisplay::Hidden;
+    let mut unknown = card_model("unknown-counts", T::Feature, S::Idle, R::Idle);
+    unknown.prs =
+        micold_core::overview::PrDisplay::Unknown(micold_core::overview::PrUnknown::Unreachable);
     arrange(
         vec![
             posed(
@@ -414,6 +424,7 @@ pub fn overview_card<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'
             ),
             posed("Default", card(default), roles),
             posed("orphan", card(orphan), roles),
+            posed("unknown counts", card(unknown), roles),
         ],
         Layout::FullWidth,
     )

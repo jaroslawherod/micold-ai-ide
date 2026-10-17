@@ -108,6 +108,7 @@ mod tests {
                         state: CardState::Idle,
                         reason: CardReason::Idle,
                         summary: "s".into(),
+                        prs: micold_core::overview::PrDisplay::Hidden,
                     },
                     roles(),
                 )

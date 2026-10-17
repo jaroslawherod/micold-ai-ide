@@ -600,16 +600,17 @@ pub fn parse_status(body: &[u8], branches: &[String]) -> Result<StatusReading, R
         };
         let (open, recent) = (alias("o".into())?, alias("r".into())?);
         let (open_forks, merged_forks) = (alias("oc".into())?, alias("mc".into())?);
-        let pull_requests = |values: Vec<serde_json::Value>| -> Result<Vec<PrNode>, ReadingFailure> {
-            values
-                .into_iter()
-                .map(|value| {
-                    serde_json::from_value::<RawNode>(value)
-                        .map(PrNode::from)
-                        .map_err(|_| UNREADABLE)
-                })
-                .collect()
-        };
+        let pull_requests =
+            |values: Vec<serde_json::Value>| -> Result<Vec<PrNode>, ReadingFailure> {
+                values
+                    .into_iter()
+                    .map(|value| {
+                        serde_json::from_value::<RawNode>(value)
+                            .map(PrNode::from)
+                            .map_err(|_| UNREADABLE)
+                    })
+                    .collect()
+            };
         let (open, recent) = (pull_requests(open)?, pull_requests(recent)?);
         if let Some(status) = select_pull_request(&open, &recent).map_err(|_| UNREADABLE)? {
             reading.statuses.insert(branch.clone(), status);

@@ -151,6 +151,7 @@ pub enum PendingOp {
         seq: u64,
         asked: Vec<String>,
         statuses: std::collections::BTreeMap<String, micold_core::pull_request::PullRequestStatus>,
+        counts: std::collections::BTreeMap<String, micold_core::overview::PrCounts>,
         started: u64,
     },
     /// A read-only `RepoRootQuery` — the open-project gate asked over the wire, because this
@@ -1416,6 +1417,7 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
                 seq,
                 asked,
                 statuses,
+                counts,
                 started,
             }) => {
                 let answers = match result {
@@ -1423,7 +1425,12 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
                     _ => None,
                 };
                 follow_up = crate::shell::pr_status::on_merged_branches(
-                    app, seq, asked, statuses, started, answers,
+                    app,
+                    seq,
+                    asked,
+                    (statuses, counts),
+                    started,
+                    answers,
                 );
             }
             // Feature 027 (research R2 part 2): the open-project gate, answered by the side
@@ -1632,10 +1639,16 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
                     seq,
                     asked,
                     statuses,
+                    counts,
                     started,
                 }) => {
                     return crate::shell::pr_status::on_merged_branches(
-                        app, seq, asked, statuses, started, None,
+                        app,
+                        seq,
+                        asked,
+                        (statuses, counts),
+                        started,
+                        None,
                     );
                 }
                 // Feature 029: the failure notice is the generic one below — "Couldn't refresh

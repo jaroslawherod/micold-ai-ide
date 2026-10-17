@@ -7,6 +7,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use micold_client::features::pr_status::{self, Effect, Msg, Outcome, Phase, State};
+use micold_core::overview::PrCounts;
 use micold_core::pull_request::{
     CheckStatus, PrState, PullRequestStatus, ReadingFailure, ReviewState,
 };
@@ -25,6 +26,7 @@ fn status(number: u64) -> PullRequestStatus {
         },
         review: ReviewState::None,
         head: "a".repeat(40),
+        conflict: false,
     }
 }
 
@@ -32,9 +34,22 @@ fn statuses() -> BTreeMap<String, PullRequestStatus> {
     BTreeMap::from([("feat/a".to_string(), status(7))])
 }
 
+fn counts() -> BTreeMap<String, PrCounts> {
+    BTreeMap::from([(
+        "feat/a".to_string(),
+        PrCounts {
+            open: 1,
+            merged: 2,
+            open_capped: false,
+            merged_capped: false,
+        },
+    )])
+}
+
 fn ok(started_at: u64) -> Outcome {
     Outcome::Ok {
         statuses: statuses(),
+        counts: counts(),
         removable: BTreeSet::new(),
         started_at,
     }
@@ -196,7 +211,12 @@ fn switching_off_clears_everything_and_goes_idle() {
 /// Force a reading under way on a state that already read once, by turning the switch off and on.
 fn reading_again(st: &mut State) -> u64 {
     let pause = st.pause_until.take();
-    let kept = (st.statuses.clone(), st.removable.clone(), st.read_at);
+    let kept = (
+        st.statuses.clone(),
+        st.counts.clone(),
+        st.removable.clone(),
+        st.read_at,
+    );
     update(
         st,
         Msg::EnabledChanged {
@@ -207,7 +227,7 @@ fn reading_again(st: &mut State) -> u64 {
     let Effect::Read { seq } = update(st, enable()) else {
         panic!("switching on while held and listed reads");
     };
-    (st.statuses, st.removable, st.read_at) = kept;
+    (st.statuses, st.counts, st.removable, st.read_at) = kept;
     st.pause_until = pause;
     seq
 }
@@ -392,6 +412,7 @@ fn finish_ok(statuses: BTreeMap<String, PullRequestStatus>, removable: &[&str]) 
         seq,
         Outcome::Ok {
             statuses,
+            counts: BTreeMap::new(),
             removable,
             started_at: NOW,
         },
@@ -593,4 +614,80 @@ fn a_trigger_sixty_seconds_after_a_reading_started_abandons_it() {
     let before = st.clone();
     assert_eq!(finish(&mut st, old, ok(LATER)), Effect::None);
     assert_eq!(st, before);
+}
+
+// ---- Feature 813 (T025): the counts of a reading follow its statuses ----
+
+/// FR-004: a finished reading stores its counts beside its statuses.
+#[test]
+fn a_finished_reading_stores_its_counts() {
+    let st = holding_statuses();
+    assert_eq!(st.counts, counts());
+    assert!(!st.unreachable);
+}
+
+/// FR-019: the shell's `StatusesRead` carries the counts on to the reading's end; the reducer
+/// itself changes nothing.
+#[test]
+fn statuses_read_carries_counts_and_changes_nothing() {
+    let mut st = holding_statuses();
+    let before = st.clone();
+    let effect = update(
+        &mut st,
+        Msg::StatusesRead {
+            seq: 0,
+            statuses: statuses(),
+            counts: counts(),
+            started_at: NOW,
+        },
+    );
+    assert_eq!(effect, Effect::None);
+    assert_eq!(st, before);
+}
+
+/// The counts are cleared exactly when the statuses are: `Unavailable`, `Released`, disabling.
+#[test]
+fn unavailable_released_and_disabling_clear_the_counts_with_the_statuses() {
+    let mut st = holding_statuses();
+    let seq = reading_again(&mut st);
+    finish(&mut st, seq, Outcome::Err(ReadingFailure::Unavailable));
+    assert!(st.statuses.is_empty() && st.counts.is_empty());
+    assert!(st.unreachable, "the card says why it has no counts");
+
+    let mut st = holding_statuses();
+    update(&mut st, Msg::Released);
+    assert!(st.statuses.is_empty() && st.counts.is_empty());
+
+    let mut st = holding_statuses();
+    update(
+        &mut st,
+        Msg::EnabledChanged {
+            enabled: false,
+            now: LATER,
+        },
+    );
+    assert!(st.statuses.is_empty() && st.counts.is_empty());
+}
+
+/// A passing failure or a rate limit keeps the statuses, and so the counts; the next good reading
+/// ends `unreachable`.
+#[test]
+fn a_passing_failure_or_a_rate_limit_keeps_the_counts_and_a_good_reading_clears_unreachable() {
+    for failure in [
+        ReadingFailure::Passing,
+        ReadingFailure::RateLimited { until: UNTIL },
+    ] {
+        let mut st = holding_statuses();
+        let seq = reading_again(&mut st);
+        finish(&mut st, seq, Outcome::Err(failure));
+        assert_eq!(st.statuses, statuses());
+        assert_eq!(st.counts, counts());
+    }
+    let mut st = holding_statuses();
+    let seq = reading_again(&mut st);
+    finish(&mut st, seq, Outcome::Err(ReadingFailure::Unavailable));
+    let seq = reading_again(&mut st);
+    finish(&mut st, seq, ok(LATER));
+    assert!(!st.unreachable);
+    assert_eq!(st.counts, counts());
 }

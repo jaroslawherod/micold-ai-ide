@@ -792,6 +792,7 @@ mod tests {
             state,
             reason: CardReason::Idle,
             summary: name.into(),
+            prs: PrDisplay::Hidden,
         }
     }
 

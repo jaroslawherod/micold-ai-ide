@@ -6,7 +6,8 @@ use micold_client::features::agent_confirm::Prompt;
 use micold_client::features::overview::Msg;
 use micold_client::features::pr_status::Msg as PrMsg;
 use micold_client::ui::overview::cards;
-use micold_core::overview::{CardReason, CardState, LocationType};
+use micold_core::local_time::LocalTime;
+use micold_core::overview::{CardReason, CardState, LocationType, PrCounts, PrDisplay};
 use micold_core::project::{Availability, Project};
 use micold_core::protocol::messages::ActivitySignal;
 use micold_core::protocol::messages::ConfirmOperation;
@@ -80,6 +81,7 @@ fn status(state: PrState, review: ReviewState) -> PullRequestStatus {
         state,
         review,
         head: "abc".to_string(),
+        conflict: false,
     }
 }
 
@@ -441,4 +443,142 @@ fn opening_changes_closes_the_overview() {
         micold_client::features::sidebar::Msg::ReviewChangesRequested(wt("feat-a")),
     ));
     assert!(!state.overview.open);
+}
+
+// ---- Feature 813 M2 (T026): pull request counts and the unknown mark ----
+
+fn counts(open: u8, merged: u8) -> PrCounts {
+    PrCounts {
+        open,
+        merged,
+        open_capped: false,
+        merged_capped: false,
+    }
+}
+
+fn read_counts(state: &mut State, branch: &str, counts: PrCounts) {
+    state.pr_status.enabled = true;
+    state.pr_status.read_at = Some(100);
+    state.pr_status.counts.insert(branch.to_string(), counts);
+}
+
+fn feat_a() -> State {
+    project_with(vec![worktree(
+        "feat-a",
+        Some("feat/a"),
+        WorktreeStatus::Valid,
+        false,
+    )])
+}
+
+fn prs(state: &State) -> PrDisplay {
+    card(&cards(state), &wt("feat-a")).prs.clone()
+}
+
+/// US1 scenario 3: one open and two merged pull requests read 1 open, 2 merged.
+#[test]
+fn a_branch_with_one_open_and_two_merged_reads_counts() {
+    let mut state = feat_a();
+    read_counts(&mut state, "feat/a", counts(1, 2));
+    assert_eq!(prs(&state), PrDisplay::Counts(counts(1, 2)));
+}
+
+/// FR-004: a branch the reading covers with no pull request is 0 / 0, not unknown.
+#[test]
+fn a_branch_without_pull_requests_reads_zero_and_zero() {
+    let mut state = feat_a();
+    read_counts(&mut state, "feat/a", counts(0, 0));
+    assert_eq!(prs(&state), PrDisplay::Counts(counts(0, 0)));
+}
+
+/// FR-004, edge case: each reason the counts cannot be shown, in words.
+#[test]
+fn unknown_counts_name_their_reason() {
+    let reason = |state: &State| match prs(state) {
+        PrDisplay::Unknown(reason) => reason.label(),
+        other => panic!("expected an unknown mark, got {other:?}"),
+    };
+
+    let mut state = feat_a();
+    state.pr_status.enabled = true;
+    assert_eq!(reason(&state), "not read yet");
+
+    state.pr_status.enabled = false;
+    assert_eq!(reason(&state), "pull request status is off");
+
+    state.pr_status.enabled = true;
+    state.pr_status.unreachable = true;
+    assert_eq!(reason(&state), "GitHub is not reachable");
+
+    state.pr_status.unreachable = false;
+    let until = 4_000_000_000;
+    state.pr_status.pause_until = Some(until);
+    assert_eq!(
+        reason(&state),
+        format!(
+            "rate-limited until {}",
+            LocalTime::local(until as i64).hh_mm()
+        )
+    );
+
+    // A reading that does not cover this branch is just not read yet.
+    state.pr_status.pause_until = None;
+    state.pr_status.read_at = Some(100);
+    assert_eq!(reason(&state), "not read yet");
+}
+
+/// A reading held while a pause runs still shows its counts.
+#[test]
+fn counts_of_the_last_reading_show_during_a_pause() {
+    let mut state = feat_a();
+    read_counts(&mut state, "feat/a", counts(2, 0));
+    state.pr_status.pause_until = Some(4_000_000_000);
+    assert_eq!(prs(&state), PrDisplay::Counts(counts(2, 0)));
+}
+
+/// No branch, no counts: Default, a detached HEAD and an orphan show none, even when a reading
+/// holds counts for a branch of that name.
+#[test]
+fn locations_without_a_branch_hide_the_counts() {
+    let mut state = project_with(vec![
+        worktree("detached", None, WorktreeStatus::Valid, false),
+        worktree("gone", None, WorktreeStatus::Missing, false),
+    ]);
+    read_counts(&mut state, "main", counts(3, 3));
+    let all = cards(&state);
+    assert_eq!(card(&all, &SessionLocation::Default).prs, PrDisplay::Hidden);
+    assert_eq!(card(&all, &wt("detached")).prs, PrDisplay::Hidden);
+    assert_eq!(card(&all, &wt("gone")).prs, PrDisplay::Hidden);
+}
+
+/// FR-004: a count of 100 or more is flagged so the card reads *100+*.
+#[test]
+fn a_full_page_is_flagged_as_capped() {
+    let mut state = feat_a();
+    let capped = PrCounts {
+        open: 0,
+        merged: 100,
+        open_capped: false,
+        merged_capped: true,
+    };
+    read_counts(&mut state, "feat/a", capped);
+    assert_eq!(prs(&state), PrDisplay::Counts(capped));
+}
+
+/// R6: a current open pull request that conflicts needs attention, with the reason named.
+#[test]
+fn an_open_pull_request_with_a_conflict_needs_attention_for_a_merge_conflict() {
+    let mut state = feat_a();
+    let mut conflicting = status(
+        PrState::Open {
+            checks: CheckStatus::Passing,
+        },
+        ReviewState::None,
+    );
+    conflicting.conflict = true;
+    read(&mut state, "feat/a", conflicting, false);
+    let all = cards(&state);
+    let a = card(&all, &wt("feat-a"));
+    assert_eq!(a.state, CardState::NeedsAttention);
+    assert_eq!(a.reason, CardReason::MergeConflict);
 }
