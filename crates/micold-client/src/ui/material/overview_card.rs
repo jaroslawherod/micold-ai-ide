@@ -2,7 +2,7 @@
 //!
 //! The type icon and the display name (ellipsized, the full name in a tooltip), the state icon and
 //! word (the reason is the word's tooltip), the branch when it has one, the summary line and the
-//! sessions footer. Every colour comes from the theme's roles through [`palette`]: Needs action is
+//! activity line (when the agent's hooks report), the sessions footer. Every colour comes from the theme's roles through [`palette`]: Needs action is
 //! the `error` family, Needs attention `warning`, Working `primary`, Done `success`, and Idle sits
 //! on the de-emphasised `surface_container_low`. With a press (`on_press`) the card is a control: a
 //! click, or Enter or Space on the focused card, publishes the message, and it takes the keyboard
@@ -13,6 +13,7 @@ use crate::ui::material::keyboard_focus::{Indicator, TakesTheKeyboard};
 use crate::ui::material::{style, Ellipsized, Glyph, ProgressBar, Text, Tooltip, TypeRole};
 use iced::widget::{button, column, container, row};
 use iced::{keyboard, Alignment, Element, Length};
+use micold_core::hook_activity::CurrentActivity;
 use micold_core::overview::{CardModel, CardState, LocationType};
 use micold_core::task_progress::{Progress, Ratio};
 use micold_core::tokens::{spacing, Rgb, Roles};
@@ -116,6 +117,15 @@ pub fn progress_words(progress: &Progress) -> ProgressWords {
     }
 }
 
+/// The activity line: what the agent is doing now, with its todo ratio when it has a list
+/// (*Writing tests \u{b7} 2/5*). The task-list progress row stays below it (Story 5).
+pub fn activity_words(activity: &CurrentActivity) -> String {
+    match activity.ratio {
+        Some(ratio) => format!("{} \u{b7} {}/{}", activity.line, ratio.done, ratio.total),
+        None => activity.line.clone(),
+    }
+}
+
 /// The words of `model`.
 pub fn words(model: &CardModel) -> Words {
     Words {
@@ -215,6 +225,13 @@ impl<'a, M: Clone + 'a> From<OverviewCard<'a, M>> for Element<'a, M> {
                 p.text,
             ))
             .push(Text::new(w.footer, TypeRole::Caption, roles).tint(p.text));
+        if let Some(activity) = &card.model.activity {
+            body = body.push(Ellipsized::<M>::at_role(
+                activity_words(activity),
+                TypeRole::Caption,
+                p.text,
+            ));
+        }
         let row = progress_words(&card.model.progress);
         body = body.push(Text::new(row.text, TypeRole::Caption, roles).tint(p.text));
         if let Some(ratio) = row.bar {
@@ -291,6 +308,7 @@ mod tests {
             summary: "Adds the worktree overview".into(),
             prs: PrDisplay::Hidden,
             progress: Default::default(),
+            activity: None,
             activation: Activation::OpenSession(SessionId::new()),
         }
     }

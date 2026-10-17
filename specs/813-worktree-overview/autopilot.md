@@ -12,7 +12,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-2lmupk
 - **Started**: 2026-10-17
 - **Phase**: milestones
-- **Next step**: M5 PR (orchestrator opens from scratchpad title/body), CI, merge; then M6. Visual pass for M5 (quickstart §B2–B4, ProgressBar/OverviewCard showcase) NOT run: no xdotool/Vulkan in the cloud container; see visual-pass-m5.md. Run it where a display exists.
+- **Next step**: M6 in progress (implementing). M5 visual pass for M5 (quickstart §B2–B4, ProgressBar/OverviewCard showcase) NOT run: no xdotool/Vulkan in the cloud container; see visual-pass-m5.md. Run it where a display exists.
 
 ## Pull requests
 
@@ -23,6 +23,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #932 | M2 | merged | fc417da8a17206a597e17ab2a697126186c3007d |
 | #936 | M3 | merged | d93c9dbc687412cced0a9b7854cf44323ee3930e |
 | #951 | M4 | merged | 35b8584fbc0734c15ffe2b14bfb67595ec66d9fe |
+| #976 | M5 | merged | c3df49b331943d973840651d85e1419b8685754a |
 
 ## Milestones
 
@@ -32,7 +33,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T024–T030 | full | PR counts and merge conflict on cards | #932 | merged |
 | M3 | T031–T039 | full | Ctrl/Cmd+Shift+O and attention badge | #936 | merged |
 | M4 | T040–T049 | full | Card activation and keyboard traversal | #951 | merged |
-| M5 | T050–T060 | full | Task summary and progress on cards | pending (title/body written) | PR to open |
+| M5 | T050–T060 | full | Task summary and progress on cards | #976 | merged |
 | M6 | T061–T069 | full | Hook-fed agent activity (protocol 49) | — | pending |
 
 M1 holds 18 US1 tasks plus setup and foundational: kept whole because no smaller cut has an

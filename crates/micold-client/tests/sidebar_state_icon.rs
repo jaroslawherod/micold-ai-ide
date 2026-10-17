@@ -318,6 +318,7 @@ fn catalog(sessions: &[(SessionId, &str, WireLifecycle, ActivitySignal)]) -> Cat
                     agents: Vec::new(),
                     main: false,
                     paused_on_user: false,
+                    hook_activity: None,
                 })
                 .collect(),
         }],

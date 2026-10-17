@@ -437,6 +437,7 @@ fn sample_summary() -> SessionSummary {
         }],
         main: false,
         paused_on_user: false,
+        hook_activity: None,
     }
 }
 
@@ -1887,6 +1888,7 @@ fn the_main_marker_and_set_main_round_trip() {
         origin: None,
         main: true,
         paused_on_user: false,
+        hook_activity: None,
     };
     let json = serde_json::to_value(&summary).expect("encode");
     assert_eq!(json["main"], true);
@@ -1907,6 +1909,7 @@ fn the_main_marker_and_set_main_round_trip() {
 fn paused_on_user_round_trips_and_defaults_to_false() {
     let summary = SessionSummary {
         paused_on_user: true,
+        hook_activity: None,
         ..sample_summary()
     };
     json_roundtrip(&summary);
@@ -1967,4 +1970,30 @@ fn the_jira_switch_and_a_connection_change_round_trip() {
         .jira_connections
         .insert("/work/app".into(), connection.clone());
     json_roundtrip(&DaemonMsg::SettingsChanged { settings });
+}
+
+/// Feature 813 (W1): `hook_activity` rides the summary, and a frame without it decodes `None`.
+#[test]
+fn hook_activity_round_trips_and_defaults_to_none() {
+    use micold_core::hook_activity::{HookActivity, Todo, TodoStatus};
+    let summary = SessionSummary {
+        hook_activity: Some(HookActivity {
+            todos: vec![Todo {
+                text: "write".into(),
+                active: Some("writing".into()),
+                status: TodoStatus::InProgress,
+            }],
+            prompt: Some("fix the bug".into()),
+        }),
+        ..sample_summary()
+    };
+    json_roundtrip(&summary);
+    postcard_roundtrip(&summary);
+    let mut json = serde_json::to_value(&summary).expect("encode");
+    assert_eq!(json["hook_activity"]["prompt"], "fix the bug");
+    json.as_object_mut()
+        .expect("object")
+        .remove("hook_activity");
+    let older: SessionSummary = serde_json::from_value(json).expect("decode without the field");
+    assert_eq!(older.hook_activity, None);
 }

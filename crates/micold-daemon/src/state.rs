@@ -398,6 +398,9 @@ struct LiveSession {
     /// The turn clock that tells a finished turn's kind (feature 613, C1). Created `NotInTurn`
     /// with the live entry and dropped with it; not persisted.
     turn: TurnClock,
+    /// The todo list and last prompt line this session's hooks reported (feature 813, W2). Not
+    /// persisted; never logged (FR-020).
+    hook_activity: micold_core::hook_activity::HookActivity,
     /// The most recent OSC-0 title observed on the AI CLI's `Primary` process (glyph-stripped,
     /// the CLI's own startup title excluded), used to project a live session title and to
     /// debounce title-change pushes (T047). Persisted separately, as the catalog label (feature
@@ -1507,6 +1510,8 @@ impl DaemonState {
                 summary.activity = live.activity.signal().clone();
                 summary.paused_on_user = live.turn.paused_on_user();
                 summary.input_serial = live.input.expected();
+                summary.hook_activity =
+                    (!live.hook_activity.is_empty()).then(|| live.hook_activity.clone());
                 // `012` FR-008/BUG-003: which shell instances exist is durable-ish client state,
                 // but which are *alive* is only knowable here. The client cannot infer it — no
                 // frames is a quiet shell as much as a dead one.
@@ -4199,6 +4204,7 @@ impl DaemonState {
                 input: InputReceiver::new(),
                 activity: Activity::new(),
                 turn: TurnClock::default(),
+                hook_activity: Default::default(),
                 last_title: None,
                 name_stale: true,
                 event_log: None,
@@ -4669,6 +4675,15 @@ impl DaemonState {
                 session,
             },
         ))
+    }
+
+    /// Fold a hook body into the session's [`HookActivity`]; `true` when it changed (feature 813,
+    /// W2). Only that session's live entry is touched.
+    pub fn note_hook_activity(&self, session: SessionId, body: &serde_json::Value) -> bool {
+        self.lock()
+            .sessions
+            .get_mut(&session)
+            .is_some_and(|live| live.hook_activity.apply(body))
     }
 
     /// Apply an activity [`ActivityEvent`] to a live session's FSM (US2, T046). Returns `true` if the
@@ -5588,6 +5603,7 @@ impl DaemonState {
                         input: InputReceiver::new(),
                         activity: Activity::new(),
                         turn: TurnClock::default(),
+                        hook_activity: Default::default(),
                         last_title: None,
                         // A shell-only session has no conversation to name.
                         name_stale: false,
