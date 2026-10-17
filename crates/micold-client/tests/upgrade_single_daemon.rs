@@ -201,6 +201,8 @@ fn a_daemon_added_after_the_upgrade_starts_at_defaults_not_a_copy() {
         legacy_default: None,
         locations: &[],
         sessions: &sessions,
+        taken_elsewhere: Vec::new(),
+        next_port: &|| Ok(7801),
     };
     micold_client::features::daemons::save(&mut form, &mut model).expect("the form saves");
     assert_eq!(registry.entries().len(), 2);
