@@ -18,7 +18,7 @@ open and shows the new project's cards.
 
 Each card shows:
 
-- the location's **type**, as an icon (hover for the word);
+- the location's **type**, as an icon and a word (the word leads the footer line, and is also the icon's tooltip);
 - its name, and the branch below it;
 - a one-line summary (the branch, or *Project root* for Default);
 - its session counts: how many sessions there are and how many are running;
