@@ -14,8 +14,9 @@ chord (0 bytes to the PTY) and in the app's unfocused chord listener. A press re
 the orders the sidebar and switcher already draw (pure `navigation::step` in core) and applies it
 by sending the click's own message (`SessionMsg::Selected`, `ProjectMsg::Reopened`), plus a reveal
 scroll and, when the terminal did not have the keyboard, a keyboard-focused sidebar row. A location
-with no session becomes a navigation stop without changing the session shown. D4 (PageUp/PageDown)
-and D5 (no direct jumps) are provisional; a different D4 answer changes K1 and the docs rows only.
+with no session becomes a navigation stop without changing the session shown. Ledger decisions
+D4 (PageUp/PageDown) and D5 (no direct jumps) are provisional; a different D4 answer changes K1 and
+the docs rows only.
 
 ## Technical Context
 
@@ -27,7 +28,7 @@ and D5 (no direct jumps) are provisional; a different D4 answer changes K1 and t
 **Storage**: none; `nav_stop` and `keyboard_row` are per-window memory (Principle IV)
 
 **Testing**: `cargo test` via `mise run test-core` (core `navigation`) and `mise run gate` (client
-`tests/keymap.rs`, new `tests/navigation.rs`, sidebar state tests, `TreeItem` anatomy, showcase)
+`tests/keymap.rs`, new `tests/navigation.rs` and `tests/navigation_apply.rs`, sidebar state tests, `TreeItem` anatomy, showcase)
 
 **Target Platform**: Linux, macOS, Windows desktop
 
@@ -93,11 +94,13 @@ New `crates/micold-client/src/features/navigation.rs`: `Step`, `location_order(&
 ### D5 — Applying a step — R5, R6, R7
 
 `app.rs` `State::apply_navigation(step, terminal_had_focus) -> Vec<Message>`: pure, returns the
-follow-up message (`Selected` / `Reopened`) and sets `nav_stop`, `keyboard_row`, released terminal,
-reveal arm per U3. `main.rs` routes `Message::Navigate(action)`: reads `terminal_focused()`, calls
-D3 then `apply_navigation`, and dispatches the follow-ups through its own `update` (so `Selected`
-runs its full shell path). `keyboard_row` for a project step is set from the session the switch
-restored, after `Reopened` ran.
+follow-up message (`Selected` / `Reopened`) and sets `nav_stop`, released terminal, reveal arm per
+U3. `State::finish_navigation(step, terminal_had_focus)`: pure, runs after the follow-ups; when the
+terminal did not have the keyboard it releases the terminal (which `Selected` focused) and sets
+`keyboard_row` (`Session(id)`, or for a project step the session the switch restored). `main.rs`
+routes `Message::Navigate(action)`: reads `terminal_focused()`, calls D3, `apply_navigation`,
+dispatches the follow-ups through its own `update` (so `Selected` runs its full shell path), then
+`finish_navigation`; it holds no branch of its own.
 
 ### D6 — Component — R7
 
@@ -144,7 +147,7 @@ states) and `docs/user-guide/worktrees-and-sessions.md` **Navigation** bullet ([
 |---|---|---|---|
 | Core unit | `micold-core/src/navigation.rs` tests | next/previous middle, wrap at both ends, one entry stays, empty → `None`, absent/`None` current → first/last | 005, SC-001 |
 | Client keys | `micold-client/tests/keymap.rs` | K5: decode by physical key and by fallback (logical `{` `}` `<` `>`), both modifier sets, near misses incl. Ctrl+[ → `0x1b`, no overlap with reserved outputs, `route_key` both focus states, docs carry both labels of every chord | 001, 006–008, 013, 016, SC-002, SC-003, SC-006 |
-| Client state | `micold-client/tests/navigation.rs` (new) | U1 gate (Settings, dialog, context menu, switcher panel); U2 for each level: filter skip, collapsed group skip, expanded group run included, helper order, unavailable project skipped, welcome screen, no current, one entry, `nav_stop` honoured and cleared (session change, project entered, `KeyboardRowLeft`, pointer selection); after a `Stop`, the next press that lands on a session sets `keyboard_row`, not terminal focus; U3 apply: `Selected`/`Reopened` follow-up, reveal armed, focus rule both ways, `Stop` leaves `session.active` and the session count unchanged | 002–005, 009–012, 015, SC-004, SC-005 |
+| Client state | `micold-client/tests/navigation.rs` (resolution) and `navigation_apply.rs` (apply), new | U1 gate (Settings, dialog, context menu, switcher panel); U2 for each level: filter skip, collapsed group skip, expanded group run included, helper order, unavailable project skipped, welcome screen, no current, one entry, `nav_stop` honoured and cleared (session change, project entered, `KeyboardRowLeft`, pointer selection); after a `Stop`, the next press that lands on a session sets `keyboard_row`, not terminal focus; U3 apply: `Selected`/`Reopened` follow-up, reveal armed, focus rule both ways, `Stop` leaves `session.active` and the session count unchanged | 002–005, 009–012, 015, SC-004, SC-005 |
 | Client state | `tests/features_sidebar.rs` / `sidebar_state.rs` | `row_index` for location/sub-row/run rows; `reveal_scroll_offset` to `keyboard_row`; `KeyboardRowLeft` clears; `current_session_writers.rs` still green | 009, 010 |
 | Component | `ui/material/tree_view.rs`, `keyboard_focus.rs` tests | `keyboard_focus` adds no layout node size change; supplied+shown draws the ring on the **first** build after the flag goes true (wrapper already present) and on a freshly created wrapper (`state()` seeded); disabled wrappers are skipped by Tab traversal and draw nothing | 010 |
 | Showcase | `tests/showcase_completeness.rs` | focused-row variant listed | VIII |
@@ -179,7 +182,7 @@ crates/micold-client/src/
 ├── ui/{mod.rs, sidebar.rs}
 ├── ui/material/{terminal_pane.rs, tree_view.rs, keyboard_focus.rs}
 └── showcase/{catalogue.rs, sections/*}
-crates/micold-client/tests/{keymap.rs, navigation.rs (new), features_sidebar.rs, showcase_completeness.rs}
+crates/micold-client/tests/{keymap.rs, navigation.rs (new), navigation_apply.rs (new), features_sidebar.rs, showcase_completeness.rs}
 docs/user-guide/{terminal-panes.md, worktrees-and-sessions.md}
 ```
 

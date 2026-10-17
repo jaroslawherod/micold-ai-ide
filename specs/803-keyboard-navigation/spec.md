@@ -24,7 +24,8 @@ quick-switcher palette follow-up vs in scope."
   root) or a worktree, including a missing or invalid one.
 - **Location order**: the order in which the sidebar lists the active project's locations at the
   moment of the key press, after its tag filter: Default first, then the worktrees as shown.
-  Locations the filter hides are not in it.
+  Locations the filter hides are not in it; the current session's location, which the sidebar keeps
+  shown under any filter, is in it.
 - **Session order**: the order in which the sidebar lists the open (not closed) sessions of one
   location: the main session first, then its helpers as shown.
 - **Project order**: the order of the known projects in the top bar's project switcher, without the
@@ -85,7 +86,9 @@ each press.
 4. **Given** keyboard focus in the sidebar (or nowhere), **When** the user presses a navigation
    chord, **Then** the sidebar's keyboard focus moves to the newly selected row.
 5. **Given** the target location has no session, **When** it becomes current by the chord, **Then**
-   it shows its start-session action as it does when clicked, and no session is started.
+   it shows its start-session action as it does when clicked, no session is started, the terminal
+   keeps showing the session it showed, and the sidebar's keyboard focus marks the location's row
+   (a navigation stop); the next location press steps on from it.
 6. **Given** the target row is scrolled out of view, **When** it becomes current by the chord,
    **Then** the sidebar scrolls just far enough to show it.
 7. **Given** the sidebar's tag filter hides some worktrees, **When** the user steps through
@@ -242,12 +245,13 @@ their Linux/Windows and macOS forms.
 - **FR-010**: When a terminal had keyboard focus before the press and the press shows a terminal,
   that terminal MUST have keyboard focus after it. Otherwise (focus was elsewhere, or the new current
   location has no session and shows its start action) the sidebar's keyboard focus MUST move to the
-  newly selected row.
+  newly selected row. After a press that left the keyboard on a sidebar row, the next press keeps it
+  in the sidebar: the terminal takes the keyboard back only by a click or the focus chords.
 - **FR-011**: A navigation chord MUST NOT start, stop, close or remove a session or change which
   session is a location's main session; a location without a session shows its start action.
-- **FR-012**: The navigation chords MUST do nothing while Settings, a modal dialog, a context menu or
-  the project switcher panel is open. A location or session chord MUST close an open Overview as a
-  sidebar selection does.
+- **FR-012**: The navigation chords MUST do nothing while Settings, a modal dialog, a context menu,
+  the project switcher panel or the sidebar's filter panel is open. A location or session chord MUST
+  close an open Overview as a sidebar selection does.
 - **FR-013**: The user guide MUST list the six chords, with both platform forms and the wrap rule,
   in every place it lists the app's keyboard shortcuts (Principle VII).
 - **FR-014**: Jumping directly to a location, session or project (numbered chords or a picker) is
@@ -267,13 +271,15 @@ their Linux/Windows and macOS forms.
 ### Measurable Outcomes
 
 - **SC-001**: A user can move from any worktree to any other worktree of the project without the
-  mouse, in at most N/2 + 1 presses for a project of N locations (wrap in both directions).
+  mouse, in at most ⌊N/2⌋ presses for a project of N locations (wrap in both directions).
 - **SC-002**: For each of the six chords, pressed with a terminal focused, the terminal receives 0
   bytes.
 - **SC-003**: 0 of the six default chords appears in the reserved-shortcut lists of FR-006 on any of
   the three platforms, or among the app's existing chords.
 - **SC-004**: After every navigation press, the highlighted sidebar row is the session the terminal
-  shows, in 100% of presses, and that row is on screen.
+  shows, in 100% of presses. After every press that shows a session, that row is on screen; after a
+  press that lands on a navigation stop, the stop's row is on screen (the highlighted row may then
+  be scrolled out of a long list).
 - **SC-005**: Pressing a navigation chord never changes how many sessions are running.
 - **SC-006**: All six chords appear in every user-guide shortcut list, with Linux/Windows and macOS
   forms.

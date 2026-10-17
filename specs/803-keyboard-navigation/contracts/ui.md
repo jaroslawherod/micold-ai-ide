@@ -32,6 +32,9 @@ session orders are empty.
 | `Project(path)` | dispatch `Message::Project(ProjectMsg::Reopened(path))`; if `!terminal_had_focus`: release the terminal, `keyboard_row = Session(restored current)` when one is restored |
 | `None` | nothing |
 
+The `if !terminal_had_focus` effects run in `State::finish_navigation(step, terminal_had_focus)`,
+after `main.rs` dispatched the follow-up message, so `main.rs` holds no branch of its own.
+
 Never: start, stop, close or archive a session; change a main session (FR-011, SC-005).
 
 ## U4 — Sidebar rendering
