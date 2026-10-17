@@ -45,7 +45,12 @@ with a pinned host key and with daemon environment passed through; (d) the **AI 
 start** into the volume, idempotent, streamed, cancellable and classified. What #686 needs from it is
 written down as [contracts/shared-ssh-image.md](./contracts/shared-ssh-image.md); #806's plan owns the
 module and its names (working name `micold-core/src/ssh_image/` in this feature's documents). Every
-#686 task that calls it is marked **blocked on #806** and sits in the last milestones.
+#686 task that calls it is marked **blocked on #806** and sits in the last milestones. The contract
+also requires the copy and the install to be safe when two clients run them at once on one volume
+(FR-023): each writes to a temporary path and renames into place, under a lock file on the volume, so
+the later client waits within the phase bound and then finds the result in place. #686 reaches the
+key generation through a small port (`KeyGen`, data model) so the access secret is built and tested
+before #806 lands.
 
 Until #806 lands, the Kubernetes start sequence runs up to an open tunnel to the pod's SSH server
 (phases `Config` to `Tunnel`, K6) and is proven over `FakeCluster`; the Add form does not offer the
@@ -68,7 +73,9 @@ stream and copies bytes both ways. The SSH target handed to the shared provision
 `127.0.0.1`, the relay's port, the image's user, the daemon's client key, and the pinned host key
 under a per-daemon `HostKeyAlias` in a per-daemon known-hosts file (K3), so `StrictHostKeyChecking=yes`
 and `UpdateHostKeys=no` hold as in 489. The relay lives as long as the daemon's actor holds it and
-closes on disconnect, stop or remove. `Transport::Tunnel` (revision 1, T010/T017) is not needed: the
+closes on disconnect, stop or remove. Before #806, the `Tunnel` phase proves the path by reading
+the SSH server's identification line (`SSH-2.0-`) through the relay; the login with the pinned host
+key happens in `Copy`, where a mismatch is classified as `HostKeyMismatch`. `Transport::Tunnel` (revision 1, T010/T017) is not needed: the
 protocol runs over 489's `Transport::Ssh`.
 
 **Why**: reuses 489's mechanism unchanged in shape (the owner's instruction); a loopback listener is
@@ -93,7 +100,9 @@ keyed by the daemon key; never in settings, the cluster or logs. The image's SSH
 `authorized_keys` straight from the mounted secret (so a key added later is seen without restarting
 the pod, after the kubelet's volume refresh; the `Tunnel` phase waits for a login within its bound),
 and copies the host key to `/tmp` with mode 0600 at startup (`sshd` refuses a group-readable host
-key). Remove deletes the secret and this client's key files.
+key). Remove deletes the secret and this client's key files; when the cluster is unreachable, the
+confirmation lists the access secret, and with it this client's still-authorized key, among the
+resources that remain (FR-015).
 
 **Why**: the private key never leaves the client (FR-008); the host key is pinned, so a replaced pod
 or secret is a refused mismatch, not a silent trust (edge case); several clients share one pod
@@ -124,7 +133,10 @@ annotation `micold.dev/daemon-name=<name>`. A resource is **ours** only when bot
 Create is `POST`; `409 AlreadyExists` → `GET`: ours → adopt (the race loser reuses the winner's pod,
 FR-023), not ours → `Conflict { kind, name }` (edge case "Pod created by someone else"). The client
 never lists or deletes by label selector alone; deletes name the resource and pass a precondition on
-its UID read in the same step.
+its UID read in the same step. An adopted pod carries the annotation `micold.dev/pod-settings`, the
+canonical JSON of the settings that shape it (image, resources, node selector, tolerations, allowed
+credentials); when it differs from the saved settings, start stops and asks the user to recreate the
+pod or keep it (FR-005), naming the settings that differ.
 
 **Why**: names derived from the three identifying fields make two clients with the same daemon meet on
 the same objects with no coordination (spec 489 FR-021), and the API's create-uniqueness is the lock.
@@ -142,7 +154,8 @@ plugin — 120 s; (2) `Preflight` namespace `GET` and `SelfSubjectAccessReview` 
 ensure PVC — 120 s; (4) `Secrets` reconcile the access secret (K3) and the allowed ones — 120 s;
 (5) `Pod` create or adopt — 120 s; (6) `Schedule` until `PodScheduled=True` — 120 s; (7) `Pull` until
 the container is no longer `ContainerCreating` with a pull in progress — 15 min; (8) `Tunnel` the
-relay (K2) up and an SSH login accepted with the pinned host key — 120 s. Then the shared mechanism
+relay (K2) up and the SSH server's identification line read through it — 120 s (the login with the
+pinned host key is in `Copy`). Then the shared mechanism
 (K1, **blocked on #806**): (9) `Copy` probe, copy if absent, start — 120 s; (10) `Install` the AI
 CLIs — 15 min, live, cancellable; (11) `Connect` the 489 bridge and handshake — 120 s. Failure
 classes (`KubeFailure`) come from pure classifiers over API status codes and pod/PVC conditions and
