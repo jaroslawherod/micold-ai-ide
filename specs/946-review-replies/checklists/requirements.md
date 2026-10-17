@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain
+- [x] No [NEEDS CLARIFICATION] markers remain
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
@@ -31,7 +31,7 @@
 
 ## Notes
 
-- One `[NEEDS CLARIFICATION]` marker remains (User Story 5: structured-session delivery and
-  Edit/Write diff comments, which depend on epic #945) for the clarify unit.
+- The one `[NEEDS CLARIFICATION]` marker (User Story 5, structured sessions) was resolved in
+  clarify (D3: deferred to epic #945); tasks reviewer confirmed none remain.
 - "Agent tool server" and "terminal"/"structured session" name existing user-facing app concepts
   (docs/user-guide/agent-tools.md, epic #945), not implementation choices.

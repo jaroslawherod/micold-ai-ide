@@ -109,7 +109,7 @@ user can mark a Sent comment by hand and read a full reply.
 - [ ] T027 [P] [US1] Write failing geometry tests in `crates/micold-client/src/ui/material/review_comment.rs`: `CardState::{Applied, Answered}` draw their status tag; `.reply(text, shortened)` draws the reply under the comment text, with a "Show all" affordance only when `shortened`; neither state draws Edit or Delete
 - [ ] T028 [P] [US1] Write failing client state tests in `crates/micold-client/tests/features_changes.rs`: a pushed Reported comment's card model has status Applied or Answered, its reply passed through `reply::display` and `reply::shortened(.., 4_000)`, and no edit or delete (FR-002, FR-007); a reply of 4,001 characters is marked shortened; a second window's state applies the same push (US1 s1)
 - [ ] T029 [US1] Implement `CardState::{Applied, Answered}` and `.reply(..)` on `ReviewCommentCard` in `crates/micold-client/src/ui/material/review_comment.rs` until T027 passes
-- [ ] T030 [US1] Derive each card's status and reply in `crates/micold-client/src/features/changes.rs` (replacing T009's Reported-as-Sent mapping) until T028 passes
+- [ ] T030 [US1] Derive each card's status and reply in `crates/micold-client/src/features/changes.rs` (replacing T003's Reported-as-Sent mapping) until T028 passes
 - [ ] T031 [US1] Draw Applied and Answered cards with their replies in `crates/micold-client/src/ui/changes.rs` (glue, quickstart §B step 5)
 - [ ] T032 [P] [US1] Add Applied and Answered `ReviewCommentCard` poses (short reply, shortened reply) to `crates/micold-client/src/showcase/sections/review.rs` and `crates/micold-client/src/showcase/catalogue.rs`
 - [ ] T033 [P] [US1] Document `report_review_comment` in `docs/user-guide/agent-tools.md` (arguments, outcomes, own-entry rule including the Default entry, refusals, that it never waits for approval) and add "Statuses and replies" to `docs/user-guide/reviewing-changes.md` (Draft, Sent, Applied, Answered; replies on cards; kept across restarts; a session without the tool server cannot report) (FR-028)
@@ -227,7 +227,7 @@ T027 card geometry tests          T028 client features tests
 
 ## Implementation Strategy
 
-1. **MVP (M1)**: Setup, Foundational, US2: the stable batch with references goes out on Send review.
+1. **MVP (M1 + M2)**: M1 (Setup, Foundational, US2) sends the stable batch with references; M2 completes the P1 round trip (US1 reports shown on the cards).
 2. **M2, M3**: US1: the agent's reports come back on the cards; marking by hand and full replies.
 3. **M4**: US3: the review panel.
 4. **M5**: US4: re-anchoring.
