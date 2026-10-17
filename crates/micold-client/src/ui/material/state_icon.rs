@@ -69,7 +69,9 @@ impl<'a, M: 'a> From<StateIcon> for Element<'a, M> {
         };
         container(content)
             .width(Length::Fixed(s.size))
+            .height(Length::Fixed(s.size))
             .align_x(Alignment::Center)
+            .align_y(Alignment::Center)
             .into()
     }
 }
@@ -114,9 +116,14 @@ mod tests {
                 default.height
             );
             assert_eq!(
-                size_of(StateIcon::new(state, roles()).size(20.0)).width,
-                20.0,
-                "{state:?} at 20dp"
+                default.height, default.width,
+                "{state:?}: the slot is square, the Unknown slot included"
+            );
+            let px = TypeRole::Title.size();
+            assert_eq!(
+                size_of(StateIcon::new(state, roles()).size(px)).width,
+                px,
+                "{state:?} at {px}dp"
             );
         }
     }
