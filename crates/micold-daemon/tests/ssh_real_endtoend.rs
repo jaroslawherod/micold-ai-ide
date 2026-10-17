@@ -154,7 +154,7 @@ async fn ssh_real_repository_worktree_session_and_terminal_work_on_the_host() {
             project: repo.clone(),
             worktree_dir: "feature-x".into(),
             provider: AiCli::ClaudeCode,
-            allow_additional_session: false,
+            allow_additional_session: true,
         },
         3,
         &mut seen,
@@ -165,7 +165,7 @@ async fn ssh_real_repository_worktree_session_and_terminal_work_on_the_host() {
     };
     conn.send(Frame::Control(ClientMsg::SessionStart {
         session,
-        allow_additional_session: false,
+        allow_additional_session: true,
     }))
     .await
     .expect("start the session");
