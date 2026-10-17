@@ -80,6 +80,26 @@ whose use is not obvious from that:
 The first `mise run <task>` in a fresh worktree/clone requires trusting the repo's `mise.toml`
 once via `mise trust` (mise refuses untrusted configs by default).
 
+## Navigate Rust with the `LSP` tool before `grep`
+
+The `rust-analyzer-lsp` plugin (`.claude/settings.json`) backs the `LSP` tool. For a Rust symbol it
+answers in one call what `grep -n` plus several `Read`s answer in many, and it knows types and
+trait impls, which text search does not. `filePath`, `line` and `character` are 1-based; find the
+position with `grep -n` first.
+
+- **Where is it defined / what is its type:** `goToDefinition`, `hover`.
+- **Who uses it, before changing a signature or deleting it:** `findReferences`,
+  `incomingCalls`. Do this before a rename or a removal; a `grep` misses macro-generated and
+  trait-dispatched uses.
+- **Which impl runs:** `goToImplementation` on the trait method.
+- **What is in a file:** `documentSymbol`, then `Read` only the range you need, not the whole file.
+- **Find a symbol by name:** `workspaceSymbol` with a non-empty `query`.
+
+Use `grep -n` for strings, log messages, config keys, docs, shell scripts and anything that is not
+Rust. If `LSP` reports no server or returns nothing (rust-analyzer still indexing, a file outside
+the workspace), fall back to `grep -n` and do not retry. It does not replace `mise run gate`:
+rust-analyzer's diagnostics are not CI's clippy.
+
 ## Search for an existing helper before writing a new one
 
 Before adding a function, type or test fixture, `grep -n` the crates for what it does (a verb, a

@@ -10,5 +10,7 @@ task files, the ledger and the scope. Read `.claude/skills/speckit-autopilot/rul
 letter. Read another task file only where one of those links it for the step in hand.
 
 - There is no Grep tool: use `grep -n` in Bash, then `Read` with `offset` and `limit`.
+- For a Rust symbol use the `LSP` tool (`goToDefinition`, `findReferences`, `incomingCalls`) before
+  `grep`; see CLAUDE.md, *Navigate Rust with the `LSP` tool*.
 - Every call re-reads your whole context. Put calls that do not depend on each other in one message.
 - End with the return block `rules/unit.md` gives, and nothing after it.

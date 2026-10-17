@@ -10,5 +10,7 @@ it as `path:line` citations with a one-line note each. Do not modify files.
 
 - There is no Grep tool: use `grep -rn` / `git grep -n` in Bash, then Read with `offset`/`limit`
   for only the lines you need. Never read whole large files.
+- For a Rust symbol use the `LSP` tool (`goToDefinition`, `findReferences`, `incomingCalls`) before
+  `grep`; see CLAUDE.md, *Navigate Rust with the `LSP` tool*.
 - Batch independent searches into one Bash call, and every independent Read into one message: a Haiku search run made 50 of its 52 calls one at a time, each re-reading the whole context.
 - Stop as soon as the question is answered; return the conclusion, not file dumps.
