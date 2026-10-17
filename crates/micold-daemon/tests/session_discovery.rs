@@ -472,10 +472,22 @@ fn discovery_finds_what_the_clis_recorded_and_nothing_else() {
         );
         assert_eq!(state.discover_external_sessions(&project), 0);
 
-        // An unknown id that is not a continuation is still adopted.
-        stores.claude_conversation(&cwd, Uuid::from_u128(0xA2));
-        assert_eq!(state.discover_external_sessions(&project), 1);
-        assert_eq!(recorded(&state, &project).len(), 2);
+        // An unknown id that is not a continuation is not treated as one: it is not marked
+        // archived. It is still not adopted here, because the location already holds a session
+        // and discovery catalogues at most one per location (FR-012, feature 776 M6).
+        let unrelated = Uuid::from_u128(0xA2);
+        stores.claude_conversation(&cwd, unrelated);
+        assert_eq!(state.discover_external_sessions(&project), 0);
+        assert!(
+            !micold_core::provider::AiCliProvider::is_archived(
+                AiCli::ClaudeCode.provider(),
+                &stores.claude,
+                &cwd,
+                unrelated
+            ),
+            "only a /clear continuation is archived as handled"
+        );
+        assert_eq!(recorded(&state, &project).len(), 1);
     }
 
     // --- A `/clear` transcript where no session exists is adopted as before ---
