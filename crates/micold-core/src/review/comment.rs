@@ -437,6 +437,8 @@ pub enum ReviewError {
     Busy,
     /// There is no pending comment to send (W6, US2 s5).
     NothingPending,
+    /// Another comment of the entry already has the new id's reference (FR-014).
+    RefTaken,
 }
 
 impl std::fmt::Display for ReviewError {
@@ -448,6 +450,7 @@ impl std::fmt::Display for ReviewError {
             Self::InSend => f.write_str("the comment is being sent; try again once the send ends"),
             Self::Busy => f.write_str("these comments are already being sent"),
             Self::NothingPending => f.write_str("there are no draft comments to send"),
+            Self::RefTaken => f.write_str("another comment of this entry has that reference"),
         }
     }
 }
@@ -554,10 +557,15 @@ impl EntryReview {
         self.comments.is_empty()
     }
 
-    /// Add a pending comment `id` made at `created` (W1): refused when the quote does not hold
-    /// one line per line of the range or the trimmed text is empty; the text is stored trimmed.
+    /// Add a Draft comment `id` made at `created` (W1): refused when the quote does not hold
+    /// one line per line of the range, the trimmed text is empty, or another comment of the
+    /// entry has `id`'s reference (`RefTaken`, FR-014); the text is stored trimmed.
     pub fn add(&mut self, draft: Draft, id: CommentId, created: u64) -> Result<(), ReviewError> {
         let text = checked_text(&draft.text)?;
+        let reference = CommentRef::of(id);
+        if self.comments.iter().any(|c| c.reference() == reference) {
+            return Err(ReviewError::RefTaken);
+        }
         if draft.quote.len() != draft.range.len() as usize {
             return Err(ReviewError::Invalid(format!(
                 "the quote holds {} lines but the range {}..={} covers {}",
@@ -665,11 +673,26 @@ mod tests {
         }
     }
 
+    /// `0000000n-…`: distinct leading digits, so each id has its own reference.
     fn id(n: u128) -> CommentId {
-        CommentId(Uuid::from_u128(n))
+        CommentId(Uuid::from_u128(n << 96))
     }
 
     const NOW: u64 = 1_790_000_000;
+
+    #[test]
+    fn add_refuses_an_id_whose_reference_another_comment_has() {
+        let mut review = EntryReview::default();
+        let first = CommentId(Uuid::from_u128(0x1a2b_3c4d_0000_4000_8000_0000_0000_0001));
+        let same_ref = CommentId(Uuid::from_u128(0x1a2b_3c4d_0000_4000_8000_0000_0000_0002));
+        review.add(draft(1, 1, &["x"], "one"), first, NOW).expect("the first is kept");
+        assert_eq!(
+            review.add(draft(2, 2, &["y"], "two"), same_ref, NOW),
+            Err(ReviewError::RefTaken),
+            "a reference is unique within the entry (FR-014)"
+        );
+        assert_eq!(review.comments().len(), 1, "nothing is stored on a refusal");
+    }
 
     #[test]
     fn add_stores_a_pending_comment_with_its_text_trimmed() {
@@ -1151,7 +1174,7 @@ mod tests {
 
     #[test]
     fn a_reference_parses_from_either_prefix_case_and_surrounding_whitespace() {
-        let expected = CommentRef::of(id(0x1a2b_3c4d_0000_4000_8000_0000_0000_0000));
+        let expected = CommentRef::of(CommentId(Uuid::from_u128(0x1a2b_3c4d_0000_4000_8000_0000_0000_0000)));
         for text in ["C-1a2b3c4d", "c-1a2b3c4d", "C-1A2B3C4D", "  C-1a2b3c4d\n", "\tc-1A2b3C4d "] {
             assert_eq!(CommentRef::parse(text), Some(expected), "{text:?} names the comment");
         }
@@ -1162,9 +1185,9 @@ mod tests {
 
     #[test]
     fn fresh_id_skips_a_drawn_id_whose_reference_is_taken() {
-        let taken = id(0x1111_1111_0000_4000_8000_0000_0000_0001);
-        let collides = id(0x1111_1111_ffff_4fff_8fff_ffff_ffff_ffff);
-        let free = id(0x2222_2222_0000_4000_8000_0000_0000_0001);
+        let taken = CommentId(Uuid::from_u128(0x1111_1111_0000_4000_8000_0000_0000_0001));
+        let collides = CommentId(Uuid::from_u128(0x1111_1111_ffff_4fff_8fff_ffff_ffff_ffff));
+        let free = CommentId(Uuid::from_u128(0x2222_2222_0000_4000_8000_0000_0000_0001));
         let mut existing = sample(CommentState::Draft);
         existing.id = taken;
         let review = EntryReview::from_comments(vec![existing]);
