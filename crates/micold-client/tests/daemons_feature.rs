@@ -818,12 +818,24 @@ fn choosing_a_host_from_the_picker_fills_only_the_host_and_clears_the_other_fiel
         &mut w,
         daemons::Msg::SshHostsLoaded(vec!["build".into(), "web".into()]),
     );
-    assert_eq!(state.ssh_hosts, ["build", "web"], "the picker lists the configured hosts");
-    send(&mut state, &mut w, daemons::Msg::SshHostChosen("web".into()));
+    assert_eq!(
+        state.ssh_hosts,
+        ["build", "web"],
+        "the picker lists the configured hosts"
+    );
+    send(
+        &mut state,
+        &mut w,
+        daemons::Msg::SshHostChosen("web".into()),
+    );
     let d = state.draft.as_ref().unwrap();
     assert_eq!(d.ssh_host, "web");
     assert_eq!(
-        (d.ssh_user.as_str(), d.ssh_port.as_str(), d.ssh_key_file.as_str()),
+        (
+            d.ssh_user.as_str(),
+            d.ssh_port.as_str(),
+            d.ssh_key_file.as_str()
+        ),
         ("", "", ""),
         "user, port and key come from the SSH configuration"
     );
@@ -843,7 +855,11 @@ fn entered_fields_are_stored_as_typed_for_a_host_not_in_the_configuration() {
     match &entry.runtime {
         DaemonRuntime::Ssh(s) => {
             assert_eq!(
-                (s.target.host.as_str(), s.target.user.as_deref(), s.target.port),
+                (
+                    s.target.host.as_str(),
+                    s.target.user.as_deref(),
+                    s.target.port
+                ),
                 ("devbox", Some("dev"), Some(2222))
             );
         }
@@ -1046,7 +1062,11 @@ fn a_second_alias_of_the_same_machine_is_refused_naming_the_first_daemon() {
     let same = parse_g("hostname 10.0.0.1\nuser me\nport 22\n");
     for host in ["a", "b"] {
         let target = SshTarget::new(host, None, None, None).unwrap();
-        send(&mut state, &mut w, daemons::Msg::SshResolved(target, same.clone()));
+        send(
+            &mut state,
+            &mut w,
+            daemons::Msg::SshResolved(target, same.clone()),
+        );
     }
     daemons::save(&mut state, &mut w.model()).unwrap();
 
@@ -1080,8 +1100,15 @@ fn removing_an_ssh_daemon_asks_first_and_applies_to_that_daemon_only() {
     let id = w.registry.entries().last().unwrap().id;
     let before = w.registry.entries().len();
     send(&mut state, &mut w, daemons::Msg::RemovalRequested(id));
-    assert!(state.prompt().is_some(), "the 491 confirmation applies unchanged");
-    assert_eq!(w.registry.entries().len(), before, "nothing removed before confirming");
+    assert!(
+        state.prompt().is_some(),
+        "the 491 confirmation applies unchanged"
+    );
+    assert_eq!(
+        w.registry.entries().len(),
+        before,
+        "nothing removed before confirming"
+    );
     send(&mut state, &mut w, daemons::Msg::RemovalConfirmed);
     assert_eq!(w.registry.entries().len(), before - 1);
     assert!(w.registry.entries().iter().all(|e| e.id != id));

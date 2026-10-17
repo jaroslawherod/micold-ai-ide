@@ -13,7 +13,8 @@ use std::path::{Path, PathBuf};
 
 use iced::Task;
 use micold_client::app::Message;
-use micold_client::features::daemons::{DraftRuntime, Msg};
+use micold_client::features::daemons::DraftRuntime;
+use micold_client::features::daemons::Msg;
 use micold_client::features::Outcome;
 use micold_core::daemons::DaemonId;
 use micold_core::protocol::messages::ClientMsg;
