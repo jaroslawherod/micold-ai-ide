@@ -627,3 +627,164 @@ fn sections_open_by_toggle_and_by_error_without_touching_the_draft() {
     send(&mut state, &mut w, daemons::Msg::AddOpened);
     assert_eq!(open(&state), [true, false, false, false, false]);
 }
+
+// Feature 805: a container daemon saved with an empty port gets a free one, kept from then on.
+
+fn stored_port(w: &World, name: &str) -> u16 {
+    let e = w
+        .registry
+        .entries()
+        .iter()
+        .find(|e| e.name.as_str() == name);
+    match &e.expect("stored").runtime {
+        micold_core::daemons::DaemonRuntime::Container(c) => c.port,
+        other => panic!("not a container: {other:?}"),
+    }
+}
+
+fn sequence(ports: Vec<u16>) -> impl Fn() -> std::io::Result<u16> {
+    let it = std::cell::RefCell::new(ports.into_iter());
+    move || {
+        it.borrow_mut()
+            .next()
+            .ok_or_else(|| std::io::Error::other("empty"))
+    }
+}
+
+#[test]
+fn an_empty_port_is_picked_stored_and_shown_on_edit() {
+    let mut w = World::new();
+    let mut state = State::default();
+    add_container(&mut state, "Three", "c3", "");
+    daemons::save(&mut state, &mut w.model()).unwrap();
+    let port = stored_port(&w, "Three");
+    assert_ne!(port, 0);
+    assert!(![7001].contains(&port), "not another daemon's port");
+    let id = w.registry.entries().last().unwrap().id;
+    let d = daemons::begin_edit(&mut state, &w.model(), id).unwrap();
+    assert_eq!(
+        d.port,
+        port.to_string(),
+        "the edit view shows the picked port"
+    );
+}
+
+#[test]
+fn an_explicit_port_is_stored_as_given() {
+    let mut w = World::new();
+    let mut state = State::default();
+    add_container(&mut state, "Three", "c3", " 7003 ");
+    daemons::save(&mut state, &mut w.model()).unwrap();
+    assert_eq!(stored_port(&w, "Three"), 7003);
+}
+
+#[test]
+fn zero_and_an_explicit_duplicate_are_still_refused() {
+    let mut w = World::new();
+    let mut state = State::default();
+    add_container(&mut state, "Three", "c3", "0");
+    let err = daemons::save(&mut state, &mut w.model()).unwrap_err();
+    assert_eq!(
+        (err.field, err.message.as_str()),
+        ("port", "Enter a port between 1 and 65535.")
+    );
+    add_container(&mut state, "Three", "c3", "7001");
+    assert_eq!(
+        daemons::save(&mut state, &mut w.model()).unwrap_err().field,
+        "port"
+    );
+}
+
+#[test]
+fn a_host_daemon_edited_to_container_with_an_empty_port_gets_a_picked_one() {
+    let mut w = World::new();
+    let mut state = State::default();
+    let host = w.host;
+    daemons::begin_edit(&mut state, &w.model(), host);
+    let draft = state.draft.as_mut().unwrap();
+    draft.runtime = DraftRuntime::Container;
+    draft.container_name = "host-ctr".into();
+    draft.port = String::new();
+    let next = sequence(vec![8123]);
+    daemons::save(&mut state, &mut w.model_with(Vec::new(), &next)).unwrap();
+    assert_eq!(stored_port(&w, "Host"), 8123);
+}
+
+#[test]
+fn two_empty_adds_get_different_ports_even_when_the_source_repeats() {
+    let mut w = World::new();
+    let mut state = State::default();
+    let next = sequence(vec![8001, 8001, 8002]);
+    add_container(&mut state, "Three", "c3", "");
+    daemons::save(&mut state, &mut w.model_with(Vec::new(), &next)).unwrap();
+    add_container(&mut state, "Four", "c4", "");
+    daemons::save(&mut state, &mut w.model_with(Vec::new(), &next)).unwrap();
+    assert_eq!(stored_port(&w, "Three"), 8001);
+    assert_eq!(stored_port(&w, "Four"), 8002);
+}
+
+#[test]
+fn a_port_held_elsewhere_is_never_picked() {
+    let mut w = World::new();
+    let mut state = State::default();
+    let next = sequence(vec![8001, 8002]);
+    add_container(&mut state, "Three", "c3", "");
+    daemons::save(&mut state, &mut w.model_with(vec![8001], &next)).unwrap();
+    assert_eq!(stored_port(&w, "Three"), 8002);
+}
+
+#[test]
+fn no_free_port_fails_the_save_and_stores_nothing() {
+    let mut w = World::new();
+    let mut state = State::default();
+    let next = || Err(std::io::Error::other("no sockets"));
+    add_container(&mut state, "Three", "c3", "");
+    let err = daemons::save(&mut state, &mut w.model_with(Vec::new(), &next)).unwrap_err();
+    assert_eq!(
+        (err.field, err.message.as_str()),
+        ("port", "No free port could be found; enter one yourself.")
+    );
+    assert_eq!(w.registry.entries().len(), 2, "the registry is unchanged");
+}
+
+#[test]
+fn editing_with_the_port_cleared_or_untouched_keeps_the_stored_port() {
+    let mut w = World::new();
+    let mut state = State::default();
+    let boxed = w.boxed;
+    for clear in [true, false] {
+        daemons::begin_edit(&mut state, &w.model(), boxed);
+        let draft = state.draft.as_mut().unwrap();
+        draft.name = "Box renamed".into();
+        if clear {
+            draft.port = String::new();
+        }
+        let next = sequence(vec![9999]);
+        daemons::save(&mut state, &mut w.model_with(Vec::new(), &next)).unwrap();
+        assert_eq!(stored_port(&w, "Box renamed"), 7001, "cleared: {clear}");
+    }
+}
+
+#[test]
+fn a_picked_port_survives_a_restart() {
+    use micold_client::links::{bring_up, BringUp};
+    let mut w = World::new();
+    let mut state = State::default();
+    add_container(&mut state, "Three", "c3", "");
+    daemons::save(&mut state, &mut w.model()).unwrap();
+    let port = stored_port(&w, "Three");
+    let entries: Vec<_> = w
+        .registry
+        .entries()
+        .iter()
+        .map(|e| serde_json::from_str(&serde_json::to_string(e).unwrap()).unwrap())
+        .collect();
+    let restarted = micold_core::daemons::DaemonRegistry::new(entries, w.registry.next_id());
+    let entry = restarted.entries().last().unwrap();
+    assert_eq!(restarted.container_ports().last(), Some(&port));
+    assert_eq!(
+        bring_up(entry, &DaemonState::Starting, false),
+        BringUp::Spawn,
+        "it starts on its stored entry; nothing picks at start"
+    );
+}

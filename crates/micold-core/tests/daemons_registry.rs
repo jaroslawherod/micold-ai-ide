@@ -1,7 +1,8 @@
 //! Feature 491 (FR-001, FR-015): the rules a daemon registry enforces on every change.
 
 use micold_core::daemons::{
-    ContainerSettings, DaemonId, DaemonRegistry, DaemonRuntime, RegistryError,
+    os_free_loopback_port, pick_free_port, ContainerSettings, DaemonId, DaemonRegistry,
+    DaemonRuntime, PortPickError, RegistryError,
 };
 use micold_core::sandbox::SandboxProfile;
 
@@ -139,4 +140,54 @@ fn a_second_host_daemon_is_refused() {
 fn the_runtime_label_is_the_plain_value() {
     assert_eq!(DaemonRuntime::Host.label(), "Host");
     assert_eq!(container("c", 7728).label(), "Container");
+}
+
+fn sequence(ports: Vec<std::io::Result<u16>>) -> impl FnMut() -> std::io::Result<u16> {
+    let mut it = ports.into_iter();
+    move || it.next().unwrap_or(Ok(0))
+}
+
+#[test]
+fn the_picker_skips_taken_and_zero_ports() {
+    let mut next = sequence(vec![Ok(0), Ok(7000), Ok(7001)]);
+    assert_eq!(pick_free_port(&[7000], &mut next), Ok(7001));
+}
+
+#[test]
+fn the_picker_gives_up_after_sixteen_misses() {
+    let mut calls = 0;
+    let mut next = || {
+        calls += 1;
+        Ok(7000)
+    };
+    assert_eq!(
+        pick_free_port(&[7000], &mut next),
+        Err(PortPickError::NoFreePort)
+    );
+    assert_eq!(calls, 16, "exactly 16 attempts");
+}
+
+#[test]
+fn the_picker_fails_when_the_source_fails() {
+    let mut next = sequence(vec![Err(std::io::Error::other("no sockets"))]);
+    assert_eq!(
+        pick_free_port(&[], &mut next),
+        Err(PortPickError::NoFreePort)
+    );
+}
+
+#[test]
+fn the_os_port_is_non_zero_and_binds() {
+    let port = os_free_loopback_port().unwrap();
+    assert_ne!(port, 0);
+    std::net::TcpListener::bind(("127.0.0.1", port)).expect("the picked port binds");
+}
+
+#[test]
+fn container_ports_lists_every_stored_container_port() {
+    let mut r = registry();
+    r.add("A", container("c1", 7001), false).unwrap();
+    r.add("H", DaemonRuntime::Host, false).unwrap();
+    r.add("B", container("c2", 7002), false).unwrap();
+    assert_eq!(r.container_ports(), vec![7001, 7002]);
 }

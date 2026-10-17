@@ -140,7 +140,49 @@ impl DaemonRuntime {
     }
 }
 
+/// Why no port could be picked for a container daemon.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PortPickError {
+    /// The source gave only taken or zero ports, or failed.
+    NoFreePort,
+}
+
+/// How many ports `pick_free_port` asks for before it gives up.
+const PORT_PICK_ATTEMPTS: usize = 16;
+
+/// The first port `next` yields that is non-zero and not in `taken`; gives up after 16 misses or
+/// on an error from `next`.
+pub fn pick_free_port(
+    taken: &[u16],
+    next: &mut dyn FnMut() -> std::io::Result<u16>,
+) -> Result<u16, PortPickError> {
+    for _ in 0..PORT_PICK_ATTEMPTS {
+        let port = next().map_err(|_| PortPickError::NoFreePort)?;
+        if port != 0 && !taken.contains(&port) {
+            return Ok(port);
+        }
+    }
+    Err(PortPickError::NoFreePort)
+}
+
+/// A port the OS hands out on the loopback interface: bindable at this instant.
+pub fn os_free_loopback_port() -> std::io::Result<u16> {
+    let listener = std::net::TcpListener::bind(("127.0.0.1", 0))?;
+    Ok(listener.local_addr()?.port())
+}
+
 impl DaemonRegistry {
+    /// Every stored container port.
+    pub fn container_ports(&self) -> Vec<u16> {
+        self.entries
+            .iter()
+            .filter_map(|e| match &e.runtime {
+                DaemonRuntime::Container(c) => Some(c.port),
+                _ => None,
+            })
+            .collect()
+    }
+
     /// A registry over stored entries and the stored counter.
     pub fn new(entries: Vec<DaemonEntry>, next_id: u32) -> Self {
         Self { entries, next_id }

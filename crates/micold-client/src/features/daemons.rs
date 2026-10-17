@@ -43,6 +43,10 @@ pub struct Model<'a> {
     pub locations: &'a [WorktreeRef],
     /// The live sessions of each daemon.
     pub sessions: &'a BTreeMap<DaemonId, Vec<SessionId>>,
+    /// Container ports other windows' registries hold, which a picked port must also avoid.
+    pub taken_elsewhere: Vec<u16>,
+    /// Where a free port comes from when a container daemon is saved with none.
+    pub next_port: &'a dyn Fn() -> std::io::Result<u16>,
 }
 
 /// Which runtime the form is set to.
@@ -600,7 +604,12 @@ fn invalid_field(field: &'static str) -> FormError {
     FormError { field, message }
 }
 
-fn runtime_of(draft: &Draft) -> Result<DaemonRuntime, FormError> {
+fn runtime_of(
+    draft: &Draft,
+    registry: &DaemonRegistry,
+    taken_elsewhere: &[u16],
+    next_port: &dyn Fn() -> std::io::Result<u16>,
+) -> Result<DaemonRuntime, FormError> {
     match draft.runtime {
         DraftRuntime::Host => Ok(DaemonRuntime::Host),
         DraftRuntime::Ssh => {
@@ -624,10 +633,7 @@ fn runtime_of(draft: &Draft) -> Result<DaemonRuntime, FormError> {
             Ok(DaemonRuntime::Ssh(micold_core::ssh::SshSettings { target }))
         }
         DraftRuntime::Container => {
-            let port = draft.port.trim().parse::<u16>().map_err(|_| FormError {
-                field: "port",
-                message: "Enter a port between 1 and 65535.".into(),
-            })?;
+            let port = container_port(draft, registry, taken_elsewhere, next_port)?;
             let mut profile = draft.profile.clone();
             let path = draft.image_path.trim();
             profile.image.path = (!path.is_empty()).then(|| PathBuf::from(path));
@@ -666,6 +672,43 @@ fn runtime_of(draft: &Draft) -> Result<DaemonRuntime, FormError> {
             ))
         }
     }
+}
+
+/// The container port: as typed, else the stored one while editing a container daemon (FR-006),
+/// else a free one picked now (FR-001).
+fn container_port(
+    draft: &Draft,
+    registry: &DaemonRegistry,
+    taken_elsewhere: &[u16],
+    next_port: &dyn Fn() -> std::io::Result<u16>,
+) -> Result<u16, FormError> {
+    let text = draft.port.trim();
+    if !text.is_empty() {
+        return text
+            .parse::<u16>()
+            .ok()
+            .filter(|p| *p != 0)
+            .ok_or(FormError {
+                field: "port",
+                message: "Enter a port between 1 and 65535.".into(),
+            });
+    }
+    let stored = draft
+        .editing
+        .and_then(|id| registry.get(id))
+        .and_then(|e| match &e.runtime {
+            DaemonRuntime::Container(c) => Some(c.port),
+            _ => None,
+        });
+    if let Some(port) = stored {
+        return Ok(port);
+    }
+    let mut taken = registry.container_ports();
+    taken.extend_from_slice(taken_elsewhere);
+    micold_core::daemons::pick_free_port(&taken, &mut || next_port()).map_err(|_| FormError {
+        field: "port",
+        message: "No free port could be found; enter one yourself.".into(),
+    })
 }
 
 fn prompt_for(model: &Model<'_>, id: DaemonId, action: &str, effect: &str) -> RemovalPrompt {
@@ -709,7 +752,12 @@ pub fn save(state: &mut State, model: &mut Model<'_>) -> Result<Vec<Outcome>, Fo
         .map_err(|e| form_error(model.registry, &draft, e))?
         .as_str()
         .to_string();
-    let runtime = runtime_of(&draft)?;
+    let runtime = runtime_of(
+        &draft,
+        model.registry,
+        &model.taken_elsewhere,
+        model.next_port,
+    )?;
     // Validate on a copy so a refusal leaves the registry exactly as it was.
     let mut probe = model.registry.clone();
     let probed = match draft.editing {

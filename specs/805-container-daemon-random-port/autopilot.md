@@ -9,19 +9,20 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #805
 - **Worktree branch**: feat/805_container-daemon-without-a-port-should-pick-a
 - **Started**: 2026-10-16
-- **Phase**: tasks
-- **Next step**: milestone M1
+- **Phase**: milestone M1
+- **Next step**: CI and merge of the M1 PR, then close
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
+| #910 | Design | merged | 59cd8f77356153f09a73586392e703384c345066 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T012 | full | Empty container port picks, saves and keeps a free port; taken port reported at start | | pending |
+| M1 | T001–T012 | full | Empty container port picks, saves and keeps a free port; taken port reported at start | | in review |
 
 ## Decisions
 
@@ -39,6 +40,8 @@ One milestone: US1 and US2 share `runtime_of`; US3 is test-only. No split.
 | Plan 805 | 2 | 4c72070b7194209d3ea7d8d4a9652178aa4dddd5:ee944ffa41778bb9cfadeee6c8ea9bc95db4677e | CHANGES: 1 MAJOR (fixed: taken_elsewhere moved to shell/daemons.rs caller; verified by grep, not re-reviewed, design detail only) |
 | Tasks 805 | 1 | 30b4c926f36e42cdd89f210bbe75f293f55897bc:99178fc09a5891d2d4a728d47c88ee68d53085ab | CLEAN (2 MINOR fixed prose only: test file daemons_feature.rs, compile-step note). speckit-analyze: I1 declined (spec says earlier saved saves; plan accepts only same-instant), others fixed |
 | Spec 805 | 2 | 0ff26f022abefc0f43afb7749457cd129609b76f:8a04f4206330fa7552531e4694e2244b186d345f | CLEAN (3 MINOR, 2 fixed prose only) |
+| Review A M1 | 1 | bdfd6f1132e3674c5d0dab674adad020656ba9e1:59cd8f77356153f09a73586392e703384c345066 | CLEAN |
+| Review B M1 | 1 | same | CLEAN (3 MINOR: weak restart test, no cycle-log, hardcoded 7001; not fixed, effort low) |
 
 ## Declined review findings
 

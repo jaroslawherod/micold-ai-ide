@@ -112,6 +112,20 @@ fn canned_failures_reach_the_caller_as_distinct_variants() {
     }
 }
 
+/// Feature 805, SC-003: a port in use names the port and where to change it.
+#[test]
+fn a_taken_port_names_the_port_and_where_to_change_it() {
+    let err = RuntimeError::PortUnavailable { port: 7727 };
+    assert_eq!(
+        err.reason(),
+        "Port 7727 is already in use, so the sandbox has no control channel."
+    );
+    assert_eq!(
+        err.remedy(),
+        "Stop whatever holds the port, or choose another in Settings → Daemons."
+    );
+}
+
 /// K-8, the case that is not about output at all: the program is missing.
 #[test]
 fn a_missing_program_is_reported_as_not_installed() {
