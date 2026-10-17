@@ -24,10 +24,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Decisions
 
-- Clarify round 1 (orchestrator defaults, pending owner): image = #806 build pushed to a user-named registry, pull stays an option; provider CLIs installed at build time; clone from the project git remote, no-remote projects refused.
-- Clarify round 2 (agent-resolved): registry pull credential follows FR-008 allow-list; push uses the local runtime login; image tag/rebuild and CI image loading deferred to plan. No critical ambiguities left.
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
+| 1 | clarify | FR-004 default image source | #806 build, pushed to a user-named registry; pull stays an option | orchestrator default, pending owner | decision card 2026-10-17 |
+| 2 | clarify | FR-004 provider CLIs in the pod | installed at build time | orchestrator default, pending owner | decision card 2026-10-17 |
+| 3 | clarify | FR-007 clone source | project git remote with allowed credential; no-remote refused | orchestrator default, pending owner | decision card 2026-10-17 |
+| 4 | clarify | private registry pull; push auth | pull secret on FR-008 allow-list; push via local runtime login | agent | spec.md FR-008, FR-002 |
+| 5 | clarify | image tag/rebuild; CI image loading | deferred to plan | agent | spec.md FR-017, FR-021 |
 
 ## Review rounds
 
