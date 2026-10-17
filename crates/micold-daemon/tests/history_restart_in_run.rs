@@ -238,7 +238,11 @@ fn u32_two_sessions_each_show_only_their_own_lines_after_stop_and_start() {
     script(project.path(), "print restarted\nwait\n");
     for id in [a, b] {
         state
-            .start_session(id, LaunchMode::Fresh)
+            .start_session_gated(
+                id,
+                LaunchMode::Fresh,
+                micold_core::occupancy::Additional::Yes,
+            )
             .expect("starts again");
     }
 
