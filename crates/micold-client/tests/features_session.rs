@@ -1335,6 +1335,9 @@ fn the_row_press_opens_the_new_main_after_the_catalog_update() {
 fn a_blocked_start_shows_the_reason_and_offers_the_confirmation_naming_the_live_session() {
     use micold_core::session::SessionLifecycle;
     let (mut st, main, helper) = worktree_with_main_and_helper();
+    for s in st.workspace.sessions.get_mut(Path::new("/a")).unwrap() {
+        s.lifecycle = SessionLifecycle::Idle;
+    }
     assert_eq!(st.session_start_block_text(helper), None, "both idle: free");
     st.workspace
         .sessions
