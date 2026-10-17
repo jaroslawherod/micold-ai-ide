@@ -61,6 +61,7 @@ split along s6 (M3) is the only scenario split with a deliverable on each side.
 | Review B M1 | 1 | 548fdaf3ddac4e7745d3d235831aa23e6c1946f2:2fde8de8aaaece00bd3722d3616afa038422f4fc | CHANGES: F2 MAJOR fixed (T012/T016 red shown by mutation, cycle-log); F1 BLOCKER declined; F3/F4 MINOR accepted |
 | Review A M2 | 1 | 3567331dce9fafe33a66b7a1fbcdaf4a163b0083:19603c45c87b865d165e112624aa9424e8226e1b | CLEAN (3 MINOR: F1 explicit Proceed arm kept for D4/D5; F2 parse-time length check kept, contract check 4; F3 "Show all" not pressable until M3 T038) |
 | Review B M2 | 1 | 3567331dce9fafe33a66b7a1fbcdaf4a163b0083:19603c45c87b865d165e112624aa9424e8226e1b | CHANGES: F1 BLOCKER fixed (review_reports.rs fixture `README.md` → `src/root.rs`, documentation_is_not_read); F2 MINOR accepted (T027/T029 not red-first, recorded with mutation evidence) |
+| Review B M2 | 2 | 0fe803d654e87962ac1b0c83ac4cfaf7a03381b3:785eb8686bea27aad77303adef472950c28c81d0 | running |
 
 ## Declined review findings
 
