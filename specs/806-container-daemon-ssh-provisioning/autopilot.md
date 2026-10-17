@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-uwrpqv
 - **Started**: 2026-10-17
 - **Phase**: M1
-- **Next step**: M1 implemented (T001–T009); verify: scoped gate + review A, review B, full gate, PR
+- **Next step**: M1 verify — run the full gate (`scripts/gate.sh`) on HEAD, then review B, then PR (see Handover)
 
 ## Pull requests
 
@@ -60,6 +60,7 @@ Milestone notes:
 | Plan | 2 | 92cbdb5e2c5275bb243ed3a4d5096b1f4e785397:11a4dcc7ddbe26563fe2b317d7f0cabdf06d8bd0 | CLEAN |
 | Tasks | 1 | 2c3cc526e672d823e5c3d3242c3e812f4328c67d:a093c67d80e868ef4684e22c934607c036f9850f | CHANGES: 2 MAJOR, 1 MINOR (all fixed: [P] on T033/T063/T064 dropped, M4/M5 parallel examples corrected, M4 observability note in ledger); round 2 below |
 | Tasks | 2 | ae7101c78be879b2cde37d5455ed29eb6fd93300:2d525fd2157f2c7e851c1e8dd343a38d30d37344 | CLEAN (1 MINOR fixed: checklist item ticked after reviewer confirmed 0 markers, FR-002/FR-010 resolved) |
+| M1 review A (code-review high) | 1 | HEAD 687b8f8d | 10 findings: F1–F5, F8, F9 fixed; F6, F7, F10 declined (see Handover) |
 
 ## Declined review findings
 
@@ -69,7 +70,13 @@ Milestone notes:
 
 ## Handover
 
-None.
+M1 unit hit the 150k context cap during verify.
+
+- **Done**: T001–T009 implemented and ticked (commit 687b8f8d); review A (code-review high) round 1 ran on 687b8f8d: 10 findings. Fixed in the handover commit: F1 `copilot` added to the real test's ABSENT list; F2 `basic-image.yml` publishes only on a definite not-found/denied (logs in first), fails on any other inspect error; F3 `scripts/basic-image-hash.sh` added to the workflow paths; F4 `workflow_dispatch` off `main` refused; F5 `mise run image` also builds `micold-basic:dev`, `test-sandbox` comment says so; F8 entrypoint falls back to `/tmp` when HOME is `/`; F9 Containerfile install guard widened (npm i/ci/add at line end, npx, pnpm, yarn, curl|sh). Pin moved to `722a7d9ef0d6aadb`. `cargo fmt` applied (gate-1 failed on fmt only, before these fixes).
+- **Declined (record in Declined review findings)**: F6 README in the hash and F7 `find` over the working tree — the contract's *Content hash* defines the hash as `find packaging/basic -type f`; F10 `is_released_image` has no caller yet — by design, M5 (T046+) uses it; its join of registry/repository is local and parse-based.
+- **Next**: run the full gate on HEAD (`setsid nohup bash -c 'scripts/gate.sh; echo GATE_EXIT=$?'`, CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0); review A fixes need no counted re-round unless you judge F2/F4 need one (scoped sonnet round on the fix diff from snapshot of 687b8f8d); then review B (conformance, sonnet) once; then PR files in $SCRATCHPAD (title `#806: Container daemon: configurable resources, Dockerfile or image source; build from current daemon binary by default` + milestone suffix `— feat(806): publish the basic image (M1) (#806)` per pr.md), push `--force-with-lease`.
+- **Local env notes**: `dockerd` was started by hand (works); `deb.debian.org` is refused by the egress proxy, so `micold-basic:dev` cannot be built here; `sandbox_real_basic_image` red shown against `node:24-trixie-slim`, green only in CI.
+- **Digest pin**: not needed in M1 — `BASIC_IMAGE` is T049 (M5), after `basic-image.yml` runs on main post-merge.
 
 ## Open escalation
 

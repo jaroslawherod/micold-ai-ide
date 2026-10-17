@@ -21,7 +21,7 @@ pub const BASIC_IMAGE_REPOSITORY: &str = "ghcr.io/jaroslawherod/micold-basic";
 ///
 /// Change it in the same commit as any file under `packaging/basic/`;
 /// `scripts/tests/basic-image-hash.test.sh` fails while it disagrees with the tree.
-pub const BASIC_IMAGE_CONTENT_HASH: &str = "00aed251757ccc6f";
+pub const BASIC_IMAGE_CONTENT_HASH: &str = "722a7d9ef0d6aadb";
 
 /// The tag a local build of `packaging/basic/` carries (`docker build -t micold-basic:dev`), and the
 /// one the real-runtime suite starts from by default.
@@ -93,7 +93,11 @@ mod tests {
 
     #[test]
     fn the_content_hash_is_sixteen_lowercase_hex() {
-        assert_eq!(BASIC_IMAGE_CONTENT_HASH.len(), 16, "{BASIC_IMAGE_CONTENT_HASH:?}");
+        assert_eq!(
+            BASIC_IMAGE_CONTENT_HASH.len(),
+            16,
+            "{BASIC_IMAGE_CONTENT_HASH:?}"
+        );
         assert!(
             BASIC_IMAGE_CONTENT_HASH
                 .chars()

@@ -142,7 +142,9 @@ else
   instructions="$(grep -v '^[[:space:]]*#' "$containerfile")"
   copies="$(printf '%s\n' "$instructions" | grep -Ei '^[[:space:]]*(COPY|ADD)[[:space:]]' || true)"
   bad_copy="$(printf '%s\n' "$copies" | grep -Ei 'key|credential|\.ssh|micold-daemon|token' || true)"
-  npm="$(printf '%s\n' "$instructions" | grep -Ei 'npm[[:space:]]+(install|i)[[:space:]]' || true)"
+  # Any package-manager or piped-script install: what the client installs must not be baked in.
+  npm="$(printf '%s\n' "$instructions" \
+    | grep -Ei '(npm[[:space:]]+(install|i|ci|add)([[:space:]]|\\|$))|npx[[:space:]]|pnpm[[:space:]]|yarn[[:space:]]+(global|add)|(curl|wget)[^|]*\|[[:space:]]*(ba)?sh' || true)"
   if [ -n "$bad_copy" ]; then
     fail "Containerfile copies in no key, credential, daemon or token, and installs no AI CLI" \
       "copies: $bad_copy"

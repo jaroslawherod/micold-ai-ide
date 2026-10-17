@@ -18,7 +18,16 @@ use std::process::Command;
 use micold_core::sandbox::basic_image::DEV_BASIC_IMAGE;
 
 /// What must not be in the image: the daemon and every AI CLI the application offers.
-const ABSENT: [&str; 6] = ["micold-daemon", "claude", "codex", "gemini", "opencode", "pi"];
+/// `gemini` is not offered today; it is listed because the spec names it.
+const ABSENT: [&str; 7] = [
+    "micold-daemon",
+    "claude",
+    "copilot",
+    "codex",
+    "gemini",
+    "opencode",
+    "pi",
+];
 
 /// What must be: the SSH server, the runtime the npm-distributed CLIs install with, the tool the
 /// daemon runs for worktrees, and the lock the install step serialises on.
@@ -34,7 +43,15 @@ fn image() -> String {
 /// Run `script` with `sh -c` inside a throwaway container of the image, past its entrypoint.
 fn in_image(script: &str) -> std::process::Output {
     let out = Command::new("docker")
-        .args(["run", "--rm", "--entrypoint", "/bin/sh", &image(), "-c", script])
+        .args([
+            "run",
+            "--rm",
+            "--entrypoint",
+            "/bin/sh",
+            &image(),
+            "-c",
+            script,
+        ])
         .output()
         .expect("docker runs");
     assert!(
