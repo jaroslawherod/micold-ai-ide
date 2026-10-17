@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain
+- [x] No [NEEDS CLARIFICATION] markers remain
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
@@ -31,8 +31,8 @@
 
 ## Notes
 
-- Two `[NEEDS CLARIFICATION]` markers are left for the clarify unit: FR-002 (where the default basic
-  image comes from) and FR-010 (default AI CLI selection).
+- FR-002 (where the default basic image comes from) and FR-010 (default AI CLI selection) were
+  resolved in the clarify unit; no `[NEEDS CLARIFICATION]` markers remain (tasks review round 2).
 - SSH is named because the owner's decision makes it the user-visible mechanism (image requirement for
   "My own image"). FR-006 states observable security outcomes (no password, no personal key, nothing
   reachable from another machine) and FR-019 user-visible time bounds; how the key, port, copy and
