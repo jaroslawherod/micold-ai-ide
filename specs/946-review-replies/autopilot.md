@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #946
 - **Worktree branch**: claude/project-thread-jjniz9
 - **Started**: 2026-10-17
-- **Phase**: tasks
-- **Next step**: tasks review, checklist close, specs-only gate, design PR
+- **Phase**: design PR
+- **Next step**: design PR open; after merge, milestone M1
 
 ## Pull requests
 
@@ -53,6 +53,7 @@ split along s6 (M3) is the only scenario split with a deliverable on each side.
 | Clarify | 1 | spec.md@7b200934 | 1 marker resolved (D3), 2 agent-resolved (D4, D5) |
 | Clarify | 2 | spec.md after round 1 | no critical ambiguities |
 | Plan | 1 | e3ecccba79f5e3b40a507a17e457b890bfcdbd6d:6992724c29035e9298018a753f72c3f8dacc111d | CLEAN (2 MINOR, fixed, prose only) |
+| Tasks | 1 | 4380837765014bf8cc3452af063dd049edc1dded:e28ca8bb81d4de0489768de261204c9c857a5300 | CLEAN (3 MINOR, fixed, prose only; checklist item confirmed and ticked) |
 
 ## Declined review findings
 
