@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #946
 - **Worktree branch**: claude/project-thread-jjniz9
 - **Started**: 2026-10-17
-- **Phase**: clarify done
-- **Next step**: plan unit
+- **Phase**: plan drafted (not reviewed)
+- **Next step**: plan unit (continue handover): plan review round 1
 
 ## Pull requests
 
@@ -48,7 +48,12 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+Plan unit, handed over at the 150k context cap after `speckit-plan` finished (no extension hooks
+registered). Done: plan.md, research.md (R1–R9), data-model.md, quickstart.md,
+contracts/{batch-format,agent-tool,review-wire-delta}.md, committed on the branch (rebased onto
+origin/main by branch-start.sh). Next: review round 1 of the plan (tasks/review.md with
+rubrics/plan.md, model omitted, no snapshot recorded yet), act on findings (review-rounds.md),
+commit, set **Next step** to `tasks unit`, return DONE with PR none. No open findings, no PR.
 
 ## Open escalation
 
