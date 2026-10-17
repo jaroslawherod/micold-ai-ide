@@ -118,7 +118,7 @@ run = """
 #   * omitting `--test-threads=1` lets two tests contend for one container name and one port,
 #   * `sandbox_real_` is matched against **test names**, not file names.
 #
-# It needs `micold-daemon:dev` present: build it with `mise run image` first.
+# It needs `micold-daemon:dev` and `micold-basic:dev` present: build both with `mise run image` first.
 set -e
 
 runtime="${MICOLD_RUNTIME:-docker}"
@@ -195,6 +195,12 @@ case "$smoke" in
 esac
 
 echo "Built $tag -- select it in Settings > Daemon > Image."
+
+# The basic image (feature 806): sshd and session tools, no daemon. `sandbox_real_basic_image` in
+# `mise run test-sandbox` starts from it.
+"$runtime" build -f {{config_root}}/packaging/basic/Containerfile \
+  -t "${MICOLD_BASIC_IMAGE_TAG:-micold-basic:dev}" {{config_root}}/packaging/basic
+echo "Built ${MICOLD_BASIC_IMAGE_TAG:-micold-basic:dev}."
 """
 
 [tasks.sweep]

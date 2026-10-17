@@ -10,7 +10,9 @@ set -eu
 
 uid="$(id -u)"
 gid="$(id -g)"
-home="${MICOLD_HOME:-${HOME:-/tmp}}"
+# A runtime sets HOME=/ for a uid with no passwd entry; `/` is not writable, so fall back to /tmp.
+home="${MICOLD_HOME:-${HOME:-/}}"
+[ "$home" = "/" ] && home=/tmp
 
 if ! grep -q "^[^:]*:[^:]*:${uid}:" /etc/passwd; then
   if [ -w /etc/passwd ]; then

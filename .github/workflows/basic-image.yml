@@ -19,11 +19,13 @@ on:
   pull_request:
     paths:
       - packaging/basic/**
+      - scripts/basic-image-hash.sh
       - .github/workflows/basic-image.yml
   push:
     branches: [main]
     paths:
       - packaging/basic/**
+      - scripts/basic-image-hash.sh
       - .github/workflows/basic-image.yml
   workflow_dispatch:
 
@@ -41,6 +43,9 @@ jobs:
   hash:
     name: content hash
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
     outputs:
       hash: ${{ steps.hash.outputs.hash }}
       publish: ${{ steps.exists.outputs.publish }}
@@ -61,6 +66,18 @@ jobs:
             echo "::error::BASIC_IMAGE_CONTENT_HASH in crates/micold-core/src/sandbox/basic_image.rs is not the tree's hash: $check" >&2
             exit 1
           fi
+      # Publishing is for main only: a tag is immutable, so a manual run on an unmerged branch
+      # would publish unreviewed content under a hash nothing can replace.
+      - name: Refuse to publish from a branch other than main
+        if: github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::basic-image.yml publishes from main only (this run: $GITHUB_REF)" >&2
+          exit 1
+      - name: Sign in to GHCR
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "$GH_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
       # Published tags are immutable: a tag that exists is reported, never rebuilt or moved.
       - name: Stop when this tree is already published
         id: exists
@@ -70,8 +87,12 @@ jobs:
         run: |
           set -euo pipefail
           ref="$REPOSITORY:$HASH"
-          if digest="$(docker buildx imagetools inspect "$ref" --format '{{json .Manifest}}' 2>/dev/null | jq -r .digest)" \
-             && [ -n "$digest" ] && [ "$digest" != "null" ]; then
+          # Only a registry answer that the tag (or, before the first publish, the package) does not
+          # exist means publish: `not found` / MANIFEST_UNKNOWN / NAME_UNKNOWN, or `denied`, which
+          # GHCR answers for a package nobody has created yet. Any other failure (network, 5xx,
+          # rate limit) stops the run: rebuilding an existing tag would move it.
+          if out="$(docker buildx imagetools inspect "$ref" --format '{{json .Manifest}}' 2>&1)"; then
+            digest="$(printf '%s' "$out" | jq -r .digest)"
             echo "publish=false" >> "$GITHUB_OUTPUT"
             {
               echo "## Basic image already published"
@@ -81,8 +102,11 @@ jobs:
               echo '```'
             } >> "$GITHUB_STEP_SUMMARY"
             echo "$ref exists at $digest; nothing to publish"
-          else
+          elif printf '%s' "$out" | grep -Eqi 'not found|manifest unknown|name unknown|denied'; then
             echo "publish=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::cannot tell whether $ref exists: $out" >&2
+            exit 1
           fi
 
   build:
