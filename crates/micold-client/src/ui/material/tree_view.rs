@@ -102,6 +102,9 @@ pub struct TreeItem<'a, M> {
     /// role. Private, so a row is read, unread or counted and never two at once; the last of
     /// [`unread`](Self::unread) and [`unread_count`](Self::unread_count) wins.
     unread: RowUnread,
+    /// The location's state icon (feature 905, contract `state-icon.md` S2): a fixed slot after the
+    /// twisty and before the leading icon, at the view's label role size, whatever the state.
+    state_icon: Option<super::StateIcon>,
     /// Lifetime marker so borrowed data can be captured by callers if needed.
     pub _marker: std::marker::PhantomData<&'a ()>,
 }
@@ -129,8 +132,16 @@ impl<'a, M> TreeItem<'a, M> {
             badge: None,
             annotation: None,
             unread: RowUnread::Read,
+            state_icon: None,
             _marker: std::marker::PhantomData,
         }
+    }
+
+    /// Show the location's state in a fixed slot after the twisty (feature 905, S2). The host
+    /// sizes it to the view's label role, so every state takes the same width.
+    pub fn state_icon(mut self, state_icon: super::StateIcon) -> Self {
+        self.state_icon = Some(state_icon);
+        self
     }
 
     /// Show the number of a location's unread sessions at the trailing edge (feature 575).
@@ -380,6 +391,12 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
                 None => line = line.push(Space::new().width(Length::Fixed(twisty_size))),
             }
 
+            // The state slot (feature 905): sized to `label_role`, like the leading icon, so the
+            // name's column is the same in every state and an Unknown state's empty slot keeps it.
+            if let Some(state_icon) = item.state_icon {
+                line = line.push(state_icon.size(label_role.size()));
+            }
+
             if let Some(glyph) = item.icon {
                 // A **fixed slot**, not the glyph's own width. A glyph's advance is whatever the
                 // face gives it — `AddWorktree` measures 14dp where the role says 16 — so a
@@ -505,7 +522,12 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
                     } else {
                         0.0
                     };
-                    lead + twisty + icon_gap + leading_icon
+                    let state_slot = if item.state_icon.is_some() {
+                        label_role.size() + icon_gap
+                    } else {
+                        0.0
+                    };
+                    lead + twisty + icon_gap + state_slot + leading_icon
                 };
                 // The indent is **padding**, not a leading spacer child. A spacer would sit one
                 // `spacing::XS` to the left of the first chip — the row's own between-chip gap

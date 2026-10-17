@@ -328,6 +328,51 @@ pub fn unread_mark<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a,
     )
 }
 
+/// `StateIcon` — the three states and the empty slot of an unknown one, each on a worktree row as
+/// the sidebar builds it, and one row with tags (feature 905, FR-012). What has to be checked by
+/// eye is that the triangle, octagon and two bars read as three shapes in both themes, and that
+/// the name starts in the same column whatever the state.
+pub fn state_icon<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
+    use micold_core::location_state::{BlockedReason, LocationState};
+    let row = |state: LocationState, tagged: bool| -> Element<'a, Message> {
+        let mut item = material::TreeItem::new(0, samples::WORKTREES[1].0, roles.on_surface)
+            .state_icon(material::StateIcon::new(state, roles))
+            .on_press(Message::NoOp);
+        if tagged {
+            item = item.tags(vec![
+                ("feat".to_string(), roles.primary),
+                ("local".to_string(), roles.secondary),
+            ]);
+        }
+        material::TreeView::new(vec![item], roles)
+            .density(micold_core::tokens::density::DENSE)
+            .label_role(TypeRole::SidebarName)
+            .selected_label_role(TypeRole::SidebarSessionCurrent)
+            .into()
+    };
+    arrange(
+        vec![
+            posed("Running", row(LocationState::Running, false), roles),
+            posed(
+                "Blocked",
+                row(
+                    LocationState::Blocked(BlockedReason::NeedsPermission),
+                    false,
+                ),
+                roles,
+            ),
+            posed("Idle", row(LocationState::Idle, false), roles),
+            posed("Unknown", row(LocationState::Unknown, false), roles),
+            posed(
+                "a worktree row with tags carrying it",
+                row(LocationState::Running, true),
+                roles,
+            ),
+        ],
+        Layout::FullWidth,
+    )
+}
+
 /// `PullRequestIndicator` — the four states alone, open and draft with each check status, and the
 /// stale form of open-passing and of merged (feature 040, FR-033). What has to be checked by eye is
 /// that the seven glyphs read as seven shapes in both themes, and that the stale form is quieter.

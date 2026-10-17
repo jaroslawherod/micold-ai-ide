@@ -35,6 +35,9 @@ status markers.
 | Error | A session stopped because of an error | **Session error** row in Settings and its notification |
 | Task done (check in a circle) | A session finished a long task | **Long task finished** row in Settings and its notification |
 | Chat bubble | A session finished a turn | **Turn finished** row in Settings and its notification |
+| Triangle (play) | **Running**: a session in the worktree is working, starting or restarting | Sidebar worktree rows and the **Default** entry, after the toggle |
+| Octagon with a mark | **Blocked**: a session cannot go on without you (it failed, or waits to be resumed) | Sidebar worktree rows and the **Default** entry, after the toggle |
+| Two bars (pause) | **Idle / waiting**: nothing in progress, or waiting for your next prompt | Sidebar worktree rows and the **Default** entry, after the toggle |
 
 Every icon follows the active theme: it is tinted to match the text around it and is legible
 in both the light and the dark theme. When you switch your system between light and dark, the

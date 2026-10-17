@@ -50,6 +50,6 @@ Exported from `ui/material/mod.rs`. Draws the glyph of the data model's table in
 
 ## S6 — Showcase
 
-A catalogue entry `material/state_icon.rs` / `StateIcon` with variants `Running`, `Blocked`,
-`Idle`, posed `Running`, `Blocked`, `Idle`, `Unknown` and one worktree row with tags carrying it
+A catalogue entry `material/state_icon.rs` / `StateIcon` (no `variants`: `LocationState` is a core
+enum, and C4 holds `variants` to the library's own; decision 6), posed `Running`, `Blocked`, `Idle`, `Unknown` and one worktree row with tags carrying it
 (FR-012); `tests/showcase_completeness.rs` holds the variant list.

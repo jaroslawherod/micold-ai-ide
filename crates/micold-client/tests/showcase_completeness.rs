@@ -469,6 +469,24 @@ fn v3_the_animation_module_is_where_it_is_expected() {
     );
 }
 
+/// Feature 905 (FR-012, contract S6): the state icon has its entry, posing its three states and
+/// the empty slot. `LocationState` is a core enum, not a library one, so its states are posed
+/// instances rather than `variants` (C4 holds `variants` to the library's own enums).
+#[test]
+fn the_state_icon_has_an_entry_posing_its_three_states() {
+    let entry = COMPONENTS
+        .iter()
+        .find(|e| e.module == "material/state_icon.rs" && e.component == "StateIcon")
+        .expect("the gallery has a `material/state_icon.rs` / `StateIcon` entry");
+    for state in ["Running", "Blocked", "Idle", "Unknown"] {
+        assert!(
+            entry.posed.contains(&state),
+            "the StateIcon entry poses `{state}`: {:?}",
+            entry.posed
+        );
+    }
+}
+
 /// **V4** — a gallery emptied by a refactor must fail rather than agree with an empty library.
 #[test]
 fn v4_the_catalogue_is_not_empty() {

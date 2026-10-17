@@ -103,6 +103,7 @@ mod snackbar;
 /// T033). Used by the sidebar's start-a-session row action.
 mod split_action;
 mod split_view;
+mod state_icon;
 /// The one place design tokens become rendering types. Internal by intent (FR-002): a feature
 /// module that could reach it could render an off-spec variant of a shared component, which is
 /// exactly the drift this feature removes. `pub(crate)` rather than private only because the
@@ -193,6 +194,7 @@ pub use select::Select;
 pub use snackbar::Snackbar;
 pub use split_action::SplitAction;
 pub use split_view::{pane_focus_mark, pane_notice_fill, SplitView};
+pub use state_icon::StateIcon;
 pub use surface::{Kind as SurfaceKind, Surface};
 pub use tab::{content_colour as tab_content_colour, IndicatorEdge, Tab, WIDTH as TAB_WIDTH};
 pub use tab_strip::TabStrip;

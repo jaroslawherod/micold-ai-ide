@@ -49,6 +49,7 @@ use crate::features::worktree::worktree_tags;
 use crate::floating_surface;
 use crate::overlay::registry::Registered;
 use crate::overlay::SurfaceId;
+use micold_core::location_state::{location_state, LocationState};
 use micold_core::naming::{ConventionalType, Tag};
 use micold_core::pull_request::{CheckStatus, PrState, PullRequestStatus, ReviewState};
 use micold_core::runs::{GroupId, RunGroup, RunStatus};
@@ -334,6 +335,12 @@ impl WorktreeNode {
     pub fn listed_sessions(&self) -> Vec<&Session> {
         main_first(&self.sessions, self.main_session())
     }
+
+    /// The worktree's state for its row's state icon (feature 905, FR-001, FR-004): taken from
+    /// every un-archived session, expanded or not.
+    pub fn state(&self) -> LocationState {
+        location_state(&self.sessions)
+    }
 }
 
 impl DefaultNode {
@@ -355,6 +362,12 @@ impl DefaultNode {
     /// The sessions in the order the expander lists them: the main one first.
     pub fn listed_sessions(&self) -> Vec<&Session> {
         main_first(&self.sessions, self.main_session())
+    }
+
+    /// The project root's state for the Default row's state icon, by the worktree rows' rules
+    /// (feature 905, FR-002).
+    pub fn state(&self) -> LocationState {
+        location_state(&self.sessions)
     }
 }
 
@@ -916,6 +929,12 @@ pub fn unread_tooltip_line(n: usize) -> Option<String> {
         1 => Some("1 unread session".to_string()),
         n => Some(format!("{n} unread sessions")),
     }
+}
+
+/// `tooltip` with the state's line in words appended on a line of its own (feature 905, FR-009).
+/// Composed inside [`with_unread_line`], so the state line comes before the unread line.
+pub fn with_state_line(tooltip: String, state: LocationState) -> String {
+    format!("{tooltip}\n{}", state.tooltip_line())
 }
 
 /// `tooltip` with [`unread_tooltip_line`] appended on a line of its own (feature 575, FR-005).

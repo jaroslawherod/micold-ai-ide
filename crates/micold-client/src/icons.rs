@@ -141,6 +141,14 @@ pub enum Icon {
     /// The same indicator at or above the warning threshold (feature 490, U2, FR-010) —
     /// `warning`, a different shape so the warning is not colour alone.
     UsageWarning,
+    /// A worktree whose session is working, starting or restarting (feature 905, FR-007) —
+    /// `play_arrow`, a triangle.
+    StateRunning,
+    /// A worktree that cannot proceed without the user (feature 905) — `report`, an octagon.
+    StateBlocked,
+    /// A worktree with nothing in progress, or waiting for the next prompt (feature 905) —
+    /// `pause`, two bars.
+    StateIdle,
 }
 
 impl Icon {
@@ -198,6 +206,9 @@ impl Icon {
         Icon::OpenInBrowser,
         Icon::PlanUsage,
         Icon::UsageWarning,
+        Icon::StateRunning,
+        Icon::StateBlocked,
+        Icon::StateIdle,
     ];
 
     /// The font codepoint for this icon (Private Use Area; see `assets/fonts/PROVENANCE.md`).
@@ -269,6 +280,10 @@ impl Icon {
             Icon::OpenInBrowser => '\u{e89e}',
             Icon::PlanUsage => '\u{e1af}',
             Icon::UsageWarning => '\u{e002}',
+            // `play_arrow`, `report`, `pause` (upstream `.codepoints`; feature 905 decision 4).
+            Icon::StateRunning => '\u{e037}',
+            Icon::StateBlocked => '\u{f052}',
+            Icon::StateIdle => '\u{e034}',
         }
     }
 }
