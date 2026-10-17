@@ -52,6 +52,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review B M3 | 1 | 280cc5ee2819 | CLEAN (1 MINOR: guide said "image", not tested; dropped the word, prose only) |
 | Spec amendment M4 | 1 | 330332e3287d:030ddb2ab98c | CLEAN (3 MINOR fixed, prose/task names) |
 | M4 review A | 1 | 2b8390eddd30:20bda6cfa20d | CHANGES: 1 MAJOR (Tab reached fields of closed sections) fixed in Expand::operate, test added |
+| Close review | 1 | d81ef7a13f34:2569ae5009cd | CHANGES: 1 MAJOR (T037 overclaimed accordion asserts) fixed, tasks text narrowed, prose only; 2 MINOR (1 fixed, 1 accepted) |
 | M4 review B | 1 | d13d7c993531:6e49a8943740 | CHANGES: 1 MAJOR (no red evidence for T025/T028) declined, recorded in cycle-log; 1 MINOR declined |
 
 ## Declined review findings
@@ -80,3 +81,5 @@ None. <or: the banner as sent, and when>
 <Defects found outside this flow's work, scope deliberately cut, etc. Copied into the handoff.>
 
 - Tasks review round 1: 2 MAJOR (T018/T009 paths) fixed, 3 MINOR fixed; not re-reviewed (path/order fixes only).
+- Follow-up issue #931: remove dead legacy `SettingsDraft.daemon` and `FieldId::Settings*Limit`.
+

@@ -23,3 +23,5 @@ Date 2026-10-17; commit 0e3b543f plus the uncommitted working-tree changes prese
 4. PASS: ticking Git configuration in the form made the Daemons rail row show *Sharing* at once, with none shown before (`b4-sharing-in-form.png`); after Save daemon the badge stays when Appearance is selected (`b4-sharing-after-save.png`).
 5. NOT RUN: needs a running daemon; starting one would pull and run a real container image on this machine, so no daemon was started and the running-daemon confirmation was not seen.
 6. PASS: Host daemon form has no container sections and shows the "can't outlive signing out" caution (`b6-host.png`); the SSH daemon form shows host/user/port/key file only, no container sections and no caution (`b6-ssh.png`).
+
+Commits after the pass changed only tests, specs and the ledger; no product code.
