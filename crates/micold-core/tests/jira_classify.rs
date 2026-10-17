@@ -84,18 +84,35 @@ fn notices_read_as_the_contract_says() {
 }
 
 #[test]
-fn no_notice_carries_the_token_unless_the_reason_did() {
-    // The classifier is handed transport text, never the request; a notice names host and key only.
-    for error in [
-        classify(&Outcome::TimedOut),
-        classify(&Outcome::Status(401)),
-        classify(&Outcome::Status(404)),
-        classify(&Outcome::Status(429)),
-        classify(&Outcome::Redirected),
-        classify(&Outcome::BadBody),
-        classify(&Outcome::Status(500)),
+fn only_the_transport_reason_reaches_a_notice_and_it_is_cut_first() {
+    // The classifier is handed transport text, never the request: the reason is the one text that
+    // flows through, so the token appears exactly when the reason carried it within 80 characters.
+    let carried = classify(&Outcome::Unreachable(format!("refused {SENTINEL}")));
+    assert_eq!(
+        notice(&carried),
+        format!("Couldn't reach acme.atlassian.net: refused {SENTINEL}.")
+    );
+    let cut = classify(&Outcome::Unreachable(format!(
+        "{}{SENTINEL}",
+        "x".repeat(80)
+    )));
+    assert_eq!(
+        notice(&cut),
+        format!("Couldn't reach acme.atlassian.net: {}.", "x".repeat(80))
+    );
+    for outcome in [
+        Outcome::TimedOut,
+        Outcome::Status(401),
+        Outcome::Status(404),
+        Outcome::Status(429),
+        Outcome::Redirected,
+        Outcome::BadBody,
+        Outcome::Status(500),
     ] {
-        assert!(!notice(&error).contains(SENTINEL));
+        assert!(
+            !notice(&classify(&outcome)).contains(SENTINEL),
+            "{outcome:?}"
+        );
     }
 }
 
@@ -120,15 +137,25 @@ fn a_variant_asked_in_the_other_providers_voice_gets_a_generic_text() {
         IssueLoadError::CredentialsRefused,
         IssueLoadError::NotJiraCloud,
     ] {
-        assert!(!error.message(&repo).is_empty());
+        assert_eq!(
+            error.message(&repo),
+            "Couldn't read issues. Check your connection and settings, then retry."
+        );
     }
-    for error in [
-        IssueLoadError::ToolMissing,
-        IssueLoadError::NotSignedIn,
-        IssueLoadError::Offline,
+    for (error, text) in [
+        (
+            IssueLoadError::ToolMissing,
+            "Couldn't read issues from acme.atlassian.net. Check Settings > Jira, then retry.",
+        ),
+        (
+            IssueLoadError::NotSignedIn,
+            "Couldn't read issues from acme.atlassian.net. Check Settings > Jira, then retry.",
+        ),
+        (
+            IssueLoadError::Offline,
+            "Couldn't reach acme.atlassian.net. Check your connection, then retry.",
+        ),
     ] {
-        let text = notice(&error);
-        assert!(!text.is_empty());
-        assert!(!text.contains("`gh`"), "{text}");
+        assert_eq!(notice(&error), text);
     }
 }

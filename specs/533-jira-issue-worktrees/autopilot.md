@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #533
 - **Worktree branch**: feat/533_create-worktrees-from-jira-issues
 - **Started**: 2026-10-12
-- **Phase**: milestone M5
-- **Next step**: wait for CI on PR #920 (rebased onto origin/main 2ccbbe6b) and merge M5, then Close
+- **Phase**: milestone M6
+- **Next step**: implement M6 (T078 test first, T074 seam and tests, T076, T077, T079), then a new close unit (T066, T067, Status Closed). Uncommitted close-unit work (test-strength fixes T071-T073 T075, tdd/verification.md, visual/close.md and B-step evidence) rides in the M6 PR
 
 ## Pull requests
 
@@ -21,7 +21,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #871 | M2 | merged | bcc36d0bf1c2908d967f669178733d1cb2865fd3 |
 | #894 | M3 | merged | 2516aa28bf7a14b886d23cd17c92cfdd76e16374 |
 | #903 | M4 | merged | 7e662c9164484c5183be2c0437e2b66dd410b915 |
-| #920 | M5 | open | |
+| #920 | M5 | merged | dbdd56da106e94b9ddf0069fb81db2b53731029e |
 
 ## Milestones
 
@@ -31,7 +31,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T022–T031 | full | Connect, change and remove a project's connection and token | #871 | merged |
 | M3 | T032–T033, T035–T053, T068–T069 | full | Start a worktree from a Jira issue (list, pick, notices); kept whole: core, adapter and dialog are one wired path (no half-wired UI) | #894 | merged |
 | M4 | T054–T058, T070 | full | Search Jira issues incl. beyond the loaded list | #903 | merged |
-| M5 | T059–T065 | full | GitHub / Jira source choice per project | #920 | open |
+| M5 | T059–T065 | full | GitHub / Jira source choice per project | #920 | merged |
+| M6 | T074, T076, T077, T078, T079 | full | Keep-or-Remove prompt when switching Jira off over a stored connection (B7 bug); shell-level Jira request tests (needs a `Capabilities` test seam) | | pending |
 
 ## Decisions
 
@@ -76,7 +77,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None. PR #920 (M5) rebased onto main 6cf261ef, layout snapshot regenerated (toolbar gained a button on main), full `mise run gate` green, force-pushed; waiting on CI and merge.
+None.
 
 ## Open escalation
 
@@ -94,3 +95,9 @@ None.
 
 - M1 had no test-first red-phase evidence (tests written after the code in part 1); no tdd/cycle-log.md; coverage is by the tests T003-T008, T015-T017 passing in the gate, not by red-then-green history.
 - GitHub issue picker brought under an integrations switch (pending clarify answer).
+
+## Close unit findings (2026-10-18)
+
+- converge: nothing else unbuilt; T066/T067 left open for the second close unit.
+- tdd-verify: FAIL (see tdd/verification.md); HIGH findings 1-4 fixed (T071-T073, core tests pass), 11/7/9 fixed in client tests (T075, ports of T076); T074/T076/T077 need a test seam: M6.
+- visual pass B7 FAILED: switch cannot be saved off over a stored connection (T078); SC-006 timing 1.05 s unproven (T079). B1-B6, B8, B9 (Linux) pass; light scheme, narrow window, macOS/Windows perms: missing access.

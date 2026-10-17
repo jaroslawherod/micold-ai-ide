@@ -1,0 +1,4 @@
+B9 Linux 2026-10-17: token file permissions after B2 save
+drwx------ jaro <data>/micold-ai-ide/jira
+-rw------- jaro <data>/micold-ai-ide/jira/d5f1d15d44fa282a.token
+700 600 
