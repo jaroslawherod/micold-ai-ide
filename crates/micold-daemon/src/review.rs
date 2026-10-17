@@ -8,9 +8,11 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
+use micold_core::mcp::errors::{ErrorCategory, OpError};
 use micold_core::protocol::messages::{DaemonMsg, ErrorKind, ReviewEditOp};
 use micold_core::review::comment::{
-    fresh_id, CommentId, Draft, EntryReview, ReviewError, SendSnapshot,
+    fresh_id, CommentId, CommentRef, Draft, EntryReview, Outcome, Reporter, ReviewComment,
+    ReviewError, SendSnapshot, Status,
 };
 use micold_core::review::prompt::EntryKind;
 use micold_core::review::store::ReviewFile;
@@ -208,6 +210,75 @@ impl Reviews {
             tracing::warn!(project = %project.display(), entry = dir, %err, "sent review comments not written");
         }
         msg
+    }
+
+    /// Report comment `reference` of entry `dir` of `project` as `outcome` with `reply` (feature
+    /// 946, contracts/agent-tool.md checks 5–8): `dir` is the caller's own entry (`""` for the
+    /// Default entry). A reference of another entry of the project is refused, one of no entry is
+    /// not found. The review file is written before memory changes; returns the reported comment,
+    /// its status before, and the `ReviewChanged` to push (W17).
+    #[allow(clippy::too_many_arguments)] // the report's own fields, as the tool gives them
+    pub fn report(
+        &mut self,
+        catalog: &Catalog,
+        project: &Path,
+        dir: &str,
+        reference: CommentRef,
+        outcome: Outcome,
+        reply: &str,
+        by: Reporter,
+        at: u64,
+    ) -> Result<(ReviewComment, Status, DaemonMsg), OpError> {
+        let entries = self.project(catalog, project);
+        let holds = |review: &EntryReview| {
+            review
+                .comments()
+                .iter()
+                .any(|comment| comment.reference() == reference)
+        };
+        let Some(mut reported) = entries.get(dir).filter(|review| holds(review)).cloned() else {
+            return Err(if entries.values().any(holds) {
+                OpError::new(
+                    ErrorCategory::RefusedByPolicy,
+                    "that comment belongs to another worktree; a session reports only on its own entry's comments",
+                )
+            } else {
+                OpError::not_found("no such comment; it may have been cleared or discarded")
+            });
+        };
+        let previous =
+            reported
+                .report(reference, outcome, reply, by, at)
+                .map_err(|err| match err {
+                    ReviewError::Invalid(why) => OpError::invalid_input(why),
+                    ReviewError::InSend => OpError::new(
+                        ErrorCategory::Conflict,
+                        "that comment is being sent and has not been delivered yet",
+                    ),
+                    ReviewError::Draft => OpError::new(
+                        ErrorCategory::Conflict,
+                        "that comment is still a draft; it has not been sent to you",
+                    ),
+                    _ => {
+                        OpError::not_found("no such comment; it may have been cleared or discarded")
+                    }
+                })?;
+        catalog
+            .save_reviews(project, &file_with(entries, dir, &reported))
+            .map_err(|err| {
+                tracing::warn!(project = %project.display(), entry = dir, %err, "review report not written");
+                OpError::service_error(format!("the report could not be saved: {err}"))
+            })?;
+        let comment = reported
+            .comments()
+            .iter()
+            .find(|comment| comment.reference() == reference)
+            .cloned()
+            .expect("the reported comment is in its entry");
+        let msg = changed(project, dir, &reported);
+        tracing::info!(project = %project.display(), entry = dir, comment = %reference, "review comment reported");
+        entries.insert(dir.to_owned(), reported);
+        Ok((comment, previous, msg))
     }
 
     /// Forget worktree `dir` of `project` once it is deleted (W11): its comments leave memory and

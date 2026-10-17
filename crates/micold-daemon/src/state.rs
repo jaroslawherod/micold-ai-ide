@@ -2143,6 +2143,41 @@ impl DaemonState {
         Ok(())
     }
 
+    /// Report a comment of `project`'s entry `worktree_dir` for the `report_review_comment` tool
+    /// (feature 946, contracts/agent-tool.md) and push the entry's comments to every client (W17).
+    /// Returns the reported comment and its status before.
+    #[allow(clippy::too_many_arguments)] // the report's own fields, as the tool gives them
+    pub fn review_report(
+        &self,
+        project: &Path,
+        worktree_dir: &str,
+        reference: micold_core::review::comment::CommentRef,
+        outcome: micold_core::review::comment::Outcome,
+        reply: &str,
+        by: micold_core::review::comment::Reporter,
+    ) -> Result<
+        (
+            micold_core::review::comment::ReviewComment,
+            micold_core::review::comment::Status,
+        ),
+        micold_core::mcp::errors::OpError,
+    > {
+        let mut inner = self.lock();
+        let inner = &mut *inner;
+        let (comment, previous, msg) = inner.reviews.report(
+            &inner.catalog,
+            project,
+            worktree_dir,
+            reference,
+            outcome,
+            reply,
+            by,
+            micold_core::unix_time::unix_secs(),
+        )?;
+        Self::broadcast_locked(inner, vec![msg]);
+        Ok((comment, previous))
+    }
+
     /// W2: a project the catalog does not list, or a worktree it does not have, is `NotFound`.
     fn check_entry_locked(
         inner: &Inner,
