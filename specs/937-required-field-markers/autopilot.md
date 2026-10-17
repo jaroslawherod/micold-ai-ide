@@ -9,22 +9,23 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #937
 - **Worktree branch**: claude/project-thread-rkhzho
 - **Started**: 2026-10-17
-- **Phase**: M1 PR
-- **Next step**: orchestrator opens the M1 PR (title/body in the unit scratchpad), waits on CI, merges; then M2. Full gate green at f0bd268a. Visual pass for M1 not run (no xdotool, no subagent); D2/D3 are orchestrator defaults pending jaro's card
+- **Phase**: M2 PR
+- **Next step**: orchestrator opens the M2 PR (title/body in the scratchpad: pr-title-937-M2.txt, pr-body-937-M2.md), waits on CI, merges; then M3. Visual pass not run (no xdotool). D2/D3 = A, confirmed by jaro 2026-10-17
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #948 | Design: spec, clarify, plan, tasks | merged | 7f95bbc7a71151ff44315b9f93939fe9bb115872 |
-| to-open | M1: required fields marked in the dialogs | to-open | — |
+| #963 | M1: required fields marked in the dialogs | merged | 70f5872667fb6e8e9126555f2573ce86e0a7bf80 |
+| to-open | M2: required fields marked in Settings and the daemon form | to-open | — |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T015 | full | Required fields marked (`*`) in the add-worktree, run-in-parallel and rename dialogs | to-open | PR |
-| M2 | T016–T022 | full | Required fields marked in Settings sections and the daemon form | — | pending |
+| M1 | T001–T015 | full | Required fields marked (`*`) in the add-worktree, run-in-parallel and rename dialogs | #963 | merged |
+| M2 | T016–T022 | full | Required fields marked in Settings sections and the daemon form | to-open | PR |
 | M3 | T023–T028 | full | `* required` legend once above the first field of every form with a required field | — | pending |
 | M4 | T029–T035 | full | Required error on submit in the dialogs; Create and Start runs enabled | — | pending |
 | M5 | T036–T041 | full | Required error on save in Settings and the daemon form | — | pending |
@@ -35,8 +36,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
 | D1 | spec | Marker convention: asterisk on required fields, or mark optional fields where most are required? | Asterisk on required fields, app-wide, explained by "* required" above the first field | agent-resolved | issue #937 acceptance criteria ("consistent across forms"); spec review round 1 F1; spec.md FR-001, FR-004 |
-| D2 | clarify | Create/Confirm disabled while a required field is empty: enable them? | A: enable; a press with empty required fields shows the required errors, no submit (FR-012) | orchestrator default pending jaro's card | worktree_form.rs:602, parallel_dialog.rs:125; spec.md Clarifications |
-| D3 | clarify | Show the required error on blur too, or only on submit attempt? | A: on blur and on submit attempt, never on a fresh form (FR-006) | orchestrator default pending jaro's card | issue #937 "left empty"; material/field_focus.rs; spec.md Clarifications |
+| D2 | clarify | Create/Confirm disabled while a required field is empty: enable them? | A: enable; a press with empty required fields shows the required errors, no submit (FR-012) | confirmed by jaro 2026-10-17 | worktree_form.rs:602, parallel_dialog.rs:125; spec.md Clarifications |
+| D3 | clarify | Show the required error on blur too, or only on submit attempt? | A: on blur and on submit attempt, never on a fresh form (FR-006) | confirmed by jaro 2026-10-17 | issue #937 "left empty"; material/field_focus.rs; spec.md Clarifications |
 
 ## Review rounds
 
@@ -66,4 +67,5 @@ None.
 - Tasks unit: speckit-analyze I1–I3, I6–I8, I11 fixed (spec FR-010 and US3 scenario 4 reworded to a live case, Jira edge case added; plan source tree completed; T005/T030/T032 slug-empty name; T029 FR-007). Not fixed (LOW): I5 text-scale test, I9 FR order, I10 SC-002 wording. I4 = D2/D3 pending jaro's card: if B, M4 loses FR-012 (T030 can_press, T032/T033 buttons) and M6 is dropped.
 
 - Spec review round 2 MINOR (rename-dialog files, container fields): addressed in research.md R4 and R5.
-
+- jaro 2026-10-17: "currently it works in way that you click submit and first field that fails validation is marked but should be all at once". The spec already says so (edge case *Several required fields empty at once*). M4 and M5 tests must cover two or more empty required fields all reading `Missing` after one submit/save, including Settings and the daemon form. M2's `required_fields` lists every field with its own `empty`, so no field hides behind the first.
+- M2: `ctests` for T016/T017 were written after the code (the unit wrote the lists and views in one pass); their red phase was not observed. Mutation-style check: each test asserts the exact field list, so dropping a field fails it.
