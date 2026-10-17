@@ -123,13 +123,23 @@ fn command(
         args.extend(["-F".into(), "none".into()]);
     }
     args.extend(
-        ["-T", "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=yes"]
-            .iter()
-            .map(|s| s.to_string()),
+        [
+            "-T",
+            "-o",
+            "BatchMode=yes",
+            "-o",
+            "StrictHostKeyChecking=yes",
+        ]
+        .iter()
+        .map(|s| s.to_string()),
     );
     // `UpdateHostKeys=no`: never write to known_hosts on the user's behalf (FR-010). The server
     // alive options bound a network that dies mid-copy or mid-session (FR-009).
-    let mut options = vec!["UpdateHostKeys=no", "ServerAliveInterval=15", "ServerAliveCountMax=3"];
+    let mut options = vec![
+        "UpdateHostKeys=no",
+        "ServerAliveInterval=15",
+        "ServerAliveCountMax=3",
+    ];
     if forward.is_none() {
         options.insert(0, "ClearAllForwardings=yes");
     }
@@ -219,7 +229,12 @@ pub fn install(
 
 /// Records which build the target should start unattended (`$HOME/.micold/remote/last`), for the
 /// image's entrypoint. App-owned targets only. The build id is this build's own constant.
-pub fn record_last(reach: &Reach, platform: ClientPlatform, timeout: u32, build: &str) -> SshCommand {
+pub fn record_last(
+    reach: &Reach,
+    platform: ClientPlatform,
+    timeout: u32,
+    build: &str,
+) -> SshCommand {
     let remote = format!(
         "sh -c 'mkdir -p \"$HOME/.micold/remote\" && printf %s \"{build}\" > \"$HOME/.micold/remote/last\"'"
     );
@@ -247,12 +262,7 @@ pub fn copy(reach: &Reach, platform: ClientPlatform, timeout: u32, build: &str) 
 }
 
 /// The bridge: the remote daemon binary's relay, whose stdin/stdout carry the protocol.
-pub fn bridge(
-    reach: &Reach,
-    platform: ClientPlatform,
-    timeout: u32,
-    build: &str,
-) -> SshCommand {
+pub fn bridge(reach: &Reach, platform: ClientPlatform, timeout: u32, build: &str) -> SshCommand {
     let remote = format!("\"{}/micold-daemon\" remote bridge", remote_dir(build));
     command(reach, platform, timeout, &remote, None)
 }
@@ -461,7 +471,8 @@ mod tests {
             install(&pinned(), ClientPlatform::Linux, 15, None),
         ] {
             let a = &cmd.args;
-            let pair = |flag: &str, value: &str| a.windows(2).any(|w| w[0] == flag && w[1] == value);
+            let pair =
+                |flag: &str, value: &str| a.windows(2).any(|w| w[0] == flag && w[1] == value);
             assert_eq!(&a[..2], ["-F", "none"], "{a:?}");
             for option in [
                 "IdentitiesOnly=yes",

@@ -287,7 +287,13 @@ mod tests {
             .await
             .unwrap();
         let files = |k: &DaemonKeys| {
-            [k.client_key(), k.client_pub(), k.host_key(), k.host_pub(), k.authorized()]
+            [
+                k.client_key(),
+                k.client_pub(),
+                k.host_key(),
+                k.host_pub(),
+                k.authorized(),
+            ]
         };
         for fa in files(&a) {
             assert!(!files(&b).contains(&fa));

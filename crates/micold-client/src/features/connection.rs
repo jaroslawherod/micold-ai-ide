@@ -234,8 +234,8 @@ pub enum Msg {
     /// A bring-up that makes exactly one try (an SSH daemon) failed, with the reason in the user's
     /// words (feature 489): unreachable at once, not retried until the user starts it again.
     StartFailed(String),
-    /// How much of the daemon build has been copied to the remote host, in percent (feature 489).
-    CopyProgress(u8),
+    /// A start step began or the copy advanced (features 489 and 806).
+    Provisioning(micold_core::provision::ProvisionEvent),
     /// A daemon answered and refused the handshake, with a human-facing reason — a stale `:dev`
     /// image, or a refusal without a variant of its own (#370).
     ///

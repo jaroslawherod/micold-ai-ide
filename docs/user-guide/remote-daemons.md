@@ -14,9 +14,16 @@ agent and `~/.ssh/config`; it stores no password or key.
 
 ## What happens when it starts
 
-The row shows **Starting**. If the host has no daemon of this build yet, Micold copies its own
-daemon there (`copying daemon to <host> (n%)`) into `~/.micold/remote/` of your account, then starts
-it. When the handshake succeeds the row shows **Connected**, the daemon's version and
+The row shows **Starting** and, under it, the step it is in:
+
+1. `connecting to the SSH server`
+2. `checking the daemon build`
+3. `copying the daemon (n%)`, only if the host has no daemon of this build yet: Micold copies its
+   own daemon into `~/.micold/remote/` of your account
+4. `starting the daemon`
+5. `checking the daemon version`, only if the daemon refused the handshake over its version
+
+Each step is on its own timeout, apart from the copy, which shows its progress instead. When the handshake succeeds the row shows **Connected**, the daemon's version and
 `user@host:port`. Nothing is listening on a network port on either machine: the connection is the
 SSH session itself.
 
@@ -39,6 +46,10 @@ The row shows **Unreachable** with the reason: the host could not be found, refu
 did not answer in 15 seconds, did not accept your key, or has a host key that is unknown or has
 changed (check it with `ssh <host>` once, then try again). Micold never accepts an unknown host key
 on its own. Choose **Reconnect** once it is fixed.
+
+The reason names the step that failed, for example `copying the daemon failed: the daemon build
+could not be written in the target`, followed by the last lines of the tool's output when it printed
+any. A step that runs too long reads `<step> failed: did not finish within <time>`.
 
 Host key and permission problems need your action; the daemon is not retried until you start it.
 

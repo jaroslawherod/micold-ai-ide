@@ -39,6 +39,7 @@ impl Dialer {
                 own_daemon: PathBuf::from(env!("CARGO_BIN_EXE_micold-daemon")),
                 bundled_dir: None,
                 ssh_path: Some(host.ssh_wrapper.clone()),
+                cancel: None,
             },
             target: SshTarget::new(super::sshd::ALIAS, None, None, None).expect("target"),
             opts: ProvisionOptions {

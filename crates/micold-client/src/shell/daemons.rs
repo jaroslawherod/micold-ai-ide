@@ -139,6 +139,7 @@ pub fn system_ssh() -> micold_core::ssh::SystemSsh {
             .ok()
             .and_then(|exe| exe.parent().map(|d| d.join("remote"))),
         ssh_path,
+        cancel: None,
     }
 }
 

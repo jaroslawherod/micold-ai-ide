@@ -43,9 +43,9 @@ pub fn update(app: &mut App, id: DaemonId, msg: Msg) -> Task<Message> {
         Msg::ConnectFailed(reason) => daemon_sync::on_connect_failed(app, id, reason),
         Msg::Refused(reason) => daemon_sync::on_refused(app, id, reason),
         Msg::StartFailed(reason) => daemon_sync::on_start_failed(app, id, reason),
-        Msg::CopyProgress(percent) => {
+        Msg::Provisioning(event) => {
             app.core.update(Message::Daemons(
-                micold_client::features::daemons::Msg::CopyProgress(id, percent),
+                micold_client::features::daemons::Msg::Provisioning(id, event),
             ));
             Task::none()
         }

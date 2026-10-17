@@ -123,7 +123,9 @@ impl FailureCause {
     fn has_output(&self) -> bool {
         !matches!(
             self,
-            FailureCause::Cancelled | FailureCause::TimedOut { .. } | FailureCause::NoMatchingBuild { .. }
+            FailureCause::Cancelled
+                | FailureCause::TimedOut { .. }
+                | FailureCause::NoMatchingBuild { .. }
         )
     }
 }
@@ -135,7 +137,7 @@ fn bound_text(bound: Duration) -> String {
         let minutes = secs / 60;
         format!("{minutes} minute{}", if minutes == 1 { "" } else { "s" })
     } else {
-        format!("{secs} seconds")
+        format!("{secs} second{}", if secs == 1 { "" } else { "s" })
     }
 }
 
@@ -280,7 +282,10 @@ mod tests {
         for (cause, text) in want {
             assert_eq!(cause.text(&ctx()), text);
         }
-        let mismatch = FailureCause::VersionMismatch { found: "1.0".into(), expected: "2.0".into() };
+        let mismatch = FailureCause::VersionMismatch {
+            found: "1.0".into(),
+            expected: "2.0".into(),
+        };
         let text = mismatch.text(&ctx());
         assert!(text.contains("1.0") && text.contains("2.0"), "{text}");
     }
@@ -288,7 +293,10 @@ mod tests {
     #[test]
     fn an_ssh_cause_reuses_the_489_text_unchanged() {
         let failure = SshFailure::HostUnreachable;
-        assert_eq!(FailureCause::Ssh(failure.clone()).text(&ctx()), failure.reason(&ctx()));
+        assert_eq!(
+            FailureCause::Ssh(failure.clone()).text(&ctx()),
+            failure.reason(&ctx())
+        );
     }
 
     #[test]
@@ -310,12 +318,24 @@ mod tests {
     #[test]
     fn a_cause_without_output_is_one_line() {
         let f = ProvisionFailure::new(Step::Probe, FailureCause::Cancelled).with_output("noise");
-        assert_eq!(f.reason(&ctx()), "checking the daemon build failed: stopped by you");
+        assert_eq!(
+            f.reason(&ctx()),
+            "checking the daemon build failed: stopped by you"
+        );
     }
 
     #[test]
     fn a_warning_names_the_cli_and_carries_the_installer_output() {
-        let w = ProvisionWarning { cli: AiCli::Codex, output: "npm ERR! 404\n".into() };
-        assert_eq!(w.text(), format!("{} was not installed:\nnpm ERR! 404", AiCli::Codex.provider().display_name()));
+        let w = ProvisionWarning {
+            cli: AiCli::Codex,
+            output: "npm ERR! 404\n".into(),
+        };
+        assert_eq!(
+            w.text(),
+            format!(
+                "{} was not installed:\nnpm ERR! 404",
+                AiCli::Codex.provider().display_name()
+            )
+        );
     }
 }

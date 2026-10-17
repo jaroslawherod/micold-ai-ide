@@ -264,11 +264,19 @@ fn the_ssh_form_and_ssh_rows_paint_their_fields_and_badges_without_overflow() {
         )
         .unwrap();
     state.settings.links = DaemonLinks::at_launch(&state.settings.daemons);
-    state.update(Message::Daemons(DaemonsMsg::CopyProgress(ssh, 40)));
+    use micold_core::provision::{ProvisionEvent, Step};
+    state.update(Message::Daemons(DaemonsMsg::Provisioning(
+        ssh,
+        ProvisionEvent::Entered(Step::Copy),
+    )));
+    state.update(Message::Daemons(DaemonsMsg::Provisioning(
+        ssh,
+        ProvisionEvent::CopyPercent(40),
+    )));
     state.settings.links.apply(ssh, DaemonEvent::Start);
     let painted_rows = painted(&state);
     assert!(has(&painted_rows, "Remote over SSH"), "{painted_rows:?}");
-    assert!(has(&painted_rows, "copying daemon"), "{painted_rows:?}");
+    assert!(has(&painted_rows, "copying the daemon"), "{painted_rows:?}");
     assert_no_text_overflows(&state, "an SSH row while starting");
 
     state.settings.links.apply(ssh, DaemonEvent::Connected);

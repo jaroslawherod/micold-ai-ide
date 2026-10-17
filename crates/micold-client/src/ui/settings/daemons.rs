@@ -18,7 +18,7 @@ use crate::features::daemons::{
 use crate::features::settings::DaemonDraft;
 use crate::features::window::FieldId;
 use crate::ui::focus::TrackFocus;
-use crate::ui::material::{Button, Checkbox, Select, Tag, TextField};
+use crate::ui::material::{Button, Checkbox, Select, StageProgress, Tag, TextField};
 use crate::ui::settings::container_fields::{self, ContainerView, FieldErrors};
 use crate::ui::settings::{caution, group, name_of, note, page, Named};
 use iced::widget::{column, row};
@@ -198,7 +198,7 @@ fn daemon_row<'a>(
     .spacing(spacing::XS)
     .width(Length::Fill);
     if let Some(activity) = &view.activity {
-        body = body.push(note(activity.clone(), roles));
+        body = body.push(StageProgress::new(activity.clone(), roles));
     }
     if let Some(sentence) = state_note(&view) {
         body = body.push(caution(sentence, roles));

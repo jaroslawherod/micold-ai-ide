@@ -48,6 +48,24 @@ use runtime::RuntimeKind;
 #[serde(transparent)]
 pub struct MilliCpus(pub u32);
 
+/// The AI CLIs a daemon offers (feature 806, FR-010). Its profile field and serde default come
+/// with the per-daemon selection; today only the provisioning sequence reads it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct AiCliSelection(pub BTreeSet<crate::session::AiCli>);
+
+impl AiCliSelection {
+    /// What a new daemon offers: Claude Code.
+    pub fn new_daemon() -> Self {
+        Self(BTreeSet::from([crate::session::AiCli::ClaudeCode]))
+    }
+
+    /// Every supported AI CLI.
+    pub fn all() -> Self {
+        Self(crate::session::AiCli::ALL.into_iter().collect())
+    }
+}
+
 /// A byte count, for the memory and writable-storage limits.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(transparent)]

@@ -10,11 +10,15 @@ use std::time::Duration;
 
 use futures_util::future::BoxFuture;
 
-use super::argv::{self, ClientPlatform, SshCommand};
-use super::classify::{classify, SshFailure};
+use super::argv::{ClientPlatform, SshCommand};
+use super::classify::SshFailure;
 use super::stdio::SshStdio;
 use super::target::SshTarget;
-use crate::connect::{handshake_with, Connected, Credentials, Transport};
+use crate::connect::Connected;
+use crate::provision::{
+    ensure_build, run, CancelToken, EventSink, FailureCause, ProvisionEvent, ProvisionFailure,
+    ProvisionTarget,
+};
 
 /// Reports the copy's progress as a percentage, 0..=100.
 pub type ProvisionProgress = Arc<dyn Fn(u8) + Send + Sync>;
@@ -33,7 +37,7 @@ pub struct SshOutput {
 }
 
 impl SshOutput {
-    fn ok(&self) -> bool {
+    pub(crate) fn ok(&self) -> bool {
         self.status == Some(0) && !self.timed_out
     }
 }
@@ -165,33 +169,7 @@ pub struct ProvisionOptions {
     pub client_build: String,
 }
 
-async fn run_probe(
-    host: &dyn SshHost,
-    target: &SshTarget,
-    opts: &ProvisionOptions,
-) -> Result<Probe, SshFailure> {
-    let cmd = argv::probe(target, opts.platform, opts.timeout_secs);
-    let script = argv::probe_script(&opts.build_id).into_bytes();
-    let deadline = Some(Duration::from_secs(u64::from(opts.timeout_secs)));
-    let out = host
-        .run(cmd, script, deadline, None)
-        .await
-        .map_err(io_failure)?;
-    if !out.ok() {
-        return Err(classify(
-            false,
-            out.timed_out,
-            out.status == Some(0),
-            &out.stderr,
-        ));
-    }
-    parse_probe(&String::from_utf8_lossy(&out.stdout)).map_err(|raw| match raw {
-        Some((os, arch)) => SshFailure::RemoteUnsupported { os, arch },
-        None => classify(false, false, true, &out.stderr),
-    })
-}
-
-fn io_failure(e: io::Error) -> SshFailure {
+pub(crate) fn io_failure(e: io::Error) -> SshFailure {
     if e.kind() == io::ErrorKind::NotFound {
         SshFailure::SshMissing
     } else {
@@ -201,49 +179,59 @@ fn io_failure(e: io::Error) -> SshFailure {
     }
 }
 
+/// The shared sequence's target for a user's host: the 489 bounds (the connect deadline for every
+/// step, the copy unbounded).
+fn user_host(target: &SshTarget, opts: &ProvisionOptions) -> ProvisionTarget {
+    ProvisionTarget::user_host(target, Duration::from_secs(u64::from(opts.timeout_secs)))
+}
+
+/// A sink that forwards the copy's percentage and drops every other event.
+fn progress_sink(progress: Option<ProvisionProgress>) -> EventSink {
+    Arc::new(move |event| {
+        if let (ProvisionEvent::CopyPercent(p), Some(progress)) = (event, &progress) {
+            progress(p);
+        }
+    })
+}
+
+/// A shared-sequence failure as 489's class, so the callers keep their reason table.
+fn ssh_failure_of(failure: ProvisionFailure) -> SshFailure {
+    match failure.cause {
+        FailureCause::Ssh(f) => f,
+        FailureCause::TimedOut { .. } => SshFailure::Timeout,
+        FailureCause::NoMatchingBuild { os, arch } => SshFailure::NoMatchingBuild { os, arch },
+        FailureCause::CopyFailed => SshFailure::RemoteNotWritable,
+        FailureCause::AuthRefused => SshFailure::AuthRefused,
+        _ => SshFailure::HelperFailed {
+            tail: failure
+                .output
+                .lines()
+                .last()
+                .unwrap_or_default()
+                .to_string(),
+        },
+    }
+}
+
 /// Make sure this build's daemon is on the host, copying it only when absent. Returns the probe
-/// that confirmed it.
+/// that confirmed it. The shared sequence with a [`Ownership::UserHost`] target.
 pub async fn provision(
     host: &dyn SshHost,
     target: &SshTarget,
     opts: &ProvisionOptions,
     progress: Option<ProvisionProgress>,
 ) -> Result<Probe, SshFailure> {
-    let probe = run_probe(host, target, opts).await?;
-    if !probe.home_writable {
-        return Err(SshFailure::RemoteNotWritable);
-    }
-    if probe.have {
-        return Ok(probe);
-    }
-    let bytes = match select_artefact(opts.platform, &opts.client_arch, &probe.os, &probe.arch) {
-        ArtefactChoice::Own => host.own().map_err(io_failure)?,
-        ArtefactChoice::Bundled => {
-            host.bundled(&probe.os, &probe.arch)
-                .ok_or_else(|| SshFailure::NoMatchingBuild {
-                    os: probe.os.clone(),
-                    arch: probe.arch.clone(),
-                })?
-        }
-    };
-    // The transfer is outside the connect deadline: it reports progress instead (R3).
-    let cmd = argv::copy(target, opts.platform, opts.timeout_secs, &opts.build_id);
-    let out = host
-        .run(cmd, bytes, None, progress)
-        .await
-        .map_err(io_failure)?;
-    if !out.ok() {
-        return Err(match classify(false, out.timed_out, false, &out.stderr) {
-            SshFailure::Other { .. } => SshFailure::RemoteNotWritable,
-            known => known,
-        });
-    }
-    let again = run_probe(host, target, opts).await?;
-    if again.have {
-        Ok(again)
-    } else {
-        Err(SshFailure::RemoteNotWritable)
-    }
+    let sink = progress_sink(progress);
+    ensure_build(
+        host,
+        &user_host(target, opts),
+        opts,
+        &CancelToken::new(),
+        &sink,
+    )
+    .await
+    .map(|(probe, _)| probe)
+    .map_err(ssh_failure_of)
 }
 
 /// Provision, open the bridge and handshake. `Connected::Refused` is returned as is: a version
@@ -254,28 +242,17 @@ pub async fn connect(
     opts: &ProvisionOptions,
     progress: Option<ProvisionProgress>,
 ) -> Result<Connected, SshFailure> {
-    provision(host, target, opts, progress).await?;
-    let cmd = argv::bridge(target, opts.platform, opts.timeout_secs, &opts.build_id);
-    let stdio = host.open(cmd).map_err(io_failure)?;
-    let tail = stdio.stderr_tail();
-    let deadline = Duration::from_secs(u64::from(opts.timeout_secs));
-    let credentials = Credentials::default();
-    let shake = handshake_with(Transport::Ssh(stdio), &opts.client_build, &credentials);
-    match tokio::time::timeout(deadline, shake).await {
-        Err(_) => Err(SshFailure::Timeout),
-        Ok(Ok(connected)) => Ok(connected),
-        Ok(Err(e)) => {
-            // Give the child a moment to write why it exited before reading its stderr.
-            tokio::time::sleep(Duration::from_millis(50)).await;
-            let text = tail.text();
-            let text = if text.trim().is_empty() {
-                e.to_string()
-            } else {
-                text
-            };
-            Err(classify(false, false, true, &text))
-        }
-    }
+    let sink = progress_sink(progress);
+    run(
+        host,
+        &user_host(target, opts),
+        opts,
+        &CancelToken::new(),
+        &sink,
+    )
+    .await
+    .map(|p| p.connected)
+    .map_err(ssh_failure_of)
 }
 
 #[cfg(test)]
@@ -426,6 +403,15 @@ mod tests {
 
     fn target() -> SshTarget {
         SshTarget::new("build-host", None, None, None).unwrap()
+    }
+
+    #[test]
+    fn the_wrappers_run_the_shared_sequence_for_a_user_host_with_489_bounds() {
+        let t = user_host(&target(), &opts());
+        assert_eq!(t.owned, crate::provision::Ownership::UserHost);
+        let b = t.bounds;
+        let d = Duration::from_secs(15);
+        assert_eq!((b.reach, b.probe, b.start, b.copy), (d, d, d, None));
     }
 
     #[tokio::test]

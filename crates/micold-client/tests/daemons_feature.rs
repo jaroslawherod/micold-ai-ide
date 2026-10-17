@@ -8,6 +8,7 @@ use daemons_fixture::{wt, World};
 use micold_client::features::daemons::{self, DraftRuntime, State};
 use micold_client::features::Outcome;
 use micold_core::daemons::{DaemonEvent, DaemonState, MAX_CONNECTION_ERRORS, MAX_LOG_LINES};
+use micold_core::provision::{ProvisionEvent, Step};
 
 fn add_container(state: &mut State, name: &str, ctr: &str, port: &str) {
     daemons::begin_add(state);
@@ -273,7 +274,12 @@ fn an_ssh_daemon_is_added_started_and_shows_progress_then_its_version_and_target
     daemons::update(
         &mut state,
         &mut w.model(),
-        daemons::Msg::CopyProgress(id, 40),
+        daemons::Msg::Provisioning(id, ProvisionEvent::Entered(Step::Copy)),
+    );
+    daemons::update(
+        &mut state,
+        &mut w.model(),
+        daemons::Msg::Provisioning(id, ProvisionEvent::CopyPercent(40)),
     );
     let vm = daemons::views(&state, &w.model());
     let row = vm.rows.iter().find(|r| r.id == id).unwrap();
@@ -897,4 +903,86 @@ fn every_section_field_error_opens_its_section() {
             assert_eq!(state.section_open(other), other == section, "{field}");
         }
     }
+}
+
+/// Feature 806, T016, FR-018, FR-022: a start step and the copy percent are one daemon's own; a
+/// failure makes only that daemon unreachable, with the shared reason in its recent errors.
+#[test]
+fn provisioning_events_and_a_start_failure_belong_to_one_daemon() {
+    use micold_core::provision::{FailureCause, ProvisionFailure};
+    let mut w = World::new();
+    let mut state = State::default();
+    fill_ssh(&mut state, "First", true);
+    daemons::save(&mut state, &mut w.model()).unwrap();
+    fill_ssh(&mut state, "Second", true);
+    daemons::save(&mut state, &mut w.model()).unwrap();
+    let (a, b) = (w.registry.entries()[2].id, w.registry.entries()[3].id);
+
+    for (id, event) in [
+        (a, ProvisionEvent::Entered(Step::Copy)),
+        (a, ProvisionEvent::CopyPercent(40)),
+        (b, ProvisionEvent::Entered(Step::Probe)),
+    ] {
+        daemons::update(
+            &mut state,
+            &mut w.model(),
+            daemons::Msg::Provisioning(id, event),
+        );
+    }
+    let activity = |state: &State, w: &mut World, id| {
+        let vm = daemons::views(state, &w.model());
+        vm.rows
+            .iter()
+            .find(|r| r.id == id)
+            .unwrap()
+            .activity
+            .clone()
+    };
+    assert_eq!(
+        activity(&state, &mut w, a).as_deref(),
+        Some("copying the daemon (40%)")
+    );
+    assert_eq!(
+        activity(&state, &mut w, b).as_deref(),
+        Some("checking the daemon build")
+    );
+
+    let ctx = micold_core::ssh::ReasonContext {
+        host: "devbox".into(),
+        port: 2222,
+        timeout_secs: 15,
+        platform: micold_core::ssh::ClientPlatform::Linux,
+    };
+    let failure = ProvisionFailure::new(Step::Copy, FailureCause::CopyFailed)
+        .with_output("cat: No space left on device");
+    let reason = failure.reason(&ctx);
+    daemons::daemon_event(
+        &mut state,
+        &mut w.links,
+        a,
+        DaemonEvent::StartFailed(reason.clone()),
+    );
+
+    assert_eq!(
+        w.links.state(a),
+        Some(&DaemonState::Unreachable {
+            reason: reason.clone()
+        })
+    );
+    assert_eq!(
+        w.links.state(b),
+        Some(&DaemonState::Starting),
+        "the other is untouched"
+    );
+    assert_eq!(
+        daemons::details(&state, a).errors.last().unwrap().reason,
+        reason
+    );
+    assert!(reason.contains("No space left on device"));
+    assert!(daemons::details(&state, b).errors.is_empty());
+    assert_eq!(
+        activity(&state, &mut w, a),
+        None,
+        "a failed start shows no step"
+    );
 }
