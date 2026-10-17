@@ -826,7 +826,10 @@ fn every_child_row_carries_the_child_marker_and_no_user_started_row_does() {
         .into_iter()
         .map(|p| p.content)
         .collect();
-    let annotations: Vec<&String> = painted.iter().filter(|c| c.contains("claude")).collect();
+    let annotations: Vec<&String> = painted
+        .iter()
+        .filter(|c| c.as_str() == "claude" || c.starts_with("agent"))
+        .collect();
     assert_eq!(
         annotations.len(),
         5,
@@ -844,10 +847,7 @@ fn every_child_row_carries_the_child_marker_and_no_user_started_row_does() {
         annotations.iter().any(|c| c.as_str() == "claude"),
         "the user-started session is not: {annotations:?}"
     );
-    assert!(annotations
-        .iter()
-        .any(|c| c.as_str() == "agent, origin pending, claude"));
-    assert!(annotations
-        .iter()
-        .any(|c| c.as_str() == "agent, origin removed, claude"));
+    // A child's marker is ellipsized to share the row with the name, so only its start is stable.
+    assert!(annotations.iter().any(|c| c.starts_with("agent, origin p")));
+    assert!(annotations.iter().any(|c| c.starts_with("agent, origin r")));
 }
