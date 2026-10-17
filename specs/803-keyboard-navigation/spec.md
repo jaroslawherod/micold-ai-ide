@@ -33,6 +33,20 @@ quick-switcher palette follow-up vs in scope."
   sidebar already marks them (see the user guide, *Finding the session you are on*).
 - **Navigation chord**: one of the six key combinations of FR-001.
 
+## Clarifications
+
+### Session 2026-10-17
+
+- Q: Do the FR-001 defaults collide with a reserved system shortcut, an input-method shortcut or an
+  existing app chord? → A: No. GNOME/IBus binds Ctrl+. and Ctrl+; (emoji) and Ctrl+Shift+U
+  (Unicode) with exact modifiers, so Ctrl+Shift+. (keysym `greater`) and Ctrl+Shift+, do not match;
+  Windows' emoji panel is Win+. / Win+; and its layout switch fires on a bare Ctrl+Shift release,
+  not with a third key; macOS reserves none of Cmd+Shift+[ ] , . PageUp PageDown system-wide
+  (Cmd+Shift+. shows hidden files only inside Finder and file dialogs, where FR-012 already disables
+  the chords; Cmd+Shift+[ ] is the common next/previous-tab convention). None equals an existing
+  app chord (E, T, D, H, W, C, V, O, Arrows). _(agent-resolved:
+  docs/user-guide/terminal-panes.md#shortcuts; spec.md#FR-006; platform shortcut lists)_
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Step between worktrees from the keyboard (Priority: P1)
@@ -214,10 +228,9 @@ lists.
   | Previous / next location | Ctrl+Shift+, / Ctrl+Shift+. | Cmd+Shift+, / Cmd+Shift+. |
   | Previous / next project | Ctrl+Shift+PageUp / Ctrl+Shift+PageDown | Cmd+Shift+PageUp / Cmd+Shift+PageDown |
 
-  [NEEDS CLARIFICATION: confirm these defaults against the reserved lists of FR-006 and the
-  platforms' input-method shortcuts (for example IBus's Ctrl+. emoji and Ctrl+Shift+U Unicode
-  input on GNOME), and choose a replacement for any that collides; on macOS laptops PageUp and
-  PageDown need Fn.]
+  None of these collides with FR-006's lists or a platform input-method shortcut (see
+  *Clarifications*). [NEEDS CLARIFICATION: on macOS laptops PageUp and PageDown need Fn, so the
+  project chords are Cmd+Shift+Fn+Up/Down there: keep them, or pick other keys?]
 - **FR-002**: The next/previous location chord MUST make the location after/before the current one
   in location order current, with the same result as clicking that location's row.
 - **FR-003**: The next/previous session chord MUST make the session after/before the current one in
