@@ -31,8 +31,8 @@
 
 ## Notes
 
-- One `[NEEDS CLARIFICATION]` marker remains (FR-023: Overview in place of the main pane, or an
-  overlay over the whole window); it goes to the clarify unit.
+- The `[NEEDS CLARIFICATION]` marker on FR-023 is resolved in the spec's Clarifications: the
+  Overview replaces the main pane, not an overlay over the whole window.
 - The issue's other open questions are settled in the spec: *main session* is feature 776's
   (Terms), and the LLM summary is out of scope for this iteration (Out of Scope), as the issue
   recommends.
