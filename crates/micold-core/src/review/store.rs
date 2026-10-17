@@ -230,7 +230,10 @@ mod tests {
             .collect();
         assert_eq!(
             states,
-            vec![CommentState::Draft, CommentState::Sent { at: 1_790_000_100 }]
+            vec![
+                CommentState::Draft,
+                CommentState::Sent { at: 1_790_000_100 }
+            ]
         );
         let sent = &file.entries["feature-x"][1];
         assert_eq!(
@@ -304,7 +307,11 @@ mod tests {
             earlier,
             "the earlier one is unchanged"
         );
-        assert_ne!(comments[1].id.0.to_string(), later, "the later one is re-id'd");
+        assert_ne!(
+            comments[1].id.0.to_string(),
+            later,
+            "the later one is re-id'd"
+        );
         assert_ne!(
             comments[1].reference(),
             comments[0].reference(),

@@ -1394,14 +1394,12 @@ fn the_review_messages_and_the_diff_layout_round_trip_on_both_wires() {
             note: String::new(),
         },
         ReviewEditOp::Reanchor {
-            moves: vec![
-                Move::new(
-                    id,
-                    LineRange::new(3, 4).unwrap(),
-                    LineRange::new(7, 8).unwrap(),
-                )
-                .unwrap(),
-            ],
+            moves: vec![Move::new(
+                id,
+                LineRange::new(3, 4).unwrap(),
+                LineRange::new(7, 8).unwrap(),
+            )
+            .unwrap()],
         },
         ReviewEditOp::Reanchor { moves: Vec::new() },
     ];

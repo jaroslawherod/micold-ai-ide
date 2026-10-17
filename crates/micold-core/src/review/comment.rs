@@ -685,7 +685,9 @@ mod tests {
         let mut review = EntryReview::default();
         let first = CommentId(Uuid::from_u128(0x1a2b_3c4d_0000_4000_8000_0000_0000_0001));
         let same_ref = CommentId(Uuid::from_u128(0x1a2b_3c4d_0000_4000_8000_0000_0000_0002));
-        review.add(draft(1, 1, &["x"], "one"), first, NOW).expect("the first is kept");
+        review
+            .add(draft(1, 1, &["x"], "one"), first, NOW)
+            .expect("the first is kept");
         assert_eq!(
             review.add(draft(2, 2, &["y"], "two"), same_ref, NOW),
             Err(ReviewError::RefTaken),
@@ -1105,8 +1107,13 @@ mod tests {
 
     #[test]
     fn each_state_has_the_data_model_store_shape() {
-        let state = |s: CommentState| serde_json::to_value(sample(s)).expect("serialises")["state"].clone();
-        assert_eq!(state(CommentState::Draft), json!({ "draft": null }), "a draft");
+        let state =
+            |s: CommentState| serde_json::to_value(sample(s)).expect("serialises")["state"].clone();
+        assert_eq!(
+            state(CommentState::Draft),
+            json!({ "draft": null }),
+            "a draft"
+        );
         assert_eq!(
             state(CommentState::Sent { at: NOW }),
             json!({ "sent": { "at": NOW } }),
@@ -1116,7 +1123,9 @@ mod tests {
             state(reported(
                 Outcome::Answered,
                 "Kept on purpose.",
-                Reporter::Agent { session: Uuid::from_u128(AGENT) }
+                Reporter::Agent {
+                    session: Uuid::from_u128(AGENT)
+                }
             )),
             json!({ "reported": {
                 "sent_at": NOW,
@@ -1137,11 +1146,18 @@ mod tests {
             CommentState::Draft,
             CommentState::Sent { at: NOW },
             reported(Outcome::Applied, "", Reporter::User),
-            reported(Outcome::Answered, "why", Reporter::Agent { session: Uuid::from_u128(AGENT) }),
+            reported(
+                Outcome::Answered,
+                "why",
+                Reporter::Agent {
+                    session: Uuid::from_u128(AGENT),
+                },
+            ),
         ] {
-            let back: ReviewComment =
-                serde_json::from_value(serde_json::to_value(sample(s.clone())).expect("serialises"))
-                    .expect("deserialises");
+            let back: ReviewComment = serde_json::from_value(
+                serde_json::to_value(sample(s.clone())).expect("serialises"),
+            )
+            .expect("deserialises");
             assert_eq!(back.state, s, "every state round-trips");
         }
     }
@@ -1168,17 +1184,40 @@ mod tests {
         let reference = comment.reference().to_string();
         assert_eq!(reference, "C-01234567", "the id starts 01234567 (FR-014)");
         assert!(reference.len() <= 12, "short enough to quote (FR-014)");
-        let upper = CommentRef::of(CommentId(Uuid::from_u128(0xABCD_EF12_0000_4000_8000_0000_0000_0000)));
+        let upper = CommentRef::of(CommentId(Uuid::from_u128(
+            0xABCD_EF12_0000_4000_8000_0000_0000_0000,
+        )));
         assert_eq!(upper.to_string(), "C-abcdef12", "lowercase hex");
     }
 
     #[test]
     fn a_reference_parses_from_either_prefix_case_and_surrounding_whitespace() {
-        let expected = CommentRef::of(CommentId(Uuid::from_u128(0x1a2b_3c4d_0000_4000_8000_0000_0000_0000)));
-        for text in ["C-1a2b3c4d", "c-1a2b3c4d", "C-1A2B3C4D", "  C-1a2b3c4d\n", "\tc-1A2b3C4d "] {
-            assert_eq!(CommentRef::parse(text), Some(expected), "{text:?} names the comment");
+        let expected = CommentRef::of(CommentId(Uuid::from_u128(
+            0x1a2b_3c4d_0000_4000_8000_0000_0000_0000,
+        )));
+        for text in [
+            "C-1a2b3c4d",
+            "c-1a2b3c4d",
+            "C-1A2B3C4D",
+            "  C-1a2b3c4d\n",
+            "\tc-1A2b3C4d ",
+        ] {
+            assert_eq!(
+                CommentRef::parse(text),
+                Some(expected),
+                "{text:?} names the comment"
+            );
         }
-        for text in ["C-123", "D-1a2b3c4d", "C-1a2b3c4d5", "C-1a2b3c4g", "1a2b3c4d", "C-", "", "C- 1a2b3c4d"] {
+        for text in [
+            "C-123",
+            "D-1a2b3c4d",
+            "C-1a2b3c4d5",
+            "C-1a2b3c4g",
+            "1a2b3c4d",
+            "C-",
+            "",
+            "C- 1a2b3c4d",
+        ] {
             assert_eq!(CommentRef::parse(text), None, "{text:?} is no reference");
         }
     }
@@ -1195,16 +1234,31 @@ mod tests {
         let fresh = fresh_id(&review, || drawn.next().expect("a draw"));
         assert_eq!(fresh, free, "the colliding draw is skipped (research R4)");
         let mut once = vec![free].into_iter();
-        assert_eq!(fresh_id(&review, || once.next().expect("a draw")), free, "a free first draw is kept");
+        assert_eq!(
+            fresh_id(&review, || once.next().expect("a draw")),
+            free,
+            "a free first draw is kept"
+        );
     }
 
     #[test]
     fn a_move_keeps_the_number_of_lines() {
         let range = |a, b| LineRange::new(a, b).expect("valid");
         let m = Move::new(id(1), range(3, 5), range(10, 12)).expect("three lines to three lines");
-        assert_eq!((m.id(), m.from(), m.to()), (id(1), range(3, 5), range(10, 12)));
-        assert_eq!(Move::new(id(1), range(3, 5), range(10, 11)), None, "3 lines cannot become 2");
-        assert_eq!(Move::new(id(1), range(3, 3), range(4, 5)), None, "1 line cannot become 2");
+        assert_eq!(
+            (m.id(), m.from(), m.to()),
+            (id(1), range(3, 5), range(10, 12))
+        );
+        assert_eq!(
+            Move::new(id(1), range(3, 5), range(10, 11)),
+            None,
+            "3 lines cannot become 2"
+        );
+        assert_eq!(
+            Move::new(id(1), range(3, 3), range(4, 5)),
+            None,
+            "1 line cannot become 2"
+        );
     }
 
     #[test]
@@ -1217,7 +1271,11 @@ mod tests {
         review = EntryReview::from_comments(comments);
         review.clear_sent();
         let ids: Vec<_> = review.comments().iter().map(|comment| comment.id).collect();
-        assert_eq!(ids, vec![id(1), id(2), id(3)], "Sent and Reported go, Drafts stay (FR-019)");
+        assert_eq!(
+            ids,
+            vec![id(1), id(2), id(3)],
+            "Sent and Reported go, Drafts stay (FR-019)"
+        );
     }
 
     #[test]
@@ -1225,7 +1283,11 @@ mod tests {
         let mut answered = sample(reported(Outcome::Answered, "why", Reporter::User));
         answered.id = id(1);
         let mut review = EntryReview::from_comments(vec![answered.clone()]);
-        assert_eq!(review.set_text(id(1), "new"), Err(ReviewError::Refused), "FR-002");
+        assert_eq!(
+            review.set_text(id(1), "new"),
+            Err(ReviewError::Refused),
+            "FR-002"
+        );
         assert_eq!(review.delete(id(1)), Err(ReviewError::Refused), "FR-002");
         assert_eq!(review.comments(), &[answered][..], "nothing changed");
     }
