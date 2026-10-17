@@ -149,7 +149,7 @@ async fn time_one(
     let started = Instant::now();
     conn.send(Frame::Control(ClientMsg::SessionStart {
         session,
-        allow_additional_session: false,
+        allow_additional_session: true,
     }))
     .await
     .expect("SessionStart");

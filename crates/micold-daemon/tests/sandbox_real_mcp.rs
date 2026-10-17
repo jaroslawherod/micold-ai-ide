@@ -179,7 +179,7 @@ async fn sandbox_real_mcp_binding_answers_whoami_from_inside_the_container() {
     // and then read at its container path, from inside.
     conn.send(Frame::Control(ClientMsg::SessionStart {
         session: agent,
-        allow_additional_session: false,
+        allow_additional_session: true,
     }))
     .await
     .expect("start the AI-CLI session");
