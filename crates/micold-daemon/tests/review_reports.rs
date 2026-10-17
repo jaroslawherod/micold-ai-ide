@@ -454,7 +454,7 @@ async fn refusals_follow_the_contracts_order_and_change_nothing() {
 async fn d5_a_default_session_reports_on_the_default_entrys_comment() {
     let _guard = ENV.lock().await;
     let s = Sandbox::new().await;
-    let root = s.add("", "README.md", 2, 2, "Explain more.");
+    let root = s.add("", "src/root.rs", 2, 2, "Explain more.");
     let wt = s.add("wt", "src/a.rs", 1, 1, "Worktree one.");
     s.send("").await;
     s.send("wt").await;
@@ -466,7 +466,7 @@ async fn d5_a_default_session_reports_on_the_default_entrys_comment() {
         )
         .await;
     assert_eq!(result["status"], "answered", "{result}");
-    assert_eq!(result["file"], "README.md", "{result}");
+    assert_eq!(result["file"], "src/root.rs", "{result}");
     assert!(reported(&s.comments(""), &root, Outcome::Answered));
 
     let error = s.report_err(sid(4), report(&wt, "applied", "")).await;
