@@ -81,7 +81,11 @@ fn run_and_stop(state: &DaemonState, project: &Path, id: SessionId, text: &str) 
     let printed = project.join("printed");
     let _ = std::fs::remove_file(&printed);
     script(project, &format!("print {text}\ntouch printed\nwait\n"));
-    state.start_session(id, LaunchMode::Fresh).expect("starts");
+    // The stopped sibling's exit may not be recorded yet: this helper runs several sessions of one
+    // project in turn (legacy worktree, feature 776), so the start is the explicit request.
+    state
+        .start_session_gated(id, LaunchMode::Fresh, micold_core::occupancy::Additional::Yes)
+        .expect("starts");
     wait_file(&printed);
     history_showing(state, id, text);
     assert!(state.stop_session(id));

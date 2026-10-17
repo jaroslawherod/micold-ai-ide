@@ -187,7 +187,12 @@ pub fn ai_session() -> Session {
 }
 
 /// A service whose catalog holds `sessions` in `project`, with nothing on disk.
-pub fn service(project: &Path, sessions: Vec<Session>) -> Arc<DaemonState> {
+pub fn service(project: &Path, mut sessions: Vec<Session>) -> Arc<DaemonState> {
+    // A fixture session is not running: `Session::start_new` says `Starting`, which counts as live
+    // beside its siblings (feature 776, FR-013).
+    for session in &mut sessions {
+        session.lifecycle = micold_core::session::SessionLifecycle::Idle;
+    }
     let workspace = Workspace {
         projects: vec![Project::new(
             project.to_path_buf(),
