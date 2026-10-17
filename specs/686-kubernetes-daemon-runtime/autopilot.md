@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #686
 - **Worktree branch**: claude/project-thread-xelisc
 - **Started**: 2026-10-17
-- **Phase**: implement M1a
-- **Next step**: design revision (decisions 8–10) before more implementation; then M1a T019 onward
+- **Phase**: design revision 2
+- **Next step**: design revision 2 (continue from Handover): fix spec review round 1 findings, then plan, tasks, test-list; then re-cut M1a
 
 ## Pull requests
 
@@ -48,6 +48,7 @@ Cut notes: US1 (>10 tasks) split along its acceptance scenarios and the plan's s
 | 8 | implement M1a | FR-004 provider CLIs in the pod | owner: "Install on start" — installed into the volume when the pod starts; works with pulled images; slower first start; pod needs outbound network. Replaces decision 2. Owner decision, design change pending: spec FR-004 / plan / tasks to be revised by a dedicated unit after M1a merges, before M2 | owner | decision card 2026-10-17T21:33Z |
 | 9 | implement M1a | FR-004 image source | owner (verbatim): "use basic image with ssh where you can copy daemon and install ai cli" — replaces decision 1: no build/push/registry; the pod runs a basic image with sshd, the client copies the daemon binary in over SSH and installs the AI CLIs (with decision 8). Changes the start sequence (no `Image` phase; a copy/install step) and likely the manifests. Design revision pending before more implementation | owner | owner instruction 2026-10-17T21:34Z |
 | 10 | implement M1a | Same mechanism for the local sandbox container? | owner (verbatim): "should use same mechanism for local \"sandbox\" container". Orchestrator default: #686 builds the sshd-image + copy-daemon-over-SSH + install-CLIs mechanism as a shared part both runtimes can use; moving the local sandbox container runtime onto it is #806's scope (commented there) | owner + orchestrator default | owner instruction 2026-10-17T21:35Z |
+| 11 | design rev 2 | Who builds the shared sshd image + copy-daemon + install-CLIs mechanism? | #806's separate run builds it; #686 consumes it (contracts/shared-ssh-image.md, to write) and orders milestones: work independent of it first (core types done, kubeconfig, manifests + pod/PVC/secret lifecycle, port-forward tunnel, stop/remove, failure reasons, Settings form), copy-daemon + install-CLIs last, marked "blocked on #806" | owner via coordinator | coordinator message 2026-10-17 |
 
 ## Review rounds
 
@@ -59,6 +60,7 @@ Cut notes: US1 (>10 tasks) split along its acceptance scenarios and the plan's s
 | Plan | 2 (scoped, sonnet) | b26d31e28d1362689a3bc021fc0af7cdff72869c:48a879226ceb5fe45e669e6aade3331e2c742d6f | CLEAN — 1 MINOR fixed, prose only (plan.md Primary Dependencies, contracts/daemon-image.md: `program_of` is the free function `sandbox::cli::program_of`, not a `CliRuntime` method) |
 | Tasks | 1 | 1aab2e66eaf532352e358ce882e50c398d808e64:b3c1e46cab50933fb87b51b5d85bae4ad7b90da8 | CHANGES: 4 MAJOR, 3 MINOR — all fixed (F1 speckit-tdd-plan run: tdd/test-list.md A1–A27, U1–U116, markers on every behavioral task, acceptance tasks T099–T105 per milestone, tdd/cycle-log.md baseline; D14 un-declined; F2 M2/M7 Verify one filter per command; F3 M1 Verify adds `--lib kube::live` and `micold-daemon server::`; F4 credentialed-clone clause moved from M5 to M8 (T092), M3 text points there; F5 checklist ticked, Notes say defaults pending owner; F6 T002 not [P]; F7 T075 names only the M6 classifiers) |
 | Tasks | 2 (scoped, sonnet) | bf9cd12b8a7d863016aa8c342f4bf594a34f477e:a8551c98307dc5eb20c1a8b684f92be48c98641b | CLEAN — 1 MINOR fixed (Milestones preamble names T097/T098 Polish as in no milestone, left to the close unit) |
+| Spec rev 2 | 1 | 9b02dde817655adc92898292c8f93e391c823d2e:4233f507b15954e5f2b3b193009816ee9ea8fd52 | CHANGES: 3 MAJOR, 3 MINOR — open (see Handover) |
 
 ## Declined review findings
 
@@ -71,24 +73,51 @@ Cut notes: US1 (>10 tasks) split along its acceptance scenarios and the plan's s
 
 ## Handover
 
-**Design revision pending before more implementation** (decisions 8, 9 and 10: provider CLIs installed
-on start; the mechanism shared with the local sandbox container (#806); basic image with sshd, daemon binary copied in over SSH — replaces FR-004's build/push and
-likely changes the start sequence and the manifests). Do not resume M1a until spec FR-004, plan and
-tasks are revised.
+**Design revision 2 in progress (unit "Design revision 686", handed over at 150k).** Uncommitted
+work is committed with this handover as `docs(686): design revision 2 — spec and research (WIP)`.
 
-Branch: local commits only, NOT pushed (no green full gate in this container yet): 51769aab,
-c9f9eb9f, 6b14932c (M1 units 1–3, rebased onto origin/main 70f58726) and 7b22b4d2 (M1a/M1b split),
-plus this commit. Backup bundle /mnt/project-files/backups/686-m1-wip.bundle (branch + refs/stash).
-Done: T001–T018 (green). M1 split into M1a/M1b (decision 7, tasks.md Milestones).
-Uncommitted red WIP, kept off the branch (git stash@{0} "686 M1a red WIP", also
-/mnt/project-files/backups/686-m1a-wip-red.patch): tests + `todo!()` stubs for T019 (manifest.rs),
-T020 (kubeconfig.rs), T021 (start.rs + start_tests.rs), T079 (lifecycle.rs), plus `Quantity::to_k8s`
-/`parse_k8s`, `ResourceNames::daemon_name`/`all_secrets`, `ObjectKind::noun`,
-`KubeFailure::StopTimeout` and `From<ApiFailure>`, `FakeCluster::hold_on_delete`, tokio `test-util`
-dev-dep in core. Never compiled or run; no red evidence recorded. Kubeconfig (T020/T026) and
-lifecycle (T079/T081) likely survive the redesign; manifest and start sequence need re-checking
-against it. After the revision: re-cut M1a if needed, apply the stash, run red, implement T025–T027,
-T081, verify, reviews A/B, gate (`scripts/gate.sh`), PR files.
+Done:
+- spec.md revised (Status line "revision 2"): SSH image (#806's), copy daemon over SSH via 489
+  FR-005, AI CLIs installed on start, no build/push/registry; new FR-024 (consume #806's mechanism,
+  no second copy); FR-004/006/008/009/012/015/017/021, edge cases, entities, SC-001/004,
+  assumptions, out of scope rewritten. Pod SSH auth: per-daemon access secret `<base>-ssh-access`
+  (host key pair + `authorized_keys`, one line per client), client private keys owner-only on each
+  client, host key pinned from the secret, sshd on pod loopback 127.0.0.1:2222.
+- research.md: revision-2 preamble; K1 (consume #806, interface in contracts/shared-ssh-image.md
+  — NOT YET WRITTEN, working module name `micold-core/src/ssh_image/`), K2 (loopback relay
+  `client/kube/relay.rs` → port-forward per accepted connection; 489 system `ssh` with HostKeyAlias
+  + per-daemon known_hosts; `Transport::Tunnel` not needed), K3 (access secret, multi-client keys
+  via resourceVersion-guarded update, sshd reads authorized_keys from the mount, host key copied to
+  /tmp 0600), K4 (listener_auth removed: revert T008/T016), K6 phases (Config, Preflight [+update
+  secrets], Volume, Secrets, Pod, Schedule, Pull, Tunnel; then blocked on #806: Copy 120 s,
+  Install 15 min, Connect 120 s; KubeFailure drops NoRuntime/Build/Push, adds ImageContract,
+  HostKeyMismatch, Provision(..)), K7 (pod shape; daemon env passed by the provisioning start step,
+  not pod env, since sshd clears env), K10 small, K12 (kind, no registry; blocked on #806).
+- Spec review rev 2 round 1: CHANGES (full text /mnt/project-files/backups/686-rev2-spec-review-r1.md).
+  Open, to fix then scoped re-review (sonnet, `review-snapshot.sh diff 9b02dde8…:4233f507…`):
+  F1 MAJOR concurrency of shared steps (copy, install, access-secret key add) on one volume/secret
+  by two clients — add edge case + FR-023 clause; F2 MAJOR US3.4 "accepts only the daemon's key"
+  vs FR-008 per-client keys — say "only keys in the access secret"; F3 MAJOR AI CLIs to install and
+  "wanted version" undefined — add to FR-004/US5.1/FR-018/entity (selected in the form, default the
+  enabled providers; version pinned by the client build per #806); F4 MINOR checklists/requirements.md
+  note stale; F5 MINOR edits vs adopted pod (say: an edit recreates the pod on next start when the pod
+  spec differs; volume kept); F6 MINOR FR-024 delivery constraint → make observable ("Kubernetes is not
+  listed in Add until …") or move to Assumptions.
+
+Next (in order): fix F1–F6 in spec.md; scoped spec re-review; data-model.md, plan.md,
+contracts/kube-runtime.md, new contracts/shared-ssh-image.md (replaces contracts/daemon-image.md:
+delete it), quickstart.md; plan review (fresh reviewer, plan rubric); tasks.md re-cut + tdd/test-list.md
+(mark T001–T018 kept/changed/removed: T005/T012 DaemonImageSource → remove, keep DaemonResources moved
+to `core/daemon_resources.rs`; T004/T011 drop `registry`, `arch`, `RegistryRepo`, add `image:
+Option<ImageRef>`, `providers`; T008/T016 revert; T010/T017 revert `Transport::Tunnel`; T009/T018
+variant list change; T015 port 7727 → 2222; T034–T046 removed; new relay, access-secret, blocked-on-#806
+tasks), milestones in coordinator's order (core types done → kubeconfig → manifests + pod/PVC/secret
+lifecycle → port-forward tunnel/relay → stop/remove → failure reasons → Settings form (Add entry hidden)
+→ blocked on #806: copy+install+connect and Add entry, clone/worktrees, reconnect, real-cluster CI);
+tasks review; note what in stash@{0} survives (kubeconfig T020, lifecycle T079, manifest T019 needs
+sshd image/env/port changes, start T021 needs phase list without Image and with Tunnel=sshd login,
+`Quantity::to_k8s`, `ResourceNames::all_secrets` + access secret, `KubeFailure::StopTimeout`,
+`FakeCluster::hold_on_delete` survive); commit. Branch still unpushed; never reset.
 
 ## Open escalation
 
