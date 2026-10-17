@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #776
 - **Worktree branch**: feat/776_one-session-per-worktree-chosen-at-start
 - **Started**: 2026-10-12
-- **Phase**: M7 reviewed, full gate running
-- **Next step**: gate green on rebased tree (2nd rebase), push, open M7 PR
+- **Phase**: M7 PR open, waiting for CI
+- **Next step**: orchestrator waits on CI and merges M7
 
 ## Pull requests
 
@@ -97,7 +97,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-Part 4: rebased on origin/main, fixed gate failures (daemon test fixtures now start siblings on purpose, commit 1e7a0782), fresh full gate running. Next: gate green, push, open M7 PR (visual pass already recorded, M4/M5/M6 evidence; M7 has none open).
+None.
 
 ## Open escalation
 
