@@ -3172,7 +3172,7 @@ pub fn view_and_start(app: &mut App, id: SessionId) {
     // starting, and ask whether to run both (FR-016).
     if app.core.session_start_block_text(id).is_some() {
         view_session(app, id);
-        crate::features::session::start_blocked(&mut app.core, id);
+        micold_client::features::session::start_blocked(&mut app.core, id);
         return;
     }
     view_and_send(
