@@ -79,8 +79,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M5 (T056-T065) rebased onto origin/main (2 WIP commits). Core tests (`mise run test-core`) green. Tasks T056-T065 ticked provisionally and the M5 test-after entry written in tdd/cycle-log.md. Running (detached, scratchpad `ab67e302-.../t3.log`, ends T_EXIT): client `--all-targets` and daemon `ssh_real_` tests. The build lock queue is long (other worktrees' gates), so expect long waits.
-Next step: fix any client/ssh failures (watch daemon.rs fake-runner tests that count `ssh -G` calls, showcase inventory tests), add M5 rows to tdd/test-list.md if missing, scoped gate + review A, review B, full gate, push, PR "feat(489): host picker, failure reasons and daemon management (#489)".
+M5 rebased onto origin/main (4 commits, conflicts resolved keeping both 805 and M5 tests). Fixed a compile error (ssh_target helper). Running detached: `cargo test -p micold-client --all-targets` (log scratchpad t4.log, ends T4_EXIT). Core tests were green earlier.
+Next step: fix client/ssh failures (daemon.rs fake-runner tests counting `ssh -G` calls, showcase inventory tests), M5 rows in tdd/test-list.md if missing, scoped gate + review A, review B, full gate, push, PR "feat(489): host picker, failure reasons and daemon management (#489)". Build lock queue is long.
 
 ## Open escalation
 
