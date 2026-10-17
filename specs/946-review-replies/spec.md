@@ -59,6 +59,24 @@ none runs, sending from two windows, clearing, removal with the worktree).
 - **Anchor**: the place in the current diff where a comment is shown.
 - **Entry** (from 482): a worktree, or the project's "Default" entry (the project root).
 
+## Clarifications
+
+### Session 2026-10-17
+
+- Q: Structured (stream-json) sessions do not exist yet (epic #945, #938–#944 open). Is delivering
+  the batch to a structured session, and commenting on its Edit/Write diffs, part of this feature?
+  → A: No. Ship for terminal (PTY) sessions only and leave both to epic #945; the batch stays
+  independent of delivery (FR-026) so #945 can send the same text as a user message. _(orchestrator
+  default under bias to action; the user may override)_
+- Q: Must an agent report wait for the user's approval, like other agent-tool requests? → A: No;
+  only tools that stop or remove something wait for the user, and a report only changes a
+  comment's status and reply (FR-003). _(agent-resolved:
+  docs/user-guide/agent-tools.md#requests-that-wait-for-you)_
+- Q: Can a session in the project folder (the Default entry) report on comments? → A: Yes, on the
+  Default entry's own comments only; the tool server knows each session's worktree (`whoami`), and
+  a report on another entry's comment is refused (FR-004). _(agent-resolved:
+  docs/user-guide/agent-tools.md#what-the-assistant-can-do; specs/482-worktree-changes-review/spec.md)_
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - The agent answers each comment, and the answer shows next to it (Priority: P1)
@@ -216,31 +234,14 @@ place and outdated flag.
 
 ---
 
-### User Story 5 - Send to a structured session (Priority: P3)
+### User Story 5 - Send to a structured session (deferred to epic #945)
 
-[NEEDS CLARIFICATION: Structured (stream-json) sessions do not exist yet: epic #945 and its
-sub-issues #938–#944 are all open. Is delivering the batch to a structured session, and commenting
-on a structured session's Edit/Write diffs, part of this feature (blocking it on #945), or does this
-feature ship for terminal sessions and leave both to #945? Recommended: leave both to #945; this
-feature keeps the batch independent of how it is delivered, so a structured session can send the
-same text as a user message.]
-
-When the entry's receiving session is a structured session, Send review delivers the same batch as
-one user message of that session instead of typing it into a terminal.
-
-**Why this priority**: The issue names it, but it needs a session kind the app does not have yet.
-
-**Independent Test**: With a structured session running in an entry, send a review and check the
-session received the batch as one user message with the same bytes a terminal session would have
-received, and that the comments became Sent.
-
-**Acceptance Scenarios**:
-
-1. **Given** a running structured session in the entry and draft comments, **When** the user
-   chooses Send review, **Then** that session receives the batch as one user message, unchanged,
-   and the comments become Sent.
-2. **Given** a structured session whose agent reports on comments, **When** it reports, **Then**
-   the statuses and replies change exactly as in Story 1.
+Structured (stream-json) sessions do not exist yet: epic #945 and its sub-issues #938–#944 are all
+open. This feature ships for terminal (PTY) sessions only. Delivering the batch to a structured
+session as one user message, and commenting on a structured session's Edit/Write diffs, are left
+to epic #945 (see Clarifications and Out of Scope). This feature keeps building the batch
+independent of how it is delivered (FR-026), so a structured session can later send the same bytes
+as a user message, and a structured session's agent can report through the same tool (FR-003).
 
 ---
 
@@ -360,8 +361,8 @@ received, and that the comments became Sent.
 #### Delivery and scope
 
 - **FR-026**: Building the batch MUST NOT depend on how it is delivered; the same text goes to a
-  terminal session typed as one pasted submission (as 482). Delivery to a structured session:
-  see User Story 5.
+  terminal session typed as one pasted submission (as 482). This feature delivers only to terminal
+  (PTY) sessions; delivery to a structured session is left to epic #945 (User Story 5).
 - **FR-027**: The batch format, the comment reference, the status transitions, report validation
   and re-anchoring MUST be verifiable by automated tests that run with no window open and no
   session running.
@@ -400,6 +401,8 @@ received, and that the comments became Sent.
 ## Out of Scope
 
 - Commenting on a structured session's Edit/Write diffs (the issue's "later"; see Story 5).
+- Delivering the batch to a structured (stream-json) session as a user message; it waits for
+  epic #945 (see Story 5).
 - Posting the review to GitHub, or importing GitHub review comments.
 - Back-and-forth threads: the user replying to the agent's reply on a comment. The user writes a new
   comment instead.
