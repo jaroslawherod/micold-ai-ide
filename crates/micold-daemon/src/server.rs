@@ -2563,10 +2563,14 @@ async fn stream_view(
     tx: tokio::sync::mpsc::UnboundedSender<Frame<DaemonMsg>>,
 ) {
     // Full snapshot on first view — the whole current screen, however long the client was away.
-    let mut snapshot = framer
-        .lock()
-        .expect("framer poisoned")
-        .frame(pty.term(), true, None);
+    // Read the change count first: a change during the snapshot only costs one extra delta.
+    let mut seen = pty.signals().changes();
+    let mut viewer = crate::framer::Viewer::default();
+    let mut snapshot =
+        framer
+            .lock()
+            .expect("framer poisoned")
+            .frame_for(&mut viewer, pty.term(), true, None);
     snapshot.process = process;
     if tx.send(Frame::Grid(snapshot)).is_err() {
         return; // client already gone
@@ -2576,12 +2580,17 @@ async fn stream_view(
     ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     loop {
         ticker.tick().await;
-        // Only frame when there is new output; a clean tick sends nothing.
-        if pty.signals().take_dirty() {
-            let mut delta = framer
-                .lock()
-                .expect("framer poisoned")
-                .frame(pty.term(), false, None);
+        // Only frame when there is new output; a clean tick sends nothing. The count is per
+        // stream: another client viewing this terminal must still see the change.
+        let now = pty.signals().changes();
+        if now != seen {
+            seen = now;
+            let mut delta = framer.lock().expect("framer poisoned").frame_for(
+                &mut viewer,
+                pty.term(),
+                false,
+                None,
+            );
             delta.process = process;
             if tx.send(Frame::Grid(delta)).is_err() {
                 return;
