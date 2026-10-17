@@ -242,9 +242,15 @@ rejected. Paths are under `crates/` unless they start with `docs/` or `specs/`.
   view, drawn with `TreeItem`'s existing selected look) until the next selection.
 - **Rationale**: reuses the sidebar's selection and start paths (FR-013); a worktree without
   sessions has no selectable row today, so "select the location" needs the reveal mark.
-- **Risk to check in tasks**: the start menu anchors to the row's start button by a measured
-  position (`StartMenuAnchored`); when opened from a card the row must be scrolled into view first
-  (reveal, then open).
+- **Start menu anchor (confirmed in the tasks unit)**: the list hangs at
+  `state.session.start_press.unwrap_or_default()` (`features/session.rs` `start_menu_toggled`),
+  which only the row's own press sets (`StartMenuAnchored`); from a card it would be stale or
+  `(0, 0)`, and `tests/context_menu_anchor_call_sites.rs` forbids a figure written into the view.
+  So `OfferStart` reveals the row, focuses its start control by widget id, scrolls it into view
+  (`ui/focus.rs` `scroll_focused_into_view`), reads the focused control's bounds with a read-only
+  operation like `into_view`'s first pass, and sends `StartMenuAnchored` from those bounds before
+  `StartMenuOpened`. The anchor is measured from the control, so it holds for pointer and keyboard
+  activation alike.
 
 - **Alternatives rejected**: starting a session directly on a card click (FR-013 forbids starting
   without confirmation); selecting nothing for a location without sessions (the user would land on
@@ -270,7 +276,7 @@ rejected. Paths are under `crates/` unless they start with `docs/` or `specs/`.
 - **Decision**: no new notice. The window already shows `connection_banner` between the top bar
   and the body on every branch (`ui/mod.rs`; "content on screen is now stale", `shell/daemon_sync.rs`
   `on_disconnected`), so it shows above the Overview too. Cards are derived from what the window
-  still holds: the sessions in its core keep their last state (to confirm in the tasks unit: `on_disconnected` removes `daemon_catalogs[daemon]`; if that drops the sessions, `overview::State` keeps the last card list while disconnected instead); the pull request reading is
+  still holds: the sessions in its core keep their last state (confirmed in the tasks unit: `on_disconnected` removes `daemon_catalogs[daemon]`, which only `register_projects` reads; the sessions live in the window's core state and are not touched, so no last card list is kept); the pull request reading is
   `Released` on disconnect, so counts read unknown and PR-derived states are not claimed (the
   spec's "PR status unreadable" edge case). On reconnect the new catalog and reading replace them.
   A client state test pins that the card list built after `on_disconnected` keeps the

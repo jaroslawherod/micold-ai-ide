@@ -137,8 +137,8 @@ a session ask for a permission: the button shows a red badge.
 4. **Given** any location in Needs action, **When** the user looks at the button, **Then** it shows
    a red attention badge; given none in Needs action but one in Needs attention, a yellow badge;
    otherwise no badge. The badge has a tooltip line or accessible label naming the count.
-5. **Given** the shortcut, **When** the user reads the user guide or the shortcut list in settings,
-   **Then** the Overview shortcut is listed there.
+5. **Given** the shortcut, **When** the user reads the user guide's shortcut lists (the app has
+   no in-app shortcut list), **Then** the Overview shortcut is listed there.
 
 ---
 
