@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #489
 - **Worktree branch**: feat/489_run-the-session-daemon-on-a-remote-host-over-ssh
 - **Started**: 2026-10-12
-- **Phase**: M5 implementing
-- **Next step**: implement M5 (T056–T065)
+- **Phase**: M5 PR open
+- **Next step**: merge M5, then M6
 
 ## Pull requests
 
@@ -79,8 +79,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M5 rebased onto origin/main, client tests green, review A/B round 1 fixed (duplicate check two-pass, picker hosts resolved once per form open, red pass logged). Scoped gate was red only for the geometry case, now fixed.
-Next step: scoped gate, then full gate, push, PR "feat(489): host picker, failure reasons and daemon management (#489)". Test-ssh (real sshd) not yet run.
+None.
 
 ## Open escalation
 
