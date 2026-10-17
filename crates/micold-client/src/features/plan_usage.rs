@@ -11,6 +11,9 @@
 use micold_core::local_time::UtcOffset;
 use micold_core::plan_usage::{UsageReading, WarnPercent, DEFAULT_PLAN_USAGE_ENABLED};
 
+/// The tooltip's first line: the usage shown is Claude Code's, not the active provider's.
+pub const PROVIDER_HEADING: &str = "Claude Code plan usage";
+
 /// The window's plan-usage state.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct State {
@@ -37,7 +40,7 @@ impl Default for State {
 pub struct View {
     /// `"42% · 15:30"` (FR-004, FR-008).
     pub label: String,
-    /// One line per current window, the threshold line when one is reached, and when the reading
+    /// The provider heading, one line per current window, the threshold line when one is reached, and when the reading
     /// was obtained (FR-006, FR-009).
     pub details: Vec<String>,
     /// A current window is at or above the threshold: the warning look (FR-010). Only the look
@@ -74,9 +77,13 @@ impl State {
             return None;
         }
         let current = self.reading.as_ref()?.current(now)?;
+        // The reading is Claude Code's status-line data whichever provider is active, so the
+        // tooltip names it (BUG-788).
+        let mut details = vec![PROVIDER_HEADING.to_string()];
+        details.extend(current.details(self.warn, now, offset));
         Some(View {
             label: current.label(now, offset),
-            details: current.details(self.warn, now, offset),
+            details,
             warning: !current.warning(self.warn).is_empty(),
         })
     }

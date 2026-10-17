@@ -127,6 +127,7 @@ pub const USAGE_LONG_LABEL: &str = "100% · Mon 15:30";
 pub const USAGE_WARNING_LABEL: &str = "86% · 15:30";
 /// The details of [`USAGE_LABEL`].
 pub const USAGE_DETAILS: &[&str] = &[
+    "Claude Code plan usage",
     "5-hour: 42%, resets 15:30",
     "Weekly: 18%, resets Thu 12:00",
     "Updated 11:58",

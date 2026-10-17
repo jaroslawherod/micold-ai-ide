@@ -81,6 +81,7 @@ fn the_view_is_the_headline_label_and_every_window_in_the_details() {
     assert_eq!(
         view.details,
         vec![
+            "Claude Code plan usage".to_string(),
             "5-hour: 42%, resets 15:30".to_string(),
             "Weekly: 18%, resets Thu 12:00".to_string(),
             "Updated 11:58".to_string(),
