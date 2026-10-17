@@ -48,8 +48,12 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Tasks | 1 | 8c8b1867192c49ca20905789073b9d034edea94d:c04615ca1903b069dda6cd168be6441c8cd53ad3 | CLEAN (3 MINOR, fixed: T043 TrackFocus gate clause, M3/M4 Satisfies, M3 tier light→full; headless `claude -p` reviewer) |
 | M1 review A (high) | 1 | 59c30ec23ec1de722ae5a94cf995f13aa19871b2:326551152b14bb2d44a697360ac33e50e792aac0 | CLEAN (3 MINOR: F1 validate doc comment fixed, F2 branch requirement bound once fixed, F3 per-draft helper declined: one expression, two call sites; headless `claude -p` reviewer) |
 | M1 review B (conformance, sonnet) | 1 | 6fa0fac3e1b420be05805ee20dcb0a99c86719fd:f0bd268aba57da8d9996615e081ff25b58e56fbe | CLEAN (1 MINOR: rename tests' red not observed by a run, noted in tdd/cycle-log.md); Verify ok |
+| M2 review A (high) | 1 | 05fbd8e4a4925031fcf50837ca94cdfad025cb2f:7b2045850367e7e33008f0bed82b190ef6b503c4 | CLEAN (headless `claude -p`) |
+| M2 review B (conformance, sonnet) | 1 | 05fbd8e4a4925031fcf50837ca94cdfad025cb2f:7b2045850367e7e33008f0bed82b190ef6b503c4 | CHANGES: F1 MAJOR red phase not recorded (fixed: cycle-log row 8), F2 MINOR declined; Verify ok (core 11, daemons 5, settings 112, call sites 3) |
 
 ## Declined review findings
+
+- M2 review B F2 (MINOR, `SettingsPlanUsageWarn` listed unconditionally): declined. `ui/settings/environment.rs` always adds the Warn-at field (`controls.extend([plan_usage, plan_usage_warn.into()])`), and `validate` always checks it, so the list is exact; the task text's "only while shown" has no hidden case in this code.
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
@@ -68,4 +72,4 @@ None.
 
 - Spec review round 2 MINOR (rename-dialog files, container fields): addressed in research.md R4 and R5.
 - jaro 2026-10-17: "currently it works in way that you click submit and first field that fails validation is marked but should be all at once". The spec already says so (edge case *Several required fields empty at once*). M4 and M5 tests must cover two or more empty required fields all reading `Missing` after one submit/save, including Settings and the daemon form. M2's `required_fields` lists every field with its own `empty`, so no field hides behind the first.
-- M2: `ctests` for T016/T017 were written after the code (the unit wrote the lists and views in one pass); their red phase was not observed. Mutation-style check: each test asserts the exact field list, so dropping a field fails it.
+- M2: the T016/T017 tests were written after the code; review B F1 (MAJOR) asked for the red phase. Fixed: observed by stubbing the lists, 10 of 14 tests failed, recorded in tdd/cycle-log.md row 8.
