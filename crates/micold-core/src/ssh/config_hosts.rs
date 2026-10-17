@@ -146,8 +146,7 @@ fn read_included(ssh_dir: &Path, home: &Path, pattern: &str) -> Vec<String> {
         Some(rest) => home.join(rest),
         None => ssh_dir.join(pattern),
     };
-    let (Some(dir), Some(name)) = (path.parent(), path.file_name().and_then(|n| n.to_str()))
-    else {
+    let (Some(dir), Some(name)) = (path.parent(), path.file_name().and_then(|n| n.to_str())) else {
         return Vec::new();
     };
     let mut names: Vec<_> = match std::fs::read_dir(dir) {
@@ -205,12 +204,17 @@ mod tests {
 
     #[test]
     fn parse_g_reads_the_effective_hostname_user_port_and_timeout() {
-        let out = "user dev\nhostname 10.0.0.5\nport 2222\nconnecttimeout 7\nidentityfile ~/.ssh/id\n";
+        let out =
+            "user dev\nhostname 10.0.0.5\nport 2222\nconnecttimeout 7\nidentityfile ~/.ssh/id\n";
         let e = parse_g(out);
         assert_eq!(e.hostname, "10.0.0.5");
         assert_eq!(e.user.as_deref(), Some("dev"));
         assert_eq!(e.port, Some(2222));
-        assert_eq!(e.timeout_secs(), 7, "the user's ConnectTimeout is the deadline");
+        assert_eq!(
+            e.timeout_secs(),
+            7,
+            "the user's ConnectTimeout is the deadline"
+        );
     }
 
     #[test]

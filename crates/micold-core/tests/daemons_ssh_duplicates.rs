@@ -14,7 +14,9 @@ fn ssh(host: &str, user: Option<&str>, port: Option<u16>) -> DaemonRuntime {
 #[test]
 fn a_second_daemon_for_the_same_host_user_and_port_is_refused_naming_the_first() {
     let mut r = DaemonRegistry::default();
-    let first = r.add("One", ssh("box", Some("me"), Some(22)), false).unwrap();
+    let first = r
+        .add("One", ssh("box", Some("me"), Some(22)), false)
+        .unwrap();
     assert_eq!(
         r.add("Two", ssh("BOX", Some("me"), None), false),
         Err(RegistryError::SshDuplicate { other: first }),
@@ -27,7 +29,9 @@ fn a_different_user_or_port_is_a_different_daemon() {
     let mut r = DaemonRegistry::default();
     r.add("One", ssh("box", Some("me"), None), false).unwrap();
     assert!(r.add("Two", ssh("box", Some("you"), None), false).is_ok());
-    assert!(r.add("Three", ssh("box", Some("me"), Some(2222)), false).is_ok());
+    assert!(r
+        .add("Three", ssh("box", Some("me"), Some(2222)), false)
+        .is_ok());
 }
 
 #[test]
@@ -41,7 +45,9 @@ fn two_aliases_of_one_machine_are_refused_when_ssh_resolves_them_alike() {
         parse_g(out).identity()
     };
     let mut r = DaemonRegistry::default();
-    let first = r.add_resolved("One", ssh("a", None, None), false, &resolve).unwrap();
+    let first = r
+        .add_resolved("One", ssh("a", None, None), false, &resolve)
+        .unwrap();
     assert_eq!(
         r.add_resolved("Two", ssh("b", None, None), false, &resolve),
         Err(RegistryError::SshDuplicate { other: first })

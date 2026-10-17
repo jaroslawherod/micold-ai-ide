@@ -16,8 +16,8 @@ pub mod system;
 pub mod target;
 
 pub use argv::{ClientPlatform, SshCommand};
-pub use config_hosts::{EffectiveSsh, SshIdentity};
 pub use classify::{ReasonContext, SshFailure};
+pub use config_hosts::{EffectiveSsh, SshIdentity};
 pub use provision::{Artefacts, ProvisionProgress, SshHost, SshOutput, SshRunner};
 pub use reconnect::Backoff;
 pub use remote_path::{RemoteLocation, RemotePathError};
