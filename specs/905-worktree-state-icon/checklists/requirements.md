@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain
+- [x] No [NEEDS CLARIFICATION] markers remain
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
@@ -31,9 +31,7 @@
 
 ## Notes
 
-- Three `[NEEDS CLARIFICATION]` markers are left open on purpose for the clarify unit: (1) whether
-  a mid-turn question (not a permission) is Blocked or Idle / waiting (Terms, FR-003); (2) whether
-  a location with several sessions takes its state from all of them or from its main session alone
-  (Edge Cases, FR-004); (3) whether a session with unknown activity shows Idle / waiting or no icon
-  (Edge Cases, FR-005).
+- The three `[NEEDS CLARIFICATION]` markers (mid-turn question, several sessions, unknown
+  activity) were resolved in the clarify unit (spec *Clarifications*, Session 2026-10-17); none
+  remain. Confirmed by the tasks review.
 - Items marked incomplete require spec updates before `/speckit-clarify` or `/speckit-plan`

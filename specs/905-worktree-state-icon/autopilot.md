@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-h057j5
 - **Started**: 2026-10-17
 - **Phase**: tasks
-- **Next step**: tasks unit
+- **Next step**: open the design PR; after its merge, milestone M1
 
 ## Pull requests
 
@@ -41,6 +41,7 @@ M1 holds 17 tasks (over the ~10 of milestones.md rule 3): it is Foundational + U
 | Spec review | 1 | 2148471a6892a9acfe8441d5914d9cacd029f1e4:bfdc456e3ecbab4afa9c30045923409081433f23 | CHANGES: 1 MAJOR, 2 MINOR (all fixed) |
 | Spec review | 2 | 047d8dca47a8242fd7e54bccd72425e87b1e87dc:bfdc456e3ecbab4afa9c30045923409081433f23 | CLEAN: 2 MINOR (fixed, prose only) |
 | Plan review | 1 | 7ff73d272ce69913ac4b831931834346e5e5a681:7093a3877e09df8c0b61a273d62ad507a90888f6 | CLEAN: no findings |
+| Tasks review | 1 | 09001da43f215b58f9b3a1028df23f2279894dc7:cd966ec8f3b1df26c9b4c8ee1af19cfe0bbb0fcd | CLEAN: 1 MINOR (checklist item ticked, prose only) |
 
 ## Declined review findings
 
