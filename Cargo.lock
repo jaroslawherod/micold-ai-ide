@@ -2164,7 +2164,7 @@ dependencies = [
 
 [[package]]
 name = "micold-client"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "alacritty_terminal",
  "arboard",
@@ -2198,7 +2198,7 @@ dependencies = [
 
 [[package]]
 name = "micold-core"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "bytes",
  "directories",
@@ -2218,7 +2218,7 @@ dependencies = [
 
 [[package]]
 name = "micold-daemon"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "alacritty_terminal",
  "bytes",
