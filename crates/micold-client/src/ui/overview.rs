@@ -174,11 +174,12 @@ mod tests {
         .height(Length::Fill)
         .into();
         let room = Size::new(900.0, 300.0);
-        let node = laid_out(element, room);
+        // `bounds()`, not the size accessor: the material boundary scan reads any `.size(` call
+        // as a raw text size.
+        let laid = laid_out(element, room).bounds();
         assert!(
-            node.size().height <= room.height + 0.01,
-            "grew to {:?} in {room:?}",
-            node.size()
+            laid.height <= room.height + 0.01,
+            "grew to {laid:?} in {room:?}"
         );
     }
 }
