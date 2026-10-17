@@ -21,6 +21,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #883 | M2 | merged | ce4dbafccc49cfe6ad011d64b556c1ac5c9e9214 |
 | #895 | M3 | merged | 8a04f4206330fa7552531e4694e2244b186d345f |
 | #918 | M4 | merged | 402b31f667bec7632cfe284acd65c59549085fc8 |
+| #964 | M5 | open | — |
 
 ## Milestones
 
@@ -30,7 +31,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T028–T038 | full | Remote projects, worktrees and sessions | #883 | done |
 | M3 | T039–T050 | full | Reconnect after a network drop | #895 | done |
 | M4 | T051–T055 | full | Local work unaffected, concurrent clients | #918 | done |
-| M5 | T056–T065 | full | Host picker, failure reasons, daemon management | — | pending |
+| M5 | T056–T065 | full | Host picker, failure reasons, daemon management | #964 | in review |
 | M6 | T066–T072 | full | Version mismatch explained | — | pending |
 | M7 | T073–T081 | full | Replace a mismatched daemon with no sessions | — | pending |
 | M8 | T082–T084 | full | Remote daemon artefact for macOS and Windows | — | pending |
