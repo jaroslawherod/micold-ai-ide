@@ -67,3 +67,11 @@ list. Append only.
   implementation, so no recorded red. Green: `--lib overview_placement`: `1 passed`.
 - **Button/docs**: toolbar button has no unit test (built from `Button`/`Tooltip`); docs checked by
   `documentation-set` and `check-user-guide-updated` scripts and `--test icons`: all pass.
+- **Review fixes (F1-F4, G1)**: `starting_a_session_closes_the_overview` and
+  `opening_changes_closes_the_overview` (tests/overview.rs) red first (`2 failed` at `assert!(!state.overview.open)`),
+  green after the root closes the Overview on `Session::Started`, `ChangesRequested` and
+  `ChangesClosedForCompare`: `--test overview`: `17 passed`.
+- **Layout/toolbar**: `thirty_cards_lay_out_bounded_in_a_short_window` (ui/overview.rs) and
+  `the_overview_button_needs_an_active_project_and_no_settings` (toolbar.rs) were written with the
+  fix, no recorded red. The key-order test moved into `ui::overview::tests` (G1: `ui/mod.rs` keeps
+  no inline test module). `leaves`/`overlap` now live in `test_support`. Green: `--lib`: `657 passed`.

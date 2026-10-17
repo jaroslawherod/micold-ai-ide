@@ -109,13 +109,18 @@ pub fn view<'a>(state: &State, scheme: ColorScheme) -> Element<'a, Message> {
 /// The Overview button (feature 813, contract U2): after the project switcher, shown whether or not
 /// the Overview is open, and inert while Settings is open (research R2).
 fn overview_button<'a>(state: &State, r: tokens::Roles) -> Element<'a, Message> {
-    let settings_open = state.settings.settings_draft.is_some();
     let button = Button::text("Overview", r)
         .leading(Icon::Overview)
-        .on_press_maybe(
-            (!settings_open).then_some(Message::Overview(OverviewMsg::Toggled { settings_open })),
-        );
+        .on_press_maybe(overview_press(state));
     Tooltip::new(button, "Overview", r).into()
+}
+
+/// What the Overview button sends: nothing while Settings is open or no project is active, since
+/// the Overview only draws inside an active project.
+fn overview_press(state: &State) -> Option<Message> {
+    let settings_open = state.settings.settings_draft.is_some();
+    (!settings_open && state.workspace.active.is_some())
+        .then_some(Message::Overview(OverviewMsg::Toggled { settings_open }))
 }
 
 /// The usage indicator for `now` in the zone `offset`, or `None` when nothing is shown (feature
@@ -155,6 +160,17 @@ mod tests {
             }],
             obtained_at: NOON,
         }
+    }
+
+    /// F3: the Overview button is inert with no active project, and while Settings is open.
+    #[test]
+    fn the_overview_button_needs_an_active_project_and_no_settings() {
+        let mut state = State::default();
+        assert!(overview_press(&state).is_none(), "no project");
+        state.workspace.active = Some(std::path::PathBuf::from("/repo"));
+        assert!(overview_press(&state).is_some());
+        state.settings.settings_draft = Some(Default::default());
+        assert!(overview_press(&state).is_none(), "settings open");
     }
 
     /// U3: the indicator is in the bar only with the switch on and a current reading.

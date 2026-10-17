@@ -414,3 +414,31 @@ fn building_thirty_locations_with_three_sessions_each_is_fast() {
     assert_eq!(cards(&state).len(), 31);
     assert!(started.elapsed() < std::time::Duration::from_secs(1));
 }
+
+/// FR-023: starting a session hands the main area to its terminal, so the Overview closes.
+#[test]
+fn starting_a_session_closes_the_overview() {
+    let mut state = project_with(Vec::new());
+    state.overview.open = true;
+    let session = Session::start_new(SessionLocation::Default, AiCli::ClaudeCode);
+    state.update(Message::Session(
+        micold_client::features::session::Msg::Started(session),
+    ));
+    assert!(!state.overview.open);
+}
+
+/// FR-023: opening the Changes view hands the main area to it, so the Overview closes.
+#[test]
+fn opening_changes_closes_the_overview() {
+    let mut state = project_with(vec![worktree(
+        "feat-a",
+        Some("feat/a"),
+        WorktreeStatus::Valid,
+        false,
+    )]);
+    state.overview.open = true;
+    state.update(Message::Sidebar(
+        micold_client::features::sidebar::Msg::ReviewChangesRequested(wt("feat-a")),
+    ));
+    assert!(!state.overview.open);
+}

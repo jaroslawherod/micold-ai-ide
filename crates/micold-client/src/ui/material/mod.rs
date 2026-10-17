@@ -144,7 +144,7 @@ mod tag;
 mod terminal_pane;
 /// The headless renderer the in-crate component tests share.
 #[cfg(test)]
-mod test_support;
+pub mod test_support;
 mod text;
 mod text_area;
 mod text_field;

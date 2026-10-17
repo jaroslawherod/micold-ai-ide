@@ -60,6 +60,7 @@ counts are split off as M2 along acceptance scenario 3. Polish T070–T071 chang
 | Plan | 1 | a87de0fcfc292f91a22bf5eed48bbb38ce5f826e:2b103a91d9ac9fc083447d12fbfc68629dc01877 | CHANGES (F1 MAJOR: alternatives missing in R7/R12/R13/R14, F2 MINOR: ProgressBar vs StageProgress; both fixed, prose only) |
 | Tasks | 1 | 0434f4af333fc87f0250ee05e67d0bda684de551:86d6baaac0c3f6bc0d2544cb19bad7681f594131 | CHANGES (F1 MAJOR: M5 Verify gave cargo two filters, fixed; F2 MINOR checklist note, F3 MINOR [P] on T007/T008, fixed; F4 MINOR declined) |
 | Tasks | 2 | 5f969cc13bac9d5706f57bb7d0cc3b1de8c919c0:86d6baaac0c3f6bc0d2544cb19bad7681f594131 | CLEAN (sonnet, scoped) |
+| M1 review A (code-review high) | 1 | a788a747a73dad0b4fd79f50fe1e929c9fa9b067:a9d57c2caafecd4e3dbdade759c913e7ede04768 | CHANGES (F1 MAJOR nested scrollable, F2 MAJOR other main-area openers leave Overview open, F3/F4 MINOR fixed; F5 F6 MINOR declined) |
 
 ## Declined review findings
 
@@ -68,6 +69,8 @@ counts are split off as M2 along acceptance scenario 3. Polish T070–T071 chang
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| M1 | A r1 | F5 MINOR empty `hook_activity`/`task_progress` modules | T001 registers them in M1 by design (tasks.md); M5/M6 fill them |
+| M1 | A r1 | F6 MINOR `CardModel` clone per layout pass | 30 cards of short strings; SC-007 bound met; not worth an `Rc` API now |
 
 ## Handover
 
