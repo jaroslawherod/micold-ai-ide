@@ -19,7 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #787 | Design PR | merged | 8e1cdcce24199789f214b1ae153a9199863cb2e4 |
 | #824 | M1 | merged | 6f578693808230b11552a7a47db3bc7214a40e84 |
 | #916 | M2 | merged | 6898a677ce98be25a1fca4a55af813ad36955170 |
-| PR | M3 | open | |
+| #962 | M3 | open | |
 
 ## Milestones
 
@@ -27,7 +27,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T016, T025, T038 | full | Origin recorded by the daemon's `record_origin` (nothing sets it until M3), persisted, exposed on wire and MCP; spike T025 outcome recorded | #824 | merged |
 | M2 | T017–T024, T039 | full | Sidebar nests children with child/pending/removed markers | #916 | merged |
-| M3 | T026–T031, T040 | full | Provider readers for spike-confirmed providers, discovery, provider table | PR | PR open |
+| M3 | T026–T031, T040 | full | Provider readers for spike-confirmed providers, discovery, provider table | #962 | PR open |
 | M4 | T032–T037, T041 | full | Fold, count, attention rollup, persisted fold | | pending |
 
 ## Decisions
