@@ -10,20 +10,21 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #946
 - **Worktree branch**: claude/project-thread-jjniz9
 - **Started**: 2026-10-17
-- **Phase**: milestone M1
-- **Next step**: M1 PR open (orchestrator opens it from the scratchpad title/body), then CI and merge; then M2
+- **Phase**: milestone M2
+- **Next step**: M2 implement (T019–T034)
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #950 | design (spec, plan, tasks) | merged (rebase) | 1a621e02d4181bd2120a6febb9d121397ce27872 |
+| #969 | M1 | merged (rebase); `remote daemon over a real sshd` failed once in ssh_real_concurrent (timing, unrelated), passed on re-run | e12d7c2c4849b3e6b2b6a283c8f0224e9b63fe05 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T018 | full | Send review types the documented batch with C-references; review file v2, protocol 49 | pending (pushed; orchestrator opens) | gate green at 3cf671f3 |
+| M1 | T001–T018 | full | Send review types the documented batch with C-references; review file v2, protocol 49 | #969 | merged |
 | M2 | T019–T034 | full | report_review_comment; cards show Applied/Answered and replies in every window, after restart | | planned |
 | M3 | T035–T046 | full | Mark a Sent comment by hand; read a full reply | | planned |
 | M4 | T047–T056 | full | Review panel: rows, counts, jump, draft edit/delete, panel buttons | | planned |

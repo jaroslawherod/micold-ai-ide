@@ -42,7 +42,7 @@ impl From<ReviewError> for Refusal {
         let kind = match err {
             ReviewError::Invalid(_) => ErrorKind::InvalidInput,
             ReviewError::NotFound => ErrorKind::NotFound,
-            ReviewError::Refused => ErrorKind::Refused,
+            ReviewError::Refused | ReviewError::Draft => ErrorKind::Refused,
             ReviewError::InSend | ReviewError::Busy => ErrorKind::Busy,
             ReviewError::NothingPending | ReviewError::RefTaken => ErrorKind::InvalidInput,
         };
