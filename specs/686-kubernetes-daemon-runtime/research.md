@@ -1,10 +1,13 @@
 # Research: Kubernetes session daemon runtime (#686)
 
-Each decision names what was chosen, why, and what was rejected. The image source (K1, K2, K3) and
-the clone source (K8) are deliberately self-contained: FR-004 and FR-007 run on orchestrator
-defaults pending the owner's decision cards (ledger Decisions 1-3), and a different answer replaces
-only those sections and the modules they name (`micold-core/src/daemon_image/`,
-`micold-core/src/kube/clone.rs`, the `RepoClone` op), not the pod, tunnel or lifecycle design.
+Each decision names what was chosen, why, and what was rejected.
+
+**Revision 2 (2026-10-17)**: the owner replaced the image design (ledger decisions 8-10): the pod
+runs a basic image with an SSH server, the client copies its own daemon in over SSH and installs the
+AI CLIs on start, with one mechanism shared with the local container runtime, built by #806 and
+consumed here. K1-K4 and K12 are rewritten; K0, K6, K7 and K10 are amended; the build, tag and push
+decisions of revision 1 (old K1-K3), the in-pod loopback listener without a token (old K4) and the
+kind registry (old K12) are gone. The clone source (K8) is unchanged.
 
 ## K0. Talking to the cluster: the `kube` crate in the client, a port in core
 
@@ -20,12 +23,10 @@ backend choice (`ureq`, feature 533): no C/NASM toolchain on Windows.
 
 **Why**: `kube` reads kubeconfig (merged `KUBECONFIG` list, contexts, exec credential plugins, client
 certificates, OIDC) exactly as `kubectl` does, and its `ws` feature gives the API's port-forward as an
-in-process `AsyncRead + AsyncWrite` stream, so no local listener exists at all (FR-006 is stronger
-than "loopback only"). The user needs no `kubectl` installed, which the spec's Assumptions do not
-promise.
+in-process `AsyncRead + AsyncWrite` stream, which the loopback relay of K2 hands to the user's `ssh`.
+The user needs no `kubectl` installed, which the spec's Assumptions do not promise.
 
-No hash crate is added: the daemon key (K5) and the image-inputs hash (K2) use the core's existing
-`protocol::hashing::sha256_hex`.
+No hash crate is added: the daemon key (K5) uses the core's existing `protocol::hashing::sha256_hex`.
 
 **Rejected**: shelling out to `kubectl` (an unstated runtime requirement; `kubectl port-forward`
 opens a loopback listener any local process can use; parsing its human output for failure reasons is
@@ -33,107 +34,91 @@ fragile); a hand-written REST client over `ureq` (re-implements exec plugins, au
 SPDY/WebSocket port-forward); `kube` in `micold-core` (pulls hyper, tower and rustls into the
 render-free crate the daemon also compiles; the core keeps only rules).
 
-## K1. Image source model: one shared `DaemonImageSource`, introduced here for #806
+## K1. The SSH image, daemon copy and AI CLI install: #806's shared mechanism, consumed here
 
-**Decision**: #806 is open and unimplemented (no `specs/806-*`, container daemons still use
-`sandbox::ImageSource` with `Registry | ImportedFile | LocalBuild`). This feature introduces the
-shared model #806 will adopt, in a new module `micold-core/src/daemon_image/`:
-`DaemonImageSource::Build { dockerfile: Option<PathBuf>, providers: BTreeSet<AiCli> }` (no
-Dockerfile = the app's own template) and `DaemonImageSource::Pull { reference: ImageRef }`, plus `DaemonResources { cpu_request,
-cpu_limit, memory_request, memory_limit }` (#806's resources fields; FR-005 needs a request settable
-apart from its limit, which `sandbox::ResourceBudget`'s single ceiling per resource cannot hold). The
-Kubernetes settings add `registry: Option<RegistryRepo>` beside it (FR-004: the build choice needs a
-registry). **Form**: no new settings file. The image-source and limits fields are extracted from
-`ui/settings/container_fields.rs`'s `sections` into functions in that same file (its "one copy of
-the fields" rule), drawn by the container form today and the Kubernetes form now; #806 switches the
-container form's source to `DaemonImageSource` without a second copy.
+**Decision**: #686 does not build images, push them, or carry its own copy of the daemon-provisioning
+code. It consumes one mechanism, built by the #806 run (owner, 2026-10-17), that both the local
+container runtime and this runtime use: (a) a basic **SSH image** with a published reference the
+client pins; (b) a **per-daemon key pair** and a host key; (c) **provisioning over SSH**, spec 489's
+probe, copy and bridge (`ssh::provision`, FR-005) generalised to a target reached on a loopback port
+with a pinned host key and with daemon environment passed through; (d) the **AI CLI install on
+start** into the volume, idempotent, streamed, cancellable and classified. What #686 needs from it is
+written down as [contracts/shared-ssh-image.md](./contracts/shared-ssh-image.md); #806's plan owns the
+module and its names (working name `micold-core/src/ssh_image/` in this feature's documents). Every
+#686 task that calls it is marked **blocked on #806** and sits in the last milestones.
 
-**Why**: the owner asked for one shared form (spec Overview). Building it here, isolated, means #806
-reuses it rather than reconciling two models; if #806 lands first with its own type, the Kubernetes
-settings hold that type instead and only `kube/image.rs` changes.
+Until #806 lands, the Kubernetes start sequence runs up to an open tunnel to the pod's SSH server
+(phases `Config` to `Tunnel`, K6) and is proven over `FakeCluster`; the Add form does not offer the
+Kubernetes runtime (FR-024, no half-wired UI) until the milestone that connects.
 
-**Rejected**: reusing `sandbox::ImageSource` (its default is the published release image FR-004
-forbids, and `ImportedFile` means nothing to a cluster); waiting for #806 (blocks this feature on an
-unscheduled one; the owner's comment asked for alignment, not ordering).
+**Why**: the owner chose the mechanism and its sharing; one copy means the local container and the
+pod cannot drift, and the daemon is always the client's own build (FR-017 by construction, as 489).
 
-## K2. Build inputs, tag and rebuild rule (#806's rule, deferred to the plan by clarify)
+**Rejected**: building the mechanism here first (the owner moved it to #806); a Kubernetes-only copy
+step through `pods/exec` (a second mechanism, and `exec` RBAC is broader than `portforward`); keeping
+revision 1's build → push → pull by digest (owner decision 9).
 
-**Decision**:
-- **Daemon binary**: a Linux build of this client's daemon for the chosen node architecture
-  (`KubeSettings.arch`, `amd64` default, or `arm64`), selected by the 489 artefact rule
-  (`ssh::provision::ArtefactChoice`): the client's own binary on a Linux client of that
-  architecture, else the bundled `<install>/remote-daemons/linux-<arch>/micold-daemon` (489 R3).
-- **Containerfile**: with no Dockerfile named, `daemon_image::containerfile::render(providers)`
-  renders the app's template, derived from `packaging/sandbox/Containerfile` (same base, same pinned
-  CLI versions read from its `ARG` lines at compile time with `include_str!`), installing only the
-  selected providers' CLIs, running as UID 10001, with `HOME=/data/home`, `XDG_DATA_HOME=/data/state`,
-  `TMPDIR=/tmp`. With a Dockerfile named, its directory is the build context and the daemon binary is
-  passed as the named build context `micold` (`--build-context micold=<tmp>`, BuildKit; docker ≥ 23,
-  podman ≥ 4.1); the user's Dockerfile copies it with `COPY --from=micold micold-daemon …`.
-- **Tag**: `<registry>/micold-daemon:<CARGO_PKG_VERSION>-<inputs>` where `<inputs>` is the first 12
-  hex of SHA-256 over (daemon binary bytes, rendered or user Containerfile bytes, sorted provider
-  list, `linux/<arch>`). Never a moving tag (`sandbox::image::MOVING_TAGS` check reused).
-- **Rebuild rule**: no rebuild on edit (story 5.2: settings apply on next start). On start, if the
-  local runtime has no image with that tag, build; then always push (a push of present layers
-  transfers nothing) and read the pushed digest. A changed provider set, Dockerfile, architecture or
-  client version changes the tag, so the next start rebuilds and pushes; nothing else does.
-- **Pod reference**: the image by digest (`<registry>/micold-daemon@sha256:…`), so the pod runs
-  exactly what was pushed even if the tag is re-pushed by another client.
+## K2. Reaching the pod's SSH server: port-forward behind a loopback relay
 
-**Why**: the version in the tag plus the digest reference make FR-017's mismatch impossible on the
-build path; the hash makes "selected CLIs changed" a rebuild without any stored state. Both are pure
-functions, testable in core.
+**Decision**: the pod's SSH server listens on the pod's loopback, `127.0.0.1:2222` (non-root cannot
+bind 22). spec 489 drives the user's own `ssh` binary (`ssh::argv`), which needs a TCP endpoint, so
+the client runs a **loopback relay** per connected daemon (`micold-client/src/kube/relay.rs`): a
+listener on `127.0.0.1:0`; each accepted connection opens a fresh `Cluster::port_forward(pod, 2222)`
+stream and copies bytes both ways. The SSH target handed to the shared provisioning is host
+`127.0.0.1`, the relay's port, the image's user, the daemon's client key, and the pinned host key
+under a per-daemon `HostKeyAlias` in a per-daemon known-hosts file (K3), so `StrictHostKeyChecking=yes`
+and `UpdateHostKeys=no` hold as in 489. The relay lives as long as the daemon's actor holds it and
+closes on disconnect, stop or remove. `Transport::Tunnel` (revision 1, T010/T017) is not needed: the
+protocol runs over 489's `Transport::Ssh`.
 
-**Rejected**: rebuild on every start (minutes per start, SC-001); rebuild on edit (an edit while the
-cluster is unreachable would fail the form); a stored "last built" record (stale across machines that
-share the daemon, spec 489 FR-021); `:latest` or version-only tags (a provider change would reuse a
-wrong image).
+**Why**: reuses 489's mechanism unchanged in shape (the owner's instruction); a loopback listener is
+inside FR-006 ("nothing beyond loopback"), and a local process that connects to it meets the SSH
+server's key-only login, not the daemon.
 
-## K3. Build, push and their bounds
+**Rejected**: `ProxyCommand` running the app's own executable as a relay (a second process that must
+re-read kubeconfig and re-run exec plugins); an in-process SSH client crate (a second SSH stack beside
+489's); `kubectl port-forward` (K0).
 
-**Decision**: build and push run through the local container runtime CLI already wrapped by
-`sandbox/cli.rs`: `CliRuntime<R: CommandRunner>` (the `ContainerRuntime` impl; `program_of(RuntimeKind)`
-picks docker or podman) gains inherent methods `build_image`, `push_image` and `repo_digest`. They
-are not `ContainerRuntime` trait methods: only the Kubernetes image step needs them, and adding them
-to the trait would force every runtime impl and fake to grow them. The tag-present check reuses the
-trait's `inspect_image`; output streams through `CommandRunner::run_streaming`; tests use the
-existing `RecordingRunner`. Output streams line by line into the daemon's diagnostics log
-(`DaemonDiagnostics::push_log`) and the row shows "Building image" / "Pushing image" with **Cancel**
-(kills the child). The phase fails at 30 minutes from its start (FR-012). Push authenticates with the
-runtime's own login; a refusal is classified (`not logged in`, `denied`, `unreachable`) naming the
-registry and the runtime's stderr (edge case "Registry push refused"). No runtime installed with the
-build choice: start fails with "a container runtime is needed to build; pulling a given image needs
-none".
+## K3. SSH access: per-daemon access secret, per-client keys, pinned host key (FR-008, FR-009)
 
-**Rejected**: an in-process image builder (`buildkit` client, kaniko in-cluster): the first needs a
-daemon anyway, the second needs cluster privileges the spec's Assumptions do not grant.
+**Decision**: one secret per daemon, `<base>-ssh-access`, labelled ours (K5), holds the pod's host
+key pair (`ssh_host_ed25519_key`, `.pub`) and `authorized_keys`, one line per client allowed to log
+in, each tagged with a client id comment. The client that first starts the daemon generates the host
+key pair and its own key pair with the shared mechanism's key generation; a later client (another
+computer, FR-023 / 489 FR-021) adds its public key to `authorized_keys` by an update guarded by the
+secret's `resourceVersion` (a `409` re-reads and retries), and reads the host public key from the
+secret through the cluster API, whose trust is the user's kubeconfig. Each client keeps its private
+key and the pinned host key in owner-only files under the app's data directory (`owner_only.rs`),
+keyed by the daemon key; never in settings, the cluster or logs. The image's SSH server reads
+`authorized_keys` straight from the mounted secret (so a key added later is seen without restarting
+the pod, after the kubelet's volume refresh; the `Tunnel` phase waits for a login within its bound),
+and copies the host key to `/tmp` with mode 0600 at startup (`sshd` refuses a group-readable host
+key). Remove deletes the secret and this client's key files.
 
-## K4. Daemon authentication inside the pod: loopback-only listener, no token
+**Why**: the private key never leaves the client (FR-008); the host key is pinned, so a replaced pod
+or secret is a refused mismatch, not a silent trust (edge case); several clients share one pod
+without recreating it.
 
-**Decision**: the pod sets `MICOLD_LISTEN_ADDR=127.0.0.1:7727` and `MICOLD_TOKEN_PATH=` (empty). The
-daemon gains one rule (`micold-core/src/protocol/auth.rs`, `listener_auth(addr, token_env)`): an
-empty token path is accepted **only** with a loopback listen address, and means "no token"; an empty
-path with a non-loopback address stays fatal (feature 027's rule unchanged). The API's port-forward
-dials the pod's own loopback, so the daemon is reachable by holders of `create pods/portforward`
-in the namespace, or by anything already running inside the pod, as with the sandbox's in-container
-token. (`pods/exec` is a separate RBAC subresource; the guard is stated in terms of
-`pods/portforward` alone.) A `listener_auth` table test keeps "empty path + non-loopback stays
-fatal".
+**Rejected**: one key shared by every client (it would have to travel between computers); a
+password or token in the pod spec (readable by `get pods`); trust on first use of the host key (the
+cluster API already gives an authenticated copy).
 
-**Why**: a token would have to reach the pod as a Kubernetes secret, which FR-009 and SC-004 forbid
-(0 secrets beyond those the user allowed) and which adds nothing: anyone who can read that secret can
-port-forward. Other pods cannot reach a pod's loopback.
+## K4. Revision 1's in-pod loopback listener without a token: removed
 
-**Rejected**: a token secret (violates FR-009/SC-004); the token as an env var in the pod spec
-(readable by anyone who can `get pods`); binding `0.0.0.0` (reachable from every pod in the cluster
-when no NetworkPolicy exists).
+**Decision**: the daemon is reached through 489's bridge over SSH, so it never listens for the
+port-forward. The `listener_auth` rule (`protocol/auth.rs`) and `adopt_auth_token`'s empty-token path
+in `micold-daemon/src/server.rs`, done in M1a (T008, T016) but unmerged, are reverted; feature 027's
+rule (an empty token path is fatal) stands unchanged.
+
+**Why**: a relaxed authentication path with no caller is a liability (Constitution: no dead code; a
+security check loosened for nothing).
 
 ## K5. Resource identity, ownership and races (FR-003, FR-016, FR-023)
 
 **Decision**: every resource is named deterministically from the daemon key
 `key = sha256_hex(context ‖ 0 ‖ namespace ‖ 0 ‖ daemon name)[..8]` (`protocol::hashing`):
-`micold-<slug(name)>-<key>` (pod), `…-data` (PVC), `…-git-credentials`, `…-git-ssh`, `…-gitconfig`,
-`…-signin-<cli>`, `…-pull` (secrets). `slug` is DNS-1123, at most 40 characters. Every resource
+`micold-<slug(name)>-<key>` (pod), `…-data` (PVC), `…-ssh-access` (K3), `…-git-credentials`,
+`…-git-ssh`, `…-gitconfig`, `…-signin-<cli>`, `…-pull` (secrets). `slug` is DNS-1123, at most 40 characters. Every resource
 carries labels `app.kubernetes.io/managed-by=micold-ai-ide` and `micold.dev/daemon=<key>` and the
 annotation `micold.dev/daemon-name=<name>`. A resource is **ours** only when both labels match.
 Create is `POST`; `409 AlreadyExists` → `GET`: ours → adopt (the race loser reuses the winner's pod,
@@ -152,46 +137,58 @@ StatefulSet (spec Assumption: bare pod; a controller would recreate a pod the us
 **Decision**: start is a fixed sequence of phases in `micold-core/src/kube/start.rs`, a pure state
 machine over `Cluster` results, each with its bound: (1) `Config` load kubeconfig, context, exec
 plugin — 120 s; (2) `Preflight` namespace `GET` and `SelfSubjectAccessReview` for `create pods`,
-`create persistentvolumeclaims`, `create secrets` (only when some are allowed), `create pods/portforward`,
-`delete pods` — 120 s, so RBAC denial is reported before anything is created (story 4.1); (3) `Image`
-build and push — 30 min, live, cancellable (Pull choice skips it); (4) `Volume` ensure PVC — 120 s;
-(5) `Secrets` reconcile — 120 s; (6) `Pod` create or adopt — 120 s; (7) `Schedule` until
-`PodScheduled=True` — 120 s; (8) `Pull` until the container is no longer `ContainerCreating` with a
-pull in progress — 15 min; (9) `Tunnel` port-forward and handshake — 120 s. Failure classes
-(`KubeFailure`) come from pure classifiers over API status codes and pod/PVC conditions and events:
-`Forbidden { verb, resource }` (403 or a denied review), `ImagePull { image, message }`
+`create persistentvolumeclaims`, `create secrets`, `update secrets`, `create pods/portforward`,
+`delete pods` — 120 s, so RBAC denial is reported before anything is created (story 4.1); (3) `Volume`
+ensure PVC — 120 s; (4) `Secrets` reconcile the access secret (K3) and the allowed ones — 120 s;
+(5) `Pod` create or adopt — 120 s; (6) `Schedule` until `PodScheduled=True` — 120 s; (7) `Pull` until
+the container is no longer `ContainerCreating` with a pull in progress — 15 min; (8) `Tunnel` the
+relay (K2) up and an SSH login accepted with the pinned host key — 120 s. Then the shared mechanism
+(K1, **blocked on #806**): (9) `Copy` probe, copy if absent, start — 120 s; (10) `Install` the AI
+CLIs — 15 min, live, cancellable; (11) `Connect` the 489 bridge and handshake — 120 s. Failure
+classes (`KubeFailure`) come from pure classifiers over API status codes and pod/PVC conditions and
+events: `Forbidden { verb, resource }` (403 or a denied review), `ImagePull { image, message }`
 (`ErrImagePull`, `ImagePullBackOff`, `InvalidImageName` — reported on first sight, not after the
 bound), `Unschedulable { message }` (`PodScheduled=False, reason=Unschedulable`), `ClaimNotBound
 { message }` (PVC `ProvisioningFailed` event, or the scheduler's "unbound immediate
 PersistentVolumeClaims"), `ContextMissing`, `NamespaceMissing`, `Unreachable`, `ExecPlugin`,
-`Build`, `Push`, `Conflict`, `PhaseTimeout { phase }`. A failed start deletes what this attempt
-created (pod, secrets; the PVC only if this attempt created it), by name and UID (FR-013).
+`Conflict`, `ImageContract { image, missing }` (the container exits or the SSH server never answers
+on 2222), `HostKeyMismatch`, `PhaseTimeout { phase }`, `Cancelled`, and the shared mechanism's own
+failures (copy, start, install; their texts are #806's) wrapped as `Provision(..)`. A failed start
+deletes what this attempt created (pod, secrets; the PVC only if this attempt created it), by name
+and UID (FR-013); a client key added to an adopted access secret in this attempt is removed again.
 
 **Why**: a phase list with one bound each is the spec's FR-012 text made data; each classifier is a
 table test.
 
-**Rejected**: one overall timeout (an image pull legitimately takes minutes while RBAC denial must not
-wait for it); watching with informers (a `GET` poll every second within a phase is enough for one pod
+**Rejected**: one overall timeout (an image pull or a CLI install legitimately takes minutes while RBAC
+denial must not wait for it); watching with informers (a `GET` poll every second within a phase is enough for one pod
 and much simpler to fake).
 
 ## K7. Pod shape and secrets (FR-006, FR-008, FR-009, US3)
 
-**Decision**: one container, `restartPolicy: Always`, `automountServiceAccountToken: false` (else the
+**Decision**: one container running the SSH image (#806's pinned reference, or the user's), command
+left to the image, `restartPolicy: Always`, `automountServiceAccountToken: false` (else the
 service-account token would be a secret the user did not allow), `enableServiceLinks: false`,
 pod `securityContext { runAsNonRoot, runAsUser: 10001, runAsGroup: 10001, fsGroup: 10001,
 seccompProfile: RuntimeDefault }`, container `securityContext { readOnlyRootFilesystem: true,
-allowPrivilegeEscalation: false, capabilities.drop: [ALL] }`; volumes: the PVC at `/data`, an
-`emptyDir` at `/tmp`; `resources.requests`/`resources.limits` from `DaemonResources` (each key only when set, FR-005); `nodeSelector` = user's plus
-`kubernetes.io/arch=<arch>` on the build choice; `tolerations` as given; env `MICOLD_LISTEN_ADDR`,
-`MICOLD_TOKEN_PATH=` (K4), `MICOLD_IDLE_STOP=off` (the pod's lifetime is the user's Stop, not the
-30-minute idle rule; else an idle exit would read as "pod gone"). Allowed secrets are mounted
+allowPrivilegeEscalation: false, capabilities.drop: [ALL] }`; volumes: the PVC at `/data` (the image
+user's home `/data/home`, the copied daemon under it per 489's `remote_dir`, the AI CLIs, `/data/repos`),
+an `emptyDir` at `/tmp`, the access secret (K3) read-only at `/run/micold/ssh` (`defaultMode: 0440`);
+`resources.requests`/`resources.limits` from `DaemonResources` (each key only when set, FR-005);
+`nodeSelector` and `tolerations` as given (the daemon's architecture is found by 489's probe, so no
+arch selector is added). The SSH server's port is never declared as a `containerPort`. The pod's env
+reaches the SSH server, not the daemon (sshd starts sessions with a clean environment), so the daemon's
+environment — `MICOLD_IDLE_STOP=off` (the pod's lifetime is the user's Stop), `MICOLD_REPOS_ROOT=/data/repos`
+(K8), and each allowed credential's variables — is passed by the shared provisioning's start step
+(contract shared-ssh-image §3), built by `kube/credentials.rs`. Allowed secrets are mounted
 read-only at fixed paths: `/run/micold/creds/git-credentials` (git `credential.helper store --file`
 via `GIT_CONFIG_*` env), `/run/micold/creds/ssh/{id,known_hosts}` (`GIT_SSH_COMMAND` with
 `IdentitiesOnly=yes`, `StrictHostKeyChecking=yes`, the user's known-hosts lines for the remote's host
 only), `/data/home/.gitconfig` (subPath), each sign-in at its provider's `sandbox_auth_file` path
-under `HOME` (subPath). Image-pull secret in `imagePullSecrets` only when allowed. Withdrawn secrets
-(ours, not in the allow-list) are deleted in phase 5. No Service, Ingress, `hostPort`, `hostNetwork`
-or `containerPort` is ever written; a manifest test asserts it.
+under `HOME` (subPath). Image-pull secret in `imagePullSecrets` only when allowed (a private user
+image). Withdrawn secrets (ours, not in the allow-list) are deleted in the `Secrets` phase. No
+Service, Ingress, `hostPort`, `hostNetwork` or `containerPort` is ever written; a manifest test
+asserts it.
 
 **Credential kinds** (`KubeCredential`): `GitConfig`, `GitCredentials`, `GitSshKey { key file }`,
 `SignIn(AiCli)`, `RegistryPull { auths file }`. Not `SshAgent`: an agent socket cannot reach a pod
@@ -247,12 +244,13 @@ only); asking the user for the plugin path (a field per cloud vendor).
 ## K10. Reconnect and "pod gone" (FR-010, FR-011, FR-023, US2)
 
 **Decision**: the 489 actor loop and `Backoff` are reused unchanged; the Kubernetes dial is one more
-`Dial` arm. Before each re-dial the actor `GET`s the pod: `404` or a `deletionTimestamp` → gone
+`Dial` arm (relay up, then 489's bridge over it). Before each re-dial the actor `GET`s the pod: `404` or a `deletionTimestamp` → gone
 ("the pod was deleted"), `status.reason = Evicted` → evicted (with its message), `phase = Unknown` or
 the node `NotFound` → node lost; on gone, the actor emits a new `DaemonEvent::Gone(reason)`, the state
 becomes `Stopped` with that reason, sessions are marked `lost to its daemon`, and the actor stops
 without recreating anything. A transient API error keeps `Reconnecting`. Sessions survive the client
-(FR-010) because the daemon is the pod's process; reconnection reads the catalog and history as 489
+(FR-010) because the daemon runs detached in the pod, as 489's does on a host, and outlives the SSH
+connection; reconnection reads the catalog and history as 489
 does. Another client's Stop or Remove reaches this client by the same check (FR-023).
 
 ## K11. Stop, Remove and the unreachable case (FR-014, FR-015)
@@ -263,24 +261,25 @@ daemon. When the cluster is unreachable the confirmation lists the deterministic
 and offers "Forget locally"; nothing in the cluster is touched. The confirmations reuse 491's
 bound-worktree counts and the running-session count from the catalog.
 
-## K12. CI: a kind cluster with a local registry in the job (FR-021)
+## K12. CI: a kind cluster, the SSH image loaded into it (FR-021)
 
 **Decision**: a new Linux CI job `kube-cluster` (beside `ssh-remote`, same `classify` docs-only skip)
-installs `kind` and `kubectl` at pinned versions with checksums, starts a `registry:2` container on
-`localhost:5001`, creates a kind cluster whose containerd mirrors `localhost:5001` to that registry
-(kind's documented local-registry recipe), and runs `cargo test -p micold-client --features
-kube-real-runtime kube_real_ -- --test-threads=1`. The suite uses the **build** choice with a test
-Dockerfile (the app's template plus the stand-in AI CLI installed as `claude`), pushing to the job's
-registry, so the default image path (build → push → pull by digest) is exercised for real. RBAC denial
-uses a kubeconfig context for a ServiceAccount whose Role lacks `create pods` (and one lacking
-`pods/portforward`), from `kubectl create token`; image-pull failure names a digest absent from the
-registry; unschedulable uses a node selector no node has. Locally: `mise run test-kube` (needs docker,
-kind, kubectl; creates and deletes its own cluster `micold-kube-test`). Off by default (cargo feature).
+installs `kind` and `kubectl` at pinned versions with checksums, creates a kind cluster, makes the SSH
+image available to it (pulled by the cluster from its published reference, or, for a stand-in test
+image built from #806's image plus the stand-in AI CLI's package, `kind load docker-image`), and runs
+`cargo test -p micold-client --features kube-real-runtime kube_real_ -- --test-threads=1`. The
+stand-in AI CLI is installed on start like any CLI, from a package source reachable from the pod
+(a local directory on the volume or a file server in the job, per #806's install contract). RBAC
+denial uses a kubeconfig context for a ServiceAccount whose Role lacks `create pods` (and one lacking
+`pods/portforward`), from `kubectl create token`; image-pull failure names an image reference that does
+not exist; unschedulable uses a node selector no node has; install failure points the stand-in CLI at
+an unreachable source. Locally: `mise run test-kube` (needs docker, kind, kubectl; creates and deletes
+its own cluster `micold-kube-test`). Off by default (cargo feature). The suite runs after #806 lands
+(**blocked on #806**).
 
-**Why**: a registry in the job is what the product does (push then pull); `kind load docker-image`
-would skip the push and digest steps the default path depends on.
+**Why**: no registry is part of the product any more, so none is part of the test.
 
-**Rejected**: `kind load docker-image` (bypasses FR-004's push); k3d or minikube (kind is the
+**Rejected**: a `registry:2` in the job (revision 1; nothing pushes now); k3d or minikube (kind is the
 smallest to run on a GitHub runner and is what Kubernetes' own CI uses); a long-lived shared cluster
 (cost, credentials in CI, cross-run interference).
 
