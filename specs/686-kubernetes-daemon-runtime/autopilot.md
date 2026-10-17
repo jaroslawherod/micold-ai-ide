@@ -81,7 +81,26 @@ stash@{0} survivors ("686 M1a red WIP"; never drop it; backed up in /mnt/project
 
 ## Handover
 
-None.
+M1a unit 1 (context cap). Rebased onto origin/main (branch-start REBASED 14). Done and committed:
+T020/T026 (kubeconfig, U45–U48), T108/T113 (names: `access_secret`, `all_secrets(&allowed)`,
+`ObjectKind::noun`; U18–U21, U120), `Quantity::{to_k8s, parse_k8s}` (U117, part of T107/T112);
+cycle-log "M1a, unit 1". Next, in order (one red then green each; inner loop
+`cargo test -p micold-core --lib kube::` via build-lock with the cloud env vars):
+1. U26 T109/T114 classify: rev-2 variants (`ImageContract{image,missing}`, `HostKeyMismatch{pod}`,
+   `StopTimeout{pod}` "pod <pod> was not gone within 120 s", `Api{status,message}` "the cluster
+   answered <status>: <message>", `Unavailable`), drop `NoRuntime/Build/Push/VolumeTooSmall`,
+   `From<ApiFailure>` (stash@{0}).
+2. U121 T110/T115 fake/mod: `Cluster::replace(ns, kind, name, resource_version, manifest)` (needs
+   `resource_version` on `ObjectView`), drop `node_arch`/`set_node`, `hold_on_delete` (stash),
+   `port_forward` records the port (already logged as `port_forward <pod> <port>`).
+3. U8, U11, U12, U118, U119 T106/T107/T111/T112: move `DaemonResources` + its 3 tests to
+   `core/daemon_resources.rs`, delete `core/daemon_image/`; `KubeSettings` gets `image:
+   Option<ImageRef>` (ImageRef has no serde: string adapter), `providers: BTreeSet<AiCli>`
+   (`new(context, namespace, enabled: &[AiCli])`), drops `registry`/`arch`/`RegistryRepo`/`NodeArch`.
+4. U13–U16 T143: rework `core/tests/daemons_kube.rs` to rev-2 settings.
+5. T116: `git checkout origin/main -- crates/micold-core/src/protocol/auth.rs
+   crates/micold-daemon/src/server.rs crates/micold-core/src/connect.rs` (Verify: diff empty).
+Then verify.md (scoped gate + review A, review B), scripts/gate.sh, push, PR files in scratchpad.
 
 ## Open escalation
 

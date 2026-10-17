@@ -4,7 +4,7 @@
 //! same three find the same objects (FR-016, FR-023), and the objects can be listed for "Forget
 //! locally" without asking the cluster.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::kube::credentials::KubeCredential;
 use crate::protocol::hashing::sha256_hex;
@@ -112,6 +112,19 @@ impl ResourceNames {
             KubeCredential::SignIn { cli } => format!("{}-signin-{}", self.base, cli_slug(*cli)),
             KubeCredential::RegistryPull { .. } => self.pull_secret(),
         }
+    }
+
+    /// The secret holding the pod's SSH host key and the client's public key (contract §1).
+    pub fn access_secret(&self) -> String {
+        format!("{}-ssh-access", self.base)
+    }
+
+    /// Every secret name the daemon owns with `allowed`: the access secret first, then one per
+    /// allowed credential.
+    pub fn all_secrets(&self, allowed: &BTreeSet<KubeCredential>) -> Vec<String> {
+        std::iter::once(self.access_secret())
+            .chain(allowed.iter().map(|credential| self.secret(credential)))
+            .collect()
     }
 
     /// The image pull secret.
@@ -225,6 +238,35 @@ mod tests {
         for name in [long.pod(), long.secret(&KubeCredential::GitCredentials)] {
             assert!(is_dns_1123(&name), "{name} fits a DNS-1123 label");
         }
+    }
+
+    #[test]
+    fn the_access_secret_is_the_base_with_ssh_access() {
+        let n = ResourceNames::new("kind-dev", "dev", "Build box");
+        assert_eq!(n.access_secret(), format!("{}-ssh-access", n.pod()));
+        let long = ResourceNames::new("c", "n", &"x".repeat(80));
+        assert!(is_dns_1123(&long.access_secret()));
+    }
+
+    #[test]
+    fn all_secrets_lists_the_access_secret_first_then_one_per_allowed_credential() {
+        let n = ResourceNames::new("kind-dev", "dev", "Build box");
+        assert_eq!(
+            n.all_secrets(&BTreeSet::new()),
+            vec![n.access_secret()],
+            "with nothing allowed only the access secret"
+        );
+        let allowed = BTreeSet::from([
+            KubeCredential::GitCredentials,
+            KubeCredential::SignIn { cli: AiCli::Pi },
+            KubeCredential::RegistryPull { auths: "/a".into() },
+        ]);
+        let all = n.all_secrets(&allowed);
+        assert_eq!(all[0], n.access_secret(), "the access secret comes first");
+        let rest: BTreeSet<String> = all[1..].iter().cloned().collect();
+        let want: BTreeSet<String> = allowed.iter().map(|c| n.secret(c)).collect();
+        assert_eq!(rest, want, "then exactly one name per allowed credential");
+        assert_eq!(all.len(), 1 + allowed.len());
     }
 
     #[test]

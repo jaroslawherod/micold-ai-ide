@@ -94,6 +94,59 @@ pub struct Toleration {
 #[serde(transparent)]
 pub struct Quantity(pub u64);
 
+impl Quantity {
+    /// The quantity as a manifest writes it: whole `Ti`, `Gi`, `Mi` or `Ki` when exact, else bytes.
+    pub fn to_k8s(self) -> String {
+        BINARY_UNITS
+            .iter()
+            .find(|(_, size)| self.0 >= *size && self.0 % size == 0)
+            .map_or_else(
+                || self.0.to_string(),
+                |(unit, size)| format!("{}{unit}", self.0 / size),
+            )
+    }
+
+    /// Read a Kubernetes quantity (`10Gi`, `500M`, `1073741824`); `None` for anything else.
+    pub fn parse_k8s(text: &str) -> Option<Self> {
+        let split = text
+            .find(|c: char| !c.is_ascii_digit())
+            .unwrap_or(text.len());
+        let (digits, suffix) = text.split_at(split);
+        if digits.is_empty() {
+            return None;
+        }
+        let multiplier = match suffix {
+            "" => 1,
+            _ => BINARY_UNITS
+                .iter()
+                .chain(DECIMAL_UNITS.iter())
+                .find(|(unit, _)| *unit == suffix)
+                .map(|(_, size)| *size)?,
+        };
+        digits
+            .parse::<u64>()
+            .ok()?
+            .checked_mul(multiplier)
+            .map(Quantity)
+    }
+}
+
+/// Binary suffixes, largest first.
+const BINARY_UNITS: [(&str, u64); 4] = [
+    ("Ti", 1 << 40),
+    ("Gi", 1 << 30),
+    ("Mi", 1 << 20),
+    ("Ki", 1 << 10),
+];
+
+/// Decimal suffixes a quantity may be read with.
+const DECIMAL_UNITS: [(&str, u64); 4] = [
+    ("T", 1_000_000_000_000),
+    ("G", 1_000_000_000),
+    ("M", 1_000_000),
+    ("k", 1_000),
+];
+
 /// A Kubernetes daemon's settings.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct KubeSettings {
@@ -316,6 +369,48 @@ impl<'de> Deserialize<'de> for Toleration {
     fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
         let raw = String::deserialize(d)?;
         Toleration::parse(&raw).map_err(|_| serde::de::Error::custom("invalid toleration"))
+    }
+}
+
+#[cfg(test)]
+mod quantity_tests {
+    use super::*;
+
+    #[test]
+    fn a_quantity_is_written_in_the_largest_exact_binary_unit() {
+        assert_eq!(Quantity(10 * GIB).to_k8s(), "10Gi");
+        assert_eq!(Quantity(1024 * GIB).to_k8s(), "1Ti");
+        assert_eq!(Quantity(1536 * 1024 * 1024).to_k8s(), "1536Mi");
+        assert_eq!(Quantity(GIB + 1).to_k8s(), (GIB + 1).to_string());
+    }
+
+    #[test]
+    fn a_quantity_is_read_with_binary_decimal_or_no_suffix() {
+        assert_eq!(Quantity::parse_k8s("10Gi"), Some(Quantity(10 * GIB)));
+        assert_eq!(Quantity::parse_k8s("2Ti"), Some(Quantity(2048 * GIB)));
+        assert_eq!(Quantity::parse_k8s("512Mi"), Some(Quantity(512 << 20)));
+        assert_eq!(Quantity::parse_k8s("4Ki"), Some(Quantity(4096)));
+        assert_eq!(Quantity::parse_k8s("5G"), Some(Quantity(5_000_000_000)));
+        assert_eq!(Quantity::parse_k8s("7M"), Some(Quantity(7_000_000)));
+        assert_eq!(Quantity::parse_k8s("3k"), Some(Quantity(3_000)));
+        assert_eq!(Quantity::parse_k8s("1T"), Some(Quantity(1_000_000_000_000)));
+        assert_eq!(Quantity::parse_k8s("1073741824"), Some(Quantity(GIB)));
+        assert_eq!(Quantity::parse_k8s(""), None);
+        assert_eq!(Quantity::parse_k8s("Gi"), None);
+        assert_eq!(Quantity::parse_k8s("1.5Gi"), None);
+        assert_eq!(Quantity::parse_k8s("10Xi"), None);
+    }
+
+    #[test]
+    fn writing_then_reading_is_the_same_quantity() {
+        for q in [
+            Quantity(GIB),
+            Quantity(10 * GIB),
+            Quantity(GIB + 7),
+            Quantity(3 << 20),
+        ] {
+            assert_eq!(Quantity::parse_k8s(&q.to_k8s()), Some(q));
+        }
     }
 }
 
