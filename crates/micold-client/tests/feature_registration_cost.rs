@@ -104,6 +104,38 @@ const ALLOWED_CROSS_FEATURE_NAMES: &[(&str, &str, &str)] = &[
          A second enum owned by settings would be the same list written twice (feature 027, T075)",
     ),
     (
+        "project",
+        "window",
+        "FieldId — the draft's `required_fields()` keys each required field by the id the window \
+         already gives it for focus, so the required marks and the focus speak of one field the \
+         same way; a second key enum owned by the draft would be the same list written twice \
+         (feature 937, T009–T011)",
+    ),
+    (
+        "runs",
+        "window",
+        "FieldId — the draft's `required_fields()` keys each required field by the id the window \
+         already gives it for focus, so the required marks and the focus speak of one field the \
+         same way; a second key enum owned by the draft would be the same list written twice \
+         (feature 937, T009–T011)",
+    ),
+    (
+        "worktree",
+        "window",
+        "FieldId — the draft's `required_fields()` keys each required field by the id the window \
+         already gives it for focus, so the required marks and the focus speak of one field the \
+         same way; a second key enum owned by the draft would be the same list written twice \
+         (feature 937, T009–T011)",
+    ),
+    (
+        "worktree_form",
+        "window",
+        "FieldId — the draft's `required_fields()` keys each required field by the id the window \
+         already gives it for focus, so the required marks and the focus speak of one field the \
+         same way; a second key enum owned by the draft would be the same list written twice \
+         (feature 937, T009–T011)",
+    ),
+    (
         "settings",
         "session",
         "CliAvailability — the settings form composes FR-023b's sentence about a CLI that is \
