@@ -63,6 +63,16 @@ fn expected(icon: Icon) -> char {
         Icon::StateRunning => '\u{e037}',
         Icon::StateBlocked => '\u{f052}',
         Icon::StateIdle => '\u{e034}',
+        Icon::Overview => '\u{e871}',
+        Icon::CardNeedsAction => '\u{e645}',
+        Icon::CardNeedsAttention => '\u{e8f4}',
+        Icon::CardDone => '\u{e86c}',
+        Icon::TypeFeature => '\u{e0f0}',
+        Icon::TypeBugfix => '\u{e868}',
+        Icon::TypeChore => '\u{e869}',
+        Icon::TypeOther => '\u{e2c7}',
+        Icon::TypeIncluded => '\u{e157}',
+        Icon::TypeOrphan => '\u{eb83}',
     }
 }
 
@@ -100,8 +110,10 @@ fn all_covers_every_variant_without_duplicates() {
     // indicator (`data_usage`) and +1 for its warning look (`warning`), +1 for feature 533's Jira
     // settings section (`assignment`; no other icon shares its codepoint), -1 for the Session service
     // section icon (`dns`) removed with the section (feature 804), +3 for feature 905's worktree
-    // state icon (`play_arrow`, `report`, `pause`).
-    assert_eq!(Icon::ALL.len(), 55, "curated set size");
+    // state icon (`play_arrow`, `report`, `pause`), +10 for feature 813's Overview (`dashboard`), its
+    // card states (`priority_high`, `visibility`, `check_circle`) and location types (`lightbulb`,
+    // `bug_report`, `build`, `folder`, `link`, `folder_off`).
+    assert_eq!(Icon::ALL.len(), 65, "curated set size");
 
     // No duplicate variants.
     for (i, &a) in Icon::ALL.iter().enumerate() {
@@ -170,6 +182,35 @@ fn the_three_state_icons_are_pinned_and_share_no_glyph_with_a_rows_other_marks()
         assert!(Icon::ALL.contains(&icon), "{icon:?} must be in Icon::ALL");
         assert_eq!(icon.glyph(), glyph, "{icon:?} codepoint");
         for other in row_marks {
+            assert_ne!(
+                icon.glyph(),
+                other.glyph(),
+                "{icon:?} must not share a glyph with {other:?}"
+            );
+        }
+    }
+}
+
+/// Feature 813 (research R11): the Overview's ten icons are pinned, in the vocabulary, and share no
+/// glyph with any other icon, so a card's type and state are told apart by shape.
+#[test]
+fn the_overview_icons_are_pinned_and_distinct_from_every_other_icon() {
+    let overview = [
+        (Icon::Overview, '\u{e871}'),
+        (Icon::CardNeedsAction, '\u{e645}'),
+        (Icon::CardNeedsAttention, '\u{e8f4}'),
+        (Icon::CardDone, '\u{e86c}'),
+        (Icon::TypeFeature, '\u{e0f0}'),
+        (Icon::TypeBugfix, '\u{e868}'),
+        (Icon::TypeChore, '\u{e869}'),
+        (Icon::TypeOther, '\u{e2c7}'),
+        (Icon::TypeIncluded, '\u{e157}'),
+        (Icon::TypeOrphan, '\u{eb83}'),
+    ];
+    for (icon, glyph) in overview {
+        assert!(Icon::ALL.contains(&icon), "{icon:?} must be in Icon::ALL");
+        assert_eq!(icon.glyph(), glyph, "{icon:?} codepoint");
+        for &other in Icon::ALL.iter().filter(|&&other| other != icon) {
             assert_ne!(
                 icon.glyph(),
                 other.glyph(),

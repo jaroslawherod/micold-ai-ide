@@ -51,6 +51,9 @@ pub struct Prompt {
     pub project: PathBuf,
     /// The calling session's display label.
     pub caller_label: String,
+    /// The calling session (the wire's `caller`), so the Overview can place the request on its
+    /// location (feature 813, research R5).
+    pub session: micold_core::session::SessionId,
     /// What the agent asks to do.
     pub operation: ConfirmOperation,
     /// The target's display name: a worktree's display name or a session's label.

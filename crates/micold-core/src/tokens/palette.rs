@@ -341,3 +341,43 @@ pub const DIFF_ADDED_DARK: Rgb = Rgb::hex(0x1E3A1E);
 pub const DIFF_REMOVED_LIGHT: Rgb = Rgb::hex(0xFFE0DB);
 /// The fill of a removed line in the dark scheme.
 pub const DIFF_REMOVED_DARK: Rgb = Rgb::hex(0x4A1E1B);
+
+// --- warning and success tones (feature 813, research R11) ------------------------------------
+//
+// No M3 ramp is yellow or green, so the Overview's Needs attention and Done states read their
+// colours from fixed tones per scheme, as the diff tints do: an amber and a green family, each
+// pair at 4.5:1 or more (`composition_contrast` checks it).
+
+/// `warning` in the light scheme.
+pub const WARNING_LIGHT: Rgb = Rgb::hex(0x765A00);
+/// `on_warning` in the light scheme.
+pub const ON_WARNING_LIGHT: Rgb = Rgb::hex(0xFFFFFF);
+/// `warning_container` in the light scheme.
+pub const WARNING_CONTAINER_LIGHT: Rgb = Rgb::hex(0xFFE08B);
+/// `on_warning_container` in the light scheme.
+pub const ON_WARNING_CONTAINER_LIGHT: Rgb = Rgb::hex(0x241A00);
+/// `warning` in the dark scheme.
+pub const WARNING_DARK: Rgb = Rgb::hex(0xEEC248);
+/// `on_warning` in the dark scheme.
+pub const ON_WARNING_DARK: Rgb = Rgb::hex(0x3E2E00);
+/// `warning_container` in the dark scheme.
+pub const WARNING_CONTAINER_DARK: Rgb = Rgb::hex(0x594400);
+/// `on_warning_container` in the dark scheme.
+pub const ON_WARNING_CONTAINER_DARK: Rgb = Rgb::hex(0xFFE08B);
+
+/// `success` in the light scheme.
+pub const SUCCESS_LIGHT: Rgb = Rgb::hex(0x2B6A2E);
+/// `on_success` in the light scheme.
+pub const ON_SUCCESS_LIGHT: Rgb = Rgb::hex(0xFFFFFF);
+/// `success_container` in the light scheme.
+pub const SUCCESS_CONTAINER_LIGHT: Rgb = Rgb::hex(0xB3F1AC);
+/// `on_success_container` in the light scheme.
+pub const ON_SUCCESS_CONTAINER_LIGHT: Rgb = Rgb::hex(0x002106);
+/// `success` in the dark scheme.
+pub const SUCCESS_DARK: Rgb = Rgb::hex(0x98D592);
+/// `on_success` in the dark scheme.
+pub const ON_SUCCESS_DARK: Rgb = Rgb::hex(0x00390E);
+/// `success_container` in the dark scheme.
+pub const SUCCESS_CONTAINER_DARK: Rgb = Rgb::hex(0x115219);
+/// `on_success_container` in the dark scheme.
+pub const ON_SUCCESS_CONTAINER_DARK: Rgb = Rgb::hex(0xB3F1AC);

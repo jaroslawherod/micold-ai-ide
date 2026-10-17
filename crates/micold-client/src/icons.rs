@@ -149,6 +149,26 @@ pub enum Icon {
     /// A worktree with nothing in progress, or waiting for the next prompt (feature 905) —
     /// `pause`, two bars.
     StateIdle,
+    /// The top bar's Overview button (feature 813) — `dashboard`.
+    Overview,
+    /// An Overview card that needs action (feature 813) — `priority_high`.
+    CardNeedsAction,
+    /// An Overview card that needs attention (feature 813) — `visibility`.
+    CardNeedsAttention,
+    /// An Overview card whose work is done (feature 813) — `check_circle`.
+    CardDone,
+    /// A feature worktree on its Overview card (feature 813) — `lightbulb`.
+    TypeFeature,
+    /// A bugfix worktree on its Overview card (feature 813) — `bug_report`.
+    TypeBugfix,
+    /// A chore (any other conventional type) worktree on its Overview card (feature 813) — `build`.
+    TypeChore,
+    /// A worktree with no conventional type on its Overview card (feature 813) — `folder`.
+    TypeOther,
+    /// An included worktree on its Overview card (feature 813) — `link`.
+    TypeIncluded,
+    /// A missing or invalid worktree on its Overview card (feature 813) — `folder_off`.
+    TypeOrphan,
 }
 
 impl Icon {
@@ -209,6 +229,16 @@ impl Icon {
         Icon::StateRunning,
         Icon::StateBlocked,
         Icon::StateIdle,
+        Icon::Overview,
+        Icon::CardNeedsAction,
+        Icon::CardNeedsAttention,
+        Icon::CardDone,
+        Icon::TypeFeature,
+        Icon::TypeBugfix,
+        Icon::TypeChore,
+        Icon::TypeOther,
+        Icon::TypeIncluded,
+        Icon::TypeOrphan,
     ];
 
     /// The font codepoint for this icon (Private Use Area; see `assets/fonts/PROVENANCE.md`).
@@ -284,6 +314,17 @@ impl Icon {
             Icon::StateRunning => '\u{e037}',
             Icon::StateBlocked => '\u{f052}',
             Icon::StateIdle => '\u{e034}',
+            // Feature 813's Overview (research R11).
+            Icon::Overview => '\u{e871}',
+            Icon::CardNeedsAction => '\u{e645}',
+            Icon::CardNeedsAttention => '\u{e8f4}',
+            Icon::CardDone => '\u{e86c}',
+            Icon::TypeFeature => '\u{e0f0}',
+            Icon::TypeBugfix => '\u{e868}',
+            Icon::TypeChore => '\u{e869}',
+            Icon::TypeOther => '\u{e2c7}',
+            Icon::TypeIncluded => '\u{e157}',
+            Icon::TypeOrphan => '\u{eb83}',
         }
     }
 }

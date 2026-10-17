@@ -13,6 +13,7 @@ use std::path::PathBuf;
 
 fn prompt(id: u64) -> Prompt {
     Prompt {
+        session: micold_core::session::SessionId(Default::default()),
         id,
         project: PathBuf::from("/fixture/project"),
         caller_label: "planner".to_string(),
