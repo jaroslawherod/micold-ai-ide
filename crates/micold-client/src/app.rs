@@ -116,6 +116,9 @@ pub enum Message {
     /// Everything the attach-existing-worktrees dialog says about itself (feature 582); see
     /// [`crate::features::attach::Msg`].
     Attach(crate::features::attach::Msg),
+    /// Everything the worktree Overview says about itself (feature 813); see
+    /// [`crate::features::overview::Msg`].
+    Overview(crate::features::overview::Msg),
     /// The OS window gained (`true`) or lost (`false`) input focus. Handled by the binary,
     /// which gates the terminal/OS-theme poll subscriptions on it so a backgrounded window
     /// doesn't keep burning CPU on ticks nothing is looking at (idle-CPU fix).
@@ -284,6 +287,8 @@ pub struct State {
     pub changes: crate::features::changes::State,
     /// What Run in parallel holds (feature 483) -- see [`crate::features::runs::State`].
     pub runs: crate::features::runs::State,
+    /// What the worktree Overview holds (feature 813) -- see [`crate::features::overview::State`].
+    pub overview: crate::features::overview::State,
     /// What the notifications feature remembers — see
     /// [`crate::features::notifications::State`].
     ///
@@ -442,6 +447,8 @@ impl State {
             && self.changes.open.is_none()
             // Feature 483: so does Compare.
             && self.runs.compare.is_none()
+            // Feature 813: and so does the Overview.
+            && !self.overview.open
     }
 
     /// What decides which session this window has in view (feature 039, FR-002).
@@ -461,6 +468,7 @@ impl State {
             main_area_taken: self.settings.settings_draft.is_some()
                 || self.changes.open.is_some()
                 || self.runs.compare.is_some()
+                || self.overview.open
                 || !window.holds_project,
             selected: self.session.active,
         }
@@ -918,6 +926,7 @@ impl State {
                 let outcomes = crate::features::worktree::update(self, msg);
                 drain(outcomes, |outcome| interpret(self, outcome));
             }
+            Message::Overview(msg) => crate::features::overview::update(&mut self.overview, msg),
             Message::Runs(msg) => {
                 let outcomes = crate::features::runs::routed(self, msg);
                 drain(outcomes, |outcome| interpret(self, outcome));

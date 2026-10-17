@@ -232,7 +232,9 @@ pub fn card_state(signals: &CardSignals) -> (CardState, CardReason) {
         PrSignal::Known { current: Some(pr), removable: true } if pr.merged
     );
     match signals.location {
-        LocationState::Blocked(BlockedReason::NeedsPermission) => (S::NeedsAction, R::NeedsPermission),
+        LocationState::Blocked(BlockedReason::NeedsPermission) => {
+            (S::NeedsAction, R::NeedsPermission)
+        }
         _ if signals.agent_request => (S::NeedsAction, R::AgentRequest),
         LocationState::Blocked(BlockedReason::Failed) => (S::NeedsAttention, R::SessionFailed),
         LocationState::Blocked(BlockedReason::Resumable) => (S::NeedsAttention, R::Resumable),
@@ -325,7 +327,11 @@ mod tests {
 
     #[test]
     fn the_project_root_is_its_own_type_whatever_else_holds() {
-        for status in [WorktreeStatus::Valid, WorktreeStatus::Missing, WorktreeStatus::Invalid] {
+        for status in [
+            WorktreeStatus::Valid,
+            WorktreeStatus::Missing,
+            WorktreeStatus::Invalid,
+        ] {
             for included in [false, true] {
                 assert_eq!(
                     location_type(&SessionLocation::Default, included, status),
@@ -338,7 +344,11 @@ mod tests {
 
     #[test]
     fn an_included_worktree_is_included_before_its_health_or_branch_type() {
-        for status in [WorktreeStatus::Valid, WorktreeStatus::Missing, WorktreeStatus::Invalid] {
+        for status in [
+            WorktreeStatus::Valid,
+            WorktreeStatus::Missing,
+            WorktreeStatus::Invalid,
+        ] {
             assert_eq!(
                 location_type(&worktree("feat-1_alpha"), true, status),
                 LocationType::Included,
@@ -360,9 +370,19 @@ mod tests {
 
     #[test]
     fn the_branch_type_decides_the_rest() {
-        assert_eq!(kind_of("feat-42_alpha"), LocationType::Feature, "feat is a feature");
-        assert_eq!(kind_of("fix-7_beta"), LocationType::Bugfix, "fix is a bugfix");
-        for token in ["chore", "docs", "refactor", "test", "build", "ci", "perf", "style"] {
+        assert_eq!(
+            kind_of("feat-42_alpha"),
+            LocationType::Feature,
+            "feat is a feature"
+        );
+        assert_eq!(
+            kind_of("fix-7_beta"),
+            LocationType::Bugfix,
+            "fix is a bugfix"
+        );
+        for token in [
+            "chore", "docs", "refactor", "test", "build", "ci", "perf", "style",
+        ] {
             assert_eq!(
                 kind_of(&format!("{token}-9_gamma")),
                 LocationType::Chore,
@@ -388,7 +408,15 @@ mod tests {
         .collect();
         assert_eq!(
             words,
-            ["Feature", "Bugfix", "Chore", "Other", "Included", "Orphan", "Project root"],
+            [
+                "Feature",
+                "Bugfix",
+                "Chore",
+                "Other",
+                "Included",
+                "Orphan",
+                "Project root"
+            ],
             "the card names each type by the spec's word"
         );
     }
@@ -478,14 +506,24 @@ mod tests {
             PrSignal::Unknown => None,
         };
         let open = current.filter(|pr| pr.open);
-        let removable = matches!(s.pr, PrSignal::Known { removable: true, .. });
+        let removable = matches!(
+            s.pr,
+            PrSignal::Known {
+                removable: true,
+                ..
+            }
+        );
         let rows: [(bool, CardState, CardReason); 9] = [
             (
                 s.location == LocationState::Blocked(BlockedReason::NeedsPermission),
                 CardState::NeedsAction,
                 CardReason::NeedsPermission,
             ),
-            (s.agent_request, CardState::NeedsAction, CardReason::AgentRequest),
+            (
+                s.agent_request,
+                CardState::NeedsAction,
+                CardReason::AgentRequest,
+            ),
             (
                 s.location == LocationState::Blocked(BlockedReason::Failed),
                 CardState::NeedsAttention,
@@ -535,7 +573,11 @@ mod tests {
     #[test]
     fn card_state_follows_the_table_for_every_combination_of_signals() {
         let all = every_signal();
-        assert_eq!(all.len(), 6 * 2 * 17, "every location × request × PR signal (SC-003)");
+        assert_eq!(
+            all.len(),
+            6 * 2 * 17,
+            "every location × request × PR signal (SC-003)"
+        );
         for signals in all {
             assert_eq!(
                 card_state(&signals),
@@ -704,7 +746,10 @@ mod tests {
             }),
             "the badge counts the cards in the worst state (FR-012)"
         );
-        let cards = [card("a", CardState::NeedsAttention), card("b", CardState::Idle)];
+        let cards = [
+            card("a", CardState::NeedsAttention),
+            card("b", CardState::Idle),
+        ];
         assert_eq!(
             attention(&cards),
             Some(Attention {
@@ -718,7 +763,11 @@ mod tests {
     #[test]
     fn attention_is_none_when_nothing_needs_the_user() {
         let cards = [card("a", CardState::Working), card("b", CardState::Done)];
-        assert_eq!(attention(&cards), None, "no badge without action or attention");
+        assert_eq!(
+            attention(&cards),
+            None,
+            "no badge without action or attention"
+        );
         assert_eq!(attention(&[]), None, "no badge without cards");
     }
 }
