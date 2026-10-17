@@ -22,7 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1a | T106–T116, T020, T026 | full | Revision-2 core types (settings with image/AI CLIs/DaemonResources, names, failures, Cluster.replace), kubeconfig; revision-1 listener auth, Transport::Tunnel, daemon_image reverted | — | planned (re-cut) |
+| M1a | T106–T116, T143, T020, T026 | full | Revision-2 core types (settings with image/AI CLIs/DaemonResources, names, failures, Cluster.replace), kubeconfig; revision-1 listener auth, Transport::Tunnel, daemon_image reverted | — | planned (re-cut) |
 | M1b | T019, T117, T118, T021, T025, T119, T120, T027, T121 | full | Pod, PVC, access secret, pod stamp/drift, start through Pull with bounds + rollback over FakeCluster | — | planned |
 | M1c | T122, T023, T123, T124, T125, T028, T029, T126, T127 | full | Tunnel phase (SSH identification line), LiveCluster, relay, key files | — | planned |
 | M2 | T079, T072, T056, T073, T081, T075, T059, T076, T128 | full | Core Stop/Remove/forget-locally; failure + pod-gone classifiers; preflight | — | planned |
@@ -34,7 +34,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M7 | T047–T055, T100 | full | (#806) Clone + worktrees in the pod (RepoClone) | — | blocked on #806 |
 | M8 | T057, T058, T060, T061, T062, T101 | full | (#806) Reconnect; pod gone → stopped with reason | — | blocked on #806 |
 | M9 | T088–T096, T105 | full | (#806) kube_real_* suite, `mise run test-kube`, CI job kube-cluster | — | blocked on #806 |
-Cut notes (revision 2): tasks.md "Revision 2 task map" lists kept/changed/removed T001–T105; new tasks T106–T142. Order: everything independent of #806 first (M1a–M4b, all `docs-not-needed`: Kubernetes cannot be added before M6), then the #806-blocked milestones (M5–M9). US1 split along the #806 boundary: connect (M5) before CLI install + Add entry (M6), so the Add entry appears only when US1.1 works (no half-wired UI). User-guide tasks T046/T071/T078/T087 folded into T033 (M6), since the guide page appears with the Add entry. Polish T097–T098: close unit.
+Cut notes (revision 2): tasks.md "Revision 2 task map" lists kept/changed/removed T001–T105; new tasks T106–T143 (T137 unused; T143 is M1a's persistence test rework). Order: everything independent of #806 first (M1a–M4b, all `docs-not-needed`: Kubernetes cannot be added before M6), then the #806-blocked milestones (M5–M9). US1 split along the #806 boundary: connect (M5) before CLI install + Add entry (M6), so the Add entry appears only when US1.1 works (no half-wired UI). User-guide tasks T046/T071/T078/T087 folded into T033 (M6), since the guide page appears with the Add entry. Polish T097–T098: close unit.
 stash@{0} survivors ("686 M1a red WIP"; never drop it; backed up in /mnt/project-files/backups/686-m1-wip.bundle): keep `kubeconfig.rs` (T020/T026), `lifecycle.rs` (T079/T081), `manifest.rs` (T019, after the SSH image/env/port 2222/access-secret mount changes), `start_tests.rs` (T021, drop the `Image` phase and the volume-size refusal; `Tunnel` = identification line), `Quantity::{to_k8s, parse_k8s}`, `ResourceNames::all_secrets`, `ObjectKind::noun`, `KubeFailure::StopTimeout` + `From<ApiFailure>`, `FakeCluster::hold_on_delete`. Discard `StartPlan::for_image`. Design revision part 4: plan fixed by tasks unit — data-model StartPlan and contract §3 item 1 say `Tunnel` reads the identification line from one `Cluster::port_forward` stream; the client relay is first used in M5.
 
 ## Decisions
@@ -66,6 +66,7 @@ stash@{0} survivors ("686 M1a red WIP"; never drop it; backed up in /mnt/project
 | Spec rev 2 | 1 | 9b02dde817655adc92898292c8f93e391c823d2e:4233f507b15954e5f2b3b193009816ee9ea8fd52 | CHANGES: 3 MAJOR, 3 MINOR — all fixed (F1 FR-023 shared-step concurrency + edge case; F2 keys in the access secret, per client per daemon, FR-015 remaining key; F3 CLI selection US5.1/FR-018, version pinned by client build in FR-004; F4 checklist note; F5 FR-005/US5.2 pod-settings drift offer; F6 FR-024 observable) |
 | Spec rev 2 | 2 (scoped, sonnet) | b07e424c9e2a84170a1b988315187afce6dfc70c:24f30ec4ba00e3835c53c0f7316fdc7421cf4a76 | CLEAN — 3 MINOR fixed, prose only (FR-024 per-client key pairs; FR-005 form notice on volume size; FR-004 running sessions of a deselected CLI keep running) |
 | Plan rev 2 | 1 | 41559a5d6d08b3aae87bb6486b442919a9827c2a:52d80e58149fb6943f8321d342526864d32ed8d1 | CLEAN — 3 MINOR fixed, prose only (Unavailable before #806; daemon_resources lands in #686 first; protocol 49 coordination) |
+| Tasks rev 2 | 1 | c1aab5ca46629522b51f6d4161cc2270a3155835:1ac015d23d158b44cb52d9cd09a5df7c4782b062 | CHANGES: 1 BLOCKER, 2 MAJOR, 2 MINOR — all fixed (F1 T116 keeps feature 027's `protocol/auth.rs`, restores it to origin/main, Verify checks it; F2 new T143 reworks `core/tests/daemons_kube.rs` in M1a; F3 M4a depends on M1c for context listing; F4 T020/T026 register `kubeconfig`; F5 T115 notes `StartPhase::Image` stays until T027) |
 
 ## Declined review findings
 
