@@ -89,14 +89,14 @@ one without a session) and one included worktree → five cards, the permission 
   case per arm and per conventional type (`chore`, `docs`, `refactor`, `test`, `build`, `ci`,
   `perf`, `style`); `LocationType::label()` words *Feature*, *Bugfix*, *Chore*, *Other*,
   *Included*, *Orphan*, *Project root*
-- [ ] T007 [P] [US1] Core tests in micold-core/src/overview.rs: `card_state` over every
+- [ ] T007 [US1] Core tests in micold-core/src/overview.rs: `card_state` over every
   `LocationState` variant × `agent_request` {false, true} × `PrSignal` {`Unknown`, `Known` with no
   current, current open/draft with each of `checks_failing`, `changes_requested`, `conflict`,
   current merged with `removable` true/false} against data-model's table rows 1–10 (state and
   reason), generated exhaustively (SC-003); invariants as named tests: `Unknown` PR never yields
   rows 5–7 or 9; `LocationState::Unknown` never yields Working or Done by itself; rows 5–7 only
   for an open or draft current pull request; several signals → the first row (US1.5)
-- [ ] T008 [P] [US1] Core tests in micold-core/src/overview.rs: `session_counts` skips archived
+- [ ] T008 [US1] Core tests in micold-core/src/overview.rs: `session_counts` skips archived
   sessions and counts running as 905 `session_state == Running` (US1.2: 3 sessions, 2 running);
   `order` is stable by state worst first with ties in input (sidebar) order (FR-007);
   `attention` returns the worst state with its card count only for NeedsAction or NeedsAttention,
@@ -474,7 +474,7 @@ prompt) and its todo ratio as current activity; otherwise US4's text.
 ## Parallel Example: US1 part A
 
 ```text
-T006, T007, T008 (core tests, one file but independent test fns — write together)
+T006 (core tests; T007 and T008 follow it in the same file, not in parallel)
 T009 features_agent_confirm.rs · T010 tests/overview.rs · T011 overview_card.rs · T012 card_grid.rs
 T013 composition_contrast.rs · T014 main_tests.rs
 ```
@@ -551,7 +551,7 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Satisfies**: US4 acceptance scenarios 1–5; FR-008 (files), FR-015, FR-016, FR-017, FR-019
   (titles, file reads off the UI thread), FR-020 (titles); edge cases malformed task list, several feature folders,
   issue unreadable
-- **Verify**: `cargo test -p micold-core task_progress naming`; `cargo test -p micold-client
+- **Verify**: `cargo test -p micold-core task_progress`; `cargo test -p micold-core naming`; `cargo test -p micold-client
   --test overview`; quickstart §B B2, B3, B4
 - **Depends on**: M1
 - **Tier**: full

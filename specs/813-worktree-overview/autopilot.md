@@ -12,12 +12,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-2lmupk
 - **Started**: 2026-10-17
 - **Phase**: tasks
-- **Next step**: tasks unit
+- **Next step**: design PR open (title/body in the orchestrator's scratchpad), then M1 after its merge
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
+| pending | design (spec, plan, tasks) | pushed, PR to open | — |
 
 ## Milestones
 
@@ -57,32 +58,20 @@ counts are split off as M2 along acceptance scenario 3. Polish T070–T071 chang
 |---|---|---|---|
 | Spec | 1 | c54be34533424e39665e73004ef6ce8f0cadc4e2:992e129808513fd43ef6b1982b4cb1881cdb0921 | CLEAN (3 MINOR: F1 F2 F3 fixed, prose only) |
 | Plan | 1 | a87de0fcfc292f91a22bf5eed48bbb38ce5f826e:2b103a91d9ac9fc083447d12fbfc68629dc01877 | CHANGES (F1 MAJOR: alternatives missing in R7/R12/R13/R14, F2 MINOR: ProgressBar vs StageProgress; both fixed, prose only) |
-| Tasks | 1 | 6fee9a748edfa497c671738cc192bea1a796dbf3:284b80d3b60da7197ae00f498ce616f8a47bf5fc | pending |
+| Tasks | 1 | 0434f4af333fc87f0250ee05e67d0bda684de551:86d6baaac0c3f6bc0d2544cb19bad7681f594131 | CHANGES (F1 MAJOR: M5 Verify gave cargo two filters, fixed; F2 MINOR checklist note, F3 MINOR [P] on T007/T008, fixed; F4 MINOR declined) |
+| Tasks | 2 | 5f969cc13bac9d5706f57bb7d0cc3b1de8c919c0:86d6baaac0c3f6bc0d2544cb19bad7681f594131 | CLEAN (sonnet, scoped) |
 
 ## Declined review findings
+
+- Tasks round 1 F4 (MINOR, T056/T057 fold their tests into the implementation task): each task
+  already says test first and names the test file; splitting is taste, left to the M5 implementer.
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
 
 ## Handover
 
-Tasks unit, handed over at the 150k context cap after step 2's analyze (rules/context.md).
-
-- **Done**: branch rebased onto origin/main (REBASED 6; not pushed); `speckit-tasks` wrote
-  tasks.md (T001–T071) with `## Milestones` M1–M6, all tier full, in the ledger; `speckit-analyze`
-  ran (no CRITICAL/HIGH) and its C1–C4, T1, D1–D3 findings are fixed in tasks.md and spec US2.5
-  (prose); D4, U1–U3 accepted as LOW. The plan unit's two points are settled as D11 (start menu
-  anchor: research R12 rewritten, T042/T046) and D12 (`on_disconnected` keeps sessions: R14).
-  Optional before/after_tasks hooks (docguard, tdd) skipped.
-- **Next**: tasks step 2's fresh review with rubrics/tasks.md (round 1, session model; snapshot
-  already in *Review rounds*, take a new one if the tree changed); then step 3 (checklist: all 16
-  items already ticked, reviewer confirms), step 4 Specs-only gate
-  (`scripts/check-criteria-observables.sh specs/813-worktree-overview/spec.md`), step 5 design PR:
-  title `#813: worktree overview with state-aware cards (sessions, PRs, task progress)` plus
-  pr.md's `(#813)` suffix per the orchestrator's override, body ending `Refs #813`, written to the
-  scratchpad, not opened (cloud: no gh; push with `scripts/gate.sh` recorded).
-- **Open findings**: none.
-- **PR**: none yet.
+None.
 
 ## Open escalation
 
