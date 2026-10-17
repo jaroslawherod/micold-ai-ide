@@ -20,6 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #845 | M1 | merged | cf40ca917492368b043af1fe321c15715e919b2d |
 | #883 | M2 | merged | ce4dbafccc49cfe6ad011d64b556c1ac5c9e9214 |
 | #895 | M3 | merged | 8a04f4206330fa7552531e4694e2244b186d345f |
+| #918 | M4 | open | — |
 
 ## Milestones
 
@@ -28,7 +29,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T027 | full | Remote over SSH daemon connects (add, start, Connected) | #845 | done |
 | M2 | T028–T038 | full | Remote projects, worktrees and sessions | #883 | done |
 | M3 | T039–T050 | full | Reconnect after a network drop | #895 | done |
-| M4 | T051–T055 | full | Local work unaffected, concurrent clients | — | in review |
+| M4 | T051–T055 | full | Local work unaffected, concurrent clients | #918 | in review |
 | M5 | T056–T065 | full | Host picker, failure reasons, daemon management | — | pending |
 | M6 | T066–T072 | full | Version mismatch explained | — | pending |
 | M7 | T073–T081 | full | Replace a mismatched daemon with no sessions | — | pending |
