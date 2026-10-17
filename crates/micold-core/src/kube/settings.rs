@@ -85,7 +85,7 @@ impl Quantity {
     pub fn to_k8s(self) -> String {
         BINARY_UNITS
             .iter()
-            .find(|(_, size)| self.0 >= *size && self.0 % size == 0)
+            .find(|(_, size)| self.0 >= *size && self.0.is_multiple_of(*size))
             .map_or_else(
                 || self.0.to_string(),
                 |(unit, size)| format!("{}{unit}", self.0 / size),
