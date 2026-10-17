@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-xelisc
 - **Started**: 2026-10-17
 - **Phase**: implement M1a
-- **Next step**: design revision (decisions 8, 9) before more implementation; then M1a T019 onward
+- **Next step**: design revision (decisions 8–10) before more implementation; then M1a T019 onward
 
 ## Pull requests
 
@@ -47,6 +47,7 @@ Cut notes: US1 (>10 tasks) split along its acceptance scenarios and the plan's s
 | 7 | implement M1 | M1 too large for one milestone: split? | split M1a (T001–T021, T025–T027, T079, T081; core over FakeCluster, Kubernetes not in the Add form) / M1b (T022–T024, T028–T033, T080, T082, T099; depends on M1a); later milestones depend on M1b | orchestrator | Open escalation of unit 3; tasks.md Milestones |
 | 8 | implement M1a | FR-004 provider CLIs in the pod | owner: "Install on start" — installed into the volume when the pod starts; works with pulled images; slower first start; pod needs outbound network. Replaces decision 2. Owner decision, design change pending: spec FR-004 / plan / tasks to be revised by a dedicated unit after M1a merges, before M2 | owner | decision card 2026-10-17T21:33Z |
 | 9 | implement M1a | FR-004 image source | owner (verbatim): "use basic image with ssh where you can copy daemon and install ai cli" — replaces decision 1: no build/push/registry; the pod runs a basic image with sshd, the client copies the daemon binary in over SSH and installs the AI CLIs (with decision 8). Changes the start sequence (no `Image` phase; a copy/install step) and likely the manifests. Design revision pending before more implementation | owner | owner instruction 2026-10-17T21:34Z |
+| 10 | implement M1a | Same mechanism for the local sandbox container? | owner (verbatim): "should use same mechanism for local \"sandbox\" container". Orchestrator default: #686 builds the sshd-image + copy-daemon-over-SSH + install-CLIs mechanism as a shared part both runtimes can use; moving the local sandbox container runtime onto it is #806's scope (commented there) | owner + orchestrator default | owner instruction 2026-10-17T21:35Z |
 
 ## Review rounds
 
@@ -70,8 +71,8 @@ Cut notes: US1 (>10 tasks) split along its acceptance scenarios and the plan's s
 
 ## Handover
 
-**Design revision pending before more implementation** (decisions 8 and 9: provider CLIs installed
-on start; basic image with sshd, daemon binary copied in over SSH — replaces FR-004's build/push and
+**Design revision pending before more implementation** (decisions 8, 9 and 10: provider CLIs installed
+on start; the mechanism shared with the local sandbox container (#806); basic image with sshd, daemon binary copied in over SSH — replaces FR-004's build/push and
 likely changes the start sequence and the manifests). Do not resume M1a until spec FR-004, plan and
 tasks are revised.
 
