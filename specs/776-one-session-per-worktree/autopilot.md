@@ -97,7 +97,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+Part 4: rebased on origin/main, fixed gate failures (daemon test fixtures now start siblings on purpose, commit 1e7a0782), fresh full gate running. Next: gate green, push, open M7 PR (visual pass already recorded, M4/M5/M6 evidence; M7 has none open).
 
 ## Open escalation
 
