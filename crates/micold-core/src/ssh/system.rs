@@ -14,6 +14,7 @@ use tokio::io::AsyncWriteExt;
 use super::argv::SshCommand;
 use super::provision::{Artefacts, ProvisionProgress, SshOutput, SshRunner};
 use super::stdio::SshStdio;
+use crate::provision::CancelToken;
 
 /// How much of an artefact is written between progress reports.
 const CHUNK: usize = 64 * 1024;
@@ -27,6 +28,9 @@ pub struct SystemSsh {
     pub bundled_dir: Option<PathBuf>,
     /// The `ssh` executable when it is not found by name (the Windows OpenSSH location).
     pub ssh_path: Option<PathBuf>,
+    /// When cancelled, a running child is killed and its run ends with
+    /// [`io::ErrorKind::Interrupted`] (feature 806, FR-019).
+    pub cancel: Option<CancelToken>,
 }
 
 impl SystemSsh {
@@ -61,7 +65,11 @@ impl SshRunner for SystemSsh {
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
+        let cancel = self.cancel.clone();
         Box::pin(async move {
+            if cancel.as_ref().is_some_and(CancelToken::is_cancelled) {
+                return Err(io::ErrorKind::Interrupted.into());
+            }
             let mut child = command.spawn()?;
             let mut pipe = child.stdin.take();
             let write = async move {
@@ -83,9 +91,19 @@ impl SshRunner for SystemSsh {
                 let (_, out) = tokio::join!(write, child.wait_with_output());
                 out
             };
-            let finished = match deadline {
-                Some(limit) => tokio::time::timeout(limit, both).await.ok(),
-                None => Some(both.await),
+            let bounded = async {
+                match deadline {
+                    Some(limit) => tokio::time::timeout(limit, both).await.ok(),
+                    None => Some(both.await),
+                }
+            };
+            let finished = match &cancel {
+                // Dropping `bounded` drops the child, which `kill_on_drop` killed.
+                Some(token) => tokio::select! {
+                    done = bounded => done,
+                    () = token.cancelled() => return Err(io::ErrorKind::Interrupted.into()),
+                },
+                None => bounded.await,
             };
             match finished {
                 // Dropping `both` dropped the child, which `kill_on_drop` killed.
@@ -144,6 +162,7 @@ mod tests {
             own_daemon: PathBuf::new(),
             bundled_dir: None,
             ssh_path: None,
+            cancel: None,
         }
     }
 
@@ -196,5 +215,33 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(seen.lock().unwrap().last(), Some(&100));
+    }
+
+    #[tokio::test]
+    async fn cancelling_the_token_kills_a_running_child() {
+        let token = CancelToken::new();
+        let mut ssh = runner();
+        ssh.cancel = Some(token.clone());
+        let started = std::time::Instant::now();
+        let waiting =
+            tokio::spawn(async move { ssh.run(sh("sleep 30"), Vec::new(), None, None).await });
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        token.cancel();
+        let err = waiting.await.unwrap().unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::Interrupted);
+        assert!(started.elapsed() < Duration::from_secs(10));
+    }
+
+    #[tokio::test]
+    async fn a_token_cancelled_beforehand_starts_nothing() {
+        let token = CancelToken::new();
+        token.cancel();
+        let mut ssh = runner();
+        ssh.cancel = Some(token);
+        let err = ssh
+            .run(sh("true"), Vec::new(), None, None)
+            .await
+            .unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::Interrupted);
     }
 }

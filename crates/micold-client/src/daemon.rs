@@ -24,12 +24,13 @@ use micold_core::endpoint::{self, DialAddress};
 use micold_core::protocol::codec::{CodecError, Frame};
 use micold_core::protocol::keepalive::{self, Keepalive, KeepaliveAction};
 use micold_core::protocol::messages::{ClientMsg, DaemonMsg};
+use micold_core::provision::{run as ssh_run, CancelToken, EventSink, ProvisionTarget};
 use micold_core::sandbox::placement::PlacementKind;
 use micold_core::ssh::argv::{current_build_id, DEFAULT_CONNECT_TIMEOUT_SECS};
-use micold_core::ssh::provision::{connect as ssh_connect, ProvisionOptions};
+use micold_core::ssh::provision::ProvisionOptions;
 use micold_core::ssh::reconnect::Backoff;
 use micold_core::ssh::remote_path;
-use micold_core::ssh::{ClientPlatform, ProvisionProgress, ReasonContext, SshHost, SshTarget};
+use micold_core::ssh::{ClientPlatform, ReasonContext, SshHost, SshTarget};
 
 use crate::app::Message;
 
@@ -466,8 +467,8 @@ async fn connect_and_pump(
             "no host endpoint",
         )),
         (Dial::Ssh { target }, _) => {
-            let progress = copy_progress(id, output);
-            match ssh_attempt(SSH_HOST.get().map(|h| &**h), target, Some(progress)).await {
+            let sink = provisioning_sink(id, output);
+            match ssh_attempt(SSH_HOST.get().map(|h| &**h), target, &sink).await {
                 Ok(c) => Ok(c),
                 // A link that was up and is down is retried; a start that never connected is
                 // reported once and ends the actor.
@@ -756,23 +757,24 @@ impl PumpEnd {
     }
 }
 
-/// A progress callback that publishes how much of the build has been copied as daemon state.
-/// A full channel drops a report: the next one carries a larger number.
-fn copy_progress(id: DaemonId, output: &mpsc::Sender<Message>) -> ProvisionProgress {
+/// An event sink that publishes each start step and the copy's progress as daemon state. A full
+/// channel drops an event: the next one carries a larger number or the next step.
+fn provisioning_sink(id: DaemonId, output: &mpsc::Sender<Message>) -> EventSink {
     let sender = std::sync::Mutex::new(output.clone());
-    std::sync::Arc::new(move |percent| {
+    std::sync::Arc::new(move |event| {
         if let Ok(mut sender) = sender.lock() {
-            let _ = sender.try_send(Message::daemon(id, ConnectionMsg::CopyProgress(percent)));
+            let _ = sender.try_send(Message::daemon(id, ConnectionMsg::Provisioning(event)));
         }
     })
 }
 
-/// One bring-up of an SSH daemon: provision, bridge and handshake, with a failure already in the
-/// user's words (FR-008). `None` is a process that installed no runner.
+/// One bring-up of an SSH daemon through the shared provisioning sequence: provision, bridge and
+/// handshake, with a failure already in the user's words (FR-008, FR-018). `None` is a process
+/// that installed no runner.
 async fn ssh_attempt(
     host: Option<&dyn SshHost>,
     target: &SshTarget,
-    progress: Option<ProvisionProgress>,
+    sink: &EventSink,
 ) -> Result<Connected, String> {
     let Some(host) = host else {
         return Err("this build cannot run `ssh`".to_string());
@@ -788,16 +790,25 @@ async fn ssh_attempt(
         build_id: current_build_id(),
         client_build: CLIENT_BUILD.to_string(),
     };
-    ssh_connect(host, target, &opts, progress)
-        .await
-        .map_err(|failure| {
-            failure.reason(&ReasonContext {
-                host: target.host.clone(),
-                port: target.port.unwrap_or(22),
-                timeout_secs,
-                platform,
-            })
+    let provisioned = ssh_run(
+        host,
+        &ProvisionTarget::user_host(
+            target,
+            std::time::Duration::from_secs(u64::from(timeout_secs)),
+        ),
+        &opts,
+        &CancelToken::new(),
+        sink,
+    )
+    .await;
+    provisioned.map(|p| p.connected).map_err(|failure| {
+        failure.reason(&ReasonContext {
+            host: target.host.clone(),
+            port: target.port.unwrap_or(22),
+            timeout_secs,
+            platform,
         })
+    })
 }
 
 async fn report(id: DaemonId, output: &mut mpsc::Sender<Message>, msg: ConnectionMsg) -> PumpEnd {
@@ -887,17 +898,21 @@ mod tests {
         assert!(actor_specs(&registry, &states, dir, None, false).is_empty());
     }
 
+    fn quiet() -> micold_core::provision::EventSink {
+        std::sync::Arc::new(|_| {})
+    }
+
     /// T011: a bring-up that cannot start `ssh` is a failure in words, with no retry loop behind
     /// it (the actor ends on it).
     #[tokio::test]
     async fn a_missing_ssh_is_reported_in_words_not_retried() {
         let target = SshTarget::new("build-box", None, None, None).unwrap();
-        let err = match ssh_attempt(Some(&NoSsh), &target, None).await {
+        let err = match ssh_attempt(Some(&NoSsh), &target, &quiet()).await {
             Ok(_) => panic!("no ssh cannot connect"),
             Err(e) => e,
         };
         assert!(err.to_lowercase().contains("ssh"), "{err}");
-        let none = ssh_attempt(None, &target, None)
+        let none = ssh_attempt(None, &target, &quiet())
             .await
             .err()
             .expect("no runner");

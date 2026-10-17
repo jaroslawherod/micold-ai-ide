@@ -30,12 +30,12 @@ Each step emits `ProvisionEvent::Entered(step)` first, runs under its bound, and
 
 | # | Step (`Step`, label shown) | What it runs | Skipped when |
 |---|---|---|---|
-| 1 | `Reach` — "connecting to the SSH server" | `ssh … true`, retried every 500 ms while the failure is `ConnectionRefused` / connection reset / `kex_exchange_identification` (sshd not up yet); any other failure is final | never |
+| 1 | `Reach` — "connecting to the SSH server" | `ssh … true` (a `UserHost` skips the command: the probe is its first connection, but the step is still entered), retried every 500 ms while the failure is `ConnectionRefused` / connection reset / `kex_exchange_identification` (sshd not up yet); any other failure is final | never |
 | 2 | `Probe` — "checking the daemon build" | 489 probe script (`sh -s` on stdin) → `os`, `arch`, `home_writable`, `have` | never |
 | 3 | `Copy` — "copying the daemon" | 489 copy, bytes on stdin, atomic rename; emits `CopyPercent`; re-probes | `have` |
 | 4 | `InstallAiClis` — "installing the AI CLIs" | fixed install script (`sh -s`, below) under `flock`; emits `InstallLine`, `InstallDone(cli, result)` | `UserHost`, or nothing selected is missing |
 | 5 | `Start` — "starting the daemon" | writes `$HOME/.micold/remote/last` (app-owned only), opens `micold-daemon remote bridge`, handshake | never |
-| 6 | `VersionCheck` — "checking the daemon version" | `Connected::Refused` with a version mismatch → 489 FR-011 rule (explain; replace only with no running sessions) | handshake accepted |
+| 6 | `VersionCheck` — "checking the daemon version" | `Connected::Refused` → `Entered(VersionCheck)` and `Ok(Provisioned { connected: Refused })`; the caller applies the 489 FR-011 rule (explain; replace only with no running sessions) | handshake accepted |
 
 Steps the runtime runs before handing over (`Acquire` — "getting the image", `CreateContainer` —
 "starting the container") use the same `Step` type and event sink, so the row shows one list.
@@ -68,7 +68,7 @@ end). It never accepts a non-`CONNECT` request.
 
 ## Failure causes and reason texts (tests assert these)
 
-`reason()` = `"<step label> failed: <cause text>"`, followed by `output` (tool output, last 40
+`reason(&ReasonContext)` = `"<step label> failed: <cause text>"`, followed by `output` (tool output, last 40
 lines) where the cause has one.
 
 | Cause | Cause text | Typical step |

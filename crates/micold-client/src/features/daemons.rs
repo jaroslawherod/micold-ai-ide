@@ -16,6 +16,7 @@ use micold_core::daemons::{
     Binding, ConnectionError, DaemonDiagnostics, DaemonEvent, DaemonId, DaemonName, DaemonRegistry,
     DaemonRuntime, DaemonState, DaemonView, RegistryError, StateChange, WorktreeRef,
 };
+use micold_core::provision::{ProvisionEvent, Step};
 use micold_core::required::{RequiredMarks, Requirement};
 use micold_core::sandbox::image::{ImageSourceKind, ImageSourceProblem};
 use micold_core::sandbox::runtime::RuntimeKind;
@@ -251,6 +252,35 @@ pub struct ViewModel {
     pub shares_credentials: bool,
 }
 
+/// Where one daemon's start is: the step it is in and, while it copies the build, how far.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct StartProgress {
+    step: Option<Step>,
+    percent: Option<u8>,
+}
+
+impl StartProgress {
+    fn apply(&mut self, event: ProvisionEvent) {
+        match event {
+            ProvisionEvent::Entered(step) => {
+                self.step = Some(step);
+                self.percent = None;
+            }
+            ProvisionEvent::CopyPercent(p) => self.percent = Some(p),
+            ProvisionEvent::InstallLine(_) | ProvisionEvent::InstallDone { .. } => {}
+        }
+    }
+
+    /// The row's line: the step's label, then the percent while there is one.
+    fn text(&self) -> Option<String> {
+        let label = self.step?.label();
+        Some(match self.percent {
+            Some(p) => format!("{label} ({p}%)"),
+            None => label.to_string(),
+        })
+    }
+}
+
 /// What the Daemons feature remembers.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct State {
@@ -269,8 +299,9 @@ pub struct State {
     diagnostics: BTreeMap<DaemonId, DaemonDiagnostics>,
     versions: BTreeMap<DaemonId, String>,
     runtime_missing: BTreeMap<DaemonId, String>,
-    /// How much of the build has been copied to an SSH daemon's host, in percent (feature 489).
-    copy_progress: BTreeMap<DaemonId, u8>,
+    /// The start step an SSH daemon is in and, while it copies its build, the percent (features
+    /// 489 and 806). Per daemon: one daemon's start never touches another's (FR-022).
+    provisioning: BTreeMap<DaemonId, StartProgress>,
     /// The repository path typed under each remote daemon (feature 489, FR-012).
     pub repositories: BTreeMap<DaemonId, String>,
     /// The sentence under the repository field the last refused add was about.
@@ -370,11 +401,11 @@ pub fn views(state: &State, model: &Model<'_>) -> ViewModel {
                 .cloned()
                 .unwrap_or(DaemonState::Stopped),
             bound: bound_to(model, entry.id),
-            activity: match (&entry.runtime, state.copy_progress.get(&entry.id)) {
-                (DaemonRuntime::Ssh(s), Some(percent))
+            activity: match (&entry.runtime, state.provisioning.get(&entry.id)) {
+                (DaemonRuntime::Ssh(_), Some(progress))
                     if model.links.state(entry.id) == Some(&DaemonState::Starting) =>
                 {
-                    Some(format!("copying daemon to {} ({percent}%)", s.target.host))
+                    progress.text()
                 }
                 _ => None,
             },
@@ -447,7 +478,7 @@ pub fn daemon_event(
         .as_ref()
         .is_some_and(|c| c.to != DaemonState::Starting)
     {
-        state.copy_progress.remove(&id);
+        state.provisioning.remove(&id);
     }
     let diagnostics = state.diagnostics.entry(id).or_default();
     if let Some(change) = &change {
@@ -1026,8 +1057,8 @@ pub enum Msg {
     RepositoryEdited(DaemonId, String),
     /// Add the typed repository path of this remote daemon as a project (feature 489).
     RepositoryAdded(DaemonId),
-    /// The share of the build copied to an SSH daemon's host, in percent.
-    CopyProgress(DaemonId, u8),
+    /// A start step began, or the copy advanced, for this daemon (feature 806, FR-018).
+    Provisioning(DaemonId, ProvisionEvent),
     /// The connect-at-launch box changed.
     AutoStartToggled(bool),
     /// Start this daemon, and only it.
@@ -1168,9 +1199,7 @@ pub fn update(state: &mut State, model: &mut Model<'_>, msg: Msg) -> Vec<Outcome
             state.repository_error = None;
         }
         Msg::RepositoryAdded(id) => return add_repository(state, model, id),
-        Msg::CopyProgress(id, percent) => {
-            state.copy_progress.insert(id, percent);
-        }
+        Msg::Provisioning(id, event) => state.provisioning.entry(id).or_default().apply(event),
         Msg::AutoStartToggled(v) => edit(state, &|d| d.auto_start = v),
         Msg::Started(id) => {
             start(state, model, id);
