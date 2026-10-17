@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-xelisc
 - **Started**: 2026-10-17
 - **Phase**: tasks
-- **Next step**: specs-only gate passed; full gate (`scripts/check-criteria-observables.sh specs/686-kubernetes-daemon-runtime/spec.md`) and the design PR files (pr.md; title `#686: Support a Kubernetes session daemon runtime`, body ends `Refs #686`)
+- **Next step**: specs-only check passed; full gate (`scripts/gate.sh`, debug info off for disk) running detached, log in the session scratchpad gate-686.log; on green, the orchestrator opens the design PR from the scratchpad title/body files (title `#686: Support a Kubernetes session daemon runtime — design`, body ends `Refs #686`)
 
 ## Pull requests
 
