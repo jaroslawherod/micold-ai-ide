@@ -183,17 +183,17 @@ one without a session) and one included worktree → five cards, the permission 
 
 #### Tests for US1 part B (write first)
 
-- [ ] T024 [P] [US1] Core tests in micold-core/src/pull_request.rs: `FRAGMENT` asks `mergeable`;
+- [x] T024 [P] [US1] Core tests in micold-core/src/pull_request.rs: `FRAGMENT` asks `mergeable`;
   `status_query(n)` has `oc{i}`/`mc{i}` `pullRequests(headRefName: $b{i}, states: OPEN|MERGED,
   first: 100) { nodes { isCrossRepository } }` per branch; `parse_status` → `StatusReading
   { statuses, counts }` with W5's table (cross-repo nodes not counted; 0/0 entry for every asked
   branch; 100 nodes → `merged_capped`; missing `oc` alias → whole reading
   `ReadingFailure::Passing`); `PullRequestStatus::conflict` `CONFLICTING` → true, `MERGEABLE` /
   `UNKNOWN` / missing → false
-- [ ] T025 [P] [US1] Client tests in micold-client/tests/features_pr_status.rs: `Msg::StatusesRead`
+- [x] T025 [P] [US1] Client tests in micold-client/tests/features_pr_status.rs: `Msg::StatusesRead`
   stores `counts`; `Unavailable`, `Released` and disabling clear `counts` exactly when they clear
   `statuses`
-- [ ] T026 [P] [US1] Client tests in micold-client/tests/overview.rs: a branch with 1 open and 2
+- [x] T026 [P] [US1] Client tests in micold-client/tests/overview.rs: a branch with 1 open and 2
   merged reads `PrDisplay::Counts` 1 / 2 (US1.3); unknown with each reason — *pull request status
   is off*, *GitHub is not reachable*, *rate-limited until HH:MM*, *not read yet* (FR-004, edge
   case); `Hidden` for Default, detached HEAD and orphan; a current open pull request with
@@ -201,19 +201,19 @@ one without a session) and one included worktree → five cards, the permission 
 
 #### Implementation for US1 part B
 
-- [ ] T027 [US1] Implement in micold-core/src/pull_request.rs: `mergeable` in `FRAGMENT`,
+- [x] T027 [US1] Implement in micold-core/src/pull_request.rs: `mergeable` in `FRAGMENT`,
   `PullRequestStatus::conflict`, the `oc`/`mc` aliases in `status_query`, `StatusReading`,
   `parse_status` and `read_outcome` returning it, `PrCounts { open: u8, merged: u8, open_capped:
   bool, merged_capped: bool }` in micold-core/src/overview.rs; no new interval, trigger or `gh`
   call (FR-019); T024 passes
-- [ ] T028 [US1] Carry counts in micold-client/src/features/pr_status.rs (`State::counts`,
+- [x] T028 [US1] Carry counts in micold-client/src/features/pr_status.rs (`State::counts`,
   `Outcome::Ok`, `Msg::StatusesRead`) and micold-client/src/shell/pr_status.rs; T025 passes
-- [ ] T029 [US1] `CardModel::prs: PrDisplay::{Hidden, Unknown(reason), Counts(PrCounts)}` and
+- [x] T029 [US1] `CardModel::prs: PrDisplay::{Hidden, Unknown(reason), Counts(PrCounts)}` and
   `CurrentPr::conflict` from the reading in micold-client/src/features/overview.rs; the footer's
   *X open · Y merged* (*100+* when capped) or *—* with the reason as tooltip in
   micold-client/src/ui/material/overview_card.rs; showcase variant with unknown counts; T026
   passes
-- [ ] T030 [US1] docs/user-guide/overview.md: pull request counts, the unknown mark and its
+- [x] T030 [US1] docs/user-guide/overview.md: pull request counts, the unknown mark and its
   reasons, the merge-conflict reason
 
 **Checkpoint**: US1 complete (scenarios 1–6).

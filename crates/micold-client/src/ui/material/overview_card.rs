@@ -166,6 +166,13 @@ impl<'a, M: 'a> From<OverviewCard<'a, M>> for Element<'a, M> {
                 p.text,
             ))
             .push(Text::new(w.footer, TypeRole::Caption, roles).tint(p.text));
+        if let Some((text, tooltip)) = card.model.prs.footer() {
+            let line = Text::new(text, TypeRole::Caption, roles).tint(p.text);
+            body = match tooltip {
+                Some(reason) => body.push(Tooltip::new(line, reason, roles)),
+                None => body.push(line),
+            };
+        }
         container(body)
             .width(Length::Fill)
             .height(Length::Fixed(HEIGHT))
@@ -187,7 +194,7 @@ mod tests {
     use super::super::test_support::{leaves, overlap};
     use super::*;
     use iced::{Rectangle, Size};
-    use micold_core::overview::CardReason;
+    use micold_core::overview::{CardReason, PrDisplay};
     use micold_core::session::SessionLocation;
     use micold_core::theme::ColorScheme;
     use micold_core::tokens;
@@ -202,6 +209,7 @@ mod tests {
             state,
             reason: CardReason::Working,
             summary: "Adds the worktree overview".into(),
+            prs: PrDisplay::Hidden,
         }
     }
 

@@ -22,7 +22,19 @@ Each card shows:
 - its name, and the branch below it;
 - a one-line summary (the branch, or *Project root* for Default);
 - its session counts: how many sessions there are and how many are running;
-- its **state**, as an icon and a word. Hover for the reason.
+- its **state**, as an icon and a word. Hover for the reason;
+- for a card with a branch, its **pull request counts**, such as *1 open · 2 merged* (drafts count as open; a count of 100 or more reads *100+*).
+
+## Pull request counts
+
+The counts come from the pull request status the app already reads; the Overview starts no reading of its own. When they cannot be read, the card shows a dash (*—*) and its tooltip says why:
+
+- *pull request status is off*: the pull request status setting is off;
+- *GitHub is not reachable*: the last reading could not reach GitHub;
+- *rate-limited until HH:MM*: GitHub asked the app to wait, and readings resume then;
+- *not read yet*: no reading has covered the branch yet.
+
+Default, a detached HEAD and an orphan have no branch, so they show no counts. An open pull request that cannot merge because of a conflict makes its card **Needs attention** with the reason *merge conflict*.
 
 | Icon | Type | Meaning |
 |------|------|---------|

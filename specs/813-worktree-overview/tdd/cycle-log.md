@@ -130,3 +130,9 @@ test rerun green.
   `--test pull_request_{counts,parse,query,source,select,list,diff,failure,is_never_stored}` all `ok`
   (counts 6 passed). Recorded `pr_*.txt` answers gained derived `oc{i}`/`mc{i}` aliases; the pinned
   query texts (`pull_request_query.rs`, `status_query_50.graphql`) were updated.
+
+## M2 / T025, T026 → T028, T029 (client: counts carried, card footer)
+
+- **Tests**: `tests/features_pr_status.rs` (`StatusesRead` stores `counts`; `Unavailable`, `Released`, disabling clear it with `statuses`) and `tests/overview.rs` (1 open / 2 merged → `Counts`; each unknown reason; `Hidden` for Default, detached, orphan; open PR with `conflict` → *merge conflict*).
+- **Red**: both files failed to compile before the change (`no field counts on State`, `no field prs on CardModel`, `PrDisplay` unresolved).
+- **Green**: `State::counts`, `Outcome::Ok.counts`, `CardModel::prs`, `pr_display` in `ui/overview.rs`, footer line in `overview_card.rs`; results in the M2 commit message.
