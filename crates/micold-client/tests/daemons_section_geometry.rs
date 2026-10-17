@@ -174,10 +174,7 @@ fn the_container_form_paints_five_titles_with_only_container_open() {
             "title {title:?} missing: {shown:?}"
         );
     }
-    assert!(
-        has(&shown, "Image source"),
-        "Container is open: {shown:?}"
-    );
+    assert!(has(&shown, "Image source"), "Container is open: {shown:?}");
     for closed_body in [
         "The container starts with none of your credentials",
         "Names still resolve either way",
@@ -201,10 +198,7 @@ fn the_container_form_paints_five_titles_with_only_container_open() {
         Section::Network,
     )));
     let shown = painted(&state);
-    assert!(
-        has(&shown, "Names still resolve either way"),
-        "{shown:?}"
-    );
+    assert!(has(&shown, "Names still resolve either way"), "{shown:?}");
     assert_eq!(count(Icon::MoveUp, &shown), 2);
     assert_no_text_overflows(&state, "container form with two sections open");
 }
