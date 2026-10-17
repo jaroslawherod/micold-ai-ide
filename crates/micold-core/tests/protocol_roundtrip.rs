@@ -1361,7 +1361,7 @@ fn a_catalog_snapshot_without_env_include_failures_reads_back_with_none() {
 #[test]
 fn the_review_messages_and_the_diff_layout_round_trip_on_both_wires() {
     use micold_core::protocol::messages::ReviewEditOp;
-    use micold_core::review::comment::{CommentId, CommentState, ReviewComment};
+    use micold_core::review::comment::{CommentId, CommentState, Move, Outcome, ReviewComment};
     use micold_core::review::{LineRange, RelPath, Side};
     use micold_core::settings::DiffLayout;
 
@@ -1382,6 +1382,28 @@ fn the_review_messages_and_the_diff_layout_round_trip_on_both_wires() {
         ReviewEditOp::Delete { id },
         ReviewEditOp::ClearSent,
         ReviewEditOp::DiscardPending,
+        // Feature 946 (W14, W15).
+        ReviewEditOp::Mark {
+            id,
+            outcome: Outcome::Answered,
+            note: "kept: see R4".into(),
+        },
+        ReviewEditOp::Mark {
+            id,
+            outcome: Outcome::Applied,
+            note: String::new(),
+        },
+        ReviewEditOp::Reanchor {
+            moves: vec![
+                Move::new(
+                    id,
+                    LineRange::new(3, 4).unwrap(),
+                    LineRange::new(7, 8).unwrap(),
+                )
+                .unwrap(),
+            ],
+        },
+        ReviewEditOp::Reanchor { moves: Vec::new() },
     ];
     for edit in edits {
         let msg = ClientMsg::ReviewEdit {
@@ -1402,24 +1424,41 @@ fn the_review_messages_and_the_diff_layout_round_trip_on_both_wires() {
     json_roundtrip(&send);
     postcard_roundtrip(&send);
 
-    let comment = ReviewComment {
-        id,
-        path: RelPath::from_native("src/a.rs").unwrap(),
-        side: Side::New,
-        range: LineRange::new(1, 2).unwrap(),
-        quote: vec!["a".into(), "b".into()],
-        text: "t".into(),
-        state: CommentState::Sent { at: 9 },
-        created: 1,
+    // Feature 946 (W13): a comment in each state, and a report by each kind of reporter. A
+    // `Report` has no public constructor, so the reported states come from their stored form.
+    let reported = |by: serde_json::Value| -> CommentState {
+        serde_json::from_value(serde_json::json!({ "reported": {
+            "sent_at": 9, "outcome": "answered", "reply": "line 1\nline 2",
+            "first_at": 10, "last_at": 11, "by": by
+        } }))
+        .expect("a reported state parses")
     };
-    let changed = DaemonMsg::ReviewChanged {
-        project: PathBuf::from("/p"),
-        worktree_dir: "feature".into(),
-        comments: vec![comment],
-        sending: true,
-    };
-    json_roundtrip(&changed);
-    postcard_roundtrip(&changed);
+    let states = [
+        CommentState::Draft,
+        CommentState::Sent { at: 9 },
+        reported(serde_json::json!({ "agent": "00000000-0000-0000-0000-0000000000aa" })),
+        reported(serde_json::json!("user")),
+    ];
+    for state in states {
+        let comment = ReviewComment {
+            id,
+            path: RelPath::from_native("src/a.rs").unwrap(),
+            side: Side::New,
+            range: LineRange::new(1, 2).unwrap(),
+            quote: vec!["a".into(), "b".into()],
+            text: "t".into(),
+            state,
+            created: 1,
+        };
+        let changed = DaemonMsg::ReviewChanged {
+            project: PathBuf::from("/p"),
+            worktree_dir: "feature".into(),
+            comments: vec![comment],
+            sending: true,
+        };
+        json_roundtrip(&changed);
+        postcard_roundtrip(&changed);
+    }
     for started in [true, false] {
         let sent = OperationResult::ReviewSent {
             session: sid(),

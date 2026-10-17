@@ -281,7 +281,10 @@ fn the_build_fingerprint_is_a_separate_mechanism_from_the_schema_hash() {
 /// `SessionSummary`. An older peer cannot decode it.
 ///
 /// And 47 → 48 for feature 905's `paused_on_user` on `SessionSummary` (contracts/wire.md).
-const FEATURE_026_PROTOCOL_VERSION: u32 = 48;
+///
+/// And 48 → 49 for feature 946's review replies (contracts/review-wire-delta.md W13–W15):
+/// `CommentState::Reported` and `ReviewEditOp::{Mark, Reanchor}`.
+const FEATURE_026_PROTOCOL_VERSION: u32 = 49;
 
 #[test]
 fn the_wire_changes_for_this_feature_cost_exactly_one_version_bump() {

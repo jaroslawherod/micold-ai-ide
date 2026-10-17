@@ -28,7 +28,7 @@ use crate::mcp::policy::CrossSessionAccess;
 use crate::naming::WorktreeNaming;
 use crate::plan_usage::UsageReading;
 use crate::protocol::grid::{LineId, WireLine, WireStyle};
-use crate::review::comment::{CommentId, ReviewComment};
+use crate::review::comment::{CommentId, Move, Outcome, ReviewComment};
 use crate::review::Side;
 use crate::runs::{GroupId, Integration, RunGroup};
 use crate::session::{AiCli, SessionId, SessionLabel, ShellInstanceId};
@@ -1536,6 +1536,22 @@ pub enum ReviewEditOp {
     ClearSent,
     /// Remove every pending comment not inside an open send (W4).
     DiscardPending,
+    /// Mark a Sent comment Applied or Answered by hand (feature 946, W14); `note` is required
+    /// for `Answered`.
+    Mark {
+        /// The comment.
+        id: CommentId,
+        /// Applied or answered.
+        outcome: Outcome,
+        /// The user's note; trimmed, `\n` line breaks.
+        note: String,
+    },
+    /// Move comments whose code moved (feature 946, W15); a move whose `from` no longer holds is
+    /// skipped, not refused.
+    Reanchor {
+        /// The moves.
+        moves: Vec<Move>,
+    },
 }
 
 /// One question of [`ClientMsg::MergedBranchCheck`]: does local `branch` hold anything beyond

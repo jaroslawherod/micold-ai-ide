@@ -123,6 +123,7 @@ impl Reviews {
             ReviewEditOp::Delete { id } => edited.delete(id)?,
             ReviewEditOp::ClearSent => edited.clear_sent(),
             ReviewEditOp::DiscardPending => edited.discard_pending(),
+            ReviewEditOp::Mark { .. } | ReviewEditOp::Reanchor { .. } => {}
         }
 
         catalog.save_reviews(project, &file_with(entries, dir, &edited)).map_err(|err| {
