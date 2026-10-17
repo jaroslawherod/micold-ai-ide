@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #776
 - **Worktree branch**: feat/776_one-session-per-worktree-chosen-at-start
 - **Started**: 2026-10-12
-- **Phase**: M6 full gate
-- **Next step**: full gate green, then push and open the M6 PR
+- **Phase**: M6 PR open
+- **Next step**: orchestrator waits on CI and merges M6
 
 ## Pull requests
 
