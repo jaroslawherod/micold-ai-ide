@@ -340,10 +340,12 @@ async fn s1_a_report_is_stored_pushed_to_every_window_and_kept_after_a_restart()
         "a report never waits for the user: {seen:?}"
     );
 
-    // The audit line names the reference, never the reply (034 FR-018).
+    // The audit line names the reference, never the reply (034 FR-018). The log is shared by
+    // every test of this binary, so only this comment's lines count.
+    let reference = first.reference().to_string();
     let lines: Vec<String> = log_lines_for(sid(1))
         .into_iter()
-        .filter(|line| line.contains("report_review_comment"))
+        .filter(|line| line.contains("report_review_comment") && line.contains(&reference))
         .collect();
     assert_eq!(lines.len(), 1, "one audit line: {lines:?}");
     assert!(
