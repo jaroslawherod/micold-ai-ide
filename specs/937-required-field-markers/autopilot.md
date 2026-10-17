@@ -9,18 +9,25 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #937
 - **Worktree branch**: claude/project-thread-rkhzho
 - **Started**: 2026-10-17
-- **Phase**: plan
-- **Next step**: tasks unit; D2/D3 are orchestrator defaults pending jaro's card — re-apply to spec.md and plan.md *Pending decisions* if jaro answers B
+- **Phase**: tasks
+- **Next step**: design PR to open and merge (orchestrator), then milestone M1; D2/D3 are orchestrator defaults pending jaro's card — re-apply to spec.md and plan.md *Pending decisions* if jaro answers B
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
+| to-open | Design: spec, clarify, plan, tasks | to be opened by orchestrator | — |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
+| M1 | T001–T015 | full | Required fields marked (`*`) in the add-worktree, run-in-parallel and rename dialogs | — | pending |
+| M2 | T016–T022 | full | Required fields marked in Settings sections and the daemon form | — | pending |
+| M3 | T023–T028 | full | `* required` legend once above the first field of every form with a required field | — | pending |
+| M4 | T029–T035 | full | Required error on submit in the dialogs; Create and Start runs enabled | — | pending |
+| M5 | T036–T041 | full | Required error on save in Settings and the daemon form | — | pending |
+| M6 | T042–T048 | full | Required error on leaving a field (blur), selects included | — | pending |
 
 ## Decisions
 
@@ -36,6 +43,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | Spec | 1 | 1c97f54c4c7b32b3f5f8c11552756f9e77d1de18:d93c9dbc687412cced0a9b7854cf44323ee3930e | CLEAN (1 MINOR: plan to confirm rename-dialog files) |
 | Plan | 1 | 62a5b8cee2e629d9da01c81c6d40863f389921ff:beb9cd17a1cfe2ca6753f0882614af877c9ae912 | CLEAN (3 MINOR, fixed, prose only; reviewer ran as headless `claude -p`: no Agent tool in this unit) |
+| Tasks | 1 | 8c8b1867192c49ca20905789073b9d034edea94d:c04615ca1903b069dda6cd168be6441c8cd53ad3 | CLEAN (3 MINOR, fixed: T043 TrackFocus gate clause, M3/M4 Satisfies, M3 tier light→full; headless `claude -p` reviewer) |
 
 ## Declined review findings
 
@@ -51,6 +59,8 @@ None.
 None.
 
 ## Follow-ups not done
+
+- Tasks unit: speckit-analyze I1–I3, I6–I8, I11 fixed (spec FR-010 and US3 scenario 4 reworded to a live case, Jira edge case added; plan source tree completed; T005/T030/T032 slug-empty name; T029 FR-007). Not fixed (LOW): I5 text-scale test, I9 FR order, I10 SC-002 wording. I4 = D2/D3 pending jaro's card: if B, M4 loses FR-012 (T030 can_press, T032/T033 buttons) and M6 is dropped.
 
 - Spec review round 2 MINOR (rename-dialog files, container fields): addressed in research.md R4 and R5.
 

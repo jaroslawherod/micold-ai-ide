@@ -37,7 +37,7 @@ gate` (client feature tests in `crates/micold-client/tests/`, in-crate anatomy t
 **Constraints**: the marker is a text character in the label font (FR-003, Principle VI); legend,
 marker and message come only from the shared components (FR-008)
 
-**Scale/Scope**: 1 core module, 4 component changes, 6 drafts, 9 view files (research R5), 1
+**Scale/Scope**: 1 core module, 4 component changes, 6 drafts (plus the daemons `State`), 9 view files (research R5), 1
 showcase entry, 1 source-scan gate, 4 user-guide pages
 
 ## Constitution Check
@@ -145,11 +145,12 @@ crates/micold-client/src/ui/focus.rs               # TrackFocus for Select
 crates/micold-client/src/features/{window,mod,required}.rs   # FieldId, Outcome, routing (D3)
 crates/micold-client/src/features/{worktree_form,runs,project,worktree,settings,daemons}.rs  # D4
 crates/micold-client/src/app.rs                    # apply Outcome::FieldBlurred
-crates/micold-client/src/ui/{worktree_form,parallel_dialog,rename_dialog}.rs  # D5
+crates/micold-client/src/ui/{worktree_form,parallel_dialog,rename_dialog,rename,worktree_rename}.rs  # D5
 crates/micold-client/src/ui/settings/{terminal,environment,github,jira,daemons,container_fields}.rs
 crates/micold-client/src/showcase/sections/controls.rs   # D6
 crates/micold-client/tests/required_call_sites.rs  # new gate (D6)
-crates/micold-client/tests/features_*.rs           # D4 tests
+crates/micold-client/tests/features_*.rs           # D4 tests, incl. new features_required.rs (D3)
+crates/micold-client/tests/{layout_snapshot.rs,gates/,showcase_completeness.rs}  # R8, C6
 docs/user-guide/{worktrees-and-sessions,parallel-runs,settings,project-selection}.md
 docs/development/component-library.md
 ```
