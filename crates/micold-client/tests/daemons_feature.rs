@@ -428,9 +428,9 @@ fn two_daemons_edit_independently_and_drafts_are_kept_apart() {
 
     // An unsaved draft of one form does not show in the other.
     daemons::begin_edit(&mut state, &w.model(), boxed);
-    send(&mut state, &mut w, Msg::CpuLimitEdited("2".into()));
+    send(&mut state, &mut w, Msg::CpuLimitEdited("3".into()));
     let d = daemons::begin_edit(&mut state, &w.model(), three).unwrap();
-    assert_eq!(d.cpus, "");
+    assert_eq!(d.cpus, "2", "its own saved default, not the other form's 3");
     assert_eq!(
         d.pids,
         three_before.map(|p| p.to_string()).unwrap_or_default()

@@ -454,6 +454,8 @@ pub fn stop(state: &mut State, model: &mut Model<'_>, id: DaemonId) -> Option<St
 
 /// Open the form for a new daemon.
 pub fn begin_add(state: &mut State) {
+    let profile = SandboxProfile::default();
+    let texts = ProfileTexts::of(&profile);
     state.flipped_sections.clear();
     state.draft = Some(Draft {
         editing: None,
@@ -461,12 +463,12 @@ pub fn begin_add(state: &mut State) {
         runtime: DraftRuntime::default(),
         container_name: String::new(),
         port: String::new(),
-        profile: SandboxProfile::default(),
-        image_path: String::new(),
-        cpus: String::new(),
-        memory_mib: String::new(),
-        pids: String::new(),
-        storage_mib: String::new(),
+        profile,
+        image_path: texts.image_path,
+        cpus: texts.cpus,
+        memory_mib: texts.memory_mib,
+        pids: texts.pids,
+        storage_mib: texts.storage_mib,
         auto_start: true,
         ssh_host: String::new(),
         ssh_user: String::new(),
