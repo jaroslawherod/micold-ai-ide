@@ -102,3 +102,4 @@ Companion issue #552 (replace name-based hiding with native hooks) is out of sco
 Tasks unit: speckit-analyze fixed before review: spike moved to M1 (T025), `origin_rejected` tombstone added (data-model, T005, T030), FR-011 count pinned to direct children, spec Assumptions and Clarification 1 corrected to research R2/R6. Polish (quickstart Part B, ticks) left to the close unit.
 
 - RED 916 (run 39016080872): `discovery_finds_what_the_clis_recorded_and_nothing_else` failed because CI tested the merge with main, where BUG-904 changed that test (discovery catalogues at most one session per location); branch was behind main. Merged origin/main (clean), full gate green.
+- RED 962 (run 39068363841): macOS `micold-daemon --test idle_race` failed; the log is truncated, the test is a timing race on the daemon idle window that this diff does not touch. Rebased onto origin/main (clean), full gate green including idle_race; pushed for a CI rerun.
