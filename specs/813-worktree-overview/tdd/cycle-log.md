@@ -118,3 +118,15 @@ test rerun green.
    (`left: Some(SessionId(0000…)) right: Some(SessionId(dcd777dd-…))`). Green: `ok. 1 passed`.
    `--test features_agent_confirm` stayed green under the mutation (`ok. 12 passed`): it builds
    its own `Prompt`, so it does not pin the caller; the bin test is the pin.
+
+## M2 / T024 → T027 (core: counts and conflict in the status reading)
+
+- **Tests**: `crates/micold-core/tests/pull_request_counts.rs` (6 tests: query text, counts from the recorded
+  answer, forks left out, 100 → capped, missing `oc`/`mc` → `Passing`, `conflict` mapping).
+- **Red**: `cargo test -p micold-core --test pull_request_counts`: `unresolved import
+  micold_core::overview::PrCounts`, `unresolved import micold_core::pull_request::StatusReading`
+  (compile red: the API did not exist).
+- **Green**: `StatusReading`, `PrCounts`, `oc`/`mc` aliases, `mergeable`, `PullRequestStatus::conflict`;
+  `--test pull_request_{counts,parse,query,source,select,list,diff,failure,is_never_stored}` all `ok`
+  (counts 6 passed). Recorded `pr_*.txt` answers gained derived `oc{i}`/`mc{i}` aliases; the pinned
+  query texts (`pull_request_query.rs`, `status_query_50.graphql`) were updated.

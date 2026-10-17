@@ -21,6 +21,7 @@ fn node(number: u64, state: &str, created_at: &str) -> PrNode {
         head: format!("head{number}"),
         review_decision: None,
         checks: None,
+        conflict: false,
     }
 }
 
@@ -240,6 +241,7 @@ fn the_selected_status_equals_what_the_node_held() {
             },
             review: ReviewState::ChangesRequested,
             head: "head7".to_string(),
+            conflict: false,
         })),
         "the status copies number, title, url, review and head from the node (FR-004)"
     );

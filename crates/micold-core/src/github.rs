@@ -1916,10 +1916,7 @@ impl crate::pull_request::PullRequestSource for GhCli {
         repo: &GithubRepo,
         branches: &[String],
         now: u64,
-    ) -> Result<
-        std::collections::BTreeMap<String, crate::pull_request::PullRequestStatus>,
-        crate::pull_request::ReadingFailure,
-    > {
+    ) -> Result<crate::pull_request::StatusReading, crate::pull_request::ReadingFailure> {
         // `now` is when the reading began; a later chunk's `Retry-After` counts from its own answer.
         let began = std::time::Instant::now();
         crate::pull_request::read_in_chunks(branches, |chunk| {

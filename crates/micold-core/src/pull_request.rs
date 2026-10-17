@@ -13,6 +13,7 @@ use std::collections::BTreeMap;
 use std::fmt;
 
 use crate::github::{classify, GithubRepo, IssueLoadError};
+use crate::overview::PrCounts;
 use crate::process::RunOutcome;
 
 /// What one reading found for one branch (data-model §1).
@@ -30,6 +31,9 @@ pub struct PullRequestStatus {
     pub review: ReviewState,
     /// The commit the pull request ends at (`headRefOid`).
     pub head: String,
+    /// GitHub reports it cannot merge because of a conflict (`mergeable: CONFLICTING`). `MERGEABLE`
+    /// and `UNKNOWN`, which GitHub answers while it computes, are `false`.
+    pub conflict: bool,
 }
 
 /// Prints the number, the state and the review, and nothing else (FR-032).
@@ -144,6 +148,8 @@ pub struct PrNode {
     pub review_decision: Option<String>,
     /// The check counts of the last commit; `None` for a `null` rollup or no commit.
     pub checks: Option<CheckCounts>,
+    /// `mergeable` is `CONFLICTING`.
+    pub conflict: bool,
 }
 
 /// How many checks of a pull request's last commit are in each state, by GitHub's state names.
@@ -165,17 +171,27 @@ pub struct Unreadable;
 /// Shared by both connections of a branch: the 10 newest pull requests with that head branch.
 const NEWEST_TEN: &str = "first: 10, orderBy: {field: CREATED_AT, direction: DESC}";
 
+/// The page the count aliases read, and the most they can report (`PrCounts` shows *100+*).
+const COUNT_PAGE: &str = "first: 100";
+
+/// The same page size as a number.
+const COUNT_PAGE_SIZE: usize = 100;
+
+/// Only the fork flag of each node: the counts leave out other repositories' pull requests.
+const COUNT_NODES: &str = "{ nodes { isCrossRepository } }";
+
 /// What is read of each pull request. Check counts by state, never the checks themselves: one
 /// request stays small however many checks a pull request has.
 const FRAGMENT: &str = "fragment pr on PullRequest { number title url state isDraft createdAt \
-isCrossRepository headRefOid reviewDecision commits(last: 1) { nodes { commit { \
+isCrossRepository headRefOid reviewDecision mergeable commits(last: 1) { nodes { commit { \
 statusCheckRollup { contexts(first: 1) { checkRunCount checkRunCountsByState { state count } \
 statusContextCount statusContextCountsByState { state count } } } } } } }";
 
 /// The GraphQL document that asks about `n` branches (1 to [`BRANCHES_PER_REQUEST`]), on one line.
 ///
 /// Branch `i` is the variable `$b<i>`; `o<i>` holds its open pull requests and `r<i>` its newest of
-/// any state. No branch name is part of the document (FR-031): names travel as variables, so no
+/// any state; `oc<i>` and `mc<i>` hold the fork flags of up to 100 open and merged ones, for the
+/// counts (feature 813). No branch name is part of the document (FR-031): names travel as variables, so no
 /// name can change what is asked.
 pub fn status_query(n: usize) -> String {
     use fmt::Write as _;
@@ -188,7 +204,9 @@ pub fn status_query(n: usize) -> String {
             aliases,
             "o{i}: pullRequests(headRefName: $b{i}, states: OPEN, {NEWEST_TEN}) \
              {{ nodes {{ ...pr }} }} \
-             r{i}: pullRequests(headRefName: $b{i}, {NEWEST_TEN}) {{ nodes {{ ...pr }} }} "
+             r{i}: pullRequests(headRefName: $b{i}, {NEWEST_TEN}) {{ nodes {{ ...pr }} }} \
+             oc{i}: pullRequests(headRefName: $b{i}, states: OPEN, {COUNT_PAGE}) {COUNT_NODES} \
+             mc{i}: pullRequests(headRefName: $b{i}, states: MERGED, {COUNT_PAGE}) {COUNT_NODES} "
         );
     }
     format!(
@@ -260,6 +278,7 @@ pub fn select_pull_request(
         state,
         review,
         head: node.head,
+        conflict: node.conflict,
     }))
 }
 
@@ -438,7 +457,14 @@ impl AnswerError {
 
 #[derive(serde::Deserialize)]
 struct Connection {
-    nodes: Vec<RawNode>,
+    nodes: Vec<serde_json::Value>,
+}
+
+/// One node of a count alias: whether the pull request lives in a fork.
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RawCounted {
+    is_cross_repository: bool,
 }
 
 #[derive(serde::Deserialize)]
@@ -453,6 +479,9 @@ struct RawNode {
     is_cross_repository: bool,
     head_ref_oid: String,
     review_decision: Option<String>,
+    /// Absent in answers recorded before the field was asked.
+    #[serde(default)]
+    mergeable: Option<String>,
     commits: RawCommits,
 }
 
@@ -519,22 +548,38 @@ impl From<RawNode> for PrNode {
             head: raw.head_ref_oid,
             review_decision: raw.review_decision,
             checks,
+            conflict: raw.mergeable.as_deref() == Some("CONFLICTING"),
         }
     }
 }
 
-/// One status per branch that has a pull request, from the body of an answer to
+/// What one reading found: the pull request each branch is shown with, and how many it has.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct StatusReading {
+    /// Branch → the shown pull request; a branch without one has no entry.
+    pub statuses: BTreeMap<String, PullRequestStatus>,
+    /// Branch → its open and merged counts; **every** asked branch has an entry (0 / 0 for none), so
+    /// "no pull request" differs from "unknown" (no entry).
+    pub counts: BTreeMap<String, PrCounts>,
+}
+
+impl StatusReading {
+    /// Add the branches of `other`, as chunks of one reading are joined.
+    fn extend(&mut self, other: Self) {
+        self.statuses.extend(other.statuses);
+        self.counts.extend(other.counts);
+    }
+}
+
+/// One status and one count pair per asked branch, from the body of an answer to
 /// [`status_query`]`(branches.len())`.
 ///
 /// The key of an entry is `branches[i]`, never a name taken from the answer. An answer that cannot
 /// be read whole — an `errors` entry (but a refused `statusCheckRollup`, whose checks read as none),
-/// a missing alias, a `null` repository, a pull request state
+/// a missing alias (`oc`/`mc` too), a `null` repository, a pull request state
 /// this version does not know, JSON that does not parse — is [`ReadingFailure::Passing`], never a
-/// partial map (FR-019). [`reading_failure`] names the real kind from the whole `gh` run.
-pub fn parse_status(
-    body: &[u8],
-    branches: &[String],
-) -> Result<BTreeMap<String, PullRequestStatus>, ReadingFailure> {
+/// partial reading (FR-019). [`reading_failure`] names the real kind from the whole `gh` run.
+pub fn parse_status(body: &[u8], branches: &[String]) -> Result<StatusReading, ReadingFailure> {
     const UNREADABLE: ReadingFailure = ReadingFailure::Passing;
     let answer: Answer = serde_json::from_slice(body).map_err(|_| UNREADABLE)?;
     // A refused `statusCheckRollup` leaves the pull request readable: its checks read as none.
@@ -545,19 +590,56 @@ pub fn parse_status(
         .data
         .and_then(|data| data.repository)
         .ok_or(UNREADABLE)?;
-    let mut statuses = BTreeMap::new();
+    let mut reading = StatusReading::default();
     for (i, branch) in branches.iter().enumerate() {
-        let mut nodes = |alias: String| -> Result<Vec<PrNode>, ReadingFailure> {
-            let connection = repository.remove(&alias).ok_or(UNREADABLE)?;
-            Ok(connection.nodes.into_iter().map(PrNode::from).collect())
+        let mut alias = |name: String| -> Result<Vec<serde_json::Value>, ReadingFailure> {
+            repository
+                .remove(&format!("{name}{i}"))
+                .map(|connection| connection.nodes)
+                .ok_or(UNREADABLE)
         };
-        let open = nodes(format!("o{i}"))?;
-        let recent = nodes(format!("r{i}"))?;
+        let (open, recent) = (alias("o".into())?, alias("r".into())?);
+        let (open_forks, merged_forks) = (alias("oc".into())?, alias("mc".into())?);
+        let pull_requests = |values: Vec<serde_json::Value>| -> Result<Vec<PrNode>, ReadingFailure> {
+            values
+                .into_iter()
+                .map(|value| {
+                    serde_json::from_value::<RawNode>(value)
+                        .map(PrNode::from)
+                        .map_err(|_| UNREADABLE)
+                })
+                .collect()
+        };
+        let (open, recent) = (pull_requests(open)?, pull_requests(recent)?);
         if let Some(status) = select_pull_request(&open, &recent).map_err(|_| UNREADABLE)? {
-            statuses.insert(branch.clone(), status);
+            reading.statuses.insert(branch.clone(), status);
         }
+        let (open, open_capped) = count_own(open_forks)?;
+        let (merged, merged_capped) = count_own(merged_forks)?;
+        reading.counts.insert(
+            branch.clone(),
+            PrCounts {
+                open,
+                merged,
+                open_capped,
+                merged_capped,
+            },
+        );
     }
-    Ok(statuses)
+    Ok(reading)
+}
+
+/// The pull requests of this repository among a count alias's nodes, and whether the page was full
+/// (so there may be more). Forks are not counted, the rule [`select_pull_request`] uses.
+fn count_own(nodes: Vec<serde_json::Value>) -> Result<(u8, bool), ReadingFailure> {
+    let capped = nodes.len() >= COUNT_PAGE_SIZE;
+    let mut own = 0u8;
+    for node in nodes {
+        let counted: RawCounted =
+            serde_json::from_value(node).map_err(|_| ReadingFailure::Passing)?;
+        own = own.saturating_add(u8::from(!counted.is_cross_repository));
+    }
+    Ok((own, capped))
 }
 
 /// How long nothing is sent when GitHub names no time (FR-024).
@@ -645,15 +727,15 @@ pub fn read_outcome(
     outcome: &RunOutcome,
     branches: &[String],
     now: u64,
-) -> Result<BTreeMap<String, PullRequestStatus>, ReadingFailure> {
+) -> Result<StatusReading, ReadingFailure> {
     if let RunOutcome::Exited { code, stdout, .. } = outcome {
         let read = split_response(stdout)
             .filter(|response| response.status == 200)
             // `gh` exits 1 for any `errors` entry; only a refused check rollup is read through.
             .filter(|response| *code == 0 || only_checks_forbidden(response.body))
             .map(|response| parse_status(response.body, branches));
-        if let Some(Ok(statuses)) = read {
-            return Ok(statuses);
+        if let Some(Ok(reading)) = read {
+            return Ok(reading);
         }
     }
     Err(reading_failure(outcome, now))
@@ -841,7 +923,7 @@ pub trait PullRequestSource {
         repo: &GithubRepo,
         branches: &[String],
         now: u64,
-    ) -> Result<BTreeMap<String, PullRequestStatus>, ReadingFailure>;
+    ) -> Result<StatusReading, ReadingFailure>;
 
     /// Every pull request whose head branch is `branch`, newest first, forks dropped (feature
     /// 775). One GitHub request, no retry.
@@ -913,17 +995,17 @@ pub fn diff_outcome(outcome: &RunOutcome, now: u64) -> Result<String, DiffReadFa
 /// whole or it is a failure (FR-019).
 pub fn read_in_chunks(
     branches: &[String],
-    mut read_chunk: impl FnMut(&[String]) -> Result<BTreeMap<String, PullRequestStatus>, ReadingFailure>,
-) -> Result<BTreeMap<String, PullRequestStatus>, ReadingFailure> {
-    let mut statuses = BTreeMap::new();
+    mut read_chunk: impl FnMut(&[String]) -> Result<StatusReading, ReadingFailure>,
+) -> Result<StatusReading, ReadingFailure> {
+    let mut reading = StatusReading::default();
     for chunk in branches.chunks(BRANCHES_PER_REQUEST) {
-        statuses.extend(read_chunk(chunk)?);
+        reading.extend(read_chunk(chunk)?);
     }
-    Ok(statuses)
+    Ok(reading)
 }
 
 /// One scripted answer of a [`FakePullRequestSource`].
-type Reading = Result<BTreeMap<String, PullRequestStatus>, ReadingFailure>;
+type Reading = Result<StatusReading, ReadingFailure>;
 
 /// A scripted [`PullRequestSource`] for tests: answers each `read` with the next scripted answer
 /// and records every call. Public (not `#[cfg(test)]`) so every crate's tests can use it, like
@@ -947,9 +1029,17 @@ impl FakePullRequestSource {
         Self::default()
     }
 
-    /// Answer the next unanswered `read` with `statuses`.
+    /// Answer the next unanswered `read` with `statuses` and no counts.
     pub fn with_answer(self, statuses: BTreeMap<String, PullRequestStatus>) -> Self {
-        self.lock_script().push_back(Ok(statuses));
+        self.with_reading(StatusReading {
+            statuses,
+            counts: BTreeMap::new(),
+        })
+    }
+
+    /// Answer the next unanswered `read` with `reading`.
+    pub fn with_reading(self, reading: StatusReading) -> Self {
+        self.lock_script().push_back(Ok(reading));
         self
     }
 
@@ -1039,7 +1129,7 @@ impl PullRequestSource for FakePullRequestSource {
         repo: &GithubRepo,
         branches: &[String],
         _now: u64,
-    ) -> Result<BTreeMap<String, PullRequestStatus>, ReadingFailure> {
+    ) -> Result<StatusReading, ReadingFailure> {
         self.calls
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)

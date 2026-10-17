@@ -72,7 +72,7 @@ fn branches(names: &[&str]) -> Vec<String> {
 
 fn read(name: &str, names: &[&str]) -> BTreeMap<String, PullRequestStatus> {
     match parse_status(&body_of(name), &branches(names)) {
-        Ok(map) => map,
+        Ok(reading) => reading.statuses,
         Err(e) => panic!("{name} is a readable answer, got {e:?}"),
     }
 }
@@ -329,7 +329,7 @@ fn parse_status_unknown_review_decision_is_none() {
     let changed = text.replace("\"APPROVED\"", "\"SOMETHING_NEW\"");
     assert_ne!(changed, text, "the replacement must have happened");
     let map = match parse_status(changed.as_bytes(), &branches(&["x", "y", "z"])) {
-        Ok(m) => m,
+        Ok(m) => m.statuses,
         Err(e) => panic!("an unknown decision is still a readable answer, got {e:?}"),
     };
     let Some(s) = map.get("x") else {
@@ -361,7 +361,7 @@ fn three_body() -> serde_json::Value {
 fn three_result(
     v: &serde_json::Value,
 ) -> Result<BTreeMap<String, PullRequestStatus>, ReadingFailure> {
-    parse_status(v.to_string().as_bytes(), &branches(&["a", "b", "c"]))
+    parse_status(v.to_string().as_bytes(), &branches(&["a", "b", "c"])).map(|r| r.statuses)
 }
 
 // U14

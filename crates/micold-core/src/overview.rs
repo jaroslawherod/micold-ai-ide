@@ -72,6 +72,89 @@ pub fn location_type(
     }
 }
 
+/// How many pull requests a branch has, as the status reading counts them (data-model *PrCounts*):
+/// those of this repository, not forks. A full page of 100 reads as *100+*.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct PrCounts {
+    /// Open, drafts included.
+    pub open: u8,
+    /// Merged.
+    pub merged: u8,
+    /// There may be more open ones than `open`.
+    pub open_capped: bool,
+    /// There may be more merged ones than `merged`.
+    pub merged_capped: bool,
+}
+
+/// Why a card cannot show its pull request counts (FR-004, research R6).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PrUnknown {
+    /// The pull request status setting is off.
+    Off,
+    /// The last reading could not reach GitHub.
+    Unreachable,
+    /// GitHub asked the app to wait until this Unix second.
+    RateLimited {
+        /// When readings resume, in Unix seconds.
+        until: u64,
+    },
+    /// No reading has covered this branch yet.
+    NotReadYet,
+}
+
+impl PrUnknown {
+    /// The reason in words, the tooltip of the unknown mark. A time reads in the host's zone.
+    pub fn label(self) -> String {
+        match self {
+            Self::Off => "pull request status is off".to_string(),
+            Self::Unreachable => "GitHub is not reachable".to_string(),
+            Self::RateLimited { until } => format!(
+                "rate-limited until {}",
+                crate::local_time::LocalTime::local(i64::try_from(until).unwrap_or(i64::MAX))
+                    .hh_mm()
+            ),
+            Self::NotReadYet => "not read yet".to_string(),
+        }
+    }
+}
+
+/// What a card shows for its branch's pull requests (data-model *CardModel*).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PrDisplay {
+    /// The location has no branch (Default, detached HEAD, orphan): nothing is shown.
+    Hidden,
+    /// The counts cannot be read: *—*, with the reason as tooltip.
+    Unknown(PrUnknown),
+    /// The branch's open and merged counts.
+    Counts(PrCounts),
+}
+
+impl PrDisplay {
+    /// The card footer's text and, for an unknown mark, its tooltip; `None` when hidden. A capped
+    /// count reads *100+*.
+    pub fn footer(self) -> Option<(String, Option<String>)> {
+        let count = |n: u8, capped: bool| {
+            if capped {
+                format!("{}+", u32::from(n))
+            } else {
+                n.to_string()
+            }
+        };
+        match self {
+            Self::Hidden => None,
+            Self::Unknown(reason) => Some(("\u{2014}".to_string(), Some(reason.label()))),
+            Self::Counts(c) => Some((
+                format!(
+                    "{} open \u{b7} {} merged",
+                    count(c.open, c.open_capped),
+                    count(c.merged, c.merged_capped)
+                ),
+                None,
+            )),
+        }
+    }
+}
+
 /// What the card knows of the branch's current pull request (data-model *PrSignal*).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct CurrentPr {
@@ -88,8 +171,7 @@ pub struct CurrentPr {
 }
 
 impl CurrentPr {
-    /// The signals one reading gives for a branch's current pull request. `conflict` is not read
-    /// yet: the reading gains it with the pull request counts.
+    /// The signals one reading gives for a branch's current pull request.
     pub fn from_status(status: &PullRequestStatus) -> Self {
         let (open, checks_failing) = match status.state {
             PrState::Open { checks } | PrState::Draft { checks } => {
@@ -100,7 +182,7 @@ impl CurrentPr {
         Self {
             checks_failing,
             changes_requested: status.review == ReviewState::ChangesRequested,
-            conflict: false,
+            conflict: status.conflict,
             merged: status.state == PrState::Merged,
             open,
         }
@@ -281,6 +363,8 @@ pub struct CardModel {
     pub reason: CardReason,
     /// The one line saying what the location is for.
     pub summary: String,
+    /// Its pull request counts, or why there are none.
+    pub prs: PrDisplay,
 }
 
 /// Orders cards worst state first, keeping the sidebar's order within a state (FR-007).
