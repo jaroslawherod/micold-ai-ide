@@ -57,6 +57,7 @@ mod form_field;
 #[cfg(test)]
 mod form_field_anatomy;
 pub mod glyph;
+mod host_picker;
 mod icon_button;
 mod icon_label;
 pub(crate) mod key_value_list;
@@ -183,6 +184,7 @@ pub use filter_panel::FilterTrigger;
 pub(crate) use form_field::beneath;
 pub use form_field::{FormField, Layer as FieldLayer};
 pub use glyph::Glyph;
+pub use host_picker::HostPicker;
 pub use icon_button::IconButton;
 pub use icon_label::IconLabel;
 pub use key_value_list::KeyValueList;

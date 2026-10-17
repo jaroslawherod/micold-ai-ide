@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 
 use iced::Task;
 use micold_client::app::Message;
-use micold_client::features::daemons::Msg;
+use micold_client::features::daemons::{DraftRuntime, Msg};
 use micold_client::features::Outcome;
 use micold_core::daemons::DaemonId;
 use micold_core::protocol::messages::ClientMsg;
@@ -57,6 +57,10 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
             _ => None,
         })
         .collect();
+    let wants_hosts = matches!(
+        msg,
+        Msg::AddOpened | Msg::EditOpened(_) | Msg::RuntimeChosen(DraftRuntime::Ssh)
+    );
     let outcomes = app.core.update_daemons(msg, taken_elsewhere);
     let mut rest = Vec::new();
     let mut bound = Vec::new();
@@ -134,6 +138,45 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
     });
     for path in gate {
         let _ = crate::shell::workspace::on_folder_chosen(app, path);
+    }
+    if wants_hosts {
+        tasks.push(Task::perform(
+            async {
+                tokio::task::spawn_blocking(|| {
+                    directories::BaseDirs::new()
+                        .map(|d| micold_core::ssh::config_hosts::user_host_aliases(d.home_dir()))
+                        .unwrap_or_default()
+                })
+                .await
+                .unwrap_or_default()
+            },
+            |hosts| Message::Daemons(Msg::SshHostsLoaded(hosts)),
+        ));
+    }
+    // The form's target and every stored remote daemon are resolved through `ssh -G`, once each, so
+    // two aliases of one machine are refused as one (FR-016). A failed resolution leaves the host
+    // judged as typed.
+    for target in app
+        .core
+        .daemon_list
+        .unresolved_targets(&app.core.settings.daemons)
+    {
+        tasks.push(Task::perform(
+            async move {
+                let runner = system_ssh();
+                let effective = micold_core::ssh::config_hosts::resolve(
+                    &runner,
+                    &target,
+                    micold_core::ssh::ClientPlatform::current(),
+                )
+                .await;
+                (target, effective)
+            },
+            |(target, effective)| match effective {
+                Some(effective) => Message::Daemons(Msg::SshResolved(target, effective)),
+                None => Message::NoOp,
+            },
+        ));
     }
     Task::batch(tasks)
 }

@@ -485,7 +485,9 @@ limits (one host daemon at most, unique names, container names and ports) and wh
 daemon looks like are in [Running a host daemon and container daemons
 together](sandboxed-daemon.md#running-a-host-daemon-and-container-daemons-together). A daemon can
 also run on another computer: see [Running the session service on another
-computer over SSH](remote-daemons.md).
+computer over SSH](remote-daemons.md). Choose **Remote over SSH** in the form and pick a host from
+your SSH configuration, or enter host, user, port and key file; a second daemon for the same host,
+user and port is refused, naming the existing one.
 
 Each container daemon keeps its own settings, and they are kept if you switch it to the host and
 back. A change to a running daemon asks before it restarts it.

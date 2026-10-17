@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #489
 - **Worktree branch**: feat/489_run-the-session-daemon-on-a-remote-host-over-ssh
 - **Started**: 2026-10-12
-- **Phase**: M4 PR open
-- **Next step**: orchestrator waits on CI and merges M4, then M5
+- **Phase**: M5 implementing
+- **Next step**: implement M5 (T056–T065)
 
 ## Pull requests
 
@@ -20,7 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #845 | M1 | merged | cf40ca917492368b043af1fe321c15715e919b2d |
 | #883 | M2 | merged | ce4dbafccc49cfe6ad011d64b556c1ac5c9e9214 |
 | #895 | M3 | merged | 8a04f4206330fa7552531e4694e2244b186d345f |
-| #918 | M4 | open | — |
+| #918 | M4 | merged | 402b31f667bec7632cfe284acd65c59549085fc8 |
 
 ## Milestones
 
@@ -29,7 +29,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T027 | full | Remote over SSH daemon connects (add, start, Connected) | #845 | done |
 | M2 | T028–T038 | full | Remote projects, worktrees and sessions | #883 | done |
 | M3 | T039–T050 | full | Reconnect after a network drop | #895 | done |
-| M4 | T051–T055 | full | Local work unaffected, concurrent clients | #918 | in review |
+| M4 | T051–T055 | full | Local work unaffected, concurrent clients | #918 | done |
 | M5 | T056–T065 | full | Host picker, failure reasons, daemon management | — | pending |
 | M6 | T066–T072 | full | Version mismatch explained | — | pending |
 | M7 | T073–T081 | full | Replace a mismatched daemon with no sessions | — | pending |
@@ -79,7 +79,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M5 (T056-T065) implemented in the working tree, NOT yet compiled or tested green; no task ticked, no tdd log entry, no review, no gate, no PR. #918 recorded merged; branch was reset onto origin/main.
+
+Written (all uncommitted before this commit's WIP):
+- core: `ssh/config_hosts.rs` (parse_g, host_aliases, user_host_aliases, EffectiveSsh, SshIdentity, literal_identity, async `resolve`; its unit tests were written WITH the impl, so record it as test-after or run a mutant), `argv::resolve` (+test), `RegistryError::SshDuplicate{other}`, `DaemonRegistry::add_resolved/edit_resolved` (identity closure), test file `crates/micold-core/tests/daemons_ssh_duplicates.rs` (T057).
+- client: `features/daemons.rs` (State.ssh_hosts, private resolved cache keyed by resolution_key, `unresolved_targets`, Msg::SshHostsLoaded/SshHostChosen/SshResolved, SshDuplicate -> "<host> is already used by daemon <other>." on field host, save uses add_resolved/edit_resolved), tests appended to `tests/daemons_feature.rs` (T058), geometry test appended to `tests/daemons_section_geometry.rs` (T059), `ui/material/host_picker.rs` (HostPicker over Select, exported in material/mod.rs, showcase Entry in `showcase/catalogue.rs` + `showcase/sections/controls.rs::host_picker`), `ui/settings/daemons.rs` (picker above the host field; `form` now takes `state: &'a State`), `shell/daemons.rs` (loads aliases on AddOpened/EditOpened/RuntimeChosen(Ssh); runs `ssh -G` for unresolved targets -> SshResolved), `daemon.rs::ssh_attempt` (watchdog = resolved ConnectTimeout else 15 s; NOTE it adds one extra `ssh -G` runner call, which may break fake-runner tests in daemon.rs that count calls).
+- daemon: `tests/ssh_real_hostkey_auth.rs` (T060) + `Dialer::with_ssh` in `ssh_real_support/remote.rs`.
+- docs: `docs/user-guide/remote-daemons.md`, `settings.md` (T065).
+
+Next step: read `/tmp/claude-1000/-home-jaro-workspaces-micold-ai-ide--claude-worktrees-feat-489-run-the-session-daemon-on-a-remote-host-over-ssh/dbec3b30-045c-474f-8ce3-29336ebde102/scratchpad/t1.log` (detached run of: core duplicates test, core lib config_hosts+argv, daemon ssh_real_hostkey_auth, client daemons_feature; ends with T_EXIT) or rerun; fix compile errors (likely: unused imports, `tokio::task::spawn_blocking` availability in client, `dyn SshHost` as `SshRunner` in `resolve`, showcase completeness/inventory tests, fmt). Then run client `daemons_section_geometry`, showcase_* and inventory tests, `mise run test-core`, `mise run test-ssh` (ssh_real_hostkey_auth: unknown/changed key, auth, unreachable; adjust expectations to what classify returns), tick T056-T065 in tasks.md, append tdd/cycle-log.md and test-list.md rows (M5 outer/inner), then review A/B, full gate, PR "feat(489): host picker, failure reasons and daemon management (#489)".
 
 ## Open escalation
 

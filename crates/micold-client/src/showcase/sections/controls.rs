@@ -142,6 +142,19 @@ pub fn split_action<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a
     )
 }
 
+/// `HostPicker` — the select over the hosts of the user's SSH configuration (feature 489). The
+/// gallery has no SSH configuration, so the one pose is the empty list.
+pub fn host_picker<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
+    arrange(
+        vec![posed(
+            "no configured hosts",
+            material::HostPicker::new(&[], "", |_| Message::NoOp, roles),
+            roles,
+        )],
+        Layout::Inline,
+    )
+}
+
 /// `LabelledToggle` — a glyph and the word for what it toggles (feature 026, T066a).
 pub fn labelled_toggle<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
     arrange(

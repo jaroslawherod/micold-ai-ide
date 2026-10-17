@@ -838,9 +838,11 @@ async fn ssh_attempt(
         return Err("this build cannot run `ssh`".to_string());
     };
     let platform = ClientPlatform::current();
-    // The connect watchdog: no attempt hangs the client. The user's `ConnectTimeout` replaces it
-    // when read from their SSH configuration (M5).
-    let timeout_secs = DEFAULT_CONNECT_TIMEOUT_SECS;
+    // The connect watchdog: no attempt hangs the client. The user's `ConnectTimeout` replaces the
+    // default when their SSH configuration sets one (FR-009).
+    let timeout_secs = micold_core::ssh::config_hosts::resolve(host, target, platform)
+        .await
+        .map_or(DEFAULT_CONNECT_TIMEOUT_SECS, |e| e.timeout_secs());
     let opts = ProvisionOptions {
         platform,
         client_arch: std::env::consts::ARCH.to_string(),
