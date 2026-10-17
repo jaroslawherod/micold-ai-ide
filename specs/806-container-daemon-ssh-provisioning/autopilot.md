@@ -9,21 +9,22 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #806
 - **Worktree branch**: claude/project-thread-uwrpqv
 - **Started**: 2026-10-17
-- **Phase**: M1
-- **Next step**: M1 PR pushed; orchestrator opens it, waits on CI and merges
+- **Phase**: M2
+- **Next step**: M2 in progress: see Handover
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #975 | design (spec, plan, tasks) | merged | edae87f2b49c0d1ab6315393fe395222c2809a8d |
+| #979 | M1 basic image | merged | 110b724e0371648d2de53c5f5c033f57acad16b2 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T009 | full | basic image published by `basic-image.yml` on merge (prints the `BASIC_IMAGE` pin) | (orchestrator opens) | pushed |
-| M2 | T010–T025, T087 | full | shared `micold_core::provision` (contract); 489 remote daemons start through it, row shows shared steps — #686 can plan onto it from here | — | pending |
+| M1 | T001–T009 | full | basic image published by `basic-image.yml` on merge (prints the `BASIC_IMAGE` pin) | #979 | merged |
+| M2 | T010–T025, T087 | full | shared `micold_core::provision` (contract); 489 remote daemons start through it, row shows shared steps — #686 can plan onto it from here | — | in progress |
 | M3 | T026–T031 | full | static Linux musl daemons (x86_64, aarch64) in every package; `NoMatchingBuild` | — | pending |
 | M4 | T032–T041 | full | AI CLI install step + registry-only relay on app-owned targets; daemon offers only installed CLIs — #686 has the full contract | — | pending |
 | M5 | T042–T070 | full | container daemons on the pinned basic image over SSH; two-entry image form; migration and legacy containers | — | pending |
@@ -75,7 +76,17 @@ Milestone notes:
 
 ## Handover
 
-None.
+M2 unit 1 stopped at ~125k context (branch reset to origin/main, WIP committed locally, NOT pushed, no PR). Done:
+- `crates/micold-core/src/ssh/argv.rs`: `Reach`, `PinnedReach`, `reach_check`, `install(reach,platform,timeout,relay_port)`, `record_last(reach,platform,timeout,build)`; `probe/copy/bridge` now take `&Reach`; tests T010 written (T017 core done; callers NOT yet moved: `ssh/provision.rs` still passes `&SshTarget`).
+- New files, written but NOT yet declared in `lib.rs` and never compiled: `provision/attempt.rs` (CancelToken + tests, T014 part 1/T020 part 1), `provision/failure.rs` (Step, FailureCause, ProvisionFailure::reason(&ReasonContext), ProvisionWarning + tests, T012/T019), `provision/keys.rs` (DaemonKeys, keygen_argv, ensure(dir, platform, &dyn SshRunner), write_known_hosts + tests, T011/T018).
+Next (in order):
+1. `pub mod provision;` in lib.rs; create `provision/mod.rs`: `pub mod attempt, failure, keys`; `HostPort{host,port}`, `Egress`, `AiCliTable` (empty placeholder struct), `Ownership::{AppOwned{ai_clis,table,state_dir,egress},UserHost}`, `StepBounds{acquire,create_container,reach,probe,copy:Option,install,start,version}` with `container()` / `user_host(Duration)`, `ProvisionTarget{reach,owned,bounds}`, `ProvisionEvent{Entered,CopyPercent(u8),InstallLine,InstallDone}`, `EventSink=Arc<dyn Fn(ProvisionEvent)+Send+Sync>`, `Provisioned{connected,warnings,copied}`, `ensure_build(host,target,opts,cancel,sink)->Result<(Probe,copied),ProvisionFailure>` (Reach, Probe, Copy; InstallAiClis skipped until M4 T035) and `run(...)` = ensure_build + Start + VersionCheck. Add `AiCliSelection(BTreeSet<AiCli>)` (`new_daemon()`={ClaudeCode}, `all()`=AiCli::ALL, serde) in `sandbox/mod.rs` (not yet in SandboxProfile; T077).
+   Design decisions made: UserHost skips the `true` reach command (the probe is its first connection; 489 tests script only the probe) but still emits `Entered(Reach)`; Reach retries every 500 ms on stderr containing "Connection refused" / "Connection reset" / "kex_exchange_identification" until `bounds.reach`, then NoSshServer; AppOwned + AuthRefused -> `FailureCause::AuthRefused`, UserHost stays `Ssh(AuthRefused)`; each step runs under a guard (select on `cancel.cancelled()` and `tokio::time::timeout(bound)` -> `TimedOut{bound}` / `Cancelled`; dropping the future kills the ssh child via kill_on_drop); runner `timed_out` -> `TimedOut{bound}`; copy failure classified `Other` -> `CopyFailed`, known class -> `Ssh(class)`; post-copy re-probe without `have` -> CopyFailed; no artefact -> `NoMatchingBuild{os,arch}` at Probe; `!home_writable` -> `Ssh(RemoteNotWritable)`; Start: AppOwned runs `argv::record_last` first, then `host.open(bridge)` + `handshake_with` under `bounds.start`; bridge death -> UserHost `Ssh(HelperFailed)`, AppOwned `DaemonStart` (+output); `Connected::Refused` -> `Entered(VersionCheck)` and `Ok(Provisioned{connected: Refused})` (the client keeps its 489 banner/restart flow); add `FailureCause::from_refusal(&RefusalReason)->Option<FailureCause>` (VersionMismatch{found: daemon,expected: client}) for runtimes (M5). Tests: fake host keyed by command kind (true / sh -s with MICOLD_PROBE in stdin / `cat >` / `printf` / `remote bridge`); fake daemon for the handshake: `Framed::new(far, DaemonCodec::new())`, read Hello, send `Frame::Control(DaemonMsg::Refused{reason})`. T013, T087 live in `provision/mod.rs` tests.
+2. `ssh/provision.rs` T022: `provision()` = `ensure_build` wrapper, `connect()` = `run` wrapper with `UserHost` target, `ProvisionOptions` kept; map ProvisionFailure back to SshFailure (Ssh(f)->f, TimedOut->Timeout, CopyFailed->RemoteNotWritable, NoMatchingBuild->SshFailure::NoMatchingBuild, DaemonStart->HelperFailed{last output line}); existing 489 tests there stay unchanged (T015 test: UserHost wrapper uses bounds reach/probe/start = timeout_secs, copy None). Callers of the argv builders: `grep -n "argv::" crates -r`.
+3. T014 second half: `SystemSsh` gets `cancel: Option<CancelToken>` (client constructor `shell/daemons.rs::system_ssh` and `crates/micold-daemon/tests/ssh_real_support/remote.rs:38` build it by struct literal: add the field there) and kills the child on cancel; add `cancelled: bool` is NOT needed if `run` returns `Err(io::ErrorKind::Interrupted)` on cancel; test with `sleep` child cfg(unix) and `timeout` on Windows.
+4. Client T016/T023/T024: replace `ConnectionMsg::CopyProgress(u8)` with `ConnectionMsg::Provisioning(ProvisionEvent)` (`features/connection.rs:238`, `shell/connection.rs:46`, `daemon.rs:761 copy_progress` and `ssh_attempt` -> use `provision::run` + `ProvisionFailure::reason(ctx)`, `features/daemons.rs:1030/1171` `Msg::CopyProgress`; tests `crates/micold-client/tests/daemons_feature.rs:276`, `daemons_section_geometry.rs:267`); per-daemon current step + percent; failure sets `unreachable` to `reason()` and appends to recent errors; row draws step label + percent via `progress.rs` in `ui/settings/daemons.rs`.
+5. T025 `docs/user-guide/remote-daemons.md`; update `contracts/provisioning.md` (UserHost Reach note; `reason(&ReasonContext)`; VersionCheck returns Ok(Refused)); tick T010-T025, T087 in tasks.md.
+6. Then verify.md / review / gate (`scripts/gate.sh`, detached; free disk first, df showed 21 GB free at start) / PR files (`$SCRATCHPAD/pr-title` = `#806: Container daemon: configurable resources, Dockerfile or image source; build from current daemon binary by default — M2: shared SSH provisioning (T010–T025, T087)`, `pr-body.md` per pr.md), push `--force-with-lease`.
 
 ## Open escalation
 

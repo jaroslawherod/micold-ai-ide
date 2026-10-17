@@ -1,5 +1,7 @@
 //! The command lines of every `ssh` the client runs (contracts/ssh-transport.md). Pure builders.
 
+use std::path::PathBuf;
+
 use super::target::SshTarget;
 
 /// The client's platform, as data (like `pathmap::map_for` takes `windows_host`), so one CI
@@ -47,6 +49,34 @@ pub struct SshCommand {
     pub env: Vec<(String, String)>,
 }
 
+/// How a command reaches its SSH server (contracts/provisioning.md, *What a runtime supplies*).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Reach {
+    /// A host the user owns, reached through their own SSH configuration (feature 489).
+    UserConfig(SshTarget),
+    /// An app-owned target (a container, a pod) reached on loopback with the app's own key and
+    /// `known_hosts`, never the user's configuration, keys or agent.
+    Pinned(PinnedReach),
+}
+
+/// Everything a pinned reach needs; nothing is read from the user's SSH setup.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PinnedReach {
+    /// The host, always loopback (`127.0.0.1`).
+    pub host: String,
+    /// The port the target's SSH server is published on.
+    pub port: u16,
+    /// The user name to log in as.
+    pub user: String,
+    /// The app's private key for this target.
+    pub key: PathBuf,
+    /// The app's own `known_hosts` for this target.
+    pub known_hosts: PathBuf,
+}
+
+/// The loopback port an install command's relay is forwarded to inside the target.
+pub const RELAY_REMOTE_PORT: u16 = 17728;
+
 /// The seconds a connect may take when the user's SSH configuration sets no `ConnectTimeout`
 /// (FR-009).
 pub const DEFAULT_CONNECT_TIMEOUT_SECS: u32 = 15;
@@ -78,48 +108,74 @@ fn program(platform: ClientPlatform) -> String {
     }
 }
 
-/// The common prefix, in order, then `--`, the host and the remote command.
+/// The common prefix, in order, then `--`, the host and the remote command. `relay` is the local
+/// port of the install relay, forwarded to the target's loopback; only [`install`] passes one, and
+/// only an install command lacks `ClearAllForwardings`.
 fn command(
-    target: &SshTarget,
+    reach: &Reach,
     platform: ClientPlatform,
     connect_timeout_secs: u32,
     remote: &str,
+    forward: Option<Forward>,
 ) -> SshCommand {
-    let mut args: Vec<String> = [
-        "-T",
-        "-o",
-        "BatchMode=yes",
-        "-o",
-        "StrictHostKeyChecking=yes",
-    ]
-    .iter()
-    .map(|s| s.to_string())
-    .collect();
+    let mut args: Vec<String> = Vec::new();
+    if matches!(reach, Reach::Pinned(_)) {
+        args.extend(["-F".into(), "none".into()]);
+    }
+    args.extend(
+        ["-T", "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=yes"]
+            .iter()
+            .map(|s| s.to_string()),
+    );
     // `UpdateHostKeys=no`: never write to known_hosts on the user's behalf (FR-010). The server
     // alive options bound a network that dies mid-copy or mid-session (FR-009).
-    for option in [
-        "ClearAllForwardings=yes",
-        "UpdateHostKeys=no",
-        "ServerAliveInterval=15",
-        "ServerAliveCountMax=3",
-    ] {
+    let mut options = vec!["UpdateHostKeys=no", "ServerAliveInterval=15", "ServerAliveCountMax=3"];
+    if forward.is_none() {
+        options.insert(0, "ClearAllForwardings=yes");
+    }
+    for option in options {
         args.extend(["-o".into(), option.into()]);
     }
     args.extend([
         "-o".into(),
         format!("ConnectTimeout={connect_timeout_secs}"),
     ]);
-    if let Some(port) = target.port {
-        args.extend(["-p".into(), port.to_string()]);
-    }
-    if let Some(user) = &target.user {
-        args.extend(["-l".into(), user.clone()]);
-    }
-    if let Some(key) = &target.key_file {
-        args.extend(["-i".into(), key.display().to_string()]);
+    let host = match reach {
+        Reach::UserConfig(target) => {
+            if let Some(port) = target.port {
+                args.extend(["-p".into(), port.to_string()]);
+            }
+            if let Some(user) = &target.user {
+                args.extend(["-l".into(), user.clone()]);
+            }
+            if let Some(key) = &target.key_file {
+                args.extend(["-i".into(), key.display().to_string()]);
+            }
+            target.host.clone()
+        }
+        Reach::Pinned(pinned) => {
+            for option in [
+                "IdentitiesOnly=yes".to_string(),
+                "IdentityAgent=none".to_string(),
+                format!("UserKnownHostsFile={}", pinned.known_hosts.display()),
+                "GlobalKnownHostsFile=none".to_string(),
+            ] {
+                args.extend(["-o".into(), option]);
+            }
+            args.extend(["-i".into(), pinned.key.display().to_string()]);
+            args.extend(["-l".into(), pinned.user.clone()]);
+            args.extend(["-p".into(), pinned.port.to_string()]);
+            pinned.host.clone()
+        }
+    };
+    if let Some(Forward { relay_port }) = forward {
+        args.extend([
+            "-R".into(),
+            format!("127.0.0.1:{RELAY_REMOTE_PORT}:127.0.0.1:{relay_port}"),
+        ]);
     }
     args.push("--".into());
-    args.push(target.host.clone());
+    args.push(host);
     args.push(remote.to_string());
     SshCommand {
         program: program(platform),
@@ -128,9 +184,46 @@ fn command(
     }
 }
 
+/// The one remote forward a command may carry: the install relay.
+#[derive(Clone, Copy)]
+struct Forward {
+    relay_port: u16,
+}
+
 /// The probe: the fixed script goes on stdin of `sh -s`, so the user's login shell never parses it.
-pub fn probe(target: &SshTarget, platform: ClientPlatform, timeout: u32) -> SshCommand {
-    command(target, platform, timeout, "sh -s")
+pub fn probe(reach: &Reach, platform: ClientPlatform, timeout: u32) -> SshCommand {
+    command(reach, platform, timeout, "sh -s", None)
+}
+
+/// The reach check: runs `true`, so a pinned target's SSH server is proven up before the probe.
+pub fn reach_check(reach: &Reach, platform: ClientPlatform, timeout: u32) -> SshCommand {
+    command(reach, platform, timeout, "true", None)
+}
+
+/// The install: the fixed install script goes on stdin of `sh -s`. The only command that may carry
+/// a forward: `-R` to the install relay, when `relay_port` is given.
+pub fn install(
+    reach: &Reach,
+    platform: ClientPlatform,
+    timeout: u32,
+    relay_port: Option<u16>,
+) -> SshCommand {
+    command(
+        reach,
+        platform,
+        timeout,
+        "sh -s",
+        relay_port.map(|relay_port| Forward { relay_port }),
+    )
+}
+
+/// Records which build the target should start unattended (`$HOME/.micold/remote/last`), for the
+/// image's entrypoint. App-owned targets only. The build id is this build's own constant.
+pub fn record_last(reach: &Reach, platform: ClientPlatform, timeout: u32, build: &str) -> SshCommand {
+    let remote = format!(
+        "sh -c 'mkdir -p \"$HOME/.micold/remote\" && printf %s \"{build}\" > \"$HOME/.micold/remote/last\"'"
+    );
+    command(reach, platform, timeout, &remote, None)
 }
 
 /// The probe script itself, a fixed string with only the build directory name substituted.
@@ -145,23 +238,23 @@ pub fn probe_script(build: &str) -> String {
 }
 
 /// The copy: the artefact bytes arrive on stdin and land atomically in the build's directory.
-pub fn copy(target: &SshTarget, platform: ClientPlatform, timeout: u32, build: &str) -> SshCommand {
+pub fn copy(reach: &Reach, platform: ClientPlatform, timeout: u32, build: &str) -> SshCommand {
     let dir = remote_dir(build);
     let remote = format!(
         "sh -c 'umask 077; mkdir -p \"{dir}\" && cat > \"{dir}/.part\" && chmod 700 \"{dir}/.part\" && mv \"{dir}/.part\" \"{dir}/micold-daemon\"'"
     );
-    command(target, platform, timeout, &remote)
+    command(reach, platform, timeout, &remote, None)
 }
 
 /// The bridge: the remote daemon binary's relay, whose stdin/stdout carry the protocol.
 pub fn bridge(
-    target: &SshTarget,
+    reach: &Reach,
     platform: ClientPlatform,
     timeout: u32,
     build: &str,
 ) -> SshCommand {
     let remote = format!("\"{}/micold-daemon\" remote bridge", remote_dir(build));
-    command(target, platform, timeout, &remote)
+    command(reach, platform, timeout, &remote, None)
 }
 
 #[cfg(test)]
@@ -169,13 +262,23 @@ mod tests {
     use super::*;
     use std::path::PathBuf;
 
-    fn target() -> SshTarget {
-        SshTarget {
+    fn target() -> Reach {
+        Reach::UserConfig(SshTarget {
             host: "build".into(),
             user: Some("me".into()),
             port: Some(2222),
             key_file: Some(PathBuf::from("/home/me/.ssh/id")),
-        }
+        })
+    }
+
+    fn pinned() -> Reach {
+        Reach::Pinned(PinnedReach {
+            host: "127.0.0.1".into(),
+            port: 40222,
+            user: "dev".into(),
+            key: PathBuf::from("/state/ssh/client_ed25519"),
+            known_hosts: PathBuf::from("/state/ssh/known_hosts"),
+        })
     }
 
     fn all_commands(platform: ClientPlatform) -> Vec<SshCommand> {
@@ -184,6 +287,8 @@ mod tests {
             probe(&t, platform, 15),
             copy(&t, platform, 15, "1.0-abc"),
             bridge(&t, platform, 15, "1.0-abc"),
+            reach_check(&t, platform, 15),
+            record_last(&t, platform, 15, "1.0-abc"),
         ]
     }
 
@@ -259,12 +364,12 @@ mod tests {
 
     #[test]
     fn user_and_port_are_passed_only_when_entered() {
-        let bare = SshTarget {
+        let bare = Reach::UserConfig(SshTarget {
             host: "h".into(),
             user: None,
             port: None,
             key_file: None,
-        };
+        });
         let joined = probe(&bare, ClientPlatform::Linux, 15).args.join(" ");
         for flag in ["-p ", "-l ", "-i "] {
             assert!(!joined.contains(flag), "{flag} in {joined}");
@@ -310,6 +415,114 @@ mod tests {
         assert!(
             !last.contains("build"),
             "host name must not reach the script: {last}"
+        );
+    }
+
+    #[test]
+    fn a_user_config_reach_is_byte_for_byte_todays_argv() {
+        let cmd = probe(&target(), ClientPlatform::Linux, 15);
+        let want: Vec<&str> = vec![
+            "-T",
+            "-o",
+            "BatchMode=yes",
+            "-o",
+            "StrictHostKeyChecking=yes",
+            "-o",
+            "ClearAllForwardings=yes",
+            "-o",
+            "UpdateHostKeys=no",
+            "-o",
+            "ServerAliveInterval=15",
+            "-o",
+            "ServerAliveCountMax=3",
+            "-o",
+            "ConnectTimeout=15",
+            "-p",
+            "2222",
+            "-l",
+            "me",
+            "-i",
+            "/home/me/.ssh/id",
+            "--",
+            "build",
+            "sh -s",
+        ];
+        assert_eq!(cmd.args, want);
+    }
+
+    #[test]
+    fn a_pinned_reach_reads_no_user_configuration_key_or_agent() {
+        for cmd in [
+            probe(&pinned(), ClientPlatform::Linux, 15),
+            reach_check(&pinned(), ClientPlatform::Linux, 15),
+            copy(&pinned(), ClientPlatform::Linux, 15, "b"),
+            bridge(&pinned(), ClientPlatform::Linux, 15, "b"),
+            record_last(&pinned(), ClientPlatform::Linux, 15, "b"),
+            install(&pinned(), ClientPlatform::Linux, 15, None),
+        ] {
+            let a = &cmd.args;
+            let pair = |flag: &str, value: &str| a.windows(2).any(|w| w[0] == flag && w[1] == value);
+            assert_eq!(&a[..2], ["-F", "none"], "{a:?}");
+            for option in [
+                "IdentitiesOnly=yes",
+                "IdentityAgent=none",
+                "UserKnownHostsFile=/state/ssh/known_hosts",
+                "GlobalKnownHostsFile=none",
+                "StrictHostKeyChecking=yes",
+            ] {
+                assert!(pair("-o", option), "{option} missing: {a:?}");
+            }
+            assert!(pair("-i", "/state/ssh/client_ed25519"), "{a:?}");
+            assert!(pair("-l", "dev") && pair("-p", "40222"), "{a:?}");
+            let at = a.iter().position(|x| x == "--").unwrap();
+            assert_eq!(a[at + 1], "127.0.0.1");
+        }
+    }
+
+    #[test]
+    fn the_reach_check_runs_true() {
+        for reach in [target(), pinned()] {
+            let cmd = reach_check(&reach, ClientPlatform::Linux, 15);
+            assert_eq!(cmd.args.last().map(String::as_str), Some("true"));
+        }
+    }
+
+    #[test]
+    fn install_is_the_only_command_without_clear_all_forwardings() {
+        let with = install(&pinned(), ClientPlatform::Linux, 15, Some(5555));
+        let joined = with.args.join(" ");
+        assert!(!joined.contains("ClearAllForwardings"), "{joined}");
+        assert!(
+            joined.contains("-R 127.0.0.1:17728:127.0.0.1:5555"),
+            "{joined}"
+        );
+        assert_eq!(with.args.last().map(String::as_str), Some("sh -s"));
+        let without = install(&pinned(), ClientPlatform::Linux, 15, None);
+        assert!(!without.args.iter().any(|a| a == "-R"));
+        for platform in [ClientPlatform::Linux, ClientPlatform::Windows] {
+            for reach in [target(), pinned()] {
+                for cmd in [
+                    probe(&reach, platform, 15),
+                    copy(&reach, platform, 15, "b"),
+                    bridge(&reach, platform, 15, "b"),
+                    reach_check(&reach, platform, 15),
+                    record_last(&reach, platform, 15, "b"),
+                ] {
+                    assert!(cmd.args.contains(&"ClearAllForwardings=yes".to_string()));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_pinned_install_is_platform_parametrised() {
+        assert_eq!(
+            install(&pinned(), ClientPlatform::Windows, 15, None).program,
+            "ssh.exe"
+        );
+        assert_eq!(
+            install(&pinned(), ClientPlatform::MacOs, 15, None).program,
+            "ssh"
         );
     }
 }
