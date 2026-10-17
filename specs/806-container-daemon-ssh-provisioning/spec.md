@@ -12,6 +12,32 @@ images are a basic image with sshd; the client copies the daemon binary in over 
 selected AI CLIs on start (no image build/push). The local 'sandbox' container runtime should use the
 same mechanism." The Dockerfile build of the issue body is dropped.
 
+## Clarifications
+
+### Session 2026-10-17
+
+- Q: Where does the default basic image come from: an image this project publishes and pins, or a
+  stock public image the client prepares on first start? → A: An image this project publishes, built
+  from `packaging/sandbox/Containerfile` without the daemon and the AI CLIs and with an SSH server
+  added, and pushed by the release workflow's existing image jobs for both architectures. Its version
+  is independent of the app's: the client compiles in a pinned reference (by digest) and the image is
+  republished only when its base changes, so a development or unreleased client still finds it. A stock
+  image is not used: none carries an SSH server together with the Node runtime the npm-distributed AI
+  CLIs need and a glibc at least as new as the daemon build's, and preparing one on start would need
+  root, a package manager and network on every first start. _(agent-resolved:
+  packaging/sandbox/Containerfile#runtime-base, .github/workflows/release.yml#image,
+  spec.md#Overview)_
+- Q: Which AI CLIs does a new daemon, and a migrated one, have selected by default? → A: A migrated
+  daemon (any container daemon from before the upgrade, on the released image or on its own image)
+  selects every AI CLI the app supports, which is what the released image carried and what the app
+  offered on every container daemon, so nothing it offered before is lost. A new daemon selects only Claude Code, the app's default AI CLI; the user
+  adds others in the form. _(agent-resolved: packaging/sandbox/Containerfile#AI CLIs (FR-023a),
+  spec.md#US4 + FR-016, crates/micold-core/src/session.rs#AiCli (`#[default] ClaudeCode`), spec.md#SC-002)_
+- Q: What happens when a daemon's stored default AI CLI is not selected, or its install failed? → A: The
+  existing rule: the start press starts nothing, substitutes nothing, keeps the stored default and says
+  the CLI is not available on that daemon, where the user chooses. _(agent-resolved: specs/026 FR-002,
+  FR-004 scenario 4, crates/micold-client/tests/unavailable_default_says_so.rs, spec 027 FR-023b)_
+
 ## Overview
 
 Today a container daemon runs a released image that has the session daemon and every AI CLI baked in.
@@ -253,10 +279,10 @@ copy refused) is reported with the same reason text on both.
   basic image, or "My own image" given as an image reference or an image archive file. The default for a
   new daemon MUST be the basic image.
 - **FR-002**: The basic image MUST contain an SSH server and the tools a session needs, and MUST NOT
-  contain the session daemon or any AI CLI. [NEEDS CLARIFICATION: Where does the default basic image
-  come from: an image this project publishes once per base change and pins by digest (version
-  independent of the app), or a stock public image (for example a distribution image) that the client
-  prepares on first start?]
+  contain the session daemon or any AI CLI. It MUST carry the runtime the AI CLI installs need (Node,
+  for the npm-distributed CLIs) and a C library no older than the daemon build's. It MUST be published
+  by this project, independently of the app's version, and the client MUST name it by a pinned
+  reference (digest), so a client of any version, including an unreleased one, can pull it.
 - **FR-003**: The released daemon image MUST NOT be offered, suggested or used as a default anywhere.
 - **FR-004**: "My own image" MUST be pulled (reference) or loaded (archive) and provisioned exactly like
   the basic image. The form MUST say that such an image must provide an SSH server.
@@ -286,9 +312,9 @@ copy refused) is reported with the same reason text on both.
 **AI CLIs**
 
 - **FR-010**: Each container daemon MUST have its own selection of AI CLIs, chosen in its form from the AI CLIs the
-  app supports, persisted with the daemon. [NEEDS CLARIFICATION: Which AI CLIs does a new daemon, and a
-  migrated one, have selected by default: all the app supports (what the released image carried), none,
-  or only Claude Code?]
+  app supports, persisted with the daemon. A new daemon MUST have only Claude Code selected; every container
+  daemon from before the upgrade (either case of FR-016) MUST have every AI CLI the app supports
+  selected.
 - **FR-011**: On start of a container daemon the system MUST install every selected AI CLI that is not
   already installed in the daemon's container, at the version this app release pins, and MUST keep installed CLIs across
   restarts and container recreation (with the container's daemon state, not inside the image) so a start with nothing new to install downloads nothing.
