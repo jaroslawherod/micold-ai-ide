@@ -23,6 +23,16 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
+| M1 | T001–T023 | full | Overview grid from the top-bar button, session-derived card states | — | pending |
+| M2 | T024–T030 | full | PR counts and merge conflict on cards | — | pending |
+| M3 | T031–T039 | full | Ctrl/Cmd+Shift+O and attention badge | — | pending |
+| M4 | T040–T049 | full | Card activation and keyboard traversal | — | pending |
+| M5 | T050–T060 | full | Task summary and progress on cards | — | pending |
+| M6 | T061–T069 | full | Hook-fed agent activity (protocol 49) | — | pending |
+
+M1 holds 18 US1 tasks plus setup and foundational: kept whole because no smaller cut has an
+observable deliverable (the grid needs the rules, card, grid, view and button together); US1's PR
+counts are split off as M2 along acceptance scenario 3. Polish T070–T071 changes no code: close unit.
 
 ## Decisions
 
@@ -38,6 +48,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D8 | plan | Issue title source | One-shot cached `GhCli::read_issue` per numeric ticket on Overview open when GitHub issue tooling is available; else branch name | agent-resolved | research R8; spec Assumptions (no fetch only when lookup off/offline); no client title cache exists |
 | D9 | plan | PR counts without a new poller | Light `oc`/`mc` aliases (first 100, non-fork nodes) on the existing status query; `mergeable` for conflicts | agent-resolved | research R6; crates/micold-core/src/pull_request.rs `status_query`, `select_pull_request` drops forks |
 | D10 | plan | Ledger phase words → card phase | spec/clarify/bug → Spec, plan → Plan, tasks → Tasks, milestones/bugfix/chore → Implement, close → PR, done → Done | agent-resolved | research R9; .claude/skills/speckit-autopilot/templates/autopilot-ledger.md |
+| D11 | tasks | Does the start menu anchor to its row when a card opens it? | No as planned (`start_menu_toggled` uses the last row press, stale or (0,0)); `OfferStart` focuses the row's start control, scrolls it into view, measures its bounds with a read-only focus operation and sends `StartMenuAnchored` before `StartMenuOpened` (T042, T046); plan fixed in research R12 | agent-resolved | features/session.rs `start_menu_toggled`; ui/material/split_action.rs anchor rule; ui/focus.rs `into_view` |
+| D12 | tasks | Does `on_disconnected` keep the sessions so cards keep their state? | Yes: it removes only `daemon_catalogs[daemon]`, read only by `register_projects`; sessions stay in core state; PR reading is `Released` (unknown); research R14 updated, pinned by T010 | agent-resolved | shell/daemon_sync.rs `on_disconnected`, `register_projects` |
 
 ## Review rounds
 
@@ -45,6 +57,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | Spec | 1 | c54be34533424e39665e73004ef6ce8f0cadc4e2:992e129808513fd43ef6b1982b4cb1881cdb0921 | CLEAN (3 MINOR: F1 F2 F3 fixed, prose only) |
 | Plan | 1 | a87de0fcfc292f91a22bf5eed48bbb38ce5f826e:2b103a91d9ac9fc083447d12fbfc68629dc01877 | CHANGES (F1 MAJOR: alternatives missing in R7/R12/R13/R14, F2 MINOR: ProgressBar vs StageProgress; both fixed, prose only) |
+| Tasks | 1 | 6fee9a748edfa497c671738cc192bea1a796dbf3:284b80d3b60da7197ae00f498ce616f8a47bf5fc | pending |
 
 ## Declined review findings
 
@@ -53,7 +66,23 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+Tasks unit, handed over at the 150k context cap after step 2's analyze (rules/context.md).
+
+- **Done**: branch rebased onto origin/main (REBASED 6; not pushed); `speckit-tasks` wrote
+  tasks.md (T001–T071) with `## Milestones` M1–M6, all tier full, in the ledger; `speckit-analyze`
+  ran (no CRITICAL/HIGH) and its C1–C4, T1, D1–D3 findings are fixed in tasks.md and spec US2.5
+  (prose); D4, U1–U3 accepted as LOW. The plan unit's two points are settled as D11 (start menu
+  anchor: research R12 rewritten, T042/T046) and D12 (`on_disconnected` keeps sessions: R14).
+  Optional before/after_tasks hooks (docguard, tdd) skipped.
+- **Next**: tasks step 2's fresh review with rubrics/tasks.md (round 1, session model; snapshot
+  already in *Review rounds*, take a new one if the tree changed); then step 3 (checklist: all 16
+  items already ticked, reviewer confirms), step 4 Specs-only gate
+  (`scripts/check-criteria-observables.sh specs/813-worktree-overview/spec.md`), step 5 design PR:
+  title `#813: worktree overview with state-aware cards (sessions, PRs, task progress)` plus
+  pr.md's `(#813)` suffix per the orchestrator's override, body ending `Refs #813`, written to the
+  scratchpad, not opened (cloud: no gh; push with `scripts/gate.sh` recorded).
+- **Open findings**: none.
+- **PR**: none yet.
 
 ## Open escalation
 
