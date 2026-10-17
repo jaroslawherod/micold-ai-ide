@@ -118,7 +118,7 @@ observable result needs a real pod (A3) is hosted only in the real suite.
 
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U26 | Every revision-2 `KubeFailure` variant except `Provision` (M5) displays exactly its contract §6 text: `ImageContract`, `HostKeyMismatch`, `StopTimeout`, `Api`, `Unavailable` added; `NoRuntime`, `Build`, `Push`, `VolumeTooSmall` gone | FR-012 | example | PENDING |  |
+| U26 | Every revision-2 `KubeFailure` variant except `Provision` (M5) displays exactly its contract §6 text: `ImageContract`, `HostKeyMismatch`, `StopTimeout`, `Api`, `Unavailable` added; `NoRuntime`, `Build`, `Push`, `VolumeTooSmall` gone | FR-012 | example | DONE | `core/kube/classify.rs` tests::{every_failure_reads_as_the_contract_says, an_api_failure_without_a_closer_reason_is_api} |
 | U27 | ~~A failed build becomes `Build` carrying the output's last lines~~ (revision 2: removed) | FR-012 | example | REMOVED |  |
 | U28 | ~~A push refused for login, permission or reachability becomes `Push { registry, error }`~~ (revision 2: removed) | FR-012, Edge: registry push refused | example | REMOVED |  |
 | U29 | A pod `404` or `deletionTimestamp` is `Deleted`; `Evicted` is `Evicted { message }`; phase `Unknown` or a `404` node is `NodeLost { node }`; a running ready pod is not gone | FR-011 | example | PENDING | |
