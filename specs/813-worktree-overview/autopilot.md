@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #813
 - **Worktree branch**: claude/project-thread-2lmupk
 - **Started**: 2026-10-17
-- **Phase**: spec
+- **Phase**: clarify
 - **Next step**: clarify unit: resolve FR-023's `[NEEDS CLARIFICATION]` (overlay vs main pane)
 
 ## Pull requests
@@ -36,7 +36,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
-| Spec | 1 | c54be34533424e39665e73004ef6ce8f0cadc4e2:992e129808513fd43ef6b1982b4cb1881cdb0921 | pending |
+| Spec | 1 | c54be34533424e39665e73004ef6ce8f0cadc4e2:992e129808513fd43ef6b1982b4cb1881cdb0921 | CLEAN (3 MINOR: F1 F2 F3 fixed, prose only) |
 
 ## Declined review findings
 

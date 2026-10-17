@@ -52,8 +52,8 @@ flow:feature.
   3. **Working**: the location state is Running.
   4. **Done**: none of the above, and the branch's pull request is merged and the branch holds no
      work beyond it (the sidebar's *removable* signal).
-  5. **Idle**: none of the above: the location state is Idle / waiting or Unknown, and nothing else
-     calls for the user.
+  5. **Idle**: every other case (the location state is Idle / waiting or Unknown and no other rule
+     applies). Unknown never yields Working or Done by itself.
 - **Pull request counts**: the number of open (including draft) and of merged pull requests whose
   head is the location's branch. Closed-unmerged pull requests are not counted.
 - **Task summary**: one line saying what the location is working on. **Progress**: how far that
@@ -137,7 +137,7 @@ answer the permission or read what the agent did.
 step is what saves the time.
 
 **Independent Test**: Open the Overview, click the red card: the Overview closes and the main
-session of that worktree is selected and shown, with keyboard focus in its terminal.
+session of that worktree is selected and shown.
 
 **Acceptance Scenarios**:
 
@@ -149,6 +149,11 @@ session of that worktree is selected and shown, with keyboard focus in its termi
    same choices as starting one from the sidebar; nothing starts without the user's confirmation.
 3. **Given** a card for an orphan / invalid location, **When** the user activates it, **Then** the
    location is selected in the sidebar and no session is offered (a session cannot start there).
+4. **Given** the Overview open, **When** the user presses Tab or the arrow keys, **Then** focus
+   moves from card to card, and Enter or Space activates the focused card; **When** they press
+   Escape, **Then** the Overview closes and the previous view returns.
+5. **Given** a greyed Idle card, **When** the user activates it, **Then** it behaves as any other
+   card does.
 
 ---
 
