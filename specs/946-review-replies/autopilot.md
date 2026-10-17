@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-jjniz9
 - **Started**: 2026-10-17
 - **Phase**: milestone M1
-- **Next step**: M1 T004–T018
+- **Next step**: M1 verify (gate, reviews), see Handover
 
 ## Pull requests
 
@@ -55,6 +55,7 @@ split along s6 (M3) is the only scenario split with a deliverable on each side.
 | Clarify | 2 | spec.md after round 1 | no critical ambiguities |
 | Plan | 1 | e3ecccba79f5e3b40a507a17e457b890bfcdbd6d:6992724c29035e9298018a753f72c3f8dacc111d | CLEAN (2 MINOR, fixed, prose only) |
 | Tasks | 1 | 4380837765014bf8cc3452af063dd049edc1dded:e28ca8bb81d4de0489768de261204c9c857a5300 | CLEAN (3 MINOR, fixed, prose only; checklist item confirmed and ticked) |
+| Review A M1 | 1 | 69eede8cc3bef883e825ffe7ee48a68dc903fa34:7fed368b72a9f602c7bae2b326591610623df30e | running at handover: scratchpad reviewA-r1.out |
 
 ## Declined review findings
 
@@ -64,7 +65,23 @@ split along s6 (M3) is the only scenario split with a deliverable on each side.
 
 ## Handover
 
-None.
+M1 unit 2 handed over at 150k. No PR yet; branch is 12 commits ahead of origin/main, unpushed.
+- **Done**: T001–T018 all ticked, each pair red-then-green in tdd/cycle-log.md (T012/T016 passed at
+  declaration: core begin_send already did it). T018 docs written by a sonnet worker, committed
+  unchecked by a reviewer.
+- **Open doc/UI mismatch**: the worker's docs call the card marker **Draft**, but the client still
+  shows "Pending" (`crates/micold-client/src/ui/material/review_comment.rs:28` `PENDING`, plus
+  showcase `catalogue.rs:820`). Next unit: rename the card label to "Draft" (layout snapshots may
+  move) or revert that doc sentence; FR-001 names the status Draft.
+- **Running when handed over** (detached, results in the session scratchpad
+  /tmp/claude-0/-home-user-micold-ai-ide/7539e20a-fded-5e3c-a99f-db59de7c38a3/scratchpad): scoped gate `scoped-gate-1.log` (`GATE_EXIT=`), Review A round 1
+  (`claude -p --agent autopilot-reviewer`, code-review high) `reviewA-r1.out` (`REVIEW_EXIT=`),
+  snapshot 69eede8c:7fed368b. Neither covers the T018 docs commit.
+- **Next**: read those two results (grep), fix findings, then verify.md step 2 (Review B,
+  conformance, sonnet; visual pass for the renamed button/dialog text), full gate
+  (`scripts/gate.sh`), push, PR title/body to the scratchpad per the orchestrator's prompt.
+- No Agent tool in this container: run reviewers/workers as `claude -p --agent <type>` detached
+  and `hold.sh` on their output file (echo `<NAME>_EXIT=$?` at the end).
 
 ## Open escalation
 

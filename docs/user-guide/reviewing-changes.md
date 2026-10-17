@@ -161,15 +161,15 @@ With lines picked, press **Add comment** under them. A text box opens under the 
 write the comment and press **Save** (or **Ctrl+Enter**, **Cmd+Enter** on macOS). **Cancel** closes
 it without saving. **Save** stays unavailable while the box is empty.
 
-The comment then shows as a card under its last line, marked **Pending** until it is sent to a
-session. The text you are writing is kept while the list or the diff is read again.
+The comment then shows as a card under its last line, marked **Draft** until it is sent. The text you are
+writing is kept while the list or the diff is read again.
 If a change removes the lines you picked, the box moves above the diff with the note "The lines
 this comment was on are gone. Pick lines to place it." and keeps your text; pick lines again and
 **Save** adds the comment there. If the file itself leaves the list, the unsaved comment is closed.
 
 ### Editing and deleting
 
-A pending comment's card has **Edit** and **Delete**. **Edit** opens the text box in its place with
+A draft comment's card has **Edit** and **Delete**. **Edit** opens the text box in its place with
 the comment's text; **Save** keeps the new text. **Delete** removes the comment straight away.
 
 A comment whose lines the diff on screen does not show — for example because you turned off the
@@ -189,57 +189,106 @@ Comments belong to the worktree (or the Default entry) they were written in, and
 service keeps them: they are still there after you restart the app, and every window open on the
 project shows the same comments as they are added, edited and deleted.
 
-### Sending comments to the session
+### Sending a review
 
-**Send to session (n)** in the view's header sends the entry's pending comments — *n* of them — to
-the session working in that worktree (or in the project root, for the Default entry) as one
-prompt. It is unavailable while there are no pending comments, and reads **Sending…** while a send
-of this entry is under way in any window.
+**Send review (n)** in the view's header sends the entry's draft comments — *n* of them — to the
+session working in that worktree (or in the project root, for the Default entry) as one message. It
+is unavailable while there are no drafts, and reads **Sending…** while a send of this entry is
+under way in any window. Only draft comments are sent: a comment that was already sent is not sent
+again, so a later send carries only the comments added since.
 
-The prompt asks the session to address the comments. For each file, in path order, it lists every
-comment with the lines it is about — marked as current lines, or as removed lines with their
-numbers in the base version — the code on those lines as it was when the comment was written, and
-the comment's text. A long range of lines is shortened to its first and last lines.
-
-The prompt goes to the session running in the same entry; with several running there, to the one
+The message goes to the session running in the same entry; with several running there, to the one
 you used most recently (typed into, or whose activity last changed). It never goes to a session of
 another worktree. It is typed as one pasted submission, exactly as if you had pasted it and pressed
-Enter.
+Enter. What it contains is described under [The review message](#the-review-message).
 
-When it is delivered, a message says how many comments went to which session, and the comments
-become **sent**: they stay on their lines, but can no longer be edited or deleted, and a later
-send carries only the comments added since. When it is not delivered — for example the session's
-terminal cannot take a pasted text — an error says why and the comments stay pending.
+When it is delivered, a message reads "Sent a review of *n* comments to *session*", and the
+comments become **sent**: they stay on their lines, but can no longer be edited or deleted. When it
+is not delivered — for example the session's terminal cannot take a pasted text — an error reads
+"Couldn't send the review: *why*" and the comments stay drafts.
 
 #### When no session is running
 
-If no session is running in the entry, Send to session starts one there with the project's
-default AI CLI (Settings), waits until it is ready for input, and types the prompt as its first
-input. A session that ended earlier is never resumed for this: the new session starts fresh. The
-message then reads "Started a session and sent *n* comments", and the new session appears in the
-sidebar like any other.
+If no session is running in the entry, Send review starts one there with the project's default AI
+CLI (Settings), waits until it is ready for input, and types the message as its first input. A
+session that ended earlier is never resumed for this: the new session starts fresh. The message
+then reads "Started a session and sent a review of *n* comments", and the new session appears in
+the sidebar like any other.
 
 If the session cannot start — the default AI CLI is not installed or not available where the entry
-runs, its process fails to start, or it is not ready for input within a minute — an error says
-why, nothing is typed, and every comment stays pending. A session that was started but not ready
-in time stays in the sidebar; you can use it, or close it, and send again.
+runs, its process fails to start, or it is not ready for input within a minute — the error reads
+"Couldn't send the review: *why*", nothing is typed, and every comment stays a draft. A session
+that was started but not ready in time stays in the sidebar; you can use it, or close it, and send
+again.
 
 #### Sending from two windows
 
-While a send of an entry is under way, Send to session reads **Sending…** and is unavailable for
-that entry in every window, including while a new session is starting for it. Each comment is
-delivered once: a second send started meanwhile is refused, and the comments of the first are
-not sent twice.
+While a send of an entry is under way, Send review reads **Sending…** and is unavailable for that
+entry in every window, including while a new session is starting for it. Each comment is delivered
+once: a second send started meanwhile is refused, and the comments of the first are not sent twice.
+
+### The review message
+
+The message asks the session to address the comments. This is one for a worktree with three
+drafts:
+
+````text
+Please work through these review comments on the changes in this worktree. Each block below is one comment: its reference, the file (relative to the worktree root), the lines it is about, the code on those lines when the comment was written, and the comment itself.
+
+For each comment, either make the change it asks for, or explain why you are not making it. Then report each outcome by the comment's reference with the report_review_comment tool of the micold tool server: outcome "applied" when you made the change (a reply is optional), or "answered" with your explanation as the reply. If you cannot use that tool, answer each comment by its reference in your reply instead.
+
+### Comment C-00000002: src/a.rs, line 3 (removed, base version)
+```
+use std::io;
+```
+Keep this import.
+
+### Comment C-00000001: src/a.rs, lines 12-14 (current)
+```
+fn a() {
+    b.clone()
+}
+```
+Why clone here?
+
+### Comment C-00000003: src/b.rs, line 7 (current)
+Note: the file has changed since this comment was written; the code is quoted as written.
+```
+let x = 1;
+```
+Name this.
+````
+
+From the top:
+
+- **Preamble.** Two paragraphs, each on one line. The first says where the comments are and what a
+  block holds; for the Default entry it says "the project root" in place of this worktree and the
+  worktree root. The second asks the session to make each change or explain why not, and to report
+  each outcome by the comment's reference with the `report_review_comment` tool; if it cannot use
+  that tool, it answers each comment by its reference in its reply.
+- **Reference.** `C-` and 8 lowercase hex digits, such as `C-00000001`. It is unique in the entry
+  and does not change.
+- **Path.** Relative to the entry's root, with `/` separators.
+- **Lines.** "line *n*" for one line, "lines *a*-*b*" for a range, as the comment is placed now.
+- **Side.** "(current)" for added and unchanged lines, "(removed, base version)" for removed lines.
+- **Outdated note.** An outdated comment has a line saying the file has changed since the comment
+  was written and the code is quoted as written.
+- **Fence.** The quoted code sits in a fence one backtick longer than the longest run of backticks
+  in it, and at least three.
+- **Elision.** A quote of more than 50 lines shows its first line, "... *k* lines not shown ...",
+  and its last line. The heading keeps the full range.
+- **Comment text.** As you wrote it.
+- **Order.** By path, then start line, then current before removed, then creation time.
 
 ### Clearing and discarding
 
 Two buttons in the view's header tidy the list once a round of feedback is done:
 
-- **Clear sent** removes every sent comment of the entry at once and keeps the pending ones. It is
+- **Clear sent** removes every sent comment of the entry at once and keeps the drafts. It is
   unavailable while the entry has no sent comments.
-- **Discard pending…** asks "Discard *n* pending comments? This cannot be undone." **Discard**
-  removes every pending comment of the entry; **Cancel** keeps them. It is unavailable while the
-  entry has no pending comments, and while a send of the entry is under way.
+- **Discard drafts…** asks "Discard *n* draft comments? This cannot be undone." **Discard**
+  removes every draft comment of the entry; **Cancel** keeps them. It is unavailable while the
+  entry has no draft comments, and while a send of the entry is under way.
 
 Both change the entry's comments in every window open on the project.
 
