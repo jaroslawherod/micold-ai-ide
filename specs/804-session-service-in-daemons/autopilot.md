@@ -31,7 +31,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T013 | full | Container settings in the Daemons form | #882 | merged |
 | M2 | T014–T021 | full | Session service section removed | #889 | merged |
 | M3 | T022–T023 | light | Existing settings carry over | #900 | merged |
-| M4 | T025–T032 | full | Collapsible container sections (accordion, #890) | #911 | merged |
+| M4 | T025–T032 | full | Collapsible container sections (accordion, issue 890) | #911 | merged |
 
 ## Decisions
 
