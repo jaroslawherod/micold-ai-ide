@@ -139,6 +139,12 @@ Draft, `sent` → Sent). An older build that meets version 2 quarantines the fil
 `ReviewComment`'s state shape on the postcard wire changes and `ReviewEditOp` gains `Reanchor`
 and `Mark`.
 
+**Alternatives**: keep version 1 and add optional fields (an older build would load the file and
+drop statuses and replies on its next write, silently); a separate side file for statuses and
+replies (two files to keep consistent per entry, and 482's quarantine covers only one); no
+protocol bump with a compatibility field (postcard is positional, so an older peer misreads the
+new shape instead of refusing it).
+
 ## R8 — The review panel
 
 **Decision**: a third pane of the Changes view, right of the diff, open by default and collapsible
@@ -160,3 +166,7 @@ shows comments per file).
 an optional note, Answered with a required note, `by: User`. A comment already reported can be
 re-marked by the agent's later report (last wins, FR-005), not by the user (FR-006 names Sent).
 The composer gains a target `Answer(CommentId)` for the note, so no new editor widget.
+
+**Alternatives**: letting the user re-mark an Applied or Answered comment (FR-006 limits marking
+to Sent, and it would let the user overwrite the agent's own report); a dedicated note editor
+widget for the mark (duplicates the composer, against Principle VIII's shared components).

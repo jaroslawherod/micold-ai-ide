@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #946
 - **Worktree branch**: claude/project-thread-jjniz9
 - **Started**: 2026-10-17
-- **Phase**: plan drafted (not reviewed)
-- **Next step**: plan unit (continue handover): plan review round 1
+- **Phase**: plan reviewed
+- **Next step**: tasks unit
 
 ## Pull requests
 
@@ -40,6 +40,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Spec | 1 | b568a3dc841efaadf93ae2edebd13db597dee865:d93c9dbc687412cced0a9b7854cf44323ee3930e | CLEAN (3 MINOR, fixed) |
 | Clarify | 1 | spec.md@7b200934 | 1 marker resolved (D3), 2 agent-resolved (D4, D5) |
 | Clarify | 2 | spec.md after round 1 | no critical ambiguities |
+| Plan | 1 | e3ecccba79f5e3b40a507a17e457b890bfcdbd6d:6992724c29035e9298018a753f72c3f8dacc111d | CLEAN (2 MINOR, fixed, prose only) |
 
 ## Declined review findings
 
@@ -48,12 +49,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-Plan unit, handed over at the 150k context cap after `speckit-plan` finished (no extension hooks
-registered). Done: plan.md, research.md (R1–R9), data-model.md, quickstart.md,
-contracts/{batch-format,agent-tool,review-wire-delta}.md, committed on the branch (rebased onto
-origin/main by branch-start.sh). Next: review round 1 of the plan (tasks/review.md with
-rubrics/plan.md, model omitted, no snapshot recorded yet), act on findings (review-rounds.md),
-commit, set **Next step** to `tasks unit`, return DONE with PR none. No open findings, no PR.
+None.
 
 ## Open escalation
 

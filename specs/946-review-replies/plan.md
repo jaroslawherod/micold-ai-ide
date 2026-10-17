@@ -123,6 +123,18 @@ drawing in `ui/`.
 | Client state | `tests/features_changes.rs` | anchors drawn and outdated marks (FR-024), Reanchor effect only for the working tree, panel rows/grouping/counts, jump vs hidden reason, draft-only edit/delete, manual mark composer, 200-comment row build |
 | Manual | quickstart §B, §C | glue in `ui/changes.rs`, look of the panel and cards |
 
+Requirements the table names only by layer, mapped to where they are built and tested:
+
+| FR | Built in | Tested in |
+|---|---|---|
+| FR-008 | `review/store.rs` (version 2, v1 compat) | core unit `review/store.rs`; daemon restart persistence in `review_reports.rs` |
+| FR-009, FR-015 | `daemon/state.rs` `review_send`, `daemon/review.rs` | daemon integration `review_send.rs` (Draft-only batch; success → Sent, failure stays Draft with reason) |
+| FR-010–FR-014 | `review/prompt.rs`, `review/comment.rs` (reference) | core unit `review/prompt.rs` (contracts/batch-format.md P1–P9), `review/comment.rs` |
+| FR-016–FR-019 | `features/changes.rs` (rows, grouping, counts, jump, actions), `ui/changes.rs` glue | client state `features_changes.rs`; quickstart §B for the look |
+| FR-026 | `review/prompt.rs` (no delivery input) | core unit `review/prompt.rs` |
+| FR-027 | every core and daemon test above runs headless with no session | `mise run gate` |
+| FR-028 | `docs/user-guide/reviewing-changes.md`, `agent-tools.md` | M2/M3 review against the FR-028 list |
+
 ## Delivery order (for the tasks unit)
 
 1. **M1 core**: statuses, reference, anchor, batch, reply, store v2, wire ops, MCP operation.
