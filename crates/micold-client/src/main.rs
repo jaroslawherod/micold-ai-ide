@@ -818,6 +818,10 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             app.core.update(Message::Runs(
                 micold_client::features::runs::Msg::CompareClosed,
             ));
+            // Feature 813 (FR-023): and so does the Overview, showing the picked session.
+            app.core.update(Message::Overview(
+                micold_client::features::overview::Msg::Closed,
+            ));
             shell::daemon_sync::on_session_selected(app, id)
         }
         Message::Session(SessionMsg::CloseRequested(id)) => {

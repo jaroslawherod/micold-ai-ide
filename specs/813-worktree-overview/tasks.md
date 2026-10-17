@@ -58,11 +58,11 @@ bundled; CI runs Linux, macOS and Windows.
   (`WARNING_*_LIGHT`/`_DARK`, `SUCCESS_*_LIGHT`/`_DARK`), the way `diff_added` uses
   `DIFF_ADDED_LIGHT`/`DIFF_ADDED_DARK`; export them wherever `diff_added` is exported
   (micold-core/src/tokens/css.rs if it lists roles); T002 passes
-- [ ] T004 [P] Test first: pin codepoints for `Icon::Overview`, `CardNeedsAction`,
+- [X] T004 [P] Test first: pin codepoints for `Icon::Overview`, `CardNeedsAction`,
   `CardNeedsAttention`, `CardDone`, `TypeFeature`, `TypeBugfix`, `TypeChore`, `TypeOther`,
   `TypeIncluded`, `TypeOrphan` in micold-client/tests/icons.rs (distinct from every other icon) and
   micold-client/tests/icons_font.rs (glyph present in `assets/fonts/MaterialSymbolsOutlined.ttf`)
-- [ ] T005 Add the ten icons to micold-client/src/icons.rs (enum, codepoint, the all-icons list),
+- [X] T005 Add the ten icons to micold-client/src/icons.rs (enum, codepoint, the all-icons list),
   choosing Material Symbols glyphs present in the bundled font; T004 passes
 
 **Checkpoint**: roles and icons exist; no behaviour changed.
@@ -101,9 +101,9 @@ one without a session) and one included worktree → five cards, the permission 
   `order` is stable by state worst first with ties in input (sidebar) order (FR-007);
   `attention` returns the worst state with its card count only for NeedsAction or NeedsAttention,
   else `None` (FR-012)
-- [ ] T009 [P] [US1] Client test in micold-client/tests/features_agent_confirm.rs: a queued
+- [X] T009 [P] [US1] Client test in micold-client/tests/features_agent_confirm.rs: a queued
   `Prompt` carries `session`, the caller of `ConfirmationRequested` (W4)
-- [ ] T010 [P] [US1] Client state tests in micold-client/tests/overview.rs (new):
+- [X] T010 [P] [US1] Client state tests in micold-client/tests/overview.rs (new):
   `update(Toggled { settings_open: false })` opens then closes; `Toggled { settings_open: true }`
   changes nothing (R2); `Closed` closes; a project switch keeps `open` and the cards follow the new
   project; `cards` from app state gives exactly one card per `sidebar_entries()` entry, in sidebar
@@ -127,7 +127,7 @@ one without a session) and one included worktree → five cards, the permission 
   card state its text role ≥ 4.5:1 and icon role ≥ 3:1 on its card fill (`error_container`,
   `warning_container`, `primary_container`, `success_container`, Idle `surface_container_low` with
   `on_surface_variant` ≥ 4.5:1), light and dark (FR-005, FR-006, SC-005)
-- [ ] T014 [P] [US1] Test in micold-client/src/main_tests.rs: with the Overview open,
+- [X] T014 [P] [US1] Test in micold-client/src/main_tests.rs: with the Overview open,
   `Message::Session(SessionMsg::Selected(id))` closes it and shows that session (FR-023)
 
 #### Implementation for US1 part A
@@ -140,10 +140,10 @@ one without a session) and one included worktree → five cards, the permission 
   wins), `location_type`, `session_counts`, `CardModel { location, display_name, branch, kind,
   sessions, state, reason, summary }`, `order`, `Attention { state, count }`, `attention`; T006–T008
   pass. Later milestones add `CardModel::prs`, `progress`, `activity`, `activation`
-- [ ] T016 [US1] Add `session: SessionId` to `Prompt` in micold-client/src/features/agent_confirm.rs
+- [X] T016 [US1] Add `session: SessionId` to `Prompt` in micold-client/src/features/agent_confirm.rs
   and fill it from `DaemonMsg::ConfirmationRequested.caller` in
   micold-client/src/shell/daemon_sync.rs; update every `Prompt { .. }` literal; T009 passes
-- [ ] T017 [US1] Implement micold-client/src/features/overview.rs: `State { open }`, `Msg::{Toggled
+- [X] T017 [US1] Implement micold-client/src/features/overview.rs: `State { open }`, `Msg::{Toggled
   { settings_open }, Closed}`, `update`, and `cards(&crate::app::State) -> Vec<CardModel>`
   building `CardSignals` from `sidebar_entries()`, the project's sessions (`location_state`,
   `main_session` of micold-core), `agent_confirm`'s queue (`Prompt::session` → `Session::location`)

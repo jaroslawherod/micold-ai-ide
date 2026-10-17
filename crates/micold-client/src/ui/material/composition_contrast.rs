@@ -310,7 +310,9 @@ fn warning_and_success_roles_are_legible_on_their_fills() {
         ] {
             let ratio = contrast(text, fill);
             if ratio < AA_TEXT {
-                violations.push(format!("{scheme:?} / {pair}: {ratio:.2}:1 (needs {AA_TEXT})"));
+                violations.push(format!(
+                    "{scheme:?} / {pair}: {ratio:.2}:1 (needs {AA_TEXT})"
+                ));
             }
         }
     }

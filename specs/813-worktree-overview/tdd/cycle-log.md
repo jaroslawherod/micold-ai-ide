@@ -24,3 +24,21 @@ list. Append only.
   `every_colour_role_is_emitted_as_a_hex_triple ... FAILED` (`light: --micold-warning is not emitted`).
 - **Green**: roles + palette tones added → `test result: ok. 11 passed; 0 failed`. The client
   contrast test was not yet run (client build in progress at handover).
+
+## M2 / T010 + T017 (Overview state and cards)
+
+- **Tests**: `crates/micold-client/tests/overview.rs` (15 tests: toggle/close, R2, project switch,
+  one card per sidebar entry and order, counts, R5 agent request, R6 PR states, Default never
+  PR-derived, summary, R14 after `Released`, keyboard/main area, 30×3 build time).
+- **Red**: with `State`/`Msg`/`update` wired and `cards` a stub returning `[]`:
+  `test result: FAILED. 4 passed; 11 failed` (each on an empty card list). The keyboard/main-area
+  test was already green: its wiring went in with the stub.
+- **Green**: `cards` built from `sidebar_entries()`, sessions, agent prompts and `pr_status` →
+  `test result: ok. 15 passed; 0 failed`.
+
+## M2 / T014 (+ T022 routing) (selecting a session closes the Overview)
+
+- **Test**: `main_tests.rs` `selecting_a_session_closes_the_overview_and_shows_it`.
+- **Red**: `assertion failed: !app.core.overview.open`.
+- **Green**: the `SessionMsg::Selected` arm sends `overview::Msg::Closed` →
+  `test result: ok. 1 passed`.

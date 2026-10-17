@@ -224,6 +224,21 @@ fn terminal_resized_remembers_the_pane_size_for_future_spawns() {
     assert_eq!(app.last_grid, Some((180, 45)));
 }
 
+/// Feature 813 (T014, FR-023): picking a session while the Overview is open closes it and shows
+/// that session.
+#[test]
+fn selecting_a_session_closes_the_overview_and_shows_it() {
+    let (mut app, _rx) = connected_app();
+    app.core.workspace.active = Some(std::path::PathBuf::from("/tmp/project"));
+    app.core.overview.open = true;
+    let id = SessionId::new();
+
+    let _ = update_inner(&mut app, Message::Session(SessionMsg::Selected(id)));
+
+    assert!(!app.core.overview.open);
+    assert_eq!(app.core.session.active, Some(id));
+}
+
 /// T061 (BUG-003, `006-real-terminal-emulator` FR-014a): displaying a session must state the
 /// pane's size *before* starting it, so the daemon spawns the process at that size instead of
 /// its 100×30 seed.
