@@ -80,7 +80,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+None. PR #964 was CONFLICTING with main: rebased onto origin/main (conflicts in daemons_feature.rs and daemons_section_geometry.rs resolved keeping both sides), rustfmt fix, full `mise run gate` green, force-pushed. `mise run test-ssh`: all 5 `ssh_real_hostkey_auth` pass; `ssh_real_two_clients_share_one_daemon...` (M4, untouched by M5) failed once in the full run and once alone, then passed: flaky at ssh_real_concurrent.rs:164 (drain timing), follow-up.
 
 ## Open escalation
 
