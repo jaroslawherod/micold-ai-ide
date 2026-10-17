@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-15
 
-**Status**: Draft
+**Status**: Closed 2026-10-17 — shipped in PRs #869, #882, #889, #900, #902, #911
 
 **Input**: User description: "Move the Session service settings (container runtime, limits) into the Daemons manager (#804)"
 

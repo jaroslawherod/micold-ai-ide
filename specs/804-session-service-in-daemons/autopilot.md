@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #804
 - **Worktree branch**: feat/804_move-the-session-service-settings-container
 - **Started**: 2026-10-15
-- **Phase**: milestones (M4 implemented, in review)
-- **Next step**: wait for CI on PR #911 and merge, then close
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -21,7 +21,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #889 | M2 | merged | bf0910213b7555c49ad0524ab880ddee40069806 |
 | #900 | M3 | merged | 030ddb2ab98c254a7c760f637e82a30f669634cb |
 | #902 | M4 spec amendment | merged | 20bda6cfa20de24c45a6f8a8e5fff89c4c34e205 |
-| #911 | M4 | open; CI red run 39011113666 was a Windows-only timing flake in daemon test mcp_create_worktree a_slow_read_is_cut_at_the_bound (code untouched by M4); rebased on origin/main, full `mise run gate` green, pushed | |
+| #911 | M4 | merged; CI red run 39011113666 was a Windows-only timing flake in daemon test mcp_create_worktree a_slow_read_is_cut_at_the_bound (code untouched by M4); rebased on origin/main, full `mise run gate` green, pushed | b1ad6307f1340c96552b57481f7d32f5ecb79935 |
 
 ## Milestones
 
@@ -30,7 +30,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T013 | full | Container settings in the Daemons form | #882 | merged |
 | M2 | T014–T021 | full | Session service section removed | #889 | merged |
 | M3 | T022–T023 | light | Existing settings carry over | #900 | merged |
-| M4 | T025–T032 | full | Collapsible container sections (accordion, #890) | | in review |
+| M4 | T025–T032 | full | Collapsible container sections (accordion, #890) | #911 | merged |
 
 ## Decisions
 
@@ -67,7 +67,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M4 done: review A and B recorded, visual pass passed, full gate green (`mise run --skip-tools gate`; mise tool install failed offline), branch pushed. Left: `gh pr create` failed (api.github.com unreachable, git over ssh works). Open the PR when the API is back: title `feat(804): collapsible container sections (#804)`, body from the PR body in the unit's return (M4 summary, reviews, gate, ends `Refs #804` and `Refs #890`). Branch is 6 commits behind origin/main; code-wise rebase if desired, rerun the gate.
+None.
 
 ## Open escalation
 
