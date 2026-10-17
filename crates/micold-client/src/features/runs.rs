@@ -328,7 +328,6 @@ impl ParallelDialog {
         derive_group(&self.naming, self.runs.len() as u8)
     }
 
-    /// The first rule the dialog breaks, or `Ok` when it can be confirmed.
     /// The fields this dialog refuses empty, in display order, with whether each is empty now
     /// (feature 937, FR-002). Mirrors [`Self::validate`]'s emptiness rules, trims included.
     pub fn required_fields(&self) -> Vec<(FieldId, Requirement)> {
@@ -346,6 +345,7 @@ impl ParallelDialog {
         ]
     }
 
+    /// The first rule the dialog breaks, or `Ok` when it can be confirmed.
     pub fn validate(&self) -> Result<(), Invalid> {
         if self.prompt.trim().is_empty() {
             return Err(Invalid::EmptyPrompt);

@@ -363,6 +363,9 @@ fn branch_picker<'a>(form: &'a WorktreeForm, r: Roles) -> Element<'a, Message> {
         })
         .collect();
 
+    let required = form
+        .required
+        .state_in(&form.required_fields(), FieldId::AddWorktreeBranch);
     // Where the current selection sits among the rows on screen, so the marker follows it as the
     // search narrows — and disappears while it is filtered out, rather than marking the wrong row.
     let selected = form.selected_branch.as_ref().and_then(|chosen| {
@@ -380,10 +383,7 @@ fn branch_picker<'a>(form: &'a WorktreeForm, r: Roles) -> Element<'a, Message> {
         )
         .placeholder("Search branches…")
         .label("Branch")
-        .required(
-            form.required
-                .state_in(&form.required_fields(), FieldId::AddWorktreeBranch),
-        )
+        .required(required)
         .open(form.branch_list_open)
         .highlighted(form.branch_highlight)
         .selected(selected)

@@ -44,6 +44,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Spec | 1 | 1c97f54c4c7b32b3f5f8c11552756f9e77d1de18:d93c9dbc687412cced0a9b7854cf44323ee3930e | CLEAN (1 MINOR: plan to confirm rename-dialog files) |
 | Plan | 1 | 62a5b8cee2e629d9da01c81c6d40863f389921ff:beb9cd17a1cfe2ca6753f0882614af877c9ae912 | CLEAN (3 MINOR, fixed, prose only; reviewer ran as headless `claude -p`: no Agent tool in this unit) |
 | Tasks | 1 | 8c8b1867192c49ca20905789073b9d034edea94d:c04615ca1903b069dda6cd168be6441c8cd53ad3 | CLEAN (3 MINOR, fixed: T043 TrackFocus gate clause, M3/M4 Satisfies, M3 tier light→full; headless `claude -p` reviewer) |
+| M1 review A (high) | 1 | 59c30ec23ec1de722ae5a94cf995f13aa19871b2:326551152b14bb2d44a697360ac33e50e792aac0 | CLEAN (3 MINOR: F1 validate doc comment fixed, F2 branch requirement bound once fixed, F3 per-draft helper declined: one expression, two call sites; headless `claude -p` reviewer) |
 
 ## Declined review findings
 
