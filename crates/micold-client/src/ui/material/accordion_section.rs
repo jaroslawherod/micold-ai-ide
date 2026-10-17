@@ -54,7 +54,7 @@ impl<'a, M: Clone + 'a> AccordionSection<'a, M> {
 
 impl<'a, M: Clone + 'a> From<AccordionSection<'a, M>> for Element<'a, M> {
     fn from(s: AccordionSection<'a, M>) -> Self {
-        let chevron = if s.open { Icon::MoveDown } else { Icon::MoveUp };
+        let chevron = if s.open { Icon::MoveUp } else { Icon::MoveDown };
         let header = row![
             Text::new(s.title, TypeRole::Action, s.roles),
             Space::new().width(Length::Fill),
