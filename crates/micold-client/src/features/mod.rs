@@ -94,6 +94,10 @@ pub enum Outcome {
     /// Overview, feature 813 FR-023) gives way. `session::started` emits it for the session it
     /// creates and shows.
     MainAreaTaken,
+    /// A selection ends the Overview's reveal mark on the sidebar row (feature 813, R12).
+    RevealMarkCleared,
+    /// An Overview card sent the user to this row: mark it, and open it (feature 813, R12).
+    LocationRevealed(micold_core::session::SessionLocation),
     /// The sidebar should scroll to the current session's row once one exists (research R7, I4).
     RevealScrollArmed,
     /// The user arrived in a project, so view state switched on for the previous one resets.

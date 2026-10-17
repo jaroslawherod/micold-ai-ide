@@ -12,7 +12,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-2lmupk
 - **Started**: 2026-10-17
 - **Phase**: milestones
-- **Next step**: M4 implement (T040-T049)
+- **Next step**: M4 PR (create from scratchpad title/body), CI, merge; then M5
 
 ## Pull requests
 
@@ -30,7 +30,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T023 | full | Overview grid from the top-bar button, session-derived card states | #930 | merged |
 | M2 | T024–T030 | full | PR counts and merge conflict on cards | #932 | merged |
 | M3 | T031–T039 | full | Ctrl/Cmd+Shift+O and attention badge | #936 | merged |
-| M4 | T040–T049 | full | Card activation and keyboard traversal | — | pending |
+| M4 | T040–T049 | full | Card activation and keyboard traversal | pending (title/body written) | PR open |
 | M5 | T050–T060 | full | Task summary and progress on cards | — | pending |
 | M6 | T061–T069 | full | Hook-fed agent activity (protocol 49) | — | pending |
 
@@ -101,3 +101,7 @@ None yet.
 | M2 | A r1 | capped counts include fork nodes | W5's table: 100 nodes → capped; cross-repo not counted |
 | M2 | A r1 | stale counts kept on Passing/RateLimited | mirrors `statuses` handling (T025); same as existing pr_status behaviour |
 | M2 | A r1 | MINORs: String clone, tuple threading, no re-render at rate-limit end | not worth the churn |
+| M4 review A (code-review high) | 1 | db133badc287a5ad6a886585f659bcabbcc09a75:e1cc1b79a0e3ead06504121b7ce58ba7d82f4c0e | CHANGES: F1 MAJOR collapsed-group row never revealed / stale start-menu anchor (fixed: group expanded on reveal, no menu without bounds, test added), F2 MINOR toggle closes open menu (fixed: dismiss first) |
+| M4 review B (conformance, sonnet) | 1 | db133badc287a5ad6a886585f659bcabbcc09a75:e1cc1b79a0e3ead06504121b7ce58ba7d82f4c0e | CLEAN (MINOR: main.rs task chains untestable; B8/B9 need a display) |
+| M4 visual pass | - | - | not run: no display in the container; quickstart B8/B9 for a human pass |
+| M4 client invariants | - | - | 5 repo-wide invariant tests failed on the first diff; fixed (render-free, write isolation, SC-002, material boundary) |

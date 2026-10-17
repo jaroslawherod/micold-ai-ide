@@ -289,7 +289,7 @@ mod tests {
     use crate::ui::material::test_support::{roles, Mounted};
     use crate::ui::material::Button;
     use iced::advanced::widget::operation::scrollable::scroll_by;
-    use iced::widget::{column, scrollable, Space};
+    use iced::widget::{column, Scrollable, Space};
     use iced::Length;
 
     /// A panel 400dp tall showing content from `translation_y`, and a 56dp control at `y`.
@@ -393,7 +393,7 @@ mod tests {
             Button::filled("Start", roles()).on_press("start".to_string())
         ];
         let mut mounted = Mounted::new(
-            scrollable(content)
+            Scrollable::new(content)
                 .id(id.clone())
                 .height(Length::Fixed(300.0)),
         );

@@ -50,6 +50,8 @@ pub fn interpret(outcome: Outcome) -> Task<Message> {
         | Outcome::LocationOpened(_)
         | Outcome::MainAreaTaken
         | Outcome::RevealScrollArmed
+        | Outcome::RevealMarkCleared
+        | Outcome::LocationRevealed(_)
         | Outcome::ProjectEntered
         | Outcome::RevealSuppressed(_)
         | Outcome::FieldFocusCleared

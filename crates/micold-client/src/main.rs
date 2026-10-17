@@ -649,7 +649,8 @@ fn tab_reveal_scroll(app: &mut App) -> Option<Task<Message>> {
 
 /// The Overview's messages, and what they ask of the window (feature 813, R12, R13).
 fn overview_message(app: &mut App, msg: micold_client::features::overview::Msg) -> Task<Message> {
-    use micold_client::features::overview::{follow_up, Msg};
+    use micold_client::features::overview::Msg;
+    use micold_client::ui::overview::follow_up;
     use micold_core::overview::Activation;
     let was_open = app.core.overview.open;
     let Msg::CardActivated(activation) = msg else {
@@ -682,14 +683,20 @@ fn overview_message(app: &mut App, msg: micold_client::features::overview::Msg) 
                         let px = |v: f32| v.round().clamp(0.0, f32::from(u16::MAX)) as u16;
                         (px(b.x), px(b.y + b.height))
                     });
-                    let open = follow.clone().map_or_else(Task::none, Task::done);
-                    match anchor {
-                        Some(anchor) => Task::done(Message::Session(
-                            micold_client::features::session::Msg::StartMenuAnchored(anchor),
-                        ))
-                        .chain(open),
-                        None => open,
-                    }
+                    // Without bounds the control was not found: opening the menu would hang it at
+                    // a stale anchor, so there is nothing to open.
+                    let (Some(anchor), Some(open)) = (anchor, follow.clone()) else {
+                        return Task::none();
+                    };
+                    // Dismiss first: `StartMenuOpened` toggles, and would close a menu already
+                    // open for this location.
+                    Task::done(Message::Session(
+                        micold_client::features::session::Msg::StartMenuDismissed,
+                    ))
+                    .chain(Task::done(Message::Session(
+                        micold_client::features::session::Msg::StartMenuAnchored(anchor),
+                    )))
+                    .chain(Task::done(open))
                 })
         }
     }

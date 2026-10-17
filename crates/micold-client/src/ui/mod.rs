@@ -1203,7 +1203,7 @@ fn overview_arrow(event: iced::keyboard::Event) -> Option<Message> {
     let iced::keyboard::Event::KeyPressed { key, .. } = event else {
         return None;
     };
-    crate::features::overview::arrow_focus(&key).map(|forward| Message::FocusMoved { forward })
+    crate::ui::overview::arrow_focus(&key).map(|forward| Message::FocusMoved { forward })
 }
 
 /// The Overview chord, heard while the terminal is not focused.
