@@ -927,15 +927,6 @@ impl State {
                 drain(outcomes, |outcome| interpret(self, outcome));
             }
             Message::Overview(msg) => {
-                // Feature 813 (R12): the row an activation sends the user to is marked until the
-                // next selection.
-                if let crate::features::overview::Msg::CardActivated(
-                    micold_core::overview::Activation::OfferStart(location)
-                    | micold_core::overview::Activation::RevealOnly(location),
-                ) = &msg
-                {
-                    self.sidebar.revealed = Some(location.clone());
-                }
                 let outcomes = crate::features::overview::update(&mut self.overview, msg);
                 drain(outcomes, |outcome| interpret(self, outcome));
             }
@@ -1099,6 +1090,23 @@ impl State {
     }
 }
 
+impl State {
+    /// Mark the row an Overview activation sends the user to, until the next selection (feature
+    /// 813, R12). A row in a collapsed group is not drawn, so it could be neither scrolled to nor
+    /// have its start control focused: its group and the row itself are opened too.
+    fn location_revealed(&mut self, location: micold_core::session::SessionLocation) {
+        self.location_opened(&location);
+        if let micold_core::session::SessionLocation::Worktree(dir) = &location {
+            for group in &self.runs.groups {
+                if group.runs.iter().any(|run| &run.names.dir_name == dir) {
+                    self.runs.collapsed.remove(&group.id);
+                }
+            }
+        }
+        self.sidebar.revealed = Some(location);
+    }
+}
+
 /// How many outcomes one drain may apply before it gives up (feature 021, T060 — FR-024,
 /// contract O4).
 ///
@@ -1175,6 +1183,8 @@ pub fn interpret(
         Outcome::LocationOpened(location) => state.location_opened(&location),
         // Feature 813 (FR-023): a view that takes the main area closes the Overview.
         Outcome::MainAreaTaken => state.overview.open = false,
+        Outcome::RevealMarkCleared => state.sidebar.revealed = None,
+        Outcome::LocationRevealed(location) => state.location_revealed(location),
         Outcome::RevealScrollArmed => state.reveal_scroll_armed(),
         Outcome::ProjectEntered => state.project_entered(),
         Outcome::RevealSuppressed(suppressed) => state.reveal_suppression_set(suppressed),

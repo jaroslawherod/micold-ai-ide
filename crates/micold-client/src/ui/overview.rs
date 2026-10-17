@@ -173,6 +173,35 @@ fn pr_display(pr: &crate::features::pr_status::State, branch: Option<String>) ->
     }
 }
 
+/// Which way an arrow key moves the focus: `Some(true)` forward (Right, Down), `Some(false)` back
+/// (Left, Up), `None` for any other key (research R13). Here rather than in the feature module,
+/// which is render-free and so cannot name the key type.
+pub fn arrow_focus(key: &iced::keyboard::Key) -> Option<bool> {
+    use iced::keyboard::{key::Named, Key};
+    match key {
+        Key::Named(Named::ArrowRight | Named::ArrowDown) => Some(true),
+        Key::Named(Named::ArrowLeft | Named::ArrowUp) => Some(false),
+        _ => None,
+    }
+}
+
+/// What follows an activation, once the Overview has closed (research R12): the existing message
+/// the sidebar sends for the same intent. A reveal-only activation sends none; an offer to start
+/// sends the start menu's, which the root anchors first (it needs the row's position). Named here
+/// because it names the session feature's messages, which the Overview feature module may not.
+pub fn follow_up(activation: &micold_core::overview::Activation) -> Option<Message> {
+    use crate::features::session::Msg as SessionMsg;
+    use micold_core::overview::Activation;
+    match activation {
+        Activation::OpenSession(id) => Some(Message::Session(SessionMsg::Selected(*id))),
+        Activation::OfferStart(location) => Some(Message::Session(SessionMsg::StartMenuOpened {
+            location: location.clone(),
+            unavailable_default: None,
+        })),
+        Activation::RevealOnly(_) => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

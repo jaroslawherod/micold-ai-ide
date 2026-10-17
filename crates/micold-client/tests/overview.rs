@@ -3,10 +3,10 @@
 
 use micold_client::app::{Message, State};
 use micold_client::features::agent_confirm::Prompt;
-use micold_client::features::overview::{arrow_focus, badge, follow_up, Badge, Msg, Tone};
+use micold_client::features::overview::{badge, Badge, Msg, Tone};
 use micold_client::features::pr_status::Msg as PrMsg;
 use micold_client::features::session::Msg as SessionMsg;
-use micold_client::ui::overview::cards;
+use micold_client::ui::overview::{arrow_focus, cards, follow_up};
 use micold_core::local_time::LocalTime;
 use micold_core::overview::Activation;
 use micold_core::overview::{CardReason, CardState, LocationType, PrCounts, PrDisplay};
@@ -767,4 +767,62 @@ fn arrow_keys_move_the_focus_and_other_keys_do_not() {
     assert_eq!(arrow_focus(&named(Named::ArrowUp)), Some(false));
     assert_eq!(arrow_focus(&named(Named::Enter)), None);
     assert_eq!(arrow_focus(&Key::Character("a".into())), None);
+}
+
+#[test]
+fn a_card_whose_worktree_sits_in_a_collapsed_group_has_its_row_drawn_once_activated() {
+    use micold_client::features::runs::Msg as RunsMsg;
+    use micold_client::features::sidebar::location_row;
+    use micold_core::naming::{ConventionalType, DerivedNames, WorktreeNaming};
+    use micold_core::runs::{GroupId, NewGroup, Run, RunGroup, RunStatus};
+    let mut state = project_with(vec![worktree(
+        "feat-a-1",
+        Some("feat/a-1"),
+        WorktreeStatus::Valid,
+        false,
+    )]);
+    let id = GroupId(uuid::Uuid::from_u128(7));
+    let group = RunGroup::new(NewGroup {
+        id,
+        name: "a".into(),
+        naming: WorktreeNaming {
+            type_: Some(ConventionalType::Feat),
+            ticket: None,
+            name: "a".into(),
+        },
+        prompt: "p".into(),
+        base_branch: "main".into(),
+        base_commit: "abc".into(),
+        created: std::time::SystemTime::UNIX_EPOCH,
+        runs: (1..=2u8)
+            .map(|number| Run {
+                number,
+                provider: AiCli::ClaudeCode,
+                names: DerivedNames {
+                    dir_name: format!("feat-a-{number}"),
+                    branch: format!("feat/a-{number}"),
+                },
+                session: None,
+                status: RunStatus::Prompted,
+            })
+            .collect(),
+    })
+    .expect("valid group");
+    state.update(Message::Runs(RunsMsg::GroupsChanged(vec![group])));
+    state.update(Message::Runs(RunsMsg::GroupToggled(id)));
+    assert!(!state.runs.is_expanded(id), "the group starts collapsed");
+    assert_eq!(
+        location_row(&state.sidebar_entries(), &wt("feat-a-1")),
+        None
+    );
+
+    open_overview(&mut state);
+    state.update(Message::Overview(Msg::CardActivated(
+        Activation::OfferStart(wt("feat-a-1")),
+    )));
+    assert!(state.runs.is_expanded(id), "the activation opens the group");
+    assert!(
+        location_row(&state.sidebar_entries(), &wt("feat-a-1")).is_some(),
+        "the revealed row is drawn, so it can be scrolled to and its start control focused"
+    );
 }

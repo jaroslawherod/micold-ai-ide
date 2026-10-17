@@ -1062,10 +1062,11 @@ pub fn started(state: &mut crate::app::State, session: Session) -> Vec<crate::fe
 pub fn selected(state: &mut crate::app::State, id: SessionId) -> Vec<crate::features::Outcome> {
     state.session.active = Some(id);
     // Feature 813 (R12): a selection ends the Overview's reveal mark.
-    state.sidebar.revealed = None;
     // Selecting a session displays its terminal, so it holds the keyboard, clearing any earlier
     // release (FR-011, FR-021a).
-    state.focus_terminal()
+    let mut outcomes = state.focus_terminal();
+    outcomes.push(crate::features::Outcome::RevealMarkCleared);
+    outcomes
 }
 
 /// The daemon reported a session's process running.

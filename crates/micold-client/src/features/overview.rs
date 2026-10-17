@@ -29,8 +29,13 @@ pub enum Msg {
 }
 
 /// Apply a message to the Overview's state.
-/// It never asks the root for anything, so the outcomes are always empty.
+/// An activation that sends the user to a row asks the root to reveal it; nothing else asks.
 pub fn update(state: &mut State, msg: Msg) -> Vec<crate::features::Outcome> {
+    use micold_core::overview::Activation;
+    if let Msg::CardActivated(Activation::OfferStart(at) | Activation::RevealOnly(at)) = &msg {
+        state.open = false;
+        return vec![crate::features::Outcome::LocationRevealed(at.clone())];
+    }
     match msg {
         Msg::Toggled {
             settings_open: true,
@@ -77,35 +82,4 @@ pub fn badge(cards: &[micold_core::overview::CardModel]) -> Option<Badge> {
         count: attention.count,
         label: format!("{} {words}", attention.count),
     })
-}
-
-/// Which way an arrow key moves the focus: `Some(true)` forward (Right, Down), `Some(false)` back
-/// (Left, Up), `None` for any other key (research R13).
-pub fn arrow_focus(key: &iced::keyboard::Key) -> Option<bool> {
-    use iced::keyboard::{key::Named, Key};
-    match key {
-        Key::Named(Named::ArrowRight | Named::ArrowDown) => Some(true),
-        Key::Named(Named::ArrowLeft | Named::ArrowUp) => Some(false),
-        _ => None,
-    }
-}
-
-/// What follows an activation, once the Overview has closed (research R12): the existing message
-/// the sidebar sends for the same intent. A reveal-only activation sends none; an offer to start
-/// sends the start menu's, which the root anchors first (it needs the row's position).
-pub fn follow_up(activation: &micold_core::overview::Activation) -> Option<crate::app::Message> {
-    use crate::features::session::Msg as SessionMsg;
-    use micold_core::overview::Activation;
-    match activation {
-        Activation::OpenSession(id) => {
-            Some(crate::app::Message::Session(SessionMsg::Selected(*id)))
-        }
-        Activation::OfferStart(location) => {
-            Some(crate::app::Message::Session(SessionMsg::StartMenuOpened {
-                location: location.clone(),
-                unavailable_default: None,
-            }))
-        }
-        Activation::RevealOnly(_) => None,
-    }
 }
