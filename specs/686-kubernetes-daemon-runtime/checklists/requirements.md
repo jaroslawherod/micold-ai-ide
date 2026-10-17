@@ -31,8 +31,11 @@
 
 ## Notes
 
-- No [NEEDS CLARIFICATION] markers remain. FR-004 (image source, aligned with #806) and FR-007
-  (clone source) use the orchestrator's recommended defaults pending the owner's answer, recorded
-  in spec.md Clarifications.
+- No [NEEDS CLARIFICATION] markers remain. The owner decided FR-004 (basic SSH image, daemon copied
+  in, AI CLIs installed on start; shared with #806) and FR-007 (clone from the git remote) on
+  2026-10-17, recorded in spec.md Clarifications (revision 2).
+- FR-009's SSH server rules (loopback only, key login only, no passwords, root login or extra
+  forwarding) are security requirements stated as observable behaviour of the pod, not a choice of
+  server or its configuration syntax, so "No implementation details" stays ticked.
 - Kubernetes terms (pod, PVC, secret, port-forward, RBAC) are the domain named by the issue, not
   implementation choices.
