@@ -22,6 +22,8 @@ path = "src/lib.rs"
 sandbox-real-runtime = []
 # Feature 489: the stale-daemon fixture suffix is honoured only under this feature (research R10).
 ssh-real-runtime = []
+# Feature 686: exposes `kube::fake::FakeCluster` to client tests.
+kube-fake = []
 
 [dependencies]
 serde = { workspace = true }

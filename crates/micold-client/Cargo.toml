@@ -27,6 +27,10 @@ path = "src/main.rs"
 # saved state. Deliberately absent from `[package.metadata.deb] assets` below and from the desktop
 # entry — it must never reach an end user (FR-018), which `tests/packaging_excludes_showcase.rs`
 # enforces rather than trusting anyone to remember.
+[features]
+# Feature 686: opts in to the `kube_real_*` tests against a real cluster (CI job kube-cluster).
+kube-real-runtime = []
+
 [[bin]]
 name = "micold-showcase"
 path = "src/showcase/main.rs"
@@ -35,6 +39,9 @@ path = "src/showcase/main.rs"
 # Feature 533 (research R2): the Jira Cloud request (`shell/jira_http.rs`) and its Basic header.
 ureq = { workspace = true }
 base64 = { workspace = true }
+# Feature 686 (research K0): the Kubernetes runtime's `LiveCluster` (`src/kube/live.rs`) only.
+kube = { workspace = true }
+k8s-openapi = { workspace = true }
 micold-core = { workspace = true }
 iced = { workspace = true }
 dark-light = { workspace = true }
@@ -81,6 +88,8 @@ wayland-protocols = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
+# Feature 686: `kube::fake::FakeCluster` for the Kubernetes daemon tests.
+micold-core = { workspace = true, features = ["kube-fake"] }
 # Feature 019's text-overflow gate only. See the workspace manifest for why these are needed.
 iced_renderer = { workspace = true }
 iced_tiny_skia = { workspace = true }
