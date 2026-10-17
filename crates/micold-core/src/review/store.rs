@@ -112,12 +112,12 @@ mod tests {
         file.entries.insert(
             "feature-x".into(),
             vec![
-                comment(1, CommentState::Pending),
+                comment(1, CommentState::Draft),
                 comment(2, CommentState::Sent { at: 1_790_000_100 }),
             ],
         );
         file.entries
-            .insert(String::new(), vec![comment(3, CommentState::Pending)]);
+            .insert(String::new(), vec![comment(3, CommentState::Draft)]);
         file
     }
 

@@ -2,6 +2,7 @@
 //! review comments. Lists and diffs come from the user's `git` (research R1), parsed here by pure
 //! functions; nothing in this module draws or owns a PTY (FR-022).
 
+pub mod anchor;
 pub mod base;
 pub mod changes;
 pub mod comment;
@@ -9,6 +10,7 @@ pub mod diff;
 pub mod git;
 pub mod pr_diff;
 pub mod prompt;
+pub mod reply;
 pub mod store;
 pub mod target;
 pub mod watch;

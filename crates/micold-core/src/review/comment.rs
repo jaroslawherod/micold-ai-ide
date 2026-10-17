@@ -26,35 +26,184 @@ impl Default for CommentId {
     }
 }
 
-/// Whether a comment has reached its session. `Pending → Sent` only on delivery (FR-017), and
-/// never back. Stored as `{ "pending": null }` or `{ "sent": { "at": … } }` (data-model § Core:
-/// persistence).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+/// Where a comment is in its life (feature 946, data-model § `CommentState`, FR-001):
+/// `Draft → Sent → Reported ⟲ Reported`, and never back to `Draft`. Stored as `{ "draft": null }`,
+/// `{ "sent": { "at": … } }` or `{ "reported": { "sent_at", "outcome", "reply", "first_at",
+/// "last_at", "by" } }`; version 1's `{ "pending": null }` reads as `Draft`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(from = "StateRepr", into = "StateRepr")]
 pub enum CommentState {
-    /// Not yet delivered.
-    Pending,
+    /// Written, not sent (482's pending). Editable and deletable.
+    Draft,
     /// Typed into a session at `at` (Unix seconds).
     Sent {
-        /// When the prompt was written.
+        /// When the batch was written.
         at: u64,
+    },
+    /// The agent (or the user, by hand) said it was applied or answered.
+    Reported {
+        /// When the batch carrying it was written.
+        sent_at: u64,
+        /// The latest report.
+        report: Report,
     },
 }
 
-/// The stored shape of [`CommentState`]: a newtype `Pending(())` writes `{ "pending": null }`
-/// where a unit variant would write a bare string.
+impl CommentState {
+    /// The one of four statuses the UI and the panel's counts show (FR-001).
+    pub fn status(&self) -> Status {
+        match self {
+            Self::Draft => Status::Draft,
+            Self::Sent { .. } => Status::Sent,
+            Self::Reported { report, .. } => match report.outcome {
+                Outcome::Applied => Status::Applied,
+                Outcome::Answered => Status::Answered,
+            },
+        }
+    }
+}
+
+/// What a comment's state means to the user (FR-001).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Status {
+    /// Not sent yet.
+    Draft,
+    /// Sent, no report yet.
+    Sent,
+    /// Reported as applied.
+    Applied,
+    /// Reported as answered.
+    Answered,
+}
+
+/// How a comment was handled.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Outcome {
+    /// The change was made.
+    Applied,
+    /// Not made; the reply says why.
+    Answered,
+}
+
+/// Who made the latest report. Stored as `{ "agent": "<session uuid>" }` or `"user"`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(from = "ReporterRepr", into = "ReporterRepr")]
+pub enum Reporter {
+    /// A session, through the agent tool server.
+    Agent {
+        /// The reporting session.
+        session: Uuid,
+    },
+    /// The user, by hand.
+    User,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum ReporterRepr {
+    Agent(Uuid),
+    User,
+}
+
+impl From<ReporterRepr> for Reporter {
+    fn from(repr: ReporterRepr) -> Self {
+        match repr {
+            ReporterRepr::Agent(session) => Self::Agent { session },
+            ReporterRepr::User => Self::User,
+        }
+    }
+}
+
+impl From<Reporter> for ReporterRepr {
+    fn from(reporter: Reporter) -> Self {
+        match reporter {
+            Reporter::Agent { session } => Self::Agent(session),
+            Reporter::User => Self::User,
+        }
+    }
+}
+
+/// A comment's latest report (data-model § `Report`). Built only by [`EntryReview`]'s report and
+/// mark operations (research R1), so a Reported comment always holds a checked reply.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Report {
+    outcome: Outcome,
+    reply: String,
+    first_at: u64,
+    last_at: u64,
+    by: Reporter,
+}
+
+impl Report {
+    /// Applied or answered.
+    pub fn outcome(&self) -> Outcome {
+        self.outcome
+    }
+
+    /// The reply: `\n` line breaks, trimmed; never empty when answered.
+    pub fn reply(&self) -> &str {
+        &self.reply
+    }
+
+    /// When the comment was first reported (Unix seconds), kept by later reports (FR-005).
+    pub fn first_at(&self) -> u64 {
+        self.first_at
+    }
+
+    /// When it was last reported (Unix seconds).
+    pub fn last_at(&self) -> u64 {
+        self.last_at
+    }
+
+    /// Who reported last.
+    pub fn by(&self) -> Reporter {
+        self.by
+    }
+}
+
+/// The stored shape of [`CommentState`]: a newtype `Draft(())` writes `{ "draft": null }` where a
+/// unit variant would write a bare string. `pending` is version 1's name for a draft.
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 enum StateRepr {
-    Pending(()),
-    Sent { at: u64 },
+    #[serde(alias = "pending")]
+    Draft(()),
+    Sent {
+        at: u64,
+    },
+    Reported {
+        sent_at: u64,
+        outcome: Outcome,
+        reply: String,
+        first_at: u64,
+        last_at: u64,
+        by: Reporter,
+    },
 }
 
 impl From<StateRepr> for CommentState {
     fn from(repr: StateRepr) -> Self {
         match repr {
-            StateRepr::Pending(()) => Self::Pending,
+            StateRepr::Draft(()) => Self::Draft,
             StateRepr::Sent { at } => Self::Sent { at },
+            StateRepr::Reported {
+                sent_at,
+                outcome,
+                reply,
+                first_at,
+                last_at,
+                by,
+            } => Self::Reported {
+                sent_at,
+                report: Report {
+                    outcome,
+                    reply,
+                    first_at,
+                    last_at,
+                    by,
+                },
+            },
         }
     }
 }
@@ -62,8 +211,117 @@ impl From<StateRepr> for CommentState {
 impl From<CommentState> for StateRepr {
     fn from(state: CommentState) -> Self {
         match state {
-            CommentState::Pending => Self::Pending(()),
+            CommentState::Draft => Self::Draft(()),
             CommentState::Sent { at } => Self::Sent { at },
+            CommentState::Reported { sent_at, report } => Self::Reported {
+                sent_at,
+                outcome: report.outcome,
+                reply: report.reply,
+                first_at: report.first_at,
+                last_at: report.last_at,
+                by: report.by,
+            },
+        }
+    }
+}
+
+/// A comment's short reference, `C-` + the first 8 lowercase hex digits of its id (FR-014,
+/// research R4). Derived from the id, never stored.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct CommentRef(u32);
+
+impl CommentRef {
+    /// The reference of comment `id`.
+    pub fn of(id: CommentId) -> Self {
+        let bytes = id.0.as_bytes();
+        Self(u32::from_be_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
+    }
+
+    /// Read a reference as an agent or the user wrote it: `C-` or `c-`, then 8 hex digits in
+    /// either case, with optional surrounding whitespace. `None` for anything else.
+    pub fn parse(text: &str) -> Option<Self> {
+        let text = text.trim();
+        let hex = text
+            .strip_prefix("C-")
+            .or_else(|| text.strip_prefix("c-"))?;
+        if hex.len() != 8 || !hex.bytes().all(|b| b.is_ascii_hexdigit()) {
+            return None;
+        }
+        u32::from_str_radix(hex, 16).ok().map(Self)
+    }
+}
+
+impl std::fmt::Display for CommentRef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "C-{:08x}", self.0)
+    }
+}
+
+/// A comment's range moved from `from` to `to` (data-model § `Move`); both cover as many lines.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "MoveRepr", into = "MoveRepr")]
+pub struct Move {
+    id: CommentId,
+    from: LineRange,
+    to: LineRange,
+}
+
+#[derive(Serialize, Deserialize)]
+struct MoveRepr {
+    id: CommentId,
+    from: LineRange,
+    to: LineRange,
+}
+
+impl Move {
+    /// Comment `id` moves from `from` to `to`; `None` when they cover different numbers of lines.
+    pub fn new(id: CommentId, from: LineRange, to: LineRange) -> Option<Self> {
+        (from.len() == to.len()).then_some(Self { id, from, to })
+    }
+
+    /// The comment.
+    pub fn id(&self) -> CommentId {
+        self.id
+    }
+
+    /// The range it must still have for the move to apply.
+    pub fn from(&self) -> LineRange {
+        self.from
+    }
+
+    /// Its new range.
+    pub fn to(&self) -> LineRange {
+        self.to
+    }
+}
+
+impl TryFrom<MoveRepr> for Move {
+    type Error = String;
+
+    fn try_from(repr: MoveRepr) -> Result<Self, Self::Error> {
+        Self::new(repr.id, repr.from, repr.to)
+            .ok_or_else(|| "a move keeps the number of lines".to_owned())
+    }
+}
+
+impl From<Move> for MoveRepr {
+    fn from(m: Move) -> Self {
+        Self {
+            id: m.id,
+            from: m.from,
+            to: m.to,
+        }
+    }
+}
+
+/// A new id for a comment of `entry`: the first one `draw` gives whose reference no comment of
+/// the entry already has (research R4).
+pub fn fresh_id(entry: &EntryReview, mut draw: impl FnMut() -> CommentId) -> CommentId {
+    loop {
+        let id = draw();
+        let reference = CommentRef::of(id);
+        if !entry.comments().iter().any(|c| c.reference() == reference) {
+            return id;
         }
     }
 }
@@ -88,13 +346,18 @@ pub struct ReviewComment {
     pub quote: Vec<String>,
     /// What the user wrote, trimmed and non-empty.
     pub text: String,
-    /// Pending or sent.
+    /// Draft, sent or reported.
     pub state: CommentState,
     /// When it was made (Unix seconds).
     pub created: u64,
 }
 
 impl ReviewComment {
+    /// Its short reference, `C-xxxxxxxx` (FR-014).
+    pub fn reference(&self) -> CommentRef {
+        CommentRef::of(self.id)
+    }
+
     /// Whether the lines at its range on its side no longer hold its quote (R14, FR-013). `lines`
     /// is that side's text now; `None` when the file is gone or not text.
     pub fn is_outdated(&self, lines: Option<&SideLines>) -> bool {
@@ -184,7 +447,7 @@ impl std::fmt::Display for ReviewError {
             Self::Refused => f.write_str("a sent comment cannot be changed; clear it instead"),
             Self::InSend => f.write_str("the comment is being sent; try again once the send ends"),
             Self::Busy => f.write_str("these comments are already being sent"),
-            Self::NothingPending => f.write_str("there are no pending comments to send"),
+            Self::NothingPending => f.write_str("there are no draft comments to send"),
         }
     }
 }
@@ -251,7 +514,7 @@ impl EntryReview {
         let pending: Vec<ReviewComment> = self
             .comments
             .iter()
-            .filter(|comment| comment.state == CommentState::Pending)
+            .filter(|comment| comment.state == CommentState::Draft)
             .cloned()
             .collect();
         if pending.is_empty() {
@@ -311,7 +574,7 @@ impl EntryReview {
             range: draft.range,
             quote: draft.quote,
             text,
-            state: CommentState::Pending,
+            state: CommentState::Draft,
             created,
         });
         Ok(())
@@ -335,7 +598,7 @@ impl EntryReview {
     /// Remove every sent comment (W4); pending ones stay.
     pub fn clear_sent(&mut self) {
         self.comments
-            .retain(|comment| comment.state == CommentState::Pending);
+            .retain(|comment| comment.state == CommentState::Draft);
     }
 
     /// Remove every pending comment not inside an open send (W4); sent ones and those the send
@@ -343,7 +606,7 @@ impl EntryReview {
     pub fn discard_pending(&mut self) {
         let sending = self.sending.as_deref().unwrap_or_default();
         self.comments.retain(|comment| {
-            comment.state != CommentState::Pending || sending.contains(&comment.id)
+            comment.state != CommentState::Draft || sending.contains(&comment.id)
         });
     }
 
@@ -359,8 +622,8 @@ impl EntryReview {
             return Err(ReviewError::InSend);
         }
         match self.comments[index].state {
-            CommentState::Pending => Ok(index),
-            CommentState::Sent { .. } => Err(ReviewError::Refused),
+            CommentState::Draft => Ok(index),
+            CommentState::Sent { .. } | CommentState::Reported { .. } => Err(ReviewError::Refused),
         }
     }
 }
@@ -427,7 +690,7 @@ mod tests {
         );
         assert_eq!(
             stored[0].state,
-            CommentState::Pending,
+            CommentState::Draft,
             "a new comment is pending"
         );
         assert_eq!(stored[0].quote, vec!["a", "b", "c"]);
@@ -537,8 +800,8 @@ mod tests {
     }
 
     #[test]
-    fn a_pending_comment_has_the_persisted_json_shape() {
-        let value = serde_json::to_value(sample(CommentState::Pending)).expect("serialises");
+    fn a_draft_comment_has_the_persisted_json_shape() {
+        let value = serde_json::to_value(sample(CommentState::Draft)).expect("serialises");
         assert_eq!(
             value,
             json!({
@@ -549,7 +812,7 @@ mod tests {
                 "end": 14,
                 "quote": ["a", "b", "c"],
                 "text": "Why clone here?",
-                "state": { "pending": null },
+                "state": { "draft": null },
                 "created": 1_790_000_000u64,
             }),
             "the comment is stored in the shape data-model.md § Core: persistence gives"
@@ -559,7 +822,7 @@ mod tests {
     #[test]
     fn comments_round_trip_in_both_states_and_on_the_old_side() {
         for state in [
-            CommentState::Pending,
+            CommentState::Draft,
             CommentState::Sent { at: 1_790_000_100 },
         ] {
             let mut comment = sample(state);
@@ -577,7 +840,7 @@ mod tests {
 
     #[test]
     fn a_reversed_range_in_stored_json_is_refused() {
-        let mut value = serde_json::to_value(sample(CommentState::Pending)).expect("serialises");
+        let mut value = serde_json::to_value(sample(CommentState::Draft)).expect("serialises");
         value["start"] = json!(9);
         value["end"] = json!(3);
         assert!(
@@ -618,6 +881,7 @@ mod tests {
             .find(|comment| comment.id == id(n))
             .expect("the comment is there")
             .state
+            .clone()
     }
 
     #[test]
@@ -635,7 +899,7 @@ mod tests {
         let pending: Vec<_> = review
             .comments()
             .iter()
-            .filter(|comment| comment.state == CommentState::Pending)
+            .filter(|comment| comment.state == CommentState::Draft)
             .cloned()
             .collect();
         assert_eq!(
@@ -698,7 +962,7 @@ mod tests {
         }
         assert_eq!(
             state_of(&review, 5),
-            CommentState::Pending,
+            CommentState::Draft,
             "added meanwhile stays pending"
         );
         assert_eq!(
@@ -716,7 +980,7 @@ mod tests {
         review.begin_send(EntryKind::Worktree, &[]).expect("send");
         review.abort_send();
         for n in 1..=3 {
-            assert_eq!(state_of(&review, n), CommentState::Pending, "FR-017");
+            assert_eq!(state_of(&review, n), CommentState::Draft, "FR-017");
         }
         assert!(!review.sending(), "the send is closed");
         review.set_text(id(1), "edit").expect("edits work again");
@@ -734,7 +998,7 @@ mod tests {
         assert!(review
             .comments()
             .iter()
-            .all(|comment| comment.state == CommentState::Pending));
+            .all(|comment| comment.state == CommentState::Draft));
     }
 
     #[test]
@@ -769,7 +1033,7 @@ mod tests {
 
     #[test]
     fn a_comment_whose_lines_still_hold_its_quote_is_not_outdated() {
-        let comment = sample(CommentState::Pending);
+        let comment = sample(CommentState::Draft);
         let mut text = "x\n".repeat(11);
         text.push_str("a\nb\nc\nd\n");
         assert!(
@@ -780,7 +1044,7 @@ mod tests {
 
     #[test]
     fn a_comment_whose_lines_changed_is_outdated() {
-        let comment = sample(CommentState::Pending);
+        let comment = sample(CommentState::Draft);
         let mut text = "x\n".repeat(11);
         text.push_str("a\nB\nc\n");
         assert!(comment.is_outdated(Some(&lines(&text))), "line 13 is now B");
@@ -788,7 +1052,7 @@ mod tests {
 
     #[test]
     fn a_comment_whose_range_runs_past_the_end_is_outdated() {
-        let comment = sample(CommentState::Pending);
+        let comment = sample(CommentState::Draft);
         let mut text = "x\n".repeat(11);
         text.push_str("a\nb\n");
         assert!(comment.is_outdated(Some(&lines(&text))), "line 14 is gone");
@@ -797,5 +1061,149 @@ mod tests {
     #[test]
     fn a_comment_on_a_file_that_is_gone_is_outdated() {
         assert!(sample(CommentState::Sent { at: NOW }).is_outdated(None));
+    }
+
+    // --- Feature 946 (T002): statuses, references, moves ---
+
+    const AGENT: u128 = 0x6f1c_0000_0000_4000_8000_0000_0000_0001;
+
+    fn reported(outcome: Outcome, reply: &str, by: Reporter) -> CommentState {
+        CommentState::Reported {
+            sent_at: NOW,
+            report: Report {
+                outcome,
+                reply: reply.to_owned(),
+                first_at: NOW + 100,
+                last_at: NOW + 200,
+                by,
+            },
+        }
+    }
+
+    #[test]
+    fn each_state_has_the_data_model_store_shape() {
+        let state = |s: CommentState| serde_json::to_value(sample(s)).expect("serialises")["state"].clone();
+        assert_eq!(state(CommentState::Draft), json!({ "draft": null }), "a draft");
+        assert_eq!(
+            state(CommentState::Sent { at: NOW }),
+            json!({ "sent": { "at": NOW } }),
+            "a sent comment"
+        );
+        assert_eq!(
+            state(reported(
+                Outcome::Answered,
+                "Kept on purpose.",
+                Reporter::Agent { session: Uuid::from_u128(AGENT) }
+            )),
+            json!({ "reported": {
+                "sent_at": NOW,
+                "outcome": "answered",
+                "reply": "Kept on purpose.",
+                "first_at": NOW + 100,
+                "last_at": NOW + 200,
+                "by": { "agent": Uuid::from_u128(AGENT).to_string() },
+            } }),
+            "a report by an agent names its session"
+        );
+        assert_eq!(
+            state(reported(Outcome::Applied, "", Reporter::User))["reported"]["by"],
+            json!("user"),
+            "a mark by hand says user"
+        );
+        for s in [
+            CommentState::Draft,
+            CommentState::Sent { at: NOW },
+            reported(Outcome::Applied, "", Reporter::User),
+            reported(Outcome::Answered, "why", Reporter::Agent { session: Uuid::from_u128(AGENT) }),
+        ] {
+            let back: ReviewComment =
+                serde_json::from_value(serde_json::to_value(sample(s.clone())).expect("serialises"))
+                    .expect("deserialises");
+            assert_eq!(back.state, s, "every state round-trips");
+        }
+    }
+
+    #[test]
+    fn status_is_exactly_one_of_four() {
+        assert_eq!(CommentState::Draft.status(), Status::Draft);
+        assert_eq!(CommentState::Sent { at: NOW }.status(), Status::Sent);
+        assert_eq!(
+            reported(Outcome::Applied, "", Reporter::User).status(),
+            Status::Applied,
+            "an applied report shows Applied (FR-001)"
+        );
+        assert_eq!(
+            reported(Outcome::Answered, "why", Reporter::User).status(),
+            Status::Answered,
+            "an answered report shows Answered (FR-001)"
+        );
+    }
+
+    #[test]
+    fn a_reference_is_c_and_the_first_eight_lowercase_hex_digits_of_the_id() {
+        let comment = sample(CommentState::Draft);
+        let reference = comment.reference().to_string();
+        assert_eq!(reference, "C-01234567", "the id starts 01234567 (FR-014)");
+        assert!(reference.len() <= 12, "short enough to quote (FR-014)");
+        let upper = CommentRef::of(CommentId(Uuid::from_u128(0xABCD_EF12_0000_4000_8000_0000_0000_0000)));
+        assert_eq!(upper.to_string(), "C-abcdef12", "lowercase hex");
+    }
+
+    #[test]
+    fn a_reference_parses_from_either_prefix_case_and_surrounding_whitespace() {
+        let expected = CommentRef::of(id(0x1a2b_3c4d_0000_4000_8000_0000_0000_0000));
+        for text in ["C-1a2b3c4d", "c-1a2b3c4d", "C-1A2B3C4D", "  C-1a2b3c4d\n", "\tc-1A2b3C4d "] {
+            assert_eq!(CommentRef::parse(text), Some(expected), "{text:?} names the comment");
+        }
+        for text in ["C-123", "D-1a2b3c4d", "C-1a2b3c4d5", "C-1a2b3c4g", "1a2b3c4d", "C-", "", "C- 1a2b3c4d"] {
+            assert_eq!(CommentRef::parse(text), None, "{text:?} is no reference");
+        }
+    }
+
+    #[test]
+    fn fresh_id_skips_a_drawn_id_whose_reference_is_taken() {
+        let taken = id(0x1111_1111_0000_4000_8000_0000_0000_0001);
+        let collides = id(0x1111_1111_ffff_4fff_8fff_ffff_ffff_ffff);
+        let free = id(0x2222_2222_0000_4000_8000_0000_0000_0001);
+        let mut existing = sample(CommentState::Draft);
+        existing.id = taken;
+        let review = EntryReview::from_comments(vec![existing]);
+        let mut drawn = vec![collides, free].into_iter();
+        let fresh = fresh_id(&review, || drawn.next().expect("a draw"));
+        assert_eq!(fresh, free, "the colliding draw is skipped (research R4)");
+        let mut once = vec![free].into_iter();
+        assert_eq!(fresh_id(&review, || once.next().expect("a draw")), free, "a free first draw is kept");
+    }
+
+    #[test]
+    fn a_move_keeps_the_number_of_lines() {
+        let range = |a, b| LineRange::new(a, b).expect("valid");
+        let m = Move::new(id(1), range(3, 5), range(10, 12)).expect("three lines to three lines");
+        assert_eq!((m.id(), m.from(), m.to()), (id(1), range(3, 5), range(10, 12)));
+        assert_eq!(Move::new(id(1), range(3, 5), range(10, 11)), None, "3 lines cannot become 2");
+        assert_eq!(Move::new(id(1), range(3, 3), range(4, 5)), None, "1 line cannot become 2");
+    }
+
+    #[test]
+    fn clear_sent_removes_sent_and_reported_comments_and_keeps_drafts() {
+        let mut review = three_pending_one_sent();
+        let mut answered = sample(reported(Outcome::Answered, "why", Reporter::User));
+        answered.id = id(10);
+        let mut comments = review.comments().to_vec();
+        comments.push(answered);
+        review = EntryReview::from_comments(comments);
+        review.clear_sent();
+        let ids: Vec<_> = review.comments().iter().map(|comment| comment.id).collect();
+        assert_eq!(ids, vec![id(1), id(2), id(3)], "Sent and Reported go, Drafts stay (FR-019)");
+    }
+
+    #[test]
+    fn a_reported_comment_refuses_set_text_and_delete() {
+        let mut answered = sample(reported(Outcome::Answered, "why", Reporter::User));
+        answered.id = id(1);
+        let mut review = EntryReview::from_comments(vec![answered.clone()]);
+        assert_eq!(review.set_text(id(1), "new"), Err(ReviewError::Refused), "FR-002");
+        assert_eq!(review.delete(id(1)), Err(ReviewError::Refused), "FR-002");
+        assert_eq!(review.comments(), &[answered][..], "nothing changed");
     }
 }
