@@ -28,11 +28,11 @@ All of it is per-window memory; nothing is persisted or sent (Principle IV).
 | Item | Where | Shape | Invariant |
 |---|---|---|---|
 | `RowRef` | `sidebar.rs` | `enum { Location(SessionLocation), Session(SessionId) }` | names a row by identity, not index, so it survives the list arriving late |
-| `sidebar.nav_stop` | `sidebar::State` | `Option<SessionLocation>` | set only by a location step that landed on a location with no session; cleared by any current-session change and `project_entered` |
+| `sidebar.nav_stop` | `sidebar::State` | `Option<SessionLocation>` | set only by a location step that landed on a location with no session; cleared by any current-session change, `project_entered`, and every clearing of `keyboard_row` |
 | `sidebar.keyboard_row` | `sidebar::State` | `Option<RowRef>` | at most one row holds the sidebar's keyboard; set only by `Message::Navigate`; cleared when that row reports losing focus |
 | `Step` | `navigation.rs` (new) | `enum { None, Session(SessionId), Stop(SessionLocation), Project(PathBuf) }` | what one press resolves to ([contracts/ui.md](./contracts/ui.md) U2) |
 | `Message::Navigate(NavAction)` | `app.rs` | new top-level message | handled in `main.rs` (U3) |
-| `SidebarMsg::KeyboardRowLeft` | `sidebar.rs` | new message | clears `keyboard_row` |
+| `SidebarMsg::KeyboardRowLeft` | `sidebar.rs` | new message | clears `keyboard_row` and `nav_stop` |
 
 ## Orders (derived at each press, never stored)
 

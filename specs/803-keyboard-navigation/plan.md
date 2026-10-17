@@ -87,8 +87,8 @@ New `crates/micold-client/src/features/navigation.rs`: `Step`, `location_order(&
 `features/sidebar.rs`: `RowRef`, `State::nav_stop`, `State::keyboard_row`,
 `SidebarMsg::KeyboardRowLeft`; `row_index(entries, &RowRef)` shared with `current_session_row`;
 `reveal_scroll_offset` targets `keyboard_row` when set. `nav_stop` cleared in
-`set_current_session`, `session::selected` and `project_entered`; `keyboard_row` cleared on
-`KeyboardRowLeft` and on a pointer selection (U5).
+`set_current_session`, `session::selected`, `project_entered`, and with every clearing of
+`keyboard_row`; `keyboard_row` cleared on `KeyboardRowLeft` and on a pointer selection (U5).
 
 ### D5 — Applying a step — R5, R6, R7
 
@@ -101,11 +101,12 @@ restored, after `Reopened` ran.
 
 ### D6 — Component — R7
 
-`ui/material/keyboard_focus.rs`: `TakesTheKeyboard::shown(bool)` (supplied focus draws the ring).
-`ui/material/tree_view.rs`: `TreeItem::keyboard_focus(focused, on_change)` wraps the row in
-`TakesTheKeyboard` (enabled only when set) with the row's indicator. `ui/sidebar.rs`: the row whose
-`RowRef` is `keyboard_row` (location rows, session sub-rows, run rows) calls it with
-`SidebarMsg::KeyboardRowLeft` on loss. Showcase: a tree with a keyboard-focused row.
+`ui/material/keyboard_focus.rs`: `TakesTheKeyboard::shown(bool)` (supplied focus draws the ring);
+`state()` seeds `Focus` from the supplied flag when `on_focus_change` is set. `ui/material/tree_view.rs`:
+`TreeItem::keyboard_focus(focused, on_change)` wraps the row in `TakesTheKeyboard` (enabled only
+when `focused`) with the row's indicator. `ui/sidebar.rs`: **every** row (location rows, session
+sub-rows, run rows) calls it, `focused` true only for the row whose `RowRef` is `keyboard_row`, with
+`SidebarMsg::KeyboardRowLeft` on loss, so the tree shape is stable across presses (R7). Showcase: a tree with a keyboard-focused row.
 
 ### D7 — Docs — R10
 
@@ -124,7 +125,7 @@ states) and `docs/user-guide/worktrees-and-sessions.md` **Navigation** bullet ([
 | FR-006, SC-003 | D2 conflict test | R9 |
 | FR-007, SC-002 | D2 tier 1, routing both paths | R2 |
 | FR-008 | D2 `is_primary_shift`, near-miss tests | R2 |
-| FR-009, SC-004 | D4 reveal target, D5 reveal arm, existing `effective_open` | R5, R7 |
+| FR-009, SC-004 | D4 reveal target, D5 reveal arm, existing `effective_open`; on a `Stop` the highlighted row may be off screen (recorded deviation) | R4, R5, R7 |
 | FR-010 | D5 focus rule, D4 `keyboard_row`, D6 | R7 |
 | FR-011, SC-005 | D5 only sends `Selected`/`Reopened`; `Stop` starts nothing | R4 |
 | FR-012 | D3 gate; `Selected` closes the Overview | R8 |
@@ -143,9 +144,9 @@ states) and `docs/user-guide/worktrees-and-sessions.md` **Navigation** bullet ([
 |---|---|---|---|
 | Core unit | `micold-core/src/navigation.rs` tests | next/previous middle, wrap at both ends, one entry stays, empty → `None`, absent/`None` current → first/last | 005, SC-001 |
 | Client keys | `micold-client/tests/keymap.rs` | K5: decode by physical key and by fallback (logical `{` `}` `<` `>`), both modifier sets, near misses incl. Ctrl+[ → `0x1b`, no overlap with reserved outputs, `route_key` both focus states, docs carry both labels of every chord | 001, 006–008, 013, 016, SC-002, SC-003, SC-006 |
-| Client state | `micold-client/tests/navigation.rs` (new) | U1 gate (Settings, dialog, context menu, switcher panel); U2 for each level: filter skip, collapsed group skip, expanded group run included, helper order, unavailable project skipped, welcome screen, no current, one entry, `nav_stop` honoured and cleared; U3 apply: `Selected`/`Reopened` follow-up, reveal armed, focus rule both ways, `Stop` leaves `session.active` and the session count unchanged | 002–005, 009–012, 015, SC-004, SC-005 |
+| Client state | `micold-client/tests/navigation.rs` (new) | U1 gate (Settings, dialog, context menu, switcher panel); U2 for each level: filter skip, collapsed group skip, expanded group run included, helper order, unavailable project skipped, welcome screen, no current, one entry, `nav_stop` honoured and cleared (session change, project entered, `KeyboardRowLeft`, pointer selection); after a `Stop`, the next press that lands on a session sets `keyboard_row`, not terminal focus; U3 apply: `Selected`/`Reopened` follow-up, reveal armed, focus rule both ways, `Stop` leaves `session.active` and the session count unchanged | 002–005, 009–012, 015, SC-004, SC-005 |
 | Client state | `tests/features_sidebar.rs` / `sidebar_state.rs` | `row_index` for location/sub-row/run rows; `reveal_scroll_offset` to `keyboard_row`; `KeyboardRowLeft` clears; `current_session_writers.rs` still green | 009, 010 |
-| Component | `ui/material/tree_view.rs`, `keyboard_focus.rs` tests | `keyboard_focus` adds no layout node size change; supplied+shown draws the ring; disabled rows untouched | 010 |
+| Component | `ui/material/tree_view.rs`, `keyboard_focus.rs` tests | `keyboard_focus` adds no layout node size change; supplied+shown draws the ring on the **first** build after the flag goes true (wrapper already present) and on a freshly created wrapper (`state()` seeded); disabled wrappers are skipped by Tab traversal and draw nothing | 010 |
 | Showcase | `tests/showcase_completeness.rs` | focused-row variant listed | VIII |
 | Visual pass | quickstart §B (visual-pass skill) | B1–B12 | all |
 | Platforms | CI on three; quickstart §C | parity, no system action | VI, 006 |

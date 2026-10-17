@@ -29,7 +29,7 @@ group with one worktree with a session.
 
 | # | Do | Expect |
 |---|---|---|
-| B1 | Terminal of Default focused; press Ctrl+Shift+. four times, typing `x` after each | `feat-1_a` main, `fix-2_b` (ring on its row, start action shown, terminal still on `feat-1_a` main, no `x` typed into it), `chore-3_c` (scrolled into view, terminal focused, `x` appears), the run's worktree (if group expanded), then Default again (wrap) |
+| B1 | Terminal of Default focused; press Ctrl+Shift+. four times, typing `x` after each | `feat-1_a` main, `fix-2_b` (ring on its row, start action shown, terminal still on `feat-1_a` main, no `x` typed into it), `chore-3_c` (scrolled into view, terminal shows it, ring on its row, no `x` typed: the keyboard was on the stop's row, not the terminal, so FR-010 keeps it in the sidebar), the run's worktree (if group expanded), then Default again (wrap) |
 | B2 | Ctrl+Shift+, from Default | the last location (wrap backwards) |
 | B3 | On `feat-1_a` main, Ctrl+Shift+] three times | helper 1 (row opened, sub-row highlighted), helper 2, main |
 | B4 | On a one-session location, Ctrl+Shift+[ | nothing changes, no error |
