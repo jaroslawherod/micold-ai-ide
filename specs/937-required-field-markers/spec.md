@@ -101,8 +101,9 @@ message, and that the message names the problem in words.
 3. **Given** the add-worktree form with Name focused and empty, **When** the user moves focus to
    another field without typing, **Then** Name shows the required error; a field the user has not
    focused shows none until a submit attempt.
-4. **Given** a field that already shows another validation error (e.g. a port that is not a
-   number), **When** it is not empty, **Then** that error is shown, not the required message.
+4. **Given** a field that holds a value the form rejects for another reason (e.g. a worktree name
+   with no letters or digits, a port that is not a number), **When** the user submits, **Then**
+   that field shows its own error, not the required message.
 
 ---
 
@@ -114,6 +115,9 @@ message, and that the message names the problem in words.
 - **Conditionally required fields**: a field required only for some value of another field shows
   the marker only while it is required, and a hidden field never counts toward the form's
   explanation.
+- **Jira credentials**: Settings › Jira accepts all four connection fields empty, so they are
+  required only while Jira is enabled and one of them holds input or a connection is stored; the
+  API token additionally only while no token is stored.
 - **Fields that are not text fields**: a required select (e.g. a daemon or AI CLI picker with no
   default) carries the same marker and error state as a text field.
 - **Several required fields empty at once**: a submit attempt puts every empty required field into
@@ -171,9 +175,9 @@ message, and that the message names the problem in words.
   run-in-parallel prompt, type, name and base branch; the daemon's name; a rename's new name); the
   plan MUST list each form with its required fields. A form in which FR-002 picks out no field
   (e.g. Settings › Appearance) gets neither marker nor explanation.
-- **FR-010**: A field's own validation error other than emptiness (e.g. an invalid port) MUST take
-  precedence over the required error while the field is not empty, and forms MUST keep their
-  existing non-emptiness errors.
+- **FR-010**: Forms MUST keep their existing validation errors other than emptiness (e.g. an
+  invalid port, a name with no letters or digits), shown on the field they concern; when a field
+  has its own error, that error MUST be shown instead of the required message.
 - **FR-011**: The component showcase MUST show a required field in its resting, filled and error
   states and the marker explanation, so the convention can be checked without opening a form.
 
