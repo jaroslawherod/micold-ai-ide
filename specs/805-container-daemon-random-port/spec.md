@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-16
 
-**Status**: Closed 2026-10-17 — shipped in PRs #910, #926, close PR
+**Status**: Closed 2026-10-17 — shipped in PRs #910, #926, #933
 
 **Input**: User description: "Container daemon without a port should pick a random port and save it (#805)"
 
