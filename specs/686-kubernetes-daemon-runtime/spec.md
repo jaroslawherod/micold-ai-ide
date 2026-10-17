@@ -74,9 +74,12 @@ the session is running and shows the output produced while the client was away.
 2. **Given** the tunnel dropped, **When** the client reconnects (automatically or by the user's
    reconnect), **Then** the sessions are shown running with their output since the drop, and no second
    pod or duplicate session is created.
-3. **Given** the pod was deleted or restarted meanwhile, **When** the client reconnects, **Then** the
-   worktrees are still present on the volume, and sessions that were running are shown as
-   `lost to its daemon` (spec 491 term), not as running.
+3. **Given** the pod was deleted, evicted or lost with its node meanwhile, **When** the client
+   reconnects, **Then** the daemon shows `stopped` with a reason naming why the pod is gone, the
+   sessions that were running are shown as `lost to its daemon` (spec 491 term), and the client does
+   not recreate the pod by itself.
+4. **Given** that stopped daemon, **When** the user starts it, **Then** a new pod is created on the
+   kept volume and every worktree is still present.
 
 ---
 
@@ -153,10 +156,13 @@ again (worktrees still there), then remove (pod and volume gone after confirmati
    apply on its next start; a running pod is not changed silently.
 3. **Given** a running daemon, **When** the user chooses **Stop**, **Then** the pod is deleted, the
    volume (and its worktrees) is kept, and the state becomes `stopped`.
-4. **Given** a daemon, **When** the user chooses **Remove**, **Then** a confirmation says the pod, the
+4. **Given** a Kubernetes daemon shown `unreachable` whose pod still runs, **When** the user chooses
+   **Reconnect**, **Then** the tunnel is re-established and its running sessions are shown again with
+   their output.
+5. **Given** a daemon, **When** the user chooses **Remove**, **Then** a confirmation says the pod, the
    volume with its worktrees and the daemon's secrets will be deleted, plus spec 491's bound-worktree
    counts, and nothing is deleted until confirmed.
-5. **Given** the removal was confirmed, **When** it completes, **Then** the pod, volume and secrets the
+6. **Given** the removal was confirmed, **When** it completes, **Then** the pod, volume and secrets the
    client created are gone from the namespace and the worktrees follow spec 491 FR-014.
 
 ---
@@ -195,9 +201,11 @@ pass with no sign-in, provider network access or cost.
   namespace and daemon name is refused naming the first.
 - **Volume full**: worktree creation or git operations fail with the disk-full reason; existing
   sessions are not killed by the client.
-- **Pod evicted or node lost while connected**: the daemon goes `reconnecting`, sessions show
-  `disconnected`, then `lost to its daemon` once the replacement pod is up (story 2.3).
-- **Image tag differs from the client's version**: the daemon is marked `version mismatch` per spec
+- **Pod evicted, deleted outside the app or node lost while connected**: the daemon goes
+  `reconnecting` and sessions show `disconnected`; once the client sees the pod is gone it stops the
+  attempts, shows `stopped` with the reason (evicted, deleted, node lost), marks the sessions
+  `lost to its daemon`, and waits for the user's **Start** (story 2.3, 2.4; FR-011).
+- **The daemon in the pod reports a version different from the client's**: the daemon is marked `version mismatch` per spec
   491 FR-008 and sessions are not started; no running session is ended to resolve it.
 - **Stop while sessions run**: confirmation states how many running sessions will end; worktrees stay.
 - **Remove when the cluster is unreachable**: the confirmation offers to forget the daemon locally and
@@ -207,7 +215,24 @@ pass with no sign-in, provider network access or cost.
 - **Port-forward denied while pod creation is allowed**: reported as RBAC denial naming port-forward.
 - **Repository branch already checked out in another daemon's worktree**: refused per spec 491 FR-016,
   naming the worktree and daemon.
-- **Windows, macOS, Linux clients**: same behaviour on all three.
+- **Two clients start the same daemon at once** (same context, namespace and daemon name, from two
+  windows or two machines): at most one pod results; the client that loses the race reuses the pod
+  the other created (FR-023).
+- **One client stops or removes a daemon while another is connected**: the other client shows the
+  daemon `stopped` with a reason saying the pod was deleted, and its sessions `lost to its daemon`; it
+  never recreates the pod on its own (FR-011, FR-023). After a remove, its next **Start** creates a new,
+  empty volume.
+- **Same daemon name configured on another machine for the same context and namespace**: it is the
+  same daemon; both clients share its pod, volume and secrets (spec 489 FR-021). A same-named
+  resource in the namespace that the app did not create is a conflict (FR-016).
+- **Kubeconfig location per OS**: the `KUBECONFIG` variable is honoured as a list of files, separated
+  by `;` on Windows and `:` on macOS and Linux, merged in order; without it the file `.kube/config` in
+  the user's home directory (`%USERPROFILE%` on Windows) is used. None found: the add form says no
+  kubeconfig was found and where it looked.
+- **Exec credential plugin** (cloud CLIs that the kubeconfig runs to log in): missing from the
+  app's search path (for example when the app is launched from the macOS Dock or Finder rather than a
+  shell), or failing, makes start fail naming the plugin, its error, and the search path used.
+- **Windows, macOS, Linux clients**: same behaviour on all three, including the two cases above.
 
 ## Requirements *(mandatory)*
 
@@ -226,7 +251,9 @@ pass with no sign-in, provider network access or cost.
   [NEEDS CLARIFICATION: #806 defaults to building an image locally from a Dockerfile with the current
   daemon binary; a cluster cannot use a locally built image without a registry. Is the Kubernetes
   default (a) build locally and push to a registry the user names, (b) pull only, with the user naming
-  an image (e.g. one built and pushed per #806), or (c) build inside the cluster?]
+  an image (e.g. one built and pushed per #806), or (c) build inside the cluster? Under each, how do
+  the AI provider CLIs the user selects for the daemon (#806 installs them in the built image) get
+  into the pod's image?]
 - **FR-005**: The user MUST be able to set CPU and memory requests and limits (the #806 resources
   fields), a node selector, tolerations and the volume size; these persist with the daemon and apply
   on the next start.
@@ -248,12 +275,18 @@ pass with no sign-in, provider network access or cost.
   quits, and MUST be shown with their output produced meanwhile on reconnection (as spec 489 FR-006).
 - **FR-011**: The system MUST reconnect a dropped tunnel automatically with the spec 489 FR-007 back-off
   and user stop/retry, use the spec 489 FR-008 state set (including `reconnecting`), and MUST NOT
-  create a second pod or duplicate sessions by reconnecting. Sessions follow spec 489 FR-019.
-- **FR-012**: The system MUST report, with a reason naming the cause and within a start timeout of
-  at most 120 seconds (plus image pull time while the cluster reports pull progress), at least: RBAC
-  denial (naming the action and resource), image pull failure (naming the image and cluster error),
-  unschedulable pod (with the scheduler's reason), volume claim not bound (with its reason), missing
-  context or namespace, and unreachable cluster. It MUST NOT hang or retry silently.
+  create a second pod or duplicate sessions by reconnecting. Sessions follow spec 489 FR-019. When the
+  client finds the daemon's pod gone (deleted, evicted, node lost), it MUST stop the attempts, show the
+  daemon `stopped` with that reason, mark its sessions `lost to its daemon`, and MUST NOT recreate the
+  pod until the user starts the daemon.
+- **FR-012**: The system MUST report, with a reason naming the cause, at least: RBAC denial (naming
+  the action and resource), image pull failure (naming the image and cluster error), unschedulable pod
+  (with the scheduler's reason), volume claim not bound (with its reason), missing context or
+  namespace, unreachable cluster, and a missing or failing exec credential plugin. It MUST NOT hang or
+  retry silently. Each start phase has its own bound, after which start fails naming the phase:
+  everything except the image pull and any image build or push at most 120 seconds; the image pull at
+  most 15 minutes; an image build or push (if FR-004 resolves to one) shows its output live, can be
+  cancelled by the user, and fails at most 30 minutes after it starts.
 - **FR-013**: A failed start MUST NOT leave behind a pod or secrets it created in that attempt; the
   volume is kept only if it existed before the attempt.
 - **FR-014**: **Stop** MUST delete the pod and keep the volume; after confirmation when sessions are
@@ -261,8 +294,10 @@ pass with no sign-in, provider network access or cost.
 - **FR-015**: **Remove** MUST, after a confirmation naming the pod, volume and secrets to be deleted
   (with spec 491 FR-012/FR-014 counts), delete every cluster resource the system created for the
   daemon, then forget the daemon; when the cluster is unreachable it MUST say which resources remain.
-- **FR-016**: The system MUST mark cluster resources it creates as belonging to the daemon, act only
-  on resources so marked, and refuse to reuse or delete anything else, naming the conflict.
+- **FR-016**: The system MUST mark cluster resources it creates as belonging to the daemon, identified
+  by context, namespace and daemon name (so another client's daemon with the same three is the same
+  daemon), act only on resources so marked, and refuse to reuse or delete anything else, naming the
+  conflict.
 - **FR-017**: The system MUST detect a client and daemon version mismatch per spec 491 FR-008 and
   spec 489 FR-011 and MUST NOT start sessions on a mismatched daemon.
 - **FR-018**: The user MUST be able to add, edit, start, stop, reconnect and remove a Kubernetes daemon
@@ -278,7 +313,12 @@ pass with no sign-in, provider network access or cost.
   and an unschedulable pod. The tests MUST be off by default locally, runnable by a documented task,
   and run in CI.
 - **FR-022**: Every user-facing behaviour above MUST work equivalently on Linux, macOS and Windows
-  clients.
+  clients, including kubeconfig discovery (the `KUBECONFIG` list with the OS's separator, else the
+  home directory's `.kube/config`) and exec credential plugins resolved the same way whether the app
+  was started from a shell or from the desktop.
+- **FR-023**: Concurrent starts of one daemon, from one or several clients, MUST result in at most one
+  pod, the later start reusing it. A Stop or Remove by one client MUST be shown to every other connected
+  client as `stopped` with a reason saying the pod was deleted, with its sessions `lost to its daemon`.
 
 ### Key Entities
 
