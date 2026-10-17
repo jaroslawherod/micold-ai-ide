@@ -69,5 +69,8 @@ Everything up to an open tunnel to the pod's SSH server, proven over `FakeCluste
 adapter's unit tests: kubeconfig, settings, manifests, the access secret (with a fake `KeyGen`), the
 pod/PVC/secret lifecycle with rollback, the relay and the `Tunnel` phase (the SSH identification
 line), Stop, Remove, the failure reasons, and the Settings form with the Add entry hidden (spec
-FR-024). The blocked milestones then wire §2-§4, the clone (protocol 49), reconnect over the bridge,
+FR-024). #686 lands `micold-core/src/daemon_resources.rs` (`DaemonResources`) and the resources
+fields extracted in `ui/settings/container_fields.rs` in its first milestone; #806 adopts them rather
+than creating its own. `PROTOCOL_VERSION`: whichever of #686's `RepoClone` (49) and a #806 bump merges
+second takes the next number and re-pins the `schema_hash.rs` hashes. The blocked milestones then wire §2-§4, the clone (protocol 49), reconnect over the bridge,
 the Add entry, and the real-cluster suite.
