@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-jjniz9
 - **Started**: 2026-10-17
 - **Phase**: milestone M2
-- **Next step**: M2 verify (Review A high, Review B, full gate), then PR
+- **Next step**: M2 PR: orchestrator opens it from the scratchpad pr-title.md/pr-body.md, waits on CI, merges; then M3
 
 ## Pull requests
 
