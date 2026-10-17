@@ -84,7 +84,11 @@ fn run_and_stop(state: &DaemonState, project: &Path, id: SessionId, text: &str) 
     // The stopped sibling's exit may not be recorded yet: this helper runs several sessions of one
     // project in turn (legacy worktree, feature 776), so the start is the explicit request.
     state
-        .start_session_gated(id, LaunchMode::Fresh, micold_core::occupancy::Additional::Yes)
+        .start_session_gated(
+            id,
+            LaunchMode::Fresh,
+            micold_core::occupancy::Additional::Yes,
+        )
         .expect("starts");
     wait_file(&printed);
     history_showing(state, id, text);
