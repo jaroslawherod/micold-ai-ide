@@ -9,21 +9,21 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #805
 - **Worktree branch**: feat/805_container-daemon-without-a-port-should-pick-a
 - **Started**: 2026-10-16
-- **Phase**: milestone M1
-- **Next step**: CI and merge of the M1 PR, then close
+- **Phase**: close
+- **Next step**: tdd-verify, close PR
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #910 | Design | merged | 59cd8f77356153f09a73586392e703384c345066 |
-| #926 | M1 | open | |
+| #926 | M1 | merged | 7746676b3eaf73b56ee06898a8e01b7bebf5cbda |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T012 | full | Empty container port picks, saves and keeps a free port; taken port reported at start | #926 | in review |
+| M1 | T001–T012 | full | Empty container port picks, saves and keeps a free port; taken port reported at start | #926 | merged |
 
 ## Decisions
 
