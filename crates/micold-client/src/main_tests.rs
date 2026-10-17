@@ -5062,6 +5062,29 @@ mod script_path_report {
         );
     }
 
+    #[test]
+    fn confirming_a_blocked_start_sends_the_start_with_the_additional_flag() {
+        let (mut app, _probe) = app_with(&stored_path(), ProbeAnswer::Missing);
+        let (tx, mut rx) = iced::futures::channel::mpsc::unbounded();
+        app.connect_test_daemon(micold_client::daemon::Outbox::new(tx));
+        app.core.workspace.active = Some(std::env::temp_dir());
+        let id = SessionId::new();
+        app.core.session.blocked_start = Some(id);
+
+        let _ = update_inner(&mut app, Message::Session(SessionMsg::AdditionalConfirmed));
+
+        let sent = std::iter::from_fn(|| rx.try_recv().ok()).collect::<Vec<_>>();
+        assert!(
+            sent.iter().any(|m| matches!(
+                m,
+                ClientMsg::SessionStart { session, allow_additional_session: true }
+                    if *session == id
+            )),
+            "T032: confirming sends SessionStart with allow_additional_session: true"
+        );
+        assert_eq!(app.core.session.blocked_start, None);
+    }
+
     // --- T014: the triggers (contracts/settings-indication.md §3, T1) ---
 
     #[test]

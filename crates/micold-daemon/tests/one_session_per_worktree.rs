@@ -958,7 +958,7 @@ fn unarchived_in(state: &DaemonState, project: &Path, wt: &str) -> usize {
     state
         .sessions_for(project)
         .iter()
-        .filter(|s| !s.archived && s.location == SessionLocation::Worktree(wt.into()))
+        .filter(|s| s.worktree_dir.as_deref() == Some(wt))
         .count()
 }
 
