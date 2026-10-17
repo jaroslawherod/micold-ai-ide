@@ -310,6 +310,67 @@ fn hooks_drive_the_projected_activity_signal() {
     session.kill().expect("kill");
 }
 
+/// Feature 905 (W2, W3): `paused_on_user` follows the turn clock, and a change of it alone is
+/// reported so the catalog is broadcast, though the activity signal did not move.
+#[test]
+fn a_permission_stop_pauses_the_turn_and_every_change_of_it_is_reported() {
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    let id = SessionId::from_uuid(Uuid::from_u128(SESSION_U128));
+    let state = DaemonState::new(catalog_with_session(
+        project.path(),
+        store.path(),
+        AiCli::ClaudeCode,
+    ));
+    let session = register_cat(&state, id);
+    let hook = |kind| state.note_activity(id, ActivityEvent::Hook(kind));
+    let seen = || {
+        let s = summary_of(&state, id);
+        (s.activity, s.paused_on_user)
+    };
+
+    assert!(hook(HookKind::UserPromptSubmit));
+    assert!(hook(HookKind::Notification));
+    assert_eq!(seen(), (ActivitySignal::AwaitingInput, true));
+    assert!(hook(HookKind::PreToolUse));
+    assert_eq!(seen(), (ActivitySignal::Working, false));
+
+    assert!(hook(HookKind::Notification));
+    assert_eq!(seen(), (ActivitySignal::AwaitingInput, true));
+    assert!(
+        hook(HookKind::Stop),
+        "the flag changed though the signal did not: broadcast"
+    );
+    assert_eq!(seen(), (ActivitySignal::AwaitingInput, false));
+
+    assert!(hook(HookKind::UserPromptSubmit));
+    assert!(hook(HookKind::Stop));
+    assert_eq!(seen(), (ActivitySignal::AwaitingInput, false));
+    session.kill().expect("kill");
+}
+
+#[test]
+fn a_notification_with_no_turn_is_not_a_pause_and_an_unhosted_session_is_not_paused() {
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    let id = SessionId::from_uuid(Uuid::from_u128(SESSION_U128));
+    let state = DaemonState::new(catalog_with_session(
+        project.path(),
+        store.path(),
+        AiCli::ClaudeCode,
+    ));
+    // Not live yet: the overlay has no clock to read.
+    assert!(!summary_of(&state, id).paused_on_user);
+    let session = register_cat(&state, id);
+    assert!(state.note_activity(id, ActivityEvent::Hook(HookKind::Notification)));
+    let s = summary_of(&state, id);
+    assert_eq!(
+        (s.activity, s.paused_on_user),
+        (ActivitySignal::AwaitingInput, false)
+    );
+    session.kill().expect("kill");
+}
+
 #[test]
 fn a_hook_for_an_unhosted_session_reports_nothing() {
     // H1: a hook for a session the daemon is not hosting invents no state.

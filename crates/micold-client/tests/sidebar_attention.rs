@@ -423,6 +423,7 @@ fn catalog(sessions: &[(SessionId, Option<&str>, bool)]) -> CatalogSnapshot {
                     origin: None,
                     agents: Vec::new(),
                     main: false,
+                    paused_on_user: false,
                 })
                 .collect(),
         }],

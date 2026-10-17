@@ -319,6 +319,7 @@ fn catalog(sessions: &[(SessionId, &str, WireLifecycle, ActivitySignal)]) -> Cat
                     origin: None,
                     agents: Vec::new(),
                     main: false,
+                    paused_on_user: false,
                 })
                 .collect(),
         }],
@@ -373,6 +374,96 @@ fn a_catalog_snapshot_changes_the_state_and_nothing_else() {
         false,
     );
     assert_eq!(state_of(&state, FEATURE_X), Some(LocationState::Running));
+}
+
+/// The snapshot of [`catalog`] with every session's `paused_on_user` set to `paused`.
+fn paused_catalog(
+    sessions: &[(SessionId, &str, WireLifecycle, ActivitySignal)],
+    paused: bool,
+) -> CatalogSnapshot {
+    let mut snapshot = catalog(sessions);
+    for summary in &mut snapshot.projects[0].sessions {
+        summary.paused_on_user = paused;
+    }
+    snapshot
+}
+
+fn ask_permission(dir: &str) -> Session {
+    let mut session = turn_finished(dir);
+    session.paused_on_user = true;
+    session
+}
+
+/// US2 scenarios 1 and 4, W4: a session paused on the user makes its worktree Blocked, on both
+/// catalog paths, and the next snapshot's `Working` makes it Running again.
+#[test]
+fn a_permission_stop_blocks_the_worktree_until_the_session_carries_on() {
+    let rows = |id| {
+        [(
+            id,
+            FEATURE_X,
+            WireLifecycle::Running,
+            ActivitySignal::AwaitingInput,
+        )]
+    };
+
+    // New-session insert.
+    let id = SessionId::new();
+    let mut state = state_with(Vec::new());
+    reconcile_catalog(
+        &mut state,
+        DaemonId(1),
+        &paused_catalog(&rows(id), true),
+        false,
+    );
+    assert_eq!(
+        state_of(&state, FEATURE_X),
+        Some(LocationState::Blocked(BlockedReason::NeedsPermission))
+    );
+    let tooltip_line = state_of(&state, FEATURE_X).unwrap().tooltip_line();
+    assert_eq!(tooltip_line, "Blocked: needs permission");
+
+    // Existing-session update, then the grant.
+    let carried_on = [(
+        id,
+        FEATURE_X,
+        WireLifecycle::Running,
+        ActivitySignal::Working,
+    )];
+    reconcile_catalog(
+        &mut state,
+        DaemonId(1),
+        &paused_catalog(&carried_on, false),
+        false,
+    );
+    assert_eq!(state_of(&state, FEATURE_X), Some(LocationState::Running));
+    reconcile_catalog(
+        &mut state,
+        DaemonId(1),
+        &paused_catalog(&rows(id), true),
+        false,
+    );
+    assert_eq!(
+        state_of(&state, FEATURE_X),
+        Some(LocationState::Blocked(BlockedReason::NeedsPermission))
+    );
+    reconcile_catalog(
+        &mut state,
+        DaemonId(1),
+        &paused_catalog(&rows(id), false),
+        false,
+    );
+    assert_eq!(state_of(&state, FEATURE_X), Some(LocationState::Idle));
+}
+
+/// US2 scenario 1: a helper asking for a permission blocks the worktree beside an idle main.
+#[test]
+fn a_helper_asking_for_a_permission_blocks_beside_an_idle_main_session() {
+    let state = state_with(vec![turn_finished(FEATURE_X), ask_permission(FEATURE_X)]);
+    assert_eq!(
+        state_of(&state, FEATURE_X),
+        Some(LocationState::Blocked(BlockedReason::NeedsPermission))
+    );
 }
 
 /// FR-009, A7: the state's words go on a line of their own, before the unread line.
