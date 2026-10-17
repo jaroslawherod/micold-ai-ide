@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #905
 - **Worktree branch**: claude/project-thread-h057j5
 - **Started**: 2026-10-17
-- **Phase**: spec
-- **Next step**: review spec.md (rubric spec), then commit; next unit: clarify
+- **Phase**: clarify
+- **Next step**: clarify unit: settle the three [NEEDS CLARIFICATION] markers in spec.md (mid-turn question state, several-sessions aggregation, unknown activity)
 
 ## Pull requests
 
@@ -32,7 +32,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
 | Spec review | 1 | 2148471a6892a9acfe8441d5914d9cacd029f1e4:bfdc456e3ecbab4afa9c30045923409081433f23 | CHANGES: 1 MAJOR, 2 MINOR (all fixed) |
-| Spec review | 2 | 047d8dca47a8242fd7e54bccd72425e87b1e87dc:bfdc456e3ecbab4afa9c30045923409081433f23 | pending |
+| Spec review | 2 | 047d8dca47a8242fd7e54bccd72425e87b1e87dc:bfdc456e3ecbab4afa9c30045923409081433f23 | CLEAN: 2 MINOR (fixed, prose only) |
 
 ## Declined review findings
 
