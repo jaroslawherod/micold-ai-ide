@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-uwrpqv
 - **Started**: 2026-10-17
 - **Phase**: M2
-- **Next step**: M2 in progress: see Handover
+- **Next step**: M2 PR open; orchestrator waits on CI and merges, then M3
 
 ## Pull requests
 
@@ -24,7 +24,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T009 | full | basic image published by `basic-image.yml` on merge (prints the `BASIC_IMAGE` pin) | #979 | merged |
-| M2 | T010–T025, T087 | full | shared `micold_core::provision` (contract); 489 remote daemons start through it, row shows shared steps — #686 can plan onto it from here | — | in progress |
+| M2 | T010–T025, T087 | full | shared `micold_core::provision` (contract); 489 remote daemons start through it, row shows shared steps — #686 can plan onto it from here | pending | PR open |
 | M3 | T026–T031 | full | static Linux musl daemons (x86_64, aarch64) in every package; `NoMatchingBuild` | — | pending |
 | M4 | T032–T041 | full | AI CLI install step + registry-only relay on app-owned targets; daemon offers only installed CLIs — #686 has the full contract | — | pending |
 | M5 | T042–T070 | full | container daemons on the pinned basic image over SSH; two-entry image form; migration and legacy containers | — | pending |
@@ -82,7 +82,7 @@ Milestone notes:
 
 ## Handover
 
-M2 implementation done (T010-T025, T087 ticked, uncommitted-then-committed in "feat(806): M2 shared provisioning"). Left: scoped/full gate (`scripts/gate.sh`), review A and B (not yet run), fix findings, write `$SCRATCHPAD/pr-title` and `pr-body.md`, push `--force-with-lease`. `provision::run` skips InstallAiClis until M4 T035; `FailureCause::from_refusal` for runtimes was not added (M5).
+None.
 
 ## Open escalation
 
