@@ -36,12 +36,12 @@ pub type SharedTerm = Arc<FairMutex<Term<DaemonListener>>>;
 /// both write to the one PTY master, so both hold this.
 pub type SharedWriter = Arc<Mutex<Box<dyn Write + Send>>>;
 
-/// Signals the framer and supervisor read out-of-band from the VT stream: a dirty flag raised on
-/// every content change (depth-1, cleared by the framer each tick — T032), the latest OSC-0 title
-/// (T047), a rung-bell edge, and the child's reported exit code (`Event::ChildExit`).
+/// Signals the framer and supervisor read out-of-band from the VT stream: a change count raised on
+/// every content change (each viewer compares it with the count it last framed at — T032), the
+/// latest OSC-0 title (T047), a rung-bell edge, and the child's reported exit code (`Event::ChildExit`).
 #[derive(Clone, Default)]
 pub struct VtSignals {
-    dirty: Arc<AtomicBool>,
+    changes: Arc<AtomicU64>,
     bell: Arc<AtomicBool>,
     /// A braille-spinner glyph was seen on an OSC-0 title since the last drain — positive evidence
     /// of `Working` (activity invariant H1a, T046). Detected from the **raw** title before the glyph
@@ -57,14 +57,16 @@ pub struct VtSignals {
 }
 
 impl VtSignals {
-    /// Take and clear the dirty flag — true when content changed since the last call (framer tick).
-    pub fn take_dirty(&self) -> bool {
-        self.dirty.swap(false, Ordering::AcqRel)
+    /// How many content changes the terminal has signalled. A viewer remembers the count it last
+    /// framed at and frames again when it moved; a shared flag that one viewer clears would hide the
+    /// change from the others.
+    pub fn changes(&self) -> u64 {
+        self.changes.load(Ordering::Acquire)
     }
 
-    /// Raise the dirty flag (used on attach to force the next tick to snapshot).
+    /// Note a content change (also used on attach to force the next tick to frame).
     pub fn mark_dirty(&self) {
-        self.dirty.store(true, Ordering::Release);
+        self.changes.fetch_add(1, Ordering::AcqRel);
     }
 
     /// Count one read of output from the process.
@@ -228,7 +230,7 @@ impl EventListener for DaemonListener {
             Event::Bell => self.signals.bell.store(true, Ordering::Release),
             // Any new content / cursor movement dirties the frame (depth-1 — T032).
             Event::Wakeup | Event::MouseCursorDirty | Event::CursorBlinkingChange => {
-                self.signals.dirty.store(true, Ordering::Release);
+                self.signals.mark_dirty();
             }
             // Clipboard, exit-request and the rest are not daemon concerns here.
             _ => {}

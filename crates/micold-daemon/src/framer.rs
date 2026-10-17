@@ -54,15 +54,24 @@ pub struct Framer {
     /// aligning on it is exact; the screen is excluded because its bottom line is edited in place
     /// (which would defeat the alignment).
     prev_history_hashes: Vec<u64>,
-    /// The viewport lines last sent, `id -> content hash`, for delta computation.
-    shadow: HashMap<LineId, u64>,
+    /// What the framer's own callers have been sent (see [`Viewer`]); [`Self::frame`] uses it.
+    own: Viewer,
     /// Last viewport dimensions, to detect resize.
     last_cols: u16,
     last_rows: u16,
     /// Whether the previous frame was on the alternate screen (toggles bump the generation).
     last_alt_screen: bool,
-    /// True until the first frame is produced (forces the first frame to be full).
-    fresh: bool,
+}
+
+/// What one client has been sent of a terminal: the viewport lines last sent to it and the
+/// generation they belong to. Several clients can view one terminal, and each needs a delta
+/// against what *it* holds, so the shadow lives here and not in the shared [`Framer`].
+#[derive(Default)]
+pub struct Viewer {
+    /// The viewport lines last sent, `id -> content hash`, for delta computation.
+    shadow: HashMap<LineId, u64>,
+    /// The framer generation of the last frame sent; `None` until the first (which is full).
+    generation: Option<u64>,
 }
 
 impl Framer {
@@ -74,11 +83,10 @@ impl Framer {
             generation: 0,
             scrolled_off: 0,
             prev_history_hashes: Vec::new(),
-            shadow: HashMap::new(),
+            own: Viewer::default(),
             last_cols: 0,
             last_rows: 0,
             last_alt_screen: false,
-            fresh: true,
         }
     }
 
@@ -87,6 +95,23 @@ impl Framer {
     /// changed, else a full frame.
     pub fn frame(
         &mut self,
+        term: &SharedTerm,
+        force_full: bool,
+        input_serial: Option<u64>,
+    ) -> GridFrame {
+        let mut own = std::mem::take(&mut self.own);
+        let frame = self.frame_for(&mut own, term, force_full, input_serial);
+        self.own = own;
+        frame
+    }
+
+    /// Like [`Self::frame`], but a delta against what `viewer` was sent. The line ids and the
+    /// scroll-off watermark stay the framer's own, so every viewer of a terminal agrees on them and
+    /// on [`Self::scrollback_range`]; a viewer that has not seen the current generation (it is new,
+    /// or another viewer's frame saw a resize first) gets a full frame.
+    pub fn frame_for(
+        &mut self,
+        viewer: &mut Viewer,
         term: &SharedTerm,
         force_full: bool,
         input_serial: Option<u64>,
@@ -123,11 +148,11 @@ impl Framer {
             // than risk mis-keying. Ids stay monotonic; the client drops its cache on the bump.
             None => resnapshot = true,
         }
-        if resnapshot && !self.fresh {
+        if resnapshot && self.seq > 0 {
             self.generation += 1;
         }
 
-        let full = force_full || resnapshot || self.fresh;
+        let full = force_full || resnapshot || viewer.generation != Some(self.generation);
         let oldest_available = LineId(self.scrolled_off);
         let viewport_top = LineId(self.scrolled_off + history as i64);
 
@@ -145,7 +170,7 @@ impl Framer {
             let hash = hash_row(grid_row, cols);
             new_shadow.insert(id, hash);
 
-            let changed = full || self.shadow.get(&id) != Some(&hash);
+            let changed = full || viewer.shadow.get(&id) != Some(&hash);
             if !changed {
                 continue;
             }
@@ -163,12 +188,12 @@ impl Framer {
         let cursor = build_cursor(&term, viewport_top, rows);
 
         // Commit state for the next tick.
-        self.shadow = new_shadow;
+        viewer.shadow = new_shadow;
+        viewer.generation = Some(self.generation);
         self.prev_history_hashes = hist_hashes;
         self.last_cols = cols;
         self.last_rows = rows;
         self.last_alt_screen = alt_screen;
-        self.fresh = false;
         self.seq += 1;
 
         GridFrame {
