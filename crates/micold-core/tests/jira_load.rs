@@ -2,7 +2,7 @@
 //! §1): the same paging helper GitHub uses, driven through `FakeJiraSource`.
 
 use micold_core::github::{Issue, IssueLoadError, IssuePage, ISSUE_LOAD_CAP};
-use micold_core::jira::{load, ApiToken, FakeJiraSource, JiraConnection, JiraSource};
+use micold_core::jira::{load, ApiToken, FakeJiraSource, JiraConnection};
 
 fn conn() -> JiraConnection {
     JiraConnection::parse("https://acme.atlassian.net", "ABC", "me@acme.example").expect("valid")
@@ -113,14 +113,31 @@ fn an_unscripted_call_is_an_error_not_a_hang() {
 }
 
 #[test]
-fn search_is_scripted_and_recorded() {
-    let found = vec![Issue::jira("ABC-5", 5, "x".into(), vec![], String::new())];
-    let source = FakeJiraSource::new().with_search(Ok(found.clone()));
+fn a_failure_on_a_later_page_discards_the_issues_read_and_asks_for_no_more() {
+    let source = FakeJiraSource::new()
+        .with_page(page(1, 2, true))
+        .with_error(IssueLoadError::TimedOut)
+        .with_page(page(3, 1, false));
     assert_eq!(
-        source
-            .search_open(&conn(), &token(), "login")
-            .expect("found"),
-        found
+        load(&source, &conn(), &token()).unwrap_err(),
+        IssueLoadError::TimedOut
     );
-    assert_eq!(source.search_calls(), ["login".to_string()]);
+    assert_eq!(
+        source.calls(),
+        [None, Some("tok-2".to_string())],
+        "the load stops at the failed request"
+    );
+}
+
+#[test]
+fn the_listing_counts_the_issues_held_not_the_total_a_page_claims() {
+    let mut claimed = page(1, 2, false);
+    claimed.total_open = 999;
+    let source = FakeJiraSource::new().with_page(claimed);
+    let listing = load(&source, &conn(), &token()).expect("loaded");
+    assert_eq!(
+        listing.total_open, 2,
+        "Jira gives no total; the count is what was read"
+    );
+    assert!(listing.complete);
 }

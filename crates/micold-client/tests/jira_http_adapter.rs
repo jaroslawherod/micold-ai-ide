@@ -64,6 +64,16 @@ fn serve(response: Option<String>) -> (String, mpsc::Receiver<String>) {
     (origin, rx)
 }
 
+/// An origin on a loopback port that was bound and then released, so nothing listens on it.
+fn closed_origin() -> String {
+    let port = TcpListener::bind("127.0.0.1:0")
+        .unwrap()
+        .local_addr()
+        .unwrap()
+        .port();
+    format!("http://127.0.0.1:{port}")
+}
+
 fn ok(body: &str) -> String {
     format!(
         "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
@@ -164,15 +174,16 @@ fn a_search_body_carries_only_the_search_jql_and_the_page_size() {
 
 #[test]
 fn an_empty_search_sends_nothing() {
-    let found = JiraCloud::new().search_open(&connection("http://127.0.0.1:9"), &token(), "  ");
+    let found = JiraCloud::new().search_open(&connection(&closed_origin()), &token(), "  ");
     assert_eq!(found, Ok(Vec::new()));
 }
 
 #[test]
 fn a_redirect_is_not_followed() {
-    let (origin, _rx) = serve(Some(
-        "HTTP/1.1 302 Found\r\nLocation: http://127.0.0.1:1/elsewhere\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_string(),
-    ));
+    let (origin, _rx) = serve(Some(format!(
+        "HTTP/1.1 302 Found\r\nLocation: {}/elsewhere\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        closed_origin()
+    )));
     let error = JiraCloud::new()
         .list_open(&connection(&origin), &token(), None)
         .unwrap_err();
@@ -212,8 +223,8 @@ fn a_stalled_server_times_out_at_the_budget() {
 
 #[test]
 fn the_token_is_in_no_error_string_or_debug() {
-    // Nothing listens on port 1: a refused connection.
-    let conn = connection("http://127.0.0.1:1");
+    // Nothing listens on a port that was just released: a refused connection.
+    let conn = connection(&closed_origin());
     let error = JiraCloud::new()
         .list_open(&conn, &token(), None)
         .unwrap_err();
@@ -227,4 +238,9 @@ fn the_token_is_in_no_error_string_or_debug() {
         .contains(SENTINEL));
     assert!(!format!("{:?}", JiraCloud::new()).contains(SENTINEL));
     assert!(!format!("{:?}", token()).contains(SENTINEL));
+}
+
+#[test]
+fn the_production_request_budget_is_ten_seconds() {
+    assert_eq!(jira_http::REQUEST_TIMEOUT, Duration::from_secs(10));
 }

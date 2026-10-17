@@ -257,3 +257,28 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 ### Not a milestone
 
 T066–T067 change no code (quickstart results, follow-up record): the close unit does them in the close PR.
+
+## Phase 9: TDD remediation
+
+The feature is not done until the HIGH findings (T071-T074) are cleared. Findings refer to `tdd/verification.md`.
+
+- [x] T071 [US3] Finding 1: in `crates/micold-core/tests/jira_connection.rs:160` assert the whole token path from an injected data dir with no `if let`; prove with `mise run test-core`.
+- [x] T072 [US1] Findings 2-3: in `crates/micold-core/tests/jira_classify.rs:86-100,123,131` pass the sentinel through a transport reason and assert exact texts instead of `!is_empty()`; prove with `scripts/build-lock.sh cargo test -p micold-core --test jira_classify`.
+- [x] T073 [US1] Finding 4: replace `search_is_scripted_and_recorded` (`crates/micold-core/tests/jira_load.rs:115`) with a test of `load`/search behavior, not the fake; prove with `cargo test -p micold-core --test jira_load`.
+- [ ] T074 [US1] Finding 5: add shell-level tests that run `start_jira_load`/`start_jira_search` with `FakeJiraSource`: switch off, no connection, no token file, token rotated; each must fail when the `jira_request` gate is inverted (run that mutant); prove with `mise run test`.
+- [x] T075 [US1] Findings 7, 11: add a Jira pick test with a summary over 50 characters and a test pinning `REQUEST_TIMEOUT` to 10 s; prove with `cargo test -p micold-client --test jira_source_state --test jira_http_adapter`.
+- [ ] T076 Findings 6, 8 (port part of 9 done in the close unit): replace the exact-line source scans with behavior where T074 covers them, review and record the `layout_snapshot.txt` diff, and use a bound-then-closed port instead of `:1`/`:9`; prove with `mise run gate`.
+- [ ] T077 Finding 10 and mutation: run the three proposed deliberate mutants from `verification.md` (restore each, re-run the suite) and record the results there.
+- [ ] T078 [US2] Bug found by the close unit visual pass (B7, `visual/close.md`, US2 AS5): turning the Jira switch off over a stored connection and pressing Save does nothing, because `on_settings_saved` (`crates/micold-client/src/shell/persist.rs`) raises the Keep-or-Remove prompt but `view()` in `crates/micold-client/src/ui/settings/jira.rs` draws it only when `draft.jira.enabled`. Write the failing test first (reducer/view: switch off + stored connection + save shows the prompt), then draw the prompt while it is pending; prove with `mise run test`.
+- [ ] T079 [US2] Re-run quickstart B7 (two windows, switch off, Keep and Remove; propagation within 1 s, SC-006) and record it in `visual/close.md`; then tick T066.
+
+## Milestones (appended by the close unit)
+
+### M6 — Switching Jira off over a stored connection, and test strength
+
+- **Tasks**: T074, T076, T077, T078, T079
+- **Deliverable**: Saving the Jira switch off with a stored connection shows the Keep-or-Remove prompt, and the shell Jira request path is covered by behaviour tests (switch off, no connection, no token file, token rotated) instead of source scans.
+- **Satisfies**: US2 acceptance scenario 5; FR-005, FR-022; SC-006
+- **Verify**: `mise run gate`; quickstart §B B7 (`visual/close.md`)
+- **Depends on**: M5
+- **Tier**: full

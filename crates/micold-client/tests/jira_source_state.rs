@@ -375,6 +375,40 @@ fn a_pick_fills_ticket_name_and_type_and_a_hand_edit_stands() {
 }
 
 #[test]
+fn a_pick_of_a_long_summary_shortens_the_name_to_fifty_characters() {
+    let (mut state, seq) = loading();
+    let long = "Add rate limiting to the login endpoint so that repeated brute force attempts are throttled";
+    assert!(long.chars().count() > 50);
+    send(
+        &mut state,
+        Msg::IssuesLoaded {
+            seq,
+            result: Ok((
+                IssueListing {
+                    total_open: 1,
+                    complete: true,
+                    issues: vec![issue("ABC-77", 77, long, &[], "Bug")],
+                },
+                PathBuf::new(),
+            )),
+            resolved_env: None,
+        },
+    );
+    send(
+        &mut state,
+        Msg::IssuePicked {
+            number: 77,
+            mapping: default_mapping(),
+        },
+    );
+    assert_eq!(form(&state).ticket, "ABC-77");
+    assert_eq!(
+        form(&state).name,
+        "Add rate limiting to the login endpoint so that"
+    );
+}
+
+#[test]
 fn a_failure_shows_its_notice_and_retry_reloads_with_the_inputs_live() {
     let (mut state, seq) = loading();
     send(
