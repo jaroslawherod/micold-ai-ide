@@ -116,14 +116,14 @@ one without a session) and one included worktree → five cards, the permission 
   `Released`) the session-derived states are unchanged and PR-derived ones are not claimed (R14,
   decision D12); `App::terminal_focused()` is false and `main_area_taken` true while open; `cards` over 30 locations with 3 sessions each builds
   within 1 s (SC-007, a loose bound)
-- [ ] T011 [P] [US1] Geometry tests in micold-client/src/ui/material/overview_card.rs (new file,
+- [X] T011 [P] [US1] Geometry tests in micold-client/src/ui/material/overview_card.rs (new file,
   tests module first): card height equal for the five states with the same content; no text
   overlap at 280 px; a long display name ellipsizes with the full text in its tooltip (U4); each card shows its type icon with
   `LocationType::label()` and its state icon with `CardState::label()` (SC-005)
-- [ ] T012 [P] [US1] Geometry tests in micold-client/src/ui/material/card_grid.rs (new file, tests
+- [X] T012 [P] [US1] Geometry tests in micold-client/src/ui/material/card_grid.rs (new file, tests
   first): columns `= max(1, floor((w + gap) / (min + gap)))`; one column at 279 px; no card
   overlaps another; 30 cards scroll vertically (U4)
-- [ ] T013 [P] [US1] Contrast tests in micold-client/src/ui/material/composition_contrast.rs: per
+- [X] T013 [P] [US1] Contrast tests in micold-client/src/ui/material/composition_contrast.rs: per
   card state its text role ≥ 4.5:1 and icon role ≥ 3:1 on its card fill (`error_container`,
   `warning_container`, `primary_container`, `success_container`, Idle `surface_container_low` with
   `on_surface_variant` ≥ 4.5:1), light and dark (FR-005, FR-006, SC-005)
@@ -152,15 +152,15 @@ one without a session) and one included worktree → five cards, the permission 
   add `overview: overview::State` to `crate::app::State`, `Message::Overview(overview::Msg)` in
   micold-client/src/app.rs, and the Overview to `terminal_focused` and
   `view_facts.main_area_taken`; T010 passes
-- [ ] T018 [US1] Implement `OverviewCard` in micold-client/src/ui/material/overview_card.rs:
+- [X] T018 [US1] Implement `OverviewCard` in micold-client/src/ui/material/overview_card.rs:
   `new(&CardModel, roles) -> Element`, layout per contracts/ui.md U3 (type icon + display name
   ellipsized with tooltip, state icon + word with the reason as tooltip, branch, summary, footer
   *N sessions, M running*), state fill and icon from R11's mapping, Idle on the de-emphasised
   surface; no press handler yet (M4 adds it); register in ui/material/mod.rs; T011, T013 pass
-- [ ] T019 [US1] Implement `CardGrid` in micold-client/src/ui/material/card_grid.rs:
+- [X] T019 [US1] Implement `CardGrid` in micold-client/src/ui/material/card_grid.rs:
   `new(cards).min_width(280.0).spacing(..)`, columns from the available width through iced
   `responsive`, one column minimum, vertical scroll; register in ui/material/mod.rs; T012 passes
-- [ ] T020 [US1] Showcase: `OverviewCard` in each of the five states plus Default and orphan
+- [X] T020 [US1] Showcase: `OverviewCard` in each of the five states plus Default and orphan
   variants, and `CardGrid` with 1, 3 and 30 cards and narrow, in
   micold-client/src/showcase/catalogue.rs and micold-client/src/showcase/sections/surfaces.rs;
   extend micold-client/tests/showcase_completeness.rs for both entries (FR-021)

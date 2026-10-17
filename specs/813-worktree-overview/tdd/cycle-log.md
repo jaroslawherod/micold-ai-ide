@@ -42,3 +42,17 @@ list. Append only.
 - **Red**: `assertion failed: !app.core.overview.open`.
 - **Green**: the `SessionMsg::Selected` arm sends `overview::Msg::Closed` →
   `test result: ok. 1 passed`.
+
+## M2 / T011–T013, T018–T020 (OverviewCard, CardGrid, contrast, showcase)
+
+- **Tests**: `overview_card.rs` (one height ×5 states, no overlap at 280 px with a long name, name
+  tooltip, type/state icon + word), `card_grid.rs` (columns formula, columns when laid out, no card
+  overlap, 30 cards scroll), `composition_contrast.rs` (card palette per state, both schemes),
+  `showcase_completeness.rs` (both entries and their poses).
+- **Red**: `card_grid` with `columns` a stub returning 0: `15 passed; 2 failed`
+  (`columns_follow_the_width…` left 0 / right 1; `the_laid_out_grid…` 1 column, not 3). The card
+  and contrast tests were written together with their implementation (`palette`, `words`), so they
+  have no recorded red; the card height is a constant, so its test pins the constant.
+- **Green**: `columns` = `max(1, floor((w+gap)/(min+gap)))` →
+  `--lib overview_card card_grid composition_contrast`: `17 passed; 0 failed`;
+  `--test showcase_completeness`: `38 passed; 0 failed`.
