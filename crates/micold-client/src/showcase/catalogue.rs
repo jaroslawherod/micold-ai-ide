@@ -712,6 +712,7 @@ pub const COMPONENTS: &[Entry] = &[
         density: &[],
         posed: &[
             "selected row",
+            "keyboard-focused worktree row",
             "tags",
             "expandable parent",
             "run group, expanded",

@@ -1650,7 +1650,10 @@ Keystrokes stream straight to the CLI as you press them, exactly like a standalo
   never sees them. Past the last location the next press wraps to the first, and back. Worktrees
   hidden by a tag filter or inside a collapsed run group are skipped. A location with a session
   shows its main session, as a click on its row does; an empty location is highlighted in the
-  sidebar instead, and no session is started.
+  sidebar instead, and no session is started. The keyboard lands where it was: in the new
+  session's terminal when a terminal had focus, otherwise on the sidebar row, which shows the focus
+  ring (also on an empty location). The next press then steps on from that row; click the terminal
+  to type in it again.
 
 ### Links
 

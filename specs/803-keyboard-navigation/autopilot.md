@@ -9,21 +9,23 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #803
 - **Worktree branch**: claude/project-thread-ah7xxz
 - **Started**: 2026-10-17
-- **Phase**: milestone M1 (pushed, awaiting PR)
-- **Next step**: orchestrator opens the M1 PR from the scratchpad title/body, waits on CI, merges; then M2 (T017–T023)
+- **Phase**: milestone M2 (implemented, gate and reviews)
+- **Next step**: gate, reviews A and B, push M2; the orchestrator opens the PR from the scratchpad title/body
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #949 | design: spec, plan, tasks | merged | c410a749a8c6a417aa91f9011fd2a16fe2e340a8 |
+| #967 | M1 | merged | c5e61c3ea91a464695dcf9fb42b53121fac37490 |
+| M2 | M2 | to open (title/body in the scratchpad) | — |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T016 | full | Location chords step through locations (both focus states, stop, 0 PTY bytes), docs rows | pushed, PR pending | in review |
-| M2 | T017–T023 | full | Keyboard lands on the sidebar row with a focus ring (FR-010), showcase variant | — | pending |
+| M1 | T001–T016 | full | Location chords step through locations (both focus states, stop, 0 PTY bytes), docs rows | #967 | merged |
+| M2 | T017–T023 | full | Keyboard lands on the sidebar row with a focus ring (FR-010), showcase variant | pending PR | in review |
 | M3 | T024–T029 | light | Session chords cycle a location's sessions, docs rows | — | pending |
 | M4 | T030–T037 | full | Project chords; all six chords in the user guide | — | pending |
 
@@ -38,8 +40,8 @@ US1 split along acceptance scenario 4 (FR-010 sidebar ring) into M1/M2: one mile
 | D1 | spec | Wrap or stop at list ends? | Wrap at every level | agent-resolved | spec.md#Assumptions |
 | D2 | spec | User-configurable bindings? | Out of scope, follow-up | agent-resolved | spec.md#Out of Scope; no key-binding settings exist |
 | D3 | clarify | Do FR-001 defaults collide with system/IME/app chords? | No (IBus Ctrl+. is exact-modifier; Win+. emoji; macOS reserves none) | agent-resolved | spec.md#Clarifications; docs/user-guide/terminal-panes.md |
-| D4 | clarify | macOS project chords need Fn: keep PageUp/PageDown? | Keep Ctrl/Cmd+Shift+PageUp/PageDown everywhere | recommended default, pending user confirmation (decision card posted) | spec.md#Clarifications |
-| D5 | clarify | "Jump directly" in scope? | Out of scope; quick-switcher palette follow-up | recommended default, pending user confirmation (decision card posted) | spec.md#Clarifications |
+| D4 | clarify | macOS project chords need Fn: keep PageUp/PageDown? | Keep Ctrl/Cmd+Shift+PageUp/PageDown everywhere | CONFIRMED by the user on 2026-10-17 | spec.md#Clarifications |
+| D5 | clarify | "Jump directly" in scope? | Out of scope; quick-switcher palette follow-up | CONFIRMED by the user on 2026-10-17 | spec.md#Clarifications |
 | D6 | tasks | speckit-analyze findings | Spec amended: SC-004 scoped for stops, US1 AC5 and FR-010 state the stop and where the keyboard stays, FR-012 adds the filter panel, SC-001 ⌊N/2⌋, Terms: current location survives the filter. Plan D5/ui.md U3 amended: render-free `State::finish_navigation` so main.rs holds no branch (Principle I) | agent-resolved | speckit-analyze report I1–I4, A1–A3, T2 |
 | D7 | implement | Plan names `Message::Navigate(NavAction)`; the root-vocabulary, overlay-subscription and feature-registration guards refuse a single-feature root variant | Feature wrapper `Message::Navigation(navigation::Msg::Pressed(NavAction))`, shape-B entry `shell::navigation::update`; `navigation`→`sidebar` read allowlisted; `tests/features_navigation.rs` isolation test | agent-resolved | tests/root_vocabulary_is_cross_cutting.rs, feature_registration_cost.rs, overlay_registry.rs |
 
@@ -74,5 +76,5 @@ None.
 
 - User-configurable key bindings (spec Out of Scope).
 - Quick-switcher palette / direct jumps (FR-014, D5): follow-up issue.
-- Visual pass skipped for M1: nothing drawn changes (the keyboard-row ring is M2); the stop only moves the reveal scroll.
+- Visual pass skipped for M1 (M2 does it): nothing drawn changes (the keyboard-row ring is M2); the stop only moves the reveal scroll.
 - Spec reviews ran as headless `claude -p` sessions (no Agent tool in this unit's environment); fresh context, same prompt parts.

@@ -676,6 +676,7 @@ fn build_items(
         }
         let dir = wt.dir_name.clone();
 
+        let keyboard = state.sidebar.keyboard_row.as_ref();
         let mut item = TreeItem::new(depth, node.display_name.clone(), tint)
             .tags(tags)
             .on_right_press({
@@ -781,26 +782,51 @@ fn build_items(
                 r.on_surface_variant,
             );
         }
-        items.push(item);
+        let focused = keyboard.is_some_and(|row| {
+            row.is_location_row(
+                &node.location(),
+                node.sessions_shown(),
+                &node.listed_sessions(),
+            )
+        });
+        items.push(with_keyboard_focus(item, focused));
 
         if node.sessions_shown() {
             let main = node.main_session();
             for row in node.session_rows() {
-                items.push(session_tree_item(
-                    depth + 1 + row.depth.min(MAX_NESTING) as u16,
-                    row.session,
-                    state.session.active,
-                    in_view,
-                    Some(row.session.id) != main && !row.place.is_child(),
-                    row.place,
-                    state.session_start_block_text(row.session.id),
-                    r,
+                items.push(with_keyboard_focus(
+                    session_tree_item(
+                        depth + 1 + row.depth.min(MAX_NESTING) as u16,
+                        row.session,
+                        state.session.active,
+                        in_view,
+                        Some(row.session.id) != main && !row.place.is_child(),
+                        row.place,
+                        state.session_start_block_text(row.session.id),
+                        r,
+                    ),
+                    keyboard.is_some_and(|k| k.is_session_row(row.session.id)),
                 ));
             }
         }
     }
 
     items
+}
+
+/// Give `item` the keyboard's focus wrapper (feature 803, FR-010, U4). Every row gets one, focused
+/// or not, so the tree keeps its shape across presses; losing the keyboard tells the sidebar.
+fn with_keyboard_focus(
+    item: TreeItem<'static, Message>,
+    focused: bool,
+) -> TreeItem<'static, Message> {
+    item.keyboard_focus(focused, |focused| {
+        if focused {
+            Message::NoOp
+        } else {
+            Message::Sidebar(SidebarMsg::KeyboardRowLeft)
+        }
+    })
 }
 
 /// A run group's row and, when it is expanded, its runs (feature 483, G1, G1a, G2, G3).
@@ -820,17 +846,20 @@ fn group_items(
     if group.failed_count > 0 {
         tags.push((format!("{} failed", group.failed_count), r.error));
     }
-    let mut items = vec![TreeItem::new(0, group.name.clone(), r.on_surface)
-        .tags(tags)
-        .row_tooltip(group.name.clone())
-        .on_right_press({
-            let id = group.id;
-            move |point| Message::Runs(crate::features::runs::Msg::MenuToggled(id, point))
-        })
-        .expandable(
-            group.expanded,
-            Message::Runs(crate::features::runs::Msg::GroupToggled(group.id)),
-        )];
+    let mut items = vec![with_keyboard_focus(
+        TreeItem::new(0, group.name.clone(), r.on_surface)
+            .tags(tags)
+            .row_tooltip(group.name.clone())
+            .on_right_press({
+                let id = group.id;
+                move |point| Message::Runs(crate::features::runs::Msg::MenuToggled(id, point))
+            })
+            .expandable(
+                group.expanded,
+                Message::Runs(crate::features::runs::Msg::GroupToggled(group.id)),
+            ),
+        false,
+    )];
     if !group.expanded {
         return items;
     }
@@ -862,7 +891,7 @@ fn group_items(
                 if let Some(reason) = run.reason() {
                     item = item.row_tooltip(reason.to_string());
                 }
-                items.push(item);
+                items.push(with_keyboard_focus(item, false));
             }
         }
     }
@@ -1051,21 +1080,32 @@ fn build_default_item(
     if state.sidebar.revealed == Some(SessionLocation::Default) {
         item = item.selected(true);
     }
-    items.push(item);
+    let keyboard = state.sidebar.keyboard_row.as_ref();
+    let focused = keyboard.is_some_and(|row| {
+        row.is_location_row(
+            &SessionLocation::Default,
+            node.sessions_shown(),
+            &node.listed_sessions(),
+        )
+    });
+    items.push(with_keyboard_focus(item, focused));
 
     if node.sessions_shown() {
         let in_view = crate::features::attention::in_view(&state.attention);
         let main = node.main_session();
         for row in node.session_rows() {
-            items.push(session_tree_item(
-                1 + row.depth.min(MAX_NESTING) as u16,
-                row.session,
-                state.session.active,
-                in_view,
-                Some(row.session.id) != main && !row.place.is_child(),
-                row.place,
-                state.session_start_block_text(row.session.id),
-                r,
+            items.push(with_keyboard_focus(
+                session_tree_item(
+                    1 + row.depth.min(MAX_NESTING) as u16,
+                    row.session,
+                    state.session.active,
+                    in_view,
+                    Some(row.session.id) != main && !row.place.is_child(),
+                    row.place,
+                    state.session_start_block_text(row.session.id),
+                    r,
+                ),
+                keyboard.is_some_and(|k| k.is_session_row(row.session.id)),
             ));
         }
     }

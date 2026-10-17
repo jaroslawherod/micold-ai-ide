@@ -19,6 +19,7 @@ use std::num::NonZeroUsize;
 /// The same shape `cdk::ContextArea` publishes, deliberately — a row and a terminal tab answer the
 /// same gesture, and a second shape for it is how the sidebar came to answer it differently
 /// (BUG-008).
+type OnKeyboardFocus<'a, M> = Box<dyn Fn(bool) -> M + 'a>;
 type OnRightPress<'a, M> = Box<dyn Fn((u16, u16)) -> M + 'a>;
 
 /// What a row says about unread sessions (feature 039 FR-018, feature 575).
@@ -109,6 +110,9 @@ pub struct TreeItem<'a, M> {
     /// The location's state icon (feature 905, contract `state-icon.md` S2): a fixed slot after the
     /// twisty and before the leading icon, at the view's label role size, whatever the state.
     state_icon: Option<super::StateIcon>,
+    /// Whether the application's keyboard focus is on this row, and what a change of it sends
+    /// (feature 803, FR-010): the row wears the focus ring, shown as keyboard focus.
+    keyboard_focus: Option<(bool, OnKeyboardFocus<'a, M>)>,
     /// Lifetime marker so borrowed data can be captured by callers if needed.
     pub _marker: std::marker::PhantomData<&'a ()>,
 }
@@ -138,6 +142,7 @@ impl<'a, M> TreeItem<'a, M> {
             child: false,
             unread: RowUnread::Read,
             state_icon: None,
+            keyboard_focus: None,
             _marker: std::marker::PhantomData,
         }
     }
@@ -235,6 +240,15 @@ impl<'a, M> TreeItem<'a, M> {
     /// Set the leading icon.
     pub fn with_icon(mut self, glyph: Icon) -> Self {
         self.icon = Some(glyph);
+        self
+    }
+
+    /// Wrap the row in the keyboard's focus (feature 803, U4): `focused` draws the ring on it, and
+    /// `on_change` is told when the row gains or loses the keyboard. Call it on **every** row so
+    /// the tree keeps its shape across presses; the wrapper is layout-transparent, and only a
+    /// focused row is in the Tab traversal.
+    pub fn keyboard_focus(mut self, focused: bool, on_change: impl Fn(bool) -> M + 'a) -> Self {
+        self.keyboard_focus = Some((focused, Box::new(on_change)));
         self
     }
 
@@ -629,6 +643,24 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
                 body
             };
 
+            // The keyboard's focus ring, over the row's own shape (feature 803, FR-010).
+            let row_el: Element<'a, M> = match item.keyboard_focus {
+                Some((focused, on_change)) => {
+                    use super::keyboard_focus::{Indicator, TakesTheKeyboard};
+                    TakesTheKeyboard::new(row_el, focused)
+                        .focused(focused)
+                        .shown(focused)
+                        .on_focus_change(on_change)
+                        .indicator(Indicator {
+                            outline: r.secondary,
+                            layer: r.on_surface,
+                            radius: shape::FULL,
+                        })
+                        .into()
+                }
+                None => row_el,
+            };
+
             // The selection pill (contract §7.2): `secondary_container` fill, its own text colour,
             // and the `full` corner.
             //
@@ -774,6 +806,21 @@ mod tests {
             "the row has no 8dp mark; its nodes are {nodes:?}"
         );
         marks[0]
+    }
+
+    /// 803 U4: the keyboard wrapper is layout-transparent, whichever way the flag is set.
+    #[test]
+    fn keyboard_focus_leaves_the_rows_layout_size_unchanged() {
+        for label in ["feat-short", LONG_NAME] {
+            let plain = laid_out(session_row(label), NARROW);
+            for focused in [false, true] {
+                let wrapped = laid_out(session_row(label).keyboard_focus(focused, |_| ()), NARROW);
+                assert_eq!(
+                    wrapped, plain,
+                    "keyboard_focus({focused}) moved or resized a node of {label:?}"
+                );
+            }
+        }
     }
 
     /// U149 (U8, FR-032).

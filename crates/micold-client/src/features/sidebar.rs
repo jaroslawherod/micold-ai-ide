@@ -133,6 +133,27 @@ pub enum RowRef {
     Session(SessionId),
 }
 
+impl RowRef {
+    /// Whether this names the row of `location`: its own, or its session's when the location draws
+    /// no sub-rows (`shown` false), matching [`row_index`].
+    pub fn is_location_row(
+        &self,
+        location: &SessionLocation,
+        shown: bool,
+        sessions: &[&Session],
+    ) -> bool {
+        match self {
+            RowRef::Location(wanted) => wanted == location,
+            RowRef::Session(id) => !shown && sessions.iter().any(|s| s.id == *id),
+        }
+    }
+
+    /// Whether this names the sub-row of `session`.
+    pub fn is_session_row(&self, session: SessionId) -> bool {
+        *self == RowRef::Session(session)
+    }
+}
+
 /// One row in the sidebar's location list (feature 010): either a worktree or the single
 /// "Default" project-root entry. A closed enum (Principle V) so a row can never be ambiguously
 /// styled as a worktree when it isn't one (FR-006).
