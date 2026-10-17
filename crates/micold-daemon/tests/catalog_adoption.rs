@@ -756,6 +756,120 @@ fn an_origin_that_fails_validation_leaves_the_session_top_level() {
     }
 }
 
+// --- Feature 551, US3: a provider-reported origin that is not yet known (T027, R4) ---------------
+
+/// A session with a chosen id, as a provider's store names it, added beside the others of `wt`.
+fn appear(catalog: &mut Catalog, project: &Path, wt: &str, id: SessionId) {
+    let session = Session::restored(
+        id,
+        SessionLocation::Worktree(wt.into()),
+        SessionLabel::Pending,
+        TerminalMode::AiCli,
+        AiCli::Codex,
+    );
+    catalog
+        .attach_session_as(project, session, Additional::Yes)
+        .unwrap();
+}
+
+#[test]
+fn a_reported_origin_not_yet_known_is_kept_pending_and_stands_once_it_appears() {
+    // FR-016: event order is irrelevant. The child is adopted before its origin.
+    let dir = tempfile::tempdir().unwrap();
+    let (projects, settings, project) = origin_paths(dir.path());
+    let mut catalog = empty_project_catalog(&projects, &settings, &project);
+    let child = adopt_into(&mut catalog, &project, "w");
+    let parent = SessionId::from_uuid(Uuid::from_u128(0xA1));
+
+    assert!(catalog.record_origin(child, parent, true).unwrap());
+    assert_eq!(origin_of(&catalog, &project, child), Some(parent));
+    assert_eq!(catalog.settle_pending_origins(&project).unwrap(), 0);
+
+    // The origin appears in the same worktree: the full check passes and nothing changes.
+    appear(&mut catalog, &project, "w", parent);
+    assert_eq!(catalog.settle_pending_origins(&project).unwrap(), 0);
+    assert_eq!(origin_of(&catalog, &project, child), Some(parent));
+    assert!(
+        !catalog.record_origin(child, parent, true).unwrap(),
+        "written once"
+    );
+}
+
+#[test]
+fn a_pending_origin_that_fails_the_full_check_is_cleared_once_and_never_recorded_again() {
+    // R4: the origin appears in another worktree. The stored origin is cleared, `origin_rejected`
+    // is persisted, and neither a later settle nor a later report brings it back.
+    let dir = tempfile::tempdir().unwrap();
+    let (projects, settings, project) = origin_paths(dir.path());
+    let mut catalog = empty_project_catalog(&projects, &settings, &project);
+    let child = adopt_into(&mut catalog, &project, "w");
+    let pending = SessionId::from_uuid(Uuid::from_u128(0xB1));
+    assert!(catalog.record_origin(child, pending, true).unwrap());
+    appear(&mut catalog, &project, "other", pending);
+
+    assert_eq!(catalog.settle_pending_origins(&project).unwrap(), 1);
+    assert_eq!(origin_of(&catalog, &project, child), None);
+    assert_eq!(catalog.settle_pending_origins(&project).unwrap(), 0);
+    assert!(!catalog.record_origin(child, pending, true).unwrap());
+    assert!(
+        catalog
+            .origin_candidates(&project)
+            .iter()
+            .all(|c| c.id != child),
+        "discovery skips a session whose origin was rejected"
+    );
+
+    drop(catalog);
+    let restarted = load_catalog(&projects, &settings);
+    assert_eq!(origin_of(&restarted, &project, child), None);
+    assert!(restarted
+        .origin_candidates(&project)
+        .iter()
+        .all(|c| c.id != child));
+}
+
+#[test]
+fn a_reported_origin_that_fails_at_once_is_not_asked_for_again() {
+    // The provider names a session of another worktree: rejected now, remembered, never re-recorded.
+    let dir = tempfile::tempdir().unwrap();
+    let (projects, settings, project) = origin_paths(dir.path());
+    let mut catalog = empty_project_catalog(&projects, &settings, &project);
+    let child = adopt_into(&mut catalog, &project, "w");
+    let elsewhere = adopt_into(&mut catalog, &project, "other");
+
+    assert!(!catalog.record_origin(child, elsewhere, true).unwrap());
+    assert_eq!(origin_of(&catalog, &project, child), None);
+    assert!(catalog
+        .origin_candidates(&project)
+        .iter()
+        .all(|c| c.id != child));
+    drop(catalog);
+    let restarted = load_catalog(&projects, &settings);
+    assert!(restarted
+        .origin_candidates(&project)
+        .iter()
+        .all(|c| c.id != child));
+}
+
+#[test]
+fn only_open_sessions_without_an_origin_are_candidates_for_a_provider_report() {
+    let dir = tempfile::tempdir().unwrap();
+    let (projects, settings, project) = origin_paths(dir.path());
+    let mut catalog = empty_project_catalog(&projects, &settings, &project);
+    let top = adopt_into(&mut catalog, &project, "w");
+    let child = adopt_into(&mut catalog, &project, "w");
+    let closed = adopt_into(&mut catalog, &project, "w");
+    assert!(catalog.record_origin(child, top, true).unwrap());
+    catalog.archive_session(closed).unwrap();
+
+    let ids: Vec<SessionId> = catalog
+        .origin_candidates(&project)
+        .iter()
+        .map(|c| c.id)
+        .collect();
+    assert_eq!(ids, vec![top]);
+}
+
 // --- Feature 776: adoption keeps one session per location (FR-012, T025) -----------------------
 
 fn found(id: u128, location: SessionLocation) -> Session {

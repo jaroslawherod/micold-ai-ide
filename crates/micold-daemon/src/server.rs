@@ -2249,20 +2249,30 @@ async fn refresh_worktrees_off_runtime(state: &Arc<DaemonState>, project: &std::
     let discovered = tokio::task::spawn_blocking(move || {
         st.refresh_worktrees(&proj);
         let adopted = st.discover_external_sessions(&proj);
+        // Same hop (feature 551, R3): what each provider reports about who started the sessions
+        // now in the catalog, adopted a moment ago or earlier.
+        let origins = st.discover_origins(&proj);
         // Third step, same hop and same worktree cache (feature 029, FR-006, contract C14): the
         // sessions this application already knows but has no name for. After discovery, not
         // before — a session adopted a moment ago already carries whatever name its records hold,
         // so it is `Named` and costs this pass nothing.
         let recovered = st.recover_session_names(&proj);
-        (adopted, recovered)
+        (adopted, recovered, origins)
     })
     .await;
-    if let Ok((adopted, recovered)) = discovered {
+    if let Ok((adopted, recovered, origins)) = discovered {
         if adopted > 0 {
             tracing::info!(
                 project = %project.display(),
                 count = adopted,
                 "adopted sessions started outside this application"
+            );
+        }
+        if origins > 0 {
+            tracing::info!(
+                project = %project.display(),
+                count = origins,
+                "recorded the origin a provider reported for sessions"
             );
         }
         if recovered > 0 {

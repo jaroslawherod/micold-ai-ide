@@ -3461,6 +3461,43 @@ impl DaemonState {
             .adopt_discovered_sessions(project, found)
     }
 
+    /// Record the origin each provider reports for the open sessions of `project` that have none,
+    /// then settle the pending ones (feature 551, FR-001, R3, R4). Runs in the discovery hop,
+    /// after [`Self::discover_external_sessions`], so a session adopted a moment ago is asked
+    /// about too, as is every later pass for a session whose origin was not yet visible.
+    ///
+    /// A provider with no native signal answers `None` (the default), so its sessions stay
+    /// top-level (FR-002). The reads happen off the lock; the writes are `record_origin` (write
+    /// once, validated) and `settle_pending_origins` (clears a pending origin that fails the full
+    /// check, once). Returns how many sessions changed, so the caller knows to broadcast.
+    pub fn discover_origins(&self, project: &Path) -> usize {
+        let candidates = self.lock().catalog.origin_candidates(project);
+        let reports: Vec<(SessionId, SessionId)> = candidates
+            .into_iter()
+            .filter_map(|c| {
+                let provider = c.provider.provider();
+                let config_dir = provider.config_dir()?;
+                let origin =
+                    provider.reported_origin(&config_dir, &c.location.cwd(project), c.id.0)?;
+                Some((c.id, SessionId::from_uuid(origin)))
+            })
+            .collect();
+        let mut changed = 0;
+        let mut guard = self.lock();
+        for (id, origin) in reports {
+            match guard.catalog.record_origin(id, origin, true) {
+                Ok(true) => changed += 1,
+                Ok(false) => {}
+                Err(err) => tracing::warn!(%err, "could not persist a provider-reported origin"),
+            }
+        }
+        match guard.catalog.settle_pending_origins(project) {
+            Ok(cleared) => changed += cleared,
+            Err(err) => tracing::warn!(%err, "could not persist a rejected origin"),
+        }
+        changed
+    }
+
     /// Give every **known but unnamed** session of `project` the name its own AI CLI recorded for
     /// it, persisting each one (feature 029, US2 — FR-006, FR-007, FR-010). Returns how many names
     /// **and labels** were recorded (`0` ⇒ no write happened, so the caller need not broadcast —

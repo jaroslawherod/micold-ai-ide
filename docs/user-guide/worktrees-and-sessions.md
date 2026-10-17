@@ -1228,7 +1228,25 @@ started by an agent nests one level further down. The same tree is shown under a
 - **No manual reparenting.** The nesting follows what the agent reported; you cannot drag a session
   under another.
 - **Which providers.** Only a provider that reports which session started a session shows the tree.
-  Claude Code does not yet report it, so its agent-started sessions are listed as ordinary sessions.
+  The table below says which do; a session of any other provider is listed as an ordinary session.
+
+### Which providers report which session started them
+
+The app never guesses the relationship from a name, a folder or a start time. It uses only what the
+provider itself records, so a provider that records nothing is a gap, and its sessions stay at the
+top level of their worktree exactly as before.
+
+| Provider | Reports | Signal | When it does not report |
+| --- | --- | --- | --- |
+| Claude Code | No | None found: its sub-agents run inside one session and its transcript links are between messages, not sessions | Its sessions are listed at the top level |
+| GitHub Copilot | No | Its sub-agent events are inside the same session's record, not separate sessions | Its sessions are listed at the top level |
+| Pi Coding Agent | No | Its `parentSession` marks a fork of a session, not one an agent started | Its sessions are listed at the top level |
+| Codex | Reports | The spawning thread named in the session's own record | A session whose record names none is listed at the top level |
+| OpenCode | Reports | The parent session named in the session's own record | A session whose record names none is listed at the top level |
+
+The Codex and OpenCode readers follow those providers' documented record formats and have not yet
+been checked against a recorded real session. A parent the app does not know yet shows as
+`origin pending` until it appears.
 
 ### Finding the session you are on
 

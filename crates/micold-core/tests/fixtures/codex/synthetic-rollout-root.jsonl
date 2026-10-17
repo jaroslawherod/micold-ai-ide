@@ -1,0 +1,2 @@
+{"timestamp":"2026-10-13T10:00:00.000Z","type":"session_meta","payload":{"id":"0190aaaa-0000-7000-8000-000000000002","timestamp":"2026-10-13T10:00:00.000Z","cwd":"/work/tree","originator":"codex_cli_rs","cli_version":"0.0.0","source":"cli"}}
+{"timestamp":"2026-10-13T10:00:01.000Z","type":"event_msg","payload":{"type":"user_message","message":"child of 0190aaaa-0000-7000-8000-000000000001 in /work/tree"}}

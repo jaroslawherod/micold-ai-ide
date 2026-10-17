@@ -307,6 +307,15 @@ pub trait AiCliProvider {
         false
     }
 
+    /// The session that started `session_id`, when this provider's own record says so (feature 551,
+    /// FR-001): a pure, bounded read, never a write. `None` is the answer for a provider with no
+    /// native signal, for a record that names no parent, and for a parent no session is known by
+    /// yet (the next discovery pass asks again). Never derived from a name, a path, a prefix or a
+    /// timestamp (FR-002). Defaults to `None`.
+    fn reported_origin(&self, _config_dir: &Path, _cwd: &Path, _session_id: Uuid) -> Option<Uuid> {
+        None
+    }
+
     /// The latest title this provider has recorded, read from disk (best-effort I/O). NEVER
     /// errors: any missing file / read / parse failure yields `None`, so a title read never fails
     /// the session (FR-017).
@@ -1654,17 +1663,31 @@ fn bound_conversation(base: &Path, session_id: Uuid) -> Option<String> {
     valid_conversation_id(id).then(|| id.to_string())
 }
 
+/// The binding files under `base`: `(session, conversation id)` for each session bound to one.
+/// Archive markers (`<session>.archived`) are not bindings.
+fn bindings(base: &Path) -> impl Iterator<Item = (Uuid, String)> {
+    std::fs::read_dir(base.join("micold-bindings"))
+        .into_iter()
+        .flatten()
+        .filter_map(Result::ok)
+        .filter_map(|entry| {
+            let session = Uuid::parse_str(entry.file_name().to_str()?).ok()?;
+            let text = std::fs::read_to_string(entry.path()).ok()?;
+            Some((session, text.trim().to_string()))
+        })
+}
+
 /// Every conversation id some session is bound to under `base`.
 fn bound_ids(base: &Path) -> std::collections::HashSet<String> {
-    let Ok(entries) = std::fs::read_dir(base.join("micold-bindings")) else {
-        return std::collections::HashSet::new();
-    };
-    entries
-        .filter_map(Result::ok)
-        .filter(|entry| !entry.file_name().to_string_lossy().contains('.'))
-        .filter_map(|entry| std::fs::read_to_string(entry.path()).ok())
-        .map(|text| text.trim().to_string())
+    bindings(base)
+        .map(|(_, conversation)| conversation)
         .collect()
+}
+
+/// The session bound to conversation `conversation` under `base`: the reverse of
+/// [`bound_conversation`], how a provider's native parent id becomes a session id (feature 551).
+fn session_bound_to(base: &Path, conversation: &str) -> Option<Uuid> {
+    bindings(base).find_map(|(session, bound)| (bound == conversation).then_some(session))
 }
 
 /// Write the binding once. Binding the same id again is a no-op; a different id, or an id another
@@ -1802,6 +1825,24 @@ impl CodexProvider {
     fn read_bounded(path: &Path) -> Option<Vec<u8>> {
         crate::first_turn::read_prefix_bounded(path, Self::PREFIX_BYTES)
     }
+
+    /// The conversation a rollout's first line says spawned it: the sub-agent thread spawn's
+    /// `parent_thread_id`, else the payload's own `parent_thread_id` (`codex-rs/protocol`).
+    fn rollout_parent(prefix: &[u8]) -> Option<String> {
+        prefix.contains(&b'\n').then_some(())?;
+        let line = prefix.split(|byte| *byte == b'\n').next()?;
+        let record: serde_json::Value = serde_json::from_slice(line).ok()?;
+        if record.get("type")?.as_str()? != "session_meta" {
+            return None;
+        }
+        let payload = record.get("payload")?;
+        payload
+            .pointer("/source/subagent/thread_spawn/parent_thread_id")
+            .or_else(|| payload.get("parent_thread_id"))?
+            .as_str()
+            .filter(|id| valid_conversation_id(id))
+            .map(str::to_string)
+    }
 }
 
 impl AiCliProvider for CodexProvider {
@@ -1921,6 +1962,14 @@ impl AiCliProvider for CodexProvider {
         // turn is the name (the label seam stays empty, as for Pi).
         let (_, path) = Self::bound_rollout(config_dir, session_id)?;
         crate::first_turn::codex_first_turn(&Self::read_bounded(&path)?)
+    }
+
+    fn reported_origin(&self, config_dir: &Path, _cwd: &Path, session_id: Uuid) -> Option<Uuid> {
+        // The spawning thread's conversation, mapped to the session bound to it: a parent no
+        // session is bound to yet is not guessed at.
+        let (_, path) = Self::bound_rollout(config_dir, session_id)?;
+        let parent = Self::rollout_parent(&Self::read_bounded(&path)?)?;
+        session_bound_to(config_dir, &parent).filter(|parent| *parent != session_id)
     }
 
     fn read_label(&self, _config_dir: &Path, _cwd: &Path, _session_id: Uuid) -> Option<String> {
@@ -2165,6 +2214,15 @@ impl AiCliProvider for OpenCodeProvider {
         // typed turn, as for Codex. An unbound session has nothing to ask about.
         let id = bound_conversation(config_dir, session_id)?;
         Self::first_turn(&Self::run_json(cwd, &["export", &id])?)
+    }
+
+    fn reported_origin(&self, config_dir: &Path, cwd: &Path, session_id: Uuid) -> Option<Uuid> {
+        // `export` carries the session's `info.parentID` (the `session.parent_id` column).
+        let id = bound_conversation(config_dir, session_id)?;
+        let export = Self::run_json(cwd, &["export", &id])?;
+        let parent = export.pointer("/info/parentID")?.as_str()?;
+        valid_conversation_id(parent).then_some(())?;
+        session_bound_to(config_dir, parent).filter(|parent| *parent != session_id)
     }
 
     fn read_label(&self, _config_dir: &Path, _cwd: &Path, _session_id: Uuid) -> Option<String> {
