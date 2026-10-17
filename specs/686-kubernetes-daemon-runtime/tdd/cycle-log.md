@@ -39,3 +39,24 @@ before the implementation.
   carry `context`/`namespace` for their contract text; new `VolumeTooSmall { claim }` (T021's
   smaller-volume refusal) and `Api { code, reason, message }` (unclassified answers until M6).
 - commit: the handover commit (red; next unit makes it green).
+
+## Cycle 1 (continued): GREEN; Cycle 2: U13–U16 (`DaemonRuntime::Kubernetes`)
+
+- green: `cargo test -p micold-core --lib -- kube:: daemon_image:: listener_auth_tests` ->
+  `test result: ok. 22 passed; 0 failed`.
+- test fix: `the_key_is_eight_hex_of_the_nul_joined_triple` compared `("a\0b","c","d")` with
+  `("a","b\0c","d")`, which join to the same bytes under any NUL separator (the test was wrong, not
+  the rule); now `("ab","c","d")` vs `("a","bc","d")`.
+- mutants (one run, all four killed): toleration `a:Maybe:E` accepted -> `a_toleration_with_another_effect_…`
+  FAILED; request without limit refused -> `each_of_the_four_can_be_set_alone` FAILED; default volume 1 GiB
+  -> `defaults_are_amd64_…` FAILED; `is_loopback` -> `is_unspecified` -> `an_empty_path_on_loopback_…` FAILED.
+- object names: the slug inside names is cut to 31 so `micold-<slug>-<key>-git-credentials` stays a
+  DNS-1123 label (63); `slug()` itself keeps its 40 cap.
+- cycle 2 red: `crates/micold-core/tests/daemons_kube.rs` -> `error[E0599]: no variant named Kubernetes`
+  (compile red); green after T013: `cargo test -p micold-core --all-targets --no-fail-fast` fails only
+  the pre-existing root-user reds (`settings_refuses_save_over_failed_read`, `settings_write_is_logged`,
+  `worktree_leftovers` ×2).
+- fixture `settings_unsupported_kind.json` used `kubernetes` as the unknown kind; now `nomad`.
+- U16 decision: `RegistryError::DuplicateName` stays field-less; the form already names the first
+  ("Another daemon is already named <name>.", `features/daemons.rs` `form_error`), since names
+  match case-insensitively the draft's name is the first's name.

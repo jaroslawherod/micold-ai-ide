@@ -106,7 +106,7 @@ fn migration_leaves_the_version_alone_and_keeps_writing_the_daemon_key() {
 fn an_unknown_runtime_kind_is_unsupported_and_survives_a_save_verbatim() {
     let (dir, store, s) = load(UNSUPPORTED);
     assert!(
-        matches!(&s.daemons[1].runtime, DaemonRuntime::Unsupported { kind, .. } if kind == "kubernetes"),
+        matches!(&s.daemons[1].runtime, DaemonRuntime::Unsupported { kind, .. } if kind == "nomad"),
         "an unknown kind loads as Unsupported"
     );
     store.save(&s).unwrap();

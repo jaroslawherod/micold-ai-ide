@@ -152,16 +152,142 @@ impl KubeSettings {
         }
     }
 
+    /// The row's endpoint: `<context> / <namespace> / <pod>` (contract §7).
+    pub fn endpoint(&self, daemon_name: &str) -> String {
+        let pod =
+            crate::kube::names::ResourceNames::new(&self.context.0, &self.namespace.0, daemon_name)
+                .pod();
+        format!("{} / {} / {pod}", self.context.0, self.namespace.0)
+    }
+
     /// Check every field; the first refusal names its field.
     pub fn validate(&self) -> Result<(), RegistryError> {
-        Ok(())
+        if self.context.0.trim().is_empty() {
+            return Err(invalid("context"));
+        }
+        if !is_dns_label(&self.namespace.0) {
+            return Err(invalid("namespace"));
+        }
+        match &self.registry {
+            Some(repo) if !is_registry_repo(&repo.0) => return Err(invalid("registry")),
+            None if matches!(self.image, DaemonImageSource::Build { .. }) => {
+                return Err(invalid("registry"))
+            }
+            _ => {}
+        }
+        let labels_ok = self
+            .node_selector
+            .iter()
+            .all(|(k, v)| is_label_key(&k.0) && is_label_value(&v.0));
+        if !labels_ok {
+            return Err(invalid("node_selector"));
+        }
+        if self.volume_size.0 < GIB {
+            return Err(invalid("volume_size"));
+        }
+        if self
+            .storage_class
+            .as_deref()
+            .is_some_and(|c| !is_dns_subdomain(c))
+        {
+            return Err(invalid("storage_class"));
+        }
+        self.resources.validate()
     }
+}
+
+/// A DNS-1123 label: 1-63 of `[a-z0-9-]`, alphanumeric at both ends.
+pub fn is_dns_label(s: &str) -> bool {
+    (1..=63).contains(&s.len())
+        && s.bytes()
+            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
+        && !s.starts_with('-')
+        && !s.ends_with('-')
+}
+
+/// A DNS-1123 subdomain: dot-separated labels, at most 253 characters.
+fn is_dns_subdomain(s: &str) -> bool {
+    s.len() <= 253 && s.split('.').all(is_dns_label)
+}
+
+/// A label name or value body: at most 63 of `[A-Za-z0-9._-]`, alphanumeric at both ends.
+fn is_label_name(s: &str, allow_empty: bool) -> bool {
+    if s.is_empty() {
+        return allow_empty;
+    }
+    let alnum = |c: Option<char>| c.is_some_and(|c| c.is_ascii_alphanumeric());
+    s.len() <= 63
+        && s.chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
+        && alnum(s.chars().next())
+        && alnum(s.chars().last())
+}
+
+fn is_label_key(s: &str) -> bool {
+    match s.split_once('/') {
+        Some((prefix, name)) => is_dns_subdomain(prefix) && is_label_name(name, false),
+        None => is_label_name(s, false),
+    }
+}
+
+fn is_label_value(s: &str) -> bool {
+    is_label_name(s, true)
+}
+
+/// `host[:port]/path` with a lowercase path and no tag or digest.
+fn is_registry_repo(s: &str) -> bool {
+    let Some((host, path)) = s.split_once('/') else {
+        return false;
+    };
+    let host_ok = match host.split_once(':') {
+        Some((name, port)) => {
+            !name.is_empty() && !port.is_empty() && port.bytes().all(|b| b.is_ascii_digit())
+        }
+        None => !host.is_empty(),
+    };
+    let component_ok = |c: &str| {
+        !c.is_empty()
+            && c.bytes().all(|b| {
+                b.is_ascii_lowercase() || b.is_ascii_digit() || matches!(b, b'.' | b'_' | b'-')
+            })
+    };
+    host_ok
+        && host
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'-' | b':'))
+        && path.split('/').all(component_ok)
 }
 
 impl Toleration {
     /// Parse `key[=value]:Effect` or `key:Exists:Effect`.
-    pub fn parse(_raw: &str) -> Result<Self, RegistryError> {
-        Err(invalid("tolerations"))
+    pub fn parse(raw: &str) -> Result<Self, RegistryError> {
+        let refused = || invalid("tolerations");
+        let (head, effect) = raw.rsplit_once(':').ok_or_else(refused)?;
+        let effect = match effect {
+            "NoSchedule" => TaintEffect::NoSchedule,
+            "PreferNoSchedule" => TaintEffect::PreferNoSchedule,
+            "NoExecute" => TaintEffect::NoExecute,
+            _ => return Err(refused()),
+        };
+        let (key, operator) = match head.split_once(':') {
+            Some((key, "Exists")) => (key, TolerationOperator::Exists),
+            Some(_) => return Err(refused()),
+            None => match head.split_once('=') {
+                Some((key, value)) if is_label_value(value) => {
+                    (key, TolerationOperator::Equal(Some(value.to_string())))
+                }
+                Some(_) => return Err(refused()),
+                None => (head, TolerationOperator::Equal(None)),
+            },
+        };
+        if !is_label_key(key) {
+            return Err(refused());
+        }
+        Ok(Toleration {
+            key: key.to_string(),
+            operator,
+            effect,
+        })
     }
 }
 
@@ -220,9 +346,17 @@ mod tests {
     fn an_empty_context_is_refused_and_any_non_empty_one_is_accepted_unread() {
         let mut s = valid();
         s.context = KubeContextName("  ".into());
-        assert_eq!(refused_field(&s), Some("context"), "a blank context names the field");
+        assert_eq!(
+            refused_field(&s),
+            Some("context"),
+            "a blank context names the field"
+        );
         s.context = KubeContextName("not-in-any-kubeconfig".into());
-        assert_eq!(s.validate(), Ok(()), "existence is a start-time check, not a save-time one");
+        assert_eq!(
+            s.validate(),
+            Ok(()),
+            "existence is a start-time check, not a save-time one"
+        );
     }
 
     #[test]
@@ -234,7 +368,11 @@ mod tests {
         }
         for bad in ["", &"a".repeat(64), "Dev", "-dev", "dev-", "d_v"] {
             s.namespace = Namespace(bad.to_string());
-            assert_eq!(refused_field(&s), Some("namespace"), "{bad:?} is not a DNS-1123 label");
+            assert_eq!(
+                refused_field(&s),
+                Some("namespace"),
+                "{bad:?} is not a DNS-1123 label"
+            );
         }
     }
 
@@ -242,7 +380,11 @@ mod tests {
     fn a_built_image_needs_a_registry_and_a_pulled_one_does_not() {
         let mut s = valid();
         s.image = DaemonImageSource::default();
-        assert_eq!(refused_field(&s), Some("registry"), "Build pushes, so it needs a registry");
+        assert_eq!(
+            refused_field(&s),
+            Some("registry"),
+            "Build pushes, so it needs a registry"
+        );
         s.registry = Some(RegistryRepo("registry.local:5000/team".into()));
         assert_eq!(s.validate(), Ok(()));
         s.image = pulled();
@@ -253,7 +395,11 @@ mod tests {
     #[test]
     fn a_registry_is_host_and_path_without_tag_or_digest() {
         let mut s = valid();
-        for ok in ["registry.local:5000/team", "ghcr.io/acme", "localhost:5001/x/y"] {
+        for ok in [
+            "registry.local:5000/team",
+            "ghcr.io/acme",
+            "localhost:5001/x/y",
+        ] {
             s.registry = Some(RegistryRepo(ok.into()));
             assert_eq!(s.validate(), Ok(()), "{ok:?} is host[:port]/path");
         }
@@ -265,7 +411,11 @@ mod tests {
             "ghcr.io/Acme",
         ] {
             s.registry = Some(RegistryRepo(bad.into()));
-            assert_eq!(refused_field(&s), Some("registry"), "{bad:?} is not a bare repository");
+            assert_eq!(
+                refused_field(&s),
+                Some("registry"),
+                "{bad:?} is not a bare repository"
+            );
         }
     }
 
@@ -276,12 +426,27 @@ mod tests {
             LabelKey("kubernetes.io/arch".into()),
             LabelValue("amd64".into()),
         );
-        s.node_selector.insert(LabelKey("pool".into()), LabelValue("".into()));
-        assert_eq!(s.validate(), Ok(()), "prefixed keys and empty values are label syntax");
-        for (k, v) in [("bad key", "x"), ("pool", "no spaces"), ("-pool", "x"), ("p", &"v".repeat(64))] {
+        s.node_selector
+            .insert(LabelKey("pool".into()), LabelValue("".into()));
+        assert_eq!(
+            s.validate(),
+            Ok(()),
+            "prefixed keys and empty values are label syntax"
+        );
+        for (k, v) in [
+            ("bad key", "x"),
+            ("pool", "no spaces"),
+            ("-pool", "x"),
+            ("p", &"v".repeat(64)),
+        ] {
             let mut t = valid();
-            t.node_selector.insert(LabelKey(k.into()), LabelValue(v.into()));
-            assert_eq!(refused_field(&t), Some("node_selector"), "{k:?}={v:?} is refused");
+            t.node_selector
+                .insert(LabelKey(k.into()), LabelValue(v.into()));
+            assert_eq!(
+                refused_field(&t),
+                Some("node_selector"),
+                "{k:?}={v:?} is refused"
+            );
         }
     }
 
@@ -294,7 +459,11 @@ mod tests {
                 format!("gpu:Exists:{effect}"),
             ] {
                 let t = Toleration::parse(&raw).unwrap_or_else(|e| panic!("{raw}: {e:?}"));
-                assert_eq!(t.to_string(), raw, "a toleration writes back as it was given");
+                assert_eq!(
+                    t.to_string(),
+                    raw,
+                    "a toleration writes back as it was given"
+                );
             }
         }
         assert_eq!(
@@ -305,10 +474,18 @@ mod tests {
 
     #[test]
     fn a_toleration_with_another_effect_is_refused_naming_tolerations() {
-        for bad in ["gpu=true", "gpu:Evict", "gpu:Exists", ":NoSchedule", "gpu:Maybe:NoSchedule"] {
+        for bad in [
+            "gpu=true",
+            "gpu:Evict",
+            "gpu:Exists",
+            ":NoSchedule",
+            "gpu:Maybe:NoSchedule",
+        ] {
             assert_eq!(
                 Toleration::parse(bad),
-                Err(RegistryError::InvalidField { field: "tolerations" }),
+                Err(RegistryError::InvalidField {
+                    field: "tolerations"
+                }),
                 "{bad:?}"
             );
         }
@@ -333,7 +510,10 @@ mod tests {
         .unwrap();
         assert_eq!(s.arch, NodeArch::Amd64);
         assert_eq!(s.storage_class, None, "none means the cluster default");
-        assert!(s.allowed.is_empty(), "nothing leaves this machine unless allowed (SP-1)");
+        assert!(
+            s.allowed.is_empty(),
+            "nothing leaves this machine unless allowed (SP-1)"
+        );
         assert_eq!(s.volume_size, DEFAULT_VOLUME_SIZE);
     }
 }

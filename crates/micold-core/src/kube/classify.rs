@@ -126,14 +126,107 @@ pub enum KubeFailure {
 }
 
 fn paths(list: &[PathBuf]) -> String {
-    let _ = list;
-    String::new()
+    list.iter()
+        .map(|p| p.display().to_string())
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// A phase bound as the user reads it: whole minutes from ten minutes up, else seconds.
+fn bound_text(phase: StartPhase) -> String {
+    let secs = phase.bound().as_secs();
+    if secs >= 600 {
+        format!("{} min", secs / 60)
+    } else {
+        format!("{secs} s")
+    }
 }
 
 impl fmt::Display for KubeFailure {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let _ = paths(&[]);
-        write!(f, "{self:?}")
+        use KubeFailure as K;
+        match self {
+            K::NoKubeconfig { looked_in } => {
+                write!(f, "no kubeconfig found; looked in {}", paths(looked_in))
+            }
+            K::ContextMissing { context, looked_in } => write!(
+                f,
+                "context {context} is not in the kubeconfig ({})",
+                paths(looked_in)
+            ),
+            K::Unreachable {
+                context,
+                server,
+                error,
+            } => {
+                write!(
+                    f,
+                    "cannot reach the cluster of {context} at {server}: {error}"
+                )
+            }
+            K::ExecPlugin {
+                command,
+                error,
+                search_path,
+            } => write!(
+                f,
+                "the kubeconfig's credential plugin {command} failed: {error} (searched {})",
+                paths(search_path)
+            ),
+            K::NamespaceMissing { namespace } => write!(
+                f,
+                "namespace {namespace} does not exist; Micold does not create namespaces"
+            ),
+            K::Forbidden {
+                verb,
+                resource,
+                namespace,
+            } => {
+                write!(f, "not allowed to {verb} {resource} in {namespace}")
+            }
+            K::NoRuntime => f.write_str(
+                "a container runtime (docker or podman) is needed to build the image; pulling a \
+                 given image needs none",
+            ),
+            K::Build { output_tail } => write!(f, "image build failed: {output_tail}"),
+            K::Push { registry, error } => write!(f, "pushing to {registry} failed: {error}"),
+            K::ImagePull { image, message } => {
+                write!(f, "the cluster cannot pull {image}: {message}")
+            }
+            K::Unschedulable { message } => write!(f, "no node can run the pod: {message}"),
+            K::ClaimNotBound { claim, message } => {
+                write!(f, "volume {claim} is not bound: {message}")
+            }
+            K::Conflict {
+                kind,
+                name,
+                namespace,
+            } => write!(
+                f,
+                "a {kind} named {name} already exists in {namespace} and was not created by \
+                 Micold; rename the daemon or remove it"
+            ),
+            K::CredentialSource { credential, path } => write!(
+                f,
+                "{credential} is allowed but {} does not exist",
+                path.display()
+            ),
+            K::VolumeTooSmall { claim } => write!(
+                f,
+                "volume {claim} is larger than the volume size set; a volume cannot shrink"
+            ),
+            K::PhaseTimeout { phase } => {
+                write!(f, "{phase} did not finish within {}", bound_text(*phase))
+            }
+            K::Cancelled => f.write_str("start cancelled"),
+            K::Api {
+                code,
+                reason,
+                message,
+            } => {
+                write!(f, "the cluster answered {code} {reason}: {message}")
+            }
+        }
     }
 }
 
@@ -147,14 +240,22 @@ mod tests {
 
     #[test]
     fn every_failure_reads_as_the_contract_says() {
-        let looked = vec![PathBuf::from("/home/u/.kube/config"), PathBuf::from("/etc/k")];
+        let looked = vec![
+            PathBuf::from("/home/u/.kube/config"),
+            PathBuf::from("/etc/k"),
+        ];
         let cases = [
             (
-                KubeFailure::NoKubeconfig { looked_in: looked.clone() },
+                KubeFailure::NoKubeconfig {
+                    looked_in: looked.clone(),
+                },
                 "no kubeconfig found; looked in /home/u/.kube/config, /etc/k",
             ),
             (
-                KubeFailure::ContextMissing { context: "prod".into(), looked_in: looked.clone() },
+                KubeFailure::ContextMissing {
+                    context: "prod".into(),
+                    looked_in: looked.clone(),
+                },
                 "context prod is not in the kubeconfig (/home/u/.kube/config, /etc/k)",
             ),
             (
@@ -175,7 +276,9 @@ mod tests {
                  (searched /usr/bin, /opt/homebrew/bin)",
             ),
             (
-                KubeFailure::NamespaceMissing { namespace: "dev".into() },
+                KubeFailure::NamespaceMissing {
+                    namespace: "dev".into(),
+                },
                 "namespace dev does not exist; Micold does not create namespaces",
             ),
             (
@@ -192,23 +295,36 @@ mod tests {
                  given image needs none",
             ),
             (
-                KubeFailure::Build { output_tail: "step 3 failed".into() },
+                KubeFailure::Build {
+                    output_tail: "step 3 failed".into(),
+                },
                 "image build failed: step 3 failed",
             ),
             (
-                KubeFailure::Push { registry: "reg:5000/t".into(), error: "denied".into() },
+                KubeFailure::Push {
+                    registry: "reg:5000/t".into(),
+                    error: "denied".into(),
+                },
                 "pushing to reg:5000/t failed: denied",
             ),
             (
-                KubeFailure::ImagePull { image: "x:1".into(), message: "not found".into() },
+                KubeFailure::ImagePull {
+                    image: "x:1".into(),
+                    message: "not found".into(),
+                },
                 "the cluster cannot pull x:1: not found",
             ),
             (
-                KubeFailure::Unschedulable { message: "0/1 nodes".into() },
+                KubeFailure::Unschedulable {
+                    message: "0/1 nodes".into(),
+                },
                 "no node can run the pod: 0/1 nodes",
             ),
             (
-                KubeFailure::ClaimNotBound { claim: "d-data".into(), message: "no class".into() },
+                KubeFailure::ClaimNotBound {
+                    claim: "d-data".into(),
+                    message: "no class".into(),
+                },
                 "volume d-data is not bound: no class",
             ),
             (
@@ -228,11 +344,15 @@ mod tests {
                 "Git credentials is allowed but /home/u/.git-credentials does not exist",
             ),
             (
-                KubeFailure::PhaseTimeout { phase: StartPhase::Pull },
+                KubeFailure::PhaseTimeout {
+                    phase: StartPhase::Pull,
+                },
                 "pulling the image did not finish within 15 min",
             ),
             (
-                KubeFailure::PhaseTimeout { phase: StartPhase::Tunnel },
+                KubeFailure::PhaseTimeout {
+                    phase: StartPhase::Tunnel,
+                },
                 "opening the tunnel did not finish within 120 s",
             ),
             (KubeFailure::Cancelled, "start cancelled"),
