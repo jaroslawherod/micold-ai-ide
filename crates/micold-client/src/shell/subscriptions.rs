@@ -146,6 +146,8 @@ pub fn subscription(app: &App) -> Subscription<Message> {
     }
     // Compare's per-run watches (483 R11), likewise only while the view is open.
     subs.extend(crate::shell::runs_watch::watches(app));
+    // The Overview's progress watches (813 R9), likewise only while it is open.
+    subs.extend(crate::shell::overview_watch::watches(app));
     if probe_config().is_some() {
         subs.push(iced::window::frames().map(|_| Message::NoOp));
     }

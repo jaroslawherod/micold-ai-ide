@@ -143,6 +143,12 @@ pub enum PendingOp {
         number: u64,
         started: u64,
     },
+    /// The `RemoteList` the Overview's issue-title reads start with (feature 813, R8). Carries the
+    /// tickets asked for; an answer for a project no longer active is dropped.
+    TitleRemotes {
+        project: PathBuf,
+        numbers: Vec<u64>,
+    },
     /// The `MergedBranchCheck` a pull request reading ends with when a pull request was merged
     /// (feature 040, reading-and-wire §2 step 4). Carries the reading's statuses, which wait for the
     /// answer, and the branches asked about in the order asked, so the answer needs nothing
@@ -237,7 +243,8 @@ impl PendingOp {
             PendingOp::RemoteList { .. }
             | PendingOp::PrStatusRemotes { .. }
             | PendingOp::PrListRemotes { .. }
-            | PendingOp::PrDiffRemotes { .. } => "read the repository's remotes".into(),
+            | PendingOp::PrDiffRemotes { .. }
+            | PendingOp::TitleRemotes { .. } => "read the repository's remotes".into(),
             PendingOp::MergedBranchCheck { .. } => "check the merged branches".into(),
             PendingOp::RepoRootQuery(p) => {
                 format!("check whether {} is a repository", p.display())
@@ -342,6 +349,10 @@ pub fn switch_daemon_attachment(
     if old.as_ref().map(|(project, _)| project.as_path()) != Some(new) {
         let _ =
             crate::shell::pr_status::update(app, micold_client::features::pr_status::Msg::Released);
+        // Nor do the Overview's file readings and issue titles (feature 813, data-model).
+        app.core.update(Message::Overview(
+            micold_client::features::overview::Msg::ProjectSwitched,
+        ));
     }
     // The project being left detaches from its own daemon, the one entered attaches to its: they
     // may be two different daemons, and a down one is skipped rather than replaced (rule P-2).
@@ -543,7 +554,9 @@ fn resolve_pending_of(app: &mut App, daemon: DaemonId) -> Task<Message> {
             }
             // Feature 040: the reading ended with the hold, above; no failure of a reading is
             // ever a notice (FR-025, SC-004).
-            PendingOp::PrStatusRemotes { .. } | PendingOp::MergedBranchCheck { .. } => {}
+            PendingOp::PrStatusRemotes { .. }
+            | PendingOp::MergedBranchCheck { .. }
+            | PendingOp::TitleRemotes { .. } => {}
             // The list read ends as a passing failure, or its view would stay `Loading` for ever
             // (feature 775).
             PendingOp::PrListRemotes { seq, started, .. } => {
@@ -1411,6 +1424,14 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
                     app, project, seq, number, started, remotes,
                 );
             }
+            // Feature 813: the remotes the Overview's title reads asked for.
+            Some(PendingOp::TitleRemotes { project, numbers }) => {
+                let remotes = match result {
+                    OperationResult::RemoteList { remotes } => Some(remotes),
+                    _ => None,
+                };
+                follow_up = crate::shell::issues::on_title_remotes(app, project, numbers, remotes);
+            }
             // Feature 040: the answer to a reading's question about its merged branches. Whether it
             // is still wanted is `on_merged_branches`' question.
             Some(PendingOp::MergedBranchCheck {
@@ -1632,6 +1653,10 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
                     return crate::shell::pr_status::on_diff_remotes(
                         app, project, seq, number, started, None,
                     );
+                }
+                // Feature 813: titles that could not be asked for leave the branch as the summary.
+                Some(PendingOp::TitleRemotes { project, numbers }) => {
+                    return crate::shell::issues::on_title_remotes(app, project, numbers, None);
                 }
                 // Feature 040: a refused question applies the statuses with no suggestion, and is
                 // never a notice (FR-017, FR-025).

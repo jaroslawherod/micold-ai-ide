@@ -645,3 +645,183 @@ fn start_issue_details(app: &mut App, request: DetailsRequest) -> Task<Message> 
         },
     )
 }
+
+// ---- The Overview's issue titles (feature 813, research R8) ----
+
+/// The Overview opened: seed titles from the issues the New-worktree form already holds, then read
+/// each numeric ticket still without an entry, once. The remotes come first (the repository is
+/// whatever the daemon says); a window with no route to a daemon reads nothing (FR-019).
+pub fn on_overview_opened(app: &mut App) -> Task<Message> {
+    use micold_client::features::overview::{numeric_ticket, titles_to_fetch, Msg, TitleLookup};
+    let dirs: Vec<String> = app
+        .core
+        .worktree
+        .worktrees
+        .iter()
+        .map(|worktree| worktree.dir_name.clone())
+        .collect();
+    let seeds: Vec<(u64, String)> = dirs
+        .iter()
+        .filter_map(|dir| numeric_ticket(dir))
+        .filter(|number| !app.core.overview.titles.contains_key(number))
+        .filter_map(|number| {
+            let held = app.core.worktree_form.form.as_ref()?.issues.held();
+            let issue = held.into_iter().find(|issue| issue.number() == number)?;
+            Some((number, issue.title().to_string()))
+        })
+        .collect();
+    for (number, title) in seeds {
+        app.core.update(Message::Overview(Msg::TitleRead {
+            number,
+            result: TitleLookup::Known(title),
+        }));
+    }
+    let binding = app.active_binding();
+    let routed = matches!(
+        app.route(binding),
+        micold_client::links::Route::To(id) if app.outbox_for(id).is_some()
+    );
+    let wanted = titles_to_fetch(&app.core.overview, &dirs, routed);
+    let Some(project) = app
+        .core
+        .workspace
+        .active
+        .clone()
+        .filter(|_| !wanted.is_empty())
+    else {
+        return Task::none();
+    };
+    app.core
+        .update(Message::Overview(Msg::TitlesRequested(wanted.clone())));
+    let asked_for = project.clone();
+    send_op(
+        app,
+        PendingOp::TitleRemotes {
+            project: asked_for,
+            numbers: wanted,
+        },
+        move |req| ClientMsg::RemoteList { req, project },
+    );
+    Task::none()
+}
+
+/// The daemon answered the titles' `RemoteList` (`None`: it failed). Reads each title on a blocking
+/// thread when the repository is on GitHub and `gh` is found; every other end leaves the branch as
+/// the summary.
+pub fn on_title_remotes(
+    app: &mut App,
+    project: PathBuf,
+    numbers: Vec<u64>,
+    remotes: Option<Vec<micold_core::git::GitRemote>>,
+) -> Task<Message> {
+    use micold_client::features::overview::{Msg, TitleLookup};
+    let unavailable = |numbers: Vec<u64>| {
+        Task::batch(numbers.into_iter().map(|number| {
+            Task::done(Message::Overview(Msg::TitleRead {
+                number,
+                result: TitleLookup::Unavailable,
+            }))
+        }))
+    };
+    // An answer for a project no longer active: that project's titles were cleared on the switch.
+    if app.core.workspace.active.as_deref() != Some(project.as_path()) {
+        return Task::none();
+    }
+    let Some(micold_core::github::RemoteChoice::Github { repo, .. }) =
+        remotes.map(|remotes| micold_core::github::choose_remote(&remotes))
+    else {
+        return unavailable(numbers);
+    };
+    let tooling = app.caps.issue_tooling();
+    let cached = app.env_include_cache.get(&project).cloned();
+    let resolver = app.caps.env_include_shared();
+    let enabled = app.env_include_enabled;
+    let script = app.env_include_script_path.clone();
+    let timeout_secs = app.env_include_timeout_secs;
+    let asked = numbers.clone();
+    Task::perform(
+        async move {
+            tokio::task::spawn_blocking(move || {
+                let snapshot = cached.unwrap_or_else(|| {
+                    resolve_env_include(&*resolver, enabled, &script, timeout_secs, &project)
+                });
+                let gh = (tooling.locate_gh)(env_include_path(&snapshot.vars))?;
+                let gh = micold_core::github::GhCli::new(gh);
+                Some(
+                    numbers
+                        .into_iter()
+                        .map(|number| (number, read_title(&gh, &repo, number)))
+                        .collect::<Vec<_>>(),
+                )
+            })
+            .await
+            .ok()
+            .flatten()
+        },
+        move |read| {
+            read.unwrap_or_else(|| {
+                asked
+                    .iter()
+                    .map(|number| (*number, TitleLookup::Unavailable))
+                    .collect()
+            })
+        },
+    )
+    .then(|read| {
+        Task::batch(read.into_iter().map(|(number, result)| {
+            Task::done(Message::Overview(Msg::TitleRead { number, result }))
+        }))
+    })
+}
+
+/// One title through `gh`. A failure is logged by number alone and leaves the branch (FR-020).
+fn read_title(
+    gh: &micold_core::github::GhCli,
+    repo: &micold_core::github::GithubRepo,
+    number: u64,
+) -> micold_client::features::overview::TitleLookup {
+    use micold_client::features::overview::TitleLookup;
+    use micold_core::github::IssueLookup;
+    let Ok(small) = u32::try_from(number) else {
+        return TitleLookup::Unavailable;
+    };
+    match gh.read_issue(repo, small) {
+        Ok(issue) => TitleLookup::Known(issue.title),
+        Err(error) => {
+            eprintln!("{}", title_failure_line(number, &error));
+            TitleLookup::Unavailable
+        }
+    }
+}
+
+/// The log line for a title that could not be read. It names the issue number and a fixed reason,
+/// never the error's own text, which can quote the issue (FR-020).
+fn title_failure_line(number: u64, error: &micold_core::github::IssueLookupError) -> String {
+    use micold_core::github::IssueLookupError;
+    let reason = match error {
+        IssueLookupError::NotOpenIssue { .. } => "it is not an open issue",
+        IssueLookupError::Load(_) => "the read failed",
+    };
+    format!("micold: no title for issue #{number} on the Overview: {reason}")
+}
+
+#[cfg(test)]
+mod title_tests {
+    use super::*;
+    use micold_core::github::{IssueLoadError, IssueLookupError};
+
+    /// FR-020: the line names the number, and nothing the error carries.
+    #[test]
+    fn the_failure_line_names_the_number_and_never_a_title() {
+        let quoted = "Fix the SECRET-TITLE crash";
+        for error in [
+            IssueLookupError::Load(IssueLoadError::Other(quoted.into())),
+            IssueLookupError::Load(IssueLoadError::Unreachable(quoted.into())),
+            IssueLookupError::NotOpenIssue { closed: true },
+        ] {
+            let line = title_failure_line(813, &error);
+            assert!(line.contains("#813"), "{line}");
+            assert!(!line.contains("SECRET"), "{line}");
+        }
+    }
+}

@@ -89,6 +89,7 @@ mod picker_parity;
 #[cfg(test)]
 mod picker_press;
 mod progress;
+mod progress_bar;
 mod resize_handle;
 mod review_comment;
 mod ripple;
@@ -189,6 +190,7 @@ pub use overview_card::OverviewCard;
 pub use picker::Row as TypeaheadRow;
 pub use picker::PICKER_HIGHLIGHT;
 pub use progress::StageProgress;
+pub use progress_bar::ProgressBar;
 pub use pull_request_indicator::{CheckMark, PrMark, PullRequestIndicator};
 pub use pull_request_row::PullRequestRow;
 pub use resize_handle::ResizeHandle;

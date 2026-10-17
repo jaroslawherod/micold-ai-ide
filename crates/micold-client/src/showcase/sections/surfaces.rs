@@ -339,6 +339,23 @@ pub fn stage_progress<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<
     )
 }
 
+/// `ProgressBar` at none, most and all of a task list.
+pub fn progress_bar<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
+    use micold_core::task_progress::Ratio;
+    let bar = |done| {
+        iced::widget::container(material::ProgressBar::new(Ratio { done, total: 10 }, roles))
+            .width(Length::Fixed(320.0))
+    };
+    arrange(
+        vec![
+            posed("0/10", bar(0), roles),
+            posed("6/10", bar(6), roles),
+            posed("10/10", bar(10), roles),
+        ],
+        Layout::FullWidth,
+    )
+}
+
 /// A sample card for the Overview poses.
 fn card_model(
     name: &str,
@@ -361,6 +378,7 @@ fn card_model(
             open_capped: false,
             merged_capped: false,
         }),
+        progress: Default::default(),
         activation: micold_core::overview::Activation::RevealOnly(
             micold_core::session::SessionLocation::Default,
         ),
@@ -389,8 +407,20 @@ pub fn overview_card<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'
     let mut unknown = card_model("unknown-counts", T::Feature, S::Idle, R::Idle);
     unknown.prs =
         micold_core::overview::PrDisplay::Unknown(micold_core::overview::PrUnknown::Unreachable);
+    let mut with_progress = card_model("with-progress", T::Feature, S::Working, R::Working);
+    with_progress.progress = micold_core::task_progress::Progress {
+        phase: Some(micold_core::task_progress::Phase::Implement),
+        ratio: Some(micold_core::task_progress::Ratio { done: 6, total: 10 }),
+        source: micold_core::task_progress::Source::TaskList,
+    };
     arrange(
         vec![
+            posed("with progress", card(with_progress), roles),
+            posed(
+                "without progress",
+                card(card_model("without-progress", T::Feature, S::Idle, R::Idle)),
+                roles,
+            ),
             posed(
                 "Needs action",
                 card(card_model(

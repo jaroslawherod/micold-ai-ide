@@ -63,30 +63,66 @@ fn targets(root: &Path, git_dirs: &[PathBuf]) -> Vec<(PathBuf, RecursiveMode)> {
     targets
 }
 
-/// Watch `root` until the subscription is dropped (the view closed or moved to another entry).
+/// What a watch resolved once its subscription started: the canonical root, the git dirs whose
+/// state counts, and the directories to watch.
+pub(crate) struct Resolved {
+    pub root: PathBuf,
+    pub git_dirs: Vec<PathBuf>,
+    pub targets: Vec<(PathBuf, RecursiveMode)>,
+}
+
+/// Watch `root` until the subscription is dropped (the view closed or moved to another entry),
+/// saying `wake` when a burst of changes the view shows is over.
 pub(crate) fn run(
     root: PathBuf,
     git: Arc<dyn Git + Send + Sync>,
     wake: Message,
 ) -> impl Stream<Item = Message> {
-    iced::stream::channel(1, |mut output: mpsc::Sender<Message>| async move {
-        // Canonical paths, as the watcher reports them (`/private/var` on macOS).
-        let resolve = {
-            let git = git.clone();
-            move || {
-                let root = root.canonicalize().unwrap_or(root);
-                let dirs: Vec<PathBuf> = git
-                    .git_dirs(&root)
-                    .unwrap_or_default()
-                    .into_iter()
-                    .map(|dir| dir.canonicalize().unwrap_or(dir))
-                    .collect();
-                (root, dirs)
+    let resolve = {
+        let git = git.clone();
+        move || {
+            // Canonical paths, as the watcher reports them (`/private/var` on macOS).
+            let root = root.canonicalize().unwrap_or(root);
+            let git_dirs: Vec<PathBuf> = git
+                .git_dirs(&root)
+                .unwrap_or_default()
+                .into_iter()
+                .map(|dir| dir.canonicalize().unwrap_or(dir))
+                .collect();
+            let targets = targets(&root, &git_dirs);
+            Resolved {
+                root,
+                git_dirs,
+                targets,
             }
-        };
-        let Ok((root, git_dirs)) = tokio::task::spawn_blocking(resolve).await else {
+        }
+    };
+    // A failed check counts the change, as in `counts`.
+    let read = move |resolved: &Resolved, batch: Vec<PathBuf>| {
+        counts(&*git, &resolved.root, &resolved.git_dirs, batch).then(|| wake.clone())
+    };
+    watch_loop(resolve, read, false)
+}
+
+/// The watch loop both the Changes view and the Overview use: watch what `resolve` names, collect
+/// the relevant changes through the [`Debouncer`], and for each finished burst run `read` on a
+/// blocking thread, sending the message it returns. With `initial` it reads once up front, with an
+/// empty burst. Ends when the subscription is dropped or the watcher is gone.
+pub(crate) fn watch_loop<Resolve, Read>(
+    resolve: Resolve,
+    read: Read,
+    initial: bool,
+) -> impl Stream<Item = Message>
+where
+    Resolve: FnOnce() -> Resolved + Send + 'static,
+    Read: Fn(&Resolved, Vec<PathBuf>) -> Option<Message> + Send + Sync + 'static,
+{
+    iced::stream::channel(1, move |mut output: mpsc::Sender<Message>| async move {
+        let Ok(resolved) = tokio::task::spawn_blocking(resolve).await else {
             return;
         };
+        let resolved = Arc::new(resolved);
+        let read = Arc::new(read);
         let (events, mut changed) = tokio::sync::mpsc::unbounded_channel::<Vec<PathBuf>>();
         let watcher = RecommendedWatcher::new(
             move |event: notify::Result<Event>| {
@@ -99,15 +135,34 @@ pub(crate) fn run(
         let mut watcher = match watcher {
             Ok(watcher) => watcher,
             Err(err) => {
-                eprintln!("micold: cannot watch {} for changes: {err}", root.display());
+                eprintln!(
+                    "micold: cannot watch {} for changes: {err}",
+                    resolved.root.display()
+                );
                 return;
             }
         };
-        for (dir, mode) in targets(&root, &git_dirs) {
+        for (dir, mode) in &resolved.targets {
             // A git dir with no `refs/` of its own (a worktree's) has nothing there to watch.
-            if let Err(err) = watcher.watch(&dir, mode) {
-                if dir == root {
+            if let Err(err) = watcher.watch(dir, *mode) {
+                if *dir == resolved.root {
                     eprintln!("micold: cannot watch {} for changes: {err}", dir.display());
+                }
+            }
+        }
+        let read_once = |batch: Vec<PathBuf>| {
+            let (read, resolved) = (read.clone(), resolved.clone());
+            async move {
+                tokio::task::spawn_blocking(move || read(&resolved, batch))
+                    .await
+                    .ok()
+                    .flatten()
+            }
+        };
+        if initial {
+            if let Some(message) = read_once(Vec::new()).await {
+                if output.send(message).await.is_err() {
+                    return;
                 }
             }
         }
@@ -122,7 +177,7 @@ pub(crate) fn run(
             };
             match next {
                 Ok(Some(paths)) => debouncer.push(
-                    watch::relevant_paths(&root, &git_dirs, paths),
+                    watch::relevant_paths(&resolved.root, &resolved.git_dirs, paths),
                     Instant::now(),
                 ),
                 // The watcher is gone: nothing more will come.
@@ -132,14 +187,10 @@ pub(crate) fn run(
             let Some(batch) = debouncer.ready(Instant::now()) else {
                 continue;
             };
-            let check = {
-                let (git, root, git_dirs) = (git.clone(), root.clone(), git_dirs.clone());
-                move || counts(&*git, &root, &git_dirs, batch)
-            };
-            // A failed check counts the change, as in `counts`.
-            let counts = tokio::task::spawn_blocking(check).await.unwrap_or(true);
-            if counts && output.send(wake.clone()).await.is_err() {
-                return;
+            if let Some(message) = read_once(batch).await {
+                if output.send(message).await.is_err() {
+                    return;
+                }
             }
         }
     })

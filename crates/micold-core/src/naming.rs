@@ -469,3 +469,32 @@ pub fn name_from_title(title: &str) -> String {
             .to_owned()
     })
 }
+
+/// The ticket a worktree directory name carries, exactly as written (feature 813, T054): the
+/// number of a GitHub issue or the key of a Jira one, found by [`split_name`]. `None` when the
+/// name has no ticket boundary or nothing before it.
+pub fn ticket(dir_name: &str) -> Option<String> {
+    split_name(dir_name).ticket
+}
+
+#[cfg(test)]
+mod ticket_tests {
+    use super::ticket;
+
+    #[test]
+    fn numeric_ticket() {
+        assert_eq!(ticket("feat-813_worktree-overview"), Some("813".into()));
+    }
+
+    #[test]
+    fn jira_key_keeps_its_case() {
+        assert_eq!(ticket("fix-ABC-123_login"), Some("ABC-123".into()));
+    }
+
+    #[test]
+    fn none_without_a_ticket() {
+        assert_eq!(ticket("feat_login"), None);
+        assert_eq!(ticket("feat-login"), None);
+        assert_eq!(ticket("plain"), None);
+    }
+}

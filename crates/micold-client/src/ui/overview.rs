@@ -12,9 +12,10 @@ use micold_core::location_state::location_state;
 use micold_core::occupancy::main_session;
 use micold_core::overview::{
     activation, card_state, location_type, order, session_counts, CardModel, CardSignals,
-    CurrentPr, LocationType, PrDisplay, PrSignal, PrUnknown,
+    CardState, CurrentPr, LocationType, PrDisplay, PrSignal, PrUnknown,
 };
 use micold_core::session::{Session, SessionLocation};
+use micold_core::task_progress::{self, Progress, Source};
 use micold_core::theme::ColorScheme;
 use micold_core::tokens::{self, spacing};
 
@@ -113,11 +114,21 @@ fn card(app: &State, place: &Place) -> CardModel {
         pr: pr_signal(&app.pr_status, branch.as_deref()),
     };
     let (state, reason) = card_state(&signals);
-    let summary = match (&location, &branch) {
-        (SessionLocation::Default, _) => "Project root".to_string(),
-        (_, Some(branch)) => branch.clone(),
-        (_, None) => display_name.clone(),
+    let ticket = match &location {
+        SessionLocation::Worktree(dir) => crate::features::overview::numeric_ticket(dir),
+        SessionLocation::Default => None,
     };
+    let summary = crate::features::overview::summary(
+        &location,
+        &display_name,
+        branch.as_deref(),
+        ticket.and_then(|number| app.overview.titles.get(&number)),
+    );
+    let pr_open = matches!(
+        pr_signal(&app.pr_status, branch.as_deref()),
+        PrSignal::Known { current: Some(current), .. } if current.open
+    );
+    let progress = progress(app, &location, state, pr_open);
     let branch_ref = branch.clone();
     let activation = activation(
         &location,
@@ -133,8 +144,31 @@ fn card(app: &State, place: &Place) -> CardModel {
         state,
         reason,
         summary,
+        progress,
         prs: pr_display(&app.pr_status, branch_ref),
         activation,
+    }
+}
+
+/// The card's feature progress: the phase from the ledger, the card state, an open pull request
+/// or the files, and the task ratio; empty without a reading (research R9, FR-017). Only a
+/// worktree has files.
+fn progress(app: &State, location: &SessionLocation, state: CardState, pr_open: bool) -> Progress {
+    let SessionLocation::Worktree(dir) = location else {
+        return Progress::default();
+    };
+    let files = app.overview.progress.get(dir).cloned().unwrap_or_default();
+    let source = if files.ledger.is_some() {
+        Source::Ledger
+    } else if files.tasks.is_some() || files.artifact.is_some() {
+        Source::TaskList
+    } else {
+        Source::None
+    };
+    Progress {
+        phase: task_progress::phase(files.ledger, state, pr_open, files.artifact),
+        ratio: files.tasks,
+        source,
     }
 }
 
@@ -240,6 +274,7 @@ mod tests {
                 reason: micold_core::overview::CardReason::Idle,
                 summary: "s".into(),
                 prs: micold_core::overview::PrDisplay::Hidden,
+                progress: Default::default(),
                 activation: micold_core::overview::Activation::RevealOnly(
                     micold_core::session::SessionLocation::Default,
                 ),
