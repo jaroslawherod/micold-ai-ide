@@ -118,3 +118,6 @@ the core baseline still fails only the four root-user tests named above).
   `image_is_moving`, `new(context, namespace, enabled)`; `RegistryRepo`, `NodeArch`, `registry`,
   `arch` and their two tests (U3, U4) removed; core lib 719 passed, `daemons_kube` 6 passed.
   U1, U2, U5–U7: revision 1's tests, unchanged and green. refactor: none needed.
+- T116 (revert, no new behaviour): `protocol/auth.rs`, `daemon/server.rs` and `connect.rs` restored
+  to `origin/main`; `git diff origin/main -- <the three>` is empty; feature 027's token tests are
+  covered by the gate.

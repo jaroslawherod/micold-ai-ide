@@ -81,7 +81,8 @@ impl Placement {
 
     /// The placement a registry daemon's runtime stands for; `None` for a runtime this build
     /// cannot start, and for a Kubernetes daemon, which the client reaches through its own dial
-    /// (feature 686) rather than a sandbox placement. Pure, like [`Self::resolve`], and independent of the global placement choice.
+    /// (feature 686) rather than a sandbox placement. Pure, like [`Self::resolve`], and
+    /// independent of the global placement choice.
     pub fn from_runtime(runtime: &crate::daemons::DaemonRuntime) -> Option<Self> {
         use crate::daemons::DaemonRuntime;
         match runtime {

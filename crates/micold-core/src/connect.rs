@@ -43,23 +43,6 @@ pub enum Transport {
     Loopback(tokio::net::TcpStream),
     /// The stdio of an `ssh` child that runs the remote helper's bridge (feature 489).
     Ssh(crate::ssh::SshStdio),
-    /// A tunnel the client opened elsewhere, such as a Kubernetes API port-forward (feature 686).
-    /// Opaque here: no kube type reaches the core.
-    Tunnel(Tunnel),
-}
-
-/// A byte stream usable as a daemon transport.
-pub trait AsyncReadWrite: AsyncRead + AsyncWrite + Send + Unpin {}
-
-impl<T: AsyncRead + AsyncWrite + Send + Unpin> AsyncReadWrite for T {}
-
-/// A boxed tunnel stream ([`Transport::Tunnel`]); its `Debug` names only what it is.
-pub struct Tunnel(pub Box<dyn AsyncReadWrite>);
-
-impl std::fmt::Debug for Tunnel {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("Tunnel")
-    }
 }
 
 macro_rules! delegate {
@@ -68,7 +51,6 @@ macro_rules! delegate {
             Transport::Local(s) => Pin::new(s).$method($($arg),*),
             Transport::Loopback(s) => Pin::new(s).$method($($arg),*),
             Transport::Ssh(s) => Pin::new(s).$method($($arg),*),
-            Transport::Tunnel(t) => Pin::new(&mut *t.0).$method($($arg),*),
         }
     };
 }
@@ -563,39 +545,6 @@ pub async fn connect_or_spawn(
 mod tests {
     use super::*;
     use crate::protocol::codec::CodecError;
-
-    /// U34 (feature 686): a boxed tunnel half carries the 491 handshake like any other transport.
-    #[tokio::test]
-    async fn a_boxed_tunnel_completes_the_handshake_against_a_daemon_stub() {
-        use crate::protocol::codec::DaemonCodec;
-        let (client, daemon) = tokio::io::duplex(64 * 1024);
-        let stub = tokio::spawn(async move {
-            let mut framed = Framed::new(daemon, DaemonCodec::new());
-            let Some(Ok(Frame::Control(ClientMsg::Hello { client_build, .. }))) =
-                framed.next().await
-            else {
-                panic!("the client opens with Hello");
-            };
-            let reason = RefusalReason::BuildMismatch {
-                client_build,
-                daemon_build: "stub".into(),
-            };
-            framed
-                .send(Frame::Control(DaemonMsg::Refused { reason }))
-                .await
-                .unwrap();
-        });
-        let connected = handshake(Transport::Tunnel(Tunnel(Box::new(client))), "client")
-            .await
-            .expect("the handshake completes over the tunnel");
-        match connected {
-            Connected::Refused(RefusalReason::BuildMismatch { client_build, .. }) => {
-                assert_eq!(client_build, "client")
-            }
-            _ => panic!("the stub's answer arrives intact"),
-        }
-        stub.await.unwrap();
-    }
     #[cfg(windows)]
     use interprocess::local_socket::{GenericFilePath, ToFsName};
 
