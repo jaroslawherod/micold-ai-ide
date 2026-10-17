@@ -138,7 +138,7 @@ mod tests {
             range: LineRange::new(start, end).expect("a valid range"),
             quote: quote.iter().map(|line| (*line).to_owned()).collect(),
             text: text.to_owned(),
-            state: CommentState::Pending,
+            state: CommentState::Draft,
             created,
         }
     }
