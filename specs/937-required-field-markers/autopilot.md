@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-rkhzho
 - **Started**: 2026-10-17
 - **Phase**: plan
-- **Next step**: plan unit (clarify CLEAN after 2 rounds; D2/D3 are orchestrator defaults pending jaro's card — re-apply to spec.md if jaro answers B)
+- **Next step**: plan unit (continue handover: plan review round 1); D2/D3 are orchestrator defaults pending jaro's card — re-apply to spec.md and plan.md *Pending decisions* if jaro answers B
 
 ## Pull requests
 
@@ -43,7 +43,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+- Done: `speckit-plan` ran; plan.md, research.md (R1–R9, incl. the open items: rename-dialog files R4, select/typeahead blur R2, form inventory R5), data-model.md, contracts/required-field.md, quickstart.md written and committed. No extension hooks registered for plan.
+- Next: plan review round 1 (tasks/review.md with rubrics/plan.md, model omitted), act on it (review-rounds.md), then set **Next step** to `tasks unit` and return DONE, PR none.
+- Open findings: none yet. PR: none.
+- Unit handed over at 156k context (cap 150k).
 
 ## Open escalation
 
@@ -51,5 +54,5 @@ None.
 
 ## Follow-ups not done
 
-- Spec review round 2 MINOR: the plan should confirm which files implement the project and worktree rename dialogs (rename_dialog.rs, rename.rs, worktree_rename.rs) and list the container fields under Settings › Daemons.
+- Spec review round 2 MINOR (rename-dialog files, container fields): addressed in research.md R4 and R5.
 
