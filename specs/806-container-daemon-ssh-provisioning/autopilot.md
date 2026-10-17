@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #806
 - **Worktree branch**: claude/project-thread-uwrpqv
 - **Started**: 2026-10-17
-- **Phase**: clarify
-- **Next step**: clarify unit: resolve the two [NEEDS CLARIFICATION] markers (FR-002 basic image origin, FR-010 default AI CLI selection)
+- **Phase**: plan
+- **Next step**: plan unit. Clarify CLEAN after 2 rounds (D2-D4, agent-resolved). Plan must cover the first publish of the basic image before a client can pin its digest (publishing is an outward action: escalate category 3 if it needs a release or a manual push).
 
 ## Pull requests
 
@@ -27,6 +27,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
 | D1 | spec | Dockerfile build or copy-in over SSH? | Basic image with sshd; client copies its daemon build over SSH and installs selected AI CLIs on start; same mechanism for the local sandbox container and #686 | user | owner decision 2026-10-17 (issue #806 comment, project thread) |
+| D2 | clarify r1 | FR-002: where does the basic image come from? | Project-published (Containerfile minus daemon/CLIs plus sshd, existing release image jobs), version-independent, client pins by digest | agent | packaging/sandbox/Containerfile, .github/workflows/release.yml#image, spec Overview |
+| D3 | clarify r1 | FR-010: default AI CLI selection? | New daemon: Claude Code only; every pre-upgrade container daemon: all supported CLIs | agent | Containerfile FR-023a, spec US4/FR-016, AiCli `#[default] ClaudeCode`, SC-002 |
+| D4 | clarify r2 | Default AI CLI not selected / install failed? | Existing rule: start nothing, substitute nothing, say so where chosen | agent | spec 026 FR-002/FR-004 s4, unavailable_default_says_so.rs, spec 027 FR-023b |
 
 ## Review rounds
 
