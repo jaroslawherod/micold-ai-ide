@@ -76,7 +76,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+None. PR #920 (M5) rebased onto main 6cf261ef, layout snapshot regenerated (toolbar gained a button on main), full `mise run gate` green, force-pushed; waiting on CI and merge.
 
 ## Open escalation
 
