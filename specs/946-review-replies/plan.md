@@ -135,15 +135,11 @@ Requirements the table names only by layer, mapped to where they are built and t
 | FR-027 | every core and daemon test above runs headless with no session | `mise run gate` |
 | FR-028 | `docs/user-guide/reviewing-changes.md`, `agent-tools.md` | M2/M3 review against the FR-028 list |
 
-## Delivery order (for the tasks unit)
+## Delivery order
 
-1. **M1 core**: statuses, reference, anchor, batch, reply, store v2, wire ops, MCP operation.
-2. **M2 daemon**: report tool, Mark, Reanchor, send-time re-anchoring; agent-tools.md.
-3. **M3 client**: card states and replies, anchors on display, panel and shared row, manual mark,
-   showcase; reviewing-changes.md.
-
-Each milestone leaves the app working: M1 changes the batch text and store (docs for the format go
-with it), M2 makes reports possible (visible as text in the existing cards' state until M3).
+Cut by user story in tasks.md § Milestones (M1 batch and store, M2 agent reports, M3 marking by
+hand, M4 review panel, M5 re-anchoring); each milestone leaves the app working. The batch's
+fallback sentence covers the report tool's absence between M1 and M2.
 
 ## Complexity Tracking
 

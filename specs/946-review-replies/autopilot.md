@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #946
 - **Worktree branch**: claude/project-thread-jjniz9
 - **Started**: 2026-10-17
-- **Phase**: plan reviewed
-- **Next step**: tasks unit
+- **Phase**: tasks
+- **Next step**: tasks review, checklist close, specs-only gate, design PR
 
 ## Pull requests
 
@@ -22,6 +22,16 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
+| M1 | T001–T018 | full | Send review types the documented batch with C-references; review file v2, protocol 49 | | planned |
+| M2 | T019–T034 | full | report_review_comment; cards show Applied/Answered and replies in every window, after restart | | planned |
+| M3 | T035–T046 | full | Mark a Sent comment by hand; read a full reply | | planned |
+| M4 | T047–T056 | full | Review panel: rows, counts, jump, draft edit/delete, panel buttons | | planned |
+| M5 | T057–T067 | full | Comments follow their code; next batch names new lines | | planned |
+
+Polish T068–T070 changes no code: left to the close unit. M1 has 18 tasks (over ~10): Foundational
+(statuses, store v2, the one-edit wire delta 48 → 49) has no deliverable of its own and US2 is
+small, so they ship together. M2 has 16: US1 s1 needs the tool and the card display together; the
+split along s6 (M3) is the only scenario split with a deliverable on each side.
 
 ## Decisions
 
@@ -32,6 +42,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D3 | clarify | Deliver to structured (stream-json) sessions and comment on their Edit/Write diffs in this feature? | No: ship for terminal (PTY) sessions only; both left to epic #945 (open); batch stays delivery-independent (FR-026) | orchestrator default (bias to action; user may override) | spec.md#clarifications, User Story 5, FR-026, Out of Scope |
 | D4 | clarify | Must a report wait for user approval? | No; only stop/remove tools wait; a report changes only status and reply | agent-resolved | docs/user-guide/agent-tools.md#requests-that-wait-for-you; spec.md FR-003 |
 | D5 | clarify | Can a Default-entry session report? | Yes, on the Default entry's own comments only | agent-resolved | docs/user-guide/agent-tools.md (whoami); spec.md FR-004 |
+| D6 | tasks | Milestone order when both P1 stories depend on each other? | US2 (batch with references) is M1, US1 (reports) M2: an agent can report only by a reference the batch gave it; the preamble's fallback sentence covers the tool's absence until M2 | agent-resolved | tasks.md § US2 "Why before US1"; plan.md § Delivery order |
+| D7 | tasks | Plan's layer-cut delivery order (core/daemon/client) vs story-cut milestones? | Plan's section replaced by a pointer to tasks.md § Milestones (speckit-analyze F8: plan fixed) | agent-resolved | plan.md § Delivery order |
 
 ## Review rounds
 
@@ -46,6 +58,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| — | speckit-analyze | F12–F14 (LOW: panel toggle not in an FR; three names for the batch; PR-diff view does not store moves) | optional LOWs; tasks and docs already state the behaviour, spec unchanged |
 
 ## Handover
 
