@@ -109,16 +109,16 @@ rootless `sshd` and are off by default (`mise run test-ssh`).
 **Goal**: choose a host, see failure reasons, manage the daemon.
 **Independent test**: add a daemon, cause each failure, read the named reason within the timeout.
 
-- [ ] T056 [P] [US3] Test the host list from `~/.ssh/config` and the `ssh -G` output parser in `core/ssh/config_hosts.rs`
-- [ ] T057 [P] [US3] Test `SshDuplicate{other}` over (resolved host, user, port) and `InvalidField` naming the field in `core/daemons.rs`
-- [ ] T058 [P] [US3] Test picker, entered fields, recent errors, edit, remove with confirmation in `client/features/daemons.rs`
-- [ ] T059 [P] [US3] Add geometry-gate cases for the picker and error rows in `client/ui/settings/daemons.rs`
-- [ ] T060 [US3] Write `daemon/tests/ssh_real_hostkey_auth.rs`: unknown and changed host key, auth refused, missing key, unreachable host within the timeout, no hang, no key recorded
-- [ ] T061 [US3] Implement `config_hosts.rs` in `core/ssh/config_hosts.rs`
-- [ ] T062 [US3] Add the duplicate and field rules to `DaemonRegistry::add` and `edit` in `core/daemons.rs`
-- [ ] T063 [US3] Resolve with `ssh -G` and run the `ConnectTimeout` watchdog in `client/shell/daemons.rs`
-- [ ] T064 [US3] Build the host picker as a shared widget in `client/ui/material/` (builder with `.into()`, Principle VIII), then add it, the errors list and the edit and remove flows to `client/features/daemons.rs` and `client/ui/settings/daemons.rs`
-- [ ] T065 [US3] Document hosts, failure reasons and management in `docs/user-guide/remote-daemons.md` and `docs/user-guide/settings.md`
+- [x] T056 [P] [US3] Test the host list from `~/.ssh/config` and the `ssh -G` output parser in `core/ssh/config_hosts.rs`
+- [x] T057 [P] [US3] Test `SshDuplicate{other}` over (resolved host, user, port) and `InvalidField` naming the field in `core/daemons.rs`
+- [x] T058 [P] [US3] Test picker, entered fields, recent errors, edit, remove with confirmation in `client/features/daemons.rs`
+- [x] T059 [P] [US3] Add geometry-gate cases for the picker and error rows in `client/ui/settings/daemons.rs`
+- [x] T060 [US3] Write `daemon/tests/ssh_real_hostkey_auth.rs`: unknown and changed host key, auth refused, missing key, unreachable host within the timeout, no hang, no key recorded
+- [x] T061 [US3] Implement `config_hosts.rs` in `core/ssh/config_hosts.rs`
+- [x] T062 [US3] Add the duplicate and field rules to `DaemonRegistry::add` and `edit` in `core/daemons.rs`
+- [x] T063 [US3] Resolve with `ssh -G` and run the `ConnectTimeout` watchdog in `client/shell/daemons.rs`
+- [x] T064 [US3] Build the host picker as a shared widget in `client/ui/material/` (builder with `.into()`, Principle VIII), then add it, the errors list and the edit and remove flows to `client/features/daemons.rs` and `client/ui/settings/daemons.rs`
+- [x] T065 [US3] Document hosts, failure reasons and management in `docs/user-guide/remote-daemons.md` and `docs/user-guide/settings.md`
 
 ## Phase 7: User Story 5 - Version mismatch is explained (P2)
 

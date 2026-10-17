@@ -76,3 +76,15 @@ Mutants each test would fail: a remote event that writes to the local link or ou
 `at_launch` that marks a lazy remote `Starting` or an eager one `Stopped` (T052); a daemon that
 serves a second bridge from a different process, delivers input to every session, or drops the
 other client when one leaves; a cut remote link that stalls a local session (T053).
+
+## M5 (T056-T065): test-after deviation
+
+The M5 behaviours (the `~/.ssh/config` alias list and the `ssh -G` parser, `SshDuplicate{other}`
+over the resolved (host, user, port), the host picker and its widget, the recent-errors list, the
+`ConnectTimeout` watchdog, the real-sshd host-key and auth failures) were written together with
+their tests by an interrupted unit; no red run was captured and none is claimed. What backs them:
+the tests assert observables (alias list contents, parsed effective host/user/port/timeout, the
+duplicate message naming the other daemon, picker geometry, the failure reason strings over a real
+sshd with no key recorded), and review A and B read each against the behaviour. Mutants to apply
+if audited: "parse_g takes the first of repeated keys instead of the effective one", "duplicate
+check compares the alias instead of the resolved host", "watchdog ignores ConnectTimeout".
