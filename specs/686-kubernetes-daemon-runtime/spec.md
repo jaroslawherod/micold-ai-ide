@@ -444,7 +444,8 @@ pass with no sign-in, provider network access or cost.
   and, on each client, its private key and the pinned host key; created on first start, deleted on
   remove. Part of #806's shared mechanism.
 - **Tunnel**: the client's port-forward connection through the Kubernetes API to the pod's SSH server,
-  carrying spec 489's SSH connection to the daemon.
+  carrying spec 489's SSH connection to the daemon. (The start phase named `Tunnel` in the plan only
+  checks that the pod's SSH server answers over one such connection.)
 
 ## Success Criteria *(mandatory)*
 

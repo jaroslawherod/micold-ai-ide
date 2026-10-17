@@ -107,9 +107,11 @@ one `allowed` entry (FR-009, SC-004); both ownership labels on every object (FR-
 `Config | Preflight | Volume | Secrets | Pod | Schedule | Pull | Tunnel | Copy | Install | Connect`,
 with `bound()`: `Pull` 15 min, `Install` 15 min, every other 120 s (FR-012), and `activity()` (the
 row text). `StartPlan::kube()` is the fixed list; `Copy`, `Install` and `Connect` call the **(#806)**
-provisioning and are **blocked on #806**: until then the sequence ends after `Tunnel`, which is a
-port-forward to `SSH_PORT` through the relay that reads an SSH identification line (`SSH-2.0-…`)
-within its bound (else `ImageContract`). `Attempt { created: Vec<CreatedResource>, added_key:
+provisioning and are **blocked on #806**: until then the sequence ends after `Tunnel`, which opens
+one `Cluster::port_forward(namespace, pod, SSH_PORT)` stream (the same stream the client relay opens
+per accepted connection) and reads an SSH identification line (`SSH-2.0-…`) from it within its bound
+(else `ImageContract`). The relay itself is client-side (`micold-client/src/kube/relay.rs`) and is
+first used by `Copy` and `Connect` (M5). `Attempt { created: Vec<CreatedResource>, added_key:
 Option<ClientId> }` records what this attempt created or added, for rollback (FR-013). `StartOutcome`
 = `Ready { tunnel }` | `Drift { fields }` (the pod runs with other settings: ask the user, FR-005) |
 `Failed(KubeFailure)`. In a build without the mechanism (no pinned image reference, no live
