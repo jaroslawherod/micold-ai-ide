@@ -177,11 +177,13 @@ impl Fixture {
     }
 
     async fn start(&self, state: &Arc<DaemonState>, n: u128, mode: LaunchMode) {
+        // Several of these tests run two sessions in one directory on purpose (feature 776, legacy
+        // worktrees): the explicit request skips the occupancy refusal.
         assert!(micold_daemon::ops::start_session(
             state,
             sid(n),
             mode,
-            micold_core::occupancy::Additional::No
+            micold_core::occupancy::Additional::Yes
         )
         .await
         .unwrap());
