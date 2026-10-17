@@ -607,7 +607,11 @@ mod tests {
         let cmd = resolve(&t, ClientPlatform::Linux);
         assert_eq!(cmd.args.first().map(String::as_str), Some("-G"));
         let sep = cmd.args.iter().position(|a| a == "--").unwrap();
-        assert_eq!(cmd.args[sep + 1..], ["box"], "the host is the last argument");
+        assert_eq!(
+            cmd.args[sep + 1..],
+            ["box"],
+            "the host is the last argument"
+        );
         assert!(
             cmd.args.contains(&"-p".to_string()) && cmd.args.contains(&"me".to_string()),
             "entered fields override the file: {:?}",

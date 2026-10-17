@@ -218,7 +218,12 @@ impl DaemonRegistry {
         runtime: DaemonRuntime,
         auto_start: bool,
     ) -> Result<DaemonId, RegistryError> {
-        self.add_resolved(name, runtime, auto_start, &crate::ssh::config_hosts::literal_identity)
+        self.add_resolved(
+            name,
+            runtime,
+            auto_start,
+            &crate::ssh::config_hosts::literal_identity,
+        )
     }
 
     /// [`Self::add`], judging "the same remote machine" by `identity` (what `ssh -G` resolved)
