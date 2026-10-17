@@ -209,7 +209,11 @@ fn a_pi_session_carries_the_component_only_while_the_switch_is_on() {
     state.set_pi_activity_component(false).expect("persists");
     let off = SessionId::from_uuid(Uuid::from_u128(DECLINED));
     state
-        .start_session(off, LaunchMode::Fresh)
+        .start_session_gated(
+            off,
+            LaunchMode::Fresh,
+            micold_core::occupancy::Additional::Yes,
+        )
         .expect("still starts");
     let fields = launch(&launches, 1);
     assert_eq!(

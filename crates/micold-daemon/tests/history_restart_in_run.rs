@@ -86,7 +86,11 @@ fn a9_stop_then_start_shows_the_earlier_lines_one_separator_and_the_new_output()
 
     script(project.path(), "print new output\nwait\n");
     state
-        .start_session(id, LaunchMode::Fresh)
+        .start_session_gated(
+            id,
+            LaunchMode::Fresh,
+            micold_core::occupancy::Additional::Yes,
+        )
         .expect("starts again");
     let lines = history_showing(&state, id, "new output");
 
@@ -217,7 +221,13 @@ fn u32_two_sessions_each_show_only_their_own_lines_after_stop_and_start() {
 
     script(project.path(), "args\nwait\n");
     for id in [a, b] {
-        state.start_session(id, LaunchMode::Fresh).expect("starts");
+        state
+            .start_session_gated(
+                id,
+                LaunchMode::Fresh,
+                micold_core::occupancy::Additional::Yes,
+            )
+            .expect("starts");
         history_once(&state, id, "its args line", |lines| {
             lines.iter().any(own(id))
         });

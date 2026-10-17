@@ -50,7 +50,13 @@ fn time_to_running(state: &DaemonState, project: &Path, id: SessionId, marker: &
     let file = project.join(marker);
     script(project, &format!("touch {marker}\nprint ready\nwait\n"));
     let started = Instant::now();
-    state.start_session(id, LaunchMode::Fresh).expect("starts");
+    state
+        .start_session_gated(
+            id,
+            LaunchMode::Fresh,
+            micold_core::occupancy::Additional::Yes,
+        )
+        .expect("starts");
     let deadline = started + Duration::from_secs(30);
     while !file.exists() {
         assert!(Instant::now() < deadline, "the session never ran");
@@ -200,7 +206,13 @@ fn u131_saving_ten_busy_sessions_delays_a_keystroke_echo_by_at_most_20_ms_at_p95
     history::history_once(&state, ids[0], "output", |lines| !lines.is_empty());
     script(project.path(), "flood busy\n");
     for id in &ids[1..] {
-        state.start_session(*id, LaunchMode::Fresh).expect("starts");
+        state
+            .start_session_gated(
+                *id,
+                LaunchMode::Fresh,
+                micold_core::occupancy::Additional::Yes,
+            )
+            .expect("starts");
     }
     for id in &ids[1..] {
         history::history_once(&state, *id, "output", |lines| lines.len() > 100);

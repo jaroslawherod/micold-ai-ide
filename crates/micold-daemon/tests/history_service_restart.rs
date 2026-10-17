@@ -289,7 +289,13 @@ fn a6_two_sessions_each_show_only_their_own_history_after_a_restart() {
     let state = service_saving(project.path(), sessions, saved.path());
     script(project.path(), "print restarted\nwait\n");
     for id in [a, b] {
-        state.start_session(id, LaunchMode::Fresh).expect("starts");
+        state
+            .start_session_gated(
+                id,
+                LaunchMode::Fresh,
+                micold_core::occupancy::Additional::Yes,
+            )
+            .expect("starts");
     }
     for (id, other) in [(a, b), (b, a)] {
         let lines = history_showing(&state, id, "restarted");
