@@ -43,3 +43,10 @@ the light and the dark scheme.
 ## §C — macOS and Windows
 
 Repeat B1, B3 and B9 on macOS and Windows. Expected: the same glyphs and results (Principle VI).
+
+**Recorded 2026-10-17 (close unit): handed to CI's OS matrix, not run on a real macOS or Windows
+machine** (none here). What CI's three-platform leg covers: `showcase_completeness` (the `StateIcon`
+showcase entry exists and renders every state) and the core/daemon tests, which include the
+`location_state` rule table and the protocol round-trip. The glyphs are Material Symbols codepoints
+pinned in `icons.rs` and `icons_font.rs` against the bundled font, so the same shapes ship on every
+platform. B1 and B3 on real macOS and Windows hardware stay a manual check for a release candidate.

@@ -134,9 +134,7 @@ fn default_of(state: &State) -> DefaultNode {
 /// US1 scenarios 1-3, US2 scenario 2, FR-003, FR-005.
 #[test]
 fn a_worktree_rows_state_follows_its_session() {
-    let mut paused = turn_finished(FEATURE_Y);
-    paused.paused_on_user = false;
-    let state = state_with(vec![working(FEATURE_X), paused]);
+    let state = state_with(vec![working(FEATURE_X), turn_finished(FEATURE_Y)]);
     assert_eq!(state_of(&state, FEATURE_X), Some(LocationState::Running));
     assert_eq!(
         state_of(&state, FEATURE_Y),
