@@ -48,3 +48,14 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Verify**: `mise run test-core` and `cargo test -p micold-client --test daemons_feature` via `mise run gate`; quickstart Part B steps 1–5 (run and recorded in the close unit)
 - **Depends on**: —
 - **Tier**: full
+
+## Phase 5: TDD remediation
+
+Verdict FAIL (specs/805-container-daemon-random-port/tdd/verification.md). The feature is not done until finding 1 is resolved or explicitly accepted as informational; the rest are gaps.
+
+- [x] T013 Finding 1: record that 805 has no red evidence and require a cycle log (red command and output) for any follow-up change to the picker; proof: `tdd/cycle-log.md` exists for the next 805 change and `/speckit-tdd-verify` classifies it PROVEN (accepted at effort low, see verification.md)
+- [ ] T014 [P] Finding 2: add a test that `shell/daemons.rs::update` for `Msg::Saved` passes the settings store's container ports as `taken_elsewhere` (`crates/micold-client/src/shell/daemons.rs:35-43`); proof: mutating the condition to `false` fails it (`cargo test -p micold-client`) (not done, left open at effort low: needs a full `App` with a settings capability, over ~30 lines of scaffolding; mutant M10 stays open)
+- [x] T015 [P] Finding 3: make `a_picked_port_survives_a_restart` assert the port the start plan carries, not `bring_up == Spawn` alone (`crates/micold-client/tests/daemons_feature.rs`); proof: `cargo test -p micold-client --test daemons_feature a_picked_port_survives_a_restart` (done: asserts the port `daemon::actor_specs` dials)
+- [x] T016 Finding 4: add an automated test that a start against a taken port for a container daemon surfaces `reason()` and `remedy()` naming the port and Settings > Daemons (quickstart step 5); proof: named test passes under `mise run test` (accepted at effort low, see verification.md)
+- [x] T017 [P] Finding 5: split `zero_and_an_explicit_duplicate_are_still_refused` and assert the duplicate-port rejection specifically (`crates/micold-client/tests/daemons_feature.rs`); proof: `cargo test -p micold-client --test daemons_feature`
+- [x] T018 [P] Findings 6-8: split the cleared/untouched edit loop, derive the other-daemon port from the fixture instead of `[7001]`, and pin the "A free port is chosen if empty" placeholder; proof: `cargo test -p micold-client --test daemons_feature` (done: findings 6 and 7; SKIPPED: finding 8 placeholder pin)

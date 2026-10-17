@@ -659,7 +659,12 @@ fn an_empty_port_is_picked_stored_and_shown_on_edit() {
     daemons::save(&mut state, &mut w.model()).unwrap();
     let port = stored_port(&w, "Three");
     assert_ne!(port, 0);
-    assert!(![7001].contains(&port), "not another daemon's port");
+    let others = w.registry.container_ports();
+    assert_eq!(
+        others.iter().filter(|p| **p == port).count(),
+        1,
+        "not another daemon's port: {others:?}"
+    );
     let id = w.registry.entries().last().unwrap().id;
     let d = daemons::begin_edit(&mut state, &w.model(), id).unwrap();
     assert_eq!(
@@ -679,7 +684,7 @@ fn an_explicit_port_is_stored_as_given() {
 }
 
 #[test]
-fn zero_and_an_explicit_duplicate_are_still_refused() {
+fn a_zero_port_is_still_refused() {
     let mut w = World::new();
     let mut state = State::default();
     add_container(&mut state, "Three", "c3", "0");
@@ -688,11 +693,26 @@ fn zero_and_an_explicit_duplicate_are_still_refused() {
         (err.field, err.message.as_str()),
         ("port", "Enter a port between 1 and 65535.")
     );
-    add_container(&mut state, "Three", "c3", "7001");
-    assert_eq!(
-        daemons::save(&mut state, &mut w.model()).unwrap_err().field,
-        "port"
+}
+
+#[test]
+fn an_explicit_duplicate_port_is_still_refused_as_a_duplicate() {
+    let mut w = World::new();
+    let mut state = State::default();
+    let taken = w.registry.container_ports()[0];
+    add_container(&mut state, "Three", "c3", &taken.to_string());
+    let err = daemons::save(&mut state, &mut w.model()).unwrap_err();
+    assert_eq!(err.field, "port");
+    assert_ne!(
+        err.message, "Enter a port between 1 and 65535.",
+        "a duplicate is not reported as an invalid number"
     );
+    assert!(
+        err.message.contains(&taken.to_string()) || err.message.to_lowercase().contains("use"),
+        "names the clash: {}",
+        err.message
+    );
+    assert_eq!(w.registry.entries().len(), 2, "nothing was stored");
 }
 
 #[test]
@@ -747,22 +767,33 @@ fn no_free_port_fails_the_save_and_stores_nothing() {
     assert_eq!(w.registry.entries().len(), 2, "the registry is unchanged");
 }
 
-#[test]
-fn editing_with_the_port_cleared_or_untouched_keeps_the_stored_port() {
-    let mut w = World::new();
+fn rename_boxed(w: &mut World, clear_port: bool) {
     let mut state = State::default();
     let boxed = w.boxed;
-    for clear in [true, false] {
-        daemons::begin_edit(&mut state, &w.model(), boxed);
-        let draft = state.draft.as_mut().unwrap();
-        draft.name = "Box renamed".into();
-        if clear {
-            draft.port = String::new();
-        }
-        let next = sequence(vec![9999]);
-        daemons::save(&mut state, &mut w.model_with(Vec::new(), &next)).unwrap();
-        assert_eq!(stored_port(&w, "Box renamed"), 7001, "cleared: {clear}");
+    daemons::begin_edit(&mut state, &w.model(), boxed);
+    let draft = state.draft.as_mut().unwrap();
+    draft.name = "Box renamed".into();
+    if clear_port {
+        draft.port = String::new();
     }
+    let next = sequence(vec![9999]);
+    daemons::save(&mut state, &mut w.model_with(Vec::new(), &next)).unwrap();
+}
+
+#[test]
+fn editing_with_the_port_cleared_keeps_the_stored_port() {
+    let mut w = World::new();
+    let before = stored_port(&w, "Box");
+    rename_boxed(&mut w, true);
+    assert_eq!(stored_port(&w, "Box renamed"), before);
+}
+
+#[test]
+fn editing_with_the_port_untouched_keeps_the_stored_port() {
+    let mut w = World::new();
+    let before = stored_port(&w, "Box");
+    rename_boxed(&mut w, false);
+    assert_eq!(stored_port(&w, "Box renamed"), before);
 }
 
 #[test]
@@ -785,6 +816,25 @@ fn a_picked_port_survives_a_restart() {
     assert_eq!(
         bring_up(entry, &DaemonState::Starting, false),
         BringUp::Spawn,
-        "it starts on its stored entry; nothing picks at start"
+        "a restarted daemon is brought up"
+    );
+    let links = micold_client::links::DaemonLinks::at_launch(&restarted);
+    let specs = micold_client::daemon::actor_specs(
+        &restarted,
+        links.states(),
+        std::path::Path::new("/state"),
+        None,
+        false,
+    );
+    let dialled: Vec<u16> = specs
+        .iter()
+        .filter_map(|s| match &s.dial {
+            micold_client::daemon::Dial::Container { port, .. } => Some(*port),
+            _ => None,
+        })
+        .collect();
+    assert!(
+        dialled.contains(&port),
+        "the start dials the stored port {port}: {dialled:?}"
     );
 }
