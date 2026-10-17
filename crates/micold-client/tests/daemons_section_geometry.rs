@@ -492,3 +492,61 @@ fn the_kubernetes_placement_errors_and_row_actions_paint_without_overflow() {
     assert!(has(&form, "The volume must be at least 1 GiB."), "{form:?}");
     assert_no_text_overflows(&state, "the Kubernetes form with a refused volume size");
 }
+
+/// Feature 489, T059: the host picker and the refusal rows of the SSH form paint without overflow,
+/// and a failed SSH daemon's recent errors paint their named reasons.
+#[test]
+fn the_host_picker_and_the_error_rows_paint_without_overflow() {
+    let (mut state, _) = with_daemons();
+    state.update(Message::Daemons(DaemonsMsg::AddOpened));
+    state.update(Message::Daemons(DaemonsMsg::RuntimeChosen(
+        micold_client::features::daemons::DraftRuntime::Ssh,
+    )));
+    state.update(Message::Daemons(DaemonsMsg::SshHostsLoaded(vec![
+        "build".into(),
+        "a-rather-long-host-name.internal.example.com".into(),
+    ])));
+    let form = painted(&state);
+    assert!(
+        has(&form, "Host from your SSH configuration"),
+        "the picker is drawn: {form:?}"
+    );
+    assert_no_text_overflows(&state, "the SSH form with the host picker");
+
+    state.update(Message::Daemons(DaemonsMsg::SshHostChosen("build".into())));
+    state.update(Message::Daemons(DaemonsMsg::NameEdited(
+        "A name that is long enough to need the whole width of the form field".into(),
+    )));
+    state.update(Message::Daemons(DaemonsMsg::SshPortEdited("99999".into())));
+    state.update(Message::Daemons(DaemonsMsg::Saved));
+    assert!(
+        has(&painted(&state), "Enter a port between 1 and 65535."),
+        "the refused port names itself"
+    );
+    assert_no_text_overflows(&state, "the SSH form with a refused port");
+
+    // A failed daemon lists its recent errors with the named reason.
+    state.update(Message::Daemons(DaemonsMsg::DraftDiscarded));
+    let target = micold_core::ssh::SshTarget::new("build", None, None, None).unwrap();
+    let ssh = state
+        .settings
+        .daemons
+        .add(
+            "Build",
+            DaemonRuntime::Ssh(micold_core::ssh::SshSettings { target }),
+            true,
+        )
+        .unwrap();
+    state.settings.links = DaemonLinks::at_launch(&state.settings.daemons);
+    let reason = "The host key for build has changed. Check with the host's owner, then fix known_hosts yourself.";
+    state.update(Message::Daemons(DaemonsMsg::EventReported(
+        ssh,
+        DaemonEvent::StartFailed(reason.into()),
+    )));
+    state.update(Message::Daemons(DaemonsMsg::DetailsToggled(ssh)));
+    assert!(
+        has(&painted(&state), "The host key for build has changed"),
+        "the reason is on the row"
+    );
+    assert_no_text_overflows(&state, "a failed SSH row with its recent errors");
+}

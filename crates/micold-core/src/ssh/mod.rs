@@ -7,6 +7,7 @@
 
 pub mod argv;
 pub mod classify;
+pub mod config_hosts;
 pub mod provision;
 pub mod reconnect;
 pub mod remote_path;
@@ -15,6 +16,7 @@ pub mod system;
 pub mod target;
 
 pub use argv::{ClientPlatform, SshCommand};
+pub use config_hosts::{EffectiveSsh, SshIdentity};
 pub use classify::{ReasonContext, SshFailure};
 pub use provision::{Artefacts, ProvisionProgress, SshHost, SshOutput, SshRunner};
 pub use reconnect::Backoff;

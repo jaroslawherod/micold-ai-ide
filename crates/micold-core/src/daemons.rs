@@ -82,6 +82,11 @@ pub enum RegistryError {
         /// The daemon that holds it.
         other: DaemonId,
     },
+    /// Another remote daemon already reaches this host, user and port (FR-016).
+    SshDuplicate {
+        /// The daemon that holds it.
+        other: DaemonId,
+    },
     /// A field is missing or out of range.
     InvalidField {
         /// Which field.
@@ -213,8 +218,20 @@ impl DaemonRegistry {
         runtime: DaemonRuntime,
         auto_start: bool,
     ) -> Result<DaemonId, RegistryError> {
+        self.add_resolved(name, runtime, auto_start, &crate::ssh::config_hosts::literal_identity)
+    }
+
+    /// [`Self::add`], judging "the same remote machine" by `identity` (what `ssh -G` resolved)
+    /// instead of the host as typed, so two aliases of one machine are one daemon (R12).
+    pub fn add_resolved(
+        &mut self,
+        name: &str,
+        runtime: DaemonRuntime,
+        auto_start: bool,
+        identity: &dyn Fn(&crate::ssh::SshTarget) -> crate::ssh::SshIdentity,
+    ) -> Result<DaemonId, RegistryError> {
         let name = DaemonName::new(name)?;
-        self.check(None, &name, &runtime)?;
+        self.check(None, &name, &runtime, identity)?;
         let id = DaemonId(self.next_id.max(1));
         self.next_id = id.0 + 1;
         self.entries.push(DaemonEntry {
@@ -234,11 +251,29 @@ impl DaemonRegistry {
         runtime: DaemonRuntime,
         auto_start: bool,
     ) -> Result<(), RegistryError> {
+        self.edit_resolved(
+            id,
+            name,
+            runtime,
+            auto_start,
+            &crate::ssh::config_hosts::literal_identity,
+        )
+    }
+
+    /// [`Self::edit`], judging the remote machine by `identity` as [`Self::add_resolved`] does.
+    pub fn edit_resolved(
+        &mut self,
+        id: DaemonId,
+        name: &str,
+        runtime: DaemonRuntime,
+        auto_start: bool,
+        identity: &dyn Fn(&crate::ssh::SshTarget) -> crate::ssh::SshIdentity,
+    ) -> Result<(), RegistryError> {
         let name = DaemonName::new(name)?;
         if self.get(id).is_none() {
             return Err(RegistryError::UnknownDaemon);
         }
-        self.check(Some(id), &name, &runtime)?;
+        self.check(Some(id), &name, &runtime, identity)?;
         if let Some(entry) = self.entries.iter_mut().find(|e| e.id == id) {
             entry.name = name;
             entry.runtime = runtime;
@@ -253,6 +288,7 @@ impl DaemonRegistry {
         editing: Option<DaemonId>,
         name: &DaemonName,
         runtime: &DaemonRuntime,
+        identity: &dyn Fn(&crate::ssh::SshTarget) -> crate::ssh::SshIdentity,
     ) -> Result<(), RegistryError> {
         let others = || self.entries.iter().filter(|e| Some(e.id) != editing);
         if others().any(|e| e.name.0.to_lowercase() == name.0.to_lowercase()) {
@@ -297,6 +333,14 @@ impl DaemonRegistry {
                     settings.target.port,
                     settings.target.key_file.clone(),
                 )?;
+                let wanted = identity(&settings.target);
+                let holder = others().find_map(|e| match &e.runtime {
+                    DaemonRuntime::Ssh(o) if identity(&o.target) == wanted => Some(e.id),
+                    _ => None,
+                });
+                if let Some(other) = holder {
+                    return Err(RegistryError::SshDuplicate { other });
+                }
             }
             // Whether the kube context exists is a start-time question (FR-018).
             DaemonRuntime::Kubernetes(settings) => settings.validate()?,

@@ -202,6 +202,27 @@ struct Forward {
     relay_port: u16,
 }
 
+/// `ssh -G`: the effective settings the user's configuration gives the target, no connection made.
+/// Entered fields go first so they override the file, as they will when connecting.
+pub fn resolve(target: &SshTarget, platform: ClientPlatform) -> SshCommand {
+    let mut args = vec!["-G".to_string()];
+    if let Some(port) = target.port {
+        args.extend(["-p".into(), port.to_string()]);
+    }
+    if let Some(user) = &target.user {
+        args.extend(["-l".into(), user.clone()]);
+    }
+    if let Some(key) = &target.key_file {
+        args.extend(["-i".into(), key.display().to_string()]);
+    }
+    args.extend(["--".into(), target.host.clone()]);
+    SshCommand {
+        program: program(platform),
+        args,
+        env: vec![("LC_ALL".into(), "C".into())],
+    }
+}
+
 /// The probe: the fixed script goes on stdin of `sh -s`, so the user's login shell never parses it.
 pub fn probe(reach: &Reach, platform: ClientPlatform, timeout: u32) -> SshCommand {
     command(reach, platform, timeout, "sh -s", None)
@@ -577,6 +598,20 @@ mod tests {
         assert_eq!(
             install(&pinned(), ClientPlatform::MacOs, 15, None).program,
             "ssh"
+        );
+    }
+
+    #[test]
+    fn resolve_asks_ssh_for_its_effective_config_with_the_host_after_the_separator() {
+        let t = SshTarget::new("box", Some("me"), Some(2200), None).unwrap();
+        let cmd = resolve(&t, ClientPlatform::Linux);
+        assert_eq!(cmd.args.first().map(String::as_str), Some("-G"));
+        let sep = cmd.args.iter().position(|a| a == "--").unwrap();
+        assert_eq!(cmd.args[sep + 1..], ["box"], "the host is the last argument");
+        assert!(
+            cmd.args.contains(&"-p".to_string()) && cmd.args.contains(&"me".to_string()),
+            "entered fields override the file: {:?}",
+            cmd.args
         );
     }
 }

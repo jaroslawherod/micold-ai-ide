@@ -21,7 +21,8 @@ use crate::features::settings::DaemonDraft;
 use crate::features::window::FieldId;
 use crate::ui::focus::TrackFocus;
 use crate::ui::material::{
-    Button, Checkbox, KeyValueList, Select, StageProgress, Tag, TextField, TolerationList,
+    Button, Checkbox, HostPicker, KeyValueList, Select, StageProgress, Tag, TextField,
+    TolerationList,
 };
 use crate::ui::settings::container_fields::{self, ContainerView, FieldErrors};
 use crate::ui::settings::{caution, group, name_of, note, page, Named};
@@ -312,7 +313,7 @@ pub struct MachineFacts<'a> {
 
 fn form<'a>(
     draft: &'a Draft,
-    state: &State,
+    state: &'a State,
     facts: MachineFacts<'a>,
     focused: Option<FieldId>,
     roles: Roles,
@@ -411,6 +412,14 @@ fn form<'a>(
             ));
     }
     if draft.runtime == DraftRuntime::Ssh {
+        if !state.ssh_hosts.is_empty() {
+            fields = fields.push(HostPicker::new(
+                &state.ssh_hosts,
+                &draft.ssh_host,
+                |host| Message::Daemons(DaemonsMsg::SshHostChosen(host)),
+                roles,
+            ));
+        }
         fields = fields
             .push(
                 TextField::new("", &draft.ssh_host, roles)

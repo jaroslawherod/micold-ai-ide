@@ -422,6 +422,18 @@ pub const COMPONENTS: &[Entry] = &[
         render: sections::controls::split_action,
     },
     Entry {
+        module: "material/host_picker.rs",
+        component: "HostPicker",
+        variants: &[],
+        density: &[],
+        posed: &["no configured hosts"],
+        live: &["press the trigger to open the list of configured hosts"],
+        interactive: true,
+        section: Section::Components,
+        layout: Layout::Inline,
+        render: sections::controls::host_picker,
+    },
+    Entry {
         module: "material/labelled_toggle.rs",
         component: "LabelledToggle",
         variants: &[],

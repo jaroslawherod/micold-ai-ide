@@ -8,9 +8,17 @@ agent and `~/.ssh/config`; it stores no password or key.
 
 1. Open **Settings > Daemons** and choose **Add daemon**.
 2. Name it, and set **Runs in** to **Remote over SSH**.
-3. Enter the **Host**: a name, or a `Host` alias from your SSH configuration. **User**, **Port** and
-   **Key file** are optional; what you leave blank comes from your SSH configuration.
+3. Choose the host. If `~/.ssh/config` (and the files it includes) names hosts, **Host from your SSH
+   configuration** lists them: pick one and only the name needs entering, because the user, port and
+   key come from your SSH configuration. For a host that is not there, type the **Host** (a name or an
+   address) and, if you need them, the **User**, **Port** and **Key file**; what you leave blank still
+   comes from your SSH configuration. Micold only reads the file and never changes it.
 4. Leave **Connect when the application starts** on, or start it yourself from its row.
+
+A second daemon for the same host, user and port is refused with `<host> is already used by daemon
+<name>`. Two aliases that your SSH configuration points at the same computer and account count as
+one. A blank or invalid field is refused with the field named: a blank host or one starting with
+`-`, a user containing `@`, a port outside 1 to 65535, or a key file that does not exist.
 
 ## What you need
 
@@ -61,15 +69,27 @@ local project, on the host.
 ## When it does not connect
 
 The row shows **Unreachable** with the reason: the host could not be found, refused the connection,
-did not answer in 15 seconds, did not accept your key, or has a host key that is unknown or has
-changed (check it with `ssh <host>` once, then try again). Micold never accepts an unknown host key
-on its own. Choose **Reconnect** once it is fixed.
+did not answer in time, did not accept your key (or no key was available), or has a host key that is
+unknown or has changed (check it with `ssh <host>` once, then try again). "In time" is the
+`ConnectTimeout` your SSH configuration sets for the host, or 15 seconds when it sets none. A failure
+is never a hang and is never retried silently. Micold never accepts or records a host key on its own.
+Choose **Reconnect** once it is fixed.
+
+Open the row's details to see its recent connection errors, newest last.
 
 The reason names the step that failed, for example `copying the daemon failed: the daemon build
 could not be written in the target`, followed by the last lines of the tool's output when it printed
 any. A step that runs too long reads `<step> failed: did not finish within <time>`.
 
 Host key and permission problems need your action; the daemon is not retried until you start it.
+
+## Managing a remote daemon
+
+From its row you can **Start**, **Stop**, **Reconnect**, **Edit** and **Remove** a remote daemon, and
+each applies to that daemon only. Editing the target of a connected daemon asks first, saying how
+many sessions it will end; a change of name alone changes nothing else. Removal asks as it does for
+any daemon and does not touch the host: the daemon there and its sessions keep running, and the
+worktrees bound to it show that no daemon runs them until you add it again.
 
 ## When the network drops
 

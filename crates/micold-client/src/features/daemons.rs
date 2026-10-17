@@ -12,6 +12,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
+use micold_core::ssh::config_hosts::{literal_identity, EffectiveSsh};
+use micold_core::ssh::SshTarget;
 use micold_core::daemons::{
     Binding, ConnectionError, DaemonDiagnostics, DaemonEvent, DaemonId, DaemonName, DaemonRegistry,
     DaemonRuntime, DaemonState, DaemonView, RegistryError, StateChange, WorktreeRef,
@@ -384,6 +386,11 @@ pub struct State {
     pub contexts: ContextList,
     /// The AI CLIs a new Kubernetes daemon installs: the providers enabled in Settings (FR-018).
     pub default_providers: Vec<AiCli>,
+    /// The `Host` aliases of the user's SSH configuration, for the picker (feature 489, FR-002).
+    pub ssh_hosts: Vec<String>,
+    /// What `ssh -G` resolved for each target seen, so two aliases of one machine are one daemon
+    /// (FR-016, R12). A target not in here is judged by the host as typed.
+    resolved: BTreeMap<String, EffectiveSsh>,
 }
 
 impl State {
@@ -408,6 +415,24 @@ impl State {
         )
     }
 
+    /// The targets whose `ssh -G` resolution is still missing: the open form's and every stored
+    /// remote daemon's. The shell resolves these (it owns the `ssh` runner).
+    pub fn unresolved_targets(&self, registry: &DaemonRegistry) -> Vec<SshTarget> {
+        let mut targets: Vec<SshTarget> = registry
+            .entries()
+            .iter()
+            .filter_map(|e| match &e.runtime {
+                DaemonRuntime::Ssh(s) => Some(s.target.clone()),
+                _ => None,
+            })
+            .collect();
+        if let Some(Ok(DaemonRuntime::Ssh(s))) = self.draft.as_ref().map(runtime_of) {
+            targets.push(s.target);
+        }
+        targets.retain(|t| !self.resolved.contains_key(&resolution_key(t)));
+        targets
+    }
+
     /// The confirmation waiting for an answer.
     pub fn prompt(&self) -> Option<&RemovalPrompt> {
         self.pending.as_ref().map(|(_, prompt)| prompt)
@@ -417,6 +442,14 @@ impl State {
     pub fn ended_by_removal(&self) -> &[SessionId] {
         &self.ended
     }
+}
+
+/// The key a resolution is cached under: everything that can change what `ssh -G` prints.
+fn resolution_key(target: &SshTarget) -> String {
+    format!(
+        "{}\u{0}{:?}\u{0}{:?}\u{0}{:?}",
+        target.host, target.user, target.port, target.key_file
+    )
 }
 
 fn plural(n: usize, one: &str, many: &str) -> String {
@@ -769,6 +802,10 @@ fn form_error(registry: &DaemonRegistry, draft: &Draft, err: RegistryError) -> F
                 message: format!("That {what} is already used by daemon {}.", named(other)),
             }
         }
+        RegistryError::SshDuplicate { other } => FormError {
+            field: "host",
+            message: format!("{} is already used by daemon {}.", draft.ssh_host.trim(), named(other)),
+        },
         RegistryError::InvalidField { field } => invalid_field(field),
         RegistryError::UnknownDaemon => FormError {
             field: "name",
@@ -962,11 +999,18 @@ pub fn save(state: &mut State, model: &mut Model<'_>) -> Result<Vec<Outcome>, Fo
     )?;
     // Validate on a copy so a refusal leaves the registry exactly as it was.
     let mut probe = model.registry.clone();
+    let identity = |t: &SshTarget| {
+        state
+            .resolved
+            .get(&resolution_key(t))
+            .map(EffectiveSsh::identity)
+            .unwrap_or_else(|| literal_identity(t))
+    };
     let probed = match draft.editing {
         Some(id) => probe
-            .edit(id, &name, runtime.clone(), draft.auto_start)
+            .edit_resolved(id, &name, runtime.clone(), draft.auto_start, &identity)
             .map(|()| id),
-        None => probe.add(&name, runtime.clone(), draft.auto_start),
+        None => probe.add_resolved(&name, runtime.clone(), draft.auto_start, &identity),
     };
     let id = probed.map_err(|e| form_error(model.registry, &draft, e))?;
 
@@ -1360,6 +1404,12 @@ pub enum Msg {
     SurviveLogoutToggled(bool),
     /// The SSH host field changed.
     SshHostEdited(String),
+    /// The configured hosts were read for the picker.
+    SshHostsLoaded(Vec<String>),
+    /// A host was picked from the user's SSH configuration: user, port and key come from there.
+    SshHostChosen(String),
+    /// `ssh -G` resolved a target.
+    SshResolved(SshTarget, EffectiveSsh),
     /// The SSH user field changed.
     SshUserEdited(String),
     /// The SSH port field changed.
@@ -1585,6 +1635,16 @@ pub fn update(state: &mut State, model: &mut Model<'_>, msg: Msg) -> Vec<Outcome
         Msg::StorageLimitEdited(v) => edit(state, &|d| d.storage_mib = v.clone()),
         Msg::SurviveLogoutToggled(v) => edit(state, &|d| d.profile.survive_logout = v),
         Msg::SshHostEdited(v) => edit(state, &|d| d.ssh_host = v.clone()),
+        Msg::SshHostsLoaded(hosts) => state.ssh_hosts = hosts,
+        Msg::SshHostChosen(host) => edit(state, &|d| {
+            d.ssh_host = host.clone();
+            d.ssh_user.clear();
+            d.ssh_port.clear();
+            d.ssh_key_file.clear();
+        }),
+        Msg::SshResolved(target, effective) => {
+            state.resolved.insert(resolution_key(&target), effective);
+        }
         Msg::SshUserEdited(v) => edit(state, &|d| d.ssh_user = v.clone()),
         Msg::SshPortEdited(v) => edit(state, &|d| d.ssh_port = v.clone()),
         Msg::SshKeyFileEdited(v) => edit(state, &|d| d.ssh_key_file = v.clone()),
