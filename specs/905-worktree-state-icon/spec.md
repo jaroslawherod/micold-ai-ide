@@ -37,7 +37,7 @@ as colour."
   2. lifecycle *starting* or *restarting* → Running;
   3. lifecycle *idle* → Idle / waiting (whatever the activity reads);
   4. lifecycle *running*, activity *working* → Running;
-  5. lifecycle *running*, activity *awaiting input* after a mid-turn stop to ask for a permission →
+  5. lifecycle *running*, activity *awaiting input*: after a mid-turn stop to ask for a permission
      or an answer → Blocked; after the end of a turn → Idle / waiting;
   6. lifecycle *running*, activity *ended* → Idle / waiting;
   7. lifecycle *running*, activity *unknown* → **Unknown**: no state is claimed (see the Edge
