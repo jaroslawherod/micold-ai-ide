@@ -102,6 +102,8 @@ pub struct Button<'a, M> {
     shape: Option<f32>,
     leading: Option<(Icon, Option<Rgb>)>,
     trailing_mark: Option<(usize, String)>,
+    mark: Option<super::UnreadMark<'a, M>>,
+    selected: bool,
     host: Option<style::Host>,
 }
 
@@ -146,6 +148,8 @@ impl<'a, M: Clone + 'a> Button<'a, M> {
             padding: None,
             leading: None,
             trailing_mark: None,
+            mark: None,
+            selected: false,
             width: None,
             shape: None,
             host: None,
@@ -242,6 +246,47 @@ impl<'a, M: Clone + 'a> Button<'a, M> {
         self
     }
 
+    /// A mark the caller has configured, after the label inside the button: the Overview's
+    /// badge, tinted and worded by its host (feature 813, FR-012). Unlike
+    /// [`trailing_mark`](Self::trailing_mark) it is drawn exactly as given. It adds no height.
+    pub fn mark(mut self, mark: super::UnreadMark<'a, M>) -> Self {
+        self.mark = Some(mark);
+        self
+    }
+
+    /// Draw the button toggled on: the selected state layer over its content colour (feature 813,
+    /// FR-012). A layer and not a size, so toggling moves nothing.
+    pub fn selected(mut self, selected: bool) -> Self {
+        self.selected = selected;
+        self
+    }
+
+    /// The style the rendering stack's button is given: the variant's own, with the corner
+    /// overridden if the caller asked, and the selected layer where it is toggled on.
+    fn style_fn(&self) -> ButtonStyleFn {
+        // A decorator rather than a parameter threaded through `style.rs`: the radius and the
+        // selected layer are the only things an override touches, and every other call site keeps
+        // the style function it has always had.
+        let base = self.variant.style(self.roles, self.host);
+        let (radius, selected) = (self.shape, self.selected);
+        let layer = style::color(self.variant.content(self.roles, self.host));
+        Box::new(move |theme, status| {
+            let mut style = base(theme, status);
+            if let Some(radius) = radius {
+                style.border.radius = radius.into();
+            }
+            // Pressed keeps its own, heavier layer; every other status of a toggled button shows
+            // the selected one.
+            if selected && !matches!(status, button::Status::Pressed | button::Status::Disabled) {
+                style.background = Some(iced::Background::Color(style::state_fill(
+                    layer,
+                    micold_core::tokens::state::SELECTED,
+                )));
+            }
+            style
+        })
+    }
+
     /// A leading icon in a stated tint, for a glyph carrying its own meaning — the destructive
     /// `error` red on "Forget", which is saying something the label's accent does not.
     ///
@@ -294,6 +339,7 @@ impl<'a, M: Clone + 'a> From<Button<'a, M>> for Element<'a, M> {
         //
         // The unread count joins it here too, for the same reason: the gap before it and the role
         // and colour of its number are the component's, not the app bar's.
+        let style_fn = b.style_fn();
         let (mark, tooltip) = match b.trailing_mark {
             Some((unread, tooltip)) => (
                 Some(
@@ -304,7 +350,7 @@ impl<'a, M: Clone + 'a> From<Button<'a, M>> for Element<'a, M> {
                 ),
                 Some(tooltip),
             ),
-            None => (None, None),
+            None => (b.mark, None),
         };
         let inner: Element<'a, M> = if b.leading.is_none() && mark.is_none() {
             b.content
@@ -335,18 +381,6 @@ impl<'a, M: Clone + 'a> From<Button<'a, M>> for Element<'a, M> {
         let content = container(inner)
             .height(Length::Fill)
             .align_y(Alignment::Center);
-        // The variant's own style, with the corner overridden if the caller asked. A decorator
-        // rather than a parameter threaded through `style.rs`: the radius is the *only* thing an
-        // override touches, and every other call site keeps the style function it has always had.
-        let base = b.variant.style(b.roles, b.host);
-        let style_fn: ButtonStyleFn = match b.shape {
-            Some(radius) => Box::new(move |theme, status| {
-                let mut style = base(theme, status);
-                style.border.radius = radius.into();
-                style
-            }),
-            None => base,
-        };
         let mut widget = button(content)
             .height(Length::Fixed(density::BUTTON_BASE))
             .style(style_fn);
@@ -432,6 +466,7 @@ mod tests {
     use super::super::test_support::roles;
     use super::*;
     use crate::showcase::state::Message;
+    use crate::ui::material::UnreadMark;
     use iced::advanced::layout::{self, Layout};
     use iced::advanced::widget::Tree;
     use iced::{Rectangle, Size};
@@ -516,6 +551,75 @@ mod tests {
             marked.width, plain.width,
             "a total of zero leaves no gap where the mark would stand"
         );
+    }
+
+    /// T033 (FR-012): a toggled button draws the selected state layer and keeps its geometry.
+    #[test]
+    fn a_selected_button_draws_the_selected_layer_and_keeps_its_geometry() {
+        let plain = || Button::<Message>::text("Overview", roles()).leading(Icon::Overview);
+        let draw = |b: Button<'_, Message>, status| b.style_fn()(&iced::Theme::Light, status);
+
+        let resting = draw(plain(), button::Status::Active);
+        let selected = draw(plain().selected(true), button::Status::Active);
+        let unselected = draw(plain().selected(false), button::Status::Active);
+
+        assert_eq!(
+            resting.background, None,
+            "a resting text button has no layer"
+        );
+        assert_eq!(unselected.background, resting.background);
+        let Some(iced::Background::Color(layer)) = selected.background else {
+            panic!(
+                "a selected button draws a layer, not {:?}",
+                selected.background
+            );
+        };
+        assert!(
+            (layer.a - micold_core::tokens::state::SELECTED).abs() < 1e-6,
+            "the layer is the selected opacity, not {}",
+            layer.a
+        );
+        assert_eq!(
+            parts(plain().on_press(Message::NoOp).into()).0,
+            parts(plain().selected(true).on_press(Message::NoOp).into()).0,
+            "toggling changes no size"
+        );
+    }
+
+    /// T033 (FR-012): a configured mark is placed trailing and the button keeps its height.
+    #[test]
+    fn a_configured_mark_sits_trailing_without_changing_the_height() {
+        let plain = || {
+            Button::<Message>::text("Overview", roles())
+                .leading(Icon::Overview)
+                .on_press(Message::NoOp)
+        };
+        let (bare, _) = parts(plain().into());
+        let (marked, content) = parts(
+            plain()
+                .mark(
+                    UnreadMark::new(roles())
+                        .icon(Icon::CardNeedsAction)
+                        .count(2)
+                        .role(TypeRole::Action),
+                )
+                .into(),
+        );
+
+        let [_glyph, label, mark] = content[..] else {
+            panic!(
+                "icon, label and mark are three boxes, not {}",
+                content.len()
+            );
+        };
+        assert!(mark.x >= label.x + label.width, "the mark trails the label");
+        let inset = (marked.x + marked.width) - (mark.x + mark.width);
+        assert!(
+            (inset - anatomy::button::PADDING_TEXT).abs() < 0.5,
+            "the mark ends {inset}dp inside the trailing edge"
+        );
+        assert_eq!(marked.height, bare.height, "the mark adds no height");
+        assert!(marked.width > bare.width, "the mark adds width");
     }
 
     /// U158 (FR-023).

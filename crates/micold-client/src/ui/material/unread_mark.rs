@@ -11,6 +11,8 @@
 //!
 //! Exposed as a chainable builder terminating in `.into()` (U4).
 
+use crate::icons::Icon;
+use crate::ui::material::glyph::icon;
 use crate::ui::material::{style, TypeRole};
 use iced::widget::{container, row, Space};
 use iced::{Alignment, Background, Element, Length};
@@ -19,6 +21,9 @@ use std::marker::PhantomData;
 
 /// The mark's diameter (U1).
 const DIAMETER: f32 = 8.0;
+
+/// The size of an icon standing in for the dot: the label role's, so it reads with the number.
+const GLYPH_SIZE: f32 = 16.0;
 
 /// The role the mark is filled in (U1). One function, so that the contrast gate
 /// (`composition_contrast.rs`) measures the colour that is drawn.
@@ -42,6 +47,7 @@ fn dot_style(r: Roles) -> container::Style {
 pub struct UnreadMark<'a, M> {
     roles: Roles,
     count: Option<usize>,
+    glyph: Option<Icon>,
     worded: bool,
     role: TypeRole,
     tint: CaptionTint,
@@ -65,10 +71,32 @@ impl<'a, M: 'a> UnreadMark<'a, M> {
         Self {
             roles,
             count: None,
+            glyph: None,
             worded: false,
             role: TypeRole::Label,
             tint: CaptionTint::Text,
             _marker: PhantomData,
+        }
+    }
+
+    /// Draw `glyph` in place of the dot: the mark of a state with a shape of its own, as the
+    /// Overview's badge says needs action or attention (feature 813, FR-012). The glyph takes the
+    /// [`tint`](Self::tint) if one is stated, else the mark's `primary`; the count follows it.
+    pub fn icon(mut self, glyph: Icon) -> Self {
+        self.glyph = Some(glyph);
+        self
+    }
+
+    /// The icon standing in for the dot, if any.
+    fn glyph(&self) -> Option<Icon> {
+        self.glyph
+    }
+
+    /// The colour the icon is drawn in: the stated tint, else the mark's own.
+    fn glyph_tint(&self) -> Rgb {
+        match self.tint {
+            CaptionTint::Stated(color) => color,
+            CaptionTint::Text | CaptionTint::Muted => fill(self.roles),
         }
     }
 
@@ -124,11 +152,14 @@ impl<'a, M: 'a> From<UnreadMark<'a, M>> for Element<'a, M> {
             return Space::new().into();
         }
         let r = mark.roles;
-        let dot: Element<'a, M> = container(Space::new())
-            .width(Length::Fixed(DIAMETER))
-            .height(Length::Fixed(DIAMETER))
-            .style(move |_theme: &iced::Theme| dot_style(r))
-            .into();
+        let dot: Element<'a, M> = match mark.glyph() {
+            Some(glyph) => icon(glyph, GLYPH_SIZE, mark.glyph_tint()),
+            None => container(Space::new())
+                .width(Length::Fixed(DIAMETER))
+                .height(Length::Fixed(DIAMETER))
+                .style(move |_theme: &iced::Theme| dot_style(r))
+                .into(),
+        };
         match mark.caption() {
             Some(caption) => {
                 let text = super::Text::new(caption, mark.role, r);
@@ -151,6 +182,7 @@ impl<'a, M: 'a> From<UnreadMark<'a, M>> for Element<'a, M> {
 mod tests {
     use super::super::test_support::roles;
     use super::*;
+    use crate::icons::Icon;
     use iced::{Background, Size};
     use micold_core::theme::ColorScheme;
     use micold_core::tokens;
@@ -255,6 +287,51 @@ mod tests {
             "`Action` is the larger role, so the same number is wider in it: {} against {}",
             action.width,
             label.width
+        );
+    }
+
+    /// T033 (FR-012): an icon mark draws the glyph and the count, tinted by the given role.
+    #[test]
+    fn an_icon_mark_draws_the_glyph_and_the_count_in_the_given_tint() {
+        let r = roles();
+        let counted = size_of(UnreadMark::new(r).count(2).into());
+        let with_icon = UnreadMark::<()>::new(r)
+            .icon(Icon::CardNeedsAction)
+            .count(2)
+            .tint(r.error);
+        let untinted = UnreadMark::<()>::new(r).icon(Icon::CardNeedsAction);
+
+        assert_eq!(with_icon.glyph(), Some(Icon::CardNeedsAction));
+        assert_eq!(
+            with_icon.glyph_tint(),
+            r.error,
+            "the glyph takes the stated role"
+        );
+        assert_eq!(
+            untinted.glyph_tint(),
+            r.primary,
+            "the mark's own role otherwise"
+        );
+        assert_eq!(
+            with_icon.caption().as_deref(),
+            Some("2"),
+            "the count follows"
+        );
+        let icon_width = size_of(with_icon.into()).width;
+        assert!(
+            icon_width > counted.width + 4.0,
+            "the glyph is wider than the dot it replaces: {icon_width} against {}",
+            counted.width
+        );
+        assert_eq!(
+            size_of(
+                UnreadMark::new(r)
+                    .icon(Icon::CardNeedsAction)
+                    .count(0)
+                    .into()
+            ),
+            Size::ZERO,
+            "a count of zero still renders nothing"
         );
     }
 

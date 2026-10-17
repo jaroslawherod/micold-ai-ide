@@ -12,7 +12,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-2lmupk
 - **Started**: 2026-10-17
 - **Phase**: milestones
-- **Next step**: M2 PR (create from scratchpad title/body), CI, merge; then M3
+- **Next step**: M3 PR (create from scratchpad title/body), CI, merge; then M4
 
 ## Pull requests
 
@@ -20,14 +20,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #927 | design (spec, plan, tasks) | merged | 0e3b543ff7eaf73840eea4e07d00a2f7e93e1248 |
 | #930 | M1 | merged | 6cf261efc3ae0a1d4e35b1ad157a63644acf327e |
+| #932 | M2 | merged | fc417da8a17206a597e17ab2a697126186c3007d |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T023 | full | Overview grid from the top-bar button, session-derived card states | #930 | merged |
-| M2 | T024–T030 | full | PR counts and merge conflict on cards | pending (title/body written) | PR open |
-| M3 | T031–T039 | full | Ctrl/Cmd+Shift+O and attention badge | — | pending |
+| M2 | T024–T030 | full | PR counts and merge conflict on cards | #932 | merged |
+| M3 | T031–T039 | full | Ctrl/Cmd+Shift+O and attention badge | pending (title/body written) | PR open |
 | M4 | T040–T049 | full | Card activation and keyboard traversal | — | pending |
 | M5 | T050–T060 | full | Task summary and progress on cards | — | pending |
 | M6 | T061–T069 | full | Hook-fed agent activity (protocol 49) | — | pending |
@@ -68,6 +69,9 @@ counts are split off as M2 along acceptance scenario 3. Polish T070–T071 chang
 | M2 review B (conformance) | 1 | 25f177cecaf3a5717b2501e8410e56404959bb28:4f5c655a6df6e2bc340fd8b1d358f9ffdba67b6c | CLEAN (sonnet; Verify green; 2 MINOR unfixed) |
 | M2 visual pass | 1 | 7f83ac90 | B4, B5 PASS (evidence visual-pass/m2/); showcase lacks PR-off card |
 | M1 visual pass | 1 | dd716a91 | B15 states/grid/greyscale PASS, B1 reduced PASS; type word only in tooltip FAIL (FR-002), fixed test-first |
+| M3 review A (code-review high) | 1 | 88916a9c:84b25cec | CLEAN |
+| M3 review B (conformance, sonnet) | 1 | 88916a9c:84b25cec | CHANGES: F1 MAJOR cycle-log lacked M3 (fixed: M3 entries added, red = compile errors), F2 MINOR toolbar mapping untested (fixed: pure fns + test), F3 MINOR settings_open false (confirmed: Settings replaces the body, no terminal pane exists then) |
+| M3 visual pass | - | - | not run: no xdotool/sway in the container; notes in visual-pass/m3/notes.md; geometry pinned by layout snapshot |
 
 ## Declined review findings
 

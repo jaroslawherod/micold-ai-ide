@@ -113,6 +113,8 @@ pub enum KeyOutput {
     /// The reserved "open a new Regular Terminal instance" chord was pressed (feature 011,
     /// FR-019; never forwarded to the PTY).
     NewTerminalInstance,
+    /// The reserved Overview chord was pressed (feature 813, FR-011; never forwarded to the PTY).
+    ToggleOverview,
     /// A pane shortcut (feature 484; never forwarded to the PTY).
     Pane(PaneAction),
     /// Not handled here — let the app/subscription see it.
@@ -130,6 +132,10 @@ pub fn encode(input: &KeyInput, mode: TermMode) -> KeyOutput {
     // focus-out chord above — never forwarded to the PTY either).
     if is_new_terminal_chord(&input.key, input.mods) {
         return KeyOutput::NewTerminalInstance;
+    }
+    // 1a'. Reserved Overview chord (feature 813, FR-011; the same tier, never forwarded).
+    if is_overview_chord(&input.key, input.mods) {
+        return KeyOutput::ToggleOverview;
     }
     // 1b. Pane chords (feature 484, FR-009; the same tier: never forwarded either).
     if let Some(action) = pane_action(&input.key, input.mods) {
@@ -210,6 +216,21 @@ fn is_release_chord(key: &Key, mods: Mods) -> bool {
 /// FR-019; macOS `Cmd+Shift+T`, else `Ctrl+Shift+T`; contracts/keyboard-shortcut.md).
 fn is_new_terminal_chord(key: &Key, mods: Mods) -> bool {
     is_primary_shift_chord(key, mods, 't')
+}
+
+/// Whether the press is the reserved Overview chord (feature 813, FR-011, research R3; macOS
+/// `Cmd+Shift+O`, else `Ctrl+Shift+O`). Public so the focused and unfocused paths share it.
+pub fn is_overview_chord(key: &Key, mods: Mods) -> bool {
+    is_primary_shift_chord(key, mods, 'o')
+}
+
+/// The Overview chord as the platform writes it, for tooltips and docs.
+pub fn overview_chord_label() -> &'static str {
+    if cfg!(target_os = "macos") {
+        "Cmd+Shift+O"
+    } else {
+        "Ctrl+Shift+O"
+    }
 }
 
 /// Pane chords (macOS `Cmd+Shift+D/H/W/Arrow`, else `Ctrl+Shift+D/H/W/Arrow`), built like

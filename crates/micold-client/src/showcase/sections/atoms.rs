@@ -11,7 +11,7 @@
 use iced::Element;
 use micold_core::naming::ConventionalType;
 use micold_core::protocol::messages::ActivitySignal;
-use micold_core::tokens::Roles;
+use micold_core::tokens::{Rgb, Roles};
 
 use crate::icons::Icon;
 use crate::showcase::catalogue::Layout;
@@ -302,6 +302,22 @@ pub fn unread_mark<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a,
             .on_press(Message::NoOp)
             .into()
     };
+    // The Overview button as the app bar builds it: toggled, and with a tinted badge that carries
+    // the state's icon and the count (feature 813, FR-012).
+    let overview_button = |open: bool, glyph: Icon, tint: Rgb| -> Element<'a, Message> {
+        material::Button::text("Overview", roles)
+            .leading(Icon::Overview)
+            .selected(open)
+            .mark(
+                material::UnreadMark::new(roles)
+                    .icon(glyph)
+                    .count(2)
+                    .role(TypeRole::Action)
+                    .tint(tint),
+            )
+            .on_press(Message::NoOp)
+            .into()
+    };
     arrange(
         vec![
             posed("an unread session row", session_row(true), roles),
@@ -323,6 +339,16 @@ pub fn unread_mark<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a,
                 roles,
             ),
             posed("the switcher's button with none", switcher_button(0), roles),
+            posed(
+                "the Overview button toggled on, with a needs-action badge",
+                overview_button(true, Icon::CardNeedsAction, roles.error),
+                roles,
+            ),
+            posed(
+                "the Overview button with a needs-attention badge",
+                overview_button(false, Icon::CardNeedsAttention, roles.warning),
+                roles,
+            ),
         ],
         Layout::FullWidth,
     )

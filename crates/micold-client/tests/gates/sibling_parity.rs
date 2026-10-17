@@ -61,31 +61,30 @@ fn app_bar_actions(records: &[LayoutRecord]) -> Vec<&LayoutRecord> {
         .collect()
 }
 
-/// The glyph a control draws: its **leading** leaf — deepest, and leftmost among the deepest.
+/// The glyph a control draws: its **leading leaf** — the leftmost record under the root that has
+/// no descendant in the same layer; among leaves at the same `x`, the deepest.
 ///
 /// Read structurally rather than by a fixed path, so the two shapes may carry different numbers of
 /// wrappers (an icon button nests container → ripple → button → glyph; a labelled button nests
 /// button → container → row → glyph, text) and still be compared on the thing a person sees.
 ///
-/// "Leftmost among the deepest" is the part that matters: a labelled action's glyph and its label
-/// are siblings at the same depth, so depth alone would just as happily hand back the **text** and
-/// measure a word where the contract states a glyph size.
+/// "Leftmost leaf" is the part that matters. A labelled action's glyph and its label are sibling
+/// leaves, so taking the leftmost hands back the glyph, not the **text**. And depth alone is wrong:
+/// a trailing badge nests deeper than the leading glyph (Overview's `UnreadMark` icon), so "deepest"
+/// would measure the badge.
 fn glyph_of<'a>(records: &'a [LayoutRecord], root: &LayoutRecord) -> Option<&'a LayoutRecord> {
-    let deepest = records
-        .iter()
-        .filter(|r| {
-            r.layer == root.layer
-                && r.path.len() > root.path.len()
-                && r.path.starts_with(&root.path)
-        })
-        .map(|r| r.path.len())
-        .max()?;
+    let under = |r: &LayoutRecord| {
+        r.layer == root.layer && r.path.len() > root.path.len() && r.path.starts_with(&root.path)
+    };
     records
         .iter()
-        .filter(|r| {
-            r.layer == root.layer && r.path.len() == deepest && r.path.starts_with(&root.path)
+        .filter(|r| under(r))
+        .filter(|leaf| {
+            !records.iter().any(|o| {
+                under(o) && o.path.len() > leaf.path.len() && o.path.starts_with(&leaf.path)
+            })
         })
-        .min_by(|a, b| a.x.total_cmp(&b.x))
+        .min_by(|a, b| a.x.total_cmp(&b.x).then(b.path.len().cmp(&a.path.len())))
 }
 
 /// Every anchored panel in a state: a layer's own child, smaller than the window on both axes.

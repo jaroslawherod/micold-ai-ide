@@ -241,6 +241,8 @@ pub const COMPONENTS: &[Entry] = &[
             "a worktree row with none",
             "the switcher's button with an unread count",
             "the switcher's button with none",
+            "the Overview button toggled on, with a needs-action badge",
+            "the Overview button with a needs-attention badge",
         ],
         live: &[],
         interactive: false,

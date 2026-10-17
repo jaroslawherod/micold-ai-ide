@@ -1624,6 +1624,9 @@ Keystrokes stream straight to the CLI as you press them, exactly like a standalo
 - **Pane shortcuts**: **Ctrl+Shift+D**, **H** and the arrow keys (Cmd+Shift on macOS) split and
   move between terminal panes; the app takes them and the terminal never sees them. See
   [Terminal panes](terminal-panes.md#keyboard-shortcuts).
+- **Overview**: **Ctrl+Shift+O** (Cmd+Shift+O on macOS) opens and closes the
+  [worktree Overview](overview.md), also from a focused terminal; the app takes it and the
+  terminal never sees it.
 
 ### Links
 
