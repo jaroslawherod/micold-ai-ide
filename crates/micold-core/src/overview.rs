@@ -391,6 +391,8 @@ pub struct CardModel {
     pub summary: String,
     /// Its pull request counts, or why there are none.
     pub prs: PrDisplay,
+    /// The feature's phase and task ratio, or none (data-model *CardModel*, R9).
+    pub progress: crate::task_progress::Progress,
     /// What activating the card does.
     pub activation: Activation,
 }
@@ -887,6 +889,7 @@ mod tests {
             reason: CardReason::Idle,
             summary: name.into(),
             prs: PrDisplay::Hidden,
+            progress: Default::default(),
             activation: Activation::RevealOnly(worktree(name)),
         }
     }

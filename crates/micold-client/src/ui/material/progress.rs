@@ -95,6 +95,39 @@ impl<'a, M: 'a> From<StageProgress> for Element<'a, M> {
     }
 }
 
+/// Paint the track every progress bar shares: a full-radius `secondary_container` pill.
+pub(super) fn paint_track<R: renderer::Renderer>(renderer: &mut R, bounds: Rectangle, r: &Roles) {
+    renderer.fill_quad(
+        renderer::Quad {
+            bounds,
+            border: pill(),
+            ..Default::default()
+        },
+        iced::Background::Color(style::color(r.secondary_container)),
+    );
+}
+
+/// Paint the `primary` fill every progress bar shares, over `bounds` (the part of the track it
+/// covers).
+pub(super) fn paint_fill<R: renderer::Renderer>(renderer: &mut R, bounds: Rectangle, r: &Roles) {
+    renderer.fill_quad(
+        renderer::Quad {
+            bounds,
+            border: pill(),
+            ..Default::default()
+        },
+        iced::Background::Color(style::color(r.primary)),
+    );
+}
+
+/// The full-radius border of the track and the fill.
+fn pill() -> Border {
+    Border {
+        radius: shape::FULL.into(),
+        ..Border::default()
+    }
+}
+
 /// The bar itself: a `secondary_container` track with a `primary` segment travelling across it.
 struct Bar {
     roles: Roles,
@@ -166,19 +199,7 @@ where
             return;
         }
         let r = self.roles;
-        let rounded = Border {
-            radius: shape::FULL.into(),
-            ..Border::default()
-        };
-
-        renderer.fill_quad(
-            renderer::Quad {
-                bounds,
-                border: rounded,
-                ..Default::default()
-            },
-            iced::Background::Color(style::color(r.secondary_container)),
-        );
+        paint_track(renderer, bounds, &r);
 
         // The segment enters from the left edge and leaves past the right, so the travel reads as
         // continuous rather than as something restarting in place.
@@ -198,14 +219,7 @@ where
             return;
         };
         renderer.with_layer(clip, |renderer| {
-            renderer.fill_quad(
-                renderer::Quad {
-                    bounds: indicator,
-                    border: rounded,
-                    ..Default::default()
-                },
-                iced::Background::Color(style::color(r.primary)),
-            );
+            paint_fill(renderer, indicator, &r);
         });
     }
 }

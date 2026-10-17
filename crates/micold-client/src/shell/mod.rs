@@ -33,6 +33,7 @@ pub mod legacy_units;
 pub mod link_opener;
 pub mod links;
 pub mod os_theme;
+pub mod overview_watch;
 pub mod panes;
 pub mod pasted_image;
 pub mod persist;

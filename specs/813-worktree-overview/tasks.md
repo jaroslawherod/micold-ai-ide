@@ -342,9 +342,9 @@ its branch name and *No task progress*.
 
 ### Tests for US4 (write first)
 
-- [ ] T050 [P] [US4] Core tests in micold-core/src/naming.rs: `ticket(dir_name)` for a numeric
+- [x] T050 [P] [US4] Core tests in micold-core/src/naming.rs: `ticket(dir_name)` for a numeric
   ticket, a Jira key (case kept), and none
-- [ ] T051 [P] [US4] Core tests in micold-core/src/task_progress.rs: `checkbox_ratio` (lines
+- [x] T051 [P] [US4] Core tests in micold-core/src/task_progress.rs: `checkbox_ratio` (lines
   `^\s*[-*] \[( |x|X)\] `, others ignored, none → `None`, never 0/0; "`total > 0` always");
   `ledger_phase` (spec/clarify/bug → Spec, plan → Plan, tasks → Tasks, milestones/bugfix/chore →
   Implement, close → PR, done → Done, numeric prefix stripped, unknown word → `None`);
@@ -352,27 +352,27 @@ its branch name and *No task progress*.
   the numeric ticket, several folders, else `None`); `artifact_phase` (ticked tasks.md → Implement,
   tasks.md → Tasks, plan.md → Plan, spec.md → Spec); `phase` precedence ledger → Done → PR →
   artifact; `read` with a missing, a > 1 MiB and a non-UTF-8 file (absent, no panic)
-- [ ] T052 [P] [US4] Client tests in micold-client/tests/overview.rs: `ProgressRead { dir,
+- [x] T052 [P] [US4] Client tests in micold-client/tests/overview.rs: `ProgressRead { dir,
   progress }` is stored per worktree and a project switch clears `progress` and `titles`; card
   summary: known title → title, `Pending`/`Unavailable`/Jira → branch, Default *Project root*
   (US4.1); progress ratio and phase from `FileProgress` + card state + open pull request (US4.2,
   US4.3); no source → `Progress` with no phase and no ratio (US4.4, FR-017); `TitleRead` moves
   `Pending` → `Known` / `Unavailable`; titles to fetch on open are only numeric tickets with no
   entry, none when issue tooling is not GitHub or unavailable (R8, FR-019)
-- [ ] T053 [P] [US4] Geometry tests for `ProgressBar` in micold-client/src/ui/material/progress.rs
+- [x] T053 [P] [US4] Geometry tests for `ProgressBar` in micold-client/src/ui/material/progress.rs
   tests: fill width proportional to the ratio (0/10, 6/10, 10/10), same track as `StageProgress`;
   and in overview_card.rs: the progress row shows phase + ratio + bar only with a ratio, else the
   text *No task progress* and no bar
 
 ### Implementation for US4
 
-- [ ] T054 [US4] `pub fn ticket(dir_name) -> Option<String>` in micold-core/src/naming.rs over
+- [x] T054 [US4] `pub fn ticket(dir_name) -> Option<String>` in micold-core/src/naming.rs over
   `split_name`; T050 passes
-- [ ] T055 [US4] micold-core/src/task_progress.rs: `Phase` (+ `label()`), `Ratio { done, total }`,
+- [x] T055 [US4] micold-core/src/task_progress.rs: `Phase` (+ `label()`), `Ratio { done, total }`,
   `FileProgress`, `Progress { phase, ratio, source }`, `feature_dir`, `checkbox_ratio`,
   `ledger_phase`, `artifact_phase`, `phase`, and `read(root, ticket)` reading at most 1 MiB per
   file; T051 passes
-- [ ] T056 [US4] Test first in micold-client/src/shell/overview_watch.rs: its watch targets for a
+- [x] T056 [US4] Test first in micold-client/src/shell/overview_watch.rs: its watch targets for a
   root are `<root>/specs` and `<root>/.specify`, recursive (the `Debouncer` is already tested in
   micold-core/src/review/watch.rs). Then generalise `run` in micold-client/src/shell/changes_watch.rs over the read it
   performs (its key and message unchanged), and add micold-client/src/shell/overview_watch.rs: one
@@ -380,20 +380,20 @@ its branch name and *No task progress*.
   `<root>/.specify` recursively with the 300 ms / 1 s `Debouncer`, reading with
   `task_progress::read` in `spawn_blocking` once on open and on change, emitting
   `overview::Msg::ProgressRead`; ask for it from micold-client/src/shell/subscriptions.rs (R9)
-- [ ] T057 [US4] Titles: `TitleLookup` and `Msg::TitleRead` in
+- [x] T057 [US4] Titles: `TitleLookup` and `Msg::TitleRead` in
   micold-client/src/features/overview.rs, seeded from `IssueList::held`
   (features/worktree_form.rs); on open, micold-client/src/shell/issues.rs reads each needed title
   once through `GhCli::read_issue` in `spawn_blocking` when `issue_tooling` is GitHub and
   available; the read's failure log names the issue number only, never a title (FR-020, checked
   by a test in micold-client/src/shell/issues.rs over the log line it builds)
-- [ ] T058 [US4] `CardModel::summary` from titles and `CardModel::progress` from `progress` +
+- [x] T058 [US4] `CardModel::summary` from titles and `CardModel::progress` from `progress` +
   card state + open pull request in micold-client/src/features/overview.rs; T052 passes
-- [ ] T059 [US4] `ProgressBar::new(ratio, roles).width(..)` in a new
+- [x] T059 [US4] `ProgressBar::new(ratio, roles).width(..)` in a new
   micold-client/src/ui/material/progress_bar.rs sharing the track and fill styling with
   `StageProgress` through one helper in progress.rs; the progress row in overview_card.rs;
   showcase `ProgressBar` (0/10, 6/10, 10/10) and `OverviewCard` with and without progress;
   showcase_completeness; T053 passes
-- [ ] T060 [US4] docs/user-guide/overview.md: the summary line's sources, the phases and their
+- [x] T060 [US4] docs/user-guide/overview.md: the summary line's sources, the phases and their
   precedence (ledger wins), the task ratio, the empty state, refresh within 5 s
 
 **Checkpoint**: US4 works; cards stay useful without it.

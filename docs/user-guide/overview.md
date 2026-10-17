@@ -31,10 +31,32 @@ Each card shows:
 
 - the location's **type**, as an icon and a word (the word leads the footer line, and is also the icon's tooltip);
 - its name, and the branch below it;
-- a one-line summary (the branch, or *Project root* for Default);
+- a one-line summary (see [The summary line](#the-summary-line));
 - its session counts: how many sessions there are and how many are running;
 - its **state**, as an icon and a word. Hover for the reason;
+- a **progress row** (see [Feature progress](#feature-progress));
 - for a card with a branch, its **pull request counts**, such as *1 open · 2 merged* (drafts count as open; a count of 100 or more reads *100+*).
+
+## The summary line
+
+The summary says what the location is for. For a worktree named after a GitHub issue number (such as `feat-813_worktree-overview`) it is the **issue's title**, once the app has it. Otherwise it is the **branch** (or the display name when there is no branch). Default reads *Project root*.
+
+Titles come from the issues the New-worktree form already loaded, or from one read of each issue when the Overview opens, when the project is on GitHub and `gh` is available. A Jira ticket, an offline machine, a closed issue or a missing `gh` leave the branch as the summary. Each title is read once while the app runs, and is never written to a log.
+
+## Feature progress
+
+The progress row reads the worktree's own files, so it needs no session. It shows the feature's **phase** and, when there is a task list, the **ratio of ticked tasks** with a bar.
+
+- **Ratio**: the ticked checkboxes over all checkboxes in the feature's `tasks.md`, such as *Implement · 6/10*. The feature folder is the one named in `.specify/feature.json`, else the one `specs/<number>-*` folder matching the issue number.
+- **Phase**: *Spec*, *Plan*, *Tasks*, *Implement*, *PR* or *Done*. The first of these that applies wins:
+  1. the autopilot ledger's `Phase` line (`autopilot.md` in the feature folder) wins over everything else;
+  2. *Done* when the card is **Done**;
+  3. *PR* when the branch has an open pull request;
+  4. otherwise what the files imply: `tasks.md` with a ticked task is *Implement*, `tasks.md` alone is *Tasks*, then `plan.md` is *Plan*, then `spec.md` is *Spec*.
+- **No bar without a ratio**: a phase without a task list shows the phase alone.
+- **Empty state**: with nothing to read, the row says *No task progress* and shows no bar.
+
+The files are watched only while the Overview is open: each worktree is read once on opening and again shortly after a change, so a card follows the files within 5 seconds.
 
 ## Pull request counts
 

@@ -10,15 +10,16 @@
 
 use crate::icons::Icon;
 use crate::ui::material::keyboard_focus::{Indicator, TakesTheKeyboard};
-use crate::ui::material::{style, Ellipsized, Glyph, Text, Tooltip, TypeRole};
+use crate::ui::material::{style, Ellipsized, Glyph, ProgressBar, Text, Tooltip, TypeRole};
 use iced::widget::{button, column, container, row};
 use iced::{keyboard, Alignment, Element, Length};
 use micold_core::overview::{CardModel, CardState, LocationType};
+use micold_core::task_progress::{Progress, Ratio};
 use micold_core::tokens::{spacing, Rgb, Roles};
 use std::marker::PhantomData;
 
 /// The card's one height: the same for every state and every content, so a grid row never ragged.
-pub const HEIGHT: f32 = 136.0;
+pub const HEIGHT: f32 = 172.0;
 
 /// The colours one card state is drawn in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -88,6 +89,31 @@ pub struct Words {
     pub reason_tooltip: &'static str,
     /// The footer line.
     pub footer: String,
+}
+
+/// What the card's progress row says (FR-016, FR-017).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProgressWords {
+    /// *Implement \u{b7} 6/10*, *6/10*, the phase alone, or *No task progress*.
+    pub text: String,
+    /// The ratio a bar is drawn for; `None` draws no bar.
+    pub bar: Option<Ratio>,
+}
+
+/// The words of a card's progress row.
+pub fn progress_words(progress: &Progress) -> ProgressWords {
+    let text = match (progress.ratio, progress.phase) {
+        (Some(ratio), Some(phase)) => {
+            format!("{} \u{b7} {}/{}", phase.label(), ratio.done, ratio.total)
+        }
+        (Some(ratio), None) => format!("{}/{}", ratio.done, ratio.total),
+        (None, Some(phase)) => phase.label().to_string(),
+        (None, None) => "No task progress".to_string(),
+    };
+    ProgressWords {
+        text,
+        bar: progress.ratio,
+    }
 }
 
 /// The words of `model`.
@@ -189,6 +215,11 @@ impl<'a, M: Clone + 'a> From<OverviewCard<'a, M>> for Element<'a, M> {
                 p.text,
             ))
             .push(Text::new(w.footer, TypeRole::Caption, roles).tint(p.text));
+        let row = progress_words(&card.model.progress);
+        body = body.push(Text::new(row.text, TypeRole::Caption, roles).tint(p.text));
+        if let Some(ratio) = row.bar {
+            body = body.push(ProgressBar::new(ratio, roles));
+        }
         if let Some((text, tooltip)) = card.model.prs.footer() {
             let line = Text::new(text, TypeRole::Caption, roles).tint(p.text);
             body = match tooltip {
@@ -244,6 +275,7 @@ mod tests {
     use iced::{Rectangle, Size};
     use micold_core::overview::{Activation, CardReason, PrDisplay};
     use micold_core::session::{SessionId, SessionLocation};
+    use micold_core::task_progress::Phase;
     use micold_core::theme::ColorScheme;
     use micold_core::tokens;
 
@@ -258,7 +290,58 @@ mod tests {
             reason: CardReason::Working,
             summary: "Adds the worktree overview".into(),
             prs: PrDisplay::Hidden,
+            progress: Default::default(),
             activation: Activation::OpenSession(SessionId::new()),
+        }
+    }
+
+    fn with_progress(ratio: Option<(u32, u32)>, phase: Option<Phase>) -> CardModel {
+        let mut m = model(CardState::Working, "feat-a");
+        m.progress = Progress {
+            phase,
+            ratio: ratio.map(|(done, total)| Ratio { done, total }),
+            source: micold_core::task_progress::Source::TaskList,
+        };
+        m
+    }
+
+    /// How many bars (4 px leaves) the card draws.
+    fn bars(model: &CardModel, width: f32) -> usize {
+        let node = super::super::test_support::laid_out(card(model), Size::new(width, 400.0));
+        leaves(&node)
+            .iter()
+            .filter(|l| (l.height - micold_core::tokens::anatomy::progress::THICKNESS).abs() < 0.01)
+            .count()
+    }
+
+    /// FR-016, FR-017: the row has a bar only with a ratio; without one it says so in words.
+    #[test]
+    fn the_progress_row_has_a_bar_only_with_a_ratio() {
+        let with = with_progress(Some((6, 10)), Some(Phase::Implement));
+        assert_eq!(bars(&with, 280.0), 1);
+        assert_eq!(progress_words(&with.progress).text, "Implement \u{b7} 6/10");
+        let phase_only = with_progress(None, Some(Phase::Pr));
+        assert_eq!(bars(&phase_only, 280.0), 0);
+        assert_eq!(progress_words(&phase_only.progress).text, "PR");
+        let none = with_progress(None, None);
+        assert_eq!(bars(&none, 280.0), 0);
+        let words = progress_words(&none.progress);
+        assert_eq!((words.text.as_str(), words.bar), ("No task progress", None));
+    }
+
+    /// FR-016: the bar fits the card at 280 px with every other row present, and the card keeps
+    /// its one height.
+    #[test]
+    fn the_card_with_every_row_fits_its_height() {
+        let mut full = with_progress(Some((6, 10)), Some(Phase::Implement));
+        full.prs = PrDisplay::Unknown(micold_core::overview::PrUnknown::Unreachable);
+        let node = super::super::test_support::laid_out(card(&full), Size::new(280.0, 400.0));
+        assert_eq!(node.size().height, HEIGHT);
+        for part in leaves(&node) {
+            assert!(
+                part.y + part.height <= HEIGHT - spacing::MD + 0.01,
+                "{part:?} runs into the card's padding"
+            );
         }
     }
 

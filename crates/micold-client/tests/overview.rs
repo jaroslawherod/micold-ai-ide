@@ -826,3 +826,202 @@ fn a_card_whose_worktree_sits_in_a_collapsed_group_has_its_row_drawn_once_activa
         "the revealed row is drawn, so it can be scrolled to and its start control focused"
     );
 }
+
+// ---- US4 (T052): the summary line and the progress row ----
+
+use micold_client::features::overview::{titles_to_fetch, TitleLookup};
+use micold_core::task_progress::{FileProgress, Phase, Progress, Ratio, Source};
+
+fn ticketed() -> State {
+    project_with(vec![worktree(
+        "feat-813_worktree-overview",
+        Some("feat/813-worktree-overview"),
+        WorktreeStatus::Valid,
+        false,
+    )])
+}
+
+fn ticketed_card(state: &State) -> micold_core::overview::CardModel {
+    card(&cards(state), &wt("feat-813_worktree-overview")).clone()
+}
+
+fn files(
+    ledger: Option<Phase>,
+    artifact: Option<Phase>,
+    tasks: Option<(u32, u32)>,
+) -> FileProgress {
+    FileProgress {
+        feature_dir: Some("specs/813-worktree-overview".into()),
+        artifact,
+        ledger,
+        tasks: tasks.map(|(done, total)| Ratio { done, total }),
+    }
+}
+
+fn progress_read(state: &mut State, dir: &str, progress: FileProgress) {
+    state.update(Message::Overview(Msg::ProgressRead {
+        dir: dir.into(),
+        progress,
+    }));
+}
+
+fn title_read(state: &mut State, number: u64, result: TitleLookup) {
+    state.update(Message::Overview(Msg::TitleRead { number, result }));
+}
+
+/// US4.2, FR-017: a reading is kept per worktree; a project switch forgets readings and titles.
+#[test]
+fn a_progress_reading_is_kept_per_worktree_and_a_project_switch_clears_it_and_the_titles() {
+    let mut state = ticketed();
+    progress_read(&mut state, "a", files(None, Some(Phase::Plan), None));
+    progress_read(&mut state, "b", files(None, Some(Phase::Spec), None));
+    assert_eq!(state.overview.progress.len(), 2);
+    assert_eq!(state.overview.progress["a"].artifact, Some(Phase::Plan));
+    title_read(&mut state, 813, TitleLookup::Known("Overview".into()));
+    state.update(Message::Overview(Msg::ProjectSwitched));
+    assert!(state.overview.progress.is_empty());
+    assert!(state.overview.titles.is_empty());
+}
+
+/// US4.1, FR-015: a known title is the summary; every other lookup, a Jira ticket and a worktree
+/// without a ticket fall back to the branch; Default stays *Project root*.
+#[test]
+fn the_summary_is_the_known_title_else_the_branch() {
+    let mut state = ticketed();
+    assert_eq!(
+        ticketed_card(&state).summary,
+        "feat/813-worktree-overview",
+        "no entry"
+    );
+    title_read(&mut state, 813, TitleLookup::Pending);
+    assert_eq!(ticketed_card(&state).summary, "feat/813-worktree-overview");
+    title_read(&mut state, 813, TitleLookup::Unavailable);
+    assert_eq!(ticketed_card(&state).summary, "feat/813-worktree-overview");
+    title_read(
+        &mut state,
+        813,
+        TitleLookup::Known("Worktree overview".into()),
+    );
+    assert_eq!(ticketed_card(&state).summary, "Worktree overview");
+    assert_eq!(
+        card(&cards(&state), &SessionLocation::Default).summary,
+        "Project root",
+        "a title never replaces the project root"
+    );
+    let mut jira = project_with(vec![worktree(
+        "feat-ABC-12_thing",
+        Some("feat/ABC-12-thing"),
+        WorktreeStatus::Valid,
+        false,
+    )]);
+    title_read(&mut jira, 12, TitleLookup::Known("Not this one".into()));
+    assert_eq!(
+        card(&cards(&jira), &wt("feat-ABC-12_thing")).summary,
+        "feat/ABC-12-thing"
+    );
+}
+
+/// R8: a read moves a pending ticket to Known or Unavailable.
+#[test]
+fn a_title_read_moves_pending_to_known_or_unavailable() {
+    let mut state = ticketed();
+    state.update(Message::Overview(Msg::TitlesRequested(vec![813, 7])));
+    assert_eq!(state.overview.titles[&813], TitleLookup::Pending);
+    title_read(&mut state, 813, TitleLookup::Known("T".into()));
+    title_read(&mut state, 7, TitleLookup::Unavailable);
+    assert_eq!(state.overview.titles[&813], TitleLookup::Known("T".into()));
+    assert_eq!(state.overview.titles[&7], TitleLookup::Unavailable);
+}
+
+/// FR-020: a title never shows in a debug dump, which is what a log of a message would print.
+#[test]
+fn a_title_does_not_show_in_a_debug_dump() {
+    let known = TitleLookup::Known("Secret title".into());
+    assert!(!format!("{known:?}").contains("Secret"));
+    let msg = Msg::TitleRead {
+        number: 1,
+        result: known,
+    };
+    assert!(!format!("{msg:?}").contains("Secret"));
+}
+
+/// R8, FR-019: only numeric tickets with no entry are fetched, and only with GitHub tooling.
+#[test]
+fn titles_to_fetch_are_the_numeric_tickets_with_no_entry_and_none_without_github() {
+    let mut state = State::default();
+    state.overview.titles.insert(7, TitleLookup::Unavailable);
+    let dirs = [
+        "feat-813_a",
+        "fix-7_b",
+        "feat-ABC-12_c",
+        "chore-x",
+        "feat-813_d",
+    ]
+    .map(String::from)
+    .to_vec();
+    assert_eq!(titles_to_fetch(&state.overview, &dirs, true), vec![813]);
+    assert!(titles_to_fetch(&state.overview, &dirs, false).is_empty());
+}
+
+/// US4.2, US4.3: the phase and ratio come from the files, the card state and the pull request;
+/// the ledger wins.
+#[test]
+fn the_progress_is_read_from_the_files_the_card_state_and_the_pull_request() {
+    let dir = "feat-813_worktree-overview";
+    let mut state = ticketed();
+    progress_read(
+        &mut state,
+        dir,
+        files(None, Some(Phase::Implement), Some((6, 10))),
+    );
+    let got = ticketed_card(&state).progress;
+    assert_eq!(
+        got,
+        Progress {
+            phase: Some(Phase::Implement),
+            ratio: Some(Ratio { done: 6, total: 10 }),
+            source: Source::TaskList
+        }
+    );
+    read(
+        &mut state,
+        "feat/813-worktree-overview",
+        status(
+            PrState::Open {
+                checks: CheckStatus::Passing,
+            },
+            ReviewState::None,
+        ),
+        false,
+    );
+    assert_eq!(
+        ticketed_card(&state).progress.phase,
+        Some(Phase::Pr),
+        "an open pull request"
+    );
+    progress_read(
+        &mut state,
+        dir,
+        files(Some(Phase::Plan), Some(Phase::Implement), Some((6, 10))),
+    );
+    let got = ticketed_card(&state).progress;
+    assert_eq!(got.phase, Some(Phase::Plan), "the ledger wins");
+    assert_eq!(got.source, Source::Ledger);
+}
+
+/// US4.4, FR-017: nothing to read is no phase and no ratio.
+#[test]
+fn a_worktree_with_no_source_has_no_phase_and_no_ratio() {
+    let mut state = ticketed();
+    assert_eq!(ticketed_card(&state).progress, Progress::default());
+    progress_read(
+        &mut state,
+        "feat-813_worktree-overview",
+        FileProgress::default(),
+    );
+    assert_eq!(ticketed_card(&state).progress, Progress::default());
+    assert_eq!(
+        card(&cards(&state), &SessionLocation::Default).progress,
+        Progress::default()
+    );
+}

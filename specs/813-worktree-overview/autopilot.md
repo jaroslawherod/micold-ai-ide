@@ -12,7 +12,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-2lmupk
 - **Started**: 2026-10-17
 - **Phase**: milestones
-- **Next step**: M4 PR (create from scratchpad title/body), CI, merge; then M5
+- **Next step**: M5 implement (T050–T060)
 
 ## Pull requests
 
@@ -22,6 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #930 | M1 | merged | 6cf261efc3ae0a1d4e35b1ad157a63644acf327e |
 | #932 | M2 | merged | fc417da8a17206a597e17ab2a697126186c3007d |
 | #936 | M3 | merged | d93c9dbc687412cced0a9b7854cf44323ee3930e |
+| #951 | M4 | merged | 35b8584fbc0734c15ffe2b14bfb67595ec66d9fe |
 
 ## Milestones
 
@@ -30,7 +31,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T023 | full | Overview grid from the top-bar button, session-derived card states | #930 | merged |
 | M2 | T024–T030 | full | PR counts and merge conflict on cards | #932 | merged |
 | M3 | T031–T039 | full | Ctrl/Cmd+Shift+O and attention badge | #936 | merged |
-| M4 | T040–T049 | full | Card activation and keyboard traversal | pending (title/body written) | PR open |
+| M4 | T040–T049 | full | Card activation and keyboard traversal | #951 | merged |
 | M5 | T050–T060 | full | Task summary and progress on cards | — | pending |
 | M6 | T061–T069 | full | Hook-fed agent activity (protocol 49) | — | pending |
 

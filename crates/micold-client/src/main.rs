@@ -656,7 +656,10 @@ fn overview_message(app: &mut App, msg: micold_client::features::overview::Msg) 
     let Msg::CardActivated(activation) = msg else {
         app.core.update(Message::Overview(msg));
         return if !was_open && app.core.overview.open {
-            iced::widget::operation::focus(micold_client::ui::overview::FIRST_CARD_ID.clone())
+            Task::batch([
+                iced::widget::operation::focus(micold_client::ui::overview::FIRST_CARD_ID.clone()),
+                shell::issues::on_overview_opened(app),
+            ])
         } else {
             Task::none()
         };
