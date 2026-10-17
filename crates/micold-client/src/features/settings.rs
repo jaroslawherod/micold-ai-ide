@@ -58,6 +58,7 @@ use micold_core::issue_types::{
 };
 use micold_core::mcp::policy::CrossSessionAccess;
 use micold_core::naming::ConventionalType;
+use micold_core::required::{RequiredMarks, Requirement};
 use micold_core::sandbox::placement::PlacementKind;
 use micold_core::sandbox::runtime::RuntimeCapabilities;
 use micold_core::sandbox::{
@@ -499,6 +500,13 @@ impl JiraDraft {
         self.prompt = None;
     }
 
+    /// Whether the connection form is validated at all: Jira is on, a project is open, no removal
+    /// is pending and the form holds input or a stored connection (the cases [`SettingsDraft::validate`]
+    /// does not answer with `Keep`).
+    fn validated(&self) -> bool {
+        self.enabled && self.project.is_some() && !self.remove_requested && self.has_input()
+    }
+
     /// Whether the form holds typed connection input worth validating.
     fn has_input(&self) -> bool {
         self.connection.is_some() || self.typed() != ("", "", "") || !self.token.as_str().is_empty()
@@ -684,6 +692,9 @@ pub struct SettingsDraft {
     /// only what the user changed (BUG-570, FR-026a). `None` for a draft not seeded from stored
     /// settings: every field then counts as changed.
     pub baseline: Option<Settings>,
+    /// Which fields the user has left and whether a save was attempted, for the required errors
+    /// (feature 937). Fresh when the page opens, dropped with the draft.
+    pub required: RequiredMarks<FieldId>,
 }
 
 /// A processor share as the field shows it: cores, with no trailing zeros.
@@ -935,6 +946,65 @@ impl SettingsDraft {
         })
     }
 
+    /// The fields `section` refuses empty, in display order, with whether each is empty now
+    /// (feature 937, FR-002). Mirrors [`Self::validate`]'s emptiness rules, trims included: the
+    /// scrollback, timeout, long-task threshold and warn percentage always; one label per GitHub
+    /// mapping entry; the Jira connection's four fields only while that form is validated, and its
+    /// token only when none is stored. Appearance and Daemons list nothing (the daemon form has its
+    /// own list).
+    pub fn required_fields(&self, section: SettingsSection) -> Vec<(FieldId, Requirement)> {
+        let text = |id, value: &str| (id, Requirement::text(true, value));
+        match section {
+            SettingsSection::Appearance | SettingsSection::Daemons => Vec::new(),
+            SettingsSection::Terminal => {
+                vec![text(
+                    FieldId::SettingsScrollback,
+                    &self.terminal.scrollback_lines,
+                )]
+            }
+            SettingsSection::Environment => {
+                let e = &self.environment;
+                vec![
+                    text(
+                        FieldId::SettingsLongTaskThreshold,
+                        &e.long_task_threshold_secs,
+                    ),
+                    text(FieldId::SettingsPlanUsageWarn, &e.plan_usage_warn_percent),
+                    text(FieldId::SettingsEnvIncludeTimeout, &e.timeout_secs),
+                ]
+            }
+            SettingsSection::GithubIssues => self
+                .github
+                .entries
+                .iter()
+                .enumerate()
+                .map(|(i, entry)| text(FieldId::IssueMappingLabel(i), &entry.label))
+                .collect(),
+            SettingsSection::Jira => {
+                let j = &self.jira;
+                if !j.validated() {
+                    return Vec::new();
+                }
+                vec![
+                    text(FieldId::SettingsJiraSite, &j.site),
+                    text(FieldId::SettingsJiraKey, &j.project_key),
+                    text(FieldId::SettingsJiraEmail, &j.email),
+                    (
+                        FieldId::SettingsJiraToken,
+                        Requirement::text(!j.token_stored, j.token.as_str()),
+                    ),
+                ]
+            }
+        }
+    }
+
+    /// Forget the fields the user left among the mapping labels: the entries were removed,
+    /// moved or replaced, so an index no longer names the entry it did (feature 937).
+    fn forget_mapping_marks(&mut self) {
+        self.required
+            .forget(|id| matches!(id, FieldId::IssueMappingLabel(_)));
+    }
+
     /// The connection form, checked last because its section is last in the rail (FR-006).
     fn jira_action(&self) -> Result<micold_core::jira::ConnectionAction, FieldError> {
         use micold_core::jira::{
@@ -1178,6 +1248,7 @@ impl SettingsDraft {
                 },
             error: _,
             baseline: _,
+            required: _,
         } = &fresh;
         macro_rules! refresh {
             ($($part:ident . $field:ident),+ $(,)?) => {$(
@@ -1275,6 +1346,7 @@ impl SettingsDraft {
             },
             error: None,
             baseline: Some(settings.clone()),
+            required: RequiredMarks::default(),
         }
     }
 }
@@ -1474,16 +1546,21 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
                 type_: ConventionalType::Feat,
             })
         }),
-        Msg::IssueMappingRemoved(index) => edit_mapping(state, |entries| {
-            if index < entries.len() {
-                entries.remove(index);
-            }
-        }),
+        Msg::IssueMappingRemoved(index) => {
+            edit_mapping(state, |entries| {
+                if index < entries.len() {
+                    entries.remove(index);
+                }
+            });
+            forget_mapping_marks(state);
+        }
         Msg::IssueMappingMoved(index, direction) => {
-            edit_mapping(state, |entries| move_entry(entries, index, direction))
+            edit_mapping(state, |entries| move_entry(entries, index, direction));
+            forget_mapping_marks(state);
         }
         Msg::IssueMappingDefaultsRestored => {
-            edit_mapping(state, |entries| *entries = default_mapping())
+            edit_mapping(state, |entries| *entries = default_mapping());
+            forget_mapping_marks(state);
         }
         Msg::PrStatusToggled(on) => edit(state, |draft| draft.github.pr_status_enabled = on),
         Msg::JiraEnabledToggled(on) => edit(state, |draft| {
@@ -1700,6 +1777,13 @@ pub fn cross_session_access_changed(state: &mut crate::app::State, access: Cross
 /// message from a row that is gone — changes nothing.
 fn edit_mapping(state: &mut crate::app::State, change: impl FnOnce(&mut Vec<LabelTypeEntry>)) {
     edit(state, |draft| change(&mut draft.github.entries));
+}
+
+/// The mapping's indices shifted: drop the left marks that named them (feature 937).
+fn forget_mapping_marks(state: &mut crate::app::State) {
+    if let Some(draft) = &mut state.settings.settings_draft {
+        draft.forget_mapping_marks();
+    }
 }
 
 /// Swap the entry at `index` with its neighbour: `Prev` is up, `Next` is down (FR-017). The first

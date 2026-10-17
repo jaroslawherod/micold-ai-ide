@@ -35,8 +35,11 @@ pub fn view<'a>(
         FieldId::SettingsScrollback,
     );
 
+    let required = draft.required_fields(SettingsSection::Terminal);
+    let state = |id| draft.required.state_in(&required, id);
     let scrollback = TextField::new("", &draft.terminal.scrollback_lines, roles)
         .label("Scrollback lines")
+        .required(state(FieldId::SettingsScrollback))
         .supporting("Lines kept per terminal")
         .error(error)
         .track_focus(FieldId::SettingsScrollback, focused)

@@ -2390,3 +2390,239 @@ mod jira_connection_form {
         );
     }
 }
+
+/// Feature 937 (T016): the fields each section refuses empty, from `SettingsDraft::required_fields`.
+mod required_fields {
+    use super::*;
+    use micold_client::features::settings::TokenInput;
+    use micold_core::issue_types::LabelTypeEntry;
+    use micold_core::naming::ConventionalType;
+    use std::path::PathBuf;
+
+    fn ids(draft: &SettingsDraft, section: SettingsSection) -> Vec<FieldId> {
+        draft
+            .required_fields(section)
+            .into_iter()
+            .filter(|(_, r)| r.required)
+            .map(|(id, _)| id)
+            .collect()
+    }
+
+    fn empty_ids(draft: &SettingsDraft, section: SettingsSection) -> Vec<FieldId> {
+        draft
+            .required_fields(section)
+            .into_iter()
+            .filter(|(_, r)| r.required && r.empty)
+            .map(|(id, _)| id)
+            .collect()
+    }
+
+    fn fresh() -> SettingsDraft {
+        SettingsDraft::from_settings(&Settings::default())
+    }
+
+    #[test]
+    fn appearance_and_daemons_list_nothing() {
+        let draft = fresh();
+        assert!(draft
+            .required_fields(SettingsSection::Appearance)
+            .is_empty());
+        assert!(draft.required_fields(SettingsSection::Daemons).is_empty());
+    }
+
+    #[test]
+    fn terminal_requires_the_scrollback_and_it_is_empty_exactly_when_validate_refuses_it() {
+        let mut draft = fresh();
+        assert_eq!(
+            ids(&draft, SettingsSection::Terminal),
+            vec![FieldId::SettingsScrollback]
+        );
+        assert!(empty_ids(&draft, SettingsSection::Terminal).is_empty());
+        for blank in ["", "   "] {
+            draft.terminal.scrollback_lines = blank.into();
+            assert_eq!(
+                empty_ids(&draft, SettingsSection::Terminal),
+                vec![FieldId::SettingsScrollback]
+            );
+            assert_eq!(
+                draft.validate().unwrap_err().field,
+                FieldId::SettingsScrollback
+            );
+        }
+    }
+
+    #[test]
+    fn environment_requires_timeout_threshold_and_warn_percent() {
+        let mut draft = fresh();
+        let mut listed = ids(&draft, SettingsSection::Environment);
+        listed.sort_by_key(|id| format!("{id:?}"));
+        let mut want = vec![
+            FieldId::SettingsEnvIncludeTimeout,
+            FieldId::SettingsLongTaskThreshold,
+            FieldId::SettingsPlanUsageWarn,
+        ];
+        want.sort_by_key(|id| format!("{id:?}"));
+        assert_eq!(listed, want);
+        assert!(empty_ids(&draft, SettingsSection::Environment).is_empty());
+
+        draft.environment.timeout_secs.clear();
+        assert_eq!(
+            empty_ids(&draft, SettingsSection::Environment),
+            vec![FieldId::SettingsEnvIncludeTimeout]
+        );
+        assert_eq!(
+            draft.validate().unwrap_err().field,
+            FieldId::SettingsEnvIncludeTimeout
+        );
+        draft.environment.timeout_secs = "5".into();
+
+        draft.environment.long_task_threshold_secs = " ".into();
+        assert_eq!(
+            empty_ids(&draft, SettingsSection::Environment),
+            vec![FieldId::SettingsLongTaskThreshold]
+        );
+        assert_eq!(
+            draft.validate().unwrap_err().field,
+            FieldId::SettingsLongTaskThreshold
+        );
+        draft.environment.long_task_threshold_secs = "60".into();
+
+        draft.environment.plan_usage_warn_percent.clear();
+        assert_eq!(
+            empty_ids(&draft, SettingsSection::Environment),
+            vec![FieldId::SettingsPlanUsageWarn]
+        );
+        assert_eq!(
+            draft.validate().unwrap_err().field,
+            FieldId::SettingsPlanUsageWarn
+        );
+    }
+
+    #[test]
+    fn two_empty_environment_fields_both_read_empty_at_once() {
+        let mut draft = fresh();
+        draft.environment.timeout_secs.clear();
+        draft.environment.plan_usage_warn_percent.clear();
+        assert_eq!(empty_ids(&draft, SettingsSection::Environment).len(), 2);
+    }
+
+    #[test]
+    fn github_requires_one_label_per_entry_and_blank_is_what_validate_refuses() {
+        let mut draft = fresh();
+        let n = draft.github.entries.len();
+        assert_eq!(
+            ids(&draft, SettingsSection::GithubIssues),
+            (0..n).map(FieldId::IssueMappingLabel).collect::<Vec<_>>()
+        );
+        assert!(empty_ids(&draft, SettingsSection::GithubIssues).is_empty());
+        draft.github.entries.push(LabelTypeEntry {
+            label: "  ".into(),
+            type_: ConventionalType::Feat,
+        });
+        assert_eq!(
+            empty_ids(&draft, SettingsSection::GithubIssues),
+            vec![FieldId::IssueMappingLabel(n)]
+        );
+        assert_eq!(
+            draft.validate().unwrap_err().field,
+            FieldId::IssueMappingLabel(n)
+        );
+    }
+
+    fn jira_draft() -> SettingsDraft {
+        let mut draft = fresh();
+        draft.jira.enabled = true;
+        draft.jira.project = Some(PathBuf::from("/work/app"));
+        draft
+    }
+
+    #[test]
+    fn jira_lists_nothing_until_the_form_has_input_or_a_connection() {
+        let mut draft = jira_draft();
+        assert!(draft.required_fields(SettingsSection::Jira).is_empty());
+        draft.jira.site = "https://acme.atlassian.net".into();
+        assert_eq!(
+            ids(&draft, SettingsSection::Jira),
+            vec![
+                FieldId::SettingsJiraSite,
+                FieldId::SettingsJiraKey,
+                FieldId::SettingsJiraEmail,
+                FieldId::SettingsJiraToken,
+            ]
+        );
+        draft.jira.enabled = false;
+        assert!(draft.required_fields(SettingsSection::Jira).is_empty());
+    }
+
+    #[test]
+    fn jira_token_is_required_only_while_none_is_stored() {
+        let mut draft = jira_draft();
+        draft.jira.site = "https://acme.atlassian.net".into();
+        draft.jira.token_stored = true;
+        assert!(!ids(&draft, SettingsSection::Jira).contains(&FieldId::SettingsJiraToken));
+        draft.jira.token_stored = false;
+        assert!(ids(&draft, SettingsSection::Jira).contains(&FieldId::SettingsJiraToken));
+    }
+
+    #[test]
+    fn jira_fields_are_empty_exactly_when_validate_refuses_them() {
+        let mut draft = jira_draft();
+        draft.jira.site = "https://acme.atlassian.net".into();
+        // Three fields empty at once: every one reads empty, validate names the first.
+        assert_eq!(
+            empty_ids(&draft, SettingsSection::Jira),
+            vec![
+                FieldId::SettingsJiraKey,
+                FieldId::SettingsJiraEmail,
+                FieldId::SettingsJiraToken,
+            ]
+        );
+        assert_eq!(
+            draft.validate().unwrap_err().field,
+            FieldId::SettingsJiraKey
+        );
+        draft.jira.project_key = "ABC".into();
+        draft.jira.email = "a@b.co".into();
+        assert_eq!(
+            empty_ids(&draft, SettingsSection::Jira),
+            vec![FieldId::SettingsJiraToken]
+        );
+        assert_eq!(
+            draft.validate().unwrap_err().field,
+            FieldId::SettingsJiraToken
+        );
+        draft.jira.token = TokenInput::new("secret".into());
+        assert!(empty_ids(&draft, SettingsSection::Jira).is_empty());
+        assert!(draft.validate().is_ok());
+    }
+
+    #[test]
+    fn removing_or_moving_a_mapping_entry_forgets_every_left_label() {
+        use micold_client::app::State;
+        use micold_client::features::settings::{update, Msg};
+        use micold_core::required::FieldRequirement;
+        for msg in [
+            Msg::IssueMappingRemoved(0),
+            Msg::IssueMappingMoved(1, micold_core::typeahead::Direction::Prev),
+            Msg::IssueMappingDefaultsRestored,
+        ] {
+            let mut state = State::default();
+            let mut draft = fresh();
+            draft.github.entries[1].label.clear();
+            draft.required.leave(FieldId::IssueMappingLabel(1));
+            draft.required.leave(FieldId::SettingsScrollback);
+            state.settings.settings_draft = Some(draft);
+            let _ = update(&mut state, msg);
+            let draft = state.settings.settings_draft.as_ref().unwrap();
+            let r = micold_core::required::Requirement::text(true, "");
+            assert_eq!(
+                draft.required.state(FieldId::IssueMappingLabel(1), r),
+                FieldRequirement::Required
+            );
+            assert_eq!(
+                draft.required.state(FieldId::SettingsScrollback, r),
+                FieldRequirement::Missing
+            );
+        }
+    }
+}

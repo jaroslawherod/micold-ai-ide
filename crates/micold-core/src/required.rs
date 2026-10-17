@@ -84,6 +84,13 @@ impl<K: Ord + Copy> RequiredMarks<K> {
         self.left.insert(k);
     }
 
+    /// Forgets that the user left every field `gone` picks out, for a form whose fields are
+    /// renumbered under it (a list entry removed or moved), so a mark never lands on the wrong
+    /// field.
+    pub fn forget(&mut self, mut gone: impl FnMut(&K) -> bool) {
+        self.left.retain(|k| !gone(k));
+    }
+
     /// Records a submit attempt on the draft.
     pub fn attempt(&mut self) {
         self.attempted = true;
@@ -122,6 +129,17 @@ impl<K: Ord + Copy> RequiredMarks<K> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn forget_drops_the_left_marks_it_picks_and_keeps_the_rest() {
+        let r = Requirement::text(true, "");
+        let mut marks = RequiredMarks::default();
+        marks.leave(1u8);
+        marks.leave(2u8);
+        marks.forget(|k| *k == 1);
+        assert_eq!(marks.state(1, r), FieldRequirement::Required);
+        assert_eq!(marks.state(2, r), FieldRequirement::Missing);
+    }
 
     #[test]
     fn state_in_reads_a_listed_field_and_leaves_an_unlisted_one_optional() {

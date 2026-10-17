@@ -58,6 +58,8 @@ pub fn view<'a>(
     focused: Option<FieldId>,
     roles: Roles,
 ) -> Element<'a, Message> {
+    let required = draft.required_fields(SettingsSection::Environment);
+    let state = |id| draft.required.state_in(&required, id);
     let enabled = Checkbox::new(cli_reason::LABEL_ENABLED, draft.environment.enabled, roles)
         .track_focus(FieldId::SettingsEnvIncludeEnabled, focused)
         .on_toggle(|v| Message::Settings(SettingsMsg::EnvIncludeEnabledToggled(v)));
@@ -76,6 +78,7 @@ pub fn view<'a>(
 
     let timeout = TextField::new("", &draft.environment.timeout_secs, roles)
         .label(cli_reason::LABEL_TIMEOUT)
+        .required(state(FieldId::SettingsEnvIncludeTimeout))
         .supporting("Seconds")
         .error(super::error_for(
             draft,
@@ -197,6 +200,7 @@ pub fn view<'a>(
             let mut threshold =
                 TextField::new("", &draft.environment.long_task_threshold_secs, roles)
                     .label("Long-task threshold")
+                    .required(state(FieldId::SettingsLongTaskThreshold))
                     .supporting("Seconds, 10–3600")
                     .error(super::error_for(
                         draft,
@@ -230,6 +234,7 @@ pub fn view<'a>(
     );
     let plan_usage_warn = TextField::new("", &draft.environment.plan_usage_warn_percent, roles)
         .label("Warn at")
+        .required(state(FieldId::SettingsPlanUsageWarn))
         .supporting("Percent, 50–100")
         .error(super::error_for(
             draft,

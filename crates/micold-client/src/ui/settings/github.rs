@@ -43,6 +43,7 @@ pub fn view<'a>(
 ) -> Element<'a, Message> {
     let entries = &draft.github.entries;
     let last = entries.len().saturating_sub(1);
+    let required = draft.required_fields(SettingsSection::GithubIssues);
 
     let mut controls: Vec<Element<'a, Message>> = Vec::with_capacity(entries.len() + 3);
     // Consent, not capability: always enabled, whether or not `gh` is installed (FR-025, FR-030).
@@ -70,6 +71,11 @@ pub fn view<'a>(
     for (index, entry) in entries.iter().enumerate() {
         let label = TextField::new("", &entry.label, roles)
             .label("Label")
+            .required(
+                draft
+                    .required
+                    .state_in(&required, FieldId::IssueMappingLabel(index)),
+            )
             .error(super::error_for(
                 draft,
                 SettingsSection::GithubIssues,

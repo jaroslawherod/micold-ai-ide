@@ -22,6 +22,7 @@ use crate::ui::material::{AccordionSection, Checkbox, Select, TextField};
 use crate::ui::settings::{caution, field_note, name_of, note, Named};
 use iced::widget::column;
 use iced::Element;
+use micold_core::required::FieldRequirement;
 use micold_core::sandbox::image::ImageSourceKind;
 use micold_core::sandbox::placement::PlacementKind;
 use micold_core::sandbox::runtime::{LimitSupport, RuntimeCapabilities, RuntimeKind};
@@ -77,6 +78,10 @@ pub struct FieldErrors {
     pub path: Option<String>,
     /// Processor, memory, process and storage limits, in that order.
     pub limits: [Option<String>; 4],
+    /// How the image reference is marked (feature 937).
+    pub reference_required: FieldRequirement,
+    /// How the image archive is marked (feature 937).
+    pub path_required: FieldRequirement,
 }
 
 /// The share whose sign-in is reported unmounted, while the profile still shares it. A report about
@@ -343,6 +348,7 @@ pub fn sections<'a>(
     let reference = TextField::new("", &view.profile.image.reference, roles)
         .label("Image reference")
         .supporting("A digest or an exact tag; a moving tag cannot be reported in a bug")
+        .required(errors.reference_required)
         .error(errors.reference)
         .track_focus(FieldId::DaemonImage, focused)
         .on_input(|v| Message::Daemons(DaemonsMsg::ImageEdited(v)))
@@ -351,6 +357,7 @@ pub fn sections<'a>(
     let archive = TextField::new("", view.image_path, roles)
         .label("Image file")
         .supporting("The archive to load, when the image comes from a file")
+        .required(errors.path_required)
         .error(errors.path)
         .track_focus(FieldId::DaemonImagePath, focused)
         .on_input(|v| Message::Daemons(DaemonsMsg::ImagePathEdited(v)))
