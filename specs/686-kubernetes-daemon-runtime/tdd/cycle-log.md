@@ -95,3 +95,11 @@ the core baseline still fails only the four root-user tests named above).
   secret) was replaced by the revision-2 signature. refactor: none needed.
 - U18, U19, U21: covered by revision 1's passing tests in `kube/names.rs` (red recorded in unit 2
   of M1 above); marked DONE with the tests named, not re-run red.
+
+### M1a, unit 2 (revision 2, 2026-10-17)
+
+- U26 (T109/T114, `kube/classify.rs`). red: did not compile, `no variant named ImageContract`,
+  `HostKeyMismatch`, `StopTimeout`, `Unavailable`; `Api has no field named status`. green: the five
+  variants with their contract §6 texts, `NoRuntime`/`Build`/`Push`/`VolumeTooSmall` removed,
+  `From<ApiFailure>` (stash@{0}, re-shaped to `Api { status, message }`); 30 passed in `kube::`.
+  refactor: none needed.

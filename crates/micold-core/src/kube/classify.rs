@@ -53,20 +53,6 @@ pub enum KubeFailure {
         /// The namespace.
         namespace: String,
     },
-    /// No container runtime to build with.
-    NoRuntime,
-    /// The image build failed.
-    Build {
-        /// The last lines of its output.
-        output_tail: String,
-    },
-    /// The push failed.
-    Push {
-        /// The registry.
-        registry: String,
-        /// The runtime's error.
-        error: String,
-    },
     /// The cluster cannot pull the image.
     ImagePull {
         /// The image.
@@ -102,10 +88,17 @@ pub enum KubeFailure {
         /// The missing file.
         path: PathBuf,
     },
-    /// The settings ask for a smaller volume than the existing claim has.
-    VolumeTooSmall {
-        /// The claim.
-        claim: String,
+    /// The image runs but does not provide what Micold needs (shared SSH image contract).
+    ImageContract {
+        /// The image.
+        image: String,
+        /// What is missing, e.g. `no SSH server answered on port 2222`.
+        missing: String,
+    },
+    /// The pod's SSH host key is not the one its access secret holds.
+    HostKeyMismatch {
+        /// The pod.
+        pod: String,
     },
     /// A phase did not finish within its bound.
     PhaseTimeout {
@@ -114,16 +107,34 @@ pub enum KubeFailure {
     },
     /// The user cancelled the start.
     Cancelled,
+    /// Stop deleted the pod and it was still there when the wait ended.
+    StopTimeout {
+        /// The pod.
+        pod: String,
+    },
     /// Any other answer of the API server.
     Api {
-        /// The HTTP status.
-        code: u16,
-        /// The status reason.
-        reason: String,
+        /// The HTTP status, 0 when no response came.
+        status: u16,
         /// The status message.
         message: String,
     },
+    /// This build cannot run Kubernetes daemons: the shared SSH image (#806) is missing.
+    Unavailable,
 }
+
+impl From<crate::kube::ApiFailure> for KubeFailure {
+    /// An answer the sequences have no closer reason for (the classifiers come later).
+    fn from(failure: crate::kube::ApiFailure) -> Self {
+        KubeFailure::Api {
+            status: failure.code,
+            message: failure.message,
+        }
+    }
+}
+
+/// How long Stop waits for a deleted pod to be gone (contract §5).
+pub const STOP_WAIT_SECS: u64 = 120;
 
 fn paths(list: &[PathBuf]) -> String {
     list.iter()
@@ -184,12 +195,6 @@ impl fmt::Display for KubeFailure {
             } => {
                 write!(f, "not allowed to {verb} {resource} in {namespace}")
             }
-            K::NoRuntime => f.write_str(
-                "a container runtime (docker or podman) is needed to build the image; pulling a \
-                 given image needs none",
-            ),
-            K::Build { output_tail } => write!(f, "image build failed: {output_tail}"),
-            K::Push { registry, error } => write!(f, "pushing to {registry} failed: {error}"),
             K::ImagePull { image, message } => {
                 write!(f, "the cluster cannot pull {image}: {message}")
             }
@@ -211,21 +216,27 @@ impl fmt::Display for KubeFailure {
                 "{credential} is allowed but {} does not exist",
                 path.display()
             ),
-            K::VolumeTooSmall { claim } => write!(
+            K::ImageContract { image, missing } => write!(
                 f,
-                "volume {claim} is larger than the volume size set; a volume cannot shrink"
+                "{image} does not provide the SSH server Micold needs: {missing}"
+            ),
+            K::HostKeyMismatch { pod } => write!(
+                f,
+                "the SSH host key of {pod} does not match the one in its access secret; refusing \
+                 to connect"
             ),
             K::PhaseTimeout { phase } => {
                 write!(f, "{phase} did not finish within {}", bound_text(*phase))
             }
             K::Cancelled => f.write_str("start cancelled"),
-            K::Api {
-                code,
-                reason,
-                message,
-            } => {
-                write!(f, "the cluster answered {code} {reason}: {message}")
+            K::StopTimeout { pod } => {
+                write!(f, "pod {pod} was not gone within {STOP_WAIT_SECS} s")
             }
+            K::Api { status, message } => write!(f, "the cluster answered {status}: {message}"),
+            K::Unavailable => f.write_str(
+                "Kubernetes daemons need the shared SSH image (#806), which this build does not \
+                 include",
+            ),
         }
     }
 }
@@ -290,24 +301,6 @@ mod tests {
                 "not allowed to create pods/portforward in dev",
             ),
             (
-                KubeFailure::NoRuntime,
-                "a container runtime (docker or podman) is needed to build the image; pulling a \
-                 given image needs none",
-            ),
-            (
-                KubeFailure::Build {
-                    output_tail: "step 3 failed".into(),
-                },
-                "image build failed: step 3 failed",
-            ),
-            (
-                KubeFailure::Push {
-                    registry: "reg:5000/t".into(),
-                    error: "denied".into(),
-                },
-                "pushing to reg:5000/t failed: denied",
-            ),
-            (
                 KubeFailure::ImagePull {
                     image: "x:1".into(),
                     message: "not found".into(),
@@ -356,9 +349,58 @@ mod tests {
                 "opening the tunnel did not finish within 120 s",
             ),
             (KubeFailure::Cancelled, "start cancelled"),
+            (
+                KubeFailure::ImageContract {
+                    image: "ghcr.io/x/ssh:1".into(),
+                    missing: "no SSH server answered on port 2222".into(),
+                },
+                "ghcr.io/x/ssh:1 does not provide the SSH server Micold needs: no SSH server \
+                 answered on port 2222",
+            ),
+            (
+                KubeFailure::HostKeyMismatch {
+                    pod: "micold-x-1".into(),
+                },
+                "the SSH host key of micold-x-1 does not match the one in its access secret; \
+                 refusing to connect",
+            ),
+            (
+                KubeFailure::StopTimeout {
+                    pod: "micold-x-1".into(),
+                },
+                "pod micold-x-1 was not gone within 120 s",
+            ),
+            (
+                KubeFailure::Api {
+                    status: 500,
+                    message: "etcdserver: request timed out".into(),
+                },
+                "the cluster answered 500: etcdserver: request timed out",
+            ),
+            (
+                KubeFailure::Unavailable,
+                "Kubernetes daemons need the shared SSH image (#806), which this build does not \
+                 include",
+            ),
         ];
         for (failure, expected) in cases {
             assert_eq!(text(failure), expected);
         }
+    }
+
+    #[test]
+    fn an_api_failure_without_a_closer_reason_is_api() {
+        let failure = KubeFailure::from(crate::kube::ApiFailure {
+            code: 422,
+            reason: "Invalid".into(),
+            message: "spec.containers: Required value".into(),
+        });
+        assert_eq!(
+            failure,
+            KubeFailure::Api {
+                status: 422,
+                message: "spec.containers: Required value".into(),
+            }
+        );
     }
 }
