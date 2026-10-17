@@ -1,7 +1,6 @@
 //! Feature 551, US3 (T028, SC-005): the user guide's provider table has a row for every
 //! `AiCli` variant, so a provider added later cannot ship undocumented.
 
-use micold_core::provider::AiCliProvider;
 use micold_core::session::AiCli;
 
 const GUIDE: &str = include_str!("../../../docs/user-guide/worktrees-and-sessions.md");
