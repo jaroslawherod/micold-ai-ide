@@ -11,6 +11,10 @@ use std::os::windows::ffi::OsStrExt;
 use std::path::Path;
 use std::ptr::{null, null_mut};
 
+#[path = "../../micold-core/tests/support/file_security.rs"]
+mod file_security;
+
+use file_security::{summarize_dacl, Dacl};
 use micold_core::endpoint::Endpoint;
 use micold_daemon::singleton::{self, Acquisition};
 use windows_sys::Win32::Foundation::{
@@ -21,9 +25,7 @@ use windows_sys::Win32::Security::Authorization::{
     SE_KERNEL_OBJECT,
 };
 use windows_sys::Win32::Security::{
-    EqualSid, GetAce, GetSecurityDescriptorControl, GetTokenInformation, TokenUser,
-    ACCESS_ALLOWED_ACE, ACE_HEADER, ACL, DACL_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR,
-    SECURITY_ATTRIBUTES, SE_DACL_PROTECTED, TOKEN_QUERY, TOKEN_USER,
+    ACL, DACL_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR, SECURITY_ATTRIBUTES,
 };
 use windows_sys::Win32::Storage::FileSystem::{
     CreateFileW, FILE_FLAG_FIRST_PIPE_INSTANCE, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING,
@@ -32,11 +34,6 @@ use windows_sys::Win32::Storage::FileSystem::{
 use windows_sys::Win32::System::Pipes::{
     CreateNamedPipeW, PIPE_TYPE_BYTE, PIPE_UNLIMITED_INSTANCES,
 };
-use windows_sys::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
-
-/// `ACCESS_ALLOWED_ACE_TYPE` from winnt.h. windows-sys files it under `System_SystemServices`, a
-/// whole feature for one constant.
-const ACCESS_ALLOWED_ACE_TYPE: u8 = 0;
 
 /// A pipe name no other test or running daemon uses: the pipe namespace is machine-wide.
 fn test_endpoint(dir: &Path, case: &str) -> Endpoint {
@@ -99,15 +96,7 @@ impl Drop for SquattedPipe {
     }
 }
 
-/// What the bound pipe's security descriptor says, read while the listener is still held.
-struct PipeDacl {
-    protected: bool,
-    ace_count: u16,
-    /// Whether ACE 0 is `ACCESS_ALLOWED` for the current token's user SID.
-    first_ace_allows_current_user: bool,
-}
-
-async fn bound_pipe_dacl(case: &str) -> PipeDacl {
+async fn bound_pipe_dacl(case: &str) -> Dacl {
     let dir = tempfile::tempdir().unwrap();
     let ep = test_endpoint(dir.path(), case);
     let Acquisition::Bound(listener) = singleton::acquire(&ep).await.expect("acquire") else {
@@ -118,10 +107,10 @@ async fn bound_pipe_dacl(case: &str) -> PipeDacl {
     dacl
 }
 
-fn read_dacl(pipe: &Path) -> PipeDacl {
+fn read_dacl(pipe: &Path) -> Dacl {
     let wide: Vec<u16> = pipe.as_os_str().encode_wide().chain(Some(0)).collect();
     // SAFETY: `wide` is NUL-terminated and outlives the call; every out pointer is either null or a
-    // local, and the handle, the token and the descriptor are each released below.
+    // local, and the handle is closed below and the descriptor by `summarize_dacl`.
     unsafe {
         let handle = CreateFileW(
             wide.as_ptr(),
@@ -153,74 +142,8 @@ fn read_dacl(pipe: &Path) -> PipeDacl {
         );
         CloseHandle(handle);
         assert_eq!(status, ERROR_SUCCESS, "GetSecurityInfo on {pipe:?}");
-        assert!(
-            !dacl.is_null(),
-            "{pipe:?} has a NULL DACL, which grants everyone full access"
-        );
 
-        let mut control = 0u16;
-        let mut revision = 0u32;
-        assert_ne!(
-            GetSecurityDescriptorControl(sd, &mut control, &mut revision),
-            0,
-            "GetSecurityDescriptorControl: {}",
-            std::io::Error::last_os_error()
-        );
-
-        let ace_count = (*dacl).AceCount;
-        let mut first_ace_allows_current_user = false;
-        let mut ace: *mut core::ffi::c_void = null_mut();
-        if ace_count > 0 && GetAce(dacl, 0, &mut ace) != 0 {
-            let header = &*(ace as *const ACE_HEADER);
-            if header.AceType == ACCESS_ALLOWED_ACE_TYPE {
-                let allowed = ace as *const ACCESS_ALLOWED_ACE;
-                let sid = std::ptr::addr_of!((*allowed).SidStart) as *mut core::ffi::c_void;
-                first_ace_allows_current_user =
-                    with_current_user_sid(|user| EqualSid(sid, user) != 0);
-            }
-        }
-
-        LocalFree(sd);
-        PipeDacl {
-            protected: control & SE_DACL_PROTECTED != 0,
-            ace_count,
-            first_ace_allows_current_user,
-        }
-    }
-}
-
-/// Run `f` with the current process token's user SID.
-fn with_current_user_sid<T>(f: impl FnOnce(*mut core::ffi::c_void) -> T) -> T {
-    // SAFETY: the token handle is closed before returning, and the SID pointer lives in `buffer`,
-    // which outlives `f`.
-    unsafe {
-        let mut token: HANDLE = null_mut();
-        assert_ne!(
-            OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token),
-            0,
-            "OpenProcessToken: {}",
-            std::io::Error::last_os_error()
-        );
-        let mut needed = 0u32;
-        GetTokenInformation(token, TokenUser, null_mut(), 0, &mut needed);
-        // u64 words keep the buffer aligned for TOKEN_USER's pointer field.
-        let mut buffer = vec![0u64; (needed as usize).div_ceil(8)];
-        let ok = GetTokenInformation(
-            token,
-            TokenUser,
-            buffer.as_mut_ptr().cast(),
-            needed,
-            &mut needed,
-        );
-        CloseHandle(token);
-        assert_ne!(
-            ok,
-            0,
-            "GetTokenInformation: {}",
-            std::io::Error::last_os_error()
-        );
-        let user = &*(buffer.as_ptr() as *const TOKEN_USER);
-        f(user.User.Sid)
+        summarize_dacl(dacl, sd, pipe)
     }
 }
 

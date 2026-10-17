@@ -9,6 +9,9 @@ use std::path::{Path, PathBuf};
 
 use micold_core::owner_only;
 
+#[path = "support/file_security.rs"]
+mod file_security;
+
 const CONTENT: &[u8] = b"the second, shorter version";
 const FILE: &str = "a.history";
 
@@ -70,17 +73,10 @@ fn a_rename_that_fails_returns_the_error_and_leaves_no_temporary_file() {
 
 #[cfg(unix)]
 mod unix {
+    use super::file_security::{mode, set_mode};
     use super::*;
     use std::io::Read;
     use std::os::unix::fs::{MetadataExt, PermissionsExt};
-
-    fn mode(path: &Path) -> u32 {
-        std::fs::metadata(path).unwrap().permissions().mode() & 0o777
-    }
-
-    fn set_mode(path: &Path, mode: u32) {
-        std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode)).unwrap();
-    }
 
     /// U55.
     #[test]
@@ -215,28 +211,8 @@ mod unix {
 
 #[cfg(windows)]
 mod windows {
+    use super::file_security::{read_dacl, Dacl};
     use super::*;
-    use std::os::windows::ffi::OsStrExt;
-    use std::ptr::null_mut;
-
-    use windows_sys::Win32::Foundation::{CloseHandle, LocalFree, ERROR_SUCCESS, HANDLE};
-    use windows_sys::Win32::Security::Authorization::{GetNamedSecurityInfoW, SE_FILE_OBJECT};
-    use windows_sys::Win32::Security::{
-        EqualSid, GetAce, GetSecurityDescriptorControl, GetTokenInformation, TokenUser,
-        ACCESS_ALLOWED_ACE, ACE_HEADER, ACL, DACL_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR,
-        SE_DACL_PROTECTED, TOKEN_QUERY, TOKEN_USER,
-    };
-    use windows_sys::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
-
-    /// `ACCESS_ALLOWED_ACE_TYPE` from winnt.h.
-    const ACCESS_ALLOWED_ACE_TYPE: u8 = 0;
-
-    #[derive(Debug, PartialEq)]
-    struct Dacl {
-        protected: bool,
-        ace_count: u16,
-        first_ace_allows_current_user: bool,
-    }
 
     /// The DACL every directory and file of this module must have.
     const OWNER_ONLY: Dacl = Dacl {
@@ -244,76 +220,6 @@ mod windows {
         ace_count: 1,
         first_ace_allows_current_user: true,
     };
-
-    fn read_dacl(path: &Path) -> Dacl {
-        let wide: Vec<u16> = path.as_os_str().encode_wide().chain(Some(0)).collect();
-        // SAFETY: `wide` is NUL-terminated and outlives the call; the descriptor is freed below.
-        unsafe {
-            let mut dacl: *mut ACL = null_mut();
-            let mut sd: PSECURITY_DESCRIPTOR = null_mut();
-            let status = GetNamedSecurityInfoW(
-                wide.as_ptr(),
-                SE_FILE_OBJECT,
-                DACL_SECURITY_INFORMATION,
-                null_mut(),
-                null_mut(),
-                &mut dacl,
-                null_mut(),
-                &mut sd,
-            );
-            assert_eq!(status, ERROR_SUCCESS, "GetNamedSecurityInfoW on {path:?}");
-            assert!(!dacl.is_null(), "{path:?} has a NULL DACL");
-            let mut control = 0u16;
-            let mut revision = 0u32;
-            assert_ne!(
-                GetSecurityDescriptorControl(sd, &mut control, &mut revision),
-                0
-            );
-            let ace_count = (*dacl).AceCount;
-            let mut first_ace_allows_current_user = false;
-            let mut ace: *mut core::ffi::c_void = null_mut();
-            if ace_count > 0 && GetAce(dacl, 0, &mut ace) != 0 {
-                let header = &*(ace as *const ACE_HEADER);
-                if header.AceType == ACCESS_ALLOWED_ACE_TYPE {
-                    let allowed = ace as *const ACCESS_ALLOWED_ACE;
-                    let sid = std::ptr::addr_of!((*allowed).SidStart) as *mut core::ffi::c_void;
-                    first_ace_allows_current_user =
-                        with_current_user_sid(|user| EqualSid(sid, user) != 0);
-                }
-            }
-            LocalFree(sd);
-            Dacl {
-                protected: control & SE_DACL_PROTECTED != 0,
-                ace_count,
-                first_ace_allows_current_user,
-            }
-        }
-    }
-
-    fn with_current_user_sid<T>(f: impl FnOnce(*mut core::ffi::c_void) -> T) -> T {
-        // SAFETY: the token handle is closed before returning; the SID lives in `buffer`.
-        unsafe {
-            let mut token: HANDLE = null_mut();
-            assert_ne!(
-                OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token),
-                0
-            );
-            let mut needed = 0u32;
-            GetTokenInformation(token, TokenUser, null_mut(), 0, &mut needed);
-            let mut buffer = vec![0u64; (needed as usize).div_ceil(8)];
-            let ok = GetTokenInformation(
-                token,
-                TokenUser,
-                buffer.as_mut_ptr().cast(),
-                needed,
-                &mut needed,
-            );
-            CloseHandle(token);
-            assert_ne!(ok, 0, "GetTokenInformation");
-            let user = &*(buffer.as_ptr() as *const TOKEN_USER);
-            f(user.User.Sid)
-        }
-    }
 
     /// U57.
     #[test]
