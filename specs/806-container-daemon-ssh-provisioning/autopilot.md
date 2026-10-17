@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #806
 - **Worktree branch**: claude/project-thread-uwrpqv
 - **Started**: 2026-10-17
-- **Phase**: plan
-- **Next step**: plan unit (continue the handover: plan review round 1).
+- **Phase**: tasks
+- **Next step**: tasks unit
 
 ## Pull requests
 
@@ -38,6 +38,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Spec | 1 | 010544dfa6285dd3519917045f0d621c0e6d449e:70f5872667fb6e8e9126555f2573ce86e0a7bf80 | CHANGES: 3 MAJOR, 3 MINOR (all fixed; F4 fixed as `unreachable`, not `failed`) |
 | Spec | 2 | 74cc41c423ab5d29a6175b050cf3e75df031fe9c:70f5872667fb6e8e9126555f2573ce86e0a7bf80 | CLEAN |
 | Plan | 1 | d0b4a6a43fd58d9a107426429874df1d6bc2da64:234ba46aea57fbd8e8220579dce4517a2582febf | CHANGES: 1 MAJOR, 1 MINOR (both fixed: test-strategy rows for FR-013/014/022/024/026; repair_retired_namespace kept before into_choice) |
+| Plan | 2 | 92cbdb5e2c5275bb243ed3a4d5096b1f4e785397:11a4dcc7ddbe26563fe2b317d7f0cabdf06d8bd0 | CLEAN |
 
 ## Declined review findings
 
@@ -47,7 +48,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-Plan unit 2 handed over at the context cap with every plan artifact written, not yet reviewed. Done: `research.md` complete (R1-R14, each with rejected alternatives), `plan.md` (constitution table, FR map, design, test strategy, delivery order), `data-model.md`, `contracts/{provisioning,basic-image,daemon-settings}.md`, `quickstart.md`. Next: plan unit continues with step 2 of tasks/plan.md: plan review round 1 (no rounds run yet; run `review-snapshot.sh` first), act on findings, commit, set Next step to `tasks unit`. R1 per the orchestrator: plan on the merge-to-main publish workflow (`basic-image.yml`); do not escalate it again. Notable design choices a reviewer may probe: R8 install relay (client CONNECT proxy over `ssh -R`, npm registry only) for the default no-outbound posture; R11 the 489 target keeps its unbounded copy as a per-target bound; R10 `Adoption::Legacy`. No PR.
+None.
 
 ## Open escalation
 
