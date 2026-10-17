@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/551_show-sessions-spawned-by-an-agent-as-a-tree-under
 - **Started**: 2026-10-12
 - **Phase**: milestone-M3
-- **Next step**: M3 implemented; gate, reviews, PR
+- **Next step**: M3 tasks ticked, daemon tests green; rebase, scoped gate, review B, full gate, PR
 
 ## Pull requests
 
