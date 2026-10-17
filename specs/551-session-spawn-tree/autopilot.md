@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/551_show-sessions-spawned-by-an-agent-as-a-tree-under
 - **Started**: 2026-10-12
 - **Phase**: milestone-M3
-- **Next step**: M3 tasks ticked, daemon tests green; rebase, scoped gate, review B, full gate, PR
+- **Next step**: M3 PR open; orchestrator waits on CI and merges, then M4
 
 ## Pull requests
 
@@ -19,6 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #787 | Design PR | merged | 8e1cdcce24199789f214b1ae153a9199863cb2e4 |
 | #824 | M1 | merged | 6f578693808230b11552a7a47db3bc7214a40e84 |
 | #916 | M2 | merged | 6898a677ce98be25a1fca4a55af813ad36955170 |
+| PR | M3 | open | |
 
 ## Milestones
 
@@ -26,7 +27,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T016, T025, T038 | full | Origin recorded by the daemon's `record_origin` (nothing sets it until M3), persisted, exposed on wire and MCP; spike T025 outcome recorded | #824 | merged |
 | M2 | T017–T024, T039 | full | Sidebar nests children with child/pending/removed markers | #916 | merged |
-| M3 | T026–T031, T040 | full | Provider readers for spike-confirmed providers, discovery, provider table | | in progress |
+| M3 | T026–T031, T040 | full | Provider readers for spike-confirmed providers, discovery, provider table | PR | PR open |
 | M4 | T032–T037, T041 | full | Fold, count, attention rollup, persisted fold | | pending |
 
 ## Decisions
@@ -64,6 +65,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Amendment fix 551 | 4 (sonnet) | a68e498d5b9c43aaea5c6bc312397d7d3a0cea7f:64875b6b7a9a5fa719e5c3448f02c144d22709dd | CHANGES: 1 MAJOR (quickstart seeded projects.json, not the project state file), 1 MINOR; fixed (wording of seeding instructions and ledger row, prose only); round 3 F1-F3 confirmed fixed |
 | Code A M1 551 (rebased) | 2 (sonnet) | 45c07d7d1709df3cfdffcb90075eeb6db86ba71e:35a170e47eea873fd8569b79ef57ab11de1f4baa | CHANGES: 2 MAJOR (F1 removed-child event lacked live overlay, F2 dead worktree_ref_of), 1 MINOR (F3 origin rollback on persist failure); all fixed in 35a170e4 |
 | Code B M1 551 (rebased) | 2 (sonnet) | 45c07d7d1709df3cfdffcb90075eeb6db86ba71e:35a170e47eea873fd8569b79ef57ab11de1f4baa | CHANGES: 1 BLOCKER (4 test call sites kept a dropped 4th create_session argument; fixed), 1 MAJOR (Verify unobserved: lock held 15 min; the full gate's cargo test --workspace covers it), 1 MINOR (protocol 42 in artifacts, fixed); no re-run of B for the fixes |
+| Conformance B M3 551 | 1 | 19a208bc01d7ee5d7c630206731dc659e572ab8d:f3db56932b614d1bcdfe85f073f80b74d8a67556 | CLEAN (one MINOR: daemon Verify unobserved by B; run green by the unit) |
 | Code A M3 551 | 1 | c5b0216fe24c6f3862fbbf81960a018a707a9366:6898a677ce98be25a1fca4a55af813ad36955170 (pre-edit tree) | 10 findings: fixed #4 (provider-reported failing origin now sets origin_rejected in record_origin), #7 (shared `bindings` iterator in provider.rs), #10 (guide says readers not yet checked against a recording); rest declined, see Declined; fixes since need a scoped round-2 only if the scoped gate shows code changes beyond these |
 
 ## Declined review findings
