@@ -20,12 +20,12 @@ as colour."
   483), which is a worktree row inside its group.
 - **Location**: a worktree, or the project root shown as **Default**. Each hosts zero or more
   un-archived sessions: one main session and any helpers (feature 776).
-- **Worktree state**: one of three values the row shows, derived from the location's sessions:
+- **Worktree state**: one of three values the row shows (or Unknown, when no session gives a
+  signal: rule 7), derived from the location's sessions:
   - **Running**: a session is actively working: it is starting, restarting after an unexpected
     exit, or its activity reads *working*.
   - **Blocked**: a session cannot proceed until the user acts: it stopped mid-turn to ask for a
-    permission ([NEEDS CLARIFICATION: is a session that stopped mid-turn to ask the user a question
-    (not a permission) Blocked, or Idle / waiting like a session that finished its turn?]), its
+    permission or an answer to a question (one case, as feature 613's *Needs permission* kind), its
     start failed or its restarts were exhausted (*failed*), or it was interrupted by a service
     restart and waits to be resumed (*resumable*).
   - **Idle / waiting**: nothing is in progress: no session, a session whose lifecycle is *idle*
@@ -38,12 +38,37 @@ as colour."
   3. lifecycle *idle* → Idle / waiting (whatever the activity reads);
   4. lifecycle *running*, activity *working* → Running;
   5. lifecycle *running*, activity *awaiting input* after a mid-turn stop to ask for a permission →
-     Blocked; after a mid-turn stop to ask the user a question → as the Blocked term's open marker
-     settles; after the end of a turn → Idle / waiting;
+     or an answer → Blocked; after the end of a turn → Idle / waiting;
   6. lifecycle *running*, activity *ended* → Idle / waiting;
-  7. lifecycle *running*, activity *unknown* → as the Edge Cases section's *Activity unknown* entry
-     settles (never Blocked).
+  7. lifecycle *running*, activity *unknown* → **Unknown**: no state is claimed (see the Edge
+     Cases section's *Activity unknown* entry); never Blocked.
 - **State icon**: the glyph on the worktree row that shows the worktree state.
+
+## Clarifications
+
+### Session 2026-10-17
+
+- Q: Is a session that stopped mid-turn to ask the user a question (not a permission) Blocked, or
+  Idle / waiting? → A: Blocked, the same case as a permission. The app does not tell the two apart:
+  feature 613 defines *Needs permission* as a mid-turn stop "to ask for a permission or for an
+  answer", and the core's `NotificationKind::NeedsPermission` carries that one meaning; the tooltip
+  reads *Blocked: needs permission* for both _(agent-resolved:
+  specs/613-notification-kinds/spec.md#Terms; crates/micold-core/src/attention.rs
+  `NotificationKind::NeedsPermission`)_.
+- Q: Does a worktree with several sessions take its state from all of them or from its main session
+  alone? → A: From all of its un-archived sessions, main and helpers, by precedence Blocked over
+  Running over Unknown over Idle / waiting. The location row already summarises every session it
+  holds (feature 575's attention indicator counts every un-archived session of the location), and a
+  helper stuck on a permission is exactly what Story 2 must surface _(agent-resolved:
+  specs/575-workspace-attention-list/spec.md#Terms "Location row", "Attention indicator";
+  crates/micold-client/tests/sidebar_attention.rs
+  `a_worktree_row_counts_its_unread_sessions_and_a_read_only_one_shows_none`)_.
+- Q: Does a session with unknown activity show Idle / waiting, or no icon? → A: No icon: the
+  fixed-width slot is reserved and left empty, and the tooltip line reads *State unknown*. The app
+  never shows a state it has no signal for: an unknown activity draws nothing in a reserved slot
+  (feature 010 FR-016c), and a provider without a signal MUST NOT read busy, idle or awaiting input
+  (feature 488 FR-009) _(agent-resolved: specs/010-daemon-session-persistence/spec.md#FR-016c;
+  specs/488-codex-opencode-providers/spec.md#FR-009)_.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -126,14 +151,15 @@ each is still identifiable by its shape. Hover a row: its tooltip names the stat
 - **No session**: a worktree with no session (created without one, or its session deleted) is
   Idle / waiting.
 - **Several sessions** (main plus helpers, Principle II): the row shows one state for the whole
-  location: [NEEDS CLARIFICATION: is the row's state taken from all of the location's un-archived
-  sessions, with Blocked over Running over Idle / waiting, or from its main session alone?]. Each
-  session's own sub-row keeps its existing activity dot, unchanged.
+  location, taken from all of its un-archived sessions, main and helpers alike, by precedence
+  Blocked over Running over Unknown over Idle / waiting: a helper waiting for a permission makes the
+  row Blocked, and one unknown session beside idle ones leaves the row without an icon. Archived
+  sessions do not count. Each session's own sub-row keeps its existing activity dot, unchanged.
 - **Activity unknown**: a running session of a CLI whose activity the app cannot read (no hooks
   configured, a provider that reports none, or Pi with its activity setting off) gives no evidence
-  of working or waiting: [NEEDS CLARIFICATION: does such a session show Idle / waiting, or a row
-  with no state icon at all?]. It is never shown as Blocked (an unknown activity is never dressed
-  up as a call for the user).
+  of working or waiting, so its state is Unknown: the row's icon slot stays reserved and empty, and
+  its tooltip line reads *State unknown*. It is never shown as Blocked (an unknown activity is never
+  dressed up as a call for the user), nor as Idle / waiting.
 - **Missing or invalid worktree**: keeps its error-tinted name and status tag; its state icon
   follows the same rules as any other row (with no session it is Idle / waiting).
 - **Service restart or disconnection**: while the window has no connection to the session service,
@@ -157,16 +183,19 @@ each is still identifiable by its shape. Hover a row: its tooltip names the stat
 ### Functional Requirements
 
 - **FR-001**: Every worktree row in the sidebar MUST show a state icon for its worktree state
-  (Running, Blocked or Idle / waiting), without the worktree being selected, opened or expanded.
+  (Running, Blocked or Idle / waiting), without the worktree being selected, opened or expanded; a
+  row whose state is Unknown (FR-005) shows its reserved slot empty instead.
 - **FR-002**: The Default entry MUST show the state icon of the project root's sessions by the same
   rules, and MUST NOT otherwise change how it is presented.
 - **FR-003**: Each session's state MUST be its per-session state, by the ordered rules of the Terms
   section, for every combination of lifecycle and activity; a location with no session MUST be
   Idle / waiting.
 - **FR-004**: When a location has more than one un-archived session, the row MUST show a single
-  state chosen as the Edge Cases section's *Several sessions* entry settles.
-- **FR-005**: A session whose activity the app cannot read MUST NOT make a row Blocked; the row
-  shows what the Edge Cases section's *Activity unknown* entry settles.
+  state taken from all of them, main and helpers, by precedence Blocked over Running over Unknown
+  over Idle / waiting; archived sessions MUST NOT count.
+- **FR-005**: A session whose activity the app cannot read is Unknown: it MUST NOT make a row
+  Blocked or Idle / waiting, and a row whose state is Unknown MUST leave the icon's slot reserved
+  and empty, with the tooltip line *State unknown*.
 - **FR-006**: The state icon MUST update while the user watches: within 1 second of the service
   reporting a session change that alters the derived state, with no user action, no list refresh
   and no change of selection.
@@ -177,8 +206,8 @@ each is still identifiable by its shape. Hover a row: its tooltip names the stat
   pull request indicator's glyphs, the unread mark, the session activity dot, the Default house
   icon), so no glyph on a row has two meanings.
 - **FR-009**: The row's tooltip MUST name the row's state in words (for example *Running*,
-  *Blocked: needs permission*, *Blocked: failed*, *Blocked: resumable*, *Idle*), on a line of its
-  own, alongside the lines it already has.
+  *Blocked: needs permission*, *Blocked: failed*, *Blocked: resumable*, *Idle*, *State unknown*),
+  on a line of its own, alongside the lines it already has.
 - **FR-010**: The icon MUST occupy a fixed-width slot on every row, whatever the state, so the
   name's position does not move when the state changes, and the row's height MUST NOT change.
 - **FR-011**: A change of state MUST NOT trigger a notification, a sound, a dialog or a change of
@@ -191,12 +220,13 @@ each is still identifiable by its shape. Hover a row: its tooltip names the stat
 
 ### Key Entities
 
-- **Worktree state**: Running, Blocked (with its reason: needs permission, failed, resumable) or
-  Idle / waiting. Derived, never stored: it is recomputed from the location's sessions each time
-  they change.
+- **Worktree state**: Running, Blocked (with its reason: needs permission, failed, resumable),
+  Idle / waiting, or Unknown (no icon). Derived, never stored: it is recomputed from the
+  location's sessions each time they change.
 - **Session signals** it is derived from: a session's lifecycle (idle, starting, running,
   restarting, failed, resumable) and its activity (unknown, working, awaiting input, ended), plus
-  whether an awaiting-input stop was mid-turn (a question to the user) or the end of the turn.
+  whether an awaiting-input stop was mid-turn (a permission or a question to the user) or the end
+  of the turn.
 
 ## Success Criteria *(mandatory)*
 
