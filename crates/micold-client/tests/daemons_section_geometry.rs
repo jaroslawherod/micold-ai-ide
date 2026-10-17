@@ -83,6 +83,17 @@ fn painted(state: &State) -> Vec<String> {
         .collect()
 }
 
+/// What the page paints in a window tall enough to hold the whole container form, entrances done,
+/// so nothing is clipped from the paint.
+fn painted_tall(state: &State) -> Vec<String> {
+    let mut renderer = lay::renderer();
+    lay::painted_text_settled_at(view(state), &mut renderer, iced::Size::new(1280.0, 4000.0))
+        .0
+        .into_iter()
+        .map(|drawn| drawn.content)
+        .collect()
+}
+
 fn assert_no_text_overflows(state: &State, what: &str) {
     let mut renderer = lay::renderer();
     let overflows: Vec<_> = lay::text_overflows(view(state), &mut renderer)
@@ -167,7 +178,7 @@ fn the_container_form_paints_five_titles_with_only_container_open() {
     use micold_client::icons::Icon;
     let (mut state, _) = with_daemons();
     state.update(Message::Daemons(DaemonsMsg::AddOpened));
-    let shown = painted(&state);
+    let shown = painted_tall(&state);
     for title in ["Container", "Credentials", "Network", "Limits", "Sessions"] {
         assert!(
             shown.iter().any(|c| c == title),
@@ -197,7 +208,7 @@ fn the_container_form_paints_five_titles_with_only_container_open() {
     state.update(Message::Daemons(DaemonsMsg::SectionToggled(
         Section::Network,
     )));
-    let shown = painted(&state);
+    let shown = painted_tall(&state);
     assert!(has(&shown, "Names still resolve either way"), "{shown:?}");
     assert_eq!(count(Icon::MoveUp, &shown), 2);
     assert_no_text_overflows(&state, "container form with two sections open");
