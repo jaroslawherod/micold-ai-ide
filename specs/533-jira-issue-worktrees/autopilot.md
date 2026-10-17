@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/533_create-worktrees-from-jira-issues
 - **Started**: 2026-10-12
 - **Phase**: milestone M5
-- **Next step**: wait for CI and merge M5, then Close
+- **Next step**: wait for CI on PR #920 (rebased onto origin/main 2ccbbe6b) and merge M5, then Close
 
 ## Pull requests
 
@@ -21,6 +21,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #871 | M2 | merged | bcc36d0bf1c2908d967f669178733d1cb2865fd3 |
 | #894 | M3 | merged | 2516aa28bf7a14b886d23cd17c92cfdd76e16374 |
 | #903 | M4 | merged | 7e662c9164484c5183be2c0437e2b66dd410b915 |
+| #920 | M5 | open | |
 
 ## Milestones
 
@@ -30,7 +31,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T022–T031 | full | Connect, change and remove a project's connection and token | #871 | merged |
 | M3 | T032–T033, T035–T053, T068–T069 | full | Start a worktree from a Jira issue (list, pick, notices); kept whole: core, adapter and dialog are one wired path (no half-wired UI) | #894 | merged |
 | M4 | T054–T058, T070 | full | Search Jira issues incl. beyond the loaded list | #903 | merged |
-| M5 | T059–T065 | full | GitHub / Jira source choice per project | | open |
+| M5 | T059–T065 | full | GitHub / Jira source choice per project | #920 | open |
 
 ## Decisions
 
@@ -75,14 +76,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M5 is implemented, reviewed (A, B), visual-passed and gated green at the pushed HEAD of
-`feat/533_create-worktrees-from-jira-issues` (rebased on origin/main d24fd322; gate run as
-`MISE_DISABLE_TOOLS=usage mise run gate` because mise could not install `usage` under a GitHub rate
-limit). Branch is pushed. `gh pr create` failed repeatedly (api.github.com GraphQL i/o timeout), so no
-PR exists yet. Next step: open the PR (`gh pr create --base main --title "feat(533): choose between
-GitHub and Jira issues per project (#533)"`, body: milestone M5, reviews A/B as in the Review rounds
-table, gate and visual-pass B4 pass, `Refs #533`), record its number in the PR table and the M5 row,
-then return DONE.
+None.
 
 ## Open escalation
 
