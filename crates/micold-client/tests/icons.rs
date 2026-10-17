@@ -60,6 +60,9 @@ fn expected(icon: Icon) -> char {
         Icon::OpenInBrowser => '\u{e89e}',
         Icon::PlanUsage => '\u{e1af}',
         Icon::UsageWarning => '\u{e002}',
+        Icon::StateRunning => '\u{e037}',
+        Icon::StateBlocked => '\u{f052}',
+        Icon::StateIdle => '\u{e034}',
     }
 }
 
@@ -96,8 +99,9 @@ fn all_covers_every_variant_without_duplicates() {
     // split buttons (`vertical_split`, `horizontal_split`), +1 for feature 490's plan-usage
     // indicator (`data_usage`) and +1 for its warning look (`warning`), +1 for feature 533's Jira
     // settings section (`assignment`; no other icon shares its codepoint), -1 for the Session service
-    // section icon (`dns`) removed with the section (feature 804).
-    assert_eq!(Icon::ALL.len(), 52, "curated set size");
+    // section icon (`dns`) removed with the section (feature 804), +3 for feature 905's worktree
+    // state icon (`play_arrow`, `report`, `pause`).
+    assert_eq!(Icon::ALL.len(), 55, "curated set size");
 
     // No duplicate variants.
     for (i, &a) in Icon::ALL.iter().enumerate() {
@@ -135,6 +139,42 @@ fn the_four_notification_kind_icons_are_in_the_vocabulary_and_distinct() {
     for (i, (a, _)) in kinds.iter().enumerate() {
         for (b, _) in &kinds[i + 1..] {
             assert_ne!(a.glyph(), b.glyph(), "{a:?} and {b:?} must differ");
+        }
+    }
+}
+
+/// Feature 905 (FR-007, FR-008, contract A5): the three worktree-state glyphs are `play_arrow`,
+/// `report` and `pause` (names checked against the upstream `.codepoints` manifest), and none of
+/// them is a glyph another mark on the same row already draws: the Default entry's house, the pull
+/// request indicator's seven, or the session activity dots.
+#[test]
+fn the_three_state_icons_are_pinned_and_share_no_glyph_with_a_rows_other_marks() {
+    let states = [
+        (Icon::StateRunning, '\u{e037}'),
+        (Icon::StateBlocked, '\u{f052}'),
+        (Icon::StateIdle, '\u{e034}'),
+    ];
+    let row_marks = [
+        Icon::ProjectRoot,
+        Icon::PrOpen,
+        Icon::PrDraft,
+        Icon::PrMerged,
+        Icon::PrClosed,
+        Icon::ChecksPassing,
+        Icon::ChecksPending,
+        Icon::ChecksFailing,
+        Icon::ActivityWorking,
+        Icon::ActivityEnded,
+    ];
+    for (icon, glyph) in states {
+        assert!(Icon::ALL.contains(&icon), "{icon:?} must be in Icon::ALL");
+        assert_eq!(icon.glyph(), glyph, "{icon:?} codepoint");
+        for other in row_marks {
+            assert_ne!(
+                icon.glyph(),
+                other.glyph(),
+                "{icon:?} must not share a glyph with {other:?}"
+            );
         }
     }
 }

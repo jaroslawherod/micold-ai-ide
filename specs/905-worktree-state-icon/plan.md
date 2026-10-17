@@ -79,7 +79,7 @@ New `crates/micold-core/src/location_state.rs` (registered in `lib.rs`): `Locati
 
 ### D3 — Icons — R6
 
-`crates/micold-client/src/icons.rs`: `Icon::StateRunning` (`U+E037`), `StateBlocked` (`U+E160`),
+`crates/micold-client/src/icons.rs`: `Icon::StateRunning` (`U+E037`), `StateBlocked` (`U+F052`),
 `StateIdle` (`U+E034`), in `ALL`; pinned in `crates/micold-client/tests/icons.rs`.
 
 ### D4 — Component and host slot — R7
