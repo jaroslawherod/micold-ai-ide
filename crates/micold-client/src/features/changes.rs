@@ -15,9 +15,10 @@ use micold_core::pull_request::{
 };
 use micold_core::review::base::{Base, BaseUnavailable, ReviewScope, Toggles};
 use micold_core::review::changes::{ChangeKind, ChangeList, ChangedFile};
-use micold_core::review::comment::{CommentId, CommentState, ReviewComment};
+use micold_core::review::comment::{CommentId, CommentState, ReviewComment, Status};
 use micold_core::review::diff::{parse_unified, FileDiff, LoadedDiff, Spans};
 use micold_core::review::pr_diff::PrDiff;
+use micold_core::review::reply::{self, CARD_CHARS};
 use micold_core::review::{LineRange, RelPath, Side};
 use micold_core::session::SessionLocation;
 use micold_core::settings::DiffLayout;
@@ -1227,6 +1228,39 @@ pub fn file_comments(state: &State) -> FileComments<'_> {
 /// Whether a comment is still a draft.
 pub fn is_pending(comment: &ReviewComment) -> bool {
     comment.state == CommentState::Draft
+}
+
+/// What a comment's card shows (FR-002, FR-007): its status, whether a send holds it, the reply
+/// made displayable and shortened to [`CARD_CHARS`] (`true` when cut), and whether Edit and Delete
+/// are offered (a draft no send holds).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CardModel {
+    /// One of the four statuses.
+    pub status: Status,
+    /// A draft taken by the send under way.
+    pub in_send: bool,
+    /// The reply to draw under the text, and whether it was shortened; `None` without one.
+    pub reply: Option<(String, bool)>,
+    /// Edit and Delete are offered.
+    pub editable: bool,
+}
+
+/// The card of `comment` while the entry's `sending` flag is as given.
+pub fn card_model(comment: &ReviewComment, sending: bool) -> CardModel {
+    let status = comment.state.status();
+    let draft = status == Status::Draft;
+    let reply = match &comment.state {
+        CommentState::Reported { report, .. } if !report.reply().is_empty() => Some(
+            reply::shortened(&reply::display(report.reply()), CARD_CHARS),
+        ),
+        _ => None,
+    };
+    CardModel {
+        status,
+        in_send: draft && sending,
+        reply,
+        editable: draft && !sending,
+    }
 }
 
 /// The selected file of a pull request, parsed from the patch GitHub gave: a file over the limits

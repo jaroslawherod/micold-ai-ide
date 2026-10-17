@@ -271,6 +271,12 @@ pub fn diff_view<'a>(_showcase: &'a Showcase, roles: Roles, _i: usize) -> Elemen
 
 /// The comment the card and picked-range poses show.
 const COMMENT: &str = "Pass the height through instead of reading it twice.";
+/// An agent's short reply to [`COMMENT`].
+const SHORT_REPLY: &str = "Done: the height is passed in now.";
+/// The start of a reply the card shortened.
+const LONG_REPLY: &str = "Not changed: reading it twice is what keeps the cached layout in step \
+    with the resize the window manager sends after the first frame, and passing it through would \
+    let the two drift apart for one frame on every";
 
 thread_local! {
     /// The text areas' contents: an empty one and a multi-line one. Leaked once per thread, as the
@@ -317,7 +323,8 @@ pub fn text_area<'a>(_showcase: &'a Showcase, roles: Roles, _i: usize) -> Elemen
     )
 }
 
-/// `ReviewCommentCard` — draft (Edit, Delete), sent, outdated, and draft in a send.
+/// `ReviewCommentCard` — draft (Edit, Delete), sent, outdated, draft in a send, and applied and
+/// answered with a short and a shortened reply (946).
 pub fn review_comment<'a>(
     _showcase: &'a Showcase,
     roles: Roles,
@@ -343,6 +350,16 @@ pub fn review_comment<'a>(
                 roles,
             ),
             posed("in a send", sized(card(CardState::InSend)), roles),
+            posed(
+                "applied, short reply",
+                sized(card(CardState::Applied).reply(SHORT_REPLY, false)),
+                roles,
+            ),
+            posed(
+                "answered, shortened reply",
+                sized(card(CardState::Answered).reply(LONG_REPLY, true)),
+                roles,
+            ),
         ],
         Layout::FullWidth,
     )

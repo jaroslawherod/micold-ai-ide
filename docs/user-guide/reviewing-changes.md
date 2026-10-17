@@ -280,6 +280,27 @@ From the top:
 - **Comment text.** As you wrote it.
 - **Order.** By path, then start line, then current before removed, then creation time.
 
+### Statuses and replies
+
+Each comment has one of four statuses, shown on its card:
+
+| Status | Meaning |
+|---|---|
+| **Draft** | Written, not sent. Only a draft can be edited or deleted |
+| **Sent** | Typed into the session in a review, no answer yet |
+| **Applied** | The session made the change |
+| **Answered** | The session did not make the change; its reply says why |
+
+The session reports Applied or Answered by the comment's reference with the
+`report_review_comment` tool ([Reporting on review comments](agent-tools.md#reporting-on-review-comments)).
+Its reply is drawn under the comment's text; a reply longer than 4,000 characters shows its start
+and **Show all**. A later report replaces the status and the reply. Statuses and replies reach
+every window open on the project within two seconds and are kept with the comments across
+restarts.
+
+A session started without the app's tool server cannot report: its comments stay Sent, and the
+review message asks it to answer each comment by its reference in its reply instead.
+
 ### Clearing and discarding
 
 Two buttons in the view's header tidy the list once a round of feedback is done:

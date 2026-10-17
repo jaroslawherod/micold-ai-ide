@@ -39,6 +39,7 @@ These tools make changes, exactly as the sidebar does:
 | `create_session` | Creates a session in a worktree (or in `default`, the project folder) and starts it. It runs the AI CLI the assistant names, or your default AI CLI from Settings. It can also be given a first prompt to type into the new session. A worktree holds at most one session by default: when it already has one, the call fails with a conflict that names the worktree's main session (its name and id), says that `start_session` on that id brings it back, and says to pass `allow_additional_session: true` to start another on purpose; nothing is created. With `allow_additional_session: true` (optional, default false) the call creates a second session beside the existing one and leaves that one untouched; the policy, the AI CLI check and every other check still apply |
 | `start_session` | Starts a session that is idle, failed, or waiting to be resumed, as **Start** in the sidebar does: a session that was running when the service last stopped resumes its conversation. Every window shows it starting, then running. A session that is already starting, running or restarting is left as it is, and the result says which it is |
 | `send_session_input` | Types text into another session and submits it once, as if you had typed it there and pressed Enter. See [Reading and typing into other sessions](#reading-and-typing-into-other-sessions) |
+| `report_review_comment` | Reports the outcome of one comment of a review you sent the session: applied, or answered with a reply saying why not. See [Reporting on review comments](#reporting-on-review-comments) |
 
 #### Starting the worktree's session with it
 
@@ -264,6 +265,37 @@ type into other sessions**
 A change applies to the very next request, also from sessions that are already running. A refused
 request leaves the other session untouched and tells the assistant that the option in Settings
 refused it.
+
+## Reporting on review comments
+
+When you send a review from the Changes view
+([Sending a review](reviewing-changes.md#sending-a-review)), each comment in the message carries a
+reference such as `C-1a2b3c4d`. The session answers a comment with `report_review_comment`:
+
+| Argument | What it is |
+|---|---|
+| `comment` | The comment's reference from the review message |
+| `outcome` | `applied` when it made the change, `answered` when it did not and the reply says why |
+| `reply` | What it did, or why not. Required for `answered`, optional for `applied`; at most 20,000 characters |
+
+The comment's card then shows **Applied** or **Answered** and the reply, in every window open on the
+project and after a restart
+([Statuses and replies](reviewing-changes.md#statuses-and-replies)). A later report on the same
+comment replaces the outcome and the reply.
+
+A session reports only on its own entry's comments: a session in a worktree on that worktree's
+comments, and a session in the project folder on the Default entry's. A report changes only the
+comment's status and reply, so it never waits for you to allow it. It is refused, and nothing
+changes, when:
+
+- the reference is malformed, the outcome is neither value, an `answered` report has no reply, or
+  the reply is over 20,000 characters;
+- the comment belongs to another worktree;
+- no comment has that reference (it may have been cleared or discarded);
+- the comment is in a send that has not finished delivering;
+- the comment is still a draft, never sent to the session.
+
+The log records the reference of each report, never the reply.
 
 ## What it can see
 
