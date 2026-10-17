@@ -46,7 +46,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+Plan unit 1 handed over at the context cap after exploring the code. Done: `research.md` DRAFT (code map + decisions R1-R7 + "Still to research"); `plan.md` is still the uncommitted template (re-run `setup-plan.sh` or fill it). Next: plan unit continues — verify and finish research.md (rejected alternatives, the "Still to research" items), write plan.md, data-model.md, contracts/ (incl. `provisioning.md` for #686 reuse), quickstart.md; review per tasks/plan.md. R1 (first publish of `micold-basic` via a new on-merge workflow instead of D2's release jobs) is an outward action: escalate category 3 with options after the plan review, unless the plan finds a publish needing neither a release nor a hand push. No review rounds yet. Clarify commit e62c174b and this commit are local, not pushed. No PR.
 
 ## Open escalation
 
