@@ -225,7 +225,7 @@ async fn ssh_real_a_local_session_runs_on_while_the_remote_link_is_cut() {
         return;
     };
     let tick = "#!/bin/sh\ni=1\nwhile true; do echo TICK-$i; i=$((i+1)); sleep 1; done\n";
-    let remote_repo = ssh_real_support::remote::stand_in_repo(&host, tick);
+    ssh_real_support::remote::stand_in_repo(&host, tick);
     let Some(mut remote) = start(&host, name).await else {
         return;
     };
@@ -291,8 +291,7 @@ async fn ssh_real_a_local_session_runs_on_while_the_remote_link_is_cut() {
         "the local session ticks: {before}"
     );
 
-    // The remote link is cut; its session is gone from view, the local one is not.
-    let _ = remote_repo;
+    // The remote link is cut (the remote daemon holds no session here); the local session keeps ticking.
     host.proxy.cut();
     let _ = tokio::time::timeout(Duration::from_secs(10), remote.connection.next()).await;
     let during = drain(&mut local, Duration::from_secs(4)).await;
