@@ -1224,9 +1224,9 @@ pub fn file_comments(state: &State) -> FileComments<'_> {
     placed
 }
 
-/// Whether a comment is still pending.
+/// Whether a comment is still a draft.
 pub fn is_pending(comment: &ReviewComment) -> bool {
-    comment.state == CommentState::Pending
+    comment.state == CommentState::Draft
 }
 
 /// The selected file of a pull request, parsed from the patch GitHub gave: a file over the limits

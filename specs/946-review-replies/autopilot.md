@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-jjniz9
 - **Started**: 2026-10-17
 - **Phase**: milestone M1
-- **Next step**: M1 handover: finish T003 (workspace rename), then T004–T018
+- **Next step**: M1 T004–T018
 
 ## Pull requests
 
@@ -64,26 +64,7 @@ split along s6 (M3) is the only scenario split with a deliverable on each side.
 
 ## Handover
 
-M1 unit 1 handed over at 150k (big source reads). Branch reset to origin/main (1a621e02, #950
-merged); no PR yet.
-
-- **Done**: T001 (anchor.rs, reply.rs declared). T002 tests written and run red (cycle log), core
-  half of T003 green: `CommentState::{Draft, Sent, Reported}`, `Status`, `Outcome`, `Reporter`,
-  `Report` (private fields, getters), `CommentRef` (`of`, `parse`, Display), `Move` (`new`,
-  getters, serde try_from), `fresh_id`, `ReviewComment::reference()`, NothingPending message, in
-  `crates/micold-core/src/review/comment.rs`. `CommentState` is no longer `Copy`. v1 `pending`
-  reads as Draft via `#[serde(alias = "pending")]` on the state repr. `cargo test -p micold-core
-  --lib review::` 98 passed. T001/T002 not yet ticked in tasks.md.
-- **Workspace does not compile yet**: next step is the rest of T003, `CommentState::Pending` →
-  `Draft` (and `.state` copies → `.clone()`/refs) in crates/micold-core/tests/protocol_roundtrip.rs,
-  crates/micold-daemon/src/review.rs, crates/micold-daemon/tests/review_{edit,send}.rs,
-  crates/micold-client/src/features/changes.rs (`is_pending`: Draft only; Reported counts as Sent),
-  crates/micold-client/tests/{features_changes.rs,support/modals.rs}; then tick T001–T003.
-- **Then** T004–T018 in order. T013/T017 snackbar wording is not fixed by the spec: proposed
-  "Couldn't send the review: <why>" and "Sent a review of n comments to <session>" /
-  "Started a session and sent a review of n comments".
-- Decision for the next unit: no `tdd/test-list.md` exists; cycle-log.md rows per task pair (as 837).
-- Scratchpad: `SCRATCHPAD` env is empty in this container; use the session scratchpad path.
+None.
 
 ## Open escalation
 

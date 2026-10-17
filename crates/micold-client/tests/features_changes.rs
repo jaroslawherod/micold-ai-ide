@@ -939,7 +939,7 @@ fn save_with_blank_text_sends_nothing() {
 #[test]
 fn edit_and_delete_send_set_text_and_delete() {
     let mut state = showing(commentable());
-    let c = comment("b.rs", Side::New, 2, 2, CommentState::Pending);
+    let c = comment("b.rs", Side::New, 2, 2, CommentState::Draft);
     let id = c.id;
     push(&mut state, "feat-a", vec![c.clone()]);
     changes::update(&mut state, Msg::EditComment(id));
@@ -973,7 +973,7 @@ fn edit_and_delete_send_set_text_and_delete() {
 #[test]
 fn an_edit_composer_closes_when_its_comment_is_gone() {
     let mut state = showing(commentable());
-    let c = comment("b.rs", Side::New, 2, 2, CommentState::Pending);
+    let c = comment("b.rs", Side::New, 2, 2, CommentState::Draft);
     let id = c.id;
     push(&mut state, "feat-a", vec![c.clone()]);
     changes::update(&mut state, Msg::EditComment(id));
@@ -1022,8 +1022,8 @@ fn the_composer_survives_a_list_and_diff_reread() {
 #[test]
 fn a_review_push_replaces_only_that_entrys_comments() {
     let mut state = showing(commentable());
-    let a = comment("b.rs", Side::New, 2, 2, CommentState::Pending);
-    let d = comment("x.rs", Side::New, 1, 1, CommentState::Pending);
+    let a = comment("b.rs", Side::New, 2, 2, CommentState::Draft);
+    let d = comment("x.rs", Side::New, 1, 1, CommentState::Draft);
     push(&mut state, "feat-a", vec![a.clone()]);
     push(&mut state, "", vec![d.clone()]);
     push(&mut state, "feat-a", vec![]);
@@ -1047,16 +1047,16 @@ fn the_list_counts_each_files_pending_comments() {
         &mut state,
         "feat-a",
         vec![
-            comment("b.rs", Side::New, 2, 2, CommentState::Pending),
-            comment("b.rs", Side::Old, 4, 4, CommentState::Pending),
+            comment("b.rs", Side::New, 2, 2, CommentState::Draft),
+            comment("b.rs", Side::Old, 4, 4, CommentState::Draft),
             comment("b.rs", Side::New, 1, 1, CommentState::Sent { at: 5 }),
-            comment("a.rs", Side::New, 9, 9, CommentState::Pending),
+            comment("a.rs", Side::New, 9, 9, CommentState::Draft),
         ],
     );
     push(
         &mut state,
         "",
-        vec![comment("b.rs", Side::New, 3, 3, CommentState::Pending)],
+        vec![comment("b.rs", Side::New, 3, 3, CommentState::Draft)],
     );
     let counts = pending_counts(&state);
     assert_eq!(counts.get(&path("a.rs")), Some(&1));
@@ -1068,10 +1068,10 @@ fn the_list_counts_each_files_pending_comments() {
 #[test]
 fn comments_not_in_the_diff_are_grouped_apart() {
     let mut state = showing(commentable());
-    let on_new = comment("b.rs", Side::New, 1, 2, CommentState::Pending);
-    let on_old = comment("b.rs", Side::Old, 4, 4, CommentState::Pending);
-    let gone = comment("b.rs", Side::New, 40, 40, CommentState::Pending);
-    let other_file = comment("a.rs", Side::New, 2, 2, CommentState::Pending);
+    let on_new = comment("b.rs", Side::New, 1, 2, CommentState::Draft);
+    let on_old = comment("b.rs", Side::Old, 4, 4, CommentState::Draft);
+    let gone = comment("b.rs", Side::New, 40, 40, CommentState::Draft);
+    let other_file = comment("a.rs", Side::New, 2, 2, CommentState::Draft);
     push(
         &mut state,
         "feat-a",
@@ -1148,12 +1148,12 @@ fn send_to_session_is_enabled_only_with_pending_comments_and_no_send_open() {
         "no comments: unavailable (US2 s5)"
     );
     let sent = comment("a.rs", Side::New, 1, 1, CommentState::Sent { at: 5 });
-    let pending_a = comment("a.rs", Side::New, 2, 2, CommentState::Pending);
-    let pending_b = comment("b.rs", Side::Old, 2, 2, CommentState::Pending);
+    let pending_a = comment("a.rs", Side::New, 2, 2, CommentState::Draft);
+    let pending_b = comment("b.rs", Side::Old, 2, 2, CommentState::Draft);
     push(
         &mut state,
         "",
-        vec![comment("x", Side::New, 1, 1, CommentState::Pending)],
+        vec![comment("x", Side::New, 1, 1, CommentState::Draft)],
     );
     push(&mut state, "feat-a", vec![sent.clone()]);
     assert_eq!(
@@ -1196,7 +1196,7 @@ fn pressing_send_to_session_sends_review_send_for_the_open_entry() {
         "nothing pending"
     );
     let comments = vec![
-        comment("a.rs", Side::New, 2, 2, CommentState::Pending),
+        comment("a.rs", Side::New, 2, 2, CommentState::Draft),
         quoting("b.rs", Side::New, 4, &["d"]),
     ];
     push(&mut state, "feat-a", comments.clone());
@@ -1246,7 +1246,7 @@ fn quoting(p: &str, side: Side, start: u32, quote: &[&str]) -> ReviewComment {
     let end = start + u32::try_from(quote.len()).unwrap() - 1;
     ReviewComment {
         quote: quote.iter().map(|line| (*line).to_owned()).collect(),
-        ..comment(p, side, start, end, CommentState::Pending)
+        ..comment(p, side, start, end, CommentState::Draft)
     }
 }
 
@@ -1503,7 +1503,7 @@ fn clear_sent_and_discard_pending_are_enabled_only_with_comments_to_act_on() {
         "no comments: neither"
     );
     let sent = comment("a.rs", Side::New, 1, 1, CommentState::Sent { at: 5 });
-    let pending = comment("a.rs", Side::New, 2, 2, CommentState::Pending);
+    let pending = comment("a.rs", Side::New, 2, 2, CommentState::Draft);
     push(&mut state, "", vec![sent.clone(), pending.clone()]);
     assert_eq!(
         tidy_actions(&state),
@@ -1591,8 +1591,8 @@ fn discard_pending_asks_first_and_only_the_confirm_sends_it() {
         &mut state,
         "feat-a",
         vec![
-            comment("a.rs", Side::New, 1, 1, CommentState::Pending),
-            comment("a.rs", Side::New, 2, 2, CommentState::Pending),
+            comment("a.rs", Side::New, 1, 1, CommentState::Draft),
+            comment("a.rs", Side::New, 2, 2, CommentState::Draft),
             comment("a.rs", Side::New, 3, 3, CommentState::Sent { at: 5 }),
         ],
     );
@@ -1636,7 +1636,7 @@ fn a_confirm_after_the_pending_comments_went_elsewhere_sends_nothing() {
     push(
         &mut state,
         "feat-a",
-        vec![comment("a.rs", Side::New, 1, 1, CommentState::Pending)],
+        vec![comment("a.rs", Side::New, 1, 1, CommentState::Draft)],
     );
     changes::update(&mut state, Msg::DiscardPendingPressed);
     push(
@@ -1664,7 +1664,7 @@ fn the_discard_confirmation_counts_in_the_singular_and_closes_with_the_view() {
     push(
         &mut state,
         "feat-a",
-        vec![comment("a.rs", Side::New, 1, 1, CommentState::Pending)],
+        vec![comment("a.rs", Side::New, 1, 1, CommentState::Draft)],
     );
     changes::update(&mut state, Msg::DiscardPendingPressed);
     assert_eq!(

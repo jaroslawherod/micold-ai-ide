@@ -187,7 +187,7 @@ pub fn open_discard_pending(state: &mut State) {
                 range: micold_core::review::LineRange::new(1, 1).unwrap(),
                 quote: vec!["a".into()],
                 text: "t".into(),
-                state: CommentState::Pending,
+                state: CommentState::Draft,
                 created: 1,
             }],
             sending: false,
