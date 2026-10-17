@@ -472,7 +472,7 @@ fn feat_a() -> State {
 }
 
 fn prs(state: &State) -> PrDisplay {
-    card(&cards(state), &wt("feat-a")).prs.clone()
+    card(&cards(state), &wt("feat-a")).prs
 }
 
 /// US1 scenario 3: one open and two merged pull requests read 1 open, 2 merged.

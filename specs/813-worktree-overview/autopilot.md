@@ -64,6 +64,7 @@ counts are split off as M2 along acceptance scenario 3. Polish T070–T071 chang
 | M1 review A (code-review high) | 1 | a788a747a73dad0b4fd79f50fe1e929c9fa9b067:a9d57c2caafecd4e3dbdade759c913e7ede04768 | CHANGES (F1 MAJOR nested scrollable, F2 MAJOR other main-area openers leave Overview open, F3/F4 MINOR fixed; F5 F6 MINOR declined) |
 | M1 review A (code-review high) | 2 | a788a747a73dad0b4fd79f50fe1e929c9fa9b067:a9d57c2caafecd4e3dbdade759c913e7ede04768 → c75653a03639e42b0f8ff27ed47da14a6f605c1e:dd716a91e83a5147a1ed8428014219cbdce9dedb | CLEAN (sonnet, scoped; 1 MINOR: Toggled unguarded, for M3 shortcut) |
 | M1 review B (conformance) | 1 | c75653a03639e42b0f8ff27ed47da14a6f605c1e:dd716a91e83a5147a1ed8428014219cbdce9dedb | CHANGES (F1/F2 MAJOR missing assertion reds in cycle-log, fixed by mutation reds; F3/F4 MINOR log headings and T002 run, fixed) |
+| M2 review A (code-review high) | 1 | 6b1655982fe593202311c406f2f377a670100338:c8a49970814fedf44a35826d742201d0fc715771 | 8 findings, all declined (spec-mandated or pre-existing pattern; see Declined) |
 | M1 visual pass | 1 | dd716a91 | B15 states/grid/greyscale PASS, B1 reduced PASS; type word only in tooltip FAIL (FR-002), fixed test-first |
 
 ## Declined review findings
@@ -87,3 +88,9 @@ None.
 ## Follow-ups not done
 
 None yet.
+
+| M2 | A r1 | `UNKNOWN` mergeable read as no conflict | T024 and W5 specify `UNKNOWN`/missing → false |
+| M2 | A r1 | `mergeable` in the shared fragment, `oc`/`mc` 100-node aliases | specified by T027 / plan W5; no new poller (FR-019) |
+| M2 | A r1 | capped counts include fork nodes | W5's table: 100 nodes → capped; cross-repo not counted |
+| M2 | A r1 | stale counts kept on Passing/RateLimited | mirrors `statuses` handling (T025); same as existing pr_status behaviour |
+| M2 | A r1 | MINORs: String clone, tuple threading, no re-render at rate-limit end | not worth the churn |
