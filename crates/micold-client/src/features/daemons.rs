@@ -12,8 +12,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
-use micold_core::ssh::config_hosts::{literal_identity, EffectiveSsh};
-use micold_core::ssh::SshTarget;
 use micold_core::daemons::{
     Binding, ConnectionError, DaemonDiagnostics, DaemonEvent, DaemonId, DaemonName, DaemonRegistry,
     DaemonRuntime, DaemonState, DaemonView, RegistryError, StateChange, WorktreeRef,
@@ -28,6 +26,8 @@ use micold_core::sandbox::runtime::RuntimeKind;
 use micold_core::sandbox::{CredentialShare, NetworkPosture, SandboxProfile};
 use micold_core::session::AiCli;
 use micold_core::session::SessionId;
+use micold_core::ssh::config_hosts::{literal_identity, EffectiveSsh};
+use micold_core::ssh::SshTarget;
 
 pub use super::daemons_kube::{AllowedKind, ContextList, KubeDraft, VOLUME_NOTICE};
 use super::settings::{parse_budget, LimitField, ProfileTexts};
@@ -391,6 +391,9 @@ pub struct State {
     /// What `ssh -G` resolved for each target seen, so two aliases of one machine are one daemon
     /// (FR-016, R12). A target not in here is judged by the host as typed.
     resolved: BTreeMap<String, EffectiveSsh>,
+    /// The targets already handed to `ssh -G`, so one that is slow or fails is asked once, not on
+    /// every message.
+    requested: BTreeSet<String>,
 }
 
 impl State {
@@ -417,7 +420,7 @@ impl State {
 
     /// The targets whose `ssh -G` resolution is still missing: the open form's and every stored
     /// remote daemon's. The shell resolves these (it owns the `ssh` runner).
-    pub fn unresolved_targets(&self, registry: &DaemonRegistry) -> Vec<SshTarget> {
+    pub fn unresolved_targets(&mut self, registry: &DaemonRegistry) -> Vec<SshTarget> {
         let mut targets: Vec<SshTarget> = registry
             .entries()
             .iter()
@@ -429,7 +432,10 @@ impl State {
         if let Some(Ok(DaemonRuntime::Ssh(s))) = self.draft.as_ref().map(runtime_of) {
             targets.push(s.target);
         }
-        targets.retain(|t| !self.resolved.contains_key(&resolution_key(t)));
+        targets.retain(|t| {
+            let key = resolution_key(t);
+            !self.resolved.contains_key(&key) && self.requested.insert(key)
+        });
         targets
     }
 
@@ -804,7 +810,11 @@ fn form_error(registry: &DaemonRegistry, draft: &Draft, err: RegistryError) -> F
         }
         RegistryError::SshDuplicate { other } => FormError {
             field: "host",
-            message: format!("{} is already used by daemon {}.", draft.ssh_host.trim(), named(other)),
+            message: format!(
+                "{} is already used by daemon {}.",
+                draft.ssh_host.trim(),
+                named(other)
+            ),
         },
         RegistryError::InvalidField { field } => invalid_field(field),
         RegistryError::UnknownDaemon => FormError {
@@ -999,10 +1009,17 @@ pub fn save(state: &mut State, model: &mut Model<'_>) -> Result<Vec<Outcome>, Fo
     )?;
     // Validate on a copy so a refusal leaves the registry exactly as it was.
     let mut probe = model.registry.clone();
+    // A resolved identity never equals a literal one (ssh always reports a user), so while the
+    // form's own target is unresolved every target is judged as typed.
+    let form_resolved = match &runtime {
+        DaemonRuntime::Ssh(s) => state.resolved.contains_key(&resolution_key(&s.target)),
+        _ => false,
+    };
     let identity = |t: &SshTarget| {
         state
             .resolved
             .get(&resolution_key(t))
+            .filter(|_| form_resolved)
             .map(EffectiveSsh::identity)
             .unwrap_or_else(|| literal_identity(t))
     };

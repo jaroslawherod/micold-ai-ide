@@ -34,32 +34,18 @@ pub struct Dialer {
 
 impl Dialer {
     pub fn new(host: &super::sshd::Sshd) -> Self {
-        Self {
-            runner: SystemSsh {
-                own_daemon: PathBuf::from(env!("CARGO_BIN_EXE_micold-daemon")),
-                bundled_dir: None,
-                ssh_path: Some(host.ssh_wrapper.clone()),
-                cancel: None,
-            },
-            target: SshTarget::new(super::sshd::ALIAS, None, None, None).expect("target"),
-            opts: ProvisionOptions {
-                platform: ClientPlatform::current(),
-                client_arch: std::env::consts::ARCH.to_string(),
-                timeout_secs: 30,
-                build_id: current_build_id(),
-                client_build: "micold-ai-ide/ssh-real".to_string(),
-            },
-        }
+        Self::with_ssh(host.ssh_wrapper.clone(), super::sshd::ALIAS, 30)
     }
 
     /// A dialer whose `ssh` is `wrapper` and whose host is `alias`, with `timeout_secs` as the
     /// connection timeout (the host-key and authentication failure tests change both).
     pub fn with_ssh(wrapper: PathBuf, alias: &str, timeout_secs: u32) -> Self {
-        let mut dialer = Self {
+        Self {
             runner: SystemSsh {
                 own_daemon: PathBuf::from(env!("CARGO_BIN_EXE_micold-daemon")),
                 bundled_dir: None,
                 ssh_path: Some(wrapper),
+                cancel: None,
             },
             target: SshTarget::new(alias, None, None, None).expect("target"),
             opts: ProvisionOptions {
@@ -69,9 +55,7 @@ impl Dialer {
                 build_id: current_build_id(),
                 client_build: "micold-ai-ide/ssh-real".to_string(),
             },
-        };
-        dialer.opts.timeout_secs = timeout_secs;
-        dialer
+        }
     }
 
     /// Provision (a no-op once copied) and open the bridge, as the client's own dial does.

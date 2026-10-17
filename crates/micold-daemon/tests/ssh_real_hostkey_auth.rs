@@ -84,7 +84,13 @@ async fn ssh_real_an_unknown_host_key_is_refused_and_no_key_is_recorded() {
     };
     let known = host.dir.join("empty_known_hosts");
     fs::write(&known, "").unwrap();
-    let cfg = config(&host, &known, &host.dir.join("client_key"), "127.0.0.1", host.port);
+    let cfg = config(
+        &host,
+        &known,
+        &host.dir.join("client_key"),
+        "127.0.0.1",
+        host.port,
+    );
     let dialer = Dialer::with_ssh(wrapper(&host, "unknown", &cfg), ALIAS, TIMEOUT_SECS);
     let (failure, took) = fails(&dialer).await;
     assert_eq!(failure, SshFailure::HostKeyUnknown, "{failure:?}");
@@ -117,7 +123,13 @@ async fn ssh_real_a_changed_host_key_is_refused_and_the_record_is_untouched() {
     let known = host.dir.join("changed_known_hosts");
     let recorded = format!("[127.0.0.1]:{} {kind} {key}\n", host.port);
     fs::write(&known, &recorded).unwrap();
-    let cfg = config(&host, &known, &host.dir.join("client_key"), "127.0.0.1", host.port);
+    let cfg = config(
+        &host,
+        &known,
+        &host.dir.join("client_key"),
+        "127.0.0.1",
+        host.port,
+    );
     let dialer = Dialer::with_ssh(wrapper(&host, "changed", &cfg), ALIAS, TIMEOUT_SECS);
     let (failure, _) = fails(&dialer).await;
     assert_eq!(failure, SshFailure::HostKeyChanged, "{failure:?}");
