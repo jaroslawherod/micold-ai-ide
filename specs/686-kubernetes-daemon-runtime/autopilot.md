@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-xelisc
 - **Started**: 2026-10-17
 - **Phase**: design revision 2
-- **Next step**: design revision 2 (continue from Handover): tasks.md re-cut + test-list + tasks review; then M1a
+- **Next step**: design revision 2 part 4 (continue from Handover): test-list.md, speckit-analyze, tasks review; then M1a
 
 ## Pull requests
 
@@ -22,17 +22,19 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1a | T001–T021, T025–T027, T079, T081 | full | Core runtime over FakeCluster: settings, manifests, kubeconfig, start with rollback, stop/remove | — | in progress |
-| M1b | T022–T024, T028–T033, T080, T082, T099 | full | Add (given image), start/adopt, tunnel to connected, stop, remove from the client | — | planned |
-| M2 | T034–T046 | full | Build → push → pod by digest; requests and limits | — | planned |
-| M3 | T047–T055 | full | Clone remote + worktrees in the pod (RepoClone, protocol 49) | — | planned |
-| M4 | T056–T062 | full | Reconnect; pod gone → stopped with reason | — | planned |
-| M5 | T063–T071 | full | Allowed credentials only; pod security context | — | planned |
-| M6 | T072–T078 | full | Failure reasons (preflight RBAC, pull, schedule, PVC) | — | planned |
-| M7 | T083–T087 | full | Rest of the form: placement, volume, Reconnect, Logs | — | planned |
-| M8 | T088–T096 | full | kube_real_* suite, `mise run test-kube`, CI job kube-cluster | — | planned |
-
-Cut notes: US1 (>10 tasks) split along its acceptance scenarios and the plan's separable parts (3a given image, 3b image source, 3c clone source). US5 Stop/Remove (T079–T082) ship in M1 so the Kubernetes row reachable from the form has working Stop and Remove (no half-wired UI). FR-013 rollback and per-phase timeouts moved into M1 (analyze D5/D8). Polish T097–T098 change no code: close unit. M8 adds no user-visible behaviour: `docs-not-needed` if its PR is `feat`.
+| M1a | T106–T116, T020, T026 | full | Revision-2 core types (settings with image/AI CLIs/DaemonResources, names, failures, Cluster.replace), kubeconfig; revision-1 listener auth, Transport::Tunnel, daemon_image reverted | — | planned (re-cut) |
+| M1b | T019, T117, T118, T021, T025, T119, T120, T027, T121 | full | Pod, PVC, access secret, pod stamp/drift, start through Pull with bounds + rollback over FakeCluster | — | planned |
+| M1c | T122, T023, T123, T124, T125, T028, T029, T126, T127 | full | Tunnel phase (SSH identification line), LiveCluster, relay, key files | — | planned |
+| M2 | T079, T072, T056, T073, T081, T075, T059, T076, T128 | full | Core Stop/Remove/forget-locally; failure + pod-gone classifiers; preflight | — | planned |
+| M3 | T063, T064, T065, T067, T068, T069, T102 | full | Allowed credentials as secrets, daemon_env, security contexts (core) | — | planned |
+| M4a | T024, T130, T066, T031, T131, T070, T032 | full | Kubernetes form via Edit (Add entry hidden), shared resources fields, credentials list | — | planned |
+| M4b | T083, T084, T080, T132, T085, T086, T082, T133, T129 | full | Placement fields, Stop/Remove/Forget locally/Logs from the row, Start → Unavailable | — | planned |
+| M5 | T134, T022, T074, T135, T030, T077, T136 | full | (#806) Copy + Connect over SSH through the relay; failures at client level | — | blocked on #806 |
+| M6 | T138, T139, T141, T142, T033, T140 | full | (#806) AI CLI install, drift prompt, Add entry, user guide 🎯 MVP | — | blocked on #806 |
+| M7 | T047–T055, T100 | full | (#806) Clone + worktrees in the pod (RepoClone) | — | blocked on #806 |
+| M8 | T057, T058, T060, T061, T062, T101 | full | (#806) Reconnect; pod gone → stopped with reason | — | blocked on #806 |
+| M9 | T088–T096, T105 | full | (#806) kube_real_* suite, `mise run test-kube`, CI job kube-cluster | — | blocked on #806 |
+Cut notes (revision 2): tasks.md "Revision 2 task map" lists kept/changed/removed T001–T105; new tasks T106–T142. Order: everything independent of #806 first (M1a–M4b, all `docs-not-needed`: Kubernetes cannot be added before M6), then the #806-blocked milestones (M5–M9). US1 split along the #806 boundary: connect (M5) before CLI install + Add entry (M6), so the Add entry appears only when US1.1 works (no half-wired UI). User-guide tasks T046/T071/T078/T087 folded into T033 (M6), since the guide page appears with the Add entry. Polish T097–T098: close unit.
 
 ## Decisions
 
@@ -75,31 +77,48 @@ Cut notes: US1 (>10 tasks) split along its acceptance scenarios and the plan's s
 
 ## Handover
 
-**Design revision 2, part 2 done up to the plan (unit "Design revision 686 part 2", handed over at 150k).**
-Done and committed: spec F1–F6 fixed, scoped re-review CLEAN (3 MINOR fixed, prose); research.md
-amended (K1 shared-step concurrency + `KeyGen` port, K2/K6 `Tunnel` = SSH identification line via the
-relay, login with pinned host key in `Copy`, K3 Remove-unreachable key, K5 `micold.dev/pod-settings`
-drift); data-model.md, plan.md, contracts/kube-runtime.md rewritten; contracts/shared-ssh-image.md
-written, daemon-image.md deleted; quickstart.md rewritten (A1 + B-form before #806, rest after #806).
-Plan review round 1 CLEAN (full text /mnt/project-files/backups/686-rev2-plan-review-r1.md); its 3
-MINORs fixed, prose only (`KubeFailure::Unavailable` before #806; #686 lands `daemon_resources.rs` +
-resources fields first; protocol-49 bump coordination with #806).
-Next (in order): 1) tasks.md re-cut (speckit-tasks; mark T001–T018 kept/changed/removed: T005/T012
-DaemonImageSource → remove, keep DaemonResources moved to `core/daemon_resources.rs`; T004/T011 drop
-`registry`, `arch`, `RegistryRepo`, `NodeArch`, add `image: Option<ImageRef>`, `providers`; T008/T016
-revert listener_auth; T010/T017 revert `Transport::Tunnel`; T009/T018 KubeFailure variant list per
-data-model; `Cluster::node_arch` removed, `Cluster::replace` added; T015 port 7727 → 2222; T034–T046
-removed; new tasks: access.rs + FakeKeyGen, keys.rs, relay.rs, PodStamp/drift, Unavailable, runtime
-choices omit Kubernetes, blocked-on-#806 tasks) and milestones in this order: M1a core types (done
-parts) + kubeconfig → manifests + pod/PVC/secret lifecycle + access secret → relay + `Tunnel` phase →
-stop/remove → failure reasons → Settings form (Add entry hidden) → blocked on #806: copy+install+
-connect and Add entry + user guide, clone/worktrees (protocol 49), reconnect/gone, real-cluster CI;
-2) tdd/test-list.md to match; 3) speckit-analyze, tasks review (fresh reviewer, tasks rubric);
-4) stash@{0} survivors note in the ledger: kubeconfig T020, lifecycle T079, manifest T019 (needs SSH
-image/env/port 2222 changes), start T021 (phase list without Image, Tunnel = identification line),
-`Quantity::{to_k8s, parse_k8s}`, `ResourceNames::all_secrets` + access secret, `ObjectKind::noun`,
-`KubeFailure::StopTimeout`, `FakeCluster::hold_on_delete` survive; 5) commit, refresh bundle, return
-DONE with the re-cut M1a ready. Branch unpushed; never reset; stash@{0} kept.
+**Design revision 2, part 3 (unit "Design revision 686 part 3", handed over at 150k).** Done:
+tasks.md re-cut (committed): revision-2 task map (T001–T105 kept/changed/removed), new tasks
+T106–T142, milestones M1a–M4b (independent of #806) then M5–M9 (blocked on #806); ledger Milestones
+table replaced. Not yet done (next, in order):
+1) **tdd/test-list.md** to match tasks.md markers. Mark REMOVED: U3, U4, U9, U10, U22–U25, U27, U28,
+   U34, U42, U56, U71–U78, U90–U94, U98. Amend: U8 (defaults: no image, no storage class, nothing
+   allowed, 10 GiB), U11/U12 file → `core/daemon_resources.rs`, U20 (+ `-ssh-access`), U26
+   (revision-2 variants, `Provision` in M5), U37 (pod env only HOME, TMPDIR, access-secret dir;
+   access secret read-only at /run/micold/ssh 0440), U44 (access secret always mounted), U49/U50
+   (11-phase plan; Pull/Install 15 min, else 120 s), U60 (+ `update secrets`, `create secrets`
+   always), U65 (access secret listed), U66/U67 (env via `daemon_env`), U95 (Edit, not Add), U97
+   (limits fields only), U106 (key stays authorized text). New: U117 Quantity to_k8s/parse_k8s;
+   U118 image None default / given kept / moving tag flagged; U119 providers default enabled, may be
+   empty; U120 all_secrets access first; U121 FakeCluster replace 409 on stale rv, hold_on_delete;
+   U122 PodStamp canonical + annotation; U123 drift names fields in form order; U124 AccessSecret
+   parse/to_data; U125 with_client idempotent/replace same id, without_client; U126 access secret
+   create / add key by replace + 409 re-read keeps other key / no write when present; U127 rollback
+   removes added key; U128 drift → Drift{fields}, Recreate, Keep; U129 Tunnel reads SSH-2.0- else
+   ImageContract; U130 relay; U131 key files owner-only, known_hosts alias line, client_id stable,
+   delete; U133 Start → Unavailable, no cluster call; U134 Add runtime choices omit Kubernetes until
+   wired; U135 AI CLI checkboxes default + volume notice; U136 daemon_env; U138 Copy target + env,
+   HostKeyMismatch, Provision; U139 Install (providers, log, Cancel, 15 min, Provision names CLI);
+   U140 Connect bridge; U141 drift prompt text + buttons; U143 Remove/Forget delete key files.
+   Acceptance: A1 (default image, copy, install, connect; M6), A4/A5 test column add `core/kube/start.rs`
+   (M1b core half), A14–A17 add core start.rs (M2), A18 → US4.6, A19 (+ AI CLIs), A20 (+ drift
+   offer), A22 → M8, A23/A24 (+ key files), A26 (+ install failure), new A28 = US4.5 (install
+   failure / image without SSH contract; `kube_daemon_start`, real `kube_real_failures`);
+   `spec_criteria: 28`. Remove the "the pod's listener without a token" wording anywhere left.
+2) Plan/data-model prose fix (record in ledger as "plan fixed by tasks unit"): the core `Tunnel` phase
+   reads the identification line from one `Cluster::port_forward` stream (the stream the client relay
+   opens per connection); the relay itself is client-side and used from M5 (data-model StartPlan
+   paragraph, contract kube-runtime §3 item 1 "relay up" wording).
+3) speckit-analyze inline; then a fresh tasks reviewer (round 1, review.md, rubrics/tasks.md), scoped
+   re-review (sonnet) until CLEAN.
+4) stash@{0} survivors (record under Decisions or Cut notes): `kubeconfig.rs` (T020/T026), `lifecycle.rs`
+   (T079/T081), `manifest.rs` (T019, needs SSH image/env/port 2222/access-secret mount changes),
+   `start_tests.rs` (T021, drop `Image` phase and volume-size refusal; Tunnel = identification line),
+   `Quantity::{to_k8s, parse_k8s}`, `ResourceNames::all_secrets`, `ObjectKind::noun`,
+   `KubeFailure::StopTimeout` + `From<ApiFailure>`, `FakeCluster::hold_on_delete`. Discard
+   `StartPlan::for_image`. Never drop the stash.
+5) commit, refresh /mnt/project-files/backups/686-m1-wip.bundle, return DONE naming M1a
+   (T106–T116, T020, T026). Branch unpushed; never reset.
 
 ## Open escalation
 

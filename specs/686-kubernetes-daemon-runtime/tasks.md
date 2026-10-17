@@ -1,33 +1,36 @@
 # Tasks: Kubernetes session daemon runtime
 
-**Input**: Design documents from `/specs/686-kubernetes-daemon-runtime/`
+**Input**: Design documents from `/specs/686-kubernetes-daemon-runtime/` (revision 2)
 
 **Prerequisites**: [plan.md](./plan.md), [spec.md](./spec.md), [research.md](./research.md),
 [data-model.md](./data-model.md), [contracts/kube-runtime.md](./contracts/kube-runtime.md),
-[contracts/daemon-image.md](./contracts/daemon-image.md), [quickstart.md](./quickstart.md)
+[contracts/shared-ssh-image.md](./contracts/shared-ssh-image.md), [quickstart.md](./quickstart.md)
 
 **Tests**: Mandatory (Constitution I). In every phase the test tasks come first and must fail before
 the implementation tasks after them. Core rules are `#[cfg(test)]` unit tests in the module named;
-client sequences run over `FakeCluster` (`micold-core` feature `kube-fake`); the real-cluster suite
-is US6.
+sequences run over `FakeCluster` and `FakeKeyGen` (`micold-core` feature `kube-fake`); the
+real-cluster suite is US6.
 
-**Documentation**: each user-visible phase carries its user-guide task (Constitution VII, CI's
-user-guide gate).
+**Documentation**: milestones before the Add entry (M1a–M4b) change no user-visible behaviour
+(`docs-not-needed`, plan Constitution VII). The user guide `docs/user-guide/kubernetes-daemons.md`
+is written in M6, the milestone that shows the Add entry, and extended by M7 and M8.
 
 **Behavior markers**: `[A<n>]` and `[U<n>]` are the behavior ids of [tdd/test-list.md](./tdd/test-list.md).
 `/speckit.tdd.run` ticks a task once every behavior it carries is done; a test task must be seen
 failing for the right reason before the implementation task with the same ids starts. Each
-milestone ends with an acceptance task: its outer-loop behaviors green before it is complete.
+milestone with outer-loop behaviors ends with an acceptance task: those behaviors green before it
+is complete. Before #806 the highest level that runs is the composed core sequence over
+`FakeCluster`; M5/M6 confirm the same behaviors at client level.
 
-**Visual pass**: each milestone that changes the Settings form (M1b, M2, M5, M7) runs the
-`visual-pass` skill at its gate (autopilot gate rule) on the parts it adds; T097 is the full
-quickstart Part B pass at the end.
+**Visual pass**: each milestone that changes the Settings form (M4a, M4b, M6) runs the `visual-pass`
+skill at its gate on the parts it adds; T097 is the full quickstart Part B pass at the end.
 
 **Cross-platform**: the platform-dependent rules (kubeconfig separator, home, exec search path) are
 pure functions taking the platform, tested on all three CI platforms (Constitution VI, research K13).
 
-**Separable parts** (FR-004/FR-007 run on orchestrator defaults pending the owner): the image source
-is Phase 3b, the clone source Phase 3c. A different answer replaces those phases only.
+**Blocked on #806**: tasks marked **(#806)** call the shared SSH image mechanism
+([contracts/shared-ssh-image.md](./contracts/shared-ssh-image.md)); they use the names #806 ships.
+Milestones M5–M9 start only after #806 merges. Everything before them runs without it (contract §5).
 
 ## Format: `[ID] [P?] [Story] Description`
 
@@ -37,240 +40,288 @@ is Phase 3b, the clone source Phase 3c. A different answer replaces those phases
 Paths: `core/` = `crates/micold-core/src/`, `client/` = `crates/micold-client/src/`,
 `client-tests/` = `crates/micold-client/tests/`, `daemon/` = `crates/micold-daemon/src/`.
 
+## Revision 2 task map
+
+Revision 2 (ledger decisions 8–11) replaced the image build/push and the in-pod token-less listener
+with #806's SSH image. Task ids are kept for history; new tasks start at T106.
+
+| Old | Status | Where now |
+|---|---|---|
+| T001, T002, T006, T013 | kept, done | as is |
+| T003 | done; `core/daemon_image/` removed | T111 |
+| T004, T011 | done; rework (drop `registry`, `arch`; add `image`, `providers`, `resources`) | T107, T112 |
+| T005, T012 | done; `DaemonImageSource` removed, `DaemonResources` moved | T106, T111 |
+| T007, T014 | done; rework (access secret, `all_secrets`) | T108, T113 |
+| T008, T016, T010, T017 | done; **removed** (research K2, K4) | reverted by T116 |
+| T009, T018 | done; rework (revision-2 variant list) | T109, T114 |
+| T015 | done; rework (`replace`, port 2222, no `node_arch`) | T110, T115 |
+| T019, T021, T025, T027 | rewritten in place | M1b |
+| T020, T026, T023, T029, T079, T081 | kept (T023/T028 port 2222) | M1a, M1c, M2 |
+| T022, T024, T028, T030–T033 | rewritten in place | M1c, M4a, M5, M6 |
+| T034–T046 | **removed** (no build, push, registry, arch) | resources parts: T019, T130, T131 |
+| T047–T055, T056–T062, T063–T078, T080, T082–T096 | kept or rewritten in place | see each task |
+| T099, T103, T104 | **removed** (milestone acceptance re-cut) | T121, T128, T129, T136, T140 |
+
 ---
 
-## Phase 1: Setup
-
-**Purpose**: dependencies, features and empty modules.
+## Phase 1: Setup (done)
 
 - [x] T001 Add workspace dependencies `kube` 4.2 (`default-features = false`; features `client`, `config`, `rustls-tls`, `ring`, `ws`) and `k8s-openapi` 0.28 (feature `v1_32`) in the root `Cargo.toml` and use them from `crates/micold-client/Cargo.toml` only; add `[features] kube-real-runtime = []` to `crates/micold-client/Cargo.toml`. Confirm `cargo tree -p micold-client -i openssl-sys` prints nothing and both crates are Apache-2.0 (research K0); `micold-core` and `micold-daemon` gain no new dependency.
-- [x] T002 Add feature `kube-fake = []` to `crates/micold-core/Cargo.toml` (comment: exposes `kube::fake::FakeCluster` to client tests) and enable it on the `micold-core` entry of `[dev-dependencies]` in `crates/micold-client/Cargo.toml`.
-- [x] T003 [P] Create empty modules `core/kube/mod.rs` and `core/daemon_image/mod.rs` registered in `core/lib.rs`, and `client/kube/mod.rs` registered in `client/lib.rs`.
+- [x] T002 Add feature `kube-fake = []` to `crates/micold-core/Cargo.toml` (comment: exposes `kube::fake::{FakeCluster, FakeKeyGen}` to client tests) and enable it on the `micold-core` entry of `[dev-dependencies]` in `crates/micold-client/Cargo.toml`.
+- [x] T003 [P] Create empty modules `core/kube/mod.rs` and `core/daemon_image/mod.rs` registered in `core/lib.rs`, and `client/kube/mod.rs` registered in `client/lib.rs`. (`daemon_image` is removed by T111.)
 
 ---
 
-## Phase 2: Foundational (blocks every story)
+## Phase 2: Foundational — revision-2 core types and kubeconfig (M1a)
 
-**Purpose**: the persisted settings, resource identity, the cluster port and its fake, the tunnel
-transport, and the in-pod listener rule.
+**Purpose**: the persisted settings, resource identity, the cluster port and its fake, failure texts,
+and kubeconfig discovery; revision 1's pieces reverted.
+
+### Done in revision 1 (history; reworked below)
+
+- [x] T004 `KubeSettings` validation tests (revision 1 fields) in `core/kube/settings.rs`.
+- [x] T005 `DaemonImageSource` and `DaemonResources` tests in `core/daemon_image/mod.rs`.
+- [x] T006 [U13] [U14] [U15] [U16] `DaemonRuntime::Kubernetes` tests in `core/daemons.rs`: serde round trip as `{"kind":"kubernetes", ...}`, no `settings_version` bump; unknown-kind reader keeps `Unsupported` verbatim; `label()` "Kubernetes"; `is_startable()`; endpoint `<context> / <namespace> / <pod name>`; duplicate name → `RegistryError::DuplicateName` (form text names it, decision 6).
+- [x] T007 Name and ownership tests in `core/kube/names.rs` (revision 1 names).
+- [x] T008 `listener_auth` tests in `core/protocol/auth.rs` — **removed** (K4), reverted by T116.
+- [x] T009 `KubeFailure` text tests (revision 1 variants) in `core/kube/classify.rs`.
+- [x] T010 `Transport::Tunnel` test in `core/connect.rs` — **removed** (K2), reverted by T116.
+- [x] T011 `KubeSettings` and newtypes in `core/kube/settings.rs` (revision 1).
+- [x] T012 `DaemonImageSource` and `DaemonResources` in `core/daemon_image/mod.rs`.
+- [x] T013 [U13] [U14] [U15] [U16] `DaemonRuntime::Kubernetes(KubeSettings)`, `label`, `is_startable`, endpoint text in `core/daemons.rs`.
+- [x] T014 `DaemonKey`, `slug`, `ResourceNames`, `is_ours` in `core/kube/names.rs` (revision 1).
+- [x] T015 `Cluster` port and `FakeCluster` in `core/kube/mod.rs` and `core/kube/fake.rs` (revision 1: `node_arch`, port 7727).
+- [x] T016 `listener_auth` and its use in `daemon/server.rs` — **removed**, reverted by T116.
+- [x] T017 `Transport::Tunnel` — **removed**, reverted by T116.
+- [x] T018 `KubeFailure` with `Display` in `core/kube/classify.rs` (revision 1 variants).
 
 ### Tests (write first, must fail)
 
-- [x] T004 [P] [U1] [U2] [U3] [U4] [U5] [U6] [U7] [U8] `KubeSettings` validation tests in `core/kube/settings.rs`; each refusal is `InvalidField` naming the field (FR-018): `context` "non-empty; existence in kubeconfig checked at start, not on save"; `namespace` "DNS-1123 label, 1-63 chars"; `registry` "required when `image` is `Build` (FR-004); `host[:port]/path`, no tag, no digest"; `arch` "`Amd64` default, `Arm64`"; `node_selector` keys and values "Kubernetes label syntax"; `tolerations` "`key[=value]:Effect` or `key:Exists:Effect`; `Effect` ∈ NoSchedule, PreferNoSchedule, NoExecute"; `volume_size` "≥ 1 GiB, default 10 GiB"; `storage_class` "none = cluster default"; `allowed` "empty by default".
-- [x] T005 [P] [U9] [U10] [U11] [U12] `DaemonImageSource` and `DaemonResources` tests in `core/daemon_image/mod.rs`: `Build` is the default with `dockerfile: None` and `providers` defaulting to the CLIs the Settings provider list enables; `Pull { reference: ImageRef }` flags a moving tag as `sandbox::image` does; `DaemonResources` defaults `cpu_request: None`, `cpu_limit: Some(sandbox::DEFAULT_MILLI_CPUS)`, `memory_request: None`, `memory_limit: Some(sandbox::DEFAULT_MEMORY)`; "each of the four set or unset on its own; a request above its limit refused naming the request field".
-- [x] T006 [P] [U13] [U14] [U15] [U16] `DaemonRuntime::Kubernetes` tests in `core/daemons.rs`: serde round trip as `{"kind":"kubernetes", ...}` through the hand-written `DaemonRuntime` serde, no `settings_version` bump; an unknown-kind reader keeps it as `Unsupported` verbatim (491); `label()` = "Kubernetes"; `is_startable()` = true; endpoint = `<context> / <namespace> / <pod name>`; a duplicate daemon name → `RegistryError::DuplicateName` naming the first.
-- [x] T007 [P] [U18] [U19] [U20] [U21] Name and ownership tests in `core/kube/names.rs`: `DaemonKey::of(context, namespace, name)` = first 8 hex of `protocol::hashing::sha256_hex` over the three NUL-separated; `slug` is DNS-1123 and at most 40 characters; `ResourceNames` gives `micold-<slug>-<key>` (pod), `…-data`, `…-gitconfig`, `…-git-credentials`, `…-git-ssh`, `…-signin-<cli>`, `…-pull`; labels `app.kubernetes.io/managed-by=micold-ai-ide`, `micold.dev/daemon=<key>`, annotation `micold.dev/daemon-name=<name>`; `is_ours` is true only when both labels match.
-- [x] T008 [P] [U22] [U23] [U24] [U25] `listener_auth` table tests in `core/protocol/auth.rs` (K4): set path → `Token(path)`; empty path + loopback address (`127.0.0.1`, `::1`) → `LoopbackNoToken`; empty path + non-loopback address → `AuthConfigError`; plus a test in `daemon/server.rs` that `adopt_auth_token` with an empty `MICOLD_TOKEN_PATH` and `MICOLD_LISTEN_ADDR=0.0.0.0:7727` stays fatal.
-- [x] T009 [P] [U26] `KubeFailure` text tests in `core/kube/classify.rs`: every variant of the data model (`ContextMissing`, `NoKubeconfig`, `Unreachable`, `ExecPlugin`, `NamespaceMissing`, `Forbidden`, `NoRuntime`, `Build`, `Push`, `ImagePull`, `Unschedulable`, `ClaimNotBound`, `Conflict`, `CredentialSource`, `PhaseTimeout`, `Cancelled`) displays exactly its contract §6 text.
-- [x] T010 [P] [U34] `Transport::Tunnel` test in `core/connect.rs`: a `tokio::io::duplex` half boxed as `Transport::Tunnel(Box<dyn AsyncReadWrite>)` completes the 491 handshake against a daemon-side stub; no kube type appears in `connect.rs`.
+- [ ] T106 [P] [U11] [U12] `DaemonResources` tests in `core/daemon_resources.rs` (moved from `core/daemon_image/mod.rs`): defaults `cpu_request: None`, `cpu_limit: Some(sandbox::DEFAULT_MILLI_CPUS)`, `memory_request: None`, `memory_limit: Some(sandbox's default memory)`; each of the four set or unset on its own; a request equal to its limit accepted, one above it refused naming the request field.
+- [ ] T107 [P] [U1] [U2] [U5] [U6] [U7] [U8] [U117] [U118] [U119] `KubeSettings` revision-2 tests in `core/kube/settings.rs` (data model "KubeSettings"; each refusal `InvalidField` naming the field, FR-018): `image: Option<ImageRef>` is `None` by default and a given reference is kept as is, a moving tag flagged as `sandbox::image` flags it; `providers` defaults to the providers enabled in Settings and may be empty; `resources: DaemonResources`; no `registry` or `arch` field; `Quantity::{to_k8s, parse_k8s}` (write the largest exact binary unit, read binary, decimal or no suffix, round trip equal — from stash@{0}).
+- [ ] T108 [P] [U20] [U120] Name tests in `core/kube/names.rs`: `ResourceNames.access_secret` = `<base>-ssh-access`; `all_secrets(&allowed)` lists the access secret first, then one name per allowed credential; `ObjectKind::noun` (from stash@{0}).
+- [ ] T109 [P] [U26] `KubeFailure` text tests in `core/kube/classify.rs`: every revision-2 variant of the data model except `Provision` (added in M5) — `ContextMissing`, `NoKubeconfig`, `Unreachable`, `ExecPlugin`, `NamespaceMissing`, `Forbidden`, `ImagePull`, `Unschedulable`, `ClaimNotBound`, `Conflict`, `CredentialSource`, `ImageContract`, `HostKeyMismatch`, `PhaseTimeout`, `Cancelled`, `StopTimeout`, `Api`, `Unavailable` — displays exactly its contract §6 text (`Unavailable`: data model `StartOutcome` text); `NoRuntime`, `Build`, `Push`, `VolumeTooSmall` no longer exist.
+- [ ] T110 [P] [U121] `FakeCluster` tests in `core/kube/fake.rs`: `replace` with the current `resourceVersion` stores the object under a new one; with a stale one answers `ApiFailure` 409 and changes nothing; `hold_on_delete` keeps a deleted pod terminating (`deletionTimestamp` set) until released (from stash@{0}); `port_forward(namespace, pod, port)` records the port.
+- [ ] T020 [P] [US1] [U45] [U46] [U47] [U48] Kubeconfig tests in `core/kube/kubeconfig.rs`, parameterised over Linux, macOS and Windows (FR-022): `candidates` splits `KUBECONFIG` on `;` (Windows) or `:` (else), else `<home>/.kube/config` with home `%USERPROFILE%` (Windows) or `$HOME`; `search_path(process_path, login_shell_path, home, platform)` is the process `PATH`, then the login shell's `PATH` (absent on Windows), then `/opt/homebrew/bin`, `/usr/local/bin`, `~/.local/bin`, `~/google-cloud-sdk/bin`, de-duplicated keeping the first; `parse_login_shell_output` returns the text between the markers, `None` without them. (Tests in stash@{0}.)
 
 ### Implementation
 
-- [x] T011 [U1] [U2] [U3] [U4] [U5] [U6] [U7] [U8] `KubeSettings` and its newtypes (`KubeContextName`, `Namespace`, `RegistryRepo`, `NodeArch`, `LabelKey`, `LabelValue`, `Toleration`, `Quantity`) with validation and serde in `core/kube/settings.rs` (data model "KubeSettings"; `allowed: BTreeSet<KubeCredential>` with `KubeCredential` declared in `core/kube/credentials.rs` as the five variants of the data model, mapping added in US3).
-- [x] T012 [P] [U9] [U10] [U11] [U12] `DaemonImageSource` and `DaemonResources` in `core/daemon_image/mod.rs`, reusing `sandbox::MilliCpus`, `sandbox::Bytes` and `sandbox::image::ImageRef` (not `sandbox::ResourceBudget`).
-- [x] T013 [U13] [U14] [U15] [U16] `DaemonRuntime::Kubernetes(KubeSettings)`, `label`, `is_startable`, endpoint text in `core/daemons.rs` (depends on T011, T012).
-- [x] T014 [P] [U18] [U19] [U20] [U21] `DaemonKey`, `slug`, `ResourceNames`, `Ownership`, `is_ours` in `core/kube/names.rs`.
-- [x] T015 `Cluster` port in `core/kube/mod.rs` (a trait returning boxed futures, like `ssh::SshRunner`): create (→ `Created { uid }` or `AlreadyExists`), get, delete by name with `preconditions.uid` (`404` = done), namespace get, access review, pod status (`PodStatusView`), events (`EventView`), node get, `port_forward(pod, 7727)` → `Box<dyn AsyncReadWrite>`, `logs(pod, tail)`; `ApiFailure { code, reason, message }`. `FakeCluster` in `core/kube/fake.rs` under `cfg(any(test, feature = "kube-fake"))`: scriptable per-call answers, pod phase progressions, a call log, objects keyed by kind and name, a tunnel built from `tokio::io::duplex`.
-- [x] T016 [P] [U22] [U23] [U24] [U25] `listener_auth` in `core/protocol/auth.rs`; `adopt_auth_token` in `daemon/server.rs` uses it.
-- [x] T017 [P] [U34] `Transport::Tunnel` in `core/connect.rs` and its dial arm.
-- [x] T018 [P] [U26] `KubeFailure` with `Display` in `core/kube/classify.rs` (new file); its classifiers come in M2 (`from_runtime`), M4 (`PodGone`) and M6 (`from_status`, `from_pod`, `from_pvc`).
+- [ ] T111 [U11] [U12] `DaemonResources` in `core/daemon_resources.rs` (new, shared with #806), registered in `core/lib.rs`; delete `core/daemon_image/` (`DaemonImageSource`, `ImageInputs`) and its registration.
+- [ ] T112 [U1] [U2] [U5] [U6] [U7] [U8] [U117] [U118] [U119] `KubeSettings` revision 2 in `core/kube/settings.rs`: remove `RegistryRepo`, `NodeArch`, `registry`, `arch`; add `image: Option<ImageRef>`, `providers: BTreeSet<AiCli>`, `resources: DaemonResources`; `Quantity::{to_k8s, parse_k8s}`. `core/daemons.rs` and its tests follow (depends on T111).
+- [ ] T113 [P] [U20] [U120] `ResourceNames.access_secret`, `all_secrets`, `ObjectKind::noun` in `core/kube/names.rs` and `core/kube/mod.rs`.
+- [ ] T114 [P] [U26] `KubeFailure` revision 2 in `core/kube/classify.rs` (add `ImageContract`, `HostKeyMismatch`, `StopTimeout`, `Api`, `Unavailable`; remove `NoRuntime`, `Build`, `Push`, `VolumeTooSmall`; `From<ApiFailure>` from stash@{0}).
+- [ ] T115 [U121] `Cluster` port revision 2 in `core/kube/mod.rs`: add `replace(namespace, kind, name, resource_version, manifest)`; `port_forward(namespace, pod, port)`; remove `node_arch`. `FakeCluster` gains `replace` and `hold_on_delete` in `core/kube/fake.rs`.
+- [ ] T116 Revert revision 1's listener auth and tunnel transport (research K2, K4): delete `core/protocol/auth.rs` and its registration; restore `daemon/server.rs` and `core/connect.rs` to `origin/main` (`git diff origin/main -- crates/micold-daemon/src/server.rs crates/micold-core/src/connect.rs` is empty); feature 027's empty-token-is-fatal tests stay green.
+- [ ] T026 [P] [US1] [U45] [U46] [U47] [U48] `candidates`, `search_path`, `parse_login_shell_output` in `core/kube/kubeconfig.rs` (stub in stash@{0}).
 
-**Checkpoint**: `mise run test-core` green; a Kubernetes daemon round-trips through `settings.json`.
+**Checkpoint**: `mise run test-core` green; a revision-2 Kubernetes daemon round-trips through `settings.json`.
 
 ---
 
-## Phase 3: User Story 1 — Work on a project in a Kubernetes daemon end to end (P1) 🎯 MVP
+## Phase 3: Pod, volume and access secret (US1, US5; M1b)
 
-**Goal**: add a Kubernetes daemon, start it, bind a worktree, run a session in the pod.
+**Goal**: the start sequence creates or adopts the daemon's PVC, SSH access secret and pod, with
+per-phase bounds and rollback, over `FakeCluster` and `FakeKeyGen`.
 
-**Independent test**: with a cluster, add a daemon with defaults, start it, create a bound worktree,
-start a session and type; input and output reach it (US1 scenarios 1–5).
+### Tests (write first, must fail)
 
-### 3a — Start and connect with a given image (scenarios 1, 4, 5)
+- [ ] T019 [P] [US1] [U35] [U36] [U37] [U38] [U39] [U40] [U41] Manifest tests in `core/kube/manifest.rs` for `pod(..)`, `pvc(..)`, `secret(..)` (contract §1, research K7): never a `Service` or `Ingress` kind; no `hostPort`, `hostNetwork`, `hostPID`, `privileged`, `containerPort`; `restartPolicy: Always`, `automountServiceAccountToken: false`, `enableServiceLinks: false`; one container, image = the given image or the default passed in, command left to the image; pod env only `HOME=/data/home`, `TMPDIR=/tmp` and the access-secret directory (shared-ssh-image §1); the access secret mounted read-only at `/run/micold/ssh` (`defaultMode: 0440`); the PVC at `/data`, an `emptyDir` at `/tmp`; the PVC `ReadWriteOnce` with `volume_size` and `storage_class` (omitted when none); both ownership labels and the name annotation on every object; `nodeSelector` and `tolerations` as given; `resources.requests` / `.limits` hold exactly the set `DaemonResources` fields (`<n>m`, `Quantity::to_k8s`). Starts from stash@{0}'s `manifest.rs` (replace port 7727, the daemon env and the listener env).
+- [ ] T117 [P] [US5] [U122] [U123] `PodStamp` and `drift` tests in `core/kube/manifest.rs`: the stamp is the canonical JSON of image, resources, node selector, tolerations and allowed credentials, equal for equal settings, written as annotation `micold.dev/pod-settings`; `drift` names the differing settings in form order and is empty when equal (FR-005, US5.2).
+- [ ] T118 [P] [US1] [U124] [U125] `AccessSecret` tests in `core/kube/access.rs` (research K3): `parse` / `to_data` round trip over keys `ssh_host_ed25519_key`, `ssh_host_ed25519_key.pub`, `authorized_keys` (one line per client, comment `micold-client:<client id>`); `with_client` is idempotent, replaces a line with the same client id and reports whether it changed; `without_client` removes only that line; `FakeKeyGen` returns fixed pairs.
+- [ ] T021 [P] [US1] [U49] [U50] [U51] [U52] [U53] [U54] [U55] [U57] [U126] [U127] [U128] Start sequence tests over `FakeCluster` and `FakeKeyGen` in `core/kube/start.rs` (contract §2–§3): `StartPlan::kube()` is `Config, Preflight, Volume, Secrets, Pod, Schedule, Pull, Tunnel, Copy, Install, Connect`; `bound()` is 15 min for `Pull` and `Install`, 120 s for every other, and with a paused clock each phase run here fails `PhaseTimeout { phase }` at its bound and not a tick before; a missing namespace → `NamespaceMissing`, nothing created; the PVC is created on first start and reused on the next; a `201` is recorded in `Attempt.created`; `409` + ours → adopted, not recorded; `409` + not ours → `Conflict { kind, name }`; a pod with `deletionTimestamp` is waited out, then created; the first start creates the access secret with a generated host key and this client's key; another client's start adds its key by `replace` with the `resourceVersion` it read, a `409` re-reads and keeps the other key, a key already present writes nothing; an adopted pod whose stamp differs ends the start with `Drift { fields }`, Recreate deletes it as Stop does and creates a new one, Keep continues; any failure rolls back `Attempt.created` in reverse by name and UID (the PVC only when this attempt created it, adopted objects never) and removes a key this attempt added. Each phase sets its `activity`. Starts from stash@{0}'s `start_tests.rs` (drop the `Image` phase and the volume-size refusal).
 
-#### Tests (write first, must fail)
+### Implementation
 
-- [ ] T019 [P] [US1] [U35] [U36] [U37] [U38] [U39] [U40] Manifest tests in `core/kube/manifest.rs` for `pod(..)` and `pvc(..)`: never a `Service` or `Ingress` kind; no `hostPort`, `hostNetwork`, `hostPID`, `privileged`, `containerPort`; `restartPolicy: Always`, `automountServiceAccountToken: false`, `enableServiceLinks: false`; one container with env `MICOLD_LISTEN_ADDR=127.0.0.1:7727`, `MICOLD_TOKEN_PATH=` (empty), `MICOLD_IDLE_STOP=off`, `MICOLD_REPOS_ROOT=/data/repos`, `HOME=/data/home`, `XDG_DATA_HOME=/data/state`, `TMPDIR=/tmp`; the PVC mounted at `/data` and an `emptyDir` at `/tmp`; the PVC is `ReadWriteOnce` with `volume_size` and `storage_class` (omitted when none); both ownership labels and the name annotation on every object; `nodeSelector` and `tolerations` as given.
-- [ ] T020 [P] [US1] [U45] [U46] [U47] [U48] Kubeconfig tests in `core/kube/kubeconfig.rs`, parameterised over Linux, macOS and Windows (FR-022): `candidates` splits `KUBECONFIG` on `;` (Windows) or `:` (else), else `<home>/.kube/config` with home `%USERPROFILE%` (Windows) or `$HOME`; `search_path(process_path, login_shell_path, home, platform)` is the process `PATH`, then the login shell's `PATH` (absent on Windows), then `/opt/homebrew/bin`, `/usr/local/bin`, `~/.local/bin`, `~/google-cloud-sdk/bin`, de-duplicated keeping the first; `parse_login_shell_output` returns the text between the markers, `None` without them.
-- [ ] T021 [P] [US1] [U49] [U50] [U51] [U52] [U53] [U54] [U55] [U56] [U57] Start sequence tests over `FakeCluster` in `core/kube/start.rs`: `StartPlan` for a Pull image is `Config, Preflight, Volume, Secrets, Pod, Schedule, Pull, Tunnel` and for Build has `Image` after `Preflight`; `StartPhase::bound()` is 30 min for `Image`, 15 min for `Pull`, 120 s for every other; a missing namespace → `NamespaceMissing`; the PVC is created on first start and reused on the next; a `201` is recorded in `Attempt.created`; `409` + ours → adopted, not recorded; `409` + not ours → `Conflict { kind, name }` with the contract §2 text; a pod with `deletionTimestamp` → wait until it is gone, then create; a `volume_size` smaller than the existing claim is refused naming the claim; each phase sets its `activity`; with a paused clock each phase fails `PhaseTimeout { phase }` at its `bound()`; any failure rolls back `Attempt.created` in reverse, by name and UID, the PVC only when this attempt created it, adopted objects never (FR-013).
-- [ ] T022 [P] [US1] [A1] [A4] [A5] [U111] [U112] [U113] Client tests over `FakeCluster` in `client-tests/kube_daemon_start.rs`: Start → `Starting` → `connected` through `Transport::Tunnel`, row endpoint `<context> / <namespace> / <pod>`; a second Start with the pod present adopts it (US1.4); two actors starting the same daemon on one `FakeCluster` → exactly one pod create succeeds and both connect (FR-023); a second, non-Kubernetes daemon's state is unchanged throughout (FR-019); a handshake refused for version mismatch → `VersionMismatch` and no session started (FR-017); the cluster created no `Service` or `Ingress` (FR-006, US1.5); app launch with the cluster unreachable does not delay the other daemons or the window (FR-019).
-- [ ] T023 [P] [US1] [U86] [U87] [U88] [U89] Pure-helper tests in `client/kube/live.rs` `#[cfg(test)]`: `rewrite_exec_commands` turns each non-absolute `users[].exec.command` into the first match on the search path and leaves absolute ones; not found → `ExecPlugin { command, error, search_path }`; contexts are listed from the merged files in order; the form's context list carries no `users[]` data (FR-002); `to_api_failure(&kube::Error)` table: an API `ErrorResponse` keeps its code, reason and message, `409 AlreadyExists` on create becomes `AlreadyExists`, `404` on delete counts as done, a connection error becomes `Unreachable { server, error }`; `delete_params(uid)` sets `Preconditions { uid }` and grace seconds.
-- [ ] T024 [P] [US1] [U95] [U96] Reducer tests in `client-tests/features_daemons.rs`: choosing runtime Kubernetes in Add shows the context picker filled from the merged kubeconfig, or "no kubeconfig found; looked in <paths>"; fields namespace and image reference (Pull); Save refuses an invalid field naming it; the saved row shows "Kubernetes" and the endpoint.
+- [ ] T025 [US1] [U35] [U36] [U37] [U38] [U39] [U40] [U41] `pod`, `pvc`, `secret` builders returning `serde_json::Value` in `core/kube/manifest.rs`, constants `SSH_PORT = 2222`, `IMAGE_USER_UID = 10001`, mount paths (security contexts and credential mounts come in M3).
+- [ ] T119 [P] [US5] [U122] [U123] `PodStamp`, `drift` in `core/kube/manifest.rs`.
+- [ ] T120 [P] [US1] [U124] [U125] `AccessSecret`, `KeyPair`, the `KeyGen` port in `core/kube/access.rs`; `FakeKeyGen` in `core/kube/fake.rs` under the `kube-fake` feature.
+- [ ] T027 [US1] [U49] [U50] [U51] [U52] [U53] [U54] [U55] [U57] [U126] [U127] [U128] `StartPhase`, `bound()`, `activity()`, `StartPlan::kube()`, `Attempt { created, added_key }`, `CreatedResource`, `StartOutcome { Ready, Drift, Failed }` and the sequence over `Cluster` and `KeyGen` through `Pull` in `core/kube/start.rs`, with per-phase timeouts and rollback (preflight reviews and classifiers come in M2, allowed secrets in M3, `Tunnel` in M1c).
+- [ ] T121 [US1] [A4] [A5] Acceptance (M1b): the `core/kube/start.rs` tests show a second start adopts the pod and creates nothing (A4, core half) and the call log holds no `Service` or `Ingress` (A5, core half).
 
-#### Implementation
+---
 
-- [ ] T025 [US1] [U35] [U36] [U37] [U38] [U39] [U40] `pod`, `pvc` builders returning `serde_json::Value` in `core/kube/manifest.rs` (security context and credential mounts come in US3, resources in 3b).
-- [ ] T026 [P] [US1] [U45] [U46] [U47] [U48] `candidates`, `search_path`, `parse_login_shell_output` in `core/kube/kubeconfig.rs`.
-- [ ] T027 [US1] [U49] [U50] [U51] [U52] [U53] [U54] [U55] [U56] [U57] `StartPhase`, `bound()`, `StartPlan`, `Attempt`, `CreatedResource` and the happy-path sequence over `Cluster` in `core/kube/start.rs` with per-phase timeouts and rollback of `Attempt.created` (preflight access reviews and the cluster-status classifiers come in US4).
-- [ ] T028 [US1] [U86] [U87] [U88] [U89] `LiveCluster` in `client/kube/live.rs`: merge candidate files with `kube::config::Kubeconfig`, `rewrite_exec_commands`, a `kube::Client` per context, the `Cluster` operations through `to_api_failure` and `delete_params`, `Api::<Pod>::portforward` on 7727 returned as the boxed stream, `logs` with `tail_lines`; the login shell's `PATH` read once per run with a 5 s timeout (skipped on Windows).
+## Phase 4: Tunnel, relay, keys and the live cluster (US1; M1c)
+
+**Goal**: the `Tunnel` phase reaches the pod's SSH server; the client side has the live adapter, the
+loopback relay and the owner-only key files.
+
+### Tests (write first, must fail)
+
+- [ ] T122 [P] [US1] [U129] `Tunnel` phase tests in `core/kube/start.rs` over `FakeCluster`: it opens `port_forward(namespace, pod, SSH_PORT)` and reads an identification line starting `SSH-2.0-` within its bound → `StartOutcome::Ready`; no line within the bound, a line that is not SSH, or the container exited → `ImageContract { image, missing }` with the contract §6 examples, and rollback runs.
+- [ ] T023 [P] [US1] [U86] [U87] [U88] [U89] Pure-helper tests in `client/kube/live.rs` `#[cfg(test)]`: `rewrite_exec_commands` turns each non-absolute `users[].exec.command` into the first match on the search path and leaves absolute ones; not found → `ExecPlugin { command, error, search_path }`; contexts are listed from the merged files in order and carry no `users[]` data (FR-002); `to_api_failure(&kube::Error)`: an API `ErrorResponse` keeps its code, reason and message, `409 AlreadyExists` on create is `AlreadyExists`, `409` on replace stays a 409 `ApiFailure`, `404` on delete is done, a connection error is `Unreachable { server, error }`; `delete_params(uid)` sets `Preconditions { uid }` and grace seconds.
+- [ ] T123 [P] [US1] [U130] Relay tests in `client/kube/relay.rs` over `FakeCluster`'s duplex port-forward: `Relay::open` listens on `127.0.0.1:0`; each accepted connection opens one `port_forward(.., SSH_PORT)` and copies bytes both ways; two connections → two streams; dropping the relay closes the listener and its connections; a refused port-forward closes only that connection.
+- [ ] T124 [P] [US1] [U131] Key-file tests in `client/kube/keys.rs` over a temp directory: `id_ed25519`, `id_ed25519.pub`, `known_hosts`, `client_id` per daemon key are owner-only (`owner_only.rs`); `known_hosts` is one line `micold-kube-<daemon key> <host public key>`; `client_id` is stable across loads; `delete` removes them all.
+
+### Implementation
+
+- [ ] T125 [US1] [U129] The `Tunnel` phase in `core/kube/start.rs`; the sequence ends after it with `Ready { tunnel }` until M5 adds `Copy`, `Install`, `Connect`.
+- [ ] T028 [US1] [U86] [U87] [U88] [U89] `LiveCluster` in `client/kube/live.rs`: merge candidate files with `kube::config::Kubeconfig`, `rewrite_exec_commands`, a `kube::Client` per context, the `Cluster` operations (incl. `replace`) through `to_api_failure` and `delete_params`, `Api::<Pod>::portforward` on the given port returned as the boxed stream, `logs` with `tail_lines`; the login shell's `PATH` read once per run with a 5 s timeout (skipped on Windows).
 - [ ] T029 [US1] Choose `LiveCluster` once in `client/shell/capabilities.rs`; `client-tests/no_concrete_implementations.rs` stays green.
-- [ ] T030 [US1] [A1] [A4] [A5] [U111] [U112] [U113] `Dial::Kube` in `client/daemon.rs`: run the start sequence inside the daemon's actor (no cluster I/O on the UI thread, FR-019), dial `Transport::Tunnel`, then the 491/489 handshake; a failed start → `Unreachable` with the reason and no further attempts until the user's Start or Reconnect (489 R7).
-- [ ] T031 [US1] [U95] [U96] Kubernetes `Draft`/`Msg` (context, namespace, image reference) in `client/features/daemons.rs`; kubeconfig context listing off the UI thread in `client/shell/daemons.rs`.
-- [ ] T032 [US1] [U96] Kubernetes form glue in `client/ui/settings/daemons.rs`; extend `client-tests/daemons_section_geometry.rs` to the Kubernetes form.
-- [ ] T033 [US1] User guide: new `docs/user-guide/kubernetes-daemons.md` (adding, starting, what is created in the namespace, no Service, stop, remove, and Forget locally when the cluster is unreachable), linked from `docs/SUMMARY.md`, `docs/user-guide/settings.md` and `docs/user-guide/remote-daemons.md`.
-
-### 3b — The daemon image: build, push, resources (scenario 1 default path; FR-004, FR-005)
-
-#### Tests (write first, must fail)
-
-- [ ] T034 [P] [US1] [U71] [U72] [U73] Template tests in `core/daemon_image/containerfile.rs`: `render(providers)` installs exactly the selected providers' npm packages at the versions pinned in `packaging/sandbox/Containerfile` (read with `include_str!`), creates UID/GID 10001, sets `USER 10001`, `HOME=/data/home`, `XDG_DATA_HOME=/data/state`, `TMPDIR=/tmp`, has no `COPY` or `ENV` of any credential, ends with the daemon as `ENTRYPOINT`; a test fails when an `AiCli` has no pinned `ARG`.
-- [ ] T035 [P] [US1] [U74] [U75] Tag tests in `core/daemon_image/tag.rs`: `ImageInputs { daemon_sha256, containerfile_sha256, providers, arch }` → `<registry>/micold-daemon:<CARGO_PKG_VERSION>-<12 hex>`; equal inputs give equal tags; a change of daemon bytes, Containerfile bytes, provider set or arch changes the tag; never a `sandbox::image::MOVING_TAGS` tag; `PushedImage { tag, digest }.pod_image()` = `<registry>/micold-daemon@<digest>`.
-- [ ] T036 [P] [US1] [U76] [U77] [U78] [U27] [U28] `CliRuntime` tests over `RecordingRunner` in `core/sandbox/cli.rs`: `build_image` argv `<rt> build --platform linux/<arch> -f <file> -t <tag> <context>`, plus `--build-context micold=<tmp>` for a user Dockerfile; `push_image` argv `<rt> push <tag>`; `repo_digest` runs `<rt> image inspect --format '{{json .RepoDigests}}' <tag>` and picks the `<registry>/micold-daemon` entry; none → `Push` "the registry returned no digest"; `<rt>` is `sandbox::cli::program_of(kind)`. In `core/kube/classify.rs`: `from_runtime` maps a failed build to `Build { output_tail }` (its last lines) and a failed push ("not logged in", "denied", unreachable) to `Push { registry, error }`.
-- [ ] T037 [P] [US1] [U90] [U91] [U92] [U93] [U94] Image-step tests over `RecordingRunner` in `client/kube/image.rs` `#[cfg(test)]`: the daemon binary is chosen by `ssh::provision::ArtefactChoice` (own binary on a Linux client of that arch, else `<install>/remote-daemons/linux-<arch>/micold-daemon`; absent → "no daemon build for linux-<arch> ships with this app"); tag present (`inspect_image`) → no build; push always; the digest is what the pod uses; output lines go to `DaemonDiagnostics::push_log`; Cancel kills the child → `Cancelled`; the `Image` phase's 30-minute bound from `start.rs` (paused clock) kills the child and fails `PhaseTimeout { phase: Image }`; a failed build → `Build` with the output tail; no runtime installed → `NoRuntime`.
-- [ ] T038 [P] [US1] [U41] [U42] Manifest resource tests in `core/kube/manifest.rs`: for each of `cpu_request`, `cpu_limit`, `memory_request`, `memory_limit`, set alone, all set, none set → exactly those keys under `resources.requests` / `resources.limits` (`<n>m`, bytes); the Build choice adds `nodeSelector` `kubernetes.io/arch=<arch>`; the pod image is the digest reference.
-- [ ] T039 [P] [US1] [U97] [U98] [U99] Reducer tests in `client-tests/features_daemons.rs`: image source choice Build (default) or Pull; Build with no Registry is refused naming "Registry"; providers default to the enabled ones; arch; the four resource fields, a request above its limit refused naming the request field; the container form still shows its image and limits fields unchanged.
-
-#### Implementation
-
-- [ ] T040 [P] [US1] [U71] [U72] [U73] `render(providers)` in `core/daemon_image/containerfile.rs`.
-- [ ] T041 [P] [US1] [U74] [U75] `ImageInputs`, `ImageTag`, `PushedImage` in `core/daemon_image/tag.rs`; make `sandbox::image::MOVING_TAGS` `pub(crate)` to reuse it.
-- [ ] T042 [P] [US1] [U76] [U77] [U78] [U27] [U28] Inherent `CliRuntime::{build_image, push_image, repo_digest}` over its `CommandRunner` (`run_streaming` for build and push) in `core/sandbox/cli.rs`, not on the `ContainerRuntime` trait; `from_runtime` in `core/kube/classify.rs`.
-- [ ] T043 [US1] [U90] [U91] [U92] [U93] [U94] The image step in `client/kube/image.rs` over `CliRuntime<SystemRunner>` and its wiring into the `Image` phase of `core/kube/start.rs` and `client/daemon.rs`: activity "Building image" / "Pushing image" with Cancel through the actor, failures through `from_runtime`.
-- [ ] T044 [US1] [U41] [U42] `resources` and the Build-choice arch selector in `core/kube/manifest.rs`.
-- [ ] T045 [US1] [U97] [U98] [U99] Extract the image-source and limits fields from `sections` in `client/ui/settings/container_fields.rs` into functions in that file, drawn by the container form and the Kubernetes form (one copy, K1); Kubernetes `Draft` fields (choice, Dockerfile picker, providers, registry, arch, four resources) in `client/features/daemons.rs`; the geometry gate covers them.
-- [ ] T046 [US1] User guide `docs/user-guide/kubernetes-daemons.md`: image source (Build pushes to your registry with your runtime's login; Pull), the tag and rebuild rule, resources.
-
-### 3c — Clone and worktrees in the pod (scenarios 2, 3; FR-007)
-
-#### Tests (write first, must fail)
-
-- [ ] T047 [P] [US1] [U79] [U80] [U81] Clone rule tests in `core/kube/clone.rs`: `remote_for` picks `origin`, else the only remote; none → `NoRemote`; several without `origin` → `Ambiguous(names)`; `CloneTarget::for_url` = `/data/repos/<slug(repo)>-<hash8(url)>`, deterministic; `CloneFailure` from git stderr → `AuthRequired { remote }`, `DiskFull`, `Unreachable { remote }`, `Other`; texts as contract §6 (clone).
-- [ ] T048 [P] [US1] [U82] Protocol tests in `core/protocol/messages.rs` and `core/protocol/version.rs`: `ClientMsg::RepoClone { url, dest }`, `DaemonMsg::RepoCloned { dest }`, `DaemonMsg::RepoCloneFailed { dest, failure }` round-trip; `PROTOCOL_VERSION` is 49.
-- [ ] T049 [P] [US1] [U83] [U84] [U85] Daemon tests in `daemon/repo_clone.rs` against a local bare repository: clone into `.partial-<dest>-<rand>` and rename on success; an existing `dest` is fetched; an auth failure (with `GIT_TERMINAL_PROMPT=0`) leaves no directory; a `dest` outside `MICOLD_REPOS_ROOT` is refused.
-- [ ] T050 [P] [US1] [A2] [U100] [U101] [U102] Reducer tests in `client-tests/features_daemons.rs` over a fake daemon: binding a worktree of a project with no remote to a Kubernetes daemon is refused with the reason and sends nothing; a project with a remote sends `RepoClone` then `WorktreeCreate`, in that order, showing activity "Cloning <repo>"; the bound worktree is a 489 remote project with identity `micold-remote://<daemon-id>/data/repos/…` (`ssh/remote_path.rs`), its row showing the daemon name and in-pod path.
-
-#### Implementation
-
-- [ ] T051 [P] [US1] [U79] [U80] [U81] `remote_for`, `CloneTarget`, `CloneFailure` in `core/kube/clone.rs`.
-- [ ] T052 [US1] [U82] `RepoClone` / `RepoCloned` / `RepoCloneFailed` (`CloneFailureWire`) in `core/protocol/messages.rs`; `PROTOCOL_VERSION` 48 → 49 in `core/protocol/version.rs`.
-- [ ] T053 [US1] [U83] [U84] [U85] `daemon/repo_clone.rs` (new) dispatched from `daemon/ops.rs`, `MICOLD_REPOS_ROOT` from the environment.
-- [ ] T054 [US1] [A2] [U100] [U101] [U102] Create-worktree clone step for Kubernetes daemons in `client/features/` and `client/shell/workspace.rs`.
-- [ ] T055 [US1] Docs: `docs/user-guide/worktrees-and-sessions.md` (worktrees on a Kubernetes daemon come from the project's remote; unpushed commits stay local; a remote needing a credential needs it allowed for the daemon), `docs/user-guide/kubernetes-daemons.md`, and `docs/daemon.md` (`RepoClone`, `MICOLD_REPOS_ROOT`, the pod's listener without a token).
-- [ ] T100 [US1] [A2] Acceptance (M3): A2 green in `features_daemons` over the fake daemon.
-
-**Checkpoint**: US1 runs end to end over `FakeCluster`; sessions in the pod use the existing ops.
+- [ ] T126 [P] [US1] [U130] `Relay` in `client/kube/relay.rs`.
+- [ ] T127 [P] [US1] [U131] Key files in `client/kube/keys.rs` with `owner_only.rs`.
 
 ---
 
-## Phase 4: User Story 2 — Sessions outlive the client (P1)
-
-**Goal**: a dropped tunnel reconnects to the same pod; a pod that is gone stops the daemon with its
-reason and is not recreated.
-
-**Independent test**: start a session producing output, quit, wait, reopen; the session runs with
-the output produced meanwhile.
+## Phase 5: Stop, Remove and failure reasons in core (US5, US4; M2)
 
 ### Tests (write first, must fail)
 
+- [ ] T079 [P] [US5] [A21] [A24] [U63] [U64] [U65] Lifecycle tests over `FakeCluster` in `core/kube/lifecycle.rs`: Stop deletes the pod by name and UID with grace 10 s and waits until gone (120 s, else `StopTimeout`), PVC and secrets kept; Remove deletes pod, secrets (access secret included) and PVC that are ours (`404` = done); the forget-locally list is the deterministic names (K5), the access secret among them, and makes no cluster call. (Tests in stash@{0}.)
+- [ ] T072 [P] [US4] [U30] [U31] [U32] [U33] `KubeFailure` classifier tests in `core/kube/classify.rs`: `from_status` (403 → `Forbidden { verb, resource }`, namespace 404 → `NamespaceMissing`, connect error → `Unreachable { server, error }`, other → `Api`); `from_pod` (`ErrImagePull`, `ImagePullBackOff`, `InvalidImageName` → `ImagePull` on first sight; `PodScheduled=False, reason=Unschedulable` → `Unschedulable { message }`; the container terminated → `ImageContract`); `from_pvc` (`ProvisioningFailed` event or "unbound immediate PersistentVolumeClaims" → `ClaimNotBound`); texts as contract §6.
 - [ ] T056 [P] [US2] [U29] `PodGone` table tests in `core/kube/classify.rs` (contract §4): `404` or `deletionTimestamp` → `Deleted`; `status.reason == Evicted` → `Evicted { message }`; `phase == Unknown` or its node `404` → `NodeLost { node }`; present, `Running`, ready → `None`; texts "stopped: the pod was deleted", "stopped: the pod was evicted: <message>", "stopped: the pod's node <node> was lost".
-- [ ] T057 [P] [US2] [U17] [U103] State tests in `core/daemons.rs`: `Reconnecting` or `Unreachable` + `Gone(reason)` → `Stopped` with `stopped_reason`; `Start` from `Stopped` → `Starting` and clears it; plus a reducer test in `client-tests/features_daemons.rs` that the row shows `stopped` with the reason.
-- [ ] T058 [P] [US2] [A6] [A7] [A8] [A9] [U114] [U115] Actor tests over `FakeCluster` in `client-tests/kube_daemon_reconnect.rs`: tunnel dropped with the pod running → re-dial, sessions shown with output since the drop, no pod create; pod deleted, evicted or node lost → `Stopped` with the reason, sessions `lost to its daemon`, no create call, actor ended; a 5xx or timeout on lookup → stays `Reconnecting` with 489's back-off; Start after `Gone` → a new pod on the same PVC (no PVC create); after another client's Remove (pod and PVC gone) → `Gone(Deleted)`, and Start creates a new, empty PVC and pod (FR-023); another daemon untouched.
+- [ ] T073 [P] [US4] [U60] [U61] [U62] Start tests over `FakeCluster` in `core/kube/start.rs`: `Preflight` runs access reviews for `create pods`, `create persistentvolumeclaims`, `create secrets`, `update secrets`, `create pods/portforward`, `delete pods`, and a denial fails `Forbidden` before any create (US4.1); `Config` failures → `NoKubeconfig { looked_in }`, `ContextMissing { context, looked_in }`, `ExecPlugin`; a pod failing `ImagePull` or `Unschedulable`, or a PVC failing `ClaimNotBound`, fails the start on first sight, before the phase bound.
 
 ### Implementation
 
+- [ ] T081 [US5] [A21] [A24] [U63] [U64] [U65] Stop, Remove and forget-locally sequences in `core/kube/lifecycle.rs` (stub in stash@{0}).
+- [ ] T075 [US4] [U30] [U31] [U32] [U33] `from_status`, `from_pod`, `from_pvc` in `core/kube/classify.rs`.
 - [ ] T059 [P] [US2] [U29] `PodGone` and its classifier in `core/kube/classify.rs`.
-- [ ] T060 [US2] [U17] `DaemonEvent::Gone`, `DaemonView.stopped_reason` and the transitions in `core/daemons.rs`.
-- [ ] T061 [US2] [A6] [A7] [A8] [A9] [U103] [U114] [U115] Pod lookup before each re-dial in `client/daemon.rs`; sessions marked `lost to its daemon` through the 489 FR-019 path in `client/links.rs`; the row shows the reason in `client/ui/settings/daemons.rs`.
-- [ ] T062 [US2] User guide `docs/user-guide/kubernetes-daemons.md`: sessions survive the client, reconnect, and what "stopped: the pod was …" means.
-- [ ] T101 [US2] [A6] [A7] [A8] [A9] Acceptance (M4): `kube_daemon_reconnect` green for A6–A9.
+- [ ] T076 [US4] [U60] [U61] [U62] Preflight access reviews (`manifest::access_reviews`), `Config` failures, and the classifiers applied in the `Volume`, `Schedule` and `Pull` phases in `core/kube/start.rs` and `core/kube/manifest.rs`.
+- [ ] T128 [US4] [A14] [A15] [A16] [A17] [A21] [A24] Acceptance (M2): the `core/kube/start.rs` tests for A14–A17 and the `core/kube/lifecycle.rs` tests for A21, A24 green over `FakeCluster`.
 
 ---
 
-## Phase 5: User Story 3 — Only what the user allows reaches the pod (P1)
-
-**Goal**: allowed credentials and sign-ins become secrets mounted read-only; nothing else; the pod is
-non-root with a read-only root filesystem.
-
-**Independent test**: allow one credential and one sign-in, start, inspect the pod (US3.1–3.4).
+## Phase 6: Only what the user allows reaches the pod (US3; M3)
 
 ### Tests (write first, must fail)
 
-- [ ] T063 [P] [US3] [U66] [U67] [U68] [U69] [U70] Credential tests in `core/kube/credentials.rs`: each `KubeCredential` maps to exactly one secret (`ResourceNames`) and one mount: `GitCredentials` → `/run/micold/creds/git-credentials` with `GIT_CONFIG_*` env setting `credential.helper store --file`; `GitSshKey { key }` → `/run/micold/creds/ssh/{id,known_hosts}` with `GIT_SSH_COMMAND` using `IdentitiesOnly=yes` and `StrictHostKeyChecking=yes`, known-hosts lines for the remote's host only; `GitConfig` → `/data/home/.gitconfig` (subPath); `SignIn(cli)` → the provider's `sandbox_auth_file` under `HOME` (subPath); `RegistryPull { auths }` → one `imagePullSecrets` entry of type `kubernetes.io/dockerconfigjson` named `<base>-pull`; a missing source file → `CredentialSource { credential, path }`; there is no SSH-agent credential.
-- [ ] T064 [P] [US3] [U43] [U44] Security manifest tests in `core/kube/manifest.rs`: pod `securityContext` `runAsNonRoot: true`, `runAsUser: 10001`, `runAsGroup: 10001`, `fsGroup: 10001`, `seccompProfile: RuntimeDefault`; container `readOnlyRootFilesystem: true`, `allowPrivilegeEscalation: false`, `capabilities.drop: [ALL]`; every secret volume mount corresponds to one `allowed` entry; `allowed` empty → no secret volume and no `imagePullSecrets` (SC-004).
-- [ ] T065 [P] [US3] [A10] [A11] [A12] [A13] [U58] [U59] `Secrets` phase tests over `FakeCluster` in `core/kube/start.rs`: allowed secrets are created (recorded) or adopted; a withdrawn secret that is ours is deleted by name and UID; one that is not ours is untouched; none allowed → no secret calls; source files are read only in this phase; the pod the start creates mounts exactly the allowed secrets (none when nothing is allowed) and carries T064's security contexts (US3.1–3.4).
+- [ ] T063 [P] [US3] [U66] [U67] [U68] [U69] [U70] [U136] Credential tests in `core/kube/credentials.rs`: each `KubeCredential` maps to exactly one secret (`ResourceNames`) and one mount: `GitCredentials` → `/run/micold/creds/git-credentials`; `GitSshKey { key }` → `/run/micold/creds/ssh/{id,known_hosts}`, known-hosts lines for the remote's host only; `GitConfig` → `/data/home/.gitconfig` (subPath); `SignIn(cli)` → the provider's `sandbox_auth_file` under `HOME` (subPath); `RegistryPull { auths }` → one `imagePullSecrets` entry of type `kubernetes.io/dockerconfigjson` named `<base>-pull`; a missing source file → `CredentialSource { credential, path }`; no SSH-agent credential. `daemon_env(&allowed)` = `MICOLD_IDLE_STOP=off`, `MICOLD_REPOS_ROOT=/data/repos`, plus `GIT_CONFIG_*` (store helper) for `GitCredentials` and `GIT_SSH_COMMAND` (`IdentitiesOnly=yes`, `StrictHostKeyChecking=yes`) for `GitSshKey`, nothing else.
+- [ ] T064 [P] [US3] [U43] [U44] Security manifest tests in `core/kube/manifest.rs`: pod `securityContext` `runAsNonRoot: true`, `runAsUser: 10001`, `runAsGroup: 10001`, `fsGroup: 10001`, `seccompProfile: RuntimeDefault`; container `readOnlyRootFilesystem: true`, `allowPrivilegeEscalation: false`, `capabilities.drop: [ALL]`; the secret volumes are the access secret plus one per `allowed` entry; `allowed` empty → only the access secret and no `imagePullSecrets` (SC-004).
+- [ ] T065 [P] [US3] [A10] [A11] [A12] [A13] [U58] [U59] `Secrets` phase tests over `FakeCluster` in `core/kube/start.rs`: allowed secrets are created (recorded) or adopted; a withdrawn secret that is ours is deleted by name and UID; one that is not ours is untouched; none allowed → no credential-secret calls; source files are read through the start's file-reader argument only in this phase; the pod mounts exactly the access secret and the allowed secrets and carries T064's security contexts (US3.1–3.4).
+
+### Implementation
+
+- [ ] T067 [P] [US3] [U66] [U67] [U68] [U69] [U70] [U136] `KubeCredential` → secret, data, mount; `daemon_env` in `core/kube/credentials.rs`.
+- [ ] T068 [US3] [U43] [U44] Security contexts, secret volumes, mounts and `imagePullSecrets` in `core/kube/manifest.rs`.
+- [ ] T069 [US3] [A10] [A11] [A12] [A13] [U58] [U59] Secrets reconcile in the `Secrets` phase of `core/kube/start.rs`, reading source files through a reader the caller passes (the client's real reader is wired in M5).
+- [ ] T102 [US3] [A10] [A11] [A12] [A13] Acceptance (M3): the `core/kube/start.rs` tests for A10–A13 green over `FakeCluster`.
+
+---
+
+## Phase 7: The Kubernetes form, Add entry hidden (US5; M4a)
+
+**Goal**: the form and its reducer exist and are tested; Kubernetes daemons already in settings show
+in the list and open in Edit; the Add form's runtime list omits Kubernetes (FR-024, contract §7).
+
+### Tests (write first, must fail)
+
+- [ ] T024 [P] [US5] [U95] [U96] [U134] [U135] Reducer tests in `client-tests/features_daemons.rs`: the Add form's runtime choices omit Kubernetes in a build without the mechanism; a Kubernetes daemon opened in Edit shows the context picker filled from the merged kubeconfig, or "no kubeconfig found; looked in <paths>"; fields namespace, image (empty = the default SSH image), AI CLI checkboxes defaulting to the providers enabled in Settings; editing the volume size of a daemon started before shows "Applies only to a new volume, after Remove"; Save refuses an invalid field naming it; the row shows "Kubernetes" and the endpoint.
+- [ ] T130 [P] [US5] [U97] [U99] Resources-field tests in `client-tests/features_daemons.rs`: the container form's limits fields behave as before the extraction (characterization, written first); the Kubernetes form's four resource fields are edited on their own, a request above its limit refused naming the request field.
 - [ ] T066 [P] [US3] [U104] Reducer tests in `client-tests/features_daemons.rs`: the allowed-credentials checkbox list, nothing checked by default, SSH key and registry auth requiring a file.
 
 ### Implementation
 
-- [ ] T067 [P] [US3] [U66] [U67] [U68] [U69] [U70] `KubeCredential` → secret, data, mount, env in `core/kube/credentials.rs`.
-- [ ] T068 [US3] [U43] [U44] Security contexts, secret volumes, mounts, env and `imagePullSecrets` in `core/kube/manifest.rs`.
-- [ ] T069 [US3] [A10] [A11] [A12] [A13] [U58] [U59] Secrets reconcile in the `Secrets` phase of `core/kube/start.rs`, with the client reading source files in `client/daemon.rs` only during that phase.
-- [ ] T070 [US3] [U104] Allowed-credentials list with file pickers in `client/features/daemons.rs` and `client/ui/settings/daemons.rs`; geometry gate.
-- [ ] T071 [US3] User guide `docs/user-guide/kubernetes-daemons.md`: what each allowed credential creates and where it is mounted, withdrawal, the pod's security settings.
-- [ ] T102 [US3] [A10] [A11] [A12] [A13] Acceptance (M5): the `core/kube/start.rs` start-sequence tests for A10–A13 green over `FakeCluster`.
+- [ ] T031 [US5] [U95] [U96] [U134] [U135] Kubernetes `Draft`/`Msg` (context, namespace, image, AI CLIs, volume notice) and runtime choices in `client/features/daemons.rs`; kubeconfig context listing off the UI thread in `client/shell/daemons.rs`.
+- [ ] T131 [US5] [U97] [U99] Extract the limits fields from `sections` in `client/ui/settings/container_fields.rs` into functions in that file, drawn by the container form and the Kubernetes form (one copy; #806 inherits them, contract shared-ssh-image §5); the four resource `Draft` fields in `client/features/daemons.rs`.
+- [ ] T070 [US3] [U104] Allowed-credentials list with file pickers in `client/features/daemons.rs` and `client/ui/settings/daemons.rs`.
+- [ ] T032 [US5] [U96] Kubernetes form glue in `client/ui/settings/daemons.rs`; extend `client-tests/daemons_section_geometry.rs` to the Kubernetes form.
 
 ---
 
-## Phase 6: User Story 4 — Failures are reported with their reason, not as a hang (P1)
-
-**Goal**: every start failure names its cause within its phase bound and leaves nothing this attempt
-created.
-
-**Independent test**: provoke RBAC denial, image pull failure and an unschedulable pod; read state and
-reason in Settings → Daemons.
+## Phase 8: The rest of the form and the row actions (US5; M4b)
 
 ### Tests (write first, must fail)
 
-- [ ] T072 [P] [US4] [U30] [U31] [U32] [U33] `KubeFailure` classifier tests in `core/kube/classify.rs`: `from_status` (403 → `Forbidden { verb, resource }`, namespace 404 → `NamespaceMissing`, connect error → `Unreachable { server, error }`); `from_pod` (`ErrImagePull`, `ImagePullBackOff`, `InvalidImageName` → `ImagePull` on first sight; `PodScheduled=False, reason=Unschedulable` → `Unschedulable { message }`); `from_pvc` (`ProvisioningFailed` event or "unbound immediate PersistentVolumeClaims" → `ClaimNotBound`); each classified failure's text is the contract §6 one.
-- [ ] T073 [P] [US4] [U60] [U61] [U62] Start tests over `FakeCluster` in `core/kube/start.rs`: `Preflight` runs access reviews for `create pods`, `create persistentvolumeclaims`, `create secrets` (only when `allowed` is not empty), `create pods/portforward`, `delete pods`, and a denial fails `Forbidden` before any create (US4.1); `Config` failures → `NoKubeconfig { looked_in }`, `ContextMissing { context, looked_in }`, `ExecPlugin`; a pod failing `ImagePull` or `Unschedulable`, or a PVC failing `ClaimNotBound`, fails the start on first sight, before the phase bound.
-- [ ] T074 [P] [US4] [A14] [A15] [A16] [A17] [A18] [U116] Client tests over `FakeCluster` in `client-tests/kube_daemon_failures.rs`: each failure → `Unreachable` with its reason text and no retry; the reason and the full output reach the daemon's diagnostics; only a pre-existing PVC remains; another daemon's state is unchanged (US4.5, FR-019).
+- [ ] T083 [P] [US5] [A19] [A20] [U107] [U108] Reducer tests in `client-tests/features_daemons.rs`: node selector, tolerations, volume size and storage class fields, each refused naming the field when invalid; editing a running daemon saves and shows "applies on next start" and sends nothing to the cluster (US5.2); Logs fetches the last 200 lines on demand.
+- [ ] T084 [P] [US5] [U109] [U110] Parse/format tests for the key/value list and toleration editors in `client/ui/material/key_value_list.rs` and `client/ui/material/toleration_list.rs`.
+- [ ] T080 [P] [US5] [A23] [U105] [U106] [U143] Confirmation reducer tests in `client-tests/features_daemons.rs`: Stop with running sessions "Stop <name>? <n> running session(s) will end. Worktrees on its volume are kept."; Remove names pod, volume with its worktrees, secrets and this computer's SSH key, plus 491's bound-worktree counts; cluster unreachable → contract §5 text naming what stays, the access secret and this computer's still-authorized key among it; nothing is deleted before confirmation; Remove and Forget locally delete this client's key files.
+- [ ] T132 [P] [US5] [U133] Actor test in `client-tests/kube_daemon_start.rs` over `FakeCluster`: Start of a Kubernetes daemon in a build without the mechanism fails at once with `Unavailable`, makes no cluster call, and the row shows `unreachable` with that reason.
 
 ### Implementation
 
-- [ ] T075 [US4] [U30] [U31] [U32] [U33] `from_status`, `from_pod`, `from_pvc` classifiers in `core/kube/classify.rs`.
-- [ ] T076 [US4] [U60] [U61] [U62] [A14] [A15] [A16] [A17] Preflight access reviews (`manifest::access_reviews`), `Config` failures, and the classifiers applied in the `Volume`, `Schedule` and `Pull` phases in `core/kube/start.rs` and `core/kube/manifest.rs`.
-- [ ] T077 [US4] [A18] [U116] Report failures and build output through `DaemonDiagnostics::push_log` in `client/daemon.rs`.
-- [ ] T078 [US4] User guide `docs/user-guide/kubernetes-daemons.md`: a troubleshooting table of the contract §6 texts and what to do about each.
-- [ ] T103 [US4] [A14] [A15] [A16] [A17] [A18] Acceptance (M6): `kube_daemon_failures` green for A14–A18.
-
----
-
-## Phase 7: User Story 5 — Manage a Kubernetes daemon in Settings (P2)
-
-**Goal**: add, edit, start, stop, reconnect, remove with 491's row and actions.
-
-**Independent test**: add, edit resources, start, stop (volume kept), start (worktrees present),
-remove (pod and volume gone after confirmation).
-
-### Stop and Remove (core in M1a, client in M1b)
-
-- [ ] T079 [P] [US5] [A21] [A24] [U63] [U64] [U65] Lifecycle tests over `FakeCluster` in `core/kube/lifecycle.rs`: Stop deletes the pod by name and UID with grace 10 s and waits until gone (120 s), PVC and secrets kept; Remove deletes pod, secrets and PVC (ours only; `404` = done); the forget-locally list is the deterministic names (K5) and makes no cluster call.
-- [ ] T080 [P] [US5] [A23] [U105] [U106] Confirmation reducer tests in `client-tests/features_daemons.rs`: Stop with running sessions "Stop <name>? <n> running session(s) will end. Worktrees on its volume are kept."; Remove "Remove <name>? This deletes from <context>/<namespace>: pod <pod>, volume <pvc> with its worktrees, secrets <list>." plus 491's bound-worktree counts; cluster unreachable → "The cluster could not be reached (<error>). Forget <name> on this computer only? These stay in <context>/<namespace>: <pod>, <pvc>, <secrets>."; nothing is deleted before confirmation.
-- [ ] T081 [US5] [A21] [A24] [U63] [U64] [U65] Stop, Remove and forget-locally sequences in `core/kube/lifecycle.rs`.
-- [ ] T082 [US5] [A23] [U105] [U106] Wire Stop, Remove and Forget locally for Kubernetes daemons in `client/daemon.rs`, `client/shell/daemons.rs` and `client/features/daemons.rs`; confirmation texts in `client/ui/confirm_daemon_removal.rs`; worktrees follow 491 FR-014.
-- [ ] T099 [US1] [A1] [A4] [A5] [A21] [A23] [A24] Acceptance (M1b): `kube_daemon_start`, `features_daemons` and the `core/kube/lifecycle.rs` tests for A1, A4, A5, A21, A23, A24 green over `FakeCluster`; the milestone is not complete before.
-
-### The rest of the form and actions
-
-- [ ] T083 [P] [US5] [A19] [A20] [A22] [U107] [U108] Reducer tests in `client-tests/features_daemons.rs`: node selector, tolerations, volume size and storage class fields, each refused naming the field when invalid; editing a running daemon saves and shows "applies on next start" (US5.2); Reconnect re-dials (US5.4); Logs fetches the last 200 lines on demand.
-- [ ] T084 [P] [US5] [U109] [U110] Parse/format tests for the key/value list and toleration editors in `client/ui/material/key_value_list.rs` and `client/ui/material/toleration_list.rs`.
 - [ ] T085 [US5] [U109] [U110] Key/value list and toleration editors with builder `.into()` APIs in `client/ui/material/key_value_list.rs` and `client/ui/material/toleration_list.rs`, registered in `client/ui/material/mod.rs`.
-- [ ] T086 [US5] [A19] [A20] [A22] [U107] [U108] Node selector, tolerations, volume size, storage class, "applies on next start", Reconnect and Logs (pod log tail via `Cluster::logs`) in `client/features/daemons.rs`, `client/shell/daemons.rs` and `client/ui/settings/daemons.rs`; geometry gate.
-- [ ] T087 [US5] User guide `docs/user-guide/kubernetes-daemons.md` and `docs/user-guide/settings.md`: every field, edit applies on next start, Reconnect, Logs, Forget locally.
-- [ ] T104 [US5] [A19] [A20] [A22] Acceptance (M7): `features_daemons` green for A19, A20, A22.
+- [ ] T086 [US5] [A19] [A20] [U107] [U108] Node selector, tolerations, volume size, storage class, "applies on next start" and Logs (pod log tail via `Cluster::logs`) in `client/features/daemons.rs`, `client/shell/daemons.rs` and `client/ui/settings/daemons.rs`; geometry gate.
+- [ ] T082 [US5] [A23] [U105] [U106] [U143] Wire Stop, Remove and Forget locally for Kubernetes daemons (`core/kube/lifecycle.rs` over `LiveCluster`, key files deleted through `client/kube/keys.rs`) in `client/daemon.rs`, `client/shell/daemons.rs` and `client/features/daemons.rs`; confirmation texts in `client/ui/confirm_daemon_removal.rs`; worktrees follow 491 FR-014.
+- [ ] T133 [US5] [U133] `Unavailable` start of a Kubernetes daemon in `client/daemon.rs` (the `Dial` match), until M5 replaces it.
+- [ ] T129 [US5] [A19] [A20] [A23] Acceptance (M4b): `features_daemons` green for A19, A20, A23.
 
 ---
 
-## Phase 8: User Story 6 — Proven end to end in CI (P2)
+## Phase 9: Connect over SSH — blocked on #806 (US1, US4; M5)
 
-**Goal**: a throwaway kind cluster with a registry in the job drives the real path.
+### Tests (write first, must fail)
 
-**Independent test**: `mise run test-kube` with docker, kind and kubectl installed; all pass.
+- [ ] T134 [P] [US1] [U138] [U140] **(#806)** `Copy` and `Connect` phase tests in `core/kube/start.rs` over `FakeCluster`, `FakeKeyGen` and #806's provisioning fake: `Copy` passes the SSH target `{ 127.0.0.1, relay port, user, key file, known_hosts file, HostKeyAlias micold-kube-<key> }` and `daemon_env(&allowed)` (shared-ssh-image §3); a host-key mismatch → `HostKeyMismatch { pod }`; other provisioning failures → `Provision(..)`; `Connect` returns the bridge; bounds 120 s each.
+- [ ] T022 [P] [US1] [A4] [A5] [U111] [U112] [U113] **(#806)** Client tests over `FakeCluster` in `client-tests/kube_daemon_start.rs`: Start → `Starting` → `connected` through the relay and 489's bridge, row endpoint `<context> / <namespace> / <pod>`; a second Start with the pod present adopts it and copies nothing (US1.4); two actors starting the same daemon on one `FakeCluster` → exactly one pod create succeeds and both connect, both clients' keys in the access secret (FR-023); a second, non-Kubernetes daemon's state is unchanged throughout (FR-019); a version mismatch → `VersionMismatch`, no session started (FR-017); no `Service` or `Ingress` (FR-006); app launch with the cluster unreachable does not delay the other daemons or the window (FR-019).
+- [ ] T074 [P] [US4] [A14] [A15] [A16] [A17] [A18] [U116] **(#806)** Client tests over `FakeCluster` in `client-tests/kube_daemon_failures.rs`: each failure → `Unreachable` with its reason text and no retry; the reason and output reach the daemon's diagnostics; only a pre-existing PVC remains; another daemon's state is unchanged (US4.6, FR-019).
 
-- [ ] T088 [US6] Harness `client-tests/kube_real_support/mod.rs` behind feature `kube-real-runtime`: skips with a printed reason when docker, `kind` or `kubectl` is absent; creates kind cluster `micold-kube-test` with a `registry:2` container on `localhost:5001` mirrored into containerd (kind's local-registry recipe), deletes it unless `MICOLD_KUBE_TEST_KEEP=1`; RBAC fixtures: kubeconfig contexts for ServiceAccounts whose Role lacks `create pods`, and one lacking `pods/portforward` (`kubectl create token`); a git remote reachable from the pod for the clone.
-- [ ] T089 [P] [US6] `packaging/kube/test.Containerfile`: the app's template plus the stand-in AI CLI installed as `claude`.
-- [ ] T090 [P] [US6] [A3] [A25] `client-tests/kube_real_endtoend.rs`: build → push → pull by digest, tunnel, clone and worktree, a session's input and output with the stand-in CLI, 0 Services and 0 Ingresses (SC-006); the time from Start to typed input, minus the `Image` and `Pull` phases, is asserted under 5 minutes (SC-001).
+### Implementation
+
+- [ ] T135 [US1] [U138] [U140] **(#806)** `Copy` and `Connect` phases in `core/kube/start.rs` calling #806's provisioning; `KubeFailure::Provision`; the live `KeyGen` (#806's key generation) chosen in `client/shell/capabilities.rs`.
+- [ ] T030 [US1] [A4] [A5] [U111] [U112] [U113] **(#806)** `Dial::Kube` in `client/daemon.rs` replacing T133's `Unavailable`: run the start sequence inside the daemon's actor (no cluster I/O on the UI thread, FR-019) with `LiveCluster`, the real credential-file reader and `client/kube/keys.rs`; open the relay; 489's bridge and the 491 handshake over it; a failed start → `Unreachable` with the reason and no further attempts until Start or Reconnect (489 R7).
+- [ ] T077 [US4] [A18] [U116] **(#806)** Report failures and phase output through `DaemonDiagnostics::push_log` in `client/daemon.rs`.
+- [ ] T136 [US1] [A4] [A5] [A14] [A15] [A16] [A17] [A18] Acceptance (M5): `kube_daemon_start` green for A4, A5 and `kube_daemon_failures` for A14–A18.
+
+---
+
+## Phase 10: AI CLIs, drift prompt and the Add entry — blocked on #806 (US1, US4, US5; M6) 🎯 MVP
+
+### Tests (write first, must fail)
+
+- [ ] T138 [P] [US1] [U139] **(#806)** `Install` phase tests in `core/kube/start.rs` over #806's install fake: it passes `providers` and the volume's install root; output lines reach the activity log; Cancel → `Cancelled` and rollback; a paused clock at 15 min → `PhaseTimeout { phase: Install }`; a failed install → `Provision(..)` naming the CLI (US4.5); a CLI already installed is skipped by #806 and not re-run here.
+- [ ] T139 [P] [US5] [A1] [A28] [U134] [U141] **(#806)** Tests: in `client-tests/features_daemons.rs`, the Add form lists Kubernetes once the mechanism is wired; a `Drift { fields }` start shows "The running pod differs from the settings (<fields>). Recreate it? Its <n> running session(s) will end; the volume is kept." with Recreate pod / Keep running pod, and each choice continues the start (contract §3); in `client-tests/kube_daemon_start.rs`, an added daemon with the default image starts, its selected CLIs are installed and it reaches `connected` (A1); an install failure or an image without the SSH contract shows its reason (A28).
+
+### Implementation
+
+- [ ] T141 [US1] [U139] **(#806)** `Install` phase in `core/kube/start.rs` with live output and Cancel through the actor; activity "Installing <cli>".
+- [ ] T142 [US5] [A1] [A28] [U134] [U141] **(#806)** Show Kubernetes in the Add form's runtime choices; drift prompt in `client/features/daemons.rs` and `client/ui/settings/daemons.rs`; the default image = #806's pinned reference.
+- [ ] T033 [US1] User guide: new `docs/user-guide/kubernetes-daemons.md` (adding, the default image or your own and its contract, AI CLIs installed on start, starting, what is created in the namespace, no Service, allowed credentials and where they are mounted, the pod's security settings, every form field, edits apply on next start and the drift prompt, Stop, Remove, Forget locally, Logs, a troubleshooting table of the contract §6 texts), linked from `docs/SUMMARY.md`, `docs/user-guide/settings.md` and `docs/user-guide/remote-daemons.md`. (Replaces T046, T071, T078, T087.)
+- [ ] T140 [US1] [A1] [A28] Acceptance (M6): `kube_daemon_start` and `features_daemons` green for A1, A28; quickstart §B form steps pass at the visual pass.
+
+---
+
+## Phase 11: Clone and worktrees in the pod — blocked on #806 (US1; M7)
+
+### Tests (write first, must fail)
+
+- [ ] T047 [P] [US1] [U79] [U80] [U81] Clone rule tests in `core/kube/clone.rs`: `remote_for` picks `origin`, else the only remote; none → `NoRemote`; several without `origin` → `Ambiguous(names)`; `CloneTarget::for_url` = `/data/repos/<slug(repo)>-<hash8(url)>`, deterministic; `CloneFailure` from git stderr → `AuthRequired { remote }`, `DiskFull`, `Unreachable { remote }`, `Other`; texts as contract §6 (clone).
+- [ ] T048 [P] [US1] [U82] Protocol tests in `core/protocol/messages.rs` and `core/protocol/version.rs`: `ClientMsg::RepoClone { url, dest }`, `DaemonMsg::RepoCloned { dest }`, `DaemonMsg::RepoCloneFailed { dest, failure }` round-trip; `PROTOCOL_VERSION` is the next number after `main`'s (49 unless #806 bumped first; re-pin `schema_hash.rs`).
+- [ ] T049 [P] [US1] [U83] [U84] [U85] Daemon tests in `daemon/repo_clone.rs` against a local bare repository: clone into `.partial-<dest>-<rand>` and rename on success; an existing `dest` is fetched; two requests for one `dest` are serialised (the second fetches); an auth failure (with `GIT_TERMINAL_PROMPT=0`) leaves no directory; a `dest` outside `MICOLD_REPOS_ROOT` is refused.
+- [ ] T050 [P] [US1] [A2] [U100] [U101] [U102] Reducer tests in `client-tests/features_daemons.rs` over a fake daemon: binding a worktree of a project with no remote to a Kubernetes daemon is refused with the reason and sends nothing; a project with a remote sends `RepoClone` then `WorktreeCreate`, in that order, showing activity "Cloning <repo>"; the bound worktree is a 489 remote project with identity `micold-remote://<daemon-id>/data/repos/…` (`ssh/remote_path.rs`), its row showing the daemon name and in-pod path.
+
+### Implementation
+
+- [ ] T051 [P] [US1] [U79] [U80] [U81] `remote_for`, `CloneTarget`, `CloneFailure` in `core/kube/clone.rs`.
+- [ ] T052 [US1] [U82] `RepoClone` / `RepoCloned` / `RepoCloneFailed` (`CloneFailureWire`) in `core/protocol/messages.rs`; the `PROTOCOL_VERSION` bump in `core/protocol/version.rs`.
+- [ ] T053 [US1] [U83] [U84] [U85] `daemon/repo_clone.rs` (new) dispatched from `daemon/ops.rs`, `MICOLD_REPOS_ROOT` from the environment, one lock per `dest`.
+- [ ] T054 [US1] [A2] [U100] [U101] [U102] Create-worktree clone step for Kubernetes daemons in `client/features/` and `client/shell/workspace.rs`.
+- [ ] T055 [US1] Docs: `docs/user-guide/worktrees-and-sessions.md` (worktrees on a Kubernetes daemon come from the project's remote; unpushed commits stay local; a remote needing a credential needs it allowed for the daemon), `docs/user-guide/kubernetes-daemons.md`, and `docs/daemon.md` (`RepoClone`, `MICOLD_REPOS_ROOT`).
+- [ ] T100 [US1] [A2] Acceptance (M7): A2 green in `features_daemons` over the fake daemon.
+
+---
+
+## Phase 12: Sessions outlive the client — blocked on #806 (US2, US5; M8)
+
+### Tests (write first, must fail)
+
+- [ ] T057 [P] [US2] [U17] [U103] State tests in `core/daemons.rs`: `Reconnecting` or `Unreachable` + `Gone(reason)` → `Stopped` with `stopped_reason`; `Start` from `Stopped` → `Starting` and clears it; plus a reducer test in `client-tests/features_daemons.rs` that the row shows `stopped` with the reason.
+- [ ] T058 [P] [US2] [A6] [A7] [A8] [A9] [A22] [U114] [U115] Actor tests over `FakeCluster` in `client-tests/kube_daemon_reconnect.rs`: tunnel dropped with the pod running → relay re-opened, re-dial, sessions shown with output since the drop, no pod create; Reconnect on an `unreachable` daemon whose pod runs does the same (US5.4); pod deleted, evicted or node lost → `Stopped` with the reason, sessions `lost to its daemon`, no create call, actor ended; a 5xx or timeout on lookup → stays `Reconnecting` with 489's back-off; Start after `Gone` → a new pod on the same PVC; after another client's Remove → `Gone(Deleted)`, and Start creates a new, empty PVC and pod (FR-023); another daemon untouched.
+
+### Implementation
+
+- [ ] T060 [US2] [U17] `DaemonEvent::Gone`, `DaemonView.stopped_reason` and the transitions in `core/daemons.rs`.
+- [ ] T061 [US2] [A6] [A7] [A8] [A9] [A22] [U103] [U114] [U115] Pod lookup (`PodGone`) before each re-dial and the Reconnect action in `client/daemon.rs`; sessions marked `lost to its daemon` through the 489 FR-019 path in `client/links.rs`; the row shows the reason in `client/ui/settings/daemons.rs`.
+- [ ] T062 [US2] User guide `docs/user-guide/kubernetes-daemons.md`: sessions survive the client, Reconnect, and what "stopped: the pod was …" means.
+- [ ] T101 [US2] [A6] [A7] [A8] [A9] [A22] Acceptance (M8): `kube_daemon_reconnect` green for A6–A9, A22.
+
+---
+
+## Phase 13: Proven end to end in CI — blocked on #806 (US6; M9)
+
+- [ ] T088 [US6] Harness `client-tests/kube_real_support/mod.rs` behind feature `kube-real-runtime`: skips with a printed reason when docker, `kind` or `kubectl` is absent; creates kind cluster `micold-kube-test` and deletes it unless `MICOLD_KUBE_TEST_KEEP=1`; makes the SSH image available (pulled from its reference, or the stand-in test image via `kind load docker-image`, K12); RBAC fixtures: kubeconfig contexts for ServiceAccounts whose Role lacks `create pods`, and one lacking `pods/portforward` (`kubectl create token`); a package source for the stand-in AI CLI reachable from the pod (#806's install contract §4); a git remote reachable from the pod for the clone.
+- [ ] T089 [P] [US6] `packaging/kube/test.Containerfile`: #806's SSH image plus the stand-in AI CLI's package source, if #806's install contract needs it in the image (K12).
+- [ ] T090 [P] [US6] [A3] [A25] `client-tests/kube_real_endtoend.rs`: pod, tunnel, copy, install of the stand-in CLI, clone and worktree, a session's input and output, 0 Services and 0 Ingresses (SC-006); the time from Start to typed input, minus the `Pull` and `Install` phases, is asserted under 5 minutes (SC-001).
 - [ ] T091 [P] [US6] [A25] `client-tests/kube_real_reconnect.rs`: drop the tunnel, reconnect, quit the client for an away window (`MICOLD_KUBE_AWAY_SECS`, default 60 in CI, 600 for the SC-002 run) and reopen: every session still running with its output since the drop; `kubectl delete pod` → `stopped` "the pod was deleted", no new pod (SC-002).
-- [ ] T092 [P] [US6] `client-tests/kube_real_security.rs`: the live pod's security context and mounted secrets equal the allowed set; withdrawal deletes the secret (SC-004); a remote needing the allowed git credential clones.
-- [ ] T093 [P] [US6] [A26] `client-tests/kube_real_failures.rs`: RBAC `create pods` and `pods/portforward` denial, a digest absent from the registry, a node selector no node has; each reason within its bound, nothing left (SC-003).
-- [ ] T094 [P] [US6] [A25] `client-tests/kube_real_lifecycle.rs` and `client-tests/kube_real_concurrent.rs`: stop keeps the PVC and the worktree after restart; remove leaves 0 labelled objects (SC-005); two concurrent starts → one pod (FR-023).
+- [ ] T092 [P] [US6] `client-tests/kube_real_security.rs`: the live pod's security context and mounted secrets equal the access secret plus the allowed set; withdrawal deletes the secret (SC-004); the SSH server accepts only the access secret's keys; a remote needing the allowed git credential clones.
+- [ ] T093 [P] [US6] [A26] `client-tests/kube_real_failures.rs`: RBAC `create pods` and `pods/portforward` denial, an image reference that does not exist, a node selector no node has, an install from an unreachable source; each reason within its bound, nothing left (SC-003).
+- [ ] T094 [P] [US6] [A25] `client-tests/kube_real_lifecycle.rs` and `client-tests/kube_real_concurrent.rs`: stop keeps the PVC and the worktree after restart; remove leaves 0 labelled objects (SC-005); two concurrent starts → one pod, one daemon build, one install per CLI, both keys authorized (FR-023).
 - [ ] T095 [US6] [A27] `mise.toml` task `test-kube` (build-locked, `cargo test -p micold-client --features kube-real-runtime kube_real_ --no-fail-fast -- --test-threads=1`).
 - [ ] T096 [US6] [A27] CI job `kube-cluster` in `.github/workflows/ci.yml` beside `ssh-remote`, same docs-only skip, `kind` and `kubectl` at pinned versions with checksums, Linux only with the reason (K13) in a comment; `docs/development/ci-pipeline.md` describes it.
-- [ ] T105 [US6] [A3] [A25] [A26] [A27] Acceptance (M8): `mise run test-kube` green for A3, A25, A26 on a kind cluster, and A27 (off by default, on in CI's `kube-cluster`).
+- [ ] T105 [US6] [A3] [A25] [A26] [A27] Acceptance (M9): `mise run test-kube` green for A3, A25, A26 on a kind cluster, and A27 (off by default, on in CI's `kube-cluster`).
 
 ---
 
-## Phase 9: Polish
+## Phase 14: Polish
 
 - [ ] T097 Run quickstart Part B at a display (the `visual-pass` skill) and save screenshots under `specs/686-kubernetes-daemon-runtime/visual-pass/`.
 - [ ] T098 Re-run `speckit-converge` against the code and tick what is done.
@@ -279,114 +330,139 @@ remove (pod and volume gone after confirmation).
 
 ## Dependencies & Execution Order
 
-- Setup (T001–T003) → Foundational (T004–T018) → every story.
-- US1: 3a (T019–T033) → 3b (T034–T046) → 3c (T047–T055). 3b and 3c are independent of each other
-  once 3a is done; 3c needs a connected daemon only.
-- US5 Stop and Remove (T079–T082) depend on 3a only and ship with it.
-- US2 (T056–T062) depends on 3a. US3 (T063–T071) depends on 3a (manifest, start). US4 (T072–T078)
-  depends on 3a, and on 3b for the `Image` phase failures.
-- US5 rest (T083–T087) depends on 3a–3b (the form). US6 (T088–T096) depends on every story.
+- Setup (done) → M1a → M1b → M1c → M2 → M3 → M4a → M4b, all without #806.
+- M5 needs #806 merged and M1c, M2, M3, M4b. M6 needs M5. M7 and M8 need M6 (independent of each
+  other). M9 needs M6–M8.
 - Within a phase: tests → core types → core sequences → client adapters → client reducers → UI glue
   → docs.
 
 ## Parallel Examples
 
-- Foundational tests T004–T010 together (seven files).
-- 3a tests T019–T024 together; then T025 and T026 together.
-- 3b: T034–T039 together; then T040, T041, T042 together.
-- 3c: T047–T050 together; T051 beside T052.
-- US6: T089–T094 together once T088 exists.
+- M1a tests T106–T110 and T020 together (six files); then T111 → T112, with T113, T114, T115, T116, T026 beside.
+- M1b: T019, T117, T118 together, then T021; T025, T119, T120 together.
+- M1c: T122, T023, T123, T124 together; T126 beside T127.
+- M9: T089–T094 together once T088 exists.
 
 ## Implementation Strategy
 
-MVP is M1: a Kubernetes daemon added in Settings with a given image starts, connects through the
-tunnel, and can be stopped and removed. Each further milestone adds one deliverable: the built
-image (M2), worktrees and sessions in the pod (M3), surviving the client (M4), allowed credentials
-only (M5), failure reasons (M6), the full form (M7), the real-cluster CI proof (M8). Polish (T097,
-T098) changes no code and is left to the close unit.
+Everything that does not need #806 lands first, proven over `FakeCluster` and `FakeKeyGen`, with the
+Add entry hidden (FR-024): core types and kubeconfig (M1a), the pod, volume and access secret (M1b),
+the tunnel, relay, keys and live adapter (M1c), Stop/Remove and failure reasons (M2), allowed
+credentials (M3), the form (M4a, M4b). After #806 merges: connect over SSH (M5), AI CLIs and the Add
+entry, the MVP (M6), clone and worktrees (M7), reconnect (M8), the real-cluster CI proof (M9).
+Polish (T097, T098) changes no code and is left to the close unit.
 
 ## Milestones
 
-Each milestone merges to `main` on its own, through one PR (speckit-autopilot). Polish T097 (quickstart Part B visual pass) and T098 (`speckit-converge` re-run) are in no
-milestone: they change no code, so the close unit does them in the close PR.
+Each milestone merges to `main` on its own, through one PR (speckit-autopilot). Polish T097
+(quickstart Part B visual pass) and T098 (`speckit-converge` re-run) are in no milestone: they
+change no code, so the close unit does them in the close PR. M1a–M4b change no user-visible
+behaviour (Kubernetes cannot be added before M6): `docs-not-needed`.
 
-### M1a — Kubernetes daemon core runtime over a fake cluster
+### M1a — Revision-2 core types and kubeconfig discovery
 
-- **Tasks**: T001–T021, T025–T027, T079, T081
-- **Deliverable**: `micold-core` runs a Kubernetes daemon's whole lifecycle against the `Cluster` port: validated `KubeSettings` persisted as `DaemonRuntime::Kubernetes`, deterministic owned resource names, pod and PVC manifests with no Service, kubeconfig discovery on Linux, macOS and Windows, the start sequence (create or adopt the PVC and pod, tunnel) with per-phase bounds and rollback of what the attempt created, and the Stop, Remove and forget-locally sequences — all proven over `FakeCluster`; the daemon refuses a non-loopback listener without a token, and `Transport::Tunnel` completes the handshake. Kubernetes is not offered in the Add form yet (M1b).
-- **Satisfies**: US1 scenarios 1, 4, 5 (core half, given image); US5 scenarios 3, 5, 6 (core sequences); FR-003, FR-006 (transport), FR-013, FR-014, FR-015, FR-016, FR-020, FR-022 (kubeconfig discovery), FR-023 (adopt on `AlreadyExists`)
-- **Verify**: `mise run test-core`; `cargo test -p micold-daemon server::`
+- **Tasks**: T106–T116, T020, T026
+- **Deliverable**: `micold-core` holds revision-2 `KubeSettings` (image, AI CLIs, shared `DaemonResources`) persisted as `DaemonRuntime::Kubernetes`, the access-secret name, the revision-2 failure texts, a `Cluster` port with `replace`, and kubeconfig discovery on Linux, macOS and Windows; revision 1's listener auth, `Transport::Tunnel` and `daemon_image` are gone.
+- **Satisfies**: FR-002, FR-018, FR-020, FR-022 (discovery); FR-005 (resources type); FR-016 (names)
+- **Verify**: `mise run test-core`; `git diff origin/main -- crates/micold-daemon/src/server.rs crates/micold-core/src/connect.rs` prints nothing
 - **Depends on**: —
 - **Tier**: full
 
-### M1b — Start, connect, stop and remove a Kubernetes daemon from the client 🎯 MVP
+### M1b — Pod, volume and access secret over a fake cluster
 
-- **Tasks**: T022–T024, T028–T033, T080, T082, T099
-- **Deliverable**: Settings → Daemons → Add offers runtime Kubernetes (context, namespace, image reference); Start creates or adopts the daemon's PVC and pod and reaches `connected` through the API tunnel; Stop deletes the pod and keeps the volume; Remove deletes what it created after confirmation.
-- **Satisfies**: US1 scenarios 1, 4, 5 (given image); US5 scenarios 3, 5, 6; FR-001, FR-002, FR-006, FR-014, FR-015, FR-017, FR-019, FR-022, FR-023
-- **Verify**: `cargo test -p micold-client --test kube_daemon_start --test features_daemons --test daemons_section_geometry --test no_concrete_implementations`; `cargo test -p micold-client --lib kube::live`
+- **Tasks**: T019, T117, T118, T021, T025, T119, T120, T027, T121
+- **Deliverable**: the core start sequence creates or adopts the daemon's PVC, SSH access secret and pod (no Service, locked-down manifest, resources, pod stamp), adds a second client's key without losing another's, offers a drift choice, and rolls back what an attempt created, within per-phase bounds — proven over `FakeCluster`.
+- **Satisfies**: US1 scenarios 4, 5 (core half); US5 scenario 2 (drift detection); FR-003, FR-005, FR-006 (manifest), FR-013, FR-016, FR-023 (adopt, key race)
+- **Verify**: `mise run test-core` (`kube::manifest::`, `kube::access::`, `kube::start::`)
 - **Depends on**: M1a
 - **Tier**: full
 
-### M2 — Build and push the daemon image; set resources
+### M1c — Tunnel to the pod's SSH server; relay, keys, live adapter
 
-- **Tasks**: T034–T046
-- **Deliverable**: a Kubernetes daemon with image source Build (the default) builds the image with the local runtime, pushes it to the named registry and runs the pod by digest, with live output and Cancel; CPU and memory requests and limits reach the pod.
-- **Satisfies**: US1 scenario 1 (default image path); FR-004, FR-005 (requests and limits)
-- **Verify**: `mise run test-core` (`daemon_image::`, `sandbox::cli::`, `kube::manifest::`); `cargo test -p micold-client --lib kube::image`; `cargo test -p micold-client --test features_daemons`
+- **Tasks**: T122, T023, T123, T124, T125, T028, T029, T126, T127
+- **Deliverable**: the start sequence's `Tunnel` phase reads the pod's SSH identification line through the API port-forward (else `ImageContract`); the client has `LiveCluster`, the loopback relay and owner-only key files, each unit-tested.
+- **Satisfies**: FR-006 (port-forward only), FR-008 (key files), FR-002, FR-022 (exec plugins), FR-012 (`ImageContract`)
+- **Verify**: `mise run test-core` (`kube::start::`); `cargo test -p micold-client --lib kube::`; `cargo test -p micold-client --test no_concrete_implementations`
 - **Depends on**: M1b
 - **Tier**: full
 
-### M3 — Worktrees and sessions in the pod
+### M2 — Stop, Remove and failure reasons in core
+
+- **Tasks**: T079, T072, T056, T073, T081, T075, T059, T076, T128
+- **Deliverable**: core Stop, Remove and forget-locally sequences, and every start failure (RBAC before any create, config, namespace, pull, scheduling, volume) classified with its contract §6 reason on first sight, plus the pod-gone classifier — proven over `FakeCluster`.
+- **Satisfies**: US4 scenarios 1–4 (core); US5 scenarios 3, 6 (core); FR-012, FR-014, FR-015; FR-011 (classifier)
+- **Verify**: `mise run test-core` (`kube::lifecycle::`, `kube::classify::`, `kube::start::`)
+- **Depends on**: M1c
+- **Tier**: full
+
+### M3 — Only allowed credentials reach the pod
+
+- **Tasks**: T063, T064, T065, T067, T068, T069, T102
+- **Deliverable**: the start sequence creates allowed credentials as secrets mounted read-only beside the access secret, deletes withdrawn ones, builds the daemon's environment for them, and the pod runs non-root with a read-only root filesystem — proven over `FakeCluster`.
+- **Satisfies**: US3 scenarios 1–4 (core); FR-008, FR-009
+- **Verify**: `mise run test-core` (`kube::credentials::`, `kube::manifest::`, `kube::start::`)
+- **Depends on**: M1b
+- **Tier**: full
+
+### M4a — The Kubernetes form, Add entry hidden
+
+- **Tasks**: T024, T130, T066, T031, T131, T070, T032
+- **Deliverable**: a Kubernetes daemon in settings opens in Edit with context, namespace, image, AI CLIs, resources (fields shared with the container form) and allowed credentials; the Add form does not offer Kubernetes yet (FR-024).
+- **Satisfies**: US5 scenario 1 (form, minus placement and volume); FR-001, FR-002, FR-004 (fields), FR-005 (resources), FR-018, FR-024
+- **Verify**: `cargo test -p micold-client --test features_daemons`; `cargo test -p micold-client --test daemons_section_geometry`
+- **Depends on**: M1a
+- **Tier**: full
+
+### M4b — Placement fields, Stop, Remove, Logs from the row
+
+- **Tasks**: T083, T084, T080, T132, T085, T086, T082, T133, T129
+- **Deliverable**: the form edits node selector, tolerations, volume size and storage class; edits show "applies on next start"; Stop, Remove (with confirmations and key-file deletion), Forget locally and Logs work from a Kubernetes row; Start of a Kubernetes daemon says the build lacks the shared SSH image (`Unavailable`).
+- **Satisfies**: US5 scenarios 1, 2, 3, 5, 6; FR-005, FR-014, FR-015, FR-018, FR-024
+- **Verify**: `cargo test -p micold-client --test features_daemons`; `cargo test -p micold-client --test daemons_section_geometry`; `cargo test -p micold-client --test kube_daemon_start`; `cargo test -p micold-client --lib ui::material::key_value_list`; `cargo test -p micold-client --lib ui::material::toleration_list`
+- **Depends on**: M2, M4a
+- **Tier**: full
+
+### M5 — Connect over SSH (blocked on #806)
+
+- **Tasks**: T134, T022, T074, T135, T030, T077, T136
+- **Deliverable**: Start of a Kubernetes daemon copies the client's daemon in over SSH through the relay with the pinned host key and reaches `connected`; failures show their reason with no retry; two clients share one pod.
+- **Satisfies**: US1 scenarios 4, 5; US4 scenarios 1–4, 6; FR-006, FR-010 (detached daemon), FR-017, FR-019, FR-023
+- **Verify**: `mise run test-core` (`kube::start::`); `cargo test -p micold-client --test kube_daemon_start`; `cargo test -p micold-client --test kube_daemon_failures`
+- **Depends on**: #806, M1c, M2, M3, M4b
+- **Tier**: full
+
+### M6 — AI CLIs on start and the Add entry 🎯 MVP (blocked on #806)
+
+- **Tasks**: T138, T139, T141, T142, T033, T140
+- **Deliverable**: Settings → Daemons → Add offers Kubernetes; Start installs the selected AI CLIs (live output, Cancel) and connects; a pod running with other settings offers Recreate or Keep; the user guide describes it.
+- **Satisfies**: US1 scenarios 1, 4; US4 scenario 5; US5 scenarios 1, 2; FR-001, FR-004, FR-012, FR-024
+- **Verify**: `mise run test-core` (`kube::start::`); `cargo test -p micold-client --test kube_daemon_start`; `cargo test -p micold-client --test features_daemons`
+- **Depends on**: M5
+- **Tier**: full
+
+### M7 — Worktrees and sessions in the pod (blocked on #806)
 
 - **Tasks**: T047–T055, T100
-- **Deliverable**: creating a worktree bound to a Kubernetes daemon clones the project's remote (one needing no credential; M5 lets the user allow a git credential, and M8's T092 proves a credentialed remote clones with it) into the daemon's volume and creates the worktree there, shown with the daemon's name and in-pod path; a project without a remote is refused with the reason.
+- **Deliverable**: creating a worktree bound to a Kubernetes daemon clones the project's remote into the daemon's volume and creates the worktree there, shown with the daemon's name and in-pod path; a project without a remote is refused with the reason.
 - **Satisfies**: US1 scenarios 2, 3; FR-007
 - **Verify**: `mise run test-core` (`kube::clone::`, `protocol::`); `cargo test -p micold-daemon repo_clone`; `cargo test -p micold-client --test features_daemons`
-- **Depends on**: M1b
+- **Depends on**: M6
 - **Tier**: full
 
-### M4 — Sessions outlive the client
+### M8 — Sessions outlive the client (blocked on #806)
 
-- **Tasks**: T056–T062, T101
-- **Deliverable**: a dropped tunnel reconnects to the same pod with sessions intact; a deleted, evicted or node-lost pod shows `stopped` with its reason, sessions `lost to its daemon`, and is not recreated until Start.
-- **Satisfies**: US2 scenarios 1–4; FR-010, FR-011
-- **Verify**: `cargo test -p micold-client --test kube_daemon_reconnect`; `mise run test-core` (`kube::classify::`, `daemons::`)
-- **Depends on**: M1b
+- **Tasks**: T057, T058, T060, T061, T062, T101
+- **Deliverable**: a dropped tunnel or the user's Reconnect re-dials the same pod with sessions intact; a deleted, evicted or node-lost pod shows `stopped` with its reason, sessions `lost to its daemon`, and is not recreated until Start.
+- **Satisfies**: US2 scenarios 1–4; US5 scenario 4; FR-010, FR-011
+- **Verify**: `cargo test -p micold-client --test kube_daemon_reconnect`; `mise run test-core` (`daemons::`)
+- **Depends on**: M6
 - **Tier**: full
 
-### M5 — Only allowed credentials reach the pod
-
-- **Tasks**: T063–T071, T102
-- **Deliverable**: allowed credentials and sign-ins are created as secrets and mounted read-only, withdrawn ones are deleted on the next start, and the pod runs non-root with a read-only root filesystem.
-- **Satisfies**: US3 scenarios 1–4; FR-008, FR-009
-- **Verify**: `mise run test-core` (`kube::credentials::`, `kube::manifest::`, `kube::start::`); `cargo test -p micold-client --test features_daemons`
-- **Depends on**: M1b
-- **Tier**: full
-
-### M6 — Failures named within their bound
-
-- **Tasks**: T072–T078, T103
-- **Deliverable**: RBAC denial, missing context or namespace, unreachable cluster, credential-plugin failure, push and pull failures, unschedulable pods and unbound volumes each show their contract §6 reason, RBAC denial before anything is created and pull or scheduling failures on first sight.
-- **Satisfies**: US4 scenarios 1–5; FR-012
-- **Verify**: `mise run test-core` (`kube::classify::`, `kube::start::`); `cargo test -p micold-client --test kube_daemon_failures`
-- **Depends on**: M1b, M2
-- **Tier**: full
-
-### M7 — The full Kubernetes form and actions
-
-- **Tasks**: T083–T087, T104
-- **Deliverable**: the Kubernetes form edits node selector, tolerations, volume size and storage class; edits apply on next start; Reconnect and Logs work from the row.
-- **Satisfies**: US5 scenarios 1, 2, 4; FR-005 (node selector, tolerations, volume size), FR-018
-- **Verify**: `cargo test -p micold-client --test features_daemons --test daemons_section_geometry`; `cargo test -p micold-client --lib ui::material::key_value_list`; `cargo test -p micold-client --lib ui::material::toleration_list`
-- **Depends on**: M1b, M2
-- **Tier**: full
-
-### M8 — Real-cluster suite in CI
+### M9 — Real-cluster suite in CI (blocked on #806)
 
 - **Tasks**: T088–T096, T105
-- **Deliverable**: `mise run test-kube` runs the `kube_real_*` suite on a throwaway kind cluster with a registry, and CI's `kube-cluster` job runs it on every non-docs change; on a live pod, a remote needing an allowed git credential clones with it (T092).
+- **Deliverable**: `mise run test-kube` runs the `kube_real_*` suite on a throwaway kind cluster, and CI's `kube-cluster` job runs it on every non-docs change.
 - **Satisfies**: US6 scenarios 1–3; FR-021; SC-001–SC-006 evidence
 - **Verify**: `mise run test-kube`; CI job `kube-cluster` green on the PR
-- **Depends on**: M1a, M1b, M2–M7
+- **Depends on**: M6, M7, M8
 - **Tier**: full
