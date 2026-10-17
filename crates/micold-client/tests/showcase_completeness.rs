@@ -827,3 +827,42 @@ fn the_pull_request_indicator_poses_its_twelve_states() {
     }
     assert!(!entry.interactive, "the indicator answers no press");
 }
+
+/// The gallery poses the Overview card in each of the five states, the Default card and an orphan,
+/// and the grid with 1, 3 and 30 cards and narrow (feature 813, T020 — FR-021).
+#[test]
+fn the_overview_card_and_grid_are_posed() {
+    for (component, module, poses) in [
+        (
+            "OverviewCard",
+            "material/overview_card.rs",
+            &[
+                "Needs action",
+                "Needs attention",
+                "Working",
+                "Done",
+                "Idle",
+                "Default",
+                "orphan",
+            ][..],
+        ),
+        (
+            "CardGrid",
+            "material/card_grid.rs",
+            &["1 card", "3 cards", "30 cards", "narrow"][..],
+        ),
+    ] {
+        let entry = COMPONENTS
+            .iter()
+            .find(|e| e.component == component)
+            .unwrap_or_else(|| panic!("{component} has a gallery entry"));
+        assert_eq!(entry.module, module);
+        for pose in poses {
+            assert!(
+                entry.posed.contains(pose),
+                "{component}: pose \"{pose}\" is missing"
+            );
+        }
+        assert!(!entry.interactive, "{component} answers no press yet");
+    }
+}

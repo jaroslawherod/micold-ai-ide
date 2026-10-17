@@ -338,6 +338,115 @@ pub fn stage_progress<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<
     )
 }
 
+/// A sample card for the Overview poses.
+fn card_model(
+    name: &str,
+    kind: micold_core::overview::LocationType,
+    state: micold_core::overview::CardState,
+    reason: micold_core::overview::CardReason,
+) -> micold_core::overview::CardModel {
+    micold_core::overview::CardModel {
+        location: micold_core::session::SessionLocation::Worktree(name.to_string()),
+        display_name: name.to_string(),
+        branch: Some(format!("feat/{name}")),
+        kind,
+        sessions: (3, 2),
+        state,
+        reason,
+        summary: "Adds the worktree overview".to_string(),
+    }
+}
+
+/// `OverviewCard` in each of the five states, the Default (project root) card and an orphan.
+pub fn overview_card<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
+    use micold_core::overview::{CardReason as R, CardState as S, LocationType as T};
+    let card = |m: micold_core::overview::CardModel| {
+        iced::widget::container(Element::from(material::OverviewCard::<Message>::new(
+            &m, roles,
+        )))
+        .width(Length::Fixed(320.0))
+    };
+    let mut default = card_model("Default", T::ProjectRoot, S::Idle, R::Idle);
+    default.branch = Some("main".to_string());
+    let mut orphan = card_model(
+        "gone-worktree",
+        T::OrphanInvalid,
+        S::NeedsAttention,
+        R::MergeConflict,
+    );
+    orphan.branch = None;
+    arrange(
+        vec![
+            posed(
+                "Needs action",
+                card(card_model(
+                    "needs-action",
+                    T::Feature,
+                    S::NeedsAction,
+                    R::NeedsPermission,
+                )),
+                roles,
+            ),
+            posed(
+                "Needs attention",
+                card(card_model(
+                    "needs-attention",
+                    T::Bugfix,
+                    S::NeedsAttention,
+                    R::ChecksFailing,
+                )),
+                roles,
+            ),
+            posed(
+                "Working",
+                card(card_model("working", T::Chore, S::Working, R::Working)),
+                roles,
+            ),
+            posed(
+                "Done",
+                card(card_model("done", T::Other, S::Done, R::Merged)),
+                roles,
+            ),
+            posed(
+                "Idle",
+                card(card_model("idle", T::Included, S::Idle, R::Idle)),
+                roles,
+            ),
+            posed("Default", card(default), roles),
+            posed("orphan", card(orphan), roles),
+        ],
+        Layout::FullWidth,
+    )
+}
+
+/// `CardGrid` with 1, 3 and 30 cards, and in a narrow room.
+pub fn card_grid<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
+    use micold_core::overview::{CardReason as R, CardState as S, LocationType as T};
+    let grid = |n: usize, width: Length| {
+        let cards = (0..n)
+            .map(|i| {
+                let state = S::ALL[i % S::ALL.len()];
+                material::OverviewCard::<Message>::new(
+                    &card_model(&format!("worktree-{i}"), T::Feature, state, R::Working),
+                    roles,
+                )
+            })
+            .collect();
+        iced::widget::container(Element::from(material::CardGrid::new(cards, roles)))
+            .width(width)
+            .height(Length::Fixed(320.0))
+    };
+    arrange(
+        vec![
+            posed("1 card", grid(1, Length::Fill), roles),
+            posed("3 cards", grid(3, Length::Fill), roles),
+            posed("30 cards", grid(30, Length::Fill), roles),
+            posed("narrow", grid(3, Length::Fixed(279.0)), roles),
+        ],
+        Layout::FullWidth,
+    )
+}
+
 /// `TreeView` — the sidebar's list, with a selected row, tags, a badge and an expandable parent.
 pub fn tree_view<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
     let items: Vec<material::TreeItem<'a, Message>> = samples::WORKTREES

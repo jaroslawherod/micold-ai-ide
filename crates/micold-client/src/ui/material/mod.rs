@@ -23,6 +23,7 @@ mod button;
 /// the touch target; a button is content-sized across, so no size check can see its inset.
 #[cfg(test)]
 mod button_anatomy;
+mod card_grid;
 mod checkbox;
 /// A component read against the container it is *rendered in*, not against the surfaces its own
 /// role was enumerated for. The first check here that reads a **composition** rather than the
@@ -71,6 +72,7 @@ mod menu;
 mod menu_anatomy;
 mod modal;
 mod navigation_drawer;
+mod overview_card;
 mod picker;
 /// The transition both lists arrive and leave by, asserted against **each other** and against
 /// §6.3 rather than each against the contract. In-crate for the same reason as `picker_parity`
@@ -166,6 +168,7 @@ pub use accordion_section::AccordionSection;
 pub use activity_badge::{ActivityBadge, BadgeEmphasis};
 pub use animation::{expand, fade, scale, scrim, HoverReveal, ViewFade};
 pub use button::{unread_total_tooltip, Button, Variant as ButtonVariant};
+pub use card_grid::CardGrid;
 pub use checkbox::Checkbox;
 pub use connection_banner::ConnectionBanner;
 pub use diff_view::{DiffLayout, DiffView};
@@ -182,6 +185,7 @@ pub use labelled_toggle::LabelledToggle;
 pub use menu::{menu_panel_size, ContextMenu, MenuItem, MenuOverlay, MenuTrigger};
 pub use modal::Modal;
 pub use navigation_drawer::NavigationDrawer;
+pub use overview_card::OverviewCard;
 pub use picker::Row as TypeaheadRow;
 pub use picker::PICKER_HIGHLIGHT;
 pub use progress::StageProgress;

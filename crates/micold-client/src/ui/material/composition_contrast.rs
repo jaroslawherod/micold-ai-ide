@@ -323,6 +323,44 @@ fn warning_and_success_roles_are_legible_on_their_fills() {
     );
 }
 
+/// Overview cards (feature 813, T013 — FR-005, FR-006, SC-005): each state's words read at 4.5:1 and
+/// its icon at 3:1 on the card's own fill, both schemes. The roles come from the card's `palette`,
+/// the function the card is drawn with, so a role changed there is the one checked here.
+#[test]
+fn an_overview_cards_text_and_icon_are_legible_on_its_state_fill() {
+    use micold_core::overview::CardState;
+    let mut violations: Vec<String> = Vec::new();
+    for scheme in [ColorScheme::Light, ColorScheme::Dark] {
+        let r = tokens::roles(scheme);
+        for state in CardState::ALL {
+            let p = super::overview_card::palette(state, &r);
+            let text = contrast(p.text, p.fill);
+            if text < AA_TEXT {
+                violations.push(format!(
+                    "{scheme:?} / {state:?} text: {text:.2}:1 (needs {AA_TEXT})"
+                ));
+            }
+            let icon = contrast(p.icon, p.fill);
+            if icon < AA_NON_TEXT {
+                violations.push(format!(
+                    "{scheme:?} / {state:?} icon: {icon:.2}:1 (needs {AA_NON_TEXT})"
+                ));
+            }
+        }
+        let idle = super::overview_card::palette(CardState::Idle, &r);
+        assert_eq!(
+            idle.fill, r.surface_container_low,
+            "Idle is the de-emphasised surface"
+        );
+        assert_eq!(idle.text, r.on_surface_variant);
+    }
+    assert!(
+        violations.is_empty(),
+        "an Overview card cannot be read on its fill:\n  {}",
+        violations.join("\n  ")
+    );
+}
+
 /// Syntax colours (feature 482, T043, US1 s8): every colour a highlighter theme can give, as the
 /// diff draws it through `syntax::legible`, reads at 4.5:1 on the diff's surface and on both line
 /// tints of its scheme. The themes' palettes are not public, so the walk sweeps a grid of the whole
