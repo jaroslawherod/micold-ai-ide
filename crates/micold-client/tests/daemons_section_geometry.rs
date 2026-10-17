@@ -265,6 +265,7 @@ fn the_ssh_form_and_ssh_rows_paint_their_fields_and_badges_without_overflow() {
         .unwrap();
     state.settings.links = DaemonLinks::at_launch(&state.settings.daemons);
     use micold_core::provision::{ProvisionEvent, Step};
+    state.settings.links.apply(ssh, DaemonEvent::Start);
     state.update(Message::Daemons(DaemonsMsg::Provisioning(
         ssh,
         ProvisionEvent::Entered(Step::Copy),
@@ -273,7 +274,6 @@ fn the_ssh_form_and_ssh_rows_paint_their_fields_and_badges_without_overflow() {
         ssh,
         ProvisionEvent::CopyPercent(40),
     )));
-    state.settings.links.apply(ssh, DaemonEvent::Start);
     let painted_rows = painted(&state);
     assert!(has(&painted_rows, "Remote over SSH"), "{painted_rows:?}");
     assert!(has(&painted_rows, "copying the daemon"), "{painted_rows:?}");
