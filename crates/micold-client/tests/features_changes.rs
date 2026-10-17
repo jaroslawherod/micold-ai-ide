@@ -1118,7 +1118,7 @@ fn slot_heights_are_kept_for_the_shown_file_and_layout_only() {
     assert!(heights(&state).is_empty(), "another file has other slots");
 }
 
-// --- M5: Send to session (S1, S2) ---
+// --- M5: Send review (482 S1, S2; renamed by 946 FR-009) ---
 
 use micold_client::features::changes::{send_action, send_error_text, sent_text, SendAction};
 
@@ -1142,7 +1142,7 @@ fn send_to_session_is_enabled_only_with_pending_comments_and_no_send_open() {
     assert_eq!(
         send_action(&state),
         Some(SendAction {
-            label: "Send to session (0)".into(),
+            label: "Send review (0)".into(),
             enabled: false,
         }),
         "no comments: unavailable (US2 s5)"
@@ -1158,7 +1158,7 @@ fn send_to_session_is_enabled_only_with_pending_comments_and_no_send_open() {
     push(&mut state, "feat-a", vec![sent.clone()]);
     assert_eq!(
         send_action(&state).map(|a| (a.label, a.enabled)),
-        Some(("Send to session (0)".into(), false)),
+        Some(("Send review (0)".into(), false)),
         "only sent comments here, and another entry's pending one does not count (FR-021)"
     );
     push(
@@ -1169,7 +1169,7 @@ fn send_to_session_is_enabled_only_with_pending_comments_and_no_send_open() {
     assert_eq!(
         send_action(&state),
         Some(SendAction {
-            label: "Send to session (2)".into(),
+            label: "Send review (2)".into(),
             enabled: true,
         })
     );
@@ -1223,19 +1223,19 @@ fn pressing_send_to_session_sends_review_send_for_the_open_entry() {
 fn the_send_snackbars_name_the_count_the_session_and_the_reason() {
     assert_eq!(
         sent_text(2, "Fix the parser", false),
-        "Sent 2 comments to Fix the parser"
+        "Sent a review of 2 comments to Fix the parser"
     );
     assert_eq!(
         sent_text(1, "Fix the parser", false),
-        "Sent 1 comment to Fix the parser"
+        "Sent a review of 1 comment to Fix the parser"
     );
     assert_eq!(
         sent_text(3, "ignored", true),
-        "Started a session and sent 3 comments"
+        "Started a session and sent a review of 3 comments"
     );
     assert_eq!(
         send_error_text("no session is running in this entry"),
-        "Couldn't send the comments: no session is running in this entry"
+        "Couldn't send the review: no session is running in this entry"
     );
 }
 
@@ -1489,7 +1489,7 @@ fn a_refresh_that_drops_the_selected_file_closes_a_new_comment() {
 
 use micold_client::features::changes::{discard_prompt, tidy_actions, TidyActions};
 
-/// S3. **Clear sent** is enabled iff the open entry has a sent comment, **Discard pending…** iff
+/// S3. **Clear sent** is enabled iff the open entry has a sent comment, **Discard drafts…** iff
 /// it has a pending one and no send is open; another entry's comments do not count (FR-021).
 #[test]
 fn clear_sent_and_discard_pending_are_enabled_only_with_comments_to_act_on() {
@@ -1571,7 +1571,7 @@ fn clear_sent_sends_clear_sent_for_the_open_entry() {
     );
 }
 
-/// S3. **Discard pending…** only opens the confirmation; Cancel closes it sending nothing; only
+/// S3. **Discard drafts…** only opens the confirmation; Cancel closes it sending nothing; only
 /// its confirm sends `DiscardPending` (US4 s3, FR-019).
 #[test]
 fn discard_pending_asks_first_and_only_the_confirm_sends_it() {
@@ -1603,7 +1603,7 @@ fn discard_pending_asks_first_and_only_the_confirm_sends_it() {
     );
     assert_eq!(
         discard_prompt(&state).as_deref(),
-        Some("Discard 2 pending comments? This cannot be undone.")
+        Some("Discard 2 draft comments? This cannot be undone.")
     );
     assert_eq!(
         changes::update(&mut state, Msg::DiscardCancelled),
@@ -1669,7 +1669,7 @@ fn the_discard_confirmation_counts_in_the_singular_and_closes_with_the_view() {
     changes::update(&mut state, Msg::DiscardPendingPressed);
     assert_eq!(
         discard_prompt(&state).as_deref(),
-        Some("Discard 1 pending comment? This cannot be undone.")
+        Some("Discard 1 draft comment? This cannot be undone.")
     );
     changes::update(&mut state, Msg::Closed);
     assert_eq!(discard_prompt(&state), None);

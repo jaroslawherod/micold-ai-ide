@@ -164,7 +164,7 @@ pub fn an_agent_request() -> micold_client::features::agent_confirm::Prompt {
     }
 }
 
-/// Open the Changes view's **Discard pending…** confirmation (feature 482, S3): a view with one
+/// Open the Changes view's **Discard drafts…** confirmation (feature 482, S3): a view with one
 /// pending comment, then the press.
 pub fn open_discard_pending(state: &mut State) {
     use micold_client::features::changes::{self, Msg as ChangesMsg};
