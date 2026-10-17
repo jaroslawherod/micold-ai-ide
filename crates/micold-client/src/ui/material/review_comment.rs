@@ -1,11 +1,13 @@
 //! `ReviewCommentCard` — one review comment under its anchor row (feature 482,
 //! contracts/changes-view.md C3).
 //!
-//! The comment's text, its state (Draft / Sent), an Outdated tag when the lines it quotes changed,
-//! and Edit / Delete for a draft comment that is not in a send.
+//! The comment's text, its state (Draft / Sent, or the Applied / Answered tag of a reported one,
+//! feature 946), an Outdated tag when the lines it quotes changed, the agent's reply under the
+//! text with "Show all" when it was shortened, and Edit / Delete for a draft comment that is not
+//! in a send.
 //!
 //! Builder form: `ReviewCommentCard::new(&text, CardState::Draft, roles).outdated(false)
-//! .on_edit(Msg::Edit(id)).on_delete(Msg::Delete(id)).into()`.
+//! .reply(&reply, shortened).on_edit(Msg::Edit(id)).on_delete(Msg::Delete(id)).into()`.
 
 use iced::widget::{column, container, row, Space};
 use iced::{Alignment, Border, Element, Length};
@@ -22,12 +24,22 @@ pub enum CardState {
     InSend,
     /// Delivered to a session.
     Sent,
+    /// Reported as applied (feature 946).
+    Applied,
+    /// Reported as answered: not applied, the reply says why (feature 946).
+    Answered,
 }
 
 /// The state label.
 pub const DRAFT: &str = "Draft";
 /// The state label once delivered.
 pub const SENT: &str = "Sent";
+/// The tag of a comment reported applied.
+pub const APPLIED: &str = "Applied";
+/// The tag of a comment reported answered.
+pub const ANSWERED: &str = "Answered";
+/// The affordance under a shortened reply.
+pub const SHOW_ALL: &str = "Show all";
 /// The tag of a comment whose quoted lines changed.
 pub const OUTDATED: &str = "Outdated";
 
@@ -36,6 +48,12 @@ pub const OUTDATED: &str = "Outdated";
 pub struct Parts {
     /// The state label.
     pub label: &'static str,
+    /// The label is drawn as a status tag (Applied, Answered), not as muted text.
+    pub tag: bool,
+    /// A reply is drawn under the text.
+    pub reply: bool,
+    /// "Show all" is drawn under the reply: it was shortened.
+    pub show_all: bool,
     /// The Outdated tag.
     pub outdated: bool,
     /// Edit and Delete.
@@ -48,6 +66,7 @@ pub struct ReviewCommentCard<'a, M> {
     state: CardState,
     roles: Roles,
     outdated: bool,
+    reply: Option<(&'a str, bool)>,
     on_edit: Option<M>,
     on_delete: Option<M>,
 }
@@ -60,6 +79,7 @@ impl<'a, M: Clone + 'a> ReviewCommentCard<'a, M> {
             state,
             roles,
             outdated: false,
+            reply: None,
             on_edit: None,
             on_delete: None,
         }
@@ -68,6 +88,13 @@ impl<'a, M: Clone + 'a> ReviewCommentCard<'a, M> {
     /// Show the Outdated tag.
     pub fn outdated(mut self, outdated: bool) -> Self {
         self.outdated = outdated;
+        self
+    }
+
+    /// Draw `reply` (already made displayable) under the text; `shortened` adds "Show all". An
+    /// empty reply draws nothing.
+    pub fn reply(mut self, reply: &'a str, shortened: bool) -> Self {
+        self.reply = (!reply.is_empty()).then_some((reply, shortened));
         self
     }
 
@@ -89,7 +116,12 @@ impl<'a, M: Clone + 'a> ReviewCommentCard<'a, M> {
             label: match self.state {
                 CardState::Draft | CardState::InSend => DRAFT,
                 CardState::Sent => SENT,
+                CardState::Applied => APPLIED,
+                CardState::Answered => ANSWERED,
             },
+            tag: matches!(self.state, CardState::Applied | CardState::Answered),
+            reply: self.reply.is_some(),
+            show_all: self.reply.is_some_and(|(_, shortened)| shortened),
             outdated: self.outdated,
             actions: self.state == CardState::Draft
                 && (self.on_edit.is_some() || self.on_delete.is_some()),
@@ -101,9 +133,12 @@ impl<'a, M: Clone + 'a> From<ReviewCommentCard<'a, M>> for Element<'a, M> {
     fn from(card: ReviewCommentCard<'a, M>) -> Self {
         let parts = card.parts();
         let r = card.roles;
-        let mut head = row![Text::new(parts.label, TypeRole::Caption, r).muted()]
-            .spacing(spacing::SM)
-            .align_y(Alignment::Center);
+        let label: Element<'a, M> = match card.state {
+            CardState::Applied => Tag::new(APPLIED, r.primary).into(),
+            CardState::Answered => Tag::new(ANSWERED, r.secondary).into(),
+            _ => Text::new(parts.label, TypeRole::Caption, r).muted().into(),
+        };
+        let mut head = row![label].spacing(spacing::SM).align_y(Alignment::Center);
         if parts.outdated {
             head = head.push(Tag::new(OUTDATED, r.tertiary));
         }
@@ -116,7 +151,14 @@ impl<'a, M: Clone + 'a> From<ReviewCommentCard<'a, M>> for Element<'a, M> {
                 head = head.push(Button::text("Delete", r).on_press(message));
             }
         }
-        container(column![head, Text::new(card.text, TypeRole::Body, r)].spacing(spacing::XS))
+        let mut body = column![head, Text::new(card.text, TypeRole::Body, r)].spacing(spacing::XS);
+        if let Some((reply, shortened)) = card.reply {
+            body = body.push(Text::new(reply, TypeRole::Body, r).muted());
+            if shortened {
+                body = body.push(Text::new(SHOW_ALL, TypeRole::Label, r).muted());
+            }
+        }
+        container(body)
             .padding(spacing::SM)
             .width(Length::Fill)
             .style(move |_| container::Style {
@@ -150,10 +192,19 @@ mod tests {
 
     /// The card's height laid out `width` wide.
     fn height(text: &str, width: f32) -> f32 {
-        let mut element: Element<'_, ()> = ReviewCommentCard::new(text, CardState::Draft, LIGHT)
+        let card = ReviewCommentCard::new(text, CardState::Draft, LIGHT)
             .on_edit(())
-            .on_delete(())
-            .into();
+            .on_delete(());
+        height_of(card, width)
+    }
+
+    /// `card`'s height laid out 400 wide.
+    fn laid_out(card: ReviewCommentCard<'_, ()>) -> f32 {
+        height_of(card, 400.0)
+    }
+
+    fn height_of(card: ReviewCommentCard<'_, ()>, width: f32) -> f32 {
+        let mut element: Element<'_, ()> = card.into();
         let renderer = super::super::test_support::renderer();
         let mut tree = Tree::new(element.as_widget());
         element
@@ -186,6 +237,49 @@ mod tests {
     #[test]
     fn an_outdated_card_shows_its_tag() {
         assert!(card(CardState::Sent).outdated(true).parts().outdated);
+    }
+
+    #[test]
+    fn applied_and_answered_draw_their_status_tag_and_no_actions() {
+        let applied = card(CardState::Applied).parts();
+        assert_eq!(
+            (applied.label, applied.tag, applied.actions),
+            (APPLIED, true, false)
+        );
+        let answered = card(CardState::Answered).parts();
+        assert_eq!(
+            (answered.label, answered.tag, answered.actions),
+            (ANSWERED, true, false)
+        );
+        assert!(
+            !card(CardState::Sent).parts().tag,
+            "Sent stays a muted label"
+        );
+    }
+
+    #[test]
+    fn a_reply_is_drawn_under_the_text_with_show_all_only_when_shortened() {
+        let whole = card(CardState::Answered).reply("not needed", false).parts();
+        assert!(whole.reply && !whole.show_all);
+        let cut = card(CardState::Answered).reply("not needed", true).parts();
+        assert!(cut.reply && cut.show_all);
+        assert!(!card(CardState::Applied).reply("", false).parts().reply);
+
+        let plain = laid_out(ReviewCommentCard::new("rename", CardState::Answered, LIGHT));
+        let replied = laid_out(
+            ReviewCommentCard::new("rename", CardState::Answered, LIGHT).reply("not needed", false),
+        );
+        let shortened = laid_out(
+            ReviewCommentCard::new("rename", CardState::Answered, LIGHT).reply("not needed", true),
+        );
+        assert!(
+            replied > plain,
+            "the reply adds a line: {replied} > {plain}"
+        );
+        assert!(
+            shortened > replied,
+            "Show all adds a line: {shortened} > {replied}"
+        );
     }
 
     #[test]

@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-jjniz9
 - **Started**: 2026-10-17
 - **Phase**: milestone M2
-- **Next step**: M2 implement, T027–T034
+- **Next step**: M2 implement, continue at T027/T029 (see Handover)
 
 ## Pull requests
 
@@ -74,7 +74,24 @@ split along s6 (M3) is the only scenario split with a deliverable on each side.
 
 ## Handover
 
-None.
+M2 unit 2 (context cap). Done and committed: T022, T026 (4b5ac050: `Reviews::report` in
+`micold-daemon/src/review.rs`, `DaemonState::review_report`, the `report_review_comment` handler
+in `src/mcp/tools.rs`; `tests/review_reports.rs` 4 passed). Workspace compiles again.
+
+In progress (committed, **not yet compiled or run**): `crates/micold-client/src/ui/material/review_comment.rs`
+has T027's tests (`applied_and_answered_draw_their_status_tag_and_no_actions`,
+`a_reply_is_drawn_under_the_text_with_show_all_only_when_shortened`) and T029's implementation
+together (`CardState::{Applied, Answered}` drawn as `Tag` with `r.primary`/`r.secondary`,
+`Parts::{tag, reply, show_all}`, `.reply(text, shortened)`, "Show all" as a muted Label, not
+pressable until T038). Next: `cargo test -p micold-client --lib review_comment`, fix, tick T027,
+T029, cycle-log row (note red was not shown separately). Then T028/T030: planned
+`features::changes::card_model(comment, sending) -> CardModel { status: Status, in_send, reply:
+Option<(String, bool)> = shortened(display(reply), CARD_CHARS), editable }`, test it in
+`tests/features_changes.rs` (build Reported via `EntryReview::from_comments(..).report(..)`;
+`Report` fields are private, use accessors); T031 `comment_or_editor` in `ui/changes.rs` (line
+~484) maps it to `CardState` + `.reply(..)`; T032 showcase poses; T033 docs; T034 visual pass
+cannot run here (no xdotool): say so in the PR body. Then verify.md (Review A high, Review B),
+`scripts/gate.sh`, push, PR files.
 
 ## Open escalation
 
