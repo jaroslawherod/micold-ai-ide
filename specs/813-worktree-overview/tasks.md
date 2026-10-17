@@ -164,16 +164,16 @@ one without a session) and one included worktree → five cards, the permission 
   variants, and `CardGrid` with 1, 3 and 30 cards and narrow, in
   micold-client/src/showcase/catalogue.rs and micold-client/src/showcase/sections/surfaces.rs;
   extend micold-client/tests/showcase_completeness.rs for both entries (FR-021)
-- [ ] T021 [US1] Wire the view: micold-client/src/ui/overview.rs (new) `view` → `CardGrid` of
+- [X] T021 [US1] Wire the view: micold-client/src/ui/overview.rs (new) `view` → `CardGrid` of
   `OverviewCard`s from `overview::cards` after `order`; micold-client/src/ui/mod.rs `view_with`
   order Settings → Overview → Changes → Compare → terminal → `shell::view`, `main_content_key`
   `u64::MAX - 3` while open (U1)
-- [ ] T022 [US1] Top-bar button in micold-client/src/ui/toolbar.rs after the project switcher:
+- [X] T022 [US1] Top-bar button in micold-client/src/ui/toolbar.rs after the project switcher:
   `Button::text("Overview", r).leading(Icon::Overview).tooltip("Overview")`, pressing sends
   `overview::Msg::Toggled { settings_open }`, disabled while Settings is open (R2); route
   `Message::Overview` in micold-client/src/main.rs and send `overview::Msg::Closed` from the
   `SessionMsg::Selected` arm; T014 passes
-- [ ] T023 [US1] User guide: new docs/user-guide/overview.md (opening and closing with the
+- [X] T023 [US1] User guide: new docs/user-guide/overview.md (opening and closing with the
   button, one card per location, the location types with their icons, session counts, the five
   card states with what puts a location in each from data-model's table, worst first, live
   updates, stale data under the connection banner), linked from docs/SUMMARY.md; the new icons'

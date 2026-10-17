@@ -3,8 +3,9 @@
 
 use micold_client::app::{Message, State};
 use micold_client::features::agent_confirm::Prompt;
-use micold_client::features::overview::{cards, Msg};
+use micold_client::features::overview::Msg;
 use micold_client::features::pr_status::Msg as PrMsg;
+use micold_client::ui::overview::cards;
 use micold_core::overview::{CardReason, CardState, LocationType};
 use micold_core::project::{Availability, Project};
 use micold_core::protocol::messages::ActivitySignal;
