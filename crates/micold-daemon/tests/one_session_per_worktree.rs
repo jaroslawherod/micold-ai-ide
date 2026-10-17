@@ -925,3 +925,211 @@ async fn start_stop_and_restart_keep_the_one_session() {
     one(&state);
     kill_all(&state, project.path());
 }
+
+// --- Feature 776 (M7): worktrees that hold several sessions stay intact -------------------------
+
+fn ai_session(id: SessionId, wt: &str, name: &str) -> Session {
+    Session::restored(
+        id,
+        SessionLocation::Worktree(wt.into()),
+        SessionLabel::Named(name.into()),
+        TerminalMode::AiCli,
+        AiCli::ClaudeCode,
+    )
+}
+
+/// A project with worktree `wt` holding `Live` (running) and `Sleeper` (stopped), as a catalog
+/// written before the rule would.
+fn legacy_pair(project: &Path, store: &Path) -> Arc<DaemonState> {
+    init_repo(project);
+    add_worktree(project, "wt");
+    state_with(
+        project,
+        store,
+        vec![
+            ai_session(sid(1), "wt", "Live"),
+            ai_session(sid(2), "wt", "Sleeper"),
+        ],
+        &[sid(1)],
+    )
+}
+
+fn unarchived_in(state: &DaemonState, project: &Path, wt: &str) -> usize {
+    state
+        .sessions_for(project)
+        .iter()
+        .filter(|s| !s.archived && s.location == SessionLocation::Worktree(wt.into()))
+        .count()
+}
+
+/// US4 s1, s2 and SC-005: a catalog with two sessions in a worktree opens with both, unchanged,
+/// and a new session is still refused.
+#[tokio::test]
+async fn legacy_pair_opens_untouched_and_refuses_a_third() {
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    let state = legacy_pair(project.path(), store.path());
+    let before = [
+        record_of(&state, project.path(), sid(1)),
+        record_of(&state, project.path(), sid(2)),
+    ];
+    assert_eq!(count(&state, project.path()), 2, "both sessions are listed");
+
+    let mut client = connect(&state).await;
+    send(&mut client, create(1, project.path(), "wt")).await;
+    assert!(
+        matches!(
+            answer(&mut client, 1).await,
+            DaemonMsg::OperationError {
+                kind: ErrorKind::Refused,
+                ..
+            }
+        ),
+        "a third session is refused"
+    );
+    assert_eq!(count(&state, project.path()), 2);
+    assert_eq!(record_of(&state, project.path(), sid(1)), before[0]);
+    assert_eq!(record_of(&state, project.path(), sid(2)), before[1]);
+}
+
+/// FR-013: starting the stopped session while the other runs is refused naming the running one,
+/// and nothing is spawned or rewritten; the explicit request lifts the refusal.
+#[test]
+fn start_refusal_names_the_live_session_and_the_flag_lifts_it() {
+    use micold_core::occupancy::Additional;
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    let state = legacy_pair(project.path(), store.path());
+    let sleeper = record_of(&state, project.path(), sid(2));
+
+    let text = state
+        .start_refusal(sid(2), Additional::No)
+        .expect("a start beside a running session is refused");
+    assert!(text.contains("\"Live\""), "names the running one: {text}");
+    assert!(text.contains(&sid(1).0.to_string()), "{text}");
+    assert!(text.contains("allow_additional_session: true"), "{text}");
+    assert_eq!(state.start_refusal(sid(2), Additional::Yes), None);
+    assert_eq!(
+        state.start_refusal(sid(1), Additional::No),
+        None,
+        "the running session itself is not blocked by the stopped one"
+    );
+
+    let err = state
+        .start_session_gated(
+            sid(2),
+            micold_core::terminal::LaunchMode::Resume,
+            Additional::No,
+        )
+        .expect_err("the gated start refuses");
+    assert_eq!(err.kind(), std::io::ErrorKind::WouldBlock);
+    assert!(state.live_session(sid(2)).is_none(), "nothing was spawned");
+    assert_eq!(record_of(&state, project.path(), sid(2)), sleeper);
+}
+
+/// FR-013 at the wire: `SessionStart` without the flag is dropped; with it, both run.
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn wire_start_beside_a_running_session_needs_the_flag() {
+    let _guard = PATH_LOCK.lock().await;
+    let bin = tempfile::tempdir().unwrap();
+    stand_in_claude(bin.path());
+    let _path = PathGuard::set(bin.path());
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    let state = legacy_pair(project.path(), store.path());
+    let mut client = connect(&state).await;
+    let start = |allow| ClientMsg::SessionStart {
+        session: sid(2),
+        allow_additional_session: allow,
+    };
+
+    send(&mut client, start(false)).await;
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    assert!(state.live_session(sid(2)).is_none(), "refused: not started");
+
+    send(&mut client, start(true)).await;
+    until_live(&state, sid(2), true).await;
+    assert_eq!(unarchived_in(&state, project.path(), "wt"), 2);
+    kill_all(&state, project.path());
+}
+
+/// US4 s3 and SC-001: deleting an extra leaves the other; and over create, start, stop, restart,
+/// resume and delete from two connections, a worktree never gains a second session unasked.
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn no_sequence_without_the_flag_ever_shows_two_sessions() {
+    let _guard = PATH_LOCK.lock().await;
+    let bin = tempfile::tempdir().unwrap();
+    stand_in_claude(bin.path());
+    let _path = PathGuard::set(bin.path());
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    init_repo(project.path());
+    add_worktree(project.path(), "wt");
+    let state = state_with(project.path(), store.path(), Vec::new(), &[]);
+    let mut a = connect(&state).await;
+    let mut b = connect(&state).await;
+    let at_most_one = || assert!(unarchived_in(&state, project.path(), "wt") <= 1);
+
+    send(&mut a, create(1, project.path(), "wt")).await;
+    assert!(matches!(
+        answer(&mut a, 1).await,
+        DaemonMsg::OperationOk { .. }
+    ));
+    at_most_one();
+    let own = state.sessions_for(project.path())[0].id;
+    send(&mut b, create(2, project.path(), "wt")).await;
+    assert!(matches!(
+        answer(&mut b, 2).await,
+        DaemonMsg::OperationError { .. }
+    ));
+    at_most_one();
+    send(&mut b, ClientMsg::SessionStop { session: own }).await;
+    until_live(&state, own, false).await;
+    for msg in [
+        ClientMsg::SessionStart {
+            session: own,
+            allow_additional_session: false,
+        },
+        ClientMsg::SessionRestart {
+            session: own,
+            allow_additional_session: false,
+        },
+    ] {
+        send(&mut a, msg).await;
+        until_live(&state, own, true).await;
+        at_most_one();
+    }
+    send(&mut b, create(3, project.path(), "wt")).await;
+    assert!(matches!(
+        answer(&mut b, 3).await,
+        DaemonMsg::OperationError { .. }
+    ));
+    at_most_one();
+    delete(&mut a, 4, own).await;
+    at_most_one();
+    send(&mut b, create(5, project.path(), "wt")).await;
+    assert!(
+        matches!(answer(&mut b, 5).await, DaemonMsg::OperationOk { .. }),
+        "deleting the session frees the path"
+    );
+    at_most_one();
+    kill_all(&state, project.path());
+}
+
+/// US4: deleting one of two legacy sessions leaves the other, and the worktree accepts no new one.
+#[tokio::test]
+async fn deleting_an_extra_keeps_the_other_session() {
+    let project = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    let state = legacy_pair(project.path(), store.path());
+    let mut client = connect(&state).await;
+    delete(&mut client, 1, sid(2)).await;
+    assert_eq!(unarchived_in(&state, project.path(), "wt"), 1);
+    let kept = state.sessions_for(project.path());
+    assert_eq!(
+        kept.iter().find(|s| !s.archived).map(|s| s.id),
+        Some(sid(1))
+    );
+}

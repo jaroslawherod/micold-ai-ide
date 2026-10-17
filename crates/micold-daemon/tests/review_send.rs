@@ -106,9 +106,14 @@ impl Sandbox {
             std::fs::write(self.bin.path().join(format!("nopaste.{}", id.0)), "").unwrap();
         }
         self.state.begin_start(id);
-        let started = micold_daemon::ops::start_session(&self.state, id, LaunchMode::Fresh)
-            .await
-            .unwrap();
+        let started = micold_daemon::ops::start_session(
+            &self.state,
+            id,
+            LaunchMode::Fresh,
+            micold_core::occupancy::Additional::No,
+        )
+        .await
+        .unwrap();
         assert!(started, "session {} starts", id.0);
         let input = self.input_path(id);
         let deadline = Instant::now() + BOUND;

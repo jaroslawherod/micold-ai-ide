@@ -44,6 +44,13 @@ choose a folder.
   main one. Worktrees recorded before this existed treat their first open session as the main one
   until you choose another; nothing is rewritten.
 
+- **Worktrees that already hold several sessions** (from before this limit, or because you asked
+  for helpers) open untouched: no session is removed or changed. A new session there is still
+  refused, and starting one session while another of the same worktree is starting or running is
+  refused too: in the sidebar the row opens without starting and its tooltip names the running
+  session, and the confirmation that appears lets you run both on purpose. Stopping the running one
+  first needs no confirmation. To get back to one session, delete the extras.
+
 <!-- media: worktree-sidebar-light -->
 
 ### Worktree state icon

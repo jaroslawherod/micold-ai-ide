@@ -177,9 +177,14 @@ impl Fixture {
     }
 
     async fn start(&self, state: &Arc<DaemonState>, n: u128, mode: LaunchMode) {
-        assert!(micold_daemon::ops::start_session(state, sid(n), mode)
-            .await
-            .unwrap());
+        assert!(micold_daemon::ops::start_session(
+            state,
+            sid(n),
+            mode,
+            micold_core::occupancy::Additional::No
+        )
+        .await
+        .unwrap());
     }
 
     fn binding(&self, n: u128) -> PathBuf {

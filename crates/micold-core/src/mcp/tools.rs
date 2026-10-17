@@ -173,6 +173,9 @@ pub enum Operation {
     /// Start an idle, failed or resumable session, as the sidebar does.
     StartSession {
         session: SessionRef,
+        /// An explicit request to start it beside another live session of its worktree (feature
+        /// 776, FR-015): `allow_additional_session`, default `No`.
+        additional: crate::occupancy::Additional,
     },
     StopSession {
         session: SessionRef,
@@ -329,7 +332,7 @@ impl Operation {
             Operation::GetSession { session }
             | Operation::ReadSessionOutput { session, .. }
             | Operation::SendSessionInput { session, .. }
-            | Operation::StartSession { session }
+            | Operation::StartSession { session, .. }
             | Operation::StopSession { session }
             | Operation::InterruptSession { session }
             | Operation::DeleteSession { session } => session.0.to_string(),
@@ -616,8 +619,18 @@ const TOOLS: &[Tool] = &[
         name: "start_session",
         description: "Start an idle, failed or resumable session, as the sidebar's start does (a \
             resumable session resumes its conversation). A session that is already starting, \
-            running or restarting is left as it is. Returns the session's lifecycle.",
-        properties: session_property,
+            running or restarting is left as it is. A worktree runs one session at a time by \
+            default: starting a session while another session of its worktree is starting or \
+            running is refused (Conflict), naming the running one; stop it first, or pass \
+            allow_additional_session: true to run both on purpose (policy and every other check \
+            still apply). Returns the session's lifecycle.",
+        properties: || {
+            let mut properties = session_property();
+            properties["allow_additional_session"] = json!({"type": "boolean", "default": false,
+                "description": "Start the session even though another session of its \
+                    worktree is running, leaving that one untouched."});
+            properties
+        },
         required: &["session"],
         read_only: false,
         destructive: false,
@@ -769,6 +782,9 @@ pub fn parse_operation(name: &str, arguments: &Value) -> Result<Operation, OpErr
         },
         "start_session" => Operation::StartSession {
             session: required_session(args, "session")?,
+            additional: optional_bool(args, "allow_additional_session")?
+                .unwrap_or(false)
+                .into(),
         },
         "stop_session" => Operation::StopSession {
             session: required_session(args, "session")?,

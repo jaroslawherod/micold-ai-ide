@@ -349,6 +349,7 @@ pub fn start_session(
     state: &Arc<DaemonState>,
     session: SessionId,
     launch: LaunchMode,
+    additional: micold_core::occupancy::Additional,
 ) -> tokio::task::JoinHandle<bool> {
     let gate = queue_for_gate(state, session);
     let state = Arc::clone(state);
@@ -356,7 +357,7 @@ pub fn start_session(
         let _serialized = gate.await;
         let worker = Arc::clone(&state);
         let outcome = tokio::task::spawn_blocking(move || {
-            worker.start_session_gated(session, launch)?;
+            worker.start_session_gated(session, launch, additional)?;
             // Watch this session's own event log, for a provider that reports one (feature 026,
             // T064). In the same blocking hop as the spawn, and **only** for a session the daemon
             // has just started — that is what keeps a merely discovered session unwatched.
@@ -636,7 +637,19 @@ pub async fn create_session_with_prompt(
     prompt: Option<FirstPrompt<'_>>,
 ) -> Result<(SessionId, Result<(), FirstPromptUndelivered>), crate::catalog::CreateSessionError> {
     let session = state.create_session(new.project, new.worktree_dir, new.cli, new.additional)?;
-    Ok(start_with_prompt(state, session, new.cwd, new.cli, LaunchMode::Fresh, prompt).await)
+    // The record exists, so the creation's own check (FR-002) has passed or was waived: the
+    // start is not asked again about another live session of the location.
+    let additional = micold_core::occupancy::Additional::Yes;
+    Ok(start_with_prompt(
+        state,
+        session,
+        new.cwd,
+        new.cli,
+        LaunchMode::Fresh,
+        additional,
+        prompt,
+    )
+    .await)
 }
 
 /// Start `session` (a fresh one, or an existing one resumed) and type `prompt` as its next input
@@ -647,11 +660,14 @@ pub async fn start_with_prompt(
     cwd: &Path,
     cli: AiCli,
     launch: LaunchMode,
+    additional: micold_core::occupancy::Additional,
     prompt: Option<FirstPrompt<'_>>,
 ) -> (SessionId, Result<(), FirstPromptUndelivered>) {
     state.begin_start(session);
     state.broadcast_catalog();
-    let started = start_session(state, session, launch).await.unwrap_or(false);
+    let started = start_session(state, session, launch, additional)
+        .await
+        .unwrap_or(false);
     let Some(prompt) = prompt else {
         return (session, Ok(()));
     };

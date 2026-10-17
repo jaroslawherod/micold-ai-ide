@@ -113,7 +113,10 @@ async fn dispatch(
             prompt,
             additional,
         } => create_session(&state, caller, worktree, ai_cli, prompt, additional, asked).await,
-        Operation::StartSession { session } => start_session(&state, caller, session).await,
+        Operation::StartSession {
+            session,
+            additional,
+        } => start_session(&state, caller, session, additional).await,
         Operation::RenameWorktree {
             worktree,
             display_name,
@@ -1185,6 +1188,7 @@ async fn start_session(
     state: &Arc<DaemonState>,
     caller: SessionId,
     target: SessionRef,
+    additional: micold_core::occupancy::Additional,
 ) -> Result<Value, OpError> {
     let session = SessionId::from_uuid(target.0);
     let st = Arc::clone(state);
@@ -1201,17 +1205,28 @@ async fn start_session(
         Ok((who, lifecycle))
     })
     .await?;
-    check_policy(&who, &Operation::StartSession { session: target })?;
+    check_policy(
+        &who,
+        &Operation::StartSession {
+            session: target,
+            additional,
+        },
+    )?;
 
     if !matches!(
         lifecycle,
         WireLifecycle::Starting | WireLifecycle::Running | WireLifecycle::Restarting { .. }
     ) {
+        // Another session of its worktree is live (feature 776, FR-013): refused, naming it,
+        // before the session is shown `Starting` or anything is spawned.
+        if let Some(refusal) = state.start_refusal(session, additional) {
+            return Err(OpError::new(ErrorCategory::Conflict, refusal));
+        }
         // The sidebar's `SessionStart`: bringing an existing session back is a resume. Every
         // window sees it `Starting` while the start runs.
         state.begin_start(session);
         state.broadcast_catalog();
-        let started = ops::start_session(state, session, LaunchMode::Resume)
+        let started = ops::start_session(state, session, LaunchMode::Resume, additional)
             .await
             .unwrap_or(false);
         if !started {

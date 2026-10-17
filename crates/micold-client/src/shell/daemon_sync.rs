@@ -2526,6 +2526,17 @@ fn additional_session_request(
 /// The additional-session confirmation was accepted (feature 776, FR-016, FR-017): ask the daemon
 /// for the helper. The reply's `SessionCreated` selects it like any created session.
 pub fn on_additional_session_confirmed(app: &mut App) -> Task<Message> {
+    // A blocked start: the same start, now explicit (FR-016).
+    if let Some(id) = app.core.session.blocked_start {
+        view_and_send(
+            app,
+            id,
+            ClientMsg::SessionStart {
+                session: id,
+                allow_additional_session: true,
+            },
+        );
+    }
     if let (Some((location, provider)), Some(project)) = (
         app.core.additional_request(),
         app.core.workspace.active.clone(),
@@ -3157,6 +3168,13 @@ pub fn on_worktree_delete_confirmed(app: &mut App) -> Task<Message> {
 /// View a session on the daemon — start/resume it and stream its grid — resetting the local
 /// selection and scroll for the newly-displayed session.
 pub fn view_and_start(app: &mut App, id: SessionId) {
+    // Another live session of its worktree blocks the start (feature 776, FR-013): view it without
+    // starting, and ask whether to run both (FR-016).
+    if app.core.session_start_block_text(id).is_some() {
+        view_session(app, id);
+        crate::features::session::start_blocked(&mut app.core, id);
+        return;
+    }
     view_and_send(
         app,
         id,
