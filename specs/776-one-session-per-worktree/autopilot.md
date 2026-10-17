@@ -24,6 +24,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #828 | M3 | merged | 5ac2e0a2648abd82f8f95bbbf52d6f0309c193ca |
 | #880 | M4 | merged | bb0458f6bed51342b3ac261670cc0be8989cc198 |
 | #891 | M5 | merged | 2a1e24637014dfbfb417a1b201d88ceaaa11a755 |
+| #912 | M6 | open | |
 
 ## Milestones
 
@@ -34,7 +35,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 | T014–T016, T021, T050–T054 | full | create_worktree / WorktreeCreate define the session at start (WIP at tag wip-776-m3, cherry-picked after M2); main session persisted, moved, promoted; wire v44 | | pending |
 | M4 | T017–T020, T022, T036, T043–T045 | full | Dialog fields; worktree rows only; row press opens the main session; helpers marked | #880 | merged (#880) |
 | M5 | T046–T049, T055–T057 | full | Row menu "Start another session..." (adds a helper) with confirmation; "Make main session"; delete names successor | #891 | merged (#891) |
-| M6 | T023–T030 | full | Resume replaces (resumed becomes main) or keeps both (helper); attach cap | | pending |
+| M6 | T023–T030 | full | Resume replaces (resumed becomes main) or keeps both (helper); attach cap | #912 | open (#912) |
 | M7 | T031–T035 | full | Several sessions intact; start beside a live one needs confirmation | | pending |
 
 ## Decisions
