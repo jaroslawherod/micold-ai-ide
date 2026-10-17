@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #489
 - **Worktree branch**: feat/489_run-the-session-daemon-on-a-remote-host-over-ssh
 - **Started**: 2026-10-12
-- **Phase**: M3 PR open
-- **Next step**: orchestrator waits on CI and merges M3, then M4
+- **Phase**: M4 PR open
+- **Next step**: orchestrator waits on CI and merges M4, then M5
 
 ## Pull requests
 
@@ -28,7 +28,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T027 | full | Remote over SSH daemon connects (add, start, Connected) | #845 | done |
 | M2 | T028–T038 | full | Remote projects, worktrees and sessions | #883 | done |
 | M3 | T039–T050 | full | Reconnect after a network drop | #895 | done |
-| M4 | T051–T055 | full | Local work unaffected, concurrent clients | — | pending |
+| M4 | T051–T055 | full | Local work unaffected, concurrent clients | — | in review |
 | M5 | T056–T065 | full | Host picker, failure reasons, daemon management | — | pending |
 | M6 | T066–T072 | full | Version mismatch explained | — | pending |
 | M7 | T073–T081 | full | Replace a mismatched daemon with no sessions | — | pending |
@@ -62,6 +62,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | Code A M3 | 1 | 8e76f42d25b6f3cb4abdbba133fccaa69d6b52c9:cc041d5055f93d89b924ad57eb1114474c83cf85 | CHANGES: 1 MAJOR (Reconnect during outage ended the attempts; fixed with ActorSpec.resumed), 2 MINOR declined |
 | Conformance B M3 | 1 | a6a3a59724167f056348879bfc89da0d364ddddc:009e6393a452cac9a09765bfc662b80b107e19cc | CLEAN (test-ssh and test-core green), 2 MINOR noted |
+| Code A M4 | 1 | dfcc707c664f16e2b5a44168300e3ab0c7bfbbc6:2a8db33bcecb8469fb979f349f204f66893325ed | CLEAN, 3 MINOR (cut-test comment fixed, prose only; weak negative asserts F1/F3 noted) |
+| Conformance B M4 | 1 | dfcc707c664f16e2b5a44168300e3ab0c7bfbbc6:2a8db33bcecb8469fb979f349f204f66893325ed | CLEAN, 3 MINOR (Verify not observed by B for build lock; full gate runs the ssh tests) |
 
 ## Declined review findings
 
