@@ -379,6 +379,7 @@ fn card_model(
             merged_capped: false,
         }),
         progress: Default::default(),
+        activity: None,
         activation: micold_core::overview::Activation::RevealOnly(
             micold_core::session::SessionLocation::Default,
         ),
@@ -413,9 +414,16 @@ pub fn overview_card<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'
         ratio: Some(micold_core::task_progress::Ratio { done: 6, total: 10 }),
         source: micold_core::task_progress::Source::TaskList,
     };
+    let mut with_activity = card_model("with-activity", T::Feature, S::Working, R::Working);
+    with_activity.activity = Some(micold_core::hook_activity::CurrentActivity {
+        line: "Writing the activity line".to_string(),
+        ratio: Some(micold_core::task_progress::Ratio { done: 2, total: 5 }),
+    });
+    with_activity.progress = with_progress.progress.clone();
     arrange(
         vec![
             posed("with progress", card(with_progress), roles),
+            posed("with activity", card(with_activity), roles),
             posed(
                 "without progress",
                 card(card_model("without-progress", T::Feature, S::Idle, R::Idle)),

@@ -110,6 +110,7 @@ mod tests {
                         summary: "s".into(),
                         prs: micold_core::overview::PrDisplay::Hidden,
                         progress: Default::default(),
+                        activity: None,
                         activation: micold_core::overview::Activation::RevealOnly(
                             micold_core::session::SessionLocation::Default,
                         ),

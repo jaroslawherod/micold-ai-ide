@@ -1296,6 +1296,11 @@ pub struct SessionSummary {
     /// `activity`: the catalog stores `false`. Absent on an older frame means `false`.
     #[serde(default)]
     pub paused_on_user: bool,
+    /// The todo list and prompt the session's hooks reported (feature 813, W1), for its
+    /// location's Overview card. Live only, like `activity`: the catalog stores `None`. Absent on
+    /// an older frame means `None`. Never logged (FR-020).
+    #[serde(default)]
+    pub hook_activity: Option<crate::hook_activity::HookActivity>,
 }
 
 /// One agent run on a [`SessionSummary`] — the stored form, unchanged (feature 552).
@@ -1866,6 +1871,7 @@ mod attention_wire_tests {
             agents: Vec::new(),
             main: false,
             paused_on_user: false,
+            hook_activity: None,
         };
 
         assert_eq!(
@@ -1894,6 +1900,7 @@ mod attention_wire_tests {
             agents: Vec::new(),
             main: false,
             paused_on_user: false,
+            hook_activity: None,
         };
 
         assert!(

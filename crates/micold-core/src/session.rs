@@ -331,6 +331,10 @@ pub struct Session {
     /// not resumed or finished (feature 905, data-model *Session*). Runtime-only, like `activity`;
     /// `false` from every constructor. Read only when `activity` is `AwaitingInput`.
     pub paused_on_user: bool,
+    /// What the session's hooks reported (feature 813, US5): its todo list and latest prompt, for
+    /// the location's Overview card. Runtime-only, like `activity`: never persisted, `None` from
+    /// every constructor, replaced by each catalog snapshot. Never logged (FR-020).
+    pub hook_activity: Option<crate::hook_activity::HookActivity>,
     /// Which process is attached to the visible pane (feature 010). Persisted (FR-011).
     pub mode: TerminalMode,
     /// Every currently-open Regular Terminal instance, in creation ("open") order (feature 011;
@@ -392,6 +396,7 @@ impl Session {
             lifecycle: SessionLifecycle::Starting,
             activity: crate::protocol::messages::ActivitySignal::Unknown,
             paused_on_user: false,
+            hook_activity: None,
             mode: TerminalMode::AiCli,
             shells: Vec::new(),
             active_shell: None,
@@ -428,6 +433,7 @@ impl Session {
             lifecycle: SessionLifecycle::Idle,
             activity: crate::protocol::messages::ActivitySignal::Unknown,
             paused_on_user: false,
+            hook_activity: None,
             mode,
             shells: Vec::new(),
             active_shell: None,

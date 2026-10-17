@@ -36,6 +36,7 @@ fn session(id: SessionId, dir: &str) -> SessionSummary {
         origin: None,
         agents: Vec::new(),
         paused_on_user: false,
+        hook_activity: None,
     }
 }
 

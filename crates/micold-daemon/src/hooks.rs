@@ -293,7 +293,7 @@ enum Route {
 #[derive(Debug, PartialEq, Eq)]
 enum HookClass {
     /// A recognised turn-affecting hook — apply it to the FSM.
-    Event(HookKind),
+    Event(HookKind, serde_json::Value),
     /// A sub-agent run started or stopped (feature 552, contract C2): recorded against the origin
     /// session, never applied to its activity (FR-007).
     Agent(AgentSignal),
@@ -375,8 +375,11 @@ async fn handle_connection(
     // 6. Map the hook to an activity transition. The body is NEVER logged (contract §6).
     let body_str = std::str::from_utf8(&body).unwrap_or("");
     match classify_hook(body_str) {
-        HookClass::Event(kind) => {
-            if state.note_activity(session, ActivityEvent::Hook(kind)) {
+        HookClass::Event(kind, value) => {
+            // Both are called, never short-circuited: each folds this event in.
+            let activity = state.note_activity(session, ActivityEvent::Hook(kind));
+            let hook_activity = state.note_hook_activity(session, &value);
+            if activity || hook_activity {
                 state.broadcast_catalog();
             }
             respond(&mut stream, 200, "OK").await
@@ -472,11 +475,11 @@ fn classify_hook(body: &str) -> HookClass {
         return HookClass::Invalid;
     };
     match name {
-        "UserPromptSubmit" => HookClass::Event(HookKind::UserPromptSubmit),
-        "PreToolUse" => HookClass::Event(HookKind::PreToolUse),
-        "PostToolUse" => HookClass::Event(HookKind::PostToolUse),
-        "Stop" => HookClass::Event(HookKind::Stop),
-        "Notification" => HookClass::Event(HookKind::Notification),
+        "UserPromptSubmit" => HookClass::Event(HookKind::UserPromptSubmit, value),
+        "PreToolUse" => HookClass::Event(HookKind::PreToolUse, value),
+        "PostToolUse" => HookClass::Event(HookKind::PostToolUse, value),
+        "Stop" => HookClass::Event(HookKind::Stop, value),
+        "Notification" => HookClass::Event(HookKind::Notification, value),
         // SessionStart is well-formed but carries no FSM transition (the session starts Unknown).
         "SessionStart" => HookClass::Ignored,
         // A helper agent starting or finishing inside a turn neither ends nor pauses it (feature
@@ -668,15 +671,17 @@ mod tests {
 
     #[test]
     fn classifies_hook_event_names() {
-        let ev = |n: &str| classify_hook(&format!(r#"{{"hook_event_name":"{n}"}}"#));
-        assert_eq!(
-            ev("UserPromptSubmit"),
-            HookClass::Event(HookKind::UserPromptSubmit)
-        );
-        assert_eq!(ev("PreToolUse"), HookClass::Event(HookKind::PreToolUse));
-        assert_eq!(ev("PostToolUse"), HookClass::Event(HookKind::PostToolUse));
-        assert_eq!(ev("Stop"), HookClass::Event(HookKind::Stop));
-        assert_eq!(ev("Notification"), HookClass::Event(HookKind::Notification));
+        // The body rides along with the kind (feature 813); compare the kind alone.
+        let ev = |n: &str| match classify_hook(&format!(r#"{{"hook_event_name":"{n}"}}"#)) {
+            HookClass::Event(kind, _) => HookClass::Event(kind, serde_json::Value::Null),
+            other => other,
+        };
+        let event = |kind| HookClass::Event(kind, serde_json::Value::Null);
+        assert_eq!(ev("UserPromptSubmit"), event(HookKind::UserPromptSubmit));
+        assert_eq!(ev("PreToolUse"), event(HookKind::PreToolUse));
+        assert_eq!(ev("PostToolUse"), event(HookKind::PostToolUse));
+        assert_eq!(ev("Stop"), event(HookKind::Stop));
+        assert_eq!(ev("Notification"), event(HookKind::Notification));
         // A helper agent starting or finishing is not the end of the turn (feature 613, FR-024);
         // with no `agent_id` there is nothing to record (feature 552, FR-008).
         assert_eq!(ev("SubagentStop"), HookClass::Ignored);

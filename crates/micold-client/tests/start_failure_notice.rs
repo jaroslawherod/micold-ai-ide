@@ -67,6 +67,7 @@ fn snapshot(lifecycle: WireLifecycle) -> CatalogSnapshot {
                 agents: Vec::new(),
                 main: false,
                 paused_on_user: false,
+                hook_activity: None,
             }],
         }],
         env_include_failures: Vec::new(),

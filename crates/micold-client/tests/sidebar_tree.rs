@@ -1076,6 +1076,7 @@ fn a_summary_carrying_agent_runs_lists_every_worktree_and_session() {
                 }],
                 origin: None,
                 paused_on_user: false,
+                hook_activity: None,
             }],
         }],
         env_include_failures: Vec::new(),

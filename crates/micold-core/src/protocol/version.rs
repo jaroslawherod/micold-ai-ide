@@ -172,7 +172,10 @@
 /// Bumped 48 → 49 for feature 946's review replies, in one edit (contracts/review-wire-delta.md
 /// W13–W15): `CommentState::{Draft, Sent, Reported}` on `ReviewComment`, and
 /// `ReviewEditOp::{Mark, Reanchor}`. An older peer cannot decode a reported comment or either op.
-pub const PROTOCOL_VERSION: u32 = 49;
+///
+/// And 49 → 50 for feature 813's worktree overview (contracts/wire.md W1): `hook_activity` on
+/// `SessionSummary`, serde-defaulted, so an older frame decodes to `None`.
+pub const PROTOCOL_VERSION: u32 = 50;
 
 // `build.rs` emits `pub const SCHEMA_HASH: [u8; 32] = [...];` into this file.
 include!(concat!(env!("OUT_DIR"), "/schema_hash.rs"));

@@ -393,6 +393,8 @@ pub struct CardModel {
     pub prs: PrDisplay,
     /// The feature's phase and task ratio, or none (data-model *CardModel*, R9).
     pub progress: crate::task_progress::Progress,
+    /// What the main session's hooks say it is doing now, when they report (Story 5, R10).
+    pub activity: Option<crate::hook_activity::CurrentActivity>,
     /// What activating the card does.
     pub activation: Activation,
 }
@@ -890,6 +892,7 @@ mod tests {
             summary: name.into(),
             prs: PrDisplay::Hidden,
             progress: Default::default(),
+            activity: None,
             activation: Activation::RevealOnly(worktree(name)),
         }
     }

@@ -130,11 +130,12 @@ fn card(app: &State, place: &Place) -> CardModel {
     );
     let progress = progress(app, &location, state, pr_open);
     let branch_ref = branch.clone();
-    let activation = activation(
-        &location,
-        main_session(app.active_sessions(), &location),
-        kind,
-    );
+    let main = main_session(app.active_sessions(), &location);
+    let activity = main
+        .and_then(|id| app.active_sessions().iter().find(|s| s.id == id))
+        .and_then(|s| s.hook_activity.as_ref())
+        .and_then(|hooks| hooks.current());
+    let activation = activation(&location, main, kind);
     CardModel {
         location,
         display_name,
@@ -145,6 +146,7 @@ fn card(app: &State, place: &Place) -> CardModel {
         reason,
         summary,
         progress,
+        activity,
         prs: pr_display(&app.pr_status, branch_ref),
         activation,
     }
@@ -275,6 +277,7 @@ mod tests {
                 summary: "s".into(),
                 prs: micold_core::overview::PrDisplay::Hidden,
                 progress: Default::default(),
+                activity: None,
                 activation: micold_core::overview::Activation::RevealOnly(
                     micold_core::session::SessionLocation::Default,
                 ),

@@ -1056,3 +1056,125 @@ fn a_worktree_with_no_source_has_no_phase_and_no_ratio() {
         Progress::default()
     );
 }
+
+fn hooks(line: &str, done: usize, total: usize) -> micold_core::hook_activity::HookActivity {
+    use micold_core::hook_activity::{Todo, TodoStatus};
+    let todo = |i: usize| Todo {
+        text: format!("t{i}"),
+        active: None,
+        status: if i < done {
+            TodoStatus::Completed
+        } else if i == done {
+            TodoStatus::InProgress
+        } else {
+            TodoStatus::Pending
+        },
+    };
+    let mut h = micold_core::hook_activity::HookActivity {
+        todos: (0..total).map(todo).collect(),
+        prompt: None,
+    };
+    h.todos[done].active = Some(line.to_string());
+    h
+}
+
+/// Folds a catalog reporting `hook_activity` for `session` into `state`.
+fn adopt(
+    state: &mut State,
+    session: &Session,
+    hook: Option<micold_core::hook_activity::HookActivity>,
+) {
+    use micold_core::protocol::messages::{
+        CatalogSnapshot, ProjectSnapshot, SessionSummary, WireLifecycle,
+    };
+    let snapshot = CatalogSnapshot {
+        schema_version: 1,
+        last_active: None,
+        projects: vec![ProjectSnapshot {
+            pane_layout: None,
+            path: project_path(),
+            display_name: "repo".to_string(),
+            is_git_repo: true,
+            available: true,
+            worktrees: Vec::new(),
+            sessions: vec![SessionSummary {
+                id: session.id,
+                worktree_dir: Some("feat-a".to_string()),
+                title: session.label.clone(),
+                lifecycle: WireLifecycle::Running,
+                activity: ActivitySignal::Working,
+                input_serial: 0,
+                live_shells: Vec::new(),
+                attention_seq: 0,
+                unread: false,
+                main: true,
+                provider: AiCli::ClaudeCode,
+                origin: None,
+                agents: Vec::new(),
+                paused_on_user: false,
+                hook_activity: hook,
+            }],
+        }],
+        env_include_failures: Vec::new(),
+    };
+    micold_client::catalog_sync::reconcile_catalog(
+        state,
+        micold_core::daemons::DaemonId(1),
+        &snapshot,
+        false,
+    );
+}
+
+#[test]
+fn hook_activity_reaches_the_main_sessions_card_beside_the_task_list_ratio() {
+    let mut state = project_with(vec![worktree(
+        "feat-a",
+        Some("feat/a"),
+        WorktreeStatus::Valid,
+        false,
+    )]);
+    let session = running(&mut state, wt("feat-a"));
+    adopt(&mut state, &session, Some(hooks("Writing tests", 2, 5)));
+    let stored = &state.workspace.sessions[&project_path()][0];
+    assert!(stored.hook_activity.is_some());
+    let all = cards(&state);
+    let activity = card(&all, &wt("feat-a")).activity.clone().unwrap();
+    assert_eq!(activity.line, "Writing tests");
+    assert_eq!(activity.ratio.map(|r| (r.done, r.total)), Some((2, 5)));
+    // Story 4's summary stays what it was.
+    assert_eq!(card(&all, &wt("feat-a")).summary, "feat/a");
+}
+
+#[test]
+fn without_hook_data_or_after_a_reconnect_the_card_falls_back() {
+    let mut state = project_with(vec![worktree(
+        "feat-a",
+        Some("feat/a"),
+        WorktreeStatus::Valid,
+        false,
+    )]);
+    let session = running(&mut state, wt("feat-a"));
+    assert!(card(&cards(&state), &wt("feat-a")).activity.is_none());
+    adopt(&mut state, &session, Some(hooks("Writing tests", 0, 2)));
+    assert!(card(&cards(&state), &wt("feat-a")).activity.is_some());
+    // A reconnect's snapshot carries none: the card is Story 4's again, without an error.
+    adopt(&mut state, &session, None);
+    let all = cards(&state);
+    assert!(card(&all, &wt("feat-a")).activity.is_none());
+    assert_eq!(card(&all, &wt("feat-a")).summary, "feat/a");
+}
+
+#[test]
+fn hook_activity_is_runtime_only() {
+    let session = Session::restored(
+        micold_core::session::SessionId::new(),
+        wt("feat-a"),
+        micold_core::session::SessionLabel::Pending,
+        micold_core::session::TerminalMode::AiCli,
+        AiCli::ClaudeCode,
+    );
+    assert!(session.hook_activity.is_none());
+    assert!(Session::start_new(wt("feat-a"), AiCli::ClaudeCode)
+        .hook_activity
+        .is_none());
+}

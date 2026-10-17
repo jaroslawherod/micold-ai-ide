@@ -34,6 +34,7 @@ Each card shows:
 - a one-line summary (see [The summary line](#the-summary-line));
 - its session counts: how many sessions there are and how many are running;
 - its **state**, as an icon and a word. Hover for the reason;
+- when the agent reports it, an **activity line** (see [What the agent is doing now](#what-the-agent-is-doing-now));
 - a **progress row** (see [Feature progress](#feature-progress));
 - for a card with a branch, its **pull request counts**, such as *1 open · 2 merged* (drafts count as open; a count of 100 or more reads *100+*).
 
@@ -57,6 +58,14 @@ The progress row reads the worktree's own files, so it needs no session. It show
 - **Empty state**: with nothing to read, the row says *No task progress* and shows no bar.
 
 The files are watched only while the Overview is open: each worktree is read once on opening and again shortly after a change, so a card follows the files within 5 seconds.
+
+## What the agent is doing now
+
+When the location's main session runs an agent CLI with **hooks configured** (Claude Code with the app's hooks installed), the card shows an **activity line** above the progress row: the agent's in-progress todo, else the latest prompt you submitted shortened to one line, with the todo list's done / total after it (*Writing tests · 2/5*). The task-list ratio of the progress row stays below it as the feature's progress.
+
+Without hooks, with a session that has reported nothing yet, or while the window reconnects to the service, there is no activity line and the card shows the summary and progress described above, without an error.
+
+The todo text and prompt stay on your machine: the hooks report them to the app's own service, which hands them to the window over the same local connection. They are held in memory only, never written to a log or to the saved session list, and sent nowhere else.
 
 ## Pull request counts
 

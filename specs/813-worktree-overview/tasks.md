@@ -409,44 +409,44 @@ prompt) and its todo ratio as current activity; otherwise US4's text.
 
 ### Tests for US5 (write first)
 
-- [ ] T061 [P] [US5] Core tests in micold-core/src/hook_activity.rs: wire.md W2's table
+- [x] T061 [P] [US5] Core tests in micold-core/src/hook_activity.rs: wire.md W2's table
   (`UserPromptSubmit` first non-empty line; `TodoWrite` replaces todos; other tool or event
   unchanged and returns `false`; malformed items skipped, not an array → unchanged); bounds "≤ 50
   todos, text ≤ 200 chars, prompt = first non-empty line ≤ 200 chars"; `current()` precedence
   (in-progress `activeForm` → its `content` → prompt) and ratio completed / total only with todos
-- [ ] T062 [P] [US5] Wire tests: micold-core/tests/protocol_roundtrip.rs `hook_activity`
+- [x] T062 [P] [US5] Wire tests: micold-core/tests/protocol_roundtrip.rs `hook_activity`
   round-trips and an absent field decodes to `None`; micold-core/tests/schema_hash.rs re-pinned
   for protocol 49
-- [ ] T063 [P] [US5] Daemon tests in micold-daemon/src/state.rs and
+- [x] T063 [P] [US5] Daemon tests in micold-daemon/src/state.rs and
   micold-daemon/tests/hooks_receiver.rs: a `TodoWrite` body on `/hook/<uuid>` sets that live
   session's activity and broadcasts the catalog; another session is untouched; the overlay copies
   it to `SessionSummary::hook_activity`; micold-daemon/src/catalog.rs `session_summary` gives
   `None`; the MCP tools (micold-daemon/src/mcp/tools.rs) never return it; a log capture after the
   hooks holds neither the prompt nor a todo text (W2, W3, FR-020)
-- [ ] T064 [P] [US5] Client tests in micold-client/tests/overview.rs: catalog adoption sets
+- [x] T064 [P] [US5] Client tests in micold-client/tests/overview.rs: catalog adoption sets
   `Session::hook_activity`; the main session's activity becomes `CardModel::activity` beside the
   task-list ratio (US5.2); `None` and after reconnect → US4's summary and progress (US5.3); the
   field is not persisted
 
 ### Implementation for US5
 
-- [ ] T065 [US5] micold-core/src/hook_activity.rs: `HookActivity { todos, prompt }`, `Todo { text,
+- [x] T065 [US5] micold-core/src/hook_activity.rs: `HookActivity { todos, prompt }`, `Todo { text,
   active, status }`, `TodoStatus`, `apply(&mut self, &serde_json::Value) -> bool`, `current() ->
   Option<CurrentActivity { line, ratio }>`; `Serialize`/`Deserialize`, no `Debug` used in logging;
   T061 passes
-- [ ] T066 [US5] `SessionSummary::hook_activity: Option<HookActivity>` (`#[serde(default)]`) in
+- [x] T066 [US5] `SessionSummary::hook_activity: Option<HookActivity>` (`#[serde(default)]`) in
   micold-core/src/protocol/messages.rs, `PROTOCOL_VERSION` 48 → 49 with a doc line for feature 813
   in micold-core/src/protocol/version.rs, `None` in every `SessionSummary { .. }` literal; T062
   passes
-- [ ] T067 [US5] Daemon: micold-daemon/src/hooks.rs `classify_hook` hands the parsed body on with
+- [x] T067 [US5] Daemon: micold-daemon/src/hooks.rs `classify_hook` hands the parsed body on with
   `HookClass::Event`; micold-daemon/src/state.rs `LiveSession::hook_activity`,
   `note_hook_activity`, `overlay_live_summaries` copies it, broadcast when `note_activity` or
   `note_hook_activity` reports a change; micold-daemon/src/catalog.rs sets `None`; T063 passes
-- [ ] T068 [US5] Client: `Session::hook_activity` runtime only (skipped like `activity` when
+- [x] T068 [US5] Client: `Session::hook_activity` runtime only (skipped like `activity` when
   persisting) in micold-core/src/session.rs, adopted in micold-client/src/catalog_sync.rs where
   `paused_on_user` is; `CardModel::activity` in features/overview.rs; the activity line in
   overview_card.rs; showcase card with activity; T064 passes
-- [ ] T069 [US5] docs/user-guide/overview.md: hook-fed activity, how to get it (hooks configured),
+- [x] T069 [US5] docs/user-guide/overview.md: hook-fed activity, how to get it (hooks configured),
   what stays on the machine
 
 **Checkpoint**: all stories work.
