@@ -212,8 +212,16 @@ fn first_leaf<'a>(records: &'a [LayoutRecord], row: &'a LayoutRecord) -> &'a Lay
     at
 }
 
-fn centre(row: &LayoutRecord) -> Point {
-    Point::new(row.x + row.width / 2.0, row.y + row.height / 2.0)
+/// The centre of the part of `row` that the page's scroll viewport shows. The page grew a
+/// `* required` legend (feature 937), so the last kind row now starts inside the 800-high window's
+/// viewport and ends below it: a click at its full centre would land on the clipped part.
+fn visible_centre(records: &[LayoutRecord], column: &[usize], row: &LayoutRecord) -> Point {
+    let viewport = records
+        .iter()
+        .find(|r| r.layer == lay::Layer::Base && r.path == column[..column.len() - 1])
+        .expect("the column's scroll viewport");
+    let bottom = (row.y + row.height).min(viewport.y + viewport.height);
+    Point::new(row.x + row.width / 2.0, (row.y + bottom) / 2.0)
 }
 
 const CLICK: [Event; 2] = [
@@ -230,7 +238,7 @@ fn the_kind_rows_and_the_threshold_take_input_only_while_the_master_switch_is_on
     for on in [true, false] {
         let under = environment(on);
         let records = lay::resolve(lay::view_of(&under), &renderer);
-        let (_, _, run) = indented_run(&records);
+        let (column, _, run) = indented_run(&records);
         assert_eq!(
             run.len(),
             5,
@@ -239,7 +247,11 @@ fn the_kind_rows_and_the_threshold_take_input_only_while_the_master_switch_is_on
 
         let kind_rows = run.iter().enumerate().filter(|(i, _)| *i != 3);
         for (row, kind) in kind_rows.zip(NotificationKind::ALL) {
-            let published = publish(&under, centre(first_leaf(&records, row.1)), &CLICK);
+            let published = publish(
+                &under,
+                visible_centre(&records, &column, first_leaf(&records, row.1)),
+                &CLICK,
+            );
             let toggled: Vec<_> = published
                 .iter()
                 .filter_map(|m| match m {
@@ -276,7 +288,7 @@ fn the_kind_rows_and_the_threshold_take_input_only_while_the_master_switch_is_on
             text: Some("5".into()),
             repeat: false,
         }));
-        let edits: Vec<_> = publish(&under, centre(run[3]), &typed)
+        let edits: Vec<_> = publish(&under, visible_centre(&records, &column, run[3]), &typed)
             .into_iter()
             .filter(|m| {
                 matches!(

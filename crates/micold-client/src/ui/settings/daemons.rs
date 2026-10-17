@@ -21,8 +21,8 @@ use crate::features::settings::DaemonDraft;
 use crate::features::window::FieldId;
 use crate::ui::focus::TrackFocus;
 use crate::ui::material::{
-    Button, Checkbox, HostPicker, KeyValueList, Select, StageProgress, Tag, TextField,
-    TolerationList,
+    Button, Checkbox, HostPicker, KeyValueList, RequiredLegend, Select, StageProgress, Tag,
+    TextField, TolerationList,
 };
 use crate::ui::settings::container_fields::{self, ContainerView, FieldErrors};
 use crate::ui::settings::{caution, group, name_of, note, page, Named};
@@ -301,7 +301,7 @@ fn repository_step<'a>(
     if view.state == DaemonState::Connected {
         add = add.on_press(Message::Daemons(DaemonsMsg::RepositoryAdded(id)));
     }
-    row![
+    let step = row![
         TextField::new("/path/to/repository on the host", typed, roles)
             .label("Repository on the host")
             .required(repository_state)
@@ -310,8 +310,16 @@ fn repository_step<'a>(
             .on_input(move |v| Message::Daemons(DaemonsMsg::RepositoryEdited(id, v))),
         add,
     ]
-    .spacing(spacing::SM)
-    .into()
+    .spacing(spacing::SM);
+    // The marker's explanation, once, above the step's field (feature 937, FR-004).
+    column![]
+        .spacing(spacing::SM)
+        .extend(RequiredLegend::for_fields(
+            std::slice::from_ref(&repository),
+            roles,
+        ))
+        .push(step)
+        .into()
 }
 
 fn error_of(state: &State, field: &str) -> Option<String> {
@@ -346,8 +354,13 @@ fn form<'a>(
     };
     let required = draft.required_fields();
     let marker = |id| draft.required.state_in(&required, id);
+    // The marker's explanation, once for the whole form, between its title and its first field
+    // (feature 937, FR-004); the container and SSH fields below add none.
+    let heading = column![group(title, roles)]
+        .spacing(spacing::SM)
+        .extend(RequiredLegend::for_fields(&required, roles));
     let mut fields = column![
-        group(title, roles),
+        heading,
         TextField::new("", &draft.name, roles)
             .label("Name")
             .required(marker(FieldId::DaemonName))

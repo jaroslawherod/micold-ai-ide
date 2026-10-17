@@ -4,7 +4,7 @@
 use crate::app::Message;
 use crate::features::window::FieldId;
 use crate::ui::focus::TrackFocus;
-use crate::ui::material::{self, Button, SurfaceKind, Text, TextField, TypeRole};
+use crate::ui::material::{self, Button, RequiredLegend, SurfaceKind, Text, TextField, TypeRole};
 use iced::widget::{column, row};
 use iced::{Element, Length};
 use micold_core::project::RenameError;
@@ -45,8 +45,12 @@ pub(crate) fn view<'a>(
     let mut fields = material::dialog::fields(column![
         Text::new(spec.title, TypeRole::Headline, r),
         Text::new(spec.caption, TypeRole::Caption, r).muted(),
-        input,
     ]);
+    // The marker's explanation, once, above the first field (feature 937, FR-004).
+    if spec.required != FieldRequirement::Optional {
+        fields = fields.push(RequiredLegend::new(r));
+    }
+    fields = fields.push(input);
 
     // Show the validation problem when a blank name was submitted.
     if let Some(error) = spec.error {

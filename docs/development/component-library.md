@@ -99,6 +99,16 @@ TextField::new("", &form.name, roles)
     .required(form.required.state_in(&form.required_fields(), FieldId::AddWorktreeName))
 ```
 
+### `RequiredLegend`: the marker explained once
+
+`RequiredLegend::new(roles)` (`ui/material/required_legend.rs`, contract C3) is the `* required`
+line (`required::LEGEND`) as muted `Caption` text. A form pushes it once, above its first field, and
+only when it has a required field: `RequiredLegend::for_fields(&form.required_fields(), roles)`
+returns `None` when no field is required, so Settings › Appearance shows none. A form with several
+parts (the daemon form and its container fields) shows one. Never write the words yourself:
+`tests/required_call_sites.rs` fails on a `"* required"` literal outside `ui/material/` and on a
+form that does not call `RequiredLegend`.
+
 ## `UnreadMark`: one mark for three places
 
 `UnreadMark` (`ui/material/unread_mark.rs`, contract `specs/039-session-attention-notifications/contracts/unread-mark.md`)

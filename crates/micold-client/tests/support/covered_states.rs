@@ -1207,10 +1207,10 @@ pub fn covered_states() -> &'static [CoveredState] {
                     name: "example".to_string(),
                     ..WorktreeForm::default()
                 });
-                // Index 3: the heading, the source switch, then the caption under it (feature 034),
-                // then the Type row, whose first child is the select (feature 776: the AI CLI
-                // select shares the row).
-                StateUnderTest::new(state).pressing(&[6, 0, 0, 0, 3, 0])
+                // Index 4: the heading, the source switch, then the caption under it (feature 034),
+                // the `* required` legend (feature 937), then the Type row, whose first child is
+                // the select (feature 776: the AI CLI select shares the row).
+                StateUnderTest::new(state).pressing(&[6, 0, 0, 0, 4, 0])
             },
             anchors: &[
                 Anchor {
@@ -1219,7 +1219,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                 },
                 Anchor {
                     name: "dialog.type-select",
-                    path: &[6, 0, 0, 0, 3, 0],
+                    path: &[6, 0, 0, 0, 4, 0],
                 },
                 // Same form as `add-worktree-dialog-new-branch`; opening the menu adds an overlay
                 // layer, not a field.

@@ -17,7 +17,7 @@ use crate::features::settings::{
 use crate::features::window::FieldId;
 use crate::notification_icon;
 use crate::ui::focus::TrackFocus;
-use crate::ui::material::{Checkbox, Select, TextField};
+use crate::ui::material::{Checkbox, RequiredLegend, Select, TextField};
 use crate::ui::settings::{caution, field_note, note, page};
 use iced::widget::container;
 use iced::Element;
@@ -264,6 +264,8 @@ pub fn view<'a>(
 
     let mut controls: Vec<Element<'a, Message>> =
         vec![cli, pi_activity, tool_server, desktop_notifications];
+    // The marker's explanation, once, above the first field (feature 937, FR-004).
+    controls.splice(0..0, RequiredLegend::for_fields(&required, roles));
     controls.extend(kind_rows);
     controls.extend([plan_usage, plan_usage_warn.into()]);
     controls.push(cross_session);

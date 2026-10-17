@@ -43,11 +43,12 @@ const PROJECT: &str = "/fixture/providers";
 /// The Default AI CLI select inside Settings' Environment section.
 ///
 /// Settings is a full-surface view as of feature 027, not a dialog, so the path runs down the
-/// content area rather than an overlay: the section's controls column has the select first, above
+/// content area rather than an overlay: the section's controls column has the `* required` legend
+/// first (feature 937), then the select, above
 /// the environment-include toggle and its two fields. The last index is the select inside its
 /// `field_note` column: the press lands at the node's centre, and the centre of the column is in
 /// the note once the note wraps to several lines (feature 037).
-const SETTINGS_SELECT: &[usize] = &[0, 0, 1, 0, 1, 0, 0, 1, 0];
+const SETTINGS_SELECT: &[usize] = &[0, 0, 1, 0, 1, 0, 0, 2, 0];
 
 fn with_project() -> State {
     let mut workspace = support::workspace_with(vec![(PROJECT, vec![])]);

@@ -6,7 +6,9 @@ use crate::app::{Message, State};
 use crate::features::runs::{Msg, ParallelDialog};
 use crate::features::window::FieldId;
 use crate::ui::focus::TrackFocus;
-use crate::ui::material::{self, Button, Select, SurfaceKind, Text, TextField, TypeRole};
+use crate::ui::material::{
+    self, Button, RequiredLegend, Select, SurfaceKind, Text, TextField, TypeRole,
+};
 use iced::widget::{column, row};
 use iced::{Element, Length};
 use micold_core::env_include::EnvIncludeOutcome;
@@ -33,6 +35,10 @@ pub fn modal<'a>(
     // binary-owned `text_editor::Content` (follow-up in the ledger).
     let required = dialog.required_fields();
     let state = |id| dialog.required.state_in(&required, id);
+    // The marker's explanation, once, above the first field (feature 937, FR-004).
+    if let Some(legend) = RequiredLegend::for_fields(&required, r) {
+        fields = fields.push(legend);
+    }
     fields = fields.push(
         TextField::new("", &dialog.prompt, r)
             .label("Prompt")
