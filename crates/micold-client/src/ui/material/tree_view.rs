@@ -1009,4 +1009,179 @@ mod tests {
             assert_eq!(count_tint(r, r.on_surface), r.on_surface);
         }
     }
+
+    // --- Feature 905 (contract `state-icon.md` S2, A2-A4): the state slot ---
+
+    use super::super::StateIcon;
+    use micold_core::location_state::{BlockedReason, LocationState};
+
+    /// Every state a row can show, the empty one included.
+    const STATES: [LocationState; 4] = [
+        LocationState::Running,
+        LocationState::Blocked(BlockedReason::Failed),
+        LocationState::Idle,
+        LocationState::Unknown,
+    ];
+
+    /// A location row carrying the state icon, as the sidebar builds it.
+    fn stated_row(label: &str, tagged: bool, state: LocationState) -> TreeItem<'static, ()> {
+        location_row(label, tagged).state_icon(StateIcon::new(state, roles()))
+    }
+
+    /// The bounds at `path` of `item` laid out the way [`laid_out`] lays it out.
+    fn at(item: TreeItem<'static, ()>, width: f32, path: &[usize]) -> Rectangle {
+        let element: Element<'static, ()> = TreeView::new(vec![item], roles())
+            .density(density::DENSE)
+            .label_role(TypeRole::SidebarName)
+            .selected_label_role(TypeRole::SidebarSessionCurrent)
+            .into();
+        super::super::test_support::bounds_at(element, Size::new(width, 600.0), path)
+    }
+
+    /// The name line of a depth-0 row: the body's second child, or the first line of its column.
+    fn line_path(tagged: bool) -> Vec<usize> {
+        if tagged {
+            vec![0, 1, 0]
+        } else {
+            vec![0, 1]
+        }
+    }
+
+    /// The `index`th child of the name line.
+    fn on_line(tagged: bool, index: usize) -> Vec<usize> {
+        let mut path = line_path(tagged);
+        path.push(index);
+        path
+    }
+
+    /// On a depth-0 expandable row the line is `twisty, state slot, label`.
+    const SLOT: usize = 1;
+    const LABEL: usize = 2;
+
+    /// A3, SC-005: the label's x and the row's height do not move when the state changes.
+    #[test]
+    fn the_label_and_the_row_height_are_the_same_in_every_state() {
+        for tagged in [false, true] {
+            for width in [NARROW, ROOMY] {
+                let first = STATES[0];
+                let label_x = at(
+                    stated_row("feat-short", tagged, first),
+                    width,
+                    &on_line(tagged, LABEL),
+                )
+                .x;
+                let height = at(stated_row("feat-short", tagged, first), width, &[0]).height;
+                for state in STATES {
+                    let label = at(
+                        stated_row("feat-short", tagged, state),
+                        width,
+                        &on_line(tagged, LABEL),
+                    );
+                    let row = at(stated_row("feat-short", tagged, state), width, &[0]);
+                    assert!(
+                        (label.x - label_x).abs() < TOLERANCE,
+                        "{state:?} moves the label to {}dp from {label_x}dp (tagged {tagged}, {width}dp)",
+                        label.x
+                    );
+                    assert!(
+                        (row.height - height).abs() < TOLERANCE,
+                        "{state:?} makes the row {}dp tall, not {height}dp (tagged {tagged}, {width}dp)",
+                        row.height
+                    );
+                }
+            }
+        }
+    }
+
+    /// S2: the tag line still starts under the label when the row carries a state slot.
+    #[test]
+    fn a_stated_rows_chips_start_where_its_label_starts() {
+        for state in STATES {
+            let label_x = at(
+                stated_row("feat-short", true, state),
+                ROOMY,
+                &on_line(true, LABEL),
+            )
+            .x;
+            let chip_x = at(stated_row("feat-short", true, state), ROOMY, &[0, 1, 1, 0]).x;
+            assert!(
+                (label_x - chip_x).abs() < TOLERANCE,
+                "{state:?}: the label starts at {label_x}dp and its chips at {chip_x}dp"
+            );
+        }
+    }
+
+    /// A2, A4: at the narrowest sidebar the name gives way; the slot keeps the label role's size
+    /// in every state, the empty one included.
+    #[test]
+    fn at_the_narrowest_width_the_name_gives_way_and_the_slot_keeps_its_width() {
+        let size = TypeRole::SidebarName.size();
+        for tagged in [false, true] {
+            for state in STATES {
+                let slot = at(
+                    stated_row(LONG_NAME, tagged, state),
+                    NARROW,
+                    &on_line(tagged, SLOT),
+                );
+                let label = at(
+                    stated_row(LONG_NAME, tagged, state),
+                    NARROW,
+                    &on_line(tagged, LABEL),
+                );
+                let row = at(stated_row(LONG_NAME, tagged, state), NARROW, &[0]);
+                assert!(
+                    (slot.width - size).abs() < TOLERANCE,
+                    "{state:?}: the slot is {}dp wide, not the label role's {size}dp",
+                    slot.width
+                );
+                assert!(
+                    slot.x + slot.width <= label.x + TOLERANCE,
+                    "{state:?}: the slot sits before the name"
+                );
+                assert!(
+                    label.x + label.width <= row.x + row.width + TOLERANCE,
+                    "{state:?}: the name is cut short inside the row: it ends at {} and the row at {}",
+                    label.x + label.width,
+                    row.x + row.width
+                );
+            }
+        }
+    }
+
+    /// S2: a row without a state icon has no slot: its label is one slot and one gap further left,
+    /// and its height is the same.
+    #[test]
+    fn a_row_without_a_state_icon_is_laid_out_as_before() {
+        let step = TypeRole::SidebarName.size() + anatomy::list_row::DENSE_ICON_GAP;
+        for tagged in [false, true] {
+            let plain = at(
+                location_row("feat-short", tagged),
+                ROOMY,
+                &on_line(tagged, 1),
+            );
+            let stated = at(
+                stated_row("feat-short", tagged, LocationState::Idle),
+                ROOMY,
+                &on_line(tagged, LABEL),
+            );
+            assert!(
+                (stated.x - plain.x - step).abs() < TOLERANCE,
+                "the slot adds {step}dp before the label: {}dp without, {}dp with (tagged {tagged})",
+                plain.x,
+                stated.x
+            );
+            let plain_chip = at(location_row("feat-short", true), ROOMY, &[0, 1, 1, 0]).x;
+            let plain_label = at(location_row("feat-short", true), ROOMY, &on_line(true, 1)).x;
+            assert!((plain_chip - plain_label).abs() < TOLERANCE);
+            assert_eq!(
+                at(location_row("feat-short", tagged), ROOMY, &[0]).height,
+                at(
+                    stated_row("feat-short", tagged, LocationState::Idle),
+                    ROOMY,
+                    &[0]
+                )
+                .height,
+            );
+        }
+    }
 }

@@ -33,6 +33,7 @@ pub mod issue_types;
 pub mod jira;
 pub mod link;
 pub mod local_time;
+pub mod location_state;
 pub mod logout_survival;
 pub mod mcp;
 pub mod metadata;

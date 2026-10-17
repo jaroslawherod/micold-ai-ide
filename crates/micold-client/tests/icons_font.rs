@@ -135,3 +135,22 @@ fn the_notification_kind_icons_have_glyphs_in_the_bundled_font() {
         assert!(face.glyph_index(cp).is_some(), "{icon:?} has no glyph");
     }
 }
+
+/// Feature 905 (FR-007): the three worktree-state glyphs each have a glyph in the bundled font, and
+/// three different ones, so the shape alone tells the states apart.
+#[test]
+fn the_state_icons_have_three_distinct_glyphs_in_the_bundled_font() {
+    let face = ttf_parser::Face::parse(FONT, 0).expect("shipped font must parse");
+    let glyphs: Vec<_> = [Icon::StateRunning, Icon::StateBlocked, Icon::StateIdle]
+        .into_iter()
+        .map(|icon| {
+            assert!(Icon::ALL.contains(&icon), "{icon:?} must be in Icon::ALL");
+            face.glyph_index(icon.glyph())
+                .unwrap_or_else(|| panic!("{icon:?} has no glyph in the shipped font"))
+        })
+        .collect();
+    assert!(
+        glyphs[0] != glyphs[1] && glyphs[1] != glyphs[2] && glyphs[0] != glyphs[2],
+        "three states, three glyphs: {glyphs:?}"
+    );
+}

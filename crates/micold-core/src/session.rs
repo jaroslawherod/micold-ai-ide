@@ -327,6 +327,10 @@ pub struct Session {
     /// Derived activity signal from the daemon (feature 010 US2, FR-016d) — transient, never
     /// persisted, resets to `Unknown` on daemon restart (H3). Drives the sidebar activity badge.
     pub activity: crate::protocol::messages::ActivitySignal,
+    /// Whether the session stopped mid-turn to ask the user for a permission or an answer and has
+    /// not resumed or finished (feature 905, data-model *Session*). Runtime-only, like `activity`;
+    /// `false` from every constructor. Read only when `activity` is `AwaitingInput`.
+    pub paused_on_user: bool,
     /// Which process is attached to the visible pane (feature 010). Persisted (FR-011).
     pub mode: TerminalMode,
     /// Every currently-open Regular Terminal instance, in creation ("open") order (feature 011;
@@ -387,6 +391,7 @@ impl Session {
             label: SessionLabel::Pending,
             lifecycle: SessionLifecycle::Starting,
             activity: crate::protocol::messages::ActivitySignal::Unknown,
+            paused_on_user: false,
             mode: TerminalMode::AiCli,
             shells: Vec::new(),
             active_shell: None,
@@ -422,6 +427,7 @@ impl Session {
             label,
             lifecycle: SessionLifecycle::Idle,
             activity: crate::protocol::messages::ActivitySignal::Unknown,
+            paused_on_user: false,
             mode,
             shells: Vec::new(),
             active_shell: None,

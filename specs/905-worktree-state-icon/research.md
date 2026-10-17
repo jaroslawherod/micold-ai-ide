@@ -97,7 +97,7 @@ alternatives rejected.
   | State | `Icon` | Material name | Codepoint | Shape | Role |
   |---|---|---|---|---|---|
   | Running | `StateRunning` | `play_arrow` | `U+E037` | right-pointing triangle | `primary` |
-  | Blocked | `StateBlocked` | `report` | `U+E160` | octagon with `!` | `error` |
+  | Blocked | `StateBlocked` | `report` | `U+F052` | octagon with `!` | `error` |
   | Idle / waiting | `StateIdle` | `pause` | `U+E034` | two vertical bars | `on_surface_variant` |
 
   All three codepoints are mapped by `assets/fonts/MaterialSymbolsOutlined.ttf` (checked against
