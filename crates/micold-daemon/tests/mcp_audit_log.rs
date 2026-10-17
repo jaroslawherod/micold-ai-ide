@@ -20,6 +20,8 @@ use std::sync::{Arc, OnceLock};
 
 use mcp_support::*;
 use micold_core::mcp::errors::ErrorCategory;
+use micold_core::protocol::messages::{DaemonMsg, ReviewEditOp};
+use micold_core::review::Side;
 use micold_core::session::{AiCli, SessionId, TerminalMode};
 use micold_daemon::state::DaemonState;
 use serde_json::{json, Value};
@@ -54,7 +56,13 @@ fn sandbox_env() {
         let bin = tempfile::tempdir().unwrap();
         let home = tempfile::tempdir().unwrap();
         let cli = bin.path().join("copilot");
-        std::fs::write(&cli, "#!/bin/sh\nprintf 'ready> '\nexec cat > /dev/null\n").unwrap();
+        // Bracketed paste on, as a real AI CLI turns it on: a review send types only into a
+        // terminal that accepts a pasted text.
+        std::fs::write(
+            &cli,
+            "#!/bin/sh\nprintf '\\033[?2004hready> '\nexec cat > /dev/null\n",
+        )
+        .unwrap();
         std::fs::set_permissions(&cli, std::fs::Permissions::from_mode(0o755)).unwrap();
         let mut path = vec![bin.path().to_path_buf()];
         path.extend(["/usr/bin", "/bin"].map(PathBuf::from));
@@ -163,12 +171,15 @@ impl Fixture {
 
     /// What `good_call` for `tool` needs to be true first. `send_session_input` types into a
     /// running sibling and only a running session can be interrupted, so the target is started
-    /// here, before the caller's lines are counted.
-    async fn prepare(&self, tool: &str, caller: SessionId) {
+    /// here, before the caller's lines are counted. `report_review_comment` needs a comment of
+    /// the caller's worktree sent to it: added and sent here, and its report's arguments returned
+    /// in place of `good_call`'s.
+    async fn prepare(&self, tool: &str, caller: SessionId) -> Option<Value> {
         let target = match tool {
             "send_session_input" => sibling_of(caller),
             "interrupt_session" => sibling(caller, SHELL),
-            _ => return,
+            "report_review_comment" => return Some(self.sent_comment().await),
+            _ => return None,
         };
         let started = self
             .call(
@@ -178,6 +189,42 @@ impl Fixture {
             )
             .await;
         assert_eq!(started["isError"], json!(false), "{started}");
+        None
+    }
+
+    /// Add a comment to worktree `b` and send it; the arguments of a report on it.
+    async fn sent_comment(&self) -> Value {
+        let project = self._project.path();
+        self.state
+            .review_edit(
+                project,
+                "b",
+                ReviewEditOp::Add {
+                    path: "src/a.rs".into(),
+                    side: Side::New,
+                    start: 1,
+                    end: 1,
+                    quote: vec!["line 1".into()],
+                    text: "Audit me.".into(),
+                },
+            )
+            .expect("a valid comment is accepted");
+        let sent = self.state.review_send(project, "b", &[]).await;
+        assert!(sent.is_ok(), "the send is delivered: {sent:?}");
+        let reference = self
+            .state
+            .review_pushes_on_attach(project)
+            .into_iter()
+            .find_map(|msg| match msg {
+                DaemonMsg::ReviewChanged {
+                    worktree_dir,
+                    comments,
+                    ..
+                } if worktree_dir == "b" => comments.first().map(|c| c.reference().to_string()),
+                _ => None,
+            })
+            .expect("the sent comment is held");
+        json!({"comment": reference, "outcome": "applied", "reply": TEXT_MARKER})
     }
 
     /// The names `tools/list` marks as not read-only.
@@ -222,12 +269,12 @@ fn good_call(tool: &str, caller: SessionId) -> Value {
 }
 
 /// The target an audit line names for a call with `args`: the session, else the worktree, else
-/// the branch a new worktree is made from.
+/// the branch a new worktree is made from, else the reported comment.
 fn expected_target(args: &Value) -> String {
-    ["session", "worktree", "branch"]
+    ["session", "worktree", "branch", "comment"]
         .iter()
         .find_map(|k| args[*k].as_str())
-        .expect("every call names a session, a worktree or a branch")
+        .expect("every call names a session, a worktree, a branch or a comment")
         .to_string()
 }
 
@@ -279,6 +326,13 @@ fn failing_call(tool: &str, caller: SessionId) -> Vec<(Value, ErrorCategory)> {
                 ErrorCategory::NotFound,
             ),
         ],
+        "report_review_comment" => vec![
+            (json!({"outcome": "applied"}), ErrorCategory::InvalidInput),
+            (
+                json!({"comment": "C-0000abcd", "outcome": "applied"}),
+                ErrorCategory::NotFound,
+            ),
+        ],
         other => panic!("no failing call for the mutating tool {other}: add one here"),
     }
 }
@@ -304,9 +358,9 @@ async fn every_successful_mutating_call_writes_one_info_line() {
     let tools = f.mutating_tools(caller).await;
     assert!(!tools.is_empty(), "M3 ships mutating tools");
     for tool in &tools {
-        f.prepare(tool, caller).await;
+        let prepared = f.prepare(tool, caller).await;
         let before = audit_lines(caller).len();
-        let args = good_call(tool, caller);
+        let args = prepared.unwrap_or_else(|| good_call(tool, caller));
         let result = f.call(caller, tool, args.clone()).await;
         assert_eq!(result["isError"], json!(false), "{tool}: {result}");
         let lines = audit_lines(caller);
