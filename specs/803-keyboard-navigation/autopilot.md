@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-ah7xxz
 - **Started**: 2026-10-17
 - **Phase**: plan
-- **Next step**: plan unit (D4/D5 provisional: if the user picks differently, an amend unit updates spec.md first)
+- **Next step**: plan unit, continue from *Handover* (plan review round 1)
 
 ## Pull requests
 
@@ -46,7 +46,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+- Done: branch rebased onto origin/main (REBASED 3); `speckit-plan` ran (no extension hooks); plan.md,
+  research.md (R1–R10), data-model.md, contracts/keys.md (K1 = the single chord table), contracts/ui.md,
+  quickstart.md written and committed. Planned on D4/D5 defaults; a different D4 changes K1 + docs rows only.
+- Next: plan review round 1 (tasks/review.md, rubrics/plan.md, session model, headless
+  `claude -p --agent autopilot-reviewer` since this environment has no Agent tool), act on it
+  (review-rounds.md), commit, set **Next step** to `tasks unit`, return DONE with PR: none.
+- Open findings: none yet. Design judgement a reviewer should check: R4 (empty location = `nav_stop`,
+  terminal unchanged) and R7 (only the navigated row becomes focusable).
+- PR: none.
 
 ## Open escalation
 
