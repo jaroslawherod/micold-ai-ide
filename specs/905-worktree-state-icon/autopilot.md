@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-h057j5
 - **Started**: 2026-10-17
 - **Phase**: implement
-- **Next step**: M2 implemented (main was at protocol 47, now 48); scoped gate, reviews A and B, full gate, push, then the orchestrator opens the M2 PR
+- **Next step**: orchestrator opens the M2 PR (pushed; title/body in the unit's scratchpad), waits on CI and merges; then the close unit (T027-T028 visual pass, §C)
 
 ## Pull requests
 
@@ -24,7 +24,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T017 | full | Worktree and Default rows show a live state icon; showcase, contrast gate, user guide and icon reference | #915 | merged |
-| M2 | T018–T026 | full | A mid-turn permission stop makes its worktree Blocked (protocol 48) | — | implemented, verifying |
+| M2 | T018–T026 | full | A mid-turn permission stop makes its worktree Blocked (protocol 48) | — | review (pushed) |
 
 M1 holds 17 tasks (over the ~10 of milestones.md rule 3): it is Foundational + US1 + US3, because the shared `StateIcon` must ship with its showcase entry, contrast proof and icon-reference rows (Principles VII, VIII; speckit-analyze C1, C2). US1 has no acceptance-scenario split that leaves a deliverable without the component. T027–T028 (visual pass, §C) go to the close unit.
 
