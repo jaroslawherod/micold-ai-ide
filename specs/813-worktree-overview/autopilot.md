@@ -11,8 +11,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #813
 - **Worktree branch**: claude/project-thread-2lmupk
 - **Started**: 2026-10-17
-- **Phase**: plan
-- **Next step**: plan unit
+- **Phase**: tasks
+- **Next step**: tasks unit
 
 ## Pull requests
 
@@ -44,6 +44,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
 | Spec | 1 | c54be34533424e39665e73004ef6ce8f0cadc4e2:992e129808513fd43ef6b1982b4cb1881cdb0921 | CLEAN (3 MINOR: F1 F2 F3 fixed, prose only) |
+| Plan | 1 | a87de0fcfc292f91a22bf5eed48bbb38ce5f826e:2b103a91d9ac9fc083447d12fbfc68629dc01877 | CHANGES (F1 MAJOR: alternatives missing in R7/R12/R13/R14, F2 MINOR: ProgressBar vs StageProgress; both fixed, prose only) |
 
 ## Declined review findings
 
