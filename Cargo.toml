@@ -37,6 +37,10 @@ wayland-protocols = { version = "0.32", features = ["client", "staging"] }
 # Windows (a WinRT toast). Each is a dependency of the client on its own system only.
 mac-usernotifications = "0.3.1"
 tauri-winrt-notification = "0.8.1"
+# Feature 686 (research K0): the Kubernetes API client, in `micold-client` only (never the daemon or
+# core). rustls on the `ring` backend (no OpenSSL, no C toolchain); `ws` for the port-forward tunnel.
+kube = { version = "4.2", default-features = false, features = ["client", "config", "rustls-tls", "ring", "ws"] }
+k8s-openapi = { version = "0.28", features = ["v1_32"] }
 
 # --- render-free core deps (never iced / never PTY) ---
 serde = { version = "1.0.229", features = ["derive"] }

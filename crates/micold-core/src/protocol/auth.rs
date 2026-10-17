@@ -138,6 +138,79 @@ fn write_owner_only(path: &Path, contents: &str) -> io::Result<()> {
     fs::write(path, contents)
 }
 
+/// How a daemon's listener authenticates clients (feature 686, research K4).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ListenerAuth {
+    /// Every handshake must carry the token in this file.
+    Token(PathBuf),
+    /// No token: the listener is on loopback inside a pod, reached only through the API server's
+    /// port-forward, which already authenticated the user.
+    LoopbackNoToken,
+}
+
+/// Why the listener's authentication could not be decided: an empty token path on an address
+/// anything but loopback can reach would leave the daemon open.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AuthConfigError {
+    /// The listen address that was refused.
+    pub listen_addr: String,
+}
+
+impl std::fmt::Display for AuthConfigError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{TOKEN_PATH_ENV} is empty but the daemon listens on {}, which is not loopback; \
+             a token is required there",
+            self.listen_addr
+        )
+    }
+}
+
+/// Decide the listener's authentication from the listen address and the token path variable.
+pub fn listener_auth(
+    _listen_addr: &str,
+    _token_path: &std::ffi::OsStr,
+) -> Result<ListenerAuth, AuthConfigError> {
+    Ok(ListenerAuth::LoopbackNoToken)
+}
+
+#[cfg(test)]
+mod listener_auth_tests {
+    use super::*;
+    use std::ffi::OsStr;
+
+    #[test]
+    fn a_set_token_path_requires_that_token() {
+        assert_eq!(
+            listener_auth("0.0.0.0:7727", OsStr::new("/run/micold/token")),
+            Ok(ListenerAuth::Token(PathBuf::from("/run/micold/token")))
+        );
+    }
+
+    #[test]
+    fn an_empty_path_on_loopback_needs_no_token() {
+        for addr in ["127.0.0.1:7727", "[::1]:7727"] {
+            assert_eq!(
+                listener_auth(addr, OsStr::new("")),
+                Ok(ListenerAuth::LoopbackNoToken),
+                "{addr}: only the port-forward reaches it"
+            );
+        }
+    }
+
+    #[test]
+    fn an_empty_path_on_any_other_address_is_refused() {
+        for addr in ["0.0.0.0:7727", "10.1.2.3:7727", "[::]:7727", "not an address"] {
+            assert_eq!(
+                listener_auth(addr, OsStr::new("")),
+                Err(AuthConfigError { listen_addr: addr.to_string() }),
+                "{addr}: an open listener without a token is refused"
+            );
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

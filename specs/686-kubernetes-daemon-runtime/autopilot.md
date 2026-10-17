@@ -9,19 +9,20 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #686
 - **Worktree branch**: claude/project-thread-xelisc
 - **Started**: 2026-10-17
-- **Phase**: tasks
-- **Next step**: specs-only check passed; full gate (`scripts/gate.sh`, debug info off for disk) running detached, log in the session scratchpad gate-686.log; on green, the orchestrator opens the design PR from the scratchpad title/body files (title `#686: Support a Kubernetes session daemon runtime — design`, body ends `Refs #686`)
+- **Phase**: implement M1
+- **Next step**: M1 implement — continue the handover: make cycle 1 (core types) green, then the rest of M1
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
+| #965 | design | merged | 0d36906050f9ad7fedde4b06fa0ee0ca31d231c9 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T033, T079–T082 | full | Add (given image), start/adopt, tunnel to connected, stop, remove | — | planned |
+| M1 | T001–T033, T079–T082 | full | Add (given image), start/adopt, tunnel to connected, stop, remove | — | in progress |
 | M2 | T034–T046 | full | Build → push → pod by digest; requests and limits | — | planned |
 | M3 | T047–T055 | full | Clone remote + worktrees in the pod (RepoClone, protocol 49) | — | planned |
 | M4 | T056–T062 | full | Reconnect; pod gone → stopped with reason | — | planned |
@@ -64,7 +65,24 @@ Cut notes: US1 (>10 tasks) split along its acceptance scenarios and the plan's s
 
 ## Handover
 
-None.
+Unit 1 of M1 (context cap reached). Done: branch restarted from origin/main (0d369060); T001–T003
+setup (workspace `kube` 4.2 / `k8s-openapi` 0.28 in the client only, no `openssl-sys`; `kube-fake`
+feature in core, `kube-real-runtime` in client; empty modules registered); cycle 1 RED (see
+tdd/cycle-log.md "Cycle 1"): tests + stubs in `core/kube/{settings,names,classify,credentials,start}.rs`,
+`core/daemon_image/mod.rs`, `core/protocol/auth.rs` (`listener_auth`). Tasks not yet ticked.
+
+Next: implement the stub bodies (validate, Toleration::parse, DaemonImageSource::default_for/is_moving,
+DaemonResources default + validate, DaemonKey::of, slug, ResourceNames, is_ours, KubeFailure Display,
+listener_auth) → green with `cargo test -p micold-core --lib -- kube:: daemon_image:: listener_auth_tests`;
+mutant-check the four tests that passed on the stubs; log green in the cycle log; tick T004, T005,
+T007, T009 (tests) and T011, T012, T014, T018 (impl) — T008/T016 also need the daemon side
+(`adopt_auth_token` via `listener_auth`, U22 characterization). Then T006/T013 (`DaemonRuntime::
+Kubernetes` in core/daemons.rs: serde arm `"kubernetes"`, label, startable, the registry `check`
+arm calling `KubeSettings::validate`; client `features/daemons.rs` endpoint arm and
+`sandbox/placement.rs::from_runtime` need a Kubernetes arm), then T010/T017, T015, T019–T033,
+T079–T082, T099. U16 "naming the first": `RegistryError::DuplicateName` carries no name today —
+decide (assert the existing variant, or add a field) and record it. Build env: CARGO_INCREMENTAL=0
+CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0; run builds detached + hold.sh.
 
 ## Open escalation
 
