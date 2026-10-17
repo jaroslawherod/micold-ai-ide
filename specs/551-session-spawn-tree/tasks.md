@@ -89,19 +89,19 @@ description: "Task list for the session tree of agent-spawned sessions (#551)"
 
 ### Tests
 
-- [ ] T026 [P] [US3] Write failing tests in `crates/micold-core/tests/provider_origin.rs`: the default `reported_origin` is `None`; each confirmed provider's fixture (recorded, or synthetic from the provider's own schema or source, marked as such) yields `Some(parent)` and the same fixture without the field yields `None`; a name, path or timestamp never yields an origin (FR-002) [U15] [A8]
-- [ ] T027 [P] [US3] Write failing tests in `crates/micold-daemon/tests/catalog_adoption.rs`: discovery records a reported origin once (FR-001, FR-010); a child adopted before its origin stays top-level pending and nests when the origin is adopted (FR-016); a pending origin that fails the full check (same-worktree, cycle) when it appears is cleared once, `origin_rejected` is persisted and no later pass re-records it (R4); an adopted session of a gap provider stays top-level [U16] [A8]
-- [ ] T028 [P] [US3] Write a failing test in `crates/micold-core/tests/provider_origin_docs.rs` that the provider table in `docs/user-guide/worktrees-and-sessions.md` lists every `AiCli` variant (SC-005) [U17] [A9]
+- [x] T026 [P] [US3] Write failing tests in `crates/micold-core/tests/provider_origin.rs`: the default `reported_origin` is `None`; each confirmed provider's fixture (recorded, or synthetic from the provider's own schema or source, marked as such) yields `Some(parent)` and the same fixture without the field yields `None`; a name, path or timestamp never yields an origin (FR-002) [U15] [A8]
+- [x] T027 [P] [US3] Write failing tests in `crates/micold-daemon/tests/catalog_adoption.rs`: discovery records a reported origin once (FR-001, FR-010); a child adopted before its origin stays top-level pending and nests when the origin is adopted (FR-016); a pending origin that fails the full check (same-worktree, cycle) when it appears is cleared once, `origin_rejected` is persisted and no later pass re-records it (R4); an adopted session of a gap provider stays top-level [U16] [A8]
+- [x] T028 [P] [US3] Write a failing test in `crates/micold-core/tests/provider_origin_docs.rs` that the provider table in `docs/user-guide/worktrees-and-sessions.md` lists every `AiCli` variant (SC-005) [U17] [A9]
 
 ### Implementation
 
-- [ ] T029 [US3] Add `AiCliProvider::reported_origin(&self, config_dir, cwd, session_id) -> Option<Uuid>` (default `None`; pure read, no write) and the readers for the confirmed providers in `crates/micold-core/src/provider.rs` [U15]
-- [ ] T030 [US3] In `crates/micold-daemon/src/state.rs` `discover_external_sessions`, call `reported_origin` for newly adopted sessions and for adopted sessions without an origin on each later pass; in `crates/micold-daemon/src/catalog.rs` keep a not-yet-known origin pending, run the full check when it appears, and clear it once if rejected, setting `origin_rejected` so discovery skips the session afterwards [U16]
-- [ ] T031 [US3] Add the provider table (reports or not, by which signal, what a gap does instead) to `docs/user-guide/worktrees-and-sessions.md` (FR-014) [U17] [A9]
+- [x] T029 [US3] Add `AiCliProvider::reported_origin(&self, config_dir, cwd, session_id) -> Option<Uuid>` (default `None`; pure read, no write) and the readers for the confirmed providers in `crates/micold-core/src/provider.rs` [U15]
+- [x] T030 [US3] In `crates/micold-daemon/src/state.rs` `discover_external_sessions`, call `reported_origin` for newly adopted sessions and for adopted sessions without an origin on each later pass; in `crates/micold-daemon/src/catalog.rs` keep a not-yet-known origin pending, run the full check when it appears, and clear it once if rejected, setting `origin_rejected` so discovery skips the session afterwards [U16]
+- [x] T031 [US3] Add the provider table (reports or not, by which signal, what a gap does instead) to `docs/user-guide/worktrees-and-sessions.md` (FR-014) [U17] [A9]
 
 ### Outer loop
 
-- [ ] T040 [US3] Run the provider acceptance behaviors (`provider_origin`, `catalog_adoption`, `provider_origin_docs`) and confirm each is green: [A8] [A9]
+- [x] T040 [US3] Run the provider acceptance behaviors (`provider_origin`, `catalog_adoption`, `provider_origin_docs`) and confirm each is green: [A8] [A9]
 
 ## Phase 6: User Story 4 (Priority: P3)
 

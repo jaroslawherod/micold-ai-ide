@@ -31,3 +31,9 @@ Append only.
 - Tests written with the code in one pass (U12 in origin.rs, U13 in tests/sidebar_spawn_tree.rs, U14 in layout_snapshot.rs); no per-behaviour red output captured, as in M1.
 - Green: `cargo test -p micold-core --lib origin`, `-p micold-client --lib sidebar`, `--test sidebar_spawn_tree --test layout_snapshot --test features_sidebar`.
 - The child marker is the word `agent` leading the row annotation (text, not a glyph), so row height is unchanged.
+
+## M3 (2026-10-17)
+
+- Tests written with the code in one pass (U15 in `provider_origin.rs`, U16 in `catalog_adoption.rs` and `provider_origin_discovery.rs`, U17 in `provider_origin_docs.rs`); no per-behaviour red output captured, as in M1 and M2.
+- Green: `cargo test -p micold-core --test provider_origin --test provider_origin_docs`, `-p micold-daemon --test catalog_adoption --test provider_origin_discovery`.
+- Codex and OpenCode readers run on synthetic fixtures built from the providers' schema or source (marked as such); Claude Code stays a documented gap.

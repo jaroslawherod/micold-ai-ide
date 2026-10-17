@@ -24,8 +24,8 @@ and layout gates (`crates/micold-client/tests/`). The rendered pass is quickstar
 | A5 | After a daemon restart the origin, its two children and their nesting are unchanged | US2-1, FR-006, SC-002 | example | DONE | M1 |
 | A6 | A child running at daemon stop is resumable after restart and still nested | US2-2, FR-006 | example | DONE | M1 |
 | A7 | A child whose origin was deleted stays visible top-level marked "origin removed", once | US2-3, FR-008, FR-018 | example | DONE | M1 |
-| A8 | A session from a provider with no signal is top-level and nothing is nested by guesswork | US3-1, FR-002, SC-003 | example | PENDING | |
-| A9 | The user guide lists every provider with its reporting status | US3-2, FR-014, SC-005 | example | PENDING | |
+| A8 | A session from a provider with no signal is top-level and nothing is nested by guesswork | US3-1, FR-002, SC-003 | example | GREEN | M3 |
+| A9 | The user guide lists every provider with its reporting status | US3-2, FR-014, SC-005 | example | GREEN | M3 |
 | A10 | Collapsing an origin hides its children and shows their count | US4-1, FR-011 | example | PENDING | |
 | A11 | A collapsed origin shows that a hidden child needs attention | US4-2, FR-011 | example | PENDING | |
 | A12 | A fold persists across restart and a never-folded origin is expanded | US4-3, FR-017 | example | PENDING | |
@@ -71,9 +71,9 @@ and layout gates (`crates/micold-client/tests/`). The rendered pass is quickstar
 
 | id | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U15 | Default `reported_origin` is `None`; each confirmed fixture yields its parent and the same fixture without the field yields `None`; name/path/time never yields one | FR-001, FR-002 | example | PENDING | |
-| U16 | Discovery records a reported origin once, keeps an unknown one pending, clears a rejected one once and never re-records it | FR-001, FR-010, FR-016 | example | PENDING | |
-| U17 | The provider table lists every `AiCli` variant | FR-014, SC-005 | example | PENDING | |
+| U15 | Default `reported_origin` is `None`; each confirmed fixture yields its parent and the same fixture without the field yields `None`; name/path/time never yields one | FR-001, FR-002 | example | GREEN | M3 |
+| U16 | Discovery records a reported origin once, keeps an unknown one pending, clears a rejected one once and never re-records it | FR-001, FR-010, FR-016 | example | GREEN | M3 |
+| U17 | The provider table lists every `AiCli` variant | FR-014, SC-005 | example | GREEN | M3 |
 | U18 | `folded_origins` round-trips, absent loads empty, `settings_version` unchanged | FR-017 | example | PENDING | |
 
 ## Invariants and edge cases still to place
