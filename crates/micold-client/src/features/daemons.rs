@@ -429,8 +429,13 @@ impl State {
                 _ => None,
             })
             .collect();
-        if let Some(Ok(DaemonRuntime::Ssh(s))) = self.draft.as_ref().map(runtime_of) {
-            targets.push(s.target);
+        if let Some(target) = self
+            .draft
+            .as_ref()
+            .filter(|d| d.runtime == DraftRuntime::Ssh)
+            .and_then(|d| ssh_target(d).ok())
+        {
+            targets.push(target);
         }
         targets.retain(|t| {
             let key = resolution_key(t);
@@ -851,6 +856,27 @@ pub(crate) fn invalid_field(field: &'static str) -> FormError {
     FormError { field, message }
 }
 
+/// The SSH target the form describes, or the field that is wrong.
+fn ssh_target(draft: &Draft) -> Result<SshTarget, FormError> {
+    fn blank(v: &str) -> Option<&str> {
+        Some(v.trim()).filter(|v| !v.is_empty())
+    }
+    let port = match blank(&draft.ssh_port) {
+        Some(p) => Some(p.parse::<u16>().map_err(|_| invalid_field("port"))?),
+        None => None,
+    };
+    SshTarget::new(
+        &draft.ssh_host,
+        blank(&draft.ssh_user),
+        port,
+        blank(&draft.ssh_key_file).map(PathBuf::from),
+    )
+    .map_err(|e| match e {
+        RegistryError::InvalidField { field } => invalid_field(field),
+        _ => invalid_field("host"),
+    })
+}
+
 fn runtime_of(
     draft: &Draft,
     registry: &DaemonRegistry,
@@ -860,26 +886,9 @@ fn runtime_of(
     match draft.runtime {
         DraftRuntime::Host => Ok(DaemonRuntime::Host),
         DraftRuntime::Kubernetes => draft.kube.settings().map(DaemonRuntime::Kubernetes),
-        DraftRuntime::Ssh => {
-            fn blank(v: &str) -> Option<&str> {
-                Some(v.trim()).filter(|v| !v.is_empty())
-            }
-            let port = match blank(&draft.ssh_port) {
-                Some(p) => Some(p.parse::<u16>().map_err(|_| invalid_field("port"))?),
-                None => None,
-            };
-            let target = micold_core::ssh::SshTarget::new(
-                &draft.ssh_host,
-                blank(&draft.ssh_user),
-                port,
-                blank(&draft.ssh_key_file).map(PathBuf::from),
-            )
-            .map_err(|e| match e {
-                RegistryError::InvalidField { field } => invalid_field(field),
-                _ => invalid_field("host"),
-            })?;
-            Ok(DaemonRuntime::Ssh(micold_core::ssh::SshSettings { target }))
-        }
+        DraftRuntime::Ssh => Ok(DaemonRuntime::Ssh(micold_core::ssh::SshSettings {
+            target: ssh_target(draft)?,
+        })),
         DraftRuntime::Container => {
             let port = container_port(draft, registry, taken_elsewhere, next_port)?;
             let mut profile = draft.profile.clone();
