@@ -54,9 +54,10 @@ ones #806 introduces for container daemons (one shared form): see FR-004 and FR-
   it is #806's scope. _(decided by owner, 2026-10-17: "should use same mechanism for local "sandbox"
   container"; split by the owner: #806 builds it, #686 waits for it)_
 - Q: How does the client authenticate to the pod's SSH server, and the pod to the client? → A: With a
-  key pair per daemon: the client's private key stays on the client, readable by the user only; the
-  public key and the pod's host key reach the pod as the daemon's own access secret; the client pins
-  that host key, so host-key checking stays strict as in spec 489. _(agent-resolved:
+  key pair per client per daemon: each client's private key stays on that client, readable by the user
+  only; the public keys of every client allowed to log in and the pod's host key reach the pod as the
+  daemon's own access secret; the client pins that host key, so host-key checking stays strict as in
+  spec 489. _(agent-resolved:
   specs/686-kubernetes-daemon-runtime/spec.md#FR-008)_
 - Q: Where does the clone in the daemon's volume come from? → A: The project's git remote, fetched in
   the pod with an allowed push/pull credential (FR-008); a project with no remote is refused for a
@@ -155,7 +156,7 @@ credential, the pod runs as a non-root user with a read-only root filesystem.
 4. **Given** any Kubernetes daemon pod, **When** inspected, **Then** it runs as a non-root user, with
    a read-only root filesystem (writable paths limited to the volume and scratch space), without
    privilege escalation, and its SSH server listens on the pod's loopback only and accepts only the
-   daemon's key.
+   public keys in the daemon's access secret.
 
 ---
 
@@ -204,10 +205,12 @@ again (worktrees still there), then remove (pod and volume gone after confirmati
 
 1. **Given** the add form, **When** the user chooses the Kubernetes runtime, **Then** they can pick a
    kube context (from their kubeconfig) and a namespace, keep the default image or give their own
-   (FR-004), set resources (the #806 form), node selector, tolerations, volume size and allowed
-   credentials and sign-ins.
+   (FR-004), choose the AI CLIs to install (any of `claude`, `copilot`, `pi`; by default the providers
+   enabled in the app), set resources (the #806 form), node selector, tolerations, volume size and
+   allowed credentials and sign-ins.
 2. **Given** a Kubernetes daemon, **When** the user edits it and saves, **Then** the new settings
-   apply on its next start; a running pod is not changed silently.
+   apply on its next start as FR-005 states; a running pod is not changed silently, and when Start
+   finds the pod running with settings that differ, it says so and offers to recreate the pod.
 3. **Given** a running daemon, **When** the user chooses **Stop**, **Then** the pod is deleted, the
    volume (and its worktrees) is kept, and the state becomes `stopped`.
 4. **Given** a Kubernetes daemon shown `unreachable` whose pod still runs, **When** the user chooses
@@ -289,7 +292,10 @@ pass with no sign-in, provider network access or cost.
   naming the worktree and daemon.
 - **Two clients start the same daemon at once** (same context, namespace and daemon name, from two
   windows or two machines): at most one pod results; the client that loses the race reuses the pod
-  the other created (FR-023).
+  the other created (FR-023). Their shared steps (daemon copy, AI CLI install, clone, adding each
+  client's public key to the access secret) run once: the later client waits for a step in progress
+  and reuses its result, the volume holds one complete daemon build and one complete install per CLI,
+  and both clients' keys are in the access secret afterwards (FR-023).
 - **One client stops or removes a daemon while another is connected**: the other client shows the
   daemon `stopped` with a reason saying the pod was deleted, and its sessions `lost to its daemon`; it
   never recreates the pod on its own (FR-011, FR-023). After a remove, its next **Start** creates a new,
@@ -323,12 +329,18 @@ pass with no sign-in, provider network access or cost.
   default MUST be #806's shared SSH image (FR-024); the user MAY give another image that meets the same
   contract. Over SSH through the tunnel (FR-006) the client MUST copy its own matching daemon build into
   the volume and start it as spec 489 FR-005 does for a remote host, and MUST install the AI CLIs
-  selected for the daemon into the volume on start, skipping a CLI already installed at the wanted
-  version. The system MUST NOT build or push an image and MUST NOT need a registry or a local container
+  selected for the daemon (FR-018) into the volume on start, each at the version the client's build
+  pins for it (#806's mechanism), skipping a CLI already installed at that version. A CLI added to the
+  selection is installed on the next start; a CLI removed from it is no longer offered for new
+  sessions on the daemon (its running sessions keep running), and its files stay on the volume until Remove. The system MUST NOT build or push an image and MUST NOT need a registry or a local container
   runtime for a Kubernetes daemon.
 - **FR-005**: The user MUST be able to set CPU and memory requests and limits (the #806 resources
-  fields), a node selector, tolerations and the volume size; these persist with the daemon and apply
-  on the next start.
+  fields), a node selector, tolerations and the volume size; these persist with the daemon. Changes to
+  them, to the image and to the allowed credentials take effect when the pod is next created; a volume
+  size change takes effect only when the volume is created, and the
+  form says so when the daemon's volume already exists. When Start finds the daemon's pod running
+  with settings that differ from the saved ones, it MUST say which differ and offer to recreate the pod
+  (ending its sessions, keeping the volume); declined, it reuses the pod unchanged.
 - **FR-006**: The system MUST reach the pod only through the Kubernetes API's port-forward tunnel to
   its SSH server, and the daemon only over that SSH connection, and MUST NOT create a Service, Ingress
   or any other network exposure, in the cluster or on the client beyond loopback.
@@ -348,7 +360,7 @@ pass with no sign-in, provider network access or cost.
 - **FR-009**: The pod MUST run as a non-root user, with a read-only root filesystem (writable only on
   the volume and scratch space), with privilege escalation disabled, and with no secret mounted that
   FR-008 did not allow or create. Its SSH server MUST listen on the pod's loopback only, accept public
-  key login for the image's user only, and refuse passwords, root login and forwarding other than the
+  key login for the image's user only and only with the keys in the access secret, and refuse passwords, root login and forwarding other than the
   daemon's bridge.
 - **FR-010**: Sessions and terminals MUST keep running in the pod when the client disconnects or
   quits, and MUST be shown with their output produced meanwhile on reconnection (as spec 489 FR-006).
@@ -374,7 +386,8 @@ pass with no sign-in, provider network access or cost.
 - **FR-015**: **Remove** MUST, after a confirmation naming the pod, volume and secrets to be deleted
   (with spec 491 FR-012/FR-014 counts), delete every cluster resource the system created for the
   daemon and the daemon's key and pinned host key on this client, then forget the daemon; when the
-  cluster is unreachable it MUST say which resources remain.
+  cluster is unreachable it MUST say which resources remain, including this client's public key in
+  the access secret, which stays authorized until the resources are deleted.
 - **FR-016**: The system MUST mark cluster resources it creates as belonging to the daemon, identified
   by context, namespace and daemon name (so another client's daemon with the same three is the same
   daemon), act only on resources so marked, and refuse to reuse or delete anything else, naming the
@@ -384,7 +397,8 @@ pass with no sign-in, provider network access or cost.
   daemon of another build already running in the pod, started by another client) and MUST NOT start
   sessions on a mismatched daemon.
 - **FR-018**: The user MUST be able to add, edit, start, stop, reconnect and remove a Kubernetes daemon
-  from Settings → Daemons and see its recent errors and the pod's logs; blank or invalid fields are
+  from Settings → Daemons, choose its AI CLIs to install (any of `claude`, `copilot`, `pi`; by default
+  the providers enabled in the app), and see its recent errors and the pod's logs; blank or invalid fields are
   refused naming the field; a second daemon with the same name is refused.
 - **FR-019**: A Kubernetes daemon being started, failing or unreachable MUST NOT change the state or
   responsiveness of any other daemon, including while the app starts.
@@ -401,14 +415,18 @@ pass with no sign-in, provider network access or cost.
   home directory's `.kube/config`) and exec credential plugins resolved the same way whether the app
   was started from a shell or from the desktop.
 - **FR-023**: Concurrent starts of one daemon, from one or several clients, MUST result in at most one
-  pod, the later start reusing it. A Stop or Remove by one client MUST be shown to every other connected
+  pod, the later start reusing it. The steps they share — the daemon copy, the AI CLI install, the
+  clone, and adding a client's public key to the access secret — MUST NOT corrupt or undo each other:
+  afterwards the volume holds one complete daemon build per version and one complete install per CLI,
+  a start that finds a step in progress waits for it within that phase's bound (FR-012) and reuses its
+  result, and every client's key added before or during the race is still in the access secret. A Stop or Remove by one client MUST be shown to every other connected
   client as `stopped` with a reason saying the pod was deleted, with its sessions `lost to its daemon`.
 - **FR-024**: The SSH image, the copy and start of the daemon over SSH, the AI CLI install on start
-  and the per-daemon key pair are one mechanism shared with the local container runtime, built by
+  and the per-client, per-daemon key pairs are one mechanism shared with the local container runtime, built by
   #806. This feature MUST use that mechanism and MUST NOT carry a second copy of it; what it adds is
   the Kubernetes transport to the SSH server, the pod, volume and secrets, and the Kubernetes failure
-  reasons. Behaviour that needs the mechanism (FR-004's copy and install, a `connected` Kubernetes
-  daemon) MUST NOT be offered to users before the mechanism exists.
+  reasons. In a build without that mechanism, the Kubernetes runtime MUST be absent from the Add
+  form's runtime choice.
 
 ### Key Entities
 
