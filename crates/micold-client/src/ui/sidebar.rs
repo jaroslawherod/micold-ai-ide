@@ -1168,7 +1168,7 @@ mod tests {
         use micold_core::origin::{Orphan, TreePlace};
         let r = tokens::roles(ColorScheme::Dark);
         let s = session(ActivitySignal::Unknown, SessionLifecycle::Running);
-        let row = |place| session_tree_item(1, &s, None, None, false, place, r);
+        let row = |place| session_tree_item(1, &s, None, None, false, place, None, r);
         let top = row(TreePlace::Root);
         for place in [TreePlace::Child, TreePlace::Orphan(Orphan::Pending)] {
             let child = row(place);
