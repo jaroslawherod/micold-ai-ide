@@ -369,7 +369,7 @@ async fn w5_each_edit_is_on_disk_before_its_answer_and_reaches_every_window() {
 
     let comment = add_one(&mut a, 1, &f.project(), "  Why clone here?  ").await;
     assert_eq!(comment.text, "Why clone here?", "stored trimmed (W1)");
-    assert_eq!(comment.state, CommentState::Pending);
+    assert_eq!(comment.state, CommentState::Draft);
     assert_eq!(
         (comment.side, comment.range.start(), comment.range.end()),
         (Side::New, 2, 3)
@@ -498,7 +498,7 @@ fn stored(n: u128, state: CommentState) -> ReviewComment {
 
 /// Seed entry `feat` (and the Default entry, untouched by everything here) with `comments`.
 fn seed(f: &Fixture, comments: Vec<ReviewComment>) -> ReviewComment {
-    let other = stored(99, CommentState::Pending);
+    let other = stored(99, CommentState::Draft);
     let mut file = ReviewFile::default();
     file.entries.insert("feat".into(), comments);
     file.entries.insert(String::new(), vec![other.clone()]);
@@ -546,7 +546,7 @@ async fn request(client: &mut Client, req: u64, msg: ClientMsg) -> (DaemonMsg, V
 async fn w4_clear_sent_removes_sent_comments_and_discard_pending_the_pending_ones() {
     let f = Fixture::new();
     let sent = stored(1, CommentState::Sent { at: 1_790_000_100 });
-    let pending = stored(2, CommentState::Pending);
+    let pending = stored(2, CommentState::Draft);
     let other = seed(&f, vec![sent, pending.clone()]);
     let state = f.service();
     let mut a = connect(&state).await;
@@ -598,7 +598,7 @@ async fn w11_deleting_the_worktree_removes_its_comments_from_memory_and_file_and
     let other = seed(
         &f,
         vec![
-            stored(1, CommentState::Pending),
+            stored(1, CommentState::Draft),
             stored(2, CommentState::Sent { at: 1_790_000_100 }),
         ],
     );
@@ -667,7 +667,7 @@ async fn w11_deleting_the_worktree_removes_its_comments_from_memory_and_file_and
 #[tokio::test]
 async fn w11_forgetting_a_worktree_drops_its_comments_from_memory_and_file_at_once() {
     let f = Fixture::new();
-    let other = seed(&f, vec![stored(1, CommentState::Pending)]);
+    let other = seed(&f, vec![stored(1, CommentState::Draft)]);
     let state = f.service();
     let mut a = connect(&state).await;
     let on_attach = attach(&mut a, &f.project()).await;
@@ -708,7 +708,7 @@ async fn w11_forgetting_a_worktree_drops_its_comments_from_memory_and_file_at_on
 #[tokio::test]
 async fn a_worktree_removed_outside_the_app_loses_its_comments_on_the_next_refresh() {
     let f = Fixture::new();
-    let other = seed(&f, vec![stored(1, CommentState::Pending)]);
+    let other = seed(&f, vec![stored(1, CommentState::Draft)]);
     let state = f.service();
     let mut a = connect(&state).await;
     attach(&mut a, &f.project()).await;
@@ -746,7 +746,7 @@ async fn a_worktree_removed_outside_the_app_loses_its_comments_on_the_next_refre
 async fn an_unreadable_repository_prunes_nothing_on_refresh() {
     // Review A M8 F1: an unmounted drive or a renamed folder is not every worktree removed.
     let f = Fixture::new();
-    seed(&f, vec![stored(1, CommentState::Pending)]);
+    seed(&f, vec![stored(1, CommentState::Draft)]);
     let state = f.service();
     let mut a = connect(&state).await;
     attach(&mut a, &f.project()).await;
@@ -770,7 +770,7 @@ async fn an_unreadable_repository_prunes_nothing_on_refresh() {
 #[tokio::test]
 async fn removing_the_project_from_the_catalog_deletes_its_review_file() {
     let f = Fixture::new();
-    seed(&f, vec![stored(1, CommentState::Pending)]);
+    seed(&f, vec![stored(1, CommentState::Draft)]);
     let file = f.files().reviews_path(&f.project());
     assert!(file.exists(), "seeded");
     let state = f.service();

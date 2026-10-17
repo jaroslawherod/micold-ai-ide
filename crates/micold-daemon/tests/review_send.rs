@@ -328,7 +328,7 @@ fn assert_pushed_exactly(
 fn pending(comments: &[ReviewComment]) -> Vec<ReviewComment> {
     comments
         .iter()
-        .filter(|c| c.state == CommentState::Pending)
+        .filter(|c| c.state == CommentState::Draft)
         .cloned()
         .collect()
 }
