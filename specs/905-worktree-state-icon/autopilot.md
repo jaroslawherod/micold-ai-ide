@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #905
 - **Worktree branch**: claude/project-thread-h057j5
 - **Started**: 2026-10-17
-- **Phase**: implement
-- **Next step**: orchestrator opens the M2 PR (pushed; title/body in the unit's scratchpad), waits on CI and merges; then the close unit (T027-T028 visual pass, §C)
+- **Phase**: done
+- **Next step**: handoff (the run ends when the close PR merges)
 
 ## Pull requests
 
@@ -18,13 +18,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #913 | design (spec, plan, tasks) | merged | a09e523796e7d9b571b410bce28848745c1e9734 |
 | #915 | M1 (also the stale BUG-904 session_discovery test fix, refs #904) | merged | b872f2677f4b69092a8591b9bc72bbeb182a3b29 |
+| #919 | M2 | merged | 2ccbbe6b32ff6de28faa8f3ab7424442b080e31e |
+| (close) | close: client-sidebar visual pass, tdd verification, spec closed | opened by the orchestrator | — |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T017 | full | Worktree and Default rows show a live state icon; showcase, contrast gate, user guide and icon reference | #915 | merged |
-| M2 | T018–T026 | full | A mid-turn permission stop makes its worktree Blocked (protocol 48) | — | review (pushed) |
+| M2 | T018–T026 | full | A mid-turn permission stop makes its worktree Blocked (protocol 48) | #919 | merged |
 
 M1 holds 17 tasks (over the ~10 of milestones.md rule 3): it is Foundational + US1 + US3, because the shared `StateIcon` must ship with its showcase entry, contrast proof and icon-reference rows (Principles VII, VIII; speckit-analyze C1, C2). US1 has no acceptance-scenario split that leaves a deliverable without the component. T027–T028 (visual pass, §C) go to the close unit.
 
@@ -58,6 +60,10 @@ M1 holds 17 tasks (over the ~10 of milestones.md rule 3): it is Foundational + U
 |---|---|---|---|
 | M1 | A | F7 Starting→Running+Unknown shows a blank slot until the first hook | Decision 3 / data-model rule 7: unknown activity is never guessed; a CLI that reports activity reports it at once |
 | M2 | B | F1 no tdd/cycle-log.md for T018-T022 | The feature has no tdd/ directory (M1 neither); tests were written before the code and failed to compile without it |
+
+## Close unit
+
+speckit-converge: converged (every FR and SC was checked by a review B and the live pass; tasks.md unchanged beyond T027-T028 ticks). speckit-tdd-verify: PASS_WITH_GAPS, 2 deliberate mutants killed, F7 and the F3 no-op fixed, the rest left (specs/905-worktree-state-icon/tdd/verification.md). Visual pass B1-B3, B6, B7, B9, B11 run on the real client; B4, B5, B8, B10 and the dark client sidebar not run; §C handed to CI. The Blocked ring cannot be told octagon from circle at 10 px; shapes still distinct.
 
 ## Handover
 

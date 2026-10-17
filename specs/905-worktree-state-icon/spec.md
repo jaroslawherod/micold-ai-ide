@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-17
 
-**Status**: Draft
+**Status**: Closed 2026-10-17 — shipped in PRs #913, #915, #919 and the close PR
 
 **Input**: User description: "Implement GitHub issue #905: Worktree should show a state icon:
 idle/waiting, blocked or running. Each worktree entry should show an icon for its current state:

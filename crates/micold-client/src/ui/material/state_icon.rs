@@ -158,10 +158,17 @@ mod tests {
     fn each_glyph_is_drawn_in_its_role() {
         let r = roles();
         assert_eq!(role(LocationState::Running, &r), Some(r.primary));
-        assert_eq!(
-            role(LocationState::Blocked(BlockedReason::Failed), &r),
-            Some(r.error)
-        );
+        for reason in [
+            BlockedReason::Failed,
+            BlockedReason::NeedsPermission,
+            BlockedReason::Resumable,
+        ] {
+            assert_eq!(
+                role(LocationState::Blocked(reason), &r),
+                Some(r.error),
+                "{reason:?}"
+            );
+        }
         assert_eq!(role(LocationState::Idle, &r), Some(r.on_surface_variant));
         assert_eq!(role(LocationState::Unknown, &r), None);
     }

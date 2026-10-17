@@ -101,8 +101,8 @@ within 1 s; granting it turns the icon to the triangle.
 
 No code. Left to the close unit (milestones.md rule 4).
 
-- [ ] T027 Run quickstart §B (B1–B11) with the `visual-pass` skill on Linux, light and dark, and save the screenshots and results under `specs/905-worktree-state-icon/visual-pass/` (SC-001–SC-003, FR-006, FR-007)
-- [ ] T028 Record quickstart §C (macOS, Windows: B1, B3, B9) as run or as handed to CI's OS matrix in `specs/905-worktree-state-icon/quickstart.md` (Principle VI)
+- [x] T027 Run quickstart §B (B1–B11) with the `visual-pass` skill on Linux, light and dark, and save the screenshots and results under `specs/905-worktree-state-icon/visual-pass/` (SC-001–SC-003, FR-006, FR-007)
+- [x] T028 Record quickstart §C (macOS, Windows: B1, B3, B9) as run or as handed to CI's OS matrix in `specs/905-worktree-state-icon/quickstart.md` (Principle VI)
 
 ## Dependencies & Execution Order
 
