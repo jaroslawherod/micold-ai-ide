@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #776
 - **Worktree branch**: feat/776_one-session-per-worktree-chosen-at-start
 - **Started**: 2026-10-12
-- **Phase**: M7 implemented, uncompiled
-- **Next step**: compile, gate and review M7 (see Handover)
+- **Phase**: M7 reviewed, full gate running
+- **Next step**: full gate, visual pass, PR
 
 ## Pull requests
 
@@ -77,6 +77,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Conformance B M5 | 2 | same snapshot | round 1 CHANGES: 2 MAJOR (no menu/wire tests: added m5_menus + allow-flag unit test; Verify line lacked `--`: fixed), 2 MINOR fixed; round 2 CLEAN |
 | Conformance B M6 | 1 | b346eb3e4a20fa06b4f5359cb6c3dc484c68db05:1b8c7897e96789108f226c0afd5bf46fcba8e865 | CHANGES: 1 MAJOR (no red evidence; declined, see Declined), 2 MINOR (T030 tick committed; visual pass scope noted). Verify green |
 | Code A M6 | 1 | same snapshot | CLEAN (1 MINOR left: nested if-let in Catalog::replace_session) |
+| Code A M7 | 1 | e7b267562fb37f0018800e047fd87696a1ce0f95:1d9e58d73949a6b81d9714d0996f2e8769bc7551 | CLEAN (3 MINOR). Concurrent sibling starts may both be refused (never both run): ACCEPTED, user retries; atomic check+begin_start not worth it. Review-send resume with a live legacy sibling logs the refusal only: left.
+| Review B M7 | 1 | same snapshot | CLEAN (2 MINOR: hard-coded dialog title, left)
 
 ## Declined review findings
 
@@ -95,21 +97,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M7 (T031-T035) code and tests are written on the branch (one WIP commit, unpushed) but NOT yet compiled or run:
-the build lock is queued behind other worktrees' gates (wait was over 40 min).
-A detached `scripts/build-lock.sh cargo check --workspace --all-targets` was started (log in the first unit's
-scratchpad `check.log`; may be gone: just start a new one). Done: `Additional` threaded through
-`ops::start_session`/`start_with_prompt`/`start_session_gated`; `DaemonState::start_refusal`; server
-`SessionStart`/`SessionRestart` drop a blocked start; MCP `start_session` flag + Conflict; core tool schema
-(`Operation::StartSession{additional}`); client `session_start_block_text`, `blocked_start` + dialog reuse
-(`confirm_additional_session.rs`), `view_and_start` guard, sidebar row tooltip; daemon/client/core tests; docs.
-Next: compile and fix errors (likely spots: tests constructing `Operation::StartSession`, `session_tree_item` callers,
-`mcp_create_session` new test uses `s.state`/`s.addr`/`credential`, policy for start of another worktree's session),
-add a main_tests.rs test that confirming sends `SessionStart{allow_additional_session:true}` (T032), tick T031-T035 in
-tasks.md, scoped gate, review A (high) and B, visual pass (tooltip+dialog), full gate, PR (title
-`feat(776): several sessions stay intact, start beside a live one needs confirmation (#776)`).
-Known gap: the gated in-check is best effort, not atomic with the spawn of a sibling started concurrently (both
-`starting` entries make both refuse, so never two run).
+None.
 
 ## Open escalation
 
