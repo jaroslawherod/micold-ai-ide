@@ -51,8 +51,9 @@ phase as `activity` while it runs.
 1. `Config`, `Preflight` (access reviews: `create pods`, `create persistentvolumeclaims`, `create
    secrets`, `update secrets`, `create pods/portforward`, `delete pods`; a denial fails before anything
    is created), `Volume`, `Secrets` (access secret created, or this client's key added to it; allowed
-   secrets reconciled, withdrawn ones deleted), `Pod`, `Schedule`, `Pull`, `Tunnel` (relay up, the SSH
-   identification line read through it).
+   secrets reconciled, withdrawn ones deleted), `Pod`, `Schedule`, `Pull`, `Tunnel` (one `Cluster::port_forward` stream to the pod's SSH
+   port, the stream the client relay opens per connection; the SSH identification line read from it;
+   the relay itself is client-side and first used by `Copy` and `Connect`).
 2. **Pod drift**: when `Pod` adopts a pod whose `micold.dev/pod-settings` differs from the saved
    settings, start pauses with `Drift { fields }`. The row says "The running pod differs from the
    settings (<fields>). Recreate it? Its <n> running session(s) will end; the volume is kept." with
@@ -117,6 +118,7 @@ On `Gone`: sessions → `lost to its daemon`; the actor ends; the pod is not rec
 | `Cancelled` | `start cancelled` |
 | `Provision(..)` | #806's text (copy, start, install; install names the CLI and its error) |
 | `Api` | `the cluster answered <status>: <message>` |
+| `Unavailable` | `Kubernetes daemons need the shared SSH image (#806), which this build does not include` |
 
 Clone (K8, blocked on #806): `<project> has no git remote; a Kubernetes daemon clones from it`,
 `<project> has several remotes and none is origin: <names>`, `cloning <url> needs a credential:

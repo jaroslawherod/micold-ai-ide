@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-xelisc
 - **Started**: 2026-10-17
 - **Phase**: design revision 2
-- **Next step**: design revision 2 part 4 (continue from Handover): test-list.md, speckit-analyze, tasks review; then M1a
+- **Next step**: design revision 2 part 4: tasks review rev 2 (fresh reviewer, then scoped re-reviews until CLEAN); then M1a
 
 ## Pull requests
 
@@ -35,6 +35,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M8 | T057, T058, T060, T061, T062, T101 | full | (#806) Reconnect; pod gone → stopped with reason | — | blocked on #806 |
 | M9 | T088–T096, T105 | full | (#806) kube_real_* suite, `mise run test-kube`, CI job kube-cluster | — | blocked on #806 |
 Cut notes (revision 2): tasks.md "Revision 2 task map" lists kept/changed/removed T001–T105; new tasks T106–T142. Order: everything independent of #806 first (M1a–M4b, all `docs-not-needed`: Kubernetes cannot be added before M6), then the #806-blocked milestones (M5–M9). US1 split along the #806 boundary: connect (M5) before CLI install + Add entry (M6), so the Add entry appears only when US1.1 works (no half-wired UI). User-guide tasks T046/T071/T078/T087 folded into T033 (M6), since the guide page appears with the Add entry. Polish T097–T098: close unit.
+stash@{0} survivors ("686 M1a red WIP"; never drop it; backed up in /mnt/project-files/backups/686-m1-wip.bundle): keep `kubeconfig.rs` (T020/T026), `lifecycle.rs` (T079/T081), `manifest.rs` (T019, after the SSH image/env/port 2222/access-secret mount changes), `start_tests.rs` (T021, drop the `Image` phase and the volume-size refusal; `Tunnel` = identification line), `Quantity::{to_k8s, parse_k8s}`, `ResourceNames::all_secrets`, `ObjectKind::noun`, `KubeFailure::StopTimeout` + `From<ApiFailure>`, `FakeCluster::hold_on_delete`. Discard `StartPlan::for_image`. Design revision part 4: plan fixed by tasks unit — data-model StartPlan and contract §3 item 1 say `Tunnel` reads the identification line from one `Cluster::port_forward` stream; the client relay is first used in M5.
 
 ## Decisions
 
@@ -71,54 +72,14 @@ Cut notes (revision 2): tasks.md "Revision 2 task map" lists kept/changed/remove
 - speckit-analyze D13 (start failure maps to `Unreachable`): already the 491/489 rule, stated in data-model.md state machine delta; no change.
 - speckit-analyze D10 (owner decisions pending): no task change; phases 3b/3c are the separable parts.
 - speckit-analyze D1 alternative (kind smoke test in M1): declined; pure `to_api_failure`/`delete_params` table tests in M1 instead, real cluster in M8.
+- speckit-analyze rev 2 C7 (T033 user guide sits in M6, move to Polish): declined; milestones rule 4 puts the user guide in the feat PR that shows the Add entry (M6); T140 stays the last M6 task. Analyze rev 2 C1–C6 fixed (U18/U19/U21 markers on T108/T113; contract §6 `Unavailable` row; research K3 Tunnel wording; spec Tunnel glossary note; stash note in tasks.md; T137 unused).
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
 
 ## Handover
 
-**Design revision 2, part 3 (unit "Design revision 686 part 3", handed over at 150k).** Done:
-tasks.md re-cut (committed): revision-2 task map (T001–T105 kept/changed/removed), new tasks
-T106–T142, milestones M1a–M4b (independent of #806) then M5–M9 (blocked on #806); ledger Milestones
-table replaced. Not yet done (next, in order):
-1) **tdd/test-list.md** to match tasks.md markers. Mark REMOVED: U3, U4, U9, U10, U22–U25, U27, U28,
-   U34, U42, U56, U71–U78, U90–U94, U98. Amend: U8 (defaults: no image, no storage class, nothing
-   allowed, 10 GiB), U11/U12 file → `core/daemon_resources.rs`, U20 (+ `-ssh-access`), U26
-   (revision-2 variants, `Provision` in M5), U37 (pod env only HOME, TMPDIR, access-secret dir;
-   access secret read-only at /run/micold/ssh 0440), U44 (access secret always mounted), U49/U50
-   (11-phase plan; Pull/Install 15 min, else 120 s), U60 (+ `update secrets`, `create secrets`
-   always), U65 (access secret listed), U66/U67 (env via `daemon_env`), U95 (Edit, not Add), U97
-   (limits fields only), U106 (key stays authorized text). New: U117 Quantity to_k8s/parse_k8s;
-   U118 image None default / given kept / moving tag flagged; U119 providers default enabled, may be
-   empty; U120 all_secrets access first; U121 FakeCluster replace 409 on stale rv, hold_on_delete;
-   U122 PodStamp canonical + annotation; U123 drift names fields in form order; U124 AccessSecret
-   parse/to_data; U125 with_client idempotent/replace same id, without_client; U126 access secret
-   create / add key by replace + 409 re-read keeps other key / no write when present; U127 rollback
-   removes added key; U128 drift → Drift{fields}, Recreate, Keep; U129 Tunnel reads SSH-2.0- else
-   ImageContract; U130 relay; U131 key files owner-only, known_hosts alias line, client_id stable,
-   delete; U133 Start → Unavailable, no cluster call; U134 Add runtime choices omit Kubernetes until
-   wired; U135 AI CLI checkboxes default + volume notice; U136 daemon_env; U138 Copy target + env,
-   HostKeyMismatch, Provision; U139 Install (providers, log, Cancel, 15 min, Provision names CLI);
-   U140 Connect bridge; U141 drift prompt text + buttons; U143 Remove/Forget delete key files.
-   Acceptance: A1 (default image, copy, install, connect; M6), A4/A5 test column add `core/kube/start.rs`
-   (M1b core half), A14–A17 add core start.rs (M2), A18 → US4.6, A19 (+ AI CLIs), A20 (+ drift
-   offer), A22 → M8, A23/A24 (+ key files), A26 (+ install failure), new A28 = US4.5 (install
-   failure / image without SSH contract; `kube_daemon_start`, real `kube_real_failures`);
-   `spec_criteria: 28`. Remove the "the pod's listener without a token" wording anywhere left.
-2) Plan/data-model prose fix (record in ledger as "plan fixed by tasks unit"): the core `Tunnel` phase
-   reads the identification line from one `Cluster::port_forward` stream (the stream the client relay
-   opens per connection); the relay itself is client-side and used from M5 (data-model StartPlan
-   paragraph, contract kube-runtime §3 item 1 "relay up" wording).
-3) speckit-analyze inline; then a fresh tasks reviewer (round 1, review.md, rubrics/tasks.md), scoped
-   re-review (sonnet) until CLEAN.
-4) stash@{0} survivors (record under Decisions or Cut notes): `kubeconfig.rs` (T020/T026), `lifecycle.rs`
-   (T079/T081), `manifest.rs` (T019, needs SSH image/env/port 2222/access-secret mount changes),
-   `start_tests.rs` (T021, drop `Image` phase and volume-size refusal; Tunnel = identification line),
-   `Quantity::{to_k8s, parse_k8s}`, `ResourceNames::all_secrets`, `ObjectKind::noun`,
-   `KubeFailure::StopTimeout` + `From<ApiFailure>`, `FakeCluster::hold_on_delete`. Discard
-   `StartPlan::for_image`. Never drop the stash.
-5) commit, refresh /mnt/project-files/backups/686-m1-wip.bundle, return DONE naming M1a
-   (T106–T116, T020, T026). Branch unpushed; never reset.
+None.
 
 ## Open escalation
 

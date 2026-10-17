@@ -98,7 +98,8 @@ secret through the cluster API, whose trust is the user's kubeconfig. Each clien
 key and the pinned host key in owner-only files under the app's data directory (`owner_only.rs`),
 keyed by the daemon key; never in settings, the cluster or logs. The image's SSH server reads
 `authorized_keys` straight from the mounted secret (so a key added later is seen without restarting
-the pod, after the kubelet's volume refresh; the `Tunnel` phase waits for a login within its bound),
+the pod, after the kubelet's volume refresh; the `Tunnel` phase reads the SSH identification line within its bound; key login is first exercised
+by `Copy`, #806),
 and copies the host key to `/tmp` with mode 0600 at startup (`sshd` refuses a group-readable host
 key). Remove deletes the secret and this client's key files; when the cluster is unreachable, the
 confirmation lists the access secret, and with it this client's still-authorized key, among the
