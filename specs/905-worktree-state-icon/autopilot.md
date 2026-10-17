@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-h057j5
 - **Started**: 2026-10-17
 - **Phase**: implement
-- **Next step**: continue M1 from *Handover* (T004–T017)
+- **Next step**: M1 verify.md from *Handover* (all T001–T017 ticked)
 
 ## Pull requests
 
@@ -35,6 +35,7 @@ M1 holds 17 tasks (over the ~10 of milestones.md rule 3): it is Foundational + U
 | 2 | clarify | Several sessions: all or main only? | All un-archived sessions, Blocked > Running > Unknown > Idle | agent | specs/575-workspace-attention-list/spec.md#Terms (location row counts every session) |
 | 4 | implement | `report`'s codepoint | `U+F052`, not research's `U+E160` (that is Material *Icons*' `report`; the Symbols `.codepoints` manifest maps `report` to `f052`, no entry for `e160`); spec artifacts updated | agent | upstream `variablefont/MaterialSymbolsOutlined[FILL,GRAD,opsz,wght].codepoints` |
 | 5 | implement | `StateIcon` default size: contract names `TypeRole::SidebarLabel`, which does not exist | `TypeRole::SidebarName` (the sidebar tree's label role); the host passes `label_role.size()` anyway | agent | `crates/micold-client/src/ui/material/text.rs` |
+| 6 | implement | Showcase entry `variants` Running/Blocked/Idle (contract S6) | `posed` instead, `variants: &[]`: C4 requires `variants` to be a library (`ui/`) enum's, and `LocationState` is micold-core's; T014 checks `posed` | agent | `tests/showcase_completeness.rs` c4_no_variant_outlives_itself |
 | 3 | clarify | Unknown activity: Idle or no icon? | No icon, reserved empty slot, tooltip "State unknown" | agent | specs/010-daemon-session-persistence FR-016c; specs/488-codex-opencode-providers FR-009 |
 
 ## Review rounds
@@ -53,13 +54,13 @@ M1 holds 17 tasks (over the ~10 of milestones.md rule 3): it is Foundational + U
 
 ## Handover
 
-M1 unit 1 stopped at the 150k cap. Branch reset onto origin/main (a09e5237); not pushed, no PR.
+M1 unit 2 stopped at the 150k cap after implement. Not pushed, no PR. Base origin/main a09e5237.
 
-- **Done**: T001 (`Session::paused_on_user`, both constructors — no other `Session` literal exists), T002+T003 (`micold-core/src/location_state.rs`, 6 tests green; red was `todo!()` panics).
-- **Written, red, not yet green**: T004 (`tests/icons.rs`: pins, count 55, new no-shared-glyph test; `tests/icons_font.rs`: new three-distinct-glyphs test) and T006 (`ui/material/tree_view.rs` tests module, "Feature 905" block: 4 tests, path-based via `test_support::bounds_at`; line = `[0,1]` / tagged `[0,1,0]`, twisty 0, slot 1, label 2). `cargo check -p micold-client --tests` fails only on the missing `Icon::State*`, `StateIcon`, `TreeItem::state_icon` (the right red).
-- **Next**: T005 (add `StateRunning` e037, `StateBlocked` f052, `StateIdle` e034 to `Icon`/`ALL`), T007 (`state_icon.rs`, model on `unread_mark.rs`; `glyph::icon(..)`; `Copy` struct so `TreeItem` can store it and the host calls `.size(label_role.size())`), T008 (push slot after twisty in `tree_view.rs` ~line 381; `tag_indent` + `label_role.size() + icon_gap`), then T009–T017, then verify.md (gate is `scripts/gate.sh` in this cloud env; `mise`/`gh` absent).
-- **Fixtures for T009**: `tests/sidebar_attention.rs` (`state_with`, `catalog(..)` + `reconcile_catalog`), groups via `arrange_groups` + `RunGroup::new` in `tests/features_sidebar.rs` ~1380.
-- Build helper used: detached `scripts/build-lock.sh cargo …` with `CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0`.
+- **Done**: T001–T017 all ticked and green locally: `cargo test -p micold-client --lib` (637), `--test icons icons_font sidebar_state_icon showcase_completeness showcase_captions material_boundary` all ok; `cargo fmt --all` run. Core `location_state` tests green from unit 1.
+- **Not yet run**: `cargo test -p micold-core`, clippy, the full gate, any review.
+- **Next**: verify.md from step 1: scoped gate (`scripts/autopilot/scoped-gate.sh`) detached + review A (`code-review` high on `origin/main...HEAD`), then review B (conformance, sonnet) and the visual pass (showcase `StateIcon` entry; sidebar rows), then full gate `scripts/gate.sh` detached, then pr.md (cloud overrides: push, write PR title/body to scratchpad, orchestrator opens PR).
+- **Visible change**: yes (sidebar rows, showcase) → visual pass required.
+- Build helper: detached `scripts/build-lock.sh cargo …` with `CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0`. `$SCRATCHPAD` is unset in this env; use the session scratchpad path.
 
 ## Open escalation
 

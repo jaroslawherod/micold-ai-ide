@@ -11,8 +11,8 @@ use crate::features::worktree_form::Msg as FormMsg;
 use crate::icons::Icon;
 use crate::ui::material::{
     self, Accordion, ActivityBadge, Button, ButtonVariant, CheckMark, Divider, FilterTrigger,
-    HoverReveal, IconButton, PrMark, PullRequestIndicator, Scrollable, SplitAction, SurfaceKind,
-    Text, ToggleChip, Tooltip, TreeItem, TreeView, TypeRole,
+    HoverReveal, IconButton, PrMark, PullRequestIndicator, Scrollable, SplitAction, StateIcon,
+    SurfaceKind, Text, ToggleChip, Tooltip, TreeItem, TreeView, TypeRole,
 };
 use iced::widget::{column, container, row};
 use iced::{Alignment, Element, Length};
@@ -692,14 +692,22 @@ fn build_items(
         //
         // The indicator states its meaning in words on the tooltip's last line (feature 575,
         // FR-005); the row shows the mark and the number only.
+        //
+        // The state icon (feature 905, FR-001, FR-009): the worktree's state from all its
+        // sessions, in its slot after the twisty, and in words before the unread line.
+        let location_state = node.state();
         item = item
+            .state_icon(StateIcon::new(location_state, r))
             .unread_count(unread)
             .row_tooltip(crate::features::sidebar::with_unread_line(
-                crate::features::sidebar::worktree_tooltip(
-                    project_root,
-                    wt,
-                    &node.display_name,
-                    row_pr,
+                crate::features::sidebar::with_state_line(
+                    crate::features::sidebar::worktree_tooltip(
+                        project_root,
+                        wt,
+                        &node.display_name,
+                        row_pr,
+                    ),
+                    location_state,
                 ),
                 unread,
             ));
@@ -960,12 +968,18 @@ fn build_default_item(
         // Feature 482, V1: the Default row's menu, which is the worktree menu under the wire's
         // name for the project root (`""`).
         .on_right_press(|point| Message::Worktree(WorktreeMsg::MenuToggled(String::new(), point)))
+        // The project root's state icon (feature 905, FR-002), as on a worktree row.
+        .state_icon(StateIcon::new(node.state(), r))
         // The attention indicator (feature 575, FR-001), as on a worktree row.
         .unread_count(unread)
         // Location tooltip (FR-010): fixed, since the Default entry is always the project root,
-        // plus the indicator's words when it shows (feature 575, FR-005).
+        // plus the state's words (feature 905, FR-009) and the indicator's when it shows (feature
+        // 575, FR-005).
         .row_tooltip(crate::features::sidebar::with_unread_line(
-            crate::features::sidebar::DEFAULT_LOCATION_LABEL.to_string(),
+            crate::features::sidebar::with_state_line(
+                crate::features::sidebar::DEFAULT_LOCATION_LABEL.to_string(),
+                node.state(),
+            ),
             unread,
         ));
     if state.start_offered(&SessionLocation::Default) {

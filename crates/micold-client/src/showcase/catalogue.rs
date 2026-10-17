@@ -249,6 +249,24 @@ pub const COMPONENTS: &[Entry] = &[
         render: sections::atoms::unread_mark,
     },
     Entry {
+        module: "material/state_icon.rs",
+        component: "StateIcon",
+        variants: &[],
+        density: &[],
+        posed: &[
+            "Running",
+            "Blocked",
+            "Idle",
+            "Unknown",
+            "a worktree row with tags carrying it",
+        ],
+        live: &[],
+        interactive: false,
+        section: Section::Components,
+        layout: Layout::FullWidth,
+        render: sections::atoms::state_icon,
+    },
+    Entry {
         module: "material/pull_request_indicator.rs",
         component: "PullRequestIndicator",
         variants: &[

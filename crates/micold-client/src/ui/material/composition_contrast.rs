@@ -149,6 +149,44 @@ fn the_unread_mark_is_legible_on_every_fill_a_host_draws_it_on() {
     );
 }
 
+/// Feature 905 (FR-007, contract A6): each state icon's glyph is non-text, so it needs 3:1 against
+/// the sidebar row at rest, hovered and selected, in both schemes. The colour is the one the row
+/// draws, `state_icon::role`.
+#[test]
+fn every_state_icon_is_legible_on_every_fill_of_a_sidebar_row() {
+    use micold_core::location_state::{BlockedReason, LocationState};
+    let mut violations: Vec<String> = Vec::new();
+
+    for scheme in [ColorScheme::Light, ColorScheme::Dark] {
+        let r = tokens::roles(scheme);
+        for state in [
+            LocationState::Running,
+            LocationState::Blocked(BlockedReason::NeedsPermission),
+            LocationState::Idle,
+        ] {
+            let glyph = super::state_icon::role(state, &r).expect("a drawn state has a role");
+            for (host, fill) in [
+                ("the sidebar", style::to_rgb(style::sidebar_fill(r))),
+                ("a hovered sidebar row", hovered_sidebar_row(r)),
+                ("a selected row", r.secondary_container),
+            ] {
+                let ratio = contrast(glyph, fill);
+                if ratio < AA_NON_TEXT {
+                    violations.push(format!(
+                        "{scheme:?} / {state:?} on {host}: {ratio:.2}:1 (needs {AA_NON_TEXT})"
+                    ));
+                }
+            }
+        }
+    }
+
+    assert!(
+        violations.is_empty(),
+        "a state icon cannot be told from the row it is drawn on:\n  {}",
+        violations.join("\n  ")
+    );
+}
+
 /// The fill behind a hovered sidebar row: the sidebar's surface with the hover state layer of the
 /// row's content colour over it (feature 575, FR-013).
 fn hovered_sidebar_row(r: tokens::Roles) -> Rgb {
