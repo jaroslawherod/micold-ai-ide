@@ -73,3 +73,25 @@ before the implementation.
 - T015: `Cluster` port (`kube/mod.rs`: `ObjectKind`, `ApiFailure`, `Created`, `ObjectView`,
   `PodStatusView`, `EventView`, boxed futures) and `FakeCluster` (`kube/fake.rs`) with 3 self-tests;
   `cargo check -p micold-client -p micold-daemon --tests` green.
+
+### M1a, unit 1 (revision 2, 2026-10-17)
+
+Inner loop: `scripts/build-lock.sh cargo test -p micold-core --lib kube::` (single-module filter;
+the core baseline still fails only the four root-user tests named above).
+
+- U45–U48 (`kube/kubeconfig.rs`, tests from stash@{0}; stubs return empty values, not `todo!()`).
+  red: 6 failed, e.g. `kubeconfig_splits_on_the_platform_separator_keeping_order` `left: [] right:
+  ["/b/one", "/a/two", "/c/three"]`; `login_shell_output_yields_…` `left: Some("") right:
+  Some("/usr/bin:/opt/bin")`. green: `home_var`, `list_separator`, `candidates`, `search_path`
+  (first occurrence kept, `~/` = home), `parse_login_shell_output`; 6 passed. refactor:
+  `split_list` returns a `Vec` instead of a collected iterator.
+- U117 (`Quantity::{to_k8s, parse_k8s}`, tests from stash@{0}). red: 3 failed, `left: "" right:
+  "10Gi"`, `left: None right: Some(Quantity(10737418240))`. green: `BINARY_UNITS` /
+  `DECIMAL_UNITS` tables; 26 passed in `kube::`. The field-naming refusal of an unparseable
+  quantity belongs to the form (M4a); `parse_k8s` answers `None`. refactor: none needed.
+- U20 (access secret), U120 (`all_secrets(&allowed)`), `ObjectKind::noun`. red: 3 failed,
+  `left: "" right: "micold-build-box-8384f9ba-ssh-access"`, `left: [] right: [""]`, `left: ""
+  right: "pod"`. green: 29 passed in `kube::`. The stash's `all_secrets()` (every possible
+  secret) was replaced by the revision-2 signature. refactor: none needed.
+- U18, U19, U21: covered by revision 1's passing tests in `kube/names.rs` (red recorded in unit 2
+  of M1 above); marked DONE with the tests named, not re-run red.

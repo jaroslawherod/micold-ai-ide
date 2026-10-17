@@ -72,7 +72,7 @@ observable result needs a real pod (A3) is hosted only in the real suite.
 | U6  | Tolerations parse `key[=value]:Effect` and `key:Exists:Effect` for the three effects; any other effect is refused naming "tolerations" | FR-005, FR-018 | example | PENDING | |
 | U7  | A volume size of exactly 1 GiB is accepted and one below it refused; the default is 10 GiB | FR-005 | example | PENDING | |
 | U8  | Defaults: no image, no storage class, nothing allowed, volume 10 GiB | FR-004, FR-005, FR-008 | example | PENDING |  |
-| U117 | `Quantity::to_k8s` / `parse_k8s` round-trip `Mi`/`Gi` memory and millicore CPU; an unparseable quantity is refused naming the field | FR-005 | example | PENDING |  |
+| U117 | `Quantity::to_k8s` / `parse_k8s` round-trip `Mi`/`Gi` memory and millicore CPU; an unparseable quantity is refused naming the field | FR-005 | example | DONE | `core/kube/settings.rs` quantity_tests::{a_quantity_is_written_in_the_largest_exact_binary_unit, a_quantity_is_read_with_binary_decimal_or_no_suffix, writing_then_reading_is_the_same_quantity} |
 | U118 | `image` is `None` by default and a given reference is kept as is; a moving tag is flagged as `sandbox::image` flags it | FR-004 | example | PENDING |  |
 | U119 | `providers` defaults to every enabled AI CLI and may be empty | FR-004, US5.1 | example | PENDING |  |
 
@@ -99,11 +99,11 @@ observable result needs a real pod (A3) is hosted only in the real suite.
 
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U18 | The daemon key is the first 8 hex of the SHA-256 of context, namespace and name joined by NUL; equal triples give equal keys | FR-016, FR-023 | example | PENDING | |
-| U19 | The slug is DNS-1123 and 40 characters at most, for names at and over that length | FR-016 | example | PENDING | |
-| U20 | Resource names are `micold-<slug>-<key>` for the pod and its `-data`, `-ssh-access`, `-gitconfig`, `-git-credentials`, `-git-ssh`, `-signin-<cli>`, `-pull` siblings | FR-016, FR-024 | example | PENDING |  |
-| U21 | An object is ours only when both ownership labels match; one label alone is not ours | FR-016, Edge: pod created by someone else | example | PENDING | |
-| U120 | `all_secrets(&allowed)` lists the access secret first, then one name per allowed credential | FR-016, FR-024 | example | PENDING |  |
+| U18 | The daemon key is the first 8 hex of the SHA-256 of context, namespace and name joined by NUL; equal triples give equal keys | FR-016, FR-023 | example | DONE | `core/kube/names.rs` the_key_is_eight_hex_of_the_nul_joined_triple |
+| U19 | The slug is DNS-1123 and 40 characters at most, for names at and over that length | FR-016 | example | DONE | `core/kube/names.rs` the_slug_is_dns_1123_and_at_most_forty_characters |
+| U20 | Resource names are `micold-<slug>-<key>` for the pod and its `-data`, `-ssh-access`, `-gitconfig`, `-git-credentials`, `-git-ssh`, `-signin-<cli>`, `-pull` siblings | FR-016, FR-024 | example | DONE | `core/kube/names.rs` resource_names_share_the_base_and_differ_by_suffix, the_access_secret_is_the_base_with_ssh_access |
+| U21 | An object is ours only when both ownership labels match; one label alone is not ours | FR-016, Edge: pod created by someone else | example | DONE | `core/kube/names.rs` an_object_is_ours_only_when_both_labels_match |
+| U120 | `all_secrets(&allowed)` lists the access secret first, then one name per allowed credential | FR-016, FR-024 | example | DONE | `core/kube/names.rs` all_secrets_lists_the_access_secret_first_then_one_per_allowed_credential |
 
 ### `crates/micold-core/src/protocol/auth.rs` and `crates/micold-daemon/src/server.rs` (revision 2: removed)
 
@@ -154,10 +154,10 @@ observable result needs a real pod (A3) is hosted only in the real suite.
 
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U45 | `KUBECONFIG` splits on `;` on Windows and `:` on macOS and Linux, keeping order | FR-022 | example | PENDING | |
-| U46 | Without `KUBECONFIG` the candidate is `<home>/.kube/config`, home `%USERPROFILE%` on Windows and `$HOME` elsewhere | FR-022 | example | PENDING | |
-| U47 | The search path is process `PATH`, then the login shell's (not on Windows), then the fixed tool directories, first occurrence kept | FR-022, Edge: exec credential plugin | example | PENDING | |
-| U48 | Login-shell output yields the text between the markers, and nothing without them | FR-022 | example | PENDING | |
+| U45 | `KUBECONFIG` splits on `;` on Windows and `:` on macOS and Linux, keeping order | FR-022 | example | DONE | `core/kube/kubeconfig.rs` kubeconfig_splits_on_the_platform_separator_keeping_order |
+| U46 | Without `KUBECONFIG` the candidate is `<home>/.kube/config`, home `%USERPROFILE%` on Windows and `$HOME` elsewhere | FR-022 | example | DONE | `core/kube/kubeconfig.rs` without_kubeconfig_the_candidate_is_the_home_config |
+| U47 | The search path is process `PATH`, then the login shell's (not on Windows), then the fixed tool directories, first occurrence kept | FR-022, Edge: exec credential plugin | example | DONE | `core/kube/kubeconfig.rs` the_search_path_is_process_then_login_shell_then_tool_dirs_first_kept, windows_ignores_the_login_shell_path, no_path_at_all_leaves_the_tool_dirs |
+| U48 | Login-shell output yields the text between the markers, and nothing without them | FR-022 | example | DONE | `core/kube/kubeconfig.rs` login_shell_output_yields_the_text_between_the_markers |
 
 ### `crates/micold-core/src/kube/start.rs`
 

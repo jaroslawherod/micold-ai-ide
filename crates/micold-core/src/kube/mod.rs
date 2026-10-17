@@ -5,6 +5,7 @@ pub mod classify;
 pub mod credentials;
 #[cfg(any(test, feature = "kube-fake"))]
 pub mod fake;
+pub mod kubeconfig;
 pub mod names;
 pub mod settings;
 pub mod start;
@@ -34,6 +35,15 @@ impl ObjectKind {
             ObjectKind::Pod => "Pod",
             ObjectKind::PersistentVolumeClaim => "PersistentVolumeClaim",
             ObjectKind::Secret => "Secret",
+        }
+    }
+
+    /// The kind as a sentence names it (`a pod named …`).
+    pub fn noun(self) -> &'static str {
+        match self {
+            ObjectKind::Pod => "pod",
+            ObjectKind::PersistentVolumeClaim => "volume claim",
+            ObjectKind::Secret => "secret",
         }
     }
 }
@@ -159,4 +169,16 @@ pub trait Cluster: Send + Sync {
     ) -> ClusterFuture<'_, Box<dyn AsyncReadWrite>>;
     /// The last `tail` lines of the pod's log.
     fn logs(&self, namespace: &str, pod: &str, tail: u32) -> ClusterFuture<'_, String>;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_kind_reads_as_a_lowercase_noun() {
+        assert_eq!(ObjectKind::Pod.noun(), "pod");
+        assert_eq!(ObjectKind::PersistentVolumeClaim.noun(), "volume claim");
+        assert_eq!(ObjectKind::Secret.noun(), "secret");
+    }
 }
