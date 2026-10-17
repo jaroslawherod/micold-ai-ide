@@ -6,7 +6,7 @@
 
 ```text
 StateIcon::new(state: LocationState, roles: Roles)   // required inputs
-    .size(px: f32)                                   // default TypeRole::SidebarLabel's size
+    .size(px: f32)                                   // default TypeRole::SidebarName's size
 impl From<StateIcon> for Element<'_, M>
 ```
 

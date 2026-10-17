@@ -962,6 +962,7 @@ fn build_default_item(
         r,
     );
 
+    let location_state = node.state();
     let mut item = TreeItem::new(0, node.display_name.to_string(), r.on_surface)
         // Distinct icon (FR-006): never the git/branch iconography used for worktree rows.
         .with_icon(Icon::ProjectRoot)
@@ -969,7 +970,7 @@ fn build_default_item(
         // name for the project root (`""`).
         .on_right_press(|point| Message::Worktree(WorktreeMsg::MenuToggled(String::new(), point)))
         // The project root's state icon (feature 905, FR-002), as on a worktree row.
-        .state_icon(StateIcon::new(node.state(), r))
+        .state_icon(StateIcon::new(location_state, r))
         // The attention indicator (feature 575, FR-001), as on a worktree row.
         .unread_count(unread)
         // Location tooltip (FR-010): fixed, since the Default entry is always the project root,
@@ -978,7 +979,7 @@ fn build_default_item(
         .row_tooltip(crate::features::sidebar::with_unread_line(
             crate::features::sidebar::with_state_line(
                 crate::features::sidebar::DEFAULT_LOCATION_LABEL.to_string(),
-                node.state(),
+                location_state,
             ),
             unread,
         ));

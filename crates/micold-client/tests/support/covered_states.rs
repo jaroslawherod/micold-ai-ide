@@ -548,11 +548,14 @@ pub fn covered_states() -> &'static [CoveredState] {
                     // and `…/2/1` the content, so every path below the row gains a `1`. The gate
                     // named this anchor rather than letting it drift onto a neighbouring node,
                     // which is the whole reason anchors are named (019 FR-004).
-                    path: &[0, 0, 1, 0, 0, 0, 2, 0, 0, 2, 1, 0, 1],
+                    // Re-pointed under feature 905 (T008): the row gained its state-icon slot after
+                    // the twisty, so the label moved from `…/0/1` to `…/0/2` and the action
+                    // cluster from `…/0/2` to `…/0/3`.
+                    path: &[0, 0, 1, 0, 0, 0, 2, 0, 0, 2, 1, 0, 2],
                 },
                 Anchor {
                     name: "sidebar.row.delete_button",
-                    path: &[0, 0, 1, 0, 0, 0, 2, 0, 0, 2, 1, 0, 2, 1],
+                    path: &[0, 0, 1, 0, 0, 0, 2, 0, 0, 2, 1, 0, 3, 1],
                 },
                 // `Toolbar`'s leading `text(title)` (`material/toolbar.rs:46`). Named on both shell
                 // states rather than on all eleven: the toolbar is behind every dialog too, and an
