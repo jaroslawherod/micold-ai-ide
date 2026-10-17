@@ -90,7 +90,7 @@ impl<'a, M: Clone + 'a> From<CardGrid<'a, M>> for Element<'a, M> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ui::material::test_support::{laid_out, roles};
+    use crate::ui::material::test_support::{laid_out, leaves, roles};
     use iced::{Rectangle, Size};
     use micold_core::overview::{CardModel, CardReason, CardState, LocationType};
     use micold_core::session::SessionLocation;
@@ -120,21 +120,6 @@ mod tests {
             .min_width(280.0)
             .spacing(16.0)
             .into()
-    }
-
-    fn leaves(node: &iced::advanced::layout::Node) -> Vec<Rectangle> {
-        fn walk(n: &iced::advanced::layout::Node, at: iced::Vector, out: &mut Vec<Rectangle>) {
-            let b = n.bounds() + at;
-            if n.children().is_empty() {
-                out.push(b);
-            }
-            for c in n.children() {
-                walk(c, iced::Vector::new(b.x, b.y), out);
-            }
-        }
-        let mut out = Vec::new();
-        walk(node, iced::Vector::ZERO, &mut out);
-        out
     }
 
     /// The card-sized boxes (full card height) of a laid-out grid, left to right, top to bottom.

@@ -6,7 +6,7 @@
 use crate::app::{Message, State};
 use crate::features::sidebar::{RunRow, SidebarEntry, WorktreeNode};
 use crate::ui::material::{CardGrid, OverviewCard};
-use iced::widget::{container, scrollable};
+use iced::widget::container;
 use iced::{Element, Length};
 use micold_core::location_state::location_state;
 use micold_core::overview::{
@@ -24,14 +24,12 @@ pub fn view<'a>(state: &State, scheme: ColorScheme) -> Element<'a, Message> {
         .iter()
         .map(|model| OverviewCard::new(model, r))
         .collect();
-    scrollable(
-        container(CardGrid::new(cards, r))
-            .padding(spacing::LG)
-            .width(Length::Fill),
-    )
-    .width(Length::Fill)
-    .height(Length::Fill)
-    .into()
+    // The grid scrolls itself; an outer scrollable would give it unbounded height.
+    container(CardGrid::new(cards, r))
+        .padding(spacing::LG)
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .into()
 }
 
 /// The cards for the active project: one per sidebar entry (a group contributes its runs'
@@ -125,5 +123,62 @@ fn pr_signal(pr: &crate::features::pr_status::State, branch: Option<&str>) -> Pr
             removable: pr.removable.contains(branch),
         },
         _ => PrSignal::Unknown,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ui::material::test_support::laid_out;
+    use iced::Size;
+
+    /// U1: the Overview outranks Changes and Compare in the crossfade key, and Settings outranks it.
+    #[test]
+    fn the_overview_key_sits_between_settings_and_changes() {
+        let mut state = State::default();
+        state.overview.open = true;
+        assert_eq!(crate::ui::main_content_key(&state), u64::MAX - 3);
+        state.settings.settings_draft = Some(Default::default());
+        assert_eq!(
+            crate::ui::main_content_key(&state),
+            u64::MAX,
+            "Settings first"
+        );
+        state.settings.settings_draft = None;
+        state.overview.open = false;
+        assert_ne!(crate::ui::main_content_key(&state), u64::MAX - 3);
+    }
+
+    /// F1: thirty cards in a short window lay out inside it; the grid scrolls, not the page.
+    #[test]
+    fn thirty_cards_lay_out_bounded_in_a_short_window() {
+        let r = crate::ui::material::test_support::roles();
+        let models: Vec<CardModel> = (0..30)
+            .map(|i| CardModel {
+                location: SessionLocation::Worktree(format!("w{i}")),
+                display_name: format!("feat-{i}"),
+                branch: None,
+                kind: LocationType::Feature,
+                sessions: (1, 0),
+                state: micold_core::overview::CardState::Idle,
+                reason: micold_core::overview::CardReason::Idle,
+                summary: "s".into(),
+            })
+            .collect();
+        let element: Element<'_, ()> = container(CardGrid::new(
+            models.iter().map(|m| OverviewCard::new(m, r)).collect(),
+            r,
+        ))
+        .padding(spacing::LG)
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .into();
+        let room = Size::new(900.0, 300.0);
+        let node = laid_out(element, room);
+        assert!(
+            node.size().height <= room.height + 0.01,
+            "grew to {:?} in {room:?}",
+            node.size()
+        );
     }
 }

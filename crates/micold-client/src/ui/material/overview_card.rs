@@ -182,6 +182,7 @@ impl<'a, M: 'a> From<OverviewCard<'a, M>> for Element<'a, M> {
 
 #[cfg(test)]
 mod tests {
+    use super::super::test_support::{leaves, overlap};
     use super::*;
     use iced::{Rectangle, Size};
     use micold_core::overview::CardReason;
@@ -204,28 +205,6 @@ mod tests {
 
     fn card(model: &CardModel) -> Element<'static, ()> {
         OverviewCard::<()>::new(model, tokens::roles(ColorScheme::Light)).into()
-    }
-
-    fn leaves(node: &iced::advanced::layout::Node) -> Vec<Rectangle> {
-        fn walk(n: &iced::advanced::layout::Node, at: iced::Vector, out: &mut Vec<Rectangle>) {
-            let b = n.bounds() + at;
-            if n.children().is_empty() {
-                out.push(b);
-            }
-            for c in n.children() {
-                walk(c, iced::Vector::new(b.x, b.y), out);
-            }
-        }
-        let mut out = Vec::new();
-        walk(node, iced::Vector::ZERO, &mut out);
-        out
-    }
-
-    fn overlap(a: &Rectangle, b: &Rectangle) -> bool {
-        a.x < b.x + b.width - 0.01
-            && b.x < a.x + a.width - 0.01
-            && a.y < b.y + b.height - 0.01
-            && b.y < a.y + a.height - 0.01
     }
 
     /// U4: the card is one height whatever its state.

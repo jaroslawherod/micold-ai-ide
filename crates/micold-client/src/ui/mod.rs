@@ -1225,21 +1225,3 @@ pub fn focus_move_message(event: iced::keyboard::Event) -> Option<Message> {
         _ => None,
     }
 }
-
-#[cfg(test)]
-mod overview_placement_tests {
-    use super::*;
-
-    /// U1: the Overview outranks Changes and Compare in the crossfade key, and Settings outranks it.
-    #[test]
-    fn the_overview_key_sits_between_settings_and_changes() {
-        let mut state = State::default();
-        state.overview.open = true;
-        assert_eq!(main_content_key(&state), u64::MAX - 3);
-        state.settings.settings_draft = Some(Default::default());
-        assert_eq!(main_content_key(&state), u64::MAX, "Settings first");
-        state.settings.settings_draft = None;
-        state.overview.open = false;
-        assert_ne!(main_content_key(&state), u64::MAX - 3);
-    }
-}

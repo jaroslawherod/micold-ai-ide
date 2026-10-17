@@ -931,6 +931,10 @@ impl State {
                 drain(outcomes, |outcome| interpret(self, outcome));
             }
             Message::Session(msg) => {
+                // Feature 813 (FR-023): a started session is shown, so the Overview gives way.
+                if matches!(msg, crate::features::session::Msg::Started(_)) {
+                    self.overview.open = false;
+                }
                 let outcomes = crate::features::session::update(self, msg);
                 drain(outcomes, |outcome| interpret(self, outcome));
             }
@@ -1131,6 +1135,8 @@ pub fn interpret(
             );
         }
         Outcome::ChangesRequested(entry) => {
+            // Feature 813 (FR-023): the Changes view takes the main area from the Overview.
+            state.overview.open = false;
             crate::features::worktree::close_menu(state);
             let effect = crate::features::changes::update(
                 &mut state.changes,
@@ -1142,6 +1148,8 @@ pub fn interpret(
             state.changes.pending = Some(effect);
         }
         Outcome::ChangesClosedForCompare => {
+            // Feature 813 (FR-023): Compare takes the main area from the Overview too.
+            state.overview.open = false;
             let _ = crate::features::changes::update(
                 &mut state.changes,
                 crate::features::changes::Msg::SessionSelected,

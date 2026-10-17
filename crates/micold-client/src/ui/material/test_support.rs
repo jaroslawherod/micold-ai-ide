@@ -126,6 +126,30 @@ pub fn all_bounds(node: &layout::Node) -> Vec<Rectangle> {
     all
 }
 
+/// Every childless node of `node` (the pieces actually drawn), as bounds in the root's coordinates.
+pub fn leaves(node: &layout::Node) -> Vec<Rectangle> {
+    fn walk(n: &layout::Node, at: Vector, out: &mut Vec<Rectangle>) {
+        let b = n.bounds() + at;
+        if n.children().is_empty() {
+            out.push(b);
+        }
+        for c in n.children() {
+            walk(c, Vector::new(b.x, b.y), out);
+        }
+    }
+    let mut out = Vec::new();
+    walk(node, Vector::ZERO, &mut out);
+    out
+}
+
+/// Whether `a` and `b` share more than a hairline of area.
+pub fn overlap(a: &Rectangle, b: &Rectangle) -> bool {
+    a.x < b.x + b.width - 0.01
+        && b.x < a.x + a.width - 0.01
+        && a.y < b.y + b.height - 0.01
+        && b.y < a.y + a.height - 0.01
+}
+
 /// Whether `host`, laid out in `room`, holds a box of `part`'s own size (`part` laid out alone in
 /// the same room) wholly inside the host's own box.
 ///
