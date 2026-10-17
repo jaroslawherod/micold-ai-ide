@@ -133,7 +133,7 @@ impl FailureCause {
 /// `15 minutes`, `120 seconds`: whole minutes when it is a whole number of them.
 fn bound_text(bound: Duration) -> String {
     let secs = bound.as_secs();
-    if secs >= 60 && secs % 60 == 0 {
+    if secs >= 60 && secs.is_multiple_of(60) {
         let minutes = secs / 60;
         format!("{minutes} minute{}", if minutes == 1 { "" } else { "s" })
     } else {
