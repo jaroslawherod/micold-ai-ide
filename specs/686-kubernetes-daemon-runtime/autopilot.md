@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-xelisc
 - **Started**: 2026-10-17
 - **Phase**: implement M1a
-- **Next step**: M1a implement — T019/T025 manifests, T020/T026 kubeconfig, T021/T027 start, T079/T081 lifecycle
+- **Next step**: design revision (decisions 8, 9) before more implementation; then M1a T019 onward
 
 ## Pull requests
 
@@ -40,11 +40,13 @@ Cut notes: US1 (>10 tasks) split along its acceptance scenarios and the plan's s
 |---|---|---|---|---|---|
 | 1 | clarify | FR-004 default image source | #806 build, pushed to a user-named registry; pull stays an option | orchestrator default, pending owner | decision card 2026-10-17 |
 | 2 | clarify | FR-004 provider CLIs in the pod | installed at build time | orchestrator default, pending owner | decision card 2026-10-17 |
-| 3 | clarify | FR-007 clone source | project git remote with allowed credential; no-remote refused | orchestrator default, pending owner | decision card 2026-10-17 |
+| 3 | clarify | FR-007 clone source | project git remote with allowed credential; no-remote refused | owner (decision card 2026-10-17T21:33Z): "Git remote" | decision card 2026-10-17 |
 | 4 | clarify | private registry pull; push auth | pull secret on FR-008 allow-list; push via local runtime login | agent | spec.md FR-008, FR-002 |
 | 5 | clarify | image tag/rebuild; CI image loading | deferred to plan | agent | spec.md FR-017, FR-021 |
 | 6 | implement M1 | U16: does `RegistryError::DuplicateName` name the first daemon? | keep the variant field-less; the form text "Another daemon is already named <name>." names it (names match case-insensitively) | unit, from evidence | `features/daemons.rs` form_error; `core/tests/daemons_kube.rs` |
 | 7 | implement M1 | M1 too large for one milestone: split? | split M1a (T001–T021, T025–T027, T079, T081; core over FakeCluster, Kubernetes not in the Add form) / M1b (T022–T024, T028–T033, T080, T082, T099; depends on M1a); later milestones depend on M1b | orchestrator | Open escalation of unit 3; tasks.md Milestones |
+| 8 | implement M1a | FR-004 provider CLIs in the pod | owner: "Install on start" — installed into the volume when the pod starts; works with pulled images; slower first start; pod needs outbound network. Replaces decision 2. Owner decision, design change pending: spec FR-004 / plan / tasks to be revised by a dedicated unit after M1a merges, before M2 | owner | decision card 2026-10-17T21:33Z |
+| 9 | implement M1a | FR-004 image source | owner (verbatim): "use basic image with ssh where you can copy daemon and install ai cli" — replaces decision 1: no build/push/registry; the pod runs a basic image with sshd, the client copies the daemon binary in over SSH and installs the AI CLIs (with decision 8). Changes the start sequence (no `Image` phase; a copy/install step) and likely the manifests. Design revision pending before more implementation | owner | owner instruction 2026-10-17T21:34Z |
 
 ## Review rounds
 
@@ -68,7 +70,24 @@ Cut notes: US1 (>10 tasks) split along its acceptance scenarios and the plan's s
 
 ## Handover
 
-None.
+**Design revision pending before more implementation** (decisions 8 and 9: provider CLIs installed
+on start; basic image with sshd, daemon binary copied in over SSH — replaces FR-004's build/push and
+likely changes the start sequence and the manifests). Do not resume M1a until spec FR-004, plan and
+tasks are revised.
+
+Branch: local commits only, NOT pushed (no green full gate in this container yet): 51769aab,
+c9f9eb9f, 6b14932c (M1 units 1–3, rebased onto origin/main 70f58726) and 7b22b4d2 (M1a/M1b split),
+plus this commit. Backup bundle /mnt/project-files/backups/686-m1-wip.bundle (branch + refs/stash).
+Done: T001–T018 (green). M1 split into M1a/M1b (decision 7, tasks.md Milestones).
+Uncommitted red WIP, kept off the branch (git stash@{0} "686 M1a red WIP", also
+/mnt/project-files/backups/686-m1a-wip-red.patch): tests + `todo!()` stubs for T019 (manifest.rs),
+T020 (kubeconfig.rs), T021 (start.rs + start_tests.rs), T079 (lifecycle.rs), plus `Quantity::to_k8s`
+/`parse_k8s`, `ResourceNames::daemon_name`/`all_secrets`, `ObjectKind::noun`,
+`KubeFailure::StopTimeout` and `From<ApiFailure>`, `FakeCluster::hold_on_delete`, tokio `test-util`
+dev-dep in core. Never compiled or run; no red evidence recorded. Kubeconfig (T020/T026) and
+lifecycle (T079/T081) likely survive the redesign; manifest and start sequence need re-checking
+against it. After the revision: re-cut M1a if needed, apply the stash, run red, implement T025–T027,
+T081, verify, reviews A/B, gate (`scripts/gate.sh`), PR files.
 
 ## Open escalation
 
