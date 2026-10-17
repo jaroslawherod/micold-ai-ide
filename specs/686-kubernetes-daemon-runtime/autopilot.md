@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-xelisc
 - **Started**: 2026-10-17
 - **Phase**: implement M1
-- **Next step**: M1 implement — continue the handover (unit 3): daemon-side listener_auth, client arms, then T010 onward
+- **Next step**: M1 implement — decide the M1a/M1b split (Open escalation), then T019 onward
 
 ## Pull requests
 
@@ -66,22 +66,29 @@ Cut notes: US1 (>10 tasks) split along its acceptance scenarios and the plan's s
 
 ## Handover
 
-Unit 2 of M1 (context cap). Done, committed locally as the commit on top of 52d8a1ab (NOT pushed: the gate hook refuses a push before a green full gate, and micold-client does not compile until its `DaemonRuntime::Kubernetes` arms land): cycle 1 green (T004 T005 T007 T009 T011 T012 T014
-T018), mutant check of the four stub-passing tests (all killed), cycle 2 U13–U16 green (T006 T013:
-`DaemonRuntime::Kubernetes` serde/label/startable/registry check, `KubeSettings::endpoint`,
-`Placement::from_runtime` → None for Kubernetes; test `core/tests/daemons_kube.rs`). See
-tdd/cycle-log.md. `listener_auth` is implemented and green (T016 core half) but T008/T016 stay open
-until `daemon/server.rs` `adopt_auth_token` uses it with its fatal test (U22).
-Next: T008/T016 daemon side; client match arms for `DaemonRuntime::Kubernetes`
-(`features/daemons.rs` endpoint via `KubeSettings::endpoint`, ~L306/486/510, `daemon.rs` L212/223,
-`settings.rs` sync_legacy is `_ =>` already) — `cargo check -p micold-client` first; then T010/T017,
-T015, T019–T033, T079–T082, T099. Core suite: run with `--no-fail-fast`; 4 root-user reds are
-pre-existing (cycle log baseline). Build env: CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=0
-CARGO_PROFILE_TEST_DEBUG=0; builds detached + hold.sh.
+Unit 3 of M1. Local commits only (52d8a1ab, 0a49b43a, and unit 3's on top), NOT pushed: the gate
+hook needs a green full gate, and the core suite has 4 pre-existing root-user reds in this container
+(cycle-log baseline), so the full gate cannot go green here. Backup bundle:
+/mnt/project-files/backups/686-m1-wip.bundle (refreshed by unit 3).
+Done (18 of 38 ticked): T001–T018 — core types, `listener_auth` wired into `daemon/server.rs`
+(`token_auth_path`), `Transport::Tunnel`, `Cluster` port + `FakeCluster`; micold-client compiles
+unchanged (its matches already had `_` arms).
+Next: T019/T025 manifests, T020/T026 kubeconfig, T021/T027 start sequence, T079/T081 lifecycle,
+then the client half (T022–T024, T028–T033, T080, T082, T099). See *Open escalation* for the split.
 
 ## Open escalation
 
-None. Clarify round 1 questions are with the owner as decision cards (2026-10-17); the spec uses the recommended defaults meanwhile, marked "pending owner answer" in its Clarifications.
+M1 does not fit one milestone: 3 units so far, the diff is ~3,300 lines with 20 of 38 tasks still
+open (milestones.md rule 3: ~10 tasks / ~800 lines). Proposed re-cut (Recommended), along US1's
+core/client seam, Kubernetes kept unreachable from the form until M1b (rule 6):
+- **M1a** T001–T021, T025–T027, T079, T081 — core runtime: settings, names, failures, listener auth,
+  tunnel transport, `Cluster` port + `FakeCluster`, manifests, kubeconfig discovery, start sequence
+  with rollback and per-phase bounds, Stop/Remove/forget sequences, all over `FakeCluster`.
+  Verify: `mise run test-core`; `cargo test -p micold-daemon server::`. One more unit.
+- **M1b** T022–T024, T028–T033, T080, T082, T099 — `LiveCluster`, `Dial::Kube`, the Add form,
+  confirmations and the user guide. Verify: M1's client commands.
+Alternative: keep M1 whole and continue with units 4+ (each ~150k), one PR of ~6k lines.
+Clarify round 1 questions remain with the owner as decision cards (spec uses recommended defaults).
 
 ## Follow-ups not done
 
