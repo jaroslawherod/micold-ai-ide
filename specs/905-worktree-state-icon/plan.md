@@ -70,8 +70,8 @@ New `crates/micold-core/src/location_state.rs` (registered in `lib.rs`): `Locati
 
 - `crates/micold-core/src/attention.rs`: `TurnClock::paused_on_user()`.
 - `crates/micold-core/src/protocol/messages.rs`: `SessionSummary::paused_on_user`
-  (`serde(default)`); struct literals updated (`catalog.rs` `session_summary` sets `false`;
-  test fixtures). `version.rs`: 47 → 48.
+  (`serde(default)`); every `SessionSummary { .. }` literal sets `false` (`catalog.rs`
+  `session_summary`, `attention.rs`, `catalog_sync.rs`, `shell/daemon_sync.rs`, test fixtures). `version.rs`: 47 → 48.
 - `crates/micold-core/src/session.rs`: `Session::paused_on_user`, `false` in every constructor.
 - `crates/micold-daemon/src/state.rs`: `overlay_live_summaries` sets it from `live.turn`;
   `note_activity` returns `changed || paused_changed` ([wire.md](./contracts/wire.md) W3).
