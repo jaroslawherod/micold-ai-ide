@@ -7,6 +7,7 @@
 
 use micold_core::task_progress::FileProgress;
 use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
 
 /// What the Overview knows of a ticket's issue title (research R8).
 #[derive(Clone, Default, PartialEq, Eq)]
@@ -59,6 +60,8 @@ pub enum Msg {
     CardActivated(micold_core::overview::Activation),
     /// A worktree's files were read (research R9).
     ProgressRead {
+        /// The project the read was started in; dropped when it is no longer the active one.
+        project: PathBuf,
         /// The worktree's directory name.
         dir: String,
         /// What its files say.
@@ -68,6 +71,8 @@ pub enum Msg {
     TitlesRequested(Vec<u64>),
     /// A ticket's title was read: [`TitleLookup::Known`] or [`TitleLookup::Unavailable`].
     TitleRead {
+        /// The project the read was started in; dropped when it is no longer the active one.
+        project: PathBuf,
         /// The issue number.
         number: u64,
         /// The answer.
@@ -75,6 +80,18 @@ pub enum Msg {
     },
     /// The window moved to another project: what was read describes the old one.
     ProjectSwitched,
+}
+
+impl Msg {
+    /// The project a read was started in, for the messages that carry one. Issue numbers and
+    /// directory names collide across repositories, so the root drops a read whose project is no
+    /// longer the active one.
+    pub fn read_project(&self) -> Option<&Path> {
+        match self {
+            Self::ProgressRead { project, .. } | Self::TitleRead { project, .. } => Some(project),
+            _ => None,
+        }
+    }
 }
 
 /// Apply a message to the Overview's state.
@@ -86,7 +103,7 @@ pub fn update(state: &mut State, msg: Msg) -> Vec<crate::features::Outcome> {
         return vec![crate::features::Outcome::LocationRevealed(at.clone())];
     }
     match msg {
-        Msg::ProgressRead { dir, progress } => {
+        Msg::ProgressRead { dir, progress, .. } => {
             state.progress.insert(dir, progress);
         }
         Msg::TitlesRequested(numbers) => {
@@ -94,7 +111,7 @@ pub fn update(state: &mut State, msg: Msg) -> Vec<crate::features::Outcome> {
                 state.titles.entry(number).or_default();
             }
         }
-        Msg::TitleRead { number, result } => {
+        Msg::TitleRead { number, result, .. } => {
             state.titles.insert(number, result);
         }
         Msg::ProjectSwitched => {

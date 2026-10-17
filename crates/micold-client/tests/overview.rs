@@ -859,14 +859,44 @@ fn files(
 }
 
 fn progress_read(state: &mut State, dir: &str, progress: FileProgress) {
+    let project = state.workspace.active.clone().unwrap();
     state.update(Message::Overview(Msg::ProgressRead {
+        project,
         dir: dir.into(),
         progress,
     }));
 }
 
 fn title_read(state: &mut State, number: u64, result: TitleLookup) {
-    state.update(Message::Overview(Msg::TitleRead { number, result }));
+    let project = state.workspace.active.clone().unwrap();
+    state.update(Message::Overview(Msg::TitleRead {
+        project,
+        number,
+        result,
+    }));
+}
+
+/// A read started in a project the window has left is dropped: issue numbers and directory names
+/// collide across repositories, so it must not land in the new project's Overview.
+#[test]
+fn a_read_for_a_project_no_longer_active_is_dropped() {
+    let mut state = ticketed();
+    let old = state.workspace.active.clone().unwrap();
+    let new = PathBuf::from("/elsewhere/other");
+    state.update(Message::Overview(Msg::ProjectSwitched));
+    state.workspace.active = Some(new);
+    state.update(Message::Overview(Msg::TitleRead {
+        project: old.clone(),
+        number: 813,
+        result: TitleLookup::Known("Old repo".into()),
+    }));
+    state.update(Message::Overview(Msg::ProgressRead {
+        project: old,
+        dir: "feat-813_worktree-overview".into(),
+        progress: files(None, Some(Phase::Plan), None),
+    }));
+    assert!(state.overview.titles.is_empty());
+    assert!(state.overview.progress.is_empty());
 }
 
 /// US4.2, FR-017: a reading is kept per worktree; a project switch forgets readings and titles.
@@ -939,6 +969,7 @@ fn a_title_does_not_show_in_a_debug_dump() {
     let known = TitleLookup::Known("Secret title".into());
     assert!(!format!("{known:?}").contains("Secret"));
     let msg = Msg::TitleRead {
+        project: PathBuf::from("/p"),
         number: 1,
         result: known,
     };
