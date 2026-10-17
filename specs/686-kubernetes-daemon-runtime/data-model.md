@@ -21,7 +21,7 @@ Stored as `{"kind":"kubernetes", ...}` by the existing hand-written `DaemonRunti
 | `image` | `DaemonImageSource` (below) | — |
 | `registry` | `Option<RegistryRepo>` | required when `image` is `Build` (FR-004); `host[:port]/path`, no tag, no digest |
 | `arch` | `NodeArch` (`Amd64` default, `Arm64`) | build choice only |
-| `budget` | `sandbox::ResourceBudget` (existing; #806's resources) | requests = limits from the budget; `pids` and `storage_bytes` ignored for Kubernetes and hidden in its form |
+| `resources` | `DaemonResources` (below; shared with #806) | each of the four set or unset on its own; a request above its limit refused naming the request field |
 | `node_selector` | `BTreeMap<LabelKey, LabelValue>` | Kubernetes label syntax |
 | `tolerations` | `Vec<Toleration>` | `key[=value]:Effect` or `key:Exists:Effect`; `Effect` ∈ NoSchedule, PreferNoSchedule, NoExecute |
 | `volume_size` | `Quantity` (bytes) | ≥ 1 GiB, default 10 GiB (Assumptions); a smaller value than an existing claim is refused at start naming the claim |
@@ -46,17 +46,33 @@ the credential.
 | `Build` (default) | `dockerfile: Option<PathBuf>`, `providers: BTreeSet<AiCli>` | `None` = the app's template; providers default to the CLIs the Settings provider list enables |
 | `Pull` | `reference: ImageRef` (existing `sandbox::image::ImageRef`) | used as given; a moving tag is allowed but flagged as for the sandbox (FR-024b) |
 
+### `DaemonResources` — new, shared with #806 (`micold-core/src/daemon_image/mod.rs`)
+
+| Field | Type | Default | Kubernetes mapping (FR-005) |
+|---|---|---|---|
+| `cpu_request` | `Option<MilliCpus>` | `None` | `resources.requests.cpu` (`<n>m`), omitted when `None` |
+| `cpu_limit` | `Option<MilliCpus>` | `sandbox::DEFAULT_MILLI_CPUS` | `resources.limits.cpu`, omitted when `None` |
+| `memory_request` | `Option<Bytes>` | `None` | `resources.requests.memory` (bytes), omitted when `None` |
+| `memory_limit` | `Option<Bytes>` | sandbox's default memory | `resources.limits.memory`, omitted when `None` |
+
+`MilliCpus` and `Bytes` are the existing `sandbox` newtypes. `sandbox::ResourceBudget` is not used:
+it holds one ceiling per resource, so a request could not be set on its own. A container daemon
+maps `cpu_limit`/`memory_limit` to its `ResourceBudget` ceilings when #806 adopts this type
+(requests have no container meaning and are hidden there).
+
 ## Derived (pure, not persisted)
 
 ### `DaemonKey` and `ResourceNames` — new (`kube/names.rs`)
 
-`DaemonKey::of(context, namespace, name)` = 8 hex of SHA-256 over the three, NUL-separated.
+`DaemonKey::of(context, namespace, name)` = first 8 of `protocol::hashing::sha256_hex` over the
+three, NUL-separated.
 `ResourceNames { pod, pvc, secret(KubeCredential), pull_secret }` from `slug(name)` + key (K5).
 `Ownership { managed_by, daemon_key }` labels; `is_ours(labels) -> bool`.
 
 ### `ImageInputs` and `ImageTag` — new (`daemon_image/tag.rs`)
 
-`ImageInputs { daemon_sha256, containerfile_sha256, providers, arch }` →
+`ImageInputs { daemon_sha256, containerfile_sha256, providers, arch }` (each digest from
+`protocol::hashing::sha256_hex`; the 12 hex are its first 12 over the encoded inputs) →
 `ImageTag(<registry>/micold-daemon:<version>-<12 hex>)`. `PushedImage { tag, digest }` →
 `pod_image() = <registry>/micold-daemon@<digest>`.
 

@@ -11,7 +11,7 @@ client talks to the cluster with the `kube` crate (client crate only) behind a c
 adopts a bare, locked-down pod plus a PVC and only the allowed secrets, all named from
 (context, namespace, daemon name) and labelled as ours, and reaches the daemon through the API's
 port-forward as an in-process stream — no Service, no listener on either side. The daemon in the pod
-listens on the pod's loopback without a token (only `pods/portforward` holders can reach it). Start
+listens on the pod's loopback without a token (reachable only by holders of `create pods/portforward` in the namespace or by processes already in the pod, K4). Start
 is a phase sequence with per-phase bounds and classified failures, rolled back on failure. The 489
 reconnect actor is reused; a pod found gone stops the daemon with its reason. The default image is
 built locally from the client's own Linux daemon plus the selected CLIs, tagged by version and an
@@ -35,11 +35,11 @@ different answer replaces those and leaves the pod, tunnel, lifecycle and CI des
 for the Settings form.
 
 **Primary Dependencies**: new, `micold-client` only: `kube` 4.2 (`client`, `config`, `rustls-tls`,
-`ring`, `ws`) and `k8s-openapi` 0.28 (`v1_32`), both Apache-2.0 (vetting in research K0). `sha2` 0.10
-(RustCrypto, MIT/Apache-2.0, not yet in `Cargo.lock`) in `micold-core` for the image-inputs hash and
-daemon key. Existing:
-`tokio`, `serde_json`, `sandbox::cli::ContainerCli` (docker/podman), 489's `ssh::provision`
-artefact rule, `ssh::remote_path`, `ssh::reconnect::Backoff`.
+`ring`, `ws`) and `k8s-openapi` 0.28 (`v1_32`), both Apache-2.0 (vetting in research K0). Existing: `tokio`, `serde_json`,
+`protocol::hashing::sha256_hex` (daemon key K5, image-inputs hash K2; no new hash crate),
+`sandbox::cli::CliRuntime<R: CommandRunner>` (the docker/podman `ContainerRuntime` impl, with
+`program_of(RuntimeKind)`), 489's `ssh::provision` artefact rule, `ssh::remote_path`,
+`ssh::reconnect::Backoff`.
 
 **Storage**: local only. `settings.json` `daemons[].runtime = {"kind":"kubernetes",...}` (additive, no
 `settings_version` bump). No cluster credential, registry password or kubeconfig content is stored
@@ -76,7 +76,7 @@ daemon.
 | V Rust + iced | PASS: validated newtypes (`Namespace`, `KubeContextName`, `RegistryRepo`, `Quantity`, `Toleration`, `DaemonKey`), `KubeCredential` as an enum mapped 1:1 to secrets, `StartPhase` with its bound, `KubeFailure`/`PodGone` enums; iced only for UI. |
 | VI Cross-Platform | PASS: one code path; platform differences (KUBECONFIG separator, home directory, login-shell PATH for exec plugins, Linux daemon artefact for macOS/Windows clients) are pure, platform-parameterised core rules tested on all three CI platforms; the real-cluster job is Linux-only with the reason in `ci.yml` (K13). |
 | VII Documentation | PASS: `docs/user-guide/kubernetes-daemons.md` (new), `settings.md`, `worktrees-and-sessions.md`, `remote-daemons.md` cross-link, `docs/daemon.md`, `docs/development/ci-pipeline.md`, `docs/SUMMARY.md`, same change. |
-| VIII UI Components | PASS: the form reuses 491's Daemons rows, text inputs and badges; the image-source + resources section is a shared builder component (`ui/settings/daemon_image.rs` → shared library) for #806 to reuse; key/value list and toleration editors are added to the shared library with builder `.into()` APIs if none exists. |
+| VIII UI Components | PASS: the form reuses 491's Daemons rows, text inputs and badges; the image-source and limits fields are extracted from the existing `ui/settings/container_fields.rs` ("one copy of the fields") into functions there that both the container form and the Kubernetes form draw, so no second copy exists and #806 inherits them (K1); key/value list and toleration editors are added to the shared library with builder `.into()` APIs if none exists. |
 
 Re-checked after Phase 1: unchanged. Deviations: Complexity Tracking.
 
@@ -87,8 +87,8 @@ Re-checked after Phase 1: unchanged. Deviations: Complexity Tracking.
 | FR-001, FR-018, FR-020 | `daemons.rs` `DaemonRuntime::Kubernetes`, label, endpoint; `kube/settings.rs` validation (`InvalidField` naming the field); `features/daemons.rs` Draft/Msg; `ui/settings/daemons.rs`; pod log tail via `Cluster::logs`; contract §7 |
 | FR-002, FR-022 | `kube/kubeconfig.rs` (candidates, separators, home, exec search path, login-shell parse); `micold-client/src/kube/live.rs` merges files with `kube::config::Kubeconfig` and rewrites exec commands to absolute paths (K9) |
 | FR-003, FR-016, FR-023 | `kube/names.rs` (`DaemonKey`, `ResourceNames`, ownership labels); create/409/adopt rule in `kube/start.rs`; deletes by name + UID precondition (K5, contract §2) |
-| FR-004 | `daemon_image/` (`DaemonImageSource`, `containerfile.rs`, `tag.rs`); `sandbox/cli.rs` `ContainerCli::{build, push, repo_digest}` (new methods); `micold-client/src/kube/image.rs` (K1-K3, contract daemon-image) |
-| FR-005 | `KubeSettings.{budget, node_selector, tolerations, volume_size, storage_class}` → `kube/manifest.rs` |
+| FR-004 | `daemon_image/` (`DaemonImageSource`, `containerfile.rs`, `tag.rs`); `sandbox/cli.rs` new inherent `CliRuntime::{build_image, push_image, repo_digest}` over its `CommandRunner` (not `ContainerRuntime` trait methods; tag-present check reuses the trait's `inspect_image`); `micold-client/src/kube/image.rs` (K1-K3, contract daemon-image) |
+| FR-005 | `KubeSettings.{resources, node_selector, tolerations, volume_size, storage_class}`; `resources` is the shared `daemon_image::DaemonResources { cpu_request, cpu_limit, memory_request, memory_limit }` (request ≤ limit, each settable alone) → `kube/manifest.rs` `resources.requests` / `resources.limits` |
 | FR-006 | `Cluster::port_forward` → `connect::Transport::Tunnel(Box<dyn AsyncReadWrite>)` (new, generic, no kube type in core); manifest test: no Service/Ingress/hostPort; `kube_real_endtoend` lists Services/Ingresses = 0 |
 | FR-007 | `kube/clone.rs` (remote choice, `CloneTarget`, `CloneFailure`); `ClientMsg::RepoClone` (protocol 49); `micold-daemon/src/repo_clone.rs`; remote-project identity via `ssh/remote_path.rs`; create-worktree flow in `features/` + `shell/workspace.rs` (K8) |
 | FR-008, FR-009 | `kube/credentials.rs` (`KubeCredential` → secret + mount); `kube/manifest.rs` pod security context; secrets reconcile phase deletes withdrawn ones (K7) |
@@ -134,7 +134,7 @@ crates/micold-core/src/
 ├── daemons.rs                # DaemonRuntime::Kubernetes, DaemonEvent::Gone, DaemonView.stopped_reason
 ├── connect.rs                # Transport::Tunnel
 ├── protocol/{auth,messages,version}.rs   # listener_auth; RepoClone; PROTOCOL_VERSION 49
-└── sandbox/cli.rs            # ContainerCli build / push / repo_digest
+└── sandbox/cli.rs            # CliRuntime::{build_image, push_image, repo_digest} (inherent)
 crates/micold-daemon/src/
 ├── repo_clone.rs             # NEW: atomic clone/fetch under MICOLD_REPOS_ROOT
 ├── ops.rs                    # dispatch RepoClone
@@ -142,11 +142,11 @@ crates/micold-daemon/src/
 crates/micold-client/src/
 ├── kube/                     # NEW, render-free
 │   ├── live.rs               # LiveCluster: kube client, kubeconfig merge, exec rewrite, port-forward, logs
-│   └── image.rs              # build/push step over ContainerCli, live output, cancel
+│   └── image.rs              # build/push step over CliRuntime<SystemRunner>, live output, cancel
 ├── daemon.rs                 # Dial::Kube, start sequence, pod-gone check before re-dial
 ├── features/daemons.rs       # Kubernetes Draft fields, confirmations, forget-locally, logs
 ├── shell/{capabilities,daemons,workspace}.rs   # choose LiveCluster; create-worktree clone step
-└── ui/settings/{daemons,daemon_image}.rs       # form; shared image + resources section
+└── ui/settings/{daemons,container_fields}.rs   # form; image-source + limits fields extracted for both forms
 crates/micold-client/tests/kube_real_*.rs, kube_real_support/
 packaging/kube/test.Containerfile               # CI stand-in CLI image
 .github/workflows/ci.yml (job kube-cluster), mise.toml (task test-kube)
@@ -155,7 +155,7 @@ docs/daemon.md; docs/development/ci-pipeline.md; docs/SUMMARY.md
 ```
 
 **Structure Decision**: all rules in `micold-core::kube` and `micold-core::daemon_image` (pure; the
-I/O sequences over the injected `Cluster` port and `ContainerCli` runner), the `kube` crate confined
+I/O sequences over the injected `Cluster` port and `CliRuntime`'s `CommandRunner`), the `kube` crate confined
 to `micold-client/src/kube/live.rs`, render-free client reducers in `features/`, `ui/` as glue. The
 daemon crate gains only `RepoClone` and the listener-auth rule.
 
@@ -165,9 +165,9 @@ daemon crate gains only `RepoClone` and the listener-auth rule.
 |---|---|
 | FR-002, FR-022 (candidates, separators, home, exec search path) | core unit, platform-parameterised, all three CI platforms |
 | FR-003, FR-016, FR-023 (names, ownership, adopt on 409, conflict) | core unit (`names.rs`); client sequence test over `FakeCluster` (two racing starts → one pod) |
-| FR-004 (tag, template, rebuild rule) | core unit (`daemon_image`); client test of the build/push step over a fake `ContainerCli` runner (skip build when tag present, push always, digest used, cancel, 30-min bound with a paused clock) |
-| FR-005, FR-006, FR-008, FR-009 (manifests) | core unit (`manifest.rs`, `credentials.rs`); `kube_real_security` inspects the live pod (SC-004, SC-006) |
-| FR-007 (remote choice, clone target, failures) | core unit (`clone.rs`); daemon unit (`repo_clone.rs` against a local bare repo: atomic, fetch on existing, auth failure leaves nothing) |
+| FR-004 (tag, template, rebuild rule) | core unit (`daemon_image`); `CliRuntime` unit tests over the existing `RecordingRunner` (`sandbox/exec.rs`) for the argv of build/push/digest; client test of the build/push step over `RecordingRunner` (skip build when tag present, push always, digest used, cancel, 30-min bound with a paused clock) |
+| FR-005, FR-006, FR-008, FR-009 (manifests) | core unit (`manifest.rs`, `credentials.rs`; FR-005: request alone, limit alone, both, neither each map to exactly those `resources` keys; request > limit refused naming the field); `kube_real_security` inspects the live pod (SC-004, SC-006) |
+| FR-007 (remote choice, clone target, failures) | core unit (`clone.rs`); daemon unit (`repo_clone.rs` against a local bare repo: atomic, fetch on existing, auth failure leaves nothing); client `features/` reducer tests over a fake daemon: binding a no-remote project is refused with the reason and sends nothing, a project with a remote sends `RepoClone` then `WorktreeCreate` in that order, and the bound worktree is a 489 remote project keyed by the daemon id (`ssh/remote_path.rs` identity) |
 | FR-010, FR-011, FR-019 | core state-machine unit (`Gone`); client actor test over `FakeCluster` (pod deleted/evicted/node lost → `Stopped` + reason, no re-create; other daemon untouched); `kube_real_reconnect` |
 | FR-012, FR-013 | core unit (`classify.rs` tables, phase bounds); client sequence tests (each failure → reason, rollback leaves only pre-existing PVC); `kube_real_failures` (RBAC, pull, unschedulable; SC-003) |
 | FR-014, FR-015 | client sequence tests; `kube_real_lifecycle` (stop keeps PVC and worktrees, remove leaves 0 objects; SC-005) |

@@ -12,8 +12,10 @@ K1-K3.
 | **Build** (default) | Dockerfile (optional file; empty = the app's template), AI provider CLIs (checkboxes, default = the providers enabled in Settings), **Registry** (required for Kubernetes) | build with the local runtime, push to the registry, pod pulls by digest |
 | **Pull** | Image reference | pod uses it as given; the cluster pulls it, with the `RegistryPull` secret when allowed |
 
-No published release image is offered or defaulted (FR-004). Resources (CPU, memory requests and
-limits) are the existing `ResourceBudget` fields in the same section.
+No published release image is offered or defaulted (FR-004). Resources are the shared
+`DaemonResources` (data model): CPU request, CPU limit, memory request, memory limit, each settable
+on its own (FR-005), in the same section. `sandbox::ResourceBudget` is not used for Kubernetes: it
+holds one ceiling per resource and cannot express a request.
 
 ## Build
 
@@ -24,6 +26,11 @@ limits) are the existing `ResourceBudget` fields in the same section.
    `Containerfile`. With a user Dockerfile: its directory is the context and the temporary directory
    is passed as `--build-context micold=<tmp>`; the Dockerfile copies `--from=micold micold-daemon`.
 3. Tag: `<registry>/micold-daemon:<version>-<inputs12>` (data model `ImageInputs`).
+Steps 4-5 run through `sandbox::cli::CliRuntime` (`program_of(kind)` picks docker or podman): the
+presence check is the `ContainerRuntime::inspect_image` it already implements; build, push and
+digest are new inherent methods `build_image`, `push_image`, `repo_digest` over its `CommandRunner`
+(`run_streaming` for 4-5's output), tested with `RecordingRunner`.
+
 4. `<runtime> image inspect <tag>` present → skip build; else
    `<runtime> build --platform linux/<arch> -f <file> -t <tag> <context>`.
 5. `<runtime> push <tag>`; then `<runtime> image inspect --format '{{json .RepoDigests}}' <tag>` →

@@ -24,8 +24,8 @@ in-process `AsyncRead + AsyncWrite` stream, so no local listener exists at all (
 than "loopback only"). The user needs no `kubectl` installed, which the spec's Assumptions do not
 promise.
 
-`sha2` 0.10 (RustCrypto, MIT/Apache-2.0, pure Rust, no default features needed) is added to
-`micold-core` for the daemon key (K5) and the image-inputs hash (K2).
+No hash crate is added: the daemon key (K5) and the image-inputs hash (K2) use the core's existing
+`protocol::hashing::sha256_hex`.
 
 **Rejected**: shelling out to `kubectl` (an unstated runtime requirement; `kubectl port-forward`
 opens a loopback listener any local process can use; parsing its human output for failure reasons is
@@ -39,11 +39,14 @@ render-free crate the daemon also compiles; the core keeps only rules).
 `sandbox::ImageSource` with `Registry | ImportedFile | LocalBuild`). This feature introduces the
 shared model #806 will adopt, in a new module `micold-core/src/daemon_image/`:
 `DaemonImageSource::Build { dockerfile: Option<PathBuf>, providers: BTreeSet<AiCli> }` (no
-Dockerfile = the app's own template) and `DaemonImageSource::Pull { reference: ImageRef }`, plus
-`ResourceBudget` reused unchanged from `sandbox` (#806's resources fields). The Kubernetes settings add
-`registry: Option<RegistryRepo>` beside it (FR-004: the build choice needs a registry). The Settings
-form for the source and resources is one shared form section (`ui/settings/daemon_image.rs`, new)
-consumed by the Kubernetes form now and the container form when #806 lands.
+Dockerfile = the app's own template) and `DaemonImageSource::Pull { reference: ImageRef }`, plus `DaemonResources { cpu_request,
+cpu_limit, memory_request, memory_limit }` (#806's resources fields; FR-005 needs a request settable
+apart from its limit, which `sandbox::ResourceBudget`'s single ceiling per resource cannot hold). The
+Kubernetes settings add `registry: Option<RegistryRepo>` beside it (FR-004: the build choice needs a
+registry). **Form**: no new settings file. The image-source and limits fields are extracted from
+`ui/settings/container_fields.rs`'s `sections` into functions in that same file (its "one copy of
+the fields" rule), drawn by the container form today and the Kubernetes form now; #806 switches the
+container form's source to `DaemonImageSource` without a second copy.
 
 **Why**: the owner asked for one shared form (spec Overview). Building it here, isolated, means #806
 reuses it rather than reconciling two models; if #806 lands first with its own type, the Kubernetes
@@ -89,8 +92,12 @@ wrong image).
 ## K3. Build, push and their bounds
 
 **Decision**: build and push run through the local container runtime CLI already wrapped by
-`sandbox/cli.rs` (`ContainerCli`, docker or podman per the sandbox's `RuntimeKind`), gaining
-`build`, `push` and `repo_digest`. Output streams line by line into the daemon's diagnostics log
+`sandbox/cli.rs`: `CliRuntime<R: CommandRunner>` (the `ContainerRuntime` impl; `program_of(RuntimeKind)`
+picks docker or podman) gains inherent methods `build_image`, `push_image` and `repo_digest`. They
+are not `ContainerRuntime` trait methods: only the Kubernetes image step needs them, and adding them
+to the trait would force every runtime impl and fake to grow them. The tag-present check reuses the
+trait's `inspect_image`; output streams through `CommandRunner::run_streaming`; tests use the
+existing `RecordingRunner`. Output streams line by line into the daemon's diagnostics log
 (`DaemonDiagnostics::push_log`) and the row shows "Building image" / "Pushing image" with **Cancel**
 (kills the child). The phase fails at 30 minutes from its start (FR-012). Push authenticates with the
 runtime's own login; a refusal is classified (`not logged in`, `denied`, `unreachable`) naming the
@@ -107,8 +114,11 @@ daemon anyway, the second needs cluster privileges the spec's Assumptions do not
 daemon gains one rule (`micold-core/src/protocol/auth.rs`, `listener_auth(addr, token_env)`): an
 empty token path is accepted **only** with a loopback listen address, and means "no token"; an empty
 path with a non-loopback address stays fatal (feature 027's rule unchanged). The API's port-forward
-dials the pod's own loopback, so the only way to the daemon is an identity that the cluster grants
-`pods/portforward` in that namespace — the same identity that could `exec` into the pod.
+dials the pod's own loopback, so the daemon is reachable by holders of `create pods/portforward`
+in the namespace, or by anything already running inside the pod, as with the sandbox's in-container
+token. (`pods/exec` is a separate RBAC subresource; the guard is stated in terms of
+`pods/portforward` alone.) A `listener_auth` table test keeps "empty path + non-loopback stays
+fatal".
 
 **Why**: a token would have to reach the pod as a Kubernetes secret, which FR-009 and SC-004 forbid
 (0 secrets beyond those the user allowed) and which adds nothing: anyone who can read that secret can
@@ -121,7 +131,7 @@ when no NetworkPolicy exists).
 ## K5. Resource identity, ownership and races (FR-003, FR-016, FR-023)
 
 **Decision**: every resource is named deterministically from the daemon key
-`key = sha256(context ‖ 0 ‖ namespace ‖ 0 ‖ daemon name)[..8 hex]`:
+`key = sha256_hex(context ‖ 0 ‖ namespace ‖ 0 ‖ daemon name)[..8]` (`protocol::hashing`):
 `micold-<slug(name)>-<key>` (pod), `…-data` (PVC), `…-git-credentials`, `…-git-ssh`, `…-gitconfig`,
 `…-signin-<cli>`, `…-pull` (secrets). `slug` is DNS-1123, at most 40 characters. Every resource
 carries labels `app.kubernetes.io/managed-by=micold-ai-ide` and `micold.dev/daemon=<key>` and the
@@ -171,7 +181,7 @@ service-account token would be a secret the user did not allow), `enableServiceL
 pod `securityContext { runAsNonRoot, runAsUser: 10001, runAsGroup: 10001, fsGroup: 10001,
 seccompProfile: RuntimeDefault }`, container `securityContext { readOnlyRootFilesystem: true,
 allowPrivilegeEscalation: false, capabilities.drop: [ALL] }`; volumes: the PVC at `/data`, an
-`emptyDir` at `/tmp`; resources from `ResourceBudget`; `nodeSelector` = user's plus
+`emptyDir` at `/tmp`; `resources.requests`/`resources.limits` from `DaemonResources` (each key only when set, FR-005); `nodeSelector` = user's plus
 `kubernetes.io/arch=<arch>` on the build choice; `tolerations` as given; env `MICOLD_LISTEN_ADDR`,
 `MICOLD_TOKEN_PATH=` (K4), `MICOLD_IDLE_STOP=off` (the pod's lifetime is the user's Stop, not the
 30-minute idle rule; else an idle exit would read as "pod gone"). Allowed secrets are mounted
