@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain
+- [x] No [NEEDS CLARIFICATION] markers remain
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
@@ -31,7 +31,8 @@
 
 ## Notes
 
-- Two [NEEDS CLARIFICATION] markers (FR-004 image source vs #806, FR-007 clone source) are left for
-  the clarify unit.
+- No [NEEDS CLARIFICATION] markers remain. FR-004 (image source, aligned with #806) and FR-007
+  (clone source) use the orchestrator's recommended defaults pending the owner's answer, recorded
+  in spec.md Clarifications.
 - Kubernetes terms (pod, PVC, secret, port-forward, RBAC) are the domain named by the issue, not
   implementation choices.

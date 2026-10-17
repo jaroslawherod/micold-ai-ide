@@ -1,0 +1,305 @@
+---
+feature: 686-kubernetes-daemon-runtime
+loop: outside-in
+profile: .specify/memory/tdd-profile.md
+spec_criteria: 27
+planned_at: 270a530f
+updated_at: 270a530f
+suite_baseline: red # container runs as root: 6 permission-denial tests fail, none touches this feature; see cycle-log.md
+---
+
+# Test List: Kubernetes session daemon runtime
+
+Trace ids: `USn.m` is user story n, acceptance scenario m in `spec.md`; `FR-nnn` and `SC-nnn` are
+its functional requirements and success criteria; `Edge:` names a `spec.md` edge case.
+
+Behavior markers in `tasks.md` (`[A3]`, `[U12]`) are the link `/speckit.tdd.run` ticks by. A test
+task carries the ids of the behaviors it writes; the implementation task after it carries the same
+ids.
+
+## Outer loop: acceptance behaviors
+
+The profile's acceptance runner is the real-runtime suite. For this feature that is the
+`kube_real_*` suite (feature `kube-real-runtime`, M8), which exists only after every story. Each
+milestone therefore opens its acceptance behaviors at the highest level that runs without a
+cluster: client integration tests over `FakeCluster` (`client-tests/`), or the composed start
+sequence over `FakeCluster` in `core/kube/start.rs`. That is weaker than a real cluster; the `kube_real_*`
+test named in the last column of the M8 rows is the end-to-end confirmation. A criterion whose
+observable result needs a real pod (A3) is hosted only in the real suite.
+
+| id  | behavior | traces | kind | state | test |
+| --- | --- | --- | --- | --- | --- |
+| A1  | Starting an added Kubernetes daemon (given image) creates one pod in its namespace and the row reaches `connected` with endpoint `<context> / <namespace> / <pod>` | US1.1, FR-001, FR-003 | example | PENDING | `kube_daemon_start` (FakeCluster); real: `kube_real_endtoend` |
+| A2  | Creating a worktree bound to a connected Kubernetes daemon clones the project's remote into its volume and shows the worktree with the daemon's name and in-pod path | US1.2, FR-007 | example | PENDING | `features_daemons` (fake daemon); real: `kube_real_endtoend` |
+| A3  | A session started in that worktree runs in the pod, takes typed input and shows its output | US1.3 | example | PENDING | `kube_real_endtoend` (real cluster only) |
+| A4  | Starting the daemon again while its pod exists adopts that pod and creates none | US1.4, FR-003, FR-023 | example | PENDING | `kube_daemon_start` |
+| A5  | A connected Kubernetes daemon has no Service or Ingress in its namespace | US1.5, FR-006, SC-006 | example | PENDING | `kube_daemon_start`; real: `kube_real_endtoend` |
+| A6  | With the tunnel dropped and the pod running, the pod's sessions are still running when the client looks again | US2.1, FR-010 | example | PENDING | `kube_daemon_reconnect`; real: `kube_real_reconnect` |
+| A7  | Reconnecting after a drop shows the sessions running with their output since the drop, with no pod created | US2.2, FR-011, SC-002 | example | PENDING | `kube_daemon_reconnect`; real: `kube_real_reconnect` |
+| A8  | Reconnecting to a deleted, evicted or node-lost pod shows `stopped` with that reason, the sessions `lost to its daemon`, and creates no pod | US2.3, FR-011 | example | PENDING | `kube_daemon_reconnect`; real: `kube_real_reconnect` |
+| A9  | Start on that stopped daemon creates a new pod on the kept volume | US2.4, SC-005 | example | PENDING | `kube_daemon_reconnect`; real: `kube_real_lifecycle` |
+| A10 | A start with a set of allowed credentials and sign-ins mounts exactly those secrets in the pod and no other | US3.1, FR-008, SC-004 | example | PENDING | `core/kube/start.rs` (FakeCluster); real: `kube_real_security` |
+| A11 | A start with nothing allowed creates and mounts no credential, sign-in or pull secret | US3.2, FR-008 | example | PENDING | `core/kube/start.rs`; real: `kube_real_security` |
+| A12 | A start after a credential was withdrawn deletes that secret and no longer mounts it | US3.3, FR-008 | example | PENDING | `core/kube/start.rs`; real: `kube_real_security` |
+| A13 | Every pod the start creates runs non-root, with a read-only root filesystem and no privilege escalation | US3.4, FR-009, SC-004 | example | PENDING | `core/kube/start.rs`; real: `kube_real_security` |
+| A14 | A start the namespace's RBAC forbids fails naming the denied verb and resource, and leaves nothing it created | US4.1, FR-012, FR-013 | example | PENDING | `kube_daemon_failures`; real: `kube_real_failures` |
+| A15 | A start whose image cannot be pulled fails naming the image and the cluster's pull error | US4.2, FR-012 | example | PENDING | `kube_daemon_failures`; real: `kube_real_failures` |
+| A16 | A start whose pod cannot be scheduled fails with the scheduler's reason | US4.3, FR-012 | example | PENDING | `kube_daemon_failures`; real: `kube_real_failures` |
+| A17 | A start with a missing context or an unreachable cluster fails naming the context or the connection error | US4.4, FR-012 | example | PENDING | `kube_daemon_failures` |
+| A18 | Each start failure is shown within its phase bound while another daemon's state stays unchanged | US4.5, FR-012, FR-019, SC-003 | example | PENDING | `kube_daemon_failures`; real: `kube_real_failures` |
+| A19 | The add form for runtime Kubernetes offers the kubeconfig's contexts, namespace, image source, resources, node selector, tolerations, volume size and allowed credentials | US5.1, FR-002, FR-004, FR-005, FR-018 | example | PENDING | `features_daemons` |
+| A20 | Saving an edit of a running Kubernetes daemon changes nothing in the cluster and shows "applies on next start" | US5.2, FR-005 | example | PENDING | `features_daemons` |
+| A21 | Stop on a running daemon deletes its pod, keeps its volume and shows `stopped` | US5.3, FR-014, SC-005 | example | PENDING | `core/kube/lifecycle.rs` (FakeCluster); real: `kube_real_lifecycle` |
+| A22 | Reconnect on an `unreachable` daemon whose pod runs re-dials the tunnel and shows its running sessions | US5.4, FR-018 | example | PENDING | `features_daemons`, `kube_daemon_reconnect` |
+| A23 | Remove asks for confirmation naming the pod, volume and secrets with 491's counts, and deletes nothing before it | US5.5, FR-015 | example | PENDING | `features_daemons` |
+| A24 | A confirmed Remove leaves no pod, volume or secret the client created | US5.6, FR-015, SC-005 | example | PENDING | `core/kube/lifecycle.rs`; real: `kube_real_lifecycle` |
+| A25 | On a throwaway kind cluster the suite passes pod creation, tunnel, session I/O, reconnect, stop and remove | US6.1, FR-021 | example | PENDING | `kube_real_endtoend`, `kube_real_reconnect`, `kube_real_lifecycle` |
+| A26 | On that cluster RBAC denial, a pull failure and an unschedulable pod are each reported within their bound | US6.2, FR-021, SC-003 | example | PENDING | `kube_real_failures` |
+| A27 | `cargo test --workspace` without the feature runs no `kube_real_*` test; `mise run test-kube` and CI's `kube-cluster` job run them | US6.3, FR-021 | example | PENDING | `mise.toml` `test-kube`; `crates/micold-core/tests/ci_gate_covers_every_job.rs` |
+
+## Inner loop: unit behaviors
+
+### `crates/micold-core/src/kube/settings.rs`
+
+| id  | behavior | traces | kind | state | test |
+| --- | --- | --- | --- | --- | --- |
+| U1  | An empty context is refused naming "context"; a non-empty one is accepted without reading a kubeconfig | FR-018, FR-002 | example | PENDING | |
+| U2  | A namespace of 1 and of 63 DNS-1123 characters is accepted; 0, 64, or one with an uppercase letter is refused naming "namespace" | FR-018 | example | PENDING | |
+| U3  | Image source Build with no registry is refused naming "Registry"; Pull with none is accepted | FR-004 | example | PENDING | |
+| U4  | A registry with a tag or a digest is refused naming "registry"; `host[:port]/path` is accepted | FR-004 | example | PENDING | |
+| U5  | Node-selector keys and values outside Kubernetes label syntax are refused naming the field | FR-005, FR-018 | example | PENDING | |
+| U6  | Tolerations parse `key[=value]:Effect` and `key:Exists:Effect` for the three effects; any other effect is refused naming "tolerations" | FR-005, FR-018 | example | PENDING | |
+| U7  | A volume size of exactly 1 GiB is accepted and one below it refused; the default is 10 GiB | FR-005 | example | PENDING | |
+| U8  | Defaults: arch `Amd64`, no storage class, nothing allowed | FR-005, FR-008 | example | PENDING | |
+
+### `crates/micold-core/src/daemon_image/mod.rs`
+
+| id  | behavior | traces | kind | state | test |
+| --- | --- | --- | --- | --- | --- |
+| U9  | The image source defaults to Build with no Dockerfile and the providers the Settings list enables | FR-004 | example | PENDING | |
+| U10 | A Pull reference with a moving tag is flagged as `sandbox::image` flags it | FR-004 | example | PENDING | |
+| U11 | Resources default to no requests and the sandbox's CPU and memory limits; each of the four can be set alone | FR-005 | example | PENDING | |
+| U12 | A request equal to its limit is accepted; one above it is refused naming the request field | FR-005 | example | PENDING | |
+
+### `crates/micold-core/src/daemons.rs`
+
+| id  | behavior | traces | kind | state | test |
+| --- | --- | --- | --- | --- | --- |
+| U13 | `DaemonRuntime::Kubernetes` round-trips through settings as `{"kind":"kubernetes", ...}` with no settings-version bump | FR-020 | example | PENDING | |
+| U14 | A reader that does not know `kubernetes` keeps it as `Unsupported` verbatim | FR-020 | example | PENDING | |
+| U15 | The Kubernetes runtime's label is "Kubernetes", it is startable, and its endpoint is `<context> / <namespace> / <pod>` | FR-001 | example | PENDING | |
+| U16 | A second daemon with an existing name is refused naming the first | FR-018, Edge: two daemons same namespace | example | PENDING | |
+| U17 | `Reconnecting` or `Unreachable` plus `Gone(reason)` becomes `Stopped` with that reason; Start from it becomes `Starting` and clears the reason | FR-011 | example | PENDING | |
+
+### `crates/micold-core/src/kube/names.rs`
+
+| id  | behavior | traces | kind | state | test |
+| --- | --- | --- | --- | --- | --- |
+| U18 | The daemon key is the first 8 hex of the SHA-256 of context, namespace and name joined by NUL; equal triples give equal keys | FR-016, FR-023 | example | PENDING | |
+| U19 | The slug is DNS-1123 and 40 characters at most, for names at and over that length | FR-016 | example | PENDING | |
+| U20 | Resource names are `micold-<slug>-<key>` for the pod and its `-data`, `-gitconfig`, `-git-credentials`, `-git-ssh`, `-signin-<cli>`, `-pull` siblings | FR-016 | example | PENDING | |
+| U21 | An object is ours only when both ownership labels match; one label alone is not ours | FR-016, Edge: pod created by someone else | example | PENDING | |
+
+### `crates/micold-core/src/protocol/auth.rs` and `crates/micold-daemon/src/server.rs`
+
+| id  | behavior | traces | kind | state | test |
+| --- | --- | --- | --- | --- | --- |
+| U22 | An empty `MICOLD_TOKEN_PATH` with a non-loopback listen address stops the daemon at start (feature 027's rule, captured before the change) | FR-006 (K4 guard) | characterization | PENDING | `daemon/server.rs` |
+| U23 | A set token path gives `Token(path)` | FR-006 | example | PENDING | |
+| U24 | An empty path with `127.0.0.1` or `::1` gives `LoopbackNoToken` | FR-006 | example | PENDING | |
+| U25 | An empty path with a non-loopback address gives `AuthConfigError` | FR-006 | example | PENDING | |
+
+### `crates/micold-core/src/kube/classify.rs`
+
+| id  | behavior | traces | kind | state | test |
+| --- | --- | --- | --- | --- | --- |
+| U26 | Every `KubeFailure` variant displays exactly its contract §6 text | FR-012 | example | PENDING | |
+| U27 | A failed build becomes `Build` carrying the output's last lines | FR-012 | example | PENDING | |
+| U28 | A push refused for login, permission or reachability becomes `Push { registry, error }` | FR-012, Edge: registry push refused | example | PENDING | |
+| U29 | A pod `404` or `deletionTimestamp` is `Deleted`; `Evicted` is `Evicted { message }`; phase `Unknown` or a `404` node is `NodeLost { node }`; a running ready pod is not gone | FR-011 | example | PENDING | |
+| U30 | A `403` becomes `Forbidden { verb, resource }`; a namespace `404` becomes `NamespaceMissing`; a connect error becomes `Unreachable { server, error }` | FR-012, Edge: namespace missing | example | PENDING | |
+| U31 | `ErrImagePull`, `ImagePullBackOff` and `InvalidImageName` become `ImagePull` on first sight | FR-012 | example | PENDING | |
+| U32 | `PodScheduled=False, reason=Unschedulable` becomes `Unschedulable { message }` | FR-012 | example | PENDING | |
+| U33 | A `ProvisioningFailed` event or an unbound immediate claim becomes `ClaimNotBound` | FR-012, Edge: storage class absent | example | PENDING | |
+
+### `crates/micold-core/src/connect.rs`
+
+| id  | behavior | traces | kind | state | test |
+| --- | --- | --- | --- | --- | --- |
+| U34 | A boxed duplex stream as `Transport::Tunnel` completes the 491 handshake against a daemon stub | FR-006 | example | PENDING | |
+
+### `crates/micold-core/src/kube/manifest.rs`
+
+| id  | behavior | traces | kind | state | test |
+| --- | --- | --- | --- | --- | --- |
+| U35 | No manifest has a `Service` or `Ingress` kind, `hostPort`, `hostNetwork`, `hostPID`, `privileged` or `containerPort` | FR-006, SC-006 | example | PENDING | |
+| U36 | The pod has `restartPolicy: Always`, no service-account token and no service links | FR-006 | example | PENDING | |
+| U37 | The container's env sets the loopback listener, an empty token path, idle stop off, the repos root, `HOME`, `XDG_DATA_HOME` and `TMPDIR` | FR-006, FR-007 | example | PENDING | |
+| U38 | The PVC is `ReadWriteOnce` with the volume size, mounted at `/data`, with an `emptyDir` at `/tmp`; the storage class is set when given and omitted when not | FR-005, FR-007 | example | PENDING | |
+| U39 | Every object carries both ownership labels and the name annotation | FR-016 | example | PENDING | |
+| U40 | Node selector and tolerations appear as given; none given → neither key | FR-005 | example | PENDING | |
+| U41 | Each resource field set alone, all set, or none set yields exactly those keys under requests and limits | FR-005 | example | PENDING | |
+| U42 | The Build choice adds `kubernetes.io/arch=<arch>` and the pod image is the pushed digest reference | FR-004 | example | PENDING | |
+| U43 | The pod and container security contexts are non-root 10001, read-only root, no escalation, all capabilities dropped, `RuntimeDefault` seccomp | FR-009 | example | PENDING | |
+| U44 | One secret mount per allowed entry; nothing allowed → no secret volume and no `imagePullSecrets` | FR-008, FR-009, SC-004 | example | PENDING | |
+
+### `crates/micold-core/src/kube/kubeconfig.rs`
+
+| id  | behavior | traces | kind | state | test |
+| --- | --- | --- | --- | --- | --- |
+| U45 | `KUBECONFIG` splits on `;` on Windows and `:` on macOS and Linux, keeping order | FR-022 | example | PENDING | |
+| U46 | Without `KUBECONFIG` the candidate is `<home>/.kube/config`, home `%USERPROFILE%` on Windows and `$HOME` elsewhere | FR-022 | example | PENDING | |
+| U47 | The search path is process `PATH`, then the login shell's (not on Windows), then the fixed tool directories, first occurrence kept | FR-022, Edge: exec credential plugin | example | PENDING | |
+| U48 | Login-shell output yields the text between the markers, and nothing without them | FR-022 | example | PENDING | |
+
+### `crates/micold-core/src/kube/start.rs`
+
+| id  | behavior | traces | kind | state | test |
+| --- | --- | --- | --- | --- | --- |
+| U49 | The plan for Pull is `Config, Preflight, Volume, Secrets, Pod, Schedule, Pull, Tunnel`; Build adds `Image` after `Preflight` | FR-004, FR-012 | example | PENDING | |
+| U50 | Phase bounds: `Image` 30 min, `Pull` 15 min, every other 120 s; at its bound under a paused clock a phase fails `PhaseTimeout { phase }`, and not one tick before | FR-012 | example | PENDING | |
+| U51 | A missing namespace fails `NamespaceMissing` and creates nothing | FR-012, Edge: namespace missing | example | PENDING | |
+| U52 | The PVC is created on the first start and reused on the next | FR-003, FR-007 | example | PENDING | |
+| U53 | A `409` on an object that is ours is adopted and not recorded as created | FR-003, FR-023 | example | PENDING | |
+| U54 | A `409` on an object that is not ours fails `Conflict { kind, name }` | FR-016 | example | PENDING | |
+| U55 | A pod being deleted is waited out, then created | FR-003 | example | PENDING | |
+| U56 | A volume size below the existing claim's is refused naming the claim | FR-005 | example | PENDING | |
+| U57 | Any failure deletes this attempt's created objects in reverse by name and UID, the PVC only if this attempt created it, adopted objects never | FR-013 | example | PENDING | |
+| U58 | Allowed secrets are created or adopted; a withdrawn secret that is ours is deleted by name and UID; one not ours is untouched | FR-008 | example | PENDING | |
+| U59 | Nothing allowed → no secret call at all; credential source files are read only in the `Secrets` phase | FR-008 | example | PENDING | |
+| U60 | Preflight reviews `create pods`, `create persistentvolumeclaims`, `create pods/portforward`, `delete pods`, and `create secrets` only when something is allowed; a denial fails `Forbidden` before any create | FR-012, US4.1 | example | PENDING | |
+| U61 | No kubeconfig, a missing context and a failing exec plugin fail the `Config` phase with `NoKubeconfig`, `ContextMissing` and `ExecPlugin` | FR-012, FR-022 | example | PENDING | |
+| U62 | A pull failure, an unschedulable pod or an unbound claim fails the start on first sight, before the phase bound | FR-012 | example | PENDING | |
+
+### `crates/micold-core/src/kube/lifecycle.rs`
+
+| id  | behavior | traces | kind | state | test |
+| --- | --- | --- | --- | --- | --- |
+| U63 | Stop deletes the pod by name and UID with grace 10 s, waits until it is gone within 120 s, and keeps PVC and secrets | FR-014 | example | PENDING | |
+| U64 | Remove deletes pod, secrets and PVC that are ours, counting a `404` as done | FR-015 | example | PENDING | |
+| U65 | Forget-locally lists the deterministic resource names and makes no cluster call | FR-015, Edge: remove when unreachable | example | PENDING | |
+
+### `crates/micold-core/src/kube/credentials.rs`
+
+| id  | behavior | traces | kind | state | test |
+| --- | --- | --- | --- | --- | --- |
+| U66 | `GitCredentials` maps to one secret mounted at `/run/micold/creds/git-credentials` with `GIT_CONFIG_*` env for the store helper | FR-008 | example | PENDING | |
+| U67 | `GitSshKey` maps to one secret at `/run/micold/creds/ssh/{id,known_hosts}`, `GIT_SSH_COMMAND` with `IdentitiesOnly=yes` and `StrictHostKeyChecking=yes`, known-hosts lines for the remote's host only | FR-008 | example | PENDING | |
+| U68 | `GitConfig` and `SignIn(cli)` mount by subPath at `/data/home/.gitconfig` and the provider's auth file under `HOME` | FR-008 | example | PENDING | |
+| U69 | `RegistryPull` maps to one `kubernetes.io/dockerconfigjson` secret `<base>-pull` in `imagePullSecrets` | FR-008 | example | PENDING | |
+| U70 | A missing source file fails `CredentialSource { credential, path }` | FR-008 | example | PENDING | |
+
+### `crates/micold-core/src/daemon_image/containerfile.rs` and `tag.rs`
+
+| id  | behavior | traces | kind | state | test |
+| --- | --- | --- | --- | --- | --- |
+| U71 | The rendered Containerfile installs exactly the selected providers at the versions pinned in `packaging/sandbox/Containerfile` | FR-004 | example | PENDING | |
+| U72 | The rendered Containerfile runs as UID/GID 10001 with `HOME`, `XDG_DATA_HOME`, `TMPDIR` set, the daemon as entrypoint, and no credential `COPY` or `ENV` | FR-004, FR-008, FR-009 | example | PENDING | |
+| U73 | An `AiCli` with no pinned `ARG` fails the render test | FR-004 | example | PENDING | |
+| U74 | The tag is `<registry>/micold-daemon:<version>-<12 hex>`, equal for equal inputs and different when daemon bytes, Containerfile, provider set or arch change; never a moving tag | FR-004 | example | PENDING | |
+| U75 | The pod image of a pushed image is `<registry>/micold-daemon@<digest>` | FR-004 | example | PENDING | |
+
+### `crates/micold-core/src/sandbox/cli.rs`
+
+| id  | behavior | traces | kind | state | test |
+| --- | --- | --- | --- | --- | --- |
+| U76 | `build_image` runs `<rt> build --platform linux/<arch> -f <file> -t <tag> <context>`, with `--build-context micold=<tmp>` for a user Dockerfile | FR-004 | example | PENDING | |
+| U77 | `push_image` runs `<rt> push <tag>` | FR-004 | example | PENDING | |
+| U78 | `repo_digest` picks the `<registry>/micold-daemon` entry; none fails `Push` "the registry returned no digest" | FR-004, FR-012 | example | PENDING | |
+
+### `crates/micold-core/src/kube/clone.rs`, `protocol/messages.rs`, `crates/micold-daemon/src/repo_clone.rs`
+
+| id  | behavior | traces | kind | state | test |
+| --- | --- | --- | --- | --- | --- |
+| U79 | The clone remote is `origin`, else the only remote; none is `NoRemote`; several without `origin` is `Ambiguous(names)` | FR-007, Edge: project without a remote | example | PENDING | |
+| U80 | The clone target is `/data/repos/<slug>-<hash8(url)>`, the same for the same URL | FR-007 | example | PENDING | |
+| U81 | Git stderr classifies as `AuthRequired { remote }`, `DiskFull`, `Unreachable { remote }` or `Other`, each with its contract §6 text | FR-007, Edge: remote needs a credential, Edge: volume full | example | PENDING | |
+| U82 | `RepoClone`, `RepoCloned`, `RepoCloneFailed` round-trip and `PROTOCOL_VERSION` is 49 | FR-007, FR-017 | example | PENDING | |
+| U83 | The daemon clones into a `.partial-` directory and renames it on success; an existing destination is fetched | FR-007 | example | PENDING | |
+| U84 | An auth failure leaves no directory behind | FR-007, Edge: remote needs a credential | example | PENDING | |
+| U85 | A destination outside `MICOLD_REPOS_ROOT` is refused | FR-007, FR-020 | example | PENDING | |
+
+### `crates/micold-client/src/kube/live.rs` and `image.rs`
+
+| id  | behavior | traces | kind | state | test |
+| --- | --- | --- | --- | --- | --- |
+| U86 | A relative exec command is rewritten to its first match on the search path; an absolute one is left; none found fails `ExecPlugin { command, error, search_path }` | FR-022 | example | PENDING | |
+| U87 | Contexts are listed from the merged files in order and carry no `users[]` data | FR-002 | example | PENDING | |
+| U88 | API errors keep code, reason and message; `409` on create is `AlreadyExists`; `404` on delete is done; a connection error is `Unreachable` | FR-012 | example | PENDING | |
+| U89 | Delete parameters carry the UID precondition and the grace seconds | FR-016 | example | PENDING | |
+| U90 | The daemon binary is the client's own on a Linux client of that arch, else the shipped `linux-<arch>` one; absent fails naming the arch | FR-004 | example | PENDING | |
+| U91 | A tag already present skips the build; the push always runs; the pod uses the digest | FR-004 | example | PENDING | |
+| U92 | Build output lines reach the daemon's diagnostics log | FR-004, FR-012 | example | PENDING | |
+| U93 | Cancel kills the build and fails `Cancelled`; the 30-minute bound kills it and fails `PhaseTimeout { Image }` | FR-012 | example | PENDING | |
+| U94 | No container runtime installed fails `NoRuntime` | FR-012, Edge: no local container runtime | example | PENDING | |
+
+### `crates/micold-client/src/features/daemons.rs` (reducer)
+
+| id  | behavior | traces | kind | state | test |
+| --- | --- | --- | --- | --- | --- |
+| U95 | Choosing Kubernetes shows the merged kubeconfig's contexts, or "no kubeconfig found; looked in <paths>" | FR-002, FR-022 | example | PENDING | |
+| U96 | Save refuses an invalid Kubernetes field naming it; a saved row shows "Kubernetes" and the endpoint | FR-018, FR-001 | example | PENDING | |
+| U97 | The container form's image-source and limits fields behave as before the extraction | FR-004 (K1) | characterization | PENDING | |
+| U98 | Image source defaults to Build with the enabled providers; Build without a registry is refused naming "Registry" | FR-004 | example | PENDING | |
+| U99 | The four resource fields are edited on their own; a request above its limit is refused naming the request field | FR-005 | example | PENDING | |
+| U100 | A worktree of a project with no remote bound to a Kubernetes daemon is refused with the reason and sends nothing | FR-007 | example | PENDING | |
+| U101 | A project with a remote sends `RepoClone` before `WorktreeCreate`, showing "Cloning <repo>" | FR-007 | example | PENDING | |
+| U102 | The bound worktree's identity is `micold-remote://<daemon-id>/data/repos/…` | FR-007 | example | PENDING | |
+| U103 | A `stopped` row shows its reason | FR-011 | example | PENDING | |
+| U104 | The allowed-credentials list starts with nothing checked; SSH key and registry auth need a file | FR-008 | example | PENDING | |
+| U105 | Stop with running sessions confirms naming how many end | FR-014 | example | PENDING | |
+| U106 | Remove with the cluster unreachable offers forget-locally naming what stays | FR-015, Edge: remove when unreachable | example | PENDING | |
+| U107 | Node selector, tolerations, volume size and storage class each refuse an invalid value naming the field | FR-005, FR-018 | example | PENDING | |
+| U108 | Logs fetches the last 200 lines on demand | FR-018 | example | PENDING | |
+
+### `crates/micold-client/src/ui/material/key_value_list.rs` and `toleration_list.rs`
+
+| id  | behavior | traces | kind | state | test |
+| --- | --- | --- | --- | --- | --- |
+| U109 | The key/value editor parses and formats `key=value` rows, round trip equal | FR-005 | example | PENDING | |
+| U110 | The toleration editor parses and formats each accepted toleration form, round trip equal | FR-005 | example | PENDING | |
+
+### `crates/micold-client/src/daemon.rs` (actor, over `FakeCluster`)
+
+| id  | behavior | traces | kind | state | test |
+| --- | --- | --- | --- | --- | --- |
+| U111 | Two actors starting the same daemon on one cluster create exactly one pod and both connect | FR-023, Edge: two clients start at once | example | PENDING | `kube_daemon_start` |
+| U112 | A version-mismatched handshake shows `VersionMismatch` and starts no session | FR-017 | example | PENDING | `kube_daemon_start` |
+| U113 | App launch with the cluster unreachable delays neither the window nor other daemons | FR-019 | example | PENDING | `kube_daemon_start` |
+| U114 | A lookup answering 5xx or timing out keeps `Reconnecting` with 489's back-off | FR-011 | example | PENDING | `kube_daemon_reconnect` |
+| U115 | After another client's Remove, Start creates a new, empty PVC and a pod | FR-023 | example | PENDING | `kube_daemon_reconnect` |
+| U116 | A failed start shows `Unreachable` with its reason and does not retry; its full output reaches diagnostics | FR-012 | example | PENDING | `kube_daemon_failures` |
+
+## Invariants and edge cases still to place
+
+None. Every edge case in `spec.md` maps to a behavior above or to Out of scope.
+
+## Out of scope
+
+- Session input and output over the tunnel at unit level: the 489/491 session ops are unchanged and
+  already tested over `Transport`; A3 is proved on a real pod only.
+- Sign-in-requiring CLIs reporting a missing sign-in (US3.2's second half): the CLIs' own behaviour,
+  observed in `kube_real_security`, not a unit of this feature.
+- Volume full during worktree creation (Edge): covered by U81's `DiskFull` text; the client kills no
+  session (unchanged 489 behaviour).
+- Branch already checked out in another daemon's worktree (Edge): spec 491 FR-016, unchanged.
+- Creating clusters, namespaces, RBAC or storage classes; Service, Ingress, LoadBalancer or NodePort
+  exposure; moving worktrees between daemons; autoscaling or several pods per daemon; one volume
+  shared by daemons: `spec.md` Out of Scope.
+- Property-based tests: the profile has no property library; invariants are sampled at their
+  boundaries (U2, U7, U12, U19, U50).
+
+## Verification commands
+
+Copied verbatim from `.specify/memory/tdd-profile.md` at planning time:
+
+- Single test: `scripts/build-lock.sh cargo test --test {file} {name} -- --exact`
+- Unit test in `src/`: `scripts/build-lock.sh cargo test -p {crate} --lib {module}::tests::{name} -- --exact`
+- File: `scripts/build-lock.sh cargo test --test {file}`
+- Full suite: `scripts/build-lock.sh cargo test --workspace`
+- Fast subset: `scripts/build-lock.sh cargo test -p micold-core --all-targets`
+- Acceptance: `scripts/build-lock.sh cargo test -p micold-core --features sandbox-real-runtime sandbox_real_ -- --test-threads=1`
+  (this feature's real suite: `cargo test -p micold-client --features kube-real-runtime kube_real_ --no-fail-fast -- --test-threads=1`, T095)
+- Coverage: none (no cargo-llvm-cov)
+- Mutation: none (no cargo-mutants)
+- Assert on the `N passed` count, never the exit code alone: a filter matching nothing exits 0.
