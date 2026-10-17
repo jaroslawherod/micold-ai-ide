@@ -16,11 +16,13 @@ use std::task::{Context, Poll, Waker};
 
 use iced::advanced::layout::{self, Layout};
 use iced::advanced::renderer::Headless;
-use iced::advanced::widget::Tree;
-use iced::advanced::{clipboard, mouse};
+use iced::advanced::widget::operation::{self, focusable, Outcome};
+use iced::advanced::widget::{Operation, Tree};
+use iced::advanced::{clipboard, mouse, Renderer as _};
 use iced::{Element, Event, Point, Rectangle, Size, Vector};
 use micold_core::theme::ColorScheme;
 use micold_core::tokens::{self, Roles};
+use std::sync::{Arc, Mutex};
 
 /// The light role set, which most component tests build against.
 pub fn roles() -> Roles {
@@ -245,6 +247,59 @@ impl<'a> Mounted<'a> {
             &Rectangle::with_size(WINDOW),
         );
         messages
+    }
+
+    /// Run `operation` against the element to the end of its chain, the way the runtime does,
+    /// returning what it produced.
+    ///
+    /// The loop is not ceremony. `focus_next` is two passes chained — count the focusables, then
+    /// move to the one after the focused — and a single `operate` call runs only the first, so a
+    /// test that made one call would prove nothing and pass either way.
+    pub fn drive<T: Send + 'static>(&mut self, operation: impl Operation<T>) -> Option<T> {
+        let found = Arc::new(Mutex::new(None));
+        let sink = Arc::clone(&found);
+        let mut current: Box<dyn Operation> = Box::new(operation::map(operation, move |value| {
+            *sink.lock().expect("the sink is not poisoned") = Some(value);
+        }));
+        loop {
+            self.element.as_widget_mut().operate(
+                &mut self.tree,
+                Layout::new(&self.node),
+                &self.renderer,
+                current.as_mut(),
+            );
+            match current.finish() {
+                Outcome::Chain(next) => current = next,
+                Outcome::Some(()) | Outcome::None => break,
+            }
+        }
+        let value = found.lock().expect("the sink is not poisoned").take();
+        value
+    }
+
+    /// Move the keyboard forward through this element, the way `Message::FocusMoved` does.
+    pub fn focus_next(&mut self) {
+        self.drive(focusable::focus_next::<()>());
+    }
+
+    /// The element drawn over `backdrop`: the buffer and its width.
+    pub fn drawn(&mut self, backdrop: iced::Color) -> (Vec<u8>, u32) {
+        let size = self.node.bounds().size();
+        let viewport = Rectangle::with_size(size);
+        self.renderer.reset(viewport);
+        self.element.as_widget().draw(
+            &self.tree,
+            &mut self.renderer,
+            &super::theme(micold_core::theme::ColorScheme::Light),
+            &iced::advanced::renderer::Style {
+                text_color: iced::Color::BLACK,
+            },
+            Layout::new(&self.node),
+            mouse::Cursor::Unavailable,
+            &viewport,
+        );
+        let (w, h) = (size.width.ceil() as u32, size.height.ceil() as u32);
+        (self.renderer.screenshot(Size::new(w, h), 1.0, backdrop), w)
     }
 
     /// Press the left button at `at`.

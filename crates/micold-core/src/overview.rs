@@ -7,7 +7,7 @@
 use crate::location_state::{session_state, BlockedReason, LocationState};
 use crate::naming::{parse_tags, ConventionalType, Tag};
 use crate::pull_request::{CheckStatus, PrState, PullRequestStatus, ReviewState};
-use crate::session::{Session, SessionLocation};
+use crate::session::{Session, SessionId, SessionLocation};
 use crate::worktree::WorktreeStatus;
 
 /// What kind of location a card stands for, shown as an icon and a word (FR-002, research R7).
@@ -344,6 +344,32 @@ pub fn session_counts<'a>(sessions: impl IntoIterator<Item = &'a Session>) -> (u
         })
 }
 
+/// What activating a card does (FR-013, research R12).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Activation {
+    /// Select and show the location's main session, as the sidebar does.
+    OpenSession(SessionId),
+    /// Select the location and offer the start menu; nothing starts until the user picks.
+    OfferStart(SessionLocation),
+    /// Select the location only: a session cannot start there (orphan / invalid).
+    RevealOnly(SessionLocation),
+}
+
+/// What activating the card of `location` does: open its `main_session` when it has one, else offer
+/// to start one, unless `kind` says none can start there (US3.1-3.3). The card's state plays no
+/// part, so an Idle card activates as any other (US3.5).
+pub fn activation(
+    location: &SessionLocation,
+    main_session: Option<SessionId>,
+    kind: LocationType,
+) -> Activation {
+    match (main_session, kind) {
+        (Some(id), _) => Activation::OpenSession(id),
+        (None, LocationType::OrphanInvalid) => Activation::RevealOnly(location.clone()),
+        (None, _) => Activation::OfferStart(location.clone()),
+    }
+}
+
 /// One card, built per render from the window's state (data-model *CardModel*).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CardModel {
@@ -365,6 +391,8 @@ pub struct CardModel {
     pub summary: String,
     /// Its pull request counts, or why there are none.
     pub prs: PrDisplay,
+    /// What activating the card does.
+    pub activation: Activation,
 }
 
 /// Orders cards worst state first, keeping the sidebar's order within a state (FR-007).
@@ -399,7 +427,7 @@ pub fn attention(cards: &[CardModel]) -> Option<Attention> {
 mod tests {
     use super::*;
     use crate::protocol::messages::ActivitySignal;
-    use crate::session::{AiCli, SessionLifecycle};
+    use crate::session::{AiCli, SessionId, SessionLifecycle};
 
     fn worktree(dir_name: &str) -> SessionLocation {
         SessionLocation::Worktree(dir_name.into())
@@ -782,6 +810,72 @@ mod tests {
         );
     }
 
+    fn id(n: u128) -> SessionId {
+        SessionId(uuid::Uuid::from_u128(n))
+    }
+
+    /// US3.1: a location with a main session opens it, whatever its type.
+    #[test]
+    fn activation_opens_the_main_session_when_there_is_one() {
+        for kind in [LocationType::Feature, LocationType::OrphanInvalid] {
+            assert_eq!(
+                activation(&worktree("a"), Some(id(1)), kind),
+                Activation::OpenSession(id(1)),
+                "{kind:?}"
+            );
+        }
+        assert_eq!(
+            activation(
+                &SessionLocation::Default,
+                Some(id(2)),
+                LocationType::ProjectRoot
+            ),
+            Activation::OpenSession(id(2))
+        );
+    }
+
+    /// US3.2: no un-archived session on a location a session can start in offers the start.
+    #[test]
+    fn activation_offers_to_start_where_there_is_no_session() {
+        for kind in [
+            LocationType::Feature,
+            LocationType::Bugfix,
+            LocationType::Chore,
+            LocationType::Other,
+            LocationType::Included,
+        ] {
+            assert_eq!(
+                activation(&worktree("a"), None, kind),
+                Activation::OfferStart(worktree("a")),
+                "{kind:?}"
+            );
+        }
+        assert_eq!(
+            activation(&SessionLocation::Default, None, LocationType::ProjectRoot),
+            Activation::OfferStart(SessionLocation::Default)
+        );
+    }
+
+    /// US3.3: an orphan / invalid location without a session is only revealed.
+    #[test]
+    fn activation_only_reveals_an_orphan_or_invalid_location() {
+        assert_eq!(
+            activation(&worktree("gone"), None, LocationType::OrphanInvalid),
+            Activation::RevealOnly(worktree("gone"))
+        );
+    }
+
+    /// US3.5: the state does not change what activation does; the card carries it.
+    #[test]
+    fn an_idle_card_activates_as_any_other() {
+        let mut idle = card("a", CardState::Idle);
+        let mut busy = card("a", CardState::Working);
+        idle.activation = activation(&idle.location, None, idle.kind);
+        busy.activation = activation(&busy.location, None, busy.kind);
+        assert_eq!(idle.activation, busy.activation);
+        assert_eq!(idle.activation, Activation::OfferStart(worktree("a")));
+    }
+
     fn card(name: &str, state: CardState) -> CardModel {
         CardModel {
             location: worktree(name),
@@ -793,6 +887,7 @@ mod tests {
             reason: CardReason::Idle,
             summary: name.into(),
             prs: PrDisplay::Hidden,
+            activation: Activation::RevealOnly(worktree(name)),
         }
     }
 

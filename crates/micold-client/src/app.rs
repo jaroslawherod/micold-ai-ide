@@ -927,6 +927,15 @@ impl State {
                 drain(outcomes, |outcome| interpret(self, outcome));
             }
             Message::Overview(msg) => {
+                // Feature 813 (R12): the row an activation sends the user to is marked until the
+                // next selection.
+                if let crate::features::overview::Msg::CardActivated(
+                    micold_core::overview::Activation::OfferStart(location)
+                    | micold_core::overview::Activation::RevealOnly(location),
+                ) = &msg
+                {
+                    self.sidebar.revealed = Some(location.clone());
+                }
                 let outcomes = crate::features::overview::update(&mut self.overview, msg);
                 drain(outcomes, |outcome| interpret(self, outcome));
             }
@@ -1281,11 +1290,14 @@ pub fn on_escape(state: &State) -> Option<Message> {
     // on a non-dismissible dialog discard the Settings draft behind it (013 BUG-001, FR-010a).
     match crate::overlay::registry::topmost(state) {
         Some(open) => open.on(micold_core::overlay::Trigger::Escape).cloned(),
+        None if state.settings.settings_draft.is_some() => {
+            Some(Message::Settings(crate::features::settings::Msg::Cancelled))
+        }
+        // Feature 813 (FR-014): last, so a dialog or the Settings draft over it is answered first.
         None => state
-            .settings
-            .settings_draft
-            .is_some()
-            .then_some(Message::Settings(crate::features::settings::Msg::Cancelled)),
+            .overview
+            .open
+            .then_some(Message::Overview(crate::features::overview::Msg::Closed)),
     }
 }
 

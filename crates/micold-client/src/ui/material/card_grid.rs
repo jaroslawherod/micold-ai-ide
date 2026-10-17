@@ -109,6 +109,9 @@ mod tests {
                         reason: CardReason::Idle,
                         summary: "s".into(),
                         prs: micold_core::overview::PrDisplay::Hidden,
+                        activation: micold_core::overview::Activation::RevealOnly(
+                            micold_core::session::SessionLocation::Default,
+                        ),
                     },
                     roles(),
                 )

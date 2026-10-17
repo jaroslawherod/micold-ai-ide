@@ -83,6 +83,9 @@ pub struct State {
     /// the first frame where a row for the current session actually exists (research R7,
     /// invariant I4).
     pub pending_reveal_scroll: bool,
+    /// The location the Overview sent the user to (feature 813, R12): scrolled into view and drawn
+    /// with a session row's selected look until the next selection.
+    pub revealed: Option<SessionLocation>,
     /// Whether the sidebar's tag-filter panel is shown (feature 009, FR-002/FR-003). Mutually
     /// exclusive with `help.help_menu_open`/`project.switcher_open`. Transient — not persisted;
     /// closing it never alters `filters` (FR-007/FR-008).
@@ -684,6 +687,55 @@ pub fn current_session_row(entries: &[SidebarEntry], current: Option<SessionId>)
     None
 }
 
+/// Which rendered row is `target`'s own location row, if the list draws it (feature 813, R12).
+///
+/// Counted exactly as [`row_heights`] lays the list out, so the index addresses the same row.
+pub fn location_row(entries: &[SidebarEntry], target: &SessionLocation) -> Option<usize> {
+    let mut row = 0usize;
+    let step = |at: &SessionLocation, shown: bool, sessions: usize, row: &mut usize| {
+        let found = (at == target).then_some(*row);
+        *row += 1 + if shown { sessions } else { 0 };
+        found
+    };
+    for entry in entries {
+        match entry {
+            SidebarEntry::Default(node) => {
+                let at = SessionLocation::Default;
+                if let Some(found) = step(&at, node.sessions_shown(), node.sessions.len(), &mut row)
+                {
+                    return Some(found);
+                }
+            }
+            SidebarEntry::Worktree(node) => {
+                let at = node.location();
+                if let Some(found) = step(&at, node.sessions_shown(), node.sessions.len(), &mut row)
+                {
+                    return Some(found);
+                }
+            }
+            SidebarEntry::Group(group) => {
+                row += 1;
+                if group.expanded {
+                    for run in &group.runs {
+                        match &run.row {
+                            RunRow::Worktree(node) => {
+                                let at = node.location();
+                                if let Some(found) =
+                                    step(&at, node.sessions_shown(), node.sessions.len(), &mut row)
+                                {
+                                    return Some(found);
+                                }
+                            }
+                            RunRow::NoWorktree => row += 1,
+                        }
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
 /// Where the sidebar's list should sit so that row `index` is fully visible, or `None` if it
 /// already is (feature 024, contract §6).
 ///
@@ -1176,6 +1228,20 @@ impl crate::app::State {
         }
         scroll_target(
             &heights,
+            index,
+            self.sidebar.viewport_height as f32,
+            self.sidebar.scroll_offset as f32,
+        )
+        .map(|offset| offset.round().max(0.0) as u32)
+    }
+
+    /// Where the list should sit to show the row the Overview revealed (feature 813, R12), or
+    /// `None` when nothing is revealed, the row is not drawn, no layout is known, or it is visible.
+    pub fn revealed_scroll_offset(&self) -> Option<u32> {
+        let entries = self.sidebar_entries();
+        let index = location_row(&entries, self.sidebar.revealed.as_ref()?)?;
+        scroll_target(
+            &row_heights(&entries),
             index,
             self.sidebar.viewport_height as f32,
             self.sidebar.scroll_offset as f32,

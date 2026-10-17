@@ -360,6 +360,9 @@ fn card_model(
             open_capped: false,
             merged_capped: false,
         }),
+        activation: micold_core::overview::Activation::RevealOnly(
+            micold_core::session::SessionLocation::Default,
+        ),
     }
 }
 

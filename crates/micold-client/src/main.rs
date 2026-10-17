@@ -647,6 +647,70 @@ fn tab_reveal_scroll(app: &mut App) -> Option<Task<Message>> {
     ))
 }
 
+/// The Overview's messages, and what they ask of the window (feature 813, R12, R13).
+fn overview_message(app: &mut App, msg: micold_client::features::overview::Msg) -> Task<Message> {
+    use micold_client::features::overview::{follow_up, Msg};
+    use micold_core::overview::Activation;
+    let was_open = app.core.overview.open;
+    let Msg::CardActivated(activation) = msg else {
+        app.core.update(Message::Overview(msg));
+        return if !was_open && app.core.overview.open {
+            iced::widget::operation::focus(micold_client::ui::overview::FIRST_CARD_ID.clone())
+        } else {
+            Task::none()
+        };
+    };
+    app.core
+        .update(Message::Overview(Msg::CardActivated(activation.clone())));
+    let follow = follow_up(&activation);
+    match activation {
+        // The sidebar's own path: it selects, views and focuses the session.
+        Activation::OpenSession(_) => follow.map_or_else(Task::none, |m| update_inner(app, m)),
+        Activation::RevealOnly(_) => revealed_scroll(app),
+        Activation::OfferStart(location) => {
+            // Reveal the row, focus its start control, scroll it into view, measure it, then open
+            // the menu there: the list hangs at the anchor the row's own press would have set.
+            let focus = iced::widget::operation::focus::<Option<iced::Rectangle>>(
+                micold_client::ui::start_control_id(&location),
+            );
+            revealed_scroll(app)
+                .chain(focus)
+                .chain(micold_client::ui::scroll_focused_into_view())
+                .chain(micold_client::ui::focused_bounds_task())
+                .then(move |bounds| {
+                    let anchor = bounds.map(|b| {
+                        let px = |v: f32| v.round().clamp(0.0, f32::from(u16::MAX)) as u16;
+                        (px(b.x), px(b.y + b.height))
+                    });
+                    let open = follow.clone().map_or_else(Task::none, Task::done);
+                    match anchor {
+                        Some(anchor) => Task::done(Message::Session(
+                            micold_client::features::session::Msg::StartMenuAnchored(anchor),
+                        ))
+                        .chain(open),
+                        None => open,
+                    }
+                })
+        }
+    }
+}
+
+/// Scroll the sidebar to the row the Overview revealed, recording where the list was sent for the
+/// reason `reveal_scroll` does (BUG-002).
+fn revealed_scroll<T: Send + 'static>(app: &mut App) -> Task<T> {
+    let Some(offset) = app.core.revealed_scroll_offset() else {
+        return Task::none();
+    };
+    app.core.sidebar.scroll_offset = offset;
+    iced::widget::operation::scroll_to(
+        micold_client::ui::SIDEBAR_SCROLL_ID.clone(),
+        iced::widget::scrollable::AbsoluteOffset {
+            x: 0.0,
+            y: offset as f32,
+        },
+    )
+}
+
 fn update_inner(app: &mut App, message: Message) -> Task<Message> {
     match message {
         // ---- Feature 010: daemon connection lifecycle (binary-owned runtime state) ----
@@ -684,6 +748,10 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             };
             moved.chain(micold_client::ui::scroll_focused_into_view())
         }
+
+        // Feature 813: the Overview opens with the keyboard on its first card, and a card's
+        // activation is followed by the sidebar's own selection, start menu or reveal (R12).
+        Message::Overview(msg) => overview_message(app, msg),
 
         // The closing dialog has finished animating out; its snapshot has served its purpose.
         Message::OverlayTransitionFinished => {

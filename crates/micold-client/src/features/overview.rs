@@ -13,7 +13,7 @@ pub struct State {
 }
 
 /// What happens to the Overview.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Msg {
     /// The shortcut or the top-bar button. Does nothing while Settings is open, which cannot yield
     /// to another view without losing or saving its draft (research R2).
@@ -23,6 +23,9 @@ pub enum Msg {
     },
     /// Leave the Overview.
     Closed,
+    /// A card was activated by pointer, Enter or Space: leave the Overview. Following the
+    /// activation (select, start menu, reveal) is the root's business (research R12).
+    CardActivated(micold_core::overview::Activation),
 }
 
 /// Apply a message to the Overview's state.
@@ -35,7 +38,7 @@ pub fn update(state: &mut State, msg: Msg) -> Vec<crate::features::Outcome> {
         Msg::Toggled {
             settings_open: false,
         } => state.open = !state.open,
-        Msg::Closed => state.open = false,
+        Msg::Closed | Msg::CardActivated(_) => state.open = false,
     }
     Vec::new()
 }
@@ -74,4 +77,35 @@ pub fn badge(cards: &[micold_core::overview::CardModel]) -> Option<Badge> {
         count: attention.count,
         label: format!("{} {words}", attention.count),
     })
+}
+
+/// Which way an arrow key moves the focus: `Some(true)` forward (Right, Down), `Some(false)` back
+/// (Left, Up), `None` for any other key (research R13).
+pub fn arrow_focus(key: &iced::keyboard::Key) -> Option<bool> {
+    use iced::keyboard::{key::Named, Key};
+    match key {
+        Key::Named(Named::ArrowRight | Named::ArrowDown) => Some(true),
+        Key::Named(Named::ArrowLeft | Named::ArrowUp) => Some(false),
+        _ => None,
+    }
+}
+
+/// What follows an activation, once the Overview has closed (research R12): the existing message
+/// the sidebar sends for the same intent. A reveal-only activation sends none; an offer to start
+/// sends the start menu's, which the root anchors first (it needs the row's position).
+pub fn follow_up(activation: &micold_core::overview::Activation) -> Option<crate::app::Message> {
+    use crate::features::session::Msg as SessionMsg;
+    use micold_core::overview::Activation;
+    match activation {
+        Activation::OpenSession(id) => {
+            Some(crate::app::Message::Session(SessionMsg::Selected(*id)))
+        }
+        Activation::OfferStart(location) => {
+            Some(crate::app::Message::Session(SessionMsg::StartMenuOpened {
+                location: location.clone(),
+                unavailable_default: None,
+            }))
+        }
+        Activation::RevealOnly(_) => None,
+    }
 }
