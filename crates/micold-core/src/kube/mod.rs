@@ -89,6 +89,8 @@ pub enum Created {
 pub struct ObjectView {
     /// Its UID, for delete preconditions.
     pub uid: String,
+    /// Its `resourceVersion`, for replace preconditions.
+    pub resource_version: String,
     /// Its labels, for ownership.
     pub labels: BTreeMap<String, String>,
     /// Whether `deletionTimestamp` is set.
@@ -134,6 +136,16 @@ pub trait Cluster: Send + Sync {
         kind: ObjectKind,
         manifest: serde_json::Value,
     ) -> ClusterFuture<'_, Created>;
+    /// Replace the object `name` of `kind` with `manifest`, if its `resourceVersion` is still
+    /// `resource_version`; a stale one answers `409 Conflict` and changes nothing.
+    fn replace(
+        &self,
+        namespace: &str,
+        kind: ObjectKind,
+        name: &str,
+        resource_version: &str,
+        manifest: serde_json::Value,
+    ) -> ClusterFuture<'_, ()>;
     /// Read an object; `None` on `404`.
     fn get(
         &self,
@@ -158,8 +170,6 @@ pub trait Cluster: Send + Sync {
     fn pod_status(&self, namespace: &str, pod: &str) -> ClusterFuture<'_, Option<PodStatusView>>;
     /// Events about the named object, oldest first.
     fn events(&self, namespace: &str, name: &str) -> ClusterFuture<'_, Vec<EventView>>;
-    /// A node's `kubernetes.io/arch` label; `None` when the node is gone.
-    fn node_arch(&self, node: &str) -> ClusterFuture<'_, Option<String>>;
     /// Open a port-forward to `port` of the pod.
     fn port_forward(
         &self,

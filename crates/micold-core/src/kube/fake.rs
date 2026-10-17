@@ -19,13 +19,14 @@ struct Inner {
     namespaces: BTreeSet<String>,
     denied: BTreeSet<(String, String)>,
     failures: HashMap<&'static str, VecDeque<ApiFailure>>,
+    held: BTreeSet<Key>,
     progressions: HashMap<String, VecDeque<PodStatusView>>,
     events: HashMap<String, Vec<EventView>>,
-    nodes: HashMap<String, String>,
     logs: HashMap<String, String>,
     tunnels: VecDeque<DuplexStream>,
     calls: Vec<String>,
     next_uid: u64,
+    next_version: u64,
 }
 
 /// An in-memory cluster: objects keyed by namespace, kind and name; per-operation scripted
@@ -77,7 +78,7 @@ impl FakeCluster {
     }
 
     /// Fail the next call of `op` (`create`, `get`, `delete`, `namespace`, `review`, `pod_status`,
-    /// `events`, `node`, `port_forward`, `logs`) with `failure`. Queued per operation.
+    /// `events`, `replace`, `port_forward`, `logs`) with `failure`. Queued per operation.
     pub fn fail_next(&self, op: &'static str, failure: ApiFailure) {
         self.lock()
             .failures
@@ -98,6 +99,7 @@ impl FakeCluster {
         let uid = Self::uid(&mut inner);
         let view = ObjectView {
             uid: uid.clone(),
+            resource_version: Self::version(&mut inner),
             labels,
             deleting: false,
             storage: None,
@@ -120,6 +122,21 @@ impl FakeCluster {
         }
     }
 
+    /// Make a delete of this object only mark it as being deleted, as a finalizer that has not
+    /// finished does, until [`Self::release`].
+    pub fn hold_on_delete(&self, namespace: &str, kind: ObjectKind, name: &str) {
+        self.lock()
+            .held
+            .insert((namespace.into(), kind, name.into()));
+    }
+
+    /// Let a held object go: it is gone after the next `get` that sees it being deleted.
+    pub fn release(&self, namespace: &str, kind: ObjectKind, name: &str) {
+        self.lock()
+            .held
+            .remove(&(namespace.into(), kind, name.into()));
+    }
+
     /// The statuses `pod_status` returns for `pod`, one per call; the last one stays.
     pub fn progress(&self, pod: &str, statuses: Vec<PodStatusView>) {
         self.lock().progressions.insert(pod.into(), statuses.into());
@@ -128,11 +145,6 @@ impl FakeCluster {
     /// Events reported for `name`.
     pub fn set_events(&self, name: &str, events: Vec<EventView>) {
         self.lock().events.insert(name.into(), events);
-    }
-
-    /// A node and its architecture.
-    pub fn set_node(&self, node: &str, arch: &str) {
-        self.lock().nodes.insert(node.into(), arch.into());
     }
 
     /// The log a pod returns.
@@ -177,6 +189,11 @@ impl FakeCluster {
     fn uid(inner: &mut Inner) -> String {
         inner.next_uid += 1;
         format!("uid-{}", inner.next_uid)
+    }
+
+    fn version(inner: &mut Inner) -> String {
+        inner.next_version += 1;
+        inner.next_version.to_string()
     }
 
     /// Log the call and take its scripted failure, if any.
@@ -232,6 +249,7 @@ impl Cluster for FakeCluster {
                 let uid = Self::uid(&mut inner);
                 let view = ObjectView {
                     uid: uid.clone(),
+                    resource_version: Self::version(&mut inner),
                     labels: labels_of(&manifest),
                     deleting: false,
                     storage: manifest["spec"]["resources"]["requests"]["storage"]
@@ -240,6 +258,43 @@ impl Cluster for FakeCluster {
                 };
                 inner.objects.insert(key, (view, manifest));
                 Created::Created { uid }
+            });
+        now(result)
+    }
+
+    fn replace(
+        &self,
+        namespace: &str,
+        kind: ObjectKind,
+        name: &str,
+        resource_version: &str,
+        manifest: serde_json::Value,
+    ) -> ClusterFuture<'_, ()> {
+        let result = self
+            .enter("replace", format!("{kind} {name}"))
+            .and_then(|mut inner| {
+                let key = (namespace.to_string(), kind, name.to_string());
+                let current = match inner.objects.get(&key) {
+                    None => return Err(not_found(name)),
+                    Some((view, _)) => view.resource_version.clone(),
+                };
+                if current != resource_version {
+                    return Err(ApiFailure {
+                        code: 409,
+                        reason: "Conflict".into(),
+                        message: format!(
+                            "the object has been modified; resourceVersion {resource_version} is \
+                             not {current}"
+                        ),
+                    });
+                }
+                let version = Self::version(&mut inner);
+                if let Some((view, stored)) = inner.objects.get_mut(&key) {
+                    view.resource_version = version;
+                    view.labels = labels_of(&manifest);
+                    *stored = manifest;
+                }
+                Ok(())
             });
         now(result)
     }
@@ -255,7 +310,7 @@ impl Cluster for FakeCluster {
             .map(|mut inner| {
                 let key = (namespace.to_string(), kind, name.to_string());
                 let view = inner.objects.get(&key).map(|(v, _)| v.clone());
-                if view.as_ref().is_some_and(|v| v.deleting) {
+                if view.as_ref().is_some_and(|v| v.deleting) && !inner.held.contains(&key) {
                     inner.objects.remove(&key);
                 }
                 view
@@ -281,6 +336,12 @@ impl Cluster for FakeCluster {
                         reason: "Conflict".into(),
                         message: format!("precondition failed: UID in precondition: {uid}"),
                     }),
+                    Some(_) if inner.held.contains(&key) => {
+                        if let Some((view, _)) = inner.objects.get_mut(&key) {
+                            view.deleting = true;
+                        }
+                        Ok(())
+                    }
                     Some(_) => {
                         inner.objects.remove(&key);
                         Ok(())
@@ -335,13 +396,6 @@ impl Cluster for FakeCluster {
         let result = self
             .enter("events", name.to_string())
             .map(|inner| inner.events.get(name).cloned().unwrap_or_default());
-        now(result)
-    }
-
-    fn node_arch(&self, node: &str) -> ClusterFuture<'_, Option<String>> {
-        let result = self
-            .enter("node", node.to_string())
-            .map(|inner| inner.nodes.get(node).cloned());
         now(result)
     }
 
@@ -459,5 +513,108 @@ mod tests {
             Some(running())
         );
         assert_eq!(fake.calls()[0], "namespace default");
+    }
+
+    #[tokio::test]
+    async fn replace_with_the_current_version_stores_it_under_a_new_one() {
+        let fake = FakeCluster::new();
+        fake.create("default", ObjectKind::Secret, pod("s"))
+            .await
+            .unwrap();
+        let before = fake
+            .get("default", ObjectKind::Secret, "s")
+            .await
+            .unwrap()
+            .unwrap();
+        let new =
+            serde_json::json!({"kind": "Secret", "metadata": {"name": "s", "labels": {"a": "c"}}});
+        fake.replace(
+            "default",
+            ObjectKind::Secret,
+            "s",
+            &before.resource_version,
+            new.clone(),
+        )
+        .await
+        .unwrap();
+        let after = fake
+            .get("default", ObjectKind::Secret, "s")
+            .await
+            .unwrap()
+            .unwrap();
+        assert_ne!(after.resource_version, before.resource_version);
+        assert_eq!(after.uid, before.uid);
+        assert_eq!(after.labels.get("a").map(String::as_str), Some("c"));
+        assert_eq!(fake.manifest("default", ObjectKind::Secret, "s"), Some(new));
+    }
+
+    #[tokio::test]
+    async fn replace_with_a_stale_version_is_a_conflict_and_changes_nothing() {
+        let fake = FakeCluster::new();
+        fake.create("default", ObjectKind::Secret, pod("s"))
+            .await
+            .unwrap();
+        let before = fake
+            .get("default", ObjectKind::Secret, "s")
+            .await
+            .unwrap()
+            .unwrap();
+        let new = serde_json::json!({"kind": "Secret", "metadata": {"name": "s"}});
+        let stale = fake
+            .replace("default", ObjectKind::Secret, "s", "stale", new)
+            .await
+            .unwrap_err();
+        assert_eq!(stale.code, 409);
+        let after = fake
+            .get("default", ObjectKind::Secret, "s")
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(after, before);
+        assert_eq!(
+            fake.manifest("default", ObjectKind::Secret, "s"),
+            Some(pod("s"))
+        );
+    }
+
+    #[tokio::test]
+    async fn a_held_pod_stays_terminating_after_its_delete() {
+        let fake = FakeCluster::new();
+        let Created::Created { uid } = fake
+            .create("default", ObjectKind::Pod, pod("p"))
+            .await
+            .unwrap()
+        else {
+            panic!("created");
+        };
+        fake.hold_on_delete("default", ObjectKind::Pod, "p");
+        fake.delete("default", ObjectKind::Pod, "p", &uid)
+            .await
+            .unwrap();
+        for _ in 0..3 {
+            let view = fake.get("default", ObjectKind::Pod, "p").await.unwrap();
+            assert!(view.is_some_and(|v| v.deleting));
+        }
+        fake.release("default", ObjectKind::Pod, "p");
+        assert!(fake
+            .get("default", ObjectKind::Pod, "p")
+            .await
+            .unwrap()
+            .is_some_and(|v| v.deleting));
+        assert_eq!(
+            fake.get("default", ObjectKind::Pod, "p").await.unwrap(),
+            None
+        );
+    }
+
+    #[tokio::test]
+    async fn port_forward_records_the_pod_and_port() {
+        let fake = FakeCluster::new();
+        fake.create("default", ObjectKind::Pod, pod("p"))
+            .await
+            .unwrap();
+        let _stream = fake.port_forward("default", "p", 2222).await.unwrap();
+        assert!(fake.calls().contains(&"port_forward p 2222".to_string()));
+        assert!(fake.take_tunnel_peer().is_some());
     }
 }
