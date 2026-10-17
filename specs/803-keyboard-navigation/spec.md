@@ -46,6 +46,12 @@ quick-switcher palette follow-up vs in scope."
   the chords; Cmd+Shift+[ ] is the common next/previous-tab convention). None equals an existing
   app chord (E, T, D, H, W, C, V, O, Arrows). _(agent-resolved:
   docs/user-guide/terminal-panes.md#shortcuts; spec.md#FR-006; platform shortcut lists)_
+- Q: On macOS laptops PageUp/PageDown need Fn; keep Cmd+Shift+PageUp/PageDown for the project
+  chords or pick other keys? → A: Keep Ctrl/Cmd+Shift+PageUp/PageDown on all three platforms (on a
+  macOS laptop: Cmd+Shift+Fn+Up/Down). _(recommended default, pending user confirmation)_
+- Q: Is "jump directly" to a location, session or project in scope, and in what form? → A: Out of
+  scope; a quick-switcher palette is a follow-up issue. _(recommended default, pending user
+  confirmation)_
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -158,25 +164,6 @@ their Linux/Windows and macOS forms.
 
 ---
 
-### User Story 5 - Jump directly to a location, session or project (Priority: P3)
-
-A user wants to go straight to a particular worktree, session or project without stepping through
-the ones between.
-
-**Why this priority**: stepping covers the acceptance criteria; direct jumps save presses in long
-lists.
-
-**Independent Test**: depends on the answer to FR-014.
-
-**Acceptance Scenarios**:
-
-1. **Given** [NEEDS CLARIFICATION: is "jump to one directly" in scope here, and in what form —
-   (a) out of scope, a quick-switcher palette as a follow-up issue; (b) numbered chords that pick
-   the Nth location; (c) a keyboard-opened, filterable picker in this feature?], **When** …,
-   **Then** …
-
----
-
 ### Edge Cases
 
 - **Empty lists**: a project with only Default and no worktree: the location chords keep Default
@@ -229,8 +216,8 @@ lists.
   | Previous / next project | Ctrl+Shift+PageUp / Ctrl+Shift+PageDown | Cmd+Shift+PageUp / Cmd+Shift+PageDown |
 
   None of these collides with FR-006's lists or a platform input-method shortcut (see
-  *Clarifications*). [NEEDS CLARIFICATION: on macOS laptops PageUp and PageDown need Fn, so the
-  project chords are Cmd+Shift+Fn+Up/Down there: keep them, or pick other keys?]
+  *Clarifications*). The project chords use PageUp/PageDown on all three platforms; on a macOS
+  laptop without those keys they are Cmd+Shift+Fn+Up / Cmd+Shift+Fn+Down.
 - **FR-002**: The next/previous location chord MUST make the location after/before the current one
   in location order current, with the same result as clicking that location's row.
 - **FR-003**: The next/previous session chord MUST make the session after/before the current one in
@@ -263,8 +250,8 @@ lists.
   sidebar selection does.
 - **FR-013**: The user guide MUST list the six chords, with both platform forms and the wrap rule,
   in every place it lists the app's keyboard shortcuts (Principle VII).
-- **FR-014**: Direct jumps: [see the marker in User Story 5]. Whatever form is chosen MUST meet
-  FR-006 to FR-008.
+- **FR-014**: Jumping directly to a location, session or project (numbered chords or a picker) is
+  out of scope; a quick-switcher palette is a follow-up issue.
 - **FR-015**: Each window MUST navigate its own selection only.
 - **FR-016**: A chord MUST be recognised by its physical key (the key position FR-001 names on a US
   layout) with the modifiers held, whatever character the active keyboard layout produces for it.
@@ -295,8 +282,7 @@ lists.
 
 - The chords are fixed in this feature; user-configurable key bindings are out of scope (the app
   has no key-binding settings today) and a candidate follow-up.
-- A quick-switcher (fuzzy-find palette) is out of scope unless the answer to FR-014 brings a
-  picker in; it is a candidate follow-up either way.
+- Jumping directly (FR-014) is out of scope; a quick-switcher (fuzzy-find palette) is a follow-up.
 - Wrapping, not stopping, at the ends: it matches tab cycling in common desktop apps and lets a user
   reach the last entry in one press.
 - The app's existing reserved-chord convention (platform primary modifier plus Shift, taken from
@@ -308,6 +294,7 @@ lists.
 ## Out of Scope
 
 - User-configurable key bindings.
-- A fuzzy-find quick-switcher palette (unless FR-014 brings it in).
+- Jumping directly to a location, session or project: numbered chords or a fuzzy-find
+  quick-switcher palette (follow-up issue).
 - An in-app list of shortcuts (the app has none; the user guide is the list).
 - Moving between windows, panes or terminal tabs (panes already have their own chords).
