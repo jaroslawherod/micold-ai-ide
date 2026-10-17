@@ -77,7 +77,7 @@ Mutants each test would fail: a remote event that writes to the local link or ou
 serves a second bridge from a different process, delivers input to every session, or drops the
 other client when one leaves; a cut remote link that stalls a local session (T053).
 
-## M5 (T056-T065): test-after deviation
+## M5 (T056-T065): test-after, red proven by mutation
 
 The M5 behaviours (the `~/.ssh/config` alias list and the `ssh -G` parser, `SshDuplicate{other}`
 over the resolved (host, user, port), the host picker and its widget, the recent-errors list, the
@@ -88,3 +88,12 @@ duplicate message naming the other daemon, picker geometry, the failure reason s
 sshd with no key recorded), and review A and B read each against the behaviour. Mutants to apply
 if audited: "parse_g takes the first of repeated keys instead of the effective one", "duplicate
 check compares the alias instead of the resolved host", "watchdog ignores ConnectTimeout".
+
+Red pass after the fact (mutate production, run, restore): removing the user/port/key clearing in
+`SshHostChosen` fails `choosing_a_host_from_the_picker_fills_only_the_host_and_clears_the_other_fields`;
+making the registry's duplicate comparison never match fails `a_second_daemon_for_the_same_host_user_and_port_is_refused_naming_the_first`,
+`editing_a_daemon_to_its_own_target_is_not_a_duplicate_but_to_another_is`,
+`two_aliases_of_one_machine_are_refused_when_ssh_resolves_them_alike` (core) and
+`a_second_alias_of_the_same_machine_is_refused_naming_the_first_daemon` (client). Both restored; the
+tests pass on the real code. The `parse_g` and `ConnectTimeout` mutants stay unproven (the latter is
+covered only by the off-by-default real-sshd tests).
