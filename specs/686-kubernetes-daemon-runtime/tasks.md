@@ -106,7 +106,8 @@ and kubeconfig discovery; revision 1's pieces reverted.
 - [ ] T108 [P] [U18] [U19] [U20] [U21] [U120] Name tests in `core/kube/names.rs`: the revision-1 key, slug and `is_ours` tests stay as they are; `ResourceNames.access_secret` = `<base>-ssh-access`; `all_secrets(&allowed)` lists the access secret first, then one name per allowed credential; `ObjectKind::noun` (from stash@{0}).
 - [ ] T109 [P] [U26] `KubeFailure` text tests in `core/kube/classify.rs`: every revision-2 variant of the data model except `Provision` (added in M5) — `ContextMissing`, `NoKubeconfig`, `Unreachable`, `ExecPlugin`, `NamespaceMissing`, `Forbidden`, `ImagePull`, `Unschedulable`, `ClaimNotBound`, `Conflict`, `CredentialSource`, `ImageContract`, `HostKeyMismatch`, `PhaseTimeout`, `Cancelled`, `StopTimeout`, `Api`, `Unavailable` — displays exactly its contract §6 text (`Unavailable`: data model `StartOutcome` text); `NoRuntime`, `Build`, `Push`, `VolumeTooSmall` no longer exist.
 - [ ] T110 [P] [U121] `FakeCluster` tests in `core/kube/fake.rs`: `replace` with the current `resourceVersion` stores the object under a new one; with a stale one answers `ApiFailure` 409 and changes nothing; `hold_on_delete` keeps a deleted pod terminating (`deletionTimestamp` set) until released (from stash@{0}); `port_forward(namespace, pod, port)` records the port.
-- [ ] T020 [P] [US1] [U45] [U46] [U47] [U48] Kubeconfig tests in `core/kube/kubeconfig.rs`, parameterised over Linux, macOS and Windows (FR-022): `candidates` splits `KUBECONFIG` on `;` (Windows) or `:` (else), else `<home>/.kube/config` with home `%USERPROFILE%` (Windows) or `$HOME`; `search_path(process_path, login_shell_path, home, platform)` is the process `PATH`, then the login shell's `PATH` (absent on Windows), then `/opt/homebrew/bin`, `/usr/local/bin`, `~/.local/bin`, `~/google-cloud-sdk/bin`, de-duplicated keeping the first; `parse_login_shell_output` returns the text between the markers, `None` without them. (Tests in stash@{0}.)
+- [ ] T143 [U13] [U14] [U15] [U16] Rework the persistence test `core/tests/daemons_kube.rs` to revision-2 settings (no `DaemonImageSource`; the revision-2 `KubeSettings` with `image`, `providers`, `resources`): the runtime round-trips through `settings.json` as `{"kind":"kubernetes", ...}` without a `settings_version` bump, an unreadable entry stays `Unsupported` verbatim, label/endpoint and the duplicate-name refusal as before. Before T111/T112.
+- [ ] T020 [P] [US1] [U45] [U46] [U47] [U48] Kubeconfig tests in `core/kube/kubeconfig.rs` (registered as `pub mod kubeconfig;` in `core/kube/mod.rs`), parameterised over Linux, macOS and Windows (FR-022): `candidates` splits `KUBECONFIG` on `;` (Windows) or `:` (else), else `<home>/.kube/config` with home `%USERPROFILE%` (Windows) or `$HOME`; `search_path(process_path, login_shell_path, home, platform)` is the process `PATH`, then the login shell's `PATH` (absent on Windows), then `/opt/homebrew/bin`, `/usr/local/bin`, `~/.local/bin`, `~/google-cloud-sdk/bin`, de-duplicated keeping the first; `parse_login_shell_output` returns the text between the markers, `None` without them. (Tests in stash@{0}.)
 
 ### Implementation
 
@@ -114,9 +115,9 @@ and kubeconfig discovery; revision 1's pieces reverted.
 - [ ] T112 [U1] [U2] [U5] [U6] [U7] [U8] [U117] [U118] [U119] `KubeSettings` revision 2 in `core/kube/settings.rs`: remove `RegistryRepo`, `NodeArch`, `registry`, `arch`; add `image: Option<ImageRef>`, `providers: BTreeSet<AiCli>`, `resources: DaemonResources`; `Quantity::{to_k8s, parse_k8s}`. `core/daemons.rs` and its tests follow (depends on T111).
 - [ ] T113 [P] [U18] [U19] [U20] [U21] [U120] `ResourceNames.access_secret`, `all_secrets`, `ObjectKind::noun` in `core/kube/names.rs` and `core/kube/mod.rs`.
 - [ ] T114 [P] [U26] `KubeFailure` revision 2 in `core/kube/classify.rs` (add `ImageContract`, `HostKeyMismatch`, `StopTimeout`, `Api`, `Unavailable`; remove `NoRuntime`, `Build`, `Push`, `VolumeTooSmall`; `From<ApiFailure>` from stash@{0}).
-- [ ] T115 [U121] `Cluster` port revision 2 in `core/kube/mod.rs`: add `replace(namespace, kind, name, resource_version, manifest)`; `port_forward(namespace, pod, port)`; remove `node_arch`. `FakeCluster` gains `replace` and `hold_on_delete` in `core/kube/fake.rs`.
-- [ ] T116 Revert revision 1's listener auth and tunnel transport (research K2, K4): delete `core/protocol/auth.rs` and its registration; restore `daemon/server.rs` and `core/connect.rs` to `origin/main` (`git diff origin/main -- crates/micold-daemon/src/server.rs crates/micold-core/src/connect.rs` is empty); feature 027's empty-token-is-fatal tests stay green.
-- [ ] T026 [P] [US1] [U45] [U46] [U47] [U48] `candidates`, `search_path`, `parse_login_shell_output` in `core/kube/kubeconfig.rs` (stub in stash@{0}).
+- [ ] T115 [U121] `Cluster` port revision 2 in `core/kube/mod.rs`: add `replace(namespace, kind, name, resource_version, manifest)`; `port_forward(namespace, pod, port)`; remove `node_arch`. `FakeCluster` gains `replace` and `hold_on_delete` in `core/kube/fake.rs`. `StartPhase::Image` in `core/kube/start.rs` stays until T027 (M1b) replaces the phase list.
+- [ ] T116 Revert revision 1's listener auth and tunnel transport (research K2, K4): remove its additions (`ListenerAuth`, `AuthConfigError`, `listener_auth`) from `core/protocol/auth.rs`, which stays as feature 027's token module; restore `core/protocol/auth.rs`, `daemon/server.rs` and `core/connect.rs` to `origin/main` (`git diff origin/main -- crates/micold-core/src/protocol/auth.rs crates/micold-daemon/src/server.rs crates/micold-core/src/connect.rs` is empty); feature 027's empty-token-is-fatal tests stay green.
+- [ ] T026 [P] [US1] [U45] [U46] [U47] [U48] `candidates`, `search_path`, `parse_login_shell_output` in `core/kube/kubeconfig.rs`, registered in `core/kube/mod.rs` (stub in stash@{0}).
 
 **Checkpoint**: `mise run test-core` green; a revision-2 Kubernetes daemon round-trips through `settings.json`.
 
@@ -365,10 +366,10 @@ behaviour (Kubernetes cannot be added before M6): `docs-not-needed`.
 
 ### M1a — Revision-2 core types and kubeconfig discovery
 
-- **Tasks**: T106–T116, T020, T026
+- **Tasks**: T106–T116, T143, T020, T026
 - **Deliverable**: `micold-core` holds revision-2 `KubeSettings` (image, AI CLIs, shared `DaemonResources`) persisted as `DaemonRuntime::Kubernetes`, the access-secret name, the revision-2 failure texts, a `Cluster` port with `replace`, and kubeconfig discovery on Linux, macOS and Windows; revision 1's listener auth, `Transport::Tunnel` and `daemon_image` are gone.
 - **Satisfies**: FR-002, FR-018, FR-020, FR-022 (discovery); FR-005 (resources type); FR-016 (names)
-- **Verify**: `mise run test-core`; `git diff origin/main -- crates/micold-daemon/src/server.rs crates/micold-core/src/connect.rs` prints nothing
+- **Verify**: `mise run test-core`; `git diff origin/main -- crates/micold-core/src/protocol/auth.rs crates/micold-daemon/src/server.rs crates/micold-core/src/connect.rs` prints nothing
 - **Depends on**: —
 - **Tier**: full
 
@@ -414,7 +415,7 @@ behaviour (Kubernetes cannot be added before M6): `docs-not-needed`.
 - **Deliverable**: a Kubernetes daemon in settings opens in Edit with context, namespace, image, AI CLIs, resources (fields shared with the container form) and allowed credentials; the Add form does not offer Kubernetes yet (FR-024).
 - **Satisfies**: US5 scenario 1 (form, minus placement and volume); FR-001, FR-002, FR-004 (fields), FR-005 (resources), FR-018, FR-024
 - **Verify**: `cargo test -p micold-client --test features_daemons`; `cargo test -p micold-client --test daemons_section_geometry`
-- **Depends on**: M1a
+- **Depends on**: M1c (context listing in `LiveCluster`, T023/T028)
 - **Tier**: full
 
 ### M4b — Placement fields, Stop, Remove, Logs from the row
