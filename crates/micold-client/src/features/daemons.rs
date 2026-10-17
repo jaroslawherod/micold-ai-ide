@@ -1199,7 +1199,12 @@ pub fn update(state: &mut State, model: &mut Model<'_>, msg: Msg) -> Vec<Outcome
             state.repository_error = None;
         }
         Msg::RepositoryAdded(id) => return add_repository(state, model, id),
-        Msg::Provisioning(id, event) => state.provisioning.entry(id).or_default().apply(event),
+        // A late event of a start that already ended must not outlive it.
+        Msg::Provisioning(id, event) => {
+            if model.links.state(id) == Some(&DaemonState::Starting) {
+                state.provisioning.entry(id).or_default().apply(event);
+            }
+        }
         Msg::AutoStartToggled(v) => edit(state, &|d| d.auto_start = v),
         Msg::Started(id) => {
             start(state, model, id);

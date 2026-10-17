@@ -53,6 +53,8 @@ Milestone notes:
 
 ## Review rounds
 
+- M2 review A round 1 (`9cace2fa233d:d1333e94`): CLEAN, 3 MINOR; F2 (record_last failure -> DaemonStart) and F3 (late Provisioning event ignored unless Starting) fixed; F1 declined below.
+
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
 | Spec | 1 | 010544dfa6285dd3519917045f0d621c0e6d449e:70f5872667fb6e8e9126555f2573ce86e0a7bf80 | CHANGES: 3 MAJOR, 3 MINOR (all fixed; F4 fixed as `unreachable`, not `failed`) |
@@ -65,6 +67,8 @@ Milestone notes:
 | M1 review B (conformance, sonnet) | 1 | 4de41d6b382fa4417634887ea9108075302f1c02:d99547189d32d7da84a573ed1e106fc02ad026e7 | CLEAN, 4 MINOR (F2, F3 fixed, prose only; F1 declined; F4 covered by the gate) |
 
 ## Declined review findings
+
+- M2 review A F1 (MINOR, `SystemSsh.cancel` on the shared host): kept, T020 requires the field; `SSH_HOST` stays token-less (`cancel: None`) and the per-attempt token cancels through `guard`. M7 builds a per-attempt `SystemSsh` clone.
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|

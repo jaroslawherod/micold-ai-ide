@@ -426,7 +426,10 @@ async fn start_step(
                 .run(cmd, Vec::new(), Some(bound), None)
                 .await
                 .map_err(|e| io_fail(Step::Start, e))?;
-            checked(Step::Start, out, Some(bound), app_owned)?;
+            if !out.ok() {
+                // The image's entrypoint cannot start the daemon unattended without this record.
+                return Err(fail(Step::Start, FailureCause::DaemonStart).with_output(out.stderr));
+            }
         }
         let cmd = argv::bridge(
             &target.reach,
