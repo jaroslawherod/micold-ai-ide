@@ -61,6 +61,20 @@ flow:feature.
 - **Attention badge**: a mark on the Overview button that shows the worst card state across all
   cards when it is Needs action or Needs attention.
 
+## Clarifications
+
+### Session 2026-10-17
+
+- Q: Does the Overview replace the main pane (sidebar and top bar stay visible) or float over the
+  whole window? → A: It replaces the main pane, like the Changes and Compare views; sidebar and top
+  bar stay visible, and a sidebar selection closes it _(agent-resolved:
+  crates/micold-client/src/ui/mod.rs#view (feature 482 V1, feature 483 C1 main-pane views);
+  spec.md#FR-009, FR-012 need the top bar visible while the Overview is open)_
+- Q: What does the Overview shortcut do while Settings (which takes the whole content area, sidebar
+  included) is open? → A: Deferred to the plan: follow how Settings already yields to the other
+  main-pane views; no new requirement _(agent-resolved: crates/micold-client/src/ui/mod.rs#view,
+  feature 027 FR-026)_
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - See every worktree's state in one place (Priority: P1)
@@ -314,8 +328,11 @@ as the summary and *2/5* as the progress; a session without hooks shows Story 4'
 - **FR-022**: The user guide MUST describe the Overview, its card states and what makes a location
   enter each, the progress sources, and the shortcut; the shortcut MUST also be listed wherever the
   app's shortcuts are documented (Principle VII).
-- **FR-023**: The Overview MUST render [NEEDS CLARIFICATION: in place of the main pane (sidebar and
-  top bar stay visible), or as an overlay over the whole window?].
+- **FR-023**: The Overview MUST render in place of the main pane, as the Changes and Compare views do
+  (features 482, 483): the top bar (with the Overview button and its badge) and the sidebar stay
+  visible, and switching into and out of it crossfades like any other main-pane change. It is not a
+  floating surface or dialog. Selecting a location or session in the sidebar while the Overview is
+  open MUST close it and show that selection.
 
 ### Key Entities
 
