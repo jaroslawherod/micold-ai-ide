@@ -15,6 +15,8 @@ use uuid::Uuid;
 use super::errors::OpError;
 use crate::naming::{ConventionalType, WorktreeNaming};
 use crate::project::{validate_rename, RenameError};
+use crate::review::comment::{CommentRef, Outcome, MAX_REPLY_CHARS};
+use crate::review::prompt::REPORT_TOOL;
 use crate::session::AiCli;
 use crate::worktree::CreateMode;
 
@@ -156,6 +158,14 @@ pub enum Operation {
     SendSessionInput {
         session: SessionRef,
         text: NonEmptyText,
+    },
+    /// Report the outcome of review comment `comment` of the caller's entry (feature 946,
+    /// contracts/agent-tool.md). The reply is never logged.
+    ReportReviewComment {
+        comment: CommentRef,
+        outcome: Outcome,
+        /// Raw as sent; empty when an applied report gives none.
+        reply: String,
     },
     /// A new worktree: on a literal `branch`, or on the branch and directory the New worktree
     /// form derives from type, ticket and name (feature 550).
@@ -303,6 +313,7 @@ impl Operation {
             Operation::GetSession { .. } => "get_session",
             Operation::ReadSessionOutput { .. } => "read_session_output",
             Operation::SendSessionInput { .. } => "send_session_input",
+            Operation::ReportReviewComment { .. } => REPORT_TOOL,
             Operation::CreateWorktree { .. } => "create_worktree",
             Operation::CreateSession { .. } => "create_session",
             Operation::StartSession { .. } => "start_session",
@@ -337,6 +348,7 @@ impl Operation {
             | Operation::InterruptSession { session }
             | Operation::DeleteSession { session } => session.0.to_string(),
             Operation::CreateWorktree(request) => request.audit_target(),
+            Operation::ReportReviewComment { comment, .. } => comment.to_string(),
             Operation::CreateSession { worktree, .. }
             | Operation::RenameWorktree { worktree, .. }
             | Operation::DeleteWorktree { worktree, .. } => worktree.as_str().to_string(),
@@ -679,6 +691,31 @@ const TOOLS: &[Tool] = &[
         shipped: true,
     },
     Tool {
+        name: REPORT_TOOL,
+        description: "Report the outcome of one review comment the user sent you, by its \
+            reference: applied when you made the change, or answered with a reply explaining why \
+            not. The comment's status and your reply show next to it in the user's Changes view. \
+            Only comments of your own worktree (or of the project root, for a session running \
+            there) can be reported.",
+        properties: || {
+            json!({
+                "comment": {"type": "string", "minLength": 1,
+                    "description": "The comment's reference from the review message, such as \
+                        C-1a2b3c4d."},
+                "outcome": {"type": "string", "enum": ["applied", "answered"],
+                    "description": "applied: you made the change. answered: you did not, and the \
+                        reply says why."},
+                "reply": {"type": "string",
+                    "description": "What you did, or why not. Required for answered; at most \
+                        20000 characters."},
+            })
+        },
+        required: &["comment", "outcome"],
+        read_only: false,
+        destructive: false,
+        shipped: true,
+    },
+    Tool {
         name: "delete_session",
         description: "Delete another session of the project after the user confirms in an app \
             window. A session cannot delete itself.",
@@ -767,6 +804,7 @@ pub fn parse_operation(name: &str, arguments: &Value) -> Result<Operation, OpErr
             session: required_session(args, "session")?,
             text: non_empty_text(args, "text")?,
         },
+        REPORT_TOOL => report_review_comment(args)?,
         "create_worktree" => Operation::CreateWorktree(create_worktree_request(args)?),
         "create_session" => Operation::CreateSession {
             worktree: optional_worktree(args, "worktree")?.ok_or_else(|| {
@@ -1008,6 +1046,44 @@ fn display_name(args: &Map<String, Value>, key: &str) -> Result<String, OpError>
             RenameError::Empty => format!("{key} cannot be empty"),
             RenameError::Whitespace => format!("{key} cannot be only whitespace"),
         })
+    })
+}
+
+/// `report_review_comment`'s checks 1–4 of contracts/agent-tool.md, in order.
+fn report_review_comment(args: &Map<String, Value>) -> Result<Operation, OpError> {
+    let comment = args
+        .get("comment")
+        .and_then(Value::as_str)
+        .and_then(CommentRef::parse)
+        .ok_or_else(|| {
+            OpError::invalid_input(
+                "comment is not a comment reference; references look like C-1a2b3c4d",
+            )
+        })?;
+    let outcome = match args.get("outcome").and_then(Value::as_str) {
+        Some("applied") => Outcome::Applied,
+        Some("answered") => Outcome::Answered,
+        _ => {
+            return Err(OpError::invalid_input(
+                "outcome must be \"applied\" or \"answered\"",
+            ))
+        }
+    };
+    let reply = optional_text(args, "reply")?.unwrap_or_default();
+    if outcome == Outcome::Answered && reply.trim().is_empty() {
+        return Err(OpError::invalid_input(
+            "an answered comment needs an explanation in reply",
+        ));
+    }
+    if reply.chars().count() > MAX_REPLY_CHARS {
+        return Err(OpError::invalid_input(format!(
+            "the reply is over the {MAX_REPLY_CHARS}-character limit"
+        )));
+    }
+    Ok(Operation::ReportReviewComment {
+        comment,
+        outcome,
+        reply,
     })
 }
 

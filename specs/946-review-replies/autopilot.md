@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-jjniz9
 - **Started**: 2026-10-17
 - **Phase**: milestone M2
-- **Next step**: M2 implement (T019–T034)
+- **Next step**: M2 implement, continue at T022 (see Handover)
 
 ## Pull requests
 
@@ -74,7 +74,24 @@ split along s6 (M3) is the only scenario split with a deliverable on each side.
 
 ## Handover
 
-None.
+M2 unit 1 (context cap). Done and committed: T019, T020, T023, T024 (core `EntryReview::report`,
+`ReviewError::Draft`, `MAX_REPLY_CHARS`, `reply::{display, shortened, CARD_CHARS}`), T021, T025
+(core tool, catalog, parse, policy arm). **The workspace does not compile**: `micold-daemon`'s
+`read_call` match in `src/mcp/tools.rs` lacks `Operation::ReportReviewComment` — T026 adds it.
+
+Next: T022 (write `crates/micold-daemon/tests/review_reports.rs` red first), then T026. Design
+worked out for T026: `Reviews::report(catalog, project, dir, reference, outcome, reply, by, at)`
+in `src/review.rs`, like `apply_edit` (clone the entry, `EntryReview::report`, `save_reviews(file_with(..))`,
+then insert and return `changed(..)`); lookup in `dir` (caller's `worktree_dir`, `""` for Default:
+see `resolve_caller` in `src/mcp/tools.rs`), else any other entry with the reference →
+`refused_by_policy`, else `not_found`; `InSend`/`Draft` → `Conflict`; `Invalid` → `invalid_input`;
+write failure → `service_error`; messages from contracts/agent-tool.md. `DaemonState::review_report`
+in `src/state.rs` beside `review_edit` (lock, call, `broadcast_locked`). In `dispatch`, an arm
+running it through `blocking`, after `resolve_caller` + `policy_for`; result JSON `{comment, status,
+file, lines ("12-14", or "12" for one line), previous_status}`. The audit line is `call`'s (already
+names the reference only). Then T027–T034 (client, showcase, docs, visual pass: cannot run here,
+no xdotool). Known unrelated: `a_save_over_an_unreadable_file_is_refused_and_leaves_it_untouched`
+fails when tests run as root in this container.
 
 ## Open escalation
 

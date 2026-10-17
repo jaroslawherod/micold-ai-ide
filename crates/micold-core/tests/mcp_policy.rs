@@ -537,3 +537,28 @@ fn the_explicit_request_does_not_change_the_policy_decision_for_create_session()
         }
     }
 }
+
+/// Feature 946 (D4, D5): a report changes only a comment's status, so it proceeds without a
+/// confirmation for a worktree caller and for a Default caller, whatever the cross-session option.
+#[test]
+fn report_review_comment_proceeds_for_a_worktree_caller_and_a_default_caller() {
+    let operation = Operation::ReportReviewComment {
+        comment: micold_core::review::comment::CommentRef::parse("C-1a2b3c4d").unwrap(),
+        outcome: micold_core::review::comment::Outcome::Answered,
+        reply: "Not needed".into(),
+    };
+    for location in [in_worktree("b"), SessionLocation::Default] {
+        for access in EVERY_ACCESS {
+            assert_eq!(
+                decide(
+                    &caller(location.clone()),
+                    &operation,
+                    &TargetFacts::default(),
+                    access
+                ),
+                PolicyDecision::Proceed,
+                "{location:?} {access:?}"
+            );
+        }
+    }
+}
