@@ -1044,7 +1044,10 @@ pub fn started(state: &mut crate::app::State, session: Session) -> Vec<crate::fe
             .or_default()
             .push(session);
     }
-    let mut outcomes = vec![crate::features::Outcome::LocationOpened(location)];
+    let mut outcomes = vec![
+        crate::features::Outcome::LocationOpened(location),
+        crate::features::Outcome::MainAreaTaken,
+    ];
     outcomes.extend(state.set_current_session(Some(id)));
     outcomes.extend(state.focus_terminal());
     outcomes

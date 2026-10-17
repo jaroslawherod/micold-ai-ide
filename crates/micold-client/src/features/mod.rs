@@ -90,6 +90,10 @@ pub enum Outcome {
     /// it opened would silently close, so the outgoing location is folded into the user's set
     /// first. `session::started` emits the same fact a moment earlier for the session it creates.
     LocationOpened(micold_core::session::SessionLocation),
+    /// A view this feature just opened takes the main area: whatever covers it (the worktree
+    /// Overview, feature 813 FR-023) gives way. `session::started` emits it for the session it
+    /// creates and shows.
+    MainAreaTaken,
     /// The sidebar should scroll to the current session's row once one exists (research R7, I4).
     RevealScrollArmed,
     /// The user arrived in a project, so view state switched on for the previous one resets.

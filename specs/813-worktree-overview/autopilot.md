@@ -12,7 +12,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-2lmupk
 - **Started**: 2026-10-17
 - **Phase**: milestones
-- **Next step**: M1 verify (gate, review A, review B, visual pass)
+- **Next step**: M1 full gate, push, PR
 
 ## Pull requests
 
@@ -77,7 +77,12 @@ counts are split off as M2 along acceptance scenario 3. Polish T070–T071 chang
 
 ## Handover
 
-None.
+M1 unit 2. All T001–T023 ticked; review A (2 rounds, CLEAN), review B (round 1, fixed), visual pass
+(fixed) done. Full gate (`scripts/gate.sh`) was red twice for repo invariants (material_boundary
+`.size(` in a test; root_is_routing_only: Overview close moved to `Outcome::MainAreaTaken`), both
+fixed; third full gate running on the committed tree. Next: if green, push the branch, write the PR
+title/body (draft in the unit scratchpad `pr-body.md`, `GATE_LINE` placeholder), set this section
+to None. If red: fix, rerun `scripts/gate.sh`. No PR open yet.
 
 ## Open escalation
 

@@ -931,10 +931,6 @@ impl State {
                 drain(outcomes, |outcome| interpret(self, outcome));
             }
             Message::Session(msg) => {
-                // Feature 813 (FR-023): a started session is shown, so the Overview gives way.
-                if matches!(msg, crate::features::session::Msg::Started(_)) {
-                    self.overview.open = false;
-                }
                 let outcomes = crate::features::session::update(self, msg);
                 drain(outcomes, |outcome| interpret(self, outcome));
             }
@@ -1160,6 +1156,8 @@ pub fn interpret(
             return crate::features::worktree::created(state, worktree)
         }
         Outcome::LocationOpened(location) => state.location_opened(&location),
+        // Feature 813 (FR-023): a view that takes the main area closes the Overview.
+        Outcome::MainAreaTaken => state.overview.open = false,
         Outcome::RevealScrollArmed => state.reveal_scroll_armed(),
         Outcome::ProjectEntered => state.project_entered(),
         Outcome::RevealSuppressed(suppressed) => state.reveal_suppression_set(suppressed),

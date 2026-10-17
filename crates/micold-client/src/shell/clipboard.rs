@@ -48,6 +48,7 @@ pub fn interpret(outcome: Outcome) -> Task<Message> {
         | Outcome::RunInParallelRequested
         | Outcome::WorktreeCreated(_)
         | Outcome::LocationOpened(_)
+        | Outcome::MainAreaTaken
         | Outcome::RevealScrollArmed
         | Outcome::ProjectEntered
         | Outcome::RevealSuppressed(_)
