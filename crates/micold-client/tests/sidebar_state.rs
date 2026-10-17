@@ -12,30 +12,19 @@ use micold_client::features::sidebar::{SidebarEntry, TagFilter};
 use micold_client::features::worktree::Msg as WorktreeMsg;
 use micold_client::features::worktree_form;
 use micold_core::naming::ConventionalType;
-use micold_core::project::{Availability, Project};
 use micold_core::session::{AiCli, Session, SessionLocation};
 use micold_core::worktree::{Worktree, WorktreeStatus};
 use std::collections::BTreeSet;
 use std::path::PathBuf;
+
+mod support;
+use support::sidebar_fixture::{deliver, listed, session_at, state_with_active, worktree};
 
 /// Which dialog is open, by name — the question `state.overlay` answered before T037 deleted it.
 /// Asked of the registry, which reads each dialog's own state, so this is the same question about
 /// the same fact rather than a weaker one.
 fn open_dialog(state: &State) -> Option<&'static str> {
     micold_client::overlay::registry::open_dialog(state).map(|open| open.id().as_str())
-}
-
-fn state_with_active() -> State {
-    let mut state = State::default();
-    let path = PathBuf::from("/repo");
-    state.workspace.projects.push(Project {
-        path: path.clone(),
-        display_name: "repo".to_string(),
-        is_git_repo: true,
-        availability: Availability::Available,
-    });
-    state.workspace.active = Some(path);
-    state
 }
 
 #[test]
@@ -488,24 +477,6 @@ fn re_discovering_worktrees_leaves_the_current_sessions_row_alone() {
 // not exist, pass whether or not the shared one behaved, and quietly suggest there were two. These
 // assert the shared path, and this comment is what ties them to the requirement.
 
-/// A worktree at `/repo`, matching the paths `state_with_active` sets up.
-fn listed(dir_name: &str) -> Worktree {
-    Worktree {
-        dir_name: dir_name.to_string(),
-        path: PathBuf::from("/repo/.claude/worktrees").join(dir_name),
-        branch: Some(format!("feat/{dir_name}")),
-        status: WorktreeStatus::Valid,
-        included: false,
-    }
-}
-
-/// Replace the listing the way the client does when one arrives: apply, then drain, so the sidebar
-/// prunes its own expansion set rather than the worktree feature reaching into it (T066).
-fn deliver(state: &mut State, worktrees: Vec<Worktree>) {
-    let outcomes = state.set_worktrees(worktrees);
-    micold_client::app::drain(outcomes, |o| micold_client::app::interpret(state, o));
-}
-
 /// An arranged sidebar: two worktrees, both expanded, a filter applied, scrolled, a session
 /// selected. Every field FR-009 names, set to something a reset would visibly undo.
 fn arranged() -> State {
@@ -594,4 +565,169 @@ fn a_worktree_missing_from_the_listing_is_pruned_and_nothing_else_is() {
         "the active session is on `feat-a`, which is still here — a listing that removed a \
          *different* worktree has nothing to say about it"
     );
+}
+
+// --- Feature 803: the row a navigation chord reaches, and what clears it (plan D4, U5) ---------
+
+use micold_client::features::sidebar::{current_session_row, row_index, RowRef};
+
+/// Default with one session, `feat-a` open with two sessions, `feat-b` empty.
+fn three_locations() -> (State, Vec<micold_core::session::SessionId>) {
+    let mut state = state_with_active();
+    deliver(&mut state, vec![listed("feat-a"), listed("feat-b")]);
+    let ids = vec![
+        session_at(&mut state, SessionLocation::Default),
+        session_at(&mut state, worktree("feat-a")),
+        session_at(&mut state, worktree("feat-a")),
+    ];
+    state.sidebar.expanded.insert("feat-a".to_string());
+    (state, ids)
+}
+
+#[test]
+fn row_index_finds_location_rows_session_sub_rows_and_run_rows() {
+    let (mut state, ids) = three_locations();
+    let entries = state.sidebar_entries();
+    // Rows: 0 Default (one session, no sub-row), 1 feat-a, 2..3 its sessions, 4 feat-b.
+    assert_eq!(
+        row_index(&entries, &RowRef::Location(SessionLocation::Default)),
+        Some(0)
+    );
+    assert_eq!(
+        row_index(&entries, &RowRef::Session(ids[0])),
+        Some(0),
+        "no sub-row: the location's"
+    );
+    assert_eq!(
+        row_index(&entries, &RowRef::Location(worktree("feat-a"))),
+        Some(1)
+    );
+    assert_eq!(
+        row_index(&entries, &RowRef::Location(worktree("feat-b"))),
+        Some(4)
+    );
+    let subs: Vec<_> = [ids[1], ids[2]]
+        .iter()
+        .map(|id| row_index(&entries, &RowRef::Session(*id)).expect("a sub-row"))
+        .collect();
+    assert_eq!(
+        {
+            let mut s = subs.clone();
+            s.sort_unstable();
+            s
+        },
+        vec![2, 3],
+        "the open location's sessions are its sub-rows"
+    );
+    for id in &ids {
+        assert_eq!(
+            current_session_row(&entries, Some(*id)),
+            row_index(&entries, &RowRef::Session(*id)),
+            "current_session_row agrees with row_index"
+        );
+    }
+
+    // A run group: its row, then its runs' worktree rows.
+    deliver(
+        &mut state,
+        vec![
+            listed("feat-a"),
+            listed("feat-b"),
+            listed("feat-g-1"),
+            listed("feat-g-2"),
+        ],
+    );
+    state.update(micold_client::app::Message::Runs(
+        micold_client::features::runs::Msg::GroupsChanged(vec![
+            support::sidebar_fixture::run_group(1, "g", &["feat-g-1", "feat-g-2"]),
+        ]),
+    ));
+    let entries = state.sidebar_entries();
+    let group_run = row_index(&entries, &RowRef::Location(worktree("feat-g-2")))
+        .expect("an expanded group's run row is drawn");
+    let first_run = row_index(&entries, &RowRef::Location(worktree("feat-g-1"))).unwrap();
+    assert_eq!(
+        group_run,
+        first_run + 1,
+        "runs are drawn in run order, one row each"
+    );
+}
+
+#[test]
+fn the_reveal_scroll_reaches_the_keyboard_row_when_one_is_set() {
+    let mut state = state_with_active();
+    let dirs: Vec<String> = (0..30).map(|i| format!("feat-{i:02}")).collect();
+    deliver(&mut state, dirs.iter().map(|d| listed(d)).collect());
+    let id = session_at(&mut state, SessionLocation::Default);
+    state.session.active = Some(id);
+    state.sidebar.viewport_height = 200;
+    assert_eq!(
+        state.reveal_scroll_offset(),
+        None,
+        "the current session's row (Default, at the top) is already in view"
+    );
+    state.sidebar.keyboard_row = Some(RowRef::Location(worktree("feat-29")));
+    assert!(
+        state.reveal_scroll_offset().is_some_and(|y| y > 0),
+        "with a keyboard row the reveal scrolls to it, not to the current session's row"
+    );
+    assert!(
+        state.current_session_is_listed(),
+        "the target is drawn, so the reveal drains"
+    );
+    state.sidebar.keyboard_row = Some(RowRef::Location(worktree("gone")));
+    assert_eq!(
+        state.reveal_scroll_offset(),
+        None,
+        "a keyboard row the list no longer draws falls back to the current session's row"
+    );
+}
+
+/// A state with a navigation stop and keyboard row set.
+fn with_stop() -> (State, Vec<micold_core::session::SessionId>) {
+    let (mut state, ids) = three_locations();
+    state.session.active = Some(ids[0]);
+    state.sidebar.nav_stop = Some(worktree("feat-b"));
+    state.sidebar.keyboard_row = Some(RowRef::Location(worktree("feat-b")));
+    (state, ids)
+}
+
+#[test]
+fn a_current_session_change_clears_the_navigation_stop() {
+    let (mut state, ids) = with_stop();
+    let outcomes = state.set_current_session(Some(ids[1]));
+    micold_client::app::drain(outcomes, |o| micold_client::app::interpret(&mut state, o));
+    assert_eq!(
+        state.sidebar.nav_stop, None,
+        "set_current_session leaves the stop"
+    );
+    assert_eq!(state.sidebar.keyboard_row, None);
+
+    let (mut state, ids) = with_stop();
+    state.update(micold_client::app::Message::Session(
+        micold_client::features::session::Msg::Selected(ids[1]),
+    ));
+    assert_eq!(
+        state.sidebar.nav_stop, None,
+        "a pointer selection leaves the stop"
+    );
+    assert_eq!(state.sidebar.keyboard_row, None, "and the keyboard row");
+
+    let (mut state, _) = with_stop();
+    state.project_entered();
+    assert_eq!(
+        state.sidebar.nav_stop, None,
+        "entering a project leaves the stop"
+    );
+    assert_eq!(state.sidebar.keyboard_row, None);
+
+    let (mut state, _) = with_stop();
+    state.update(micold_client::app::Message::Sidebar(
+        SidebarMsg::KeyboardRowLeft,
+    ));
+    assert_eq!(
+        state.sidebar.nav_stop, None,
+        "the row losing the keyboard leaves the stop"
+    );
+    assert_eq!(state.sidebar.keyboard_row, None);
 }

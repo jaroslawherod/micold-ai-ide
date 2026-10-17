@@ -576,7 +576,8 @@ fn the_keyboard_subscription_names_no_surface() {
     // names *what the key was*, not what surface it reaches. Focus traversal has no table to
     // drift from — the rendering stack owns the order. The Overview chord (feature 813, FR-011)
     // is exempt for the same reason: it names a toggle, not a surface a key dismisses, so there
-    // is no dismissal table in it to drift.
+    // is no dismissal table in it to drift. So are the navigation chords (feature 803, K3): they
+    // name a direction, and the resolver asks the registry whether a surface is open (U1).
     let named: Vec<&str> = body
         .match_indices("Message::")
         .map(|(at, _)| body[at..].split_whitespace().next().unwrap_or_default())
@@ -584,6 +585,7 @@ fn the_keyboard_subscription_names_no_surface() {
             !m.starts_with("Message::EscapePressed")
                 && !m.starts_with("Message::FocusMoved")
                 && !m.starts_with("Message::Overview(")
+                && !m.starts_with("Message::Navigation(")
         })
         .collect();
     assert!(

@@ -1644,6 +1644,13 @@ Keystrokes stream straight to the CLI as you press them, exactly like a standalo
 - **Overview**: **Ctrl+Shift+O** (Cmd+Shift+O on macOS) opens and closes the
   [worktree Overview](overview.md), also from a focused terminal; the app takes it and the
   terminal never sees it.
+- **Navigation**: **Ctrl+Shift+.** and **Ctrl+Shift+,** (Cmd+Shift+. and Cmd+Shift+, on macOS)
+  step to the next and previous location of the project, in the order the sidebar draws them:
+  Default, then the worktrees. They work whether or not a terminal is focused, and the terminal
+  never sees them. Past the last location the next press wraps to the first, and back. Worktrees
+  hidden by a tag filter or inside a collapsed run group are skipped. A location with a session
+  shows its main session, as a click on its row does; an empty location is highlighted in the
+  sidebar instead, and no session is started.
 
 ### Links
 

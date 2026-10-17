@@ -25,8 +25,9 @@ the pane. Selecting and scrolling belong to the focused pane.
 
 ## Keyboard shortcuts
 
-With the terminal focused, these act on the focused pane. The app takes them: the terminal never
-receives them, so they shadow the same keys with Shift in a terminal program.
+With the terminal focused, the pane chords act on the focused pane. The app takes every chord
+below: the terminal never receives them, so they shadow the same keys with Shift in a terminal
+program. The Overview and location chords work whether or not a terminal is focused.
 
 | Action | Linux / Windows | macOS |
 |---|---|---|
@@ -35,6 +36,7 @@ receives them, so they shadow the same keys with Shift in a terminal program.
 | Close the focused pane | Ctrl+Shift+W | Cmd+Shift+W |
 | Focus the pane to the left / right / above / below | Ctrl+Shift+Arrow | Cmd+Shift+Arrow |
 | Open or close the [worktree Overview](overview.md) | Ctrl+Shift+O | Cmd+Shift+O |
+| Previous / next location ([Default and the worktrees](worktrees-and-sessions.md)) | Ctrl+Shift+, / Ctrl+Shift+. | Cmd+Shift+, / Cmd+Shift+. |
 
 A new pane takes focus. Moving focus towards an edge with no pane there leaves it where it is. A
 split that is refused (6 panes, or a pane too small) shows its reason next to the panes. The

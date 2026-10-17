@@ -9,20 +9,20 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #803
 - **Worktree branch**: claude/project-thread-ah7xxz
 - **Started**: 2026-10-17
-- **Phase**: design PR
-- **Next step**: orchestrator opens the design PR (title/body in the tasks unit's scratchpad), waits on CI and merges; then milestone M1
+- **Phase**: milestone M1
+- **Next step**: orchestrator opens the M1 PR from the scratchpad title/body, waits on CI, merges; then M2 (T017–T023)
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| (pending: orchestrator opens) | design: spec, plan, tasks | to open | — |
+| #949 | design: spec, plan, tasks | merged | c410a749a8c6a417aa91f9011fd2a16fe2e340a8 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T016 | full | Location chords step through locations (both focus states, stop, 0 PTY bytes), docs rows | — | pending |
+| M1 | T001–T016 | full | Location chords step through locations (both focus states, stop, 0 PTY bytes), docs rows | pushed, PR pending | in review |
 | M2 | T017–T023 | full | Keyboard lands on the sidebar row with a focus ring (FR-010), showcase variant | — | pending |
 | M3 | T024–T029 | light | Session chords cycle a location's sessions, docs rows | — | pending |
 | M4 | T030–T037 | full | Project chords; all six chords in the user guide | — | pending |
@@ -39,6 +39,7 @@ US1 split along acceptance scenario 4 (FR-010 sidebar ring) into M1/M2: one mile
 | D4 | clarify | macOS project chords need Fn: keep PageUp/PageDown? | Keep Ctrl/Cmd+Shift+PageUp/PageDown everywhere | recommended default, pending user confirmation (decision card posted) | spec.md#Clarifications |
 | D5 | clarify | "Jump directly" in scope? | Out of scope; quick-switcher palette follow-up | recommended default, pending user confirmation (decision card posted) | spec.md#Clarifications |
 | D6 | tasks | speckit-analyze findings | Spec amended: SC-004 scoped for stops, US1 AC5 and FR-010 state the stop and where the keyboard stays, FR-012 adds the filter panel, SC-001 ⌊N/2⌋, Terms: current location survives the filter. Plan D5/ui.md U3 amended: render-free `State::finish_navigation` so main.rs holds no branch (Principle I) | agent-resolved | speckit-analyze report I1–I4, A1–A3, T2 |
+| D7 | implement | Plan names `Message::Navigate(NavAction)`; the root-vocabulary, overlay-subscription and feature-registration guards refuse a single-feature root variant | Feature wrapper `Message::Navigation(navigation::Msg::Pressed(NavAction))`, shape-B entry `shell::navigation::update`; `navigation`→`sidebar` read allowlisted; `tests/features_navigation.rs` isolation test | agent-resolved | tests/root_vocabulary_is_cross_cutting.rs, feature_registration_cost.rs, overlay_registry.rs |
 
 ## Review rounds
 
@@ -50,11 +51,14 @@ US1 split along acceptance scenario 4 (FR-010 sidebar ring) into M1/M2: one mile
 | Review plan | 2 | d47f661a5157eef58b9da4fd0191667ca463746b:0dc00fc7e758a81c7a68fdc8efd44c8ef14d31a8 | CLEAN |
 | Review tasks | 1 | 5fd429a37a9d1d845b1988c23a153ea3f2524fdf:e48aa579382d1917198e8b478d11eabc68785ce3 | CHANGES: 1 MAJOR ([P] tasks sharing tests/navigation.rs: apply tests moved to navigation_apply.rs), 1 MINOR (SC-001 bound test added) |
 | Review tasks | 2 | ea280ce8681586436fafe3903453010ab4c577a5:e48aa579382d1917198e8b478d11eabc68785ce3 | CLEAN (sonnet, scoped) |
+| Review A M1 (code-review high) | 1 | 6c2da2fa240fc273d8be5a262d19b689ee24be3c:b69d9a7f1c50957529a7b62c4656082b219a8d59 | CLEAN: 1 MINOR (declined) |
+| Review B M1 (conformance, sonnet) | 1 | 6c2da2fa240fc273d8be5a262d19b689ee24be3c:b69d9a7f1c50957529a7b62c4656082b219a8d59 | CLEAN (headless, Read-only on prepared diff files; Verify from the unit's runs) |
 
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| M1 | A | MINOR: `SidebarMsg::KeyboardRowLeft` has no production sender | T012 requires it; M2 T019 sends it from the focus ring's `on_change` |
 
 ## Handover
 
@@ -68,4 +72,5 @@ None.
 
 - User-configurable key bindings (spec Out of Scope).
 - Quick-switcher palette / direct jumps (FR-014, D5): follow-up issue.
+- Visual pass skipped for M1: nothing drawn changes (the keyboard-row ring is M2); the stop only moves the reveal scroll.
 - Spec reviews ran as headless `claude -p` sessions (no Agent tool in this unit's environment); fresh context, same prompt parts.

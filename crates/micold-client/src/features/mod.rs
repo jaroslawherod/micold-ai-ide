@@ -100,6 +100,9 @@ pub enum Outcome {
     LocationRevealed(micold_core::session::SessionLocation),
     /// The sidebar should scroll to the current session's row once one exists (research R7, I4).
     RevealScrollArmed,
+    /// The current session changed, so the sidebar drops a navigation stop and the row a
+    /// navigation chord gave the keyboard (feature 803, contracts/ui.md U5).
+    KeyboardRowLeft,
     /// The user arrived in a project, so view state switched on for the previous one resets.
     ///
     /// `default_expanded` is not keyed per project (unlike `expanded`, pruned by `dir_name`), so it
@@ -232,6 +235,7 @@ pub mod changes;
 pub mod connection;
 pub mod daemons;
 pub mod help;
+pub mod navigation;
 pub mod notifications;
 pub mod overview;
 pub mod plan_usage;

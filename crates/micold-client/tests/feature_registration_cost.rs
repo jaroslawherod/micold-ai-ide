@@ -84,6 +84,13 @@ use std::path::{Path, PathBuf};
 /// is worse.
 const ALLOWED_CROSS_FEATURE_NAMES: &[(&str, &str, &str)] = &[
     (
+        "navigation",
+        "sidebar",
+        "SidebarEntry, RunRow — a location press steps through the rows the sidebar draws, in its \
+         order; reading the drawn entries is the one source of that order, and navigation changes \
+         nothing of the sidebar's (it returns a `Step`; feature 803, contracts/ui.md U2)",
+    ),
+    (
         "runs",
         "changes",
         "Load — Compare's per-run counts use the Changes view's loading value (idle, loading with \

@@ -119,6 +119,10 @@ pub enum Message {
     /// Everything the worktree Overview says about itself (feature 813); see
     /// [`crate::features::overview::Msg`].
     Overview(crate::features::overview::Msg),
+    /// Keyboard navigation (feature 803): a chord was pressed, resolved by
+    /// `features::navigation::update` and applied by [`State::apply_navigation`] in the binary,
+    /// which dispatches the follow-ups. See [`crate::features::navigation::Msg`].
+    Navigation(crate::features::navigation::Msg),
     /// The OS window gained (`true`) or lost (`false`) input focus. Handled by the binary,
     /// which gates the terminal/OS-theme poll subscriptions on it so a backgrounded window
     /// doesn't keep burning CPU on ticks nothing is looking at (idle-CPU fix).
@@ -970,6 +974,9 @@ impl State {
             Message::OverlayTransitionFinished
             // Focus state is tracked by the binary (gui runtime), not the pure core.
             | Message::WindowFocusChanged(_)
+            // The binary resolves and applies a navigation press, dispatching its follow-ups
+            // through its own `update` (feature 803, contracts/ui.md U3).
+            | Message::Navigation(_)
             // Focus is the rendering stack's, and moving it is a widget operation — see
             // [`Message::FocusMoved`].
             | Message::FocusMoved { .. } => {}
@@ -1191,6 +1198,7 @@ pub fn interpret(
         Outcome::RevealMarkCleared => state.sidebar.revealed = None,
         Outcome::LocationRevealed(location) => state.location_revealed(location),
         Outcome::RevealScrollArmed => state.reveal_scroll_armed(),
+        Outcome::KeyboardRowLeft => state.keyboard_row_left(),
         Outcome::ProjectEntered => state.project_entered(),
         Outcome::RevealSuppressed(suppressed) => state.reveal_suppression_set(suppressed),
         Outcome::FieldFocusCleared => crate::features::window::field_focus_cleared(state),
@@ -1337,8 +1345,43 @@ pub enum KeyRouting {
     ToggleOverview,
     /// A pane shortcut (feature 484): the app handles it, the terminal never sees it.
     Pane(crate::keymap::PaneAction),
+    /// A navigation chord (feature 803): the app's, focused or not.
+    Navigate(crate::keymap::NavAction),
     /// Focused, but the key has no terminal meaning — drop it.
     Ignore,
+}
+
+impl State {
+    /// Apply a resolved navigation press (feature 803, contracts/ui.md U3) and return the
+    /// follow-up messages the caller dispatches, so a `Selected` runs its full path.
+    ///
+    /// `terminal_had_focus` is read before anything changed; the branch that keeps the keyboard
+    /// off the terminal arrives with FR-010 (M2).
+    pub fn apply_navigation(
+        &mut self,
+        step: crate::features::navigation::Step,
+        terminal_had_focus: bool,
+    ) -> Vec<Message> {
+        use crate::features::navigation::Step;
+        let _ = terminal_had_focus;
+        match step {
+            Step::Session(id) => {
+                self.reveal_scroll_armed();
+                vec![Message::Session(crate::features::session::Msg::Selected(
+                    id,
+                ))]
+            }
+            Step::Stop(location) => {
+                self.sidebar.nav_stop = Some(location.clone());
+                self.release_terminal();
+                self.sidebar.keyboard_row =
+                    Some(crate::features::sidebar::RowRef::Location(location));
+                self.reveal_scroll_armed();
+                Vec::new()
+            }
+            Step::None | Step::Project(_) => Vec::new(),
+        }
+    }
 }
 
 /// Route a decoded key press given the current focus (FR-009/FR-011/FR-012).
@@ -1347,6 +1390,10 @@ pub fn route_key(terminal_focused: bool, output: crate::keymap::KeyOutput) -> Ke
     // The Overview chord is the app's whether or not the terminal has focus (feature 813).
     if output == KeyOutput::ToggleOverview {
         return KeyRouting::ToggleOverview;
+    }
+    // So are the navigation chords (feature 803, contracts/keys.md K3).
+    if let KeyOutput::Navigate(action) = output {
+        return KeyRouting::Navigate(action);
     }
     if !terminal_focused {
         return KeyRouting::App;
@@ -1359,6 +1406,7 @@ pub fn route_key(terminal_focused: bool, output: crate::keymap::KeyOutput) -> Ke
         KeyOutput::ReleaseFocus => KeyRouting::ReleaseFocus,
         KeyOutput::NewTerminalInstance => KeyRouting::NewTerminalInstance,
         KeyOutput::Pane(action) => KeyRouting::Pane(action),
+        KeyOutput::Navigate(action) => KeyRouting::Navigate(action),
         KeyOutput::Ignore => KeyRouting::Ignore,
     }
 }

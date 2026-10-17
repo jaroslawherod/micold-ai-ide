@@ -1183,7 +1183,7 @@ pub fn subscription(state: &State) -> Subscription<Message> {
     // Feature 813 (FR-011, R3): the focused terminal captures the chord itself; unfocused it is
     // heard here. Not while Settings is open, where the toggle does nothing (R2).
     if state.settings.settings_draft.is_none() {
-        subs.push(overview_chord_listener());
+        subs.push(app_chord_listener());
     }
     // Feature 813 (FR-014, R13): arrow keys move between the cards while the Overview is open.
     if state.overview.open {
@@ -1206,25 +1206,39 @@ fn overview_arrow(event: iced::keyboard::Event) -> Option<Message> {
     crate::ui::overview::arrow_focus(&key).map(|forward| Message::FocusMoved { forward })
 }
 
-/// The Overview chord, heard while the terminal is not focused.
-fn overview_chord_listener() -> Subscription<Message> {
-    iced::keyboard::listen().filter_map(overview_chord)
+/// The app's chords (the Overview's, feature 813; navigation's, feature 803), heard while the
+/// terminal is not focused.
+fn app_chord_listener() -> Subscription<Message> {
+    iced::keyboard::listen().filter_map(app_chord)
 }
 
-/// [`crate::features::overview::Msg::Toggled`] for the Overview chord, and nothing for any other
+/// The message for an app chord — [`crate::features::overview::Msg::Toggled`] for the Overview
+/// chord, `features::navigation::Msg::Pressed` for a navigation chord — and nothing for any other
 /// key. A named function, not a closure, for the same `TypeId` reason as [`escape_message`].
-fn overview_chord(event: iced::keyboard::Event) -> Option<Message> {
-    let iced::keyboard::Event::KeyPressed { key, modifiers, .. } = event else {
+fn app_chord(event: iced::keyboard::Event) -> Option<Message> {
+    use crate::ui::material::terminal_pane::{to_keymap_key, to_keymap_mods, to_keymap_physical};
+    let iced::keyboard::Event::KeyPressed {
+        key,
+        modifiers,
+        physical_key,
+        ..
+    } = event
+    else {
         return None;
     };
-    let key = crate::ui::material::terminal_pane::to_keymap_key(&key)?;
-    crate::keymap::is_overview_chord(
-        &key,
-        crate::ui::material::terminal_pane::to_keymap_mods(modifiers),
-    )
-    .then_some(Message::Overview(crate::features::overview::Msg::Toggled {
-        settings_open: false,
-    }))
+    let input = crate::keymap::KeyInput {
+        key: to_keymap_key(&key)?,
+        mods: to_keymap_mods(modifiers),
+        text: None,
+        physical: to_keymap_physical(&physical_key),
+    };
+    if crate::keymap::is_overview_chord(&input.key, input.mods) {
+        return Some(Message::Overview(crate::features::overview::Msg::Toggled {
+            settings_open: false,
+        }));
+    }
+    crate::keymap::nav_chord(&input)
+        .map(|action| Message::Navigation(crate::features::navigation::Msg::Pressed(action)))
 }
 
 /// Escape, reported as having happened; the reducer asks the registry what it reaches.
@@ -1271,3 +1285,6 @@ pub fn focus_move_message(event: iced::keyboard::Event) -> Option<Message> {
         _ => None,
     }
 }
+
+#[cfg(test)]
+mod app_chord_tests;

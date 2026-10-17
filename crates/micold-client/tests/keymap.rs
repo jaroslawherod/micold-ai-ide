@@ -3,8 +3,10 @@
 //! `specs/006-real-terminal-emulator/contracts/key-encoding.md`.
 
 use micold_client::keymap::{
-    encode, paste_bytes, Key, KeyInput, KeyOutput, Mods, NamedKey, PaneAction, TermMode,
+    encode, nav_chord_labels, paste_bytes, Key, KeyInput, KeyOutput, Mods, NamedKey, NavAction,
+    NavLevel, PaneAction, PhysicalKey, TermMode, NAV_CHORDS,
 };
+use micold_core::navigation::Dir;
 use micold_core::pane_layout::Direction;
 
 fn ctrl() -> Mods {
@@ -19,6 +21,15 @@ fn ki(key: Key, mods: Mods, text: Option<&str>) -> KeyInput {
         key,
         mods,
         text: text.map(str::to_string),
+        physical: PhysicalKey::Other,
+    }
+}
+
+/// [`ki`] with the physical key the platform reported for the press.
+fn kp(key: Key, physical: PhysicalKey, mods: Mods) -> KeyInput {
+    KeyInput {
+        physical,
+        ..ki(key, mods, None)
     }
 }
 
@@ -603,4 +614,189 @@ fn the_wrong_platform_modifier_is_not_a_pane_chord() {
     };
     let out = encode(&ki(Key::Char('d'), wrong, None), TermMode::default());
     assert!(!matches!(out, KeyOutput::Pane(_)));
+}
+
+// ---- Navigation chords (feature 803, contracts/keys.md K2, K5) ----
+
+const LOCATION_PREVIOUS: NavAction = NavAction {
+    level: NavLevel::Location,
+    dir: Dir::Previous,
+};
+const LOCATION_NEXT: NavAction = NavAction {
+    level: NavLevel::Location,
+    dir: Dir::Next,
+};
+
+/// The location chords: their physical key, the logical keys a layout may give for it, and the
+/// action.
+fn location_chords() -> [(PhysicalKey, [char; 2], NavAction); 2] {
+    [
+        (PhysicalKey::Comma, [',', '<'], LOCATION_PREVIOUS),
+        (PhysicalKey::Period, ['.', '>'], LOCATION_NEXT),
+    ]
+}
+
+#[test]
+fn location_chords_decode_by_physical_key_whatever_the_layout_gives() {
+    for (physical, _, action) in location_chords() {
+        // A layout that puts another character on the key (FR-016) still decodes by position.
+        for logical in [Key::Char('x'), Key::Char(';'), Key::Char('ж')] {
+            let out = encode(
+                &kp(logical.clone(), physical, chord_mods()),
+                TermMode::default(),
+            );
+            assert_eq!(
+                out,
+                KeyOutput::Navigate(action),
+                "the {physical:?} key with primary+Shift is {action:?} whatever it types ({logical:?})"
+            );
+        }
+    }
+}
+
+#[test]
+fn location_chords_fall_back_to_the_logical_key_without_a_physical_one() {
+    for (_, logical, action) in location_chords() {
+        for c in logical {
+            let out = encode(&ki(Key::Char(c), chord_mods(), None), TermMode::default());
+            assert_eq!(
+                out,
+                KeyOutput::Navigate(action),
+                "with no physical key, {c:?} with primary+Shift is {action:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn near_misses_of_a_location_chord_keep_their_outputs() {
+    let shift_only = Mods {
+        shift: true,
+        ..Mods::NONE
+    };
+    let with_alt = Mods {
+        alt: true,
+        ..chord_mods()
+    };
+    let primary_only = Mods {
+        shift: false,
+        ..chord_mods()
+    };
+    for (physical, [plain, shifted], _) in location_chords() {
+        for mods in [Mods::NONE, shift_only, with_alt, primary_only] {
+            let c = if mods.shift { shifted } else { plain };
+            let out = encode(&kp(Key::Char(c), physical, mods), TermMode::default());
+            assert!(
+                !matches!(out, KeyOutput::Navigate(_)),
+                "{c:?} with {mods:?} is not a navigation chord, got {out:?}"
+            );
+        }
+        // Typed without a modifier the key still writes its character.
+        let out = encode(
+            &kp(Key::Char(plain), physical, Mods::NONE),
+            TermMode::default(),
+        );
+        assert_eq!(
+            bytes(out),
+            plain.to_string().into_bytes(),
+            "plain {plain:?} is typed"
+        );
+    }
+}
+
+#[test]
+fn the_other_primary_shift_chords_are_unchanged_by_the_navigation_chords() {
+    for (c, want) in [
+        ('e', KeyOutput::ReleaseFocus),
+        ('t', KeyOutput::NewTerminalInstance),
+        ('o', KeyOutput::ToggleOverview),
+    ] {
+        let out = encode(&ki(Key::Char(c), chord_mods(), None), TermMode::default());
+        assert_eq!(out, want, "primary+Shift+{c} keeps its output");
+    }
+    for (key, action) in pane_chords() {
+        let out = encode(&ki(key.clone(), chord_mods(), None), TermMode::default());
+        assert_eq!(
+            out,
+            KeyOutput::Pane(action),
+            "{key:?} keeps its pane action"
+        );
+    }
+    #[cfg(not(target_os = "macos"))]
+    for (c, want) in [('c', KeyOutput::Copy), ('v', KeyOutput::Paste)] {
+        let out = encode(&ki(Key::Char(c), chord_mods(), None), TermMode::default());
+        assert_eq!(out, want, "Ctrl+Shift+{c} keeps copy/paste");
+    }
+}
+
+#[test]
+fn no_two_navigation_chords_share_a_key() {
+    for (i, (_, a)) in NAV_CHORDS.iter().enumerate() {
+        for (_, b) in &NAV_CHORDS[i + 1..] {
+            assert_ne!(a, b, "two navigation chords on the {a:?} key");
+        }
+    }
+}
+
+#[test]
+fn no_navigation_chord_is_a_reserved_chord_of_the_app() {
+    // R9: the navigation keys are not the letters, arrows or punctuation of an existing chord.
+    for (action, physical) in NAV_CHORDS {
+        let out = encode(
+            &kp(Key::Char('x'), physical, chord_mods()),
+            TermMode::default(),
+        );
+        assert_eq!(
+            out,
+            KeyOutput::Navigate(action),
+            "{physical:?} decodes to its own action"
+        );
+        for (key, _) in pane_chords() {
+            let out = encode(&ki(key.clone(), chord_mods(), None), TermMode::default());
+            assert_ne!(out, KeyOutput::Navigate(action), "{key:?} is a pane chord");
+        }
+    }
+}
+
+#[test]
+fn route_key_sends_a_navigation_chord_to_the_app_focused_or_not() {
+    use micold_client::app::{route_key, KeyRouting};
+    for (action, _) in NAV_CHORDS {
+        for focused in [true, false] {
+            assert_eq!(
+                route_key(focused, KeyOutput::Navigate(action)),
+                KeyRouting::Navigate(action),
+                "{action:?} is the app's whether a terminal is focused ({focused}) or not"
+            );
+        }
+    }
+}
+
+#[test]
+fn navigation_chord_labels_name_both_platform_forms() {
+    assert_eq!(
+        nav_chord_labels(LOCATION_PREVIOUS),
+        ("Ctrl+Shift+,".to_string(), "Cmd+Shift+,".to_string())
+    );
+    assert_eq!(
+        nav_chord_labels(LOCATION_NEXT),
+        ("Ctrl+Shift+.".to_string(), "Cmd+Shift+.".to_string())
+    );
+}
+
+#[test]
+fn the_user_guide_lists_every_navigation_chord_in_both_forms() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/user-guide");
+    for file in ["terminal-panes.md", "worktrees-and-sessions.md"] {
+        let text = std::fs::read_to_string(root.join(file)).expect("the user guide page reads");
+        for (action, _) in NAV_CHORDS {
+            let (linux, mac) = nav_chord_labels(action);
+            for label in [linux, mac] {
+                assert!(
+                    text.contains(&label),
+                    "{file} lists {label} ({action:?}) — FR-013"
+                );
+            }
+        }
+    }
 }

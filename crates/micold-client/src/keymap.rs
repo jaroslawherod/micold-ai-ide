@@ -77,6 +77,98 @@ pub struct KeyInput {
     pub mods: Mods,
     /// The printable text iced resolved for the press (used when no binding matches).
     pub text: Option<String>,
+    /// The key's position on a US layout, whatever the active layout types (feature 803, FR-016).
+    pub physical: PhysicalKey,
+}
+
+/// The physical keys the navigation chords sit on (feature 803, FR-016): the key's position, not
+/// what the active layout types. `Other` for every other key, and when the platform gave no code.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PhysicalKey {
+    Comma,
+    Period,
+    Other,
+}
+
+/// The level a navigation chord steps through (feature 803, FR-001).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NavLevel {
+    /// The sessions of the current location.
+    Session,
+    /// The active project's locations (Default and its worktrees).
+    Location,
+    /// The open projects.
+    Project,
+}
+
+/// A navigation chord's meaning: which level, which direction (feature 803).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct NavAction {
+    pub level: NavLevel,
+    pub dir: micold_core::navigation::Dir,
+}
+
+/// The navigation chords, the one place a chord is chosen (contracts/keys.md K1): each is its
+/// physical key with the platform primary modifier plus Shift.
+pub const NAV_CHORDS: [(NavAction, PhysicalKey); 2] = [
+    (
+        NavAction {
+            level: NavLevel::Location,
+            dir: micold_core::navigation::Dir::Previous,
+        },
+        PhysicalKey::Comma,
+    ),
+    (
+        NavAction {
+            level: NavLevel::Location,
+            dir: micold_core::navigation::Dir::Next,
+        },
+        PhysicalKey::Period,
+    ),
+];
+
+/// The chord of `action` as Linux/Windows and macOS write it (contracts/keys.md K4).
+pub fn nav_chord_labels(action: NavAction) -> (String, String) {
+    let key = NAV_CHORDS
+        .iter()
+        .find(|(a, _)| *a == action)
+        .map_or("", |(_, physical)| physical_label(*physical));
+    (format!("Ctrl+Shift+{key}"), format!("Cmd+Shift+{key}"))
+}
+
+/// How the user guide writes a navigation chord's key.
+fn physical_label(physical: PhysicalKey) -> &'static str {
+    match physical {
+        PhysicalKey::Comma => ",",
+        PhysicalKey::Period => ".",
+        PhysicalKey::Other => "",
+    }
+}
+
+/// The physical key a logical key sits on in a US layout, for a platform that reported no code
+/// (contracts/keys.md K2): the key unshifted or shifted.
+fn logical_physical(key: &Key) -> PhysicalKey {
+    match key {
+        Key::Char(',' | '<') => PhysicalKey::Comma,
+        Key::Char('.' | '>') => PhysicalKey::Period,
+        _ => PhysicalKey::Other,
+    }
+}
+
+/// The navigation chord the press is, if any (contracts/keys.md K1, K2): the platform primary
+/// modifier plus Shift on a `NAV_CHORDS` key, by physical key, else by the logical fallback.
+pub fn nav_chord(input: &KeyInput) -> Option<NavAction> {
+    if !is_primary_shift(input.mods) {
+        return None;
+    }
+    let physical = match input.physical {
+        PhysicalKey::Other => logical_physical(&input.key),
+        known => known,
+    };
+    NAV_CHORDS
+        .iter()
+        .find(|(_, key)| *key == physical && physical != PhysicalKey::Other)
+        .map(|(action, _)| *action)
 }
 
 /// The subset of terminal mode that affects key encoding.
@@ -117,6 +209,8 @@ pub enum KeyOutput {
     ToggleOverview,
     /// A pane shortcut (feature 484; never forwarded to the PTY).
     Pane(PaneAction),
+    /// A navigation chord (feature 803; never forwarded to the PTY).
+    Navigate(NavAction),
     /// Not handled here — let the app/subscription see it.
     Ignore,
 }
@@ -132,6 +226,10 @@ pub fn encode(input: &KeyInput, mode: TermMode) -> KeyOutput {
     // focus-out chord above — never forwarded to the PTY either).
     if is_new_terminal_chord(&input.key, input.mods) {
         return KeyOutput::NewTerminalInstance;
+    }
+    // 1a''. Navigation chords (feature 803, contracts/keys.md K2; the same tier, never forwarded).
+    if let Some(action) = nav_chord(input) {
+        return KeyOutput::Navigate(action);
     }
     // 1a'. Reserved Overview chord (feature 813, FR-011; the same tier, never forwarded).
     if is_overview_chord(&input.key, input.mods) {
@@ -194,7 +292,13 @@ fn printable_or_ignore(input: &KeyInput) -> KeyOutput {
 /// else `Ctrl+Shift`): the shape of the reserved focus-out (`E`) and new-terminal (`T`) chords.
 fn is_primary_shift_chord(key: &Key, mods: Mods, letter: char) -> bool {
     let is_letter = matches!(key, Key::Char(c) if c.eq_ignore_ascii_case(&letter));
-    if !is_letter || !mods.shift {
+    is_letter && is_primary_shift(mods)
+}
+
+/// Whether exactly the platform primary modifier and Shift are held (macOS `Cmd+Shift`, else
+/// `Ctrl+Shift`; Alt and the other of Ctrl/logo disqualify): the shape of every reserved chord.
+fn is_primary_shift(mods: Mods) -> bool {
+    if !mods.shift {
         return false;
     }
     #[cfg(target_os = "macos")]

@@ -1,0 +1,220 @@
+//! What a navigation press resolves to (feature 803, contracts/ui.md U1, U2 location row).
+
+use micold_client::app::{Message, State};
+use micold_client::features::navigation::{location_order, update, Step};
+use micold_client::features::sidebar::TagFilter;
+use micold_client::keymap::{NavAction, NavLevel};
+use micold_core::naming::ConventionalType;
+use micold_core::navigation::Dir;
+use micold_core::session::{SessionId, SessionLocation};
+
+mod support;
+use support::sidebar_fixture::{
+    deliver, listed, run_group, session_at, state_with_active, worktree,
+};
+
+const NEXT: NavAction = NavAction {
+    level: NavLevel::Location,
+    dir: Dir::Next,
+};
+const PREVIOUS: NavAction = NavAction {
+    level: NavLevel::Location,
+    dir: Dir::Previous,
+};
+
+/// Default and three worktrees, each with one session; returns the sessions in that order.
+fn four_locations() -> (State, Vec<SessionId>) {
+    let mut state = state_with_active();
+    deliver(
+        &mut state,
+        vec![listed("feat-a"), listed("feat-b"), listed("feat-c")],
+    );
+    let ids = vec![
+        session_at(&mut state, SessionLocation::Default),
+        session_at(&mut state, worktree("feat-a")),
+        session_at(&mut state, worktree("feat-b")),
+        session_at(&mut state, worktree("feat-c")),
+    ];
+    (state, ids)
+}
+
+#[test]
+fn the_location_order_is_default_then_the_worktrees_as_drawn() {
+    let (state, _) = four_locations();
+    assert_eq!(
+        location_order(&state),
+        vec![
+            SessionLocation::Default,
+            worktree("feat-a"),
+            worktree("feat-b"),
+            worktree("feat-c")
+        ]
+    );
+}
+
+#[test]
+fn filtered_worktrees_are_skipped_but_the_current_ones_location_stays() {
+    let (mut state, ids) = four_locations();
+    // `untyped-x` has no conventional type, so the Feat filter hides it.
+    deliver(
+        &mut state,
+        vec![
+            listed("feat-a"),
+            listed("untyped-x"),
+            listed("feat-b"),
+            listed("feat-c"),
+        ],
+    );
+    let hidden = session_at(&mut state, worktree("untyped-x"));
+    state
+        .sidebar
+        .filters
+        .insert(TagFilter::Type(ConventionalType::Feat));
+    state.session.active = Some(ids[1]);
+    assert!(
+        !location_order(&state).contains(&worktree("untyped-x")),
+        "a worktree the tag filter hides is skipped (US1 AS7)"
+    );
+    state.session.active = Some(hidden);
+    assert!(
+        location_order(&state).contains(&worktree("untyped-x")),
+        "the current session's location stays listed, as the sidebar keeps it shown"
+    );
+}
+
+#[test]
+fn a_collapsed_run_groups_worktrees_are_skipped_and_an_expanded_ones_are_not() {
+    let (mut state, _) = four_locations();
+    deliver(
+        &mut state,
+        vec![
+            listed("feat-a"),
+            listed("feat-b"),
+            listed("feat-c"),
+            listed("feat-g-1"),
+            listed("feat-g-2"),
+        ],
+    );
+    let group = run_group(1, "g", &["feat-g-1", "feat-g-2"]);
+    let id = group.id;
+    state.update(Message::Runs(
+        micold_client::features::runs::Msg::GroupsChanged(vec![group]),
+    ));
+    let order = location_order(&state);
+    assert!(
+        order.contains(&worktree("feat-g-1")) && order.contains(&worktree("feat-g-2")),
+        "an expanded group's runs are locations: {order:?}"
+    );
+    state.update(Message::Runs(
+        micold_client::features::runs::Msg::GroupToggled(id),
+    ));
+    let order = location_order(&state);
+    assert!(
+        !order.contains(&worktree("feat-g-1")) && !order.contains(&worktree("feat-g-2")),
+        "a collapsed group's runs are skipped: {order:?}"
+    );
+}
+
+#[test]
+fn next_and_previous_step_from_the_middle_and_wrap_at_both_ends() {
+    let (mut state, ids) = four_locations();
+    state.session.active = Some(ids[1]);
+    assert_eq!(update(&state, NEXT), Step::Session(ids[2]), "US1 AS1");
+    assert_eq!(update(&state, PREVIOUS), Step::Session(ids[0]));
+    state.session.active = Some(ids[3]);
+    assert_eq!(
+        update(&state, NEXT),
+        Step::Session(ids[0]),
+        "wrap to Default (AS2)"
+    );
+    state.session.active = Some(ids[0]);
+    assert_eq!(
+        update(&state, PREVIOUS),
+        Step::Session(ids[3]),
+        "wrap to the last (AS2)"
+    );
+}
+
+#[test]
+fn no_current_session_starts_at_the_first_or_last_location() {
+    let (state, ids) = four_locations();
+    assert_eq!(update(&state, NEXT), Step::Session(ids[0]));
+    assert_eq!(update(&state, PREVIOUS), Step::Session(ids[3]));
+}
+
+#[test]
+fn a_default_only_project_or_no_project_changes_nothing() {
+    let mut state = state_with_active();
+    let id = session_at(&mut state, SessionLocation::Default);
+    state.session.active = Some(id);
+    assert_eq!(
+        update(&state, NEXT),
+        Step::None,
+        "one location: stays on it"
+    );
+    assert_eq!(update(&state, PREVIOUS), Step::None);
+    let state = State::default();
+    assert_eq!(
+        update(&state, NEXT),
+        Step::None,
+        "no active project: empty order"
+    );
+}
+
+#[test]
+fn a_location_without_a_session_is_a_stop_and_the_next_press_steps_on_from_it() {
+    let mut state = state_with_active();
+    deliver(&mut state, vec![listed("feat-a"), listed("feat-b")]);
+    let default = session_at(&mut state, SessionLocation::Default);
+    let b = session_at(&mut state, worktree("feat-b"));
+    state.session.active = Some(default);
+    assert_eq!(
+        update(&state, NEXT),
+        Step::Stop(worktree("feat-a")),
+        "an empty location becomes a stop (US1 AS5)"
+    );
+    state.sidebar.nav_stop = Some(worktree("feat-a"));
+    assert_eq!(
+        update(&state, NEXT),
+        Step::Session(b),
+        "the stop is the current location for the next press"
+    );
+    state.sidebar.nav_stop = Some(worktree("gone"));
+    assert_eq!(
+        update(&state, NEXT),
+        Step::Stop(worktree("feat-a")),
+        "a stop no longer in the order is ignored"
+    );
+}
+
+#[test]
+fn a_missing_worktree_without_a_session_is_a_stop() {
+    let mut state = state_with_active();
+    let mut missing = listed("feat-a");
+    missing.status = micold_core::worktree::WorktreeStatus::Missing;
+    deliver(&mut state, vec![missing]);
+    let default = session_at(&mut state, SessionLocation::Default);
+    state.session.active = Some(default);
+    assert_eq!(update(&state, NEXT), Step::Stop(worktree("feat-a")));
+}
+
+#[test]
+fn nothing_happens_while_settings_or_a_surface_is_open() {
+    let (mut state, ids) = four_locations();
+    state.session.active = Some(ids[1]);
+    let open: [fn(&mut State); 4] = [
+        |s| s.settings.settings_draft = Some(Default::default()),
+        |s| s.sidebar.filter_open = true,
+        |s| s.project.switcher_open = true,
+        |s| s.help.help_menu_open = true,
+    ];
+    for (i, open) in open.iter().enumerate() {
+        let mut state = state.clone();
+        open(&mut state);
+        assert_eq!(
+            update(&state, NEXT),
+            Step::None,
+            "surface {i} open (FR-012)"
+        );
+    }
+}
