@@ -116,10 +116,11 @@ async fn serve_tcp(state: Arc<DaemonState>, addr: &str) -> io::Result<()> {
 /// turn a misconfigured mount into an open port, silently, inside the feature whose purpose is
 /// containment.
 fn adopt_auth_token(state: &DaemonState) -> io::Result<()> {
-    let Some(path) = std::env::var_os(micold_core::protocol::auth::TOKEN_PATH_ENV) else {
+    let token_path = std::env::var_os(micold_core::protocol::auth::TOKEN_PATH_ENV);
+    let listen_addr = std::env::var(LISTEN_ADDR_ENV).unwrap_or_default();
+    let Some(path) = token_auth_path(token_path.as_deref(), &listen_addr)? else {
         return Ok(());
     };
-    let path = std::path::PathBuf::from(path);
     state.set_auth_token(&path).map_err(|e| {
         io::Error::new(
             e.kind(),
@@ -132,6 +133,59 @@ fn adopt_auth_token(state: &DaemonState) -> io::Result<()> {
     })?;
     tracing::info!("handshake authentication is enabled");
     Ok(())
+}
+
+/// The token file to adopt, or `None` when the listener needs none (feature 686, research K4).
+///
+/// Unset token path: the host-process placement, guarded by its `0700` socket directory. Set but
+/// empty: allowed only on a loopback listen address — a pod's daemon, reached solely through the
+/// API server's port-forward — and fatal anywhere else, so an empty variable never opens a port.
+fn token_auth_path(
+    token_path: Option<&std::ffi::OsStr>,
+    listen_addr: &str,
+) -> io::Result<Option<std::path::PathBuf>> {
+    use micold_core::protocol::auth::{listener_auth, ListenerAuth};
+    let Some(token_path) = token_path else {
+        return Ok(None);
+    };
+    match listener_auth(listen_addr, token_path) {
+        Ok(ListenerAuth::Token(path)) => Ok(Some(path)),
+        Ok(ListenerAuth::LoopbackNoToken) => {
+            tracing::info!(addr = %listen_addr, "loopback listener without a token (port-forward only)");
+            Ok(None)
+        }
+        Err(e) => Err(io::Error::new(io::ErrorKind::InvalidInput, e.to_string())),
+    }
+}
+
+#[cfg(test)]
+mod token_auth_tests {
+    use super::token_auth_path;
+    use std::ffi::OsStr;
+
+    #[test]
+    fn empty_token_path_on_a_non_loopback_address_stays_fatal() {
+        let err = token_auth_path(Some(OsStr::new("")), "0.0.0.0:7727").unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::InvalidInput);
+        assert!(err.to_string().contains("0.0.0.0:7727"), "{err}");
+    }
+
+    #[test]
+    fn empty_token_path_on_loopback_needs_no_token() {
+        assert_eq!(
+            token_auth_path(Some(OsStr::new("")), "127.0.0.1:7727").unwrap(),
+            None
+        );
+    }
+
+    #[test]
+    fn a_set_token_path_is_adopted_and_unset_means_host_process() {
+        assert_eq!(
+            token_auth_path(Some(OsStr::new("/run/t")), "0.0.0.0:7727").unwrap(),
+            Some("/run/t".into())
+        );
+        assert_eq!(token_auth_path(None, "").unwrap(), None);
+    }
 }
 
 /// Run the daemon: resolve the endpoint, acquire it as the single instance, then accept.

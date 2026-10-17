@@ -60,3 +60,16 @@ before the implementation.
 - U16 decision: `RegistryError::DuplicateName` stays field-less; the form already names the first
   ("Another daemon is already named <name>.", `features/daemons.rs` `form_error`), since names
   match case-insensitively the draft's name is the first's name.
+
+### Unit 3 of M1 (2026-10-17)
+
+- T001–T003 confirmed done in 52d8a1ab: `kube` 4.2 / `k8s-openapi` 0.28 in the client only,
+  `cargo tree -p micold-client -i openssl-sys` matches no package, core and daemon gain no dependency.
+- T008/T016 daemon half (U22–U25): `daemon/server.rs` `token_auth_path` decides through
+  `listener_auth`; unset path = host process, empty + loopback = no token, empty + `0.0.0.0:7727` =
+  fatal `InvalidInput` (`token_auth_tests`, 3 green). Written with the code, no separate red run.
+- T010/T017 (U34): `Transport::Tunnel(Tunnel(Box<dyn AsyncReadWrite>))`; the duplex-half handshake
+  test against a `DaemonCodec` stub is green. Compile red only (the variant did not exist).
+- T015: `Cluster` port (`kube/mod.rs`: `ObjectKind`, `ApiFailure`, `Created`, `ObjectView`,
+  `PodStatusView`, `EventView`, boxed futures) and `FakeCluster` (`kube/fake.rs`) with 3 self-tests;
+  `cargo check -p micold-client -p micold-daemon --tests` green.
