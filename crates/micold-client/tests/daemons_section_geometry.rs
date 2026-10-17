@@ -520,10 +520,7 @@ fn the_host_picker_and_the_error_rows_paint_without_overflow() {
     state.update(Message::Daemons(DaemonsMsg::SshPortEdited("99999".into())));
     state.update(Message::Daemons(DaemonsMsg::Saved));
     assert!(
-        has(
-            &painted_tall(&state),
-            "Enter a port between 1 and 65535."
-        ),
+        has(&painted_tall(&state), "Enter a port between 1 and 65535."),
         "the refused port names itself"
     );
     assert_no_text_overflows(&state, "the SSH form with a refused port");
