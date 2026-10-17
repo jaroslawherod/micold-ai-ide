@@ -65,13 +65,13 @@ pub fn view<'a>(
     if let Some(line) = base_line(view) {
         heading = heading.push(Text::new(line, TypeRole::Body, r).muted());
     }
-    // S1: Send to session (n), "Sending…" while a send of this entry is open in any window.
+    // S1: Send review (n), "Sending…" while a send of this entry is open in any window.
     let send = send_action(&state.changes).map(|action| {
         Button::filled(action.label, r)
             .on_press_maybe(action.enabled.then_some(Message::Changes(Msg::SendPressed)))
     });
     let mut header = row![container(heading).width(Length::Fill)];
-    // S3: Clear sent and Discard pending…, each enabled only when it has something to act on.
+    // S3: Clear sent and Discard drafts…, each enabled only when it has something to act on.
     if let Some(tidy) = tidy_actions(&state.changes) {
         header = header
             .push(
@@ -81,7 +81,7 @@ pub fn view<'a>(
                 ),
             )
             .push(
-                Button::text("Discard pending…", r).on_press_maybe(
+                Button::text("Discard drafts…", r).on_press_maybe(
                     tidy.discard_pending
                         .then_some(Message::Changes(Msg::DiscardPendingPressed)),
                 ),
@@ -531,7 +531,7 @@ fn composer_box<'a>(
         .into()
 }
 
-/// The **Discard pending…** confirmation (S3), built as `ui/confirm_delete.rs` builds its dialog;
+/// The **Discard drafts…** confirmation (S3), built as `ui/confirm_delete.rs` builds its dialog;
 /// `None` when it is not open. `ui::view` wraps it in the shared `Modal` transition.
 pub fn discard_dialog<'a>(
     state: &'a State,
@@ -541,7 +541,7 @@ pub fn discard_dialog<'a>(
     let prompt = discard_prompt(&state.changes)?;
     let r = tokens::roles(scheme);
     let fields = crate::ui::material::dialog::fields(column![
-        Text::new("Discard pending comments", TypeRole::Headline, r),
+        Text::new("Discard draft comments", TypeRole::Headline, r),
         Text::new(prompt, TypeRole::Body, r).muted(),
     ]);
     let actions = crate::ui::material::dialog::actions(row![

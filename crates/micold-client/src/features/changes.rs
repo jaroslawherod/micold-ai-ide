@@ -197,7 +197,7 @@ pub struct OpenView {
     /// The entry's comments judged outdated (R14): their lines no longer hold their quote, or
     /// their file left the list. A comment keeps its judgement until its file is read again.
     pub outdated: BTreeSet<CommentId>,
-    /// **Discard pending…** was pressed: its confirmation is open (S3).
+    /// **Discard drafts…** was pressed: its confirmation is open (S3).
     pub confirm_discard: bool,
     /// The entry's branch, as the shell last told it; `None` for the Default entry and a
     /// detached HEAD (feature 775).
@@ -379,13 +379,13 @@ pub enum Msg {
         /// A send is in progress.
         sending: bool,
     },
-    /// **Send to session (n)** was pressed (S1).
+    /// **Send review (n)** was pressed (S1).
     SendPressed,
     /// A file of the open entry changed on disk or in git (R1, R9).
     Changed,
     /// **Clear sent** was pressed (S3).
     ClearSentPressed,
-    /// **Discard pending…** was pressed: open its confirmation (S3).
+    /// **Discard drafts…** was pressed: open its confirmation (S3).
     DiscardPendingPressed,
     /// The shell asks for the open view's pull requests: right after the view opened, and on the
     /// PR status triggers (feature 775). `branch` is the entry's own branch, if it has one.
@@ -1054,16 +1054,16 @@ pub fn review_of<'a>(state: &'a State, view: &OpenView) -> Option<&'a ReviewView
         .get(&(view.project.clone(), entry_dir(&view.entry)))
 }
 
-/// The toolbar's **Send to session (n)** (S1).
+/// The toolbar's **Send review (n)** (S1; 946 FR-009).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SendAction {
-    /// "Send to session (n)", or "Sending…" while a send is open.
+    /// "Send review (n)", or "Sending…" while a send is open.
     pub label: String,
     /// Whether pressing it sends.
     pub enabled: bool,
 }
 
-/// The open view's **Send to session (n)**; `None` with no view open (S1).
+/// The open view's **Send review (n)**; `None` with no view open (S1).
 pub fn send_action(state: &State) -> Option<SendAction> {
     let view = state.open.as_ref()?;
     let review = review_of(state, view);
@@ -1075,12 +1075,12 @@ pub fn send_action(state: &State) -> Option<SendAction> {
     }
     let count = review.map_or(0, |r| r.comments.iter().filter(|c| is_pending(c)).count());
     Some(SendAction {
-        label: format!("Send to session ({count})"),
+        label: format!("Send review ({count})"),
         enabled: count > 0,
     })
 }
 
-/// The **Discard pending…** confirmation, as a floating surface (S3).
+/// The **Discard drafts…** confirmation, as a floating surface (S3).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ConfirmDiscardPendingDialog;
 
@@ -1105,7 +1105,7 @@ impl crate::overlay::registry::Registered for ConfirmDiscardPendingDialog {
     }
 }
 
-/// The toolbar's **Clear sent** and **Discard pending…**, each enabled or not (S3).
+/// The toolbar's **Clear sent** and **Discard drafts…**, each enabled or not (S3).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TidyActions {
     /// The open entry has a sent comment.
@@ -1114,7 +1114,7 @@ pub struct TidyActions {
     pub discard_pending: bool,
 }
 
-/// The open view's **Clear sent** and **Discard pending…**; `None` with no view open (S3).
+/// The open view's **Clear sent** and **Discard drafts…**; `None` with no view open (S3).
 pub fn tidy_actions(state: &State) -> Option<TidyActions> {
     let view = state.open.as_ref()?;
     let review = review_of(state, view);
@@ -1126,7 +1126,7 @@ pub fn tidy_actions(state: &State) -> Option<TidyActions> {
     })
 }
 
-/// The discard confirmation's question while it is open (S3): "Discard n pending comments? This
+/// The discard confirmation's question while it is open (S3): "Discard n draft comments? This
 /// cannot be undone."
 pub fn discard_prompt(state: &State) -> Option<String> {
     let view = state.open.as_ref().filter(|view| view.confirm_discard)?;
@@ -1134,7 +1134,7 @@ pub fn discard_prompt(state: &State) -> Option<String> {
         review_of(state, view).map_or(0, |r| r.comments.iter().filter(|c| is_pending(c)).count());
     let noun = if count == 1 { "comment" } else { "comments" };
     Some(format!(
-        "Discard {count} pending {noun}? This cannot be undone."
+        "Discard {count} draft {noun}? This cannot be undone."
     ))
 }
 
@@ -1142,15 +1142,15 @@ pub fn discard_prompt(state: &State) -> Option<String> {
 pub fn sent_text(count: usize, session: &str, started: bool) -> String {
     let noun = if count == 1 { "comment" } else { "comments" };
     if started {
-        format!("Started a session and sent {count} {noun}")
+        format!("Started a session and sent a review of {count} {noun}")
     } else {
-        format!("Sent {count} {noun} to {session}")
+        format!("Sent a review of {count} {noun} to {session}")
     }
 }
 
 /// The error snackbar (S2): the service's message.
 pub fn send_error_text(message: &str) -> String {
-    format!("Couldn't send the comments: {message}")
+    format!("Couldn't send the review: {message}")
 }
 
 /// Each file's pending-comment count in the open view's entry (L2).
