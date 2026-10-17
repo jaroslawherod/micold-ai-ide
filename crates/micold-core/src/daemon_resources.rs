@@ -6,20 +6,18 @@ use serde::{Deserialize, Serialize};
 use crate::daemons::RegistryError;
 use crate::sandbox::{Bytes, MilliCpus, DEFAULT_MEMORY, DEFAULT_MILLI_CPUS};
 
-/// CPU and memory requests and limits, each set or unset on its own.
+/// CPU and memory requests and limits, each set or unset on its own. A field missing from the
+/// stored settings takes its [`Default`] value; a stored `null` is unset.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct DaemonResources {
     /// `resources.requests.cpu`.
-    #[serde(default)]
     pub cpu_request: Option<MilliCpus>,
     /// `resources.limits.cpu`.
-    #[serde(default)]
     pub cpu_limit: Option<MilliCpus>,
     /// `resources.requests.memory`.
-    #[serde(default)]
     pub memory_request: Option<Bytes>,
     /// `resources.limits.memory`.
-    #[serde(default)]
     pub memory_limit: Option<Bytes>,
 }
 
@@ -68,6 +66,18 @@ mod tests {
         assert_eq!(r.memory_request, None);
         assert_eq!(r.cpu_limit, Some(DEFAULT_MILLI_CPUS));
         assert_eq!(r.memory_limit, Some(DEFAULT_MEMORY));
+    }
+
+    #[test]
+    fn a_missing_field_takes_its_default_and_a_null_one_is_unset() {
+        let empty: DaemonResources = serde_json::from_str("{}").unwrap();
+        assert_eq!(empty, DaemonResources::default());
+        let no_cpu_limit: DaemonResources = serde_json::from_str(r#"{"cpu_limit":null}"#).unwrap();
+        assert_eq!(no_cpu_limit.cpu_limit, None);
+        assert_eq!(no_cpu_limit.memory_limit, Some(DEFAULT_MEMORY));
+        let round_trip: DaemonResources =
+            serde_json::from_str(&serde_json::to_string(&no_cpu_limit).unwrap()).unwrap();
+        assert_eq!(round_trip, no_cpu_limit);
     }
 
     #[test]

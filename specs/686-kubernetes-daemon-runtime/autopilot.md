@@ -68,6 +68,8 @@ stash@{0} survivors ("686 M1a red WIP"; never drop it; backed up in /mnt/project
 | Plan rev 2 | 1 | 41559a5d6d08b3aae87bb6486b442919a9827c2a:52d80e58149fb6943f8321d342526864d32ed8d1 | CLEAN — 3 MINOR fixed, prose only (Unavailable before #806; daemon_resources lands in #686 first; protocol 49 coordination) |
 | Tasks rev 2 | 1 | c1aab5ca46629522b51f6d4161cc2270a3155835:1ac015d23d158b44cb52d9cd09a5df7c4782b062 | CHANGES: 1 BLOCKER, 2 MAJOR, 2 MINOR — all fixed (F1 T116 keeps feature 027's `protocol/auth.rs`, restores it to origin/main, Verify checks it; F2 new T143 reworks `core/tests/daemons_kube.rs` in M1a; F3 M4a depends on M1c for context listing; F4 T020/T026 register `kubeconfig`; F5 T115 notes `StartPhase::Image` stays until T027) |
 | Tasks rev 2 | 2 (scoped, sonnet) | fa5553fcabfc99c580d0b9f2dc1af7c74f0c6834:618e287a0ec8c9de70dc33c69b725c7aa98fdd5f | CLEAN — 1 MINOR fixed, prose only (Parallel Examples names T143 with the M1a tests) |
+| M1a review A (code-review high) | 1 | d16c6458b8b7e5664f8db0f01d4324dee0807460:139d6af21c0c8c63b2f7d7e1c12c826d51b0f45b | CLEAN — 3 MINOR: F3 fixed (`DaemonResources` `#[serde(default)]` on the struct, test); F1/F2 declined (pre-existing) |
+| M1a review B (conformance, sonnet) | 1 | fbe3dfd0f7a04a22ec882b7cd8b052c14be5b2b1:44c055bedeac1dfe9ace9aea5d22e17d56d17e35 | running |
 
 ## Declined review findings
 
@@ -78,6 +80,7 @@ stash@{0} survivors ("686 M1a red WIP"; never drop it; backed up in /mnt/project
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| M1a | A (code-review high) | F1/F2 MINOR: `is_startable()` true for Kubernetes; `set_single_daemon` rewrites a Kubernetes entry's runtime | both lines unchanged from origin/main; no Kubernetes entry can be added before M6 (Add entry hidden); the dial/start path lands in M1c/M5 |
 
 ## Handover
 
