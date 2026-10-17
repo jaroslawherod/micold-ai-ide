@@ -1978,6 +1978,7 @@ pub fn covered_states() -> &'static [CoveredState] {
                 let mut state = with_project();
                 state.agent_confirm.pending =
                     vec![micold_client::features::agent_confirm::Prompt {
+                        session: micold_core::session::SessionId(Default::default()),
                         id: 1,
                         project: PathBuf::from(PROJECT),
                         caller_label: "planner".to_string(),

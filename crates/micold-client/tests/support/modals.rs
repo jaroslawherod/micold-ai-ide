@@ -153,6 +153,7 @@ pub fn a_sandboxed_link() -> micold_core::link::ResolvedLink {
 /// An agent's destructive request, pending an answer (feature 034, FR-014).
 pub fn an_agent_request() -> micold_client::features::agent_confirm::Prompt {
     micold_client::features::agent_confirm::Prompt {
+        session: micold_core::session::SessionId(Default::default()),
         id: 1,
         project: PathBuf::from("/p"),
         caller_label: "planner".to_string(),

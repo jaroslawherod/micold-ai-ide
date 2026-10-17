@@ -35,7 +35,7 @@ bundled; CI runs Linux, macOS and Windows.
 
 ## Phase 1: Setup
 
-- [ ] T001 Register the empty modules with their module docs: `pub mod overview; pub mod
+- [X] T001 Register the empty modules with their module docs: `pub mod overview; pub mod
   task_progress; pub mod hook_activity;` in micold-core/src/lib.rs (files
   micold-core/src/overview.rs, micold-core/src/task_progress.rs, micold-core/src/hook_activity.rs
   holding only `//!` docs naming feature 813), and `pub mod overview;` in
@@ -47,12 +47,12 @@ bundled; CI runs Linux, macOS and Windows.
 
 **Purpose**: the theme roles and icons every card state and the button use (R11).
 
-- [ ] T002 [P] Test first: in micold-client/src/ui/material/composition_contrast.rs add the pairs
+- [X] T002 [P] Test first: in micold-client/src/ui/material/composition_contrast.rs add the pairs
   `on_warning`/`warning`, `on_warning_container`/`warning_container`, `on_success`/`success`,
   `on_success_container`/`success_container` at ≥ 4.5:1 in light and dark, and in the existing
   roles snapshot test (micold-core/src/tokens/mod.rs tests) the eight new role names; both fail
   (roles missing)
-- [ ] T003 Add `warning`, `on_warning`, `warning_container`, `on_warning_container`, `success`,
+- [X] T003 Add `warning`, `on_warning`, `warning_container`, `on_warning_container`, `success`,
   `on_success`, `success_container`, `on_success_container` to `Roles` in
   micold-core/src/tokens/mod.rs, as fixed palette tones per scheme in micold-core/src/tokens/palette.rs
   (`WARNING_*_LIGHT`/`_DARK`, `SUCCESS_*_LIGHT`/`_DARK`), the way `diff_added` uses
@@ -83,20 +83,20 @@ one without a session) and one included worktree → five cards, the permission 
 
 #### Tests for US1 part A (write first, see them fail)
 
-- [ ] T006 [P] [US1] Core tests in micold-core/src/overview.rs `#[cfg(test)]`: `location_type`
+- [X] T006 [P] [US1] Core tests in micold-core/src/overview.rs `#[cfg(test)]`: `location_type`
   precedence "ProjectRoot (Default) → Included → OrphanInvalid (`Missing` / `Invalid`) → branch
   type (`feat` → Feature, `fix` → Bugfix, other conventional type → Chore, none → Other)" with one
   case per arm and per conventional type (`chore`, `docs`, `refactor`, `test`, `build`, `ci`,
   `perf`, `style`); `LocationType::label()` words *Feature*, *Bugfix*, *Chore*, *Other*,
   *Included*, *Orphan*, *Project root*
-- [ ] T007 [US1] Core tests in micold-core/src/overview.rs: `card_state` over every
+- [X] T007 [US1] Core tests in micold-core/src/overview.rs: `card_state` over every
   `LocationState` variant × `agent_request` {false, true} × `PrSignal` {`Unknown`, `Known` with no
   current, current open/draft with each of `checks_failing`, `changes_requested`, `conflict`,
   current merged with `removable` true/false} against data-model's table rows 1–10 (state and
   reason), generated exhaustively (SC-003); invariants as named tests: `Unknown` PR never yields
   rows 5–7 or 9; `LocationState::Unknown` never yields Working or Done by itself; rows 5–7 only
   for an open or draft current pull request; several signals → the first row (US1.5)
-- [ ] T008 [US1] Core tests in micold-core/src/overview.rs: `session_counts` skips archived
+- [X] T008 [US1] Core tests in micold-core/src/overview.rs: `session_counts` skips archived
   sessions and counts running as 905 `session_state == Running` (US1.2: 3 sessions, 2 running);
   `order` is stable by state worst first with ties in input (sidebar) order (FR-007);
   `attention` returns the worst state with its card count only for NeedsAction or NeedsAttention,
@@ -132,7 +132,7 @@ one without a session) and one included worktree → five cards, the permission 
 
 #### Implementation for US1 part A
 
-- [ ] T015 [US1] Implement in micold-core/src/overview.rs: `LocationType` (+ `label()`),
+- [X] T015 [US1] Implement in micold-core/src/overview.rs: `LocationType` (+ `label()`),
   `CardSignals { location, agent_request, pr }`, `PrSignal::{Unknown, Known { current:
   Option<CurrentPr>, removable }}`, `CurrentPr { checks_failing, changes_requested, conflict,
   merged, open }`, `CardState` (derived `Ord`: `NeedsAction < NeedsAttention < Working < Done <

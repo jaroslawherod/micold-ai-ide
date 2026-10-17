@@ -287,6 +287,40 @@ fn diff_line_text_is_legible_on_the_added_and_removed_tints() {
     );
 }
 
+/// Warning and success roles (feature 813, research R11): each `on_*` role is read on its fill at
+/// 4.5:1 in both schemes, like the M3 role pairs they sit beside.
+#[test]
+fn warning_and_success_roles_are_legible_on_their_fills() {
+    let mut violations: Vec<String> = Vec::new();
+    for scheme in [ColorScheme::Light, ColorScheme::Dark] {
+        let r = tokens::roles(scheme);
+        for (pair, text, fill) in [
+            ("on_warning / warning", r.on_warning, r.warning),
+            (
+                "on_warning_container / warning_container",
+                r.on_warning_container,
+                r.warning_container,
+            ),
+            ("on_success / success", r.on_success, r.success),
+            (
+                "on_success_container / success_container",
+                r.on_success_container,
+                r.success_container,
+            ),
+        ] {
+            let ratio = contrast(text, fill);
+            if ratio < AA_TEXT {
+                violations.push(format!("{scheme:?} / {pair}: {ratio:.2}:1 (needs {AA_TEXT})"));
+            }
+        }
+    }
+    assert!(
+        violations.is_empty(),
+        "a warning or success role cannot be read on its fill:\n  {}",
+        violations.join("\n  ")
+    );
+}
+
 /// Syntax colours (feature 482, T043, US1 s8): every colour a highlighter theme can give, as the
 /// diff draws it through `syntax::legible`, reads at 4.5:1 on the diff's surface and on both line
 /// tints of its scheme. The themes' palettes are not public, so the walk sweeps a grid of the whole

@@ -173,6 +173,24 @@ pub struct Roles {
     /// The fill of a removed diff line; `on_surface` text is read on it (US1 s8).
     pub diff_removed: Rgb,
 
+    // --- warning and success (feature 813, research R11) ---
+    /// An amber accent: the Overview's Needs attention state.
+    pub warning: Rgb,
+    /// Text and icons on `warning`.
+    pub on_warning: Rgb,
+    /// A quieter amber fill: a Needs attention card.
+    pub warning_container: Rgb,
+    /// Text and icons on `warning_container`.
+    pub on_warning_container: Rgb,
+    /// A green accent: the Overview's Done state.
+    pub success: Rgb,
+    /// Text and icons on `success`.
+    pub on_success: Rgb,
+    /// A quieter green fill: a Done card.
+    pub success_container: Rgb,
+    /// Text and icons on `success_container`.
+    pub on_success_container: Rgb,
+
     /// Which scheme this role set is, so tag tones can follow it without a second lookup.
     scheme: ColorScheme,
 }
@@ -293,6 +311,15 @@ pub const LIGHT: Roles = Roles {
     diff_added: palette::DIFF_ADDED_LIGHT,
     diff_removed: palette::DIFF_REMOVED_LIGHT,
 
+    warning: palette::WARNING_LIGHT,
+    on_warning: palette::ON_WARNING_LIGHT,
+    warning_container: palette::WARNING_CONTAINER_LIGHT,
+    on_warning_container: palette::ON_WARNING_CONTAINER_LIGHT,
+    success: palette::SUCCESS_LIGHT,
+    on_success: palette::ON_SUCCESS_LIGHT,
+    success_container: palette::SUCCESS_CONTAINER_LIGHT,
+    on_success_container: palette::ON_SUCCESS_CONTAINER_LIGHT,
+
     scheme: ColorScheme::Light,
 };
 
@@ -342,6 +369,15 @@ pub const DARK: Roles = Roles {
 
     diff_added: palette::DIFF_ADDED_DARK,
     diff_removed: palette::DIFF_REMOVED_DARK,
+
+    warning: palette::WARNING_DARK,
+    on_warning: palette::ON_WARNING_DARK,
+    warning_container: palette::WARNING_CONTAINER_DARK,
+    on_warning_container: palette::ON_WARNING_CONTAINER_DARK,
+    success: palette::SUCCESS_DARK,
+    on_success: palette::ON_SUCCESS_DARK,
+    success_container: palette::SUCCESS_CONTAINER_DARK,
+    on_success_container: palette::ON_SUCCESS_CONTAINER_DARK,
 
     scheme: ColorScheme::Dark,
 };

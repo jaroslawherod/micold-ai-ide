@@ -1832,6 +1832,7 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
         DaemonMsg::ConfirmationRequested {
             id,
             project,
+            caller,
             caller_label,
             operation,
             target_label,
@@ -1843,6 +1844,7 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
                         id,
                         project,
                         caller_label,
+                        session: caller,
                         operation,
                         target_label,
                     },
@@ -5124,6 +5126,24 @@ pub(crate) mod tests {
             sent.push(msg);
         }
         sent
+    }
+
+    /// Feature 813 (research R5, W4): the queued prompt names the session that asked, so the
+    /// Overview can put the request on that session's location.
+    #[test]
+    fn a_queued_prompt_names_the_calling_session() {
+        let (mut app, _rx) = connected_app();
+        let msg = confirmation_requested(41);
+        let DaemonMsg::ConfirmationRequested { caller, .. } = &msg else {
+            unreachable!("the fixture is a confirmation request")
+        };
+        let caller = *caller;
+        let _ = on_daemon_event(&mut app, micold_core::daemons::DaemonId(1), msg);
+        assert_eq!(
+            app.core.agent_confirm.pending.first().map(|p| p.session),
+            Some(caller),
+            "the prompt carries the wire's caller"
+        );
     }
 
     /// U210/U211 (feature 034, FR-014): the answer goes on the wire exactly once, with the id the

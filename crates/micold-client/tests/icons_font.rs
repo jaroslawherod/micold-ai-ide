@@ -154,3 +154,27 @@ fn the_state_icons_have_three_distinct_glyphs_in_the_bundled_font() {
         "three states, three glyphs: {glyphs:?}"
     );
 }
+
+/// Feature 813 (research R11): the Overview's ten icons each have a glyph in the bundled font.
+#[test]
+fn the_overview_icons_have_glyphs_in_the_bundled_font() {
+    let face = ttf_parser::Face::parse(FONT, 0).expect("shipped font must parse");
+    for icon in [
+        Icon::Overview,
+        Icon::CardNeedsAction,
+        Icon::CardNeedsAttention,
+        Icon::CardDone,
+        Icon::TypeFeature,
+        Icon::TypeBugfix,
+        Icon::TypeChore,
+        Icon::TypeOther,
+        Icon::TypeIncluded,
+        Icon::TypeOrphan,
+    ] {
+        assert!(Icon::ALL.contains(&icon), "{icon:?} must be in Icon::ALL");
+        assert!(
+            face.glyph_index(icon.glyph()).is_some(),
+            "{icon:?} has no glyph in the shipped font"
+        );
+    }
+}

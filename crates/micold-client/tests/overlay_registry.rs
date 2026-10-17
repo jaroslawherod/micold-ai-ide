@@ -344,6 +344,7 @@ fn an_agent_prompt_waits_behind_the_open_dialog_rather_than_closing_it() {
     // agent's request — and opens once that dialog closes (`agent_confirm_waits_behind_dialogs.rs`).
     let request = Message::AgentConfirm(micold_client::features::agent_confirm::Msg::Requested(
         micold_client::features::agent_confirm::Prompt {
+            session: micold_core::session::SessionId(Default::default()),
             id: 2,
             ..an_agent_request()
         },

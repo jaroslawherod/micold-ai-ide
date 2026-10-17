@@ -11,20 +11,20 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #813
 - **Worktree branch**: claude/project-thread-2lmupk
 - **Started**: 2026-10-17
-- **Phase**: tasks
-- **Next step**: design PR open (title/body in the orchestrator's scratchpad), then M1 after its merge
+- **Phase**: milestones
+- **Next step**: M1 implement (T001–T023)
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| pending | design (spec, plan, tasks) | pushed, PR to open | — |
+| #927 | design (spec, plan, tasks) | merged | 0e3b543ff7eaf73840eea4e07d00a2f7e93e1248 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T023 | full | Overview grid from the top-bar button, session-derived card states | — | pending |
+| M1 | T001–T023 | full | Overview grid from the top-bar button, session-derived card states | — | in progress |
 | M2 | T024–T030 | full | PR counts and merge conflict on cards | — | pending |
 | M3 | T031–T039 | full | Ctrl/Cmd+Shift+O and attention badge | — | pending |
 | M4 | T040–T049 | full | Card activation and keyboard traversal | — | pending |
@@ -71,7 +71,22 @@ counts are split off as M2 along acceptance scenario 3. Polish T070–T071 chang
 
 ## Handover
 
-None.
+M1 unit 1 (context cap). Branch reset to origin/main 0e3b543; work committed, not pushed, no PR.
+- Done and green: T001, T002/T003 (core side), T006–T008 + T015 (`micold-core/src/overview.rs`;
+  `location_type(location, included, status)`, `CurrentPr::from_status` (conflict false until M2)).
+  Cycle log: `specs/813-worktree-overview/tdd/cycle-log.md`.
+- Written, not yet compiled or run (client build was in progress): T004/T005 icons (dashboard
+  e871, priority_high e645, visibility e8f4, check_circle e86c, lightbulb e0f0, bug_report e868,
+  build e869, folder e2c7, link e157, folder_off eb83) in `src/icons.rs`, `tests/icons.rs`,
+  `tests/icons_font.rs`; T009/T016 `Prompt::session` (test `a_queued_prompt_names_the_calling_session`
+  in `shell/daemon_sync.rs`; test literals use `SessionId(Default::default())`); T002 client
+  contrast test. Next: run `cargo test -p micold-client --lib composition_contrast`, `--test icons
+  --test icons_font --test features_agent_confirm`, the bin's daemon_sync test; fix any exhaustive
+  `match Icon` / docs icons gate; tick T004, T005, T009, T016; then T010–T014, T017–T023.
+- Card sources found: `sidebar_entries()` (Default, Worktree, Group → `RunNode.row`
+  `RunRow::Worktree`), `session.active_sessions()`, `pr_status.{enabled,statuses,removable,read_at}`
+  (Unknown when `!enabled` or `read_at.is_none()`), `agent_confirm.pending`. `terminal_focused`
+  app.rs:431, `main_area_taken` app.rs:461.
 
 ## Open escalation
 
