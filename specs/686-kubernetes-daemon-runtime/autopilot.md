@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #686
 - **Worktree branch**: claude/project-thread-xelisc
 - **Started**: 2026-10-17
-- **Phase**: design revision 2
-- **Next step**: design revision 2 part 4: tasks review rev 2 (fresh reviewer, then scoped re-reviews until CLEAN); then M1a
+- **Phase**: implement
+- **Next step**: implement M1a (T106–T116, T143, T020, T026): design revision 2 complete, tasks review CLEAN
 
 ## Pull requests
 
@@ -67,6 +67,7 @@ stash@{0} survivors ("686 M1a red WIP"; never drop it; backed up in /mnt/project
 | Spec rev 2 | 2 (scoped, sonnet) | b07e424c9e2a84170a1b988315187afce6dfc70c:24f30ec4ba00e3835c53c0f7316fdc7421cf4a76 | CLEAN — 3 MINOR fixed, prose only (FR-024 per-client key pairs; FR-005 form notice on volume size; FR-004 running sessions of a deselected CLI keep running) |
 | Plan rev 2 | 1 | 41559a5d6d08b3aae87bb6486b442919a9827c2a:52d80e58149fb6943f8321d342526864d32ed8d1 | CLEAN — 3 MINOR fixed, prose only (Unavailable before #806; daemon_resources lands in #686 first; protocol 49 coordination) |
 | Tasks rev 2 | 1 | c1aab5ca46629522b51f6d4161cc2270a3155835:1ac015d23d158b44cb52d9cd09a5df7c4782b062 | CHANGES: 1 BLOCKER, 2 MAJOR, 2 MINOR — all fixed (F1 T116 keeps feature 027's `protocol/auth.rs`, restores it to origin/main, Verify checks it; F2 new T143 reworks `core/tests/daemons_kube.rs` in M1a; F3 M4a depends on M1c for context listing; F4 T020/T026 register `kubeconfig`; F5 T115 notes `StartPhase::Image` stays until T027) |
+| Tasks rev 2 | 2 (scoped, sonnet) | fa5553fcabfc99c580d0b9f2dc1af7c74f0c6834:618e287a0ec8c9de70dc33c69b725c7aa98fdd5f | CLEAN — 1 MINOR fixed, prose only (Parallel Examples names T143 with the M1a tests) |
 
 ## Declined review findings
 

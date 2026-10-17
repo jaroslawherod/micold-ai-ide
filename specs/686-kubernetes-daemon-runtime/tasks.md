@@ -343,7 +343,7 @@ in the list and open in Edit; the Add form's runtime list omits Kubernetes (FR-0
 
 ## Parallel Examples
 
-- M1a tests T106–T110 and T020 together (six files); then T111 → T112, with T113, T114, T115, T116, T026 beside.
+- M1a tests T106–T110, T143 and T020 together (seven files); then T111 → T112, with T113, T114, T115, T116, T026 beside.
 - M1b: T019, T117, T118 together, then T021; T025, T119, T120 together.
 - M1c: T122, T023, T123, T124 together; T126 beside T127.
 - M9: T089–T094 together once T088 exists.
