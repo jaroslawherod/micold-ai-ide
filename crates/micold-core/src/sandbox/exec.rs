@@ -24,6 +24,7 @@ use std::ffi::{OsStr, OsString};
 use std::io;
 use std::process::Command;
 use std::sync::Mutex;
+use std::time::Duration;
 
 use crate::process::no_window;
 
@@ -63,6 +64,23 @@ impl CommandOutput {
     }
 }
 
+/// The longest a streaming run leaves its caller without news while the process is silent.
+///
+/// `docker load` without a terminal prints one line, when the import is over; a 2 GiB archive
+/// on a loaded runner took 10.5 s, past SC-004's ten-second limit on a still indicator (#790).
+/// One second keeps the indicator visibly alive with room to spare.
+pub const QUIET_TICK: Duration = Duration::from_secs(1);
+
+/// What a streaming run tells its caller while the process runs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StreamEvent<'a> {
+    /// A line of output, from either stream, as it arrived.
+    Line(&'a str),
+    /// The process has printed nothing for [`QUIET_TICK`] and is still running; `elapsed` is the
+    /// time since it was spawned.
+    Quiet { elapsed: Duration },
+}
+
 /// Runs one container-runtime invocation. The only impure operation in the sandbox layer.
 ///
 /// Implementors must not interpret the arguments: classification of what an invocation *meant*
@@ -71,7 +89,8 @@ pub trait CommandRunner: Send + Sync {
     /// Run `program` with `args`, waiting for it and capturing both streams.
     fn run(&self, program: &OsStr, args: &[OsString]) -> io::Result<CommandOutput>;
 
-    /// Run `program`, invoking `on_line` for each line of output **as it arrives**.
+    /// Run `program`, invoking `on_event` for each line of output **as it arrives**, and with
+    /// [`StreamEvent::Quiet`] whenever the process has been silent for [`QUIET_TICK`].
     ///
     /// Image acquisition is the one operation that may take minutes, and obligation C-8 requires
     /// progress to move while it does — SC-004 gives first-time enable five minutes, and five
@@ -85,11 +104,11 @@ pub trait CommandRunner: Send + Sync {
         &self,
         program: &OsStr,
         args: &[OsString],
-        on_line: &mut dyn FnMut(&str),
+        on_event: &mut dyn FnMut(StreamEvent<'_>),
     ) -> io::Result<CommandOutput> {
         let out = self.run(program, args)?;
         for line in out.stdout.lines().chain(out.stderr.lines()) {
-            on_line(line);
+            on_event(StreamEvent::Line(line));
         }
         Ok(out)
     }
@@ -115,51 +134,68 @@ impl CommandRunner for SystemRunner {
         &self,
         program: &OsStr,
         args: &[OsString],
-        on_line: &mut dyn FnMut(&str),
+        on_event: &mut dyn FnMut(StreamEvent<'_>),
     ) -> io::Result<CommandOutput> {
-        use std::io::{BufRead, BufReader};
+        use std::io::{BufRead, BufReader, Read};
         use std::process::Stdio;
+        use std::sync::mpsc::{self, RecvTimeoutError};
 
+        /// Forward each line of `pipe` as it arrives, tagged with whether it is stderr.
+        fn forward(
+            pipe: impl Read + Send + 'static,
+            is_stderr: bool,
+            tx: mpsc::Sender<(bool, String)>,
+        ) -> std::thread::JoinHandle<()> {
+            std::thread::spawn(move || {
+                let mut reader = BufReader::new(pipe);
+                let mut line = String::new();
+                while reader.read_line(&mut line).unwrap_or(0) > 0 {
+                    if tx.send((is_stderr, std::mem::take(&mut line))).is_err() {
+                        break;
+                    }
+                }
+            })
+        }
+
+        let started = std::time::Instant::now();
         let mut child = no_window(&mut Command::new(program))
             .args(args)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()?;
 
-        // stdout is read on this thread and stderr on another, because a runtime that fills the
-        // stderr pipe while we are only draining stdout deadlocks — and `docker pull` writes
-        // progress to whichever it feels like.
-        let mut stderr = child.stderr.take().map(BufReader::new);
-        let stderr_thread = stderr.take().map(|mut r| {
-            std::thread::spawn(move || {
-                let mut collected = String::new();
-                let mut line = String::new();
-                while r.read_line(&mut line).unwrap_or(0) > 0 {
-                    collected.push_str(&line);
-                    line.clear();
-                }
-                collected
-            })
-        });
+        // Both streams are read on their own threads, because a runtime that fills one pipe while
+        // we only drain the other deadlocks — and `docker pull` writes progress to whichever it
+        // feels like. This thread waits on the lines with a timeout, so a process that prints
+        // nothing for minutes still lets the caller move its indicator (C-8, #790).
+        let (tx, rx) = mpsc::channel();
+        let readers: Vec<_> = [
+            child.stdout.take().map(|p| forward(p, false, tx.clone())),
+            child.stderr.take().map(|p| forward(p, true, tx.clone())),
+        ]
+        .into_iter()
+        .flatten()
+        .collect();
+        drop(tx);
 
-        let mut stdout = String::new();
-        if let Some(out) = child.stdout.take() {
-            let mut reader = BufReader::new(out);
-            let mut line = String::new();
-            while reader.read_line(&mut line).unwrap_or(0) > 0 {
-                on_line(line.trim_end());
-                stdout.push_str(&line);
-                line.clear();
+        let (mut stdout, mut stderr) = (String::new(), String::new());
+        loop {
+            match rx.recv_timeout(QUIET_TICK) {
+                Ok((is_stderr, line)) => {
+                    on_event(StreamEvent::Line(line.trim_end()));
+                    if is_stderr { &mut stderr } else { &mut stdout }.push_str(&line);
+                }
+                Err(RecvTimeoutError::Timeout) => on_event(StreamEvent::Quiet {
+                    elapsed: started.elapsed(),
+                }),
+                Err(RecvTimeoutError::Disconnected) => break,
             }
+        }
+        for reader in readers {
+            let _ = reader.join();
         }
 
         let status = child.wait()?;
-        let stderr = stderr_thread
-            .and_then(|t| t.join().ok())
-            .unwrap_or_default();
-        for line in stderr.lines() {
-            on_line(line);
-        }
         Ok(CommandOutput {
             code: status.code(),
             stdout,
@@ -268,9 +304,9 @@ impl<R: CommandRunner + ?Sized> CommandRunner for &R {
         &self,
         program: &OsStr,
         args: &[OsString],
-        on_line: &mut dyn FnMut(&str),
+        on_event: &mut dyn FnMut(StreamEvent<'_>),
     ) -> io::Result<CommandOutput> {
-        (**self).run_streaming(program, args, on_line)
+        (**self).run_streaming(program, args, on_event)
     }
 }
 
@@ -348,6 +384,49 @@ mod tests {
             .expect("spawn a process every platform has");
         assert!(out.success());
         assert!(out.stdout.contains("micold"), "stdout was {:?}", out.stdout);
+    }
+
+    /// A process silent for longer than the progress indicator may stand still (SC-004, C-8).
+    /// `docker load` without a terminal is one: it prints nothing until the import is over.
+    fn silent_then_done() -> (&'static str, Vec<OsString>) {
+        if cfg!(windows) {
+            ("cmd", os(&["/C", "ping -n 4 127.0.0.1 >NUL & echo done"]))
+        } else {
+            ("sh", os(&["-c", "sleep 3; echo done"]))
+        }
+    }
+
+    /// Issue #790: a 2 GiB import went 10.5 s with one report, at the end. Streaming must keep
+    /// the caller hearing from the runner while the process says nothing.
+    #[test]
+    fn system_runner_streaming_never_goes_quiet_while_the_process_is_silent() {
+        let (program, args) = silent_then_done();
+        let started = std::time::Instant::now();
+        let mut heard = Vec::new();
+        let mut quiet = 0;
+        let out = SystemRunner
+            .run_streaming(OsStr::new(program), &args, &mut |event| {
+                quiet += usize::from(matches!(event, StreamEvent::Quiet { .. }));
+                heard.push(started.elapsed())
+            })
+            .expect("spawn a process every platform has");
+        let finished = started.elapsed();
+
+        assert!(out.success());
+        assert!(out.stdout.contains("done"), "stdout was {:?}", out.stdout);
+        let mut previous = std::time::Duration::ZERO;
+        let mut longest = std::time::Duration::ZERO;
+        for at in heard.iter().copied().chain([finished]) {
+            longest = longest.max(at - previous);
+            previous = at;
+        }
+        assert!(quiet >= 1, "a silent process produced no quiet events");
+        // Twice the tick: a loaded runner may wake late, but never by a whole tick.
+        assert!(
+            longest <= 2 * QUIET_TICK,
+            "the caller heard nothing for {}ms; heard at {heard:?}",
+            longest.as_millis()
+        );
     }
 
     #[test]

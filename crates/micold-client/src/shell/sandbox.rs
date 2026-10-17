@@ -701,7 +701,7 @@ impl<R: CommandRunner> CommandRunner for Cancellable<R> {
         &self,
         program: &std::ffi::OsStr,
         args: &[std::ffi::OsString],
-        on_line: &mut dyn FnMut(&str),
+        on_line: &mut dyn FnMut(micold_core::sandbox::exec::StreamEvent<'_>),
     ) -> std::io::Result<micold_core::sandbox::exec::CommandOutput> {
         self.admit(args)?;
         self.runner.run_streaming(program, args, on_line)
