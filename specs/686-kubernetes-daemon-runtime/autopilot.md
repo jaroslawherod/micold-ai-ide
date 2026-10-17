@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-xelisc
 - **Started**: 2026-10-17
 - **Phase**: implement
-- **Next step**: implement M1a (T106–T116, T143, T020, T026): design revision 2 complete, tasks review CLEAN
+- **Next step**: verify M1a (scoped gate + review A, review B, full gate, PR files): all M1a tasks done
 
 ## Pull requests
 
@@ -22,7 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1a | T106–T116, T143, T020, T026 | full | Revision-2 core types (settings with image/AI CLIs/DaemonResources, names, failures, Cluster.replace), kubeconfig; revision-1 listener auth, Transport::Tunnel, daemon_image reverted | — | planned (re-cut) |
+| M1a | T106–T116, T143, T020, T026 | full | Revision-2 core types (settings with image/AI CLIs/DaemonResources, names, failures, Cluster.replace), kubeconfig; revision-1 listener auth, Transport::Tunnel, daemon_image reverted | — | implemented, verify next |
 | M1b | T019, T117, T118, T021, T025, T119, T120, T027, T121 | full | Pod, PVC, access secret, pod stamp/drift, start through Pull with bounds + rollback over FakeCluster | — | planned |
 | M1c | T122, T023, T123, T124, T125, T028, T029, T126, T127 | full | Tunnel phase (SSH identification line), LiveCluster, relay, key files | — | planned |
 | M2 | T079, T072, T056, T073, T081, T075, T059, T076, T128 | full | Core Stop/Remove/forget-locally; failure + pod-gone classifiers; preflight | — | planned |
@@ -81,26 +81,17 @@ stash@{0} survivors ("686 M1a red WIP"; never drop it; backed up in /mnt/project
 
 ## Handover
 
-M1a unit 1 (context cap). Rebased onto origin/main (branch-start REBASED 14). Done and committed:
-T020/T026 (kubeconfig, U45–U48), T108/T113 (names: `access_secret`, `all_secrets(&allowed)`,
-`ObjectKind::noun`; U18–U21, U120), `Quantity::{to_k8s, parse_k8s}` (U117, part of T107/T112);
-cycle-log "M1a, unit 1". Next, in order (one red then green each; inner loop
-`cargo test -p micold-core --lib kube::` via build-lock with the cloud env vars):
-1. U26 T109/T114 classify: rev-2 variants (`ImageContract{image,missing}`, `HostKeyMismatch{pod}`,
-   `StopTimeout{pod}` "pod <pod> was not gone within 120 s", `Api{status,message}` "the cluster
-   answered <status>: <message>", `Unavailable`), drop `NoRuntime/Build/Push/VolumeTooSmall`,
-   `From<ApiFailure>` (stash@{0}).
-2. U121 T110/T115 fake/mod: `Cluster::replace(ns, kind, name, resource_version, manifest)` (needs
-   `resource_version` on `ObjectView`), drop `node_arch`/`set_node`, `hold_on_delete` (stash),
-   `port_forward` records the port (already logged as `port_forward <pod> <port>`).
-3. U8, U11, U12, U118, U119 T106/T107/T111/T112: move `DaemonResources` + its 3 tests to
-   `core/daemon_resources.rs`, delete `core/daemon_image/`; `KubeSettings` gets `image:
-   Option<ImageRef>` (ImageRef has no serde: string adapter), `providers: BTreeSet<AiCli>`
-   (`new(context, namespace, enabled: &[AiCli])`), drops `registry`/`arch`/`RegistryRepo`/`NodeArch`.
-4. U13–U16 T143: rework `core/tests/daemons_kube.rs` to rev-2 settings.
-5. T116: `git checkout origin/main -- crates/micold-core/src/protocol/auth.rs
-   crates/micold-daemon/src/server.rs crates/micold-core/src/connect.rs` (Verify: diff empty).
-Then verify.md (scoped gate + review A, review B), scripts/gate.sh, push, PR files in scratchpad.
+M1a unit 2 (context cap, 126k after implementation). All M1a tasks are done and ticked (T106–T116,
+T143, T020, T026); commits d8121ffd (U26 classify), 52763d9e (U121 `Cluster::replace`,
+`hold_on_delete`/`release`, no `node_arch`), c2fb2684 (revision-2 `KubeSettings`,
+`daemon_resources.rs`, `daemon_image/` deleted, `daemons_kube.rs` reworked), then the T116 revert
+commit (Verify diff empty). Last local run: `cargo test -p micold-core --lib --test daemons_kube`
+719 + 6 passed. Not run yet: clippy and the workspace build (client/daemon crates). Next:
+verify.md — scoped gate (`scripts/autopilot/scoped-gate.sh`, detached) with review A
+(`code-review` high on `origin/main...HEAD`) in its shadow, then review B (conformance, sonnet),
+then `scripts/gate.sh`, push, PR title/body files in the scratchpad (body also covers the design
+revision 2 commits with the tasks review results above). No Agent tool in this environment:
+reviewers run as detached `claude -p --agent autopilot-reviewer` held with `hold.sh`.
 
 ## Open escalation
 
