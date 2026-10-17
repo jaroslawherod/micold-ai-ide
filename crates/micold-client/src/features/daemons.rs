@@ -432,7 +432,7 @@ impl State {
         if let Some(target) = self
             .draft
             .as_ref()
-            .filter(|d| d.runtime == DraftRuntime::Ssh)
+            .filter(|d| d.runtime == DraftRuntime::Ssh && self.ssh_hosts.contains(&d.ssh_host))
             .and_then(|d| ssh_target(d).ok())
         {
             targets.push(target);
@@ -1016,29 +1016,28 @@ pub fn save(state: &mut State, model: &mut Model<'_>) -> Result<Vec<Outcome>, Fo
         &model.taken_elsewhere,
         model.next_port,
     )?;
-    // Validate on a copy so a refusal leaves the registry exactly as it was.
-    let mut probe = model.registry.clone();
-    // A resolved identity never equals a literal one (ssh always reports a user), so while the
-    // form's own target is unresolved every target is judged as typed.
-    let form_resolved = match &runtime {
-        DaemonRuntime::Ssh(s) => state.resolved.contains_key(&resolution_key(&s.target)),
-        _ => false,
+    // Validate on a copy so a refusal leaves the registry exactly as it was. Two passes: as typed
+    // (always), then by what `ssh -G` resolved, where a target with no resolution matches nothing:
+    // a resolved identity is never compared with a literal one (ssh always reports a user).
+    let resolved_identity = |t: &SshTarget| {
+        let key = resolution_key(t);
+        match state.resolved.get(&key) {
+            Some(e) => e.identity(),
+            None => (format!("\0unresolved\0{key}"), None, 0),
+        }
     };
-    let identity = |t: &SshTarget| {
-        state
-            .resolved
-            .get(&resolution_key(t))
-            .filter(|_| form_resolved)
-            .map(EffectiveSsh::identity)
-            .unwrap_or_else(|| literal_identity(t))
+    let check = |identity: &dyn Fn(&SshTarget) -> micold_core::ssh::config_hosts::SshIdentity| {
+        let mut probe = model.registry.clone();
+        let result = match draft.editing {
+            Some(id) => probe
+                .edit_resolved(id, &name, runtime.clone(), draft.auto_start, identity)
+                .map(|()| id),
+            None => probe.add_resolved(&name, runtime.clone(), draft.auto_start, identity),
+        };
+        result.map(|id| (id, probe))
     };
-    let probed = match draft.editing {
-        Some(id) => probe
-            .edit_resolved(id, &name, runtime.clone(), draft.auto_start, &identity)
-            .map(|()| id),
-        None => probe.add_resolved(&name, runtime.clone(), draft.auto_start, &identity),
-    };
-    let id = probed.map_err(|e| form_error(model.registry, &draft, e))?;
+    let probed = check(&literal_identity).and_then(|_| check(&resolved_identity));
+    let (id, probe) = probed.map_err(|e| form_error(model.registry, &draft, e))?;
 
     match draft.editing {
         None => {
@@ -1580,10 +1579,12 @@ pub fn update(state: &mut State, model: &mut Model<'_>, msg: Msg) -> Vec<Outcome
     };
     match msg {
         Msg::AddOpened => {
+            state.requested.clear();
             begin_add(state);
             state.form_error = None;
         }
         Msg::EditOpened(id) => {
+            state.requested.clear();
             state.form_error = None;
             let kube = begin_edit(state, model, id).is_some_and(|d| d.kube_edited);
             if kube {
