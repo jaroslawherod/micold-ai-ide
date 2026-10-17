@@ -30,15 +30,19 @@ pub enum DaemonImageSource {
 
 impl DaemonImageSource {
     /// The default source: build from the template with the CLIs the provider list enables.
-    pub fn default_for(_enabled: &[AiCli]) -> Self {
-        DaemonImageSource::Pull {
-            reference: ImageRef::parse("stub").unwrap(),
+    pub fn default_for(enabled: &[AiCli]) -> Self {
+        DaemonImageSource::Build {
+            dockerfile: None,
+            providers: enabled.iter().copied().collect(),
         }
     }
 
     /// Whether a pulled reference can change under a running daemon, as the sandbox flags it.
     pub fn is_moving(&self) -> bool {
-        false
+        match self {
+            DaemonImageSource::Pull { reference } => reference.is_moving(),
+            DaemonImageSource::Build { .. } => false,
+        }
     }
 }
 
@@ -120,9 +124,9 @@ impl Default for DaemonResources {
     fn default() -> Self {
         Self {
             cpu_request: None,
-            cpu_limit: None,
+            cpu_limit: Some(DEFAULT_MILLI_CPUS),
             memory_request: None,
-            memory_limit: None,
+            memory_limit: Some(DEFAULT_MEMORY),
         }
     }
 }
@@ -130,7 +134,22 @@ impl Default for DaemonResources {
 impl DaemonResources {
     /// Refuse a request above its limit, naming the request field.
     pub fn validate(&self) -> Result<(), RegistryError> {
-        let _ = (DEFAULT_MEMORY, DEFAULT_MILLI_CPUS);
+        fn above<T: PartialOrd>(request: Option<T>, limit: Option<T>) -> bool {
+            matches!((request, limit), (Some(r), Some(l)) if r > l)
+        }
+        if above(self.cpu_request.map(|c| c.0), self.cpu_limit.map(|c| c.0)) {
+            return Err(RegistryError::InvalidField {
+                field: "cpu_request",
+            });
+        }
+        if above(
+            self.memory_request.map(|m| m.0),
+            self.memory_limit.map(|m| m.0),
+        ) {
+            return Err(RegistryError::InvalidField {
+                field: "memory_request",
+            });
+        }
         Ok(())
     }
 }
@@ -162,7 +181,11 @@ mod tests {
             let reference = ImageRef::parse(raw).unwrap();
             let expected = reference.is_moving();
             let source = DaemonImageSource::Pull { reference };
-            assert_eq!(source.is_moving(), expected, "{raw}: same rule as sandbox::image");
+            assert_eq!(
+                source.is_moving(),
+                expected,
+                "{raw}: same rule as sandbox::image"
+            );
             assert_eq!(source.is_moving(), moving, "{raw}");
         }
     }
@@ -185,10 +208,22 @@ mod tests {
             memory_limit: None,
         };
         let alone = [
-            DaemonResources { cpu_request: Some(MilliCpus(500)), ..none },
-            DaemonResources { cpu_limit: Some(MilliCpus(500)), ..none },
-            DaemonResources { memory_request: Some(Bytes::from_mib(256)), ..none },
-            DaemonResources { memory_limit: Some(Bytes::from_mib(256)), ..none },
+            DaemonResources {
+                cpu_request: Some(MilliCpus(500)),
+                ..none
+            },
+            DaemonResources {
+                cpu_limit: Some(MilliCpus(500)),
+                ..none
+            },
+            DaemonResources {
+                memory_request: Some(Bytes::from_mib(256)),
+                ..none
+            },
+            DaemonResources {
+                memory_limit: Some(Bytes::from_mib(256)),
+                ..none
+            },
             none,
         ];
         for r in alone {
@@ -204,7 +239,11 @@ mod tests {
             cpu_limit: Some(MilliCpus(2000)),
             ..base
         };
-        assert_eq!(at.validate(), Ok(()), "a request equal to its limit is accepted");
+        assert_eq!(
+            at.validate(),
+            Ok(()),
+            "a request equal to its limit is accepted"
+        );
         let cpu = DaemonResources {
             cpu_request: Some(MilliCpus(2001)),
             cpu_limit: Some(MilliCpus(2000)),
@@ -212,7 +251,9 @@ mod tests {
         };
         assert_eq!(
             cpu.validate(),
-            Err(RegistryError::InvalidField { field: "cpu_request" })
+            Err(RegistryError::InvalidField {
+                field: "cpu_request"
+            })
         );
         let mem = DaemonResources {
             memory_request: Some(Bytes::from_mib(5000)),
@@ -221,7 +262,9 @@ mod tests {
         };
         assert_eq!(
             mem.validate(),
-            Err(RegistryError::InvalidField { field: "memory_request" })
+            Err(RegistryError::InvalidField {
+                field: "memory_request"
+            })
         );
     }
 }

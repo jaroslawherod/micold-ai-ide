@@ -28,8 +28,9 @@ pub struct DaemonKey(String);
 
 impl DaemonKey {
     /// The key of the daemon `name` in `namespace` of `context`.
-    pub fn of(_context: &str, _namespace: &str, _name: &str) -> Self {
-        DaemonKey(String::new())
+    pub fn of(context: &str, namespace: &str, name: &str) -> Self {
+        let joined = format!("{context}\0{namespace}\0{name}");
+        DaemonKey(sha256_hex(joined.as_bytes())[..8].to_string())
     }
 
     /// The key as text.
@@ -39,8 +40,33 @@ impl DaemonKey {
 }
 
 /// A DNS-1123 slug of a daemon name, at most [`SLUG_MAX`] characters.
-pub fn slug(_name: &str) -> String {
-    String::new()
+pub fn slug(name: &str) -> String {
+    slug_within(name, SLUG_MAX)
+}
+
+/// The longest suffix a daemon's object name takes (`-git-credentials`, `-signin-opencode`).
+const LONGEST_SUFFIX: usize = 16;
+
+/// How long the slug in object names may be so `micold-<slug>-<key><suffix>` stays a DNS-1123
+/// label (63) for the longest suffix: 63 - 7 - 1 - 8 - 16.
+const NAME_SLUG_MAX: usize = 63 - "micold-".len() - 1 - 8 - LONGEST_SUFFIX;
+
+fn slug_within(name: &str, max: usize) -> String {
+    let mut out = String::new();
+    for c in name.trim().chars().flat_map(char::to_lowercase) {
+        if c.is_ascii_lowercase() || c.is_ascii_digit() {
+            out.push(c);
+        } else if !out.is_empty() && !out.ends_with('-') {
+            out.push('-');
+        }
+    }
+    out.truncate(max);
+    let trimmed = out.trim_end_matches('-');
+    if trimmed.is_empty() {
+        "daemon".to_string()
+    } else {
+        trimmed.to_string()
+    }
 }
 
 /// The names of one daemon's objects.
@@ -54,10 +80,12 @@ impl ResourceNames {
     /// The names for the daemon `name` in `namespace` of `context`.
     pub fn new(context: &str, namespace: &str, name: &str) -> Self {
         let key = DaemonKey::of(context, namespace, name);
-        Self {
-            base: String::new(),
-            key,
-        }
+        let base = format!(
+            "micold-{}-{}",
+            slug_within(name, NAME_SLUG_MAX),
+            key.as_str()
+        );
+        Self { base, key }
     }
 
     /// The daemon's key.
@@ -72,22 +100,31 @@ impl ResourceNames {
 
     /// The volume claim.
     pub fn pvc(&self) -> String {
-        self.base.clone()
+        format!("{}-data", self.base)
     }
 
     /// The secret holding one allowed credential (`RegistryPull` is the pull secret).
-    pub fn secret(&self, _credential: &KubeCredential) -> String {
-        self.base.clone()
+    pub fn secret(&self, credential: &KubeCredential) -> String {
+        match credential {
+            KubeCredential::GitConfig => format!("{}-gitconfig", self.base),
+            KubeCredential::GitCredentials => format!("{}-git-credentials", self.base),
+            KubeCredential::GitSshKey { .. } => format!("{}-git-ssh", self.base),
+            KubeCredential::SignIn { cli } => format!("{}-signin-{}", self.base, cli_slug(*cli)),
+            KubeCredential::RegistryPull { .. } => self.pull_secret(),
+        }
     }
 
     /// The image pull secret.
     pub fn pull_secret(&self) -> String {
-        self.base.clone()
+        format!("{}-pull", self.base)
     }
 
     /// The labels every object of this daemon carries.
     pub fn labels(&self) -> BTreeMap<String, String> {
-        BTreeMap::new()
+        BTreeMap::from([
+            (MANAGED_BY_LABEL.to_string(), MANAGED_BY_VALUE.to_string()),
+            (DAEMON_LABEL.to_string(), self.key.as_str().to_string()),
+        ])
     }
 }
 
@@ -103,8 +140,9 @@ pub fn cli_slug(cli: AiCli) -> &'static str {
 }
 
 /// Whether an object with `labels` belongs to the daemon `key`: both labels must match.
-pub fn is_ours(_labels: &BTreeMap<String, String>, _key: &DaemonKey) -> bool {
-    true
+pub fn is_ours(labels: &BTreeMap<String, String>, key: &DaemonKey) -> bool {
+    labels.get(MANAGED_BY_LABEL).map(String::as_str) == Some(MANAGED_BY_VALUE)
+        && labels.get(DAEMON_LABEL).map(String::as_str) == Some(key.as_str())
 }
 
 #[cfg(test)]
@@ -114,7 +152,8 @@ mod tests {
     fn is_dns_1123(s: &str) -> bool {
         !s.is_empty()
             && s.len() <= 63
-            && s.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
+            && s.bytes()
+                .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
             && !s.starts_with('-')
             && !s.ends_with('-')
     }
@@ -123,12 +162,16 @@ mod tests {
     fn the_key_is_eight_hex_of_the_nul_joined_triple() {
         let key = DaemonKey::of("kind-dev", "dev", "Build box");
         assert_eq!(key.as_str(), &sha256_hex(b"kind-dev\0dev\0Build box")[..8]);
-        assert_eq!(key, DaemonKey::of("kind-dev", "dev", "Build box"), "equal triples, equal keys");
+        assert_eq!(
+            key,
+            DaemonKey::of("kind-dev", "dev", "Build box"),
+            "equal triples, equal keys"
+        );
         assert_ne!(key, DaemonKey::of("kind-dev", "dev2", "Build box"));
         assert_ne!(
-            DaemonKey::of("a\0b", "c", "d"),
-            DaemonKey::of("a", "b\0c", "d"),
-            "the separator keeps fields apart in practice"
+            DaemonKey::of("ab", "c", "d"),
+            DaemonKey::of("a", "bc", "d"),
+            "the separator keeps fields apart"
         );
     }
 
@@ -136,7 +179,12 @@ mod tests {
     fn the_slug_is_dns_1123_and_at_most_forty_characters() {
         assert_eq!(slug("Build box"), "build-box");
         assert_eq!(slug("  Ünïcode__name!! "), "n-code-name");
-        for name in ["x".repeat(40), "x".repeat(41), "a-".repeat(30), "!!!".into()] {
+        for name in [
+            "x".repeat(40),
+            "x".repeat(41),
+            "a-".repeat(30),
+            "!!!".into(),
+        ] {
             let s = slug(&name);
             assert!(is_dns_1123(&s), "{name:?} → {s:?} is a DNS-1123 label");
             assert!(s.len() <= SLUG_MAX, "{name:?} → {s:?} is at most 40");
@@ -150,14 +198,22 @@ mod tests {
         let base = format!("micold-build-box-{}", key.as_str());
         assert_eq!(n.pod(), base);
         assert_eq!(n.pvc(), format!("{base}-data"));
-        assert_eq!(n.secret(&KubeCredential::GitConfig), format!("{base}-gitconfig"));
-        assert_eq!(n.secret(&KubeCredential::GitCredentials), format!("{base}-git-credentials"));
+        assert_eq!(
+            n.secret(&KubeCredential::GitConfig),
+            format!("{base}-gitconfig")
+        );
+        assert_eq!(
+            n.secret(&KubeCredential::GitCredentials),
+            format!("{base}-git-credentials")
+        );
         assert_eq!(
             n.secret(&KubeCredential::GitSshKey { key: "/k".into() }),
             format!("{base}-git-ssh")
         );
         assert_eq!(
-            n.secret(&KubeCredential::SignIn { cli: AiCli::Copilot }),
+            n.secret(&KubeCredential::SignIn {
+                cli: AiCli::Copilot
+            }),
             format!("{base}-signin-copilot")
         );
         assert_eq!(n.pull_secret(), format!("{base}-pull"));
@@ -175,17 +231,32 @@ mod tests {
     fn an_object_is_ours_only_when_both_labels_match() {
         let n = ResourceNames::new("kind-dev", "dev", "Build box");
         let labels = n.labels();
-        assert_eq!(labels.get(MANAGED_BY_LABEL).map(String::as_str), Some(MANAGED_BY_VALUE));
-        assert_eq!(labels.get(DAEMON_LABEL).map(String::as_str), Some(n.key().as_str()));
+        assert_eq!(
+            labels.get(MANAGED_BY_LABEL).map(String::as_str),
+            Some(MANAGED_BY_VALUE)
+        );
+        assert_eq!(
+            labels.get(DAEMON_LABEL).map(String::as_str),
+            Some(n.key().as_str())
+        );
         assert!(is_ours(&labels, n.key()));
         let mut only_managed = labels.clone();
         only_managed.remove(DAEMON_LABEL);
-        assert!(!is_ours(&only_managed, n.key()), "managed-by alone is not ours");
+        assert!(
+            !is_ours(&only_managed, n.key()),
+            "managed-by alone is not ours"
+        );
         let mut only_key = labels.clone();
         only_key.remove(MANAGED_BY_LABEL);
-        assert!(!is_ours(&only_key, n.key()), "the daemon label alone is not ours");
+        assert!(
+            !is_ours(&only_key, n.key()),
+            "the daemon label alone is not ours"
+        );
         let other = ResourceNames::new("kind-dev", "dev", "Other");
-        assert!(!is_ours(&labels, other.key()), "another daemon's object is not ours");
+        assert!(
+            !is_ours(&labels, other.key()),
+            "another daemon's object is not ours"
+        );
         assert!(!is_ours(&BTreeMap::new(), n.key()));
     }
 }

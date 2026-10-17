@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-xelisc
 - **Started**: 2026-10-17
 - **Phase**: implement M1
-- **Next step**: M1 implement — continue the handover: make cycle 1 (core types) green, then the rest of M1
+- **Next step**: M1 implement — continue the handover (unit 3): daemon-side listener_auth, client arms, then T010 onward
 
 ## Pull requests
 
@@ -42,6 +42,7 @@ Cut notes: US1 (>10 tasks) split along its acceptance scenarios and the plan's s
 | 3 | clarify | FR-007 clone source | project git remote with allowed credential; no-remote refused | orchestrator default, pending owner | decision card 2026-10-17 |
 | 4 | clarify | private registry pull; push auth | pull secret on FR-008 allow-list; push via local runtime login | agent | spec.md FR-008, FR-002 |
 | 5 | clarify | image tag/rebuild; CI image loading | deferred to plan | agent | spec.md FR-017, FR-021 |
+| 6 | implement M1 | U16: does `RegistryError::DuplicateName` name the first daemon? | keep the variant field-less; the form text "Another daemon is already named <name>." names it (names match case-insensitively) | unit, from evidence | `features/daemons.rs` form_error; `core/tests/daemons_kube.rs` |
 
 ## Review rounds
 
@@ -65,24 +66,18 @@ Cut notes: US1 (>10 tasks) split along its acceptance scenarios and the plan's s
 
 ## Handover
 
-Unit 1 of M1 (context cap reached). Done: branch restarted from origin/main (0d369060); T001–T003
-setup (workspace `kube` 4.2 / `k8s-openapi` 0.28 in the client only, no `openssl-sys`; `kube-fake`
-feature in core, `kube-real-runtime` in client; empty modules registered); cycle 1 RED (see
-tdd/cycle-log.md "Cycle 1"): tests + stubs in `core/kube/{settings,names,classify,credentials,start}.rs`,
-`core/daemon_image/mod.rs`, `core/protocol/auth.rs` (`listener_auth`). Tasks not yet ticked.
-
-Next: implement the stub bodies (validate, Toleration::parse, DaemonImageSource::default_for/is_moving,
-DaemonResources default + validate, DaemonKey::of, slug, ResourceNames, is_ours, KubeFailure Display,
-listener_auth) → green with `cargo test -p micold-core --lib -- kube:: daemon_image:: listener_auth_tests`;
-mutant-check the four tests that passed on the stubs; log green in the cycle log; tick T004, T005,
-T007, T009 (tests) and T011, T012, T014, T018 (impl) — T008/T016 also need the daemon side
-(`adopt_auth_token` via `listener_auth`, U22 characterization). Then T006/T013 (`DaemonRuntime::
-Kubernetes` in core/daemons.rs: serde arm `"kubernetes"`, label, startable, the registry `check`
-arm calling `KubeSettings::validate`; client `features/daemons.rs` endpoint arm and
-`sandbox/placement.rs::from_runtime` need a Kubernetes arm), then T010/T017, T015, T019–T033,
-T079–T082, T099. U16 "naming the first": `RegistryError::DuplicateName` carries no name today —
-decide (assert the existing variant, or add a field) and record it. Build env: CARGO_INCREMENTAL=0
-CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0; run builds detached + hold.sh.
+Unit 2 of M1 (context cap). Done, committed locally as the commit on top of 52d8a1ab (NOT pushed: the gate hook refuses a push before a green full gate, and micold-client does not compile until its `DaemonRuntime::Kubernetes` arms land): cycle 1 green (T004 T005 T007 T009 T011 T012 T014
+T018), mutant check of the four stub-passing tests (all killed), cycle 2 U13–U16 green (T006 T013:
+`DaemonRuntime::Kubernetes` serde/label/startable/registry check, `KubeSettings::endpoint`,
+`Placement::from_runtime` → None for Kubernetes; test `core/tests/daemons_kube.rs`). See
+tdd/cycle-log.md. `listener_auth` is implemented and green (T016 core half) but T008/T016 stay open
+until `daemon/server.rs` `adopt_auth_token` uses it with its fatal test (U22).
+Next: T008/T016 daemon side; client match arms for `DaemonRuntime::Kubernetes`
+(`features/daemons.rs` endpoint via `KubeSettings::endpoint`, ~L306/486/510, `daemon.rs` L212/223,
+`settings.rs` sync_legacy is `_ =>` already) — `cargo check -p micold-client` first; then T010/T017,
+T015, T019–T033, T079–T082, T099. Core suite: run with `--no-fail-fast`; 4 root-user reds are
+pre-existing (cycle log baseline). Build env: CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=0
+CARGO_PROFILE_TEST_DEBUG=0; builds detached + hold.sh.
 
 ## Open escalation
 

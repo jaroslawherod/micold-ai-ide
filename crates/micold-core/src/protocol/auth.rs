@@ -169,10 +169,18 @@ impl std::fmt::Display for AuthConfigError {
 
 /// Decide the listener's authentication from the listen address and the token path variable.
 pub fn listener_auth(
-    _listen_addr: &str,
-    _token_path: &std::ffi::OsStr,
+    listen_addr: &str,
+    token_path: &std::ffi::OsStr,
 ) -> Result<ListenerAuth, AuthConfigError> {
-    Ok(ListenerAuth::LoopbackNoToken)
+    if !token_path.is_empty() {
+        return Ok(ListenerAuth::Token(PathBuf::from(token_path)));
+    }
+    match listen_addr.parse::<std::net::SocketAddr>() {
+        Ok(addr) if addr.ip().is_loopback() => Ok(ListenerAuth::LoopbackNoToken),
+        _ => Err(AuthConfigError {
+            listen_addr: listen_addr.to_string(),
+        }),
+    }
 }
 
 #[cfg(test)]
@@ -201,10 +209,17 @@ mod listener_auth_tests {
 
     #[test]
     fn an_empty_path_on_any_other_address_is_refused() {
-        for addr in ["0.0.0.0:7727", "10.1.2.3:7727", "[::]:7727", "not an address"] {
+        for addr in [
+            "0.0.0.0:7727",
+            "10.1.2.3:7727",
+            "[::]:7727",
+            "not an address",
+        ] {
             assert_eq!(
                 listener_auth(addr, OsStr::new("")),
-                Err(AuthConfigError { listen_addr: addr.to_string() }),
+                Err(AuthConfigError {
+                    listen_addr: addr.to_string()
+                }),
                 "{addr}: an open listener without a token is refused"
             );
         }

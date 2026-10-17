@@ -2,7 +2,7 @@
   "settings_version": 4,
   "daemons": [
     { "id": 1, "name": "Host", "runtime": { "kind": "host" }, "auto_start": true },
-    { "id": 2, "name": "Far away", "runtime": { "kind": "kubernetes", "context": "box.example", "namespace": "dev" }, "auto_start": false }
+    { "id": 2, "name": "Far away", "runtime": { "kind": "nomad", "address": "box.example", "namespace": "dev" }, "auto_start": false }
   ],
   "legacy_default_daemon": 1,
   "next_daemon_id": 3

@@ -45,6 +45,8 @@ pub enum DaemonRuntime {
     Container(ContainerSettings),
     /// A host reached through the user's own `ssh` (feature 489).
     Ssh(crate::ssh::SshSettings),
+    /// A pod in a Kubernetes cluster reached through the API server's port-forward (feature 686).
+    Kubernetes(crate::kube::settings::KubeSettings),
     /// A runtime this build does not know: kept verbatim on save, never started.
     Unsupported {
         /// The `kind` the file named.
@@ -130,6 +132,7 @@ impl DaemonRuntime {
             DaemonRuntime::Host => "Host",
             DaemonRuntime::Container(_) => "Container",
             DaemonRuntime::Ssh(_) => SSH_RUNTIME_LABEL,
+            DaemonRuntime::Kubernetes(_) => "Kubernetes",
             DaemonRuntime::Unsupported { .. } => "Unsupported",
         }
     }
@@ -295,6 +298,8 @@ impl DaemonRegistry {
                     settings.target.key_file.clone(),
                 )?;
             }
+            // Whether the kube context exists is a start-time question (FR-018).
+            DaemonRuntime::Kubernetes(settings) => settings.validate()?,
             // A runtime this build cannot run is only ever loaded, never added.
             DaemonRuntime::Unsupported { .. } => {
                 return Err(RegistryError::InvalidField { field: "runtime" });
@@ -766,6 +771,11 @@ impl Serialize for DaemonRuntime {
                 value["kind"] = "ssh".into();
                 value
             }
+            DaemonRuntime::Kubernetes(c) => {
+                let mut value = serde_json::to_value(c).map_err(S::Error::custom)?;
+                value["kind"] = "kubernetes".into();
+                value
+            }
             DaemonRuntime::Unsupported { raw, .. } => raw.clone(),
         };
         value.serialize(serializer)
@@ -791,6 +801,12 @@ impl<'de> Deserialize<'de> for DaemonRuntime {
                 Ok(c) => DaemonRuntime::Ssh(c),
                 Err(_) => DaemonRuntime::Unsupported { kind, raw },
             },
+            "kubernetes" => {
+                match serde_json::from_value::<crate::kube::settings::KubeSettings>(raw.clone()) {
+                    Ok(c) => DaemonRuntime::Kubernetes(c),
+                    Err(_) => DaemonRuntime::Unsupported { kind, raw },
+                }
+            }
             _ => DaemonRuntime::Unsupported { kind, raw },
         })
     }
