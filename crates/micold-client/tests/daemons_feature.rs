@@ -459,7 +459,8 @@ fn a_running_daemon_asks_before_new_container_settings_apply() {
     send(&mut state, &mut w, Msg::PidLimitEdited("300".into()));
     let out = send(&mut state, &mut w, Msg::Saved);
     assert!(out.is_empty());
-    assert!(state.prompt().is_some(), "FR-004, FR-010");
+    let text = state.prompt().expect("FR-004, FR-010").text.clone();
+    assert!(text.contains("2 running sessions"), "{text}");
     assert_eq!(
         profile_of(&w, boxed).budget.pids,
         pids_before,
@@ -837,4 +838,63 @@ fn a_picked_port_survives_a_restart() {
         dialled.contains(&port),
         "the start dials the stored port {port}: {dialled:?}"
     );
+}
+
+/// FR-004: the question counts the daemon's running sessions, one and none included.
+#[test]
+fn the_running_daemon_question_counts_its_sessions() {
+    use daemons::Msg;
+    for (live, expected) in [(0, "0 running sessions"), (1, "1 running session ")] {
+        let mut w = World::new();
+        let mut state = State::default();
+        let boxed = w.boxed;
+        w.sessions.insert(
+            boxed,
+            (0..live)
+                .map(|_| micold_core::session::SessionId::new())
+                .collect(),
+        );
+        daemons::start(&mut state, &mut w.model(), boxed);
+        daemons::begin_edit(&mut state, &w.model(), boxed);
+        send(&mut state, &mut w, Msg::PidLimitEdited("300".into()));
+        send(&mut state, &mut w, Msg::Saved);
+        let text = state.prompt().expect("a running daemon asks").text.clone();
+        assert!(text.contains(expected), "{text}");
+    }
+}
+
+/// FR-014: every refused field of the Container and Limits sections opens its section, so the
+/// error is never hidden in a closed one.
+#[test]
+fn every_section_field_error_opens_its_section() {
+    use daemons::{FormError, Section};
+    for (field, section) in [
+        ("image", Section::Container),
+        ("image_path", Section::Container),
+        ("cpus", Section::Limits),
+        ("memory", Section::Limits),
+        ("pids", Section::Limits),
+        ("storage", Section::Limits),
+    ] {
+        let mut w = World::new();
+        let mut state = State::default();
+        add_container(&mut state, "Sec", "sec-ctr", "7050");
+        // Close the Container section, so only the error can open one.
+        send(
+            &mut state,
+            &mut w,
+            daemons::Msg::SectionToggled(Section::Container),
+        );
+        assert!(
+            !state.section_open(section),
+            "{field}: closed to begin with"
+        );
+        state.form_error = Some(FormError {
+            field,
+            message: "refused".into(),
+        });
+        for other in Section::ALL {
+            assert_eq!(state.section_open(other), other == section, "{field}");
+        }
+    }
 }

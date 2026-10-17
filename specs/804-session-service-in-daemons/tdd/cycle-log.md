@@ -20,3 +20,10 @@ The M4 unit wrote `accordion_section` and `daemons_feature` section tests alongs
 run was captured, so test-first is not shown for them. Green: `cargo test -p micold-client
 accordion_section` (6) and `--test daemons_feature`. Review A's MAJOR (Tab reached closed
 sections' fields) was fixed with a test added in the same commit.
+
+## M2 and M3 (closing note)
+
+Review of the close found no M2 or M3 red-before-green entry here, although M1's note promised
+one. None was captured at the time; the claim "M2 and M3 write red before green" is withdrawn. The M3 tuned-install test (`upgrade_single_daemon.rs`)
+passed with no source change, because the 491 migration already carried the values, so no red run
+was possible for it; it pins the carry-over against regression.

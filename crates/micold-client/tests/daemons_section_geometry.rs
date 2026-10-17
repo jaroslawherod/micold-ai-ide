@@ -158,6 +158,57 @@ fn the_add_form_shows_a_refusal_beside_its_field() {
     assert_no_text_overflows(&state, "add form with a refusal");
 }
 
+/// Feature 804, US4 AS1 / SC-005: the container form paints its five titles, the Container
+/// section open and the other four closed (their bodies absent), each header with the chevron for
+/// its state; opening one by its header paints its body.
+#[test]
+fn the_container_form_paints_five_titles_with_only_container_open() {
+    use micold_client::features::daemons::Section;
+    use micold_client::icons::Icon;
+    let (mut state, _) = with_daemons();
+    state.update(Message::Daemons(DaemonsMsg::AddOpened));
+    let shown = painted(&state);
+    for title in ["Container", "Credentials", "Network", "Limits", "Sessions"] {
+        assert!(
+            shown.iter().any(|c| c == title),
+            "title {title:?} missing: {shown:?}"
+        );
+    }
+    assert!(
+        has(&shown, "Image source"),
+        "Container is open: {shown:?}"
+    );
+    for closed_body in [
+        "The container starts with none of your credentials",
+        "Names still resolve either way",
+        "What the sandbox may consume",
+    ] {
+        assert!(
+            !has(&shown, closed_body),
+            "{closed_body:?} shown in a closed section: {shown:?}"
+        );
+    }
+    let count = |icon: Icon, painted: &[String]| {
+        painted
+            .iter()
+            .filter(|c| **c == icon.glyph().to_string())
+            .count()
+    };
+    assert_eq!(count(Icon::MoveUp, &shown), 1, "one open header");
+    assert_eq!(count(Icon::MoveDown, &shown), 4, "four closed headers");
+
+    state.update(Message::Daemons(DaemonsMsg::SectionToggled(
+        Section::Network,
+    )));
+    let shown = painted(&state);
+    assert!(
+        has(&shown, "Names still resolve either way"),
+        "{shown:?}"
+    );
+    assert_eq!(count(Icon::MoveUp, &shown), 2);
+    assert_no_text_overflows(&state, "container form with two sections open");
+}
+
 #[test]
 fn the_removal_dialog_states_both_counts_and_fits() {
     let (mut state, [host, ..]) = with_daemons();

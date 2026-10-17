@@ -2140,4 +2140,45 @@ mod parse_budget_tests {
             assert!(!message.is_empty());
         }
     }
+
+    /// FR-016: a value below a limit's minimum is refused by its own field and the message names
+    /// the accepted range, which is not what text that is not a number says.
+    #[test]
+    fn a_limit_below_its_minimum_names_the_accepted_range() {
+        for (args, field, range) in [
+            (("0.001", "", "", ""), LimitField::Cpus, "Enter between"),
+            (("", "1", "", ""), LimitField::Memory, "MiB"),
+            (("", "", "1", ""), LimitField::Pids, "Enter between"),
+            (("", "", "", "1"), LimitField::Storage, "MiB"),
+        ] {
+            let (got, message) = parse_budget(args.0, args.1, args.2, args.3).unwrap_err();
+            assert_eq!(got, field, "{message}");
+            assert!(message.contains(range), "{field:?}: {message}");
+            assert!(
+                message.chars().any(|c| c.is_ascii_digit()),
+                "{field:?}: {message}"
+            );
+        }
+    }
+
+    #[test]
+    fn text_that_is_not_a_number_says_so_rather_than_naming_a_range() {
+        for (args, field) in [
+            (("abc", "", "", ""), LimitField::Cpus),
+            (("", "x", "", ""), LimitField::Memory),
+            (("", "", "x", ""), LimitField::Pids),
+            (("", "", "", "x"), LimitField::Storage),
+        ] {
+            let (got, message) = parse_budget(args.0, args.1, args.2, args.3).unwrap_err();
+            assert_eq!(got, field);
+            assert!(!message.contains("between"), "{field:?}: {message}");
+        }
+    }
+
+    #[test]
+    fn a_whole_core_count_has_no_decimal_point() {
+        let b = parse_budget("2", "", "", "").unwrap();
+        assert_eq!(b.cpus_milli, Some(MilliCpus(2000)));
+        assert_eq!(cores_text(MilliCpus(2000)), "2");
+    }
 }

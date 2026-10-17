@@ -461,6 +461,28 @@ fn the_rail_has_no_session_service_entry() {
 /// user guide or in a source string.
 #[test]
 fn nothing_points_at_the_removed_session_service_section() {
+    // The page title is "Session service" with a capital S; the lower-case phrase names the daemon
+    // and is everywhere. Every remaining use of the title is listed here, with why.
+    const TITLE: &str = "Session service";
+    const ALLOWED: [(&str, &str); 11] = [
+        // The overflow menu's live diagnostics item, not the page.
+        ("docs/daemon.md", "Session service diagnostics"),
+        (
+            "docs/user-guide/worktrees-and-sessions.md",
+            "Session service diagnostics",
+        ),
+        ("src/ui/toolbar.rs", "Session service diagnostics"),
+        ("src/ui/material/menu.rs", "Session service"),
+        // Comments recording how wide the old label was when it wrapped.
+        ("src/ui/material/section_list.rs", "Session service"),
+        // Negative assertions and the history of what they guard against.
+        ("tests/icons.rs", "Session service"),
+        ("tests/sandbox_limits.rs", "Session service"),
+        ("tests/daemons_feature.rs", "Session service"),
+        ("tests/settings_sections.rs", "Session service"),
+        ("micold-core/src/sandbox/runtime.rs", "Session service"),
+        ("tests/settings_sections.rs", "#session-service"),
+    ];
     const STALE: [&str; 5] = [
         "Settings \\u{203a} Session service",
         "Settings → Session service",
@@ -476,10 +498,7 @@ fn nothing_points_at_the_removed_session_service_section() {
             let path = entry.path();
             if path.is_dir() {
                 stack.push(path);
-            } else if matches!(path.extension().and_then(|e| e.to_str()), Some("md" | "rs"))
-                && !path.ends_with("tests/settings_sections.rs")
-                && !path.ends_with("tests/sandbox_limits.rs")
-            {
+            } else if matches!(path.extension().and_then(|e| e.to_str()), Some("md" | "rs")) {
                 files.push(path);
             }
         }
@@ -488,10 +507,15 @@ fn nothing_points_at_the_removed_session_service_section() {
         .iter()
         .flat_map(|path| {
             let text = read(path);
-            STALE
-                .iter()
-                .filter(|needle| text.contains(**needle))
-                .map(|needle| format!("{}: {needle}", path.display()))
+            let name = path.to_string_lossy().replace('\\', "/");
+            text.lines()
+                .filter(|line| line.contains(TITLE) || STALE.iter().any(|n| line.contains(n)))
+                .filter(|line| {
+                    !ALLOWED
+                        .iter()
+                        .any(|(file, fragment)| name.ends_with(file) && line.contains(fragment))
+                })
+                .map(|line| format!("{name}: {}", line.trim()))
                 .collect::<Vec<_>>()
         })
         .collect();

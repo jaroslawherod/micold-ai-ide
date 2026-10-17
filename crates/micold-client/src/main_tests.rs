@@ -2419,6 +2419,45 @@ fn an_open_settings_page_keeps_an_edited_pr_status_switch_and_follows_an_untouch
     );
 }
 
+/// Feature 804, T007a / D3: a form save of the legacy-mirrored daemon carries the saved entry
+/// into the single-daemon `daemon` block that is still written for rollback.
+#[test]
+fn a_daemon_form_save_syncs_the_legacy_daemon_block() {
+    use micold_core::daemons::{ContainerSettings, DaemonRegistry, DaemonRuntime};
+    use micold_core::sandbox::SandboxProfile;
+
+    let mut start = micold_core::settings::Settings::default();
+    start.daemon.placement = PlacementKind::HostProcess;
+    let store = Arc::new(micold_core::settings::FakeSettingsStore::loaded(
+        start.clone(),
+    ));
+    let mut app = base_app();
+    app.caps = app.caps.clone().with_settings(store.clone());
+
+    let profile = SandboxProfile {
+        survive_logout: true,
+        ..SandboxProfile::default()
+    };
+    let mut entries = start.daemons.clone();
+    entries[0].runtime = DaemonRuntime::Container(ContainerSettings {
+        profile: profile.clone(),
+        container_name: "saved".into(),
+        port: 4321,
+    });
+    let registry = DaemonRegistry::new(entries, start.next_daemon_id);
+
+    app.apply_daemon_outcome(&micold_client::features::Outcome::DaemonRegistryChanged(
+        registry,
+    ));
+
+    let written = store
+        .saves()
+        .pop()
+        .expect("the registry change was written");
+    assert_eq!(written.daemon.placement, PlacementKind::LocalSandbox);
+    assert_eq!(written.daemon.sandbox, profile);
+}
+
 /// A49 (BUG-570, FR-026a, US4 scenario 7): a page opened before another window turned both
 /// switches off, then saved after changing only another setting, must not turn them back on: not
 /// at the service, not in the file, not in this window.
