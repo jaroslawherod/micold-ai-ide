@@ -97,10 +97,36 @@ fn a_rename_draft_starts_without_an_error() {
         path: PathBuf::from("/p/one"),
         text: "one".into(),
         error: None,
+        required: Default::default(),
     };
 
     assert!(
         draft.error.is_none(),
         "the dialog opens clean; an error appears only after a rejected confirm (FR-020)"
     );
+}
+
+/// The rename dialog's one field is required, and empty exactly when `validate_rename` refuses the
+/// value (feature 937, R4, R5).
+#[test]
+fn a_rename_draft_requires_its_name() {
+    use micold_client::features::window::FieldId;
+    for text in ["", "   ", "one", " two "] {
+        let draft = RenameDraft {
+            path: PathBuf::from("/p/one"),
+            text: text.into(),
+            error: None,
+            required: Default::default(),
+        };
+        let fields = draft.required_fields();
+        assert_eq!(fields.len(), 1);
+        let (id, req) = fields[0];
+        assert_eq!(id, FieldId::RenameProjectName);
+        assert!(req.required);
+        assert_eq!(
+            req.empty,
+            micold_core::project::validate_rename(text).is_err(),
+            "{text:?}: empty exactly when RenameError is returned"
+        );
+    }
 }

@@ -31,9 +31,12 @@ pub fn modal<'a>(
 
     // The prompt every run receives. A single-line field: a multi-line editor needs a
     // binary-owned `text_editor::Content` (follow-up in the ledger).
+    let required = dialog.required_fields();
+    let state = |id| dialog.required.state_in(&required, id);
     fields = fields.push(
         TextField::new("", &dialog.prompt, r)
             .label("Prompt")
+            .required(state(FieldId::RunPrompt))
             .supporting("Every run receives this prompt")
             .track_focus(FieldId::RunPrompt, focused)
             .on_input(|a0| msg(Msg::PromptChanged(a0))),
@@ -47,7 +50,8 @@ pub fn modal<'a>(
             r,
         )
         .placeholder("Select a type…")
-        .label("Type"),
+        .label("Type")
+        .required(state(FieldId::RunType)),
     );
     fields = fields.push(
         TextField::new("", dialog.naming.ticket.as_deref().unwrap_or(""), r)
@@ -59,6 +63,7 @@ pub fn modal<'a>(
     fields = fields.push(
         TextField::new("", &dialog.naming.name, r)
             .label("Name")
+            .required(state(FieldId::RunName))
             .supporting("e.g. login page")
             .track_focus(FieldId::RunName, focused)
             .on_input(|a0| msg(Msg::NameChanged(a0))),
@@ -73,7 +78,8 @@ pub fn modal<'a>(
             r,
         )
         .placeholder("Select a branch…")
-        .label("Base branch"),
+        .label("Base branch")
+        .required(state(FieldId::RunBaseBranch)),
     );
 
     // One row per run: its derived name and its provider (D2, D3).

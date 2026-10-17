@@ -56,6 +56,7 @@ pub mod project;
 pub mod protocol;
 pub mod provider;
 pub mod pull_request;
+pub mod required;
 pub mod review;
 pub mod runs;
 pub mod sandbox;

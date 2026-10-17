@@ -235,3 +235,29 @@ fn no_refresh_transition_touches_the_listing_or_the_arrangement_around_it() {
         );
     }
 }
+
+/// The worktree rename dialog's one field is required, and empty exactly when `validate_rename`
+/// refuses the value (feature 937, R4, R5).
+#[test]
+fn a_worktree_rename_draft_requires_its_name() {
+    use micold_client::features::window::FieldId;
+    use micold_client::features::worktree::WorktreeRenameDraft;
+    for text in ["", "   ", "one", " two "] {
+        let draft = WorktreeRenameDraft {
+            dir_name: "feat-one".into(),
+            text: text.into(),
+            error: None,
+            required: Default::default(),
+        };
+        let fields = draft.required_fields();
+        assert_eq!(fields.len(), 1);
+        let (id, req) = fields[0];
+        assert_eq!(id, FieldId::RenameWorktreeName);
+        assert!(req.required);
+        assert_eq!(
+            req.empty,
+            micold_core::project::validate_rename(text).is_err(),
+            "{text:?}: empty exactly when RenameError is returned"
+        );
+    }
+}

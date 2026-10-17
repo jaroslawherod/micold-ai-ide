@@ -45,10 +45,12 @@
 //! this feature draws over that catalog.
 
 use crate::app::Message;
+use crate::features::window::FieldId;
 use crate::floating_surface;
 use crate::overlay::registry::Registered;
 use crate::overlay::SurfaceId;
 use micold_core::project::{canonicalize_best_effort, FolderEntry, RenameError};
+use micold_core::required::{RequiredMarks, Requirement};
 use micold_core::selector::Selector;
 use std::path::PathBuf;
 
@@ -140,6 +142,19 @@ pub struct RenameDraft {
     pub text: String,
     /// The last validation error, if the user tried to confirm an invalid name (FR-020).
     pub error: Option<RenameError>,
+    /// Whether the user left the name field or attempted a confirm (feature 937).
+    pub required: RequiredMarks<FieldId>,
+}
+
+impl RenameDraft {
+    /// The dialog's one required field, empty exactly when
+    /// [`micold_core::project::validate_rename`] refuses it (feature 937, R4).
+    pub fn required_fields(&self) -> Vec<(FieldId, Requirement)> {
+        vec![(
+            FieldId::RenameProjectName,
+            Requirement::text(true, &self.text),
+        )]
+    }
 }
 
 /// The project-switcher panel, as a floating surface (feature 021, T031).
@@ -297,6 +312,7 @@ pub fn rename_started(state: &mut crate::app::State, path: PathBuf) {
     if let Some(name) = current {
         state.clear_for_dialog();
         state.project.rename_draft = Some(RenameDraft {
+            required: Default::default(),
             path,
             text: name,
             error: None,

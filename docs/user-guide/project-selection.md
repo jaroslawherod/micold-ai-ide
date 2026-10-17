@@ -138,7 +138,8 @@ moment. You can still open any folder as a project — being a git repository is
 
 You can give a project a friendlier name. In the **Known projects** list, click **Rename**
 next to a project, type the new name, and click **Rename** (or press **Enter**). Press
-**Esc** or **Cancel** to leave it unchanged.
+**Esc** or **Cancel** to leave it unchanged. The name field is marked `*`: fields marked `*`
+must be filled. Renaming a worktree works the same way.
 
 Renaming changes only the name Micold displays — it **never** renames, moves, or otherwise
 touches the folder on disk. The new name is saved and persists across restarts. Names do not

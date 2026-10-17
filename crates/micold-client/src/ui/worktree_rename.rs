@@ -26,6 +26,9 @@ pub fn modal<'a>(
             label: "Worktree name",
             field: FieldId::RenameWorktreeName,
             text: &draft.text,
+            required: draft
+                .required
+                .state_in(&draft.required_fields(), FieldId::RenameWorktreeName),
             error: draft.error,
             on_input: |t| Message::Worktree(WorktreeMsg::RenameTextChanged(t)),
             on_confirm: Message::Worktree(WorktreeMsg::RenameConfirmed),

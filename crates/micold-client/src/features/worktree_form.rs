@@ -24,6 +24,7 @@
 //! and submitting is inside `form`, and nothing outside this module names any of it.
 
 use crate::app::Message;
+use crate::features::window::FieldId;
 use crate::overlay::registry::Registered;
 use crate::overlay::{DismissalRules, FloatingSurface, SurfaceId};
 use micold_core::env_include::EnvIncludeSnapshot;
@@ -41,6 +42,7 @@ use micold_core::naming::{
 };
 use micold_core::overlay::Layer;
 use micold_core::protocol::messages::SessionDefinition;
+use micold_core::required::{RequiredMarks, Requirement};
 use micold_core::session::AiCli;
 use micold_core::typeahead::{clamp_highlight, move_highlight, rank, Direction, Match, Query};
 use micold_core::worktree::{BranchCandidate, BranchSituation, CreateMode, CreateStage, Worktree};
@@ -515,6 +517,9 @@ pub struct WorktreeForm {
     pub name: String,
     /// The last validation error shown after a rejected submit.
     pub error: Option<NamingError>,
+    /// Which fields the user has left and whether a submit was attempted, for the required
+    /// errors (feature 937). Fresh on open, dropped with the form.
+    pub required: RequiredMarks<FieldId>,
     /// Whether a create is in flight (feature 010, data-model.md).
     pub status: WorktreeFormStatus,
     /// Which half of the form is active (feature 016, FR-010).
@@ -904,6 +909,28 @@ impl WorktreeForm {
                     branch: candidate.name.clone(),
                 })
             }
+        }
+    }
+
+    /// The fields this form refuses empty, in display order, with whether each is empty now
+    /// (feature 937, FR-002). Mirrors [`Self::preview`]: Type and Name for a new branch or an
+    /// issue (Name blank after trim), the picked branch for an existing one.
+    pub fn required_fields(&self) -> Vec<(FieldId, Requirement)> {
+        match self.source {
+            BranchSource::New | BranchSource::Issue => vec![
+                (
+                    FieldId::AddWorktreeType,
+                    Requirement::choice(true, self.type_.as_ref()),
+                ),
+                (
+                    FieldId::AddWorktreeName,
+                    Requirement::text(true, &self.name),
+                ),
+            ],
+            BranchSource::Existing => vec![(
+                FieldId::AddWorktreeBranch,
+                Requirement::choice(true, self.selected_branch.as_ref()),
+            )],
         }
     }
 

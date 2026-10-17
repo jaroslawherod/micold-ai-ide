@@ -9,20 +9,20 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #937
 - **Worktree branch**: claude/project-thread-rkhzho
 - **Started**: 2026-10-17
-- **Phase**: tasks
-- **Next step**: design PR to open and merge (orchestrator), then milestone M1; D2/D3 are orchestrator defaults pending jaro's card — re-apply to spec.md and plan.md *Pending decisions* if jaro answers B
+- **Phase**: implement M1
+- **Next step**: M1 verify (scoped gate + review A, review B, full gate), PR; D2/D3 are orchestrator defaults pending jaro's card — re-apply to spec.md and plan.md *Pending decisions* if jaro answers B
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| to-open | Design: spec, clarify, plan, tasks | to be opened by orchestrator | — |
+| #948 | Design: spec, clarify, plan, tasks | merged | 7f95bbc7a71151ff44315b9f93939fe9bb115872 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T015 | full | Required fields marked (`*`) in the add-worktree, run-in-parallel and rename dialogs | — | pending |
+| M1 | T001–T015 | full | Required fields marked (`*`) in the add-worktree, run-in-parallel and rename dialogs | — | in progress |
 | M2 | T016–T022 | full | Required fields marked in Settings sections and the daemon form | — | pending |
 | M3 | T023–T028 | full | `* required` legend once above the first field of every form with a required field | — | pending |
 | M4 | T029–T035 | full | Required error on submit in the dialogs; Create and Start runs enabled | — | pending |

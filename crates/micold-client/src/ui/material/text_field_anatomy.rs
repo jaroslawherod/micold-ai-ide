@@ -19,6 +19,7 @@ use iced::advanced::widget::Tree;
 use iced::advanced::{layout, mouse, renderer, Layout, Renderer as _};
 use iced::widget::text_input;
 use iced::{Background, Color, Element, Rectangle, Size, Theme};
+use micold_core::required::FieldRequirement;
 use micold_core::tokens::{self, anatomy, shape, Roles};
 
 use super::style;
@@ -346,4 +347,47 @@ fn adding_a_placeholder_changes_nothing_where_the_leading_icon_is_drawn() {
         over, 0,
         "the placeholder is painted over {over} of the leading icon's own pixels"
     );
+}
+
+// ---------------------------------------------------------------------------------------------
+// The required marker (feature 937, contract C1)
+// ---------------------------------------------------------------------------------------------
+
+/// A required text field draws the label followed by the marker, resting (empty) and floating
+/// (filled), in the same role and tint as without it: pixel for pixel the field whose label is
+/// spelled with the `*`, and not the one without it.
+#[test]
+fn a_required_text_field_draws_the_marker_after_its_label() {
+    let r = roles();
+    for value in ["", "feature"] {
+        let required = rasterise(
+            super::TextField::new("", value, r)
+                .label("Name")
+                .required(FieldRequirement::Required),
+        );
+        let spelled = rasterise(super::TextField::new("", value, r).label("Name*"));
+        let plain = rasterise(super::TextField::new("", value, r).label("Name"));
+        assert!(
+            required == spelled,
+            "value {value:?}: a required field's label is drawn as \"Name*\""
+        );
+        assert!(
+            required != plain,
+            "value {value:?}: the marker is ink in the label, not left out"
+        );
+    }
+}
+
+/// The type-ahead (the existing-branch picker) takes the same builder and draws the same marker.
+#[test]
+fn a_required_typeahead_draws_the_marker_after_its_label() {
+    let r = roles();
+    let field = |label: &str, required: FieldRequirement| {
+        super::Typeahead::new("", Vec::new(), |s: String| s, r)
+            .label(label.to_string())
+            .required(required)
+    };
+    let required = rasterise(field("Branch", FieldRequirement::Required));
+    assert!(required == rasterise(field("Branch*", FieldRequirement::Optional)));
+    assert!(required != rasterise(field("Branch", FieldRequirement::Optional)));
 }

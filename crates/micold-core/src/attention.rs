@@ -136,7 +136,7 @@ impl AttentionTracker {
 pub const LONG_TASK_THRESHOLD: Duration = Duration::from_secs(60);
 
 /// What kind of event a desktop notification is for (feature 613, FR-001).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NotificationKind {
     /// The session stopped mid-turn to ask for a permission or an answer.

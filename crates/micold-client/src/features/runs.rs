@@ -11,6 +11,7 @@ use std::path::PathBuf;
 
 use crate::app::Message;
 use crate::features::changes::Load;
+use crate::features::window::FieldId;
 use crate::features::Outcome;
 use crate::floating_surface;
 use crate::overlay::registry::Registered;
@@ -18,6 +19,7 @@ use crate::overlay::{FloatingSurface, SurfaceId};
 use micold_core::naming::{derive, ConventionalType, DerivedNames, NamingError, WorktreeNaming};
 use micold_core::protocol::messages::ActivitySignal;
 use micold_core::protocol::messages::ClientMsg;
+use micold_core::required::{RequiredMarks, Requirement};
 use micold_core::runs::naming::derive_group;
 use micold_core::runs::{
     GroupId, Integration, Run, RunGroup, RunStatus, RunSummary, DEFAULT_RUNS, MAX_RUNS, MIN_RUNS,
@@ -255,6 +257,9 @@ pub struct ParallelDialog {
     pub default_cli: AiCli,
     /// The first failing rule, shown once the user has changed something or pressed confirm.
     pub error: Option<String>,
+    /// Which fields the user has left and whether a confirm was attempted, for the required
+    /// errors (feature 937). Fresh on open, dropped with the dialog.
+    pub required: RequiredMarks<FieldId>,
 }
 
 /// Why the dialog cannot be confirmed, in the order the rules are checked (D4, US1 s5).
@@ -301,6 +306,7 @@ impl fmt::Display for Invalid {
 impl ParallelDialog {
     fn new(opening: Opening) -> Self {
         ParallelDialog {
+            required: Default::default(),
             project: opening.project,
             naming: WorktreeNaming {
                 type_: None,
@@ -323,6 +329,23 @@ impl ParallelDialog {
     }
 
     /// The first rule the dialog breaks, or `Ok` when it can be confirmed.
+    /// The fields this dialog refuses empty, in display order, with whether each is empty now
+    /// (feature 937, FR-002). Mirrors [`Self::validate`]'s emptiness rules, trims included.
+    pub fn required_fields(&self) -> Vec<(FieldId, Requirement)> {
+        vec![
+            (FieldId::RunPrompt, Requirement::text(true, &self.prompt)),
+            (
+                FieldId::RunType,
+                Requirement::choice(true, self.naming.type_.as_ref()),
+            ),
+            (FieldId::RunName, Requirement::text(true, &self.naming.name)),
+            (
+                FieldId::RunBaseBranch,
+                Requirement::text(true, &self.base_branch),
+            ),
+        ]
+    }
+
     pub fn validate(&self) -> Result<(), Invalid> {
         if self.prompt.trim().is_empty() {
             return Err(Invalid::EmptyPrompt);

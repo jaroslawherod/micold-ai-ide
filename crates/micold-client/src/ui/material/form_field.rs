@@ -54,6 +54,7 @@
 
 use iced::widget::{column, container, Space};
 use iced::{Element, Length};
+use micold_core::required::FieldRequirement;
 use micold_core::tokens::{anatomy, shape, spacing, Roles};
 
 pub use super::filled_field::Layer;
@@ -82,6 +83,7 @@ pub(super) struct FieldText {
     label: Option<String>,
     supporting: Option<String>,
     error: Option<String>,
+    required: FieldRequirement,
 }
 
 impl FieldText {
@@ -97,6 +99,11 @@ impl FieldText {
 
     pub(super) fn error(mut self, error: Option<impl Into<String>>) -> Self {
         self.error = error.map(Into::into);
+        self
+    }
+
+    pub(super) fn required(mut self, required: FieldRequirement) -> Self {
+        self.required = required;
         self
     }
 
@@ -136,6 +143,13 @@ macro_rules! field_text_builders {
         /// Explanatory text beneath the container: a constraint, an example, a unit.
         pub fn supporting(mut self, text: impl Into<String>) -> Self {
             self.text = self.text.supporting(text);
+            self
+        }
+
+        /// Whether the form refuses this field empty, and whether to say so now (feature 937,
+        /// contract C1): `Required` and `Missing` append the marker to the label.
+        pub fn required(mut self, required: micold_core::required::FieldRequirement) -> Self {
+            self.text = self.text.required(required);
             self
         }
     };
@@ -284,9 +298,16 @@ impl<'a, M: 'a> From<FormField<'a, M>> for Element<'a, M> {
         // changes with the position — `body_small` floating, `body_large` at rest — which is what
         // makes a resting label read as the field's *content placeholder* rather than as a caption.
         let floating = label_floats(f.populated, f.active);
+        // The required marker is a character of the label itself, so it floats and rests with
+        // it, in its role and tint, and survives being read as text (feature 937, FR-001, FR-003).
+        let marked = f.text.required != FieldRequirement::Optional;
         let label: Element<'a, M> = match f.text.label {
             Some(text) => Text::new(
-                text,
+                if marked {
+                    format!("{text}{}", micold_core::required::MARKER)
+                } else {
+                    text
+                },
                 if floating {
                     TypeRole::Caption
                 } else {

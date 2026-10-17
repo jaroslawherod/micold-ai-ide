@@ -22,6 +22,7 @@
 
 use iced::widget::text_input;
 use iced::{Element, Length, Size};
+use micold_core::required::FieldRequirement;
 use micold_core::tokens::{self, anatomy, Roles};
 
 use super::style;
@@ -650,4 +651,70 @@ fn the_wrapper_declares_a_filling_width() {
     let r = roles();
     let field: Element<'_, Message> = FormField::new(input(), r).into();
     assert_eq!(field.as_widget().size().width, Length::Fill);
+}
+
+// ---------------------------------------------------------------------------------------------
+// The required marker (feature 937, contract C1)
+// ---------------------------------------------------------------------------------------------
+
+/// Every bound of `element` laid out `width` wide: two fields with the same label text in the same
+/// role lay out the same, and a label one character longer does not.
+fn bounds(element: Element<'_, Message>, width: f32) -> Vec<iced::Rectangle> {
+    super::test_support::all_bounds(&laid_out(element, width))
+}
+
+/// A required field's label is the label followed by the marker, resting and floating alike
+/// (FR-001, FR-003): it lays out exactly as a label spelled with the `*` does.
+#[test]
+fn a_required_label_reads_as_the_label_and_the_marker() {
+    let r = roles();
+    for populated in [false, true] {
+        let required: Element<'_, Message> = FormField::new(input(), r)
+            .label("Name")
+            .required(FieldRequirement::Required)
+            .populated(populated)
+            .into();
+        let spelled: Element<'_, Message> = FormField::new(input(), r)
+            .label("Name*")
+            .populated(populated)
+            .into();
+        let plain: Element<'_, Message> = FormField::new(input(), r)
+            .label("Name")
+            .populated(populated)
+            .into();
+        let required = bounds(required, 400.0);
+        assert_eq!(
+            required,
+            bounds(spelled, 400.0),
+            "populated {populated}: a required label lays out as \"Name*\""
+        );
+        assert_ne!(
+            required,
+            bounds(plain, 400.0),
+            "populated {populated}: the marker is a character in the label, so the label grows"
+        );
+    }
+}
+
+/// `Optional`, the default, leaves the label as it was.
+#[test]
+fn an_optional_field_keeps_its_label() {
+    let r = roles();
+    let optional: Element<'_, Message> = FormField::new(input(), r)
+        .label("Ticket")
+        .required(FieldRequirement::Optional)
+        .into();
+    let plain: Element<'_, Message> = FormField::new(input(), r).label("Ticket").into();
+    assert_eq!(bounds(optional, 400.0), bounds(plain, 400.0));
+}
+
+/// A field with no label has nothing to mark: the marker never appears on its own.
+#[test]
+fn a_field_without_a_label_gets_no_marker() {
+    let r = roles();
+    let required: Element<'_, Message> = FormField::new(input(), r)
+        .required(FieldRequirement::Required)
+        .into();
+    let bare: Element<'_, Message> = FormField::new(input(), r).into();
+    assert_eq!(bounds(required, 400.0), bounds(bare, 400.0));
 }
