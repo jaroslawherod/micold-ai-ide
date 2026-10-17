@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use micold_core::github::GithubRepo;
 use micold_core::pull_request::{status_args, status_query};
 
-const QUERY_1: &str = "query($owner: String!, $name: String!, $b0: String!) { repository(owner: $owner, name: $name) { o0: pullRequests(headRefName: $b0, states: OPEN, first: 10, orderBy: {field: CREATED_AT, direction: DESC}) { nodes { ...pr } } r0: pullRequests(headRefName: $b0, first: 10, orderBy: {field: CREATED_AT, direction: DESC}) { nodes { ...pr } } } rateLimit { remaining resetAt } } fragment pr on PullRequest { number title url state isDraft createdAt isCrossRepository headRefOid reviewDecision commits(last: 1) { nodes { commit { statusCheckRollup { contexts(first: 1) { checkRunCount checkRunCountsByState { state count } statusContextCount statusContextCountsByState { state count } } } } } } }";
+const QUERY_1: &str = "query($owner: String!, $name: String!, $b0: String!) { repository(owner: $owner, name: $name) { o0: pullRequests(headRefName: $b0, states: OPEN, first: 10, orderBy: {field: CREATED_AT, direction: DESC}) { nodes { ...pr } } r0: pullRequests(headRefName: $b0, first: 10, orderBy: {field: CREATED_AT, direction: DESC}) { nodes { ...pr } } oc0: pullRequests(headRefName: $b0, states: OPEN, first: 100) { nodes { isCrossRepository } } mc0: pullRequests(headRefName: $b0, states: MERGED, first: 100) { nodes { isCrossRepository } } } rateLimit { remaining resetAt } } fragment pr on PullRequest { number title url state isDraft createdAt isCrossRepository headRefOid reviewDecision mergeable commits(last: 1) { nodes { commit { statusCheckRollup { contexts(first: 1) { checkRunCount checkRunCountsByState { state count } statusContextCount statusContextCountsByState { state count } } } } } } }";
 
 fn repo() -> GithubRepo {
     GithubRepo::from_remote_url("https://github.com/acme/widgets").expect("a github.com url")
@@ -31,6 +31,8 @@ fn u2_query_for_one_branch_is_pinned() {
     for part in [
         "o0:",
         "r0:",
+        "oc0:",
+        "mc0:",
         "rateLimit { remaining resetAt }",
         "fragment pr on PullRequest",
         "checkRunCountsByState",

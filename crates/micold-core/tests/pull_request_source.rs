@@ -9,7 +9,7 @@ use micold_core::github::GithubRepo;
 use micold_core::process::RunOutcome;
 use micold_core::pull_request::{
     read_in_chunks, read_outcome, CheckStatus, FakePullRequestSource, PrState, PullRequestSource,
-    PullRequestStatus, ReadingFailure, ReviewState, BRANCHES_PER_REQUEST,
+    PullRequestStatus, ReadingFailure, ReviewState, StatusReading, BRANCHES_PER_REQUEST,
 };
 
 const NOW: u64 = 1_790_000_000;
@@ -37,18 +37,22 @@ fn status(number: u64) -> PullRequestStatus {
         state: PrState::Merged,
         review: ReviewState::None,
         head: "abc".into(),
+        conflict: false,
     }
 }
 
-type Answer = Result<BTreeMap<String, PullRequestStatus>, ReadingFailure>;
+type Answer = Result<StatusReading, ReadingFailure>;
 
 /// One entry per branch of the chunk.
 fn one_each(chunk: &[String]) -> Answer {
-    Ok(chunk
-        .iter()
-        .enumerate()
-        .map(|(i, b)| (b.clone(), status(i as u64 + 1)))
-        .collect())
+    Ok(StatusReading {
+        statuses: chunk
+            .iter()
+            .enumerate()
+            .map(|(i, b)| (b.clone(), status(i as u64 + 1)))
+            .collect(),
+        counts: BTreeMap::new(),
+    })
 }
 
 /// U42
@@ -65,7 +69,10 @@ fn fake_answers_in_order_and_records_calls() {
 
     assert_eq!(
         source.read(&repo, &first, NOW),
-        Ok(answer),
+        Ok(StatusReading {
+            statuses: answer,
+            counts: BTreeMap::new()
+        }),
         "the first read gets the first scripted answer"
     );
     assert_eq!(
@@ -95,11 +102,11 @@ fn no_branches_makes_no_request() {
     let mut asked = 0;
     let result = read_in_chunks(&[], |_| {
         asked += 1;
-        Ok(BTreeMap::new())
+        Ok(StatusReading::default())
     });
     assert_eq!(
         result,
-        Ok(BTreeMap::new()),
+        Ok(StatusReading::default()),
         "no branches is an empty answer"
     );
     assert_eq!(asked, 0, "no branches makes no request");
@@ -130,7 +137,7 @@ fn branches_are_read_in_chunks_of_fifty() {
             branches,
             "{n} branches: the chunks are the branches in order, none repeated or lost"
         );
-        let map = result.expect("every chunk answered");
+        let map = result.expect("every chunk answered").statuses;
         assert_eq!(
             map.keys().cloned().collect::<Vec<_>>(),
             {
@@ -206,7 +213,8 @@ fn a_good_answer_is_keyed_by_the_branches_passed() {
         &branches,
         NOW,
     )
-    .expect("exit 0 with HTTP 200 and a readable body is the answer");
+    .expect("exit 0 with HTTP 200 and a readable body is the answer")
+    .statuses;
     assert_eq!(
         map.keys().cloned().collect::<Vec<_>>(),
         vec!["alpha".to_string(), "beta".to_string()],
@@ -282,7 +290,8 @@ fn a_sign_in_that_cannot_read_checks_still_shows_the_pull_request_without_a_chec
         "gh: Resource not accessible by integration\nResource not accessible by integration\n",
     );
     let map = read_outcome(&outcome, &branches, NOW)
-        .expect("the pull request was readable; only the checks were refused (FR-025, FR-003)");
+        .expect("the pull request was readable; only the checks were refused (FR-025, FR-003)")
+        .statuses;
     assert_eq!(
         map.len(),
         1,

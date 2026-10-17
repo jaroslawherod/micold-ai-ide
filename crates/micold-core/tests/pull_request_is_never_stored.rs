@@ -60,6 +60,7 @@ fn debug_output_holds_the_number_and_the_enums_and_neither_title_nor_address() {
         },
         review: ReviewState::ChangesRequested,
         head: HEAD.to_string(),
+        conflict: false,
     };
 
     let printed = format!("{status:?}");
