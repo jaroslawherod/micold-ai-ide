@@ -892,6 +892,8 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
                 }));
             Task::none()
         }
+        // Feature 803 (contracts/ui.md U3).
+        Message::Navigation(msg) => shell::navigation::update(app, msg),
         Message::Session(SessionMsg::Selected(id)) => {
             // Feature 482, V2: the terminal takes the main area back. Closing reads nothing.
             let _ = app.core.update_changes(ChangesMsg::SessionSelected);

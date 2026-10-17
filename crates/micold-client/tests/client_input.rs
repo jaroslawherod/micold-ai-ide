@@ -4,7 +4,7 @@
 //! (simulated) detach/reattach.
 
 use micold_client::input::SessionInputStamper;
-use micold_client::keymap::{encode, Key, KeyInput, KeyOutput, Mods, TermMode};
+use micold_client::keymap::{encode, Key, KeyInput, KeyOutput, Mods, PhysicalKey, TermMode};
 use micold_core::protocol::messages::ClientMsg;
 use micold_core::session::SessionId;
 
@@ -84,6 +84,7 @@ fn keymap_encode_to_stamp_is_the_client_drive_pipeline() {
         key: Key::Char('a'),
         mods: Mods::NONE,
         text: Some("a".to_string()),
+        physical: PhysicalKey::Other,
     };
     let KeyOutput::Bytes(bytes) = encode(&press, TermMode::default()) else {
         panic!("a plain character must encode to bytes");

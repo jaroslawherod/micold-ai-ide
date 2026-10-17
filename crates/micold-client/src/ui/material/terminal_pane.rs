@@ -1698,6 +1698,7 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
             key,
             modifiers,
             text,
+            physical_key,
             ..
         }) = event
         {
@@ -1708,6 +1709,7 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                 key: k,
                 mods: to_keymap_mods(*modifiers),
                 text: text.as_ref().map(|t| t.to_string()),
+                physical: to_keymap_physical(physical_key),
             };
             let output = keymap::encode(&input, self.key_term_mode());
             match route_key(self.focused, output) {
@@ -1756,6 +1758,16 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                     ));
                     shell.capture_event();
                 }
+                KeyRouting::Navigate(action) => {
+                    // Unfocused, the chord belongs to the `ui::subscription` listener, as the
+                    // Overview chord does.
+                    if self.focused {
+                        shell.publish(Message::Navigation(
+                            crate::features::navigation::Msg::Pressed(action),
+                        ));
+                        shell.capture_event();
+                    }
+                }
                 KeyRouting::Ignore => {}
             }
         }
@@ -1785,6 +1797,17 @@ pub(crate) fn to_keymap_mods(m: keyboard::Modifiers) -> keymap::Mods {
         ctrl: m.control(),
         alt: m.alt(),
         logo: m.logo(),
+    }
+}
+
+/// Map an iced physical key onto the few the navigation chords name (feature 803, contracts/keys.md
+/// K2): the key's place on the keyboard, whatever character the layout puts there.
+pub(crate) fn to_keymap_physical(physical: &keyboard::key::Physical) -> keymap::PhysicalKey {
+    use keyboard::key::{Code, Physical};
+    match physical {
+        Physical::Code(Code::Comma) => keymap::PhysicalKey::Comma,
+        Physical::Code(Code::Period) => keymap::PhysicalKey::Period,
+        _ => keymap::PhysicalKey::Other,
     }
 }
 
@@ -2205,8 +2228,8 @@ mod tests {
 
         // Feature 813 (FR-011, SC-006).
 
-        #[test]
-        fn the_overview_chord_is_published_as_the_toggle_and_captured() {
+        /// Press `event` in a focused pane: whether the pane captured it, and what it published.
+        fn press_focused(event: &Event) -> (bool, Vec<Message>) {
             let renderer = super::presses::headless();
             let grid = grid(0);
             let mut clipboard = RecordingClipboard::holding(PRIOR);
@@ -2226,7 +2249,7 @@ mod tests {
             let mut shell = Shell::new(&mut messages);
             element.as_widget_mut().update(
                 &mut tree,
-                &overview_chord(),
+                event,
                 Layout::new(&node),
                 mouse::Cursor::Available(INSIDE),
                 &renderer,
@@ -2234,10 +2257,13 @@ mod tests {
                 &mut shell,
                 &Rectangle::with_size(WINDOW),
             );
-            assert!(
-                shell.is_event_captured(),
-                "the chord must not reach anyone else"
-            );
+            (shell.is_event_captured(), messages)
+        }
+
+        #[test]
+        fn the_overview_chord_is_published_as_the_toggle_and_captured() {
+            let (captured, messages) = press_focused(&overview_chord());
+            assert!(captured, "the chord must not reach anyone else");
             assert!(
                 bytes_sent(&messages).is_empty(),
                 "the PTY must receive 0 bytes"
@@ -2248,6 +2274,72 @@ mod tests {
                     settings_open: false
                 })]
             ));
+        }
+
+        /// The platform's next-location chord on the physical `.` key, under a layout that puts
+        /// another character there (feature 803, contracts/keys.md K2).
+        fn next_location_chord() -> Event {
+            #[cfg(target_os = "macos")]
+            let modifiers = keyboard::Modifiers::LOGO | keyboard::Modifiers::SHIFT;
+            #[cfg(not(target_os = "macos"))]
+            let modifiers = keyboard::Modifiers::CTRL | keyboard::Modifiers::SHIFT;
+            Event::Keyboard(keyboard::Event::KeyPressed {
+                key: keyboard::Key::Character("ю".into()),
+                modified_key: keyboard::Key::Character("Ю".into()),
+                physical_key: Physical::Code(iced::keyboard::key::Code::Period),
+                location: keyboard::Location::Standard,
+                modifiers,
+                text: None,
+                repeat: false,
+            })
+        }
+
+        // Feature 803 (contracts/keys.md K3, SC-002).
+
+        #[test]
+        fn a_location_chord_is_published_as_navigation_and_captured() {
+            use crate::keymap::{NavAction, NavLevel};
+            use micold_core::navigation::Dir;
+            let (captured, messages) = press_focused(&next_location_chord());
+            assert!(captured, "the chord must not reach anyone else");
+            assert!(
+                bytes_sent(&messages).is_empty(),
+                "the PTY must receive 0 bytes (SC-002)"
+            );
+            assert!(
+                matches!(
+                    messages.as_slice(),
+                    [Message::Navigation(
+                        crate::features::navigation::Msg::Pressed(NavAction {
+                            level: NavLevel::Location,
+                            dir: Dir::Next
+                        })
+                    )]
+                ),
+                "published: {messages:?}"
+            );
+        }
+
+        #[test]
+        fn physical_keys_map_onto_the_navigation_keys() {
+            use crate::keymap::PhysicalKey;
+            use iced::keyboard::key::Code;
+            assert_eq!(
+                to_keymap_physical(&Physical::Code(Code::Comma)),
+                PhysicalKey::Comma
+            );
+            assert_eq!(
+                to_keymap_physical(&Physical::Code(Code::Period)),
+                PhysicalKey::Period
+            );
+            assert_eq!(
+                to_keymap_physical(&Physical::Code(Code::KeyO)),
+                PhysicalKey::Other
+            );
+            assert_eq!(
+                to_keymap_physical(&Physical::Unidentified(NativeCode::Unidentified)),
+                PhysicalKey::Other
+            );
         }
 
         fn middle_click() -> Event {

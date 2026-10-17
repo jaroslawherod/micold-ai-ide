@@ -12,6 +12,8 @@ pub mod covered_states;
 pub mod layout;
 /// The modal table the overlay tests share (issue #700).
 pub mod modals;
+/// The sidebar's project at `/repo` (features 029, 803).
+pub mod sidebar_fixture;
 pub mod spawn_tree;
 /// A `cdk` tooltip driven event by event (feature 038).
 pub mod tooltip;

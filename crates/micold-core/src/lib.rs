@@ -41,6 +41,7 @@ pub mod logout_survival;
 pub mod mcp;
 pub mod metadata;
 pub mod naming;
+pub mod navigation;
 pub mod notify;
 pub mod occupancy;
 pub mod origin;

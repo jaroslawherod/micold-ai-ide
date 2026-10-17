@@ -652,6 +652,8 @@ impl crate::app::State {
         }
         self.session.reveal_suppressed_for = None;
         self.session.active = next;
+        // Feature 803 (U5): a navigation stop is left once another session is current.
+        outcomes.push(crate::features::Outcome::KeyboardRowLeft);
         if next.is_some() {
             outcomes.push(crate::features::Outcome::RevealScrollArmed);
         }
@@ -1073,10 +1075,16 @@ pub fn started(state: &mut crate::app::State, session: Session) -> Vec<crate::fe
 /// name; any other direct write to `active_session` fails that gate.
 pub fn selected(state: &mut crate::app::State, id: SessionId) -> Vec<crate::features::Outcome> {
     state.session.active = Some(id);
-    // Feature 813 (R12): a selection ends the Overview's reveal mark.
+    // Feature 803 (U5): a pointer or chord selection leaves any navigation stop, and (FR-012, 813
+    // FR-023) the session it shows takes the main area from the Overview.
+    let mut outcomes = vec![
+        crate::features::Outcome::KeyboardRowLeft,
+        crate::features::Outcome::MainAreaTaken,
+    ];
     // Selecting a session displays its terminal, so it holds the keyboard, clearing any earlier
     // release (FR-011, FR-021a).
-    let mut outcomes = state.focus_terminal();
+    outcomes.extend(state.focus_terminal());
+    // Feature 813 (R12): a selection ends the Overview's reveal mark.
     outcomes.push(crate::features::Outcome::RevealMarkCleared);
     outcomes
 }

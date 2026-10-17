@@ -115,6 +115,22 @@ pub struct State {
     /// The sidebar width in pixels. `0` means "use the default width" (see
     /// [`crate::app::State::sidebar_width_px`]).
     pub width: u16,
+    /// The location a location chord landed on that has no session to show (feature 803, a
+    /// navigation stop): the next location press steps on from it (contracts/ui.md U2, U5).
+    pub nav_stop: Option<SessionLocation>,
+    /// The row a navigation chord gave the sidebar's keyboard (feature 803, contracts/ui.md U3):
+    /// the reveal scroll reaches it rather than the current session's row.
+    pub keyboard_row: Option<RowRef>,
+}
+
+/// A sidebar row named by what it shows, not by its position, so it survives the list arriving
+/// late (feature 803, data-model.md).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RowRef {
+    /// A location's own row (Default or a worktree).
+    Location(SessionLocation),
+    /// The row holding a session: its sub-row, or its location's row when that draws none.
+    Session(SessionId),
 }
 
 /// One row in the sidebar's location list (feature 010): either a worktree or the single
@@ -633,55 +649,71 @@ pub fn row_heights(entries: &[SidebarEntry]) -> Vec<f32> {
 /// Counted the way the list is built — locations, and the sessions of the open ones — because the
 /// answer is a position in what is on screen, not a position in the model.
 pub fn current_session_row(entries: &[SidebarEntry], current: Option<SessionId>) -> Option<usize> {
-    let current = current?;
+    row_index(entries, &RowRef::Session(current?))
+}
+
+/// Which rendered row `target` is, if the list draws it (feature 803, plan D4).
+///
+/// Counted the way the list is built — locations, and the sessions of the open ones — because the
+/// answer is a position in what is on screen, not a position in the model. A session whose
+/// location draws no sub-rows is on its location's row.
+pub fn row_index(entries: &[SidebarEntry], target: &RowRef) -> Option<usize> {
     let mut row = 0usize;
-    // A location row: the row itself when it holds `current` without drawing it (a single session
-    // has no sub-row), else the sub-row's position.
-    let location = |row: &mut usize, shown: bool, sessions: &[&Session]| -> Option<usize> {
+    let location = |row: &mut usize,
+                    location: SessionLocation,
+                    shown: bool,
+                    sessions: &[&Session]|
+     -> Option<usize> {
         let at = *row;
         *row += 1;
-        if !shown {
-            return sessions.iter().any(|s| s.id == current).then_some(at);
+        if shown {
+            *row += sessions.len();
         }
-        for session in sessions {
-            if session.id == current {
-                return Some(*row);
-            }
-            *row += 1;
+        match target {
+            RowRef::Location(wanted) => (*wanted == location).then_some(at),
+            RowRef::Session(id) if !shown => sessions.iter().any(|s| s.id == *id).then_some(at),
+            RowRef::Session(id) => sessions
+                .iter()
+                .position(|s| s.id == *id)
+                .map(|i| at + 1 + i),
         }
-        None
     };
     for entry in entries {
-        match entry {
-            SidebarEntry::Default(node) => {
-                let sessions = node.listed_sessions();
-                if let Some(found) = location(&mut row, node.sessions_shown(), &sessions) {
-                    return Some(found);
-                }
-            }
-            SidebarEntry::Worktree(node) => {
-                let sessions = node.listed_sessions();
-                if let Some(found) = location(&mut row, node.sessions_shown(), &sessions) {
-                    return Some(found);
-                }
-            }
+        let found = match entry {
+            SidebarEntry::Default(node) => location(
+                &mut row,
+                SessionLocation::Default,
+                node.sessions_shown(),
+                &node.listed_sessions(),
+            ),
+            SidebarEntry::Worktree(node) => location(
+                &mut row,
+                node.location(),
+                node.sessions_shown(),
+                &node.listed_sessions(),
+            ),
             SidebarEntry::Group(group) => {
                 row += 1;
+                let mut found = None;
                 if group.expanded {
                     for run in &group.runs {
                         if let RunRow::Worktree(node) = &run.row {
-                            let sessions = node.listed_sessions();
-                            if let Some(found) =
-                                location(&mut row, node.sessions_shown(), &sessions)
-                            {
-                                return Some(found);
-                            }
+                            found = found.or(location(
+                                &mut row,
+                                node.location(),
+                                node.sessions_shown(),
+                                &node.listed_sessions(),
+                            ));
                         } else {
                             row += 1;
                         }
                     }
                 }
+                found
             }
+        };
+        if found.is_some() {
+            return found;
         }
     }
     None
@@ -1183,6 +1215,8 @@ impl crate::app::State {
     /// Drop view state that must not follow the user into a different project (T067a-6).
     pub fn project_entered(&mut self) {
         self.sidebar.default_expanded = false;
+        // Feature 803 (U5): a stop or keyboard row of the project left behind means nothing here.
+        self.keyboard_row_left();
     }
 
     /// Whether a location's row is shown open (feature 024, contract §1.1).
@@ -1211,7 +1245,7 @@ impl crate::app::State {
     /// scrolling to a stale offset (invariant I4).
     pub fn reveal_scroll_offset(&self) -> Option<u32> {
         let entries = self.sidebar_entries();
-        let index = current_session_row(&entries, self.session.active)?;
+        let index = self.reveal_row(&entries)?;
         let heights = row_heights(&entries);
         if crate::reveal_trace::enabled() {
             let top: f32 = heights[..index].iter().sum::<f32>() + ROW_GAP * index as f32;
@@ -1254,7 +1288,24 @@ impl crate::app::State {
     /// The condition for draining an armed reveal: until it is true there is nothing to scroll to,
     /// and the arm stays set.
     pub fn current_session_is_listed(&self) -> bool {
-        current_session_row(&self.sidebar_entries(), self.session.active).is_some()
+        self.reveal_row(&self.sidebar_entries()).is_some()
+    }
+
+    /// The row the reveal scroll reaches (feature 803, contracts/ui.md U3): the row a navigation
+    /// chord gave the keyboard while the list draws it, else the current session's row.
+    fn reveal_row(&self, entries: &[SidebarEntry]) -> Option<usize> {
+        self.sidebar
+            .keyboard_row
+            .as_ref()
+            .and_then(|target| row_index(entries, target))
+            .or_else(|| current_session_row(entries, self.session.active))
+    }
+
+    /// The sidebar's keyboard left the row a navigation chord gave it, or the current session
+    /// changed (feature 803, contracts/ui.md U5): no row holds it and no stop is pending.
+    pub fn keyboard_row_left(&mut self) {
+        self.sidebar.keyboard_row = None;
+        self.sidebar.nav_stop = None;
     }
 
     /// Open or close a location's row, from the user's own twisty (feature 024, contract §2.1).
@@ -1549,6 +1600,8 @@ pub enum Msg {
     ReviewChangesRequested(SessionLocation),
     /// **Run in parallel** on the sidebar header (feature 483, D).
     RunInParallelRequested,
+    /// The row a navigation chord focused lost the keyboard (feature 803, contracts/ui.md U4).
+    KeyboardRowLeft,
 }
 
 /// **Review changes** was chosen for `entry` (feature 482, V1): the root opens the Changes view.
@@ -1576,6 +1629,7 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
         Msg::DragMoved(x) => drag_moved(state, x),
         Msg::ReviewChangesRequested(entry) => return review_changes(entry),
         Msg::RunInParallelRequested => return run_in_parallel(),
+        Msg::KeyboardRowLeft => state.keyboard_row_left(),
     }
     Vec::new()
 }

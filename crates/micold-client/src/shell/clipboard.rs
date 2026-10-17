@@ -52,6 +52,7 @@ pub fn interpret(outcome: Outcome) -> Task<Message> {
         | Outcome::RevealScrollArmed
         | Outcome::RevealMarkCleared
         | Outcome::LocationRevealed(_)
+        | Outcome::KeyboardRowLeft
         | Outcome::ProjectEntered
         | Outcome::RevealSuppressed(_)
         | Outcome::FieldFocusCleared
