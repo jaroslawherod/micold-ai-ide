@@ -82,7 +82,10 @@ fn settings_showing_in(
                 false,
             )
             .unwrap();
-        let _ = state.update_daemons(micold_client::features::daemons::Msg::EditOpened(id));
+        let _ = state.update_daemons(
+            micold_client::features::daemons::Msg::EditOpened(id),
+            Vec::new(),
+        );
     }
     state.window.window_size = (1280, 2400);
     state

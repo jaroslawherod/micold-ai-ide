@@ -749,15 +749,21 @@ impl State {
             legacy_default: self.settings.legacy_default_daemon,
             locations: &locations,
             sessions: &sessions,
+            taken_elsewhere: Vec::new(),
+            next_port: &micold_core::daemons::os_free_loopback_port,
         };
         crate::features::daemons::views(&self.daemon_list, &model)
     }
 
     /// Apply a Daemons message and hand back what it asks the shell to persist or stop (feature
     /// 491, M3). The model is built from the registry, the links and the bindings the window holds.
+    ///
+    /// `taken_elsewhere` is the container ports the settings store holds that this window's copy
+    /// of the registry may not, so a picked port avoids them too.
     pub fn update_daemons(
         &mut self,
         msg: crate::features::daemons::Msg,
+        taken_elsewhere: Vec<u16>,
     ) -> Vec<crate::features::Outcome> {
         // The picker is opened from a row's menu, which a pick from it closes.
         if matches!(msg, crate::features::daemons::Msg::BindRequested(_)) {
@@ -772,6 +778,8 @@ impl State {
             legacy_default,
             locations: &locations,
             sessions: &sessions,
+            taken_elsewhere,
+            next_port: &micold_core::daemons::os_free_loopback_port,
         };
         crate::features::daemons::update(&mut self.daemon_list, &mut model, msg)
     }
@@ -923,7 +931,7 @@ impl State {
                 drain(outcomes, |outcome| interpret(self, outcome));
             }
             Message::Daemons(msg) => {
-                let outcomes = self.update_daemons(msg);
+                let outcomes = self.update_daemons(msg, Vec::new());
                 drain(outcomes, |outcome| interpret(self, outcome));
             }
             Message::EscapePressed => self.dismiss_topmost(),

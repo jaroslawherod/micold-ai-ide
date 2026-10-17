@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use micold_client::features::daemons::Model;
 use micold_client::links::DaemonLinks;
 use micold_core::daemons::{
-    ContainerSettings, DaemonId, DaemonRegistry, DaemonRuntime, WorktreeRef,
+    os_free_loopback_port, ContainerSettings, DaemonId, DaemonRegistry, DaemonRuntime, WorktreeRef,
 };
 use micold_core::sandbox::SandboxProfile;
 use micold_core::session::SessionId;
@@ -76,6 +76,19 @@ impl World {
         }
     }
 
+    /// The model with an injected port source and the ports other windows hold.
+    pub fn model_with<'a>(
+        &'a mut self,
+        taken_elsewhere: Vec<u16>,
+        next_port: &'a dyn Fn() -> std::io::Result<u16>,
+    ) -> Model<'a> {
+        Model {
+            taken_elsewhere,
+            next_port,
+            ..self.model()
+        }
+    }
+
     pub fn model(&mut self) -> Model<'_> {
         Model {
             registry: &mut self.registry,
@@ -84,6 +97,8 @@ impl World {
             legacy_default: None,
             locations: &self.locations,
             sessions: &self.sessions,
+            taken_elsewhere: Vec::new(),
+            next_port: &os_free_loopback_port,
         }
     }
 }

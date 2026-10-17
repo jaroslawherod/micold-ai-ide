@@ -32,7 +32,16 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
         .iter()
         .filter_map(|e| app.outbox_for(e.id).map(|o| (e.id, o)))
         .collect();
-    let outcomes = app.core.update_daemons(msg);
+    // Ports the store holds that this window's registry copy may not: a picked port avoids them.
+    let taken_elsewhere = if matches!(msg, Msg::Saved) {
+        app.caps
+            .settings()
+            .map(|store| store.load().settings.registry().container_ports())
+            .unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+    let outcomes = app.core.update_daemons(msg, taken_elsewhere);
     let mut rest = Vec::new();
     let mut bound = Vec::new();
     let mut gate = Vec::new();

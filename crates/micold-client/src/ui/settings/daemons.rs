@@ -307,7 +307,7 @@ fn form<'a>(
                     .on_input(|v| Message::Daemons(DaemonsMsg::ContainerNameEdited(v))),
             )
             .push(
-                TextField::new("", &draft.port, roles)
+                TextField::new("A free port is chosen if empty", &draft.port, roles)
                     .label("Port")
                     .track_focus(FieldId::DaemonPort, focused)
                     .error(error_of(state, "port"))
