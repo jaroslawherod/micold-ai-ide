@@ -468,7 +468,7 @@ fn nothing_points_at_the_removed_session_service_section() {
         // The overflow menu's live diagnostics item, not the page.
         ("docs/daemon.md", "Session service diagnostics"),
         (
-            "docs/user-guide/worktrees-and-sessions.md",
+            "user-guide/worktrees-and-sessions.md",
             "Session service diagnostics",
         ),
         ("src/ui/toolbar.rs", "Session service diagnostics"),
