@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #803
 - **Worktree branch**: claude/project-thread-ah7xxz
 - **Started**: 2026-10-17
-- **Phase**: milestone M1
+- **Phase**: milestone M1 (pushed, awaiting PR)
 - **Next step**: orchestrator opens the M1 PR from the scratchpad title/body, waits on CI, merges; then M2 (T017–T023)
 
 ## Pull requests
@@ -28,6 +28,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M4 | T030–T037 | full | Project chords; all six chords in the user guide | — | pending |
 
 US1 split along acceptance scenario 4 (FR-010 sidebar ring) into M1/M2: one milestone would exceed ~800 changed lines. Polish (T038–T039) changes no code: close unit.
+
+- 2026-10-17: M1 rebased onto origin/main 70f58726 (PR #967 conflicted, #813 M4 + #937 M1); conflicts in `session.rs` (`selected` keeps 803's KeyboardRowLeft/MainAreaTaken and 813's RevealMarkCleared), `clipboard.rs` (all three outcomes listed), `ui/mod.rs` (813's overview arrow listener kept beside 803's `app_chord` listener; no chord collision).
 
 ## Decisions
 
