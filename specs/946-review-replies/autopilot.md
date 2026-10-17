@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-jjniz9
 - **Started**: 2026-10-17
 - **Phase**: milestone M1
-- **Next step**: M1 verify (gate, reviews), see Handover
+- **Next step**: M1 PR open (orchestrator opens it from the scratchpad title/body), then CI and merge; then M2
 
 ## Pull requests
 
@@ -23,7 +23,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T018 | full | Send review types the documented batch with C-references; review file v2, protocol 49 | | in progress |
+| M1 | T001–T018 | full | Send review types the documented batch with C-references; review file v2, protocol 49 | pending (pushed; orchestrator opens) | gate green at 3cf671f3 |
 | M2 | T019–T034 | full | report_review_comment; cards show Applied/Answered and replies in every window, after restart | | planned |
 | M3 | T035–T046 | full | Mark a Sent comment by hand; read a full reply | | planned |
 | M4 | T047–T056 | full | Review panel: rows, counts, jump, draft edit/delete, panel buttons | | planned |
@@ -73,23 +73,7 @@ split along s6 (M3) is the only scenario split with a deliverable on each side.
 
 ## Handover
 
-M1 unit 2 handed over at 150k. No PR yet; branch is 12 commits ahead of origin/main, unpushed.
-- **Done**: T001–T018 all ticked, each pair red-then-green in tdd/cycle-log.md (T012/T016 passed at
-  declaration: core begin_send already did it). T018 docs written by a sonnet worker, committed
-  unchecked by a reviewer.
-- **Open doc/UI mismatch**: the worker's docs call the card marker **Draft**, but the client still
-  shows "Pending" (`crates/micold-client/src/ui/material/review_comment.rs:28` `PENDING`, plus
-  showcase `catalogue.rs:820`). Next unit: rename the card label to "Draft" (layout snapshots may
-  move) or revert that doc sentence; FR-001 names the status Draft.
-- **Running when handed over** (detached, results in the session scratchpad
-  /tmp/claude-0/-home-user-micold-ai-ide/7539e20a-fded-5e3c-a99f-db59de7c38a3/scratchpad): scoped gate `scoped-gate-1.log` (`GATE_EXIT=`), Review A round 1
-  (`claude -p --agent autopilot-reviewer`, code-review high) `reviewA-r1.out` (`REVIEW_EXIT=`),
-  snapshot 69eede8c:7fed368b. Neither covers the T018 docs commit.
-- **Next**: read those two results (grep), fix findings, then verify.md step 2 (Review B,
-  conformance, sonnet; visual pass for the renamed button/dialog text), full gate
-  (`scripts/gate.sh`), push, PR title/body to the scratchpad per the orchestrator's prompt.
-- No Agent tool in this container: run reviewers/workers as `claude -p --agent <type>` detached
-  and `hold.sh` on their output file (echo `<NAME>_EXIT=$?` at the end).
+None.
 
 ## Open escalation
 
