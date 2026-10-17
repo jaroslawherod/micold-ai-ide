@@ -11,6 +11,17 @@ Overview. The button is greyed out while [Settings](settings.md) is open; an Ove
 before Settings shows again when Settings closes. Selecting a session in the sidebar also closes
 the Overview and shows that session.
 
+The shortcut **Ctrl+Shift+O** (**Cmd+Shift+O** on macOS) does the same, also while a terminal has the
+keyboard; the app takes it and the terminal never receives it. The button's tooltip names it. The
+button looks pressed while the Overview is open.
+
+### The badge
+
+When some location needs you, the button carries a badge: an icon and a count, beside the label. A
+red exclamation mark with *N* means *N* locations **need action**; if none does, an amber eye with
+*N* means *N* **need attention**. Hover the button for the words (*2 need action*). With neither,
+there is no badge. The badge shows whether or not the Overview is open.
+
 The Overview replaces the main area; the sidebar and the top bar stay. Switching project keeps it
 open and shows the new project's cards.
 

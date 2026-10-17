@@ -19,12 +19,13 @@ use crate::app::{Message, State};
 use crate::features::connection::Msg as ConnectionMsg;
 use crate::features::help::help_actions;
 use crate::features::help::Msg as HelpMsg;
-use crate::features::overview::Msg as OverviewMsg;
+use crate::features::overview::{self, Msg as OverviewMsg, Tone};
 use crate::features::project::Msg as ProjectMsg;
 use crate::features::settings::Msg as SettingsMsg;
 use crate::icons::Icon;
 use crate::ui::material::{
-    unread_total_tooltip, Button, MenuItem, MenuTrigger, Toolbar, Tooltip, UsageIndicator,
+    unread_total_tooltip, Button, MenuItem, MenuTrigger, Toolbar, Tooltip, TypeRole, UnreadMark,
+    UsageIndicator,
 };
 use iced::Element;
 use micold_core::metadata::APP_NAME;
@@ -109,10 +110,41 @@ pub fn view<'a>(state: &State, scheme: ColorScheme) -> Element<'a, Message> {
 /// The Overview button (feature 813, contract U2): after the project switcher, shown whether or not
 /// the Overview is open, and inert while Settings is open (research R2).
 fn overview_button<'a>(state: &State, r: tokens::Roles) -> Element<'a, Message> {
-    let button = Button::text("Overview", r)
+    let mut button = Button::text("Overview", r)
         .leading(Icon::Overview)
+        .selected(state.overview.open)
         .on_press_maybe(overview_press(state));
-    Tooltip::new(button, "Overview", r).into()
+    let badge = overview::badge(&crate::ui::overview::cards(state));
+    if let Some(badge) = &badge {
+        let (glyph, tint) = badge_look(badge.tone, &r);
+        button = button.mark(
+            UnreadMark::new(r)
+                .icon(glyph)
+                .count(badge.count)
+                .role(TypeRole::Action)
+                .tint(tint),
+        );
+    }
+    Tooltip::new(button, overview_tooltip(badge.as_ref()), r).into()
+}
+
+/// The glyph and tint the Overview badge is drawn in: action is the `error` family, attention the
+/// `warning` family.
+fn badge_look(tone: Tone, r: &tokens::Roles) -> (Icon, tokens::Rgb) {
+    match tone {
+        Tone::Error => (Icon::CardNeedsAction, r.error),
+        Tone::Warning => (Icon::CardNeedsAttention, r.warning),
+    }
+}
+
+/// The Overview button's tooltip: its name and chord, then the badge's words when there is one.
+fn overview_tooltip(badge: Option<&overview::Badge>) -> String {
+    let mut tooltip = format!("Overview ({})", crate::keymap::overview_chord_label());
+    if let Some(badge) = badge {
+        tooltip.push('\n');
+        tooltip.push_str(&badge.label);
+    }
+    tooltip
 }
 
 /// What the Overview button sends: nothing while Settings is open or no project is active, since
@@ -160,6 +192,30 @@ mod tests {
             }],
             obtained_at: NOON,
         }
+    }
+
+    /// The badge is red with the action glyph for an error, yellow with the attention glyph for a
+    /// warning, and the tooltip carries the chord and the badge's words.
+    #[test]
+    fn the_overview_badge_maps_tone_to_glyph_and_tint_and_the_tooltip_names_the_chord() {
+        let r = tokens::roles(ColorScheme::Light);
+        assert_eq!(
+            badge_look(Tone::Error, &r),
+            (Icon::CardNeedsAction, r.error)
+        );
+        assert_eq!(
+            badge_look(Tone::Warning, &r),
+            (Icon::CardNeedsAttention, r.warning)
+        );
+        let plain = overview_tooltip(None);
+        assert!(plain.contains(crate::keymap::overview_chord_label()));
+        let badge = overview::Badge {
+            tone: Tone::Error,
+            count: 2,
+            label: "2 need action".into(),
+        };
+        let with = overview_tooltip(Some(&badge));
+        assert!(with.starts_with(&plain) && with.ends_with("2 need action"));
     }
 
     /// F3: the Overview button is inert with no active project, and while Settings is open.

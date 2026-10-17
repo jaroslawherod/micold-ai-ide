@@ -141,7 +141,7 @@ mod surface;
 pub(crate) mod tab;
 mod tab_strip;
 mod tag;
-mod terminal_pane;
+pub(crate) mod terminal_pane;
 /// The headless renderer the in-crate component tests share.
 #[cfg(test)]
 pub mod test_support;

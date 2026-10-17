@@ -39,3 +39,39 @@ pub fn update(state: &mut State, msg: Msg) -> Vec<crate::features::Outcome> {
     }
     Vec::new()
 }
+
+/// Which colour family the badge is drawn in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Tone {
+    /// Some card needs action: the `error` family.
+    Error,
+    /// Some card needs attention: the `warning` family.
+    Warning,
+}
+
+/// What the Overview button shows beside its label, whether or not the Overview is open
+/// (FR-012).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Badge {
+    /// The colour family.
+    pub tone: Tone,
+    /// How many cards are in the worst state.
+    pub count: usize,
+    /// The words for the tooltip: *N need action* or *N need attention*.
+    pub label: String,
+}
+
+/// The badge over the cards, or `None` when no card needs the user.
+pub fn badge(cards: &[micold_core::overview::CardModel]) -> Option<Badge> {
+    use micold_core::overview::{attention, CardState};
+    let attention = attention(cards)?;
+    let (tone, words) = match attention.state {
+        CardState::NeedsAction => (Tone::Error, "need action"),
+        _ => (Tone::Warning, "need attention"),
+    };
+    Some(Badge {
+        tone,
+        count: attention.count,
+        label: format!("{} {words}", attention.count),
+    })
+}

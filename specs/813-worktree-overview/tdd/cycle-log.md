@@ -136,3 +136,21 @@ test rerun green.
 - **Tests**: `tests/features_pr_status.rs` (`StatusesRead` stores `counts`; `Unavailable`, `Released`, disabling clear it with `statuses`) and `tests/overview.rs` (1 open / 2 merged → `Counts`; each unknown reason; `Hidden` for Default, detached, orphan; open PR with `conflict` → *merge conflict*).
 - **Red**: both files failed to compile before the change (`no field counts on State`, `no field prs on CardModel`, `PrDisplay` unresolved).
 - **Green**: `State::counts`, `Outcome::Ok.counts`, `CardModel::prs`, `pr_display` in `ui/overview.rs`, footer line in `overview_card.rs`; results in the M2 commit message.
+
+## M3 / T031, T032, T035, T036 → keymap (chord, pane capture, unfocused subscription)
+
+- **Tests**: keymap tests for `KeyRouting::ToggleOverview`, `is_overview_chord` and `overview_chord_label`; a `terminal_pane.rs` test that the focused chord is published as `Overview(Toggled)` and captured; the unfocused chord handled by the `ui::subscription` listener.
+- **Red**: observed by the implementing workers as compile errors (`ToggleOverview` variant, `is_overview_chord`, `overview_chord_label` not found). The T032 pane test's red was **not observed separately**: it was written alongside the `ToggleOverview` routing and went green with it.
+- **Green**: `--test keymap` 27 passed; `--lib` 663 passed.
+
+## M3 / T033, T037 → Button::selected / mark, UnreadMark::icon
+
+- **Tests**: showcase and component tests for a selected `Button`, a `Button` carrying a mark, and an `UnreadMark` with an icon.
+- **Red**: compile errors observed by the implementing workers (`Button::selected`, `Button::mark`, `UnreadMark::icon` missing).
+- **Green**: `--test showcase_completeness` 38 passed; `--lib` 663 passed.
+
+## M3 / T034, T038 → overview::badge
+
+- **Tests**: `tests/overview.rs` cases for the badge: `Error` for a card needing action, `Warning` for attention, none when no card needs the user.
+- **Red**: compile errors observed by the implementing workers (`badge`, `Badge`, `Tone` missing in `features::overview`).
+- **Green**: `--test overview` 27 passed.

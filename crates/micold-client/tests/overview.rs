@@ -3,7 +3,7 @@
 
 use micold_client::app::{Message, State};
 use micold_client::features::agent_confirm::Prompt;
-use micold_client::features::overview::Msg;
+use micold_client::features::overview::{badge, Badge, Msg, Tone};
 use micold_client::features::pr_status::Msg as PrMsg;
 use micold_client::ui::overview::cards;
 use micold_core::local_time::LocalTime;
@@ -581,4 +581,84 @@ fn an_open_pull_request_with_a_conflict_needs_attention_for_a_merge_conflict() {
     let a = card(&all, &wt("feat-a"));
     assert_eq!(a.state, CardState::NeedsAttention);
     assert_eq!(a.reason, CardReason::MergeConflict);
+}
+
+// --- The Overview button's badge (US2.4, FR-012) ---
+
+fn failing_checks(state: &mut State, dir: &str, branch: &str) {
+    state
+        .worktree
+        .worktrees
+        .push(worktree(dir, Some(branch), WorktreeStatus::Valid, false));
+    read(
+        state,
+        branch,
+        status(
+            PrState::Open {
+                checks: CheckStatus::Failing,
+            },
+            ReviewState::None,
+        ),
+        false,
+    );
+}
+
+fn badge_of(state: &State) -> Option<Badge> {
+    badge(&cards(state))
+}
+
+#[test]
+fn any_card_needing_action_gives_an_error_badge_counting_those_cards() {
+    for open in [false, true] {
+        let mut state = project_with(vec![
+            worktree("feat-a", Some("feat/a"), WorktreeStatus::Valid, false),
+            worktree("feat-b", Some("feat/b"), WorktreeStatus::Valid, false),
+        ]);
+        let a = add_session(&mut state, wt("feat-a"));
+        state.agent_confirm.pending.push(prompt(&a));
+        failing_checks(&mut state, "feat-c", "feat/c");
+        state.overview.open = open;
+
+        assert_eq!(
+            badge_of(&state),
+            Some(Badge {
+                tone: Tone::Error,
+                count: 1,
+                label: "1 need action".to_string(),
+            }),
+            "overview open: {open}; attention cards do not count beside action ones"
+        );
+    }
+}
+
+#[test]
+fn only_attention_cards_give_a_warning_badge() {
+    for open in [false, true] {
+        let mut state = project_with(Vec::new());
+        failing_checks(&mut state, "feat-a", "feat/a");
+        failing_checks(&mut state, "feat-b", "feat/b");
+        state.overview.open = open;
+
+        assert_eq!(
+            badge_of(&state),
+            Some(Badge {
+                tone: Tone::Warning,
+                count: 2,
+                label: "2 need attention".to_string(),
+            }),
+            "overview open: {open}"
+        );
+    }
+}
+
+#[test]
+fn nothing_to_do_gives_no_badge() {
+    let state = project_with(vec![worktree(
+        "feat-a",
+        Some("feat/a"),
+        WorktreeStatus::Valid,
+        false,
+    )]);
+    assert_eq!(badge_of(&state), None);
+    assert_eq!(badge(&[]), None);
 }

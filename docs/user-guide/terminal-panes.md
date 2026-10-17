@@ -34,6 +34,7 @@ receives them, so they shadow the same keys with Shift in a terminal program.
 | Split stacked | Ctrl+Shift+H | Cmd+Shift+H |
 | Close the focused pane | Ctrl+Shift+W | Cmd+Shift+W |
 | Focus the pane to the left / right / above / below | Ctrl+Shift+Arrow | Cmd+Shift+Arrow |
+| Open or close the [worktree Overview](overview.md) | Ctrl+Shift+O | Cmd+Shift+O |
 
 A new pane takes focus. Moving focus towards an edge with no pane there leaves it where it is. A
 split that is refused (6 panes, or a pane too small) shows its reason next to the panes. The

@@ -1178,7 +1178,33 @@ pub fn subscription(state: &State) -> Subscription<Message> {
     if crate::app::on_escape(state).is_some() {
         subs.push(escape_dismissal());
     }
+    // Feature 813 (FR-011, R3): the focused terminal captures the chord itself; unfocused it is
+    // heard here. Not while Settings is open, where the toggle does nothing (R2).
+    if state.settings.settings_draft.is_none() {
+        subs.push(overview_chord_listener());
+    }
     Subscription::batch(subs)
+}
+
+/// The Overview chord, heard while the terminal is not focused.
+fn overview_chord_listener() -> Subscription<Message> {
+    iced::keyboard::listen().filter_map(overview_chord)
+}
+
+/// [`crate::features::overview::Msg::Toggled`] for the Overview chord, and nothing for any other
+/// key. A named function, not a closure, for the same `TypeId` reason as [`escape_message`].
+fn overview_chord(event: iced::keyboard::Event) -> Option<Message> {
+    let iced::keyboard::Event::KeyPressed { key, modifiers, .. } = event else {
+        return None;
+    };
+    let key = crate::ui::material::terminal_pane::to_keymap_key(&key)?;
+    crate::keymap::is_overview_chord(
+        &key,
+        crate::ui::material::terminal_pane::to_keymap_mods(modifiers),
+    )
+    .then_some(Message::Overview(crate::features::overview::Msg::Toggled {
+        settings_open: false,
+    }))
 }
 
 /// Escape, reported as having happened; the reducer asks the registry what it reaches.

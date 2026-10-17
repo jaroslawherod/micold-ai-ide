@@ -1301,6 +1301,8 @@ pub enum KeyRouting {
     ReleaseFocus,
     /// Open a new Regular Terminal instance for the active session (feature 011, FR-019).
     NewTerminalInstance,
+    /// Toggle the worktree Overview (feature 813, FR-011): focused or not.
+    ToggleOverview,
     /// A pane shortcut (feature 484): the app handles it, the terminal never sees it.
     Pane(crate::keymap::PaneAction),
     /// Focused, but the key has no terminal meaning — drop it.
@@ -1310,10 +1312,15 @@ pub enum KeyRouting {
 /// Route a decoded key press given the current focus (FR-009/FR-011/FR-012).
 pub fn route_key(terminal_focused: bool, output: crate::keymap::KeyOutput) -> KeyRouting {
     use crate::keymap::KeyOutput;
+    // The Overview chord is the app's whether or not the terminal has focus (feature 813).
+    if output == KeyOutput::ToggleOverview {
+        return KeyRouting::ToggleOverview;
+    }
     if !terminal_focused {
         return KeyRouting::App;
     }
     match output {
+        KeyOutput::ToggleOverview => KeyRouting::ToggleOverview,
         KeyOutput::Bytes(bytes) => KeyRouting::Write(bytes),
         KeyOutput::Copy => KeyRouting::Copy,
         KeyOutput::Paste => KeyRouting::Paste,

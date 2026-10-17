@@ -210,6 +210,96 @@ fn new_terminal_instance_chord_takes_precedence_over_printable_handling() {
     }
 }
 
+// ---- Overview chord (feature 813, FR-011, SC-006) ----
+
+/// The platform's primary modifier plus Shift (`Cmd+Shift` on macOS, else `Ctrl+Shift`).
+fn primary_shift() -> Mods {
+    #[cfg(target_os = "macos")]
+    let mods = Mods {
+        logo: true,
+        shift: true,
+        ..Mods::NONE
+    };
+    #[cfg(not(target_os = "macos"))]
+    let mods = Mods {
+        ctrl: true,
+        shift: true,
+        ..Mods::NONE
+    };
+    mods
+}
+
+#[test]
+fn overview_chord_encodes_to_toggle_overview() {
+    for (c, text) in [('o', "o"), ('O', "O")] {
+        let out = encode(
+            &ki(Key::Char(c), primary_shift(), Some(text)),
+            TermMode::default(),
+        );
+        assert_eq!(out, KeyOutput::ToggleOverview);
+        assert!(micold_client::keymap::is_overview_chord(
+            &Key::Char(c),
+            primary_shift()
+        ));
+    }
+}
+
+#[test]
+fn overview_chord_needs_shift_and_no_alt() {
+    let shift_only = Mods {
+        shift: true,
+        ..Mods::NONE
+    };
+    let with_alt = Mods {
+        alt: true,
+        ..primary_shift()
+    };
+    for mods in [Mods::NONE, shift_only, with_alt] {
+        let out = encode(&ki(Key::Char('o'), mods, Some("o")), TermMode::default());
+        assert_ne!(out, KeyOutput::ToggleOverview, "{mods:?}");
+        assert!(!micold_client::keymap::is_overview_chord(
+            &Key::Char('o'),
+            mods
+        ));
+    }
+    // Ctrl+O without Shift is still the control byte.
+    let ctrl = Mods {
+        ctrl: true,
+        ..Mods::NONE
+    };
+    #[cfg(not(target_os = "macos"))]
+    {
+        let out = encode(&ki(Key::Char('o'), ctrl, None), TermMode::default());
+        assert_eq!(bytes(out), vec![0x0f]);
+    }
+    assert!(!micold_client::keymap::is_overview_chord(
+        &Key::Char('o'),
+        ctrl
+    ));
+}
+
+#[test]
+fn route_key_sends_the_overview_chord_to_the_toggle_focused_or_not() {
+    use micold_client::app::{route_key, KeyRouting};
+    for focused in [true, false] {
+        assert_eq!(
+            route_key(focused, KeyOutput::ToggleOverview),
+            KeyRouting::ToggleOverview
+        );
+    }
+}
+
+#[test]
+fn overview_chord_label_names_the_platform_chord() {
+    #[cfg(target_os = "macos")]
+    assert_eq!(micold_client::keymap::overview_chord_label(), "Cmd+Shift+O");
+    #[cfg(not(target_os = "macos"))]
+    assert_eq!(
+        micold_client::keymap::overview_chord_label(),
+        "Ctrl+Shift+O"
+    );
+}
+
 // ---- Copy / paste chords ----
 
 #[test]

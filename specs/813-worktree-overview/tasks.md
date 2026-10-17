@@ -230,41 +230,41 @@ closes, terminal gets nothing); a permission request puts a red badge on the but
 
 ### Tests for US2 (write first)
 
-- [ ] T031 [P] [US2] Tests in micold-client/tests/keymap.rs: Ctrl+Shift+O (Linux / Windows
+- [X] T031 [P] [US2] Tests in micold-client/tests/keymap.rs: Ctrl+Shift+O (Linux / Windows
   modifiers) and Cmd+Shift+O (macOS) encode to `KeyOutput::ToggleOverview`; `O` without Shift,
   with Alt, and plain Ctrl+O are not the chord (Ctrl+O still `0x0f`); `route_key` routes
   `ToggleOverview` to the Overview toggle whether or not the terminal is focused;
   `overview_chord_label()` per platform (FR-011, SC-006)
-- [ ] T032 [P] [US2] Test in micold-client/src/ui/material/terminal_pane.rs tests, beside the
+- [X] T032 [P] [US2] Test in micold-client/src/ui/material/terminal_pane.rs tests, beside the
   `NewTerminalInstance` capture test: the chord is published as the toggle and the event is
   captured (0 bytes to the PTY)
-- [ ] T033 [P] [US2] Tests in micold-client/src/ui/material/button.rs and unread_mark.rs:
+- [X] T033 [P] [US2] Tests in micold-client/src/ui/material/button.rs and unread_mark.rs:
   `Button::selected(true)` draws the selected state layer and keeps its geometry;
   `Button::mark(UnreadMark)` places the configured mark trailing without changing the button's
   height; `UnreadMark::icon(Icon)` draws the icon and the count, tinted by the given role
-- [ ] T034 [P] [US2] Client tests in micold-client/tests/overview.rs: `overview::badge(&cards)` →
+- [X] T034 [P] [US2] Client tests in micold-client/tests/overview.rs: `overview::badge(&cards)` →
   `Some { tone: Error, count, label: "N need action" }` with any NeedsAction card, else `Warning`
   *N need attention*, else `None`, whether or not the Overview is open (US2.4, FR-012)
 
 ### Implementation for US2
 
-- [ ] T035 [US2] micold-client/src/keymap.rs: `pub fn is_overview_chord` =
+- [X] T035 [US2] micold-client/src/keymap.rs: `pub fn is_overview_chord` =
   `is_primary_shift_chord(key, mods, 'o')`, `KeyOutput::ToggleOverview` in tier 1 beside
   `ReleaseFocus` and `NewTerminalInstance`, `overview_chord_label()`; micold-client/src/app.rs
   `KeyRouting` / `route_key`; micold-client/src/ui/material/terminal_pane.rs publishes and
   captures it; T031, T032 pass
-- [ ] T036 [US2] Unfocused chord: in micold-client/src/ui/mod.rs `subscription`, a
+- [X] T036 [US2] Unfocused chord: in micold-client/src/ui/mod.rs `subscription`, a
   `keyboard::listen().filter_map(overview_chord)` with a named `fn`, active while the terminal is
   not focused, sending `overview::Msg::Toggled { settings_open }` (R3)
-- [ ] T037 [US2] `Button::selected`, `Button::mark` in micold-client/src/ui/material/button.rs and
+- [X] T037 [US2] `Button::selected`, `Button::mark` in micold-client/src/ui/material/button.rs and
   `UnreadMark::icon` in micold-client/src/ui/material/unread_mark.rs; showcase entries (toggled
   button, tinted mark with icon) in micold-client/src/showcase/ and
   micold-client/tests/showcase_completeness.rs; T033 passes
-- [ ] T038 [US2] `overview::badge` in micold-client/src/features/overview.rs over `attention`; the
+- [X] T038 [US2] `overview::badge` in micold-client/src/features/overview.rs over `attention`; the
   toolbar button in micold-client/src/ui/toolbar.rs gets `.selected(open)`, tooltip *Overview
   (Ctrl+Shift+O)* / *(Cmd+Shift+O)* from `overview_chord_label()`, and `.mark(..)` tinted `error`
   or `warning` with the state's icon, the count and the label as tooltip line; T034 passes
-- [ ] T039 [US2] Docs: the shortcut and the badge in docs/user-guide/overview.md; the chord in
+- [X] T039 [US2] Docs: the shortcut and the badge in docs/user-guide/overview.md; the chord in
   docs/user-guide/terminal-panes.md §Keyboard shortcuts and in
   docs/user-guide/worktrees-and-sessions.md (US2.5, FR-022)
 

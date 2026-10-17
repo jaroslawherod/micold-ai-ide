@@ -1725,6 +1725,16 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                     shell.publish(Message::Session(SessionMsg::ShellInstanceOpenRequested));
                     shell.capture_event();
                 }
+                KeyRouting::ToggleOverview => {
+                    // Unfocused, the chord belongs to the `ui::subscription` listener; handling
+                    // it here too would toggle twice.
+                    if self.focused {
+                        shell.publish(Message::Overview(crate::features::overview::Msg::Toggled {
+                            settings_open: false,
+                        }));
+                        shell.capture_event();
+                    }
+                }
                 KeyRouting::Pane(action) => {
                     shell.publish(Message::Session(SessionMsg::Pane(PaneMsg::Chord(action))));
                     shell.capture_event();
@@ -1769,7 +1779,7 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
 }
 
 /// Map iced modifiers onto the pure `keymap::Mods`.
-fn to_keymap_mods(m: keyboard::Modifiers) -> keymap::Mods {
+pub(crate) fn to_keymap_mods(m: keyboard::Modifiers) -> keymap::Mods {
     keymap::Mods {
         shift: m.shift(),
         ctrl: m.control(),
@@ -1780,7 +1790,7 @@ fn to_keymap_mods(m: keyboard::Modifiers) -> keymap::Mods {
 
 /// Map an iced logical key onto the pure `keymap::Key` (returns `None` for keys the terminal
 /// does not encode, e.g. `Unidentified`).
-fn to_keymap_key(key: &keyboard::Key) -> Option<keymap::Key> {
+pub(crate) fn to_keymap_key(key: &keyboard::Key) -> Option<keymap::Key> {
     use keyboard::key::Named;
     use keymap::{Key as MK, NamedKey};
     match key {
@@ -2186,6 +2196,58 @@ mod tests {
                 text: None,
                 repeat: false,
             })
+        }
+
+        /// The platform's Overview chord (`Ctrl+Shift+O`, `Cmd+Shift+O` on macOS; feature 813).
+        fn overview_chord() -> Event {
+            chord("o")
+        }
+
+        // Feature 813 (FR-011, SC-006).
+
+        #[test]
+        fn the_overview_chord_is_published_as_the_toggle_and_captured() {
+            let renderer = super::presses::headless();
+            let grid = grid(0);
+            let mut clipboard = RecordingClipboard::holding(PRIOR);
+            let mut element: Element<'_, Message> = TerminalPane::new(
+                &grid,
+                TermPalette::from_scheme(micold_core::theme::ColorScheme::Dark),
+            )
+            .focused(true)
+            .into();
+            let mut tree = Tree::new(&element);
+            let node = element.as_widget_mut().layout(
+                &mut tree,
+                &renderer,
+                &Limits::new(Size::ZERO, WINDOW),
+            );
+            let mut messages = Vec::new();
+            let mut shell = Shell::new(&mut messages);
+            element.as_widget_mut().update(
+                &mut tree,
+                &overview_chord(),
+                Layout::new(&node),
+                mouse::Cursor::Available(INSIDE),
+                &renderer,
+                &mut clipboard,
+                &mut shell,
+                &Rectangle::with_size(WINDOW),
+            );
+            assert!(
+                shell.is_event_captured(),
+                "the chord must not reach anyone else"
+            );
+            assert!(
+                bytes_sent(&messages).is_empty(),
+                "the PTY must receive 0 bytes"
+            );
+            assert!(matches!(
+                messages.as_slice(),
+                [Message::Overview(crate::features::overview::Msg::Toggled {
+                    settings_open: false
+                })]
+            ));
         }
 
         fn middle_click() -> Event {
