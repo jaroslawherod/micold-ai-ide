@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-uwrpqv
 - **Started**: 2026-10-17
 - **Phase**: tasks
-- **Next step**: tasks unit: tasks review round 2 (scoped, sonnet)
+- **Next step**: orchestrator opens the design PR; after its merge: milestone M1
 
 ## Pull requests
 
@@ -54,7 +54,8 @@ Milestone notes:
 | Spec | 2 | 74cc41c423ab5d29a6175b050cf3e75df031fe9c:70f5872667fb6e8e9126555f2573ce86e0a7bf80 | CLEAN |
 | Plan | 1 | d0b4a6a43fd58d9a107426429874df1d6bc2da64:234ba46aea57fbd8e8220579dce4517a2582febf | CHANGES: 1 MAJOR, 1 MINOR (both fixed: test-strategy rows for FR-013/014/022/024/026; repair_retired_namespace kept before into_choice) |
 | Plan | 2 | 92cbdb5e2c5275bb243ed3a4d5096b1f4e785397:11a4dcc7ddbe26563fe2b317d7f0cabdf06d8bd0 | CLEAN |
-| Tasks | 1 | 2c3cc526e672d823e5c3d3242c3e812f4328c67d:a093c67d80e868ef4684e22c934607c036f9850f | CHANGES: 2 MAJOR, 1 MINOR (all fixed: [P] on T033/T063/T064 dropped, M4/M5 parallel examples corrected, M4 observability note in ledger); round 2 (sonnet, scoped) still to run |
+| Tasks | 1 | 2c3cc526e672d823e5c3d3242c3e812f4328c67d:a093c67d80e868ef4684e22c934607c036f9850f | CHANGES: 2 MAJOR, 1 MINOR (all fixed: [P] on T033/T063/T064 dropped, M4/M5 parallel examples corrected, M4 observability note in ledger); round 2 below |
+| Tasks | 2 | ae7101c78be879b2cde37d5455ed29eb6fd93300:2d525fd2157f2c7e851c1e8dd343a38d30d37344 | CLEAN (1 MINOR fixed: checklist item ticked after reviewer confirmed 0 markers, FR-002/FR-010 resolved) |
 
 ## Declined review findings
 
@@ -64,7 +65,7 @@ Milestone notes:
 
 ## Handover
 
-Tasks unit stopped at the 150k context cap. Done: `speckit-tasks` wrote tasks.md (T001–T089, 7 milestones, in the ledger above); `speckit-analyze` findings fixed (D1 AiCliSelection moved to M2, T1 stand-in CLI tasks T033/T037, B1 StepBounds incl. acquire/create, C1/C2/C3/C5 coverage, O1/O2/I1/I2/X1; S1 spec clarification amended, D5); tasks review round 1 CHANGES fixed (see Review rounds). Checklist `requirements.md` has one unchecked item ("No [NEEDS CLARIFICATION] markers remain"): grep finds 0 markers in spec.md and plan.md, so it only needs a reviewer confirmation and a tick. Specs-only gate (`scripts/check-criteria-observables.sh`) passed. Branch rebased onto origin/main (needs `--force-with-lease` push). Next: round 2 tasks review on the fix diff (`scripts/autopilot/review-snapshot.sh diff 2c3cc526e672d823e5c3d3242c3e812f4328c67d:a093c67d80e868ef4684e22c934607c036f9850f`), tick the checklist, re-run the specs-only gate, push, write $SCRATCHPAD/pr-title and pr-body.md for the design PR (title "#806: Container daemon: configurable resources, Dockerfile or image source; build from current daemon binary by default", body ends "Refs #806"); orchestrator opens it. Analyze N1 (spec "pulling the image" vs label "getting the image") left as is: the label covers archive loads too.
+None.
 
 ## Open escalation
 
