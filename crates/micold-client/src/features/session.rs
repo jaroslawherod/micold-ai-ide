@@ -1655,6 +1655,8 @@ pub enum Msg {
     AdditionalConfirmed,
     /// The confirmation was dismissed; nothing changes.
     AdditionalCancelled,
+    /// Starting this session is blocked by a live sibling (FR-013); asks whether to run both.
+    StartBlocked(SessionId),
     /// "Make main session" was chosen on a helper's row. The binary sends `SessionSetMain`.
     MakeMainRequested(SessionId),
 
@@ -1966,6 +1968,7 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
         Msg::AdditionalRequested(location) => additional_requested(state, location),
         Msg::AdditionalConfirmed => additional_confirmed(state),
         Msg::AdditionalCancelled => additional_cancelled(state),
+        Msg::StartBlocked(id) => start_blocked(state, id),
         Msg::MakeMainRequested(_) => make_main_requested(state),
         Msg::TerminalFocusReleased => state.release_terminal(),
         Msg::TerminalContextMenuOpened { x, y, link } => context_menu_opened(state, x, y, link),
