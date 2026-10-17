@@ -37,6 +37,7 @@ use micold_core::protocol::messages::{
     ActivitySignal, ConfirmOperation, ProjectSnapshot, SessionSummary, WireLifecycle,
     WorktreeStatus,
 };
+use micold_core::review::comment::{CommentRef, Outcome, Reporter, Status};
 use micold_core::session::{AiCli, SessionId, SessionLocation, TerminalMode};
 use micold_core::terminal::LaunchMode;
 use micold_core::worktree::{
@@ -146,7 +147,67 @@ async fn dispatch(
         Operation::ReadSessionOutput { session, lines } => {
             blocking(move || read_session_output(&state, caller, session, lines)).await
         }
+        Operation::ReportReviewComment {
+            comment,
+            outcome,
+            reply,
+        } => report_review_comment(&state, caller, comment, outcome, reply).await,
         read => blocking(move || read_call(&state, caller, read)).await,
+    }
+}
+
+/// `report_review_comment` (feature 946, contracts/agent-tool.md): the caller reports on its own
+/// entry's comment — its worktree, or the Default entry for a session in the project root (D5).
+/// Never waits for the user; the reply is never logged.
+async fn report_review_comment(
+    state: &Arc<DaemonState>,
+    caller: SessionId,
+    reference: CommentRef,
+    outcome: Outcome,
+    reply: String,
+) -> Result<Value, OpError> {
+    let st = Arc::clone(state);
+    blocking(move || {
+        let (who, project) = resolve_caller(&st, caller)?;
+        check_policy(
+            &who,
+            &Operation::ReportReviewComment {
+                comment: reference,
+                outcome,
+                reply: String::new(),
+            },
+        )?;
+        let dir = match &who.location {
+            SessionLocation::Worktree(dir) => dir.as_str(),
+            SessionLocation::Default => "",
+        };
+        let by = Reporter::Agent { session: caller.0 };
+        let (comment, previous) =
+            st.review_report(&project.path, dir, reference, outcome, &reply, by)?;
+        let range = comment.range;
+        let lines = if range.start() == range.end() {
+            range.start().to_string()
+        } else {
+            format!("{}-{}", range.start(), range.end())
+        };
+        Ok(json!({
+            "comment": reference.to_string(),
+            "status": comment_status_name(comment.state.status()),
+            "file": comment.path.as_str(),
+            "lines": lines,
+            "previous_status": comment_status_name(previous),
+        }))
+    })
+    .await
+}
+
+/// A comment status as the tool's result names it.
+fn comment_status_name(status: Status) -> &'static str {
+    match status {
+        Status::Draft => "draft",
+        Status::Sent => "sent",
+        Status::Applied => "applied",
+        Status::Answered => "answered",
     }
 }
 
@@ -197,7 +258,8 @@ fn read_call(
         | Operation::StopSession { .. }
         | Operation::InterruptSession { .. }
         | Operation::DeleteSession { .. }
-        | Operation::DeleteWorktree { .. } => {
+        | Operation::DeleteWorktree { .. }
+        | Operation::ReportReviewComment { .. } => {
             unreachable!("mutating tools are dispatched by call")
         }
         Operation::ReadSessionOutput { .. } => {
