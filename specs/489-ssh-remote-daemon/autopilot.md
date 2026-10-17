@@ -79,8 +79,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M5 rebased onto origin/main (4 commits, conflicts resolved keeping both 805 and M5 tests). Fixed a compile error (ssh_target helper). Running detached: `cargo test -p micold-client --all-targets` (log scratchpad t4.log, ends T4_EXIT). Core tests were green earlier.
-Next step: fix client/ssh failures (daemon.rs fake-runner tests counting `ssh -G` calls, showcase inventory tests), M5 rows in tdd/test-list.md if missing, scoped gate + review A, review B, full gate, push, PR "feat(489): host picker, failure reasons and daemon management (#489)". Build lock queue is long.
+M5 rebased onto origin/main, client tests green, review A/B round 1 fixed (duplicate check two-pass, picker hosts resolved once per form open, red pass logged). Scoped gate was red only for the geometry case, now fixed.
+Next step: scoped gate, then full gate, push, PR "feat(489): host picker, failure reasons and daemon management (#489)". Test-ssh (real sshd) not yet run.
 
 ## Open escalation
 
