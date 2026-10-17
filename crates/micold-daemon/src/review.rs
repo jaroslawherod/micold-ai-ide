@@ -9,7 +9,9 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use micold_core::protocol::messages::{DaemonMsg, ErrorKind, ReviewEditOp};
-use micold_core::review::comment::{CommentId, Draft, EntryReview, ReviewError, SendSnapshot};
+use micold_core::review::comment::{
+    fresh_id, CommentId, Draft, EntryReview, ReviewError, SendSnapshot,
+};
 use micold_core::review::prompt::EntryKind;
 use micold_core::review::store::ReviewFile;
 use micold_core::review::{LineRange, RelPath};
@@ -42,7 +44,7 @@ impl From<ReviewError> for Refusal {
             ReviewError::NotFound => ErrorKind::NotFound,
             ReviewError::Refused => ErrorKind::Refused,
             ReviewError::InSend | ReviewError::Busy => ErrorKind::Busy,
-            ReviewError::NothingPending => ErrorKind::InvalidInput,
+            ReviewError::NothingPending | ReviewError::RefTaken => ErrorKind::InvalidInput,
         };
         Self::new(kind, err.to_string())
     }
@@ -117,7 +119,8 @@ impl Reviews {
                     quote,
                     text,
                 };
-                edited.add(draft, CommentId::new(), now)?;
+                let id = fresh_id(&edited, CommentId::new);
+                edited.add(draft, id, now)?;
             }
             ReviewEditOp::SetText { id, text } => edited.set_text(id, &text)?,
             ReviewEditOp::Delete { id } => edited.delete(id)?,
