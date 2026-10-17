@@ -12,7 +12,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-2lmupk
 - **Started**: 2026-10-17
 - **Phase**: milestones
-- **Next step**: M2 full gate, push, PR title/body written (gh unavailable)
+- **Next step**: M2 PR (create from scratchpad title/body), CI, merge; then M3
 
 ## Pull requests
 
@@ -26,7 +26,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T023 | full | Overview grid from the top-bar button, session-derived card states | #930 | merged |
-| M2 | T024–T030 | full | PR counts and merge conflict on cards | — | in progress |
+| M2 | T024–T030 | full | PR counts and merge conflict on cards | pending (title/body written) | PR open |
 | M3 | T031–T039 | full | Ctrl/Cmd+Shift+O and attention badge | — | pending |
 | M4 | T040–T049 | full | Card activation and keyboard traversal | — | pending |
 | M5 | T050–T060 | full | Task summary and progress on cards | — | pending |
