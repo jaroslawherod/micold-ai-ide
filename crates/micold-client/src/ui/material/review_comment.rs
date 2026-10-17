@@ -1,10 +1,10 @@
 //! `ReviewCommentCard` — one review comment under its anchor row (feature 482,
 //! contracts/changes-view.md C3).
 //!
-//! The comment's text, its state (Pending / Sent), an Outdated tag when the lines it quotes changed,
-//! and Edit / Delete for a pending comment that is not in a send.
+//! The comment's text, its state (Draft / Sent), an Outdated tag when the lines it quotes changed,
+//! and Edit / Delete for a draft comment that is not in a send.
 //!
-//! Builder form: `ReviewCommentCard::new(&text, CardState::Pending, roles).outdated(false)
+//! Builder form: `ReviewCommentCard::new(&text, CardState::Draft, roles).outdated(false)
 //! .on_edit(Msg::Edit(id)).on_delete(Msg::Delete(id)).into()`.
 
 use iced::widget::{column, container, row, Space};
@@ -17,15 +17,15 @@ use super::{style, Button, Tag, Text, TypeRole};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CardState {
     /// Not sent, editable.
-    Pending,
-    /// Pending but in a send under way: not editable.
+    Draft,
+    /// A draft, but in a send under way: not editable.
     InSend,
     /// Delivered to a session.
     Sent,
 }
 
 /// The state label.
-pub const PENDING: &str = "Pending";
+pub const DRAFT: &str = "Draft";
 /// The state label once delivered.
 pub const SENT: &str = "Sent";
 /// The tag of a comment whose quoted lines changed.
@@ -71,13 +71,13 @@ impl<'a, M: Clone + 'a> ReviewCommentCard<'a, M> {
         self
     }
 
-    /// The message Edit sends; shown only on a pending comment not in a send.
+    /// The message Edit sends; shown only on a draft comment not in a send.
     pub fn on_edit(mut self, message: M) -> Self {
         self.on_edit = Some(message);
         self
     }
 
-    /// The message Delete sends; shown only on a pending comment not in a send.
+    /// The message Delete sends; shown only on a draft comment not in a send.
     pub fn on_delete(mut self, message: M) -> Self {
         self.on_delete = Some(message);
         self
@@ -87,11 +87,11 @@ impl<'a, M: Clone + 'a> ReviewCommentCard<'a, M> {
     fn parts(&self) -> Parts {
         Parts {
             label: match self.state {
-                CardState::Pending | CardState::InSend => PENDING,
+                CardState::Draft | CardState::InSend => DRAFT,
                 CardState::Sent => SENT,
             },
             outdated: self.outdated,
-            actions: self.state == CardState::Pending
+            actions: self.state == CardState::Draft
                 && (self.on_edit.is_some() || self.on_delete.is_some()),
         }
     }
@@ -150,7 +150,7 @@ mod tests {
 
     /// The card's height laid out `width` wide.
     fn height(text: &str, width: f32) -> f32 {
-        let mut element: Element<'_, ()> = ReviewCommentCard::new(text, CardState::Pending, LIGHT)
+        let mut element: Element<'_, ()> = ReviewCommentCard::new(text, CardState::Draft, LIGHT)
             .on_edit(())
             .on_delete(())
             .into();
@@ -168,9 +168,9 @@ mod tests {
     }
 
     #[test]
-    fn a_pending_card_has_edit_and_delete() {
-        let parts = card(CardState::Pending).parts();
-        assert_eq!(parts.label, PENDING);
+    fn a_draft_card_has_edit_and_delete() {
+        let parts = card(CardState::Draft).parts();
+        assert_eq!(parts.label, DRAFT);
         assert!(parts.actions);
         assert!(!parts.outdated);
     }
@@ -180,7 +180,7 @@ mod tests {
         let sent = card(CardState::Sent).parts();
         assert_eq!((sent.label, sent.actions), (SENT, false));
         let in_send = card(CardState::InSend).parts();
-        assert_eq!((in_send.label, in_send.actions), (PENDING, false));
+        assert_eq!((in_send.label, in_send.actions), (DRAFT, false));
     }
 
     #[test]

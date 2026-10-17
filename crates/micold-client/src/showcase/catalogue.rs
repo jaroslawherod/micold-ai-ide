@@ -828,7 +828,7 @@ pub const COMPONENTS: &[Entry] = &[
     Entry {
         module: "material/review_comment.rs",
         component: "ReviewCommentCard",
-        variants: &["Pending", "Sent", "InSend"],
+        variants: &["Draft", "Sent", "InSend"],
         density: &[],
         posed: &["outdated"],
         live: &[],

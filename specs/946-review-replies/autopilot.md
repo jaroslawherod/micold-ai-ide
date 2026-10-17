@@ -55,13 +55,19 @@ split along s6 (M3) is the only scenario split with a deliverable on each side.
 | Clarify | 2 | spec.md after round 1 | no critical ambiguities |
 | Plan | 1 | e3ecccba79f5e3b40a507a17e457b890bfcdbd6d:6992724c29035e9298018a753f72c3f8dacc111d | CLEAN (2 MINOR, fixed, prose only) |
 | Tasks | 1 | 4380837765014bf8cc3452af063dd049edc1dded:e28ca8bb81d4de0489768de261204c9c857a5300 | CLEAN (3 MINOR, fixed, prose only; checklist item confirmed and ticked) |
-| Review A M1 | 1 | 69eede8cc3bef883e825ffe7ee48a68dc903fa34:7fed368b72a9f602c7bae2b326591610623df30e | running at handover: scratchpad reviewA-r1.out |
+| Review A M1 | 1 | 69eede8cc3bef883e825ffe7ee48a68dc903fa34:7fed368b72a9f602c7bae2b326591610623df30e | CHANGES: F4 MAJOR fixed (stored report validated on load), F6 MINOR fixed (wording); F1–F3 MAJOR declined; F5 MINOR left |
+| Review A M1 | 2 | 548fdaf3ddac4e7745d3d235831aa23e6c1946f2:2fde8de8aaaece00bd3722d3616afa038422f4fc | running (sonnet, fix diff) |
+| Review B M1 | 1 | 548fdaf3ddac4e7745d3d235831aa23e6c1946f2:2fde8de8aaaece00bd3722d3616afa038422f4fc | running (sonnet) |
 
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
 | — | speckit-analyze | F12–F14 (LOW: panel toggle not in an FR; three names for the batch; PR-diff view does not store moves) | optional LOWs; tasks and docs already state the behaviour, spec unchanged |
+| M1 | Review A r1 | F1 preamble names `report_review_comment` before the tool exists | plan.md § Delivery order and D6: the preamble's fallback sentence ("If you cannot use that tool, answer … in your reply") covers M1→M2 |
+| M1 | Review A r1 | F2 every save writes v2, an older build quarantines the file | research.md R-store (lines 137–142) chose v2 knowingly over optional v1 fields; T004/T005 require it |
+| M1 | Review A r1 | F3 Mark/Reanchor answered with generic `Refused` | T008/T009 specify exactly that placeholder; T040/T063 replace it in M3/M5 |
+| M1 | Review A r1 | F5 MINOR re-id not saved, O(n²) check | MINOR; re-id is persisted on the next save, n per entry is small |
 
 ## Handover
 

@@ -317,7 +317,7 @@ pub fn text_area<'a>(_showcase: &'a Showcase, roles: Roles, _i: usize) -> Elemen
     )
 }
 
-/// `ReviewCommentCard` — pending (Edit, Delete), sent, outdated, and pending in a send.
+/// `ReviewCommentCard` — draft (Edit, Delete), sent, outdated, and draft in a send.
 pub fn review_comment<'a>(
     _showcase: &'a Showcase,
     roles: Roles,
@@ -325,7 +325,7 @@ pub fn review_comment<'a>(
 ) -> Element<'a, Message> {
     let card = |state| {
         let card = ReviewCommentCard::new(COMMENT, state, roles);
-        if state == CardState::Pending {
+        if state == CardState::Draft {
             card.on_edit(Message::NoOp).on_delete(Message::NoOp)
         } else {
             card
@@ -335,11 +335,11 @@ pub fn review_comment<'a>(
         |card: ReviewCommentCard<'a, Message>| container(card).width(Length::Fixed(COMMENT_WIDTH));
     arrange(
         vec![
-            posed("pending", sized(card(CardState::Pending)), roles),
+            posed("draft", sized(card(CardState::Draft)), roles),
             posed("sent", sized(card(CardState::Sent)), roles),
             posed(
                 "outdated",
-                sized(card(CardState::Pending).outdated(true)),
+                sized(card(CardState::Draft).outdated(true)),
                 roles,
             ),
             posed("in a send", sized(card(CardState::InSend)), roles),
@@ -348,7 +348,7 @@ pub fn review_comment<'a>(
     )
 }
 
-/// `DiffView` with new lines 12–13 picked and a pending card hanging under the last of them.
+/// `DiffView` with new lines 12–13 picked and a draft card hanging under the last of them.
 fn picked_range<'a>(roles: Roles) -> Element<'a, Message> {
     let range = LineRange::new(12, 13).expect("12 <= 13");
     let diff = DiffView::new(&UNIFIED, DiffLayout::Unified, roles)
@@ -357,7 +357,7 @@ fn picked_range<'a>(roles: Roles) -> Element<'a, Message> {
         .slot(
             Side::New,
             13,
-            column![ReviewCommentCard::new(COMMENT, CardState::Pending, roles)
+            column![ReviewCommentCard::new(COMMENT, CardState::Draft, roles)
                 .on_edit(Message::NoOp)
                 .on_delete(Message::NoOp)],
         );
