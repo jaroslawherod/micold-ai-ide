@@ -12,7 +12,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-2lmupk
 - **Started**: 2026-10-17
 - **Phase**: milestones
-- **Next step**: M1 full gate, push, PR
+- **Next step**: M1 fix root_vocabulary test, full gate, push, PR
 
 ## Pull requests
 
@@ -77,12 +77,18 @@ counts are split off as M2 along acceptance scenario 3. Polish T070–T071 chang
 
 ## Handover
 
-M1 unit 2. All T001–T023 ticked; review A (2 rounds, CLEAN), review B (round 1, fixed), visual pass
-(fixed) done. Full gate (`scripts/gate.sh`) was red twice for repo invariants (material_boundary
-`.size(` in a test; root_is_routing_only: Overview close moved to `Outcome::MainAreaTaken`), both
-fixed; third full gate running on the committed tree. Next: if green, push the branch, write the PR
-title/body (draft in the unit scratchpad `pr-body.md`, `GATE_LINE` placeholder), set this section
-to None. If red: fix, rerun `scripts/gate.sh`. No PR open yet.
+M1 unit 2 (context cap). All T001–T023 ticked; review A (2 rounds, CLEAN), review B (round 1,
+fixed; do not re-run), visual pass (fixed, evidence in visual-pass/m1/) done. Committed at 70d449b9,
+not pushed, no PR. Full gates went red one repo-invariant test at a time (cargo stops at the first
+failing target): material_boundary and root_is_routing_only are fixed. Open: the third gate failed
+`crates/micold-client/tests/root_vocabulary_is_cross_cutting.rs:574` — the root vocabulary is
+recorded as 17 feature wrappers + 5 cross-cutting (22), the scan now finds 23 because
+`Message::Overview` was added. Next: read that test's docs, update the recorded vocabulary for the
+new feature wrapper the way the test prescribes (a new feature wrapper is allowed; record it), then
+run `scripts/build-lock.sh cargo test -p micold-client --no-fail-fast` once to catch any other
+invariant at once, then `scripts/gate.sh`, push, and write the PR title/body (draft in the unit
+scratchpad `pr-body.md`, replace `GATE_LINE`; mention `Outcome::MainAreaTaken` and the regenerated
+layout snapshot). Set this section to None in that commit.
 
 ## Open escalation
 
