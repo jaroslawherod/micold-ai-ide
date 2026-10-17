@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/804_move-the-session-service-settings-container
 - **Started**: 2026-10-15
 - **Phase**: milestones (M4 implemented, in review)
-- **Next step**: open the M4 PR, wait for CI and merge, then close
+- **Next step**: wait for CI on PR #911 and merge, then close
 
 ## Pull requests
 
@@ -21,6 +21,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #889 | M2 | merged | bf0910213b7555c49ad0524ab880ddee40069806 |
 | #900 | M3 | merged | 030ddb2ab98c254a7c760f637e82a30f669634cb |
 | #902 | M4 spec amendment | merged | 20bda6cfa20de24c45a6f8a8e5fff89c4c34e205 |
+| #911 | M4 | open; CI red run 39011113666 was a Windows-only timing flake in daemon test mcp_create_worktree a_slow_read_is_cut_at_the_bound (code untouched by M4); rebased on origin/main, full `mise run gate` green, pushed | |
 
 ## Milestones
 
