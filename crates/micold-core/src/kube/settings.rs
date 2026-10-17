@@ -8,9 +8,11 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 
-use crate::daemon_image::{DaemonImageSource, DaemonResources};
+use crate::daemon_resources::DaemonResources;
 use crate::daemons::RegistryError;
 use crate::kube::credentials::KubeCredential;
+use crate::sandbox::image::ImageRef;
+use crate::session::AiCli;
 
 /// One gibibyte, the smallest volume a Kubernetes daemon accepts.
 pub const GIB: u64 = 1024 * 1024 * 1024;
@@ -31,22 +33,6 @@ pub struct KubeContextName(pub String);
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct Namespace(pub String);
-
-/// Where a built image is pushed: `host[:port]/path`, with no tag and no digest.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(transparent)]
-pub struct RegistryRepo(pub String);
-
-/// The node architecture a built image targets.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum NodeArch {
-    /// `linux/amd64`.
-    #[default]
-    Amd64,
-    /// `linux/arm64`.
-    Arm64,
-}
 
 /// A node-selector key: `[prefix/]name` in Kubernetes label syntax.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -154,15 +140,16 @@ pub struct KubeSettings {
     pub context: KubeContextName,
     /// The namespace the daemon's objects live in.
     pub namespace: Namespace,
-    /// Where the daemon's image comes from.
+    /// The image the pod runs; `None` is #806's pinned SSH image (FR-004).
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        with = "stored_image"
+    )]
+    pub image: Option<ImageRef>,
+    /// The AI CLIs installed into the volume when the pod starts; may be empty (terminals only).
     #[serde(default)]
-    pub image: DaemonImageSource,
-    /// Where a built image is pushed; required when `image` is `Build`.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub registry: Option<RegistryRepo>,
-    /// The architecture a built image targets.
-    #[serde(default)]
-    pub arch: NodeArch,
+    pub providers: BTreeSet<AiCli>,
     /// CPU and memory requests and limits.
     #[serde(default)]
     pub resources: DaemonResources,
@@ -188,14 +175,14 @@ fn default_volume_size() -> Quantity {
 }
 
 impl KubeSettings {
-    /// Settings for `context` and `namespace` with every other field at its default.
-    pub fn new(context: &str, namespace: &str, image: DaemonImageSource) -> Self {
+    /// Settings for `context` and `namespace` installing the `enabled` AI CLIs, with every other
+    /// field at its default.
+    pub fn new(context: &str, namespace: &str, enabled: &[AiCli]) -> Self {
         Self {
             context: KubeContextName(context.to_string()),
             namespace: Namespace(namespace.to_string()),
-            image,
-            registry: None,
-            arch: NodeArch::default(),
+            image: None,
+            providers: enabled.iter().copied().collect(),
             resources: DaemonResources::default(),
             node_selector: BTreeMap::new(),
             tolerations: Vec::new(),
@@ -203,6 +190,11 @@ impl KubeSettings {
             storage_class: None,
             allowed: BTreeSet::new(),
         }
+    }
+
+    /// Whether the given image can change under a running daemon, as the sandbox flags it.
+    pub fn image_is_moving(&self) -> bool {
+        self.image.as_ref().is_some_and(ImageRef::is_moving)
     }
 
     /// The row's endpoint: `<context> / <namespace> / <pod>` (contract §7).
@@ -220,13 +212,6 @@ impl KubeSettings {
         }
         if !is_dns_label(&self.namespace.0) {
             return Err(invalid("namespace"));
-        }
-        match &self.registry {
-            Some(repo) if !is_registry_repo(&repo.0) => return Err(invalid("registry")),
-            None if matches!(self.image, DaemonImageSource::Build { .. }) => {
-                return Err(invalid("registry"))
-            }
-            _ => {}
         }
         let labels_ok = self
             .node_selector
@@ -287,28 +272,24 @@ fn is_label_value(s: &str) -> bool {
     is_label_name(s, true)
 }
 
-/// `host[:port]/path` with a lowercase path and no tag or digest.
-fn is_registry_repo(s: &str) -> bool {
-    let Some((host, path)) = s.split_once('/') else {
-        return false;
-    };
-    let host_ok = match host.split_once(':') {
-        Some((name, port)) => {
-            !name.is_empty() && !port.is_empty() && port.bytes().all(|b| b.is_ascii_digit())
+/// `image` is stored as the reference string; `ImageRef` has no serde of its own.
+mod stored_image {
+    use serde::{Deserialize, Deserializer, Serializer};
+
+    use crate::sandbox::image::ImageRef;
+
+    pub fn serialize<S: Serializer>(image: &Option<ImageRef>, s: S) -> Result<S::Ok, S::Error> {
+        match image {
+            Some(r) => s.serialize_str(&r.to_reference()),
+            None => s.serialize_none(),
         }
-        None => !host.is_empty(),
-    };
-    let component_ok = |c: &str| {
-        !c.is_empty()
-            && c.bytes().all(|b| {
-                b.is_ascii_lowercase() || b.is_ascii_digit() || matches!(b, b'.' | b'_' | b'-')
-            })
-    };
-    host_ok
-        && host
-            .bytes()
-            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'-' | b':'))
-        && path.split('/').all(component_ok)
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Option<ImageRef>, D::Error> {
+        Option::<String>::deserialize(d)?
+            .map(|raw| ImageRef::parse(&raw).map_err(|e| serde::de::Error::custom(e.message())))
+            .transpose()
+    }
 }
 
 impl Toleration {
@@ -417,17 +398,12 @@ mod quantity_tests {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::daemon_image::DaemonImageSource;
+    use crate::daemon_resources::DaemonResources;
     use crate::sandbox::image::ImageRef;
-
-    fn pulled() -> DaemonImageSource {
-        DaemonImageSource::Pull {
-            reference: ImageRef::parse("ghcr.io/acme/micold-daemon:0.30.0").unwrap(),
-        }
-    }
+    use crate::session::AiCli;
 
     fn valid() -> KubeSettings {
-        KubeSettings::new("kind-dev", "dev", pulled())
+        KubeSettings::new("kind-dev", "dev", &[AiCli::ClaudeCode])
     }
 
     fn refused_field(s: &KubeSettings) -> Option<&'static str> {
@@ -472,45 +448,64 @@ mod tests {
     }
 
     #[test]
-    fn a_built_image_needs_a_registry_and_a_pulled_one_does_not() {
+    fn the_image_is_none_by_default_and_a_given_reference_is_kept_as_is() {
         let mut s = valid();
-        s.image = DaemonImageSource::default();
-        assert_eq!(
-            refused_field(&s),
-            Some("registry"),
-            "Build pushes, so it needs a registry"
-        );
-        s.registry = Some(RegistryRepo("registry.local:5000/team".into()));
+        assert_eq!(s.image, None, "None is #806's pinned SSH image");
+        assert!(!s.image_is_moving());
+        let raw = "registry.local:5000/team/ssh:1.2";
+        s.image = Some(ImageRef::parse(raw).unwrap());
         assert_eq!(s.validate(), Ok(()));
-        s.image = pulled();
-        s.registry = None;
-        assert_eq!(s.validate(), Ok(()), "Pull uses the reference as given");
+        let value = serde_json::to_value(&s).unwrap();
+        assert_eq!(value["image"], raw, "stored as the reference given");
+        let back: KubeSettings = serde_json::from_value(value).unwrap();
+        assert_eq!(back, s);
     }
 
     #[test]
-    fn a_registry_is_host_and_path_without_tag_or_digest() {
+    fn a_moving_image_tag_is_flagged_as_the_sandbox_flags_it() {
         let mut s = valid();
-        for ok in [
-            "registry.local:5000/team",
-            "ghcr.io/acme",
-            "localhost:5001/x/y",
+        for raw in [
+            "ghcr.io/acme/ssh:latest",
+            "ghcr.io/acme/ssh",
+            "ghcr.io/acme/ssh:0.30.0",
         ] {
-            s.registry = Some(RegistryRepo(ok.into()));
-            assert_eq!(s.validate(), Ok(()), "{ok:?} is host[:port]/path");
-        }
-        for bad in [
-            "ghcr.io/acme:1.0",
-            "ghcr.io/acme@sha256:abc",
-            "ghcr.io",
-            "",
-            "ghcr.io/Acme",
-        ] {
-            s.registry = Some(RegistryRepo(bad.into()));
+            let reference = ImageRef::parse(raw).unwrap();
+            let expected = reference.is_moving();
+            s.image = Some(reference);
             assert_eq!(
-                refused_field(&s),
-                Some("registry"),
-                "{bad:?} is not a bare repository"
+                s.image_is_moving(),
+                expected,
+                "{raw}: same rule as sandbox::image"
             );
+        }
+    }
+
+    #[test]
+    fn an_unparseable_stored_image_does_not_read() {
+        let raw = serde_json::json!({"context": "c", "namespace": "n", "image": "Not A Ref!"});
+        assert!(serde_json::from_value::<KubeSettings>(raw).is_err());
+    }
+
+    #[test]
+    fn providers_default_to_the_enabled_clis_and_may_be_empty() {
+        let enabled = [AiCli::ClaudeCode, AiCli::Pi];
+        let s = KubeSettings::new("kind-dev", "dev", &enabled);
+        assert_eq!(s.providers, enabled.into_iter().collect());
+        let none = KubeSettings::new("kind-dev", "dev", &[]);
+        assert!(none.providers.is_empty());
+        assert_eq!(none.validate(), Ok(()), "terminals only is allowed");
+        let back: KubeSettings =
+            serde_json::from_value(serde_json::to_value(&none).unwrap()).unwrap();
+        assert_eq!(back, none, "an empty list stays empty");
+    }
+
+    #[test]
+    fn resources_are_the_shared_daemon_resources_and_no_registry_or_arch_is_stored() {
+        let s = valid();
+        assert_eq!(s.resources, DaemonResources::default());
+        let value = serde_json::to_value(&s).unwrap();
+        for gone in ["registry", "arch"] {
+            assert!(value.get(gone).is_none(), "{gone} is not a field any more");
         }
     }
 
@@ -597,13 +592,13 @@ mod tests {
     }
 
     #[test]
-    fn defaults_are_amd64_no_storage_class_and_nothing_allowed() {
+    fn defaults_are_no_image_no_storage_class_and_nothing_allowed() {
         let s: KubeSettings = serde_json::from_value(serde_json::json!({
             "context": "kind-dev",
             "namespace": "dev",
         }))
         .unwrap();
-        assert_eq!(s.arch, NodeArch::Amd64);
+        assert_eq!(s.image, None);
         assert_eq!(s.storage_class, None, "none means the cluster default");
         assert!(
             s.allowed.is_empty(),

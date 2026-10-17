@@ -1,16 +1,17 @@
 //! Feature 686 (FR-001, FR-018, FR-020, T006): a Kubernetes daemon is one more runtime in the
 //! registry, persisted additively with no `settings_version` bump.
 
-use micold_core::daemon_image::DaemonImageSource;
 use micold_core::daemons::{DaemonRegistry, DaemonRuntime, RegistryError};
 use micold_core::kube::names::ResourceNames;
 use micold_core::kube::settings::{KubeSettings, Namespace};
 use micold_core::sandbox::image::ImageRef;
+use micold_core::session::AiCli;
 use micold_core::settings::{JsonFileSettingsStore, SettingsStore};
 
 fn settings() -> KubeSettings {
-    let reference = ImageRef::parse("ghcr.io/acme/micold-daemon:0.30.0").unwrap();
-    KubeSettings::new("kind-dev", "dev", DaemonImageSource::Pull { reference })
+    let mut s = KubeSettings::new("kind-dev", "dev", &[AiCli::ClaudeCode]);
+    s.image = Some(ImageRef::parse("ghcr.io/acme/micold-ssh:0.30.0").unwrap());
+    s
 }
 
 fn kube() -> DaemonRuntime {
@@ -23,7 +24,9 @@ fn the_runtime_round_trips_flat_with_its_kind() {
     assert_eq!(value["kind"], "kubernetes");
     assert_eq!(value["context"], "kind-dev");
     assert_eq!(value["namespace"], "dev");
-    assert_eq!(value["image"]["kind"], "pull");
+    assert_eq!(value["image"], "ghcr.io/acme/micold-ssh:0.30.0");
+    assert_eq!(value["providers"].as_array().map(Vec::len), Some(1));
+    assert!(value.get("registry").is_none() && value.get("arch").is_none());
     let back: DaemonRuntime = serde_json::from_value(value).unwrap();
     assert_eq!(back, kube());
 }

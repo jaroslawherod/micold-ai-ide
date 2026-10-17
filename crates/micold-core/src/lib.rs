@@ -17,7 +17,7 @@ pub mod attention;
 pub mod cli_reason;
 pub mod clock;
 pub mod connect;
-pub mod daemon_image;
+pub mod daemon_resources;
 pub mod daemons;
 pub mod endpoint;
 pub mod env_include;

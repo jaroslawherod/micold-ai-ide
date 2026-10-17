@@ -109,3 +109,12 @@ the core baseline still fails only the four root-user tests named above).
   changed), `ObjectView::resource_version`, `FakeCluster::{hold_on_delete, release}` (stash@{0},
   plus `release`), `node_arch`/`set_node` removed; `port_forward` already logged the port;
   34 passed in `kube::`. refactor: none needed.
+- U8, U11, U12, U13–U16, U118, U119 (T106/T107/T111/T112/T143; `kube/settings.rs`,
+  `daemon_resources.rs`, `tests/daemons_kube.rs`). red: did not compile, `unresolved import
+  crate::daemon_resources`, `no method named image_is_moving`, `no field providers`, 7 `mismatched
+  types` (`KubeSettings::new` taking `&[AiCli]`). green: `DaemonResources` and its three tests
+  moved to `daemon_resources.rs`, `daemon_image/` deleted; `KubeSettings` gets `image:
+  Option<ImageRef>` (stored as the reference string), `providers: BTreeSet<AiCli>`,
+  `image_is_moving`, `new(context, namespace, enabled)`; `RegistryRepo`, `NodeArch`, `registry`,
+  `arch` and their two tests (U3, U4) removed; core lib 719 passed, `daemons_kube` 6 passed.
+  U1, U2, U5–U7: revision 1's tests, unchanged and green. refactor: none needed.
