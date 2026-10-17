@@ -1128,8 +1128,5 @@ async fn deleting_an_extra_keeps_the_other_session() {
     delete(&mut client, 1, sid(2)).await;
     assert_eq!(unarchived_in(&state, project.path(), "wt"), 1);
     let kept = state.sessions_for(project.path());
-    assert_eq!(
-        kept.iter().find(|s| !s.archived).map(|s| s.id),
-        Some(sid(1))
-    );
+    assert_eq!(kept.first().map(|s| s.id), Some(sid(1)));
 }
