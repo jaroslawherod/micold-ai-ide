@@ -19,7 +19,7 @@
   `StrictModes no`, `PidFile none`, `UsePAM no`.
 - Labels: `org.opencontainers.image.source` (this repository), `title=micold-basic`,
   `org.micold.basic.content=<content hash>`.
-- Must not contain `micold-daemon` or any AI CLI (a `basic_image_has_no_daemon_or_cli` real-runtime
+- Must not contain `micold-daemon` or any AI CLI (a `sandbox_real_basic_image_has_no_daemon_or_cli` real-runtime
   test runs `command -v` for each inside it).
 
 A user image ("My own image") must provide: an sshd reachable on container port 2222 that accepts

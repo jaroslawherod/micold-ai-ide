@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-uwrpqv
 - **Started**: 2026-10-17
 - **Phase**: M1
-- **Next step**: M1 verify — run the full gate (`scripts/gate.sh`) on HEAD, then review B, then PR (see Handover)
+- **Next step**: M1 PR pushed; orchestrator opens it, waits on CI and merges
 
 ## Pull requests
 
@@ -22,7 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T009 | full | basic image published by `basic-image.yml` on merge (prints the `BASIC_IMAGE` pin) | — | in progress |
+| M1 | T001–T009 | full | basic image published by `basic-image.yml` on merge (prints the `BASIC_IMAGE` pin) | (orchestrator opens) | pushed |
 | M2 | T010–T025, T087 | full | shared `micold_core::provision` (contract); 489 remote daemons start through it, row shows shared steps — #686 can plan onto it from here | — | pending |
 | M3 | T026–T031 | full | static Linux musl daemons (x86_64, aarch64) in every package; `NoMatchingBuild` | — | pending |
 | M4 | T032–T041 | full | AI CLI install step + registry-only relay on app-owned targets; daemon offers only installed CLIs — #686 has the full contract | — | pending |
@@ -60,23 +60,22 @@ Milestone notes:
 | Plan | 2 | 92cbdb5e2c5275bb243ed3a4d5096b1f4e785397:11a4dcc7ddbe26563fe2b317d7f0cabdf06d8bd0 | CLEAN |
 | Tasks | 1 | 2c3cc526e672d823e5c3d3242c3e812f4328c67d:a093c67d80e868ef4684e22c934607c036f9850f | CHANGES: 2 MAJOR, 1 MINOR (all fixed: [P] on T033/T063/T064 dropped, M4/M5 parallel examples corrected, M4 observability note in ledger); round 2 below |
 | Tasks | 2 | ae7101c78be879b2cde37d5455ed29eb6fd93300:2d525fd2157f2c7e851c1e8dd343a38d30d37344 | CLEAN (1 MINOR fixed: checklist item ticked after reviewer confirmed 0 markers, FR-002/FR-010 resolved) |
-| M1 review A (code-review high) | 1 | HEAD 687b8f8d | 10 findings: F1–F5, F8, F9 fixed; F6, F7, F10 declined (see Handover) |
+| M1 review A (code-review high) | 1 | HEAD 687b8f8d | 10 findings: F1–F5, F8, F9 fixed; F6, F7, F10 declined (see Declined review findings) |
+| M1 review B (conformance, sonnet) | 1 | 4de41d6b382fa4417634887ea9108075302f1c02:d99547189d32d7da84a573ed1e106fc02ad026e7 | CLEAN, 4 MINOR (F2, F3 fixed, prose only; F1 declined; F4 covered by the gate) |
 
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
 | design | Spec r1 | F4 fix proposal: a new `failed` state | 489 FR-008 already defines `unreachable` as "a start that failed"; the spec now uses `unreachable` consistently instead of adding a state |
+| M1 | Review A r1 | F6 README.md is inside the content hash | contracts/basic-image.md *Content hash* defines the hash over `find packaging/basic -type f`; the README describes the image, so a change to it may republish |
+| M1 | Review A r1 | F7 `find` hashes the working tree, not the git index | Same contract definition; CI hashes a clean checkout, so the working tree is the committed tree there |
+| M1 | Review A r1 | F10 `is_released_image` has no caller | By design: M5 (T046+) calls it; the function is local and parse-based |
+| M1 | Review B r1 | F1 (MINOR) `hash` job fails on DRIFT | Intended: the workflow publishes under the tree's hash, so `BASIC_IMAGE_CONTENT_HASH` must match it in the same change; the later "pin PR" is the digest pin `BASIC_IMAGE` (T049) |
 
 ## Handover
 
-M1 unit hit the 150k context cap during verify.
-
-- **Done**: T001–T009 implemented and ticked (commit 687b8f8d); review A (code-review high) round 1 ran on 687b8f8d: 10 findings. Fixed in the handover commit: F1 `copilot` added to the real test's ABSENT list; F2 `basic-image.yml` publishes only on a definite not-found/denied (logs in first), fails on any other inspect error; F3 `scripts/basic-image-hash.sh` added to the workflow paths; F4 `workflow_dispatch` off `main` refused; F5 `mise run image` also builds `micold-basic:dev`, `test-sandbox` comment says so; F8 entrypoint falls back to `/tmp` when HOME is `/`; F9 Containerfile install guard widened (npm i/ci/add at line end, npx, pnpm, yarn, curl|sh). Pin moved to `722a7d9ef0d6aadb`. `cargo fmt` applied (gate-1 failed on fmt only, before these fixes).
-- **Declined (record in Declined review findings)**: F6 README in the hash and F7 `find` over the working tree — the contract's *Content hash* defines the hash as `find packaging/basic -type f`; F10 `is_released_image` has no caller yet — by design, M5 (T046+) uses it; its join of registry/repository is local and parse-based.
-- **Next**: run the full gate on HEAD (`setsid nohup bash -c 'scripts/gate.sh; echo GATE_EXIT=$?'`, CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0); review A fixes need no counted re-round unless you judge F2/F4 need one (scoped sonnet round on the fix diff from snapshot of 687b8f8d); then review B (conformance, sonnet) once; then PR files in $SCRATCHPAD (title `#806: Container daemon: configurable resources, Dockerfile or image source; build from current daemon binary by default` + milestone suffix `— feat(806): publish the basic image (M1) (#806)` per pr.md), push `--force-with-lease`.
-- **Local env notes**: `dockerd` was started by hand (works); `deb.debian.org` is refused by the egress proxy, so `micold-basic:dev` cannot be built here; `sandbox_real_basic_image` red shown against `node:24-trixie-slim`, green only in CI.
-- **Digest pin**: not needed in M1 — `BASIC_IMAGE` is T049 (M5), after `basic-image.yml` runs on main post-merge.
+None.
 
 ## Open escalation
 
