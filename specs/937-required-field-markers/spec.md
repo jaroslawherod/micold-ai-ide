@@ -23,10 +23,10 @@ required field shows the error state with supporting text.
 - Q: Create (add-worktree) and Confirm (run-in-parallel) are disabled while a required field is
   empty, so no submit attempt can happen there; what should they do? → A: Enable them; a press
   with empty required fields shows the required errors and does not submit (FR-012).
-  _(orchestrator default pending jaro's card)_
+  _(confirmed by jaro 2026-10-17)_
 - Q: Should an empty required field also show the required error when the user leaves it after
   focusing it, before any submit attempt? → A: Yes, on blur and on a submit attempt, never on a
-  freshly opened form (FR-006). _(orchestrator default pending jaro's card)_
+  freshly opened form (FR-006). _(confirmed by jaro 2026-10-17)_
 
 ## User Scenarios & Testing *(mandatory)*
 

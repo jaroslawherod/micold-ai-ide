@@ -117,9 +117,8 @@ note in `docs/user-guide/worktrees-and-sessions.md` (add-worktree form), `parall
 
 ## Pending decisions
 
-D2 and D3 are orchestrator defaults (option A). If jaro answers B to D2: drop R7/FR-012 work
-(buttons stay disabled). If B to D3: drop `RequiredMarks::left`, `Select::on_blur`, `TrackFocus for
-Select` and D3 entirely; errors show on submit attempt only.
+D2 = A and D3 = A, confirmed by jaro 2026-10-17: Create and Start runs are enabled (R7/FR-012), and
+errors show on blur and on a submit attempt.
 
 ## Project Structure
 

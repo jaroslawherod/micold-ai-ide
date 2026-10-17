@@ -143,7 +143,7 @@ Start runs (`ui/parallel_dialog.rs` `actions`) is always enabled. Their handlers
 Save, the daemon form's Save and Rename were never disabled; their handlers gain `attempt()` (the
 repository step's Add marks its one field).
 
-**Rationale**: D2 (orchestrator default A). The shell already re-checks validity before it creates
+**Rationale**: D2 (A, confirmed by jaro 2026-10-17). The shell already re-checks validity before it creates
 (`main.rs:740`), so enabling the button cannot submit an invalid form.
 
 If jaro answers **B** to D2: keep `on_press_maybe`, drop FR-012 and this entry; the required error
