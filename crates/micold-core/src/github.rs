@@ -1092,7 +1092,7 @@ pub struct IssueListing {
 
 /// Where open issues come from (research R7): [`GhCli`] in production, [`FakeIssueSource`] in
 /// tests. The paging, cap and classification around it are pure functions in this module.
-pub trait IssueSource: crate::issue_details::IssueDetailsSource {
+pub trait IssueSource: IssueLookup {
     /// One page of open issues, most recently updated first.
     fn list_open(
         &self,

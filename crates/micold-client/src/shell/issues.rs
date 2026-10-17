@@ -756,11 +756,11 @@ pub fn on_title_remotes(
                     resolve_env_include(&*resolver, enabled, &script, timeout_secs, &project)
                 });
                 let gh = (tooling.locate_gh)(env_include_path(&snapshot.vars))?;
-                let gh = micold_core::github::GhCli::new(gh);
+                let gh = (tooling.source)(gh);
                 Some(
                     numbers
                         .into_iter()
-                        .map(|number| (number, read_title(&gh, &repo, number)))
+                        .map(|number| (number, read_title(&*gh, &repo, number)))
                         .collect::<Vec<_>>(),
                 )
             })
@@ -790,12 +790,11 @@ pub fn on_title_remotes(
 
 /// One title through `gh`. A failure is logged by number alone and leaves the branch (FR-020).
 fn read_title(
-    gh: &micold_core::github::GhCli,
+    gh: &(dyn micold_core::github::IssueSource + Send + Sync),
     repo: &micold_core::github::GithubRepo,
     number: u64,
 ) -> micold_client::features::overview::TitleLookup {
     use micold_client::features::overview::TitleLookup;
-    use micold_core::github::IssueLookup;
     let Ok(small) = u32::try_from(number) else {
         return TitleLookup::Unavailable;
     };
