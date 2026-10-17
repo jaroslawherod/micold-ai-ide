@@ -455,6 +455,8 @@ pub enum ReviewError {
     NothingPending,
     /// Another comment of the entry already has the new id's reference (FR-014).
     RefTaken,
+    /// The comment is a Draft: it was never sent, so it cannot be reported (FR-004).
+    Draft,
 }
 
 impl std::fmt::Display for ReviewError {
@@ -467,6 +469,7 @@ impl std::fmt::Display for ReviewError {
             Self::Busy => f.write_str("these comments are already being sent"),
             Self::NothingPending => f.write_str("there are no draft comments to send"),
             Self::RefTaken => f.write_str("another comment of this entry has that reference"),
+            Self::Draft => f.write_str("that comment is still a draft; it has not been sent"),
         }
     }
 }
@@ -634,6 +637,62 @@ impl EntryReview {
         });
     }
 
+    /// Record a report on the Sent or Reported comment `reference` (data-model `report`, FR-003,
+    /// FR-005): the reply is `\r\n`/`\r` → `\n` and trimmed; a repeated report replaces outcome,
+    /// reply and `by` and keeps `first_at`. Refused, changing nothing: `Invalid` for a blank
+    /// answered reply or one over [`MAX_REPLY_CHARS`], `NotFound`, `InSend`, `Draft` (FR-004).
+    /// Returns the status before the report.
+    pub fn report(
+        &mut self,
+        reference: CommentRef,
+        outcome: Outcome,
+        reply: &str,
+        by: Reporter,
+        at: u64,
+    ) -> Result<Status, ReviewError> {
+        let reply = reply.replace("\r\n", "\n").replace('\r', "\n");
+        let reply = reply.trim();
+        if outcome == Outcome::Answered && reply.is_empty() {
+            return Err(ReviewError::Invalid(
+                "an answered comment needs an explanation in reply".to_owned(),
+            ));
+        }
+        if reply.chars().count() > MAX_REPLY_CHARS {
+            return Err(ReviewError::Invalid(format!(
+                "the reply is over the {MAX_REPLY_CHARS}-character limit"
+            )));
+        }
+        let comment = self
+            .comments
+            .iter_mut()
+            .find(|comment| comment.reference() == reference)
+            .ok_or(ReviewError::NotFound)?;
+        if self
+            .sending
+            .as_ref()
+            .is_some_and(|ids| ids.contains(&comment.id))
+        {
+            return Err(ReviewError::InSend);
+        }
+        let previous = comment.state.status();
+        let (sent_at, first_at) = match &comment.state {
+            CommentState::Draft => return Err(ReviewError::Draft),
+            CommentState::Sent { at: sent_at } => (*sent_at, at),
+            CommentState::Reported { sent_at, report } => (*sent_at, report.first_at),
+        };
+        comment.state = CommentState::Reported {
+            sent_at,
+            report: Report {
+                outcome,
+                reply: reply.to_owned(),
+                first_at,
+                last_at: at.max(first_at),
+                by,
+            },
+        };
+        Ok(previous)
+    }
+
     /// Where pending comment `id` is: `NotFound` when this entry has no such comment, `InSend` when
     /// an open send holds it, `Refused` when it is sent.
     fn pending_index(&self, id: CommentId) -> Result<usize, ReviewError> {
@@ -651,6 +710,9 @@ impl EntryReview {
         }
     }
 }
+
+/// The longest reply a report may carry, in characters (FR-004).
+pub const MAX_REPLY_CHARS: usize = 20_000;
 
 /// `text` trimmed, or `Invalid` when nothing is left.
 fn checked_text(text: &str) -> Result<String, ReviewError> {
@@ -1322,5 +1384,156 @@ mod tests {
         );
         assert_eq!(review.delete(id(1)), Err(ReviewError::Refused), "FR-002");
         assert_eq!(review.comments(), &[answered][..], "nothing changed");
+    }
+
+    /// One Sent comment `9` (sent at `NOW`), one Draft `1`.
+    fn one_sent_one_draft() -> EntryReview {
+        let mut review = EntryReview::default();
+        review
+            .add(draft(1, 1, &["x"], "c1"), id(1), NOW)
+            .expect("valid");
+        let mut sent = sample(CommentState::Sent { at: NOW });
+        sent.id = id(9);
+        let mut comments = review.comments().to_vec();
+        comments.push(sent);
+        EntryReview::from_comments(comments)
+    }
+
+    fn agent() -> Reporter {
+        Reporter::Agent {
+            session: Uuid::from_u128(AGENT),
+        }
+    }
+
+    #[test]
+    fn report_on_a_sent_comment_makes_it_reported_and_keeps_the_send_time() {
+        let mut review = one_sent_one_draft();
+        let previous = review
+            .report(
+                CommentRef::of(id(9)),
+                Outcome::Applied,
+                "Renamed as asked",
+                agent(),
+                NOW + 50,
+            )
+            .expect("reported");
+        assert_eq!(previous, Status::Sent);
+        assert_eq!(
+            state_of(&review, 9),
+            CommentState::Reported {
+                sent_at: NOW,
+                report: Report {
+                    outcome: Outcome::Applied,
+                    reply: "Renamed as asked".into(),
+                    first_at: NOW + 50,
+                    last_at: NOW + 50,
+                    by: agent(),
+                },
+            }
+        );
+    }
+
+    #[test]
+    fn a_second_report_replaces_outcome_reply_and_by_and_keeps_first_at() {
+        let mut review = one_sent_one_draft();
+        review
+            .report(
+                CommentRef::of(id(9)),
+                Outcome::Applied,
+                "done",
+                agent(),
+                NOW + 50,
+            )
+            .expect("first");
+        let previous = review
+            .report(
+                CommentRef::of(id(9)),
+                Outcome::Answered,
+                "on second thought, no",
+                Reporter::User,
+                NOW + 90,
+            )
+            .expect("second");
+        assert_eq!(previous, Status::Applied);
+        let CommentState::Reported { sent_at, report } = state_of(&review, 9) else {
+            panic!("reported");
+        };
+        assert_eq!(sent_at, NOW);
+        assert_eq!(report.outcome(), Outcome::Answered);
+        assert_eq!(report.reply(), "on second thought, no");
+        assert_eq!(report.by(), Reporter::User);
+        assert_eq!((report.first_at(), report.last_at()), (NOW + 50, NOW + 90));
+    }
+
+    #[test]
+    fn applied_may_have_an_empty_reply_and_replies_are_normalised() {
+        let mut review = one_sent_one_draft();
+        review
+            .report(
+                CommentRef::of(id(9)),
+                Outcome::Applied,
+                "  ",
+                agent(),
+                NOW + 1,
+            )
+            .expect("an empty applied reply is accepted");
+        let CommentState::Reported { report, .. } = state_of(&review, 9) else {
+            panic!("reported");
+        };
+        assert_eq!(report.reply(), "");
+        review
+            .report(
+                CommentRef::of(id(9)),
+                Outcome::Answered,
+                "\r\n one\r\ntwo\rthree \n",
+                agent(),
+                NOW + 2,
+            )
+            .expect("answered");
+        let CommentState::Reported { report, .. } = state_of(&review, 9) else {
+            panic!("reported");
+        };
+        assert_eq!(report.reply(), "one\ntwo\nthree");
+    }
+
+    #[test]
+    fn refused_reports_say_why_and_change_nothing() {
+        let mut review = one_sent_one_draft();
+        let before = review.clone();
+        let sent = CommentRef::of(id(9));
+        assert_eq!(
+            review.report(CommentRef::of(id(5)), Outcome::Applied, "", agent(), NOW),
+            Err(ReviewError::NotFound)
+        );
+        assert_eq!(
+            review.report(CommentRef::of(id(1)), Outcome::Applied, "", agent(), NOW),
+            Err(ReviewError::Draft)
+        );
+        assert!(matches!(
+            review.report(sent, Outcome::Answered, " \n ", agent(), NOW),
+            Err(ReviewError::Invalid(_))
+        ));
+        let over = "é".repeat(MAX_REPLY_CHARS + 1);
+        assert!(matches!(
+            review.report(sent, Outcome::Applied, &over, agent(), NOW),
+            Err(ReviewError::Invalid(_))
+        ));
+        assert_eq!(review, before);
+        let limit = "é".repeat(MAX_REPLY_CHARS);
+        review
+            .report(sent, Outcome::Applied, &limit, agent(), NOW)
+            .expect("exactly the limit is accepted");
+    }
+
+    #[test]
+    fn a_comment_in_the_open_send_refuses_a_report() {
+        let mut review = one_sent_one_draft();
+        review.begin_send(EntryKind::Worktree, &[]).expect("send");
+        let before = review.clone();
+        assert_eq!(
+            review.report(CommentRef::of(id(1)), Outcome::Applied, "", agent(), NOW),
+            Err(ReviewError::InSend)
+        );
+        assert_eq!(review, before);
     }
 }
