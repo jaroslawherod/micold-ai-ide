@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #686
 - **Worktree branch**: claude/project-thread-xelisc
 - **Started**: 2026-10-17
-- **Phase**: implement M1
-- **Next step**: M1 implement — decide the M1a/M1b split (Open escalation), then T019 onward
+- **Phase**: implement M1a
+- **Next step**: M1a implement — T019/T025 manifests, T020/T026 kubeconfig, T021/T027 start, T079/T081 lifecycle
 
 ## Pull requests
 
@@ -22,7 +22,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T033, T079–T082 | full | Add (given image), start/adopt, tunnel to connected, stop, remove | — | in progress |
+| M1a | T001–T021, T025–T027, T079, T081 | full | Core runtime over FakeCluster: settings, manifests, kubeconfig, start with rollback, stop/remove | — | in progress |
+| M1b | T022–T024, T028–T033, T080, T082, T099 | full | Add (given image), start/adopt, tunnel to connected, stop, remove from the client | — | planned |
 | M2 | T034–T046 | full | Build → push → pod by digest; requests and limits | — | planned |
 | M3 | T047–T055 | full | Clone remote + worktrees in the pod (RepoClone, protocol 49) | — | planned |
 | M4 | T056–T062 | full | Reconnect; pod gone → stopped with reason | — | planned |
@@ -43,6 +44,7 @@ Cut notes: US1 (>10 tasks) split along its acceptance scenarios and the plan's s
 | 4 | clarify | private registry pull; push auth | pull secret on FR-008 allow-list; push via local runtime login | agent | spec.md FR-008, FR-002 |
 | 5 | clarify | image tag/rebuild; CI image loading | deferred to plan | agent | spec.md FR-017, FR-021 |
 | 6 | implement M1 | U16: does `RegistryError::DuplicateName` name the first daemon? | keep the variant field-less; the form text "Another daemon is already named <name>." names it (names match case-insensitively) | unit, from evidence | `features/daemons.rs` form_error; `core/tests/daemons_kube.rs` |
+| 7 | implement M1 | M1 too large for one milestone: split? | split M1a (T001–T021, T025–T027, T079, T081; core over FakeCluster, Kubernetes not in the Add form) / M1b (T022–T024, T028–T033, T080, T082, T099; depends on M1a); later milestones depend on M1b | orchestrator | Open escalation of unit 3; tasks.md Milestones |
 
 ## Review rounds
 
@@ -66,29 +68,11 @@ Cut notes: US1 (>10 tasks) split along its acceptance scenarios and the plan's s
 
 ## Handover
 
-Unit 3 of M1. Local commits only (52d8a1ab, 0a49b43a, and unit 3's on top), NOT pushed: the gate
-hook needs a green full gate, and the core suite has 4 pre-existing root-user reds in this container
-(cycle-log baseline), so the full gate cannot go green here. Backup bundle:
-/mnt/project-files/backups/686-m1-wip.bundle (refreshed by unit 3).
-Done (18 of 38 ticked): T001–T018 — core types, `listener_auth` wired into `daemon/server.rs`
-(`token_auth_path`), `Transport::Tunnel`, `Cluster` port + `FakeCluster`; micold-client compiles
-unchanged (its matches already had `_` arms).
-Next: T019/T025 manifests, T020/T026 kubeconfig, T021/T027 start sequence, T079/T081 lifecycle,
-then the client half (T022–T024, T028–T033, T080, T082, T099). See *Open escalation* for the split.
+None.
 
 ## Open escalation
 
-M1 does not fit one milestone: 3 units so far, the diff is ~3,300 lines with 20 of 38 tasks still
-open (milestones.md rule 3: ~10 tasks / ~800 lines). Proposed re-cut (Recommended), along US1's
-core/client seam, Kubernetes kept unreachable from the form until M1b (rule 6):
-- **M1a** T001–T021, T025–T027, T079, T081 — core runtime: settings, names, failures, listener auth,
-  tunnel transport, `Cluster` port + `FakeCluster`, manifests, kubeconfig discovery, start sequence
-  with rollback and per-phase bounds, Stop/Remove/forget sequences, all over `FakeCluster`.
-  Verify: `mise run test-core`; `cargo test -p micold-daemon server::`. One more unit.
-- **M1b** T022–T024, T028–T033, T080, T082, T099 — `LiveCluster`, `Dial::Kube`, the Add form,
-  confirmations and the user guide. Verify: M1's client commands.
-Alternative: keep M1 whole and continue with units 4+ (each ~150k), one PR of ~6k lines.
-Clarify round 1 questions remain with the owner as decision cards (spec uses recommended defaults).
+None. Clarify round 1 questions remain with the owner as decision cards (spec uses recommended defaults).
 
 ## Follow-ups not done
 

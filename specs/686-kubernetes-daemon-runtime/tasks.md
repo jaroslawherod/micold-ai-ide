@@ -19,7 +19,7 @@ user-guide gate).
 failing for the right reason before the implementation task with the same ids starts. Each
 milestone ends with an acceptance task: its outer-loop behaviors green before it is complete.
 
-**Visual pass**: each milestone that changes the Settings form (M1, M2, M5, M7) runs the
+**Visual pass**: each milestone that changes the Settings form (M1b, M2, M5, M7) runs the
 `visual-pass` skill at its gate (autopilot gate rule) on the parts it adds; T097 is the full
 quickstart Part B pass at the end.
 
@@ -232,13 +232,13 @@ reason in Settings → Daemons.
 **Independent test**: add, edit resources, start, stop (volume kept), start (worktrees present),
 remove (pod and volume gone after confirmation).
 
-### Stop and Remove (shipped with M1)
+### Stop and Remove (core in M1a, client in M1b)
 
 - [ ] T079 [P] [US5] [A21] [A24] [U63] [U64] [U65] Lifecycle tests over `FakeCluster` in `core/kube/lifecycle.rs`: Stop deletes the pod by name and UID with grace 10 s and waits until gone (120 s), PVC and secrets kept; Remove deletes pod, secrets and PVC (ours only; `404` = done); the forget-locally list is the deterministic names (K5) and makes no cluster call.
 - [ ] T080 [P] [US5] [A23] [U105] [U106] Confirmation reducer tests in `client-tests/features_daemons.rs`: Stop with running sessions "Stop <name>? <n> running session(s) will end. Worktrees on its volume are kept."; Remove "Remove <name>? This deletes from <context>/<namespace>: pod <pod>, volume <pvc> with its worktrees, secrets <list>." plus 491's bound-worktree counts; cluster unreachable → "The cluster could not be reached (<error>). Forget <name> on this computer only? These stay in <context>/<namespace>: <pod>, <pvc>, <secrets>."; nothing is deleted before confirmation.
 - [ ] T081 [US5] [A21] [A24] [U63] [U64] [U65] Stop, Remove and forget-locally sequences in `core/kube/lifecycle.rs`.
 - [ ] T082 [US5] [A23] [U105] [U106] Wire Stop, Remove and Forget locally for Kubernetes daemons in `client/daemon.rs`, `client/shell/daemons.rs` and `client/features/daemons.rs`; confirmation texts in `client/ui/confirm_daemon_removal.rs`; worktrees follow 491 FR-014.
-- [ ] T099 [US1] [A1] [A4] [A5] [A21] [A23] [A24] Acceptance (M1): `kube_daemon_start`, `features_daemons` and the `core/kube/lifecycle.rs` tests for A1, A4, A5, A21, A23, A24 green over `FakeCluster`; the milestone is not complete before.
+- [ ] T099 [US1] [A1] [A4] [A5] [A21] [A23] [A24] Acceptance (M1b): `kube_daemon_start`, `features_daemons` and the `core/kube/lifecycle.rs` tests for A1, A4, A5, A21, A23, A24 green over `FakeCluster`; the milestone is not complete before.
 
 ### The rest of the form and actions
 
@@ -310,13 +310,22 @@ T098) changes no code and is left to the close unit.
 Each milestone merges to `main` on its own, through one PR (speckit-autopilot). Polish T097 (quickstart Part B visual pass) and T098 (`speckit-converge` re-run) are in no
 milestone: they change no code, so the close unit does them in the close PR.
 
-### M1 — Start, connect, stop and remove a Kubernetes daemon 🎯 MVP
+### M1a — Kubernetes daemon core runtime over a fake cluster
 
-- **Tasks**: T001–T033, T079–T082, T099
-- **Deliverable**: Settings → Daemons → Add offers runtime Kubernetes (context, namespace, image reference); Start creates or adopts the daemon's PVC and pod and reaches `connected` through the API tunnel; Stop deletes the pod and keeps the volume; Remove deletes what it created after confirmation.
-- **Satisfies**: US1 scenarios 1, 4, 5 (given image); US5 scenarios 3, 5, 6; FR-001, FR-002, FR-003, FR-006, FR-013, FR-014, FR-015, FR-016, FR-017, FR-019, FR-020, FR-022, FR-023
-- **Verify**: `mise run test-core`; `cargo test -p micold-client --test kube_daemon_start --test features_daemons --test daemons_section_geometry --test no_concrete_implementations`; `cargo test -p micold-client --lib kube::live`; `cargo test -p micold-daemon server::`
+- **Tasks**: T001–T021, T025–T027, T079, T081
+- **Deliverable**: `micold-core` runs a Kubernetes daemon's whole lifecycle against the `Cluster` port: validated `KubeSettings` persisted as `DaemonRuntime::Kubernetes`, deterministic owned resource names, pod and PVC manifests with no Service, kubeconfig discovery on Linux, macOS and Windows, the start sequence (create or adopt the PVC and pod, tunnel) with per-phase bounds and rollback of what the attempt created, and the Stop, Remove and forget-locally sequences — all proven over `FakeCluster`; the daemon refuses a non-loopback listener without a token, and `Transport::Tunnel` completes the handshake. Kubernetes is not offered in the Add form yet (M1b).
+- **Satisfies**: US1 scenarios 1, 4, 5 (core half, given image); US5 scenarios 3, 5, 6 (core sequences); FR-003, FR-006 (transport), FR-013, FR-014, FR-015, FR-016, FR-020, FR-022 (kubeconfig discovery), FR-023 (adopt on `AlreadyExists`)
+- **Verify**: `mise run test-core`; `cargo test -p micold-daemon server::`
 - **Depends on**: —
+- **Tier**: full
+
+### M1b — Start, connect, stop and remove a Kubernetes daemon from the client 🎯 MVP
+
+- **Tasks**: T022–T024, T028–T033, T080, T082, T099
+- **Deliverable**: Settings → Daemons → Add offers runtime Kubernetes (context, namespace, image reference); Start creates or adopts the daemon's PVC and pod and reaches `connected` through the API tunnel; Stop deletes the pod and keeps the volume; Remove deletes what it created after confirmation.
+- **Satisfies**: US1 scenarios 1, 4, 5 (given image); US5 scenarios 3, 5, 6; FR-001, FR-002, FR-006, FR-014, FR-015, FR-017, FR-019, FR-022, FR-023
+- **Verify**: `cargo test -p micold-client --test kube_daemon_start --test features_daemons --test daemons_section_geometry --test no_concrete_implementations`; `cargo test -p micold-client --lib kube::live`
+- **Depends on**: M1a
 - **Tier**: full
 
 ### M2 — Build and push the daemon image; set resources
@@ -325,7 +334,7 @@ milestone: they change no code, so the close unit does them in the close PR.
 - **Deliverable**: a Kubernetes daemon with image source Build (the default) builds the image with the local runtime, pushes it to the named registry and runs the pod by digest, with live output and Cancel; CPU and memory requests and limits reach the pod.
 - **Satisfies**: US1 scenario 1 (default image path); FR-004, FR-005 (requests and limits)
 - **Verify**: `mise run test-core` (`daemon_image::`, `sandbox::cli::`, `kube::manifest::`); `cargo test -p micold-client --lib kube::image`; `cargo test -p micold-client --test features_daemons`
-- **Depends on**: M1
+- **Depends on**: M1b
 - **Tier**: full
 
 ### M3 — Worktrees and sessions in the pod
@@ -334,7 +343,7 @@ milestone: they change no code, so the close unit does them in the close PR.
 - **Deliverable**: creating a worktree bound to a Kubernetes daemon clones the project's remote (one needing no credential; M5 lets the user allow a git credential, and M8's T092 proves a credentialed remote clones with it) into the daemon's volume and creates the worktree there, shown with the daemon's name and in-pod path; a project without a remote is refused with the reason.
 - **Satisfies**: US1 scenarios 2, 3; FR-007
 - **Verify**: `mise run test-core` (`kube::clone::`, `protocol::`); `cargo test -p micold-daemon repo_clone`; `cargo test -p micold-client --test features_daemons`
-- **Depends on**: M1
+- **Depends on**: M1b
 - **Tier**: full
 
 ### M4 — Sessions outlive the client
@@ -343,7 +352,7 @@ milestone: they change no code, so the close unit does them in the close PR.
 - **Deliverable**: a dropped tunnel reconnects to the same pod with sessions intact; a deleted, evicted or node-lost pod shows `stopped` with its reason, sessions `lost to its daemon`, and is not recreated until Start.
 - **Satisfies**: US2 scenarios 1–4; FR-010, FR-011
 - **Verify**: `cargo test -p micold-client --test kube_daemon_reconnect`; `mise run test-core` (`kube::classify::`, `daemons::`)
-- **Depends on**: M1
+- **Depends on**: M1b
 - **Tier**: full
 
 ### M5 — Only allowed credentials reach the pod
@@ -352,7 +361,7 @@ milestone: they change no code, so the close unit does them in the close PR.
 - **Deliverable**: allowed credentials and sign-ins are created as secrets and mounted read-only, withdrawn ones are deleted on the next start, and the pod runs non-root with a read-only root filesystem.
 - **Satisfies**: US3 scenarios 1–4; FR-008, FR-009
 - **Verify**: `mise run test-core` (`kube::credentials::`, `kube::manifest::`, `kube::start::`); `cargo test -p micold-client --test features_daemons`
-- **Depends on**: M1
+- **Depends on**: M1b
 - **Tier**: full
 
 ### M6 — Failures named within their bound
@@ -361,7 +370,7 @@ milestone: they change no code, so the close unit does them in the close PR.
 - **Deliverable**: RBAC denial, missing context or namespace, unreachable cluster, credential-plugin failure, push and pull failures, unschedulable pods and unbound volumes each show their contract §6 reason, RBAC denial before anything is created and pull or scheduling failures on first sight.
 - **Satisfies**: US4 scenarios 1–5; FR-012
 - **Verify**: `mise run test-core` (`kube::classify::`, `kube::start::`); `cargo test -p micold-client --test kube_daemon_failures`
-- **Depends on**: M1, M2
+- **Depends on**: M1b, M2
 - **Tier**: full
 
 ### M7 — The full Kubernetes form and actions
@@ -370,7 +379,7 @@ milestone: they change no code, so the close unit does them in the close PR.
 - **Deliverable**: the Kubernetes form edits node selector, tolerations, volume size and storage class; edits apply on next start; Reconnect and Logs work from the row.
 - **Satisfies**: US5 scenarios 1, 2, 4; FR-005 (node selector, tolerations, volume size), FR-018
 - **Verify**: `cargo test -p micold-client --test features_daemons --test daemons_section_geometry`; `cargo test -p micold-client --lib ui::material::key_value_list`; `cargo test -p micold-client --lib ui::material::toleration_list`
-- **Depends on**: M1, M2
+- **Depends on**: M1b, M2
 - **Tier**: full
 
 ### M8 — Real-cluster suite in CI
@@ -379,5 +388,5 @@ milestone: they change no code, so the close unit does them in the close PR.
 - **Deliverable**: `mise run test-kube` runs the `kube_real_*` suite on a throwaway kind cluster with a registry, and CI's `kube-cluster` job runs it on every non-docs change; on a live pod, a remote needing an allowed git credential clones with it (T092).
 - **Satisfies**: US6 scenarios 1–3; FR-021; SC-001–SC-006 evidence
 - **Verify**: `mise run test-kube`; CI job `kube-cluster` green on the PR
-- **Depends on**: M1–M7
+- **Depends on**: M1a, M1b, M2–M7
 - **Tier**: full
