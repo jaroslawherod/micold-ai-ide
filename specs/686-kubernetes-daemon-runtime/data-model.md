@@ -112,7 +112,11 @@ port-forward to `SSH_PORT` through the relay that reads an SSH identification li
 within its bound (else `ImageContract`). `Attempt { created: Vec<CreatedResource>, added_key:
 Option<ClientId> }` records what this attempt created or added, for rollback (FR-013). `StartOutcome`
 = `Ready { tunnel }` | `Drift { fields }` (the pod runs with other settings: ask the user, FR-005) |
-`Failed(KubeFailure)`.
+`Failed(KubeFailure)`. In a build without the mechanism (no pinned image reference, no live
+`KeyGen`), the actor's Start of a Kubernetes daemon found in settings fails at once with
+`KubeFailure::Unavailable` ("Kubernetes daemons need the shared SSH image (#806), which this build
+does not include"), creates nothing and shows `unreachable` with that reason; the sequence runs only
+in tests until then.
 
 ### `KubeFailure` — new (`kube/classify.rs`)
 
@@ -121,7 +125,7 @@ Option<ClientId> }` records what this attempt created or added, for rollback (FR
 `Forbidden { verb, resource }`, `ImagePull { image, message }`, `Unschedulable { message }`,
 `ClaimNotBound { claim, message }`, `Conflict { kind, name }`, `CredentialSource { credential, path }`,
 `ImageContract { image, missing }`, `HostKeyMismatch { pod }`, `PhaseTimeout { phase }`, `Cancelled`,
-`StopTimeout { pod }`, `Api { status, message }`, and `Provision(ProvisionFailure)` wrapping the
+`StopTimeout { pod }`, `Api { status, message }`, `Unavailable` (before #806, above), and `Provision(ProvisionFailure)` wrapping the
 **(#806)** copy, start and install failures (their texts are #806's; install names the CLI).
 Removed from revision 1: `NoRuntime`, `Build`, `Push`, `VolumeTooSmall`. `Display` gives the
 user-facing reason (contract strings). Classifiers: `from_status(code, body)`,

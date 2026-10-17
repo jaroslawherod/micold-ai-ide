@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-xelisc
 - **Started**: 2026-10-17
 - **Phase**: design revision 2
-- **Next step**: design revision 2 (continue from Handover): fix spec review round 1 findings, then plan, tasks, test-list; then re-cut M1a
+- **Next step**: design revision 2 (continue from Handover): tasks.md re-cut + test-list + tasks review; then M1a
 
 ## Pull requests
 
@@ -62,6 +62,7 @@ Cut notes: US1 (>10 tasks) split along its acceptance scenarios and the plan's s
 | Tasks | 2 (scoped, sonnet) | bf9cd12b8a7d863016aa8c342f4bf594a34f477e:a8551c98307dc5eb20c1a8b684f92be48c98641b | CLEAN — 1 MINOR fixed (Milestones preamble names T097/T098 Polish as in no milestone, left to the close unit) |
 | Spec rev 2 | 1 | 9b02dde817655adc92898292c8f93e391c823d2e:4233f507b15954e5f2b3b193009816ee9ea8fd52 | CHANGES: 3 MAJOR, 3 MINOR — all fixed (F1 FR-023 shared-step concurrency + edge case; F2 keys in the access secret, per client per daemon, FR-015 remaining key; F3 CLI selection US5.1/FR-018, version pinned by client build in FR-004; F4 checklist note; F5 FR-005/US5.2 pod-settings drift offer; F6 FR-024 observable) |
 | Spec rev 2 | 2 (scoped, sonnet) | b07e424c9e2a84170a1b988315187afce6dfc70c:24f30ec4ba00e3835c53c0f7316fdc7421cf4a76 | CLEAN — 3 MINOR fixed, prose only (FR-024 per-client key pairs; FR-005 form notice on volume size; FR-004 running sessions of a deselected CLI keep running) |
+| Plan rev 2 | 1 | 41559a5d6d08b3aae87bb6486b442919a9827c2a:52d80e58149fb6943f8321d342526864d32ed8d1 | CLEAN — 3 MINOR fixed, prose only (Unavailable before #806; daemon_resources lands in #686 first; protocol 49 coordination) |
 
 ## Declined review findings
 
@@ -74,51 +75,31 @@ Cut notes: US1 (>10 tasks) split along its acceptance scenarios and the plan's s
 
 ## Handover
 
-**Design revision 2 in progress (unit "Design revision 686", handed over at 150k).** Uncommitted
-work is committed with this handover as `docs(686): design revision 2 — spec and research (WIP)`.
-
-Done:
-- spec.md revised (Status line "revision 2"): SSH image (#806's), copy daemon over SSH via 489
-  FR-005, AI CLIs installed on start, no build/push/registry; new FR-024 (consume #806's mechanism,
-  no second copy); FR-004/006/008/009/012/015/017/021, edge cases, entities, SC-001/004,
-  assumptions, out of scope rewritten. Pod SSH auth: per-daemon access secret `<base>-ssh-access`
-  (host key pair + `authorized_keys`, one line per client), client private keys owner-only on each
-  client, host key pinned from the secret, sshd on pod loopback 127.0.0.1:2222.
-- research.md: revision-2 preamble; K1 (consume #806, interface in contracts/shared-ssh-image.md
-  — NOT YET WRITTEN, working module name `micold-core/src/ssh_image/`), K2 (loopback relay
-  `client/kube/relay.rs` → port-forward per accepted connection; 489 system `ssh` with HostKeyAlias
-  + per-daemon known_hosts; `Transport::Tunnel` not needed), K3 (access secret, multi-client keys
-  via resourceVersion-guarded update, sshd reads authorized_keys from the mount, host key copied to
-  /tmp 0600), K4 (listener_auth removed: revert T008/T016), K6 phases (Config, Preflight [+update
-  secrets], Volume, Secrets, Pod, Schedule, Pull, Tunnel; then blocked on #806: Copy 120 s,
-  Install 15 min, Connect 120 s; KubeFailure drops NoRuntime/Build/Push, adds ImageContract,
-  HostKeyMismatch, Provision(..)), K7 (pod shape; daemon env passed by the provisioning start step,
-  not pod env, since sshd clears env), K10 small, K12 (kind, no registry; blocked on #806).
-- Spec review rev 2 round 1: CHANGES (full text /mnt/project-files/backups/686-rev2-spec-review-r1.md).
-  Open, to fix then scoped re-review (sonnet, `review-snapshot.sh diff 9b02dde8…:4233f507…`):
-  F1 MAJOR concurrency of shared steps (copy, install, access-secret key add) on one volume/secret
-  by two clients — add edge case + FR-023 clause; F2 MAJOR US3.4 "accepts only the daemon's key"
-  vs FR-008 per-client keys — say "only keys in the access secret"; F3 MAJOR AI CLIs to install and
-  "wanted version" undefined — add to FR-004/US5.1/FR-018/entity (selected in the form, default the
-  enabled providers; version pinned by the client build per #806); F4 MINOR checklists/requirements.md
-  note stale; F5 MINOR edits vs adopted pod (say: an edit recreates the pod on next start when the pod
-  spec differs; volume kept); F6 MINOR FR-024 delivery constraint → make observable ("Kubernetes is not
-  listed in Add until …") or move to Assumptions.
-
-Next (in order): fix F1–F6 in spec.md; scoped spec re-review; data-model.md, plan.md,
-contracts/kube-runtime.md, new contracts/shared-ssh-image.md (replaces contracts/daemon-image.md:
-delete it), quickstart.md; plan review (fresh reviewer, plan rubric); tasks.md re-cut + tdd/test-list.md
-(mark T001–T018 kept/changed/removed: T005/T012 DaemonImageSource → remove, keep DaemonResources moved
-to `core/daemon_resources.rs`; T004/T011 drop `registry`, `arch`, `RegistryRepo`, add `image:
-Option<ImageRef>`, `providers`; T008/T016 revert; T010/T017 revert `Transport::Tunnel`; T009/T018
-variant list change; T015 port 7727 → 2222; T034–T046 removed; new relay, access-secret, blocked-on-#806
-tasks), milestones in coordinator's order (core types done → kubeconfig → manifests + pod/PVC/secret
-lifecycle → port-forward tunnel/relay → stop/remove → failure reasons → Settings form (Add entry hidden)
-→ blocked on #806: copy+install+connect and Add entry, clone/worktrees, reconnect, real-cluster CI);
-tasks review; note what in stash@{0} survives (kubeconfig T020, lifecycle T079, manifest T019 needs
-sshd image/env/port changes, start T021 needs phase list without Image and with Tunnel=sshd login,
-`Quantity::to_k8s`, `ResourceNames::all_secrets` + access secret, `KubeFailure::StopTimeout`,
-`FakeCluster::hold_on_delete` survive); commit. Branch still unpushed; never reset.
+**Design revision 2, part 2 done up to the plan (unit "Design revision 686 part 2", handed over at 150k).**
+Done and committed: spec F1–F6 fixed, scoped re-review CLEAN (3 MINOR fixed, prose); research.md
+amended (K1 shared-step concurrency + `KeyGen` port, K2/K6 `Tunnel` = SSH identification line via the
+relay, login with pinned host key in `Copy`, K3 Remove-unreachable key, K5 `micold.dev/pod-settings`
+drift); data-model.md, plan.md, contracts/kube-runtime.md rewritten; contracts/shared-ssh-image.md
+written, daemon-image.md deleted; quickstart.md rewritten (A1 + B-form before #806, rest after #806).
+Plan review round 1 CLEAN (full text /mnt/project-files/backups/686-rev2-plan-review-r1.md); its 3
+MINORs fixed, prose only (`KubeFailure::Unavailable` before #806; #686 lands `daemon_resources.rs` +
+resources fields first; protocol-49 bump coordination with #806).
+Next (in order): 1) tasks.md re-cut (speckit-tasks; mark T001–T018 kept/changed/removed: T005/T012
+DaemonImageSource → remove, keep DaemonResources moved to `core/daemon_resources.rs`; T004/T011 drop
+`registry`, `arch`, `RegistryRepo`, `NodeArch`, add `image: Option<ImageRef>`, `providers`; T008/T016
+revert listener_auth; T010/T017 revert `Transport::Tunnel`; T009/T018 KubeFailure variant list per
+data-model; `Cluster::node_arch` removed, `Cluster::replace` added; T015 port 7727 → 2222; T034–T046
+removed; new tasks: access.rs + FakeKeyGen, keys.rs, relay.rs, PodStamp/drift, Unavailable, runtime
+choices omit Kubernetes, blocked-on-#806 tasks) and milestones in this order: M1a core types (done
+parts) + kubeconfig → manifests + pod/PVC/secret lifecycle + access secret → relay + `Tunnel` phase →
+stop/remove → failure reasons → Settings form (Add entry hidden) → blocked on #806: copy+install+
+connect and Add entry + user guide, clone/worktrees (protocol 49), reconnect/gone, real-cluster CI;
+2) tdd/test-list.md to match; 3) speckit-analyze, tasks review (fresh reviewer, tasks rubric);
+4) stash@{0} survivors note in the ledger: kubeconfig T020, lifecycle T079, manifest T019 (needs SSH
+image/env/port 2222 changes), start T021 (phase list without Image, Tunnel = identification line),
+`Quantity::{to_k8s, parse_k8s}`, `ResourceNames::all_secrets` + access secret, `ObjectKind::noun`,
+`KubeFailure::StopTimeout`, `FakeCluster::hold_on_delete` survive; 5) commit, refresh bundle, return
+DONE with the re-cut M1a ready. Branch unpushed; never reset; stash@{0} kept.
 
 ## Open escalation
 
