@@ -329,19 +329,33 @@ fn a_permission_stop_pauses_the_turn_and_every_change_of_it_is_reported() {
         (s.activity, s.paused_on_user)
     };
 
+    let attention = || {
+        let s = summary_of(&state, id);
+        (s.attention_seq, s.unread)
+    };
+
     assert!(hook(HookKind::UserPromptSubmit));
+    assert_eq!(attention(), (0, false));
     assert!(hook(HookKind::Notification));
     assert_eq!(seen(), (ActivitySignal::AwaitingInput, true));
+    // W5: the permission stop is the attention event it always was.
+    assert_eq!(attention(), (1, true));
     assert!(hook(HookKind::PreToolUse));
     assert_eq!(seen(), (ActivitySignal::Working, false));
 
     assert!(hook(HookKind::Notification));
     assert_eq!(seen(), (ActivitySignal::AwaitingInput, true));
+    let after_second_stop_to_ask = attention();
     assert!(
         hook(HookKind::Stop),
         "the flag changed though the signal did not: broadcast"
     );
     assert_eq!(seen(), (ActivitySignal::AwaitingInput, false));
+    assert_eq!(
+        attention(),
+        after_second_stop_to_ask,
+        "W5: ending the pause is not a new attention event"
+    );
 
     assert!(hook(HookKind::UserPromptSubmit));
     assert!(hook(HookKind::Stop));
