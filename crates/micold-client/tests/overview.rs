@@ -851,7 +851,7 @@ fn files(
     tasks: Option<(u32, u32)>,
 ) -> FileProgress {
     FileProgress {
-        feature_dir: Some("specs/813-worktree-overview".into()),
+        feature_dir: Some("specs/NNN-example".into()),
         artifact,
         ledger,
         tasks: tasks.map(|(done, total)| Ratio { done, total }),
