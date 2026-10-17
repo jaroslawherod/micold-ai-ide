@@ -25,7 +25,7 @@ enabled (FR-012, D2 default). Research: [research.md](research.md).
 
 **Testing**: `cargo test` via `mise run test-core` (core module) and `scripts/gate.sh` / `mise run
 gate` (client feature tests in `crates/micold-client/tests/`, in-crate anatomy tests, new
-`tests/required_call_sites.rs`)
+`tests/required_call_sites.rs`). Test layer per requirement: [research.md R9](research.md)
 
 **Target Platform**: Linux, macOS, Windows desktop
 
@@ -37,7 +37,7 @@ gate` (client feature tests in `crates/micold-client/tests/`, in-crate anatomy t
 **Constraints**: the marker is a text character in the label font (FR-003, Principle VI); legend,
 marker and message come only from the shared components (FR-008)
 
-**Scale/Scope**: 1 core module, 4 component changes, 6 drafts, 11 view files (research R5), 1
+**Scale/Scope**: 1 core module, 4 component changes, 6 drafts, 9 view files (research R5), 1
 showcase entry, 1 source-scan gate, 4 user-guide pages
 
 ## Constitution Check
@@ -49,8 +49,8 @@ showcase entry, 1 source-scan gate, 4 user-guide pages
   draft owning the `FieldId` (R3). PASS
 - [x] **III. Worktree Integration**: no file or VCS operation changes. PASS
 - [x] **IV. Local-First**: nothing persisted or sent. PASS
-- [x] **V. Rust + iced**: `FieldRequirement` is one enum, so "error without marker" is
-  unrepresentable. PASS
+- [x] **V. Rust + iced**: `FieldRequirement` is one enum, so a `Missing` state without a
+  marker is unrepresentable. PASS
 - [x] **VI. Cross-Platform**: an ASCII `*` in the label font; no platform branch. PASS
 - [x] **VII. Documentation**: user guide updated (D6). PASS
 - [x] **VIII. Reusable UI**: the behaviour is added to `FormField`/`FieldText`, `Select`, and a new
