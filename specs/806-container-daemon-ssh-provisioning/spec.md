@@ -18,8 +18,9 @@ same mechanism." The Dockerfile build of the issue body is dropped.
 
 - Q: Where does the default basic image come from: an image this project publishes and pins, or a
   stock public image the client prepares on first start? → A: An image this project publishes, built
-  from `packaging/sandbox/Containerfile` without the daemon and the AI CLIs and with an SSH server
-  added, and pushed by the release workflow's existing image jobs for both architectures. Its version
+  from its own `packaging/basic/` (the session tools of `packaging/sandbox/Containerfile` without the
+  daemon and the AI CLIs, with an SSH server added) and pushed for both architectures by its own
+  workflow when that directory changes (plan research R1, [contracts/basic-image.md](./contracts/basic-image.md)). Its version
   is independent of the app's: the client compiles in a pinned reference (by digest) and the image is
   republished only when its base changes, so a development or unreleased client still finds it. A stock
   image is not used: none carries an SSH server together with the Node runtime the npm-distributed AI
