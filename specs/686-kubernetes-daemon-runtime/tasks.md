@@ -307,7 +307,8 @@ T098) changes no code and is left to the close unit.
 
 ## Milestones
 
-Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
+Each milestone merges to `main` on its own, through one PR (speckit-autopilot). Polish T097 (quickstart Part B visual pass) and T098 (`speckit-converge` re-run) are in no
+milestone: they change no code, so the close unit does them in the close PR.
 
 ### M1 — Start, connect, stop and remove a Kubernetes daemon 🎯 MVP
 
