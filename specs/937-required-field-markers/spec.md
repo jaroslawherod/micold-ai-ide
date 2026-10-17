@@ -16,6 +16,18 @@ the material components so every form gets it. Acceptance: every required field 
 and its explanation follow the Material Design guidance and are consistent across forms; an empty
 required field shows the error state with supporting text.
 
+## Clarifications
+
+### Session 2026-10-17
+
+- Q: Create (add-worktree) and Confirm (run-in-parallel) are disabled while a required field is
+  empty, so no submit attempt can happen there; what should they do? → A: Enable them; a press
+  with empty required fields shows the required errors and does not submit (FR-012).
+  _(orchestrator default pending jaro's card)_
+- Q: Should an empty required field also show the required error when the user leaves it after
+  focusing it, before any submit attempt? → A: Yes, on blur and on a submit attempt, never on a
+  freshly opened form (FR-006). _(orchestrator default pending jaro's card)_
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - See which fields must be filled before submitting (Priority: P1)
@@ -82,11 +94,14 @@ message, and that the message names the problem in words.
 **Acceptance Scenarios**:
 
 1. **Given** the add-worktree form with an empty Name, **When** the error state is triggered
-   (FR-006), **Then** the Name field shows the error state and its supporting text reads that the
-   field is required, and the form is not submitted.
+   (FR-006) by pressing Create, which is enabled (FR-012), **Then** the Name field shows the error
+   state and its supporting text reads that the field is required, and the form is not submitted.
 2. **Given** a required field in the error state, **When** the user types a value into it, **Then**
    the error state clears without the field losing focus or the typed text.
-3. **Given** a field that already shows another validation error (e.g. a port that is not a
+3. **Given** the add-worktree form with Name focused and empty, **When** the user moves focus to
+   another field without typing, **Then** Name shows the required error; a field the user has not
+   focused shows none until a submit attempt.
+4. **Given** a field that already shows another validation error (e.g. a port that is not a
    number), **When** it is not empty, **Then** that error is shown, not the required message.
 
 ---
@@ -134,11 +149,15 @@ message, and that the message names the problem in words.
 - **FR-005**: A required field left empty MUST show the field's error state with supporting text
   saying that the field is required; the message replaces the field's supporting text, sits on the
   field rather than elsewhere in the form, and states the problem in words, not by colour alone.
-- **FR-006**: The required error MUST appear on every empty required field when the user attempts to
-  submit the form, and MUST stay while the field remains empty and required. It MUST NOT appear on
-  a form the user has just opened and not yet interacted with. [NEEDS CLARIFICATION: Should an
-  empty required field also show the error when the user leaves it after focusing it, before any
-  submit attempt? Default if unanswered: no, submit attempt only.]
+- **FR-006**: The required error MUST appear on an empty required field when the user leaves it
+  after focusing it (blur), and on every empty required field when the user attempts to submit the
+  form; it MUST stay while the field remains empty and required. It MUST NOT appear on a form the
+  user has just opened and not yet interacted with, nor on a field the user has not yet focused
+  before a submit attempt.
+- **FR-012**: A form's submit button (e.g. the add-worktree form's Create, the run-in-parallel
+  dialog's Confirm) MUST NOT be disabled because a required field is empty: pressing it with an
+  empty required field is a submit attempt (FR-006), which shows the required errors and does not
+  submit the form.
 - **FR-007**: The error state MUST clear as soon as the field holds a value, without the field
   losing focus, cursor position or typed text.
 - **FR-008**: The marker, the explanation and the required error MUST be provided by the shared
