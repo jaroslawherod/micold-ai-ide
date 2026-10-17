@@ -103,3 +103,9 @@ the core baseline still fails only the four root-user tests named above).
   variants with their contract §6 texts, `NoRuntime`/`Build`/`Push`/`VolumeTooSmall` removed,
   `From<ApiFailure>` (stash@{0}, re-shaped to `Api { status, message }`); 30 passed in `kube::`.
   refactor: none needed.
+- U121 (T110/T115, `kube/fake.rs`, `kube/mod.rs`). red: did not compile, `no method named
+  replace`, `hold_on_delete`, `release`; `no field resource_version on ObjectView`. green:
+  `Cluster::replace(ns, kind, name, resource_version, manifest)` (stale version: `409`, nothing
+  changed), `ObjectView::resource_version`, `FakeCluster::{hold_on_delete, release}` (stash@{0},
+  plus `release`), `node_arch`/`set_node` removed; `port_forward` already logged the port;
+  34 passed in `kube::`. refactor: none needed.

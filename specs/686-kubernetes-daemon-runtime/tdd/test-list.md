@@ -189,7 +189,7 @@ observable result needs a real pod (A3) is hosted only in the real suite.
 
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U121 | `FakeCluster::replace` with the current `resourceVersion` stores the object under a new one; a stale one answers `409` and changes nothing; `hold_on_delete` keeps a deleted pod terminating until released | FR-023 | example | PENDING |  |
+| U121 | `FakeCluster::replace` with the current `resourceVersion` stores the object under a new one; a stale one answers `409` and changes nothing; `hold_on_delete` keeps a deleted pod terminating until released | FR-023 | example | DONE | `core/kube/fake.rs` tests::{replace_with_the_current_version_stores_it_under_a_new_one, replace_with_a_stale_version_is_a_conflict_and_changes_nothing, a_held_pod_stays_terminating_after_its_delete, port_forward_records_the_pod_and_port} |
 
 ### `crates/micold-core/src/kube/access.rs`
 
