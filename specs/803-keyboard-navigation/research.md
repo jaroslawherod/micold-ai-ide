@@ -73,15 +73,25 @@ in one table so a different choice is a one-table change plus the docs.
   (empty, or missing/invalid with no session). The current location for the next press is
   `nav_stop` when set and still in location order, else the current session's location
   (`current_session_location`). `nav_stop` is cleared by every change of the current session
-  (`set_current_session` and `session::selected`) and by `project_entered`. The terminal keeps
+  (`set_current_session` and `session::selected`), by `project_entered`, and whenever the keyboard
+  leaves the stop: a stop always sets `keyboard_row`, and every clearing of `keyboard_row`
+  (`KeyboardRowLeft` — a click elsewhere, Tab, the terminal taking focus — or a pointer selection)
+  clears `nav_stop` with it. A stop the user has walked away from is not "current". The terminal keeps
   showing what it showed; the row shows its start action as it always does when free; the
   sidebar's keyboard focus moves to that row (FR-010) and scrolls it into view (FR-009).
 - **Rationale**: without the stop a second press would compute from the old session's location and
   land on the same empty row forever. Nothing is started (FR-011) and SC-004's highlight rule stays
   true: the highlighted row is still the session the terminal shows; the keyboard focus ring marks
   the stop.
+- **SC-004 on a stop**: the reveal scroll targets the stop's row (FR-009, FR-010: the row the
+  keyboard is on). The highlighted row (the session the terminal shows) is unchanged and is not
+  scrolled to, so in a long list it can be off screen after a stop. This is a recorded deviation
+  from SC-004's "that row is on screen" for `Stop` presses only; every press that shows a session
+  meets SC-004 in full. Scrolling to keep both rows visible was rejected: they can be further apart
+  than the viewport, and FR-009 names the newly selected row.
 - **Alternatives rejected**: skipping empty locations (contradicts the spec's "a stop like any
-  other"); starting a session there (FR-011).
+  other"); starting a session there (FR-011); clearing the stop only on a session change (a stop
+  the user left by clicking the terminal would steer the next press from an invisible place).
 
 ## R5 — Selecting a session: the click path plus reveal
 
@@ -105,6 +115,8 @@ in one table so a different choice is a one-table change plus the docs.
   project → nothing.
 - **Rationale**: FR-004 "same result as picking it in the switcher", including session restore and
   the Overview behaviour of a project switch.
+- **Alternatives rejected**: calling the workspace switch directly (skips session restore and the
+  switch's own Overview handling, so a key press and a menu pick could diverge).
 
 ## R7 — Keyboard focus after a press (FR-010)
 
@@ -117,16 +129,27 @@ in one table so a different choice is a one-table change plus the docs.
   (`on_focus_change(false)`: a click elsewhere, Tab) and by any pointer selection.
 - **Rendering**: `TreeItem` (shared, `ui/material/tree_view.rs`) gains
   `.keyboard_focus(focused: bool, on_change: impl Fn(bool) -> M)`: the row is wrapped in the
-  existing `TakesTheKeyboard` with `focused` supplied by the app and the focus indicator drawn. Only
-  the row named by `keyboard_row` is wrapped as enabled, so the Tab order of the rest of the
-  sidebar is unchanged. `TakesTheKeyboard` gains `shown(bool)`: an app-supplied keyboard focus is
-  keyboard use and draws the ring (today a supplied focus sets `focused` but not `visible`).
+  existing `TakesTheKeyboard` with `focused` supplied by the app and the focus indicator drawn.
+  **Every** row is wrapped, always, so the widget tree's shape does not change when `keyboard_row`
+  moves: a wrapper added on the press would get a fresh `Tree` whose `Focus` comes from `state()`,
+  not `diff`, so the supplied flag would not be seen on the frame the step lands, and the row's
+  button, hover and tooltip state would be reset. Only the row named by `keyboard_row` is
+  `enabled` and `focused(true)`; every other wrapper is disabled, so it stays out of the Tab
+  traversal and the Tab order of the sidebar is unchanged. As a second guard, `TakesTheKeyboard::
+  state()` seeds `Focus` from the supplied flag when `on_focus_change` is set (a row that first
+  appears already named, such as a project step's restored session row, is focused on its first
+  frame). `TakesTheKeyboard` gains `shown(bool)`: an app-supplied keyboard focus is keyboard use and
+  draws the ring (today a supplied focus sets `focused` but not `visible`).
+- **Out of scope**: the focused row claims no keys (no `TakesTheKeyboard::key`): Enter or Space on
+  it does nothing. The ring marks where the keyboard landed (FR-010); activating a row from the
+  keyboard is not in the spec and is left to a follow-up.
 - **Rationale**: focus by supplied flag is the mechanism the application already uses
   (`keyboard_focus.rs` `Focus::supplied`, BUG-004), so no widget-id operation is needed and the
   state is testable without a GUI.
 - **Alternatives rejected**: `iced::widget::operation::focus(id)` (rows have no ids; an operation is
   not observable in the render-free tests); making every row focusable (changes the Tab order of a
-  long list, out of scope).
+  long list, out of scope); wrapping only the named row (changes the tree shape on each press, see
+  above).
 - **Scroll**: a `RowRef::Location` stop is not the current session's row, so the reveal scroll is
   generalised: `reveal_scroll_offset` takes its row index from `keyboard_row` when set, else from
   the current session (`current_session_row` → a new `row_index(entries, &RowRef)` that both use).
@@ -140,6 +163,8 @@ in one table so a different choice is a one-table change plus the docs.
   closes it through `Selected` (R5); a project step leaves it to the project switch (813 FR-010).
 - **Rationale**: the registry is the one maintained list of open surfaces (024 FR-009), as
   `any_surface_takes_keyboard` already relies on.
+- **Alternatives rejected**: a per-surface `is_open` check in the handler (a new surface would be
+  forgotten); treating the Overview as a blocker (813 lets session selection close it).
 
 ## R9 — Conflicts (FR-006, SC-003)
 
@@ -147,6 +172,8 @@ in one table so a different choice is a one-table change plus the docs.
   with Shift and the primary modifier (E, T, O, D, H, W, Arrows, C, V) and that every entry differs
   from the others. The platform-reserved list is checked by review against spec *Clarifications*
   (D3); it is not machine-checkable.
+- **Alternatives rejected**: a runtime conflict check at start-up (the table is static, so a test
+  catches the same thing earlier and costs nothing at run time).
 
 ## R10 — Documentation (FR-013, SC-006)
 
@@ -156,3 +183,5 @@ in one table so a different choice is a one-table change plus the docs.
   skipped entries (filtered, collapsed group, unavailable project) and the macOS laptop Fn note.
   A client test (`tests/keymap.rs`) reads both docs and checks both forms of every `nav_chord_labels` appear
   in each, so a chord change (D4) cannot leave the docs behind.
+- **Alternatives rejected**: a separate navigation page (splits the shortcut list users already
+  read); docs without a test (drifts on the first chord change, which D4 makes likely).

@@ -28,7 +28,7 @@ session orders are empty.
 | Step | Effects, in order |
 |---|---|
 | `Session(id)` | dispatch `Message::Session(SessionMsg::Selected(id))` (the click: closes Changes, Compare, Overview; daemon foreground; terminal focus); arm the reveal scroll; if `!terminal_had_focus`: release the terminal, `keyboard_row = Session(id)` |
-| `Stop(location)` | `nav_stop = Some(location)`; release the terminal; `keyboard_row = Location(location)`; arm the reveal scroll (to `keyboard_row`) |
+| `Stop(location)` | `nav_stop = Some(location)`; release the terminal; `keyboard_row = Location(location)`; arm the reveal scroll (to `keyboard_row`). The next press starts with `terminal_had_focus = false` (the keyboard is on the stop's row), so a session it lands on gets the ring, not the terminal (FR-010) |
 | `Project(path)` | dispatch `Message::Project(ProjectMsg::Reopened(path))`; if `!terminal_had_focus`: release the terminal, `keyboard_row = Session(restored current)` when one is restored |
 | `None` | nothing |
 
@@ -36,8 +36,10 @@ Never: start, stop, close or archive a session; change a main session (FR-011, S
 
 ## U4 — Sidebar rendering
 
-- The row whose `RowRef` equals `keyboard_row` is built with `TreeItem::keyboard_focus(true, …)`:
-  wrapped in `TakesTheKeyboard`, focused and showing the focus ring. No other row changes.
+- Every row is built with `TreeItem::keyboard_focus(is_named, …)`, so the widget tree keeps its
+  shape when `keyboard_row` moves (R7). The row whose `RowRef` equals `keyboard_row` is enabled,
+  focused and shows the focus ring on the first frame after the press; every other row's wrapper is
+  disabled (out of the Tab traversal) and draws nothing.
 - Its `on_focus_change(false)` sends `SidebarMsg::KeyboardRowLeft`, which clears `keyboard_row`.
 - The selected (highlighted) row stays the session the terminal shows (SC-004); on a `Stop` the
   highlight stays where it was and the ring marks the stop.
@@ -50,5 +52,5 @@ Never: start, stop, close or archive a session; change a main session (FR-011, S
 |---|---|---|
 | current session changes (any writer) | cleared | kept only if set in the same `Navigate` |
 | project entered | cleared | cleared unless set by the same `Navigate` |
-| a row press, the terminal focused by click, Tab | — | cleared (focus left the row) |
+| a row press, the terminal focused by click, Tab (`KeyboardRowLeft`, pointer selection) | cleared | cleared (focus left the row) |
 | the stop's location leaves the order (removed, filtered) | ignored at the next press | row gone; cleared |

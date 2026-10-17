@@ -38,6 +38,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | Review spec | 1 | 3570ac4feb529b41dda29f1758629810e99a726c:d93c9dbc687412cced0a9b7854cf44323ee3930e | CHANGES: 1 MAJOR, 3 MINOR (all fixed) |
 | Review spec | 2 | 9bd245752e2eea4f7d52a5c833ceb957c3b44fca:d93c9dbc687412cced0a9b7854cf44323ee3930e | CLEAN |
+| Review plan | 1 | a5368675fa0da6d90c2d114a39f92b52516249ca:89f9e66558d2c1507c412e6c77e4f61181a88dc9 | CHANGES: 3 MAJOR, 3 MINOR (all fixed) |
 
 ## Declined review findings
 
