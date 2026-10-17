@@ -38,7 +38,7 @@ pub const DEFAULT_IMAGE: &str = concat!(
 /// sandbox section before 0.12.0 has this namespace written to disk and would keep asking a
 /// registry for an image that has never existed there. [`ImageSource::repair_retired_namespace`]
 /// is what reaches them.
-const RETIRED_IMAGE_REPOSITORY: &str = "ghcr.io/micold/micold-daemon";
+pub(crate) const RETIRED_IMAGE_REPOSITORY: &str = "ghcr.io/micold/micold-daemon";
 
 /// The tag `mise run image` produces, and the one a stale-image refusal names (FR-024c).
 pub const DEV_IMAGE_TAG: &str = "micold-daemon:dev";

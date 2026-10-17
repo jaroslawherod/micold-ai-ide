@@ -1,0 +1,172 @@
+name: basic image
+
+# Publishes the basic image container daemons start from (feature 806, FR-002;
+# specs/806-container-daemon-ssh-provisioning/contracts/basic-image.md *Publication*).
+#
+# The image carries sshd and session tools and no daemon or AI CLI: the client copies its own daemon
+# in over SSH. So it is published on its own, independently of the app's version, tagged with the
+# content hash of `packaging/basic/` (`scripts/basic-image-hash.sh`), and the client pins it by
+# digest. A tag, once pushed, is never moved: a second run for the same tree finds it and stops.
+#
+#   pull_request touching packaging/basic   build both architectures, push nothing
+#   push to main touching packaging/basic   build, push, and print the `BASIC_IMAGE` pin in the
+#   workflow_dispatch                        run's summary (unless `<hash>` exists already)
+#
+# The pin itself lands in a follow-up PR (`BASIC_IMAGE` in crates/micold-core/src/sandbox/basic_image.rs),
+# because the digest exists only once this has run on main.
+
+on:
+  pull_request:
+    paths:
+      - packaging/basic/**
+      - .github/workflows/basic-image.yml
+  push:
+    branches: [main]
+    paths:
+      - packaging/basic/**
+      - .github/workflows/basic-image.yml
+  workflow_dispatch:
+
+concurrency:
+  group: basic-image-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  REPOSITORY: ghcr.io/${{ github.repository_owner }}/micold-basic
+
+jobs:
+  hash:
+    name: content hash
+    runs-on: ubuntu-latest
+    outputs:
+      hash: ${{ steps.hash.outputs.hash }}
+      publish: ${{ steps.exists.outputs.publish }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # The tree's hash must be the one the client pins, or the client asks for a tag this run does
+      # not push. `--check` prints DRIFT without failing (drift is normal between a change and its
+      # pin locally); here a drift is an error, because the pin is what the client compiles in.
+      - name: Hash packaging/basic and check the pin agrees
+        id: hash
+        run: |
+          set -euo pipefail
+          hash="$(scripts/basic-image-hash.sh)"
+          check="$(scripts/basic-image-hash.sh --check)"
+          echo "hash=$hash" >> "$GITHUB_OUTPUT"
+          echo "content hash: $hash ($check)"
+          if [ "$check" != "CURRENT" ]; then
+            echo "::error::BASIC_IMAGE_CONTENT_HASH in crates/micold-core/src/sandbox/basic_image.rs is not the tree's hash: $check" >&2
+            exit 1
+          fi
+      # Published tags are immutable: a tag that exists is reported, never rebuilt or moved.
+      - name: Stop when this tree is already published
+        id: exists
+        if: github.event_name != 'pull_request'
+        env:
+          HASH: ${{ steps.hash.outputs.hash }}
+        run: |
+          set -euo pipefail
+          ref="$REPOSITORY:$HASH"
+          if digest="$(docker buildx imagetools inspect "$ref" --format '{{json .Manifest}}' 2>/dev/null | jq -r .digest)" \
+             && [ -n "$digest" ] && [ "$digest" != "null" ]; then
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "## Basic image already published"
+              echo
+              echo '```rust'
+              echo "pub const BASIC_IMAGE: &str = \"$ref@$digest\";"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "$ref exists at $digest; nothing to publish"
+          else
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  build:
+    name: build (${{ matrix.arch }})
+    needs: hash
+    if: github.event_name == 'pull_request' || needs.hash.outputs.publish == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-22.04
+          - arch: arm64
+            runner: ubuntu-22.04-arm
+    # Native runners per architecture, as release.yml's `image` job: no emulation, so what is
+    # checked below is what runs on that architecture.
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      packages: write
+    env:
+      HASH: ${{ needs.hash.outputs.hash }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Build the image
+        run: |
+          docker build \
+            -f packaging/basic/Containerfile \
+            --build-arg "BASIC_CONTENT_HASH=$HASH" \
+            --label "org.opencontainers.image.revision=${{ github.sha }}" \
+            -t "$REPOSITORY:$HASH-${{ matrix.arch }}" packaging/basic
+      # FR-002 on this architecture: sshd and the install runtime are there, the daemon and the AI
+      # CLIs are not, and sshd accepts its config (with a throwaway host key). The full check is the
+      # `sandbox_real_basic_image` test in ci.yml.
+      - name: Carries sshd and Node, and no daemon or AI CLI
+        run: |
+          set -euo pipefail
+          docker run --rm --entrypoint /bin/sh "$REPOSITORY:$HASH-${{ matrix.arch }}" -c '
+            for c in sshd node npm git flock; do command -v "$c" >/dev/null || { echo "missing $c"; exit 1; }; done
+            for c in micold-daemon claude codex gemini opencode pi copilot; do
+              if command -v "$c" >/dev/null; then echo "unexpected $c"; exit 1; fi
+            done
+            ssh-keygen -q -t ed25519 -N "" -f /tmp/host_key
+            /usr/sbin/sshd -t -f /etc/micold/sshd_config -o HostKey=/tmp/host_key'
+      - name: Sign in to GHCR
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "$GH_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+      # Per-architecture tags, as the daemon image keeps: the multi-architecture `<hash>` index is
+      # composed from them below, and either half can be pulled by name for a reproduction.
+      - name: Push
+        if: github.event_name != 'pull_request'
+        run: docker push "$REPOSITORY:$HASH-${{ matrix.arch }}"
+
+  publish:
+    name: publish (multi-architecture)
+    needs: [hash, build]
+    if: github.event_name != 'pull_request' && needs.hash.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    env:
+      HASH: ${{ needs.hash.outputs.hash }}
+    steps:
+      - name: Sign in to GHCR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "$GH_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+      - name: Compose the multi-architecture tag and print the pin
+        run: |
+          set -euo pipefail
+          ref="$REPOSITORY:$HASH"
+          docker buildx imagetools create -t "$ref" "$ref-amd64" "$ref-arm64"
+          docker buildx imagetools inspect "$ref"
+          digest="$(docker buildx imagetools inspect "$ref" --format '{{json .Manifest}}' | jq -r .digest)"
+          {
+            echo "## Basic image published"
+            echo
+            echo "Pin it in \`crates/micold-core/src/sandbox/basic_image.rs\`:"
+            echo
+            echo '```rust'
+            echo "pub const BASIC_IMAGE: &str = \"$ref@$digest\";"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "BASIC_IMAGE = \"$ref@$digest\""

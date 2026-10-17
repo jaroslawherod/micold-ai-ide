@@ -1,0 +1,18 @@
+# sshd for the basic image (feature 806, contracts/basic-image.md). It runs as the container's
+# non-root uid, so it can authenticate only that user, by key only. The keys are mounted read-only
+# at /run/micold/ssh by the client, owned by the host uid, hence StrictModes no.
+Port 2222
+ListenAddress 0.0.0.0
+HostKey /run/micold/ssh/host_ed25519_key
+AuthorizedKeysFile /run/micold/ssh/authorized_keys
+PubkeyAuthentication yes
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PermitRootLogin no
+AllowTcpForwarding remote
+GatewayPorts no
+X11Forwarding no
+PermitTTY no
+StrictModes no
+PidFile none
+UsePAM no
