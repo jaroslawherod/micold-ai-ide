@@ -17,6 +17,10 @@ default-run = "micold-ai-ide"
 name = "micold_client"
 path = "src/lib.rs"
 
+[features]
+# Feature 686: opts in to the `kube_real_*` tests against a real cluster (CI job kube-cluster).
+kube-real-runtime = []
+
 # The GUI binary. Name preserved as `micold-ai-ide` (installed launcher entry, deb package).
 [[bin]]
 name = "micold-ai-ide"
@@ -27,10 +31,6 @@ path = "src/main.rs"
 # saved state. Deliberately absent from `[package.metadata.deb] assets` below and from the desktop
 # entry — it must never reach an end user (FR-018), which `tests/packaging_excludes_showcase.rs`
 # enforces rather than trusting anyone to remember.
-[features]
-# Feature 686: opts in to the `kube_real_*` tests against a real cluster (CI job kube-cluster).
-kube-real-runtime = []
-
 [[bin]]
 name = "micold-showcase"
 path = "src/showcase/main.rs"
