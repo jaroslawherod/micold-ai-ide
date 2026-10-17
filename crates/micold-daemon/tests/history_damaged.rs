@@ -85,6 +85,7 @@ fn run_and_stop(state: &DaemonState, project: &Path, id: SessionId, text: &str) 
     wait_file(&printed);
     history_showing(state, id, text);
     assert!(state.stop_session(id));
+    wait_exited_or_gone(state, id);
 }
 
 /// 4 KiB of bytes that are not a history and hold a marker that must never be shown.
@@ -232,7 +233,14 @@ fn a23_a_second_session_with_an_intact_file_shows_its_full_history() {
     script(project.path(), "print again\nwait\n");
     let ((), _, _) = warnings_of(|| {
         state.start_session(damaged.id, LaunchMode::Fresh).unwrap();
-        state.start_session(intact.id, LaunchMode::Fresh).unwrap();
+        // Two siblings on purpose (legacy worktree, feature 776): the explicit request.
+        state
+            .start_session_gated(
+                intact.id,
+                LaunchMode::Fresh,
+                micold_core::occupancy::Additional::Yes,
+            )
+            .unwrap();
     });
     let lines = history_showing(&state, intact.id, "again");
     assert!(lines.iter().any(|l| l == "second"), "{lines:#?}");
