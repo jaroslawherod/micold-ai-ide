@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-xelisc
 - **Started**: 2026-10-17
 - **Phase**: implement
-- **Next step**: verify M1a (scoped gate + review A, review B, full gate, PR files): all M1a tasks done
+- **Next step**: open the M1a PR from the scratchpad title/body (pr-title-686-M1a.txt, pr-body-686-M1a.md); then M1b
 
 ## Pull requests
 
@@ -22,7 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1a | T106–T116, T143, T020, T026 | full | Revision-2 core types (settings with image/AI CLIs/DaemonResources, names, failures, Cluster.replace), kubeconfig; revision-1 listener auth, Transport::Tunnel, daemon_image reverted | — | implemented, verify next |
+| M1a | T106–T116, T143, T020, T026 | full | Revision-2 core types (settings with image/AI CLIs/DaemonResources, names, failures, Cluster.replace), kubeconfig; revision-1 listener auth, Transport::Tunnel, daemon_image reverted | — | verified, gate green at 8885a829, PR files written |
 | M1b | T019, T117, T118, T021, T025, T119, T120, T027, T121 | full | Pod, PVC, access secret, pod stamp/drift, start through Pull with bounds + rollback over FakeCluster | — | planned |
 | M1c | T122, T023, T123, T124, T125, T028, T029, T126, T127 | full | Tunnel phase (SSH identification line), LiveCluster, relay, key files | — | planned |
 | M2 | T079, T072, T056, T073, T081, T075, T059, T076, T128 | full | Core Stop/Remove/forget-locally; failure + pod-gone classifiers; preflight | — | planned |
@@ -69,7 +69,7 @@ stash@{0} survivors ("686 M1a red WIP"; never drop it; backed up in /mnt/project
 | Tasks rev 2 | 1 | c1aab5ca46629522b51f6d4161cc2270a3155835:1ac015d23d158b44cb52d9cd09a5df7c4782b062 | CHANGES: 1 BLOCKER, 2 MAJOR, 2 MINOR — all fixed (F1 T116 keeps feature 027's `protocol/auth.rs`, restores it to origin/main, Verify checks it; F2 new T143 reworks `core/tests/daemons_kube.rs` in M1a; F3 M4a depends on M1c for context listing; F4 T020/T026 register `kubeconfig`; F5 T115 notes `StartPhase::Image` stays until T027) |
 | Tasks rev 2 | 2 (scoped, sonnet) | fa5553fcabfc99c580d0b9f2dc1af7c74f0c6834:618e287a0ec8c9de70dc33c69b725c7aa98fdd5f | CLEAN — 1 MINOR fixed, prose only (Parallel Examples names T143 with the M1a tests) |
 | M1a review A (code-review high) | 1 | d16c6458b8b7e5664f8db0f01d4324dee0807460:139d6af21c0c8c63b2f7d7e1c12c826d51b0f45b | CLEAN — 3 MINOR: F3 fixed (`DaemonResources` `#[serde(default)]` on the struct, test); F1/F2 declined (pre-existing) |
-| M1a review B (conformance, sonnet) | 1 | fbe3dfd0f7a04a22ec882b7cd8b052c14be5b2b1:44c055bedeac1dfe9ace9aea5d22e17d56d17e35 | running |
+| M1a review B (conformance, sonnet) | 1 | fbe3dfd0f7a04a22ec882b7cd8b052c14be5b2b1:44c055bedeac1dfe9ace9aea5d22e17d56d17e35 | CLEAN — 1 MINOR fixed (client Cargo.toml `[features]` moved off the showcase comment) |
 
 ## Declined review findings
 
