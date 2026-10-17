@@ -10,6 +10,8 @@ use micold_core::mcp::tools::{
 };
 use micold_core::naming::ConventionalType;
 use micold_core::occupancy::Additional;
+use micold_core::review::comment::{CommentRef, Outcome};
+use micold_core::review::prompt::REPORT_TOOL;
 use micold_core::session::AiCli;
 use micold_core::worktree::CreateMode;
 use serde_json::{json, Value};
@@ -27,7 +29,7 @@ const READ_TOOLS: [&str; 7] = [
 ];
 
 /// The tools whose handlers ship by milestone M6, in catalog order.
-const SHIPPED: [&str; 16] = [
+const SHIPPED: [&str; 17] = [
     "whoami",
     "list_worktrees",
     "list_branches",
@@ -43,6 +45,7 @@ const SHIPPED: [&str; 16] = [
     "stop_session",
     "interrupt_session",
     "send_session_input",
+    "report_review_comment",
     "delete_session",
 ];
 
@@ -999,4 +1002,118 @@ fn create_worktree_refuses_an_unknown_ai_cli() {
         "create_worktree",
         json!({"branch": "feat-x", "ai_cli": "emacs"}),
     );
+}
+
+// Feature 946: `report_review_comment` (contracts/agent-tool.md).
+
+fn report(arguments: Value) -> Operation {
+    parse_call("report_review_comment", &arguments).expect("a valid report")
+}
+
+#[test]
+fn report_review_comment_is_listed_after_send_session_input_as_the_contract_gives() {
+    let tools = tools_list();
+    let names: Vec<&str> = tools.iter().map(|t| t["name"].as_str().unwrap()).collect();
+    let at = names
+        .iter()
+        .position(|n| *n == "send_session_input")
+        .unwrap();
+    assert_eq!(names[at + 1], "report_review_comment");
+    assert_eq!(
+        REPORT_TOOL, "report_review_comment",
+        "the batch names the tool (P9)"
+    );
+    let tool = &tools[at + 1];
+    assert_eq!(
+        tool["description"],
+        "Report the outcome of one review comment the user sent you, by its reference: applied \
+         when you made the change, or answered with a reply explaining why not. The comment's \
+         status and your reply show next to it in the user's Changes view. Only comments of your \
+         own worktree (or of the project root, for a session running there) can be reported."
+    );
+    assert_eq!(
+        tool["annotations"],
+        json!({"readOnlyHint": false, "destructiveHint": false})
+    );
+    assert_eq!(
+        tool["inputSchema"],
+        json!({
+            "type": "object",
+            "properties": {
+                "comment": {"type": "string", "minLength": 1,
+                    "description": "The comment's reference from the review message, such as C-1a2b3c4d."},
+                "outcome": {"type": "string", "enum": ["applied", "answered"],
+                    "description": "applied: you made the change. answered: you did not, and the reply says why."},
+                "reply": {"type": "string",
+                    "description": "What you did, or why not. Required for answered; at most 20000 characters."},
+            },
+            "required": ["comment", "outcome"],
+            "additionalProperties": false,
+        })
+    );
+    assert!(is_mutating_tool("report_review_comment"), "audited");
+}
+
+#[test]
+fn report_review_comment_parses_to_an_operation_with_the_reference_and_outcome() {
+    let operation =
+        report(json!({"comment": " c-1A2B3C4D ", "outcome": "answered", "reply": "Not needed"}));
+    let comment = CommentRef::parse("C-1a2b3c4d").unwrap();
+    assert_eq!(
+        operation,
+        Operation::ReportReviewComment {
+            comment,
+            outcome: Outcome::Answered,
+            reply: "Not needed".into(),
+        }
+    );
+    assert_eq!(operation.tool_name(), "report_review_comment");
+    assert_eq!(operation.audit_target(), "C-1a2b3c4d");
+    assert!(!operation.audit_target().contains("Not needed"));
+    assert_eq!(
+        report(json!({"comment": "C-1a2b3c4d", "outcome": "applied"})),
+        Operation::ReportReviewComment {
+            comment,
+            outcome: Outcome::Applied,
+            reply: String::new(),
+        },
+        "applied needs no reply"
+    );
+}
+
+#[test]
+fn report_review_comment_refuses_checks_one_to_four_in_order() {
+    let name = "report_review_comment";
+    for bad in [
+        json!({"outcome": "applied"}),
+        json!({"comment": "C-12", "outcome": "applied"}),
+        json!({"comment": 7, "outcome": "applied"}),
+    ] {
+        assert!(
+            invalid(name, bad.clone()).contains("references look like C-1a2b3c4d"),
+            "{bad}"
+        );
+    }
+    let message = invalid(name, json!({"comment": "C-1a2b3c4d", "outcome": "fixed"}));
+    assert!(
+        message.contains("applied") && message.contains("answered"),
+        "{message}"
+    );
+    for bad in [
+        json!({"comment": "C-1a2b3c4d", "outcome": "answered"}),
+        json!({"comment": "C-1a2b3c4d", "outcome": "answered", "reply": " \n "}),
+    ] {
+        assert!(
+            invalid(name, bad.clone())
+                .contains("an answered comment needs an explanation in reply"),
+            "{bad}"
+        );
+    }
+    let over = "x".repeat(20_001);
+    assert!(invalid(
+        name,
+        json!({"comment": "C-1a2b3c4d", "outcome": "applied", "reply": over})
+    )
+    .contains("over the 20000-character limit"));
+    report(json!({"comment": "C-1a2b3c4d", "outcome": "applied", "reply": "x".repeat(20_000)}));
 }

@@ -182,6 +182,9 @@ pub fn decide(
             PolicyDecision::Confirm(ConfirmedOp::InterruptSession)
         }
         Operation::DeleteSession { .. } => PolicyDecision::Confirm(ConfirmedOp::DeleteSession),
+        // A report changes only a comment's status and reply, never a worktree: no confirmation,
+        // and a Default session may report on the Default entry (feature 946, D4, D5).
+        Operation::ReportReviewComment { .. } => PolicyDecision::Proceed,
         _ => PolicyDecision::Proceed,
     }
 }
