@@ -42,8 +42,7 @@ shared form): see FR-004 and FR-005.
   as given. _(default chosen by orchestrator, pending owner answer (decision cards 2026-10-17))_
 - Q: Where does the clone in the daemon's volume come from? → A: The project's git remote, fetched in
   the pod with an allowed push/pull credential (FR-008); a project with no remote is refused for a
-  Kubernetes daemon, naming the reason. _(default chosen by orchestrator, pending owner answer (decision
-  cards 2026-10-17))_
+  Kubernetes daemon, naming the reason. _(decided by owner (decision card 2026-10-17))_
 - Q: Does a change to the selected provider CLIs rebuild and push the image, and how is the pushed
   image tagged so the pod runs the client's version? → A: Deferred to the plan; it follows #806's
   rebuild rule, and FR-017 already refuses sessions on a mismatched daemon. _(agent-resolved:
