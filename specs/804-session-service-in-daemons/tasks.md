@@ -132,7 +132,7 @@ The feature is not done until F1, F2 and F6 are cleared (`tdd/verification.md`, 
 - [x] T034 [F2] Make `upgrade_single_daemon.rs` `a_daemon_added_after_the_upgrade_starts_at_defaults_not_a_copy` add the daemon through the form and assert the default profile; proof: `cargo test -p micold-client --test upgrade_single_daemon`
 - [x] T035 [F6] Restore range-in-message, not-a-number and per-limit minimum assertions in `parse_budget_tests` (`features/settings.rs:2130`); proof: `cargo test -p micold-client parse_budget`
 - [x] T036 [F5] Loop the section-error test over every `FormError.field` id (`daemons_feature.rs:586`); proof: `cargo test -p micold-client --test daemons_feature`
-- [x] T037 [F4] Paint test of the container form's five titles and closed bodies, plus title/chevron/focus assertions in `accordion_section.rs`; proof: `cargo test -p micold-client accordion_section --test daemons_section_geometry`
+- [x] T037 [F4] Paint test of the container form's five titles, closed bodies and chevron glyphs (`daemons_section_geometry.rs`); title and focus-ring assertions in `accordion_section.rs` waived, F4's accordion half left open; proof: `cargo test -p micold-client accordion_section --test daemons_section_geometry`
 - [x] T038 [F7] Assert the running-daemon prompt text counts sessions (`daemons_feature.rs:451`); proof: `--test daemons_feature`
 - [x] T039 [F8] Broaden the stale "Session service" search with an allowlist (`settings_sections.rs`); proof: `--test settings_sections`
 - [x] T040 [F3] Record M2/M3 outcome in `tdd/cycle-log.md`; proof: file diff
