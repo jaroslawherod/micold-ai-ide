@@ -17,10 +17,11 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
     let Msg::Pressed(action) = msg;
     let terminal_had_focus = app.core.terminal_focused();
     let step = navigation::update(&app.core, action);
-    let follow_ups = app.core.apply_navigation(step, terminal_had_focus);
-    Task::batch(
-        follow_ups
-            .into_iter()
-            .map(|message| crate::update(app, message)),
-    )
+    let follow_ups = app.core.apply_navigation(step.clone(), terminal_had_focus);
+    let tasks: Vec<_> = follow_ups
+        .into_iter()
+        .map(|message| crate::update(app, message))
+        .collect();
+    app.core.finish_navigation(&step, terminal_had_focus);
+    Task::batch(tasks)
 }

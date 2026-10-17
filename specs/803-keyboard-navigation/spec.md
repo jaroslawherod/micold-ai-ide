@@ -49,10 +49,10 @@ quick-switcher palette follow-up vs in scope."
   docs/user-guide/terminal-panes.md#shortcuts; spec.md#FR-006; platform shortcut lists)_
 - Q: On macOS laptops PageUp/PageDown need Fn; keep Cmd+Shift+PageUp/PageDown for the project
   chords or pick other keys? → A: Keep Ctrl/Cmd+Shift+PageUp/PageDown on all three platforms (on a
-  macOS laptop: Cmd+Shift+Fn+Up/Down). _(recommended default, pending user confirmation)_
+  macOS laptop: Cmd+Shift+Fn+Up/Down). _(CONFIRMED by the user on 2026-10-17)_
 - Q: Is "jump directly" to a location, session or project in scope, and in what form? → A: Out of
-  scope; a quick-switcher palette is a follow-up issue. _(recommended default, pending user
-  confirmation)_
+  scope; a quick-switcher palette is a follow-up issue (#968). _(CONFIRMED by the user on
+  2026-10-17)_
 
 ## User Scenarios & Testing *(mandatory)*
 

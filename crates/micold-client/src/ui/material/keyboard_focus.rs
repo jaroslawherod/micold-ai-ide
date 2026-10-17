@@ -72,6 +72,9 @@ pub(super) struct TakesTheKeyboard<'a, M> {
     indicator: Option<Indicator>,
     /// What the application says about this control's focus — see [`Focus::supplied`].
     focused: bool,
+    /// Whether the supplied focus is the keyboard's, and so drawn (feature 803, D6): the
+    /// application moved the keyboard here, no press or traversal did.
+    shown: bool,
     on_focus_change: Option<Box<dyn Fn(bool) -> M + 'a>>,
     /// A stable name, so the application can move the keyboard here (feature 813, R12/R13).
     id: Option<iced::advanced::widget::Id>,
@@ -88,6 +91,7 @@ impl<'a, M: Clone + 'a> TakesTheKeyboard<'a, M> {
             enabled,
             indicator: None,
             focused: false,
+            shown: false,
             on_focus_change: None,
             id: None,
         }
@@ -119,6 +123,14 @@ impl<'a, M: Clone + 'a> TakesTheKeyboard<'a, M> {
     /// it back through [`Self::on_focus_change`]. See [`Focus::supplied`].
     pub fn focused(mut self, focused: bool) -> Self {
         self.focused = focused;
+        self
+    }
+
+    /// Say the supplied focus is keyboard focus, so the indicator is drawn for it (feature 803,
+    /// D6): a row the application gave the keyboard to has had no traversal or key to show it.
+    /// Only meaningful with [`Self::on_focus_change`].
+    pub fn shown(mut self, shown: bool) -> Self {
+        self.shown = shown;
         self
     }
 
@@ -280,10 +292,11 @@ impl<'a, M: Clone + 'a> Widget<M, iced::Theme, iced::Renderer> for TakesTheKeybo
             let state = tree.state.downcast_mut::<Focus>();
             if state.supplied != self.focused {
                 state.supplied = self.focused;
-                state.focused = self.focused;
+                state.focused = self.focused && self.enabled;
+                state.visible = state.focused && self.shown;
                 // The application is the one that just said this, so saying it back would be an
                 // echo — and one that arrives a frame late, after the next `update` compares.
-                state.reported = self.focused;
+                state.reported = state.focused;
             }
         }
         tree.diff_children(std::slice::from_ref(&self.content));
@@ -294,7 +307,18 @@ impl<'a, M: Clone + 'a> Widget<M, iced::Theme, iced::Renderer> for TakesTheKeybo
     }
 
     fn state(&self) -> tree::State {
-        tree::State::new(Focus::default())
+        // A wrapper created with the application's flag already true (a row that just appeared)
+        // holds it from its first frame, rather than waiting for a change to be seen.
+        if self.on_focus_change.is_none() || !self.enabled {
+            return tree::State::new(Focus::default());
+        }
+        tree::State::new(Focus {
+            focused: self.focused,
+            supplied: self.focused,
+            reported: self.focused,
+            visible: self.focused && self.shown,
+            pressed: false,
+        })
     }
 
     fn draw(
@@ -554,5 +578,78 @@ mod tests {
                 child.max(state::FOCUS),
             );
         }
+    }
+
+    use super::super::test_support::{roles, Mounted};
+    use iced::widget::{container, text};
+
+    /// A wrapper that reports its focus, as the sidebar's rows do: the application supplies the
+    /// flag, and `shown` says the focus is the keyboard's and so is drawn (feature 803, D6).
+    fn row(supplied: bool, enabled: bool) -> Element<'static, String> {
+        let r = roles();
+        TakesTheKeyboard::new(container(text("a worktree row")).padding(8), enabled)
+            .focused(supplied)
+            .shown(supplied)
+            .on_focus_change(|focused| format!("focus {focused}"))
+            .indicator(Indicator {
+                outline: r.secondary,
+                layer: r.on_surface,
+                radius: 8.0,
+            })
+            .into()
+    }
+
+    fn pixels(mounted: &mut Mounted<'_>) -> Vec<u8> {
+        mounted.drawn(style::color(roles().surface)).0
+    }
+
+    /// The wrapper is already in the tree when the application's flag turns true: the next build
+    /// draws the ring, with no key or pointer event in between.
+    #[test]
+    fn a_flag_turning_true_on_a_wrapper_already_in_the_tree_draws_the_ring() {
+        let mut mounted = Mounted::new(row(false, false));
+        let rest = pixels(&mut mounted);
+        mounted.element = row(true, true);
+        mounted.tree.diff(&mounted.element);
+        mounted.relayout();
+        assert_ne!(
+            pixels(&mut mounted),
+            rest,
+            "no ring after the flag turned true"
+        );
+        mounted.element = row(false, false);
+        mounted.tree.diff(&mounted.element);
+        assert_eq!(
+            pixels(&mut mounted),
+            rest,
+            "the ring stayed after the flag turned false"
+        );
+    }
+
+    /// A wrapper created with the flag already true (a row that just appeared) draws it on its
+    /// first frame: `state()` is seeded from the supplied flag.
+    #[test]
+    fn a_wrapper_created_with_the_flag_true_draws_the_ring_at_once() {
+        let rest = pixels(&mut Mounted::new(row(false, false)));
+        let mut fresh = Mounted::new(row(true, true));
+        assert_ne!(pixels(&mut fresh), rest);
+    }
+
+    /// A disabled wrapper draws nothing and Tab traversal passes it by.
+    #[test]
+    fn a_disabled_wrapper_draws_nothing_and_is_skipped_by_tab() {
+        let rest = pixels(&mut Mounted::new(row(false, false)));
+        let mut disabled = Mounted::new(row(true, false));
+        assert_eq!(
+            pixels(&mut disabled),
+            rest,
+            "a disabled wrapper drew a ring"
+        );
+        disabled.focus_next();
+        assert_eq!(
+            pixels(&mut disabled),
+            rest,
+            "Tab landed on a disabled wrapper"
+        );
     }
 }

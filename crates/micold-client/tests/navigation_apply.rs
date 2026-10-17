@@ -86,3 +86,58 @@ fn the_selected_follow_up_closes_the_overview() {
     );
     assert_eq!(state.session.active, Some(a));
 }
+
+/// Run a press the way the binary does: apply, dispatch the follow-ups, then finish.
+fn press(state: &mut State, step: Step, terminal_had_focus: bool) {
+    for message in state.apply_navigation(step.clone(), terminal_had_focus) {
+        state.update(message);
+    }
+    state.finish_navigation(&step, terminal_had_focus);
+}
+
+#[test]
+fn a_session_step_without_terminal_focus_still_selects_it() {
+    let (mut state, _, a) = arranged();
+    let follow = state.apply_navigation(Step::Session(a), false);
+    assert_eq!(follow, vec![Message::Session(SessionMsg::Selected(a))]);
+}
+
+#[test]
+fn a_session_step_without_terminal_focus_leaves_the_keyboard_on_its_row() {
+    let (mut state, _, a) = arranged();
+    press(&mut state, Step::Session(a), false);
+    assert_eq!(state.session.active, Some(a));
+    assert!(
+        state.session.terminal_released,
+        "the terminal does not take the keyboard (FR-010)"
+    );
+    assert_eq!(state.sidebar.keyboard_row, Some(RowRef::Session(a)));
+}
+
+#[test]
+fn a_session_step_with_terminal_focus_gives_the_terminal_the_keyboard() {
+    let (mut state, _, a) = arranged();
+    press(&mut state, Step::Session(a), true);
+    assert_eq!(state.session.active, Some(a));
+    assert_eq!(state.sidebar.keyboard_row, None);
+    assert!(!state.session.terminal_released);
+}
+
+#[test]
+fn finishing_with_terminal_focus_changes_nothing() {
+    let (mut state, _, a) = arranged();
+    let before = state.clone();
+    state.finish_navigation(&Step::Session(a), true);
+    assert_eq!(state, before);
+}
+
+#[test]
+fn after_a_stop_the_next_press_keeps_the_keyboard_in_the_sidebar() {
+    let (mut state, _, a) = arranged();
+    press(&mut state, Step::Stop(worktree("feat-b")), true);
+    assert!(!state.terminal_focused(), "the stop released the terminal");
+    let had_focus = state.terminal_focused();
+    press(&mut state, Step::Session(a), had_focus);
+    assert_eq!(state.sidebar.keyboard_row, Some(RowRef::Session(a)));
+    assert!(state.session.terminal_released);
+}

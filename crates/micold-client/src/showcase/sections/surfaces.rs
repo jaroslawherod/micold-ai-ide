@@ -564,8 +564,26 @@ pub fn tree_view<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, M
             roles,
         )
     };
+    // A row a navigation chord gave the sidebar's keyboard (feature 803, FR-010): the focus ring on
+    // the selected pill, shown as keyboard focus.
+    let keyboard_focused = material::TreeView::new(
+        vec![
+            material::TreeItem::new(0, samples::WORKTREES[0].0, roles.on_surface)
+                .with_icon(Icon::Git)
+                .on_press(Message::NoOp)
+                .keyboard_focus(false, |_| Message::NoOp),
+            material::TreeItem::new(0, samples::WORKTREES[1].0, roles.on_surface)
+                .with_icon(Icon::Git)
+                .selected(true)
+                .on_press(Message::NoOp)
+                .keyboard_focus(true, |_| Message::NoOp),
+        ],
+        roles,
+    )
+    .selected_label_role(material::TypeRole::Label);
     arrange(
         vec![
+            posed("keyboard-focused worktree row", keyboard_focused, roles),
             posed("sessions started by an agent", spawned, roles),
             posed("run group, expanded", group(true), roles),
             posed("run group, collapsed", group(false), roles),

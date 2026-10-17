@@ -1355,8 +1355,8 @@ impl State {
     /// Apply a resolved navigation press (feature 803, contracts/ui.md U3) and return the
     /// follow-up messages the caller dispatches, so a `Selected` runs its full path.
     ///
-    /// `terminal_had_focus` is read before anything changed; the branch that keeps the keyboard
-    /// off the terminal arrives with FR-010 (M2).
+    /// `terminal_had_focus` is read before anything changed; [`Self::finish_navigation`] runs once
+    /// the follow-ups have been dispatched and decides where the keyboard lands (FR-010).
     pub fn apply_navigation(
         &mut self,
         step: crate::features::navigation::Step,
@@ -1380,6 +1380,28 @@ impl State {
                 Vec::new()
             }
             Step::None | Step::Project(_) => Vec::new(),
+        }
+    }
+
+    /// Where the keyboard lands after a navigation press, once its follow-ups have run (feature
+    /// 803, plan D5, FR-010).
+    ///
+    /// A terminal that had the keyboard keeps it: the `Selected` path already gave it to the shown
+    /// session. Otherwise a step onto a session leaves the keyboard on that session's sidebar row,
+    /// which `Selected` has just cleared along with the previous one. A stop set its own row in
+    /// [`Self::apply_navigation`].
+    pub fn finish_navigation(
+        &mut self,
+        step: &crate::features::navigation::Step,
+        terminal_had_focus: bool,
+    ) {
+        use crate::features::navigation::Step;
+        if terminal_had_focus {
+            return;
+        }
+        if let Step::Session(id) = step {
+            self.release_terminal();
+            self.sidebar.keyboard_row = Some(crate::features::sidebar::RowRef::Session(*id));
         }
     }
 }
