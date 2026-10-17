@@ -216,7 +216,7 @@ enum Pending {
     Edit {
         id: DaemonId,
         name: String,
-        runtime: DaemonRuntime,
+        runtime: Box<DaemonRuntime>,
         auto_start: bool,
     },
 }
@@ -847,7 +847,7 @@ pub fn save(state: &mut State, model: &mut Model<'_>) -> Result<Vec<Outcome>, Fo
                     Pending::Edit {
                         id,
                         name,
-                        runtime,
+                        runtime: Box::new(runtime),
                         auto_start: draft.auto_start,
                     },
                     prompt,
@@ -920,7 +920,7 @@ pub fn confirm(state: &mut State, model: &mut Model<'_>) -> Vec<Outcome> {
             let sessions = model.sessions.get(&id).cloned().unwrap_or_default();
             if model
                 .registry
-                .edit(id, &name, runtime.clone(), auto_start)
+                .edit(id, &name, (*runtime).clone(), auto_start)
                 .is_err()
             {
                 return out;
