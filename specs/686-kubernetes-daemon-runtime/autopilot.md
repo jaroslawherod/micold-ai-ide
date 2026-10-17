@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #686
 - **Worktree branch**: claude/project-thread-xelisc
 - **Started**: 2026-10-17
-- **Phase**: clarify
-- **Next step**: clarify round 1 awaiting owner answers (Open escalation: FR-004 image source + provider CLIs, FR-007 clone source); then apply, run next clarify round, then plan
+- **Phase**: plan
+- **Next step**: plan (clarify done; FR-004/FR-007 run on orchestrator defaults pending owner decision cards)
 
 ## Pull requests
 
@@ -24,6 +24,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Decisions
 
+- Clarify round 1 (orchestrator defaults, pending owner): image = #806 build pushed to a user-named registry, pull stays an option; provider CLIs installed at build time; clone from the project git remote, no-remote projects refused.
+- Clarify round 2 (agent-resolved): registry pull credential follows FR-008 allow-list; push uses the local runtime login; image tag/rebuild and CI image loading deferred to plan. No critical ambiguities left.
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
 
@@ -45,11 +47,7 @@ None.
 
 ## Open escalation
 
-Clarify round 1 (category: product decision only the owner can make; #806 has no spec yet and leaves both open):
-
-1. FR-004 Kubernetes image source default. Options: (a) build locally per #806 (current daemon binary + selected provider CLIs) and push to a registry the user names, pull-an-image as the alternative (Recommended: keeps #806's version-matched default and its CLI install, one shared form; needs a registry field + push credential); (b) pull only, user names an image (simplest, but loses the version-matched default #806 asks for); (c) build inside the cluster (Kaniko/BuildKit job; needs privileges many namespaces deny, and a registry anyway).
-2. Provider CLIs in the pod's image: (a) installed at build time in the image built under 1a (Recommended: same as #806); (b) installed at pod start into the volume (works with pull-only images, slower first start, needs egress from the pod); (c) the user's pulled image must already contain them.
-3. FR-007 clone source. Options: (a) project's git remote, with an allowed push/pull credential; projects without a remote refused (Recommended: standard, resumable, no client upload; matches FR-008 credentials); (b) client's local repository sent over the tunnel (works without remote, carries unpushed commits, slower for big repos); (c) remote when present, else local transfer.
+None. Clarify round 1 questions are with the owner as decision cards (2026-10-17); the spec uses the recommended defaults meanwhile, marked "pending owner answer" in its Clarifications.
 
 ## Follow-ups not done
 
