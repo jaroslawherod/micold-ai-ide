@@ -142,14 +142,7 @@ where
                 return;
             }
         };
-        for (dir, mode) in &resolved.targets {
-            // A git dir with no `refs/` of its own (a worktree's) has nothing there to watch.
-            if let Err(err) = watcher.watch(dir, *mode) {
-                if *dir == resolved.root {
-                    eprintln!("micold: cannot watch {} for changes: {err}", dir.display());
-                }
-            }
-        }
+        let mut unwatched = watch_targets(&mut watcher, &resolved, resolved.targets.clone());
         let read_once = |batch: Vec<PathBuf>| {
             let (read, resolved) = (read.clone(), resolved.clone());
             async move {
@@ -187,6 +180,11 @@ where
             let Some(batch) = debouncer.ready(Instant::now()) else {
                 continue;
             };
+            // A target that did not exist yet (an Overview opened before `specs/` was made) is
+            // watched as soon as a burst shows the directory may be there.
+            if !unwatched.is_empty() {
+                unwatched = watch_targets(&mut watcher, &resolved, unwatched);
+            }
             if let Some(message) = read_once(batch).await {
                 if output.send(message).await.is_err() {
                     return;
@@ -194,6 +192,28 @@ where
             }
         }
     })
+}
+
+/// Watch each of `targets`, returning those that could not be watched (a directory that does not
+/// exist yet), so the caller can try them again.
+fn watch_targets(
+    watcher: &mut impl Watcher,
+    resolved: &Resolved,
+    targets: Vec<(PathBuf, RecursiveMode)>,
+) -> Vec<(PathBuf, RecursiveMode)> {
+    targets
+        .into_iter()
+        .filter(|(dir, mode)| match watcher.watch(dir, *mode) {
+            Ok(()) => false,
+            Err(err) => {
+                // A git dir with no `refs/` of its own (a worktree's) has nothing there to watch.
+                if *dir == resolved.root {
+                    eprintln!("micold: cannot watch {} for changes: {err}", dir.display());
+                }
+                true
+            }
+        })
+        .collect()
 }
 
 /// Whether `batch` holds a change the view shows: a git state file, or a worktree file git does
@@ -219,6 +239,25 @@ pub(crate) fn counts(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A target missing when the watch starts is returned for a later try, and watched once made.
+    #[test]
+    fn a_missing_target_is_retried_until_it_exists() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().to_path_buf();
+        let specs = root.join("specs");
+        let resolved = Resolved {
+            root: root.clone(),
+            git_dirs: Vec::new(),
+            targets: Vec::new(),
+        };
+        let mut watcher = RecommendedWatcher::new(|_| {}, Config::default()).unwrap();
+        let target = vec![(specs.clone(), RecursiveMode::Recursive)];
+        let left = watch_targets(&mut watcher, &resolved, target);
+        assert_eq!(left, vec![(specs.clone(), RecursiveMode::Recursive)]);
+        std::fs::create_dir(&specs).unwrap();
+        assert!(watch_targets(&mut watcher, &resolved, left).is_empty());
+    }
 
     #[test]
     fn a_git_dir_inside_the_entry_is_covered_by_the_entry_s_watch() {

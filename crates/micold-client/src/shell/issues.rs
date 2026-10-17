@@ -670,11 +670,14 @@ pub fn on_overview_opened(app: &mut App) -> Task<Message> {
             Some((number, issue.title().to_string()))
         })
         .collect();
-    for (number, title) in seeds {
-        app.core.update(Message::Overview(Msg::TitleRead {
-            number,
-            result: TitleLookup::Known(title),
-        }));
+    if let Some(project) = app.core.workspace.active.clone() {
+        for (number, title) in seeds {
+            app.core.update(Message::Overview(Msg::TitleRead {
+                project: project.clone(),
+                number,
+                result: TitleLookup::Known(title),
+            }));
+        }
     }
     let binding = app.active_binding();
     let routed = matches!(
@@ -691,6 +694,10 @@ pub fn on_overview_opened(app: &mut App) -> Task<Message> {
     else {
         return Task::none();
     };
+    // `wanted` is empty unless `routed` held just above (a route to a daemon with an outbox), which
+    // is exactly what `send_op` needs, so the request below is always sent and marking the titles
+    // pending first cannot strand them. A daemon lost afterwards resolves the op as unknown
+    // (`on_title_remotes(None)`), which settles them as unavailable.
     app.core
         .update(Message::Overview(Msg::TitlesRequested(wanted.clone())));
     let asked_for = project.clone();
@@ -715,9 +722,11 @@ pub fn on_title_remotes(
     remotes: Option<Vec<micold_core::git::GitRemote>>,
 ) -> Task<Message> {
     use micold_client::features::overview::{Msg, TitleLookup};
+    let started_in = project.clone();
     let unavailable = |numbers: Vec<u64>| {
         Task::batch(numbers.into_iter().map(|number| {
             Task::done(Message::Overview(Msg::TitleRead {
+                project: started_in.clone(),
                 number,
                 result: TitleLookup::Unavailable,
             }))
@@ -739,6 +748,7 @@ pub fn on_title_remotes(
     let script = app.env_include_script_path.clone();
     let timeout_secs = app.env_include_timeout_secs;
     let asked = numbers.clone();
+    let started_in = project.clone();
     Task::perform(
         async move {
             tokio::task::spawn_blocking(move || {
@@ -767,9 +777,13 @@ pub fn on_title_remotes(
             })
         },
     )
-    .then(|read| {
+    .then(move |read| {
         Task::batch(read.into_iter().map(|(number, result)| {
-            Task::done(Message::Overview(Msg::TitleRead { number, result }))
+            Task::done(Message::Overview(Msg::TitleRead {
+                project: started_in.clone(),
+                number,
+                result,
+            }))
         }))
     })
 }

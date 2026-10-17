@@ -926,6 +926,11 @@ impl State {
                 let outcomes = crate::features::worktree::update(self, msg);
                 drain(outcomes, |outcome| interpret(self, outcome));
             }
+            // A read started in a project the window has left describes the wrong repository.
+            Message::Overview(ref msg)
+                if msg
+                    .read_project()
+                    .is_some_and(|project| self.workspace.active.as_deref() != Some(project)) => {}
             Message::Overview(msg) => {
                 let outcomes = crate::features::overview::update(&mut self.overview, msg);
                 drain(outcomes, |outcome| interpret(self, outcome));
