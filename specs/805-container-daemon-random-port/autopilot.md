@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #805
 - **Worktree branch**: feat/805_container-daemon-without-a-port-should-pick-a
 - **Started**: 2026-10-16
-- **Phase**: close
-- **Next step**: tdd-verify, close PR
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -18,6 +18,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #910 | Design | merged | 59cd8f77356153f09a73586392e703384c345066 |
 | #926 | M1 | merged | 7746676b3eaf73b56ee06898a8e01b7bebf5cbda |
+| CLOSEPR | Close | open | |
 
 ## Milestones
 
@@ -42,6 +43,7 @@ One milestone: US1 and US2 share `runtime_of`; US3 is test-only. No split.
 | Tasks 805 | 1 | 30b4c926f36e42cdd89f210bbe75f293f55897bc:99178fc09a5891d2d4a728d47c88ee68d53085ab | CLEAN (2 MINOR fixed prose only: test file daemons_feature.rs, compile-step note). speckit-analyze: I1 declined (spec says earlier saved saves; plan accepts only same-instant), others fixed |
 | Spec 805 | 2 | 0ff26f022abefc0f43afb7749457cd129609b76f:8a04f4206330fa7552531e4694e2244b186d345f | CLEAN (3 MINOR, 2 fixed prose only) |
 | Review A M1 | 1 | bdfd6f1132e3674c5d0dab674adad020656ba9e1:59cd8f77356153f09a73586392e703384c345066 | CLEAN |
+| Close diff | 1 | 922660f730c42005d2638587e3c3dbeaa3cfb987:7e05747a456328140f092e59908cae5c4406b8ab | CLEAN (3 MINOR; verification.md prose fixed; looser 'use' assertion in duplicate test not fixed, gate already green) |
 | Review B M1 | 1 | same | CLEAN (3 MINOR: weak restart test, no cycle-log, hardcoded 7001; not fixed, effort low) |
 
 ## Declined review findings
