@@ -118,6 +118,10 @@ rejected. Paths are under `crates/` unless they start with `docs/` or `specs/`.
   (wrapping the private `split_name`) rather than parsing the `#123` label back.
 - **Rationale**: the sidebar's tags already come from `parse_tags`, so card and sidebar agree.
 
+- **Alternatives rejected**: parsing the sidebar's `#123` issue label back into a ticket (loses
+  Jira keys' case and couples to display text); a second type parser in the client (could drift
+  from the sidebar's tags).
+
 ## R8 — Issue titles
 
 - **Decision**: the client keeps `overview::State::titles: BTreeMap<u64, TitleLookup>` per project
@@ -216,6 +220,12 @@ rejected. Paths are under `crates/` unless they start with `docs/` or `specs/`.
   falls back to `error`); "every colour from the theme's roles" (FR-021) needs them. No grid,
   determinate progress, generic card or toggled button exists (`StageProgress` is indeterminate
   by design).
+- **`ProgressBar` beside `StageProgress`**: `ui/material/progress.rs` `StageProgress` is an
+  animated indeterminate bar plus a stage line, built for durations that cannot be measured (its
+  module doc). A determinate bar has no animation and no stage text, so a `.determinate(ratio)`
+  mode would leave most of `StageProgress` unused in that mode; `ProgressBar` is a separate small
+  primitive in the same file's neighbourhood, and the two share the track and fill styling through
+  one helper in `progress.rs` (no copied styling).
 - **Alternatives rejected**: tertiary as "yellow" (scheme-dependent hue, not yellow); hard-coded
   colours (FR-021).
 
@@ -236,6 +246,10 @@ rejected. Paths are under `crates/` unless they start with `docs/` or `specs/`.
   position (`StartMenuAnchored`); when opened from a card the row must be scrolled into view first
   (reveal, then open).
 
+- **Alternatives rejected**: starting a session directly on a card click (FR-013 forbids starting
+  without confirmation); selecting nothing for a location without sessions (the user would land on
+  an unrelated view with no sign of where the location is).
+
 ## R13 — Keyboard traversal
 
 - **Decision**: each `OverviewCard` takes focus like `Button` (`TakesTheKeyboard`); Tab /
@@ -245,6 +259,11 @@ rejected. Paths are under `crates/` unless they start with `docs/` or `specs/`.
   back). Enter and Space activate the focused card through the card's own press handling. Opening
   the Overview focuses the first card.
 - **Rationale**: no new focus system; matches how the rest of the window moves focus.
+
+- **Alternatives rejected**: a new focus system or a roving-focus grid widget (iced's
+  `focus_next`/`focus_previous` already traverse focusable widgets in layout order, which is the
+  card order); arrow keys handled inside the card grid widget (needs widget-level key capture the
+  shared library does not have).
 
 ## R14 — Stale data and several windows
 
@@ -257,3 +276,6 @@ rejected. Paths are under `crates/` unless they start with `docs/` or `specs/`.
   A client state test pins that the card list built after `on_disconnected` keeps the
   session-derived states. Each window holds its own `overview::State`; card state is derived from
   the same daemon catalog and pull request reading, so windows agree.
+- **Alternatives rejected**: a dedicated stale notice inside the Overview (duplicates the
+  window-wide banner, which already sits above every body branch); clearing the cards while
+  disconnected (the spec's edge case asks to keep the last state).
