@@ -29,8 +29,8 @@ as colour."
     start failed or its restarts were exhausted (*failed*), or it was interrupted by a service
     restart and waits to be resumed (*resumable*).
   - **Idle / waiting**: nothing is in progress: no session, a session whose lifecycle is *idle*
-    (never started, or stopped by the user), a session whose activity reads *ended*, or a session
-    that finished its turn and waits for the next prompt.
+    (never started, or stopped by the user), a *running* session whose activity reads *ended*, or a
+    session that finished its turn and waits for the next prompt (the Per-session state rules decide).
 - **Per-session state**: one session's state, taken from its lifecycle first and its activity
   second, so every combination has exactly one answer. The first rule that matches wins:
   1. lifecycle *failed* or *resumable* → Blocked (whatever the activity reads);
@@ -38,7 +38,8 @@ as colour."
   3. lifecycle *idle* → Idle / waiting (whatever the activity reads);
   4. lifecycle *running*, activity *working* → Running;
   5. lifecycle *running*, activity *awaiting input* after a mid-turn stop to ask for a permission →
-     Blocked; after the end of a turn → Idle / waiting;
+     Blocked; after a mid-turn stop to ask the user a question → as the Blocked term's open marker
+     settles; after the end of a turn → Idle / waiting;
   6. lifecycle *running*, activity *ended* → Idle / waiting;
   7. lifecycle *running*, activity *unknown* → as the Edge Cases section's *Activity unknown* entry
      settles (never Blocked).
