@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-rkhzho
 - **Started**: 2026-10-17
 - **Phase**: plan
-- **Next step**: plan unit (continue handover: plan review round 1); D2/D3 are orchestrator defaults pending jaro's card — re-apply to spec.md and plan.md *Pending decisions* if jaro answers B
+- **Next step**: tasks unit; D2/D3 are orchestrator defaults pending jaro's card — re-apply to spec.md and plan.md *Pending decisions* if jaro answers B
 
 ## Pull requests
 
@@ -35,6 +35,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
 | Spec | 1 | 1c97f54c4c7b32b3f5f8c11552756f9e77d1de18:d93c9dbc687412cced0a9b7854cf44323ee3930e | CLEAN (1 MINOR: plan to confirm rename-dialog files) |
+| Plan | 1 | 62a5b8cee2e629d9da01c81c6d40863f389921ff:beb9cd17a1cfe2ca6753f0882614af877c9ae912 | CLEAN (3 MINOR, fixed, prose only; reviewer ran as headless `claude -p`: no Agent tool in this unit) |
 
 ## Declined review findings
 
@@ -43,10 +44,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-- Done: `speckit-plan` ran; plan.md, research.md (R1–R9, incl. the open items: rename-dialog files R4, select/typeahead blur R2, form inventory R5), data-model.md, contracts/required-field.md, quickstart.md written and committed. No extension hooks registered for plan.
-- Next: plan review round 1 (tasks/review.md with rubrics/plan.md, model omitted), act on it (review-rounds.md), then set **Next step** to `tasks unit` and return DONE, PR none.
-- Open findings: none yet. PR: none.
-- Unit handed over at 156k context (cap 150k).
+None.
 
 ## Open escalation
 
