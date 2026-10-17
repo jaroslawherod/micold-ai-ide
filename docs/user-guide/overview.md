@@ -57,6 +57,20 @@ Default, a detached HEAD and an orphan have no branch, so they show no counts. A
 | Link | Included | A worktree included from elsewhere |
 | Crossed-out folder | Orphan | A worktree that is missing or invalid |
 
+## Activating a card
+
+Click a card, or move to it and press **Enter** or **Space**. The Overview closes, and one of three things follows:
+
+- **The location has a session**: its main session is selected and shown, as if you had clicked it in the sidebar.
+- **The location has no session**: its row is revealed in the sidebar (scrolled into view and marked as selected), and the menu of AI CLIs opens at the row's start button. Nothing starts until you pick one.
+- **An orphan or invalid location** (a missing or broken worktree, where no session can start): its row is only revealed in the sidebar.
+
+The revealed mark stays until you select something else in the sidebar. A card in any state, **Idle** included, activates the same way.
+
+## Keyboard
+
+Opening the Overview puts the keyboard on its first card. **Tab** and **Shift+Tab** move to the next and previous card; the arrow keys do the same (**Right** and **Down** forward, **Left** and **Up** back). The focused card shows a ring. **Escape** closes the Overview, after any dialog or unsaved Settings draft that Escape would close first. While a terminal has the keyboard, the arrow keys and Escape go to the terminal.
+
 ## The five states, worst first
 
 Cards are ordered by state, worst first, and in the sidebar's order within a state. The first row

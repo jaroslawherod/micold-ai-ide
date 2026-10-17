@@ -73,6 +73,8 @@ pub(super) struct TakesTheKeyboard<'a, M> {
     /// What the application says about this control's focus — see [`Focus::supplied`].
     focused: bool,
     on_focus_change: Option<Box<dyn Fn(bool) -> M + 'a>>,
+    /// A stable name, so the application can move the keyboard here (feature 813, R12/R13).
+    id: Option<iced::advanced::widget::Id>,
 }
 
 impl<'a, M: Clone + 'a> TakesTheKeyboard<'a, M> {
@@ -87,7 +89,14 @@ impl<'a, M: Clone + 'a> TakesTheKeyboard<'a, M> {
             indicator: None,
             focused: false,
             on_focus_change: None,
+            id: None,
         }
+    }
+
+    /// Name this control for `focus(id)`.
+    pub fn id(mut self, id: iced::advanced::widget::Id) -> Self {
+        self.id = Some(id);
+        self
     }
 
     /// A key this control answers while it holds the keyboard, and the message it sends.
@@ -365,7 +374,7 @@ impl<'a, M: Clone + 'a> Widget<M, iced::Theme, iced::Renderer> for TakesTheKeybo
     ) {
         if self.enabled {
             operation.focusable(
-                None,
+                self.id.as_ref(),
                 layout.bounds(),
                 tree.state.downcast_mut::<Focus>() as &mut dyn operation::Focusable,
             );

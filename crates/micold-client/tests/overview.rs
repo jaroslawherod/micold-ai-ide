@@ -3,10 +3,12 @@
 
 use micold_client::app::{Message, State};
 use micold_client::features::agent_confirm::Prompt;
-use micold_client::features::overview::{badge, Badge, Msg, Tone};
+use micold_client::features::overview::{arrow_focus, badge, follow_up, Badge, Msg, Tone};
 use micold_client::features::pr_status::Msg as PrMsg;
+use micold_client::features::session::Msg as SessionMsg;
 use micold_client::ui::overview::cards;
 use micold_core::local_time::LocalTime;
+use micold_core::overview::Activation;
 use micold_core::overview::{CardReason, CardState, LocationType, PrCounts, PrDisplay};
 use micold_core::project::{Availability, Project};
 use micold_core::protocol::messages::ActivitySignal;
@@ -661,4 +663,108 @@ fn nothing_to_do_gives_no_badge() {
     )]);
     assert_eq!(badge_of(&state), None);
     assert_eq!(badge(&[]), None);
+}
+
+fn open_overview(state: &mut State) {
+    state.update(Message::Overview(Msg::Toggled {
+        settings_open: false,
+    }));
+    assert!(state.overview.open);
+}
+
+#[test]
+fn activating_a_card_with_a_session_closes_and_selects_it() {
+    let mut state = project_with(vec![]);
+    let session = add_session(&mut state, SessionLocation::Default);
+    let activation = Activation::OpenSession(session.id);
+    open_overview(&mut state);
+    state.update(Message::Overview(Msg::CardActivated(activation.clone())));
+    assert!(!state.overview.open);
+    assert_eq!(
+        follow_up(&activation),
+        Some(Message::Session(SessionMsg::Selected(session.id)))
+    );
+}
+
+#[test]
+fn activating_a_card_without_a_session_reveals_the_row_and_offers_the_start_menu_only() {
+    let mut state = project_with(vec![worktree(
+        "feat-a",
+        Some("feat/a"),
+        WorktreeStatus::Valid,
+        false,
+    )]);
+    let activation = Activation::OfferStart(wt("feat-a"));
+    open_overview(&mut state);
+    state.update(Message::Overview(Msg::CardActivated(activation.clone())));
+    assert!(!state.overview.open);
+    assert_eq!(state.sidebar.revealed, Some(wt("feat-a")));
+    assert_eq!(
+        follow_up(&activation),
+        Some(Message::Session(SessionMsg::StartMenuOpened {
+            location: wt("feat-a"),
+            unavailable_default: None,
+        }))
+    );
+    assert!(
+        state
+            .workspace
+            .sessions
+            .get(&project_path())
+            .is_none_or(Vec::is_empty),
+        "nothing starts without the user's confirmation (FR-013)"
+    );
+}
+
+#[test]
+fn activating_an_orphan_card_only_reveals_its_row() {
+    let mut state = project_with(vec![]);
+    let activation = Activation::RevealOnly(wt("gone"));
+    open_overview(&mut state);
+    state.update(Message::Overview(Msg::CardActivated(activation.clone())));
+    assert!(!state.overview.open);
+    assert_eq!(state.sidebar.revealed, Some(wt("gone")));
+    assert_eq!(follow_up(&activation), None);
+}
+
+#[test]
+fn the_revealed_row_clears_on_the_next_sidebar_selection() {
+    let mut state = project_with(vec![]);
+    let session = add_session(&mut state, SessionLocation::Default);
+    state.update(Message::Overview(Msg::CardActivated(
+        Activation::RevealOnly(wt("gone")),
+    )));
+    assert!(state.sidebar.revealed.is_some());
+    state.update(Message::Session(SessionMsg::Selected(session.id)));
+    assert_eq!(state.sidebar.revealed, None);
+}
+
+#[test]
+fn escape_closes_the_overview_after_the_overlay_registry_and_the_settings_draft() {
+    use micold_client::app::on_escape;
+    let mut state = project_with(vec![]);
+    assert_eq!(on_escape(&state), None);
+    open_overview(&mut state);
+    assert_eq!(on_escape(&state), Some(Message::Overview(Msg::Closed)));
+    // A Settings draft is answered first.
+    state.settings.settings_draft = Some(Default::default());
+    assert_eq!(
+        on_escape(&state),
+        Some(Message::Settings(
+            micold_client::features::settings::Msg::Cancelled
+        ))
+    );
+}
+
+#[test]
+fn arrow_keys_move_the_focus_and_other_keys_do_not() {
+    use iced::keyboard::key::Named;
+    use iced::keyboard::Key;
+    let named = |n| Key::Named(n);
+    assert_eq!(arrow_focus(&named(Named::ArrowRight)), Some(true));
+    assert_eq!(arrow_focus(&named(Named::ArrowDown)), Some(true));
+    assert_eq!(arrow_focus(&named(Named::ArrowLeft)), Some(false));
+    assert_eq!(arrow_focus(&named(Named::ArrowUp)), Some(false));
+    assert_eq!(arrow_focus(&named(Named::Enter)), None);
+    assert_eq!(arrow_focus(&Key::Character("a".into())), None);
 }

@@ -98,30 +98,6 @@ impl<'a> Mounted<'a> {
         )
     }
 
-    /// Move the keyboard forward through this element, the way `Message::FocusMoved` does.
-    ///
-    /// The loop is not ceremony. `focus_next` is two passes chained — count the focusables, then
-    /// move to the one after the focused — and a single `operate` call runs only the first, so a
-    /// test that made one call would prove nothing and pass either way. The runtime drives the
-    /// chain; here that is this loop.
-    fn focus_next(&mut self) {
-        use iced::advanced::widget::operation::{focusable, Operation, Outcome};
-
-        let mut current: Box<dyn Operation<()>> = Box::new(focusable::focus_next::<()>());
-        loop {
-            self.element.as_widget_mut().operate(
-                &mut self.tree,
-                Layout::new(&self.node),
-                &self.renderer,
-                current.as_mut(),
-            );
-            match current.finish() {
-                Outcome::Chain(next) => current = next,
-                Outcome::None | Outcome::Some(_) => break,
-            }
-        }
-    }
-
     /// Press a named key, with the pointer nowhere near — a keyboard interaction has to work
     /// without the mouse resting helpfully on the control, or it is not a keyboard interaction.
     fn press_key(&mut self, key: iced::keyboard::key::Named) -> Vec<String> {

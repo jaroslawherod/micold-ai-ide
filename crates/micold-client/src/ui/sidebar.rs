@@ -453,6 +453,15 @@ fn action_icon(
     }
 }
 
+/// The stable widget id of a location's start control, so the Overview can move the keyboard to it
+/// (feature 813, R12).
+pub fn start_control_id(location: &SessionLocation) -> iced::advanced::widget::Id {
+    iced::advanced::widget::Id::from(match location {
+        SessionLocation::Default => "start-control-default".to_string(),
+        SessionLocation::Worktree(dir) => format!("start-control-{dir}"),
+    })
+}
+
 /// What the primary half of the start affordance publishes for `location` (feature 026, T085).
 ///
 /// The branch is [`State::start_intent`]'s — this only names the message each answer arrives as, so
@@ -513,9 +522,14 @@ fn start_session_action(
     active: bool,
     press: Message,
     offers_a_choice: bool,
+    focusable: bool,
     r: Roles,
 ) -> Element<'static, Message> {
-    SplitAction::new(Icon::AddSession, r)
+    let mut action = SplitAction::new(Icon::AddSession, r);
+    if focusable {
+        action = action.focus_id(start_control_id(&location));
+    }
+    action
         // Inside the sidebar's dense rows — see `IconButton::compact` for the contract conflict
         // this resolves at the call site rather than in the component.
         .compact()
@@ -551,8 +565,11 @@ fn row_actions_cluster(
     active: bool,
     press: Message,
     offers_a_choice: bool,
+    revealed: bool,
     r: Roles,
 ) -> Element<'static, Message> {
+    // The Overview's revealed row offers its start control to the keyboard whether or not hovered.
+    let active = active || revealed;
     let mut cluster = row![].spacing(spacing::XS).align_y(Alignment::Center);
     if can_start_session {
         cluster = cluster.push(start_session_action(
@@ -561,6 +578,7 @@ fn row_actions_cluster(
             active,
             press,
             offers_a_choice,
+            revealed,
             r,
         ));
     }
@@ -686,6 +704,11 @@ fn build_items(
                 .selected(holds_viewed && !node.sessions_shown())
                 .on_press(Message::Session(SessionMsg::Selected(main)));
         }
+        // The row the Overview sent the user to wears the selected look until the next selection
+        // (feature 813, R12).
+        if state.sidebar.revealed.as_ref() == Some(&node.location()) {
+            item = item.selected(true);
+        }
         // Row tooltip (feature 010 FR-010, extended by feature 029): the full name the row had to
         // shorten, plus the facts its prettified label leaves out. Attached unconditionally — an
         // unknown project root costs the tooltip its `Location` line, not its existence (029 R5),
@@ -734,6 +757,7 @@ fn build_items(
                     .location_dir(&SessionLocation::Worktree(dir.clone()))
                     .unwrap_or_default(),
             ),
+            state.sidebar.revealed.as_ref() == Some(&node.location()),
             r,
         );
         item = item.trailing_element(match pull_request {
@@ -973,6 +997,7 @@ fn build_default_item(
                 .location_dir(&SessionLocation::Default)
                 .unwrap_or_default(),
         ),
+        state.sidebar.revealed == Some(SessionLocation::Default),
         r,
     );
 
@@ -1014,6 +1039,9 @@ fn build_default_item(
         item = item
             .selected(holds_viewed && !node.sessions_shown())
             .on_press(Message::Session(SessionMsg::Selected(main)));
+    }
+    if state.sidebar.revealed == Some(SessionLocation::Default) {
+        item = item.selected(true);
     }
     items.push(item);
 

@@ -103,6 +103,64 @@ pub fn into_view<T>() -> impl Operation<T> {
     FindFocused { focused: None }
 }
 
+/// Where the focused control is in the window, or `None` when nothing holds the keyboard — a
+/// read-only operation, for a caller that must anchor something to a control (decision D11).
+///
+/// Every layout in the pass is in untranslated content coordinates (see [`ShowFocused`]), so the
+/// bounds a control reports are where it would be before its scrollables moved the content. The
+/// translation of each scrollable that holds it comes off, which leaves where it is on screen. The
+/// result is `Some(None)` rather than no result when nothing is focused, so a caller can tell the
+/// pass ran.
+pub fn focused_bounds() -> impl Operation<Option<Rectangle>> {
+    FocusedBounds::default()
+}
+
+/// [`focused_bounds`] as the runtime runs it.
+pub fn focused_bounds_task() -> Task<Option<Rectangle>> {
+    operate(focused_bounds())
+}
+
+#[derive(Default)]
+struct FocusedBounds {
+    /// The translation of the scrollable just met, until the traversal into its content claims it.
+    entering: Option<Vector>,
+    /// For each traversal the pass is inside, the translation its scrollable applies (zero for a
+    /// traversal that is not a scrollable's content).
+    inside: Vec<Vector>,
+    found: Option<Rectangle>,
+}
+
+impl Operation<Option<Rectangle>> for FocusedBounds {
+    fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation<Option<Rectangle>>)) {
+        self.inside
+            .push(self.entering.take().unwrap_or(Vector::ZERO));
+        operate(self);
+        self.inside.pop();
+    }
+
+    fn scrollable(
+        &mut self,
+        _id: Option<&Id>,
+        _bounds: Rectangle,
+        _content_bounds: Rectangle,
+        translation: Vector,
+        _state: &mut dyn Scrollable,
+    ) {
+        self.entering = Some(translation);
+    }
+
+    fn focusable(&mut self, _id: Option<&Id>, bounds: Rectangle, state: &mut dyn Focusable) {
+        if state.is_focused() {
+            let shift = self.inside.iter().fold(Vector::ZERO, |sum, t| sum + *t);
+            self.found = Some(bounds - shift);
+        }
+    }
+
+    fn finish(&self) -> Outcome<Option<Rectangle>> {
+        Outcome::Some(self.found)
+    }
+}
+
 /// Pass one: where is the keyboard?
 struct FindFocused {
     focused: Option<Rectangle>,
@@ -228,6 +286,11 @@ pub(super) fn delta_into_view(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ui::material::test_support::{roles, Mounted};
+    use crate::ui::material::Button;
+    use iced::advanced::widget::operation::scrollable::scroll_by;
+    use iced::widget::{column, scrollable, Space};
+    use iced::Length;
 
     /// A panel 400dp tall showing content from `translation_y`, and a 56dp control at `y`.
     fn delta(control_y: f32, translation_y: f32) -> f32 {
@@ -320,5 +383,55 @@ mod tests {
                 MARGIN
             )
         );
+    }
+
+    /// A scrollable showing a button 600dp down its content, scrolled by `scrolled`.
+    fn scrolled_button(scrolled: f32) -> Mounted<'static> {
+        let id = Id::new("list");
+        let content = column![
+            Space::new().height(Length::Fixed(600.0)),
+            Button::filled("Start", roles()).on_press("start".to_string())
+        ];
+        let mut mounted = Mounted::new(
+            scrollable(content)
+                .id(id.clone())
+                .height(Length::Fixed(300.0)),
+        );
+        mounted.drive::<()>(scroll_by(
+            id,
+            AbsoluteOffset {
+                x: 0.0,
+                y: scrolled,
+            },
+        ));
+        mounted
+    }
+
+    /// Decision D11: the focused control's bounds are where it is on screen, so the scrollable's
+    /// translation comes off its layout position.
+    #[test]
+    fn the_focused_controls_bounds_are_reported_after_the_scrollables_translation() {
+        let mut at_rest = scrolled_button(0.0);
+        at_rest.focus_next();
+        let rest = at_rest.drive(focused_bounds()).flatten().expect("focused");
+        assert!(
+            rest.y >= 600.0,
+            "the button sits below the spacer: {rest:?}"
+        );
+
+        let mut scrolled = scrolled_button(250.0);
+        scrolled.focus_next();
+        let shown = scrolled.drive(focused_bounds()).flatten().expect("focused");
+        assert_eq!(shown.y, rest.y - 250.0);
+        assert_eq!(
+            (shown.x, shown.width, shown.height),
+            (rest.x, rest.width, rest.height)
+        );
+    }
+
+    /// With nothing focused there is nothing to report.
+    #[test]
+    fn nothing_is_reported_when_nothing_is_focused() {
+        assert_eq!(scrolled_button(0.0).drive(focused_bounds()), Some(None));
     }
 }

@@ -4,12 +4,15 @@
 //! word (the reason is the word's tooltip), the branch when it has one, the summary line and the
 //! sessions footer. Every colour comes from the theme's roles through [`palette`]: Needs action is
 //! the `error` family, Needs attention `warning`, Working `primary`, Done `success`, and Idle sits
-//! on the de-emphasised `surface_container_low`. The card is informational until M4 adds a press.
+//! on the de-emphasised `surface_container_low`. With a press (`on_press`) the card is a control: a
+//! click, or Enter or Space on the focused card, publishes the message, and it takes the keyboard
+//! like a `Button` (research R13); without one it is informational and not focusable.
 
 use crate::icons::Icon;
+use crate::ui::material::keyboard_focus::{Indicator, TakesTheKeyboard};
 use crate::ui::material::{style, Ellipsized, Glyph, Text, Tooltip, TypeRole};
-use iced::widget::{column, container, row};
-use iced::{Alignment, Element, Length};
+use iced::widget::{button, column, container, row};
+use iced::{keyboard, Alignment, Element, Length};
 use micold_core::overview::{CardModel, CardState, LocationType};
 use micold_core::tokens::{spacing, Rgb, Roles};
 use std::marker::PhantomData;
@@ -110,8 +113,13 @@ pub fn words(model: &CardModel) -> Words {
 pub struct OverviewCard<'a, M> {
     model: CardModel,
     roles: Roles,
+    on_press: Option<M>,
+    id: Option<iced::advanced::widget::Id>,
     _marker: PhantomData<&'a M>,
 }
+
+/// The card's corner radius, shared by its fill and its focus ring.
+const RADIUS: f32 = 12.0;
 
 impl<'a, M: 'a> OverviewCard<'a, M> {
     /// The card of `model`, themed by `roles`.
@@ -119,12 +127,27 @@ impl<'a, M: 'a> OverviewCard<'a, M> {
         Self {
             model: model.clone(),
             roles,
+            on_press: None,
+            id: None,
             _marker: PhantomData,
         }
     }
+
+    /// Make the card a control: `message` is published by a click, and by Enter or Space while the
+    /// card holds the keyboard.
+    pub fn on_press(mut self, message: M) -> Self {
+        self.on_press = Some(message);
+        self
+    }
+
+    /// Name the card so the application can move the keyboard to it.
+    pub fn id(mut self, id: iced::advanced::widget::Id) -> Self {
+        self.id = Some(id);
+        self
+    }
 }
 
-impl<'a, M: 'a> From<OverviewCard<'a, M>> for Element<'a, M> {
+impl<'a, M: Clone + 'a> From<OverviewCard<'a, M>> for Element<'a, M> {
     fn from(card: OverviewCard<'a, M>) -> Self {
         let roles = card.roles;
         let p = palette(card.model.state, &roles);
@@ -173,17 +196,38 @@ impl<'a, M: 'a> From<OverviewCard<'a, M>> for Element<'a, M> {
                 None => body.push(line),
             };
         }
-        container(body)
+        let face = container(body)
             .width(Length::Fill)
             .height(Length::Fixed(HEIGHT))
             .padding(spacing::MD)
             .style(move |_| container::Style {
                 background: Some(iced::Background::Color(style::color(p.fill))),
                 border: iced::Border {
-                    radius: 12.0.into(),
+                    radius: RADIUS.into(),
                     ..iced::Border::default()
                 },
                 ..container::Style::default()
+            });
+        let Some(message) = card.on_press else {
+            return face.into();
+        };
+        // The card is its own fill, so the button around it draws nothing.
+        let pressable = button(face)
+            .padding(0)
+            .width(Length::Fill)
+            .style(|_, _| button::Style::default())
+            .on_press(message.clone());
+        let mut focusable = TakesTheKeyboard::new(pressable, true);
+        if let Some(id) = card.id {
+            focusable = focusable.id(id);
+        }
+        focusable
+            .key(keyboard::key::Named::Enter, message.clone())
+            .key(keyboard::key::Named::Space, message)
+            .indicator(Indicator {
+                outline: roles.secondary,
+                layer: p.text,
+                radius: RADIUS,
             })
             .into()
     }
@@ -192,10 +236,14 @@ impl<'a, M: 'a> From<OverviewCard<'a, M>> for Element<'a, M> {
 #[cfg(test)]
 mod tests {
     use super::super::test_support::{leaves, overlap};
+    use super::super::test_support::{named_key, roles, Mounted};
     use super::*;
+    use iced::advanced::widget::operation::Outcome;
+    use iced::advanced::widget::Operation;
+    use iced::keyboard::key::Named;
     use iced::{Rectangle, Size};
-    use micold_core::overview::{CardReason, PrDisplay};
-    use micold_core::session::SessionLocation;
+    use micold_core::overview::{Activation, CardReason, PrDisplay};
+    use micold_core::session::{SessionId, SessionLocation};
     use micold_core::theme::ColorScheme;
     use micold_core::tokens;
 
@@ -210,6 +258,7 @@ mod tests {
             reason: CardReason::Working,
             summary: "Adds the worktree overview".into(),
             prs: PrDisplay::Hidden,
+            activation: Activation::OpenSession(SessionId::new()),
         }
     }
 
@@ -300,6 +349,104 @@ mod tests {
             words(&model(CardState::Idle, "n")).footer,
             "Feature · 3 sessions, 2 running",
             "FR-002: the type's word is visible text on the card, not only a tooltip"
+        );
+    }
+
+    /// How many controls take the keyboard in the card.
+    struct Focusables(usize);
+
+    impl Operation<usize> for Focusables {
+        fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation<usize>)) {
+            operate(self);
+        }
+
+        fn focusable(
+            &mut self,
+            _id: Option<&iced::advanced::widget::Id>,
+            _bounds: Rectangle,
+            _state: &mut dyn iced::advanced::widget::operation::Focusable,
+        ) {
+            self.0 += 1;
+        }
+
+        fn finish(&self) -> Outcome<usize> {
+            Outcome::Some(self.0)
+        }
+    }
+
+    fn mounted(pressable: bool) -> Mounted<'static> {
+        let card = OverviewCard::<String>::new(&model(CardState::Idle, "feat-a"), roles());
+        Mounted::new(if pressable {
+            card.on_press("open".to_string())
+        } else {
+            card
+        })
+    }
+
+    /// US3.4, FR-014: a card with a press takes the keyboard, and one without does not.
+    #[test]
+    fn a_card_takes_the_keyboard_only_with_a_press() {
+        assert_eq!(mounted(true).drive(Focusables(0)), Some(1));
+        assert_eq!(mounted(false).drive(Focusables(0)), Some(0));
+    }
+
+    /// US3.4: Enter and Space on the focused card publish its message; unfocused, they do not; a
+    /// card without a press publishes nothing.
+    #[test]
+    fn enter_and_space_on_the_focused_card_publish_its_message() {
+        let mut card = mounted(true);
+        let cursor = iced::advanced::mouse::Cursor::Unavailable;
+        assert!(card.send(named_key(Named::Enter), cursor).is_empty());
+        card.focus_next();
+        for key in [Named::Enter, Named::Space] {
+            assert_eq!(card.send(named_key(key), cursor), ["open"], "{key:?}");
+        }
+        let mut plain = mounted(false);
+        plain.focus_next();
+        assert!(plain.send(named_key(Named::Enter), cursor).is_empty());
+    }
+
+    /// FR-014: a click publishes it too.
+    #[test]
+    fn a_click_on_the_card_publishes_its_message() {
+        use iced::advanced::mouse::{Button, Cursor, Event as Mouse};
+        let mut card = mounted(true);
+        let at = card.node.bounds().center();
+        card.press(at);
+        let released = card.send(
+            iced::Event::Mouse(Mouse::ButtonReleased(Button::Left)),
+            Cursor::Available(at),
+        );
+        assert_eq!(released, ["open"]);
+    }
+
+    /// FR-022: keyboard focus draws the ring in `secondary` along the card's edge; at rest there is
+    /// none.
+    #[test]
+    fn the_focused_card_draws_the_focus_ring() {
+        let r = roles();
+        let backdrop = style::color(r.surface);
+        let ring = style::color(r.secondary);
+        // How far a pixel is from the ring's colour, summed over the channels.
+        let apart = |p: &[u8]| -> f32 {
+            [ring.r, ring.g, ring.b]
+                .iter()
+                .zip(p)
+                .map(|(want, got)| (want * 255.0 - f32::from(*got)).abs())
+                .sum()
+        };
+        let mut card = mounted(true);
+        let (rest, width) = card.drawn(backdrop);
+        // Mid-top edge, inside the stroke (centred half a ring width in), which antialiasing
+        // blends with the fill: so closeness, not equality.
+        let i = ((width + width / 2) * 4) as usize;
+        card.focus_next();
+        let (focused, _) = card.drawn(backdrop);
+        assert!(
+            apart(&focused[i..i + 3]) + 60.0 < apart(&rest[i..i + 3]),
+            "the focused card's edge {:?} is no nearer the ring colour than at rest {:?}",
+            &focused[i..i + 3],
+            &rest[i..i + 3]
         );
     }
 }

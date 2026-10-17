@@ -35,7 +35,9 @@ mod picker_scroll;
 /// Named individually rather than by opening the module, which stays `pub(crate)`. The binary
 /// composes the `full` measurement scene and a ripple only starts from a press, so it needs the one
 /// traversal that can reach a ripple's per-instance state — and nothing else from the library.
-pub use focus::{into_view as focus_into_view, scroll_focused_into_view};
+pub use focus::{
+    focused_bounds, focused_bounds_task, into_view as focus_into_view, scroll_focused_into_view,
+};
 /// The reveal control's `label · N` rule (feature 029, FR-025a), named individually for the same
 /// reason the ripple below is: `tests/toggle_chip_count.rs` asserts the rule — zero renders the
 /// label alone — and the module itself stays `pub(crate)` so a call site cannot reach past it into
@@ -73,7 +75,7 @@ mod sidebar;
 // The sidebar list's scroll viewport, by name — the binary addresses `scroll_to` to it when a
 // reveal has a row to bring into view (feature 024). Re-exported like `ripple_pulse` above: the
 // binary needs this one name, not the module.
-pub use sidebar::SIDEBAR_SCROLL_ID;
+pub use sidebar::{start_control_id, SIDEBAR_SCROLL_ID};
 // The application's theme — the only thing the styling layer exposes beyond the component
 // library (FR-002). Defined in `material`, not here: a feature module naming the styling layer is
 // exactly what the boundary test forbids, and `ui/mod.rs` is a feature module.
@@ -1183,7 +1185,25 @@ pub fn subscription(state: &State) -> Subscription<Message> {
     if state.settings.settings_draft.is_none() {
         subs.push(overview_chord_listener());
     }
+    // Feature 813 (FR-014, R13): arrow keys move between the cards while the Overview is open.
+    if state.overview.open {
+        subs.push(overview_arrow_listener());
+    }
     Subscription::batch(subs)
+}
+
+/// Arrow keys, heard while the Overview is open and the terminal is not focused.
+fn overview_arrow_listener() -> Subscription<Message> {
+    iced::keyboard::listen().filter_map(overview_arrow)
+}
+
+/// [`Message::FocusMoved`] for an arrow key, and nothing for any other key. A named function for
+/// the same `TypeId` reason as [`escape_message`].
+fn overview_arrow(event: iced::keyboard::Event) -> Option<Message> {
+    let iced::keyboard::Event::KeyPressed { key, .. } = event else {
+        return None;
+    };
+    crate::features::overview::arrow_focus(&key).map(|forward| Message::FocusMoved { forward })
 }
 
 /// The Overview chord, heard while the terminal is not focused.

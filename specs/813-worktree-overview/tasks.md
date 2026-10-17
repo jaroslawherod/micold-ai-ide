@@ -283,33 +283,33 @@ session is shown.
 
 ### Tests for US3 (write first)
 
-- [ ] T040 [P] [US3] Core tests in micold-core/src/overview.rs: `activation` → `OpenSession(id)`
+- [X] T040 [P] [US3] Core tests in micold-core/src/overview.rs: `activation` → `OpenSession(id)`
   when `main_session` is `Some`; `OfferStart(location)` with no un-archived session and not
   orphan / invalid; `RevealOnly(location)` for orphan / invalid; an Idle card's activation is the
   same as any other (US3.5)
-- [ ] T041 [P] [US3] Client tests in micold-client/tests/overview.rs:
+- [X] T041 [P] [US3] Client tests in micold-client/tests/overview.rs:
   `CardActivated(OpenSession)` closes and yields `SessionMsg::Selected(id)`; `OfferStart` closes,
   sets sidebar `revealed` and yields the start-menu follow-up, starting no session (FR-013);
   `RevealOnly` closes and only reveals; `revealed` clears on the next sidebar selection;
   `app::on_escape` closes the Overview after the overlay registry and the Settings draft (U5); the
   arrow mapping `overview::arrow_focus(key)` gives Right/Down forward, Left/Up back, other keys
   `None`
-- [ ] T042 [P] [US3] Test in micold-client/src/ui/focus.rs tests (beside `into_view`'s): the new
+- [X] T042 [P] [US3] Test in micold-client/src/ui/focus.rs tests (beside `into_view`'s): the new
   read-only operation reports the focused control's bounds after its scrollable's translation
   (`None` with nothing focused) (decision D11)
-- [ ] T043 [P] [US3] Tests in micold-client/src/ui/material/overview_card.rs: with `on_press` the
+- [X] T043 [P] [US3] Tests in micold-client/src/ui/material/overview_card.rs: with `on_press` the
   card is focusable (`TakesTheKeyboard`), draws the focus ring, and Enter or Space publishes the
   message; without it, it is not focusable
 
 ### Implementation for US3
 
-- [ ] T044 [US3] `Activation` / `activation` in micold-core/src/overview.rs and
+- [X] T044 [US3] `Activation` / `activation` in micold-core/src/overview.rs and
   `CardModel::activation`; T040 passes
-- [ ] T045 [US3] micold-client/src/features/overview.rs `Msg::CardActivated(Activation)`,
+- [X] T045 [US3] micold-client/src/features/overview.rs `Msg::CardActivated(Activation)`,
   `arrow_focus`; micold-client/src/features/sidebar.rs `revealed: Option<SessionLocation>` set by
   reveal and cleared by the next selection; micold-client/src/app.rs `on_escape` closes the
   Overview; T041 passes
-- [ ] T046 [US3] Start menu anchor from a card (decision D11): in micold-client/src/ui/focus.rs a
+- [X] T046 [US3] Start menu anchor from a card (decision D11): in micold-client/src/ui/focus.rs a
   read-only operation returning the focused control's window bounds; in micold-client/src/main.rs
   the `OfferStart` follow-up reveals the row, focuses its start control by widget id, scrolls it
   into view (`scroll_focused_into_view`), reads its bounds and sends
@@ -317,14 +317,14 @@ session is shown.
   { location, unavailable_default: None }`; give the row's start control a stable widget id in
   micold-client/src/ui/sidebar.rs; micold-client/tests/context_menu_anchor_call_sites.rs stays
   green; T042 passes
-- [ ] T047 [US3] `OverviewCard::on_press` (focusable, Enter / Space) in
+- [X] T047 [US3] `OverviewCard::on_press` (focusable, Enter / Space) in
   micold-client/src/ui/material/overview_card.rs; ui/overview.rs passes
   `overview::Msg::CardActivated(card.activation)`; T043 passes
-- [ ] T048 [US3] Keys and reveal wiring: the arrow-key listener (named `fn`) in
+- [X] T048 [US3] Keys and reveal wiring: the arrow-key listener (named `fn`) in
   micold-client/src/ui/mod.rs `subscription` while the Overview is open and the terminal unfocused,
   mapping to `Message::FocusMoved`; focus the first card on open; micold-client/src/ui/sidebar.rs
   draws `revealed` with `TreeItem`'s selected look and scrolls it into view (R12, R13)
-- [ ] T049 [US3] docs/user-guide/overview.md: activating a card (the three outcomes), keyboard
+- [X] T049 [US3] docs/user-guide/overview.md: activating a card (the three outcomes), keyboard
   traversal, Escape
 
 **Checkpoint**: all P1 stories work.

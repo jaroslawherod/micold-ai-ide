@@ -31,6 +31,7 @@
 
 use crate::icons::Icon;
 use crate::ui::cdk::context_area::ContextArea;
+use crate::ui::material::keyboard_focus::{Indicator, TakesTheKeyboard};
 use crate::ui::material::{IconButton, Tooltip, TypeRole};
 use iced::widget::row;
 use iced::{Alignment, Element};
@@ -58,6 +59,7 @@ pub struct SplitAction<'a, M> {
     tint: Option<Rgb>,
     compact: bool,
     size: Option<TypeRole>,
+    focus_id: Option<iced::advanced::widget::Id>,
 }
 
 impl<'a, M> SplitAction<'a, M> {
@@ -76,6 +78,7 @@ impl<'a, M> SplitAction<'a, M> {
             tint: None,
             compact: false,
             size: None,
+            focus_id: None,
         }
     }
 
@@ -167,6 +170,13 @@ impl<'a, M> SplitAction<'a, M> {
         self
     }
 
+    /// Make the primary half take the keyboard, named `id`, so the application can move focus to it
+    /// (feature 813, R12). Left off, the control is not a tab stop, as before.
+    pub fn focus_id(mut self, id: iced::advanced::widget::Id) -> Self {
+        self.focus_id = Some(id);
+        self
+    }
+
     /// The type role both halves are sized at.
     pub fn size(mut self, role: TypeRole) -> Self {
         self.size = Some(role);
@@ -200,6 +210,17 @@ impl<'a, M: Clone + 'a> From<SplitAction<'a, M>> for Element<'a, M> {
         };
 
         let primary = half(split.icon, split.primary.clone(), split.tooltip);
+        let primary = match split.focus_id {
+            Some(id) if split.primary.is_some() => TakesTheKeyboard::new(primary, true)
+                .id(id)
+                .indicator(Indicator {
+                    outline: split.roles.secondary,
+                    layer: split.tint.unwrap_or(split.roles.on_surface),
+                    radius: 12.0,
+                })
+                .into(),
+            _ => primary,
+        };
         let primary = match split.primary_anchor {
             Some(anchor) => ContextArea::new(primary).on_primary_press(anchor).into(),
             None => primary,

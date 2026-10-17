@@ -9,20 +9,36 @@ use crate::ui::material::{CardGrid, OverviewCard};
 use iced::widget::container;
 use iced::{Element, Length};
 use micold_core::location_state::location_state;
+use micold_core::occupancy::main_session;
 use micold_core::overview::{
-    card_state, location_type, order, session_counts, CardModel, CardSignals, CurrentPr,
-    LocationType, PrDisplay, PrSignal, PrUnknown,
+    activation, card_state, location_type, order, session_counts, CardModel, CardSignals,
+    CurrentPr, LocationType, PrDisplay, PrSignal, PrUnknown,
 };
 use micold_core::session::{Session, SessionLocation};
 use micold_core::theme::ColorScheme;
 use micold_core::tokens::{self, spacing};
+
+/// The first card's widget id: the keyboard goes here when the Overview opens (research R13).
+pub static FIRST_CARD_ID: std::sync::LazyLock<iced::advanced::widget::Id> =
+    std::sync::LazyLock::new(|| iced::advanced::widget::Id::new("overview-first-card"));
 
 /// The Overview: a grid with one card per location of the active project.
 pub fn view<'a>(state: &State, scheme: ColorScheme) -> Element<'a, Message> {
     let r = tokens::roles(scheme);
     let cards = cards(state)
         .iter()
-        .map(|model| OverviewCard::new(model, r))
+        .enumerate()
+        .map(|(index, model)| {
+            let card = OverviewCard::new(model, r).on_press(Message::Overview(
+                crate::features::overview::Msg::CardActivated(model.activation.clone()),
+            ));
+            // The first card is named so opening the Overview can put the keyboard on it (R13).
+            if index == 0 {
+                card.id(FIRST_CARD_ID.clone())
+            } else {
+                card
+            }
+        })
         .collect();
     // The grid scrolls itself; an outer scrollable would give it unbounded height.
     container(CardGrid::new(cards, r))
@@ -103,6 +119,11 @@ fn card(app: &State, place: &Place) -> CardModel {
         (_, None) => display_name.clone(),
     };
     let branch_ref = branch.clone();
+    let activation = activation(
+        &location,
+        main_session(app.active_sessions(), &location),
+        kind,
+    );
     CardModel {
         location,
         display_name,
@@ -113,6 +134,7 @@ fn card(app: &State, place: &Place) -> CardModel {
         reason,
         summary,
         prs: pr_display(&app.pr_status, branch_ref),
+        activation,
     }
 }
 
@@ -189,6 +211,9 @@ mod tests {
                 reason: micold_core::overview::CardReason::Idle,
                 summary: "s".into(),
                 prs: micold_core::overview::PrDisplay::Hidden,
+                activation: micold_core::overview::Activation::RevealOnly(
+                    micold_core::session::SessionLocation::Default,
+                ),
             })
             .collect();
         let element: Element<'_, ()> = container(CardGrid::new(
