@@ -81,17 +81,7 @@ stash@{0} survivors ("686 M1a red WIP"; never drop it; backed up in /mnt/project
 
 ## Handover
 
-M1a unit 2 (context cap, 126k after implementation). All M1a tasks are done and ticked (T106–T116,
-T143, T020, T026); commits d8121ffd (U26 classify), 52763d9e (U121 `Cluster::replace`,
-`hold_on_delete`/`release`, no `node_arch`), c2fb2684 (revision-2 `KubeSettings`,
-`daemon_resources.rs`, `daemon_image/` deleted, `daemons_kube.rs` reworked), then the T116 revert
-commit (Verify diff empty). Last local run: `cargo test -p micold-core --lib --test daemons_kube`
-719 + 6 passed. Not run yet: clippy and the workspace build (client/daemon crates). Next:
-verify.md — scoped gate (`scripts/autopilot/scoped-gate.sh`, detached) with review A
-(`code-review` high on `origin/main...HEAD`) in its shadow, then review B (conformance, sonnet),
-then `scripts/gate.sh`, push, PR title/body files in the scratchpad (body also covers the design
-revision 2 commits with the tasks review results above). No Agent tool in this environment:
-reviewers run as detached `claude -p --agent autopilot-reviewer` held with `hold.sh`.
+None.
 
 ## Open escalation
 

@@ -15,7 +15,12 @@ use std::fmt;
 
 use futures_util::future::BoxFuture;
 
-use crate::connect::AsyncReadWrite;
+use tokio::io::{AsyncRead, AsyncWrite};
+
+/// A byte stream, such as the one [`Cluster::port_forward`] opens to a pod's port.
+pub trait AsyncReadWrite: AsyncRead + AsyncWrite + Send + Unpin {}
+
+impl<T: AsyncRead + AsyncWrite + Send + Unpin> AsyncReadWrite for T {}
 
 /// The kinds of object the client creates or reads (contract §1).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
