@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #905
 - **Worktree branch**: claude/project-thread-h057j5
 - **Started**: 2026-10-17
-- **Phase**: clarify
-- **Next step**: clarify unit: settle the three [NEEDS CLARIFICATION] markers in spec.md (mid-turn question state, several-sessions aggregation, unknown activity)
+- **Phase**: plan
+- **Next step**: plan unit (clarify CLEAN: round 1 settled 3 markers from the repo; round 2 found no critical ambiguity)
 
 ## Pull requests
 
@@ -26,6 +26,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
+| 1 | clarify | Mid-turn question (not a permission): Blocked or Idle? | Blocked, same as a permission | agent | specs/613-notification-kinds/spec.md#Terms; micold-core attention.rs NotificationKind::NeedsPermission |
+| 2 | clarify | Several sessions: all or main only? | All un-archived sessions, Blocked > Running > Unknown > Idle | agent | specs/575-workspace-attention-list/spec.md#Terms (location row counts every session) |
+| 3 | clarify | Unknown activity: Idle or no icon? | No icon, reserved empty slot, tooltip "State unknown" | agent | specs/010-daemon-session-persistence FR-016c; specs/488-codex-opencode-providers FR-009 |
 
 ## Review rounds
 
