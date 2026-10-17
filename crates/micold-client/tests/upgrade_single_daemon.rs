@@ -182,21 +182,30 @@ fn a_daemon_added_after_the_upgrade_starts_at_defaults_not_a_copy() {
         panic!("container daemon");
     };
     assert_ne!(c.profile, SandboxProfile::default(), "the file was tuned");
+    // Added through the form, from the migrated state, not built by hand.
     let mut registry = state.settings.daemons.clone();
-    let id = registry
-        .add(
-            "second",
-            DaemonRuntime::Container(micold_core::daemons::ContainerSettings {
-                profile: SandboxProfile::default(),
-                container_name: "second".into(),
-                port: 7800,
-            }),
-            false,
-        )
-        .unwrap();
-    assert_eq!(registry.get(id).map(|e| e.id), Some(id));
+    let mut links = micold_client::links::DaemonLinks::at_launch(&registry);
+    let mut bindings = std::collections::BTreeMap::new();
+    let sessions = std::collections::BTreeMap::new();
+    let mut form = micold_client::features::daemons::State::default();
+    micold_client::features::daemons::begin_add(&mut form);
+    let draft = form.draft.as_mut().unwrap();
+    draft.name = "second".into();
+    draft.runtime = micold_client::features::daemons::DraftRuntime::Container;
+    draft.container_name = "second".into();
+    draft.port = "7800".into();
+    let mut model = micold_client::features::daemons::Model {
+        registry: &mut registry,
+        links: &mut links,
+        bindings: &mut bindings,
+        legacy_default: None,
+        locations: &[],
+        sessions: &sessions,
+    };
+    micold_client::features::daemons::save(&mut form, &mut model).expect("the form saves");
+    assert_eq!(registry.entries().len(), 2);
     assert_eq!(registry.entries()[0], migrated, "entry 1 is untouched");
-    let DaemonRuntime::Container(second) = &registry.get(id).unwrap().runtime else {
+    let DaemonRuntime::Container(second) = &registry.entries()[1].runtime else {
         panic!("container daemon");
     };
     assert_eq!(second.profile, SandboxProfile::default());
