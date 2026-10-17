@@ -484,11 +484,11 @@ fn comment_or_editor<'a>(
     let state = match (is_pending(comment), sending) {
         (false, _) => CardState::Sent,
         (true, true) => CardState::InSend,
-        (true, false) => CardState::Pending,
+        (true, false) => CardState::Draft,
     };
     let mut card = ReviewCommentCard::new(&comment.text, state, r)
         .outdated(view.outdated.contains(&comment.id));
-    if state == CardState::Pending {
+    if state == CardState::Draft {
         card = card
             .on_edit(Message::Changes(Msg::EditComment(comment.id)))
             .on_delete(Message::Changes(Msg::DeleteComment(comment.id)));

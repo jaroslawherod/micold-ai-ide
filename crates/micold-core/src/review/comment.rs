@@ -31,7 +31,7 @@ impl Default for CommentId {
 /// `{ "sent": { "at": … } }` or `{ "reported": { "sent_at", "outcome", "reply", "first_at",
 /// "last_at", "by" } }`; version 1's `{ "pending": null }` reads as `Draft`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(from = "StateRepr", into = "StateRepr")]
+#[serde(try_from = "StateRepr", into = "StateRepr")]
 pub enum CommentState {
     /// Written, not sent (482's pending). Editable and deletable.
     Draft,
@@ -182,11 +182,27 @@ enum StateRepr {
     },
 }
 
-impl From<StateRepr> for CommentState {
-    fn from(repr: StateRepr) -> Self {
-        match repr {
+impl TryFrom<StateRepr> for CommentState {
+    type Error = String;
+
+    /// Loads a stored state, refusing a report its operations could not have built: a blank
+    /// answered reply, or a first report later than the last.
+    fn try_from(repr: StateRepr) -> Result<Self, Self::Error> {
+        Ok(match repr {
             StateRepr::Draft(()) => Self::Draft,
             StateRepr::Sent { at } => Self::Sent { at },
+            StateRepr::Reported {
+                outcome: Outcome::Answered,
+                ref reply,
+                ..
+            } if reply.trim().is_empty() => {
+                return Err("an answered report has a reply".to_owned());
+            }
+            StateRepr::Reported {
+                first_at, last_at, ..
+            } if first_at > last_at => {
+                return Err("a report's first time is not after its last".to_owned());
+            }
             StateRepr::Reported {
                 sent_at,
                 outcome,
@@ -204,7 +220,7 @@ impl From<StateRepr> for CommentState {
                     by,
                 },
             },
-        }
+        })
     }
 }
 
@@ -435,7 +451,7 @@ pub enum ReviewError {
     InSend,
     /// A send is already open for this entry (W6, R6).
     Busy,
-    /// There is no pending comment to send (W6, US2 s5).
+    /// There is no draft comment to send (W6, US2 s5).
     NothingPending,
     /// Another comment of the entry already has the new id's reference (FR-014).
     RefTaken,
@@ -446,7 +462,7 @@ impl std::fmt::Display for ReviewError {
         match self {
             Self::Invalid(why) => f.write_str(why),
             Self::NotFound => f.write_str("no such comment in this entry"),
-            Self::Refused => f.write_str("a sent comment cannot be changed; clear it instead"),
+            Self::Refused => f.write_str("only a draft comment can be changed; clear it instead"),
             Self::InSend => f.write_str("the comment is being sent; try again once the send ends"),
             Self::Busy => f.write_str("these comments are already being sent"),
             Self::NothingPending => f.write_str("there are no draft comments to send"),
@@ -504,7 +520,7 @@ impl EntryReview {
         self.sending.is_some()
     }
 
-    /// Open a send of every pending comment (W6): `NothingPending` with none, `Busy` while
+    /// Open a send of every draft comment (W6): `NothingPending` with none, `Busy` while
     /// another send is open. Until it finishes or aborts, its comments refuse edits (`InSend`).
     pub fn begin_send(
         &mut self,
@@ -603,7 +619,7 @@ impl EntryReview {
         Ok(())
     }
 
-    /// Remove every sent comment (W4); pending ones stay.
+    /// Remove every sent or reported comment (W4); drafts stay.
     pub fn clear_sent(&mut self) {
         self.comments
             .retain(|comment| comment.state == CommentState::Draft);
@@ -1160,6 +1176,25 @@ mod tests {
             .expect("deserialises");
             assert_eq!(back.state, s, "every state round-trips");
         }
+    }
+
+    #[test]
+    fn a_stored_report_its_operations_could_not_build_is_refused() {
+        let stored = |reply: &str, first: u64, last: u64| {
+            let mut value = serde_json::to_value(sample(reported(
+                Outcome::Answered,
+                "why",
+                Reporter::User,
+            )))
+            .expect("serialises");
+            value["state"]["reported"]["reply"] = json!(reply);
+            value["state"]["reported"]["first_at"] = json!(first);
+            value["state"]["reported"]["last_at"] = json!(last);
+            serde_json::from_value::<ReviewComment>(value)
+        };
+        assert!(stored("why", NOW, NOW).is_ok(), "a sound report loads");
+        assert!(stored("  ", NOW, NOW).is_err(), "a blank answered reply");
+        assert!(stored("why", NOW + 1, NOW).is_err(), "first after last");
     }
 
     #[test]
