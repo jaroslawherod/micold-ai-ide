@@ -28,6 +28,37 @@ keeps the volume; **Remove** deletes both after confirmation.
 The image source and the resources fields are the ones #806 introduces for container daemons (one
 shared form): see FR-004 and FR-005.
 
+## Clarifications
+
+### Session 2026-10-17
+
+- Q: What image does a Kubernetes daemon use by default, given that a cluster cannot use an image built
+  only on the client? → A: Built per #806 (the current daemon binary plus the selected AI provider CLIs)
+  with the client's container runtime, then pushed to a registry the user names; pulling a given image
+  stays an explicit choice. _(default chosen by orchestrator, pending owner answer (decision cards
+  2026-10-17))_
+- Q: How do the AI provider CLIs selected for the daemon get into the pod? → A: Installed at build time
+  in the image the client builds and pushes, as #806 does for container daemons; a pulled image is used
+  as given. _(default chosen by orchestrator, pending owner answer (decision cards 2026-10-17))_
+- Q: Where does the clone in the daemon's volume come from? → A: The project's git remote, fetched in
+  the pod with an allowed push/pull credential (FR-008); a project with no remote is refused for a
+  Kubernetes daemon, naming the reason. _(default chosen by orchestrator, pending owner answer (decision
+  cards 2026-10-17))_
+- Q: Does a change to the selected provider CLIs rebuild and push the image, and how is the pushed
+  image tagged so the pod runs the client's version? → A: Deferred to the plan; it follows #806's
+  rebuild rule, and FR-017 already refuses sessions on a mismatched daemon. _(agent-resolved:
+  specs/686-kubernetes-daemon-runtime/spec.md#FR-017)_
+- Q: How does the CI suite (FR-021) get the built image into its throwaway cluster? → A: Deferred to
+  the plan (a registry in the job, or the local cluster's own image loading); the spec only requires
+  the scenarios to pass. _(agent-resolved: specs/686-kubernetes-daemon-runtime/spec.md#FR-021)_
+- Q: How does the cluster pull an image from a private registry? → A: Only with a registry pull
+  credential the user explicitly allows for that daemon, created as a Kubernetes image-pull secret, the
+  same allow-list rule as every other credential. _(agent-resolved:
+  specs/686-kubernetes-daemon-runtime/spec.md#FR-008)_
+- Q: How does the push to the registry authenticate? → A: With the client's container runtime's own
+  registry login, as #806's build uses the local runtime; the app stores no registry password, as it
+  stores no cluster credential. _(agent-resolved: specs/686-kubernetes-daemon-runtime/spec.md#FR-002)_
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Work on a project in a Kubernetes daemon end to end (Priority: P1)
@@ -199,6 +230,14 @@ pass with no sign-in, provider network access or cost.
 - **Two Kubernetes daemons on the same context and namespace**: allowed when names differ; each owns
   its own pod, volume and secrets, which never collide. A second daemon with the same context,
   namespace and daemon name is refused naming the first.
+- **Project without a git remote**: binding its worktree to a Kubernetes daemon is refused naming the
+  missing remote; other daemons still accept it.
+- **Remote needs a credential the user did not allow**: the clone fails naming the remote and the
+  missing credential; nothing is left half-cloned in the volume.
+- **Registry push refused** (not logged in, no permission, registry unreachable): start fails naming
+  the registry and the container runtime's error; no pod is created.
+- **No local container runtime** with the build choice: start fails saying a container runtime is
+  needed to build, and that pulling a given image needs none.
 - **Volume full**: worktree creation or git operations fail with the disk-full reason; existing
   sessions are not killed by the client.
 - **Pod evicted, deleted outside the app or node lost while connected**: the daemon goes
@@ -247,13 +286,12 @@ pass with no sign-in, provider network access or cost.
 - **FR-003**: The system MUST create the daemon's pod in the chosen namespace when none exists and
   MUST reuse the pod it created before when one exists, never creating a second pod for one daemon.
 - **FR-004**: The daemon's image source MUST use the same choice and form as container daemons in
-  #806, and the default MUST follow #806's default rather than a published release image.
-  [NEEDS CLARIFICATION: #806 defaults to building an image locally from a Dockerfile with the current
-  daemon binary; a cluster cannot use a locally built image without a registry. Is the Kubernetes
-  default (a) build locally and push to a registry the user names, (b) pull only, with the user naming
-  an image (e.g. one built and pushed per #806), or (c) build inside the cluster? Under each, how do
-  the AI provider CLIs the user selects for the daemon (#806 installs them in the built image) get
-  into the pod's image?]
+  #806 (build from a Dockerfile, or pull a given image), plus a registry field for the build choice.
+  The default MUST be #806's build (the current daemon binary and the AI provider CLIs selected for
+  the daemon, installed at build time), made with the client's container runtime and pushed to the
+  registry the user names, authenticated by that runtime's own registry login; the pod then pulls
+  the pushed image. A pulled image is used as given. A published release image MUST NOT be offered
+  as a default. The build choice with no registry named MUST be refused naming the field.
 - **FR-005**: The user MUST be able to set CPU and memory requests and limits (the #806 resources
   fields), a node selector, tolerations and the volume size; these persist with the daemon and apply
   on the next start.
@@ -261,13 +299,14 @@ pass with no sign-in, provider network access or cost.
   and MUST NOT create a Service, Ingress or any other network exposure, in the cluster or on the
   client beyond loopback.
 - **FR-007**: The system MUST store worktrees on a persistent volume owned by the daemon, populated by
-  cloning the project's repository into it, so worktrees survive pod deletion and restart.
-  [NEEDS CLARIFICATION: where does the clone come from — (a) the project's git remote, using an
-  allowed push/pull credential, with projects that have no remote refused; or (b) the client's local
-  repository, transferred to the pod over the tunnel (works without a remote)?]
+  cloning the project's repository into it, so worktrees survive pod deletion and restart. The clone
+  MUST come from the project's git remote, fetched in the pod with an allowed push/pull credential
+  (FR-008) when the remote needs one; binding a worktree of a project with no remote to a Kubernetes
+  daemon MUST be refused naming the reason. Commits not pushed to the remote are not carried over.
 - **FR-008**: Push/pull credentials and AI CLI sign-ins MUST reach the pod only when the user
   explicitly allows each for that daemon, only as Kubernetes secrets the system creates in the
-  namespace, and never inside the image. Withdrawn ones MUST be deleted on the next start.
+  namespace, and never inside the image. The same holds for a registry pull credential, created as
+  an image-pull secret. Withdrawn ones MUST be deleted on the next start.
 - **FR-009**: The pod MUST run as a non-root user, with a read-only root filesystem (writable only on
   the volume and scratch space), with privilege escalation disabled, and with no secret mounted that
   FR-008 did not allow.
@@ -282,11 +321,12 @@ pass with no sign-in, provider network access or cost.
 - **FR-012**: The system MUST report, with a reason naming the cause, at least: RBAC denial (naming
   the action and resource), image pull failure (naming the image and cluster error), unschedulable pod
   (with the scheduler's reason), volume claim not bound (with its reason), missing context or
-  namespace, unreachable cluster, and a missing or failing exec credential plugin. It MUST NOT hang or
-  retry silently. Each start phase has its own bound, after which start fails naming the phase:
-  everything except the image pull and any image build or push at most 120 seconds; the image pull at
-  most 15 minutes; an image build or push (if FR-004 resolves to one) shows its output live, can be
-  cancelled by the user, and fails at most 30 minutes after it starts.
+  namespace, unreachable cluster, a missing or failing exec credential plugin, an image build failure,
+  and a registry push failure (naming the registry and the container runtime's error). It MUST NOT
+  hang or retry silently. Each start phase has its own bound, after which start fails naming the
+  phase: everything except the image pull and the image build and push at most 120 seconds; the image
+  pull at most 15 minutes; the image build and push (FR-004) show their output live, can be cancelled
+  by the user, and fail at most 30 minutes after they start.
 - **FR-013**: A failed start MUST NOT leave behind a pod or secrets it created in that attempt; the
   volume is kept only if it existed before the attempt.
 - **FR-014**: **Stop** MUST delete the pod and keep the volume; after confirmation when sessions are
@@ -323,12 +363,12 @@ pass with no sign-in, provider network access or cost.
 ### Key Entities
 
 - **Kubernetes daemon**: a daemon (spec 491) whose runtime is Kubernetes; settings: kube context,
-  namespace, image source (#806), resources, node selector, tolerations, volume size, allowed
-  credentials and sign-ins.
+  namespace, image source (#806) and registry, resources, node selector, tolerations, volume size,
+  allowed credentials, sign-ins and registry pull credential.
 - **Daemon pod**: the pod running the session daemon; created or reused on start, deleted on stop.
 - **Daemon volume**: the persistent volume claim holding the cloned repositories and worktrees; kept
   on stop, deleted on remove.
-- **Daemon secrets**: one per allowed credential or sign-in; created on start, deleted when withdrawn
+- **Daemon secrets**: one per allowed credential, sign-in or registry pull credential; created on start, deleted when withdrawn
   or on remove.
 - **Tunnel**: the client's port-forward connection through the Kubernetes API to the daemon.
 
@@ -337,7 +377,7 @@ pass with no sign-in, provider network access or cost.
 ### Measurable Outcomes
 
 - **SC-001**: A user with a reachable cluster can add a Kubernetes daemon, start it, create a worktree
-  and type into a running session in under 5 minutes, excluding image build and pull time.
+  and type into a running session in under 5 minutes, excluding image build, push and pull time.
 - **SC-002**: After the client is away for 10 minutes, 100% of sessions still running in the pod are
   shown running with their output since disconnection.
 - **SC-003**: RBAC denial, image pull failure and an unschedulable pod are each reported with their
@@ -357,6 +397,8 @@ pass with no sign-in, provider network access or cost.
 - One volume per daemon holds every project bound to it; volume size defaults to 10 GiB.
 - The pod is a bare pod managed by the client, not a Deployment or StatefulSet; the client recreates it
   on start.
+- With the build choice the client machine has a container runtime (as #806's build needs), logged in
+  to the named registry, and the cluster can reach that registry.
 - Default resources match #806's container defaults; node selector and tolerations default to none.
 - The in-cluster daemon is the same build as the client's (version-matched), consistent with #806 and
   spec 489 FR-005.
