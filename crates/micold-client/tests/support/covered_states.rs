@@ -473,6 +473,7 @@ fn with_pull_requests(width: u16) -> State {
         state,
         review: ReviewState::None,
         head: "abc".to_string(),
+        conflict: false,
     };
     let mut state = with_project();
     state.sidebar.width = width;

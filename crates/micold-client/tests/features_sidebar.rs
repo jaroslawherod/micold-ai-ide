@@ -976,6 +976,7 @@ fn pull_request(number: u64) -> PullRequestStatus {
         },
         review: ReviewState::None,
         head: "abc".into(),
+        conflict: false,
     }
 }
 
@@ -1714,7 +1715,8 @@ fn row_state(fixture: &str, asked: &[&str], branch: &str) -> Option<PrState> {
         shown_for_current_session: false,
         daemon: String::new(),
     });
-    row_pull_request(&entry, &held, &BTreeSet::new(), Some(1), 2).map(|row| row.status.state)
+    row_pull_request(&entry, &held.statuses, &BTreeSet::new(), Some(1), 2)
+        .map(|row| row.status.state)
 }
 
 /// A1, A3, A9 (US1-1, US1-3, US1-9).

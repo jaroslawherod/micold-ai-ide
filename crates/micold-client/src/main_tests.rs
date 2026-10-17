@@ -8815,7 +8815,7 @@ mod pr_status {
     use micold_core::protocol::messages::{OperationResult, RefusalReason};
     use micold_core::pull_request::{
         CheckStatus, FakePullRequestSource, PrState, PullRequestSource, PullRequestStatus,
-        ReadingFailure, ReviewState,
+        ReadingFailure, ReviewState, StatusReading,
     };
     use std::collections::BTreeMap;
 
@@ -8872,6 +8872,7 @@ mod pr_status {
             },
             review: ReviewState::None,
             head: "a".repeat(40),
+            conflict: false,
         }
     }
 
@@ -9234,14 +9235,17 @@ mod pr_status {
             _: &micold_core::github::GithubRepo,
             _: &[String],
             _: u64,
-        ) -> Result<BTreeMap<String, PullRequestStatus>, ReadingFailure> {
+        ) -> Result<StatusReading, ReadingFailure> {
             self.entered.send(()).expect("the test listens");
             self.release
                 .lock()
                 .expect("not poisoned")
                 .recv()
                 .expect("the test lets the source go");
-            Ok(statuses())
+            Ok(StatusReading {
+                statuses: statuses(),
+                ..StatusReading::default()
+            })
         }
 
         fn list_branch(
@@ -10905,6 +10909,7 @@ mod pr_status_open {
             },
             review: ReviewState::None,
             head: "abc".into(),
+            conflict: false,
         }
     }
 
