@@ -17,8 +17,8 @@ use crate::features::worktree_form::{
 };
 use crate::ui::focus::TrackFocus;
 use crate::ui::material::{
-    self, Button, Select, StageProgress, SurfaceKind, Text, TextField, ToggleChip, TypeRole,
-    TypeaheadRow,
+    self, Button, RequiredLegend, Select, StageProgress, SurfaceKind, Text, TextField, ToggleChip,
+    TypeRole, TypeaheadRow,
 };
 use iced::widget::{column, row, Space};
 use iced::{Element, Length};
@@ -53,6 +53,11 @@ pub fn modal<'a>(
     // it reads from GitHub (feature 034, FR-002, FR-025).
     if let Some(caption) = form.source_caption() {
         fields = fields.push(Text::new(caption, TypeRole::Caption, r).muted());
+    }
+
+    // The marker's explanation, once, above the form's first field (feature 937, FR-004).
+    if let Some(legend) = RequiredLegend::for_fields(&form.required_fields(), r) {
+        fields = fields.push(legend);
     }
 
     // Source-specific inputs (feature 016, FR-010): the original type/ticket/name fields, the
@@ -535,11 +540,19 @@ fn issue_picker<'a>(form: &'a WorktreeForm, r: Roles) -> Element<'a, Message> {
                 (form.issue_search_status(), &form.issues)
             {
                 col = if matches!(search, SearchState::Failed { .. }) {
-                    col.push(Text::new(status, TypeRole::Caption, r).tint(r.error))
-                        .push(
+                    // One row: the legend (feature 937) took a line of the dialog's height, which
+                    // the panel-placement gate measures, so the failure and its Retry share one.
+                    col.push(
+                        row![
+                            Text::new(status, TypeRole::Caption, r)
+                                .tint(r.error)
+                                .width(Length::Fill),
                             Button::text("Retry", r)
                                 .on_press(Message::WorktreeForm(FormMsg::IssueRetry)),
-                        )
+                        ]
+                        .spacing(spacing::SM)
+                        .align_y(iced::Alignment::Center),
+                    )
                 } else {
                     col.push(StageProgress::new(status, r))
                 };
@@ -558,8 +571,9 @@ const DETAIL_LABEL_WIDTH: f32 = 148.0;
 
 /// How many rows of details the form shows before they scroll. The form is the tallest dialog and
 /// the window has a fixed height: nine rows, with the form's own fields, would push the dialog
-/// over the app bar (`gates/panel_placement.rs`) and the footer out of reach.
-const DETAIL_ROWS_SHOWN: usize = 5;
+/// over the app bar (`gates/panel_placement.rs`) and the footer out of reach. Three, since the
+/// `* required` legend (feature 937) took a line and its gap.
+const DETAIL_ROWS_SHOWN: usize = 3;
 
 /// One row of the details block: a body line at [`TypeRole::Body`]'s height plus the gap below it.
 const DETAIL_ROW_HEIGHT: f32 = 24.0;

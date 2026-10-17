@@ -5,7 +5,7 @@ use crate::features::settings::Msg as SettingsMsg;
 use crate::features::settings::{SettingsDraft, SettingsSection};
 use crate::features::window::FieldId;
 use crate::ui::focus::TrackFocus;
-use crate::ui::material::{Checkbox, TextField};
+use crate::ui::material::{Checkbox, RequiredLegend, TextField};
 use crate::ui::settings::{field_note, page};
 use iced::Element;
 use micold_core::tokens::Roles;
@@ -63,7 +63,10 @@ pub fn view<'a>(
     page(
         "Terminal",
         "The terminal embedded in each session.",
-        vec![scrollback.into(), save_history],
+        RequiredLegend::for_fields(&required, roles)
+            .into_iter()
+            .chain([scrollback.into(), save_history])
+            .collect(),
         roles,
     )
 }

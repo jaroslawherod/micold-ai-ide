@@ -9,8 +9,9 @@
 //!
 //! Every `.label(` in a rendering module outside `ui/material/` whose argument is a string literal
 //! must not end in `*`. Source text rather than pixels, as `field_focus_call_sites.rs` argues: the
-//! property is one of the call site. The legend and the error message get the same check in later
-//! milestones of the feature.
+//! property is one of the call site. The legend gets the same check (C5, SC-003, SC-006): no file
+//! outside `ui/material/` spells `* required`, and every form that has a required field calls
+//! `RequiredLegend`. The error message gets its check in a later milestone of the feature.
 
 #[path = "support/source_scan.rs"]
 mod source_scan;
@@ -90,6 +91,73 @@ fn no_form_writes_the_marker_into_a_label() {
          `.required(..)` instead and let the shared field draw it (feature 937, FR-008):\n{}",
         offenders.join("\n")
     );
+}
+
+/// The views that draw a form with a required field: the dialogs and the Settings pages (R5).
+const LEGEND_FORMS: [&str; 8] = [
+    "ui/worktree_form.rs",
+    "ui/parallel_dialog.rs",
+    "ui/rename_dialog.rs",
+    "ui/settings/terminal.rs",
+    "ui/settings/environment.rs",
+    "ui/settings/github.rs",
+    "ui/settings/jira.rs",
+    "ui/settings/daemons.rs",
+];
+
+/// Whether `source` writes the legend words as a string literal, comments aside.
+fn spells_the_legend(source: &str) -> bool {
+    strip_comments_keep_lines(source).contains("\"* required\"")
+}
+
+/// Whether `source` calls the shared legend component, comments aside.
+fn calls_the_legend(source: &str) -> bool {
+    strip_comments_keep_lines(source).contains("RequiredLegend::")
+}
+
+#[test]
+fn no_form_spells_the_legend() {
+    let offenders: Vec<String> = rendering_files()
+        .into_iter()
+        .filter(|(_, src)| spells_the_legend(src))
+        .map(|(name, _)| name)
+        .collect();
+    assert!(
+        offenders.is_empty(),
+        "these files write the required legend themselves; push `RequiredLegend` instead \
+         (feature 937, FR-008):\n{}",
+        offenders.join("\n")
+    );
+}
+
+#[test]
+fn every_form_with_a_required_field_calls_the_legend() {
+    let files = rendering_files();
+    let missing: Vec<&str> = LEGEND_FORMS
+        .iter()
+        .copied()
+        .filter(|form| {
+            !files
+                .iter()
+                .any(|(name, src)| name == form && calls_the_legend(src))
+        })
+        .collect();
+    assert!(
+        missing.is_empty(),
+        "these forms have a required field and do not call `RequiredLegend` (feature 937, \
+         FR-004, SC-003):\n{}",
+        missing.join("\n")
+    );
+}
+
+#[test]
+fn the_legend_scan_tells_the_literal_from_the_call() {
+    assert!(spells_the_legend(r#"Text::new("* required", r)"#));
+    assert!(!spells_the_legend(
+        "// \"* required\" is drawn by the library"
+    ));
+    assert!(calls_the_legend("fields.push(RequiredLegend::new(r))"));
+    assert!(!calls_the_legend("// RequiredLegend goes here"));
 }
 
 #[test]

@@ -135,6 +135,19 @@ pub fn divider<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Mes
     )
 }
 
+/// `RequiredLegend` — the `* required` line a form shows once above its first field (feature 937,
+/// FR-011); the marker itself is posed on the `FormField` entry.
+pub fn required_legend<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
+    arrange(
+        vec![posed(
+            "legend",
+            material::RequiredLegend::<Message>::new(roles),
+            roles,
+        )],
+        Layout::Inline,
+    )
+}
+
 /// `Tag` — a chip in two accents, so the tint reads as a tint rather than as the component's own
 /// colour, and once at the label size.
 pub fn tag<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
