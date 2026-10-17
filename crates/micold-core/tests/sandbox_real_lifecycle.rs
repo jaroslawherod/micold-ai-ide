@@ -717,7 +717,7 @@ impl CommandRunner for ControlPublishedToTheImage {
         &self,
         program: &std::ffi::OsStr,
         args: &[std::ffi::OsString],
-        on_line: &mut dyn FnMut(&str),
+        on_line: &mut dyn FnMut(micold_core::sandbox::exec::StreamEvent<'_>),
     ) -> std::io::Result<CommandOutput> {
         SystemRunner.run_streaming(program, &self.rewrite(args), on_line)
     }

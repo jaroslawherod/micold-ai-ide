@@ -9,10 +9,11 @@
 //! testing convenience bolted on afterwards; it is why the layering exists.
 
 use std::ffi::{OsStr, OsString};
+use std::time::Duration;
 
 use super::argv;
 use super::dialect::Dialect;
-use super::exec::{CommandOutput, CommandRunner};
+use super::exec::{CommandOutput, CommandRunner, StreamEvent};
 use super::image::{ImageSource, ImageSourceKind};
 use super::parse::{self, ContainerFacts, ImageFacts};
 use super::runtime::{
@@ -187,7 +188,12 @@ impl<R: CommandRunner> ContainerRuntime for CliRuntime<R> {
                     .iter()
                     .map(OsString::from)
                     .collect();
-                let mut on_line = |line: &str| progress(pull_progress(line));
+                let mut on_line = |event: StreamEvent<'_>| {
+                    progress(match event {
+                        StreamEvent::Line(line) => pull_progress(line),
+                        StreamEvent::Quiet { elapsed } => still_working("Downloading", elapsed),
+                    })
+                };
                 let out = self.finish(self.runner.run_streaming(
                     &self.program(),
                     &args,
@@ -204,11 +210,16 @@ impl<R: CommandRunner> ContainerRuntime for CliRuntime<R> {
                     OsString::from("-i"),
                     path.as_os_str().to_os_string(),
                 ];
-                let mut on_line = |line: &str| {
-                    progress(Progress {
-                        stage: "Importing".into(),
-                        detail: Some(line.to_string()),
-                        percent: None,
+                // `load` without a terminal prints nothing until the import is over, so the quiet
+                // ticks are the only progress a large archive gets (#790).
+                let mut on_line = |event: StreamEvent<'_>| {
+                    progress(match event {
+                        StreamEvent::Line(line) => Progress {
+                            stage: "Importing".into(),
+                            detail: Some(line.to_string()),
+                            percent: None,
+                        },
+                        StreamEvent::Quiet { elapsed } => still_working("Importing", elapsed),
                     })
                 };
                 self.finish(
@@ -319,6 +330,17 @@ fn pull_progress(line: &str) -> Progress {
             stage
         },
         detail: Some(line.to_string()),
+        percent: None,
+    }
+}
+
+/// The report for a runtime that is still working but has said nothing for a while.
+///
+/// No percentage: the runtime gave nothing to compute one from. The elapsed time is what moves.
+fn still_working(stage: &str, elapsed: Duration) -> Progress {
+    Progress {
+        stage: stage.to_string(),
+        detail: Some(format!("still working, {}s", elapsed.as_secs())),
         percent: None,
     }
 }

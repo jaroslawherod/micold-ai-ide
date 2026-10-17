@@ -8,8 +8,12 @@
 //! down, an image that vanishes between inspect and create, output that is cut off mid-object.
 //! Arranging those against a live runtime is either impossible or destructive.
 
+use std::ffi::{OsStr, OsString};
+
 use micold_core::sandbox::cli::CliRuntime;
-use micold_core::sandbox::exec::{CommandOutput, RecordingRunner};
+use micold_core::sandbox::exec::{
+    CommandOutput, CommandRunner, RecordingRunner, StreamEvent, QUIET_TICK,
+};
 use micold_core::sandbox::runtime::{ContainerId, ContainerRuntime, RuntimeError, RuntimeKind};
 
 fn fixture(name: &str) -> String {
@@ -303,6 +307,69 @@ fn acquiring_an_image_emits_progress_while_it_runs() {
              reports: {reports:?}"
         );
         assert!(!facts.tags.is_empty(), "{kind}");
+    }
+}
+
+/// A runner whose streaming run is silent for `ticks` quiet ticks before its canned output, as
+/// `docker load` is without a terminal (#790).
+struct SilentThenCanned {
+    inner: RecordingRunner,
+    ticks: u64,
+}
+
+impl CommandRunner for SilentThenCanned {
+    fn run(&self, program: &OsStr, args: &[OsString]) -> std::io::Result<CommandOutput> {
+        self.inner.run(program, args)
+    }
+
+    fn run_streaming(
+        &self,
+        program: &OsStr,
+        args: &[OsString],
+        on_event: &mut dyn FnMut(StreamEvent<'_>),
+    ) -> std::io::Result<CommandOutput> {
+        for n in 1..=self.ticks {
+            on_event(StreamEvent::Quiet {
+                elapsed: QUIET_TICK * n as u32,
+            });
+        }
+        self.inner.run_streaming(program, args, on_event)
+    }
+}
+
+/// #790: importing a large archive printed one line, at the end, and the indicator stood still
+/// past SC-004's ten seconds. Every quiet tick of the runner must reach the indicator.
+#[test]
+fn a_silent_import_still_reports_progress_on_every_quiet_tick() {
+    use micold_core::sandbox::image::{ImageSource, ImageSourceKind};
+
+    for kind in RuntimeKind::ALL {
+        let inner = RecordingRunner::new();
+        // inspect: absent -> load (one line, at the end) -> inspect: present
+        inner.push(Ok(CommandOutput::err(1, "Error: No such image: probe:1")));
+        inner.push_ok("Loaded image: probe:1");
+        inner.push_ok(fixture("docker_inspect_image.json"));
+        let rt = CliRuntime::new(kind, SilentThenCanned { inner, ticks: 12 });
+        let source = ImageSource {
+            kind: ImageSourceKind::ImportedFile,
+            reference: "probe:1".to_string(),
+            path: Some("/tmp/probe.tar".into()),
+        };
+
+        let mut reports = Vec::new();
+        rt.acquire_image(&source, &mut |p| reports.push(p))
+            .expect("acquire");
+
+        assert_eq!(reports.len(), 13, "{kind}: {reports:?}");
+        assert!(
+            reports.iter().all(|p| p.stage == "Importing"),
+            "{kind}: {reports:?}"
+        );
+        assert_eq!(
+            reports[11].detail.as_deref(),
+            Some("still working, 12s"),
+            "{kind}"
+        );
     }
 }
 
