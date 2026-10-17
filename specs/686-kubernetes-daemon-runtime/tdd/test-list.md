@@ -64,17 +64,17 @@ observable result needs a real pod (A3) is hosted only in the real suite.
 
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U1  | An empty context is refused naming "context"; a non-empty one is accepted without reading a kubeconfig | FR-018, FR-002 | example | PENDING | |
-| U2  | A namespace of 1 and of 63 DNS-1123 characters is accepted; 0, 64, or one with an uppercase letter is refused naming "namespace" | FR-018 | example | PENDING | |
+| U1  | An empty context is refused naming "context"; a non-empty one is accepted without reading a kubeconfig | FR-018, FR-002 | example | DONE | `core/kube/settings.rs` tests::an_empty_context_is_refused_and_any_non_empty_one_is_accepted_unread |
+| U2  | A namespace of 1 and of 63 DNS-1123 characters is accepted; 0, 64, or one with an uppercase letter is refused naming "namespace" | FR-018 | example | DONE | `core/kube/settings.rs` tests::a_namespace_must_be_a_dns_1123_label |
 | U3  | ~~Image source Build with no registry is refused naming "Registry"; Pull with none is accepted~~ (revision 2: removed) | FR-004 | example | REMOVED |  |
 | U4  | ~~A registry with a tag or a digest is refused naming "registry"; `host[:port]/path` is accepted~~ (revision 2: removed) | FR-004 | example | REMOVED |  |
-| U5  | Node-selector keys and values outside Kubernetes label syntax are refused naming the field | FR-005, FR-018 | example | PENDING | |
-| U6  | Tolerations parse `key[=value]:Effect` and `key:Exists:Effect` for the three effects; any other effect is refused naming "tolerations" | FR-005, FR-018 | example | PENDING | |
-| U7  | A volume size of exactly 1 GiB is accepted and one below it refused; the default is 10 GiB | FR-005 | example | PENDING | |
-| U8  | Defaults: no image, no storage class, nothing allowed, volume 10 GiB | FR-004, FR-005, FR-008 | example | PENDING |  |
+| U5  | Node-selector keys and values outside Kubernetes label syntax are refused naming the field | FR-005, FR-018 | example | DONE | `core/kube/settings.rs` tests::node_selector_entries_follow_label_syntax |
+| U6  | Tolerations parse `key[=value]:Effect` and `key:Exists:Effect` for the three effects; any other effect is refused naming "tolerations" | FR-005, FR-018 | example | DONE | `core/kube/settings.rs` tests::{tolerations_parse_both_forms_for_the_three_effects, a_toleration_with_another_effect_is_refused_naming_tolerations} |
+| U7  | A volume size of exactly 1 GiB is accepted and one below it refused; the default is 10 GiB | FR-005 | example | DONE | `core/kube/settings.rs` tests::the_volume_is_at_least_one_gib_and_ten_by_default |
+| U8  | Defaults: no image, no storage class, nothing allowed, volume 10 GiB | FR-004, FR-005, FR-008 | example | DONE | `core/kube/settings.rs` tests::defaults_are_no_image_no_storage_class_and_nothing_allowed |
 | U117 | `Quantity::to_k8s` / `parse_k8s` round-trip `Mi`/`Gi` memory and millicore CPU; an unparseable quantity is refused naming the field | FR-005 | example | DONE | `core/kube/settings.rs` quantity_tests::{a_quantity_is_written_in_the_largest_exact_binary_unit, a_quantity_is_read_with_binary_decimal_or_no_suffix, writing_then_reading_is_the_same_quantity} |
-| U118 | `image` is `None` by default and a given reference is kept as is; a moving tag is flagged as `sandbox::image` flags it | FR-004 | example | PENDING |  |
-| U119 | `providers` defaults to every enabled AI CLI and may be empty | FR-004, US5.1 | example | PENDING |  |
+| U118 | `image` is `None` by default and a given reference is kept as is; a moving tag is flagged as `sandbox::image` flags it | FR-004 | example | DONE | `core/kube/settings.rs` tests::{the_image_is_none_by_default_and_a_given_reference_is_kept_as_is, a_moving_image_tag_is_flagged_as_the_sandbox_flags_it, an_unparseable_stored_image_does_not_read} |
+| U119 | `providers` defaults to every enabled AI CLI and may be empty | FR-004, US5.1 | example | DONE | `core/kube/settings.rs` tests::providers_default_to_the_enabled_clis_and_may_be_empty |
 
 ### `crates/micold-core/src/daemon_resources.rs`
 
@@ -82,17 +82,17 @@ observable result needs a real pod (A3) is hosted only in the real suite.
 | --- | --- | --- | --- | --- | --- |
 | U9  | ~~The image source defaults to Build with no Dockerfile and the providers the Settings list enables~~ (revision 2: removed) | FR-004 | example | REMOVED |  |
 | U10 | ~~A Pull reference with a moving tag is flagged as `sandbox::image` flags it~~ (revision 2: removed) | FR-004 | example | REMOVED |  |
-| U11 | Resources default to no requests and the sandbox's CPU and memory limits; each of the four can be set alone | FR-005 | example | PENDING | |
-| U12 | A request equal to its limit is accepted; one above it is refused naming the request field | FR-005 | example | PENDING | |
+| U11 | Resources default to no requests and the sandbox's CPU and memory limits; each of the four can be set alone | FR-005 | example | DONE | `core/daemon_resources.rs` tests::{resources_default_to_no_requests_and_the_sandbox_limits, each_of_the_four_can_be_set_alone} |
+| U12 | A request equal to its limit is accepted; one above it is refused naming the request field | FR-005 | example | DONE | `core/daemon_resources.rs` tests::a_request_above_its_limit_is_refused_naming_the_request |
 
 ### `crates/micold-core/src/daemons.rs`
 
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U13 | `DaemonRuntime::Kubernetes` round-trips through settings as `{"kind":"kubernetes", ...}` with no settings-version bump | FR-020 | example | PENDING | |
-| U14 | A reader that does not know `kubernetes` keeps it as `Unsupported` verbatim | FR-020 | example | PENDING | |
-| U15 | The Kubernetes runtime's label is "Kubernetes", it is startable, and its endpoint is `<context> / <namespace> / <pod>` | FR-001 | example | PENDING | |
-| U16 | A second daemon with an existing name is refused naming the first | FR-018, Edge: two daemons same namespace | example | PENDING | |
+| U13 | `DaemonRuntime::Kubernetes` round-trips through settings as `{"kind":"kubernetes", ...}` with no settings-version bump | FR-020 | example | DONE | `core/tests/daemons_kube.rs` {the_runtime_round_trips_flat_with_its_kind, a_saved_document_keeps_its_version} |
+| U14 | A reader that does not know `kubernetes` keeps it as `Unsupported` verbatim | FR-020 | example | DONE | `core/tests/daemons_kube.rs` an_unreadable_kubernetes_entry_is_kept_verbatim_as_unsupported |
+| U15 | The Kubernetes runtime's label is "Kubernetes", it is startable, and its endpoint is `<context> / <namespace> / <pod>` | FR-001 | example | DONE | `core/tests/daemons_kube.rs` the_runtime_is_labelled_startable_and_shows_context_namespace_pod |
+| U16 | A second daemon with an existing name is refused naming the first | FR-018, Edge: two daemons same namespace | example | DONE | `core/tests/daemons_kube.rs` a_second_daemon_with_the_same_name_is_refused |
 | U17 | `Reconnecting` or `Unreachable` plus `Gone(reason)` becomes `Stopped` with that reason; Start from it becomes `Starting` and clears the reason | FR-011 | example | PENDING | |
 
 ### `crates/micold-core/src/kube/names.rs`
