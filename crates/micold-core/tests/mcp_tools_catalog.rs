@@ -514,6 +514,40 @@ fn create_session_holds_the_optional_allow_additional_session_flag() {
     assert_eq!(parsed(json!({"worktree": "feat-x"})), Additional::No);
 }
 
+/// Feature 776, FR-014 and FR-015: `start_session` states the rule and its refusal, and holds the
+/// same optional flag.
+#[test]
+fn start_session_states_the_rule_and_holds_the_optional_flag() {
+    let tools = tools_list();
+    let tool = tools.iter().find(|t| t["name"] == "start_session").unwrap();
+    let flag = &tool["inputSchema"]["properties"]["allow_additional_session"];
+    assert_eq!(flag["type"], "boolean", "{flag}");
+    assert_eq!(flag["default"], json!(false));
+    let required = tool["inputSchema"]["required"].as_array().unwrap();
+    assert!(!required.iter().any(|r| r == "allow_additional_session"));
+    let description = tool["description"].as_str().unwrap();
+    assert!(
+        description.contains("allow_additional_session: true")
+            && description.contains("Conflict")
+            && description.contains("naming the running one"),
+        "{description:?}"
+    );
+
+    let parsed = |args: Value| match parse_call("start_session", &args).unwrap() {
+        Operation::StartSession { additional, .. } => additional,
+        other => panic!("{other:?}"),
+    };
+    assert_eq!(
+        parsed(json!({"session": S, "allow_additional_session": true})),
+        Additional::Yes
+    );
+    assert_eq!(parsed(json!({"session": S})), Additional::No);
+    invalid_any(
+        "start_session",
+        json!({"session": S, "allow_additional_session": "yes"}),
+    );
+}
+
 #[test]
 fn create_session_accepts_exactly_the_five_ai_clis() {
     for (name, cli) in [
@@ -637,7 +671,13 @@ fn the_destructive_tools_are_callable_from_m5() {
 #[test]
 fn the_session_lifecycle_tools_take_a_session_id() {
     for (name, expected) in [
-        ("start_session", Operation::StartSession { session: s7() }),
+        (
+            "start_session",
+            Operation::StartSession {
+                session: s7(),
+                additional: Additional::No,
+            },
+        ),
         ("stop_session", Operation::StopSession { session: s7() }),
         (
             "interrupt_session",
@@ -654,7 +694,10 @@ fn the_session_lifecycle_tools_take_a_session_id() {
     }
     assert_eq!(
         parse_call("start_session", &json!({"session": S})).unwrap(),
-        Operation::StartSession { session: s7() },
+        Operation::StartSession {
+            session: s7(),
+            additional: Additional::No,
+        },
         "start_session ships in M4"
     );
 }

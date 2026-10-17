@@ -894,7 +894,10 @@ where
                 bytes,
                 process,
             } => state.session_input_to(session, serial, &bytes, process),
-            ClientMsg::SessionStart { session, .. } => {
+            ClientMsg::SessionStart {
+                session,
+                allow_additional_session,
+            } => {
                 // Bringing an existing durable session back is a resume.
                 //
                 // Spawned, not run here (BUG-009 T125, FR-026a): `start_session` resolves the
@@ -903,21 +906,30 @@ where
                 // manager waiting on the network silenced the connection well past the client's 9 s
                 // liveness deadline. `begin_start` holds any input typed meanwhile so nothing is
                 // lost to the gap it opens (protocol.md §7).
-                state.begin_start(session);
-                spawn_session_start(state, session, LaunchMode::Resume, None);
+                let additional = allow_additional_session.into();
+                if !refuse_blocked_start(state, session, additional) {
+                    state.begin_start(session);
+                    spawn_session_start(state, session, LaunchMode::Resume, additional, None);
+                }
             }
             ClientMsg::SessionSetMain { id } => {
                 // Fire-and-forget (FR-021): the catalog update is the answer. A no-op for an
                 // unknown, archived or already-main id.
                 state.set_main(id);
             }
-            ClientMsg::SessionRestart { session, .. } => {
+            ClientMsg::SessionRestart {
+                session,
+                allow_additional_session,
+            } => {
                 // The user's manual restart of the AI CLI (011 FR-007(b), BUG-442): exactly the
                 // start above, after dropping the session's directory from the environment-include
                 // cache so the relaunch re-sources the script. A plain `SessionStart` stays cached.
-                state.forget_session_env(session);
-                state.begin_start(session);
-                spawn_session_start(state, session, LaunchMode::Resume, None);
+                let additional = allow_additional_session.into();
+                if !refuse_blocked_start(state, session, additional) {
+                    state.forget_session_env(session);
+                    state.begin_start(session);
+                    spawn_session_start(state, session, LaunchMode::Resume, additional, None);
+                }
             }
             ClientMsg::ScrollbackRequest {
                 session,
@@ -986,7 +998,14 @@ where
                         // client cannot type into an id it has not been told yet), kept for one
                         // rule rather than two.
                         state.begin_start(session);
-                        spawn_session_start(state, session, LaunchMode::Fresh, Some((id, req)));
+                        spawn_session_start(
+                            state,
+                            session,
+                            LaunchMode::Fresh,
+                            // The creation's own check has passed or was waived (FR-002).
+                            micold_core::occupancy::Additional::Yes,
+                            Some((id, req)),
+                        );
                     }
                     // Feature 776: a location that has a session answers with that session's
                     // name and id, and the catalog is unchanged.
@@ -2411,9 +2430,10 @@ fn spawn_session_start(
     state: &Arc<DaemonState>,
     session: micold_core::session::SessionId,
     launch: LaunchMode,
+    additional: micold_core::occupancy::Additional,
     reply: Option<(crate::state::ClientId, u64)>,
 ) {
-    let started = ops::start_session(state, session, launch);
+    let started = ops::start_session(state, session, launch, additional);
     let task_state = Arc::clone(state);
     tokio::spawn(async move {
         // `ops::start_session` announces the finished start to every connection loop.
@@ -2429,6 +2449,21 @@ fn spawn_session_start(
             task_state.broadcast_catalog();
         }
     });
+}
+
+/// Whether a `SessionStart`/`SessionRestart` is dropped because another session of the location
+/// is live and the request is not explicit (feature 776, FR-013). Nothing is spawned or written;
+/// the client learns the rule from the catalog and asks again with the flag (FR-016).
+fn refuse_blocked_start(
+    state: &DaemonState,
+    session: micold_core::session::SessionId,
+    additional: micold_core::occupancy::Additional,
+) -> bool {
+    let Some(refusal) = state.start_refusal(session, additional) else {
+        return false;
+    };
+    tracing::warn!(session = %session.0, %refusal, "start refused");
+    true
 }
 
 /// The error reply for a `spawn_blocking` task that itself failed (panicked / was cancelled) — an

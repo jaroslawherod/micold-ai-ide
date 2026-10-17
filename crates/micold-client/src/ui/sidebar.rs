@@ -793,6 +793,7 @@ fn build_items(
                     in_view,
                     Some(row.session.id) != main && !row.place.is_child(),
                     row.place,
+                    state.session_start_block_text(row.session.id),
                     r,
                 ));
             }
@@ -901,6 +902,7 @@ fn session_tree_item(
     in_view: Option<micold_core::session::SessionId>,
     helper: bool,
     place: micold_core::origin::TreePlace,
+    blocked: Option<String>,
     r: Roles,
 ) -> TreeItem<'static, Message> {
     use micold_core::origin::{Orphan, TreePlace};
@@ -919,7 +921,7 @@ fn session_tree_item(
     // varied with session state, so it read as "done / OK" on a failed or interrupted session while
     // competing with the dot that does vary (BUG-005). Lifecycle still reaches the user: `tint`
     // above colours the label itself, not just a glyph.
-    TreeItem::new(depth, session.label.display().to_string(), tint)
+    let mut item = TreeItem::new(depth, session.label.display().to_string(), tint)
         // The derived activity dot beside the name (feature 010 US2, FR-016d): Working/AwaitingInput
         // show a filled dot, Ended a hollow one, Unknown nothing (ambient — H2) in a slot that stays
         // the same width either way, so names stay aligned as signals change (FR-016f).
@@ -966,7 +968,12 @@ fn session_tree_item(
             Icon::Close,
             Message::Session(SessionMsg::CloseRequested(session.id)),
             "Close this session",
-        )
+        );
+    // A start another live session of the worktree blocks says why on hover (feature 776, FR-013).
+    if let Some(text) = blocked {
+        item = item.row_tooltip(text);
+    }
+    item
 }
 
 /// The "Default" (project-root) row + its session sub-items when expanded (feature 010, US1).
@@ -1056,6 +1063,7 @@ fn build_default_item(
                 in_view,
                 Some(row.session.id) != main && !row.place.is_child(),
                 row.place,
+                state.session_start_block_text(row.session.id),
                 r,
             ));
         }
@@ -1113,6 +1121,7 @@ mod tests {
                 None,
                 false,
                 micold_core::origin::TreePlace::Root,
+                None,
                 r,
             );
             assert!(
@@ -1139,6 +1148,7 @@ mod tests {
                 None,
                 false,
                 micold_core::origin::TreePlace::Root,
+                None,
                 r,
             )
             .tint

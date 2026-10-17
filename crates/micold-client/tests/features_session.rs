@@ -1328,3 +1328,47 @@ fn the_row_press_opens_the_new_main_after_the_catalog_update() {
     assert!(st.is_helper(main));
     assert!(!st.is_helper(helper));
 }
+
+// --- Feature 776 (M7): a start beside a live session needs confirmation -------------------------
+
+#[test]
+fn a_blocked_start_shows_the_reason_and_offers_the_confirmation_naming_the_live_session() {
+    use micold_core::session::SessionLifecycle;
+    let (mut st, main, helper) = worktree_with_main_and_helper();
+    assert_eq!(st.session_start_block_text(helper), None, "both idle: free");
+    st.workspace
+        .sessions
+        .get_mut(Path::new("/a"))
+        .unwrap()
+        .iter_mut()
+        .find(|s| s.id == main)
+        .unwrap()
+        .lifecycle = SessionLifecycle::Running;
+    let live_name = st
+        .workspace
+        .find_session(main)
+        .unwrap()
+        .1
+        .label
+        .display()
+        .to_string();
+
+    let tooltip = st.session_start_block_text(helper).expect("blocked");
+    assert!(tooltip.contains(&live_name) && tooltip.contains(&main.0.to_string()));
+    assert_eq!(
+        st.session_start_block_text(main),
+        None,
+        "the live one is not blocked"
+    );
+
+    micold_client::features::session::start_blocked(&mut st, helper);
+    assert_eq!(st.session.blocked_start, Some(helper));
+    st.update(Message::Session(SessionMsg::AdditionalCancelled));
+    assert_eq!(st.session.blocked_start, None, "cancel changes nothing");
+
+    micold_client::features::session::start_blocked(&mut st, main);
+    assert_eq!(
+        st.session.blocked_start, None,
+        "nothing blocks the live session"
+    );
+}

@@ -571,6 +571,55 @@ async fn the_flag_creates_a_session_beside_the_existing_one() {
     s.kill_all();
 }
 
+/// Feature 776, FR-013, FR-014, FR-015 (US4 s3): `start_session` of a stopped session while
+/// another of its worktree runs is a conflict naming the running one, and `allow_additional_session`
+/// lifts it.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn start_session_beside_a_running_one_is_a_conflict_the_flag_lifts() {
+    let _guard = ENV.lock().await;
+    let s = Sandbox::new().await;
+    let first = Sandbox::created(
+        &s.ok(json!({"worktree": "b", "ai_cli": "claude_code"}))
+            .await,
+    );
+    let second = Sandbox::created(
+        &s.ok(json!({"worktree": "b", "ai_cli": "claude_code", "allow_additional_session": true}))
+            .await,
+    );
+    assert!(micold_daemon::ops::stop_session(&s.state, second)
+        .await
+        .unwrap());
+    let caller = credential(&s.state, sid(3));
+    let error = call_err(
+        s.addr,
+        &caller,
+        "start_session",
+        json!({"session": second.0.to_string()}),
+    )
+    .await;
+    assert_eq!(error["category"], "conflict", "{error}");
+    let message = error["message"].as_str().unwrap_or_default();
+    assert!(
+        message.contains(&first.0.to_string())
+            && message.contains("allow_additional_session: true"),
+        "{message}"
+    );
+    assert!(
+        s.state.live_session(second).is_none(),
+        "nothing was spawned"
+    );
+
+    call_ok(
+        s.addr,
+        &caller,
+        "start_session",
+        json!({"session": second.0.to_string(), "allow_additional_session": true}),
+    )
+    .await;
+    assert!(s.state.live_session(second).is_some(), "both run");
+    s.kill_all();
+}
+
 /// Feature 776, FR-015, US1 s6: with the flag a missing CLI fails as without it, and nothing is
 /// created; a non-boolean flag is an input error.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]

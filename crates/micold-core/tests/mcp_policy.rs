@@ -234,6 +234,7 @@ fn a_default_caller_gets_the_same_decision_as_a_worktree_caller_for_session_oper
     for operation in [
         Operation::StartSession {
             session: session(OTHER),
+            additional: Default::default(),
         },
         Operation::StopSession {
             session: session(OTHER),
@@ -360,7 +361,8 @@ fn start_session_proceeds_on_any_session() {
             decide_for(
                 in_worktree("b"),
                 &Operation::StartSession {
-                    session: session(target)
+                    session: session(target),
+                    additional: Default::default(),
                 }
             ),
             PolicyDecision::Proceed
@@ -462,6 +464,7 @@ fn the_option_changes_no_decision_but_the_cross_session_tools() {
         },
         Operation::StartSession {
             session: session(OTHER),
+            additional: Default::default(),
         },
         Operation::StopSession {
             session: session(OTHER),

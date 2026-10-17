@@ -31,6 +31,23 @@ pub fn modal<'a>(place: &str, existing: &str, scheme: ColorScheme) -> Element<'a
     )
 }
 
+/// The dialog for a start another live session blocks (feature 776, FR-013, FR-016): `text` names
+/// the live session; confirming runs both.
+fn blocked_modal<'a>(text: &str, scheme: ColorScheme) -> Element<'a, Message> {
+    let r = tokens::roles(scheme);
+    let fields = column![
+        Text::new("Start beside a running session?", TypeRole::Headline, r),
+        Text::new(text.to_string(), TypeRole::Body, r).muted(),
+    ];
+    material::dialog::confirm(
+        r,
+        fields,
+        ("Start", Message::Session(SessionMsg::AdditionalConfirmed)),
+        ("Cancel", Message::Session(SessionMsg::AdditionalCancelled)),
+        460.0,
+    )
+}
+
 /// This dialog's body from the state that opened it; `None` when the location holds no session
 /// any more, so nothing is drawn rather than a dialog naming nothing.
 pub fn dialog<'a>(
@@ -38,6 +55,10 @@ pub fn dialog<'a>(
     scheme: ColorScheme,
     _env_include_outcome: &'a EnvIncludeOutcome,
 ) -> Option<Element<'a, Message>> {
+    if let Some(id) = state.session.blocked_start {
+        let text = state.session_start_block_text(id)?;
+        return Some(blocked_modal(&text, scheme));
+    }
     let location = state.session.additional_target.as_ref()?;
     let main = micold_core::occupancy::main_session(state.active_sessions(), location)?;
     let (_, session) = state.workspace.find_session(main)?;

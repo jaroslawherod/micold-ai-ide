@@ -138,6 +138,10 @@ pub struct State {
     /// (feature 776, FR-016). Its presence *is* the confirm dialog being shown, as
     /// [`Self::remove_target`]'s is.
     pub additional_target: Option<SessionLocation>,
+    /// A stopped session whose start another live session of its worktree blocks, awaiting the
+    /// user's confirmation to run both (feature 776, FR-013, FR-016). Its presence *is* the
+    /// confirm dialog being shown.
+    pub blocked_start: Option<SessionId>,
     /// A sandboxed file open awaiting the user's confirmation (feature 031, FR-018a).
     ///
     /// Its presence *is* the confirm surface being shown, mirroring [`Self::remove_target`]. It
@@ -1019,6 +1023,14 @@ impl Registered for ConfirmAdditionalSessionDialog {
             .as_ref()
             .filter(|location| !state.start_offered(location))
             .map(|_| ConfirmAdditionalSessionDialog)
+            .or_else(|| {
+                // Or a blocked start, while its blocker is still live.
+                state
+                    .session
+                    .blocked_start
+                    .filter(|id| state.session_start_block_text(*id).is_some())
+                    .map(|_| ConfirmAdditionalSessionDialog)
+            })
     }
 }
 
@@ -1251,12 +1263,23 @@ pub fn additional_requested(state: &mut crate::app::State, location: SessionLoca
 /// The additional-session confirmation was dismissed: nothing changes (FR-016).
 pub fn additional_cancelled(state: &mut crate::app::State) {
     state.session.additional_target = None;
+    state.session.blocked_start = None;
 }
 
 /// The additional-session confirmation was accepted. The request itself is built from
 /// [`crate::app::State::additional_request`] by the binary, which reads it before this runs.
 pub fn additional_confirmed(state: &mut crate::app::State) {
     state.session.additional_target = None;
+    state.session.blocked_start = None;
+}
+
+/// Ask for the confirmation to start `id` beside the live session that blocks it (feature 776,
+/// FR-016). Nothing opens when nothing blocks the start.
+pub fn start_blocked(state: &mut crate::app::State, id: SessionId) {
+    if state.session_start_block_text(id).is_some() {
+        state.clear_for_dialog();
+        state.session.blocked_start = Some(id);
+    }
 }
 
 /// "Make main session" was chosen: the daemon's catalog update is the answer (FR-021), so only the
@@ -2315,6 +2338,19 @@ impl crate::app::State {
             micold_core::occupancy::occupancy(self.active_sessions(), location),
             micold_core::occupancy::Occupancy::Free
         )
+    }
+
+    /// Why starting `id` is blocked, in `occupancy::start_block_text`'s words, or `None` when
+    /// nothing else of its location is live (feature 776, FR-013). Judged from the catalog's
+    /// lifecycles, which are what the daemon's refusal reads too.
+    pub fn session_start_block_text(&self, id: SessionId) -> Option<String> {
+        use micold_core::occupancy::{start_block, start_block_text, StartBlock};
+        let sessions = self.active_sessions();
+        let location = &sessions.iter().find(|s| s.id == id)?.location;
+        match start_block(sessions, id, &std::collections::HashSet::new()) {
+            StartBlock::Blocked { live } => Some(start_block_text(&live, location)),
+            StartBlock::Clear => None,
+        }
     }
 
     /// The location and CLI of the session the open additional-session confirmation would start

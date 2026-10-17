@@ -2297,6 +2297,7 @@ impl DaemonState {
                 &cwd,
                 provider,
                 micold_core::terminal::LaunchMode::Resume,
+                micold_core::occupancy::Additional::No,
                 Some(first),
             )
             .await),
@@ -3904,13 +3905,58 @@ impl DaemonState {
     /// [`Self::start_session_gated`] on a blocking thread (`ops::start_session`).
     pub fn start_session(&self, id: SessionId, launch: LaunchMode) -> io::Result<()> {
         let _gate = self.hold_gate(id);
-        self.start_session_gated(id, launch)
+        self.start_session_gated(id, launch, micold_core::occupancy::Additional::No)
     }
 
-    /// [`Self::start_session`] for a caller that holds the session's gate.
-    pub fn start_session_gated(&self, id: SessionId, launch: LaunchMode) -> io::Result<()> {
+    /// The refusal of starting `id` beside another session of its location that is starting,
+    /// running or restarting (feature 776, FR-013), in `occupancy::start_block_text`'s words; `None`
+    /// when the start may go ahead, including when `additional` is the explicit request (FR-015).
+    /// An unknown id is not refused here: the start reports it.
+    pub fn start_refusal(
+        &self,
+        id: SessionId,
+        additional: micold_core::occupancy::Additional,
+    ) -> Option<String> {
+        use micold_core::occupancy::{start_block, start_block_text, StartBlock};
+        if additional.is_yes() {
+            return None;
+        }
+        let inner = self.lock();
+        let hosted: std::collections::HashSet<SessionId> = inner
+            .sessions
+            .keys()
+            .chain(inner.starting.keys())
+            .copied()
+            .collect();
+        inner
+            .catalog
+            .workspace()
+            .sessions
+            .values()
+            .find_map(|list| {
+                let target = list.iter().find(|s| s.id == id)?;
+                match start_block(list, id, &hosted) {
+                    StartBlock::Blocked { live } => Some(start_block_text(&live, &target.location)),
+                    StartBlock::Clear => None,
+                }
+            })
+    }
+
+    /// [`Self::start_session`] for a caller that holds the session's gate. `additional` is the
+    /// caller's explicit request to run beside another live session of the location (FR-015);
+    /// without it such a start is refused (`WouldBlock`, FR-013) before anything is spawned.
+    pub fn start_session_gated(
+        &self,
+        id: SessionId,
+        launch: LaunchMode,
+        additional: micold_core::occupancy::Additional,
+    ) -> io::Result<()> {
         if self.live_session(id).is_some() {
             return Ok(()); // already running — Start is idempotent
+        }
+        if let Some(refusal) = self.start_refusal(id, additional) {
+            tracing::warn!(session = %id.0, "start refused: another session of its location is live");
+            return Err(io::Error::new(io::ErrorKind::WouldBlock, refusal));
         }
 
         let plan = {

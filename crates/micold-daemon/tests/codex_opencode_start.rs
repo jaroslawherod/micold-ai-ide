@@ -12,6 +12,7 @@ mod env_support;
 #[path = "support/mcp.rs"]
 mod mcp_support;
 
+use micold_core::occupancy::Additional;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -317,9 +318,10 @@ async fn the_app_start_of_a_session_whose_provider_is_unavailable_fails_naming_i
     let _guard = ENV.lock().await;
     for (cli, command, n) in [(AiCli::Codex, "codex", 4), (AiCli::OpenCode, "opencode", 5)] {
         let f = Fixture::installed(&[]).await;
-        let started = micold_daemon::ops::start_session(&f.state, sid(n), LaunchMode::Fresh)
-            .await
-            .unwrap();
+        let started =
+            micold_daemon::ops::start_session(&f.state, sid(n), LaunchMode::Fresh, Additional::No)
+                .await
+                .unwrap();
         assert!(!started, "{cli:?} started with nothing on PATH");
         assert!(f.state.live_session(sid(n)).is_none(), "{command} is live");
         let lifecycle = f
