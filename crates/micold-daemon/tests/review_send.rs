@@ -394,7 +394,8 @@ async fn w6_w8_one_prompt_reaches_the_running_session_and_the_comments_become_se
         "every comment of the send is sent, W8",
     );
 
-    let after = add(
+    // Feature 946 (T012): Sent comments beside two new Drafts.
+    add(
         &mut client,
         4,
         &project,
@@ -405,18 +406,46 @@ async fn w6_w8_one_prompt_reaches_the_running_session_and_the_comments_become_se
         "Only this one.",
     )
     .await;
-    let (result, _) = send(&mut client, 5, &project, "wt").await;
+    let after = add(
+        &mut client,
+        5,
+        &project,
+        "wt",
+        "src/c.rs",
+        2,
+        &["y"],
+        "And this one.",
+    )
+    .await;
+    let (result, seen) = send(&mut client, 6, &project, "wt").await;
     assert!(result.is_ok(), "{result:?}");
-    let second = prompt::build(EntryKind::Worktree, &pending(&after), &[]);
+    let drafts = pending(&after);
+    assert_eq!(drafts.len(), 2, "two Drafts beside the two Sent comments");
+    let second = prompt::build(EntryKind::Worktree, &drafts, &[]);
     let typed = s.typed_holds(sid(1), &submitted(&second)).await;
     assert_eq!(
         typed,
         format!("{}{}", submitted(&expected), submitted(&second)),
-        "the second send carries only the new pending comment (US2 s6)"
+        "the second send is one submission of the Drafts' batch alone (US2 s1, FR-009)"
     );
+    assert_eq!(second.matches("### Comment ").count(), 2, "one block per Draft");
+    for draft in &drafts {
+        assert!(
+            second.contains(&format!("### Comment {}: ", draft.reference())),
+            "each Draft's block is headed by its reference: {second}"
+        );
+    }
+    for sent in &comments {
+        assert!(
+            !second.contains(&sent.reference().to_string()),
+            "nothing about a Sent comment: {second}"
+        );
+    }
+    assert!(!second.contains("Rename a."), "no sent comment is sent again");
+    let last = &seen.last().unwrap().1;
     assert!(
-        !second.contains("Rename a."),
-        "no sent comment is sent again"
+        last.iter().all(|c| matches!(c.state, CommentState::Sent { .. })),
+        "the two Drafts became Sent (FR-015): {last:?}"
     );
 }
 
@@ -445,7 +474,7 @@ async fn w9_a_terminal_without_bracketed_paste_gets_nothing_and_the_comments_sta
     let project = s.project();
     s.start(sid(1), true).await;
     let mut client = window(&s.state, &project).await;
-    let added = add(
+    add(
         &mut client,
         1,
         &project,
@@ -456,14 +485,20 @@ async fn w9_a_terminal_without_bracketed_paste_gets_nothing_and_the_comments_sta
         "Line one\nline two",
     )
     .await;
+    let added = add(&mut client, 2, &project, "wt", "b", 1, &["y"], "Second.").await;
 
-    let (result, seen) = send(&mut client, 2, &project, "wt").await;
+    let (result, seen) = send(&mut client, 3, &project, "wt").await;
     let (kind, message) = result.expect_err("the send is refused");
     assert_eq!(kind, ErrorKind::Refused, "{message}");
     assert!(message.contains("paste"), "the message says why: {message}");
     let (_, comments, sending) = seen.last().expect("the end of the send is pushed").clone();
     assert!(!sending, "the send is closed");
-    assert_pushed_exactly(&comments, &added, false, "nothing is marked sent, FR-017");
+    assert_pushed_exactly(
+        &comments,
+        &added,
+        false,
+        "both stay Draft, FR-015 (946 US2 s6)",
+    );
     tokio::time::sleep(QUIET).await;
     assert_eq!(s.typed(sid(1)), "", "nothing was typed");
 }

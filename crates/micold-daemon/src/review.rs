@@ -159,8 +159,8 @@ impl Reviews {
         Ok(msg)
     }
 
-    /// Open a send of entry `dir`'s pending comments (W6): the snapshot to deliver and the
-    /// `ReviewChanged` (with `sending`) to push. `InvalidInput` with nothing pending, `Busy` while
+    /// Open a send of entry `dir`'s Draft comments (W6): the snapshot to deliver and the
+    /// `ReviewChanged` (with `sending`) to push. `InvalidInput` with no Draft, `Busy` while
     /// another send of the entry is open. Nothing is written: `sending` is not stored.
     pub fn begin_send(
         &mut self,
