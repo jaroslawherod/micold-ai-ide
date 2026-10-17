@@ -871,6 +871,7 @@ fn indicator_marks(state: &PrState) -> (PrMark, Option<CheckMark>) {
 
 /// One session sub-item, depth 1 — shared by worktree rows and the "Default" row (feature 010)
 /// so the two locations render their sessions identically (FR-005 lifecycle parity).
+#[allow(clippy::too_many_arguments)]
 fn session_tree_item(
     depth: u16,
     session: &micold_core::session::Session,

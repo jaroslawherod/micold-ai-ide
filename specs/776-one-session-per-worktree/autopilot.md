@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: feat/776_one-session-per-worktree-chosen-at-start
 - **Started**: 2026-10-12
 - **Phase**: M7 reviewed, full gate running
-- **Next step**: full gate, visual pass, PR
+- **Next step**: gate green on rebased tree (2nd rebase), push, open M7 PR
 
 ## Pull requests
 
