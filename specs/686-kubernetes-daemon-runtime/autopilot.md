@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-xelisc
 - **Started**: 2026-10-17
 - **Phase**: implement
-- **Next step**: M5 unit 1 re-checked the tasks (drift fixed in tasks.md, below) and wrote no code. Unit 2: start at T134 red (core `start.rs` Copy/Install/Connect tests) per Handover.
+- **Next step**: M5 unit 3: client half. T135 core is done (below); do T022/T074 red, then T030/T077 and the live `KeyGen`, T136. See Handover.
 
 ## Pull requests
 
@@ -124,14 +124,17 @@ stash@{0} survivors (all used by M1a–M2, stash dropped 2026-10-18; backed up i
 
 ## Handover
 
-M5 unit 1 (context ~110k, reading only; branch reset to origin/main 21ad4154, nothing but the doc edits committed). Next: T134 → T135 → T022/T074/T030/T077 → T136, red first.
-Design (verified against main):
-- `core/kube/start.rs`: after `Tunnel`, add `copy_install_connect` calling `micold_core::provision::run(host, &ProvisionTarget, &ProvisionOptions, &CancelToken, &EventSink)` (mod.rs:596; returns `Provisioned { connected, warnings, copied }`). `StartRequest` needs `host: &dyn SshHost`, `reach: PinnedReach` (relay port, from the client's `kube::relay::Relay::open` which must be opened before this call, so start takes a `relay port` or a callback), `opts: ProvisionOptions`, `cancel`, event sink. `Started` gains `connected`. `Connected::Refused` → `VersionMismatch` (FR-017, KubeFailure variant exists? check classify.rs), `ProvisionFailure` → `KubeFailure::Provision(..)` (new), `FailureCause::Ssh(HostKeyChanged|HostKeyUnknown)` → `HostKeyMismatch { pod }`. Rollback on failure as for earlier phases.
-- `ProvisionTarget` has no env: add `env: Vec<(String,String)>` (additive, default empty; `ProvisionTarget::user_host` sets empty; thread to `argv::bridge`/the start step with shell quoting). sshd clears the login env, so `daemon_env` (MICOLD_IDLE_STOP=off for FR-010) must ride the remote command.
-- AppOwned: `ai_clis: AiCliSelection(empty)` in M5 (install is M6; `run` skips nothing-missing installs), `table: AiCliTable` (see provision/ai_cli.rs for the default constructor), `state_dir: PathBuf::from("/var/lib/micold-ai-ide")`, never `.join` a pod path (Windows CI): format with "/".
-- Client: `client/kube/keys.rs` known_hosts line currently `micold-kube-<key> <host key>`; `PinnedReach` has no HostKeyAlias, so write `[127.0.0.1]:<relay port> <key>` when the relay opens (`KubeKeys::write_known_hosts(port, line)`; update its M1c tests). `kube_attempt(cluster, context, namespace)` in `client/daemon.rs:845` must take `KubeSettings` (Dial::Kubernetes holds only context+namespace; get the settings through ActorSpec or add them to the Dial) and run in the actor with `LiveCluster::connect`, `SSH_HOST` (daemon.rs:74), `provisioning_sink`. The existing test `tests/kube_daemon_start.rs` (T132, asserts Unavailable) is rewritten by T022. Diagnostics: T077 `DaemonDiagnostics::push_log`.
-- The real KeyGen for the host key: none exists for the `KeyGen` port yet (access.rs:25); implement over `provision::keys::keygen_argv` / ssh-keygen in `client/shell/capabilities.rs`.
-- Flaky: daemon `history_*` tests. Windows CI: join pod paths with "/".
+M5 unit 2 (core half done, pushed at the first green gate). Done: T134 and the core of T135.
+- `ssh::argv::bridge_with_env` and `ProvisionTarget.env` (quoted `env K='v'` before the remote bridge; `user_host` leaves it empty).
+- `kube::start`: `STATE_DIR`, `daemon_env()` (`MICOLD_IDLE_STOP=off`), `pod_target(PinnedReach)`, `ConnectRequest { host, target, opts, cancel }`, `ConnectOutcome { Ready(Box<Provisioned>), Failed(KubeFailure) }`, `connect_pod(&StartRequest, &Started, &ConnectRequest, on_phase, on_event)`: one `provision::run`, events map to `Copy`/`Install`/`Connect` phases, failure rolls back `started.attempt`. `start()` is unchanged (ends at `Tunnel`): the client calls `start`, opens the relay, then `connect_pod`.
+- `KubeFailure::Provision { reason }` (806's `ProvisionFailure::reason`), `KubeFailure::VersionMismatch { reason }` (a refused handshake), host key changed/unknown → `HostKeyMismatch { pod }`. Tests: `kube::start::tests::connect::*` (scripted `Host`; no test of the accepted handshake in core).
+- Task drift: T134 text names `daemon_env(&allowed)`; there is no allowed-credential env, so `daemon_env()` takes none.
+Next (client, in this order):
+1. `client/kube/keys.rs`: `write_known_hosts(port, host_public_line)` writes `[127.0.0.1]:<port> <key>` (no `HostKeyAlias`; update its M1c tests and `host_alias` users). `Relay::open(cluster, ns, pod, SSH_PORT)` gives the port.
+2. Live `KeyGen` (`ssh-keygen` via `provision::keys::keygen_argv`) chosen in `shell/capabilities.rs` beside `kube_connector` (line ~212).
+3. `client/daemon.rs`: `Dial::Kubernetes` holds only context+namespace; it needs the daemon name (ResourceNames/DaemonKey) and the `KubeSettings`. Replace `kube_attempt` (line ~845; test `tests/kube_daemon_start.rs` asserts `Unavailable` and is rewritten by T022): `LiveCluster` via `kube_connector`, `start`, host key from the access secret (`kube::access::AccessSecret`), `Relay::open`, `write_known_hosts`, `connect_pod` with `SSH_HOST` (daemon.rs:74), `ProvisionOptions`, `provisioning_sink`; a drift ends the start with an Err naming the fields; return `Provisioned.connected`. No `SHARED_SSH_IMAGE_AVAILABLE` check (stays false until M6). T077: `DaemonDiagnostics::push_log` with the failure reason and phase output.
+4. Tests T022 (`kube_daemon_start.rs`, FakeCluster + a scripted `SshHost` with a daemon that accepts the handshake: see `micold-daemon/tests/support/conn.rs` for a Welcome-producing fake) and T074 (`kube_daemon_failures.rs`), then T136.
+Windows CI: join pod paths with "/". Daemon `history_*` tests are flaky on main.
 
 ## Open escalation
 
