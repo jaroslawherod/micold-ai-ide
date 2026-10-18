@@ -146,6 +146,7 @@ mod kubernetes {
     use micold_client::features::daemons::{
         self, runtime_choices, AllowedKind, ContextList, DraftRuntime, Msg, State, VOLUME_NOTICE,
     };
+    use micold_client::features::window::FieldId;
     use micold_client::features::Outcome;
     use micold_client::kube::live::ContextEntry;
     use micold_core::daemons::{DaemonEvent, DaemonId, DaemonRuntime, DaemonState};
@@ -303,7 +304,15 @@ mod kubernetes {
         send(&mut state, &mut w, Msg::NamespaceEdited("dev".into()));
         send(&mut state, &mut w, Msg::ContextChosen(String::new()));
         send(&mut state, &mut w, Msg::Saved);
-        assert_eq!(state.form_error.as_ref().unwrap().field, "context");
+        // An empty context is the required error on the field, not a sentence (feature 937).
+        assert!(state.form_error.is_none());
+        let draft = state.draft.as_ref().expect("the form stays open");
+        assert_eq!(
+            draft
+                .required
+                .state_in(&draft.required_fields(), FieldId::DaemonKubeContext),
+            micold_core::required::FieldRequirement::Missing
+        );
         assert_eq!(stored(&w, id), before);
     }
 
@@ -1033,5 +1042,148 @@ mod kubernetes {
             Some(micold_core::daemons::DaemonState::Unreachable { reason })
                 if reason == "start cancelled"
         ));
+    }
+}
+
+/// A save with a required field empty (feature 937, M5: FR-005, FR-006, FR-010, SC-004).
+mod save_required {
+    use super::daemons_fixture::World;
+    use micold_client::features::daemons::{self, DraftRuntime, Msg, State};
+    use micold_client::features::window::FieldId;
+    use micold_core::daemons::DaemonId;
+    use micold_core::required::FieldRequirement;
+
+    fn open(w: &mut World) -> State {
+        let mut state = State::default();
+        daemons::update(&mut state, &mut w.model(), Msg::AddOpened);
+        state
+    }
+
+    fn send(state: &mut State, w: &mut World, msg: Msg) {
+        daemons::update(state, &mut w.model(), msg);
+    }
+
+    fn reads(state: &State, id: FieldId) -> FieldRequirement {
+        let draft = state.draft.as_ref().expect("the form is open");
+        draft.required.state_in(&draft.required_fields(), id)
+    }
+
+    #[test]
+    fn an_empty_name_reads_missing_with_no_sentence_and_nothing_is_added() {
+        let mut w = World::new();
+        let before = w.registry.entries().len();
+        let mut state = open(&mut w);
+        assert_eq!(
+            reads(&state, FieldId::DaemonName),
+            FieldRequirement::Required
+        );
+        send(&mut state, &mut w, Msg::Saved);
+        assert!(state.form_error.is_none(), "no \"A daemon needs a name.\"");
+        assert_eq!(
+            reads(&state, FieldId::DaemonName),
+            FieldRequirement::Missing
+        );
+        assert_eq!(w.registry.entries().len(), before);
+    }
+
+    #[test]
+    fn every_empty_required_field_reads_missing_after_one_save() {
+        let mut w = World::new();
+        let mut state = open(&mut w);
+        send(&mut state, &mut w, Msg::RuntimeChosen(DraftRuntime::Ssh));
+        send(&mut state, &mut w, Msg::Saved);
+        assert!(state.form_error.is_none());
+        assert_eq!(
+            reads(&state, FieldId::DaemonName),
+            FieldRequirement::Missing
+        );
+        assert_eq!(
+            reads(&state, FieldId::DaemonSshHost),
+            FieldRequirement::Missing
+        );
+        // Filling one clears only that one.
+        send(&mut state, &mut w, Msg::NameEdited("Remote".into()));
+        assert_eq!(
+            reads(&state, FieldId::DaemonName),
+            FieldRequirement::Required
+        );
+        assert_eq!(
+            reads(&state, FieldId::DaemonSshHost),
+            FieldRequirement::Missing
+        );
+    }
+
+    #[test]
+    fn a_container_daemon_marks_name_and_container_name_together() {
+        let mut w = World::new();
+        let mut state = open(&mut w);
+        send(
+            &mut state,
+            &mut w,
+            Msg::RuntimeChosen(DraftRuntime::Container),
+        );
+        send(&mut state, &mut w, Msg::Saved);
+        assert_eq!(
+            reads(&state, FieldId::DaemonName),
+            FieldRequirement::Missing
+        );
+        assert_eq!(
+            reads(&state, FieldId::DaemonContainerName),
+            FieldRequirement::Missing
+        );
+    }
+
+    #[test]
+    fn the_ssh_host_stops_being_required_when_the_runtime_is_local_again() {
+        let mut w = World::new();
+        let mut state = open(&mut w);
+        send(&mut state, &mut w, Msg::RuntimeChosen(DraftRuntime::Ssh));
+        send(&mut state, &mut w, Msg::Saved);
+        assert_eq!(
+            reads(&state, FieldId::DaemonSshHost),
+            FieldRequirement::Missing
+        );
+        send(&mut state, &mut w, Msg::RuntimeChosen(DraftRuntime::Host));
+        assert_eq!(
+            reads(&state, FieldId::DaemonSshHost),
+            FieldRequirement::Optional
+        );
+    }
+
+    #[test]
+    fn a_port_that_is_not_a_number_keeps_its_own_error() {
+        let mut w = World::new();
+        let mut state = open(&mut w);
+        send(&mut state, &mut w, Msg::RuntimeChosen(DraftRuntime::Ssh));
+        send(&mut state, &mut w, Msg::NameEdited("Remote".into()));
+        send(&mut state, &mut w, Msg::SshHostEdited("example.org".into()));
+        send(&mut state, &mut w, Msg::SshPortEdited("abc".into()));
+        send(&mut state, &mut w, Msg::Saved);
+        assert_eq!(state.form_error.as_ref().expect("an error").field, "port");
+        assert_eq!(
+            reads(&state, FieldId::DaemonSshHost),
+            FieldRequirement::Required
+        );
+    }
+
+    #[test]
+    fn an_empty_repository_path_marks_that_daemon_only() {
+        let mut state = State::default();
+        let mut w = World::new();
+        let (a, b) = (DaemonId(1), DaemonId(2));
+        state.repositories.insert(b, "/srv/app".into());
+        let out = daemons::add_repository(&mut state, &w.model(), a);
+        assert!(out.is_empty());
+        assert!(state.repository_error.is_none());
+        let (id_a, req_a) = state.repository_field(a);
+        let (id_b, req_b) = state.repository_field(b);
+        assert_eq!(
+            state.repository_marks.state(id_a, req_a),
+            FieldRequirement::Missing
+        );
+        assert_eq!(
+            state.repository_marks.state(id_b, req_b),
+            FieldRequirement::Required
+        );
     }
 }

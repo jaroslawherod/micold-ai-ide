@@ -139,15 +139,15 @@ focus and leave a field; the field shows the error with the message, no separate
 
 ### Tests for User Story 3, submit attempt in settings and daemons (write first, see them fail)
 
-- [ ] T036 [P] [US3] Write failing tests in `ctests/features_settings.rs`: `saved` with a required field empty calls `required.attempt()`, the field reads `Missing`, nothing is saved, and `SettingsDraft::validate` no longer returns a `FieldError` for an empty value (e.g. "Enter a whole number…" on empty Scrollback, `MappingErrorKind::Blank`); a non-empty invalid value keeps its `FieldError` (FR-010)
-- [ ] T037 [P] [US3] Write failing tests in `ctests/features_daemons.rs`: the `Saved` arm with an empty name sets `required.attempted` and `DaemonName` reads `Missing` with no "A daemon needs a name." error; an empty SSH Host reads `Missing`, and switching the runtime back to local makes it `Optional` (edge case *stops being required*); a Port that is not a number keeps its own error (US3 scenario 4); `add_repository` with an empty path calls `repository_marks.leave(DaemonRepository(id))` for that daemon only
+- [x] T036 [P] [US3] Write failing tests in `ctests/features_settings.rs`: `saved` with a required field empty calls `required.attempt()`, the field reads `Missing`, nothing is saved, and `SettingsDraft::validate` no longer returns a `FieldError` for an empty value (e.g. "Enter a whole number…" on empty Scrollback, `MappingErrorKind::Blank`); a non-empty invalid value keeps its `FieldError` (FR-010)
+- [x] T037 [P] [US3] Write failing tests in `ctests/features_daemons.rs`: the `Saved` arm with an empty name sets `required.attempted` and `DaemonName` reads `Missing` with no "A daemon needs a name." error; an empty SSH Host reads `Missing`, and switching the runtime back to local makes it `Optional` (edge case *stops being required*); a Port that is not a number keeps its own error (US3 scenario 4); `add_repository` with an empty path calls `repository_marks.leave(DaemonRepository(id))` for that daemon only
 
 ### Implementation for User Story 3, submit attempt in settings and daemons
 
-- [ ] T038 [P] [US3] In `client/features/settings.rs` call `required.attempt()` in `saved` and drop the empty-value `FieldError`s (depends on T036, T031)
-- [ ] T039 [P] [US3] In `client/features/daemons.rs` call `required.attempt()` in the `Saved` arm, drop the empty-value errors, and `leave(DaemonRepository(id))` in `add_repository` (depends on T037, T031)
-- [ ] T040 [US3] In `client/ui/settings/{terminal,environment,github,jira,daemons,container_fields}.rs` stop passing emptiness errors to `.error(..)` where T038/T039 removed them, so the field's `Missing` state shows the message (depends on T038, T039)
-- [ ] T041 [P] [US3] Add to the *Required fields* note in `docs/user-guide/settings.md` that Save with a required field empty marks it "This field is required" and saves nothing
+- [x] T038 [P] [US3] In `client/features/settings.rs` call `required.attempt()` in `saved` and drop the empty-value `FieldError`s (depends on T036, T031)
+- [x] T039 [P] [US3] In `client/features/daemons.rs` call `required.attempt()` in the `Saved` arm, drop the empty-value errors, and `leave(DaemonRepository(id))` in `add_repository` (depends on T037, T031)
+- [x] T040 [US3] In `client/ui/settings/{terminal,environment,github,jira,daemons,container_fields}.rs` stop passing emptiness errors to `.error(..)` where T038/T039 removed them, so the field's `Missing` state shows the message (depends on T038, T039)
+- [x] T041 [P] [US3] Add to the *Required fields* note in `docs/user-guide/settings.md` that Save with a required field empty marks it "This field is required" and saves nothing
 
 **Checkpoint (M5)**: SC-004 holds on submit attempt.
 

@@ -12,7 +12,7 @@
 
 use std::collections::BTreeSet;
 
-use micold_client::features::settings::{SettingsDraft, SettingsSection};
+use micold_client::features::settings::{Refusal, SettingsDraft, SettingsSection};
 use micold_client::features::window::FieldId;
 use micold_core::sandbox::placement::PlacementKind;
 use micold_core::sandbox::CredentialShare;
@@ -157,7 +157,11 @@ fn a_rejected_save_names_the_field_and_its_section() {
     draft.show(SettingsSection::Appearance);
     draft.terminal.scrollback_lines = "1".into();
 
-    let error = draft.validate().expect_err("1 is below the minimum");
+    let error = draft
+        .validate()
+        .expect_err("1 is below the minimum")
+        .into_field()
+        .expect("a field error");
 
     assert_eq!(error.field, FieldId::SettingsScrollback);
     assert_eq!(
@@ -185,7 +189,11 @@ fn reporting_a_failure_shows_the_offending_section() {
     draft.show(SettingsSection::Daemons);
     draft.environment.timeout_secs = "not a number".into();
 
-    let error = draft.validate().expect_err("the timeout does not parse");
+    let error = draft
+        .validate()
+        .expect_err("the timeout does not parse")
+        .into_field()
+        .expect("a field error");
     draft.report(error);
 
     assert_eq!(
@@ -206,7 +214,11 @@ fn reporting_a_failure_shows_the_offending_section() {
 fn editing_any_field_clears_a_previous_rejection() {
     let mut draft = valid();
     draft.terminal.scrollback_lines = "1".into();
-    let error = draft.validate().expect_err("1 is below the minimum");
+    let error = draft
+        .validate()
+        .expect_err("1 is below the minimum")
+        .into_field()
+        .expect("a field error");
     draft.report(error);
 
     draft.edited();
@@ -590,11 +602,14 @@ fn a_bad_threshold_refuses_the_save_with_the_s6_message() {
         ("9", "Enter a threshold between 10 and 3600 seconds."),
         ("3601", "Enter a threshold between 10 and 3600 seconds."),
         ("abc", "Enter a whole number of seconds."),
-        ("", "Enter a whole number of seconds."),
     ] {
         let mut draft = valid();
         draft.environment.long_task_threshold_secs = text.into();
-        let error = draft.validate().expect_err(text);
+        let error = draft
+            .validate()
+            .expect_err(text)
+            .into_field()
+            .expect("a field error");
         assert_eq!(error.field, FieldId::SettingsLongTaskThreshold, "{text:?}");
         assert_eq!(error.section, SettingsSection::Environment);
         assert_eq!(error.message, message, "{text:?}");
@@ -894,16 +909,19 @@ mod issue_mapping {
             entry("  ", ConventionalType::Feat),
         ]);
         let draft = state.settings.settings_draft.as_ref().unwrap();
-        let error = draft.validate().expect_err("a blank label cannot be saved");
-        assert_eq!(error.field, FieldId::IssueMappingLabel(1));
-        assert_eq!(error.section, SettingsSection::GithubIssues);
-        assert!(!error.message.is_empty(), "the entry says what is wrong");
+        assert_eq!(
+            draft.validate(),
+            Err(micold_client::features::settings::Refusal::Missing),
+            "a blank label is the required error on its field (feature 937)"
+        );
 
         update(&mut state, Msg::IssueMappingLabelChanged(1, "Bug".into()));
         let draft = state.settings.settings_draft.as_ref().unwrap();
         let error = draft
             .validate()
-            .expect_err("a label repeating another ignoring case cannot be saved");
+            .expect_err("a label repeating another ignoring case cannot be saved")
+            .into_field()
+            .expect("a field error");
         assert_eq!(
             (error.field, error.section),
             (FieldId::IssueMappingLabel(1), SettingsSection::GithubIssues),
@@ -1986,7 +2004,11 @@ mod pr_status_switch {
         let mut state = open(false);
         let draft = state.settings.settings_draft.as_mut().unwrap();
         draft.terminal.scrollback_lines = "x".into();
-        let error = draft.validate().expect_err("not a number");
+        let error = draft
+            .validate()
+            .expect_err("not a number")
+            .into_field()
+            .expect("a field error");
         draft.report(error);
         update(&mut state, Msg::PrStatusToggled(true));
         assert!(state.settings.settings_draft.unwrap().error.is_none());
@@ -2025,10 +2047,14 @@ fn the_plan_usage_drafts_start_from_the_stored_settings() {
 
 #[test]
 fn a_threshold_outside_50_to_100_refuses_the_save() {
-    for text in ["49", "101", "abc", ""] {
+    for text in ["49", "101", "abc"] {
         let mut draft = valid();
         draft.environment.plan_usage_warn_percent = text.into();
-        let error = draft.validate().expect_err(text);
+        let error = draft
+            .validate()
+            .expect_err(text)
+            .into_field()
+            .expect("a field error");
         assert_eq!(error.field, FieldId::SettingsPlanUsageWarn, "{text:?}");
         assert_eq!(error.section, SettingsSection::Environment);
         assert_eq!(
@@ -2242,18 +2268,15 @@ mod jira_connection_form {
                 SENTINEL,
                 FieldId::SettingsJiraEmail,
             ),
-            (
-                "https://acme.atlassian.net",
-                "ABC",
-                "me@acme.com",
-                "   ",
-                FieldId::SettingsJiraToken,
-            ),
         ];
         for (site, key, email, token, field) in cases {
             let mut state = open(true, false);
             type_all(&mut state, site, key, email, token);
-            let error = draft(&state).validate().unwrap_err();
+            let error = draft(&state)
+                .validate()
+                .unwrap_err()
+                .into_field()
+                .expect("a field error");
             assert_eq!(error.field, field, "{site} {key} {email}");
             assert_eq!(error.section, SettingsSection::Jira);
         }
@@ -2444,10 +2467,7 @@ mod required_fields {
                 empty_ids(&draft, SettingsSection::Terminal),
                 vec![FieldId::SettingsScrollback]
             );
-            assert_eq!(
-                draft.validate().unwrap_err().field,
-                FieldId::SettingsScrollback
-            );
+            assert_eq!(draft.validate(), Err(Refusal::Missing));
         }
     }
 
@@ -2470,10 +2490,7 @@ mod required_fields {
             empty_ids(&draft, SettingsSection::Environment),
             vec![FieldId::SettingsEnvIncludeTimeout]
         );
-        assert_eq!(
-            draft.validate().unwrap_err().field,
-            FieldId::SettingsEnvIncludeTimeout
-        );
+        assert_eq!(draft.validate(), Err(Refusal::Missing));
         draft.environment.timeout_secs = "5".into();
 
         draft.environment.long_task_threshold_secs = " ".into();
@@ -2481,10 +2498,7 @@ mod required_fields {
             empty_ids(&draft, SettingsSection::Environment),
             vec![FieldId::SettingsLongTaskThreshold]
         );
-        assert_eq!(
-            draft.validate().unwrap_err().field,
-            FieldId::SettingsLongTaskThreshold
-        );
+        assert_eq!(draft.validate(), Err(Refusal::Missing));
         draft.environment.long_task_threshold_secs = "60".into();
 
         draft.environment.plan_usage_warn_percent.clear();
@@ -2492,10 +2506,7 @@ mod required_fields {
             empty_ids(&draft, SettingsSection::Environment),
             vec![FieldId::SettingsPlanUsageWarn]
         );
-        assert_eq!(
-            draft.validate().unwrap_err().field,
-            FieldId::SettingsPlanUsageWarn
-        );
+        assert_eq!(draft.validate(), Err(Refusal::Missing));
     }
 
     #[test]
@@ -2523,10 +2534,7 @@ mod required_fields {
             empty_ids(&draft, SettingsSection::GithubIssues),
             vec![FieldId::IssueMappingLabel(n)]
         );
-        assert_eq!(
-            draft.validate().unwrap_err().field,
-            FieldId::IssueMappingLabel(n)
-        );
+        assert_eq!(draft.validate(), Err(Refusal::Missing));
     }
 
     fn jira_draft() -> SettingsDraft {
@@ -2577,20 +2585,14 @@ mod required_fields {
                 FieldId::SettingsJiraToken,
             ]
         );
-        assert_eq!(
-            draft.validate().unwrap_err().field,
-            FieldId::SettingsJiraKey
-        );
+        assert_eq!(draft.validate(), Err(Refusal::Missing));
         draft.jira.project_key = "ABC".into();
         draft.jira.email = "a@b.co".into();
         assert_eq!(
             empty_ids(&draft, SettingsSection::Jira),
             vec![FieldId::SettingsJiraToken]
         );
-        assert_eq!(
-            draft.validate().unwrap_err().field,
-            FieldId::SettingsJiraToken
-        );
+        assert_eq!(draft.validate(), Err(Refusal::Missing));
         draft.jira.token = TokenInput::new("secret".into());
         assert!(empty_ids(&draft, SettingsSection::Jira).is_empty());
         assert!(draft.validate().is_ok());
@@ -2624,5 +2626,157 @@ mod required_fields {
                 FieldRequirement::Missing
             );
         }
+    }
+}
+
+/// Save with a required field empty (feature 937, M5: FR-005, FR-006, FR-010, SC-004).
+mod save_required {
+    use super::{valid, Refusal, SettingsDraft, SettingsSection};
+    use micold_client::features::window::FieldId;
+    use micold_core::required::FieldRequirement;
+
+    fn reads(draft: &SettingsDraft, section: SettingsSection, id: FieldId) -> FieldRequirement {
+        draft.required.state_in(&draft.required_fields(section), id)
+    }
+
+    #[test]
+    fn an_empty_scrollback_reads_missing_after_save_and_nothing_is_saved() {
+        let mut draft = valid();
+        draft.terminal.scrollback_lines.clear();
+        let id = FieldId::SettingsScrollback;
+        assert_eq!(
+            reads(&draft, SettingsSection::Terminal, id),
+            FieldRequirement::Required
+        );
+        assert!(draft.validated_for_save().is_none());
+        assert_eq!(
+            reads(&draft, SettingsSection::Terminal, id),
+            FieldRequirement::Missing
+        );
+        assert!(draft.error.is_none(), "no sentence beside the field");
+        assert_eq!(draft.section, SettingsSection::Terminal);
+    }
+
+    #[test]
+    fn two_empty_environment_fields_both_read_missing_after_one_save() {
+        let mut draft = valid();
+        draft.environment.timeout_secs.clear();
+        draft.environment.plan_usage_warn_percent.clear();
+        assert_eq!(draft.validate(), Err(Refusal::Missing));
+        assert!(draft.validated_for_save().is_none());
+        for id in [
+            FieldId::SettingsEnvIncludeTimeout,
+            FieldId::SettingsPlanUsageWarn,
+        ] {
+            assert_eq!(
+                reads(&draft, SettingsSection::Environment, id),
+                FieldRequirement::Missing
+            );
+        }
+        // The one that is filled in stays quiet.
+        assert_eq!(
+            reads(
+                &draft,
+                SettingsSection::Environment,
+                FieldId::SettingsLongTaskThreshold
+            ),
+            FieldRequirement::Required
+        );
+    }
+
+    #[test]
+    fn empty_fields_in_two_sections_all_read_missing_after_one_save() {
+        let mut draft = valid();
+        draft.terminal.scrollback_lines.clear();
+        draft.environment.long_task_threshold_secs.clear();
+        assert!(draft.validated_for_save().is_none());
+        assert_eq!(
+            reads(
+                &draft,
+                SettingsSection::Terminal,
+                FieldId::SettingsScrollback
+            ),
+            FieldRequirement::Missing
+        );
+        assert_eq!(
+            reads(
+                &draft,
+                SettingsSection::Environment,
+                FieldId::SettingsLongTaskThreshold
+            ),
+            FieldRequirement::Missing
+        );
+        assert_eq!(
+            draft.section,
+            SettingsSection::Terminal,
+            "the first section in the rail"
+        );
+    }
+
+    #[test]
+    fn two_blank_mapping_labels_both_read_missing_after_one_save() {
+        let mut draft = valid();
+        draft.github.entries[0].label.clear();
+        draft.github.entries[1].label = "  ".into();
+        assert!(draft.validated_for_save().is_none());
+        for i in 0..2 {
+            assert_eq!(
+                reads(
+                    &draft,
+                    SettingsSection::GithubIssues,
+                    FieldId::IssueMappingLabel(i)
+                ),
+                FieldRequirement::Missing
+            );
+        }
+    }
+
+    #[test]
+    fn the_empty_jira_fields_all_read_missing_after_one_save() {
+        let mut draft = valid();
+        draft.jira.enabled = true;
+        draft.jira.project = Some(std::path::PathBuf::from("/work/app"));
+        draft.jira.site = "https://acme.atlassian.net".into();
+        assert!(draft.validated_for_save().is_none());
+        for id in [
+            FieldId::SettingsJiraKey,
+            FieldId::SettingsJiraEmail,
+            FieldId::SettingsJiraToken,
+        ] {
+            assert_eq!(
+                reads(&draft, SettingsSection::Jira, id),
+                FieldRequirement::Missing
+            );
+        }
+        assert_eq!(
+            reads(&draft, SettingsSection::Jira, FieldId::SettingsJiraSite),
+            FieldRequirement::Required
+        );
+    }
+
+    #[test]
+    fn a_filled_in_invalid_value_keeps_its_own_error_beside_an_empty_one() {
+        let mut draft = valid();
+        draft.terminal.scrollback_lines = "abc".into();
+        draft.environment.timeout_secs.clear();
+        assert!(draft.validated_for_save().is_none());
+        let error = draft.error.clone().expect("the scrollback keeps its error");
+        assert_eq!(error.field, FieldId::SettingsScrollback);
+        assert_eq!(error.message, "Enter a whole number of lines.");
+        assert_eq!(
+            reads(
+                &draft,
+                SettingsSection::Environment,
+                FieldId::SettingsEnvIncludeTimeout
+            ),
+            FieldRequirement::Missing
+        );
+    }
+
+    #[test]
+    fn a_complete_draft_validates_and_marks_nothing() {
+        let mut draft = valid();
+        assert!(draft.validated_for_save().is_some());
+        assert_eq!(draft.required, Default::default());
     }
 }
