@@ -9,20 +9,21 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #938
 - **Worktree branch**: claude/project-thread-cl0lw3
 - **Started**: 2026-10-18
-- **Phase**: M1
-- **Next step**: M1 — PR to open (branch pushed; title/body in the scratchpad), then CI and merge
+- **Phase**: M2
+- **Next step**: M2 — implement T011–T021 (see Handover)
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1035 | design PR (spec, plan, research, contracts, tasks) | merged (rebase) | 0d6ced4e44dcf63df729fc15bdd8765cdf045a8d |
+| #1044 | M1 parser, fixtures, kind persisted | merged (rebase) | 613faba7880da73fd7e6228cda6c8af60d7ea85c |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T010 | full | parser types every recorded fixture line; kind persisted | to-open | gate green |
+| M1 | T001–T010 | full | parser types every recorded fixture line; kind persisted | #1044 | merged |
 | M2 | T011–T021 | full | daemon runs a structured session and streams events; lifecycle parity | — | planned |
 | M3 | T022–T028 | full | first prompt and user messages | — | planned |
 | M4 | T029–T030 | full | resume | — | planned |
@@ -72,7 +73,37 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M2 unit 1 hit the 150k cap while surveying (skill texts + daemon code); no code written. Branch
+reset to origin/main (613faba7). Next: implement T011–T021 from the start (TDD per test-list.md;
+append rows U6 history, U7 wire, U8 structured_session, U9 structured_lifecycle; M1 batched red
+tests against stubs, cycle-log Cycle 2, an accepted precedent). Read neither skill text again
+beyond what is needed — `speckit-implement`'s before-hook is `speckit-tdd-run`, `after` is optional.
+Survey findings, to save the next unit the reads:
+- `portable_pty` 0.9 has `impl Child for std::process::Child` (and `ExitStatus: From<std>`), so
+  `supervisor::Supervised` (child + `platform::ProcessTree`, `exit_status`/`terminate`/`reaped`)
+  can be made `pub(crate)` and reused as-is by `structured.rs` with a `Box<dyn Child>` of the
+  piped `std::process::Child` (take stdin/stdout/stderr out first). Copy `PtySession`'s
+  `is_alive`/`cache_exit`/`exit_outcome`/`kill`/`teardown`/`Drop` shape.
+- Env hygiene to generalise (T018): `supervisor.rs:212 prefer_process_path` (windows) and `:231
+  strip_inherited_terminal_identity`, both on `CommandBuilder`; `ensure_cwd_exists` :115.
+- `state.rs:379 struct Proc { pty, framer }` → enum; ~28 `.pty`/`.framer` uses (grep
+  `\.pty\|\.framer\|new_proc` in state.rs). Least churn: `Proc::pty() -> Option<&Arc<PtySession>>`,
+  `framer()`, `is_alive()`, `exit_outcome()`, `kill()`; collections of `Arc<PtySession>`
+  (`remove_session` :4624, `session_ptys`, `covered_live_terminals`) filter_map the pty — a
+  structured child is torn down by its `Drop` when the `LiveSession` drops off-lock.
+- `start_session_gated` state.rs:4141 (SpawnPlan built from the catalog record at :4167 — add
+  `kind`; spawn match at :4297; idempotence check `live_session(id).is_some()` at :4147 must become
+  "hosted" or a structured session restarts twice); `register_session` :4385 takes a `PtySession`.
+- Supervision: `supervise_exited_sessions_at` :4663 (`exited`/`to_respawn` hold `Arc<PtySession>`
+  for `ptr_eq`), `respawn_primary` :5472, `is_primary` :5543, `swap_primary` :5555 — generalise to
+  a cloneable child enum; `end_processes` :2837 kills every proc then carries history (pty only).
+- server.rs: `SetViewedTerminals` :1187 → `sync_terminal_streams` :2559 (`TerminalStreams` map holds
+  `Arc<PtySession>` to notice a restart) → `stream_view` :2602; frames go through
+  `state.frame_sender(id)` as `Frame<DaemonMsg>`; `SessionCreate` arm :981; `SessionKill` :1216.
+- catalog.rs: `create_session` :654, `supervise_session_exit` :1540, `session_summary` :1913.
+- protocol: `SessionCreate` messages.rs:636, `SessionSummary` :1263, `PROTOCOL_VERSION` = 51 at
+  version.rs:181 (→ 52, one doc line).
+- Disk: 20 GB free at start; gate with `CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0`.
 
 ## Open escalation
 
