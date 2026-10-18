@@ -302,7 +302,11 @@ impl<'a, M: Clone + 'a> From<OverviewCard<'a, M>> for Element<'a, M> {
             });
         // The ripple is the card's only state layer while it runs (feature 971, D1); the context
         // area outside it takes only the secondary press, which the ripple ignores (feature 972).
-        menu(Ripple::new(focusable, p.text, RADIUS).centred_on_keys().into())
+        menu(
+            Ripple::new(focusable, p.text, RADIUS)
+                .centred_on_keys()
+                .into(),
+        )
     }
 }
 
