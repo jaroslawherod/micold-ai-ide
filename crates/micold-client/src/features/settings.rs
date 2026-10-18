@@ -1683,7 +1683,10 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
     match msg {
         Msg::ThemePreferenceChanged(pref) => theme_preference_changed(state, pref),
         Msg::SystemThemeChanged(detected) => system_theme_changed(state, detected),
-        Msg::Opened => opened(state),
+        Msg::Opened => {
+            opened(state);
+            return vec![crate::features::Outcome::SettingsOpened];
+        }
         Msg::SectionShown(section) => section_shown(state, section),
         Msg::RailToggled => rail_toggled(state),
         Msg::ThemeChanged(theme) => theme_changed(state, theme),

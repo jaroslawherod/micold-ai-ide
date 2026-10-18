@@ -155,3 +155,30 @@ fn leaving_a_settings_field_marks_the_open_settings_draft_only() {
         Missing
     );
 }
+
+#[test]
+fn reopening_settings_shows_no_stale_repository_error() {
+    use micold_client::features::settings::Msg as SettingsMsg;
+    use micold_core::daemons::DaemonId;
+    let mut state = State::default();
+    let a = DaemonId(1);
+    required::blurred(&mut state, FieldId::DaemonRepository(a));
+    let empty = micold_core::required::Requirement::text(true, "");
+    assert_eq!(
+        state
+            .daemon_list
+            .repository_marks
+            .state(FieldId::DaemonRepository(a), empty),
+        Missing
+    );
+
+    state.update(Message::Settings(SettingsMsg::Opened));
+
+    assert_eq!(
+        state
+            .daemon_list
+            .repository_marks
+            .state(FieldId::DaemonRepository(a), empty),
+        Required
+    );
+}
