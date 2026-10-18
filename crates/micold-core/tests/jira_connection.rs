@@ -169,5 +169,8 @@ fn the_token_directory_is_jira_under_the_data_dir() {
         dir.as_deref().and_then(|d| d.file_name()),
         data_dir().map(|_| std::ffi::OsStr::new("jira")),
     );
-    assert_eq!(dir.as_deref().and_then(|d| d.parent()), data_dir().as_deref());
+    assert_eq!(
+        dir.as_deref().and_then(|d| d.parent()),
+        data_dir().as_deref()
+    );
 }

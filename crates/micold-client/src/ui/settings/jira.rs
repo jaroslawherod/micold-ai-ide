@@ -7,7 +7,8 @@
 
 use crate::app::Message;
 use crate::features::settings::{
-    KeepOrRemove, KeepOrRemovePrompt, Msg as SettingsMsg, SettingsDraft, SettingsSection, TokenInput,
+    KeepOrRemove, KeepOrRemovePrompt, Msg as SettingsMsg, SettingsDraft, SettingsSection,
+    TokenInput,
 };
 use crate::features::window::FieldId;
 use crate::ui::focus::TrackFocus;

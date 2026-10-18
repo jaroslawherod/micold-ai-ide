@@ -106,7 +106,10 @@ fn with_the_switch_off_the_credential_fields_stay_hidden_beside_the_question() {
 fn the_credential_fields_are_painted_only_with_the_switch_on() {
     let on = painted(&jira_page());
     for label in ["Site URL", "Project key", "Account email"] {
-        assert!(shows(&on, label), "{label} missing with the switch on: {on:?}");
+        assert!(
+            shows(&on, label),
+            "{label} missing with the switch on: {on:?}"
+        );
     }
     let mut state = jira_page();
     state.update(micold_client::app::Message::Settings(

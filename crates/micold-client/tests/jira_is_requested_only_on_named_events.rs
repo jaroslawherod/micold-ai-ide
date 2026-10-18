@@ -55,7 +55,10 @@ fn occurrences(needle: &str) -> Vec<(String, String)> {
 fn the_source_is_asked_for_only_in_the_gate_module_and_once() {
     let uses = occurrences(".jira_source()");
     assert_eq!(uses.len(), 1, "{uses:?}");
-    assert_eq!(uses[0].0, "crates/micold-client/src/shell/issues.rs", "{uses:?}");
+    assert_eq!(
+        uses[0].0, "crates/micold-client/src/shell/issues.rs",
+        "{uses:?}"
+    );
 }
 
 // The gate itself (switch off, no connection, no token file, a rotated token) is run by
