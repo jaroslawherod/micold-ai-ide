@@ -682,4 +682,121 @@ mod tests {
         ids.dedup();
         assert_eq!(ids.len(), 4);
     }
+
+    /// Both choices, the way the tests below range over them.
+    fn both_choices() -> [SandboxProfile; 2] {
+        [
+            SandboxProfile::default(),
+            SandboxProfile {
+                image: micold_core::sandbox::image::ImageChoice::Own(
+                    micold_core::sandbox::image::OwnImage::Reference(
+                        "registry.example/own:1".into(),
+                    ),
+                ),
+                ..SandboxProfile::default()
+            },
+        ]
+    }
+
+    /// US4 #5, FR-001: the select has the two entries and none of them names the released image.
+    #[test]
+    fn the_image_select_has_exactly_the_basic_and_the_own_entry() {
+        let names: Vec<&str> = IMAGE_SOURCES.iter().map(|n| n.1).collect();
+        assert_eq!(names, ["Basic image (recommended)", "My own image"]);
+        assert!(names.iter().all(|n| !n.to_lowercase().contains("released")));
+        assert_eq!(
+            OWN_IMAGE_NOTE,
+            "Your image must run an SSH server; see the user guide."
+        );
+        let kinds: Vec<_> = IMAGE_SOURCES.iter().map(|n| n.0).collect();
+        assert_eq!(kinds, [ImageKind::Basic, ImageKind::Own]);
+    }
+
+    /// The section builds for both entries (the fields it holds are checked by the geometry gate).
+    #[test]
+    fn the_container_section_builds_for_both_image_choices() {
+        let [basic, own] = both_choices();
+        let count = |profile: &SandboxProfile| {
+            let view = view_of(profile, None);
+            // One accordion per section; the container section is open.
+            sections(
+                &view,
+                FieldErrors::default(),
+                None,
+                None,
+                |s| s == Section::Container,
+                micold_core::tokens::roles(micold_core::theme::ColorScheme::Dark),
+            )
+            .len()
+        };
+        assert_eq!(count(&basic), 5);
+        assert_eq!(count(&own), 5);
+        assert_eq!(ImageKind::of(&basic.image), ImageKind::Basic);
+        assert_eq!(ImageKind::of(&own.image), ImageKind::Own);
+    }
+
+    /// US3 #4, FR-003: "My own image" saved empty is refused, and a released-image reference is
+    /// refused with the FR-003 message.
+    #[test]
+    fn an_empty_own_image_and_a_released_reference_are_refused() {
+        use crate::features::settings::image_choice;
+        use micold_core::sandbox::image::{ImageChoice, ImageSourceProblem, OwnImage};
+        let own = ImageChoice::Own(OwnImage::Reference(String::new()));
+        assert_eq!(
+            image_choice(&own, "  ", ""),
+            Err(ImageSourceProblem::MissingImage)
+        );
+        let released =
+            image_choice(&own, "ghcr.io/jaroslawherod/micold-daemon:1.0.0", "").unwrap_err();
+        assert_eq!(released, ImageSourceProblem::ReleasedImage);
+        assert_eq!(
+            released.message(),
+            micold_core::sandbox::image::RELEASED_IMAGE_REFUSED
+        );
+        assert!(image_choice(&own, "registry.example/own:1", "").is_ok());
+        assert_eq!(
+            image_choice(&ImageChoice::Basic, "", ""),
+            Ok(ImageChoice::Basic)
+        );
+    }
+
+    /// US2 #2–#3, FR-014: for both choices the four limits keep their minimums, and a limit the
+    /// runtime cannot enforce is disabled with the runtime's reason while the rest stay editable.
+    #[test]
+    fn the_limits_behave_the_same_for_both_image_choices() {
+        use crate::features::settings::parse_budget;
+        use micold_core::sandbox::runtime::IdentityMapping;
+        let caps = RuntimeCapabilities {
+            kind: RuntimeKind::Podman,
+            version: "5".into(),
+            cpus: LimitSupport::Supported,
+            memory: LimitSupport::Supported,
+            pids: LimitSupport::Supported,
+            storage: LimitSupport::unsupported("overlay without quota"),
+            identity_mapping: IdentityMapping::ExplicitUidGid,
+        };
+        for profile in both_choices() {
+            let mut view = view_of(&profile, None);
+            view.capabilities = Some(&caps);
+            let controls = limits(&view);
+            assert_eq!(
+                controls
+                    .iter()
+                    .map(LimitControl::editable)
+                    .collect::<Vec<_>>(),
+                [true, true, true, false]
+            );
+            assert!(controls[3]
+                .supporting
+                .contains("Cannot be enforced here: overlay without quota"));
+            for args in [
+                ("0.001", "", "", ""),
+                ("", "1", "", ""),
+                ("", "", "1", ""),
+                ("", "", "", "1"),
+            ] {
+                assert!(parse_budget(args.0, args.1, args.2, args.3).is_err());
+            }
+        }
+    }
 }

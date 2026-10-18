@@ -347,6 +347,39 @@ mod tests {
         }
     }
 
+    /// FR-015 (feature 806): the limits reach the create argv for the basic image and for "My own
+    /// image" alike, the image reference being the last argument either way.
+    #[test]
+    fn the_limits_are_applied_for_both_image_choices() {
+        for image in [
+            ImageChoice::Basic,
+            ImageChoice::Own(OwnImage::Reference("registry.example/own:1".into())),
+        ] {
+            let mut s = spec();
+            s.profile.image = image.clone();
+            s.profile.budget = ResourceBudget {
+                cpus_milli: Some(MilliCpus(1500)),
+                memory_bytes: Some(Bytes::from_mib(2048)),
+                pids: Some(300),
+                storage_bytes: None,
+            };
+            let args = strings(&create(
+                &s,
+                &caps(RuntimeKind::Docker, LimitSupport::Supported),
+            ));
+            for (flag, value) in [
+                ("--cpus", "1.500"),
+                ("--memory", "2048m"),
+                ("--pids-limit", "300"),
+            ] {
+                let at = args.iter().position(|a| a == flag).expect(flag);
+                assert_eq!(args[at + 1], value, "{image:?}");
+            }
+            assert!(!args.iter().any(|a| a == "--storage-opt"), "{image:?}");
+            assert_eq!(args.last().map(|a| a.as_str()), Some(image.reference()));
+        }
+    }
+
     #[test]
     fn each_supported_limit_produces_exactly_its_flag() {
         // Conformance check K-2, including the unit conversions — a megabyte passed as a byte count
@@ -807,7 +840,7 @@ mod tests {
             let args = strings(&create(&spec(), &caps(kind, LimitSupport::Supported)));
             assert_eq!(args.first().map(String::as_str), Some("create"));
             assert_eq!(
-                args.last().map(String::as_str),
+                args.last().map(|a| a.as_str()),
                 Some("micold-daemon:0.27.0")
             );
             assert!(args.iter().any(|a| a == "--name"));

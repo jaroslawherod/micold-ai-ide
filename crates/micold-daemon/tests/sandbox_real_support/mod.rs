@@ -449,6 +449,12 @@ fn wait_until_absent(program: &str, list: &[&str], key: &str, name: &str) {
 /// Mounting the data home itself gives the daemon an empty catalogue, and every session start then
 /// fails with `no such session in the catalog` while the container looks perfectly healthy.
 pub fn start_sandbox(spec: &SandboxSpec<'_>) -> Sandbox {
+    start_sandbox_from(spec, &image(), &[])
+}
+
+/// [`start_sandbox`] from `image` instead of the basic image, running `command` in it when it is not
+/// empty: the image form's "own image" entry (806 US3) and a container of a released image (US4).
+pub fn start_sandbox_from(spec: &SandboxSpec<'_>, image: &str, command: &[&str]) -> Sandbox {
     purge(spec.container, spec.network);
     cli(&["network", "create", "--driver", "bridge", spec.network]);
 
@@ -465,7 +471,6 @@ pub fn start_sandbox(spec: &SandboxSpec<'_>) -> Sandbox {
     });
 
     let (uid, gid) = micold_core::sandbox::host_identity();
-    let image = image();
     let publish = format!(
         "127.0.0.1:{}:{}",
         spec.port,
@@ -550,7 +555,8 @@ pub fn start_sandbox(spec: &SandboxSpec<'_>) -> Sandbox {
         args.push(format!("{}={value}", micold_core::spawn::IDLE_STOP_ENV));
     }
     args.extend(spec.extra.iter().cloned());
-    args.push(image);
+    args.push(image.to_string());
+    args.extend(command.iter().map(|part| part.to_string()));
 
     cli(&args.iter().map(String::as_str).collect::<Vec<_>>());
     cli(&["start", spec.container]);
@@ -668,6 +674,49 @@ pub async fn wait_for_accept(port: u16) -> (DaemonConnection, CatalogSnapshot) {
 
 /// [`wait_for_accept`], with the whole welcome: the daemon's build string and settings.
 pub async fn provision_and_connect(port: u16) -> (DaemonConnection, Welcome) {
+    let (container, outcome, _) = provision_outcome(port, StepBounds::container()).await;
+    match outcome {
+        Ok(provisioned) => {
+            for warning in &provisioned.warnings {
+                eprintln!("provisioning warning: {warning:?}");
+            }
+            match provisioned.connected {
+                Connected::Ready(conn, welcome) => (*conn, welcome),
+                Connected::Refused(reason) => {
+                    panic!("the sandboxed daemon refused this client: {reason:?}")
+                }
+            }
+        }
+        Err(failure) => panic!(
+            "provisioning the container {container} failed: {}\n{}",
+            failure.reason(&reason_context(port)),
+            failure.output
+        ),
+    }
+}
+
+fn reason_context(port: u16) -> ReasonContext {
+    ReasonContext {
+        host: "127.0.0.1".to_string(),
+        port,
+        timeout_secs: 30,
+        platform: ClientPlatform::current(),
+    }
+}
+
+/// How long the harness asks a started container for its login name.
+const LOGIN_BOUND: Duration = Duration::from_secs(60);
+
+/// One provisioning run against the container on `port` with the step bounds given, returning
+/// the container's name, the outcome, and the steps entered in order (the row's "what it is doing").
+pub async fn provision_outcome(
+    port: u16,
+    bounds: StepBounds,
+) -> (
+    String,
+    Result<provision::Provisioned, provision::ProvisionFailure>,
+    Vec<provision::Step>,
+) {
     let (container, client_key, known_hosts, state, script) = {
         let started = STARTED.lock().unwrap();
         let s = started
@@ -682,15 +731,25 @@ pub async fn provision_and_connect(port: u16) -> (DaemonConnection, Welcome) {
         )
     };
     let host = ssh_host();
-    let bounds = StepBounds::container();
     let login = provision::login::wait_for_login(
         &host,
         dialect().program,
         &container,
-        bounds.acquire + bounds.create_container,
+        // Short: an image with no passwd line for the container's uid (alpine, run as the host's
+        // uid) never answers `id -un`, and the whole acquire+create bound is a quarter of an hour.
+        LOGIN_BOUND.min(bounds.acquire + bounds.create_container),
     )
     .await
-    .unwrap_or_else(|reason| panic!("the container {container} did not start: {reason}"));
+    .unwrap_or_else(|reason| {
+        // An exited container is a failed start; anything else is an image that cannot name its
+        // user, and the step under test (Reach) fails on its own with the placeholder.
+        assert!(
+            !reason.contains("is not running"),
+            "the container {container} did not start: {reason}"
+        );
+        eprintln!("the container {container} did not name its login ({reason}); using micold");
+        "micold".to_string()
+    });
     let platform = ClientPlatform::current();
     let target = ProvisionTarget {
         reach: Reach::Pinned(PinnedReach {
@@ -720,30 +779,16 @@ pub async fn provision_and_connect(port: u16) -> (DaemonConnection, Welcome) {
         build_id: current_build_id(),
         client_build: "micold-ai-ide/sandbox-real".to_string(),
     };
-    let sink: EventSink = std::sync::Arc::new(|_| {});
-    match provision::run(&host, &target, &opts, &CancelToken::new(), &sink).await {
-        Ok(provisioned) => {
-            for warning in &provisioned.warnings {
-                eprintln!("provisioning warning: {warning:?}");
-            }
-            match provisioned.connected {
-                Connected::Ready(conn, welcome) => (*conn, welcome),
-                Connected::Refused(reason) => {
-                    panic!("the sandboxed daemon refused this client: {reason:?}")
-                }
-            }
+    let steps = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let seen = steps.clone();
+    let sink: EventSink = std::sync::Arc::new(move |event| {
+        if let provision::ProvisionEvent::Entered(step) = event {
+            seen.lock().unwrap().push(step);
         }
-        Err(failure) => panic!(
-            "provisioning the container {container} failed: {}\n{}",
-            failure.reason(&ReasonContext {
-                host: "127.0.0.1".to_string(),
-                port,
-                timeout_secs: 30,
-                platform,
-            }),
-            failure.output
-        ),
-    }
+    });
+    let outcome = provision::run(&host, &target, &opts, &CancelToken::new(), &sink).await;
+    let steps = steps.lock().unwrap().clone();
+    (container, outcome, steps)
 }
 
 /// Whether a daemon process (not a bridge, whose command line ends in `remote bridge`) is running

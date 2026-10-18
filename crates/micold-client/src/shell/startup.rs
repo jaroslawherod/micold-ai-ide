@@ -290,7 +290,6 @@ fn boot() -> (App, Task<Message>) {
     let resolved_placement = micold_client::daemon::Placement {
         kind: placement,
         state_dir: state_dir.clone(),
-        strict_fingerprint: false,
     };
     // The mount set is the registered projects, read from the store this boot already loaded.
     let projects_for_sandbox: Vec<PathBuf> = core

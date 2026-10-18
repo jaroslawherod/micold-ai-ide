@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #806
 - **Worktree branch**: claude/project-thread-uwrpqv
 - **Started**: 2026-10-17
-- **Phase**: M5b
-- **Next step**: M5b part 1 shipped (PR files in the scratchpad); then M5b part 2 (*Handover*)
+- **Phase**: M5c
+- **Next step**: push the red-CI fix for PR #1027 (sandbox job), orchestrator re-checks CI
 
 ## Pull requests
 
@@ -21,6 +21,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #982 | M2 shared provisioning | merged (Windows job failed once on an unrelated timing test, micold-daemon history_stop_request ten_busy_sessions_are_all_saved_within_the_bound; passed on re-run) | 198a12312b8b801dce177e47998024902732f0ac |
 | #988 | M3 static Linux daemons (two CI fixes: SIGPIPE in remote-daemon-bundle.test.sh; zig crashed on the Windows ARM64 runner, so musl daemons are built once in the Linux `linux-daemons` job and downloaded by packaging jobs) | merged | 32798973fe5df793f5c85b6ed52a84e52230591d |
 | #995 | M4 AI CLI install step + registry-only relay | merged | abe058a2424ea0551edb2f6667ac732064434557 |
+| #1018 | M5b part 1 (image pin, bridge env, notices, migration) | merged | 6dbe317600b3c8430dd392b5a94293c85e6fbf2f |
 | #998 | M5 subset (container daemons over SSH on the basic image; pulled in T047, T055, T065) | merged | d526eaca82b43d60d5f2eb85926259f0fefc45e4 |
 
 ## Milestones
@@ -79,6 +80,8 @@ Milestone notes:
 | Tasks | 2 | ae7101c78be879b2cde37d5455ed29eb6fd93300:2d525fd2157f2c7e851c1e8dd343a38d30d37344 | CLEAN (1 MINOR fixed: checklist item ticked after reviewer confirmed 0 markers, FR-002/FR-010 resolved) |
 | M1 review A (code-review high) | 1 | HEAD 687b8f8d | 10 findings: F1–F5, F8, F9 fixed; F6, F7, F10 declined (see Declined review findings) |
 | M1 review B (conformance, sonnet) | 1 | 4de41d6b382fa4417634887ea9108075302f1c02:d99547189d32d7da84a573ed1e106fc02ad026e7 | CLEAN, 4 MINOR (F2, F3 fixed, prose only; F1 declined; F4 covered by the gate) |
+| M5c review A (code-review high) | 1 | 7e4573e8c7115d81ab1304374e86f7d297622b16:c0850e4685b784cc72b8b989fab3015053b0dbfe | CHANGES: 3 MAJOR, 3 MINOR (F2, F3 fixed: US4 #1 settings case and a CliRuntime pull-failure case added to `sandbox_real_provision.rs`; F6 fixed; F1 declined; F4, F5 declined) |
+| M5c review B (conformance, sonnet) | 1 | 7e4573e8c7115d81ab1304374e86f7d297622b16:c0850e4685b784cc72b8b989fab3015053b0dbfe | CHANGES: 3 MAJOR, 1 MINOR (F1 cycle-log row added; F2 fixed as A F2; F3 declined; F4 declined) |
 
 ## Declined review findings
 
@@ -93,12 +96,18 @@ Milestone notes:
 | M1 | Review B r1 | F1 (MINOR) `hash` job fails on DRIFT | Intended: the workflow publishes under the tree's hash, so `BASIC_IMAGE_CONTENT_HASH` must match it in the same change; the later "pin PR" is the digest pin `BASIC_IMAGE` (T049) |
 | M4 | Review A r1 | F4 (MINOR) relay bind failure should be reported as the io error | contracts/provisioning.md *Failure causes* and T034 define `PostureBlocksDownload` for a relay that cannot be opened; the cause text covers it |
 | M4 | Review B r1 | F2 (MINOR) `standin_table` has no automated test | No suite uses it before M5/M7 (the container suites); packing and installing both variants was run by hand and is recorded in the cycle-log; a test now would be a container-free test of test support |
+| M5c | Review A r1 | F1 (MAJOR) T045 lacks tests for pinned reach, relay/direct, bounds, `CreateContainer`, legacy dial | Those are asserted by the M5 part 1–2 tests (`container_attempt` target tests T053/T054, `Adoption::Legacy` dial tests T058/T062, listed in the cycle-log); T045 adds only the missing `Entered(Acquire)`, which has its test. `CreateContainer` is emitted by the lifecycle, not this task |
+| M5c | Review B r1 | F3 (MAJOR) `strict_fingerprint` removal is outside the tasks | In scope by the unit brief and ledger follow-up 6 (dead field, nothing reads it) |
+| M5c | Review A/B r1 | F4 (MINOR) T063 test sits in `argv.rs`, not `sandbox/mod.rs`; stray closure edit | The `argv` builder lives in `argv.rs`, so its test belongs there; the closure edit is a clippy fix on the same lines. F5 (MINOR): the container-section test is a smoke test, the fields are covered by the geometry gate and T064 tests |
+
+### Red CI on #1027 (sandbox job, real runtime)
+
+- `sandbox_real_provision_a_nonexistent_image_reference_names_itself`: an unresolvable registry (`no such host`) came back as `Unknown`. `classify` now reads it as `ImagePullFailed`, and `CliRuntime::acquire_image` fills in the image reference the classifier leaves empty (US3 #3). Unit test on that stderr.
+- `..._own_image_without_ssh_fails_in_reach`: alpine has no passwd line for the host uid, so `id -un` never answered and the login wait ran its whole acquire+create bound (~15 min) until `sleep 600` ended and the container exited. `wait_for_login` now returns at once when the runtime says the container is not running; the harness asks for 60 s at most and falls back to `micold` (the Reach step under test fails on its own).
 
 ## Handover
 
-M5b part 1 is committed on the branch (PR files in the scratchpad). **Done**: T049 re-pin (`BASIC_IMAGE` = tag `6009b58e0dd70464`, index digest `sha256:ab15041b…` from `basic-image.yml` run 39128313716 on `d526eaca`, read from ghcr's anonymous manifest endpoint); the bridge-started container daemon now gets `MICOLD_IMAGE_REFERENCE`, `TZ`, `MICOLD_IDLE_STOP=off` (survive_logout) and `XDG_DATA_HOME` through `ProvisionTarget.env` (`container_env` in `daemon.rs`; `Dial::ContainerSsh` carries `image` and `survive_logout`, `daemon::install_time_zone` is set at startup), which also closes follow-up (a) of the survive-logout idle env; T056 (`settings_released_image_migration.rs`); T058 + T062 (`DaemonView.notice`/`stop_blocked`, `Model.legacy_container`, `settings.legacy_container` set by `shell/sandbox.rs` after each sandbox message, `DaemonRegistry::clear_migration` after the first non-legacy `Started` on Basic); T069 (user guide "Which image it runs on").
-
-**Next step (fresh unit, M5b part 2)**: T045 (`prepare_keys`/`container_attempt` tests with a fake `SshHost`; the `Entered(Acquire)`/`Entered(CreateContainer)` events are not emitted by the actor), T046 geometry gate, T063, T064, T066, T068 (two-entry `Select`, archive picker), the real-runtime suites T048/T059/T067 (compile only here; CI's sandbox job runs them), T070 visual pass, and follow-up items (6) `strict_fingerprint` dead code, (7) "getting the image" row text. The history/idle real-runtime suites may now drop their `provision_then_restart` workaround (the bridge-started daemon has the container env): leave it until CI shows them green. The UI of the notices is not visually checked (T070).
+None.
 
 ## Open escalation
 

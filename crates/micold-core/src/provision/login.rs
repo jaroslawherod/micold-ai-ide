@@ -50,8 +50,15 @@ pub async fn ask_login(
     }
 }
 
+/// Whether the runtime says the container has exited, which no further asking will change.
+/// Docker: `container … is not running`; podman: `container state improper`.
+fn has_exited(reason: &str) -> bool {
+    let reason = reason.to_ascii_lowercase();
+    reason.contains("is not running") || reason.contains("container state improper")
+}
+
 /// The login name, asking again every second while the container is not up yet, for at most
-/// `bound`. The last reason is the error.
+/// `bound`; at once when the container has exited. The last reason is the error.
 pub async fn wait_for_login(
     runner: &dyn SshRunner,
     runtime_program: &str,
@@ -62,7 +69,7 @@ pub async fn wait_for_login(
     loop {
         match ask_login(runner, runtime_program, container).await {
             Ok(name) => return Ok(name),
-            Err(reason) if started.elapsed() >= bound => return Err(reason),
+            Err(reason) if started.elapsed() >= bound || has_exited(&reason) => return Err(reason),
             Err(_) => tokio::time::sleep(RETRY_PAUSE).await,
         }
     }
@@ -151,6 +158,19 @@ mod tests {
                 .unwrap_err(),
             "still starting"
         );
+    }
+
+    #[tokio::test]
+    async fn a_container_that_has_exited_ends_the_wait_at_once() {
+        let runner = Script::new(vec![(
+            Some(1),
+            "",
+            "Error response from daemon: container abc is not running",
+        )]);
+        let err = wait_for_login(&runner, "docker", "c1", Duration::from_secs(600))
+            .await
+            .unwrap_err();
+        assert!(err.contains("is not running"));
     }
 
     #[tokio::test]

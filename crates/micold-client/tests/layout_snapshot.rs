@@ -114,6 +114,13 @@ mod refresh_busy_holds_the_header;
 #[path = "gates/context_menu_anchor.rs"]
 mod context_menu_anchor;
 
+// --- The container-section-fits gate (806, T046) ------------------------------------------------
+
+// Builds its own states and reads no cache, like `context_menu_anchor`; it shares this binary for the
+// `support::layout` passes.
+#[path = "gates/container_section_fits.rs"]
+mod container_section_fits;
+
 // --- The tooltip-clears-its-row gate (029 BUG-001) ----------------------------------------------
 
 // Beside `context_menu_anchor`, whose fixture it reuses: the same long worktree list and the same
