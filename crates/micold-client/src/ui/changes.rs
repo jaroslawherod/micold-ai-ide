@@ -582,7 +582,7 @@ fn comment_or_editor<'a>(
         Status::Answered => CardState::Answered,
     };
     let mut card = ReviewCommentCard::new(&comment.text, state, r)
-        .outdated(view.outdated.contains(&comment.id))
+        .outdated(crate::features::changes::is_outdated(view, comment))
         .highlighted(view.panel.focus == Some(comment.id));
     if let Some((reply, shortened)) = model.reply {
         card = card.reply(reply, shortened);

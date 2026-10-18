@@ -88,7 +88,7 @@ impl Reviews {
     }
 
     /// Apply `op` to entry `dir` of `project` (W1, W3), write the project's review file (W5), and
-    /// return the `ReviewChanged` to push. The caller has checked the entry exists (W2). On any
+    /// return the `ReviewChanged` to push (`None` when a `Reanchor` applied nothing: no write, no push). The caller has checked the entry exists (W2). On any
     /// refusal, memory and file are unchanged.
     pub fn apply_edit(
         &mut self,
@@ -97,7 +97,7 @@ impl Reviews {
         dir: &str,
         op: ReviewEditOp,
         now: u64,
-    ) -> Result<DaemonMsg, Refusal> {
+    ) -> Result<Option<DaemonMsg>, Refusal> {
         let entries = self.project(catalog, project);
         let mut edited = entries.get(dir).cloned().unwrap_or_default();
         match op {
@@ -129,12 +129,11 @@ impl Reviews {
             ReviewEditOp::ClearSent => edited.clear_sent(),
             ReviewEditOp::DiscardPending => edited.discard_pending(),
             ReviewEditOp::Mark { id, outcome, note } => edited.mark(id, outcome, &note, now)?,
-            // Feature 946's M5 answers this (T063); until then it stores nothing.
-            ReviewEditOp::Reanchor { .. } => {
-                return Err(Refusal::new(
-                    ErrorKind::Refused,
-                    "this review action is not available in this build",
-                ));
+            // W15: compare-and-set, so a repeat from another window changes nothing.
+            ReviewEditOp::Reanchor { moves } => {
+                if edited.reanchor(&moves) == 0 {
+                    return Ok(None);
+                }
             }
         }
 
@@ -158,7 +157,22 @@ impl Reviews {
         } else {
             entries.insert(dir.to_owned(), edited);
         }
-        Ok(msg)
+        Ok(Some(msg))
+    }
+
+    /// Entry `dir`'s Draft comments, for re-anchoring before a send (W16).
+    pub fn drafts(&mut self, catalog: &Catalog, project: &Path, dir: &str) -> Vec<ReviewComment> {
+        self.project(catalog, project)
+            .get(dir)
+            .map(|review| {
+                review
+                    .comments()
+                    .iter()
+                    .filter(|comment| comment.state.status() == Status::Draft)
+                    .cloned()
+                    .collect()
+            })
+            .unwrap_or_default()
     }
 
     /// Open a send of entry `dir`'s Draft comments (W6): the snapshot to deliver and the
@@ -420,4 +434,44 @@ fn entry_dir(msg: &DaemonMsg) -> &str {
         DaemonMsg::ReviewChanged { worktree_dir, .. } => worktree_dir,
         _ => "",
     }
+}
+
+/// What re-anchoring an entry's Drafts against its working tree found (W16).
+#[derive(Debug, Default)]
+pub struct Relocated {
+    /// The Drafts whose quoted code moved.
+    pub moves: Vec<micold_core::review::comment::Move>,
+    /// The current-side Drafts whose code is gone or ambiguous: the prompt notes them outdated.
+    pub outdated: Vec<CommentId>,
+}
+
+/// Locate each current-side Draft of `drafts` in its file under `root` (W16). A file that is
+/// missing or not text holds nothing: its Drafts are outdated. Reads files, so it runs on the
+/// blocking pool, outside the state lock.
+pub fn relocate(root: &Path, drafts: &[ReviewComment]) -> Relocated {
+    use micold_core::review::anchor::{locate, Located};
+    use micold_core::review::comment::Move;
+    use micold_core::review::diff::SideLines;
+    use micold_core::review::Side;
+
+    let mut found = Relocated::default();
+    let mut files: HashMap<&str, Option<SideLines>> = HashMap::new();
+    for comment in drafts.iter().filter(|c| c.side == Side::New) {
+        let lines = files.entry(comment.path.as_str()).or_insert_with(|| {
+            std::fs::read(root.join(comment.path.as_str()))
+                .ok()
+                .and_then(|bytes| SideLines::from_bytes(&bytes))
+        });
+        let located = lines.as_ref().map_or(Located::Gone, |lines| {
+            locate(&comment.quote, comment.range, lines)
+        });
+        match located {
+            Located::Same(_) => {}
+            Located::Moved(to) => {
+                found.moves.extend(Move::new(comment.id, comment.range, to));
+            }
+            Located::Gone | Located::Ambiguous => found.outdated.push(comment.id),
+        }
+    }
+    found
 }

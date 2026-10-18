@@ -15,7 +15,10 @@ use micold_core::pull_request::{
 };
 use micold_core::review::base::{Base, BaseUnavailable, ReviewScope, Toggles};
 use micold_core::review::changes::{ChangeKind, ChangeList, ChangedFile};
-use micold_core::review::comment::{CommentId, CommentState, Outcome, ReviewComment, Status};
+use micold_core::review::anchor::{self, locate, Located};
+use micold_core::review::comment::{
+    CommentId, CommentState, Move, Outcome, ReviewComment, Status,
+};
 use micold_core::review::diff::{
     parse_unified, side_by_side_rows, unified_rows, FileDiff, LoadedDiff, SideRow, Spans,
     UnifiedRow,
@@ -198,9 +201,9 @@ pub struct OpenView {
     /// The diff's slots (comment cards, the composer) as last measured, in whole pixels, keyed by
     /// the line they hang under; for the shown file in the layout in force.
     pub slot_heights: BTreeMap<(Side, u32), u32>,
-    /// The entry's comments judged outdated (R14): their lines no longer hold their quote, or
-    /// their file left the list. A comment keeps its judgement until its file is read again.
-    pub outdated: BTreeSet<CommentId>,
+    /// Where each comment of the entry is drawn and whether it shows the outdated mark (R14,
+    /// feature 946 R2): kept until its file is read again.
+    pub anchors: BTreeMap<CommentId, Anchor>,
     /// **Discard drafts…** was pressed: its confirmation is open (S3).
     pub confirm_discard: bool,
     /// The comment whose whole reply is open in its dialog (feature 946, FR-006); cleared when
@@ -325,13 +328,13 @@ pub fn panel_rows(state: &State) -> Vec<PanelRow> {
     comments.sort_by(|a, b| {
         (
             a.path.as_str().as_bytes(),
-            a.range.start(),
+            shown_range(view, a).start(),
             a.side,
             a.created,
         )
             .cmp(&(
                 b.path.as_str().as_bytes(),
-                b.range.start(),
+                shown_range(view, b).start(),
                 b.side,
                 b.created,
             ))
@@ -340,7 +343,8 @@ pub fn panel_rows(state: &State) -> Vec<PanelRow> {
         .into_iter()
         .map(|c| {
             let card = card_model(c, review.sending);
-            let (start, end) = (c.range.start(), c.range.end());
+            let shown = shown_range(view, c);
+            let (start, end) = (shown.start(), shown.end());
             let noun = if start == end { "line" } else { "lines" };
             let span = if start == end {
                 start.to_string()
@@ -392,6 +396,30 @@ pub fn status_counts(state: &State) -> [(Status, usize); 4] {
 pub const PANEL_EMPTY_TEXT: &str =
     "No review comments yet. Click a line number in the diff to write one.";
 
+/// Where a comment is drawn and whether it shows the outdated mark (feature 946, data-model §
+/// Client).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Anchor {
+    /// The lines the card hangs under: where its code is now, or its last place within the file.
+    pub shown: LineRange,
+    /// Its quoted code is gone or ambiguous, and it is a Draft or Sent comment (FR-021, FR-024).
+    pub outdated: bool,
+}
+
+/// Where `comment` is drawn: its anchor, or its stored range before its file was read.
+pub fn shown_range(view: &OpenView, comment: &ReviewComment) -> LineRange {
+    view.anchors
+        .get(&comment.id)
+        .map_or(comment.range, |anchor| anchor.shown)
+}
+
+/// Whether `comment` shows the outdated mark.
+pub fn is_outdated(view: &OpenView, comment: &ReviewComment) -> bool {
+    view.anchors
+        .get(&comment.id)
+        .is_some_and(|anchor| anchor.outdated)
+}
+
 /// The toolbar toggle's label: "Review (n)", n being every comment of the entry.
 pub fn review_toolbar_label(state: &State) -> String {
     let count = state
@@ -414,7 +442,7 @@ pub fn jump_target(state: &State, id: CommentId) -> Option<Jump> {
     Some(if listed {
         Jump::Shown {
             path: comment.path.clone(),
-            line: comment.range.start(),
+            line: shown_range(view, comment).start(),
         }
     } else if view.source == Source::Changes
         && (!view.toggles.committed || !view.toggles.uncommitted)
@@ -468,13 +496,14 @@ fn jump_offset(state: &mut State) -> Option<u32> {
     };
     // The cards and composers hung above the line push it down by their measured heights, known
     // once the file has been laid out; a cold jump lands a little short of them.
+    let first = shown_range(view, comment).start();
     let hung: u32 = view
         .slot_heights
         .iter()
-        .filter(|((_, line), _)| *line < comment.range.start())
+        .filter(|((_, line), _)| *line < first)
         .map(|(_, height)| *height)
         .sum();
-    let row = row_of_line(diff, layout, comment.side, comment.range.start());
+    let row = row_of_line(diff, layout, comment.side, first);
     let offset = row.map_or(0.0, |r| {
         r.saturating_sub(2) as f32 * crate::ui::material::DIFF_ROW_HEIGHT + hung as f32
     });
@@ -796,7 +825,8 @@ pub enum Effect {
         project: PathBuf,
         /// The wire's worktree dir; `""` is the Default entry.
         worktree_dir: String,
-        /// The pending comments judged outdated (R14), in the entry's order.
+        /// The pending removed-side comments judged outdated (R14), in the entry's order; the
+        /// service judges the others itself (W16).
         outdated: Vec<CommentId>,
         /// How many pending comments the send carries, for the success snackbar (S2).
         count: usize,
@@ -840,7 +870,7 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
                 pick: None,
                 composer: None,
                 slot_heights: BTreeMap::new(),
-                outdated: BTreeSet::new(),
+                anchors: BTreeMap::new(),
                 confirm_discard: false,
                 reply_open: None,
                 panel: Panel::default(),
@@ -1061,11 +1091,11 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
                     }
                 }
             }
-            judge_outdated(state);
+            let moves = judge_anchors(state);
             let waiting = state.open.as_ref().is_some_and(|v| v.panel.to_show);
             match waiting.then(|| jump_offset(state)).flatten() {
                 Some(offset) => Effect::ScrollDiff { offset },
-                None => Effect::None,
+                None => reanchor_effect(state, moves),
             }
         }
         Msg::PanelToggled => {
@@ -1196,7 +1226,9 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
                 .map(|r| {
                     r.comments
                         .iter()
-                        .filter(|c| is_pending(c) && view.outdated.contains(&c.id))
+                        .filter(|c| {
+                            c.side == Side::Old && is_pending(c) && is_outdated(view, c)
+                        })
                         .map(|c| c.id)
                         .collect()
                 })
@@ -1342,7 +1374,7 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
             state
                 .reviews
                 .insert((project, worktree_dir), ReviewView { comments, sending });
-            judge_outdated(state);
+            judge_anchors(state);
             Effect::None
         }
     }
@@ -1680,7 +1712,7 @@ pub fn file_comments(state: &State) -> FileComments<'_> {
         _ => &[],
     };
     for comment in review.comments.iter().filter(|c| &c.path == path) {
-        let end = comment.range.end();
+        let end = shown_range(view, comment).end();
         // The row a comment sits under: its last line on its side; a removed-side comment may
         // end on a context line, which carries both numbers.
         let shown = hunks
@@ -1922,7 +1954,7 @@ fn list_read(state: &mut State, seq: u64, result: Result<ChangeList, String>) ->
             Load::Failed(message)
         }
     };
-    judge_outdated(state);
+    judge_anchors(state);
     if again {
         request_read(state)
     } else {
@@ -1998,12 +2030,13 @@ fn diff_rows(view: &OpenView) -> BTreeSet<(Side, u32)> {
     rows
 }
 
-/// Judge the open entry's comments again (R14): a comment whose file left the shown list is
-/// outdated; one on the shown file is outdated when the lines read now no longer hold its quote;
-/// any other keeps its last judgement.
-fn judge_outdated(state: &mut State) {
+/// Judge the open entry's comments again (R14, feature 946 R2): a comment whose file left the shown
+/// list is outdated; one on the shown file is located again in the lines read now (a removed-side
+/// one only checks its quote); any other keeps its last anchor. Returns the moves of current-side
+/// comments whose code moved.
+fn judge_anchors(state: &mut State) -> Vec<Move> {
     let Some(view) = state.open.as_ref() else {
-        return;
+        return Vec::new();
     };
     let comments = review_of(state, view).map_or(&[][..], |r| r.comments.as_slice());
     let listed = shown_list(view);
@@ -2011,38 +2044,75 @@ fn judge_outdated(state: &mut State) {
         Load::Ready(diff) => Some(diff),
         _ => None,
     };
-    let mut outdated: BTreeSet<CommentId> = view
-        .outdated
+    let mut anchors: BTreeMap<CommentId, Anchor> = view
+        .anchors
         .iter()
-        .copied()
-        .filter(|id| comments.iter().any(|c| c.id == *id))
+        .filter(|(id, _)| comments.iter().any(|c| c.id == **id))
+        .map(|(id, anchor)| (*id, *anchor))
         .collect();
+    let mut moves = Vec::new();
     for comment in comments {
-        let verdict = if listed.is_some_and(|l| !l.files.iter().any(|f| f.path == comment.path)) {
-            Some(true)
+        let status = comment.state.status();
+        let held = anchors.get(&comment.id).map_or(comment.range, |a| a.shown);
+        let judged = if listed.is_some_and(|l| !l.files.iter().any(|f| f.path == comment.path)) {
+            Some(Anchor {
+                shown: held,
+                outdated: matches!(status, Status::Draft | Status::Sent),
+            })
         } else if view.selected.as_ref() == Some(&comment.path) {
-            read.map(|diff| {
-                comment.is_outdated(match comment.side {
-                    Side::Old => diff.old.as_ref(),
-                    Side::New => diff.new.as_ref(),
-                })
+            read.map(|diff| match comment.side {
+                Side::Old => Anchor {
+                    shown: comment.range,
+                    outdated: matches!(status, Status::Draft | Status::Sent)
+                        && comment.is_outdated(diff.old.as_ref()),
+                },
+                Side::New => {
+                    let located = diff.new.as_ref().map_or(Located::Gone, |lines| {
+                        locate(&comment.quote, comment.range, lines)
+                    });
+                    if let Located::Moved(to) = located {
+                        moves.extend(Move::new(comment.id, comment.range, to));
+                    }
+                    Anchor {
+                        shown: located
+                            .shown(comment.range, diff.new.as_ref().map_or(0, |l| l.len())),
+                        outdated: anchor::is_outdated(&located, status),
+                    }
+                }
             })
         } else {
             None
         };
-        match verdict {
-            Some(true) => {
-                outdated.insert(comment.id);
+        match judged {
+            Some(anchor) => {
+                anchors.insert(comment.id, anchor);
             }
-            Some(false) => {
-                outdated.remove(&comment.id);
+            None => {
+                anchors.entry(comment.id).or_insert(Anchor {
+                    shown: comment.range,
+                    outdated: false,
+                });
             }
-            None => {}
         }
     }
     if let Some(view) = state.open.as_mut() {
-        view.outdated = outdated;
+        view.anchors = anchors;
     }
+    moves
+}
+
+/// The `Reanchor` edit for `moves` (research R3), only while the shown new side is the working
+/// tree: the Default entry, or the Uncommitted toggle on, and never for a pull request's diff.
+fn reanchor_effect(state: &State, moves: Vec<Move>) -> Effect {
+    let Some(view) = state.open.as_ref() else {
+        return Effect::None;
+    };
+    let working_tree = view.source == Source::Changes
+        && (view.entry == SessionLocation::Default || view.toggles.uncommitted);
+    if moves.is_empty() || !working_tree {
+        return Effect::None;
+    }
+    review_edit(view, ReviewEditOp::Reanchor { moves })
 }
 
 /// Whether the Committed toggle can be used: not for the Default entry (L1, US1 s9).
