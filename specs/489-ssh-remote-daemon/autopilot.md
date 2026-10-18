@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #489
 - **Worktree branch**: feat/489_run-the-session-daemon-on-a-remote-host-over-ssh
 - **Started**: 2026-10-12
-- **Phase**: M6 reviewed, final gate and PR
-- **Next step**: rebase, full gate, push, PR for M6
+- **Phase**: M6 PR open (#1020)
+- **Next step**: CI and merge #1020, then M7
 
 ## Pull requests
 
@@ -22,6 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #895 | M3 | merged | 8a04f4206330fa7552531e4694e2244b186d345f |
 | #918 | M4 | merged | 402b31f667bec7632cfe284acd65c59549085fc8 |
 | #964 | M5 | merged | b81b808f88183a8562cdb5a70faf3ef9e850cf83 |
+| #1020 | M6 | open | — |
 
 ## Milestones
 
@@ -32,7 +33,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 | T039–T050 | full | Reconnect after a network drop | #895 | done |
 | M4 | T051–T055 | full | Local work unaffected, concurrent clients | #918 | done |
 | M5 | T056–T065 | full | Host picker, failure reasons, daemon management | #964 | done |
-| M6 | T066–T072 | full | Version mismatch explained | — | pending |
+| M6 | T066–T072 | full | Version mismatch explained | #1020 | in review |
 | M7 | T073–T081 | full | Replace a mismatched daemon with no sessions | — | pending |
 | M8 | T082–T084 | full | Remote daemon artefact for macOS and Windows | — | pending |
 
