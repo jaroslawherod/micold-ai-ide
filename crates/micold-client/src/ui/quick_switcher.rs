@@ -64,6 +64,7 @@ pub fn view_of(state: &State) -> View<'_> {
     for (at, ranked) in list.ranked.iter().enumerate() {
         let entry = &list.entries[ranked.index];
         let row = TypeaheadRow::new(entry.candidate.name.clone(), ranked.spans.clone())
+            .single_line()
             .details(context_line(entry.kind, &entry.context), Vec::new());
         rows.push(if entry.candidate.selectable {
             row
@@ -106,6 +107,7 @@ pub fn surface<'a>(view: View<'a>, roles: Roles) -> Element<'a, Msg> {
         .id(QUICK_SWITCHER_FIELD_ID.clone())
         .placeholder("Jump to…")
         .open(true)
+        .in_flow(true)
         .highlighted(highlighted)
         .selected(current)
         .empty_message(empty_message)

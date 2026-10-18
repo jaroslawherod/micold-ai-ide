@@ -345,7 +345,15 @@ where
     let pick = |index: usize| (s.on_selected)(s.options[index].clone());
     // No empty message: a select's options are fixed by the call site, so an empty list is a
     // call-site error rather than a search that found nothing (picker-base §3).
-    let panel = menu_element(rows, view.highlight, s.chosen(), None, Some(&pick), r);
+    let panel = menu_element(
+        rows,
+        view.highlight,
+        s.chosen(),
+        None,
+        Some(&pick),
+        r,
+        false,
+    );
     // The list arrives and leaves rather than appearing and vanishing (FR-018, FR-019), by the same
     // call the search picker makes — so the two transitions are one definition and cannot drift.
     // Neither duration nor curve is named here; both are `material::picker`'s (FR-020, SC-007).
