@@ -41,6 +41,10 @@ jobs:
   classify:
     name: classify change
     runs-on: ubuntu-latest
+    # #959: `pr-proven.sh` reads the commit's pull requests and trees through the API.
+    permissions:
+      contents: read
+      pull-requests: read
     outputs:
       docs_only: ${{ steps.verdict.outputs.docs_only }}
       packaging: ${{ steps.verdict.outputs.packaging }}
@@ -48,6 +52,10 @@ jobs:
       # #956: the `full-ci` label as a boolean, so the macOS and Windows `Test (daemon)` steps read
       # it from here rather than each parsing the label list.
       full_ci: ${{ steps.verdict.outputs.full_ci }}
+      # #959: a push to main whose tree a merged pull request's run already proved. True skips what
+      # that run covered (lint, assertions, the Ubuntu test leg); see docs/development/ci-pipeline.md.
+      pr_proven: ${{ steps.proven.outputs.pr_proven }}
+      test_os: ${{ steps.proven.outputs.test_os }}
       reason: ${{ steps.verdict.outputs.reason }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -78,6 +86,32 @@ jobs:
             | tee -a "$GITHUB_OUTPUT"
           echo "full_ci=$FORCE_FULL_CI" >> "$GITHUB_OUTPUT"
           cat "$RUNNER_TEMP/offenders.txt"
+      # #959: a push to main repeats the PR run unless the merged PR's head tree is the pushed tree.
+      # Only a push can be proven; the nightly schedule and pull requests are always false, so the
+      # nightly keeps running everything. Any doubt in the script is false. `test_os` is the matrix
+      # of the `test` job: the Ubuntu leg is dropped when proven (its full test ran on the PR).
+      - name: Was this push proven by its pull request?
+        id: proven
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          out="$RUNNER_TEMP/proven.txt"
+          printf 'pr_proven=false\npr_proven_reason=not a push\n' > "$out"
+          if [ "$EVENT" = push ]; then
+            scripts/pr-proven.sh > "$out" || printf 'pr_proven=false\npr_proven_reason=script failed\n' > "$out"
+          fi
+          cat "$out"
+          if grep -qx 'pr_proven=true' "$out"; then
+            echo 'pr_proven=true' >> "$GITHUB_OUTPUT"
+            echo 'test_os=["macos-latest","windows-latest"]' >> "$GITHUB_OUTPUT"
+          else
+            echo 'pr_proven=false' >> "$GITHUB_OUTPUT"
+            echo 'test_os=["ubuntu-latest","macos-latest","windows-latest"]' >> "$GITHUB_OUTPUT"
+          fi
+          sed -n 's/^pr_proven_reason=/PR-proven reason: /p' "$out" >> "$GITHUB_STEP_SUMMARY"
       - name: Summarise the verdict
         if: always()
         env:
@@ -117,7 +151,8 @@ jobs:
   lint:
     name: fmt + clippy
     needs: classify
-    if: needs.classify.outputs.docs_only != 'true'
+    # #959: a push to main that its merged pull request already proved skips lint.
+    if: needs.classify.outputs.docs_only != 'true' && needs.classify.outputs.pr_proven != 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -174,14 +209,21 @@ jobs:
     name: build + test (${{ matrix.os }})
     # Fail fast (#957): wait on `lint` (fmt + clippy, ~95 s) so a red lint ends the run in about 2 min
     # instead of ~25. A `needs` job is skipped, not failed, when lint fails; `ci-complete` reads
-    # lint's own `failure` and goes red. The `if:` keeps its meaning: it has no status function, so
-    # it implies success() of every need; docs_only skips lint and these jobs together.
+    # lint's own `failure` and goes red. #959: lint is also skipped on a push its pull request
+    # proved, and a plain `if:` would then skip this job too, so the condition spells out what
+    # success() implied: every need succeeded, except that lint may be skipped (never failed).
     needs: [classify, lint, linux-daemons]
-    if: needs.classify.outputs.docs_only != 'true'
+    if: >-
+      ${{ !cancelled()
+      && needs.classify.result == 'success'
+      && needs.lint.result != 'failure'
+      && needs.linux-daemons.result == 'success'
+      && needs.classify.outputs.docs_only != 'true' }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        # #959: the Ubuntu leg is dropped on a push its pull request proved (its full test ran there).
+        os: ${{ fromJSON(needs.classify.outputs.test_os || '["ubuntu-latest","macos-latest","windows-latest"]') }}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -519,9 +561,14 @@ jobs:
     # label forces `packaging=true`); main pushes and the nightly schedule always run it. A skipped
     # job satisfies `ci-complete`. An unset `packaging` output (classify failed) is not 'true' but
     # then `docs_only` is unset too and `classify` itself is red, which blocks `ci-complete`.
+    # #959: lint may be skipped on a proven push, so the condition names its needs (see `test`).
     if: >-
-      needs.classify.outputs.docs_only != 'true'
-      && (github.event_name != 'pull_request' || needs.classify.outputs.packaging == 'true')
+      ${{ !cancelled()
+      && needs.classify.result == 'success'
+      && needs.lint.result != 'failure'
+      && needs.linux-daemons.result == 'success'
+      && needs.classify.outputs.docs_only != 'true'
+      && (github.event_name != 'pull_request' || needs.classify.outputs.packaging == 'true') }}
     runs-on: windows-11-arm
     defaults:
       run:
@@ -567,9 +614,13 @@ jobs:
     # `full-ci` label forces `daemon_runtime=true`); main pushes and the nightly schedule always run
     # it. A skipped job satisfies `ci-complete`. An unset output (classify failed) is not 'true',
     # but then `docs_only` is unset too and `classify` itself is red, which blocks `ci-complete`.
+    # #959: lint may be skipped on a proven push, so the condition names its needs (see `test`).
     if: >-
-      needs.classify.outputs.docs_only != 'true'
-      && (github.event_name != 'pull_request' || needs.classify.outputs.daemon_runtime == 'true')
+      ${{ !cancelled()
+      && needs.classify.result == 'success'
+      && needs.lint.result != 'failure'
+      && needs.classify.outputs.docs_only != 'true'
+      && (github.event_name != 'pull_request' || needs.classify.outputs.daemon_runtime == 'true') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -661,9 +712,13 @@ jobs:
     # `full-ci` label forces `daemon_runtime=true`); main pushes and the nightly schedule always run
     # it. A skipped job satisfies `ci-complete`. An unset output (classify failed) is not 'true',
     # but then `docs_only` is unset too and `classify` itself is red, which blocks `ci-complete`.
+    # #959: lint may be skipped on a proven push, so the condition names its needs (see `test`).
     if: >-
-      needs.classify.outputs.docs_only != 'true'
-      && (github.event_name != 'pull_request' || needs.classify.outputs.daemon_runtime == 'true')
+      ${{ !cancelled()
+      && needs.classify.result == 'success'
+      && needs.lint.result != 'failure'
+      && needs.classify.outputs.docs_only != 'true'
+      && (github.event_name != 'pull_request' || needs.classify.outputs.daemon_runtime == 'true') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -677,7 +732,8 @@ jobs:
   assertions:
     name: assertion freeze
     needs: classify
-    if: needs.classify.outputs.docs_only != 'true'
+    # #959: skipped on a push its pull request already proved (the check ran there).
+    if: needs.classify.outputs.docs_only != 'true' && needs.classify.outputs.pr_proven != 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
