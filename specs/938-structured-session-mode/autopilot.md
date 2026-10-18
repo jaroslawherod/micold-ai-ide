@@ -112,7 +112,19 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+- **Done**: branch reset to origin/main (768812fb, #1072 recorded); T031–T032 implemented and
+  ticked in 0ef4827e (tests/structured_history.rs 7 tests green, lag case 20/20; mutant checks and
+  cycle 10 in tdd/cycle-log.md; U14 in test-list; wire.md client rule amended, Decision 12).
+  Code: `structured.rs` `StreamBounds`, `EventStream::with_bounds`, `MESSAGE_LIMIT`,
+  `history_messages`, `on_wire`; `server.rs` `stream_events`; `state.rs`
+  `set_event_stream_bounds`, `event_bounds`, `remove_live_by_ids` drops `event_streams`.
+- **Gate**: `scripts/gate.sh` started detached at handover; log
+  `$SCRATCHPAD/m5/gate.log` (SCRATCHPAD per cloud.md). Hold on it with `scripts/autopilot/hold.sh`
+  (pattern `^GATE_EXIT=` or the script's own exit line) before rerunning.
+- **Next**: tasks/verify.md for M5 (`cargo test -p micold-daemon --test structured_history`),
+  then reviews A/B (review.md), gate, push with
+  `--force-with-lease=claude/project-thread-cl0lw3:`, PR title/body to the scratchpad, `PR: to-open`.
+- **Open findings**: none. No PR opened yet.
 
 ## Open escalation
 
