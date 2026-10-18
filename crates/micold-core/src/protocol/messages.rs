@@ -32,9 +32,9 @@ use crate::review::comment::{CommentId, Move, Outcome, ReviewComment};
 use crate::review::Side;
 use crate::runs::{GroupId, Integration, RunGroup};
 use crate::session::{AiCli, SessionId, SessionKind, SessionLabel, ShellInstanceId};
-use crate::structured::SequencedEvent;
 use crate::settings::DiffLayout;
 use crate::settings::JiraConnectionChange;
+use crate::structured::SequencedEvent;
 use crate::theme::ColorScheme;
 use crate::worktree::{BranchCandidate, BranchSituation, CreateMode, CreateStage};
 

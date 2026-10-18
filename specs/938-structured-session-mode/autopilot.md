@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-cl0lw3
 - **Started**: 2026-10-18
 - **Phase**: M2
-- **Next step**: M2 — T018–T021, then verify, reviews, gate, push, PR (see Handover)
+- **Next step**: M2 — verify, reviews, gate, push, PR
 
 ## Pull requests
 
@@ -73,62 +73,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M2 unit 4 (context cap). Done this unit, committed: T018 (`supervisor.rs`: `EnvTarget` trait over
-`CommandBuilder`/`std::process::Command`, `EnvEdit`, `env_hygiene`/`apply_env_hygiene`; the
-PTY spawns call `apply_env_hygiene`; `SupervisedChild` extracted from `PtySession` (child +
-exit cache: `is_alive`/`exit_outcome`/`pid`/`kill`), `Supervised::new`, `ensure_cwd_exists`
-pub(crate)), T019 (`src/structured.rs`: `EventStream {history, broadcast}` with `push`/`subscribe`
-(snapshot+subscribe under one lock), `StructuredSession::spawn(id, &LaunchSpec, extra_args,
-on_event)` = structured_args + launch_args + extra; stdout reader → `LineSplitter`/`parse_line`,
-stderr reader → `warn!(session = %id.0, "claude stderr: …")`; `teardown`/`Drop`; 2 unit tests).
-`cargo check -p micold-daemon --lib --tests` was green before the last edits; re-check first.
-Next: T020. A WIP patch of state.rs is at
-`$SCRATCHPAD/m2/t020-state-wip.patch` (`git apply` it): `Proc` became `#[derive(Clone)] enum
-Proc { Pty{pty,framer}, Structured(Arc<StructuredSession>) }` with `pty()`, `terminal()`,
-`is_alive`, `exit_outcome`, `kill`, `same`; every `.pty`/`.framer` site converted EXCEPT
-`is_primary`/`swap_primary`/`respawn_primary` (take `&Proc`, compare with `same`, respawn a
-structured primary with `StructuredSession::spawn` in `LaunchMode::Resume`, no carry_history).
-Still to do in T020: an `Inner` map `event_streams: HashMap<SessionId, Arc<EventStream>>`
-(get-or-create at start, kept across restarts and exits; dropping on delete is T032), `kind` in
-`SpawnPlan` + the `start_session_gated` branch (structured: same env/availability gates, then
-`StructuredSession::spawn(id,&spec,&extra, move |e| stream.push(e))`, no seed); idempotence
-check at :4147 must be "hosted" (`inner.sessions.contains_key`) not `live_session` (PTY only);
-a `register_proc(id, Proc)` beside `register_session`; `create_session_of_kind` in catalog
-(`SessionKind::check` first → new `CreateSessionError::Kind(KindRefusal)`, Display = refusal
-text; `Session::start_new_of_kind`) and state (old fns delegate with Terminal). T021: server
-`SessionCreate` passes `kind`, answers `Kind` with `OperationError{kind: Refused, message:
-refusal.to_string()}`; `TerminalStreams` value → `Option<Arc<PtySession>>` (None = structured
-stream, kept while wanted and not finished); for `Primary` of a session with an event stream and
-a structured primary, spawn `stream_events(session, stream, tx)`: send snapshot as one `live:
-false` message (with omitted; chunking/Lagged are T032), then each recv'd event with seq > last as
-`live: true`. Then run both test files green, Cycle 6, tick T020/T021, verify.md etc.
-Windows note for a follow-up: `std::process::Command` does not resolve `claude.cmd` via PATHEXT
-as `CommandBuilder` does.
-
-Survey findings (unit 1), to save the next unit the reads:
-- `portable_pty` 0.9 has `impl Child for std::process::Child` (and `ExitStatus: From<std>`), so
-  `supervisor::Supervised` (child + `platform::ProcessTree`, `exit_status`/`terminate`/`reaped`)
-  can be made `pub(crate)` and reused as-is by `structured.rs` with a `Box<dyn Child>` of the
-  piped `std::process::Child` (take stdin/stdout/stderr out first). Copy `PtySession`'s
-  `is_alive`/`cache_exit`/`exit_outcome`/`kill`/`teardown`/`Drop` shape.
-- Env hygiene to generalise (T018): `supervisor.rs:212 prefer_process_path` (windows) and `:231
-  strip_inherited_terminal_identity`, both on `CommandBuilder`; `ensure_cwd_exists` :115.
-- `state.rs:379 struct Proc { pty, framer }` → enum; ~28 `.pty`/`.framer` uses (grep
-  `\.pty\|\.framer\|new_proc` in state.rs). Least churn: `Proc::pty() -> Option<&Arc<PtySession>>`,
-  `framer()`, `is_alive()`, `exit_outcome()`, `kill()`; collections of `Arc<PtySession>`
-  (`remove_session` :4624, `session_ptys`, `covered_live_terminals`) filter_map the pty — a
-  structured child is torn down by its `Drop` when the `LiveSession` drops off-lock.
-- `start_session_gated` state.rs:4141 (SpawnPlan built from the catalog record at :4167 — add
-  `kind`; spawn match at :4297; idempotence check `live_session(id).is_some()` at :4147 must become
-  "hosted" or a structured session restarts twice); `register_session` :4385 takes a `PtySession`.
-- Supervision: `supervise_exited_sessions_at` :4663 (`exited`/`to_respawn` hold `Arc<PtySession>`
-  for `ptr_eq`), `respawn_primary` :5472, `is_primary` :5543, `swap_primary` :5555 — generalise to
-  a cloneable child enum; `end_processes` :2837 kills every proc then carries history (pty only).
-- server.rs: `SetViewedTerminals` :1187 → `sync_terminal_streams` :2559 (`TerminalStreams` map holds
-  `Arc<PtySession>` to notice a restart) → `stream_view` :2602; frames go through
-  `state.frame_sender(id)` as `Frame<DaemonMsg>`; `SessionCreate` arm :981; `SessionKill` :1216.
-- catalog.rs: `create_session` :654, `supervise_session_exit` :1540, `session_summary` :1913.
-(Line numbers are pre-M2; the M2 edits so far shifted server.rs by +1 near :981.)
+None.
 
 ## Open escalation
 
@@ -136,3 +81,6 @@ None.
 
 ## Follow-ups not done
 
+- Windows (after M2): `std::process::Command` in `structured.rs` does not resolve `claude.cmd` on
+  `PATH` via `PATHEXT` as the PTY spawn's `CommandBuilder` does; a structured start on Windows
+  needs the same resolution.

@@ -128,7 +128,10 @@ mod tests {
         }
         let (omitted, events) = history.snapshot();
         assert_eq!(omitted, 2);
-        assert_eq!(events.iter().map(|e| e.seq).collect::<Vec<_>>(), vec![2, 3, 4]);
+        assert_eq!(
+            events.iter().map(|e| e.seq).collect::<Vec<_>>(),
+            vec![2, 3, 4]
+        );
         assert_eq!(events[0].event, line("c"));
     }
 
@@ -159,7 +162,10 @@ mod tests {
         let mut history = EventHistory::with_bounds(usize::MAX, 4);
         history.append(line("ab"));
         history.append(line("too long"));
-        assert_eq!((history.len(), history.bytes(), history.omitted()), (0, 0, 2));
+        assert_eq!(
+            (history.len(), history.bytes(), history.omitted()),
+            (0, 0, 2)
+        );
         assert_eq!(history.append(line("c")).seq, 2);
     }
 

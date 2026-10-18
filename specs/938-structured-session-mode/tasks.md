@@ -233,7 +233,7 @@ CLI.
   reader thread logging each line with `tracing::warn!(session = %id, "claude stderr: {line}")`
   and never producing an event; `ChildStdin` behind a mutex for later writes; `is_alive`, exit
   outcome, `kill` and teardown with the same semantics as `PtySession`.
-- [ ] T020 [US1] Wire the kind through `crates/micold-daemon/src/catalog.rs` and
+- [x] T020 [US1] Wire the kind through `crates/micold-daemon/src/catalog.rs` and
   `crates/micold-daemon/src/state.rs`: `Catalog::create_session` takes the kind and applies
   `SessionKind::check` before writing any record; the live primary becomes `Proc::{Pty,
   Structured}`, and every terminal-only operation on `Proc::Structured` returns `None` (refusal
@@ -243,7 +243,7 @@ CLI.
   recorded-conversation checks; a `SessionId → (EventHistory, broadcast::Sender<SequencedEvent>)`
   map on `DaemonState` outside `LiveSession`, appended to and broadcast from the reader callback;
   supervision (`supervise_session_exit`) treats both `Proc` variants alike.
-- [ ] T021 [US1] Make T014 pass in `crates/micold-daemon/src/server.rs`: `SessionCreate` passes its
+- [x] T021 [US1] Make T014 pass in `crates/micold-daemon/src/server.rs`: `SessionCreate` passes its
   kind, summaries carry it, and viewing a structured session's `Primary` starts a
   `stream_events` task instead of `stream_view`: under the history lock take the snapshot and
   subscribe in the same critical section, send the history as `live: false` (first message carries

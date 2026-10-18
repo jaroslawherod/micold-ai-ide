@@ -258,7 +258,8 @@ async fn no_line_of_the_tolerance_fixture_ends_the_session_or_is_lost() {
         Some(WireLifecycle::Running),
         "still running"
     );
-    let all = events_until(&mut client, id, complete(expected.len())).await;
+    // The first call took every complete line; what is left is the partial one.
+    let all = events_until(&mut client, id, complete(1)).await;
     assert_eq!(
         all.last().map(|r| r.event.event.clone()),
         expected.last().cloned(),
