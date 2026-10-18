@@ -2,9 +2,10 @@
 //!
 //! The type icon and the display name (ellipsized, the full name in a tooltip), the state icon and
 //! word (the reason is the word's tooltip), the branch when it has one, the summary line and the
-//! activity line (when the agent's hooks report), the sessions footer. Every colour comes from the theme's roles through [`palette`]: Needs action is
-//! the `error` family, Needs attention `warning`, Working `primary`, Done `success`, and Idle sits
-//! on the de-emphasised `surface_container_low`. With a press (`on_press`) the card is a control: a
+//! activity line (when the agent's hooks report), the sessions footer. Every colour comes from the
+//! theme's roles through [`palette`]: Needs action is the `error` family, Needs attention
+//! `warning`, Working `primary`, Done `success`, and Idle sits on the de-emphasised
+//! `surface_container_low`. With a press (`on_press`) the card is a control: a
 //! click, or Enter or Space on the focused card, publishes the message, and it takes the keyboard
 //! like a `Button` (research R13); without one it is informational and not focusable.
 
@@ -353,6 +354,11 @@ mod tests {
     fn the_card_with_every_row_fits_its_height() {
         let mut full = with_progress(Some((6, 10)), Some(Phase::Implement));
         full.prs = PrDisplay::Unknown(micold_core::overview::PrUnknown::Unreachable);
+        full.activity = Some(micold_core::hook_activity::CurrentActivity {
+            line: "A long activity line that has to ellipsize rather than wrap in the card"
+                .repeat(2),
+            ratio: Some(micold_core::task_progress::Ratio { done: 3, total: 7 }),
+        });
         let node = super::super::test_support::laid_out(card(&full), Size::new(280.0, 400.0));
         assert_eq!(node.size().height, HEIGHT);
         for part in leaves(&node) {

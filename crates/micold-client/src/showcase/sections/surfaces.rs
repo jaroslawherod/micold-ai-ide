@@ -419,7 +419,7 @@ pub fn overview_card<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'
         line: "Writing the activity line".to_string(),
         ratio: Some(micold_core::task_progress::Ratio { done: 2, total: 5 }),
     });
-    with_activity.progress = with_progress.progress.clone();
+    with_activity.progress = with_progress.progress;
     arrange(
         vec![
             posed("with progress", card(with_progress), roles),
