@@ -76,7 +76,7 @@ async fn kube_real_the_pod_is_locked_down_and_accepts_only_the_access_keys() {
             "ConnectTimeout=20",
             "-p",
             &addr.port().to_string(),
-            "dev@127.0.0.1",
+            &format!("{}@127.0.0.1", micold_client::daemon::POD_SSH_USER),
             "true",
         ])
         .output()

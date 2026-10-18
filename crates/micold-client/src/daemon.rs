@@ -1477,8 +1477,9 @@ pub async fn kube_reconnect(
         .map_err(KubeReconnectError::Attempt)
 }
 
-/// The account the pod's SSH server logs this client in as (the image's, #806).
-pub const POD_SSH_USER: &str = "dev";
+/// The account the pod's SSH server logs this client in as: the basic image's passwd entry for
+/// the pod's uid (`packaging/basic/Containerfile`). sshd refuses any other name.
+pub const POD_SSH_USER: &str = "micold";
 
 /// One bring-up of a Kubernetes daemon: the start sequence up to a running pod, the relay to its
 /// SSH port with its host key pinned, then the shared copy, install and connect sequence over it.
@@ -1634,6 +1635,20 @@ mod tests {
     };
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
+
+    #[test]
+    fn the_pod_login_is_the_basic_images_entry_for_the_pods_uid() {
+        let containerfile = include_str!("../../../packaging/basic/Containerfile");
+        let entry = format!(
+            "{}:x:{}:",
+            super::POD_SSH_USER,
+            micold_core::kube::manifest::IMAGE_USER_UID
+        );
+        assert!(
+            containerfile.contains(&entry),
+            "the basic image has no passwd entry {entry}..."
+        );
+    }
 
     /// A runner standing in for `ssh`: it cannot be started, as on a machine with no OpenSSH.
     struct NoSsh;
