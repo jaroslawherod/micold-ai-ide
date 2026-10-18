@@ -39,7 +39,7 @@ header, or press **Ctrl+Shift+F** (**Cmd+Shift+F** on macOS). The sidebar, its c
 included, slides away and the cards fill the window's width; the top bar stays, with the Overview
 button, its badge and the project switcher. The button then reads **Exit full screen**; press it or
 the shortcut again and the sidebar slides back. The button's tooltip names the shortcut, and Tab
-reaches it.
+reaches it. While a card's menu is open, the shortcut does nothing.
 
 Leaving the Overview leaves full screen in the same step: activating a card, **Escape**, the
 top-bar **Overview** button or **Ctrl+Shift+O** close the Overview and bring the sidebar back. The
