@@ -572,13 +572,16 @@ fn only_the_issue_highlight_move_chains_the_operation() {
         .into_iter()
         .filter(|(_, line)| !line.starts_with("pub fn "))
         .collect();
+    // The quick-switcher's list (feature 968) is the second caller: its rows can overflow the
+    // dialog, and Up and Down must keep the highlighted one in view.
+    let call = "micold_client::ui::picker_highlight_into_view()".to_string();
     assert_eq!(
         calls,
-        vec![(
-            "src/shell/issues.rs".to_string(),
-            "micold_client::ui::picker_highlight_into_view()".to_string()
-        )],
-        "the operation has exactly one caller, the tail of the issue shell's handler"
+        vec![
+            ("src/shell/issues.rs".to_string(), call.clone()),
+            ("src/shell/quick_switch.rs".to_string(), call),
+        ],
+        "the operation has two callers: the issue shell's handler and the quick-switcher's"
     );
 
     // That call is in the handler of the highlight move, and nowhere else in the file.
