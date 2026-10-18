@@ -141,7 +141,8 @@ fn node_lost() -> PodStatusView {
 
 #[tokio::test]
 async fn a_pod_found_gone_stops_the_daemon_with_the_reason_and_creates_nothing() {
-    let cases: [(&str, Box<dyn Fn(&Arc<FakeCluster>)>); 3] = [
+    type Arrange = Box<dyn Fn(&Arc<FakeCluster>)>;
+    let cases: [(&str, Arrange); 3] = [
         ("stopped: the pod was deleted", Box::new(|_| {})),
         (
             "stopped: the pod was evicted: The node was low on resource: memory.",

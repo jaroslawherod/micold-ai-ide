@@ -671,6 +671,8 @@ async fn connect_and_pump(
             let sink = provisioning_sink(id, output);
             // A lost link is reconnected to the running pod, after a look at whether it is still
             // there: a drift found then is kept.
+            // A daemon that never connected is on its first start, which creates the pod if it
+            // is missing: that is the user's Start, not a re-dial.
             let tried = if life.established {
                 kube_reconnect(env, name, &settings.0, &sink).await
             } else {
