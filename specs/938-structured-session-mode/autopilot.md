@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-cl0lw3
 - **Started**: 2026-10-18
 - **Phase**: M3
-- **Next step**: M3 — verify.md (implement done; see Handover)
+- **Next step**: M3 — PR to open (branch pushed; title and body in the scratchpad)
 
 ## Pull requests
 
@@ -64,6 +64,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 review A (code-review high, sonnet) | 2 | 826ed0589dfaa8c7d6ce31d4a56ced5687973387:93b677536b14171260bd556c4c255b3ea4aee2cc | CLEAN (5 MINOR, not fixed: worktree retry count ignores structured kills, `end_removed` on async callers, doc wording, detached reader on spawn failure, test-wide lint allow) |
 | M3 review A (code-review high) | 1 | a88fe9259fe8470c367121d7f982506069cbe4be:2c9fe052b0e42a603aa745424724d5a5fdbe8410 | 9 findings: 2 fixed (F1 per-message spawn_blocking reordered turns — accept now on the connection loop, write off it; F2 turn guard held across `on_event` at EOF), 7 declined |
 | M3 review A (code-review high, sonnet) | 2 | 83111196a2ccba7189d864995a4bc4576a907f2c:25ea31c8f8fcdbd6212cf65e8452d43a890b4b71 | CLEAN (3 MINOR, not fixed: `running` read before the turn lock at EOF, refusal answered via spawn_blocking, no dedicated order test — the refusal test covers it) |
+| M3 review B (conformance, sonnet) | 1 | 42359e030cca65c2395966e97e553098c6ef5fa9:8b37008a71fb40230b6fe64505177caaf1cde800 | CLEAN (2 MINOR: T024 red was a compile error, right reason shown by mutation; Verify read from the full gate log) |
 
 ## Declined review findings
 
@@ -92,12 +93,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M3 implemented and committed; review A done (round 1: 2 fixed in 25ea31c8, 7 declined; round 2
-CLEAN). Scoped gate as root fails only on root-only permission tests (`scripts/gate.sh` reruns
-them as a normal user); not a regression. Next: review B (prompt ready in the scratchpad
-`m3/review-b.prompt`, run with sonnet), then full `scripts/gate.sh`, push
-(`--force-with-lease=claude/project-thread-cl0lw3:`), pr-title/pr-body in the scratchpad, return
-`PR: to-open`. Not pushed yet.
+None.
 
 ## Open escalation
 
