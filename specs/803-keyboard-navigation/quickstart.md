@@ -48,3 +48,10 @@ Record screenshots for B1, B3, B7 in `specs/803-keyboard-navigation/visual-pass/
 
 On each: B1, B3, B6 (macOS: Cmd+Shift; on a laptop Cmd+Shift+Fn+Up/Down for B6), B10. Confirm no
 system action fires (macOS Mission Control, Windows emoji/IME panel, GNOME/IBus emoji).
+
+### §C result (recorded 2026-10-18, T039)
+
+**Not run.** No macOS or Windows host exists in the environment that closed this spec (a Linux cloud
+container), so B1, B3, B6 and B10 were not driven there and "no system action fires" is
+unconfirmed on both. What covers them instead: `tests/keymap.rs` decodes the chords by physical key
+with the Cmd/Ctrl primary modifier. The live run stays open for whoever has the hosts.

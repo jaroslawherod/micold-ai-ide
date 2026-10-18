@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-17
 
-**Status**: Draft
+**Status**: Closed 2026-10-18 — shipped in PRs #949, #967, #984, #987, #990
 
 **Input**: User description: "Issue #803: Keyboard shortcuts to navigate worktrees, sessions and
 projects. Problem: moving between worktrees, sessions and projects requires the mouse. Proposal:

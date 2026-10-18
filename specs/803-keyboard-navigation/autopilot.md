@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #803
 - **Worktree branch**: claude/project-thread-ah7xxz
 - **Started**: 2026-10-17
-- **Phase**: milestone M4 (pushed, awaiting PR)
-- **Next step**: orchestrator opens the M4 PR from the scratchpad title/body, waits on CI, merges; then the close unit (T038–T039)
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -20,7 +20,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #967 | M1 | merged | c5e61c3ea91a464695dcf9fb42b53121fac37490 |
 | #984 | M2 | merged | 380ceef79760b7f896b15b683276bdd0924aa959 |
 | #987 | M3 | merged | 2107a1a117dfa8aa2f6e45cddcb5af83a78850a9 |
-| — | M4 | orchestrator opens it (title/body in the scratchpad) | — |
+| #990 | M4 | merged | 68ddfea358f14bb1811220c44e1ab67a8112d580 |
+| — | close | orchestrator opens it (title/body in the scratchpad) | — |
 
 ## Milestones
 
@@ -29,7 +30,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T016 | full | Location chords step through locations (both focus states, stop, 0 PTY bytes), docs rows | #967 | merged |
 | M2 | T017–T023 | full | Keyboard lands on the sidebar row with a focus ring (FR-010), showcase variant | #984 | merged |
 | M3 | T024–T029 | light | Session chords cycle a location's sessions, docs rows | #987 | merged |
-| M4 | T030–T037 | full | Project chords; all six chords in the user guide | pending PR | in review |
+| M4 | T030–T037 | full | Project chords; all six chords in the user guide | #990 | merged |
 
 US1 split along acceptance scenario 4 (FR-010 sidebar ring) into M1/M2: one milestone would exceed ~800 changed lines. Polish (T038–T039) changes no code: close unit.
 
@@ -86,6 +87,7 @@ None.
 
 - User-configurable key bindings (spec Out of Scope).
 - Quick-switcher palette / direct jumps (FR-014, D5): follow-up issue.
-- Visual pass M2: showcase ring checked on Xvfb (`visual-pass/m2.md`); quickstart B1/B7 live run left to T038 (no xdotool here).
+- Visual pass M2: showcase ring checked on Xvfb (`visual-pass/m2.md`); quickstart B1/B3/B7 run live in the close unit (`visual-pass/t038.md`).
+- §C (macOS, Windows) not run: no such host. TDD verify: M1–M3 red runs not captured (`tdd/verification.md`); no cargo-mutants, three hand mutants killed.
 - Visual pass skipped for M1 (M2 does it): nothing drawn changes (the keyboard-row ring is M2); the stop only moves the reveal scroll.
 - Spec reviews ran as headless `claude -p` sessions (no Agent tool in this unit's environment); fresh context, same prompt parts.
