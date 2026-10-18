@@ -58,6 +58,8 @@ the card, stays inside the card's rounded corners, and fades after release.
    state's content colour.
 5. **Given** a ripple has faded, **When** nothing else happens, **Then** nothing on the card keeps
    animating.
+6. **Given** a card pressed with the pointer, **When** its ripple fades, **Then** the card shows no
+   state layer (a pointer press draws no focus layer).
 
 ---
 
@@ -102,10 +104,9 @@ shown.
 1. **Given** the Overview is open, **When** the user activates a card with the pointer or the
    keyboard, **Then** the ripple on that card is visible [NEEDS CLARIFICATION: how the ripple stays
    visible when activation closes the Overview: (A) the Overview closes once the ripple has had a
-   short, fixed time to show (for example the ripple's expand time, about 300 ms), (B) the Overview
-   closes at once as today and the ripple shows only while the pointer is held down before release,
-   so a keyboard ripple is never seen in the Overview, or (C) activation no longer closes the
-   Overview] and then the location's main session is shown as feature 813 specifies.
+   short, fixed time to show (for example the ripple's expand time, about 300 ms), or (B) the
+   Overview closes at once as today and the ripple shows only while the pointer is held down before
+   release, so a keyboard ripple is never seen in the Overview] and then the location's main session is shown as feature 813 specifies.
 2. **Given** the user activates a card, **When** the Overview closes, **Then** the outcome of the
    activation (which location is selected, which session is shown, the offer to start a session)
    is the same as without this feature.
@@ -118,12 +119,11 @@ shown.
   keyboard focus, as today.
 - **Repeated presses**: pressing the same card again while its ripple runs restarts the ripple from
   the new origin; it does not stack a second circle.
-- **Key auto-repeat**: holding Enter or Space does not start a new ripple on every repeated key
-  event faster than the user can see; at most one ripple runs on a card at a time.
+- **Key auto-repeat**: a repeated Enter or Space key event while the card's ripple runs does not
+  restart it; at most one ripple runs on a card at a time.
 - **Concurrent cards (Principle II)**: ripples are per card; pressing a second card while the first
   card's ripple fades animates both independently. A card whose location changes state while its
-  ripple runs keeps rippling in the new state's content colour, or finishes, but never draws in a
-  colour of neither state.
+  ripple runs finishes the ripple in the colour it started with.
 - **Card removed mid-ripple**: a card whose location disappears from the Overview while its ripple
   runs leaves nothing animating behind.
 - **Press in a rounded corner**: a press inside the card's bounding box but outside its rounded
@@ -134,7 +134,8 @@ shown.
   activate the card (as today); the ripple that started on press fades normally.
 - **State layers**: while the ripple runs it is the card's only state layer (feature 018, FR-024h):
   the focus layer of a focused card is not summed with the ripple, and the card settles back to the
-  layer it resumes (focus while focused, none otherwise) without a visible step.
+  layer it resumes (the focus layer while the card holds keyboard-arrived focus, per feature 018
+  FR-022a; none otherwise, including after a pointer press) without a visible step.
 - **Reduced motion and platforms (Principle VI)**: the ripple behaves the same on Linux, macOS and
   Windows; the app has no reduced-motion setting today, so none applies here.
 - **Pointer button**: only the primary pointer button starts a ripple, matching the other
@@ -152,10 +153,11 @@ shown.
   controls: drawn in the card's content colour for its state at the pressed opacity, growing over
   the same expand time and fading over the same fade time, and clipped to the card's rounded shape.
 - **FR-004**: While a card's ripple runs it MUST be the card's only state layer, and as it fades the
-  card MUST settle to the layer it resumes (the focus layer while the card holds the focus, none
-  otherwise) with no visible step, per feature 018 FR-024h.
+  card MUST settle to the layer it resumes (the focus layer while the card holds keyboard-arrived
+  focus, none otherwise, including after a pointer press) with no visible step, per feature 018 FR-024h.
 - **FR-005**: Each card MUST hold its own ripple: ripples on different cards MUST NOT interfere, a
-  new press on the same card MUST restart its ripple from the new origin, and once a ripple has
+  new press on the same card MUST restart its ripple from the new origin, a repeated key event
+  (auto-repeat) while the ripple runs MUST NOT restart it, and once a ripple has
   faded nothing on the card MUST keep animating.
 - **FR-006**: A plain card MUST NOT ripple.
 - **FR-007**: Activating a card MUST let the user see the ripple on that card, for pointer and
@@ -201,5 +203,6 @@ shown.
 
 - A hover state layer on cards (cards show no hover tint today); a separate issue if wanted.
 - A plain pressed-state tint instead of a ripple (the issue's rejected alternative).
-- Changing what activating a card does, beyond the timing User Story 3's clarification settles.
+- Changing what activating a card does, beyond the timing User Story 3's clarification settles;
+  keeping the Overview open after activation would change feature 813 FR-013 and is not offered.
 - Keyboard-origin ripples on controls other than Overview cards.
