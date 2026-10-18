@@ -20,9 +20,11 @@ expect_exit() { # <name> <want> <got>
   if [ "$2" -eq "$3" ]; then ok "$1"; else fail "$1" "exit $3, want $2"; fi
 }
 
-plan="$("$SCRIPT" --authkey-file /tmp/k --hostname vps1 --lock-down --dry-run 2>&1)"
+plan="$("$SCRIPT" --authkey-file /tmp/k --hostname vps1 --tag tag:micold --lock-down --dry-run 2>&1)"
 expect_exit "--dry-run succeeds without root" 0 $?
 expect_has "plan joins with Tailscale SSH" "$plan" "tailscale up --ssh --authkey=file:/tmp/k --hostname=vps1"
+expect_has "plan advertises the tag" "$plan" "--advertise-tags=tag:micold"
+expect_has "plan sources the keys from .bashrc" "$plan" "/home/micold/.bashrc"
 expect_has "plan writes the key template" "$plan" "/home/micold/.micold/api-keys.env (mode 600)"
 expect_has "plan locks the public ports" "$plan" "allow in on tailscale0"
 
@@ -35,6 +37,8 @@ expect_exit "the auth key file is required" 2 $?
 expect_exit "a bad --user is refused" 2 $?
 "$SCRIPT" --authkey-file /tmp/k --hostname '-x' --dry-run >/dev/null 2>&1
 expect_exit "a bad --hostname is refused" 2 $?
+"$SCRIPT" --authkey-file /tmp/k --tag micold --dry-run >/dev/null 2>&1
+expect_exit "a bad --tag is refused" 2 $?
 "$SCRIPT" --authkey-file /tmp/k --bogus >/dev/null 2>&1
 expect_exit "an unknown flag is refused" 2 $?
 

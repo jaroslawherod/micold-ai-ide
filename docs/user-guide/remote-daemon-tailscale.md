@@ -27,8 +27,26 @@ shred -u /root/ts.key
 
 It creates an unprivileged `micold` account, installs Tailscale, joins the tailnet with **Tailscale
 SSH** on (your tailnet's access rules decide who may log in; no SSH key to copy), and creates
-`/home/micold/.micold/api-keys.env`. Use `--dry-run` first to see the plan, `--user` to pick another
-account name.
+`/home/micold/.micold/api-keys.env`, which `~/.bashrc` sources. Use `--dry-run` first to see the
+plan, `--user` to pick another account name, and `--tag tag:micold` to tag the host (see below).
+
+### Let Micold connect unattended
+
+Tailscale SSH's default rule uses `"action": "check"`, which asks for a browser re-authentication
+every so often. Micold connects and reconnects without a person at the keyboard, so it would stall.
+For this host, use `"action": "accept"` instead. In the tailnet policy file, own the tag and add a
+rule for the `micold` account on tagged hosts, then run the script with `--tag tag:micold` (or use
+an auth key that already carries the tag):
+
+```json
+"tagOwners": { "tag:micold": ["autogroup:admin"] },
+"ssh": [
+  { "action": "accept", "src": ["autogroup:member"], "dst": ["tag:micold"], "users": ["micold"] }
+]
+```
+
+If an existing `check` rule also matches, change it to `accept` for this device (or remove the
+overlap) so the `accept` rule applies.
 
 `--lock-down` makes `ufw` refuse all incoming traffic except on the `tailscale0` interface. Check
 that you can reach the host over the tailnet (`ssh micold@micold-vps` from this computer) **before**
@@ -47,16 +65,17 @@ described in [that page](remote-daemons.md#adding-a-repository-that-lives-on-the
 
 ## Give the AI CLIs their API keys
 
-Edit `/home/micold/.micold/api-keys.env` on the VPS and fill in the keys, for example:
+The script appends `[ -r ~/.micold/api-keys.env ] && . ~/.micold/api-keys.env` to the `micold`
+account's `~/.bashrc`, which is what Micold sources before each session by default. Edit
+`/home/micold/.micold/api-keys.env` on the VPS and fill in the keys, for example:
 
 ```sh
 export ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-The file is mode 600 and readable only by the `micold` account. Then, in Settings, set the
-environment-include script of the worktrees bound to this daemon to source that file (the "source
-my startup file" setting, see [Settings](settings.md)), so every session, including a respawn, gets
-the keys. Alternatively `claude` can sign in on the VPS once from a terminal session.
+The file is mode 600 and readable only by the `micold` account. No change in Settings is needed, and
+every session, including a respawn, gets the keys. Alternatively `claude` can sign in on the VPS
+once from a terminal session.
 
 ## Checklist
 
