@@ -38,7 +38,7 @@ failed before the implementation.
   `rows` and `Scrollable`, unchanged).
 - refactor: `cargo fmt`; test helpers `row_width` and `row_counts` shared by U2–U5. No production
   refactor needed (one expression changed).
-- commit: `a383c665`
+- commit: `a383c665` (squashed to `4ceca365` on the rebase merge; `a383c665` is not an ancestor of main)
 
 ## Notes and deviations
 
@@ -47,3 +47,16 @@ failed before the implementation.
   (T006) recorded before the rule (T007). Each behavior's own failure is in red 2 above, except
   U6 and U7, which pin the unchanged below-threshold and scroll behavior and are covered by the
   mutant run instead.
+
+## Retroactive red (T014, 2026-10-18, recorded after the fact)
+
+The 30-card `vec![5; 6]` row shape (`thirty_cards_scroll_vertically`) and the last-row alignment
+check (`full_rows_hold_five_cards_from_the_threshold_up`) were added after the `columns` change
+(commits `c9b0a4a5`, `aa9980c8`), with no red recorded at the time. Proof that they catch the bug:
+with `columns` clamped to `clamp(1, 8)` (the cap ignored, a scratch edit, restored), `scripts/build-lock.sh cargo test -p micold-client --lib card_grid` ->
+`3 passed; 6 failed`: `columns_are_capped_at_max`, `fewer_cards_than_columns_keep_the_five_card_width`,
+`cards_at_2400_are_half_again_as_wide_as_before_and_as_tall`,
+`full_rows_hold_five_cards_from_the_threshold_up` (`card_grid.rs:278`, row counts),
+`max_columns_sets_the_cap`, `thirty_cards_scroll_vertically` (`:232`, the `vec![5; 6]` row shape).
+The last-row alignment assertion (`:290`) is not reached by that mutant, as the row-count assert fails first. Restored, green again.
+T015 then dropped the `vec![5; 6]` check as a duplicate of the row-count assert in the `full_rows` test.
