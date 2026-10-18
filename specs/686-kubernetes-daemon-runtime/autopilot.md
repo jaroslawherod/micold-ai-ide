@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-xelisc
 - **Started**: 2026-10-17
 - **Phase**: implement
-- **Next step**: M4b in progress (unit 1): workers do T084/T085 widgets, T132/T133 Unavailable start; next the reducer (T083/T080/T082/T086 in features/daemons*.rs), then shell + UI wiring, review A/B, gate, PR files
+- **Next step**: M4b committed; full gate running/green then push; the orchestrator opens the PR from pr-title-686-M4b.txt / pr-body-686-M4b.md, waits on CI, merges; then M5 (blocked on #806)
 
 ## Pull requests
 
@@ -34,7 +34,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T079, T072, T056, T073, T081, T075, T059, T076, T128 | full | Core Stop/Remove/forget-locally; failure + pod-gone classifiers; preflight | — | merged (#992) |
 | M3 | T063, T064, T065, T067, T068, T069, T102 | full | Allowed credentials as secrets, daemon_env, security contexts (core) | — | merged (#996) |
 | M4a | T024, T130, T066, T031, T131, T070, T032 | full | Kubernetes form via Edit (Add entry hidden), shared resources fields, credentials list | — | merged (#1000) |
-| M4b | T083, T084, T080, T132, T085, T086, T082, T133, T129 | full | Placement fields, Stop/Remove/Forget locally/Logs from the row, Start → Unavailable | — | planned |
+| M4b | T083, T084, T080, T132, T085, T086, T082, T133, T129 | full | Placement fields, Stop/Remove/Forget locally/Logs from the row, Start → Unavailable | — | in review |
 | M5 | T134, T022, T074, T135, T030, T077, T136 | full | (#806) Copy + Connect over SSH through the relay; failures at client level | — | blocked on #806 |
 | M6 | T138, T139, T141, T142, T033, T140 | full | (#806) AI CLI install, drift prompt, Add entry, user guide 🎯 MVP | — | blocked on #806 |
 | M7 | T047–T055, T100 | full | (#806) Clone + worktrees in the pod (RepoClone) | — | blocked on #806 |
@@ -65,6 +65,8 @@ stash@{0} survivors (all used by M1a–M2, stash dropped 2026-10-18; backed up i
 
 ## Review rounds
 
+| M4b review A (code-review high) | 1 | e6a9bc19:3ef301a4 | CLEAN — 2 MINOR declined/follow-up |
+| M4b review B (conformance, sonnet) | 1 | 13e04614:826e419b | CLEAN — Verify green |
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
 | M3 A (code-review high) | 1 | 613bbb5d7241ebee3806b0ad999889186b7cc3ab:9c51cf8e543637af11209d1da7e8fda46cb985d2 | CHANGES: F1 MAJOR fixed (GIT_SSH_COMMAND uses a 0600 copy of the key; ssh refuses group-readable keys); F2–F4 MINOR declined/deferred (Follow-ups) |
@@ -91,6 +93,9 @@ stash@{0} survivors (all used by M1a–M2, stash dropped 2026-10-18; backed up i
 | M4a review B (conformance, sonnet) | 1 | same | CLEAN — Verify 22 + 10 passed; 1 MINOR: file fields are plain text paths (no picker; same as the SSH form's key file), noted in the cycle log |
 
 ## Declined review findings
+
+| M4b | A F1 MINOR | Stop moves the link to Stopped before the pod delete ends; a failed delete only logs | contract §5 needs Stopped on success; surfacing a failed Stop is a follow-up |
+| M4b | A F2 MINOR | Edit can change name/context/namespace of a Kubernetes daemon, orphaning cluster objects | recorded in Follow-ups |
 
 | M2 | A (code-review high) | not-ours objects skipped silently by Stop/Remove; namespace 404 matched by message; PodGone for Failed/Succeeded pods; 403 mapped only in preflight | contract §2/§4/§5 say ours only and list exactly these rows; ApiFailure carries no details.kind; see Follow-ups |
 - speckit-analyze D13 (start failure maps to `Unreachable`): already the 491/489 rule, stated in data-model.md state machine delta; no change.
@@ -120,6 +125,8 @@ None. (M4a unit 2: code written; see Next step.)
 None. Clarify round 1 questions remain with the owner as decision cards (spec uses recommended defaults).
 
 ## Follow-ups not done
+
+- M4b: make name, context and namespace read-only (or refuse the save) when editing a Kubernetes daemon, since object names and key dir derive from them; Stop failure should show a reason on the row; Logs has no hide action; the list editors have no focus tracking.
 
 - M3 review A MINORs: F2 stale secrets deleted in Secrets phase before Pod drift decision (a kept drifted pod could lose its secret); F3 a rotated credential's payload is not in PodStamp (subPath mounts never update; needs a pod restart); F4 hashed `known_hosts` entries yield an empty pin file (needs ssh-keygen -F or keyscan) and a missing known_hosts fails the start.
 
