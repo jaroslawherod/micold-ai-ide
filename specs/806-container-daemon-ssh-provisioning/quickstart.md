@@ -51,3 +51,22 @@ Contracts: [provisioning](./contracts/provisioning.md), [basic image](./contract
    basic image.
 8. **Remote SSH daemon (US6)**: start a 489 remote daemon. The same step labels appear except
    installing; its form has no AI CLI section.
+
+## Recorded results (close, 2026-10-18)
+
+Run in the cloud container: no `mise`, no container image build (egress to `deb.debian.org` is refused), no local sshd, no display.
+
+| Part A run | Result |
+|---|---|
+| `scripts/gate.sh` (= `mise run gate`) | PASS on the close branch merged with `origin/main`: fmt, clippy, workspace tests (the six root-only permission tests run as a normal user by the script), script tests |
+| `mise run image` | not runnable here (no mise; the build needs `deb.debian.org`). CI: `basic-image.yml` succeeded on `main` ([run 39163142482](https://github.com/jaroslawherod/micold-ai-ide/actions/runs/39163142482), [d526eaca](https://github.com/jaroslawherod/micold-ai-ide/actions/runs/39128313716)) |
+| `mise run test-sandbox` | not runnable here (no runtime build). CI job "sandbox against a real runtime (linux)" succeeded on the M7 merge 018b6d2c ([run 39161947525](https://github.com/jaroslawherod/micold-ai-ide/actions/runs/39161947525)). Caveat from `tdd/verification.md` findings 3, 4, 7: the FR-020 and FR-023 cases there are weak, and a green job can hide skipped tests |
+| `cargo test -p micold-daemon --features ssh-real-runtime ssh_real_` | not runnable here (no sshd). CI job "remote daemon over a real sshd (linux)" succeeded on 018b6d2c ([same run](https://github.com/jaroslawherod/micold-ai-ide/actions/runs/39161947525)) |
+| `scripts/basic-image-hash.sh --check` | `CURRENT` |
+| `docker manifest inspect <BASIC_IMAGE>` | not run (no registry access); the pinned image is the one `basic-image.yml` published |
+
+| Part B step | Result |
+|---|---|
+| 8 Remote SSH daemon | not runnable here (needs a display and an SSH host). Covered by `provision::tests` (`a_user_host_never_installs_...`, same step labels and reason texts for a user host, `a_failed_copy_reads_the_same_...`) and the `ssh_real_*` CI suite; the form has no AI CLI section (`container_fields` tests). |
+| 1–7 | partial visual pass in `visual/README.md` (PASS where checkable; install failure, migration start and legacy-with-sessions need a runtime) |
+

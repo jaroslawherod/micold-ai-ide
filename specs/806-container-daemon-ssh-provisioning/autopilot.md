@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #806
 - **Worktree branch**: claude/project-thread-uwrpqv
 - **Started**: 2026-10-17
-- **Phase**: M7
-- **Next step**: close (T088–T089) after M7 merges
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -24,6 +24,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1018 | M5b part 1 (image pin, bridge env, notices, migration) | merged | 6dbe317600b3c8430dd392b5a94293c85e6fbf2f |
 | #1027 | M5c (real-runtime provision suite, form tests, row text) | merged | dc2d379365c2379b201dca8d3a6fadd40f39c632 |
 | #1043 | M6 per-daemon AI CLI selection, install warnings | merged | f0ca1c0d133038f1e710a4a616cbbfbf994f4ace |
+| #1053 | M7 bounded cancellable starts, rollback | merged | 018b6d2c8d288e65c8ac9dc283b1268914a51640 |
+| (orchestrator opens) | close (T088–T089, tdd-verify, T090/T094) | gate green | — |
 | #998 | M5 subset (container daemons over SSH on the basic image; pulled in T047, T055, T065) | merged | d526eaca82b43d60d5f2eb85926259f0fefc45e4 |
 
 ## Milestones
@@ -138,3 +140,12 @@ None.
 - **M6b (new milestone)**: T075's `NoOutbound` cases and T078's visual pass (see Handover). The visual pass needs a display; the cloud container has no xdotool.
 
 - M7: a real-runtime test that drives the client's own start path (`bring_up_attempt` with a cancel, two racing `bring_up_attempt`s, `container_attempt` dropped after `Entered(Start)`) and asserts no container or daemon is left; needs the harness to build a `SandboxProfile`/mount set.
+
+- **Close-out follow-up issues (text only, none created)**, from `tdd/verification.md` (verdict FAIL, tasks T091–T093, T095–T099 in tasks.md Phase 13):
+  1. *Rewrite the two weak real-runtime tests* (T092, T093): `sandbox_real_provision_stop_during_a_long_install_leaves_no_container_or_daemon` must start through `container_attempt`/`bring_up_attempt` with no hand-seeded `AttemptLedger`; `..._two_concurrent_starts_...` must race two starts with no container beforehand and assert both connect to one container and one daemon (prove red with `NameInUse` re-adoption disabled in `lifecycle.rs`). Needs a container runtime.
+  2. *Restore what two reshaped real-runtime tests measure* (T095): `sandbox_real_first_enable_...under_five_minutes` should time provisioning to a connected daemon (SC-002); say whether `sandbox_real_idle` still pins §5.17.
+  3. *Run the real-runtime suites once and read CI* (T096): record pass counts and that no test skipped silently.
+  4. *Retroactive reds in the cycle log* (T091): 19 TEST_AFTER behaviours (M2 T027/T029/T032/T034–T036/T042–T061, M6 T071/T072/T074, M7 T079–T085).
+  5. *provision tests*: replace real sleeps with `tokio::time::pause` (T097), one behaviour per test (T098), one shared `SshRunner` fake and list it in the TDD profile (T099).
+  Also still open from earlier: the `specs/686-kubernetes-daemon-runtime` text on #806 (FR-004, FR-012) is stale; the bridge-started daemon lacks the container env (`MICOLD_IMAGE_REFERENCE`, `TZ`, `MICOLD_IDLE_STOP`); `strict_fingerprint` dead field; real-runtime test of the client's own start path (see M7 follow-up above).
+- Close unit: tdd-verify run; T090 (plain `Connection reset` retried, red by mutation) and T094 done; T088/T089 done (docs/daemon.md section; quickstart results). Review: fresh reviewer (sonnet) r1 MAJOR ×2 fixed (T088 record, M7 cycle-log task mapping), MINOR tidied. Gate: `scripts/gate.sh` green at the close branch after merging origin/main.

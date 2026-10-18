@@ -490,10 +490,10 @@ lives in Settings → Daemons, described in
 | Placement | What it is | Reached over |
 |---|---|---|
 | **On this computer** (default) | A detached host process, spawned by the app on a cold start | A Unix socket in a `0700` directory on Linux and macOS; on Windows, a named pipe only your account can open |
-| **In a container** | A container on this machine, seeing only your registered projects | Loopback TCP, authenticated by a shared secret |
-| *Remote* | Reserved. Not selectable in this release | — |
+| **In a container** | A container on this machine, seeing only your registered projects | An SSH connection to the container's sshd on a loopback port (feature 806; before it, loopback TCP with a shared secret) |
+| **On another computer** | A daemon on an SSH host you own (feature 489) | An SSH connection to the host |
 
-The third row is why the model exists as a model. Adding the variant now costs one `match` arm per
+The last row is why the model exists as a model. Adding the variant now costs one `match` arm per
 site and forces every placement-dependent decision to be *stated*; adding it later would mean finding
 every place the host process was assumed by omission.
 
@@ -537,7 +537,7 @@ environment-include script.
 
 Enabling the sandbox does not start it on the spot; the next launch does. From then on each start
 runs: **probe** the runtime → **acquire** the image → **adopt or create** the container → **start**
-it → connect.
+it → provision and connect (see [Provisioning a daemon behind SSH](#provisioning-a-daemon-behind-ssh-feature-806)).
 
 The adopt step matters more than it looks. A sandbox outlives the app by design, so on almost every
 start there is already a container with our name. It is reused if it is ours, started if it is ours
@@ -579,3 +579,59 @@ model.*
 stdin and stdout to the host's own daemon endpoint, starting the daemon first when none listens, and
 writes nothing to stdout but relayed bytes. `micold-daemon remote prune --keep <n>` removes older
 build directories under `~/.micold/remote/`. Neither opens a network port.
+
+## Provisioning a daemon behind SSH (feature 806)
+
+A container daemon no longer runs from an image built per app version. It starts from the **basic
+image**, and the client puts the daemon in it over SSH, the way it does for a remote host (feature
+489). One sequence, `micold_core::provision`, serves every target that has an SSH server: a container
+today, a 489 remote host, and the Kubernetes pod of #686 (the module names no container runtime).
+
+### The sequence
+
+A target is described by a `ProvisionTarget` (how to reach it, who owns it: `Ownership::AppOwned` or
+`Ownership::UserHost`, and `Egress`). `provision::run` then runs these steps in order and emits a
+`ProvisionEvent` as each is entered, with the percent while copying; the daemon's row shows them
+live:
+
+| `Step` | Row text | Notes |
+|---|---|---|
+| `Acquire`, `CreateContainer` | getting the image, starting the container | run by the container runtime before the hand-over; same event sink |
+| `Reach` | connecting to the SSH server | the only step that repeats, and only while the server is "not up yet", inside its bound |
+| `Probe` | checking the daemon build | |
+| `Copy` | copying the daemon | only when the target lacks this client's build; a warm start copies nothing |
+| `InstallAiClis` | installing the AI CLIs | app-owned targets only; never on a user's host |
+| `Start`, `VersionCheck` | starting the daemon, checking the daemon version | handshake, then version comparison |
+
+Failure is a `ProvisionFailure { step, cause, output }` whose reason text is the same for every
+target. A CLI that fails to install is a `ProvisionWarning`, not a failure: the daemon still starts
+and offers only the CLIs that installed. Every step has a bound (`StepBounds`) and honours a
+`CancelToken`. What the attempt created is recorded in an `AttemptLedger` and `rollback` removes it
+when the start fails or is cancelled; a daemon found already running is never rolled back.
+
+Pinned reach (`-F none`, `IdentitiesOnly=yes`, `IdentityAgent=none`) never reads the user's SSH
+configuration or agent. A container's key pair is made per daemon (`DaemonKeys`).
+
+### AI CLIs and the install relay
+
+The AI CLIs are npm packages at pinned versions (`AiCliTable`), installed under the target's state
+directory and recorded in `ai-clis/offered.json` (selected ∩ installed), which is what the daemon
+offers. The user picks the CLIs per daemon. When the daemon's network setting forbids outbound
+traffic, the install runs through `Egress::Relay`: a client-loopback HTTP `CONNECT` proxy, open for
+one install command and reached by the target over an SSH `-R` forward, that allows only the pinned
+registry (`registry.npmjs.org:443`). If the relay cannot open, the cause is `PostureBlocksDownload`.
+
+### The basic image
+
+`packaging/basic/` (its README is the contract) builds an image with `sshd` on port 2222 (key auth
+only), Node 24 and `npm`, `git`, and the tools a session needs. It carries **no** daemon, AI CLI or
+credential: the host and authorized keys are mounted read-only at run time. Because the daemon is
+copied in, one image serves every client version. `basic-image.yml` publishes it on merge;
+`BASIC_IMAGE` in `crates/micold-core/src/sandbox/basic_image.rs` pins it by digest and
+`scripts/basic-image-hash.sh --check` reports `DRIFT` when the tree changed without a new pin. An
+image of the user's own works when it runs an SSH server on the same terms.
+
+Its entrypoint starts the last provisioned daemon in the background, runs sshd, and on stop first
+stops every daemon (so they save terminal history), then sshd. A container started before 806 stays
+on the released image until it is restarted with no sessions running; stored settings migrate on
+read.
