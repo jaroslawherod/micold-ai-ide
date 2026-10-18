@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-uwrpqv
 - **Started**: 2026-10-17
 - **Phase**: M7
-- **Next step**: M7 continues from *Handover*
+- **Next step**: close (T088–T089) after M7 merges
 
 ## Pull requests
 
@@ -37,7 +37,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M5 | T042–T044, T049–T054, T057, T060, T061 | full | container daemons on the pinned basic image over SSH (`Dial::ContainerSsh`), two-entry image form, migration read-repair, legacy adoption; shipped as a subset (orchestrator limit on parts) | (opened by the orchestrator) | gate green at c43d8040 |
 | M5b | T045, T046, T048, T056, T058, T059, T062–T064, T066–T070 (T047, T055, T065 done in #998) | full | the rest of M5: notices and gated legacy restart, tests, real-runtime suites on the basic image, CI pin check, user guide, visual pass | — | pending (new milestone) |
 | M6 | T071–T074, T076, T077 (T075, T078 open, see Follow-ups) | full | per-daemon AI CLI selection; install warnings in the row | (opened by the orchestrator) | gate green at 88af2fbe |
-| M7 | T079–T086 (+ M6b folded in: T075 NoOutbound cases, T078 visual pass) | full | step bounds, cancel, rollback, concurrent starts; end-to-end suite in CI | — | implemented incl. started_daemon rollback in the SSH attempt, strict PostureBlocksDownload test (`provision::run_with_relay` seam); reviews pending |
+| M7 | T079–T086 (+ M6b folded in: T075 NoOutbound cases, T078 visual pass) | full | step bounds, cancel, rollback, concurrent starts; end-to-end suite in CI | — | implemented incl. started_daemon rollback in the SSH attempt, strict PostureBlocksDownload test (`provision::run_with_relay` seam); gate green at d3b19972 (reviews A r2 clean) |
 
 Milestone notes:
 - M6b (T075 NoOutbound real-runtime cases, T078 visual pass) was folded into M7; T078's §B 5 is not checkable without a container runtime and is left to CI.
@@ -87,7 +87,7 @@ Milestone notes:
 | M5c review B (conformance, sonnet) | 1 | 7e4573e8c7115d81ab1304374e86f7d297622b16:c0850e4685b784cc72b8b989fab3015053b0dbfe | CHANGES: 3 MAJOR, 1 MINOR (F1 cycle-log row added; F2 fixed as A F2; F3 declined; F4 declined) |
 | M6 review A (reviewer agent) | 1 | fa4cd4b9de1fd016af7218f9e0fe3ab73fbbb121:fd94d65f8ca3be327a3179413bfae126f0a57192 | CHANGES: 2 MAJOR, 1 MINOR (F1 `Warned` lossy: the sink retries a full channel for it; F2 duplicates: cleared on `Entered(Acquire)`; F3 declined, see below) |
 | M6 review B (conformance, sonnet) | 1 | fa4cd4b9de1fd016af7218f9e0fe3ab73fbbb121:fd94d65f8ca3be327a3179413bfae126f0a57192 | CHANGES: 3 BLOCKER, 2 MAJOR, 1 MINOR (F1 tasks ticked; F2 `NoOutbound` real-runtime cases and F3 visual pass deferred, in Follow-ups; F4 test now drives selected/failed sets; F5 cycle-log M6 section added; F6 declined) |
-- M7 A r1 (e831de79:e5cf3805): CHANGES (1 BLOCKER, 2 MAJOR, 2 MINOR). B r1 (same snapshot): CHANGES (3 MAJOR, 2 MINOR). Fixed: daemon found running is never rolled back (`login::daemon_running` pre-check), every runtime command bounded (`limiting_commands`), unused token documented. Round 2 (scoped, sonnet) follows.
+- M7 A r1 (e831de79:e5cf3805): CHANGES (1 BLOCKER, 2 MAJOR, 2 MINOR). B r1 (same snapshot): CHANGES (3 MAJOR, 2 MINOR). Fixed: daemon found running is never rolled back (`login::daemon_running` pre-check), every runtime command bounded (`limiting_commands`), unused token documented. Round 2 (scoped, sonnet): CLEAN. Gate green after merging origin/main (one mcp_audit_log paste flake on an earlier run, passes alone x3).
 
 ## Declined review findings
 
