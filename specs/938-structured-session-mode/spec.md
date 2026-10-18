@@ -70,21 +70,16 @@ beyond what the clarifications below settle; every richer view belongs to a late
   configuration plus only the tool-server binding, no permission override); a tool use that would
   need the user's approval is refused by the CLI and that refusal reaches clients as events.
   _(agent-resolved: crates/micold-core/src/provider.rs#ToolServerSupport, spec.md#FR-006)_
+- Q: How does the user choose the structured kind for a session, and what does a window show for a
+  structured session before #939 delivers the transcript view? → A: A per-session choice in the
+  new-session flow, beside the existing AI CLI chevron, offered for Claude Code sessions only; the
+  session's pane shows a plain, read-only, line-per-event log until #939 replaces it.
+  _(decided by user, provisional)_
+- Q: Does the event history survive a daemon restart? → A: No. The daemon keeps it for its own
+  lifetime only; after a restart a resumed session continues the conversation and shows events from
+  the resume on. Earlier history is #939's concern (it can read the CLI's own transcript).
+  _(decided by user, provisional)_
 
-### Open
-
-- [NEEDS CLARIFICATION: How does the user choose the structured kind for a session, and what does
-  a window show for a structured session before #939 delivers the transcript view? Options: (A) a
-  per-session choice in the new-session flow, offered for Claude Code sessions only, and the
-  session's pane shows a plain, read-only, line-per-event log until #939 replaces it; (B) no user
-  control yet — the kind is reachable only through a setting marked experimental, same plain log;
-  (C) daemon and wire only — no client control or display in this feature, structured sessions are
-  created by tests and the agent tool server only. Recommended: A.]
-- [NEEDS CLARIFICATION: Does the event history survive a daemon restart? Options: (A) the daemon
-  keeps it for its own lifetime only; after a restart a resumed session continues the conversation
-  and shows events from the resume on, and earlier history is #939's concern (it can read the CLI's
-  own transcript); (B) the daemon persists every event history to the local filesystem and replays
-  it to clients after a restart. Recommended: A.]
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -337,12 +332,20 @@ check each refusal.
 - **FR-021**: Restarting or restoring a structured session whose conversation has started MUST
   launch the CLI resuming that conversation in structured mode; a new session MUST start a new
   conversation.
+- **FR-021a**: The event history MUST live in daemon memory only and is not written to disk; after
+  a daemon restart a resumed session's history starts at the resume (earlier history is #939's,
+  read from the CLI's own transcript). Stopping and starting a session within one daemon lifetime
+  keeps its history.
 
 **Selection and docs**
 
-- **FR-022**: [Depends on the first open clarification] A user MUST be able to create a
-  structured Claude Code session in the way that clarification settles, and MUST see the session
-  marked as structured wherever sessions are listed.
+- **FR-022**: A user MUST be able to choose the structured kind per session from the start-session
+  chevron's list, as a "Claude Code (structured)" entry offered only where Claude Code is available;
+  the chevron MUST then be shown even when Claude Code is the only CLI. Every other way of starting
+  a session, and the plain start-session press, creates a terminal session. The session MUST be marked as structured wherever sessions are listed.
+- **FR-022a**: Until #939 replaces it, a structured session's pane MUST show a plain, read-only
+  log with one line per event, in order, including unrecognised events and unreadable lines and
+  the omitted-events marker; it offers no input (prompt input is #941).
 - **FR-023**: The user guide MUST describe the structured kind, how to choose it, that it is
   Claude-only, and what it does not yet do (each later issue of the epic), in the same change that
   makes it user-selectable.
