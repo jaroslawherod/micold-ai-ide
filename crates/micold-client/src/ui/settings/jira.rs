@@ -12,7 +12,7 @@ use crate::features::settings::{
 };
 use crate::features::window::FieldId;
 use crate::ui::focus::TrackFocus;
-use crate::ui::material::{Button, Checkbox, TextField};
+use crate::ui::material::{Button, Checkbox, RequiredLegend, TextField};
 use crate::ui::settings::{caution, error_for, field_note, note, page};
 use iced::widget::{column, row};
 use iced::Element;
@@ -100,8 +100,10 @@ fn connection_form<'a>(
         token = token.supporting(TOKEN_STORED);
     }
 
-    let mut controls: Vec<Element<'a, Message>> =
-        vec![site.into(), key.into(), email.into(), token.into()];
+    let mut controls: Vec<Element<'a, Message>> = RequiredLegend::for_fields(&required, roles)
+        .into_iter()
+        .chain([site.into(), key.into(), email.into(), token.into()])
+        .collect();
     if jira.connection.is_some() || jira.remove_requested {
         let remove = Button::outlined("Remove connection", roles).on_press_maybe(
             (!jira.remove_requested).then_some(Message::Settings(SettingsMsg::JiraRemoveRequested)),

@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #937
 - **Worktree branch**: claude/project-thread-rkhzho
 - **Started**: 2026-10-17
-- **Phase**: M2 PR
-- **Next step**: orchestrator opens the M2 PR (title/body in the scratchpad: pr-title-937-M2.txt, pr-body-937-M2.md), waits on CI, merges; then M3. Visual pass not run (no xdotool). D2/D3 = A, confirmed by jaro 2026-10-17
+- **Phase**: M3 PR
+- **Next step**: orchestrator opens the M3 PR (title/body in the scratchpad: pr-title-937-M3.txt, pr-body-937-M3.md), waits on CI, merges; then M4. Visual pass not run (no xdotool). D2/D3 = A, confirmed by jaro 2026-10-17
 
 ## Pull requests
 
@@ -18,15 +18,16 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #948 | Design: spec, clarify, plan, tasks | merged | 7f95bbc7a71151ff44315b9f93939fe9bb115872 |
 | #963 | M1: required fields marked in the dialogs | merged | 70f5872667fb6e8e9126555f2573ce86e0a7bf80 |
-| to-open | M2: required fields marked in Settings and the daemon form | to-open | — |
+| #974 | M2: required fields marked in Settings and the daemon form | merged | e1462f4fae303fa4b29aa8261a7764c0164889b0 |
+| to-open | M3: `* required` legend | to-open | — |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T015 | full | Required fields marked (`*`) in the add-worktree, run-in-parallel and rename dialogs | #963 | merged |
-| M2 | T016–T022 | full | Required fields marked in Settings sections and the daemon form | to-open | PR |
-| M3 | T023–T028 | full | `* required` legend once above the first field of every form with a required field | — | pending |
+| M2 | T016–T022 | full | Required fields marked in Settings sections and the daemon form | #974 | merged |
+| M3 | T023–T028 | full | `* required` legend once above the first field of every form with a required field | to-open | PR |
 | M4 | T029–T035 | full | Required error on submit in the dialogs; Create and Start runs enabled | — | pending |
 | M5 | T036–T041 | full | Required error on save in Settings and the daemon form | — | pending |
 | M6 | T042–T048 | full | Required error on leaving a field (blur), selects included | — | pending |
@@ -50,6 +51,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 review B (conformance, sonnet) | 1 | 6fa0fac3e1b420be05805ee20dcb0a99c86719fd:f0bd268aba57da8d9996615e081ff25b58e56fbe | CLEAN (1 MINOR: rename tests' red not observed by a run, noted in tdd/cycle-log.md); Verify ok |
 | M2 review A (high) | 1 | 05fbd8e4a4925031fcf50837ca94cdfad025cb2f:7b2045850367e7e33008f0bed82b190ef6b503c4 | CLEAN (headless `claude -p`) |
 | M2 review B (conformance, sonnet) | 1 | 05fbd8e4a4925031fcf50837ca94cdfad025cb2f:7b2045850367e7e33008f0bed82b190ef6b503c4 | CHANGES: F1 MAJOR red phase not recorded (fixed: cycle-log row 8), F2 MINOR declined; Verify ok (core 11, daemons 5, settings 112, call sites 3) |
+| M3 review A (high) | 1 | 26c2e091b37dab4dc21ee68b849e468078d105aa:e1462f4fae303fa4b29aa8261a7764c0164889b0 | CLEAN after fixes: F4 `calls_the_legend` now matches `RequiredLegend::` (fixed); F1–F3, F5, F6–F9 declined (see below); the code-review skill ran in a fork |
+| M3 review B (conformance, sonnet) | 1 | 0d717b7bc8c847303c4c83e4771b1a4dfdac218d:e1462f4fae303fa4b29aa8261a7764c0164889b0 | CLEAN (3 MINOR: muted role not asserted; no Appearance-has-no-legend test; showcase legend is its own catalogue entry because `showcase_completeness` requires one per component, not a pose on the Required field entry); Verify ok (required_legend 3, required_call_sites 6, layout_snapshot 63, showcase_completeness 39) |
+
 
 ## Declined review findings
 
@@ -57,6 +61,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| M3 | A | F1 DETAIL_ROWS_SHOWN 5→3 over-compensates | 4 rows saves 24px: the dialog's top lands at 64.0, 0.5px inside the app bar (gate tolerance 0.5), so 3 is the least that passes `panel_placement` |
+| M3 | A | F2 Retry shares a row with the search failure | needed too: the issue-search-failed dialog was 18px over the bar; the status text has `Length::Fill`, so it wraps inside its own column |
+| M3 | A | F3 repository step shows its own legend (up to N+1 on the Daemons page) | T026 names the repository step as its own form (FR-004: one per form); it is a separate step with its own required field |
+| M3 | A | F5 rename dialog tests `spec.required`, not `for_fields` | the dialog has one field and carries only its `FieldRequirement`; no `Requirement` list exists to pass |
+| M3 | A | F6, F8, F9 (idiom variety, `new` vs `for_fields`, doc wrapping) | MINOR taste |
 
 ## Handover
 
@@ -72,4 +81,5 @@ None.
 
 - Spec review round 2 MINOR (rename-dialog files, container fields): addressed in research.md R4 and R5.
 - jaro 2026-10-17: "currently it works in way that you click submit and first field that fails validation is marked but should be all at once". The spec already says so (edge case *Several required fields empty at once*). M4 and M5 tests must cover two or more empty required fields all reading `Missing` after one submit/save, including Settings and the daemon form. M2's `required_fields` lists every field with its own `empty`, so no field hides behind the first.
+- M3: the add-worktree dialog gained 32px (legend line + SM), which the panel-placement gate measures; kept it under the app bar with DETAIL_ROWS_SHOWN 5→3 and the issue-search failure + Retry on one row. Environment-page kind-row click test now clicks the visible part of the last row. Open for M4/M5: several empty required fields all Missing after one submit/save (above).
 - M2: the T016/T017 tests were written after the code; review B F1 (MAJOR) asked for the red phase. Fixed: observed by stubbing the lists, 10 of 14 tests failed, recorded in tdd/cycle-log.md row 8.

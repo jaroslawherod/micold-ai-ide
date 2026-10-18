@@ -99,15 +99,15 @@ Settings › Appearance and Jira with nothing typed show none (quickstart §B 2�
 
 ### Tests for User Story 2 (write first, see them fail)
 
-- [ ] T023 [P] [US2] Write a failing anatomy test in `client/ui/material/required_legend.rs`: `RequiredLegend::new(roles)` renders the text `required::LEGEND` in `TypeRole::Caption` with the muted role (C3, R6)
-- [ ] T024 [P] [US2] Extend `ctests/required_call_sites.rs`: fail when a file under `client/ui/` outside `material/` contains the `"* required"` literal, and when one of the inventory view files (`ui/worktree_form.rs`, `ui/parallel_dialog.rs`, `ui/rename_dialog.rs`, `ui/settings/{terminal,environment,github,jira,daemons}.rs`) does not call `RequiredLegend` (C5, SC-003, SC-006)
+- [x] T023 [P] [US2] Write a failing anatomy test in `client/ui/material/required_legend.rs`: `RequiredLegend::new(roles)` renders the text `required::LEGEND` in `TypeRole::Caption` with the muted role (C3, R6)
+- [x] T024 [P] [US2] Extend `ctests/required_call_sites.rs`: fail when a file under `client/ui/` outside `material/` contains the `"* required"` literal, and when one of the inventory view files (`ui/worktree_form.rs`, `ui/parallel_dialog.rs`, `ui/rename_dialog.rs`, `ui/settings/{terminal,environment,github,jira,daemons}.rs`) does not call `RequiredLegend` (C5, SC-003, SC-006)
 
 ### Implementation for User Story 2
 
-- [ ] T025 [US2] Implement the `RequiredLegend` builder in `client/ui/material/required_legend.rs` and export it from `client/ui/material/mod.rs` (Principle VIII) (depends on T023)
-- [ ] T026 [US2] Push `RequiredLegend` as the first child of the fields column, only when `RequiredMarks::legend(required_fields())` is true, in `client/ui/worktree_form.rs`, `client/ui/parallel_dialog.rs` and `client/ui/rename_dialog.rs`; at the top of the section content in `client/ui/settings/{terminal,environment,github,jira}.rs`; once at the top of the daemon form (its `container_fields.rs` part adds none) and of the repository step in `client/ui/settings/daemons.rs` (FR-004: one per form) (depends on T025, T012, T021)
-- [ ] T027 [US2] Re-record the layout snapshots the legend row changes (`ctests/layout_snapshot.rs`, `ctests/gates/`), checking that the only change is the one caption row plus `spacing::SM` per form (R8)
-- [ ] T028 [P] [US2] Add the legend to the showcase *Required field* entry in `client/showcase/sections/controls.rs`; document `RequiredLegend` (C3) in `docs/development/component-library.md`; mention the `* required` line in the *Required fields* notes of `docs/user-guide/{worktrees-and-sessions,parallel-runs,project-selection,settings}.md`
+- [x] T025 [US2] Implement the `RequiredLegend` builder in `client/ui/material/required_legend.rs` and export it from `client/ui/material/mod.rs` (Principle VIII) (depends on T023)
+- [x] T026 [US2] Push `RequiredLegend` as the first child of the fields column, only when `RequiredMarks::legend(required_fields())` is true, in `client/ui/worktree_form.rs`, `client/ui/parallel_dialog.rs` and `client/ui/rename_dialog.rs`; at the top of the section content in `client/ui/settings/{terminal,environment,github,jira}.rs`; once at the top of the daemon form (its `container_fields.rs` part adds none) and of the repository step in `client/ui/settings/daemons.rs` (FR-004: one per form) (depends on T025, T012, T021)
+- [x] T027 [US2] Re-record the layout snapshots the legend row changes (`ctests/layout_snapshot.rs`, `ctests/gates/`), checking that the only change is the one caption row plus `spacing::SM` per form (R8)
+- [x] T028 [P] [US2] Add the legend to the showcase *Required field* entry in `client/showcase/sections/controls.rs`; document `RequiredLegend` (C3) in `docs/development/component-library.md`; mention the `* required` line in the *Required fields* notes of `docs/user-guide/{worktrees-and-sessions,parallel-runs,project-selection,settings}.md`
 
 **Checkpoint (M3)**: SC-003 holds.
 

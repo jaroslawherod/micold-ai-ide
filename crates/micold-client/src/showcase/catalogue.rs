@@ -193,6 +193,19 @@ pub const COMPONENTS: &[Entry] = &[
         render: sections::atoms::divider,
     },
     Entry {
+        // Feature 937 (C3, FR-011): the line that explains the required marker, once per form.
+        module: "material/required_legend.rs",
+        component: "RequiredLegend",
+        variants: &[],
+        density: &[],
+        posed: &["legend"],
+        live: &[],
+        interactive: false,
+        section: Section::Components,
+        layout: Layout::Inline,
+        render: sections::atoms::required_legend,
+    },
+    Entry {
         module: "material/tag.rs",
         component: "Tag",
         variants: &[],

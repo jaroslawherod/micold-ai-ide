@@ -13,7 +13,9 @@ use crate::features::settings::{SettingsDraft, SettingsSection};
 use crate::features::window::FieldId;
 use crate::icons::Icon;
 use crate::ui::focus::TrackFocus;
-use crate::ui::material::{Button, Checkbox, IconButton, Select, TextField, Tooltip};
+use crate::ui::material::{
+    Button, Checkbox, IconButton, RequiredLegend, Select, TextField, Tooltip,
+};
 use crate::ui::settings::{field_note, note, page};
 use iced::widget::{column, row};
 use iced::{Alignment, Element, Length};
@@ -45,7 +47,9 @@ pub fn view<'a>(
     let last = entries.len().saturating_sub(1);
     let required = draft.required_fields(SettingsSection::GithubIssues);
 
-    let mut controls: Vec<Element<'a, Message>> = Vec::with_capacity(entries.len() + 3);
+    let mut controls: Vec<Element<'a, Message>> = Vec::with_capacity(entries.len() + 4);
+    // The marker's explanation, once, above the first field (feature 937, FR-004).
+    controls.extend(RequiredLegend::for_fields(&required, roles));
     // Consent, not capability: always enabled, whether or not `gh` is installed (FR-025, FR-030).
     controls.push(field_note(
         Checkbox::new(

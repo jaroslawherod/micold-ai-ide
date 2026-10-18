@@ -14,7 +14,8 @@ Editing is one form across all the sections except Daemons, which saves its own 
 **Save** applies every section at once. If a value is rejected, Settings jumps to the section
 holding it and marks the field — press **Cancel**, or Esc, to leave without saving anything.
 
-Fields marked `*` must be filled before Settings accepts the form: **Scrollback lines** in
+A page or form with a field marked `*` shows a `* required` line above its first field; Appearance,
+which has none, shows no such line. Fields marked `*` must be filled before Settings accepts the form: **Scrollback lines** in
 Terminal; **Long-task threshold**, **Warn at** and the script timeout in Environment; each **Label**
 in GitHub; and in Jira the Site URL, Project key, Account email and API token, once you start
 filling the connection in (the token only while none is stored). Appearance has nothing to fill. In
