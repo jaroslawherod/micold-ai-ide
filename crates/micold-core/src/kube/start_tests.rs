@@ -2,6 +2,7 @@
 //! async test runs on tokio's paused clock, so phase bounds are exact and cost no wall time.
 
 use std::future::pending;
+use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use tokio::time::Instant;
@@ -37,11 +38,26 @@ fn client(id: &str) -> ClientKey {
     }
 }
 
+/// A machine with no files: reading any source fails.
+fn no_files(_: &Path) -> std::io::Result<String> {
+    Err(std::io::ErrorKind::NotFound.into())
+}
+
 async fn run_with(
     fake: &FakeCluster,
     settings: &KubeSettings,
     client: &ClientKey,
     drift: DriftChoice,
+) -> (StartOutcome, Vec<StartPhase>) {
+    run_reading(fake, settings, client, drift, &no_files).await
+}
+
+async fn run_reading(
+    fake: &FakeCluster,
+    settings: &KubeSettings,
+    client: &ClientKey,
+    drift: DriftChoice,
+    read: ReadFile<'_>,
 ) -> (StartOutcome, Vec<StartPhase>) {
     let seen = Arc::new(Mutex::new(Vec::new()));
     let sink = seen.clone();
@@ -57,6 +73,9 @@ async fn run_with(
         image: IMAGE,
         client,
         drift,
+        home: Path::new("/home/u"),
+        hosts: &[],
+        read,
     };
     let outcome = start(&request, &mut on_phase).await;
     let phases = seen.lock().unwrap().clone();
@@ -790,4 +809,159 @@ async fn an_old_event_of_an_adopted_claim_does_not_fail_the_start() {
     fake.progress(&n.pod(), vec![pending_pod()]);
     let (outcome, _) = run(&fake, &settings()).await;
     assert!(matches!(failed(outcome), KubeFailure::PhaseTimeout { .. }));
+}
+
+// ---- M3: allowed credentials (T065, A10–A13, U58, U59) ----
+
+use crate::kube::credentials::KubeCredential;
+use crate::session::AiCli;
+
+/// Home with a git config and a Claude sign-in.
+fn home_files(path: &Path) -> std::io::Result<String> {
+    // Compared as paths: on Windows the home is joined with a backslash.
+    if path == Path::new("/home/u/.gitconfig") {
+        Ok("[user]".into())
+    } else if path == Path::new("/home/u/.claude/.credentials.json") {
+        Ok("{}".into())
+    } else {
+        Err(std::io::ErrorKind::NotFound.into())
+    }
+}
+
+fn allowing(credentials: &[KubeCredential]) -> KubeSettings {
+    let mut s = settings();
+    s.allowed = credentials.iter().cloned().collect();
+    s
+}
+
+/// The calls that write a secret other than the access secret.
+fn credential_writes(fake: &FakeCluster) -> Vec<String> {
+    fake.calls()
+        .into_iter()
+        .filter(|c| c.contains("Secret") && !c.starts_with("get") && !c.contains("ssh-access"))
+        .collect()
+}
+
+#[tokio::test(start_paused = true)]
+async fn allowed_credentials_become_secrets_mounted_beside_the_access_secret() {
+    let signin = KubeCredential::SignIn {
+        cli: AiCli::ClaudeCode,
+    };
+    let s = allowing(&[KubeCredential::GitConfig, signin.clone()]);
+    let fake = cluster();
+    fake.progress(&names().pod(), vec![running()]);
+    let (outcome, _) = run_reading(&fake, &s, &client("c1"), DriftChoice::Ask, &home_files).await;
+    let started = ready(outcome);
+    let n = names();
+    let mut want = vec![
+        n.access_secret(),
+        n.secret(&KubeCredential::GitConfig),
+        n.secret(&signin),
+    ];
+    want.sort();
+    assert_eq!(fake.names(NS, ObjectKind::Secret), want);
+    let made: Vec<_> = started
+        .attempt
+        .created
+        .iter()
+        .filter(|c| c.kind == ObjectKind::Secret)
+        .map(|c| c.name.clone())
+        .collect();
+    assert_eq!(made.len(), 3);
+    let pod = fake.manifest(NS, ObjectKind::Pod, &n.pod()).unwrap();
+    let mounted: Vec<&str> = pod["spec"]["volumes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|v| v["secret"]["secretName"].as_str())
+        .collect();
+    assert_eq!(mounted.len(), 3);
+    assert!(want.iter().all(|w| mounted.contains(&w.as_str())));
+    let data = fake.manifest(
+        NS,
+        ObjectKind::Secret,
+        &n.secret(&KubeCredential::GitConfig),
+    );
+    assert_eq!(data.unwrap()["stringData"]["gitconfig"], "[user]");
+}
+
+#[tokio::test(start_paused = true)]
+async fn nothing_allowed_creates_no_credential_secret_and_reads_no_file() {
+    let fake = cluster();
+    fake.progress(&names().pod(), vec![running()]);
+    let read = |p: &Path| -> std::io::Result<String> { panic!("read {}", p.display()) };
+    let (outcome, _) =
+        run_reading(&fake, &settings(), &client("c1"), DriftChoice::Ask, &read).await;
+    ready(outcome);
+    assert_eq!(
+        fake.names(NS, ObjectKind::Secret),
+        vec![names().access_secret()]
+    );
+    assert_eq!(credential_writes(&fake), Vec::<String>::new());
+    let pod = fake.manifest(NS, ObjectKind::Pod, &names().pod()).unwrap();
+    assert!(pod["spec"].get("imagePullSecrets").is_none());
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_withdrawn_secret_of_ours_is_deleted_and_one_not_ours_is_left() {
+    let n = names();
+    let cfg = KubeCredential::GitConfig;
+    let fake = cluster();
+    fake.progress(&n.pod(), vec![running()]);
+    let allowed = allowing(std::slice::from_ref(&cfg));
+    let (first, _) = run_reading(
+        &fake,
+        &allowed,
+        &client("c1"),
+        DriftChoice::Ask,
+        &home_files,
+    )
+    .await;
+    ready(first);
+    assert!(fake.names(NS, ObjectKind::Secret).contains(&n.secret(&cfg)));
+    // A same-named secret of someone else, for a credential that was never allowed here.
+    let foreign = n.secret(&KubeCredential::GitCredentials);
+    fake.insert(NS, ObjectKind::Secret, &foreign, Default::default());
+    let (second, _) = run_reading(
+        &fake,
+        &settings(),
+        &client("c1"),
+        DriftChoice::Keep,
+        &no_files,
+    )
+    .await;
+    ready(second);
+    let left = fake.names(NS, ObjectKind::Secret);
+    assert!(!left.contains(&n.secret(&cfg)), "{left:?}");
+    assert!(left.contains(&foreign), "{left:?}");
+    assert!(left.contains(&n.access_secret()));
+    assert!(deletes(&fake).iter().any(|d| d.contains(&n.secret(&cfg))));
+    assert!(!deletes(&fake).iter().any(|d| d.contains(&foreign)));
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_missing_source_file_fails_the_secrets_phase_and_rolls_back() {
+    let s = allowing(&[KubeCredential::GitCredentials]);
+    let fake = cluster();
+    let (outcome, phases) =
+        run_reading(&fake, &s, &client("c1"), DriftChoice::Ask, &home_files).await;
+    assert!(matches!(
+        failed(outcome),
+        KubeFailure::CredentialSource { .. }
+    ));
+    assert_eq!(phases.last(), Some(&StartPhase::Secrets));
+    assert!(fake.names(NS, ObjectKind::Secret).is_empty());
+    assert!(fake.names(NS, ObjectKind::Pod).is_empty());
+}
+
+#[tokio::test(start_paused = true)]
+async fn the_pod_a_start_creates_runs_non_root_on_a_read_only_root() {
+    let fake = cluster();
+    fake.progress(&names().pod(), vec![running()]);
+    ready(run(&fake, &settings()).await.0);
+    let pod = fake.manifest(NS, ObjectKind::Pod, &names().pod()).unwrap();
+    assert_eq!(pod["spec"]["securityContext"]["runAsNonRoot"], true);
+    let c = &pod["spec"]["containers"][0]["securityContext"];
+    assert_eq!(c["readOnlyRootFilesystem"], true);
+    assert_eq!(c["allowPrivilegeEscalation"], false);
 }

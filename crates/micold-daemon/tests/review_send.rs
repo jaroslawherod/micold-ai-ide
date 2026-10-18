@@ -28,7 +28,7 @@ use micold_core::protocol::messages::{
 use micold_core::review::comment::{CommentState, ReviewComment};
 use micold_core::review::prompt::{self, EntryKind};
 use micold_core::review::Side;
-use micold_core::session::{AiCli, SessionId, TerminalMode};
+use micold_core::session::{AiCli, SessionId, SessionLocation, TerminalMode};
 use micold_core::terminal::LaunchMode;
 use micold_daemon::activity::{ActivityEvent, HookKind};
 use micold_daemon::state::DaemonState;
@@ -233,6 +233,34 @@ async fn answer(
 }
 
 #[allow(clippy::too_many_arguments)] // a test helper naming every field of one comment
+/// The working-tree directory of entry `dir`.
+fn entry_dir(project: &Path, dir: &str) -> PathBuf {
+    let location = if dir.is_empty() {
+        SessionLocation::Default
+    } else {
+        SessionLocation::Worktree(dir.into())
+    };
+    location.cwd(project)
+}
+
+/// Make `path` of entry `dir` hold `quote` from line `start` (feature 946 W16: a Draft is judged
+/// against the file on disk), keeping the other lines it already has.
+fn place_quote(project: &Path, dir: &str, path: &str, start: u32, quote: &[&str]) {
+    let file = entry_dir(project, dir).join(path);
+    let text = std::fs::read_to_string(&file).unwrap_or_default();
+    let mut lines: Vec<String> = text.lines().map(str::to_owned).collect();
+    let first = start as usize - 1;
+    if lines.len() < first + quote.len() {
+        lines.resize(first + quote.len(), String::new());
+    }
+    for (offset, line) in quote.iter().enumerate() {
+        lines[first + offset] = (*line).to_owned();
+    }
+    std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+    std::fs::write(&file, lines.join("\n") + "\n").unwrap();
+}
+
+#[allow(clippy::too_many_arguments)] // a test helper: one argument per field of the comment
 async fn add(
     client: &mut Client,
     req: u64,
@@ -244,6 +272,7 @@ async fn add(
     text: &str,
 ) -> Vec<ReviewComment> {
     let end = start + quote.len() as u32 - 1;
+    place_quote(project, dir, path, start, quote);
     let (result, seen) = request(
         client,
         req,
@@ -651,6 +680,15 @@ async fn us3_s1_with_no_session_running_one_starts_and_its_first_input_is_the_pr
 
     let (result, seen) = send(&mut client, 2, &project, "wt").await;
     let new = started_session(&result);
+    let sessions = s.state.sessions_for(&project);
+    assert_eq!(
+        sessions
+            .iter()
+            .map(|session| session.id)
+            .collect::<Vec<_>>(),
+        [new],
+        "the entry's own session is started and none was added (FR-001)"
+    );
     let (cwd, cli) = s
         .state
         .session_cwd_and_cli(new)
@@ -882,4 +920,145 @@ async fn fr018_a_second_window_sending_meanwhile_is_busy_and_the_prompt_is_typed
         .filter(|(_, typed)| typed.contains("Once only."))
         .collect();
     assert_eq!(typed.len(), 1, "one session received it: {typed:?}");
+}
+
+/// Send `dir`'s Drafts with `outdated` as the client's verdicts.
+async fn send_with(
+    client: &mut Client,
+    req: u64,
+    project: &Path,
+    dir: &str,
+    outdated: Vec<micold_core::review::comment::CommentId>,
+) -> (Result<OperationResult, (ErrorKind, String)>, Vec<Pushed>) {
+    let msg = ClientMsg::ReviewSend {
+        req,
+        project: project.to_path_buf(),
+        worktree_dir: dir.into(),
+        outdated,
+    };
+    request(client, req, msg).await
+}
+
+/// Feature 946 W16, US4 s1, FR-023: a Draft whose quoted lines moved on disk is sent with its new
+/// lines and stored at them, though no window reopened the file.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn w16_a_draft_whose_code_moved_is_sent_and_stored_at_its_new_lines() {
+    let _guard = ENV.lock().await;
+    let s = Sandbox::new().await;
+    let project = s.project();
+    s.start(sid(1), false).await;
+    let mut client = window(&s.state, &project).await;
+    let quote = ["fn a() {}", "fn b() {}"];
+    let comments = add(
+        &mut client,
+        1,
+        &project,
+        "wt",
+        "src/a.rs",
+        3,
+        &quote,
+        "Rename.",
+    )
+    .await;
+    let file = entry_dir(&project, "wt").join("src/a.rs");
+    let before = std::fs::read_to_string(&file).unwrap();
+    std::fs::write(&file, format!("{}{before}", "new\n".repeat(5))).unwrap();
+
+    let (result, seen) = send(&mut client, 2, &project, "wt").await;
+    assert!(result.is_ok(), "{result:?}");
+    let mut moved = pending(&comments);
+    moved[0].range = micold_core::review::LineRange::new(8, 9).unwrap();
+    let expected = prompt::build(EntryKind::Worktree, &moved, &[]);
+    assert!(
+        expected.contains("lines 8"),
+        "the heading names the new lines: {expected}"
+    );
+    let typed = s.typed_holds(sid(1), &submitted(&expected)).await;
+    assert_eq!(typed, submitted(&expected), "the batch names the new lines");
+    let last = &seen.last().unwrap().1;
+    assert_eq!(last[0].range, moved[0].range, "stored at the new range");
+    assert!(matches!(last[0].state, CommentState::Sent { .. }));
+}
+
+/// Feature 946 W16, FR-021/FR-022: code that is gone gets the outdated note whatever the client
+/// said; a removed-side Draft keeps the client's verdict, and the client's word about a
+/// current-side comment is not used.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn w16_the_daemon_judges_current_side_drafts_and_the_client_removed_side_ones() {
+    let _guard = ENV.lock().await;
+    let s = Sandbox::new().await;
+    let project = s.project();
+    s.start(sid(1), false).await;
+    let mut client = window(&s.state, &project).await;
+
+    let gone = add(
+        &mut client,
+        1,
+        &project,
+        "wt",
+        "src/a.rs",
+        3,
+        &["fn a() {}"],
+        "Gone.",
+    )
+    .await;
+    let kept = add(
+        &mut client,
+        2,
+        &project,
+        "wt",
+        "src/b.rs",
+        1,
+        &["keep"],
+        "Kept.",
+    )
+    .await;
+    let removed = {
+        let (result, seen) = request(
+            &mut client,
+            3,
+            ClientMsg::ReviewEdit {
+                req: 3,
+                project: project.clone(),
+                worktree_dir: "wt".into(),
+                edit: ReviewEditOp::Add {
+                    path: "src/c.rs".into(),
+                    side: Side::Old,
+                    start: 4,
+                    end: 4,
+                    quote: vec!["old line".into()],
+                    text: "Removed side.".into(),
+                },
+            },
+        )
+        .await;
+        result.expect("added");
+        seen.last().unwrap().1.clone()
+    };
+    std::fs::write(
+        entry_dir(&project, "wt").join("src/a.rs"),
+        "something else\n",
+    )
+    .unwrap();
+    let id_of = |all: &[ReviewComment], text: &str| all.iter().find(|c| c.text == text).unwrap().id;
+    let (gone_id, kept_id, removed_id) = (
+        id_of(&gone, "Gone."),
+        id_of(&kept, "Kept."),
+        id_of(&removed, "Removed side."),
+    );
+
+    // The client lists the removed-side comment and, wrongly, the intact current-side one.
+    let (result, _) = send_with(&mut client, 4, &project, "wt", vec![removed_id, kept_id]).await;
+    assert!(result.is_ok(), "{result:?}");
+    let expected = prompt::build(
+        EntryKind::Worktree,
+        &pending(&removed),
+        &[gone_id, removed_id],
+    );
+    let typed = s.typed_holds(sid(1), &submitted(&expected)).await;
+    assert_eq!(
+        typed,
+        submitted(&expected),
+        "outdated: the gone current-side Draft and the client's removed-side one only"
+    );
 }

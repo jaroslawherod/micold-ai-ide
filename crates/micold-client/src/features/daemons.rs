@@ -16,17 +16,23 @@ use micold_core::daemons::{
     Binding, ConnectionError, DaemonDiagnostics, DaemonEvent, DaemonId, DaemonName, DaemonRegistry,
     DaemonRuntime, DaemonState, DaemonView, RegistryError, StateChange, WorktreeRef,
 };
+use micold_core::kube::lifecycle::leftovers;
+use micold_core::kube::names::ResourceNames;
+use micold_core::kube::settings::KubeSettings;
 use micold_core::provision::{ProvisionEvent, Step};
 use micold_core::required::{RequiredMarks, Requirement};
 use micold_core::sandbox::image::{ImageChoice, OwnImage};
 use micold_core::sandbox::runtime::RuntimeKind;
 use micold_core::sandbox::{CredentialShare, NetworkPosture, SandboxProfile};
+use micold_core::session::AiCli;
 use micold_core::session::SessionId;
 
+pub use super::daemons_kube::{AllowedKind, ContextList, KubeDraft, VOLUME_NOTICE};
 use super::settings::{image_choice, parse_budget, LimitField, ProfileTexts};
 use super::window::FieldId;
 use super::Outcome;
 use crate::floating_surface;
+use crate::kube::live::ContextEntry;
 use crate::links::{route, DaemonLinks, Route};
 use crate::overlay::registry::Registered;
 use crate::overlay::SurfaceId;
@@ -62,6 +68,27 @@ pub enum DraftRuntime {
     Container,
     /// A host reached through the user's own `ssh` (feature 489).
     Ssh,
+    /// A pod in a Kubernetes cluster (feature 686).
+    Kubernetes,
+}
+
+/// Whether this build has #806's shared SSH image mechanism, without which a Kubernetes daemon
+/// cannot start (FR-024). While it is `false` the Add form does not offer Kubernetes; a Kubernetes
+/// daemon already in the settings still opens in Edit. #806 flips it.
+pub const SHARED_SSH_IMAGE_AVAILABLE: bool = false;
+
+/// The runtimes the form's "Runs in" choice offers for `draft`: Kubernetes only once the shared
+/// mechanism exists, or while editing a Kubernetes daemon (FR-024).
+pub fn runtime_choices(draft: &Draft) -> Vec<DraftRuntime> {
+    let mut choices = vec![
+        DraftRuntime::Container,
+        DraftRuntime::Host,
+        DraftRuntime::Ssh,
+    ];
+    if SHARED_SSH_IMAGE_AVAILABLE || draft.editing.is_some() && draft.kube_edited {
+        choices.push(DraftRuntime::Kubernetes);
+    }
+    choices
 }
 
 /// The two entries of the image form (feature 806, FR-001).
@@ -121,12 +148,23 @@ pub struct Draft {
     pub ssh_port: String,
     /// The private key file; blank takes it from the SSH configuration (SSH runtime only).
     pub ssh_key_file: String,
+    /// The Kubernetes fields (feature 686); used while `runtime` is Kubernetes.
+    pub kube: KubeDraft,
+    /// Whether the daemon being edited is a Kubernetes one, so its runtime stays on offer.
+    pub kube_edited: bool,
     /// Which fields the user has left and whether a save was attempted, for the required errors
     /// (feature 937). Fresh when the form opens, dropped with it.
     pub required: RequiredMarks<FieldId>,
 }
 
 impl Draft {
+    /// The note under the volume size once the daemon exists (FR-005), so an edit is not taken to
+    /// resize a volume that is already there.
+    pub fn volume_notice(&self) -> Option<&'static str> {
+        (self.editing.is_some() && self.runtime == DraftRuntime::Kubernetes)
+            .then_some(VOLUME_NOTICE)
+    }
+
     /// The fields the form refuses empty for the runtime chosen now, in display order, with
     /// whether each is empty (feature 937, FR-002). Mirrors [`runtime_of`] and the registry's
     /// validation: the SSH host only over SSH, the container name and image reference for a
@@ -140,6 +178,16 @@ impl Draft {
                 FieldId::DaemonSshHost,
                 Requirement::text(true, &self.ssh_host),
             )),
+            DraftRuntime::Kubernetes => {
+                fields.push((
+                    FieldId::DaemonKubeContext,
+                    Requirement::text(true, &self.kube.context),
+                ));
+                fields.push((
+                    FieldId::DaemonKubeNamespace,
+                    Requirement::text(true, &self.kube.namespace),
+                ));
+            }
             DraftRuntime::Container => {
                 fields.push((
                     FieldId::DaemonContainerName,
@@ -229,11 +277,19 @@ pub struct RemovalPrompt {
     pub running_sessions: usize,
     /// The whole sentence, stating both counts.
     pub text: String,
+    /// What the confirm button says: the action it carries out (`Stop`, `Remove`, ...).
+    pub confirm_label: &'static str,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Pending {
     Remove(DaemonId),
+    /// Stop a Kubernetes daemon's pod.
+    StopKube(DaemonId),
+    /// Delete a Kubernetes daemon's cluster objects, then forget it.
+    RemoveKube(DaemonId),
+    /// Forget a Kubernetes daemon on this computer only.
+    ForgetLocally(DaemonId),
     Edit {
         id: DaemonId,
         name: String,
@@ -251,7 +307,18 @@ pub struct DaemonDetails {
     pub log: Vec<String>,
     /// Why the container runtime is unusable, when it is.
     pub runtime_missing: Option<String>,
+    /// A Kubernetes daemon was edited while running: the note says the change waits for the next
+    /// start (FR-005).
+    pub applies_on_next_start: bool,
+    /// The pod's log tail as last fetched, or why it could not be (FR-018).
+    pub pod_log: Option<Result<String, String>>,
 }
+
+/// What the details say of an edit saved while the pod runs (FR-005).
+pub const APPLIES_ON_NEXT_START: &str = "Applies on next start";
+
+/// How many lines of the pod's log Logs fetches.
+pub const LOG_TAIL_LINES: u32 = 200;
 
 /// The list as the view draws it.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -330,6 +397,13 @@ pub struct State {
     /// [`FieldId::DaemonRepository`], so each remote daemon's step is its own field.
     pub repository_marks: RequiredMarks<FieldId>,
     ended: Vec<SessionId>,
+    /// Kubernetes daemons edited while running, until they are started again.
+    applies_on_next_start: BTreeSet<DaemonId>,
+    pod_logs: BTreeMap<DaemonId, Result<String, String>>,
+    /// The kubeconfig contexts the Kubernetes form offers (feature 686, FR-002).
+    pub contexts: ContextList,
+    /// The AI CLIs a new Kubernetes daemon installs: the providers enabled in Settings (FR-018).
+    pub default_providers: Vec<AiCli>,
 }
 
 impl State {
@@ -411,6 +485,7 @@ pub fn views(state: &State, model: &Model<'_>) -> ViewModel {
                 DaemonRuntime::Container(c) => format!("127.0.0.1:{}", c.port),
                 DaemonRuntime::Host => "local".to_string(),
                 DaemonRuntime::Ssh(s) => s.target.describe(),
+                DaemonRuntime::Kubernetes(k) => k.endpoint(entry.name.as_str()),
                 DaemonRuntime::Unsupported { kind, .. } => format!("unsupported ({kind})"),
                 _ => String::new(),
             },
@@ -469,6 +544,8 @@ pub fn details(state: &State, id: DaemonId) -> DaemonDetails {
             .unwrap_or_default(),
         log: diagnostics.map(DaemonDiagnostics::log).unwrap_or_default(),
         runtime_missing: state.runtime_missing.get(&id).cloned(),
+        applies_on_next_start: state.applies_on_next_start.contains(&id),
+        pod_log: state.pod_logs.get(&id).cloned(),
     }
 }
 
@@ -533,6 +610,7 @@ pub fn start(state: &mut State, model: &mut Model<'_>, id: DaemonId) -> Option<S
         return None;
     }
     state.runtime_missing.remove(&id);
+    state.applies_on_next_start.remove(&id);
     daemon_event(state, model.links, id, DaemonEvent::Start)
 }
 
@@ -575,6 +653,8 @@ pub fn begin_add(state: &mut State) {
         pids: texts.pids,
         storage_mib: texts.storage_mib,
         auto_start: true,
+        kube: KubeDraft::new(&state.default_providers),
+        kube_edited: false,
         ssh_host: String::new(),
         ssh_user: String::new(),
         ssh_port: String::new(),
@@ -589,7 +669,10 @@ pub fn begin_edit<'s>(state: &'s mut State, model: &Model<'_>, id: DaemonId) -> 
     // A runtime this build does not know is kept opaque: editing it as a host would replace it.
     if !matches!(
         entry.runtime,
-        DaemonRuntime::Container(_) | DaemonRuntime::Host | DaemonRuntime::Ssh(_)
+        DaemonRuntime::Container(_)
+            | DaemonRuntime::Host
+            | DaemonRuntime::Ssh(_)
+            | DaemonRuntime::Kubernetes(_)
     ) {
         return None;
     }
@@ -619,6 +702,12 @@ pub fn begin_edit<'s>(state: &'s mut State, model: &Model<'_>, id: DaemonId) -> 
             String::new(),
             SandboxProfile::default(),
         ),
+        DaemonRuntime::Kubernetes(_) => (
+            DraftRuntime::Kubernetes,
+            String::new(),
+            String::new(),
+            SandboxProfile::default(),
+        ),
         _ => (
             DraftRuntime::Host,
             String::new(),
@@ -627,9 +716,15 @@ pub fn begin_edit<'s>(state: &'s mut State, model: &Model<'_>, id: DaemonId) -> 
         ),
     };
     let texts = ProfileTexts::of(&profile);
+    let kube = match &entry.runtime {
+        DaemonRuntime::Kubernetes(k) => KubeDraft::of(k),
+        _ => KubeDraft::new(&state.default_providers),
+    };
     state.flipped_sections.clear();
     state.draft = Some(Draft {
         editing: Some(id),
+        kube,
+        kube_edited: runtime == DraftRuntime::Kubernetes,
         name: entry.name.as_str().to_string(),
         runtime,
         container_name,
@@ -701,7 +796,7 @@ fn form_error(registry: &DaemonRegistry, draft: &Draft, err: RegistryError) -> F
 }
 
 /// The refused field and the sentence beside it.
-fn invalid_field(field: &'static str) -> FormError {
+pub(crate) fn invalid_field(field: &'static str) -> FormError {
     let message = match field {
         "port" => "Enter a port between 1 and 65535.".to_string(),
         "image" => "The image reference is not valid.".to_string(),
@@ -709,6 +804,19 @@ fn invalid_field(field: &'static str) -> FormError {
         "host" => "Enter a host name, or a Host alias from your SSH configuration.".to_string(),
         "user" => "Enter a user name without an @.".to_string(),
         "key_file" => "That key file does not exist.".to_string(),
+        "context" => "Choose a kube context.".to_string(),
+        "namespace" => {
+            "Enter a namespace: lowercase letters, digits and dashes, up to 63.".to_string()
+        }
+        "node_selector" => "Enter node selector labels as key=value.".to_string(),
+        "tolerations" => "A toleration is key[=value]:Effect or key:Exists:Effect.".to_string(),
+        "volume_size" => "The volume must be at least 1 GiB.".to_string(),
+        "storage_class" => "Enter a storage class name.".to_string(),
+        "allowed" => "Allow at most one SSH key and one registry file.".to_string(),
+        "ssh_key_file" => "Enter the SSH key file to allow.".to_string(),
+        "pull_file" => "Enter the registry credentials file to allow.".to_string(),
+        "cpu_request" => "The CPU request must not exceed the CPU limit.".to_string(),
+        "memory_request" => "The memory request must not exceed the memory limit.".to_string(),
         other => format!("{other} is not valid."),
     };
     FormError { field, message }
@@ -722,6 +830,7 @@ fn runtime_of(
 ) -> Result<DaemonRuntime, FormError> {
     match draft.runtime {
         DraftRuntime::Host => Ok(DaemonRuntime::Host),
+        DraftRuntime::Kubernetes => draft.kube.settings().map(DaemonRuntime::Kubernetes),
         DraftRuntime::Ssh => {
             fn blank(v: &str) -> Option<&str> {
                 Some(v.trim()).filter(|v| !v.is_empty())
@@ -838,6 +947,7 @@ fn prompt_for(model: &Model<'_>, id: DaemonId, action: &str, effect: &str) -> Re
         worktrees_affected,
         running_sessions,
         text,
+        confirm_label: "Continue",
     }
 }
 
@@ -886,7 +996,11 @@ pub fn save(state: &mut State, model: &mut Model<'_>) -> Result<Vec<Outcome>, Fo
         }
         Some(id) => {
             let runtime_changed = model.registry.get(id).map(|e| &e.runtime) != Some(&runtime);
-            if runtime_changed && model.links.should_dial(id) {
+            let kube = matches!(runtime, DaemonRuntime::Kubernetes(_));
+            if kube && runtime_changed && model.links.should_dial(id) {
+                // The pod is not changed silently: the new settings wait for the next start.
+                state.applies_on_next_start.insert(id);
+            } else if runtime_changed && model.links.should_dial(id) {
                 let prompt = prompt_for(
                     model,
                     id,
@@ -942,6 +1056,13 @@ pub fn confirm(state: &mut State, model: &mut Model<'_>) -> Vec<Outcome> {
     };
     let mut out = Vec::new();
     match pending {
+        Pending::StopKube(id) => return stop_kube(state, model, id),
+        Pending::RemoveKube(id) => return remove_kube(model, id),
+        Pending::ForgetLocally(id) => {
+            out = end_sessions(model, id);
+            out.extend(forget(state, model, id));
+            return out;
+        }
         Pending::Remove(id) => {
             let sessions = model.sessions.get(&id).cloned().unwrap_or_default();
             model.links.apply(id, DaemonEvent::Stop);
@@ -991,6 +1112,194 @@ pub fn confirm(state: &mut State, model: &mut Model<'_>) -> Vec<Outcome> {
     }
     out.push(Outcome::DaemonRegistryChanged(model.registry.clone()));
     out
+}
+
+/// A Kubernetes daemon's name and settings.
+fn kube_of(model: &Model<'_>, id: DaemonId) -> Option<(String, KubeSettings)> {
+    let entry = model.registry.get(id)?;
+    match &entry.runtime {
+        DaemonRuntime::Kubernetes(k) => Some((entry.name.as_str().to_string(), k.clone())),
+        _ => None,
+    }
+}
+
+/// The names of a Kubernetes daemon's cluster objects (as `core/kube/start.rs` builds them).
+fn kube_names(name: &str, settings: &KubeSettings) -> ResourceNames {
+    ResourceNames::new(&settings.context.0, &settings.namespace.0, name)
+}
+
+/// A confirmation with `text`, counted as 491's prompts are.
+fn kube_prompt(
+    model: &Model<'_>,
+    id: DaemonId,
+    name: String,
+    text: String,
+    confirm_label: &'static str,
+) -> RemovalPrompt {
+    RemovalPrompt {
+        daemon: id,
+        name,
+        worktrees_affected: bound_to(model, id).len(),
+        running_sessions: model.sessions.get(&id).map_or(0, Vec::len),
+        text,
+        confirm_label,
+    }
+}
+
+/// Stop `id`'s sessions and its link, returning the outcome that ends the sessions.
+fn end_sessions(model: &mut Model<'_>, id: DaemonId) -> Vec<Outcome> {
+    let sessions = model.sessions.get(&id).cloned().unwrap_or_default();
+    model.links.apply(id, DaemonEvent::Stop);
+    if sessions.is_empty() {
+        Vec::new()
+    } else {
+        vec![Outcome::DaemonSessionsEnded {
+            daemon: id,
+            sessions,
+        }]
+    }
+}
+
+/// Stop of a Kubernetes daemon (FR-014): confirmed first when sessions run, else at once.
+fn request_kube_stop(state: &mut State, model: &mut Model<'_>, id: DaemonId) -> Vec<Outcome> {
+    let sessions = model.sessions.get(&id).map_or(0, Vec::len);
+    if sessions == 0 {
+        return stop_kube(state, model, id);
+    }
+    let Some((name, _)) = kube_of(model, id) else {
+        return Vec::new();
+    };
+    let text = format!(
+        "Stop {name}? {} will end. Worktrees on its volume are kept.",
+        plural(sessions, "running session", "running sessions"),
+    );
+    let prompt = kube_prompt(model, id, name, text, "Stop");
+    state.pending = Some((Pending::StopKube(id), prompt));
+    Vec::new()
+}
+
+fn stop_kube(_state: &mut State, model: &mut Model<'_>, id: DaemonId) -> Vec<Outcome> {
+    let Some((name, settings)) = kube_of(model, id) else {
+        return Vec::new();
+    };
+    let mut out = end_sessions(model, id);
+    out.push(Outcome::KubeStopRequested {
+        daemon: id,
+        settings,
+        name,
+    });
+    out
+}
+
+/// Remove of a Kubernetes daemon (FR-015): the confirmation names what is deleted; nothing is
+/// deleted before it.
+fn request_kube_removal(state: &mut State, model: &Model<'_>, id: DaemonId) {
+    let Some((name, settings)) = kube_of(model, id) else {
+        return;
+    };
+    let names = kube_names(&name, &settings);
+    let left = leftovers(&settings.allowed, &names);
+    let (wt, sessions) = (
+        bound_to(model, id).len(),
+        model.sessions.get(&id).map_or(0, Vec::len),
+    );
+    let text = format!(
+        "Remove {name}? This deletes from {}/{}: pod {}, volume {} with its worktrees, secrets {}. \
+         This computer's SSH key for {name} is deleted too. {} will show \"no daemon\" until bound \
+         again, and {} will stop.",
+        settings.context.0,
+        settings.namespace.0,
+        left.pod,
+        left.pvc,
+        left.secrets.join(", "),
+        plural(wt, "worktree", "worktrees"),
+        plural(sessions, "running session", "running sessions"),
+    );
+    let prompt = kube_prompt(model, id, name, text, "Remove");
+    state.pending = Some((Pending::RemoveKube(id), prompt));
+}
+
+/// The confirmed removal: the sessions end and the shell deletes the cluster objects; the entry
+/// stays until it reports.
+fn remove_kube(model: &mut Model<'_>, id: DaemonId) -> Vec<Outcome> {
+    let Some((name, settings)) = kube_of(model, id) else {
+        return Vec::new();
+    };
+    let mut out = end_sessions(model, id);
+    out.push(Outcome::KubeRemoveRequested {
+        daemon: id,
+        settings,
+        name,
+    });
+    out
+}
+
+/// The prompt to forget `id` on this computer only, after `unreachable` (the cluster error) or on
+/// request.
+fn request_forget_locally(
+    state: &mut State,
+    model: &Model<'_>,
+    id: DaemonId,
+    unreachable: Option<&str>,
+) {
+    let Some((name, settings)) = kube_of(model, id) else {
+        return;
+    };
+    let names = kube_names(&name, &settings);
+    let left = leftovers(&settings.allowed, &names);
+    let why = unreachable
+        .map(|e| format!("The cluster could not be reached ({e}). "))
+        .unwrap_or_default();
+    let text = format!(
+        "{why}Forget {name} on this computer only? These stay in {}/{}: {}, {}, {}; this \
+         computer's key stays authorized in {} until they are deleted.",
+        settings.context.0,
+        settings.namespace.0,
+        left.pod,
+        left.pvc,
+        left.secrets.join(", "),
+        names.access_secret(),
+    );
+    let prompt = kube_prompt(model, id, name, text, "Forget locally");
+    state.pending = Some((Pending::ForgetLocally(id), prompt));
+}
+
+/// The shell's answer to [`Outcome::KubeRemoveRequested`].
+fn kube_removed(
+    state: &mut State,
+    model: &mut Model<'_>,
+    id: DaemonId,
+    result: Result<(), String>,
+) -> Vec<Outcome> {
+    match result {
+        Ok(()) if model.registry.get(id).is_some() => forget(state, model, id),
+        Ok(()) => Vec::new(),
+        Err(why) => {
+            request_forget_locally(state, model, id, Some(&why));
+            Vec::new()
+        }
+    }
+}
+
+/// Forget a Kubernetes daemon here: its entry, its state, and this client's key files. Bindings
+/// are left as for 491; the cluster is not touched.
+fn forget(state: &mut State, model: &mut Model<'_>, id: DaemonId) -> Vec<Outcome> {
+    model.links.apply(id, DaemonEvent::Stop);
+    model.links.remove(id);
+    model.registry.remove(id);
+    if state.draft.as_ref().and_then(|d| d.editing) == Some(id) {
+        state.draft = None;
+    }
+    state.diagnostics.remove(&id);
+    state.versions.remove(&id);
+    state.runtime_missing.remove(&id);
+    state.applies_on_next_start.remove(&id);
+    state.pod_logs.remove(&id);
+    state.details_shown.remove(&id);
+    vec![
+        Outcome::DaemonRegistryChanged(model.registry.clone()),
+        Outcome::KubeKeysDelete { daemon: id },
+    ]
 }
 
 /// Where an op for `location` goes. A location with no daemon is refused: no session or terminal
@@ -1078,6 +1387,42 @@ pub enum Msg {
     RepositoryAdded(DaemonId),
     /// A start step began, or the copy advanced, for this daemon (feature 806, FR-018).
     Provisioning(DaemonId, ProvisionEvent),
+    /// The kubeconfig's contexts were read (feature 686): the list, or why there is none.
+    ContextsListed(Result<Vec<ContextEntry>, String>),
+    /// A kube context was chosen.
+    ContextChosen(String),
+    /// The Kubernetes namespace field changed.
+    NamespaceEdited(String),
+    /// The Kubernetes image field changed.
+    KubeImageEdited(String),
+    /// An AI CLI to install was ticked or unticked.
+    ProviderToggled(AiCli, bool),
+    /// The Kubernetes CPU request field changed.
+    CpuRequestEdited(String),
+    /// The Kubernetes CPU limit field changed.
+    KubeCpuLimitEdited(String),
+    /// The Kubernetes memory request field changed.
+    MemoryRequestEdited(String),
+    /// The Kubernetes memory limit field changed.
+    KubeMemoryLimitEdited(String),
+    /// An allowed credential was ticked or unticked.
+    AllowedToggled(AllowedKind, bool),
+    /// The allowed SSH key file field changed.
+    KubeSshKeyEdited(String),
+    /// The allowed registry auth file field changed.
+    PullFileEdited(String),
+    /// The Kubernetes node selector text changed (one `key=value` row per line).
+    NodeSelectorEdited(String),
+    /// The Kubernetes tolerations text changed (one row per line).
+    TolerationsEdited(String),
+    /// The node selector editor was acted on (typing, cursor, selection).
+    NodeSelectorAction(crate::app::EditorAction),
+    /// The tolerations editor was acted on.
+    TolerationsAction(crate::app::EditorAction),
+    /// The Kubernetes volume size text changed (`20Gi`).
+    VolumeSizeEdited(String),
+    /// The Kubernetes storage class field changed.
+    StorageClassEdited(String),
     /// The connect-at-launch box changed.
     AutoStartToggled(bool),
     /// Start this daemon, and only it.
@@ -1090,8 +1435,17 @@ pub enum Msg {
     GaveUp(DaemonId),
     /// Ask to remove this daemon: opens the counted confirmation.
     RemovalRequested(DaemonId),
-    /// Confirm the removal (or the counted edit).
+    /// Confirm the removal (or the counted edit, a Kubernetes stop, or forgetting locally).
     RemovalConfirmed,
+    /// The shell finished deleting a Kubernetes daemon's cluster objects (`Ok`), or could not
+    /// (`Err` with why); the daemon is forgotten only on `Ok`, else the forget-locally prompt opens.
+    KubeRemoved(DaemonId, Result<(), String>),
+    /// Ask to forget this Kubernetes daemon on this computer only: opens its confirmation.
+    ForgetLocallyRequested(DaemonId),
+    /// Show the last lines of this Kubernetes daemon's pod log.
+    LogsRequested(DaemonId),
+    /// The pod log the shell fetched, or why it could not.
+    LogsFetched(DaemonId, Result<String, String>),
     /// Decline it: nothing changes.
     RemovalCancelled,
     /// Show or hide this daemon's errors and log tail.
@@ -1170,7 +1524,10 @@ pub fn update(state: &mut State, model: &mut Model<'_>, msg: Msg) -> Vec<Outcome
         }
         Msg::EditOpened(id) => {
             state.form_error = None;
-            begin_edit(state, model, id);
+            let kube = begin_edit(state, model, id).is_some_and(|d| d.kube_edited);
+            if kube {
+                return vec![Outcome::KubeContextsRequested];
+            }
         }
         Msg::Saved => match save(state, model) {
             Ok(out) => {
@@ -1189,7 +1546,40 @@ pub fn update(state: &mut State, model: &mut Model<'_>, msg: Msg) -> Vec<Outcome
             }
         }
         Msg::NameEdited(v) => edit(state, &|d| d.name = v.clone()),
-        Msg::RuntimeChosen(v) => edit(state, &|d| d.runtime = v),
+        Msg::RuntimeChosen(v) => {
+            edit(state, &|d| d.runtime = v);
+            if v == DraftRuntime::Kubernetes {
+                return vec![Outcome::KubeContextsRequested];
+            }
+        }
+        Msg::ContextsListed(Ok(list)) => state.contexts = ContextList::Found(list),
+        Msg::ContextsListed(Err(why)) => state.contexts = ContextList::Failed(why),
+        Msg::ContextChosen(name) => {
+            let contexts = state.contexts.clone();
+            edit(state, &|d| d.kube.choose_context(&name, &contexts));
+        }
+        Msg::NamespaceEdited(v) => edit(state, &|d| d.kube.namespace = v.clone()),
+        Msg::KubeImageEdited(v) => edit(state, &|d| d.kube.image = v.clone()),
+        Msg::ProviderToggled(cli, on) => edit(state, &|d| {
+            if on {
+                d.kube.providers.insert(cli);
+            } else {
+                d.kube.providers.remove(&cli);
+            }
+        }),
+        Msg::CpuRequestEdited(v) => edit(state, &|d| d.kube.cpu_request = v.clone()),
+        Msg::KubeCpuLimitEdited(v) => edit(state, &|d| d.kube.cpu_limit = v.clone()),
+        Msg::MemoryRequestEdited(v) => edit(state, &|d| d.kube.memory_request = v.clone()),
+        Msg::KubeMemoryLimitEdited(v) => edit(state, &|d| d.kube.memory_limit = v.clone()),
+        Msg::AllowedToggled(kind, on) => edit(state, &|d| {
+            if on {
+                d.kube.allowed.insert(kind);
+            } else {
+                d.kube.allowed.remove(&kind);
+            }
+        }),
+        Msg::KubeSshKeyEdited(v) => edit(state, &|d| d.kube.ssh_key_file = v.clone()),
+        Msg::PullFileEdited(v) => edit(state, &|d| d.kube.pull_file = v.clone()),
         Msg::ContainerNameEdited(v) => edit(state, &|d| d.container_name = v.clone()),
         Msg::PortEdited(v) => edit(state, &|d| d.port = v.clone()),
         Msg::ImageEdited(v) => edit(state, &|d| d.image_reference = v.clone()),
@@ -1229,11 +1619,24 @@ pub fn update(state: &mut State, model: &mut Model<'_>, msg: Msg) -> Vec<Outcome
                 state.provisioning.entry(id).or_default().apply(event);
             }
         }
+        Msg::NodeSelectorEdited(v) => edit(state, &|d| d.kube.set_node_selector(v.clone())),
+        Msg::TolerationsEdited(v) => edit(state, &|d| d.kube.set_tolerations(v.clone())),
+        Msg::NodeSelectorAction(action) => edit(state, &|d| {
+            d.kube.node_selector = d.kube.node_selector_editor.perform(&action);
+        }),
+        Msg::TolerationsAction(action) => edit(state, &|d| {
+            d.kube.tolerations = d.kube.tolerations_editor.perform(&action);
+        }),
+        Msg::VolumeSizeEdited(v) => edit(state, &|d| d.kube.volume_size = v.clone()),
+        Msg::StorageClassEdited(v) => edit(state, &|d| d.kube.storage_class = v.clone()),
         Msg::AutoStartToggled(v) => edit(state, &|d| d.auto_start = v),
         Msg::Started(id) => {
             start(state, model, id);
         }
         Msg::Stopped(id) => {
+            if kube_of(model, id).is_some() {
+                return request_kube_stop(state, model, id);
+            }
             stop(state, model, id);
         }
         Msg::Reconnected(id) => {
@@ -1243,7 +1646,25 @@ pub fn update(state: &mut State, model: &mut Model<'_>, msg: Msg) -> Vec<Outcome
             give_up(state, model, id);
         }
         Msg::RemovalRequested(id) => {
-            request_removal(state, model, id);
+            if kube_of(model, id).is_some() {
+                request_kube_removal(state, model, id);
+            } else {
+                request_removal(state, model, id);
+            }
+        }
+        Msg::ForgetLocallyRequested(id) => request_forget_locally(state, model, id, None),
+        Msg::KubeRemoved(id, result) => return kube_removed(state, model, id, result),
+        Msg::LogsRequested(id) => {
+            if let Some((_, settings)) = kube_of(model, id) {
+                return vec![Outcome::KubeLogsRequested {
+                    daemon: id,
+                    settings,
+                    tail: LOG_TAIL_LINES,
+                }];
+            }
+        }
+        Msg::LogsFetched(id, result) => {
+            state.pod_logs.insert(id, result);
         }
         Msg::RemovalConfirmed => {
             let out = confirm(state, model);

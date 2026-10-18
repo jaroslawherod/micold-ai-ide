@@ -196,6 +196,29 @@ pub enum FieldId {
     DaemonCpuLimit,
     /// Settings → Daemons: the form's memory limit (feature 804).
     DaemonMemoryLimit,
+    /// Settings → Daemons: the Kubernetes form's CPU request (feature 686).
+    DaemonCpuRequest,
+    /// Settings → Daemons: the Kubernetes form's memory request (feature 686).
+    DaemonMemoryRequest,
+    /// Settings → Daemons: one AI CLI's install checkbox in the Kubernetes form (feature 686).
+    DaemonKubeProvider(micold_core::session::AiCli),
+    /// Settings → Daemons: one allowed-credential checkbox in the Kubernetes form, by its place in `AllowedKind::all()`
+    /// (feature 686; a number, so this file names no other feature).
+    DaemonKubeAllowed(u8),
+    /// Settings → Daemons: the Kubernetes form's kube context (feature 686).
+    DaemonKubeContext,
+    /// Settings → Daemons: the Kubernetes form's namespace (feature 686).
+    DaemonKubeNamespace,
+    /// Settings → Daemons: the Kubernetes form's image (feature 686).
+    DaemonKubeImage,
+    /// Settings → Daemons: the Kubernetes form's volume size (feature 686).
+    DaemonKubeVolumeSize,
+    /// Settings → Daemons: the Kubernetes form's storage class (feature 686).
+    DaemonKubeStorageClass,
+    /// Settings → Daemons: the Kubernetes form's allowed SSH key file (feature 686).
+    DaemonKubeSshKeyFile,
+    /// Settings → Daemons: the Kubernetes form's allowed registry auth file (feature 686).
+    DaemonKubePullFile,
     /// Settings → Daemons: the form's process-count limit (feature 804).
     DaemonPidLimit,
     /// Settings → Daemons: the form's writable-storage limit (feature 804).

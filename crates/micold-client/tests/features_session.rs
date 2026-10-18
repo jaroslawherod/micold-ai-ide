@@ -1242,6 +1242,7 @@ fn worktree_with_main_and_helper() -> (State, SessionId, SessionId) {
     (st, main_id, helper_id)
 }
 
+// Covers US6 s1-s2 (FR-016).
 #[test]
 fn another_session_is_confirmed_on_an_occupied_location_and_cancel_changes_nothing() {
     let (mut st, _, _) = worktree_with_main_and_helper();
@@ -1262,6 +1263,7 @@ fn another_session_is_confirmed_on_an_occupied_location_and_cancel_changes_nothi
     assert_eq!(st.workspace.sessions, before);
 }
 
+// Covers US6 s1 (FR-016).
 #[test]
 fn another_session_is_not_offered_for_a_free_location() {
     let (mut st, _, _) = two_projects(0, 0);
@@ -1271,6 +1273,7 @@ fn another_session_is_not_offered_for_a_free_location() {
     assert_eq!(st.session.additional_target, None);
 }
 
+// Covers US6 s4 (FR-016).
 #[test]
 fn the_confirmation_survives_a_refusal_arriving_first() {
     // US6 s4: the confirmed request still creates its session.
@@ -1285,6 +1288,7 @@ fn the_confirmation_survives_a_refusal_arriving_first() {
     assert_eq!(st.session.additional_target, None);
 }
 
+// Covers US7 s2 (FR-021).
 #[test]
 fn make_main_is_offered_to_a_helper_and_not_to_the_main() {
     let (st, main, helper) = worktree_with_main_and_helper();
@@ -1292,12 +1296,14 @@ fn make_main_is_offered_to_a_helper_and_not_to_the_main() {
     assert!(!st.is_helper(main));
 }
 
+// Covers US5 s1, US6 s1 (FR-017).
 #[test]
 fn a_lone_session_is_not_a_helper() {
     let (st, ids, _) = two_projects(1, 0);
     assert!(!st.is_helper(ids[0]));
 }
 
+// Covers US7 s3 (FR-021).
 #[test]
 fn deleting_a_main_names_the_session_that_takes_over() {
     let (st, main, helper) = worktree_with_main_and_helper();
@@ -1305,12 +1311,14 @@ fn deleting_a_main_names_the_session_that_takes_over() {
     assert!(st.successor_on_removal(helper).is_none(), "a helper's");
 }
 
+// Covers US7 s3-s4 (FR-021).
 #[test]
 fn deleting_a_lone_main_names_nobody() {
     let (st, ids, _) = two_projects(1, 0);
     assert!(st.successor_on_removal(ids[0]).is_none());
 }
 
+// Covers US5 s2, US7 s2 (FR-018).
 #[test]
 fn the_row_press_opens_the_new_main_after_the_catalog_update() {
     let (mut st, main, helper) = worktree_with_main_and_helper();
@@ -1331,6 +1339,7 @@ fn the_row_press_opens_the_new_main_after_the_catalog_update() {
 
 // --- Feature 776 (M7): a start beside a live session needs confirmation -------------------------
 
+// Covers US4 s3, US6 (FR-015).
 #[test]
 fn a_blocked_start_shows_the_reason_and_offers_the_confirmation_naming_the_live_session() {
     use micold_core::session::SessionLifecycle;

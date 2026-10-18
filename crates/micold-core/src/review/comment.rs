@@ -721,6 +721,24 @@ impl EntryReview {
         Ok(())
     }
 
+    /// Apply `moves` (W15): a move applies only while its comment's range equals `from` and `to`
+    /// covers as many lines as the quote; others are skipped. Quote, text and state never change
+    /// (FR-023), and a comment in the open send moves too. How many moves applied.
+    pub fn reanchor(&mut self, moves: &[Move]) -> usize {
+        let mut applied = 0;
+        for m in moves {
+            let Some(comment) = self.comments.iter_mut().find(|c| c.id == m.id()) else {
+                continue;
+            };
+            let same_size = usize::try_from(m.to().len()).is_ok_and(|n| n == comment.quote.len());
+            if comment.range == m.from() && same_size && m.from() != m.to() {
+                comment.range = m.to();
+                applied += 1;
+            }
+        }
+        applied
+    }
+
     /// Where pending comment `id` is: `NotFound` when this entry has no such comment, `InSend` when
     /// an open send holds it, `Refused` when it is sent.
     fn pending_index(&self, id: CommentId) -> Result<usize, ReviewError> {
@@ -1399,6 +1417,67 @@ mod tests {
             None,
             "1 line cannot become 2"
         );
+    }
+
+    #[test]
+    fn reanchor_applies_a_move_only_while_the_range_and_size_match() {
+        let range = |a, b| LineRange::new(a, b).expect("valid");
+        let mut review = three_pending_one_sent();
+        let before = review.clone();
+        let moves = [
+            Move::new(id(1), range(1, 1), range(8, 8)).expect("move"),
+            Move::new(id(2), range(5, 5), range(9, 9)).expect("stale from"),
+            Move::new(id(3), range(3, 3), range(3, 3)).expect("same place"),
+            Move::new(id(404), range(1, 1), range(2, 2)).expect("unknown comment"),
+        ];
+        assert_eq!(review.reanchor(&moves), 1, "only the first holds");
+        assert_eq!(review.reanchor(&moves), 0, "the same moves apply once");
+        let moved = review
+            .comments()
+            .iter()
+            .find(|c| c.id == id(1))
+            .expect("c1");
+        assert_eq!(moved.range, range(8, 8));
+        let mut restored = review.comments().to_vec();
+        restored[0].range = range(1, 1);
+        assert_eq!(
+            EntryReview::from_comments(restored).comments(),
+            before.comments(),
+            "quote, text, state and every other range are unchanged"
+        );
+    }
+
+    #[test]
+    fn reanchor_refuses_a_move_to_a_range_of_another_size_than_the_quote() {
+        let range = |a, b| LineRange::new(a, b).expect("valid");
+        let mut review = EntryReview::default();
+        review
+            .add(draft(4, 4, &["p"], "one line"), id(1), NOW)
+            .expect("valid");
+        // A stored range two lines long over a one-line quote, so `from` matches the range and
+        // only the size guard can refuse.
+        let mut stored = review.comments().to_vec();
+        stored[0].range = range(4, 5);
+        let mut review = EntryReview::from_comments(stored);
+        let wrong = Move::new(id(1), range(4, 5), range(9, 10)).expect("same-size pair");
+        assert_eq!(
+            review.reanchor(&[wrong]),
+            0,
+            "to is not as long as the quote"
+        );
+        assert_eq!(review.comments()[0].range, range(4, 5));
+        let ok = Move::new(id(1), range(4, 4), range(9, 9)).expect("move");
+        assert_eq!(review.reanchor(&[ok]), 0, "from is not the stored range");
+    }
+
+    #[test]
+    fn reanchor_moves_a_comment_in_the_open_send() {
+        let range = |a, b| LineRange::new(a, b).expect("valid");
+        let mut review = three_pending_one_sent();
+        review.begin_send(EntryKind::Worktree, &[]).expect("opens");
+        let m = Move::new(id(2), range(2, 2), range(6, 6)).expect("move");
+        assert_eq!(review.reanchor(&[m]), 1);
+        assert!(review.sending(), "the send stays open");
     }
 
     #[test]

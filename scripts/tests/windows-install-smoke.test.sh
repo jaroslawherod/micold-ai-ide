@@ -76,6 +76,19 @@ run_script "$d" "$d/dist/micold-ai-ide-*-x64-setup.exe"
 expect_refusal "names a setup executable that does not exist" 2 "no setup executable at '$d/dist/micold-ai-ide-*-x64-setup.exe'"
 rm -rf "$d"
 
+# --- one PowerShell ----------------------------------------------------------------------------
+
+# On the windows-11-arm runner every `powershell.exe` start costs ~40 s, and the smoke asked ~25
+# questions, one process each: 1064 s against 28 s on x64 (#953). Every question goes through one
+# long-lived session, so the script launches `powershell.exe` from exactly one place.
+cases=$((cases + 1))
+launches="$(grep -c '^[^#]*powershell\.exe' "$SCRIPT")"
+if [ "$launches" -eq 1 ]; then
+  pass "starts powershell.exe once, not once per question"
+else
+  fail "starts powershell.exe once, not once per question" "found $launches lines that launch powershell.exe, want 1"
+fi
+
 # -----------------------------------------------------------------------------------------------
 
 printf '\n%d case(s), %d failure(s)\n' "$cases" "$failures"

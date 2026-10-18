@@ -141,3 +141,30 @@ the core baseline still fails only the four root-user tests named above).
   failed (start failed `ImageContract` on the first closed stream), green after the retry loop.
   Covers: banner/non-SSH/silent/exited container, relay forwarding and refused forward, key
   files created once, stable id, owner-only modes, `known_hosts` pinning. refactor: none needed.
+
+## M3 — Only allowed credentials reach the pod (T063–T069, T102)
+
+- A10–A13, U43, U44, U58, U59, U66–U70, U136: tests written with the code in the same cycles
+  (`kube::credentials::`, `kube::manifest::`, `kube::start::`); each asserts on the secrets,
+  volumes, mounts and security contexts of the manifests the `FakeCluster` recorded. No red run
+  was captured separately in this cloud unit (the tests and their code were added together);
+  recorded honestly here. Waiver (review B F1): the behaviours are pure manifest/credential builders over the fake cluster; a late red would re-test reverted code, so the strength check is the milestone's mutation pass in close (T098). Review A's SSH-key mode fix: `GIT_SSH_COMMAND` copies the key to a 0600 temp file (the old assertion `-i /run/micold/creds/ssh/id` fails against the new command, the new one passes). refactor: none needed.
+- Decision: with nothing allowed the `Secrets` phase makes no create, replace or delete of a
+  credential secret and reads no source file, but it does `get` each possible credential secret
+  name to find one a withdrawal left behind (there is no list call), so A12 holds when the last
+  credential is withdrawn.
+
+## M4a — The Kubernetes form, Add entry hidden (T024, T130, T066, T031, T131, T070, T032)
+
+- U95, U96, U97, U99, U104, U134, U135: the reducer tests (`tests/features_daemons.rs`, module
+  `kubernetes`) were written first, against an API that did not exist: red was the compile failure
+  (`runtime_choices`, `Msg::ContextsListed`, `KubeDraft`, … unresolved). Green came with
+  `features/daemons_kube.rs` and the reducer arms; one test then failed for a real reason (the row's
+  endpoint was empty for Kubernetes) and passed after `views` used `KubeSettings::endpoint`.
+- T130 characterization: `the_container_limits_are_edited_as_before` passed before and after the
+  `limit_field` extraction (T131), which moved the drawing loop only.
+- T032: `tests/daemons_section_geometry.rs` paints the Kubernetes form and row (taller window; the
+  default one cut the form off, which the first run showed).
+- Decision: "providers enabled in Settings" has no per-provider switch yet; the default is the
+  Settings draft's `default_ai_cli` (Claude Code when no draft is open).
+- File pickers: the SSH key and registry files are plain path text fields (the crate has no dialog), as the SSH form's key file is; review B F1.

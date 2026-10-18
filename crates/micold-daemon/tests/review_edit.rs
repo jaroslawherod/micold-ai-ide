@@ -544,30 +544,48 @@ async fn request(client: &mut Client, req: u64, msg: ClientMsg) -> (DaemonMsg, V
     (answer, seen)
 }
 
-/// Feature 946 T008 (placeholder): `Reanchor` is refused and stores nothing until its milestone
-/// (T063 retires the assertion).
+/// Feature 946 W15, FR-023: a `Reanchor` move applies while the comment still holds `from`;
+/// `Ack` always; a repeat from another window applies nothing, writes nothing and pushes nothing.
 #[tokio::test]
-async fn reanchor_is_refused_and_stores_nothing_in_this_build() {
+async fn w15_reanchor_applies_a_matching_move_once_and_never_changes_the_rest() {
     use micold_core::review::comment::Move;
     use micold_core::review::LineRange;
 
     let f = Fixture::new();
     let sent = stored(1, CommentState::Sent { at: 1_790_000_100 });
     seed(&f, vec![sent.clone()]);
-    let before = f.on_disk();
     let state = f.service();
     let mut a = connect(&state).await;
+    let mut b = connect(&state).await;
     attach(&mut a, &f.project()).await;
+    attach(&mut b, &f.project()).await;
 
-    let line = LineRange::new(2, 2).unwrap();
-    let op = ReviewEditOp::Reanchor {
-        moves: vec![Move::new(sent.id, line, LineRange::new(5, 5).unwrap()).unwrap()],
+    let range = |n| LineRange::new(n, n).unwrap();
+    let op = |from, to| ReviewEditOp::Reanchor {
+        moves: vec![Move::new(sent.id, range(from), range(to)).unwrap()],
     };
-    let (result, seen) = edit(&mut a, 1, &f.project(), "feat", op).await;
-    let (kind, _) = result.expect_err("refused in this build");
-    assert_eq!(kind, ErrorKind::Refused);
-    assert!(seen.is_empty(), "nothing is pushed");
-    assert_eq!(f.on_disk(), before, "nothing is stored");
+
+    let (result, seen) = edit(&mut a, 1, &f.project(), "feat", op(2, 5)).await;
+    result.expect("acknowledged");
+    assert_eq!(seen.len(), 1, "the change is pushed once");
+    let stored_now = f.on_disk().entries["feat"][0].clone();
+    assert_eq!(stored_now.range, range(5), "written before the answer");
+    let expected = ReviewComment {
+        range: range(5),
+        ..sent.clone()
+    };
+    assert_eq!(stored_now, expected, "quote, text and state are untouched");
+
+    let after = f.on_disk();
+    let (result, seen) = edit(&mut b, 2, &f.project(), "feat", op(9, 12)).await;
+    result.expect("a stale move is skipped, not refused");
+    assert_eq!(seen.len(), 1, "only a's change reached b");
+    assert_eq!(f.on_disk(), after, "nothing applied, nothing written");
+
+    let (result, seen) = edit(&mut b, 3, &f.project(), "feat", op(2, 5)).await;
+    result.expect("a repeat is acknowledged too");
+    assert!(seen.is_empty(), "nothing applied, nothing pushed");
+    assert_eq!(f.on_disk(), after, "nothing applied, nothing written");
 }
 
 fn mark(id: CommentId, outcome: Outcome, note: &str) -> ReviewEditOp {

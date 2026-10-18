@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-xelisc
 - **Started**: 2026-10-17
 - **Phase**: implement
-- **Next step**: M2 PR (cloud: orchestrator opens it from the scratchpad files, merges); then M3
+- **Next step**: M4b committed; full gate running/green then push; the orchestrator opens the PR from pr-title-686-M4b.txt / pr-body-686-M4b.md, waits on CI, merges; then M5 (blocked on #806)
 
 ## Pull requests
 
@@ -20,6 +20,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #978 | M1a | merged | 0b482e1d265b286a31482b1184499377bec88ab5 |
 | #983 | M1b | merged | c256c2fe760e00e8aa3252babca54ebe4ee33d5f |
 | #989 | M1c | merged | 499a59245c2e4edd8499f266b9efddc814081275 |
+| #992 | M2 | merged | 767530b33afc20e128d27d78852508d7416bffa2 |
+| #996 | M3 | merged | 8408b815f208a74217f877563e819cf6a543fcc2 |
+| #1000 | M4a | merged | 3ef301a489e845ccbfe2f0af813187b8244e7575 |
 
 ## Milestones
 
@@ -28,10 +31,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1a | T106–T116, T143, T020, T026 | full | Revision-2 core types (settings with image/AI CLIs/DaemonResources, names, failures, Cluster.replace), kubeconfig; revision-1 listener auth, Transport::Tunnel, daemon_image reverted | #978 | merged |
 | M1b | T019, T117, T118, T021, T025, T119, T120, T027, T121 | full | Pod, PVC, access secret, pod stamp/drift, start through Pull with bounds + rollback over FakeCluster | #983 | merged |
 | M1c | T122, T023, T123, T124, T125, T028, T029, T126, T127 | full | Tunnel phase (SSH identification line), LiveCluster, relay, key files | #989 | merged |
-| M2 | T079, T072, T056, T073, T081, T075, T059, T076, T128 | full | Core Stop/Remove/forget-locally; failure + pod-gone classifiers; preflight | — | implemented (T079–T128 ticked), gated, reviewed (A fixed, B clean); PR files written |
-| M3 | T063, T064, T065, T067, T068, T069, T102 | full | Allowed credentials as secrets, daemon_env, security contexts (core) | — | planned |
-| M4a | T024, T130, T066, T031, T131, T070, T032 | full | Kubernetes form via Edit (Add entry hidden), shared resources fields, credentials list | — | planned |
-| M4b | T083, T084, T080, T132, T085, T086, T082, T133, T129 | full | Placement fields, Stop/Remove/Forget locally/Logs from the row, Start → Unavailable | — | planned |
+| M2 | T079, T072, T056, T073, T081, T075, T059, T076, T128 | full | Core Stop/Remove/forget-locally; failure + pod-gone classifiers; preflight | — | merged (#992) |
+| M3 | T063, T064, T065, T067, T068, T069, T102 | full | Allowed credentials as secrets, daemon_env, security contexts (core) | — | merged (#996) |
+| M4a | T024, T130, T066, T031, T131, T070, T032 | full | Kubernetes form via Edit (Add entry hidden), shared resources fields, credentials list | — | merged (#1000) |
+| M4b | T083, T084, T080, T132, T085, T086, T082, T133, T129 | full | Placement fields, Stop/Remove/Forget locally/Logs from the row, Start → Unavailable | — | in review |
 | M5 | T134, T022, T074, T135, T030, T077, T136 | full | (#806) Copy + Connect over SSH through the relay; failures at client level | — | blocked on #806 |
 | M6 | T138, T139, T141, T142, T033, T140 | full | (#806) AI CLI install, drift prompt, Add entry, user guide 🎯 MVP | — | blocked on #806 |
 | M7 | T047–T055, T100 | full | (#806) Clone + worktrees in the pod (RepoClone) | — | blocked on #806 |
@@ -56,10 +59,18 @@ stash@{0} survivors (all used by M1a–M2, stash dropped 2026-10-18; backed up i
 | 10 | implement M1a | Same mechanism for the local sandbox container? | owner (verbatim): "should use same mechanism for local \"sandbox\" container". Orchestrator default: #686 builds the sshd-image + copy-daemon-over-SSH + install-CLIs mechanism as a shared part both runtimes can use; moving the local sandbox container runtime onto it is #806's scope (commented there) | owner + orchestrator default | owner instruction 2026-10-17T21:35Z |
 | 11 | design rev 2 | Who builds the shared sshd image + copy-daemon + install-CLIs mechanism? | #806's separate run builds it; #686 consumes it (contracts/shared-ssh-image.md, to write) and orders milestones: work independent of it first (core types done, kubeconfig, manifests + pod/PVC/secret lifecycle, port-forward tunnel, stop/remove, failure reasons, Settings form), copy-daemon + install-CLIs last, marked "blocked on #806" | owner via coordinator | coordinator message 2026-10-17 |
 
+## Decisions (M3)
+
+- Unit: with nothing allowed the `Secrets` phase makes no create/replace/delete of a credential secret and reads no source file, but `get`s each possible credential secret name to find one a withdrawal left behind (no list call exists). `StartRequest` gains `home`, `hosts` (remote hosts for the SSH key's known_hosts lines; the caller supplies them, M5+) and `read` (the file reader).
+
 ## Review rounds
 
+| M4b review A (code-review high) | 1 | e6a9bc19:3ef301a4 | CLEAN — 2 MINOR declined/follow-up |
+| M4b review B (conformance, sonnet) | 1 | 13e04614:826e419b | CLEAN — Verify green |
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
+| M3 A (code-review high) | 1 | 613bbb5d7241ebee3806b0ad999889186b7cc3ab:9c51cf8e543637af11209d1da7e8fda46cb985d2 | CHANGES: F1 MAJOR fixed (GIT_SSH_COMMAND uses a 0600 copy of the key; ssh refuses group-readable keys); F2–F4 MINOR declined/deferred (Follow-ups) |
+| M3 B (conformance) | 1 | same | CHANGES: F1 MAJOR red-run evidence: waiver recorded in cycle-log; F2 MINOR: validate() two-secret rule is a deliberate M3 addition (one secret per kind, ResourceNames) |
 | Spec | 1 | 7330b10a0e165a38d678df142737f8a7c1ea47d0:d93c9dbc687412cced0a9b7854cf44323ee3930e | CHANGES: 4 MAJOR, 3 MINOR — all fixed (F1 pod-gone → stopped + user Start; F2 FR-023 + multi-client edges, FR-016 identity; F3 kubeconfig/exec-plugin edges, FR-022; F4 per-phase bounds in FR-012; F5 Reconnect scenario; F6 provider CLIs in FR-004 marker; F7 version wording) |
 | Spec | 2 (scoped, sonnet) | aed1af6291d0f65b2e21df970370031d92b506f6:171d36233aff56cab8399d2c2c08b7ed1c109dc2 | CLEAN — 1 MINOR fixed in clarify (SC-003, story 4.5, story 6.2 say "applicable phase bound (FR-012)") |
 | Plan | 1 | c2d5b880c183edc0c6dcd702539b137bbeaf2b7e:744377ac1576676ae85cc3ae5c9897190bba1bf2 | CHANGES: 3 MAJOR, 3 MINOR — all fixed (F1 shared `DaemonResources` with separate requests/limits, FR-005 manifest tests, contract wording; F2 `CliRuntime` inherent `build_image`/`push_image`/`repo_digest`, tests over `RecordingRunner`; F3 `sha2` dropped for `sha256_hex`; F4 fields extracted in `container_fields.rs`, recorded in K1; F5 K4 guard restated; F6 FR-007 client reducer tests) |
@@ -78,8 +89,13 @@ stash@{0} survivors (all used by M1a–M2, stash dropped 2026-10-18; backed up i
 
 | M1c review A (code-review high) | 1 | 92eb8da19e833dfac69f4c82ff46e16132a896ac:9a5aa584e8579a2c9767db3d680952aefd1e27ab | CHANGES: 1 MAJOR (Tunnel did not retry a closed stream — fixed with a red test), 3 MINOR (relay reaped + survives accept errors, key dir sanitised; delete 409 declined) |
 | M1c review B (conformance, sonnet) | 1 | 92eb8da19e833dfac69f4c82ff46e16132a896ac:9a5aa584e8579a2c9767db3d680952aefd1e27ab | CHANGES: 1 MAJOR (no cycle-log entries — added, honest that tests came with the code), 1 MINOR (declined) |
+| M4a review A (code-review high) | 1 | f29f682624d1c0bd2370fef030eb8ec1d6d102af:153fa9f2b3d8ac3525be149d44e1053093c2e8c4 | CLEAN — 3 MINOR declined (Declined review findings): default provider is one value, MIN_MEMORY floor reused, `offered()` slice order |
+| M4a review B (conformance, sonnet) | 1 | same | CLEAN — Verify 22 + 10 passed; 1 MINOR: file fields are plain text paths (no picker; same as the SSH form's key file), noted in the cycle log |
 
 ## Declined review findings
+
+| M4b | A F1 MINOR | Stop moves the link to Stopped before the pod delete ends; a failed delete only logs | contract §5 needs Stopped on success; surfacing a failed Stop is a follow-up |
+| M4b | A F2 MINOR | Edit can change name/context/namespace of a Kubernetes daemon, orphaning cluster objects | recorded in Follow-ups |
 
 | M2 | A (code-review high) | not-ours objects skipped silently by Stop/Remove; namespace 404 matched by message; PodGone for Failed/Succeeded pods; 403 mapped only in preflight | contract §2/§4/§5 say ours only and list exactly these rows; ApiFailure carries no details.kind; see Follow-ups |
 - speckit-analyze D13 (start failure maps to `Unreachable`): already the 491/489 rule, stated in data-model.md state machine delta; no change.
@@ -98,16 +114,21 @@ stash@{0} survivors (all used by M1a–M2, stash dropped 2026-10-18; backed up i
 | M1b | A | F10: `KeyGen::generate` is synchronous in an async start | only the fake exists; #806 owns the live one and can wrap it in `spawn_blocking` |
 | M1c | A F4 MINOR | `deleted_from` maps only 404 to done; a uid-precondition 409 fails | a recreated object must not be reported deleted; failing is the safe reading |
 | M1c | B F2 MINOR | `kube_connector` has `expect(dead_code)` until M4b | T029 requires choosing `LiveCluster` once; the wiring is the deliverable, M4b is its first caller |
+| M4a | A (code-review high) | F1 default providers from the Settings draft only; F2 `MIN_MEMORY` floor for pod memory; F3 `offered()` slices by position | no per-provider switch exists yet (cycle log); the floor is the shared #806 resources field's; Kubernetes is last in both lists and a test pins the Add form's choices |
 
 ## Handover
 
-None.
+None. (M4a unit 2: code written; see Next step.)
 
 ## Open escalation
 
 None. Clarify round 1 questions remain with the owner as decision cards (spec uses recommended defaults).
 
 ## Follow-ups not done
+
+- M4b: make name, context and namespace read-only (or refuse the save) when editing a Kubernetes daemon, since object names and key dir derive from them; Stop failure should show a reason on the row; Logs has no hide action; the list editors have no focus tracking.
+
+- M3 review A MINORs: F2 stale secrets deleted in Secrets phase before Pod drift decision (a kept drifted pod could lose its secret); F3 a rotated credential's payload is not in PodStamp (subPath mounts never update; needs a pod restart); F4 hashed `known_hosts` entries yield an empty pin file (needs ssh-keygen -F or keyscan) and a missing known_hosts fails the start.
 
 - M2 review A (declined/deferred): a 403 or namespace 404 from a create/delete after a green preflight surfaces as `Api` (preflight covers the normal case; `KubeFailure::from_status` is available to the client adapter); `PodGone::classify` and `lifecycle::*` are wired by M4b/M8; Failed/Succeeded non-evicted pods are not in contract §4.
 

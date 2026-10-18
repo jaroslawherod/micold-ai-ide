@@ -65,6 +65,24 @@ run() {
   printf 'ok    %-46s docs_only=%-5s %s\n' "$name" "$got_docs" "$got_reason"
 }
 
+# run_pkg <name> <want_packaging> <dir> <base> <head> [env assignments...]
+# The second output (#952): does the change touch a path declared `micold-packaging`? Unlike
+# `docs_only`, every failure path must land on `true` here too -- a lost verdict runs the slow job.
+run_pkg() {
+  local name="$1" want="$2" dir="$3" base="$4" head="$5"
+  shift 5
+  cases=$((cases + 1))
+
+  local got
+  got="$(cd "$dir" && env "$@" "$CLASSIFY" "$base" "$head" 2>/dev/null | sed -n 's/^packaging=//p')"
+  if [ "$got" != "$want" ]; then
+    printf 'FAIL  %-46s want packaging=%-5s got=%s\n' "$name" "$want" "${got:-<none>}"
+    failures=$((failures + 1))
+    return
+  fi
+  printf 'ok    %-46s packaging=%s\n' "$name" "$got"
+}
+
 # --- documentation-only ------------------------------------------------------------------------
 
 d="$(new_repo)"
@@ -159,6 +177,50 @@ rm -rf "$d"
 d="$(new_repo)"
 printf 'a\n' > "$d/docs/page.md"; commit_in "$d" docs
 run "FORCE_FULL_CI=false does not force" true "-" "$d" HEAD~1 HEAD FORCE_FULL_CI=false
+rm -rf "$d"
+
+# --- packaging paths (#952) ---------------------------------------------------------------------
+
+pkg_case() { # <name> <want> <path>
+  local d
+  d="$(new_repo)"
+  mkdir -p "$d/$(dirname "$3")"; printf 'a\n' > "$d/$3"; commit_in "$d" pkg
+  run_pkg "$1" "$2" "$d" HEAD~1 HEAD
+  rm -rf "$d"
+}
+pkg_case "packaging/windows file"           true  packaging/windows/installer.iss
+pkg_case "windows-installer.sh"             true  scripts/windows-installer.sh
+pkg_case "windows-install-smoke.sh"         true  scripts/windows-install-smoke.sh
+pkg_case "workspace Cargo.toml"             true  Cargo.toml
+pkg_case "Cargo.lock"                       true  Cargo.lock
+pkg_case "release.yml"                      true  .github/workflows/release.yml
+pkg_case "installer icon"                   true  assets/icon/icon.ico
+pkg_case "LICENSE"                          true  LICENSE
+pkg_case "remote-daemon-bundle.sh"          true  scripts/remote-daemon-bundle.sh
+pkg_case "build-lock.sh"                    true  scripts/build-lock.sh
+pkg_case "rust-toolchain.toml"              true  rust-toolchain.toml
+pkg_case ".cargo/config.toml"               true  .cargo/config.toml
+pkg_case "Rust source only"                 false crates/micold-core/src/a.rs
+pkg_case "crate Cargo.toml only"            false crates/micold-core/Cargo.toml
+pkg_case "documentation only"               false docs/page.md
+pkg_case "ci.yml only"                      false .github/workflows/ci.yml
+
+d="$(new_repo)"
+mkdir -p "$d/packaging"; printf 'a\n' > "$d/packaging/x"; printf 'fn a() {}\n' > "$d/crates/micold-core/src/a.rs"
+commit_in "$d" mixed
+run_pkg "packaging among code" true "$d" HEAD~1 HEAD
+rm -rf "$d"
+
+d="$(new_repo)"
+printf 'a\n' > "$d/docs/page.md"; commit_in "$d" docs
+run_pkg "unresolvable base ref" true "$d" origin/nope HEAD
+run_pkg "all-zero base" true "$d" 0000000000000000000000000000000000000000 HEAD
+run_pkg "FORCE_FULL_CI over docs" true "$d" HEAD~1 HEAD FORCE_FULL_CI=1
+run_pkg "FORCE_FULL_CI=false over docs" false "$d" HEAD~1 HEAD FORCE_FULL_CI=false
+rm -rf "$d"
+
+d="$(new_repo)"
+run_pkg "empty diff" false "$d" HEAD HEAD
 rm -rf "$d"
 
 echo

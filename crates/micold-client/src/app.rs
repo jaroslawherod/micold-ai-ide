@@ -50,6 +50,50 @@ pub struct EditorAction(pub iced::widget::text_editor::Action);
 
 impl Eq for EditorAction {}
 
+/// A multi-line field's editor state beside the text it edits (feature 686, M4b): cloned and
+/// shown by its text, and equal to any other so the draft compares by its own strings.
+#[derive(Default)]
+pub struct Editor(iced::widget::text_editor::Content);
+
+impl Editor {
+    /// An editor showing `text`.
+    pub fn new(text: &str) -> Self {
+        Self(iced::widget::text_editor::Content::with_text(text))
+    }
+
+    /// The content the widget draws and edits.
+    pub fn content(&self) -> &iced::widget::text_editor::Content {
+        &self.0
+    }
+
+    /// Apply an edit and return the text now shown.
+    pub fn perform(&mut self, action: &EditorAction) -> String {
+        self.0.perform(action.0.clone());
+        self.0.text()
+    }
+}
+
+impl Clone for Editor {
+    fn clone(&self) -> Self {
+        Self::new(&self.0.text())
+    }
+}
+
+impl PartialEq for Editor {
+    /// Always equal: the editor mirrors the draft's text, which is compared on its own.
+    fn eq(&self, _other: &Self) -> bool {
+        true
+    }
+}
+
+impl Eq for Editor {}
+
+impl std::fmt::Debug for Editor {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Editor({:?})", self.0.text())
+    }
+}
+
 /// Every user interaction that can change application state.
 ///
 /// No longer `Copy`: some variants carry owned data (`PathBuf`, listing results).
@@ -793,6 +837,12 @@ impl State {
             taken_elsewhere,
             next_port: &micold_core::daemons::os_free_loopback_port,
         };
+        // The provider Settings enables by default; there is no per-provider switch yet (FR-018).
+        self.daemon_list.default_providers = vec![self
+            .settings
+            .settings_draft
+            .as_ref()
+            .map_or_else(Default::default, |d| d.environment.default_ai_cli)];
         crate::features::daemons::update(&mut self.daemon_list, &mut model, msg)
     }
 
@@ -1213,6 +1263,11 @@ pub fn interpret(
         Outcome::ClipboardWrite(_) | Outcome::OpenLink(_) | Outcome::Insert { .. } => {}
         // The shell's: it persists the registry and the binding (`App::apply_daemon_outcome`).
         Outcome::DaemonRegistryChanged(_)
+        | Outcome::KubeContextsRequested
+        | Outcome::KubeStopRequested { .. }
+        | Outcome::KubeRemoveRequested { .. }
+        | Outcome::KubeKeysDelete { .. }
+        | Outcome::KubeLogsRequested { .. }
         | Outcome::DaemonBound { .. }
         | Outcome::RemoteRepositoryRequested { .. } => {}
         // Sessions of a removed daemon are gone from the window; those of an edited one are

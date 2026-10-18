@@ -115,6 +115,29 @@ specs/**      micold-docs
 # nothing in the build, the suite or the package opens it. Listed explicitly because `/*.md`
 # above matches the repository root only.
 /.github/release-notice-macos.md micold-docs
+# The packaging set (#952).
+#
+# `micold-packaging` marks paths that can change the shipped installer or how it is built. The
+# `windows-arm64-package` job of ci.yml (about 21 minutes, the pipeline's critical path) runs on a
+# pull request only when a change touches one of them -- or carries the `full-ci` label -- and
+# always on main pushes and the nightly schedule. A path is outside the set until declared; the
+# failure direction is "run it". Read by scripts/classify-change.sh (`packaging=` output), pinned by
+# scripts/tests/classify-change.test.sh. Later gates add their own attribute the same way.
+packaging/**                          micold-packaging
+scripts/windows-installer.sh          micold-packaging
+scripts/windows-install-smoke.sh      micold-packaging
+/Cargo.toml                           micold-packaging
+/Cargo.lock                           micold-packaging
+/.github/workflows/release.yml        micold-packaging
+# Inputs the installer build reads beside the set above: the .iss icon and licence, the scripts
+# windows-installer.sh calls, and the toolchain pins.
+/assets/icon/icon.ico                 micold-packaging
+/LICENSE                              micold-packaging
+scripts/remote-daemon-bundle.sh       micold-packaging
+scripts/build-lock.sh                 micold-packaging
+/rust-toolchain.toml                  micold-packaging
+/.cargo/config.toml                   micold-packaging
+
 # What a user can see, and what documents it (Constitution Principle VII).
 #
 # `micold-user-facing` marks the paths whose change a reader of the user guide could notice;

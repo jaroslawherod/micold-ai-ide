@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-12
 
-**Status**: Draft
+**Status**: Closed 2026-10-18 — shipped in PRs #791, #794, #807, #821, #827, #828, #880, #891, #912, #966
 
 **Amended**: 2026-10-13 (soft limit, default session; see Clarifications, Session 2026-10-13). The
 issue's "no way to run more than one session" is superseded by the user: the limit is a default

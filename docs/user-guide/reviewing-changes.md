@@ -176,12 +176,29 @@ A comment whose lines the diff on screen does not show — for example because y
 kind of change it is on — is listed under **Not in the current diff** above that file's diff, with
 the lines it is on.
 
-### Outdated comments
+### How comments follow their code
 
-When the lines a comment points at no longer hold the code it quoted — the agent or you changed
-them, or the file is gone — its card is marked **Outdated**. The comment stays where it is and
-keeps the code it quoted when it was written. It is still sent with that quoted code and its line
-range, so the session sees what you were looking at.
+A comment stays with the code it quoted. When lines above it are added or removed — usually
+because the agent edited the file — the card moves to the lines that now hold its code, and the next
+review you send names those new lines.
+
+- **Nearest occurrence.** If the quoted code now appears in more than one place, the comment goes to
+  the one nearest where it was. If two are equally near, it is not guessed: the comment is marked
+  **Outdated**.
+- **Outdated.** A draft or sent comment is marked **Outdated** when its quoted code is gone — a line
+  of it changed, or the file is gone. Its card stays at the closest place it can be, kept within the
+  file's length, and it is still sent with the code as written. If an edit puts the code back in one
+  place, the comment moves there and the mark goes.
+- **Removed lines.** A comment on removed lines stays where it is, as long as the base version of
+  the file has not changed.
+- **Applied and answered comments** are never marked outdated. When their code changes — as an
+  applied change usually does — they keep their status and reply and stay at their last place.
+- **Line endings.** A difference in a line's ending (`\r\n` against `\n`) does not move or outdate a
+  comment.
+
+Comments are moved on the working tree, so a comment on a pull request's diff or on the committed
+changes alone is shown at the new place but is only stored there once you open the entry's working
+tree. A comment you are writing follows its lines the same way, and keeps its text.
 
 ### Where comments are kept
 

@@ -1,0 +1,1 @@
+B8 2026-10-17: after Remove connection + Save, <data>/micold-ai-ide/jira/ is empty (ls: total 0); settings.json jira_connections {}

@@ -719,7 +719,7 @@ pub fn cores_text(cpus: MilliCpus) -> String {
 /// One core per hardware thread on a machine far larger than any this will run on.
 const MAX_CORES: f64 = 1024.0;
 /// 1 TiB, in MiB — past any desktop, and comfortably inside `u64` once multiplied out.
-const MAX_MIB: u64 = 1024 * 1024;
+pub(crate) const MAX_MIB: u64 = 1024 * 1024;
 /// The kernel's own `pid_max` ceiling on 64-bit Linux.
 const MAX_PIDS: u32 = 4_194_304;
 
@@ -830,7 +830,7 @@ pub fn parse_budget(
     })
 }
 
-fn parse_cores(text: &str) -> Result<Option<MilliCpus>, (LimitField, String)> {
+pub(crate) fn parse_cores(text: &str) -> Result<Option<MilliCpus>, (LimitField, String)> {
     let text = text.trim();
     if text.is_empty() {
         return Ok(None);
@@ -851,7 +851,7 @@ fn parse_cores(text: &str) -> Result<Option<MilliCpus>, (LimitField, String)> {
     }
 }
 
-fn parse_mib(
+pub(crate) fn parse_mib(
     text: &str,
     field: LimitField,
     min: Bytes,

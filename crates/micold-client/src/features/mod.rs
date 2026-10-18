@@ -150,6 +150,45 @@ pub enum Outcome {
     /// The daemon registry changed (feature 491, FR-011): the shell persists it
     /// (`Settings::set_registry`) and brings the links in step (`sync_links`).
     DaemonRegistryChanged(micold_core::daemons::DaemonRegistry),
+    /// The Kubernetes form opened: list the kubeconfig's contexts off the UI thread and answer
+    /// with `daemons::Msg::ContextsListed` (feature 686, FR-002). The shell's.
+    KubeContextsRequested,
+    /// Stop this Kubernetes daemon's pod (feature 686, FR-014): the shell runs
+    /// `core::kube::lifecycle::stop` over its cluster. Sessions already ended and the link stopped.
+    KubeStopRequested {
+        /// The daemon.
+        daemon: micold_core::daemons::DaemonId,
+        /// Its settings at the time of the request.
+        settings: micold_core::kube::settings::KubeSettings,
+        /// Its name.
+        name: String,
+    },
+    /// Delete every cluster object of this Kubernetes daemon (FR-015); the shell answers with
+    /// `daemons::Msg::KubeRemoved`. The entry stays until it does.
+    KubeRemoveRequested {
+        /// The daemon.
+        daemon: micold_core::daemons::DaemonId,
+        /// Its settings at the time of the request.
+        settings: micold_core::kube::settings::KubeSettings,
+        /// Its name.
+        name: String,
+    },
+    /// Delete this client's key files and pinned host key for a Kubernetes daemon that was removed
+    /// or forgotten locally (FR-015, FR-024).
+    KubeKeysDelete {
+        /// The daemon forgotten.
+        daemon: micold_core::daemons::DaemonId,
+    },
+    /// Fetch the last `tail` lines of the pod's log; the shell answers with
+    /// `daemons::Msg::LogsFetched` (FR-018).
+    KubeLogsRequested {
+        /// The daemon.
+        daemon: micold_core::daemons::DaemonId,
+        /// Its settings.
+        settings: micold_core::kube::settings::KubeSettings,
+        /// How many lines from the end.
+        tail: u32,
+    },
     /// These sessions ended because their daemon was removed or its runtime settings changed:
     /// the shell stops them on that daemon and shows them as ended (FR-012, FR-014).
     DaemonSessionsEnded {
@@ -234,6 +273,7 @@ pub mod attention;
 pub mod changes;
 pub mod connection;
 pub mod daemons;
+pub mod daemons_kube;
 pub mod help;
 pub mod navigation;
 pub mod notifications;

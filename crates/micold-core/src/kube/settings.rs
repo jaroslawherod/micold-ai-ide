@@ -230,6 +230,13 @@ impl KubeSettings {
         {
             return Err(invalid("storage_class"));
         }
+        // One secret per kind: two keys or two pull files would share a secret name.
+        let count = |is: fn(&KubeCredential) -> bool| self.allowed.iter().filter(|c| is(c)).count();
+        if count(|c| matches!(c, KubeCredential::GitSshKey { .. })) > 1
+            || count(|c| matches!(c, KubeCredential::RegistryPull { .. })) > 1
+        {
+            return Err(invalid("allowed"));
+        }
         self.resources.validate()
     }
 }
@@ -605,5 +612,24 @@ mod tests {
             "nothing leaves this machine unless allowed (SP-1)"
         );
         assert_eq!(s.volume_size, DEFAULT_VOLUME_SIZE);
+    }
+
+    #[test]
+    fn two_ssh_keys_or_two_pull_files_are_refused_for_sharing_a_secret() {
+        let mut s = KubeSettings::new("kind-dev", "dev", &[]);
+        s.allowed
+            .insert(KubeCredential::GitSshKey { key: "/a".into() });
+        assert!(s.validate().is_ok());
+        s.allowed
+            .insert(KubeCredential::GitSshKey { key: "/b".into() });
+        assert!(s.validate().is_err());
+        s.allowed
+            .remove(&KubeCredential::GitSshKey { key: "/b".into() });
+        s.allowed
+            .insert(KubeCredential::RegistryPull { auths: "/p".into() });
+        assert!(s.validate().is_ok());
+        s.allowed
+            .insert(KubeCredential::RegistryPull { auths: "/q".into() });
+        assert!(s.validate().is_err());
     }
 }

@@ -190,16 +190,16 @@ loopback relay and the owner-only key files.
 
 ### Tests (write first, must fail)
 
-- [ ] T063 [P] [US3] [U66] [U67] [U68] [U69] [U70] [U136] Credential tests in `core/kube/credentials.rs`: each `KubeCredential` maps to exactly one secret (`ResourceNames`) and one mount: `GitCredentials` → `/run/micold/creds/git-credentials`; `GitSshKey { key }` → `/run/micold/creds/ssh/{id,known_hosts}`, known-hosts lines for the remote's host only; `GitConfig` → `/data/home/.gitconfig` (subPath); `SignIn(cli)` → the provider's `sandbox_auth_file` under `HOME` (subPath); `RegistryPull { auths }` → one `imagePullSecrets` entry of type `kubernetes.io/dockerconfigjson` named `<base>-pull`; a missing source file → `CredentialSource { credential, path }`; no SSH-agent credential. `daemon_env(&allowed)` = `MICOLD_IDLE_STOP=off`, `MICOLD_REPOS_ROOT=/data/repos`, plus `GIT_CONFIG_*` (store helper) for `GitCredentials` and `GIT_SSH_COMMAND` (`IdentitiesOnly=yes`, `StrictHostKeyChecking=yes`) for `GitSshKey`, nothing else.
-- [ ] T064 [P] [US3] [U43] [U44] Security manifest tests in `core/kube/manifest.rs`: pod `securityContext` `runAsNonRoot: true`, `runAsUser: 10001`, `runAsGroup: 10001`, `fsGroup: 10001`, `seccompProfile: RuntimeDefault`; container `readOnlyRootFilesystem: true`, `allowPrivilegeEscalation: false`, `capabilities.drop: [ALL]`; the secret volumes are the access secret plus one per `allowed` entry; `allowed` empty → only the access secret and no `imagePullSecrets` (SC-004).
-- [ ] T065 [P] [US3] [A10] [A11] [A12] [A13] [U58] [U59] `Secrets` phase tests over `FakeCluster` in `core/kube/start.rs`: allowed secrets are created (recorded) or adopted; a withdrawn secret that is ours is deleted by name and UID; one that is not ours is untouched; none allowed → no credential-secret calls; source files are read through the start's file-reader argument only in this phase; the pod mounts exactly the access secret and the allowed secrets and carries T064's security contexts (US3.1–3.4).
+- [x] T063 [P] [US3] [U66] [U67] [U68] [U69] [U70] [U136] Credential tests in `core/kube/credentials.rs`: each `KubeCredential` maps to exactly one secret (`ResourceNames`) and one mount: `GitCredentials` → `/run/micold/creds/git-credentials`; `GitSshKey { key }` → `/run/micold/creds/ssh/{id,known_hosts}`, known-hosts lines for the remote's host only; `GitConfig` → `/data/home/.gitconfig` (subPath); `SignIn(cli)` → the provider's `sandbox_auth_file` under `HOME` (subPath); `RegistryPull { auths }` → one `imagePullSecrets` entry of type `kubernetes.io/dockerconfigjson` named `<base>-pull`; a missing source file → `CredentialSource { credential, path }`; no SSH-agent credential. `daemon_env(&allowed)` = `MICOLD_IDLE_STOP=off`, `MICOLD_REPOS_ROOT=/data/repos`, plus `GIT_CONFIG_*` (store helper) for `GitCredentials` and `GIT_SSH_COMMAND` (`IdentitiesOnly=yes`, `StrictHostKeyChecking=yes`) for `GitSshKey`, nothing else.
+- [x] T064 [P] [US3] [U43] [U44] Security manifest tests in `core/kube/manifest.rs`: pod `securityContext` `runAsNonRoot: true`, `runAsUser: 10001`, `runAsGroup: 10001`, `fsGroup: 10001`, `seccompProfile: RuntimeDefault`; container `readOnlyRootFilesystem: true`, `allowPrivilegeEscalation: false`, `capabilities.drop: [ALL]`; the secret volumes are the access secret plus one per `allowed` entry; `allowed` empty → only the access secret and no `imagePullSecrets` (SC-004).
+- [x] T065 [P] [US3] [A10] [A11] [A12] [A13] [U58] [U59] `Secrets` phase tests over `FakeCluster` in `core/kube/start.rs`: allowed secrets are created (recorded) or adopted; a withdrawn secret that is ours is deleted by name and UID; one that is not ours is untouched; none allowed → no credential-secret calls; source files are read through the start's file-reader argument only in this phase; the pod mounts exactly the access secret and the allowed secrets and carries T064's security contexts (US3.1–3.4).
 
 ### Implementation
 
-- [ ] T067 [P] [US3] [U66] [U67] [U68] [U69] [U70] [U136] `KubeCredential` → secret, data, mount; `daemon_env` in `core/kube/credentials.rs`.
-- [ ] T068 [US3] [U43] [U44] Security contexts, secret volumes, mounts and `imagePullSecrets` in `core/kube/manifest.rs`.
-- [ ] T069 [US3] [A10] [A11] [A12] [A13] [U58] [U59] Secrets reconcile in the `Secrets` phase of `core/kube/start.rs`, reading source files through a reader the caller passes (the client's real reader is wired in M5).
-- [ ] T102 [US3] [A10] [A11] [A12] [A13] Acceptance (M3): the `core/kube/start.rs` tests for A10–A13 green over `FakeCluster`.
+- [x] T067 [P] [US3] [U66] [U67] [U68] [U69] [U70] [U136] `KubeCredential` → secret, data, mount; `daemon_env` in `core/kube/credentials.rs`.
+- [x] T068 [US3] [U43] [U44] Security contexts, secret volumes, mounts and `imagePullSecrets` in `core/kube/manifest.rs`.
+- [x] T069 [US3] [A10] [A11] [A12] [A13] [U58] [U59] Secrets reconcile in the `Secrets` phase of `core/kube/start.rs`, reading source files through a reader the caller passes (the client's real reader is wired in M5).
+- [x] T102 [US3] [A10] [A11] [A12] [A13] Acceptance (M3): the `core/kube/start.rs` tests for A10–A13 green over `FakeCluster`.
 
 ---
 
@@ -210,16 +210,16 @@ in the list and open in Edit; the Add form's runtime list omits Kubernetes (FR-0
 
 ### Tests (write first, must fail)
 
-- [ ] T024 [P] [US5] [U95] [U96] [U134] [U135] Reducer tests in `client-tests/features_daemons.rs`: the Add form's runtime choices omit Kubernetes in a build without the mechanism; a Kubernetes daemon opened in Edit shows the context picker filled from the merged kubeconfig, or "no kubeconfig found; looked in <paths>"; fields namespace, image (empty = the default SSH image), AI CLI checkboxes defaulting to the providers enabled in Settings; editing the volume size of a daemon started before shows "Applies only to a new volume, after Remove"; Save refuses an invalid field naming it; the row shows "Kubernetes" and the endpoint.
-- [ ] T130 [P] [US5] [U97] [U99] Resources-field tests in `client-tests/features_daemons.rs`: the container form's limits fields behave as before the extraction (characterization, written first); the Kubernetes form's four resource fields are edited on their own, a request above its limit refused naming the request field.
-- [ ] T066 [P] [US3] [U104] Reducer tests in `client-tests/features_daemons.rs`: the allowed-credentials checkbox list, nothing checked by default, SSH key and registry auth requiring a file.
+- [x] T024 [P] [US5] [U95] [U96] [U134] [U135] Reducer tests in `client-tests/features_daemons.rs`: the Add form's runtime choices omit Kubernetes in a build without the mechanism; a Kubernetes daemon opened in Edit shows the context picker filled from the merged kubeconfig, or "no kubeconfig found; looked in <paths>"; fields namespace, image (empty = the default SSH image), AI CLI checkboxes defaulting to the providers enabled in Settings; editing the volume size of a daemon started before shows "Applies only to a new volume, after Remove"; Save refuses an invalid field naming it; the row shows "Kubernetes" and the endpoint.
+- [x] T130 [P] [US5] [U97] [U99] Resources-field tests in `client-tests/features_daemons.rs`: the container form's limits fields behave as before the extraction (characterization, written first); the Kubernetes form's four resource fields are edited on their own, a request above its limit refused naming the request field.
+- [x] T066 [P] [US3] [U104] Reducer tests in `client-tests/features_daemons.rs`: the allowed-credentials checkbox list, nothing checked by default, SSH key and registry auth requiring a file.
 
 ### Implementation
 
-- [ ] T031 [US5] [U95] [U96] [U134] [U135] Kubernetes `Draft`/`Msg` (context, namespace, image, AI CLIs, volume notice) and runtime choices in `client/features/daemons.rs`; kubeconfig context listing off the UI thread in `client/shell/daemons.rs`.
-- [ ] T131 [US5] [U97] [U99] Extract the limits fields from `sections` in `client/ui/settings/container_fields.rs` into functions in that file, drawn by the container form and the Kubernetes form (one copy; #806 inherits them, contract shared-ssh-image §5); the four resource `Draft` fields in `client/features/daemons.rs`.
-- [ ] T070 [US3] [U104] Allowed-credentials list with file pickers in `client/features/daemons.rs` and `client/ui/settings/daemons.rs`.
-- [ ] T032 [US5] [U96] Kubernetes form glue in `client/ui/settings/daemons.rs`; extend `client-tests/daemons_section_geometry.rs` to the Kubernetes form.
+- [x] T031 [US5] [U95] [U96] [U134] [U135] Kubernetes `Draft`/`Msg` (context, namespace, image, AI CLIs, volume notice) and runtime choices in `client/features/daemons.rs`; kubeconfig context listing off the UI thread in `client/shell/daemons.rs`.
+- [x] T131 [US5] [U97] [U99] Extract the limits fields from `sections` in `client/ui/settings/container_fields.rs` into functions in that file, drawn by the container form and the Kubernetes form (one copy; #806 inherits them, contract shared-ssh-image §5); the four resource `Draft` fields in `client/features/daemons.rs`.
+- [x] T070 [US3] [U104] Allowed-credentials list with file pickers in `client/features/daemons.rs` and `client/ui/settings/daemons.rs`.
+- [x] T032 [US5] [U96] Kubernetes form glue in `client/ui/settings/daemons.rs`; extend `client-tests/daemons_section_geometry.rs` to the Kubernetes form.
 
 ---
 
@@ -227,18 +227,18 @@ in the list and open in Edit; the Add form's runtime list omits Kubernetes (FR-0
 
 ### Tests (write first, must fail)
 
-- [ ] T083 [P] [US5] [A19] [A20] [U107] [U108] Reducer tests in `client-tests/features_daemons.rs`: node selector, tolerations, volume size and storage class fields, each refused naming the field when invalid; editing a running daemon saves and shows "applies on next start" and sends nothing to the cluster (US5.2); Logs fetches the last 200 lines on demand.
-- [ ] T084 [P] [US5] [U109] [U110] Parse/format tests for the key/value list and toleration editors in `client/ui/material/key_value_list.rs` and `client/ui/material/toleration_list.rs`.
-- [ ] T080 [P] [US5] [A23] [U105] [U106] [U143] Confirmation reducer tests in `client-tests/features_daemons.rs`: Stop with running sessions "Stop <name>? <n> running session(s) will end. Worktrees on its volume are kept."; Remove names pod, volume with its worktrees, secrets and this computer's SSH key, plus 491's bound-worktree counts; cluster unreachable → contract §5 text naming what stays, the access secret and this computer's still-authorized key among it; nothing is deleted before confirmation; Remove and Forget locally delete this client's key files.
-- [ ] T132 [P] [US5] [U133] Actor test in `client-tests/kube_daemon_start.rs` over `FakeCluster`: Start of a Kubernetes daemon in a build without the mechanism fails at once with `Unavailable`, makes no cluster call, and the row shows `unreachable` with that reason.
+- [x] T083 [P] [US5] [A19] [A20] [U107] [U108] Reducer tests in `client-tests/features_daemons.rs`: node selector, tolerations, volume size and storage class fields, each refused naming the field when invalid; editing a running daemon saves and shows "applies on next start" and sends nothing to the cluster (US5.2); Logs fetches the last 200 lines on demand.
+- [x] T084 [P] [US5] [U109] [U110] Parse/format tests for the key/value list and toleration editors in `client/ui/material/key_value_list.rs` and `client/ui/material/toleration_list.rs`.
+- [x] T080 [P] [US5] [A23] [U105] [U106] [U143] Confirmation reducer tests in `client-tests/features_daemons.rs`: Stop with running sessions "Stop <name>? <n> running session(s) will end. Worktrees on its volume are kept."; Remove names pod, volume with its worktrees, secrets and this computer's SSH key, plus 491's bound-worktree counts; cluster unreachable → contract §5 text naming what stays, the access secret and this computer's still-authorized key among it; nothing is deleted before confirmation; Remove and Forget locally delete this client's key files.
+- [x] T132 [P] [US5] [U133] Actor test in `client-tests/kube_daemon_start.rs` over `FakeCluster`: Start of a Kubernetes daemon in a build without the mechanism fails at once with `Unavailable`, makes no cluster call, and the row shows `unreachable` with that reason.
 
 ### Implementation
 
-- [ ] T085 [US5] [U109] [U110] Key/value list and toleration editors with builder `.into()` APIs in `client/ui/material/key_value_list.rs` and `client/ui/material/toleration_list.rs`, registered in `client/ui/material/mod.rs`.
-- [ ] T086 [US5] [A19] [A20] [U107] [U108] Node selector, tolerations, volume size, storage class, "applies on next start" and Logs (pod log tail via `Cluster::logs`) in `client/features/daemons.rs`, `client/shell/daemons.rs` and `client/ui/settings/daemons.rs`; geometry gate.
-- [ ] T082 [US5] [A23] [U105] [U106] [U143] Wire Stop, Remove and Forget locally for Kubernetes daemons (`core/kube/lifecycle.rs` over `LiveCluster`, key files deleted through `client/kube/keys.rs`) in `client/daemon.rs`, `client/shell/daemons.rs` and `client/features/daemons.rs`; confirmation texts in `client/ui/confirm_daemon_removal.rs`; worktrees follow 491 FR-014.
-- [ ] T133 [US5] [U133] `Unavailable` start of a Kubernetes daemon in `client/daemon.rs` (the `Dial` match), until M5 replaces it.
-- [ ] T129 [US5] [A19] [A20] [A23] Acceptance (M4b): `features_daemons` green for A19, A20, A23.
+- [x] T085 [US5] [U109] [U110] Key/value list and toleration editors with builder `.into()` APIs in `client/ui/material/key_value_list.rs` and `client/ui/material/toleration_list.rs`, registered in `client/ui/material/mod.rs`.
+- [x] T086 [US5] [A19] [A20] [U107] [U108] Node selector, tolerations, volume size, storage class, "applies on next start" and Logs (pod log tail via `Cluster::logs`) in `client/features/daemons.rs`, `client/shell/daemons.rs` and `client/ui/settings/daemons.rs`; geometry gate.
+- [x] T082 [US5] [A23] [U105] [U106] [U143] Wire Stop, Remove and Forget locally for Kubernetes daemons (`core/kube/lifecycle.rs` over `LiveCluster`, key files deleted through `client/kube/keys.rs`) in `client/daemon.rs`, `client/shell/daemons.rs` and `client/features/daemons.rs`; confirmation texts in `client/ui/confirm_daemon_removal.rs`; worktrees follow 491 FR-014.
+- [x] T133 [US5] [U133] `Unavailable` start of a Kubernetes daemon in `client/daemon.rs` (the `Dial` match), until M5 replaces it.
+- [x] T129 [US5] [A19] [A20] [A23] Acceptance (M4b): `features_daemons` green for A19, A20, A23.
 
 ---
 

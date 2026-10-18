@@ -149,7 +149,7 @@ fn an_api_token_refuses_blank_input_and_redacts_in_debug() {
 
 #[test]
 fn the_token_file_is_named_after_the_project_in_the_jira_directory() {
-    use micold_core::store::{jira_token_dir, jira_token_path, project_id_of};
+    use micold_core::store::{jira_token_path, project_id_of};
     use std::path::Path;
     let project = Path::new("/work/app");
     let dir = Path::new("/data/jira");
@@ -157,7 +157,20 @@ fn the_token_file_is_named_after_the_project_in_the_jira_directory() {
         jira_token_path(dir, project),
         dir.join(format!("{}.token", project_id_of(project)))
     );
-    if let Some(token_dir) = jira_token_dir() {
-        assert_eq!(token_dir.file_name().and_then(|n| n.to_str()), Some("jira"));
-    }
+}
+
+#[test]
+fn the_token_directory_is_jira_under_the_data_dir() {
+    use micold_core::paths::data_dir;
+    use micold_core::store::jira_token_dir;
+    let dir = jira_token_dir();
+    // The literal directory name is the contract: changing it would orphan stored tokens.
+    assert_eq!(
+        dir.as_deref().and_then(|d| d.file_name()),
+        data_dir().map(|_| std::ffi::OsStr::new("jira")),
+    );
+    assert_eq!(
+        dir.as_deref().and_then(|d| d.parent()),
+        data_dir().as_deref()
+    );
 }

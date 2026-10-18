@@ -1,0 +1,9 @@
+B7r run 2026-10-18, sway headless; frames by grim every ~0.15 s after the click on Keep/Remove in window B (t from click)
+Keep arm (run kw, pointer wiggle over A): A changed first between t=3.27 and t=3.42
+Keep arm (run keep, no wiggle): no A change through t=2.64; A already changed on a grim taken later
+Switch-on arm: A picker returned between t=3.50 and t=3.67
+Remove arm: daemon settings write at T0+0.13 s (T0=09:12:56.104Z, write 09:12:56.231Z); B changed at t=0.13; A picker gone between t=3.35 and t=3.49
+After Remove: jira_enabled False, jira_connections [], jira dir empty:
+total 4
+drwx------. 2 jaro jaro    6 Oct 18 11:12 .
+drwx------. 7 jaro jaro 4096 Oct 18 11:12 ..

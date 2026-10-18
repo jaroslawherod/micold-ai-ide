@@ -7,6 +7,7 @@ use std::collections::BTreeMap;
 use serde_json::{json, Value};
 
 use crate::daemon_resources::DaemonResources;
+use crate::kube::credentials::KubeCredential;
 use crate::kube::names::{ResourceNames, DAEMON_NAME_ANNOTATION};
 use crate::kube::settings::{KubeSettings, Quantity, TaintEffect, Toleration, TolerationOperator};
 use crate::sandbox::{Bytes, MilliCpus};
@@ -123,8 +124,43 @@ fn resources(r: &DaemonResources) -> Option<Value> {
     (!out.is_empty()).then_some(Value::Object(out))
 }
 
-fn container(settings: &KubeSettings, image: &str) -> Value {
+/// The pod's security context (FR-009).
+fn pod_security() -> Value {
+    json!({
+        "runAsNonRoot": true,
+        "runAsUser": IMAGE_USER_UID,
+        "runAsGroup": IMAGE_USER_UID,
+        "fsGroup": IMAGE_USER_UID,
+        "seccompProfile": { "type": "RuntimeDefault" },
+    })
+}
+
+/// The container's security context (FR-009).
+fn container_security() -> Value {
+    json!({
+        "readOnlyRootFilesystem": true,
+        "allowPrivilegeEscalation": false,
+        "capabilities": { "drop": ["ALL"] },
+    })
+}
+
+/// A mount of an allowed secret, read-only; the volume is named as the secret.
+fn credential_mount(names: &ResourceNames, credential: &KubeCredential) -> Option<Value> {
+    let mount = credential.mount()?;
     let mut out = json!({
+        "name": names.secret(credential),
+        "mountPath": mount.path,
+        "readOnly": true,
+    });
+    if let Some(sub) = mount.sub_path {
+        out["subPath"] = json!(sub);
+    }
+    Some(out)
+}
+
+fn container(settings: &KubeSettings, names: &ResourceNames, image: &str) -> Value {
+    let mut out = json!({
+        "securityContext": container_security(),
         "name": CONTAINER,
         "image": image,
         "env": [
@@ -138,6 +174,14 @@ fn container(settings: &KubeSettings, image: &str) -> Value {
             { "name": "ssh-access", "mountPath": ACCESS_MOUNT, "readOnly": true },
         ],
     });
+    for credential in &settings.allowed {
+        if let Some(mount) = credential_mount(names, credential) {
+            out["volumeMounts"]
+                .as_array_mut()
+                .expect("volumeMounts is an array")
+                .push(mount);
+        }
+    }
     if let Some(r) = resources(&settings.resources) {
         out["resources"] = r;
     }
@@ -162,7 +206,8 @@ pub fn pod(settings: &KubeSettings, names: &ResourceNames, image: &str, stamp: &
         "restartPolicy": "Always",
         "automountServiceAccountToken": false,
         "enableServiceLinks": false,
-        "containers": [container(settings, image)],
+        "securityContext": pod_security(),
+        "containers": [container(settings, names, image)],
         "volumes": [
             { "name": "data", "persistentVolumeClaim": { "claimName": names.pvc() } },
             { "name": "tmp", "emptyDir": {} },
@@ -170,6 +215,21 @@ pub fn pod(settings: &KubeSettings, names: &ResourceNames, image: &str, stamp: &
               "secret": { "secretName": names.access_secret(), "defaultMode": 0o440 } },
         ],
     });
+    for credential in &settings.allowed {
+        // A pull secret is no volume: the kubelet reads it by name.
+        if credential.mount().is_some() {
+            spec["volumes"]
+                .as_array_mut()
+                .expect("volumes is an array")
+                .push(json!({
+                    "name": names.secret(credential),
+                    "secret": { "secretName": names.secret(credential), "defaultMode": 0o440 },
+                }));
+        }
+        if matches!(credential, KubeCredential::RegistryPull { .. }) {
+            spec["imagePullSecrets"] = json!([{ "name": names.pull_secret() }]);
+        }
+    }
     if !settings.node_selector.is_empty() {
         spec["nodeSelector"] = json!(settings.node_selector);
     }
@@ -203,10 +263,20 @@ pub fn pvc(settings: &KubeSettings, names: &ResourceNames) -> Value {
 
 /// An Opaque secret `name` with `data` as text (`stringData`).
 pub fn secret(names: &ResourceNames, name: &str, data: &BTreeMap<String, String>) -> Value {
+    typed_secret(names, name, "Opaque", data)
+}
+
+/// A secret `name` of `kind` (`Opaque`, or the pull secret's type) with `data` as text.
+pub fn typed_secret(
+    names: &ResourceNames,
+    name: &str,
+    kind: &str,
+    data: &BTreeMap<String, String>,
+) -> Value {
     json!({
         "apiVersion": "v1",
         "kind": "Secret",
-        "type": "Opaque",
+        "type": kind,
         "metadata": metadata(names, name.to_owned(), &[]),
         "stringData": data,
     })
@@ -502,5 +572,98 @@ mod tests {
             5,
             "an unreadable stamp differs in all"
         );
+    }
+
+    fn with_allowed(allowed: &[KubeCredential]) -> Value {
+        let mut s = settings();
+        s.allowed = allowed.iter().cloned().collect();
+        pod(&s, &names(), IMAGE, &PodStamp::of(&s, IMAGE))
+    }
+
+    #[test]
+    fn the_pod_and_container_run_non_root_on_a_read_only_root() {
+        let p = &all()[0];
+        let sc = &p["spec"]["securityContext"];
+        assert_eq!(sc["runAsNonRoot"], true);
+        for key in ["runAsUser", "runAsGroup", "fsGroup"] {
+            assert_eq!(sc[key], 10001, "{key}");
+        }
+        assert_eq!(sc["seccompProfile"]["type"], "RuntimeDefault");
+        let c = &p["spec"]["containers"][0]["securityContext"];
+        assert_eq!(c["readOnlyRootFilesystem"], true);
+        assert_eq!(c["allowPrivilegeEscalation"], false);
+        assert_eq!(c["capabilities"]["drop"], json!(["ALL"]));
+    }
+
+    #[test]
+    fn nothing_allowed_mounts_only_the_access_secret_and_pulls_no_secret() {
+        let p = with_allowed(&[]);
+        let secrets: Vec<&Value> = p["spec"]["volumes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|v| v.get("secret").is_some())
+            .collect();
+        assert_eq!(secrets.len(), 1);
+        assert_eq!(secrets[0]["secret"]["secretName"], names().access_secret());
+        assert!(p["spec"].get("imagePullSecrets").is_none());
+        let mounts = p["spec"]["containers"][0]["volumeMounts"]
+            .as_array()
+            .unwrap();
+        assert_eq!(mounts.len(), 3);
+    }
+
+    #[test]
+    fn each_allowed_credential_adds_one_read_only_secret_volume_and_mount() {
+        let signin = KubeCredential::SignIn {
+            cli: crate::session::AiCli::ClaudeCode,
+        };
+        let pull = KubeCredential::RegistryPull { auths: "/a".into() };
+        let p = with_allowed(&[
+            KubeCredential::GitConfig,
+            KubeCredential::GitSshKey { key: "/k".into() },
+            signin.clone(),
+            pull.clone(),
+        ]);
+        let n = names();
+        let volumes: Vec<&str> = p["spec"]["volumes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|v| v["secret"]["secretName"].as_str())
+            .collect();
+        // The pull secret is read by the kubelet, not mounted.
+        assert_eq!(volumes.len(), 4, "{volumes:?}");
+        assert!(!volumes.contains(&n.pull_secret().as_str()));
+        let mounts = p["spec"]["containers"][0]["volumeMounts"]
+            .as_array()
+            .unwrap();
+        let find = |name: String| mounts.iter().find(|m| m["name"] == name).unwrap();
+        let config = find(n.secret(&KubeCredential::GitConfig));
+        assert_eq!(config["mountPath"], "/data/home/.gitconfig");
+        assert_eq!(config["subPath"], "gitconfig");
+        assert_eq!(config["readOnly"], true);
+        let ssh = find(n.secret(&KubeCredential::GitSshKey { key: "/k".into() }));
+        assert_eq!(ssh["mountPath"], "/run/micold/creds/ssh");
+        assert!(ssh.get("subPath").is_none());
+        let auth = find(n.secret(&signin));
+        assert_eq!(auth["mountPath"], "/data/home/.claude/.credentials.json");
+        assert_eq!(
+            p["spec"]["imagePullSecrets"],
+            json!([{ "name": n.pull_secret() }])
+        );
+        assert_eq!(mounts.len(), 3 + 3);
+    }
+
+    #[test]
+    fn a_pull_secret_has_its_own_type() {
+        let s = typed_secret(
+            &names(),
+            "x-pull",
+            "kubernetes.io/dockerconfigjson",
+            &BTreeMap::new(),
+        );
+        assert_eq!(s["type"], "kubernetes.io/dockerconfigjson");
+        assert_eq!(secret(&names(), "x", &BTreeMap::new())["type"], "Opaque");
     }
 }

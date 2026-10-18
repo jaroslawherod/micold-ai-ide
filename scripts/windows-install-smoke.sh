@@ -45,8 +45,32 @@ fi
 
 # Every question to Windows goes through PowerShell: MSYS2 rewrites a `/switch`-looking argument into
 # a path, and `$!` is an MSYS2 pid, not a Windows one. Output loses its CRs.
+#
+# One PowerShell serves them all. Starting `powershell.exe` costs ~40 s on the windows-11-arm runner
+# (~1 s on x64), and the smoke asks ~25 questions: a process per question was 1064 s of the arm64
+# job (#953). Each question is sent base64-encoded, so quotes and newlines survive, and answered with
+# a sentinel line that carries its status (1 when it threw), which is what `win` returns.
+ps_sentinel="MICOLD-SMOKE-DONE-$$"
+ps_timeout_secs=300
+export MSYS2_ARG_CONV_EXCL='*'
+coproc PS { powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command -; }
+
 win() {
-	MSYS2_ARG_CONV_EXCL='*' powershell.exe -NoProfile -NonInteractive -Command "$1" | tr -d '\r'
+	local encoded line
+	encoded="$(printf '%s' "$1" | base64 | tr -d '\r\n')"
+	printf '%s\n' "\$s = 0; try { & ([scriptblock]::Create([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('$encoded')))) } catch { [Console]::Error.WriteLine(\$_); \$s = 1 }; '$ps_sentinel' + \$s" >&"${PS[1]}" || return 1
+	while IFS= read -r -t "$ps_timeout_secs" -u "${PS[0]}" line; do
+		line="${line%$'\r'}"
+		case "$line" in
+		"$ps_sentinel"*) [ "${line#"$ps_sentinel"}" = 0 ]; return ;;
+		*) printf '%s\n' "$line" ;;
+		esac
+	done
+	# No answer in time: a late one would be read as the next question's, so end the session and let
+	# every later question fail at once.
+	echo "PowerShell gave no answer in ${ps_timeout_secs}s; stopping it" >&2
+	kill "$PS_PID" 2>/dev/null
+	return 1
 }
 
 # `True` while the Windows process <pid> exists.
@@ -72,6 +96,7 @@ clean_up() {
 	if [ -n "$daemon_pid" ]; then
 		win "Stop-Process -Id $daemon_pid -Force -ErrorAction SilentlyContinue" || true
 	fi
+	printf 'exit\n' >&"${PS[1]}" 2>/dev/null || true
 	rm -f "${markers[@]}"
 	rm -rf "$logs"
 }
@@ -109,6 +134,8 @@ done
 # show for it (FR-003). Without one Windows draws its generic exe icon.
 cat >"$logs/group-icons.ps1" <<'PS1'
 param([string]$Path)
+# Both exes are checked in the one PowerShell `win` keeps open, so the type is compiled only once.
+if (-not ('MicoldResources' -as [type])) {
 Add-Type -TypeDefinition @'
 using System;
 using System.Runtime.InteropServices;
@@ -134,11 +161,11 @@ public static class MicoldResources {
     }
 }
 '@
+}
 [MicoldResources]::GroupIcons($Path)
 PS1
 for bin in micold-ai-ide.exe micold-daemon.exe; do
-	icons="$(MSYS2_ARG_CONV_EXCL='*' powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass \
-		-File "$(cygpath -w "$logs/group-icons.ps1")" "$(cygpath -w "$install_dir/$bin")" | tr -d '\r')"
+	icons="$(win "& '$(cygpath -w "$logs/group-icons.ps1")' '$(cygpath -w "$install_dir/$bin")'")" || icons=""
 	[ "$icons" -ge 1 ] 2>/dev/null || fail "$bin has no icon resource (found '$icons'), so Windows shows a generic icon (FR-003)"
 done
 echo "both exes carry an icon"

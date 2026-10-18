@@ -7,7 +7,8 @@
 
 use crate::app::Message;
 use crate::features::settings::{
-    KeepOrRemove, Msg as SettingsMsg, SettingsDraft, SettingsSection, TokenInput,
+    KeepOrRemove, KeepOrRemovePrompt, Msg as SettingsMsg, SettingsDraft, SettingsSection,
+    TokenInput,
 };
 use crate::features::window::FieldId;
 use crate::ui::focus::TrackFocus;
@@ -52,6 +53,11 @@ pub fn view<'a>(
     if draft.jira.enabled && draft.jira.project.is_some() {
         controls.extend(connection_form(draft, focused, roles));
     }
+    // Drawn whenever it is pending: Save raises it with the switch already off, when the form
+    // above is gone (US2 AS5).
+    if let Some(prompt) = &draft.jira.prompt {
+        controls.push(keep_or_remove(prompt, roles));
+    }
     page(
         "Jira",
         "Start worktrees from the issues of a Jira Cloud project. Applies to every project.",
@@ -60,7 +66,7 @@ pub fn view<'a>(
     )
 }
 
-/// The open project's connection: the four fields, the removal and the Keep-or-Remove question.
+/// The open project's connection: the four fields and the removal.
 fn connection_form<'a>(
     draft: &'a SettingsDraft,
     focused: Option<FieldId>,
@@ -108,28 +114,28 @@ fn connection_form<'a>(
             ));
         }
     }
-    if let Some(prompt) = &jira.prompt {
-        let name = prompt
-            .project
-            .file_name()
-            .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_else(|| prompt.project.display().to_string());
-        controls.push(
-            column![
-                caution(format!("Keep the Jira connection for {name}?"), roles),
-                row![
-                    Button::filled("Keep", roles).on_press(Message::Settings(
-                        SettingsMsg::JiraKeepOrRemoveChosen(KeepOrRemove::Keep)
-                    )),
-                    Button::outlined("Remove", roles).on_press(Message::Settings(
-                        SettingsMsg::JiraKeepOrRemoveChosen(KeepOrRemove::Remove)
-                    )),
-                ]
-                .spacing(8),
-            ]
-            .spacing(8)
-            .into(),
-        );
-    }
     controls
+}
+
+/// The Keep-or-Remove question (US2 AS5).
+fn keep_or_remove<'a>(prompt: &KeepOrRemovePrompt, roles: Roles) -> Element<'a, Message> {
+    let name = prompt
+        .project
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| prompt.project.display().to_string());
+    column![
+        caution(format!("Keep the Jira connection for {name}?"), roles),
+        row![
+            Button::filled("Keep", roles).on_press(Message::Settings(
+                SettingsMsg::JiraKeepOrRemoveChosen(KeepOrRemove::Keep)
+            )),
+            Button::outlined("Remove", roles).on_press(Message::Settings(
+                SettingsMsg::JiraKeepOrRemoveChosen(KeepOrRemove::Remove)
+            )),
+        ]
+        .spacing(8),
+    ]
+    .spacing(8)
+    .into()
 }

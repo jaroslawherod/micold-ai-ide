@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #776
 - **Worktree branch**: feat/776_one-session-per-worktree-chosen-at-start
 - **Started**: 2026-10-12
-- **Phase**: M7 PR open, waiting for CI
-- **Next step**: orchestrator waits on CI and merges M7
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -25,7 +25,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #880 | M4 | merged | bb0458f6bed51342b3ac261670cc0be8989cc198 |
 | #891 | M5 | merged | 2a1e24637014dfbfb417a1b201d88ceaaa11a755 |
 | #912 | M6 | merged | 133f274ee43b66cd400c11f439324654e37d4a79 |
-| #966 | M7 | open | |
+| #966 | M7 | merged | 858b511e47bafa9e77eb41440f4a0f147ccdeea6 |
+| #1006 | Close | open | |
 
 ## Milestones
 
@@ -37,7 +38,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M4 | T017–T020, T022, T036, T043–T045 | full | Dialog fields; worktree rows only; row press opens the main session; helpers marked | #880 | merged (#880) |
 | M5 | T046–T049, T055–T057 | full | Row menu "Start another session..." (adds a helper) with confirmation; "Make main session"; delete names successor | #891 | merged (#891) |
 | M6 | T023–T030 | full | Resume replaces (resumed becomes main) or keeps both (helper); attach cap | #912 | merged (#912) |
-| M7 | T031–T035 | full | Several sessions intact; start beside a live one needs confirmation | | pending |
+| M7 | T031–T035 | full | Several sessions intact; start beside a live one needs confirmation | #966 | merged (#966) |
 
 ## Decisions
 
@@ -80,6 +81,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Code A M6 | 1 | same snapshot | CLEAN (1 MINOR left: nested if-let in Catalog::replace_session) |
 | Code A M7 | 1 | e7b267562fb37f0018800e047fd87696a1ce0f95:1d9e58d73949a6b81d9714d0996f2e8769bc7551 | CLEAN (3 MINOR). Concurrent sibling starts may both be refused (never both run): ACCEPTED, user retries; atomic check+begin_start not worth it. Review-send resume with a live legacy sibling logs the refusal only: left.
 | Review B M7 | 1 | same snapshot | CLEAN (2 MINOR: hard-coded dialog title, left)
+| Close diff | 1 | caf80283389ec0c4438ff7158d71b3a9b201af9b:3ef301a489e845ccbfe2f0af813187b8244e7575 | CLEAN (3 MINOR: T058 header wording and test tags fixed, prose only; restart-effect proof in start_stop_and_restart test left, see Follow-ups). Converge: no unbuilt behaviour. tdd-verify: FAIL on missing red phase only, waived (T058)
 
 ## Declined review findings
 
@@ -106,5 +108,6 @@ None.
 
 ## Follow-ups not done
 
+- Close: tdd-verify finding 1 (no red phase recorded for any milestone) is waived (T058), not remediated. `start_stop_and_restart_keep_the_one_session` does not prove the restart took effect (finding left by the close review).
 - Building without the repo build lock (MICOLD_NO_BUILD_LOCK=1, the lock queue was hours long) raced other worktrees on target-shared: one stale `micold-daemon` binary (v40) and one stale micold_core rlib failed tests that passed on rerun. Not a code fault.
 - TDD red phase was not recorded for M1 (tests written with the implementation; no tdd/ dir).

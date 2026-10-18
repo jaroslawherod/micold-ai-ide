@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #946
 - **Worktree branch**: claude/project-thread-jjniz9
 - **Started**: 2026-10-17
-- **Phase**: milestone M4
-- **Next step**: wait for CI on the M4 PR and merge; then M5
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -21,6 +21,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #969 | M1 | merged (rebase); `remote daemon over a real sshd` failed once in ssh_real_concurrent (timing, unrelated), passed on re-run | e12d7c2c4849b3e6b2b6a283c8f0224e9b63fe05 |
 | #981 | M2 | merged (rebase); `build + test (windows-latest)` failed once in history_stop_request::ten_busy_sessions_are_all_saved_within_the_bound (timing, unrelated), passed on one re-run | 0b2a7018c3675b303aa3051a6174f29ad28f0f5a |
 | #986 | M3 | merged (rebase) | 7760297461597a165b3d0d03d93843cc7f62438e |
+| #993 | M4 | merged (rebase); `build + test (windows-latest)` failed once in history_stop_request (timing, same flake as #981), passed on one re-run | e47c5539f3f7549d1643b63e7b35bf738bbb525f |
+| #997 | M5 | merged (rebase) | 7953641dfaa024322df8e87acf9fb2a2da7c7771 |
+| (close) | close the spec | open | |
 
 ## Milestones
 
@@ -29,8 +32,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T018 | full | Send review types the documented batch with C-references; review file v2, protocol 49 | #969 | merged |
 | M2 | T019–T034 | full | report_review_comment; cards show Applied/Answered and replies in every window, after restart | #981 | merged |
 | M3 | T035–T046 | full | Mark a Sent comment by hand; read a full reply | #986 | merged |
-| M4 | T047–T056 | full | Review panel: rows, counts, jump, draft edit/delete, panel buttons | PR open | gate green, in review |
-| M5 | T057–T067 | full | Comments follow their code; next batch names new lines | | planned |
+| M4 | T047–T056 | full | Review panel: rows, counts, jump, draft edit/delete, panel buttons | #993 | merged |
+| M5 | T057–T067 | full | Comments follow their code; next batch names new lines | #997 | merged (T057–T066); T067, T034, T046 visual passes not runnable here (no xdotool), left unticked |
 
 Polish T068–T070 changes no code: left to the close unit. M1 has 18 tasks (over ~10): Foundational
 (statuses, store v2, the one-edit wire delta 48 → 49) has no deliverable of its own and US2 is
@@ -71,6 +74,8 @@ split along s6 (M3) is the only scenario split with a deliverable on each side.
 | Review A M4 | 1 | 75287aa65477bd6b1aad7814baa611e293f12b55:049a61a9d4cb670409036a8fe6c70ab413f77e15 | CHANGES: F1 MAJOR fixed (Send/Clear/Discard in the view header while the panel is closed); F2 MAJOR fixed (jump offset adds measured slot heights above the line; a cold jump lands short, see Declined); F3 MINOR fixed (abandoned jump clears `to_show`); F5 MINOR fixed (toggle clears the reason); F4 MINOR declined |
 | Review B M4 | 1 | same | CLEAN (F1 MINOR same as A F1, fixed; F2 MINOR duplicate D7 renumbered) |
 | Review A M4 | 2 | a3b25c06d29137b57ffacd922774d58b4474321c:a435a30292b1b5ed64c456fcbbc1b677cec4553d | CLEAN (1 MINOR: hung-height sum ignores the side; kept, same cold-jump approximation) |
+| Review A M5 | 1 | 670df89bfb9d0bfde28c408bd335f27ebacb27b7:0d9e677cc32d06a712c25128f028d05f39a979a0 | CLEAN (2 MINOR: F1 failed W15 write leaves old range in prompt, logged, accepted; F2 draft created between judge and snapshot unjudged, tiny window, accepted) |
+| Review B M5 | 1 | same | CLEAN (3 MINOR: same W15 point; reanchor skipped while a jump scroll is pending, next refresh recomputes; T067 not run) |
 
 ## Declined review findings
 
@@ -98,4 +103,4 @@ None.
 
 - M2 T034: visual pass of quickstart §B steps 4–6, 10 not run (cloud container: no xdotool/Xvfb driver). Run it on a machine with a display before or at the close unit.
 - M3 T046: visual pass of quickstart §B step 7 and the full-reply dialog not run (same reason); fold into the same display run.
-
+- Close (2026-10-18): converge found no unbuilt behaviour; tdd-verify FAIL with F2, F3, F5, F10 fixed (tests/log), F1/F4 accepted as recorded process gaps (cycle-log note), F6/F7 follow the repo's budget convention, F8: visual passes T034, T046, T056, T067, T068 and macOS/Windows hardware steps remain follow-ups for a run with a display. Close review: 2 MINOR (wording) fixed.

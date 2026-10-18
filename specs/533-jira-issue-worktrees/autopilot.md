@@ -9,8 +9,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #533
 - **Worktree branch**: feat/533_create-worktrees-from-jira-issues
 - **Started**: 2026-10-12
-- **Phase**: milestone M5
-- **Next step**: wait for CI on PR #920 (rebased onto origin/main 2ccbbe6b) and merge M5, then Close
+- **Phase**: milestone M6 (implemented, in review)
+- **Next step**: finish M6 gate, Review B, PR; then a new close unit (T066, T067, T079 tick, Status Closed)
+- **CI**: #1007 docs check red (user guide); fixed in settings.md, attempt 1
 
 ## Pull requests
 
@@ -21,7 +22,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #871 | M2 | merged | bcc36d0bf1c2908d967f669178733d1cb2865fd3 |
 | #894 | M3 | merged | 2516aa28bf7a14b886d23cd17c92cfdd76e16374 |
 | #903 | M4 | merged | 7e662c9164484c5183be2c0437e2b66dd410b915 |
-| #920 | M5 | open | |
+| #920 | M5 | merged | dbdd56da106e94b9ddf0069fb81db2b53731029e |
+| #1007 | M6 | open | |
 
 ## Milestones
 
@@ -31,7 +33,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T022–T031 | full | Connect, change and remove a project's connection and token | #871 | merged |
 | M3 | T032–T033, T035–T053, T068–T069 | full | Start a worktree from a Jira issue (list, pick, notices); kept whole: core, adapter and dialog are one wired path (no half-wired UI) | #894 | merged |
 | M4 | T054–T058, T070 | full | Search Jira issues incl. beyond the loaded list | #903 | merged |
-| M5 | T059–T065 | full | GitHub / Jira source choice per project | #920 | open |
+| M5 | T059–T065 | full | GitHub / Jira source choice per project | #920 | merged |
+| M6 | T074, T076, T077, T078, T079 | full | Keep-or-Remove prompt when switching Jira off over a stored connection (B7 bug); shell-level Jira request tests (needs a `Capabilities` test seam) | #1007 | open |
 
 ## Decisions
 
@@ -62,6 +65,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Tasks | 1 | bae8666f588552c1c7a2447bfe65696f43efeeae:c779f5c824f46d2e9d3649c1647476dc206ab227 | CLEAN (2 MINOR fixed; speckit-analyze 2 HIGH, 4 MEDIUM fixed before review) |
 | Code A (M5) | 1 | 49a404c7bb63f7867eb675cfe36caada0985a331:b6c38e8f20351df17ba252d088def630e00811a9 | 9 findings: lenient unknown issue_source value, clone, duplicated read-modify-write fixed; rest declined; visual-pass toast fixed (NotFound silent) |
 | Conformance B (M5, sonnet) | 1 | 49a404c7bb63f7867eb675cfe36caada0985a331:b6c38e8f20351df17ba252d088def630e00811a9 | CLEAN (2 MINOR fixed, prose only) |
+| Conformance B (M6, sonnet) | 1 | 6b43f04c466abeb9ce1da4c3e2ef8cfdaf9a63e1:d5c412caf13b818e50de4fa6113d688f1383d325 | CHANGES: 2 MAJOR (uncommitted test edit, cycle-log entry), 2 MINOR; all fixed |
+| Code A (M6) | 1 | 8e830d74ea771f5b9236fe9ed55680fcb9dfd894:d83f04d897c1e9d5f4a8af590ef2594330d9c64e | 8 findings: tautological token-dir test, deleted structural guard and prompt test that bypassed the shell fixed; ledger refreshed; rest declined |
 
 ## Declined review findings
 
@@ -73,10 +78,12 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 | A | no Jira search beyond the cap | declared M3 deviation; M4 |
 | M3 | B | F2/F3 test gaps (no-token path, rotation, leak extension) | recorded in tdd/cycle-log.md with where the behaviour is covered; follow-up |
 | M5 | A | blocking save in the update handler; disk value wins over memory; chips shown for every branch source; outcome only with an active project | same as save_binding (feature 491) precedent; the chip row is the remembered choice, visible with both sources (T064) |
+| M6 | A | `closed_origin` ephemeral port may be reused by a parallel test | T076 asked for a bound-then-closed port; the window is microseconds and a reuse needs the same port handed out twice. MINOR |
+| M6 | A | test helper duplication, expected-text coupling, 550 KB of PNG evidence | MINOR; PNGs are the recorded visual evidence the spec's T066 requires |
 
 ## Handover
 
-None. PR #920 (M5) rebased onto main 6cf261ef, layout snapshot regenerated (toolbar gained a button on main), full `mise run gate` green, force-pushed; waiting on CI and merge.
+None.
 
 ## Open escalation
 
@@ -89,8 +96,16 @@ None.
 
 ## Follow-ups not done
 
+- SC-006: another window drops the Jira picker 3.3-3.7 s after the click, not within 1 s (visual/close.md, T079). Daemon echo is at 0.13 s; cause unknown, check whether any setting shows it.
+
 - Main took PROTOCOL_VERSION 41 and 42 (feature 776) before M1 merged: M1 is now 42 -> 43, then main took 43 and 44: M1 is now 44 -> 45; spec artifacts updated.
 - Main then took 43 (feature 552) too: M1 is now 44 -> 45.
 
 - M1 had no test-first red-phase evidence (tests written after the code in part 1); no tdd/cycle-log.md; coverage is by the tests T003-T008, T015-T017 passing in the gate, not by red-then-green history.
 - GitHub issue picker brought under an integrations switch (pending clarify answer).
+
+## Close unit findings (2026-10-18)
+
+- converge: nothing else unbuilt; T066/T067 left open for the second close unit.
+- tdd-verify: FAIL (see tdd/verification.md); HIGH findings 1-4 fixed (T071-T073, core tests pass), 11/7/9 fixed in client tests (T075, ports of T076); T074/T076/T077 need a test seam: M6.
+- visual pass B7 FAILED: switch cannot be saved off over a stored connection (T078); SC-006 timing 1.05 s unproven (T079). B1-B6, B8, B9 (Linux) pass; light scheme, narrow window, macOS/Windows perms: missing access.
