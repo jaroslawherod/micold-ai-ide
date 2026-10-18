@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #968
 - **Worktree branch**: claude/project-thread-ftdy5c
 - **Started**: 2026-10-18
-- **Phase**: M2 PR
-- **Next step**: M2 — orchestrator opens the PR from the pushed branch, waits on CI and merges; then M3
+- **Phase**: M3 PR
+- **Next step**: M3 — orchestrator opens the PR from the pushed branch, waits on CI and merges; then close (T032–T034)
 
 ## Pull requests
 
@@ -27,7 +27,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T020 | full | Chord opens the switcher over the active project's locations; filter, choose = row click, close | #1057 | merged |
 | M2 | T021–T026 | full | Sessions listed under their locations, found by name, kept by a location match | #1061 | merged |
-| M3 | T027–T031 | light | Other known projects listed (unavailable badged, unselectable); complete user-guide bullet | — | planned |
+| M3 | T027–T031 | light | Other known projects listed (unavailable badged, unselectable); complete user-guide bullet | pending | in review |
 
 ## Decisions
 
@@ -53,6 +53,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A M1 (sonnet, scoped) | 2 | 0d0c5ba3498562676ea8c6a61eacf9ff7f5c3c19:51ebbf93e8f5d60473867be8e60ad3cb9aa8253e | CLEAN: 1 MINOR (doc line still long) fixed, prose only |
 | Review B M1 (conformance, sonnet) | 1 | 0d0c5ba3498562676ea8c6a61eacf9ff7f5c3c19:51ebbf93e8f5d60473867be8e60ad3cb9aa8253e | CLEAN, no findings |
 | Visual pass M1 (quickstart §B B1, B2, B4, B7–B10) | 1 | — | 2 defects (results list outside the dialog card; long name wrapped) fixed in 18a5cf51, re-checked; evidence specs/968-quick-switcher/visual-pass/ |
+
+| M3 | A | clean (1 MINOR fixed: restore-session assertion) | scoped gate green |
+| M3 | B | MAJOR F1 (no red in cycle log): fixed with a red run | prose/evidence only, no re-round |
+| M3 | visual pass | PASS B5 B6 B12 B2 B3(reduced); B11 not run; D3 (list did not follow highlight) fixed in shell/quick_switch.rs and rechecked | |
 
 ## Declined review findings
 
