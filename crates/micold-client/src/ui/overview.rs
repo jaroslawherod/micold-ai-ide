@@ -7,6 +7,7 @@ use crate::app::{Message, State};
 use crate::features::overview::{MenuOrigin, Msg};
 use crate::features::sidebar::{RunRow, SidebarEntry, WorktreeNode};
 use crate::icons::Icon;
+use crate::ui::cdk::context_area::ContextArea;
 use crate::ui::material::{CardGrid, MenuItem, OverviewCard};
 use iced::widget::container;
 use iced::{Element, Length};
@@ -34,6 +35,7 @@ pub fn view<'a>(state: &State, scheme: ColorScheme) -> Element<'a, Message> {
         .map(|(index, model)| {
             let location = model.location.clone();
             let card = OverviewCard::new(model, r)
+                .targeted(is_targeted(state, &location))
                 .on_press(Message::Overview(Msg::ActivationRequested(
                     model.activation.clone(),
                 )))
@@ -53,11 +55,26 @@ pub fn view<'a>(state: &State, scheme: ColorScheme) -> Element<'a, Message> {
         })
         .collect();
     // The grid scrolls itself; an outer scrollable would give it unbounded height.
-    container(CardGrid::new(cards, r).on_scroll(Message::Overview(Msg::GridScrolled)))
+    let pane = container(CardGrid::new(cards, r).on_scroll(Message::Overview(Msg::GridScrolled)))
         .padding(spacing::LG)
         .width(Length::Fill)
-        .height(Length::Fill)
+        .height(Length::Fill);
+    // A right-click on empty space closes an open card menu (FR-008, research R3): a press over a
+    // card is captured by the card's own area first, so only the space between and around cards
+    // reaches this one.
+    ContextArea::new(pane)
+        .on_secondary_press(|_| Message::Overview(Msg::CardMenuDismissed))
         .into()
+}
+
+/// Whether `location`'s card is the target of the open card menu (FR-006). Identity, not a grid
+/// index, so the mark follows the location when the cards reorder.
+pub fn is_targeted(state: &State, location: &SessionLocation) -> bool {
+    state
+        .overview
+        .card_menu
+        .as_ref()
+        .is_some_and(|menu| &menu.location == location)
 }
 
 /// The card menu of `location` (feature 972, FR-002): *Open* first, then exactly that location's

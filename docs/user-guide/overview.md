@@ -118,9 +118,14 @@ asks for.
 - **Every other entry** (rename, delete, copy, bind to a daemon) acts in place: the Overview stays
   open, any dialog the entry opens shows over it, and the card reflects the result.
 
+While the menu is open, its card is marked as the target: a bold outline in the accent colour and a
+tinted fill, unlike the thin ring of keyboard focus or the light tint of hovering. The mark stays
+on that card wherever the pointer goes and goes when the menu closes.
+
 **Escape**, a click outside the menu, or scrolling the grid closes the menu without running
-anything; a click that closes it does not also activate what it landed on. Right-clicking another
-card closes the menu and opens that card's. The menu also closes when its location goes away or the
+anything; a click that closes it does not also activate what it landed on. Right-clicking empty
+space in the Overview closes it too, and right-clicking another card closes the menu and opens
+that card's. The menu also closes when its location goes away or the
 Overview closes.
 
 ## Keyboard

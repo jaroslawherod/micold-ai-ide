@@ -361,6 +361,34 @@ fn an_overview_cards_text_and_icon_are_legible_on_its_state_fill() {
     );
 }
 
+/// Overview card target mark (feature 972, T015 — FR-006): the `primary` outline reads at 3:1
+/// against each card state's fill with the selected layer over it, both schemes.
+#[test]
+fn the_card_target_outline_is_visible_on_every_state_fill() {
+    use micold_core::overview::CardState;
+    let mut violations: Vec<String> = Vec::new();
+    for scheme in [ColorScheme::Light, ColorScheme::Dark] {
+        let r = tokens::roles(scheme);
+        for state in CardState::ALL {
+            let p = super::overview_card::palette(state, &r);
+            let layered = tokens::over(p.text, f64::from(tokens::state::SELECTED), p.fill);
+            for (what, ground) in [("fill", p.fill), ("fill + selected layer", layered)] {
+                let ratio = contrast(r.primary, ground);
+                if ratio < AA_NON_TEXT {
+                    violations.push(format!(
+                        "{scheme:?} / {state:?} outline on {what}: {ratio:.2}:1 (needs {AA_NON_TEXT})"
+                    ));
+                }
+            }
+        }
+    }
+    assert!(
+        violations.is_empty(),
+        "the target outline cannot be seen on a card:\n  {}",
+        violations.join("\n  ")
+    );
+}
+
 /// Syntax colours (feature 482, T043, US1 s8): every colour a highlighter theme can give, as the
 /// diff draws it through `syntax::legible`, reads at 4.5:1 on the diff's surface and on both line
 /// tints of its scheme. The themes' palettes are not public, so the walk sweeps a grid of the whole

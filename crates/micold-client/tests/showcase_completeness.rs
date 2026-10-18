@@ -880,6 +880,7 @@ fn the_overview_card_and_grid_are_posed() {
                 "Idle",
                 "Default",
                 "orphan",
+                "targeted",
             ][..],
         ),
         (

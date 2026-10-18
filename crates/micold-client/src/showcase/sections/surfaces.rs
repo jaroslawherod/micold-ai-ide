@@ -459,6 +459,16 @@ pub fn overview_card<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'
     );
     orphan.branch = None;
     orphan.prs = micold_core::overview::PrDisplay::Hidden;
+    // The card whose context menu is open (feature 972, FR-006): outline and selected layer.
+    let targeted = iced::widget::container(Element::from(
+        material::OverviewCard::<Message>::new(
+            &card_model("targeted", T::Feature, S::Working, R::Working),
+            roles,
+        )
+        .on_press(Message::NoOp)
+        .targeted(true),
+    ))
+    .width(Length::Fixed(320.0));
     let mut unknown = card_model("unknown-counts", T::Feature, S::Idle, R::Idle);
     unknown.prs =
         micold_core::overview::PrDisplay::Unknown(micold_core::overview::PrUnknown::Unreachable);
@@ -521,6 +531,7 @@ pub fn overview_card<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'
             posed("Default", card(default), roles),
             posed("orphan", card(orphan), roles),
             posed("unknown counts", card(unknown), roles),
+            posed("targeted", targeted, roles),
         ],
         Layout::FullWidth,
     )
