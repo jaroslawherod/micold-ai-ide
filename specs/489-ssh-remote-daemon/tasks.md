@@ -154,10 +154,10 @@ rootless `sshd` and are off by default (`mise run test-ssh`).
 
 ## Phase 9: Convergence (close unit findings)
 
-- [ ] T085 [US2] Test (red first) that a session whose daemon reconnected restarted or without that session shows `lost to daemon <name>`, never `disconnected`/running (FR-019, second sentence), in `crates/micold-client/tests/worktree_unavailable_label.rs`
-- [ ] T086 [US2] Compare the session catalog the daemon reports on reconnect with the sessions the client holds and feed the result as `absent_from_catalog` into `session_lost_label` (`crates/micold-client/src/links.rs`) from the row-label path in `crates/micold-client/src/features/sidebar.rs`; give `session_lost_label` its production caller
-- [ ] T087 Pin the restart on a user Reconnect: assert the actor epoch changes in the `(_, DaemonEvent::Reconnect)` arm (`crates/micold-core/src/daemons.rs` ~579), killing the surviving mutant of `tdd/verification.md` finding 2, in `crates/micold-core/src/daemons.rs` tests or `crates/micold-client/tests/daemon_reconnect.rs`
-- [ ] T088 [US2] Document the `lost to daemon` outcome after a daemon restart in `docs/user-guide/remote-daemons.md`
+- [x] T085 [US2] Test (red first) that a session whose daemon reconnected restarted or without that session shows `lost to daemon <name>`, never `disconnected`/running (FR-019, second sentence), in `crates/micold-client/tests/worktree_unavailable_label.rs`
+- [x] T086 [US2] Compare the session catalog the daemon reports on reconnect with the sessions the client holds and feed the result as `absent_from_catalog` into `session_lost_label` (`crates/micold-client/src/links.rs`) from the row-label path in `crates/micold-client/src/features/sidebar.rs`; give `session_lost_label` its production caller
+- [x] T087 Pin the restart on a user Reconnect: assert the actor epoch changes in the `(_, DaemonEvent::Reconnect)` arm (`crates/micold-core/src/daemons.rs` ~579), killing the surviving mutant of `tdd/verification.md` finding 2, in `crates/micold-core/src/daemons.rs` tests or `crates/micold-client/tests/daemon_reconnect.rs`
+- [x] T088 [US2] Document the `lost to daemon` outcome after a daemon restart in `docs/user-guide/remote-daemons.md`
 
 ## Dependencies and order
 

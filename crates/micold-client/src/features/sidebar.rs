@@ -1226,6 +1226,17 @@ impl crate::app::State {
         .unwrap_or_else(|| self.daemon_label_of(key))
     }
 
+    /// Whether a live session of the row `key` is one its daemon did not list on reconnect.
+    fn has_session_lost_to_daemon(&self, key: &str) -> bool {
+        self.active_sessions().iter().any(|s| {
+            let here = match &s.location {
+                micold_core::session::SessionLocation::Worktree(dir) => dir == key,
+                micold_core::session::SessionLocation::Default => key.is_empty(),
+            };
+            here && !s.archived && self.settings.lost_sessions.contains(&s.id)
+        })
+    }
+
     /// The row's daemon text from this window's own links and the facts it holds (feature 491,
     /// T028): what [`worktree_tree`](Self::worktree_tree) puts on each row.
     pub fn daemon_row_label(&self, key: &str) -> String {
@@ -1255,6 +1266,17 @@ impl crate::app::State {
         match self.daemon_binding(key) {
             Binding::Bound(id) if self.settings.links.state(id).is_none() => {
                 self.daemon_label_of(key)
+            }
+            // Reconnected, and the daemon no longer has a live session of this row (FR-019).
+            Binding::Bound(id) if self.has_session_lost_to_daemon(key) => {
+                crate::links::session_lost_label(
+                    &self.settings.daemons,
+                    &self.settings.links,
+                    id,
+                    &micold_core::session::SessionLifecycle::Running,
+                    true,
+                )
+                .unwrap_or_else(|| self.daemon_status_label_of(key, &self.settings.links, facts))
             }
             _ => self.daemon_status_label_of(key, &self.settings.links, facts),
         }
