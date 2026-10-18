@@ -1271,3 +1271,65 @@ fn a_start_retires_the_migration_notice_only_on_the_basic_image() {
         "once"
     );
 }
+
+/// FR-010, US1 #2: a new container daemon has only Claude Code ticked, the selection is edited per
+/// daemon, and an emptied selection saves.
+mod ai_cli_selection {
+    use super::*;
+    use daemons::Msg;
+    use micold_core::sandbox::AiCliSelection;
+    use micold_core::session::AiCli;
+
+    #[test]
+    fn a_newly_added_daemon_has_only_claude_code_ticked() {
+        let mut state = State::default();
+        daemons::begin_add(&mut state);
+        assert_eq!(
+            state.draft.as_ref().unwrap().profile.ai_clis,
+            AiCliSelection::new_daemon()
+        );
+    }
+
+    #[test]
+    fn ticking_unticking_and_emptying_the_selection_save_per_daemon() {
+        let mut w = World::new();
+        let mut state = State::default();
+        let boxed = w.boxed;
+        daemons::begin_edit(&mut state, &w.model(), boxed);
+        send(&mut state, &mut w, Msg::AiCliToggled(AiCli::Codex, true));
+        send(&mut state, &mut w, Msg::AiCliToggled(AiCli::Codex, false));
+        for cli in AiCli::ALL {
+            send(&mut state, &mut w, Msg::AiCliToggled(cli, false));
+        }
+        daemons::save(&mut state, &mut w.model()).unwrap();
+        assert!(
+            profile_of(&w, boxed).ai_clis.0.is_empty(),
+            "an empty selection saves"
+        );
+        daemons::begin_edit(&mut state, &w.model(), boxed);
+        send(&mut state, &mut w, Msg::AiCliToggled(AiCli::Pi, true));
+        daemons::save(&mut state, &mut w.model()).unwrap();
+        assert_eq!(
+            profile_of(&w, boxed).ai_clis.0.iter().collect::<Vec<_>>(),
+            [&AiCli::Pi]
+        );
+    }
+
+    #[test]
+    fn a_change_on_a_running_daemon_goes_through_the_restart_confirmation() {
+        let mut w = World::new();
+        let mut state = State::default();
+        let boxed = w.boxed;
+        let before = profile_of(&w, boxed).ai_clis;
+        daemons::start(&mut state, &mut w.model(), boxed);
+        daemons::begin_edit(&mut state, &w.model(), boxed);
+        send(&mut state, &mut w, Msg::AiCliToggled(AiCli::Pi, false));
+        send(&mut state, &mut w, Msg::AiCliToggled(AiCli::Codex, false));
+        let out = send(&mut state, &mut w, Msg::Saved);
+        assert!(out.is_empty());
+        assert!(state.prompt().is_some(), "asks before applying");
+        assert_eq!(profile_of(&w, boxed).ai_clis, before, "not applied yet");
+        send(&mut state, &mut w, Msg::RemovalConfirmed);
+        assert_ne!(profile_of(&w, boxed).ai_clis, before);
+    }
+}

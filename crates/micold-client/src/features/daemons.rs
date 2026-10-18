@@ -760,7 +760,12 @@ pub fn stop(state: &mut State, model: &mut Model<'_>, id: DaemonId) -> Option<St
 
 /// Open the form for a new daemon.
 pub fn begin_add(state: &mut State) {
-    let profile = SandboxProfile::default();
+    // A new daemon offers Claude Code only (FR-010); `SandboxProfile::default()` is the
+    // all-CLI reading of an older stored file.
+    let profile = SandboxProfile {
+        ai_clis: micold_core::sandbox::AiCliSelection::new_daemon(),
+        ..SandboxProfile::default()
+    };
     let texts = ProfileTexts::of(&profile);
     state.flipped_sections.clear();
     state.draft = Some(Draft {
@@ -1621,6 +1626,8 @@ pub enum Msg {
     StorageLimitEdited(String),
     /// The keep-running-after-sign-out box changed.
     SurviveLogoutToggled(bool),
+    /// An AI CLI ticked or unticked in the container form (FR-010).
+    AiCliToggled(micold_core::session::AiCli, bool),
     /// The SSH host field changed.
     SshHostEdited(String),
     /// The configured hosts were read for the picker.
@@ -1877,6 +1884,13 @@ fn reduce(state: &mut State, model: &mut Model<'_>, msg: Msg) -> Vec<Outcome> {
         Msg::PidLimitEdited(v) => edit(state, &|d| d.pids = v.clone()),
         Msg::StorageLimitEdited(v) => edit(state, &|d| d.storage_mib = v.clone()),
         Msg::SurviveLogoutToggled(v) => edit(state, &|d| d.profile.survive_logout = v),
+        Msg::AiCliToggled(cli, on) => edit(state, &|d| {
+            if on {
+                d.profile.ai_clis.0.insert(cli);
+            } else {
+                d.profile.ai_clis.0.remove(&cli);
+            }
+        }),
         Msg::SshHostEdited(v) => edit(state, &|d| d.ssh_host = v.clone()),
         Msg::SshHostsLoaded(hosts) => state.ssh_hosts = hosts,
         Msg::OfferReported(id, offer) => model.links.set_offer(id, offer),

@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #806
 - **Worktree branch**: claude/project-thread-uwrpqv
 - **Started**: 2026-10-17
-- **Phase**: M5c
-- **Next step**: push the red-CI fix for PR #1027 (sandbox job), orchestrator re-checks CI
+- **Phase**: M6
+- **Next step**: M6 continues from *Handover*
 
 ## Pull requests
 
@@ -22,6 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #988 | M3 static Linux daemons (two CI fixes: SIGPIPE in remote-daemon-bundle.test.sh; zig crashed on the Windows ARM64 runner, so musl daemons are built once in the Linux `linux-daemons` job and downloaded by packaging jobs) | merged | 32798973fe5df793f5c85b6ed52a84e52230591d |
 | #995 | M4 AI CLI install step + registry-only relay | merged | abe058a2424ea0551edb2f6667ac732064434557 |
 | #1018 | M5b part 1 (image pin, bridge env, notices, migration) | merged | 6dbe317600b3c8430dd392b5a94293c85e6fbf2f |
+| #1027 | M5c (real-runtime provision suite, form tests, row text) | merged | dc2d379365c2379b201dca8d3a6fadd40f39c632 |
 | #998 | M5 subset (container daemons over SSH on the basic image; pulled in T047, T055, T065) | merged | d526eaca82b43d60d5f2eb85926259f0fefc45e4 |
 
 ## Milestones
@@ -107,7 +108,9 @@ Milestone notes:
 
 ## Handover
 
-None.
+M6 (unit 1, uncommitted-to-remote; no PR yet, nothing pushed). **Done** (committed locally): T071 (core tests: `ai_clis` default/empty round trip, `settings_released_image_migration.rs` rows), T077 (`SandboxProfile.ai_clis`, serde default `all()`, `AiCliSelection::default()` = all, `Hash`; `Dial::ContainerSsh`/`ContainerReach.ai_clis` into `Ownership::AppOwned`; `persist.rs` field-by-field merge; `begin_add` sets `new_daemon()`); the empty-selection follow-up (`install_step` no longer returns early: the check always runs and rewrites `offered.json`; test `an_empty_selection_rewrites_offered_json_to_offer_nothing`; Fake/kube `with_build` scripts gained that one run); the form (`Msg::AiCliToggled`, `ai_cli_rows`, `AI_CLI_NOTE`, checkboxes at the end of the Container section) with tests in `tests/daemons_feature.rs` (`ai_cli_selection`) and `container_fields.rs`. `cargo test -p micold-core` green (except the root-only perms test), client new tests green; no full gate run yet.
+
+**Next**: (1) T072 rest: form test that the section is not shown for a remote SSH daemon (US6 #3); (2) T073/T078 warnings: `Provisioned.warnings` is dropped in `daemon.rs::container_attempt` (`.map(|p| p.connected)`); `InstallLine` only reaches `diagnostics` log while Starting (`features/daemons.rs` `Msg::Provisioning`). Carry the warnings to the row (`DaemonView`) and recent errors naming the CLI + installer output (new `ProvisionEvent`/Msg, survives into Connected), show install lines in `ui/settings/daemons.rs`; (3) T074 (`tests/unavailable_default_says_so.rs`: deselected/failed default on a daemon says unavailable on that daemon), T076 (`gates/container_section_fits.rs` with the five checkboxes), T075 (real-runtime, compile only: `sandbox_real_provision.rs`), T078 docs in `docs/user-guide/sandboxed-daemon.md` + visual pass (evidence under `visual/`); (4) the #1027 follow-up: an own image with no passwd entry for the host uid makes `wait_for_login` run the whole acquire+create bound (~15 min); make it fail fast in Reach with a row-visible reason (bounded login wait / treat a running container whose `id -un` keeps failing as NoSshServer); (5) review A/B, merge origin/main, full gate (`scripts/gate.sh`), pr-title/pr-body, push -u.
 
 ## Open escalation
 

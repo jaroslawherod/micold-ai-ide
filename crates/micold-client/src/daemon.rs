@@ -197,6 +197,8 @@ pub enum Dial {
         image: String,
         /// Whether the daemon is kept running with nobody connected (`MICOLD_IDLE_STOP=off`).
         survive_logout: bool,
+        /// The AI CLIs this daemon offers once installed (FR-010).
+        ai_clis: AiCliSelection,
     },
     /// Start a pod in a cluster and bridge to it (feature 686). One try per start, like
     /// [`Dial::Ssh`].
@@ -335,6 +337,7 @@ pub fn actor_specs_answered(
                     network: c.profile.network,
                     image: c.profile.image.reference().to_string(),
                     survive_logout: c.profile.survive_logout,
+                    ai_clis: c.profile.ai_clis.clone(),
                 },
                 DaemonRuntime::Ssh(s) => Dial::Ssh {
                     target: s.target.clone(),
@@ -609,6 +612,7 @@ async fn connect_and_pump(
                 network,
                 image,
                 survive_logout,
+                ai_clis,
             },
             _,
         ) => {
@@ -621,6 +625,7 @@ async fn connect_and_pump(
                 network: *network,
                 image,
                 survive_logout: *survive_logout,
+                ai_clis,
                 time_zone: HOST_TIME_ZONE.get().and_then(|z| z.as_deref()),
             };
             match container_attempt(SSH_HOST.get().map(|h| &**h), &target, &sink).await {
@@ -1051,6 +1056,7 @@ struct ContainerReach<'a> {
     network: micold_core::sandbox::NetworkPosture,
     image: &'a str,
     survive_logout: bool,
+    ai_clis: &'a AiCliSelection,
     time_zone: Option<&'a str>,
 }
 
@@ -1098,7 +1104,7 @@ fn container_target(
             known_hosts: keys.known_hosts(),
         }),
         owned: Ownership::AppOwned {
-            ai_clis: AiCliSelection::all(),
+            ai_clis: reach.ai_clis.clone(),
             // A container that may connect out installs directly; one that may not goes through a
             // relay that allows only the package registries.
             egress: match reach.network {
@@ -1638,6 +1644,7 @@ mod tests {
             network: Default::default(),
             image: "ghcr.io/o/img:1",
             survive_logout: true,
+            ai_clis: &micold_core::sandbox::AiCliSelection::new_daemon(),
             time_zone: Some("Europe/Berlin"),
         };
         let target = container_target("node".into(), &reach, &keys);
@@ -1655,6 +1662,11 @@ mod tests {
             Ownership::AppOwned { egress: Egress::Relay { allow }, .. } if !allow.is_empty()
         ));
         assert_eq!(target.bounds, StepBounds::container());
+        assert!(
+            matches!(&target.owned, Ownership::AppOwned { ai_clis, .. } if *ai_clis == micold_core::sandbox::AiCliSelection::new_daemon()),
+            "the stored selection, not every CLI, is installed and offered: {:?}",
+            target.owned
+        );
         // sshd builds a session's environment afresh, so the daemon is told the image's data home,
         // where provisioning wrote the catalogue and the AI CLIs.
         // The container's other `-e` values ride along too, so this daemon matches the entrypoint's.
@@ -1736,6 +1748,7 @@ mod tests {
             network: micold_core::sandbox::NetworkPosture::Outbound,
             image: "img",
             survive_logout: false,
+            ai_clis: &micold_core::sandbox::AiCliSelection::new_daemon(),
             time_zone: None,
         };
         // `NoSsh` never finds the container, so the attempt is still waiting when the timeout ends it.

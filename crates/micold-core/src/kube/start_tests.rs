@@ -1126,7 +1126,11 @@ mod connect {
             bridge.starts_with("env MICOLD_IDLE_STOP='off' "),
             "{bridge}"
         );
-        assert_eq!(commands.len(), 4, "reach, probe, last, bridge: no copy");
+        assert_eq!(
+            commands.len(),
+            5,
+            "reach, probe, offered.json check, last, bridge: no copy"
+        );
     }
 
     #[tokio::test(start_paused = true)]
