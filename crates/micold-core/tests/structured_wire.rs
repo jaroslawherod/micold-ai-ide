@@ -2,7 +2,7 @@
 //! FR-016, FR-020). Every addition is serde-defaulted, so a frame from an older peer decodes as a
 //! terminal session.
 
-use micold_core::protocol::messages::{ClientMsg, DaemonMsg, SessionSummary};
+use micold_core::protocol::messages::{ClientMsg, DaemonMsg, RefusedRequest, SessionSummary};
 use micold_core::session::{AiCli, SessionId, SessionKind};
 use micold_core::structured::{ContentBlock, Delta, SequencedEvent, StructuredEvent, Usage};
 use uuid::Uuid;
@@ -202,5 +202,22 @@ fn a_session_user_message_round_trips_with_its_text_unchanged() {
             panic!("not a SessionUserMessage");
         };
         assert_eq!(back, text);
+    }
+}
+
+#[test]
+fn a_session_request_refused_round_trips_for_every_refused_request() {
+    for request in [
+        RefusedRequest::Input,
+        RefusedRequest::Resize,
+        RefusedRequest::Scrollback,
+        RefusedRequest::Interrupt,
+    ] {
+        let msg = DaemonMsg::SessionRequestRefused {
+            session: sid(),
+            request,
+            reason: "a structured session has no terminal".into(),
+        };
+        json_roundtrip(&msg);
     }
 }

@@ -292,7 +292,9 @@ fn the_build_fingerprint_is_a_separate_mechanism_from_the_schema_hash() {
 /// And 51 → 52 for feature 938's `kind` fields and `StructuredEvents` (contracts/wire.md, M2).
 ///
 /// And 52 → 53 for feature 938's `ClientMsg::SessionUserMessage` (contracts/wire.md, M3).
-const FEATURE_026_PROTOCOL_VERSION: u32 = 53;
+///
+/// And 53 → 54 for feature 938's `DaemonMsg::SessionRequestRefused` (contracts/wire.md, M6).
+const FEATURE_026_PROTOCOL_VERSION: u32 = 54;
 
 #[test]
 fn the_wire_changes_for_this_feature_cost_exactly_one_version_bump() {
