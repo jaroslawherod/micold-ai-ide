@@ -1432,7 +1432,11 @@ mod tests {
         ];
         assert_eq!(review.reanchor(&moves), 1, "only the first holds");
         assert_eq!(review.reanchor(&moves), 0, "the same moves apply once");
-        let moved = review.comments().iter().find(|c| c.id == id(1)).expect("c1");
+        let moved = review
+            .comments()
+            .iter()
+            .find(|c| c.id == id(1))
+            .expect("c1");
         assert_eq!(moved.range, range(8, 8));
         let mut restored = review.comments().to_vec();
         restored[0].range = range(1, 1);
