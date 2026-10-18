@@ -47,6 +47,10 @@ use iced::{Element, Event, Rectangle};
 /// What a press is turned into: a message built from the press point, in window pixels.
 type OnPress<'a, M> = Box<dyn Fn((u16, u16)) -> M + 'a>;
 
+/// What a press is turned into when the control's own box matters: a message built from its
+/// bottom-left corner, in window pixels.
+type OnBounds<'a, M> = Box<dyn Fn((u16, u16)) -> M + 'a>;
+
 /// Wraps `content` and reports a secondary click on it.
 ///
 /// Builder form (Principle VIII): `ContextArea::new(content).on_secondary_press(|(x, y)| msg)`.
@@ -54,6 +58,7 @@ pub struct ContextArea<'a, M> {
     content: Element<'a, M>,
     on_secondary_press: Option<OnPress<'a, M>>,
     on_primary_press: Option<OnPress<'a, M>>,
+    on_primary_bounds: Option<OnBounds<'a, M>>,
 }
 
 impl<'a, M: 'a> ContextArea<'a, M> {
@@ -63,7 +68,20 @@ impl<'a, M: 'a> ContextArea<'a, M> {
             content: content.into(),
             on_secondary_press: None,
             on_primary_press: None,
+            on_primary_bounds: None,
         }
+    }
+
+    /// Publish `f(corner)` when a primary (left) button is pressed over the content, where `corner`
+    /// is the content's **bottom-left** corner in window pixels rather than the press point.
+    ///
+    /// For a trigger whose panel hangs directly below it, aligned with its leading edge, wherever
+    /// inside the trigger the click landed (BUG-1023). Like [`Self::on_primary_press`] it does not
+    /// capture, and it arrives before the child's own release-time message. The corner is the
+    /// layout's, so the area must not sit in a scrolled viewport.
+    pub fn on_primary_bounds(mut self, f: impl Fn((u16, u16)) -> M + 'a) -> Self {
+        self.on_primary_bounds = Some(Box::new(f));
+        self
     }
 
     /// Publish `f(point)` when a secondary (right) button is pressed over the content.
@@ -148,6 +166,11 @@ impl<'a, M: 'a> Widget<M, iced::Theme, iced::Renderer> for ContextArea<'a, M> {
                 shell.publish(build(point));
             }
         }
+        if let Some(build) = &self.on_primary_bounds {
+            if let Some(corner) = reported_corner(event, over.is_some(), layout.bounds()) {
+                shell.publish(build(corner));
+            }
+        }
         let Some(build) = &self.on_secondary_press else {
             return;
         };
@@ -192,6 +215,19 @@ fn reported_press(
     over.map(|p| (p.x as u16, p.y as u16))
 }
 
+/// The bottom-left corner of `bounds` when `event` is a primary press and `over` is true.
+fn reported_corner(event: &Event, over: bool, bounds: Rectangle) -> Option<(u16, u16)> {
+    if !over
+        || !matches!(
+            event,
+            Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left))
+        )
+    {
+        return None;
+    }
+    Some((bounds.x as u16, (bounds.y + bounds.height) as u16))
+}
+
 impl<'a, M: 'a> From<ContextArea<'a, M>> for Element<'a, M> {
     fn from(area: ContextArea<'a, M>) -> Self {
         Element::new(area)
@@ -202,6 +238,17 @@ impl<'a, M: 'a> From<ContextArea<'a, M>> for Element<'a, M> {
 mod tests {
     use super::*;
     use iced::Point;
+
+    #[test]
+    fn a_primary_press_over_the_area_reports_its_bottom_left_corner() {
+        let bounds = Rectangle::new(Point::new(300.5, 12.0), iced::Size::new(120.0, 40.0));
+        assert_eq!(
+            reported_corner(&left_press(), true, bounds),
+            Some((300, 52))
+        );
+        assert_eq!(reported_corner(&left_press(), false, bounds), None);
+        assert_eq!(reported_corner(&right_press(), true, bounds), None);
+    }
 
     fn right_press() -> Event {
         Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Right))

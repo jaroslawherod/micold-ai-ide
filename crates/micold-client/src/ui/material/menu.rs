@@ -333,6 +333,7 @@ pub struct MenuOverlay<'a, M> {
     roles: Roles,
     open: bool,
     anchor: Option<iced::Point>,
+    hung_from: Option<iced::Point>,
     on_scroll: Option<M>,
     lifetime: std::marker::PhantomData<&'a ()>,
 }
@@ -347,9 +348,18 @@ impl<'a, M: Clone + 'a> MenuOverlay<'a, M> {
             roles,
             open: true,
             anchor: None,
+            hung_from: None,
             on_scroll: None,
             lifetime: std::marker::PhantomData,
         }
+    }
+
+    /// Hang the popover's top-left corner from `point` (window coordinates) — the bottom-left
+    /// corner of the control that opened it — instead of the default trailing-edge position. Unlike
+    /// [`Self::anchor`] it stays a popover, so a context menu opened inside it is still above it.
+    pub fn hung_from(mut self, point: Option<iced::Point>) -> Self {
+        self.hung_from = point;
+        self
     }
 
     /// Whether the menu is open. Going from `true` to `false` plays the fade out.
@@ -388,6 +398,7 @@ impl<'a, M: Clone + 'a> From<MenuOverlay<'a, M>> for Surface<'a, M> {
             roles: r,
             open,
             anchor,
+            hung_from,
             on_scroll,
             ..
         } = m;
@@ -417,13 +428,15 @@ impl<'a, M: Clone + 'a> From<MenuOverlay<'a, M>> for Surface<'a, M> {
         .rounded(super::SurfaceKind::Menu.shape())
         .animate_in();
 
-        let (layer, anchor) = match anchor {
-            Some(point) => (Layer::ContextMenu, Anchor::Point(point)),
+        let (layer, anchor) = match (anchor, hung_from) {
+            (Some(point), _) => (Layer::ContextMenu, Anchor::Point(point)),
+            // Hung from the control that opened it (BUG-1023).
+            (None, Some(point)) => (Layer::Popover, Anchor::Point(point)),
             // Read, not restated: the bar's own height plus its divider (FR-029a). This was
             // `TOP_OFFSET = 52.0 // approx. toolbar height`, written against a content-sized bar in
             // feature 005 and left alone when §7.1 pinned the bar at 64 — so the panel opened 13dp
             // inside the bar it hangs from, over the trigger it was opened from (BUG-003).
-            None => (
+            (None, None) => (
                 Layer::Popover,
                 Anchor::TopEnd {
                     top: anatomy::app_bar::BOTTOM_EDGE,
