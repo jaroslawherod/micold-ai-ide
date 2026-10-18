@@ -114,8 +114,11 @@ fn blank_name_duplicate_and_second_host_name_their_field() {
     let mut w = World::new();
     let mut state = State::default();
     add_container(&mut state, "  ", "c2", "7002");
-    let err = daemons::save(&mut state, &mut w.model()).unwrap_err();
-    assert_eq!(err.field, "name");
+    // A blank name is the required error on the field, not a refusal with a sentence (feature 937).
+    assert!(daemons::save(&mut state, &mut w.model())
+        .unwrap()
+        .is_empty());
+    assert_eq!(w.registry.entries().len(), 2, "nothing is added");
 
     add_container(&mut state, "box", "c2", "7002");
     let err = daemons::save(&mut state, &mut w.model()).unwrap_err();
@@ -409,7 +412,6 @@ fn a_bad_limit_or_archive_names_its_field_and_changes_nothing() {
         (Msg::MemoryLimitEdited("1".into()), "memory"),
         (Msg::PidLimitEdited("x".into()), "pids"),
         (Msg::StorageLimitEdited("1".into()), "storage"),
-        (Msg::ImageKindChosen(daemons::ImageKind::Own), "image"),
     ] {
         daemons::begin_edit(&mut state, &w.model(), boxed);
         send(&mut state, &mut w, msg);
@@ -418,6 +420,16 @@ fn a_bad_limit_or_archive_names_its_field_and_changes_nothing() {
         assert_eq!(err.field, field, "{}", err.message);
         assert_eq!(profile_of(&w, boxed), before);
     }
+    // "My own image" with nothing filled in is the required error on the image field.
+    daemons::begin_edit(&mut state, &w.model(), boxed);
+    send(
+        &mut state,
+        &mut w,
+        Msg::ImageKindChosen(daemons::ImageKind::Own),
+    );
+    send(&mut state, &mut w, Msg::Saved);
+    assert!(state.form_error.is_none());
+    assert_eq!(profile_of(&w, boxed), before);
 }
 
 #[test]
