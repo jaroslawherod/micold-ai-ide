@@ -217,9 +217,7 @@ pub fn pod_status_of(pod: &serde_json::Value) -> PodStatusView {
     PodStatusView {
         phase: status["phase"].as_str().unwrap_or_default().to_string(),
         scheduled: scheduled.map(|c| c["status"] == "True"),
-        schedule_reason: scheduled
-            .filter(|c| c["status"] != "True")
-            .and_then(|c| pair(c)),
+        schedule_reason: scheduled.filter(|c| c["status"] != "True").and_then(pair),
         waiting: pair(&state["waiting"]).or_else(|| pair(&state["terminated"])),
         running: !state["running"].is_null(),
     }
