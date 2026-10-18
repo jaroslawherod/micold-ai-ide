@@ -45,12 +45,10 @@ use std::path::Path;
 use std::time::Duration;
 
 use micold_core::connect::{connect_or_spawn, Connected};
-use micold_core::protocol::auth::Token;
 use micold_core::session::SessionId;
 
 use sandbox_real_support::{
-    credentials, input_serial, open_session, seed, start_sandbox, wait_for_accept, SandboxSpec,
-    Terminal,
+    input_serial, open_session, seed, start_sandbox, wait_for_accept, SandboxSpec, Terminal,
 };
 
 const CONTAINER: &str = "micold-parity-probe";
@@ -150,10 +148,6 @@ async fn sandbox_real_parity_a_sandboxed_terminal_answers_exactly_as_an_unsandbo
     std::fs::create_dir_all(&box_project).unwrap();
     let box_session = seed(&box_data, &box_project, "parity-box");
     let box_log = box_data.join("micold-ai-ide").join("micold-daemon.log");
-
-    let token = Token::generate();
-    let token_path = box_data.join("micold-ai-ide").join("sandbox.token");
-    token.write_to(&token_path).unwrap();
     let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
 
     let _sandbox = start_sandbox(&SandboxSpec {
@@ -162,12 +156,11 @@ async fn sandbox_real_parity_a_sandboxed_terminal_answers_exactly_as_an_unsandbo
         port: PORT,
         data_home: &box_data,
         project: &box_project,
-        token_path: &token_path,
         home: &home,
         survive_logout: false,
         extra: &[],
     });
-    let (mut box_conn, catalog) = wait_for_accept(PORT, &credentials(&token)).await;
+    let (mut box_conn, catalog) = wait_for_accept(PORT).await;
     let box_serial = input_serial(&catalog, box_session);
     let box_answers = collect(
         &mut box_conn,

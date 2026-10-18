@@ -21,12 +21,10 @@
 
 mod sandbox_real_support;
 
-use micold_core::protocol::auth::Token;
-
 use micold_core::sandbox::runtime::RuntimeKind;
 use sandbox_real_support::{
-    credentials, input_serial, open_session, runtime_kind, seed, start_sandbox, wait_for_accept,
-    SandboxSpec, Terminal,
+    input_serial, open_session, runtime_kind, seed, start_sandbox, wait_for_accept, SandboxSpec,
+    Terminal,
 };
 
 const CONTAINER: &str = "micold-boundary-probe";
@@ -88,10 +86,6 @@ async fn sandbox_real_boundary_holds_from_inside_a_session() {
         .join("micold-ai-ide")
         .join(micold_core::sandbox::SANDBOX_HOME_DIR);
 
-    let token = Token::generate();
-    let token_path = data.join("micold-ai-ide").join("sandbox.token");
-    token.write_to(&token_path).unwrap();
-
     let daemon_log = data.join("micold-ai-ide").join("micold-daemon.log");
     let _sandbox = start_sandbox(&SandboxSpec {
         container: CONTAINER,
@@ -99,12 +93,11 @@ async fn sandbox_real_boundary_holds_from_inside_a_session() {
         port: PORT,
         data_home: &data,
         project: &project,
-        token_path: &token_path,
         home: &host_home,
         survive_logout: false,
         extra: &[],
     });
-    let (mut conn, catalog) = wait_for_accept(PORT, &credentials(&token)).await;
+    let (mut conn, catalog) = wait_for_accept(PORT).await;
     let serial = input_serial(&catalog, session);
     let screen = open_session(&mut conn, &project, session, &daemon_log).await;
     let mut term = Terminal::new(&mut conn, session, screen, CONTAINER, &daemon_log, serial);

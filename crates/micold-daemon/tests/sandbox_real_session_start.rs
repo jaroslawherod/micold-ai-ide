@@ -33,27 +33,23 @@
 
 #![cfg(all(feature = "sandbox-real-runtime", unix))]
 
+mod sandbox_real_support;
+
 use std::collections::BTreeMap;
 use std::path::Path;
-use std::process::Command;
 use std::time::{Duration, Instant};
 
 use futures_util::{SinkExt, StreamExt};
-use micold_core::connect::{
-    connect_at, connect_or_spawn, Connected, Credentials, DaemonConnection,
-};
-use micold_core::endpoint::DialAddress;
+use micold_core::connect::{connect_or_spawn, Connected, DaemonConnection};
 use micold_core::project::{Availability, Project};
-use micold_core::protocol::auth::Token;
 use micold_core::protocol::codec::Frame;
-use micold_core::protocol::messages::{ClientMsg, PresentedToken};
+use micold_core::protocol::messages::ClientMsg;
 use micold_core::session::{
     AiCli, Session, SessionId, SessionLabel, SessionLocation, TerminalMode,
 };
 use micold_core::store::ProjectStore;
 use micold_core::workspace::Workspace;
 
-const IMAGE: &str = "micold-daemon:dev";
 const CONTAINER: &str = "micold-perf-session-start";
 const NETWORK: &str = "micold-perf-session-start-net";
 /// Not 7727, so a developer's own sandbox is neither disturbed nor accidentally measured.
@@ -75,6 +71,8 @@ const DAEMON_BIN: &str = env!("CARGO_BIN_EXE_micold-daemon");
 /// against `dash` on the other and called the difference "the sandbox". `/bin/sh` exists on both,
 /// reads no startup file, and so leaves the placement as the only thing that differs.
 const SESSION_SHELL: &str = "/bin/sh";
+
+use sandbox_real_support::{original_xdg, start_sandbox, wait_for_accept, SandboxSpec};
 
 // ---------------------------------------------------------------------------------------------
 // Seeding
@@ -239,125 +237,6 @@ fn report(label: &str, v: &[Duration]) {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Docker plumbing
-// ---------------------------------------------------------------------------------------------
-
-fn docker(args: &[&str]) {
-    let out = Command::new("docker")
-        .args(args)
-        .output()
-        .unwrap_or_else(|e| panic!("docker {args:?}: {e}"));
-    assert!(
-        out.status.success(),
-        "docker {args:?} failed: {}",
-        String::from_utf8_lossy(&out.stderr)
-    );
-}
-
-fn purge() {
-    let _ = Command::new("docker")
-        .args(["rm", "-f", CONTAINER])
-        .output();
-    let _ = Command::new("docker")
-        .args(["network", "rm", NETWORK])
-        .output();
-}
-
-struct Sandbox;
-
-impl Drop for Sandbox {
-    fn drop(&mut self) {
-        purge();
-    }
-}
-
-/// Bring the container up over `data_home`, with `project` mounted at its own host path.
-///
-/// The mount is identity because this runs on Linux, which is what lets one seeded catalogue serve
-/// both arms — on a Windows host the same paths would be rewritten and the two arms would be
-/// describing different projects.
-///
-/// Note which level is mounted. The image sets `XDG_DATA_HOME=/var/lib`, so the daemon reads
-/// `/var/lib/micold-ai-ide/projects.json` — the *state directory*, one level below the data home.
-/// Mounting the data home there instead puts the seeded catalogue at
-/// `/var/lib/micold-ai-ide/micold-ai-ide/projects.json`, where nothing looks for it; the daemon
-/// then starts on an empty catalogue and answers `SessionStart` with a log line and silence.
-fn start_sandbox(data_home: &Path, project: &Path, token_path: &Path) -> Sandbox {
-    purge();
-    docker(&["network", "create", "--driver", "bridge", NETWORK]);
-
-    let (uid, gid) = micold_core::sandbox::host_identity();
-    let user = format!("{uid}:{gid}");
-    let publish = format!("127.0.0.1:{PORT}:7727");
-    let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
-    let home_env = format!("HOME={home}");
-    let shell_env = format!("SHELL={SESSION_SHELL}");
-    let project_mount = format!("{0}:{0}:rw", project.display());
-    let state_mount = format!(
-        "{}:/var/lib/micold-ai-ide:rw",
-        data_home.join("micold-ai-ide").display()
-    );
-    let token_mount = format!("{}:/run/micold/token:ro", token_path.display());
-    // The sandbox's own writable home, at the path `HOME` names (FR-004d). Mirrored from
-    // `argv::mount_args`; created here because a bind source the runtime creates it creates as root.
-    let home_dir = data_home
-        .join("micold-ai-ide")
-        .join(micold_core::sandbox::SANDBOX_HOME_DIR);
-    std::fs::create_dir_all(&home_dir).unwrap();
-    let home_mount = format!("{}:{home}:rw", home_dir.display());
-
-    docker(&[
-        "create",
-        "--name",
-        CONTAINER,
-        "--user",
-        &user,
-        "--restart",
-        "no",
-        "--network",
-        NETWORK,
-        "-p",
-        &publish,
-        "-e",
-        &home_env,
-        "-e",
-        &shell_env,
-        "-v",
-        &home_mount,
-        "-v",
-        &project_mount,
-        "-v",
-        &state_mount,
-        "-v",
-        &token_mount,
-        IMAGE,
-    ]);
-    docker(&["start", CONTAINER]);
-    Sandbox
-}
-
-async fn wait_for_accept(address: &DialAddress, credentials: &Credentials) -> DaemonConnection {
-    let deadline = Instant::now() + Duration::from_secs(60);
-    loop {
-        match connect_at(address, "perf-client", credentials).await {
-            Ok(Some(Connected::Ready(conn, _))) => return *conn,
-            Ok(Some(Connected::Refused(reason))) => {
-                let logs = Command::new("docker")
-                    .args(["logs", CONTAINER])
-                    .output()
-                    .map(|o| String::from_utf8_lossy(&o.stderr).to_string())
-                    .unwrap_or_default();
-                panic!("the sandboxed daemon refused this client: {reason:?}\n{logs}");
-            }
-            _ if Instant::now() < deadline => {
-                tokio::time::sleep(Duration::from_millis(200)).await;
-            }
-            _ => panic!("the sandboxed daemon never accepted within 60s"),
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------------------------
 // SC-003
 // ---------------------------------------------------------------------------------------------
 
@@ -369,6 +248,9 @@ async fn wait_for_accept(address: &DialAddress, credentials: &Credentials) -> Da
 async fn sandbox_real_session_start_is_within_two_seconds_of_the_host_placement() {
     // Bound to a local first: `assert!(!cfg!(..))` folds to a constant, and clippy rejects a
     // constant assertion — correctly, in general. Here the constant *is* the check.
+    // Before the environment below is overridden for the host daemon: the container runtime's CLI
+    // must see the process's original values.
+    let _ = original_xdg();
     let release_build = !cfg!(debug_assertions);
     assert!(
         release_build,
@@ -409,19 +291,20 @@ async fn sandbox_real_session_start_is_within_two_seconds_of_the_host_placement(
     std::fs::create_dir_all(&box_project).unwrap();
     let box_ids = seed(&box_data, &box_project);
 
-    let token = Token::generate();
-    let token_path = box_data.join("sandbox.token");
-    token.write_to(&token_path).unwrap();
-
-    let _sandbox = start_sandbox(&box_data, &box_project, &token_path);
-    let mut box_conn = wait_for_accept(
-        &DialAddress::Loopback { port: PORT },
-        &Credentials {
-            auth_token: Some(PresentedToken::new(token.as_str())),
-            require_fingerprint_match: false,
-        },
-    )
-    .await;
+    let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
+    let _sandbox = start_sandbox(&SandboxSpec {
+        container: CONTAINER,
+        network: NETWORK,
+        port: PORT,
+        data_home: &box_data,
+        project: &box_project,
+        home: &home,
+        survive_logout: false,
+        extra: &[],
+    });
+    // Provisioning (the copy, the install step) happens here, before the clock starts: the claim
+    // is about a session start in a daemon that is up, as it always was.
+    let (mut box_conn, _) = wait_for_accept(PORT).await;
     let sandboxed = measure_all(&mut box_conn, &box_project, &box_ids, "container placement").await;
     drop(box_conn);
 

@@ -22,11 +22,9 @@ mod sandbox_real_support;
 
 use std::time::Duration;
 
-use micold_core::protocol::auth::Token;
-
 use sandbox_real_support::{
-    cli_out, credentials, input_serial, open_session, seed, start_sandbox, wait_for_accept,
-    SandboxSpec, Terminal,
+    cli, cli_out, input_serial, open_session, seed, start_sandbox, wait_for_accept, SandboxSpec,
+    Terminal,
 };
 
 const CONTAINER: &str = "micold-limits-probe";
@@ -42,7 +40,8 @@ const MEMORY_MIB: u64 = 256;
 /// for the kernel to reclaim its way out of.
 const ASK_MIB: u64 = 512;
 
-/// The flags `argv::budget_args` emits for a memory limit, plus the one it does not.
+/// What `cli update` applies for a memory limit, plus the swap flag `argv::budget_args` does not
+/// pass.
 ///
 /// `--memory-swap` equal to `--memory` is what makes this a *memory* limit rather than a swap
 /// limit: Docker's default is twice the memory, so without it a 512 MiB allocation under a 256 MiB
@@ -67,9 +66,6 @@ async fn sandbox_real_limits_stop_the_session_not_the_daemon() {
     let session = seed(&data, &project, "limits");
 
     let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
-    let token = Token::generate();
-    let token_path = data.join("micold-ai-ide").join("sandbox.token");
-    token.write_to(&token_path).unwrap();
     let daemon_log = data.join("micold-ai-ide").join("micold-daemon.log");
 
     let _sandbox = start_sandbox(&SandboxSpec {
@@ -78,11 +74,19 @@ async fn sandbox_real_limits_stop_the_session_not_the_daemon() {
         port: PORT,
         data_home: &data,
         project: &project,
-        token_path: &token_path,
         home: &home,
         survive_logout: false,
-        extra: &memory_flags(),
+        extra: &[],
     });
+
+    // Provisioning runs `npm install` in the container, which does not fit in this cap, so the
+    // daemon is provisioned first and the cap applied to the running container. That the limit is
+    // fixed at creation is the next test's subject, and the one after it.
+    let (mut conn, catalog) = wait_for_accept(PORT).await;
+    let mut update = vec!["update".to_string()];
+    update.extend(memory_flags());
+    update.push(CONTAINER.to_string());
+    cli(&update.iter().map(String::as_str).collect::<Vec<_>>());
 
     // The limit reached the container, not just the argv (FR-015) -------------------------------
     let enforced = cli_out(&["inspect", "-f", "{{.HostConfig.Memory}}", CONTAINER]);
@@ -92,7 +96,6 @@ async fn sandbox_real_limits_stop_the_session_not_the_daemon() {
         "the runtime must report the limit it was asked for, in bytes"
     );
 
-    let (mut conn, catalog) = wait_for_accept(PORT, &credentials(&token)).await;
     let serial = input_serial(&catalog, session);
     let screen = open_session(&mut conn, &project, session, &daemon_log).await;
     let mut term = Terminal::new(&mut conn, session, screen, CONTAINER, &daemon_log, serial);
@@ -144,7 +147,7 @@ async fn sandbox_real_limits_stop_the_session_not_the_daemon() {
         "true",
         "the container must still be running after the limit was reached"
     );
-    let (_second, _) = wait_for_accept(PORT, &credentials(&token)).await;
+    let (_second, _) = wait_for_accept(PORT).await;
 }
 
 /// The third §B.4 box: change a limit, restart the sandbox, confirm it took effect.
@@ -161,9 +164,6 @@ async fn sandbox_real_limits_change_only_by_recreating_the_container() {
     seed(&data, &project, "limits-change");
 
     let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
-    let token = Token::generate();
-    let token_path = data.join("micold-ai-ide").join("sandbox.token");
-    token.write_to(&token_path).unwrap();
 
     let container = "micold-limits-change";
     let network = "micold-limits-change-net";
@@ -175,7 +175,6 @@ async fn sandbox_real_limits_change_only_by_recreating_the_container() {
         port,
         data_home: &data,
         project: &project,
-        token_path: &token_path,
         home: &home,
         survive_logout: false,
         extra: &first,
@@ -193,7 +192,6 @@ async fn sandbox_real_limits_change_only_by_recreating_the_container() {
         port,
         data_home: &data,
         project: &project,
-        token_path: &token_path,
         home: &home,
         survive_logout: false,
         extra: &second,
@@ -206,5 +204,46 @@ async fn sandbox_real_limits_change_only_by_recreating_the_container() {
 
     // The daemon still comes up under the new limit — a limit that takes effect by making the
     // sandbox unstartable is not an improvement.
-    let (_conn, _) = wait_for_accept(port, &credentials(&token)).await;
+    let (_conn, _) = wait_for_accept(port).await;
+}
+
+/// The profile budget of US2 #1 / SC-006: two CPUs and 4 GiB, as `argv::budget_args` passes them,
+/// are what the runtime reports, and the daemon still comes up under them.
+#[tokio::test]
+async fn sandbox_real_limits_report_the_profiles_cpu_and_memory() {
+    let dir = tempfile::tempdir().unwrap();
+    let data = dir.path().join("data");
+    let project = dir.path().join("project");
+    std::fs::create_dir_all(&project).unwrap();
+    seed(&data, &project, "limits-profile");
+
+    let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
+    let container = "micold-limits-profile";
+    let network = "micold-limits-profile-net";
+    let port = 17734;
+    let flags = vec![
+        "--cpus".to_string(),
+        "2.000".to_string(),
+        "--memory".to_string(),
+        "4096m".to_string(),
+    ];
+    let _sandbox = start_sandbox(&SandboxSpec {
+        container,
+        network,
+        port,
+        data_home: &data,
+        project: &project,
+        home: &home,
+        survive_logout: false,
+        extra: &flags,
+    });
+    assert_eq!(
+        cli_out(&["inspect", "-f", "{{.HostConfig.NanoCpus}}", container]),
+        "2000000000"
+    );
+    assert_eq!(
+        cli_out(&["inspect", "-f", "{{.HostConfig.Memory}}", container]),
+        (4096u64 * 1024 * 1024).to_string()
+    );
+    let (_conn, _) = wait_for_accept(port).await;
 }

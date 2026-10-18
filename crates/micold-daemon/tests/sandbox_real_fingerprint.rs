@@ -1,23 +1,15 @@
-//! §B.7 of the quickstart — the development loop's staleness check, against a real image.
+//! §B.7 of the quickstart, as feature 806 reshaped it: the container's daemon is **this build**.
 //!
-//! `mise run image` builds a `:dev` image from the working tree, and the client refuses one whose
-//! daemon was built from a *different* tree (FR-024d, research R8). Both halves of that have to be
-//! true or the loop is worse than useless:
+//! Before 806 a `:dev` image carried its own daemon and the client refused one built from a
+//! different tree (FR-024d, research R8). The basic image carries no daemon: the client copies its
+//! own into the container (FR-003), and a daemon of another build is replaced by the next
+//! provisioning (`ensure_build` copies when the recorded build differs) rather than refused
+//! (research R10). So the property worth a real container is that the daemon that answers is the
+//! client's own build, whichever image the container started from — and that a second start with
+//! the container running neither copies nor reinstalls, so the answer is still the same build.
 //!
-//! - a **fresh** image must be accepted with the check armed, or `mise run image` never produces a
-//!   usable image and every sandboxed developer is stuck;
-//! - a **stale** one must be refused, or the developer debugs yesterday's daemon against today's
-//!   code.
-//!
-//! Only the first half is a stable test: the second needs two images built from two different
-//! trees, which is a build, not an assertion. It is recorded in `evidence/us7-dev-loop.md`, and the
-//! message the refusal produces is held by
-//! `micold-client/src/daemon.rs::the_stale_image_advice_names_the_tag_and_the_rebuild_command`.
-//!
-//! What this catches, and nothing else does: the image built by `mise run image` carrying a
-//! fingerprint that does not match the tree it was built from — a release-profile build, a stale
-//! layer cache, a `build.rs` that did not re-run. Each would refuse every client on a correct
-//! image, and the first person to see it would be told to do the rebuild they had just done.
+//! What this catches, and nothing else does: a provisioning that connects to a daemon left by an
+//! earlier run, or an image whose entrypoint starts a daemon of its own that wins the endpoint.
 //!
 //! Behind `sandbox-real-runtime` (Principle VI: the default suite needs nothing installed).
 
@@ -25,19 +17,16 @@
 
 mod sandbox_real_support;
 
-use micold_core::connect::{connect_at, Connected, Credentials};
-use micold_core::endpoint::DialAddress;
-use micold_core::protocol::auth::Token;
-use micold_core::protocol::messages::PresentedToken;
+use micold_core::protocol::version::PACKAGE_VERSION;
 
-use sandbox_real_support::{credentials, seed, start_sandbox, wait_for_accept, SandboxSpec};
+use sandbox_real_support::{provision_and_connect, seed, start_sandbox, SandboxSpec};
 
 const CONTAINER: &str = "micold-fingerprint-probe";
 const NETWORK: &str = "micold-fingerprint-probe-net";
 const PORT: u16 = 17734;
 
 #[tokio::test]
-async fn sandbox_real_a_freshly_built_image_passes_the_strict_fingerprint_check() {
+async fn sandbox_real_the_container_daemon_is_the_clients_own_build() {
     let dir = tempfile::tempdir().unwrap();
     let data = dir.path().join("data");
     let project = dir.path().join("project");
@@ -45,42 +34,26 @@ async fn sandbox_real_a_freshly_built_image_passes_the_strict_fingerprint_check(
     seed(&data, &project, "fingerprint");
 
     let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
-    let token = Token::generate();
-    let token_path = data.join("micold-ai-ide").join("sandbox.token");
-    token.write_to(&token_path).unwrap();
-
     let _sandbox = start_sandbox(&SandboxSpec {
         container: CONTAINER,
         network: NETWORK,
         port: PORT,
         data_home: &data,
         project: &project,
-        token_path: &token_path,
         home: &home,
         survive_logout: false,
         extra: &[],
     });
 
-    // Lenient first, so a failure below is a *fingerprint* refusal and not "the daemon is not up
-    // yet" wearing one.
-    let (_lenient, _) = wait_for_accept(PORT, &credentials(&token)).await;
+    let (first, welcome) = provision_and_connect(PORT).await;
+    assert!(
+        welcome.daemon_build.contains(PACKAGE_VERSION),
+        "the container's daemon reports {:?}, not this build ({PACKAGE_VERSION})",
+        welcome.daemon_build
+    );
+    drop(first);
 
-    // Then the check the client arms for a `LocalBuild` image (`startup.rs`:
-    // `image.refuses_fingerprint_mismatch()`).
-    let strict = Credentials {
-        auth_token: Some(PresentedToken::new(token.as_str())),
-        require_fingerprint_match: true,
-    };
-    match connect_at(&DialAddress::Loopback { port: PORT }, "fp-probe", &strict).await {
-        Ok(Some(Connected::Ready(..))) => {}
-        Ok(Some(Connected::Refused(reason))) => panic!(
-            "a `:dev` image built from this very tree was refused as stale: {reason:?}\n\
-             The ordinary cause is the honest one — micold-core's `src/` has changed since the last \
-             `mise run image`, so rebuild and re-run. If it has not, then either that task did not \
-             rebuild the daemon, or the fingerprint is not a function of the source tree it claims \
-             to be."
-        ),
-        Ok(None) => panic!("nothing listening on the strict attempt"),
-        Err(e) => panic!("strict connect failed for another reason: {e}"),
-    }
+    // The second start finds the build and the CLIs in place and bridges to the same daemon.
+    let (_second, again) = provision_and_connect(PORT).await;
+    assert_eq!(again.daemon_build, welcome.daemon_build);
 }

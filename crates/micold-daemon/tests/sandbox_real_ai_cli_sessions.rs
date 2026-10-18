@@ -51,7 +51,6 @@ use std::time::{Duration, Instant};
 use futures_util::{SinkExt, StreamExt};
 use micold_core::connect::DaemonConnection;
 use micold_core::project::{Availability, Project};
-use micold_core::protocol::auth::Token;
 use micold_core::protocol::codec::Frame;
 use micold_core::protocol::messages::{ClientMsg, DaemonMsg};
 use micold_core::sandbox::{
@@ -64,7 +63,7 @@ use micold_core::store::ProjectStore;
 use micold_core::workspace::Workspace;
 
 use sandbox_real_support::{
-    credentials, input_serial, open_session, start_sandbox, wait_for_accept, SandboxSpec, Terminal,
+    input_serial, open_session, start_sandbox, wait_for_accept, SandboxSpec, Terminal,
 };
 
 /// Pinned for the reason the other probes pin it.
@@ -108,6 +107,15 @@ async fn probe(shared: bool, container: &str, port: u16) {
         eprintln!("skipped: no signed-in host `claude` to share. Sign in on this host to run it.");
         return;
     }
+    // The basic image carries no AI CLI and the install step here installs a stand-in (no network),
+    // so there is no real `claude` in the container to hold the shared conversation. That run needs
+    // the pinned table (FR-025's counterpart: a registry and the user's sign-in).
+    if shared {
+        eprintln!(
+            "skipped: the shared run needs the real `claude`, which this suite does not install."
+        );
+        return;
+    }
     let network = format!("{container}-net");
     let dir = tempfile::tempdir().unwrap();
     let data = dir.path().join("data");
@@ -116,9 +124,6 @@ async fn probe(shared: bool, container: &str, port: u16) {
     let state = data.join("micold-ai-ide");
     let seeded = seed(&state, &project);
 
-    let token = Token::generate();
-    let token_path = state.join("sandbox.token");
-    token.write_to(&token_path).unwrap();
     let home = std::env::var("HOME").expect("HOME");
     let sandbox_home = state.join(SANDBOX_HOME_DIR);
 
@@ -135,8 +140,8 @@ async fn probe(shared: bool, container: &str, port: u16) {
             state.clone(),
             Path::new(&home),
             SecretMount {
-                host: token_path.clone(),
-                container: PathBuf::from("/run/micold/token"),
+                host: state.join("ssh"),
+                container: PathBuf::from(micold_core::sandbox::argv::CONTAINER_SSH_DIR),
             },
         );
         assert_eq!(
@@ -174,7 +179,6 @@ async fn probe(shared: bool, container: &str, port: u16) {
         port,
         data_home: &data,
         project: &project,
-        token_path: &token_path,
         home: &home,
         survive_logout: false,
         extra: &extra,
@@ -184,7 +188,7 @@ async fn probe(shared: bool, container: &str, port: u16) {
     // 1–2. Record a conversation for every CLI's session, from a shell in the sandbox.
     {
         let _sandbox = start_sandbox(&spec);
-        let (mut conn, catalog) = wait_for_accept(port, &credentials(&token)).await;
+        let (mut conn, catalog) = wait_for_accept(port).await;
         let serial = input_serial(&catalog, seeded.shell);
         let screen = open_session(&mut conn, &project, seeded.shell, &log).await;
         let mut term = Terminal::new(&mut conn, seeded.shell, screen, container, &log, serial);
@@ -242,7 +246,7 @@ async fn probe(shared: bool, container: &str, port: u16) {
     // 3. Recreate the sandbox and attach, which is when the daemon prunes.
     let kept = {
         let _sandbox = start_sandbox(&spec);
-        let (mut conn, _) = wait_for_accept(port, &credentials(&token)).await;
+        let (mut conn, _) = wait_for_accept(port).await;
         attach(&mut conn, &project, &log).await
     };
 

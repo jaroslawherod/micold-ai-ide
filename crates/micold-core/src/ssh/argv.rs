@@ -263,9 +263,23 @@ pub fn copy(reach: &Reach, platform: ClientPlatform, timeout: u32, build: &str) 
     command(reach, platform, timeout, &remote, None)
 }
 
+/// The data home a container's daemon keeps its state under (`<this>/micold-ai-ide`): the basic
+/// image's `ENV XDG_DATA_HOME`, which an SSH session does not inherit (sshd builds the session's
+/// environment afresh), and the parent of the state directory provisioning installs the AI CLIs
+/// into.
+pub const CONTAINER_DATA_HOME: &str = "/var/lib";
+
 /// The bridge: the remote daemon binary's relay, whose stdin/stdout carry the protocol.
+///
+/// For a pinned reach (a container) the daemon is started with the image's data home, so it reads
+/// the catalogue and the `ai-clis` the provisioning wrote to the state mount; without it the
+/// session's `HOME` would give it a private, empty data directory.
 pub fn bridge(reach: &Reach, platform: ClientPlatform, timeout: u32, build: &str) -> SshCommand {
-    let remote = format!("\"{}/micold-daemon\" remote bridge", remote_dir(build));
+    let env = match reach {
+        Reach::Pinned(_) => format!("XDG_DATA_HOME={CONTAINER_DATA_HOME} "),
+        Reach::UserConfig(_) => String::new(),
+    };
+    let remote = format!("{env}\"{}/micold-daemon\" remote bridge", remote_dir(build));
     command(reach, platform, timeout, &remote, None)
 }
 
@@ -417,6 +431,23 @@ mod tests {
                 && last.contains(".micold/remote/1.0-abc/"),
             "{last}"
         );
+    }
+
+    #[test]
+    fn a_container_bridge_starts_the_daemon_with_the_images_data_home_and_a_host_one_does_not() {
+        let last = |reach: &Reach| {
+            bridge(reach, ClientPlatform::Linux, 15, "b")
+                .args
+                .last()
+                .unwrap()
+                .clone()
+        };
+        assert!(
+            last(&pinned()).starts_with("XDG_DATA_HOME=/var/lib \""),
+            "{}",
+            last(&pinned())
+        );
+        assert!(last(&target()).starts_with('"'), "{}", last(&target()));
     }
 
     #[test]

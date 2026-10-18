@@ -19,7 +19,6 @@ use futures_util::StreamExt;
 use micold_core::connect::{connect_at, Connected, DaemonConnection};
 use micold_core::endpoint::DialAddress;
 use micold_core::project::{Availability, Project};
-use micold_core::protocol::auth::Token;
 use micold_core::protocol::codec::Frame;
 use micold_core::protocol::messages::{CatalogSnapshot, ClientMsg};
 use micold_core::session::{
@@ -29,7 +28,8 @@ use micold_core::store::ProjectStore;
 use micold_core::terminal_history::{HistoryStore, LoadOutcome};
 use micold_core::workspace::Workspace;
 use sandbox_real_support::{
-    cli, credentials, dialect, purge, start_sandbox, wait_for_accept, Sandbox, SandboxSpec, Screen,
+    cli, dialect, purge, start_sandbox, use_standin_script, wait_for_accept, Sandbox, SandboxSpec,
+    Screen,
 };
 
 const DAEMON_BIN: &str = env!("CARGO_BIN_EXE_micold-daemon");
@@ -46,10 +46,9 @@ struct World {
     data: PathBuf,
     project: PathBuf,
     runtime: PathBuf,
-    /// The stand-in `claude`, mounted into the container and put first on the host service's `PATH`.
+    /// The stand-in `claude`: first on the host service's `PATH`, and the script the container's
+    /// install step puts in place of the default stand-in.
     claude: PathBuf,
-    token: Token,
-    token_path: PathBuf,
     session: SessionId,
 }
 
@@ -69,17 +68,12 @@ impl World {
         let claude = stand_in.join("claude");
         std::fs::write(&claude, STAND_IN).unwrap();
         std::fs::set_permissions(&claude, std::fs::Permissions::from_mode(0o755)).unwrap();
-        let token = Token::generate();
-        let token_path = data.join("sandbox.token");
-        token.write_to(&token_path).unwrap();
         Self {
             _dir: dir,
             data,
             project,
             runtime,
             claude,
-            token,
-            token_path,
             session,
         }
     }
@@ -163,29 +157,25 @@ impl World {
 
     fn start_container(&self, extra: &[String]) -> Sandbox {
         // Bind mounts are unreadable to the container under SELinux unless labelling is off for it.
-        let mut args = vec![
-            "--security-opt".to_string(),
-            "label=disable".to_string(),
-            "-v".to_string(),
-            format!("{}:/usr/local/bin/claude:ro", self.claude.display()),
-        ];
+        let mut args = vec!["--security-opt".to_string(), "label=disable".to_string()];
         args.extend(extra.iter().cloned());
         let extra = &args[..];
-        start_sandbox(&SandboxSpec {
+        let sandbox = start_sandbox(&SandboxSpec {
             container: CONTAINER,
             network: NETWORK,
             port: PORT,
             data_home: &self.data,
             project: &self.project,
-            token_path: &self.token_path,
             home: HOME,
             survive_logout: false,
             extra,
-        })
+        });
+        use_standin_script(PORT, STAND_IN);
+        sandbox
     }
 
     async fn connect_container(&self) -> (DaemonConnection, CatalogSnapshot) {
-        wait_for_accept(PORT, &credentials(&self.token)).await
+        wait_for_accept(PORT).await
     }
 }
 

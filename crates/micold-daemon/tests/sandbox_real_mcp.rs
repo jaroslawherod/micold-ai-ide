@@ -39,7 +39,6 @@ use std::time::{Duration, Instant};
 
 use futures_util::SinkExt;
 use micold_core::project::{Availability, Project};
-use micold_core::protocol::auth::Token;
 use micold_core::protocol::codec::Frame;
 use micold_core::protocol::messages::ClientMsg;
 use micold_core::session::{
@@ -50,8 +49,7 @@ use micold_core::workspace::Workspace;
 use serde_json::{json, Value};
 
 use sandbox_real_support::{
-    cli_out, credentials, input_serial, open_session, start_sandbox, wait_for_accept, SandboxSpec,
-    Terminal,
+    cli_out, input_serial, open_session, start_sandbox, wait_for_accept, SandboxSpec, Terminal,
 };
 
 const CONTAINER: &str = "micold-mcp-probe";
@@ -151,10 +149,6 @@ async fn sandbox_real_mcp_binding_answers_whoami_from_inside_the_container() {
     let script = project.join("whoami-probe.cjs");
     let reply_file = project.join("whoami-reply.json");
     std::fs::write(&script, PROBE_SCRIPT).unwrap();
-
-    let token = Token::generate();
-    let token_path = state.join("sandbox.token");
-    token.write_to(&token_path).unwrap();
     let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
     let log = state.join("micold-daemon.log");
 
@@ -167,12 +161,11 @@ async fn sandbox_real_mcp_binding_answers_whoami_from_inside_the_container() {
         port: PORT,
         data_home: &data,
         project: &project,
-        token_path: &token_path,
         home: &home,
         survive_logout: false,
         extra: &[],
     });
-    let (mut conn, catalog) = wait_for_accept(PORT, &credentials(&token)).await;
+    let (mut conn, catalog) = wait_for_accept(PORT).await;
 
     // 1. Starting the AI-CLI session writes its binding file under the container's data
     // directory. The state mount is that directory, so the file is waited for on the host side
