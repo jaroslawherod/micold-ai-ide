@@ -496,6 +496,7 @@ fn kube_form<'a>(
                 kube.providers.contains(&cli),
                 roles,
             )
+            .track_focus(FieldId::DaemonKubeProvider(cli), focused)
             .on_toggle(move |on| Message::Daemons(DaemonsMsg::ProviderToggled(cli, on))),
         );
     }
@@ -525,6 +526,7 @@ fn kube_form<'a>(
     for kind in AllowedKind::all() {
         fields = fields.push(
             Checkbox::new(kind.label(), kube.allowed.contains(&kind), roles)
+                .track_focus(FieldId::DaemonKubeAllowed(kind), focused)
                 .on_toggle(move |on| Message::Daemons(DaemonsMsg::AllowedToggled(kind, on))),
         );
         let file = match kind {
