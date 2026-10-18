@@ -453,19 +453,30 @@ fn jump_offset(state: &mut State) -> Option<u32> {
     let layout = state.layout;
     let view = state.open.as_ref()?;
     let focus = view.panel.focus?;
-    let comment = review_of(state, view)?
-        .comments
-        .iter()
-        .find(|c| c.id == focus)?;
-    if view.selected.as_ref() != Some(&comment.path) {
+    let comment = review_of(state, view)
+        .and_then(|r| r.comments.iter().find(|c| c.id == focus))
+        .filter(|c| view.selected.as_ref() == Some(&c.path));
+    let Some(comment) = comment else {
+        // The comment is gone or another file was chosen: the jump is abandoned.
+        if let Some(view) = state.open.as_mut() {
+            view.panel.to_show = false;
+        }
         return None;
-    }
+    };
     let Load::Ready(diff) = &view.diff else {
         return None;
     };
+    // The cards and composers hung above the line push it down by their measured heights, known
+    // once the file has been laid out; a cold jump lands a little short of them.
+    let hung: u32 = view
+        .slot_heights
+        .iter()
+        .filter(|((_, line), _)| *line < comment.range.start())
+        .map(|(_, height)| *height)
+        .sum();
     let row = row_of_line(diff, layout, comment.side, comment.range.start());
     let offset = row.map_or(0.0, |r| {
-        r.saturating_sub(2) as f32 * crate::ui::material::DIFF_ROW_HEIGHT
+        r.saturating_sub(2) as f32 * crate::ui::material::DIFF_ROW_HEIGHT + hung as f32
     });
     if let Some(view) = state.open.as_mut() {
         view.panel.to_show = false;
@@ -975,6 +986,7 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
                 return Effect::None;
             }
             view.toggles.committed = !view.toggles.committed;
+            view.panel.hidden = None;
             request_read(state)
         }
         Msg::UncommittedToggled => {
@@ -982,6 +994,7 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
                 return Effect::None;
             };
             view.toggles.uncommitted = !view.toggles.uncommitted;
+            view.panel.hidden = None;
             request_read(state)
         }
         Msg::FileSelected(path) => {

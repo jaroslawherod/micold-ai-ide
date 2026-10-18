@@ -47,8 +47,8 @@ split along s6 (M3) is the only scenario split with a deliverable on each side.
 | D4 | clarify | Must a report wait for user approval? | No; only stop/remove tools wait; a report changes only status and reply | agent-resolved | docs/user-guide/agent-tools.md#requests-that-wait-for-you; spec.md FR-003 |
 | D5 | clarify | Can a Default-entry session report? | Yes, on the Default entry's own comments only | agent-resolved | docs/user-guide/agent-tools.md (whoami); spec.md FR-004 |
 | D6 | tasks | Milestone order when both P1 stories depend on each other? | US2 (batch with references) is M1, US1 (reports) M2: an agent can report only by a reference the batch gave it; the preamble's fallback sentence covers the tool's absence until M2 | agent-resolved | tasks.md § US2 "Why before US1"; plan.md § Delivery order |
-| D7 | M4 | `VirtualRows` has one fixed row height: file group headers in the panel? | No headers; each row's label carries the path ("path · Lines 3–5"); the panel still sorts by path | agent-resolved | tasks.md T053; research R8 |
-| D8 | M4 | **Show all** on a panel row? | Not drawn in the fixed 104 px row; `ShowReply` works from the card, and the panel row's text and reply start are visible | agent-resolved | spec.md FR-018 |
+| D8 | M4 | `VirtualRows` has one fixed row height: file group headers in the panel? | No headers; each row's label carries the path ("path · Lines 3–5"); the panel still sorts by path | agent-resolved | tasks.md T053; research R8 |
+| D9 | M4 | **Show all** on a panel row? | Not drawn in the fixed 104 px row; `ShowReply` works from the card, and the panel row's text and reply start are visible | agent-resolved | spec.md FR-018 |
 | D7 | tasks | Plan's layer-cut delivery order (core/daemon/client) vs story-cut milestones? | Plan's section replaced by a pointer to tasks.md § Milestones (speckit-analyze F8: plan fixed) | agent-resolved | plan.md § Delivery order |
 
 ## Review rounds
@@ -68,6 +68,8 @@ split along s6 (M3) is the only scenario split with a deliverable on each side.
 | Review B M2 | 2 | 0fe803d654e87962ac1b0c83ac4cfaf7a03381b3:785eb8686bea27aad77303adef472950c28c81d0 | CLEAN |
 | Review A M3 | 1 | 8eac6570df82866555b374f7a35b7a37bfca410e:ea94a12eea224f0de3170d43f9e1b2fd2e6922f4 | CLEAN |
 | Review B M3 | 1 | same | CHANGES: F1 MAJOR cycle-log lacked M3 rows (fixed, prose only: rows added); F2 MINOR unused registry param kept (signature fixed by registry) |
+| Review A M4 | 1 | 75287aa65477bd6b1aad7814baa611e293f12b55:049a61a9d4cb670409036a8fe6c70ab413f77e15 | CHANGES: F1 MAJOR fixed (Send/Clear/Discard in the view header while the panel is closed); F2 MAJOR fixed (jump offset adds measured slot heights above the line; a cold jump lands short, see Declined); F3 MINOR fixed (abandoned jump clears `to_show`); F5 MINOR fixed (toggle clears the reason); F4 MINOR declined |
+| Review B M4 | 1 | same | CLEAN (F1 MINOR same as A F1, fixed; F2 MINOR duplicate D7 renumbered) |
 
 ## Declined review findings
 
@@ -80,6 +82,8 @@ split along s6 (M3) is the only scenario split with a deliverable on each side.
 | M1 | Review A r1 | F5 MINOR re-id not saved, O(n²) check | MINOR; re-id is persisted on the next save, n per entry is small |
 | M1 | Review B r1 | F1 BLOCKER could not run Verify (headless reviewer lacked command approval, tmp ENOSPC) | environment, not the code: the full gate (`scripts/gate.sh`, all workspace tests incl. review_edit/review_send/features_changes) runs Verify on the final tree; no B fix needed a re-run |
 | M1 | Review B r1 | F3 MINOR some T002/T010 tests passed at declaration | accepted: they pin serde shapes and arms written in the same core commit (T003); recorded as not red-first in cycle-log |
+| M4 | Review A r1 | F4 panel rows/jump use the working-tree list while a pull request is shown | comments belong to the entry's own files (spec: none on a PR's diff); the panel stays the entry's, so the working-tree list is the right reference |
+| M4 | Review A r1 | F2 (remainder) cold jump ignores unmeasured card heights | slot heights exist only after the file's first layout; re-scrolling after measurement needs a new message; the offset is a few cards short at worst, the comment's card is highlighted |
 
 ## Handover
 
