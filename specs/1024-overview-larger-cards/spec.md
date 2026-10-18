@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-18
 
-**Status**: Closed 2026-10-18 — shipped in PRs #1033, #1041, #<close>
+**Status**: Closed 2026-10-18 — shipped in PRs #1033, #1041 and the close PR
 
 **Input**: User description: "Implement GitHub issue #1024: Overview should show larger cards, 5 per
 row. The Overview view should lay out its cards larger, with 5 cards in each row. Expected: larger
