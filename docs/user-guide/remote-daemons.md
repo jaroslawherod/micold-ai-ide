@@ -95,9 +95,15 @@ direction.
 
 - **The daemon is newer than the app:** `Update this app.` Micold never offers to replace a newer
   daemon, because that would downgrade the host.
-- **The daemon is older than the app:** end the daemon on the host yourself (stop the `micold-daemon`
-  process there), then choose **Reconnect**; Micold copies the matching build and starts it. Micold
-  never ends the daemon's running sessions on its own to resolve a mismatch.
+- **The daemon is older than the app:** when it has no running sessions, the row offers **Replace
+  daemon**. Choosing it stops the old daemon on the host, copies the matching build, starts it and
+  connects. The stop happens only when the host reports zero sessions at that moment; if one
+  started in between, nothing is stopped and the row stays as it was.
+- **The daemon is older but has sessions:** Micold shows no Replace action and never ends running
+  sessions on its own. Finish or stop the sessions (or stop the `micold-daemon` process on the host
+  yourself), then choose **Reconnect**.
+- **The host cannot say whether it has sessions** (a daemon too old to report it): no Replace action
+  is shown; stop the daemon on the host yourself and choose **Reconnect**.
 
 No session starts on a mismatched daemon: trying to start one is refused with the same sentence, and
 sessions already running on the host are left alone. Your local daemon and your other remote daemons
