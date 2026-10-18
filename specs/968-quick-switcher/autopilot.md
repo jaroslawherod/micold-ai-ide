@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-ftdy5c
 - **Started**: 2026-10-18
 - **Phase**: plan
-- **Next step**: plan unit (clarify CLEAN after 2 rounds; D4 is a provisional default awaiting the user)
+- **Next step**: plan unit, continue from *Handover* (plan drafted; review round 1 not run)
 
 ## Pull requests
 
@@ -46,7 +46,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+Plan unit, handed over at the context cap. Done: `speckit-plan` drafted plan.md, research.md
+(R1–R10), data-model.md, contracts/keys.md, contracts/ui.md, quickstart.md (uncommitted draft now
+committed). Next: confirm the shared dialog component's real type name in
+`crates/micold-client/src/ui/material/dialog.rs` and fix "`material::dialog`" in research R6,
+contracts/ui.md U6 and plan D6 if it differs; then review round 1 of the plan (tasks/review.md with
+rubrics/plan.md, model omitted), act on findings (review-rounds.md), commit, set **Next step** to
+`tasks unit`, return DONE. No review run yet; no open findings; no PR.
 
 ## Open escalation
 
