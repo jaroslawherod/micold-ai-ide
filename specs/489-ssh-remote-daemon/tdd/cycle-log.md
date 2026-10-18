@@ -97,3 +97,18 @@ making the registry's duplicate comparison never match fails `a_second_daemon_fo
 `a_second_alias_of_the_same_machine_is_refused_naming_the_first_daemon` (client). Both restored; the
 tests pass on the real code. The `parse_g` and `ConnectTimeout` mutants stay unproven (the latter is
 covered only by the off-by-default real-sshd tests).
+
+## M6 (T066-T072): version mismatch
+
+`ssh/mismatch.rs` was test-first: the 11 tests were run against `todo!()` stubs (all 11 failed on the
+panic), then the rules were written (11 pass). The fixture guard test
+`a_default_build_carries_the_cargo_package_version_whatever_the_fixture_variable` passes with
+`MICOLD_FIXTURE_VERSION_SUFFIX=-old` in the environment and no feature, and the feature-on variant
+passes with it set. The client tests (`ssh_version_mismatch.rs`) name `DaemonView.explanation`,
+which did not exist before the change. `ssh_real_mismatch.rs` was run once red (the daemon's build
+string still read `CARGO_PKG_VERSION`, so the suffix never reached the explanation), then green after
+`daemon_build()` used `PACKAGE_VERSION` in both places it was built.
+
+Limit: the stand-in daemon refuses this build's client, so a session cannot be started on it to prove
+"running sessions untouched"; the real-ssh test shows the refusal ends no process (same pid, a second
+dial is refused alike) and the client tests show the route sends nothing.
