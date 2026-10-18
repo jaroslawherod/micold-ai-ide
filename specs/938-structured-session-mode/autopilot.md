@@ -9,20 +9,20 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #938
 - **Worktree branch**: claude/project-thread-cl0lw3
 - **Started**: 2026-10-18
-- **Phase**: design PR
-- **Next step**: orchestrator opens the design PR (branch pushed; title/body in the scratchpad), then M1 after merge
+- **Phase**: M1
+- **Next step**: M1 — make the red tests green (T006, T009, T010), then verify.md
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| to-open | design PR (spec, plan, research, contracts, tasks) | pushed, not opened (no gh in cloud) | — |
+| #1035 | design PR (spec, plan, research, contracts, tasks) | merged (rebase) | 0d6ced4e44dcf63df729fc15bdd8765cdf045a8d |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T010 | full | parser types every recorded fixture line; kind persisted | — | planned |
+| M1 | T001–T010 | full | parser types every recorded fixture line; kind persisted | — | in progress |
 | M2 | T011–T021 | full | daemon runs a structured session and streams events; lifecycle parity | — | planned |
 | M3 | T022–T028 | full | first prompt and user messages | — | planned |
 | M4 | T029–T030 | full | resume | — | planned |
@@ -41,6 +41,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | 5 | tasks | Milestone cut | M1 = Setup + Foundational + US2 parser (P1); US1 split along scenarios 1–3 / 4–5 (M2, M3), as US1 with the foundation exceeds ~10 tasks; US5 lifecycle tests moved into M2 where the Proc enum is built; added US6 (P3) to spec for FR-022/022a/023 acceptance scenarios; M2 at 11 and M7 at 11 tasks kept whole (no smaller observable split) | agent | speckit-analyze C1, milestones.md rules 1–3 |
 | 6 | tasks | Plan fixes from speckit-analyze | `start_new_of_kind`/`restored_of_kind` delegation instead of changing 300 callers (I1); PROTOCOL_VERSION bumped per wire-changing milestone (M2, M3, M6), since each merges separately; `OversizedOnWire` variant added to data-model; FR-014 names daemon notes | agent | tests/schema_hash.rs; analyze I1/F4 |
 | 7 | tasks | Fixture capture needs a logged-in claude (R11) | M1 unit escalates if none; claude 2.1.302 is installed in the container | agent | analyze F6 |
+| 8 | M1 | Real CLI writes line types the model does not type (`active_goal`, `autocompact_state`, `rate_limit_event`, `system` status/post_turn_summary/task_summary) | T008 amended: no `Unreadable`, and no `Unrecognised` for a known type; the others are `Unrecognised` (FR-012), as SC-001 says "each known event type recognised" | agent | recorded fixtures, SC-001 |
+| 9 | M1 | `structured_args` "default `None`" vs `AiCliProvider`'s rule "No method has a default" (feature 026 FR-021) | trait method without a default, implemented in all six impls | agent | provider.rs trait doc |
+| 10 | M1 | Fixtures keep `\r\n` byte for byte under `* text=auto eol=lf` | `.gitattributes`: `crates/micold-core/tests/fixtures/stream-json/*.jsonl -text` | agent | tolerance.jsonl CRLF line |
 
 ## Review rounds
 
@@ -61,7 +64,21 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M1 unit 1 handed over at 155k context. Done: T001–T005, T007, T008 (ticked). Script, test, five
+recorded fixtures + README, `tolerance.jsonl`, `.gitattributes` line; tests for T004/T005/T007/T008
+written and red against stubs (evidence: `tdd/cycle-log.md` cycle 2). Stubs to replace:
+`crates/micold-core/src/session.rs` (`SessionKind::is_terminal` returns `true`, `check` always `Ok`,
+`KindRefusal` Display empty, `start_new_of_kind`/`restored_of_kind` ignore `kind` — invert: make
+`start_new`/`restored` delegate to them), `store.rs` (add `StoredSession.kind` with
+`#[serde(default, skip_serializing_if = "SessionKind::is_terminal")]`, set it in `from_session`,
+pass it to `restored_of_kind` in `into_session`), `provider.rs` (`structured_args` returns `None` in
+all six impls; Claude gets the argv), `structured/lines.rs` (`push`/`finish`), `structured/parse.rs`
+(`parse_line` per R9, `pair_tool_calls`). `event.rs` types are final (externally tagged: postcard).
+Next: T006, T009, T010 green; mutant-check the tests that passed against stubs (cycle-log list);
+append cycle 3 to `tdd/cycle-log.md`, set U2–U5 DONE in `tdd/test-list.md`; check the workspace
+builds (other `Session { .. }` literals?); then verify.md (scoped gate + review A high, review B,
+full gate `scripts/gate.sh`, PR files in the scratchpad, `PR: to-open`). Baseline: 4 root-only reds
+in micold-core (cycle-log *Baseline*).
 
 ## Open escalation
 
