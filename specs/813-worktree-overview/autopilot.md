@@ -86,6 +86,10 @@ counts are split off as M2 along acceptance scenario 3. Polish T070–T071 chang
 | M1 | A r1 | F5 MINOR empty `hook_activity`/`task_progress` modules | T001 registers them in M1 by design (tasks.md); M5/M6 fill them |
 | M1 | A r1 | F6 MINOR `CardModel` clone per layout pass | 30 cards of short strings; SC-007 bound met; not worth an `Rc` API now |
 
+## M6 notes
+
+- Protocol is 50, not 49: feature 946 took 49 on main. Review A r1 (reviewer, high): F1 MAJOR daemon tests missing (a worker's write was lost; rewritten), F2 MAJOR card-fit test lacked the activity row (fixed; no overflow), F3 MINOR declined (spec R10: latest prompt/todo stays until the next hook; Stop does not clear), F4 MINOR doc wrap fixed.
+
 ## Handover
 
 None.

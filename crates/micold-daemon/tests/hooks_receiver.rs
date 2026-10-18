@@ -9,6 +9,9 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+#[path = "support/mcp.rs"]
+mod mcp_support;
+
 use micold_core::project::{Availability, Project};
 use micold_core::protocol::messages::ActivitySignal;
 use micold_core::session::{
@@ -28,19 +31,26 @@ use uuid::Uuid;
 
 const SESSION_U128: u128 = 0xDEC0DE;
 
-/// A catalog with one live-able session at a project root, and its `DaemonState`.
-fn state_with_session(id: SessionId) -> (Arc<DaemonState>, tempfile::TempDir, tempfile::TempDir) {
+/// Every id in `ids` in the one project, any of them live-able.
+fn state_with_sessions(
+    ids: &[SessionId],
+) -> (Arc<DaemonState>, tempfile::TempDir, tempfile::TempDir) {
     let project = tempfile::tempdir().unwrap();
     let store = tempfile::tempdir().unwrap();
-    let session = Session::restored(
-        id,
-        SessionLocation::Default,
-        SessionLabel::Pending,
-        TerminalMode::AiCli,
-        AiCli::ClaudeCode,
-    );
+    let sessions_of: Vec<Session> = ids
+        .iter()
+        .map(|&id| {
+            Session::restored(
+                id,
+                SessionLocation::Default,
+                SessionLabel::Pending,
+                TerminalMode::AiCli,
+                AiCli::ClaudeCode,
+            )
+        })
+        .collect();
     let mut sessions = BTreeMap::new();
-    sessions.insert(project.path().to_path_buf(), vec![session]);
+    sessions.insert(project.path().to_path_buf(), sessions_of);
     let workspace = Workspace {
         projects: vec![Project::new(
             project.path().to_path_buf(),
@@ -96,9 +106,16 @@ struct Receiver {
 
 /// Bind a receiver for a fresh live session and serve it.
 async fn spawn_receiver() -> Receiver {
+    spawn_receiver_with(&[]).await.0
+}
+
+/// As [`spawn_receiver`], plus one more live session per id in `others` (returned as `cat`s to kill).
+async fn spawn_receiver_with(others: &[SessionId]) -> (Receiver, Vec<Arc<PtySession>>) {
     let id = SessionId::from_uuid(Uuid::from_u128(SESSION_U128));
-    let (state, project, store) = state_with_session(id);
+    let all: Vec<SessionId> = std::iter::once(id).chain(others.iter().copied()).collect();
+    let (state, project, store) = state_with_sessions(&all);
     let cat = register_cat(&state, id);
+    let other_cats = others.iter().map(|&o| register_cat(&state, o)).collect();
     let (receiver, listener) = HookReceiver::bind(std::env::temp_dir().join("micold-hooks-test"))
         .await
         .expect("bind receiver");
@@ -109,14 +126,15 @@ async fn spawn_receiver() -> Receiver {
         receiver.tokens(),
         Arc::clone(&state),
     ));
-    Receiver {
+    let receiver = Receiver {
         id,
         addr,
         token,
         state,
         cat,
         _dirs: (project, store),
-    }
+    };
+    (receiver, other_cats)
 }
 
 fn activity(state: &DaemonState, id: SessionId) -> ActivitySignal {
@@ -598,4 +616,100 @@ async fn sub_agent_reports_are_recorded_on_the_origin_session() {
     assert_eq!(post_hook(&addr, id.0, Some(&token), "{not json").await, 400);
 
     cat.kill().expect("kill");
+}
+
+/// The `hook_activity` the catalog snapshot carries for `id`.
+fn hook_activity(
+    state: &DaemonState,
+    id: SessionId,
+) -> Option<micold_core::hook_activity::HookActivity> {
+    state
+        .catalog_snapshot()
+        .projects
+        .into_iter()
+        .flat_map(|p| p.sessions)
+        .find(|s| s.id == id)
+        .expect("session in snapshot")
+        .hook_activity
+}
+
+/// Feature 813 (W2, W3, FR-020): a `TodoWrite` and a prompt reach only their own live session's
+/// `hook_activity`, each change is broadcast, and neither text is ever logged.
+#[tokio::test]
+async fn hook_activity_is_captured_per_session_broadcast_and_never_logged() {
+    use micold_core::hook_activity::TodoStatus;
+    use micold_core::protocol::codec::Frame;
+    use micold_core::protocol::messages::{ClientIdentity, ClientInstance, DaemonMsg};
+
+    let log = mcp_support::log();
+    let other = SessionId::from_uuid(Uuid::from_u128(SESSION_U128 + 1));
+    let (r, others) = spawn_receiver_with(&[other]).await;
+    let Receiver {
+        id,
+        addr,
+        token,
+        state,
+        cat,
+        _dirs,
+    } = r;
+    let (_client, mut rx) = state.register(ClientIdentity::new(
+        "test",
+        ClientInstance {
+            pid: 0,
+            nonce: "test".into(),
+        },
+    ));
+    assert_eq!(hook_activity(&state, id), None);
+
+    let todo_body = r#"{"hook_event_name":"PostToolUse","tool_name":"TodoWrite","tool_input":{"todos":[
+        {"content":"SECRET-TODO-DONE","activeForm":"SECRET-DOING-DONE","status":"completed"},
+        {"content":"SECRET-TODO-NOW","activeForm":"SECRET-DOING-NOW","status":"in_progress"}]}}"#;
+    assert_eq!(post_hook(&addr, id.0, Some(&token), todo_body).await, 200);
+    let got = hook_activity(&state, id).expect("todos captured");
+    assert_eq!(got.todos.len(), 2);
+    assert_eq!(got.todos[0].status, TodoStatus::Completed);
+    assert_eq!(got.todos[1].status, TodoStatus::InProgress);
+    assert_eq!(got.todos[1].text, "SECRET-TODO-NOW");
+
+    let prompt_body = r#"{"hook_event_name":"UserPromptSubmit","prompt":"SECRET-PROMPT-TEXT"}"#;
+    assert_eq!(post_hook(&addr, id.0, Some(&token), prompt_body).await, 200);
+    let got = hook_activity(&state, id).expect("prompt captured");
+    assert_eq!(got.prompt.as_deref(), Some("SECRET-PROMPT-TEXT"));
+    assert_eq!(got.todos.len(), 2, "the prompt leaves the todos alone");
+
+    assert_eq!(
+        hook_activity(&state, other),
+        None,
+        "another session is untouched"
+    );
+
+    let mut broadcasts = 0;
+    while let Ok(frame) = rx.try_recv() {
+        if let Frame::Control(DaemonMsg::CatalogChanged { catalog }) = frame {
+            let mine = catalog
+                .projects
+                .iter()
+                .flat_map(|p| &p.sessions)
+                .find(|s| s.id == id)
+                .and_then(|s| s.hook_activity.clone());
+            if mine.is_some() {
+                broadcasts += 1;
+            }
+        }
+    }
+    assert!(
+        broadcasts >= 2,
+        "each captured change is broadcast, saw {broadcasts}"
+    );
+
+    let logged = String::from_utf8_lossy(&log.lock().unwrap()).into_owned();
+    assert!(
+        !logged.contains("SECRET-"),
+        "a prompt or todo text reached the log"
+    );
+
+    cat.kill().expect("kill");
+    for c in others {
+        c.kill().expect("kill");
+    }
 }

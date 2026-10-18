@@ -238,6 +238,44 @@ async fn list_sessions_marks_only_the_caller() {
     );
 }
 
+/// Feature 813 (W3, FR-020): a session's hook-fed prompt and todo text never leave through the
+/// read tools.
+#[tokio::test]
+async fn list_sessions_and_get_session_never_return_hook_activity() {
+    let f = fixture().await;
+    let body = json!({"hook_event_name": "PostToolUse", "tool_name": "TodoWrite",
+        "tool_input": {"todos": [{"content": "SECRET-TODO", "activeForm": "SECRET-DOING",
+            "status": "in_progress"}]}});
+    let prompt = json!({"hook_event_name": "UserPromptSubmit", "prompt": "SECRET-PROMPT"});
+    let mut cmd = portable_pty::CommandBuilder::new("cat");
+    cmd.cwd(std::env::temp_dir());
+    let cat = micold_daemon::supervisor::PtySession::spawn(sid(2), cmd, 1_000, Some((80, 24)))
+        .expect("spawn cat");
+    let cat = f.state.register_session(cat);
+    assert!(
+        f.state.note_hook_activity(sid(2), &body),
+        "the todo list is captured"
+    );
+    assert!(
+        f.state.note_hook_activity(sid(2), &prompt),
+        "the prompt is captured"
+    );
+    let list = f.ok(sid(3), "list_sessions", json!({})).await.to_string();
+    let one = f
+        .ok(
+            sid(3),
+            "get_session",
+            json!({"session": sid(2).0.to_string()}),
+        )
+        .await
+        .to_string();
+    for out in [list, one] {
+        assert!(!out.contains("hook_activity"), "{out}");
+        assert!(!out.contains("SECRET"), "{out}");
+    }
+    cat.kill().expect("kill");
+}
+
 #[tokio::test]
 async fn list_sessions_filters_by_worktree() {
     let f = fixture().await;
