@@ -729,6 +729,46 @@ jobs:
       - name: Run the real-sshd tests
         run: cargo test -p micold-daemon --features ssh-real-runtime ssh_real_ --no-fail-fast -- --test-threads=1
 
+  # Feature 686 (FR-021, research K12/K13). The Kubernetes daemon runtime is proven against a real
+  # cluster: a throwaway `kind` cluster, the SSH image (the basic image plus a package source
+  # pointed at the suite) loaded into it, and the `kube_real_*` tests of `micold-client`. Linux only:
+  # kind needs a Linux container runtime, which GitHub's macOS runners lack and its Windows runners
+  # cannot provide; the client-side rules that differ per platform (kubeconfig candidates,
+  # separators, exec-plugin resolution) are pure core tests that the `test` job runs on all three.
+  # `kind` and `kubectl` are pinned by version and sha256, and the node image is one stable
+  # Kubernetes version, so the job is the same on every run. It runs on every non-documentation
+  # change (the docs-only skip of `ssh-remote`, without its path gate).
+  kube-cluster:
+    name: kubernetes daemon on a real cluster (linux)
+    # Waits on `lint` (#957), see the `test` job.
+    needs: [classify, lint]
+    if: >-
+      ${{ !cancelled()
+      && needs.classify.result == 'success'
+      && needs.lint.result != 'failure'
+      && needs.classify.outputs.docs_only != 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      KIND_VERSION: v0.30.0
+      KIND_SHA256: 517ab7fc89ddeed5fa65abf71530d90648d9638ef0c4cde22c2c11f8097b8889
+      KUBECTL_VERSION: v1.34.0
+      KUBECTL_SHA256: cfda68cba5848bc3b6c6135ae2f20ba2c78de20059f68789c090166d6abc3e2c
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - name: Install kind and kubectl at pinned versions
+        run: |
+          set -euo pipefail
+          curl -sSLfo kind "https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-linux-amd64"
+          echo "${KIND_SHA256}  kind" | sha256sum --check
+          curl -sSLfo kubectl "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
+          echo "${KUBECTL_SHA256}  kubectl" | sha256sum --check
+          sudo install -m 0755 kind kubectl /usr/local/bin/
+      - name: Run the real-cluster tests
+        run: scripts/test-kube.sh
+
   assertions:
     name: assertion freeze
     needs: classify
@@ -884,7 +924,7 @@ jobs:
   # repository.
   ci-complete:
     name: ci complete
-    needs: [classify, lint, test, linux-daemons, windows-arm64-package, sandbox-runtime, ssh-remote, assertions, docs]
+    needs: [classify, lint, test, linux-daemons, windows-arm64-package, sandbox-runtime, ssh-remote, kube-cluster, assertions, docs]
     # Load-bearing. Without it the implicit `success()` applies, so this job would be *skipped*
     # whenever a covered job failed -- and a skipped check reports success. The gate would go green
     # exactly when the run went red. `crates/micold-core/tests/ci_gate_covers_every_job.rs` asserts
@@ -908,6 +948,7 @@ jobs:
           WINARM: ${{ needs.windows-arm64-package.result }}
           SANDBOX: ${{ needs.sandbox-runtime.result }}
           SSHREMOTE: ${{ needs.ssh-remote.result }}
+          KUBECLUSTER: ${{ needs.kube-cluster.result }}
           DOCS: ${{ needs.docs.result }}
           ASSERTIONS: ${{ needs.assertions.result }}
         run: |
@@ -927,6 +968,7 @@ jobs:
           check windows-arm64 "$WINARM"
           check sandbox "$SANDBOX"
           check ssh-remote "$SSHREMOTE"
+          check kube-cluster "$KUBECLUSTER"
           check docs "$DOCS"
           check assertions "$ASSERTIONS"
           {
@@ -941,6 +983,7 @@ jobs:
             echo "| windows-arm64-package | \`$WINARM\` | yes |"
             echo "| sandbox-runtime | \`$SANDBOX\` | yes |"
             echo "| ssh-remote | \`$SSHREMOTE\` | yes |"
+            echo "| kube-cluster | \`$KUBECLUSTER\` | yes |"
             echo "| docs | \`$DOCS\` | yes |"
             echo "| assertions | \`$ASSERTIONS\` | yes |"
           } >> "$GITHUB_STEP_SUMMARY"

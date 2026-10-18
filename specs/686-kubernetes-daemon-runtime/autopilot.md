@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-xelisc
 - **Started**: 2026-10-17
 - **Phase**: implement
-- **Next step**: M8 pushed, gate green (scripts/gate.sh); PR files in the scratchpad (pr-title/pr-body-686-M8); orchestrator opens the PR, waits for CI and merges. Then M9.
+- **Next step**: M9 implemented (T088–T096, T105 ticked); full gate (scripts/gate.sh) then reviews A/B, push, PR files in the scratchpad (pr-title/pr-body-686-M9). The real verification is CI job kube-cluster on the PR (no docker/kind/kubectl here).
 
 ## Pull requests
 
@@ -27,6 +27,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1011 | M5 | merged | c7d0dbf8393d4686551c81f404bad4028978e1f7 |
 | #1015 | M6 | merged | 9639f49ae112f0c73155642adb9dc4a1dfa34bf6 |
 | #1025 | M7 | merged | d6d74c272bd4bcc76d081ec171e2e63a00c448f1 |
+| #1028 | M8 | merged | cc09ae12641f04b1e7986941ca4ee152539e4d7b |
 
 ## Milestones
 
@@ -42,8 +43,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M5 | T134, T022, T074, T135, T030, T077, T136 | full | (#806) Copy + Connect over SSH through the relay; failures at client level | — | merged (#1011) |
 | M6 | T138, T139, T141, T142, T033, T140 | full | (#806) AI CLI install, drift prompt, Add entry, user guide 🎯 MVP | — | merged (#1015) |
 | M7 | T047–T055, T100 | full | (#806) Clone + worktrees in the pod (RepoClone) | — | merged (#1025) |
-| M8 | T057, T058, T060, T061, T062, T101 | full | (#806) Reconnect; pod gone → stopped with reason | — | implemented, gate green, PR pending |
-| M9 | T088–T096, T105 | full | (#806) kube_real_* suite, `mise run test-kube`, CI job kube-cluster | — | blocked on #806 |
+| M8 | T057, T058, T060, T061, T062, T101 | full | (#806) Reconnect; pod gone → stopped with reason | #1028 | merged |
+| M9 | T088–T096, T105 | full | (#806) kube_real_* suite, `mise run test-kube`, CI job kube-cluster | — | implemented, gate running |
 Cut notes (revision 2): tasks.md "Revision 2 task map" lists kept/changed/removed T001–T105; new tasks T106–T143 (T137 unused; T143 is M1a's persistence test rework). Order: everything independent of #806 first (M1a–M4b, all `docs-not-needed`: Kubernetes cannot be added before M6), then the #806-blocked milestones (M5–M9). US1 split along the #806 boundary: connect (M5) before CLI install + Add entry (M6), so the Add entry appears only when US1.1 works (no half-wired UI). User-guide tasks T046/T071/T078/T087 folded into T033 (M6), since the guide page appears with the Add entry. Polish T097–T098: close unit.
 stash@{0} survivors (all used by M1a–M2, stash dropped 2026-10-18; backed up in /mnt/project-files/backups/686-m1-wip.bundle): keep `kubeconfig.rs` (T020/T026), `lifecycle.rs` (T079/T081), `manifest.rs` (T019, after the SSH image/env/port 2222/access-secret mount changes), `start_tests.rs` (T021, drop the `Image` phase and the volume-size refusal; `Tunnel` = identification line), `Quantity::{to_k8s, parse_k8s}`, `ResourceNames::all_secrets`, `ObjectKind::noun`, `KubeFailure::StopTimeout` + `From<ApiFailure>`, `FakeCluster::hold_on_delete`. Discard `StartPlan::for_image`. Design revision part 4: plan fixed by tasks unit — data-model StartPlan and contract §3 item 1 say `Tunnel` reads the identification line from one `Cluster::port_forward` stream; the client relay is first used in M5.
 
@@ -171,3 +172,11 @@ None. (The anchor-timing flake seen in earlier gate runs did not recur; gate8 gr
 - Tunnel phase: opens one `port_forward` to `SSH_PORT`, reads the identification line; no line within the Tunnel bound, a non-`SSH-2.0-` line, or an exited container (pod not running) is `ImageContract` (the phase has its own timeout, so it is not `PhaseTimeout`). `Started` stays without a `tunnel` field: the probe stream is dropped; the client relay (`Relay`) opens its own per connection (first used in M5). `FakeCluster` serves an SSH banner by default (`set_banner(None)` = silent port).
 - `client/kube/keys.rs` (`KubeKeys`) uses `micold_core::owner_only` and the core `KeyGen` port; it does not reuse `provision::keys::DaemonKeys` (#806): that one shells out to `ssh-keygen`, names its files `client_ed25519`, and pins `[127.0.0.1]:port`; the Kubernetes contract fixes `id_ed25519`, `client_id` and the `micold-kube-<key>` alias. The real `KeyGen` is wired with Copy/Connect (M5).
 - `LiveCluster::connect(context)` is chosen once as `Capabilities::kube_connector` (expect(dead_code) until M4b). Exec-plugin failures at request time arrive as `Unreachable` text (kube reports them as a request error); resolved plugin paths cover the not-found case (`ExecPlugin`). Untestable against a real cluster here; every decision is in a pure helper with tests.
+
+## Decisions (M9)
+
+- #806 is still open (orchestrator decision): M5–M8 needed nothing of its pending work. M9 uses the basic image as on main (`packaging/basic`) as the SSH image, built in the job (`docker build`, then `packaging/kube/test.Containerfile` on top) and loaded with `kind load docker-image`; nothing is pulled from a registry.
+- Drift fixed in the task text: `client-tests/` is `crates/micold-client/tests/` (T088–T094). T089: the stand-in's package source needs the image (an npm builtin config pointing at the docker gateway 172.30.0.1:4873), so the Containerfile exists. T088: the harness creates the cluster if missing but never deletes it (a test binary has no exit hook; each of the six binaries is its own process); `scripts/test-kube.sh` (the `test-kube` task and the CI job) deletes it on exit unless `MICOLD_KUBE_TEST_KEEP=1`. T095: the task calls `scripts/test-kube.sh` under the build lock. T096: no `daemon_runtime` gate, per "same docs-only skip" (runs on every non-docs change); `kube-cluster` added to `ci complete`.
+- Pins: kind v0.30.0 (sha256 517ab7fc…, verified by download), kubectl v1.34.0 (sha256 cfda68cb…, from dl.k8s.io), node image kindest/node:v1.34.0.
+- Not covered by the real suite, flagged for the orchestrator: T092's "remote needing the allowed git credential clones" and "withdrawal deletes the secret" (need an authenticated git server and allowed-credential fixtures; the unit tests A10–A12 over `FakeCluster` cover them) and the SC-002 600 s run (set `MICOLD_KUBE_AWAY_SECS=600`).
+- Not runnable here (no docker/kind/kubectl): the suite compiles (`cargo test -p micold-client --features kube-real-runtime --no-run`) and each test prints `SKIP <name>: <reason>` and passes. CI's `kube-cluster` log is the first real run; expect fixes (image/npm config, RBAC verbs, step names in the timing).

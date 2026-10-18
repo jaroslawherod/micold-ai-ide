@@ -178,6 +178,30 @@ from `scripts/classify-change.sh` (the `packaging` block is the pattern), pin it
 `scripts/tests/classify-change.test.sh`, expose it as a `classify` output, and put it in the
 job's `if:`.
 
+## The Kubernetes real-cluster job
+
+`kubernetes daemon on a real cluster` (`kube-cluster`, feature 686, FR-021) runs the `kube_real_*`
+tests of `micold-client` against a throwaway `kind` cluster, through `scripts/test-kube.sh` (the
+same script as `mise run test-kube`). It skips with the docs-only rule of the other jobs and runs on
+every other change, whatever path: it is not gated by `daemon_runtime`, because the code under test
+spans `micold-core`, `micold-client` and `packaging/`.
+
+- **Linux only.** kind needs a Linux container runtime; GitHub's macOS runners have none and its
+  Windows runners cannot run Linux containers. The client-side rules that differ per platform
+  (kubeconfig candidates, path separators, exec-plugin resolution, home directory) are pure core
+  tests that the `test` job runs on all three platforms. The reason is also a comment in `ci.yml`.
+- **Pinned.** `kind` and `kubectl` are downloaded at a fixed version and checked against a sha256
+  (`KIND_SHA256`, `KUBECTL_SHA256` in the job's `env`); the node image is one stable Kubernetes
+  version (`NODE_IMAGE` in `crates/micold-client/tests/kube_real_support/mod.rs`). Bump the three
+  together, and take the checksums from the release's own `.sha256` files.
+- **No registry, no sign-in, no provider network.** The pod's SSH image is built in the job from
+  `packaging/basic` plus `packaging/kube/test.Containerfile` and loaded with `kind load
+  docker-image`. The stand-in AI CLI comes from a package source the test process serves on the
+  `kind` docker network's gateway (172.30.0.1), and the git remote is a `git daemon` there.
+- **Skips, not failures.** Without docker, kind or kubectl each test prints `SKIP <name>: <reason>`
+  and passes; the job installs them, so a skip in CI means the install step is broken.
+- Part of `ci complete`; add `full-ci` to run it on a docs-only change.
+
 ## Platform daemon suites run after the merge
 
 On macOS and Windows a pull request builds, runs the render-free core tests and the component and
