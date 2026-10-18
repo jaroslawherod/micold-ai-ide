@@ -1,0 +1,12 @@
+name: Install cargo-zigbuild and zig
+description: >-
+  What scripts/remote-daemon-bundle.sh needs to cross-build the static Linux daemons (feature 806,
+  FR-009). Both come from PyPI wheels, so no compile and no download host beyond pip's.
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      # `python3` is not always a name on Windows runners; `python` is.
+      run: |
+        py="$(command -v python3 || command -v python)"
+        "$py" -m pip install --break-system-packages cargo-zigbuild ziglang

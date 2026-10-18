@@ -197,13 +197,24 @@ jobs:
       # dyld resolved, the plist parsed -- so it is reported and treated as a pass. Every other way
       # of dying still fails, which keeps the escape hatch narrow: a missing library, a rejected
       # signature and a bundle whose daemon is not beside its client all look nothing like it.
+      - name: Install the Linux daemon cross-build tools
+        if: runner.os == 'Windows' || runner.os == 'macOS'
+        uses: ./.github/actions/install-zigbuild
+      # Feature 806 (FR-009): the static Linux daemons the bundle carries for remote hosts and
+      # containers, built by the script the release uses.
+      - name: Build the Linux daemons for the macOS bundle
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          rustup target add x86_64-unknown-linux-musl aarch64-unknown-linux-musl
+          scripts/remote-daemon-bundle.sh --out target/remote-daemon
       - name: Package and launch the macOS bundle
         if: runner.os == 'macOS'
         shell: bash
         run: |
           set -euo pipefail
 
-          scripts/macos-bundle.sh --bin-dir target/debug --out target/macos
+          scripts/macos-bundle.sh --bin-dir target/debug --out target/macos --remote-dir target/remote-daemon
 
           app="target/macos/micold-ai-ide.app"
           log="$RUNNER_TEMP/launch.log"
@@ -252,7 +263,9 @@ jobs:
       - name: Package the Windows installer
         if: runner.os == 'Windows'
         shell: bash
-        run: scripts/windows-installer.sh --arch x64 --out-dir dist
+        run: |
+          rustup target add x86_64-unknown-linux-musl aarch64-unknown-linux-musl
+          scripts/windows-installer.sh --arch x64 --out-dir dist
       - name: Install and launch the Windows installer
         if: runner.os == 'Windows'
         shell: bash
@@ -422,8 +435,11 @@ jobs:
         with:
           targets: aarch64-pc-windows-msvc
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: ./.github/actions/install-zigbuild
       - name: Build the setup executable
-        run: scripts/windows-installer.sh --arch arm64 --out-dir dist
+        run: |
+          rustup target add x86_64-unknown-linux-musl aarch64-unknown-linux-musl
+          scripts/windows-installer.sh --arch arm64 --out-dir dist
       - name: Install and launch it
         run: scripts/windows-install-smoke.sh dist/micold-ai-ide-*-arm64-setup.exe
       - name: Keep the setup executable

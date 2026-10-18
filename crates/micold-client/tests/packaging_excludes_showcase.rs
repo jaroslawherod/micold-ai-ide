@@ -471,8 +471,14 @@ fn the_macos_bundle_script_exists() {
 // The Windows installer (feature 030, FR-002, FR-012)
 // ---------------------------------------------------------------------------------------------
 
-/// What the Windows installer's `[Files]` may ship: exactly the app and its daemon.
-const WINDOWS_SHIPPED: &[&str] = &["micold-ai-ide.exe", "micold-daemon.exe"];
+/// What the Windows installer's `[Files]` may ship: exactly the app, its daemon and the static
+/// Linux daemons it copies to remote hosts and containers (feature 806, FR-009).
+const WINDOWS_SHIPPED: &[&str] = &[
+    "micold-ai-ide.exe",
+    "micold-daemon.exe",
+    "micold-daemon-linux-x86_64",
+    "micold-daemon-linux-aarch64",
+];
 
 /// The Inno Setup rule for `script`, the text of a `.iss` file.
 ///
@@ -556,6 +562,8 @@ AppName=Micold AI IDE
 ; the app and the daemon it spawns, nothing else
 Source: "{#BinDir}\micold-ai-ide.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#BinDir}\micold-daemon.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#RemoteDir}\micold-daemon-linux-x86_64"; DestDir: "{app}\remote"; Flags: ignoreversion
+Source: "{#RemoteDir}\micold-daemon-linux-aarch64"; DestDir: "{app}\remote"; Flags: ignoreversion
 "#;
 
 #[test]

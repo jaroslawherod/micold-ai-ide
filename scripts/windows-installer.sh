@@ -104,6 +104,15 @@ winpath() {
 "$root/scripts/build-lock.sh" cargo build --release --locked \
 	-p micold-client --bin micold-ai-ide -p micold-daemon --bin micold-daemon --target "$triple"
 
+# The static Linux daemons for remote hosts and containers (feature 806 FR-009), installed beside the
+# app in `remote\`. MICOLD_REMOTE_DIR names a directory that already holds them and skips the build.
+remote_dir="${MICOLD_REMOTE_DIR:-}"
+if [ -z "$remote_dir" ]; then
+	remote_dir="$target_dir/remote-daemon"
+	"$root/scripts/remote-daemon-bundle.sh" --out "$remote_dir"
+fi
+remote_dir="$(absolute "$remote_dir")"
+
 out_dir="$(absolute "${out_dir:-$target_dir/windows-installer}")"
 mkdir -p "$out_dir"
 # MSYS2 would otherwise rewrite every `/D...` switch into a path.
@@ -111,6 +120,7 @@ MSYS2_ARG_CONV_EXCL='*' "$iscc" \
 	"/DAppVersion=$version" \
 	"/DArch=$arch" \
 	"/DBinDir=$(winpath "$bin_dir")" \
+	"/DRemoteDir=$(winpath "$remote_dir")" \
 	"/O$(winpath "$out_dir")" \
 	"$(winpath "$root/packaging/windows/micold-ai-ide.iss")"
 

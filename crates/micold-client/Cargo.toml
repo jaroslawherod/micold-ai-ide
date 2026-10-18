@@ -122,6 +122,11 @@ assets = [
     # relative to THIS crate's manifest dir, so the workspace-root files below need `../../` (the
     # `target/` binaries are resolved via the shared target dir and stay bare).
     ["target/release/micold-daemon", "usr/bin/", "755"],
+    # The static Linux daemons for remote hosts and containers of either architecture (feature 806
+    # FR-009), built by `scripts/remote-daemon-bundle.sh` before packaging; the client reads them
+    # from `../lib/micold-ai-ide/remote` beside its own directory.
+    ["../../target/remote-daemon/micold-daemon-linux-x86_64", "usr/lib/micold-ai-ide/remote/", "755"],
+    ["../../target/remote-daemon/micold-daemon-linux-aarch64", "usr/lib/micold-ai-ide/remote/", "755"],
     ["../../packaging/micold-ai-ide.desktop", "usr/share/applications/micold-ai-ide.desktop", "644"],
     ["../../assets/icon/png/icon-16.png", "usr/share/icons/hicolor/16x16/apps/micold-ai-ide.png", "644"],
     ["../../assets/icon/png/icon-32.png", "usr/share/icons/hicolor/32x32/apps/micold-ai-ide.png", "644"],
@@ -153,6 +158,8 @@ requires = { "glibc" = "*", "libgcc_s.so.1()(64bit)" = "*", "libxkbcommon.so.0()
 assets = [
     { source = "target/release/micold-ai-ide", dest = "/usr/bin/micold-ai-ide", mode = "755" },
     { source = "target/release/micold-daemon", dest = "/usr/bin/micold-daemon", mode = "755" },
+    { source = "target/remote-daemon/micold-daemon-linux-x86_64", dest = "/usr/lib/micold-ai-ide/remote/micold-daemon-linux-x86_64", mode = "755" },
+    { source = "target/remote-daemon/micold-daemon-linux-aarch64", dest = "/usr/lib/micold-ai-ide/remote/micold-daemon-linux-aarch64", mode = "755" },
     { source = "packaging/micold-ai-ide.desktop", dest = "/usr/share/applications/micold-ai-ide.desktop", mode = "644" },
     { source = "assets/icon/png/icon-16.png", dest = "/usr/share/icons/hicolor/16x16/apps/micold-ai-ide.png", mode = "644" },
     { source = "assets/icon/png/icon-32.png", dest = "/usr/share/icons/hicolor/32x32/apps/micold-ai-ide.png", mode = "644" },

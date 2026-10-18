@@ -12,6 +12,24 @@ agent and `~/.ssh/config`; it stores no password or key.
    **Key file** are optional; what you leave blank comes from your SSH configuration.
 4. Leave **Connect when the application starts** on, or start it yourself from its row.
 
+## What you need
+
+- **The computer you reach.** Linux or macOS, on Intel/AMD (`x86_64`) or Arm (`aarch64`), with an
+  SSH server and a writable home directory.
+- **Linux, macOS and Windows clients.** Each uses the `ssh` on its `PATH`. On Windows that is the
+  OpenSSH client (`ssh.exe`) that ships with Windows, or the one in Git for Windows; if you use a
+  key with a passphrase, the **OpenSSH Authentication Agent** service must be running (set it to
+  start automatically and run `ssh-add` once).
+
+## Which daemon is copied
+
+When the host has the same system and CPU architecture as your computer, Micold copies its own
+daemon. Otherwise it copies a build that ships with the app. Every package (the macOS app, the
+Windows setup, the `.deb` and the `.rpm`) carries static Linux builds for both `x86_64` and
+`aarch64`, so a Mac or a Windows PC can start a daemon on any Linux host or container. A host
+running anything else is refused with `no matching daemon build for <system>-<architecture>`, for
+example `linux-riscv64`.
+
 ## What happens when it starts
 
 The row shows **Starting** and, under it, the step it is in:

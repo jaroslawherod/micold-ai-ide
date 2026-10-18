@@ -136,6 +136,11 @@ jobs:
           sudo apt-get install -y \
             libxkbcommon-dev libwayland-dev libx11-dev \
             libxcursor-dev libxrandr-dev libxi-dev
+      - uses: ./.github/actions/install-zigbuild
+      - name: Build the Linux daemons for remote hosts and containers
+        run: |
+          rustup target add x86_64-unknown-linux-musl aarch64-unknown-linux-musl
+          scripts/remote-daemon-bundle.sh --out target/remote-daemon
       - name: Install cargo-deb
         run: cargo install cargo-deb --locked
       # Native build → cargo-deb derives the Debian arch (amd64 / arm64) automatically.
@@ -181,6 +186,11 @@ jobs:
           sudo apt-get install -y \
             libxkbcommon-dev libwayland-dev libx11-dev \
             libxcursor-dev libxrandr-dev libxi-dev
+      - uses: ./.github/actions/install-zigbuild
+      - name: Build the Linux daemons for remote hosts and containers
+        run: |
+          rustup target add x86_64-unknown-linux-musl aarch64-unknown-linux-musl
+          scripts/remote-daemon-bundle.sh --out target/remote-daemon
       - name: Install cargo-generate-rpm
         run: cargo install cargo-generate-rpm --locked
       - name: Build .rpm
@@ -229,8 +239,13 @@ jobs:
       # with the /Applications symlink, then mounts the result and re-verifies. No secret,
       # certificate, or Apple account is used; `mise run dmg` on a contributor's Mac produces an
       # artifact of equivalent trust (FR-016).
+      - uses: ./.github/actions/install-zigbuild
+      - name: Build the Linux daemons for remote hosts and containers
+        run: |
+          rustup target add x86_64-unknown-linux-musl aarch64-unknown-linux-musl
+          scripts/remote-daemon-bundle.sh --out target/remote-daemon
       - name: Build the disk image
-        run: scripts/macos-dmg.sh --target-dir target --out target/macos
+        run: scripts/macos-dmg.sh --target-dir target --out target/macos --remote-dir target/remote-daemon
       - name: Upload the .dmg to the draft release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -274,8 +289,11 @@ jobs:
         with:
           targets: ${{ matrix.target }}
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: ./.github/actions/install-zigbuild
       - name: Build the setup executable
-        run: scripts/windows-installer.sh --arch ${{ matrix.arch }} --out-dir dist
+        run: |
+          rustup target add x86_64-unknown-linux-musl aarch64-unknown-linux-musl
+          scripts/windows-installer.sh --arch ${{ matrix.arch }} --out-dir dist
       - name: Install, launch and uninstall it
         run: scripts/windows-install-smoke.sh dist/micold-ai-ide-*-${{ matrix.arch }}-setup.exe
       - name: Upload the setup executable to the draft release
