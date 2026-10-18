@@ -80,7 +80,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None. PR #964 was CONFLICTING with main: rebased onto origin/main (conflicts in daemons_feature.rs and daemons_section_geometry.rs resolved keeping both sides), rustfmt fix, full `mise run gate` green, force-pushed. `mise run test-ssh`: all 5 `ssh_real_hostkey_auth` pass; `ssh_real_two_clients_share_one_daemon...` (M4, untouched by M5) failed once in the full run and once alone, then passed: flaky at ssh_real_concurrent.rs:164 (drain timing), follow-up.
+None. PR #964 was refused a merge again (main moved): second rebase onto origin/main, conflicts in the ssh argv, daemons feature/shell/settings UI, two client test files, the remote-daemons user guide and the real-ssh test support resolved keeping both sides; the provisioning test of spec 806 now gives its second SSH daemon its own port (FR-016 refuses a repeat). Full `mise run gate` green, force-pushed. Orchestrator: wait on CI and merge.
 
 ## Open escalation
 
