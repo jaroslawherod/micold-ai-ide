@@ -852,6 +852,23 @@ pub const COMPONENTS: &[Entry] = &[
         layout: Layout::FullWidth,
         render: sections::review::review_comment,
     },
+    Entry {
+        module: "material/review_panel_row.rs",
+        component: "ReviewPanelRow",
+        variants: &["Draft", "Sent", "Applied", "Answered"],
+        density: &[],
+        posed: &[
+            "with reply",
+            "selected",
+            "not in the diff",
+            "highlighted card",
+        ],
+        live: &[],
+        interactive: false,
+        section: Section::Components,
+        layout: Layout::FullWidth,
+        render: sections::review::review_panel_row,
+    },
     // ---- floating surfaces and their triggers -----------------------------------------------
     // `MenuItem` and `TreeItem` are deliberately absent: they are *records* the caller
     // fills in, not components — no element conversion, public fields — and the builder-API gate

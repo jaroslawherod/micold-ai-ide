@@ -19,14 +19,14 @@ use micold_core::tokens::{self, spacing, Rgb, Roles};
 use crate::app::{EditorAction, Message, State};
 use crate::features::changes::{
     self as changes, base_line, can_pick, card_model, committed_available, composer_placed,
-    diff_body, discard_prompt, file_comments, list_body, pending_counts, review_of, selected_file,
-    send_action, tidy_actions, ComposerTarget, DiffBody, ListBody, Msg, OpenView, Source,
-    DEFAULT_ENTRY_NOTE,
+    diff_body, discard_prompt, file_comments, list_body, panel_rows, pending_counts, review_of,
+    review_toolbar_label, selected_file, send_action, status_counts, tidy_actions, ComposerTarget,
+    DiffBody, ListBody, Msg, OpenView, Source, DEFAULT_ENTRY_NOTE, PANEL_EMPTY_TEXT,
 };
 use crate::icons::Icon;
 use crate::ui::material::{
-    Button, ButtonVariant, CardState, DiffView, PullRequestRow, ReviewCommentCard, StageProgress,
-    Tag, Text, TextArea, ToggleChip, TypeRole, VirtualRows,
+    status_label, Button, ButtonVariant, CardState, DiffView, PullRequestRow, ReviewCommentCard,
+    ReviewPanelRow, StageProgress, Tag, Text, TextArea, ToggleChip, TypeRole, VirtualRows,
 };
 
 /// The heading of the comments whose lines the diff on screen does not show (C3).
@@ -46,6 +46,14 @@ pub const UNPLACED: &str = "The lines this comment was on are gone. Pick lines t
 
 /// One file row's height: fixed, which is what lets `VirtualRows` build only the visible rows.
 pub const ROW_HEIGHT: f32 = 36.0;
+
+/// One review panel row's height.
+const PANEL_ROW_HEIGHT: f32 = crate::ui::material::PANEL_ROW_HEIGHT;
+
+/// The diff's scroll viewport, by name: a panel jump scrolls it (feature 946, FR-017). A
+/// `LazyLock` for the reason [`crate::ui::SIDEBAR_SCROLL_ID`] is one.
+pub static DIFF_SCROLL_ID: std::sync::LazyLock<iced::advanced::widget::Id> =
+    std::sync::LazyLock::new(|| iced::advanced::widget::Id::new("changes-diff"));
 
 /// The Changes view of `view`'s entry. `composer` is the review composer's editor, which only the
 /// binary holds; without it an open composer shows its text read-only.
@@ -67,14 +75,53 @@ pub fn view<'a>(
         heading = heading.push(Text::new(line, TypeRole::Body, r).muted());
     }
     // S1: Send review (n), "Sending…" while a send of this entry is open in any window.
-    let send = send_action(&state.changes).map(|action| {
-        Button::filled(action.label, r)
-            .on_press_maybe(action.enabled.then_some(Message::Changes(Msg::SendPressed)))
-    });
     let mut header = row![container(heading).width(Length::Fill)];
-    // S3: Clear sent and Discard drafts…, each enabled only when it has something to act on.
+    // FR-016: the toolbar toggle that closes and reopens the review panel.
+    header = header.push(
+        ToggleChip::new(
+            review_toolbar_label(&state.changes),
+            Message::Changes(Msg::PanelToggled),
+            r,
+        )
+        .active(view.panel.open),
+    );
+    let header = header
+        .push(
+            Button::text("Close", r)
+                .leading(Icon::Close)
+                .on_press(Message::Changes(Msg::Closed)),
+        )
+        .spacing(spacing::MD)
+        .align_y(Alignment::Center);
+
+    let mut body = row![
+        container(list_pane(state, view, r)).width(Length::FillPortion(2)),
+        container(diff_pane(state, view, scheme, composer)).width(Length::FillPortion(3)),
+    ]
+    .spacing(spacing::LG)
+    .height(Length::Fill);
+    if view.panel.open {
+        body = body.push(container(review_panel(state, view, r)).width(Length::FillPortion(2)));
+    }
+
+    container(
+        column![header, body]
+            .spacing(spacing::LG)
+            .height(Length::Fill),
+    )
+    .padding(spacing::LG)
+    .width(Length::Fill)
+    .height(Length::Fill)
+    .into()
+}
+
+/// The review panel (feature 946, FR-016 to FR-019): its buttons, the counts per status, and a row
+/// per comment. `VirtualRows` has one row height, so the file path is in each row's label rather
+/// than in a group header.
+fn review_panel<'a>(state: &'a State, view: &'a OpenView, r: Roles) -> Element<'a, Message> {
+    let mut buttons = row![].spacing(spacing::SM).align_y(Alignment::Center);
     if let Some(tidy) = tidy_actions(&state.changes) {
-        header = header
+        buttons = buttons
             .push(
                 Button::text("Clear sent", r).on_press_maybe(
                     tidy.clear_sent
@@ -88,34 +135,66 @@ pub fn view<'a>(
                 ),
             );
     }
-    if let Some(send) = send {
-        header = header.push(send);
+    if let Some(action) = send_action(&state.changes) {
+        buttons = buttons.push(
+            Button::filled(action.label, r)
+                .on_press_maybe(action.enabled.then_some(Message::Changes(Msg::SendPressed))),
+        );
     }
-    let header = header
-        .push(
-            Button::text("Close", r)
-                .leading(Icon::Close)
-                .on_press(Message::Changes(Msg::Closed)),
-        )
-        .spacing(spacing::MD)
-        .align_y(Alignment::Center);
-
-    let body = row![
-        container(list_pane(state, view, r)).width(Length::FillPortion(2)),
-        container(diff_pane(state, view, scheme, composer)).width(Length::FillPortion(3)),
+    let counts = status_counts(&state.changes)
+        .iter()
+        .filter(|(_, n)| *n > 0)
+        .map(|(status, n)| format!("{n} {}", status_label(*status).to_lowercase()))
+        .collect::<Vec<_>>()
+        .join(" · ");
+    let mut pane = column![
+        Text::new("Review", TypeRole::Title, r),
+        buttons.wrap(),
+        Text::new(counts, TypeRole::Body, r).muted(),
     ]
-    .spacing(spacing::LG)
+    .spacing(spacing::SM)
     .height(Length::Fill);
-
-    container(
-        column![header, body]
-            .spacing(spacing::LG)
-            .height(Length::Fill),
+    if let Some(why) = view.panel.hidden {
+        pane = pane.push(Text::new(why.message(), TypeRole::Body, r));
+    }
+    let rows = panel_rows(&state.changes);
+    if rows.is_empty() {
+        return pane
+            .push(Text::new(PANEL_EMPTY_TEXT, TypeRole::Body, r).muted())
+            .into();
+    }
+    let list = VirtualRows::new(
+        rows.len(),
+        PANEL_ROW_HEIGHT,
+        move |index| {
+            let Some(item) = rows.get(index) else {
+                return Space::new().into();
+            };
+            let mut card = ReviewPanelRow::new(
+                format!("{} · {}", item.path.as_str(), item.lines),
+                item.text.clone(),
+                item.status,
+                r,
+            )
+            .selected(item.selected)
+            .not_in_diff(item.not_in_diff)
+            .on_press(Message::Changes(Msg::PanelRowSelected(item.id)));
+            if let Some(reply) = &item.reply {
+                card = card.reply(reply.clone());
+            }
+            if item.editable {
+                card = card
+                    .on_edit(Message::Changes(Msg::EditComment(item.id)))
+                    .on_delete(Message::Changes(Msg::DeleteComment(item.id)));
+            }
+            card.into()
+        },
+        r,
     )
-    .padding(spacing::LG)
-    .width(Length::Fill)
-    .height(Length::Fill)
-    .into()
+    .offset(view.panel.offset)
+    .viewport(view.panel.viewport)
+    .on_scroll(|offset, viewport| Message::Changes(Msg::PanelScrolled { offset, viewport }));
+    pane.push(list).into()
 }
 
 /// The left pane: the two toggles (L1) over the file list or its empty state (L2, L3).
@@ -339,6 +418,7 @@ fn diff_pane<'a>(
                 .map(|(anchor, height)| (*anchor, *height as f32))
                 .collect();
             let mut diff = DiffView::new(&loaded.diff, layout, r)
+                .scroll_id(DIFF_SCROLL_ID.clone())
                 .spans(spans)
                 .offset(view.diff_offset)
                 .viewport(view.diff_viewport)
@@ -492,7 +572,8 @@ fn comment_or_editor<'a>(
         Status::Answered => CardState::Answered,
     };
     let mut card = ReviewCommentCard::new(&comment.text, state, r)
-        .outdated(view.outdated.contains(&comment.id));
+        .outdated(view.outdated.contains(&comment.id))
+        .highlighted(view.panel.focus == Some(comment.id));
     if let Some((reply, shortened)) = model.reply {
         card = card.reply(reply, shortened);
         if shortened {

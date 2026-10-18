@@ -120,6 +120,7 @@ pub struct VirtualRows<'a, M> {
     viewport: u32,
     on_scroll: Option<Box<dyn Fn(u32, u32) -> M + 'a>>,
     extras: Vec<(usize, f32)>,
+    id: Option<iced::advanced::widget::Id>,
 }
 
 impl<'a, M: Clone + 'a> VirtualRows<'a, M> {
@@ -139,6 +140,7 @@ impl<'a, M: Clone + 'a> VirtualRows<'a, M> {
             viewport: 0,
             on_scroll: None,
             extras: Vec::new(),
+            id: None,
         }
     }
 
@@ -159,6 +161,12 @@ impl<'a, M: Clone + 'a> VirtualRows<'a, M> {
     /// [`ASSUMED_VIEWPORT`].
     pub fn viewport(mut self, viewport: u32) -> Self {
         self.viewport = viewport;
+        self
+    }
+
+    /// Name the list's scrollable, so a scroll operation can address it.
+    pub fn id(mut self, id: iced::advanced::widget::Id) -> Self {
+        self.id = Some(id);
         self
     }
 
@@ -198,6 +206,9 @@ impl<'a, M: Clone + 'a> From<VirtualRows<'a, M>> for Element<'a, M> {
         let mut scroll = Scrollable::new(content, list.roles)
             .height(Length::Fill)
             .width(Length::Fill);
+        if let Some(id) = list.id {
+            scroll = scroll.id(id);
+        }
         if let Some(f) = list.on_scroll {
             scroll =
                 scroll.on_scroll_metrics(move |offset, viewport, _content| f(offset, viewport));

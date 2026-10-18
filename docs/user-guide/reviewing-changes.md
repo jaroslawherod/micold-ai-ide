@@ -320,9 +320,30 @@ A reply longer than 4,000 characters shows its start with **Show all** under it.
 to read the whole reply in a dialog, scrolling if it is long; **Close** (or Esc) returns to the
 diff. The dialog closes by itself when its comment is cleared or discarded.
 
+### The review panel
+
+The panel on the right of the diff lists every comment of the entry, across all its files. It is
+open by default; the **Review (n)** button in the header, *n* being the number of comments, closes
+and reopens it.
+
+- **What a row shows.** The file and the lines (*Lines 3–5*, or *Old lines 3–5* for the base
+  version), the start of the comment, its status (Draft, Sent, Applied or Answered) and, once the
+  agent has reported, the start of its reply. Rows are ordered by file, then by line. A row whose
+  file is no longer among the changes is marked *Not in the current diff* and keeps its status.
+- **Counts.** Under the panel's title, how many comments are in each status.
+- **Jumping.** Press a row to select its file and scroll the diff to the comment's first line; the
+  comment's card is outlined. A jump can be refused: when the file is hidden because the
+  **Committed** or **Uncommitted** button is off, the panel says to turn it back on; when the file
+  is not among the changes at all, it says so. The diff stays where it was.
+- **Editing and deleting.** A draft row has **Edit** and **Delete**, the same as its card. Sent,
+  applied and answered rows have neither, and no row offers them while a send is under way.
+- **Buttons.** **Send review (n)**, **Clear sent** and **Discard drafts…** are in the panel's header
+  and are available under the same conditions as described here.
+- **No comments.** The panel says "No review comments yet" and how to start one.
+
 ### Clearing and discarding
 
-Two buttons in the view's header tidy the list once a round of feedback is done:
+Two buttons in the review panel's header tidy the list once a round of feedback is done:
 
 - **Clear sent** removes every sent comment of the entry at once and keeps the drafts. It is
   unavailable while the entry has no sent comments.

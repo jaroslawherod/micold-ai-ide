@@ -26,6 +26,7 @@ use crate::showcase::gallery::{arrange, posed};
 use crate::showcase::state::{Message, Showcase};
 use std::sync::LazyLock;
 
+use micold_core::review::comment::Status;
 use micold_core::review::diff::{parse_unified, FileDiff, LoadedDiff, SideLines, Spans};
 use micold_core::review::{LineRange, Side};
 use micold_core::theme::ColorScheme;
@@ -34,7 +35,8 @@ use micold_core::tokens;
 use crate::ui::syntax;
 
 use crate::ui::material::{
-    CardState, DiffLayout, DiffView, ReviewCommentCard, Tag, Text, TextArea, TypeRole, VirtualRows,
+    CardState, DiffLayout, DiffView, ReviewCommentCard, ReviewPanelRow, Tag, Text, TextArea,
+    TypeRole, VirtualRows, PANEL_ROW_HEIGHT,
 };
 
 /// Rows in the long-list pose: the length research R11 measures the list at.
@@ -381,6 +383,68 @@ pub fn review_comment<'a>(
                     Message::NoOp,
                     roles,
                 ),
+                roles,
+            ),
+        ],
+        Layout::FullWidth,
+    )
+}
+
+/// `ReviewPanelRow` — each status, with and without a reply, selected, and a file not in the diff
+/// (feature 946), and the comment card a row jump highlights.
+pub fn review_panel_row<'a>(
+    _showcase: &'a Showcase,
+    roles: Roles,
+    _i: usize,
+) -> Element<'a, Message> {
+    let row = |status, reply: Option<&'a str>| {
+        let row = ReviewPanelRow::new("src/lib.rs · Lines 3–5", COMMENT, status, roles)
+            .on_press(Message::NoOp);
+        let row = match reply {
+            Some(reply) => row.reply(reply),
+            None => row,
+        };
+        if status == Status::Draft {
+            row.on_edit(Message::NoOp).on_delete(Message::NoOp)
+        } else {
+            row
+        }
+    };
+    let sized = |row: ReviewPanelRow<'a, Message>| {
+        container(row)
+            .width(Length::Fixed(COMMENT_WIDTH))
+            .height(Length::Fixed(PANEL_ROW_HEIGHT))
+    };
+    arrange(
+        vec![
+            posed("draft", sized(row(Status::Draft, None)), roles),
+            posed("sent", sized(row(Status::Sent, None)), roles),
+            posed(
+                "applied, reply",
+                sized(row(Status::Applied, Some(SHORT_REPLY))),
+                roles,
+            ),
+            posed(
+                "answered, reply",
+                sized(row(Status::Answered, Some(SHORT_REPLY))),
+                roles,
+            ),
+            posed(
+                "selected",
+                sized(row(Status::Sent, None).selected(true)),
+                roles,
+            ),
+            posed(
+                "not in the diff",
+                sized(row(Status::Sent, None).not_in_diff(true)),
+                roles,
+            ),
+            posed(
+                "highlighted card",
+                container(
+                    ReviewCommentCard::new(COMMENT, CardState::Sent, roles).highlighted(true),
+                )
+                .width(Length::Fixed(COMMENT_WIDTH)),
                 roles,
             ),
         ],
