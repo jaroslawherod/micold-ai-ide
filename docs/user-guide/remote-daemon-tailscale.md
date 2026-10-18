@@ -16,7 +16,7 @@ reachable from the internet.
 
 ## Set up the VPS
 
-Copy [`scripts/remote-daemon-tailscale-setup.sh`](../../scripts/remote-daemon-tailscale-setup.sh)
+Copy [`scripts/remote-daemon-tailscale-setup.sh`](https://github.com/jaroslawherod/micold-ai-ide/blob/main/scripts/remote-daemon-tailscale-setup.sh)
 to the VPS, put the auth key in a file there, and run it as root:
 
 ```sh
