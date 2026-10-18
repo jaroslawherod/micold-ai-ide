@@ -50,15 +50,29 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review plan | 1 | 45b0fc650d313338200dd10363a89e8a9d0c79d7:62098e2ac5367f62ce4e90774162b79389a152c5 | CHANGES: 2 MAJOR, 2 MINOR (all fixed) |
 | Review plan | 2 | 2e543df9ccb26d8f478193d8cdf4e3ebcbb65767:5233609a4f479ef50bc8ee7f209f6969d2f950a2 | CLEAN (1 MINOR, fixed, prose only) |
 | Review tasks | 1 | 04c1c7e294dde5831e98cdfcec29ca4f3d9203f8:5eed6c26bf89d047cf687661f1602dd39770ae1e | CHANGES: 2 MAJOR (T042 client call sites; stale checklist — fixed, spec gained a plain-language summary), 2 MINOR (F3 fixed; F4 already noted in T029) |
+| Review tasks | 2 | f741a87ee478cc18590ea2227bdf989249aa490d:96c0440120fd62354a731049322b3adec98be5e1 | pending |
 
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| — | Review tasks 1 | F4 T029 partly green before T030 | already documented in T029; only daemon-restart cases are red-first |
 
 ## Handover
 
-None.
+- Done: tasks.md with 48 tasks and 7 milestones (M1–M7, all `full`); speckit-analyze run and its
+  findings fixed (decisions 5–7); tasks review round 1 fixed and committed; checklist closed (all
+  items ticked, spec gained an "In short" section); specs-only gate
+  (`scripts/check-criteria-observables.sh`) passed before round 1 fixes.
+- In flight: tasks review round 2 (sonnet) runs detached; its output goes to
+  `/tmp/claude-0/-home-user-micold-ai-ide/544d91ab-a9c0-5abb-b5f7-de6d31a04477/scratchpad/review-tasks-r2.log`
+  (ends with `REVIEW_EXIT=`). Wait on it with `scripts/autopilot/hold.sh <log>`.
+- Next: act on round 2 (round limit 3; a fix to the "non-technical" checklist item is prose only),
+  record its verdict in *Review rounds*, re-run the specs-only gate, push the branch, write
+  `$SCRATCHPAD/pr-title.md` (`#938: Structured session mode: run claude with stream-json next to
+  the PTY mode — design`) and `$SCRATCHPAD/pr-body.md` (ends `Refs #938`), return `PR: to-open`
+  (cloud.md: no `gh`).
+- No PR opened yet.
 
 ## Open escalation
 
