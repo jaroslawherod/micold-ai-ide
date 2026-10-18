@@ -45,7 +45,7 @@ choose path for a non-active entry, the T031 doc bullet and FR-003/FR-004 change
   Ord is the rank order"), `pub struct Ranked { pub index: usize, pub rank: Rank, pub spans:
   Vec<Range<usize>> }` (all derive `Debug, Clone, PartialEq, Eq`), a module doc naming FR-005,
   FR-007, FR-013, and register it with `pub mod quick_switch;` in `crates/micold-core/src/lib.rs`
-- [ ] T002 [P] Create `crates/micold-client/src/features/quick_switch.rs` with `pub enum Kind {
+- [X] T002 [P] Create `crates/micold-client/src/features/quick_switch.rs` with `pub enum Kind {
   Location, Session, Project }`, `pub struct Entry { pub candidate: Candidate, pub kind: Kind, pub
   context: String, pub current: bool }`, `pub struct State { pub open: Option<Open> }` (derive
   `Default`), `pub struct Open { pub query: String, pub highlighted: Option<EntryKey>, pub
@@ -88,7 +88,7 @@ from #803. Nothing here is observable alone; it ships inside M1.
   functions plus a prefix check (no copy of their bodies), until T003 passes (`mise run test-core`).
   `filter` ranks each candidate on its own name only; the sessions-kept-by-their-location rule is
   T024
-- [ ] T005 [P] Write the failing key tests in `crates/micold-client/tests/keymap.rs` (contracts/keys.md
+- [X] T005 [P] Write the failing key tests in `crates/micold-client/tests/keymap.rs` (contracts/keys.md
   K5): Ctrl+Shift with physical `KeyP` → `KeyOutput::ToggleSwitcher` (Cmd+Shift under
   `cfg(target_os = "macos")`); with `physical = Other` the logical fallback `p` and `P` decodes the
   same; physical `KeyP` with logical `l` (Dvorak) decodes to `ToggleSwitcher` (FR-016); the K2
@@ -100,7 +100,7 @@ from #803. Nothing here is observable alone; it ships inside M1.
   route_key(false, ToggleSwitcher) == KeyRouting::ToggleSwitcher`; docs test: both strings of
   `switcher_chord_labels()` appear in `docs/user-guide/terminal-panes.md` and
   `docs/user-guide/worktrees-and-sessions.md` (FR-017, SC-006; stays red until T020)
-- [ ] T006 Add `PhysicalKey::KeyP`, the `p`/`P` arm of `logical_physical`, `pub fn
+- [X] T006 Add `PhysicalKey::KeyP`, the `p`/`P` arm of `logical_physical`, `pub fn
   is_switcher_chord(input: &KeyInput) -> bool` (`is_primary_shift(mods)` and physical `KeyP`, the
   one place the chord is chosen), `pub fn switcher_chord_labels() -> (String, String)` and
   `KeyOutput::ToggleSwitcher` checked in `encode`'s tier 1 beside `Navigate` and `ToggleOverview`
@@ -108,12 +108,12 @@ from #803. Nothing here is observable alone; it ships inside M1.
   before the `terminal_focused` check (like `ToggleOverview`) in `crates/micold-client/src/app.rs`;
   `Code::KeyP → PhysicalKey::KeyP` in `to_keymap_physical` in
   `crates/micold-client/src/ui/material/terminal_pane.rs`; until T005 passes except its docs test
-- [ ] T007 [P] Add `pub(crate) fn location_node(state: &State, location: &SessionLocation)` in
+- [X] T007 [P] Add `pub(crate) fn location_node(state: &State, location: &SessionLocation)` in
   `crates/micold-client/src/features/navigation.rs` returning the sidebar's node for the location
   (name, tags, `unfolded_sessions()`, `main_session`), and refactor `main_session_at` and
   `session_step` onto it, removing their copies of the `SidebarEntry` match (research R4); the
   existing `tests/navigation.rs` and `tests/navigation_apply.rs` stay green
-- [ ] T008 [P] Factor the apply sequence out of `crates/micold-client/src/shell/navigation.rs` into
+- [X] T008 [P] Factor the apply sequence out of `crates/micold-client/src/shell/navigation.rs` into
   one `pub(crate) fn apply_step(app: &mut App, step: Step, terminal_had_focus: bool) ->
   Task<Message>` (`State::apply_navigation`, dispatch its follow-ups through `update`,
   `finish_navigation`) that `shell::navigation::update` calls; behaviour unchanged, the existing

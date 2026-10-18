@@ -58,3 +58,29 @@ pub enum Msg {
     /// Escape, a click outside, or the chord again.
     Dismissed,
 }
+
+/// Apply a message to the palette's own state (shape A, FR-015). Choosing and moving need the
+/// candidate list, which the root supplies; they arrive with the switcher's resolver (T014).
+pub fn update(state: &mut State, msg: Msg) -> Vec<crate::features::Outcome> {
+    match msg {
+        Msg::Toggled { terminal_had_focus } => {
+            state.open = match state.open {
+                Some(_) => None,
+                None => Some(Open {
+                    query: String::new(),
+                    highlighted: None,
+                    terminal_had_focus,
+                    keyboard_row_before: None,
+                }),
+            };
+        }
+        Msg::QueryChanged(query) => {
+            if let Some(open) = &mut state.open {
+                open.query = query;
+            }
+        }
+        Msg::Dismissed => state.open = None,
+        Msg::Moved(_) | Msg::Chosen(_) => {}
+    }
+    Vec::new()
+}

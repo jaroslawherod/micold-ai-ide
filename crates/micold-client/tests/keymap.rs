@@ -3,8 +3,8 @@
 //! `specs/006-real-terminal-emulator/contracts/key-encoding.md`.
 
 use micold_client::keymap::{
-    encode, nav_chord_labels, paste_bytes, Key, KeyInput, KeyOutput, Mods, NamedKey, NavAction,
-    NavLevel, PaneAction, PhysicalKey, TermMode, NAV_CHORDS,
+    encode, is_switcher_chord, nav_chord_labels, paste_bytes, switcher_chord_labels, Key, KeyInput,
+    KeyOutput, Mods, NamedKey, NavAction, NavLevel, PaneAction, PhysicalKey, TermMode, NAV_CHORDS,
 };
 use micold_core::navigation::Dir;
 use micold_core::pane_layout::Direction;
@@ -891,6 +891,141 @@ fn page_keys_without_shift_or_the_primary_modifier_keep_their_outputs() {
             assert!(
                 !matches!(out, KeyOutput::Navigate(_)),
                 "{named:?} with {mods:?} is not a navigation chord, got {out:?}"
+            );
+        }
+    }
+}
+
+// ---- The switcher chord (feature 968, T005; contracts/keys.md K5) ----
+
+#[test]
+fn the_switcher_chord_decodes_by_physical_key_whatever_the_layout_gives() {
+    for (key, physical) in [
+        (Key::Char('p'), PhysicalKey::KeyP),
+        (Key::Char('P'), PhysicalKey::KeyP),
+        // Dvorak: the key at P's position types `l`.
+        (Key::Char('l'), PhysicalKey::KeyP),
+        (Key::Char('L'), PhysicalKey::KeyP),
+        // No physical code: the logical fallback.
+        (Key::Char('p'), PhysicalKey::Other),
+        (Key::Char('P'), PhysicalKey::Other),
+    ] {
+        let input = kp(key.clone(), physical, primary_shift());
+        assert!(is_switcher_chord(&input), "{key:?} on {physical:?}");
+        assert_eq!(
+            encode(&input, TermMode::default()),
+            KeyOutput::ToggleSwitcher,
+            "{key:?} on {physical:?}"
+        );
+    }
+}
+
+#[test]
+fn near_misses_of_the_switcher_chord_keep_their_outputs() {
+    let mode = TermMode::default();
+    let with_text = |key, mods, text| KeyInput {
+        physical: PhysicalKey::KeyP,
+        ..ki(key, mods, Some(text))
+    };
+    assert_eq!(
+        encode(&kp(Key::Char('p'), PhysicalKey::KeyP, ctrl()), mode),
+        KeyOutput::Bytes(vec![0x10])
+    );
+    let shift = Mods {
+        shift: true,
+        ..Mods::NONE
+    };
+    assert_eq!(
+        encode(&with_text(Key::Char('P'), shift, "P"), mode),
+        KeyOutput::Bytes(b"P".to_vec())
+    );
+    let alt_shift = Mods {
+        alt: true,
+        shift: true,
+        ..Mods::NONE
+    };
+    assert_eq!(
+        encode(&kp(Key::Char('P'), PhysicalKey::KeyP, alt_shift), mode),
+        KeyOutput::Bytes(vec![0x1b, b'P'])
+    );
+    let primary_alt_shift = Mods {
+        alt: true,
+        ..primary_shift()
+    };
+    let input = kp(Key::Char('P'), PhysicalKey::KeyP, primary_alt_shift);
+    assert!(!is_switcher_chord(&input));
+    assert_ne!(encode(&input, mode), KeyOutput::ToggleSwitcher);
+    // Without Shift it is not the chord either.
+    let primary_only = Mods {
+        shift: false,
+        ..primary_shift()
+    };
+    assert!(!is_switcher_chord(&kp(
+        Key::Char('p'),
+        PhysicalKey::KeyP,
+        primary_only
+    )));
+}
+
+#[test]
+fn no_other_reserved_or_navigation_chord_decodes_to_the_switcher() {
+    let mode = TermMode::default();
+    for c in ['e', 't', 'o', 'd', 'h', 'w', 'c', 'v', 'E', 'T', 'O'] {
+        let out = encode(&ki(Key::Char(c), primary_shift(), None), mode);
+        assert_ne!(out, KeyOutput::ToggleSwitcher, "{c:?}");
+    }
+    for named in [
+        NamedKey::ArrowUp,
+        NamedKey::ArrowDown,
+        NamedKey::ArrowLeft,
+        NamedKey::ArrowRight,
+        NamedKey::PageUp,
+        NamedKey::PageDown,
+    ] {
+        let out = encode(&ki(Key::Named(named), primary_shift(), None), mode);
+        assert_ne!(out, KeyOutput::ToggleSwitcher, "{named:?}");
+    }
+    for (action, physical) in NAV_CHORDS {
+        let input = kp(Key::Char('x'), physical, primary_shift());
+        assert!(!is_switcher_chord(&input), "{action:?}");
+        assert_ne!(
+            encode(&input, mode),
+            KeyOutput::ToggleSwitcher,
+            "{action:?}"
+        );
+    }
+}
+
+#[test]
+fn route_key_sends_the_switcher_chord_to_the_app_focused_or_not() {
+    use micold_client::app::{route_key, KeyRouting};
+    for focused in [true, false] {
+        assert_eq!(
+            route_key(focused, KeyOutput::ToggleSwitcher),
+            KeyRouting::ToggleSwitcher
+        );
+    }
+}
+
+#[test]
+fn the_switcher_chord_labels_name_both_platform_forms() {
+    assert_eq!(
+        switcher_chord_labels(),
+        ("Ctrl+Shift+P".to_string(), "Cmd+Shift+P".to_string())
+    );
+}
+
+#[test]
+#[ignore = "red until T020 (user guide pages)"]
+fn the_user_guide_lists_the_switcher_chord_in_both_forms() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/user-guide");
+    let (linux, mac) = switcher_chord_labels();
+    for file in ["terminal-panes.md", "worktrees-and-sessions.md"] {
+        let text = std::fs::read_to_string(root.join(file)).expect("the user guide page reads");
+        for label in [&linux, &mac] {
+            assert!(
+                text.contains(label),
+                "{file} lists {label} (FR-017, SC-006)"
             );
         }
     }

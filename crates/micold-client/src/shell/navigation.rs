@@ -9,6 +9,7 @@ use iced::Task;
 use micold_client::app::Message;
 use micold_client::features::navigation;
 use micold_client::features::navigation::Msg;
+use micold_client::features::navigation::Step;
 
 use crate::App;
 
@@ -17,6 +18,12 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
     let Msg::Pressed(action) = msg;
     let terminal_had_focus = app.core.terminal_focused();
     let step = navigation::update(&app.core, action);
+    apply_step(app, step, terminal_had_focus)
+}
+
+/// Apply a resolved step: `State::apply_navigation`, its follow-ups through the root `update`, then
+/// `finish_navigation`. Shared by the chords and the quick switcher's choice (feature 968).
+pub(crate) fn apply_step(app: &mut App, step: Step, terminal_had_focus: bool) -> Task<Message> {
     let follow_ups = app.core.apply_navigation(step.clone(), terminal_had_focus);
     let tasks: Vec<_> = follow_ups
         .into_iter()

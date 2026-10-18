@@ -91,6 +91,8 @@ pub enum PhysicalKey {
     BracketRight,
     PageUp,
     PageDown,
+    /// The `P` key (feature 968, the quick switcher chord).
+    KeyP,
     Other,
 }
 
@@ -178,6 +180,7 @@ fn physical_label(physical: PhysicalKey) -> &'static str {
         PhysicalKey::BracketRight => "]",
         PhysicalKey::PageUp => "PageUp",
         PhysicalKey::PageDown => "PageDown",
+        PhysicalKey::KeyP => "P",
         PhysicalKey::Other => "",
     }
 }
@@ -186,6 +189,7 @@ fn physical_label(physical: PhysicalKey) -> &'static str {
 /// (contracts/keys.md K2): the key unshifted or shifted.
 fn logical_physical(key: &Key) -> PhysicalKey {
     match key {
+        Key::Char('p' | 'P') => PhysicalKey::KeyP,
         Key::Char(',' | '<') => PhysicalKey::Comma,
         Key::Char('.' | '>') => PhysicalKey::Period,
         Key::Char('[' | '{') => PhysicalKey::BracketLeft,
@@ -210,6 +214,24 @@ pub fn nav_chord(input: &KeyInput) -> Option<NavAction> {
         .iter()
         .find(|(_, key)| *key == physical && physical != PhysicalKey::Other)
         .map(|(action, _)| *action)
+}
+
+/// Whether the press is the quick switcher chord (feature 968, contracts/keys.md K5): the platform
+/// primary modifier plus Shift on the physical `P` key, else the logical fallback. The one place
+/// the chord is chosen.
+pub fn is_switcher_chord(input: &KeyInput) -> bool {
+    let physical = match input.physical {
+        PhysicalKey::Other => logical_physical(&input.key),
+        known => known,
+    };
+    is_primary_shift(input.mods) && physical == PhysicalKey::KeyP
+}
+
+/// The switcher chord as Linux/Windows and macOS write it (contracts/keys.md K5), for tooltips and
+/// docs.
+pub fn switcher_chord_labels() -> (String, String) {
+    let key = physical_label(PhysicalKey::KeyP);
+    (format!("Ctrl+Shift+{key}"), format!("Cmd+Shift+{key}"))
 }
 
 /// The subset of terminal mode that affects key encoding.
@@ -248,6 +270,8 @@ pub enum KeyOutput {
     NewTerminalInstance,
     /// The reserved Overview chord was pressed (feature 813, FR-011; never forwarded to the PTY).
     ToggleOverview,
+    /// The quick switcher chord (feature 968; never forwarded to the PTY).
+    ToggleSwitcher,
     /// A pane shortcut (feature 484; never forwarded to the PTY).
     Pane(PaneAction),
     /// A navigation chord (feature 803; never forwarded to the PTY).
@@ -271,6 +295,10 @@ pub fn encode(input: &KeyInput, mode: TermMode) -> KeyOutput {
     // 1a''. Navigation chords (feature 803, contracts/keys.md K2; the same tier, never forwarded).
     if let Some(action) = nav_chord(input) {
         return KeyOutput::Navigate(action);
+    }
+    // 1a'''. The quick switcher chord (feature 968, contracts/keys.md K5; the same tier).
+    if is_switcher_chord(input) {
+        return KeyOutput::ToggleSwitcher;
     }
     // 1a'. Reserved Overview chord (feature 813, FR-011; the same tier, never forwarded).
     if is_overview_chord(&input.key, input.mods) {

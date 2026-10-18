@@ -84,6 +84,13 @@ use std::path::{Path, PathBuf};
 /// is worse.
 const ALLOWED_CROSS_FEATURE_NAMES: &[(&str, &str, &str)] = &[
     (
+        "quick_switch",
+        "sidebar",
+        "RowRef — the palette remembers the sidebar's keyboard row when it opens and gives it back \
+         when it is dismissed, so it holds the sidebar's own pure row-naming type rather than a \
+         second one that says the same thing (feature 968, data-model.md *Client*)",
+    ),
+    (
         "navigation",
         "sidebar",
         "SidebarEntry, RunRow — a location press steps through the rows the sidebar draws, in its \

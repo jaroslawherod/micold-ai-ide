@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use micold_core::session::{Session, SessionId, SessionLocation};
 
 use crate::app::State;
-use crate::features::sidebar::{RunRow, SidebarEntry};
+use crate::features::sidebar::{DefaultNode, RunRow, SidebarEntry, WorktreeNode};
 use crate::keymap::{NavAction, NavLevel};
 
 /// The navigation feature's vocabulary at the root (feature 028's wrapper rule).
@@ -119,25 +119,8 @@ fn session_step(state: &State, dir: micold_core::navigation::Dir) -> Step {
     let Some(location) = state.current_session_location() else {
         return Step::None;
     };
-    let ids = |sessions: Vec<&Session>| sessions.iter().map(|s| s.id).collect::<Vec<_>>();
-    let order: Vec<SessionId> = state
-        .sidebar_entries()
-        .into_iter()
-        .find_map(|entry| match entry {
-            SidebarEntry::Default(node) if location == SessionLocation::Default => {
-                Some(ids(node.unfolded_sessions()))
-            }
-            SidebarEntry::Worktree(node) if node.location() == location => {
-                Some(ids(node.unfolded_sessions()))
-            }
-            SidebarEntry::Group(group) => group.runs.iter().find_map(|run| match &run.row {
-                RunRow::Worktree(node) if node.location() == location => {
-                    Some(ids(node.unfolded_sessions()))
-                }
-                _ => None,
-            }),
-            _ => None,
-        })
+    let order: Vec<SessionId> = location_node(state, &location)
+        .map(|node| node.unfolded_sessions().iter().map(|s| s.id).collect())
         .unwrap_or_default();
     match micold_core::navigation::step(&order, Some(&current), dir) {
         Some(target) if target != current => Step::Session(target),
@@ -147,16 +130,69 @@ fn session_step(state: &State, dir: micold_core::navigation::Dir) -> Step {
 
 /// The session a click on `location`'s row would select (FR-018), if it has one.
 fn main_session_at(state: &State, location: &SessionLocation) -> Option<SessionId> {
+    location_node(state, location)?.main_session()
+}
+
+/// The sidebar's row for one location, whichever kind it is (feature 968, research R4): the one
+/// match over [`SidebarEntry`] that navigation and the quick switcher share.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum LocationNode {
+    Default(DefaultNode),
+    Worktree(WorktreeNode),
+}
+
+impl LocationNode {
+    /// The name the row shows.
+    #[allow(dead_code)] // read by the switcher's candidates (T009)
+    pub(crate) fn name(&self) -> &str {
+        match self {
+            Self::Default(node) => node.display_name,
+            Self::Worktree(node) => &node.display_name,
+        }
+    }
+
+    /// The row's tags; the project root has none.
+    #[allow(dead_code)] // read by the switcher's candidates (T009)
+    pub(crate) fn tags(&self) -> &[micold_core::naming::Tag] {
+        match self {
+            Self::Default(_) => &[],
+            Self::Worktree(node) => &node.tags,
+        }
+    }
+
+    /// The row's sessions in the order a chord steps through them.
+    pub(crate) fn unfolded_sessions(&self) -> Vec<&Session> {
+        match self {
+            Self::Default(node) => node.unfolded_sessions(),
+            Self::Worktree(node) => node.unfolded_sessions(),
+        }
+    }
+
+    /// The session a press of the row selects.
+    pub(crate) fn main_session(&self) -> Option<SessionId> {
+        match self {
+            Self::Default(node) => node.main_session(),
+            Self::Worktree(node) => node.main_session(),
+        }
+    }
+}
+
+/// The sidebar's node for `location`, a run's worktree included; `None` when no row stands for it.
+pub(crate) fn location_node(state: &State, location: &SessionLocation) -> Option<LocationNode> {
     state
         .sidebar_entries()
         .into_iter()
         .find_map(|entry| match entry {
             SidebarEntry::Default(node) if *location == SessionLocation::Default => {
-                node.main_session()
+                Some(LocationNode::Default(node))
             }
-            SidebarEntry::Worktree(node) if node.location() == *location => node.main_session(),
-            SidebarEntry::Group(group) => group.runs.iter().find_map(|run| match &run.row {
-                RunRow::Worktree(node) if node.location() == *location => node.main_session(),
+            SidebarEntry::Worktree(node) if node.location() == *location => {
+                Some(LocationNode::Worktree(node))
+            }
+            SidebarEntry::Group(group) => group.runs.into_iter().find_map(|run| match run.row {
+                RunRow::Worktree(node) if node.location() == *location => {
+                    Some(LocationNode::Worktree(node))
+                }
                 _ => None,
             }),
             _ => None,

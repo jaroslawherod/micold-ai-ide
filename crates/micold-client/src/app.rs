@@ -1412,6 +1412,8 @@ pub enum KeyRouting {
     NewTerminalInstance,
     /// Toggle the worktree Overview (feature 813, FR-011): focused or not.
     ToggleOverview,
+    /// Toggle the quick switcher (feature 968): focused or not.
+    ToggleSwitcher,
     /// A pane shortcut (feature 484): the app handles it, the terminal never sees it.
     Pane(crate::keymap::PaneAction),
     /// A navigation chord (feature 803): the app's, focused or not.
@@ -1499,6 +1501,10 @@ pub fn route_key(terminal_focused: bool, output: crate::keymap::KeyOutput) -> Ke
     if output == KeyOutput::ToggleOverview {
         return KeyRouting::ToggleOverview;
     }
+    // And the quick switcher's (feature 968, contracts/keys.md K5).
+    if output == KeyOutput::ToggleSwitcher {
+        return KeyRouting::ToggleSwitcher;
+    }
     // So are the navigation chords (feature 803, contracts/keys.md K3).
     if let KeyOutput::Navigate(action) = output {
         return KeyRouting::Navigate(action);
@@ -1508,6 +1514,7 @@ pub fn route_key(terminal_focused: bool, output: crate::keymap::KeyOutput) -> Ke
     }
     match output {
         KeyOutput::ToggleOverview => KeyRouting::ToggleOverview,
+        KeyOutput::ToggleSwitcher => KeyRouting::ToggleSwitcher,
         KeyOutput::Bytes(bytes) => KeyRouting::Write(bytes),
         KeyOutput::Copy => KeyRouting::Copy,
         KeyOutput::Paste => KeyRouting::Paste,
