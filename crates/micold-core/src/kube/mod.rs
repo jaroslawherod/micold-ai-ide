@@ -7,6 +7,7 @@ pub mod credentials;
 #[cfg(any(test, feature = "kube-fake"))]
 pub mod fake;
 pub mod kubeconfig;
+pub mod lifecycle;
 pub mod manifest;
 pub mod names;
 pub mod settings;
@@ -123,6 +124,12 @@ pub struct PodStatusView {
     pub waiting: Option<(String, String)>,
     /// Whether the container is running.
     pub running: bool,
+    /// Whether `deletionTimestamp` is set.
+    pub deleting: bool,
+    /// `status.reason` and `status.message` of the pod itself (`Evicted`).
+    pub reason: Option<(String, String)>,
+    /// The node the pod was scheduled on.
+    pub node: Option<String>,
 }
 
 /// An event about an object.
