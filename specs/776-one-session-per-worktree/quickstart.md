@@ -53,3 +53,7 @@ Run through the `visual-pass` skill against the client.
    marked a helper; deleting a main that has helpers names the successor in its confirmation (US7).
 
 Record the result in `tdd/` evidence as the other features do.
+
+The row press and the "Start another session..." and "Make main session" menu entries are covered at
+reducer level in Part A (`features_session`, `features_sidebar`); the iced tree-item messages are not
+inspectable in a test, so the widget wiring stays visual-pass only (items 4 to 6).
