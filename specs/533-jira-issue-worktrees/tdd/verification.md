@@ -1,6 +1,6 @@
 ---
 feature: 533-jira-issue-worktrees
-verdict: FAIL
+verdict: FAIL # as written at verified_at; HIGH findings 1-5 and 11 cleared in the close unit and M6 (T071-T078)
 standard: .specify/extensions/tdd/templates/tdd-test-quality-rubric.md
 verified_at: 7f95bbc7
 behaviors: 0 # no tdd/test-list.md exists; tasks T003-T065 used as the behavior unit
@@ -11,8 +11,8 @@ no_test: 0
 high_smells: 4
 criteria_total: 31 # US1 AS1-7, US2 AS1-6, US3 AS1-6, US4 AS1-7, SC-001..006 counted by group in the traceability table
 criteria_covered: 31 # at reducer/unit level; see Findings 6-7 for entry-point gaps
-mutation_score: unmeasured # no mutation tool; deliberate mutants NOT run (see "What was not audited")
-mutants_survived: unmeasured
+mutation_score: unmeasured # no tool; 4 deliberate mutants run by hand in M6, all caught (see "Mutation results")
+mutants_survived: 0 # of the 4 hand-run
 suite: "6736 passed, 0 failed, 9 ignored at 469 of ~469 binaries when the report was written; run was still finishing, final line not captured"
 ---
 
@@ -68,7 +68,7 @@ Measured in M6 (T077) by hand: each mutant applied, the named suite run, the fil
 
 | Mutant | Suite | Result |
 | --- | --- | --- |
-| `jira_request` gate inverted (`shell/issues.rs:378`, `true` to `false`) | `jira_request_path` in `main_tests.rs` | caught: 6 of 7 fail (Finding 5 cleared; the 7th is the switch-off test, which an always-off gate meets) |
+| `jira_request` gate inverted (`shell/issues.rs:378`, `true` to `false`) | `jira_request_path` in `main_tests.rs` | caught: 6 of 7 fail with the switch test forced false; the switch-off test passes by design, since an always-off gate meets it (Finding 5 cleared) |
 | `REQUEST_TIMEOUT` 10 s to 60 s (`shell/jira_http.rs:24`) | `jira_http_adapter` | caught: `the_production_request_budget_is_ten_seconds` (Finding 11 cleared) |
 | `REASON_MAX_CHARS` 80 to 81 (`jira.rs:513`) | `jira_classify` | caught: 2 tests fail |
 | T078: Keep-or-Remove prompt drawn only with the switch on (the shipped bug) | `jira_keep_or_remove_is_drawn` | caught: `the_question_is_drawn_after_the_switch_goes_off_and_save_is_pressed` fails |
