@@ -634,7 +634,13 @@ async fn connect_and_pump(
                 .ended();
             };
             let sink = provisioning_sink(id, output);
-            match kube_attempt(env, name, &settings.0, drift.0, &sink).await {
+            // A lost link is reconnected to the running pod: a drift found then is kept.
+            let drift = if life.established {
+                DriftChoice::Keep
+            } else {
+                drift.0
+            };
+            match kube_attempt(env, name, &settings.0, drift, &sink).await {
                 Ok((c, relay)) => {
                     held_relay = Some(relay);
                     Ok(c)

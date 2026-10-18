@@ -1050,12 +1050,9 @@ mod connect {
         let mut on_event =
             move |e: &crate::provision::ProvisionEvent| esink.lock().unwrap().push(e.clone());
         let canceller = async {
-            match cancel_after {
-                Some(after) => {
-                    tokio::time::sleep(after).await;
-                    cancel.cancel();
-                }
-                None => {}
+            if let Some(after) = cancel_after {
+                tokio::time::sleep(after).await;
+                cancel.cancel();
             }
             pending::<()>().await
         };

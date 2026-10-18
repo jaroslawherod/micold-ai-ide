@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-xelisc
 - **Started**: 2026-10-17
 - **Phase**: implement
-- **Next step**: M6 core half done (T138/T141 core). Client half: Cancel from the row, drift prompt, Add entry (flip SHARED_SSH_IMAGE_AVAILABLE), kube_attempt default image + providers (T139/T142), user guide T033, acceptance T140; then reviews A/B, gate, PR files.
+- **Next step**: M6 implemented, reviews A/B round 1 fixed; full gate (scripts/gate.sh) and a scoped re-review of the fix diff, then the PR files in the scratchpad (pr-title-686-M6.txt, pr-body-686-M6.md); the orchestrator opens the PR.
 
 ## Pull requests
 
@@ -105,8 +105,12 @@ stash@{0} survivors (all used by M1a–M2, stash dropped 2026-10-18; backed up i
 | M4a review A (code-review high) | 1 | f29f682624d1c0bd2370fef030eb8ec1d6d102af:153fa9f2b3d8ac3525be149d44e1053093c2e8c4 | CLEAN — 3 MINOR declined (Declined review findings): default provider is one value, MIN_MEMORY floor reused, `offered()` slice order |
 | M4a review B (conformance, sonnet) | 1 | same | CLEAN — Verify 22 + 10 passed; 1 MINOR: file fields are plain text paths (no picker; same as the SSH form's key file), noted in the cycle log |
 | M5 | A (code-review high) + B (conformance) | ade6ca29b89171b2bf51f114e355f5de2b13fe52:21e2ef5743bdc4b335c71cbd7303f9bfd6df9de6 | A: CLEAN (F1 MINOR fixed: drift text; F2 MINOR declined: `RefusalReason` has no Display, Debug kept until M6 words it); B: CHANGES, F1 MAJOR fixed (A15/A16/A17 tests added), F2 MINOR fixed (cycle-log) |
+| M6 | A (high) + B (conformance) | cdafddd27dd68fd9d5a51df4d191af4f6a04f64a:991d8c1b71c05e8cca0ed4344c827bd201b94978 | A: CHANGES, F1 MAJOR fixed (drift prompts queued), F3 MINOR fixed, F2 MINOR declined; B: F1 BLOCKER mid-edit artefact, F2 MINOR fixed |
 
 ## Declined review findings
+
+- M6 review A F2 MINOR (Cancel shown for the whole Starting state, token only read from the install phase): declined; `start()` phases are bounded and Cancel is noticed at the next phase; threading a token into every wait is out of scope.
+- M6 review B F1 BLOCKER (client tests did not compile): the tree was mid-edit by a worker while B ran; both client suites green afterwards. B F2 MINOR fixed (an edit clears the drift answer).
 
 | M4b | A F1 MINOR | Stop moves the link to Stopped before the pod delete ends; a failed delete only logs | contract §5 needs Stopped on success; surfacing a failed Stop is a follow-up |
 | M4b | A F2 MINOR | Edit can change name/context/namespace of a Kubernetes daemon, orphaning cluster objects | recorded in Follow-ups |
