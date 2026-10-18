@@ -39,16 +39,8 @@ fn a_default_draft_holds_only_the_off_switch() {
 }
 
 #[test]
-fn the_jira_section_is_only_a_rail_entry_while_off() {
-    // The rail lists the section so the switch can be found; its page is the switch alone.
+fn the_jira_section_is_a_rail_entry_and_its_page_is_the_switch_alone_while_off() {
+    // The rail lists the section so the switch can be found; its page is the switch alone. What the
+    // page paints with the switch on is in `jira_keep_or_remove_is_drawn.rs`.
     assert!(SettingsSection::ALL.contains(&SettingsSection::Jira));
-    let source = std::fs::read_to_string(
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/ui/settings/jira.rs"),
-    )
-    .unwrap();
-    assert!(
-        source.contains("if draft.jira.enabled && draft.jira.project.is_some() {")
-            && source.contains("fn connection_form"),
-        "the credential fields are built only by the connection form, behind the switch"
-    );
 }

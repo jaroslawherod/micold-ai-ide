@@ -347,6 +347,16 @@ impl Capabilities {
         self
     }
 
+    /// The same capabilities with a Jira source and token directory of the test's own, so a test of
+    /// the shell's Jira request path reaches neither a Jira site nor the developer's token files
+    /// (feature 533, T074).
+    #[cfg(test)]
+    pub(crate) fn with_jira(mut self, source: Arc<dyn JiraSource>, token_dir: PathBuf) -> Self {
+        self.jira_source = Some(source);
+        self.jira_token_dir = Some(token_dir);
+        self
+    }
+
     /// The project catalog, or `None` when no data directory could be resolved.
     pub fn projects(&self) -> Option<&(dyn ProjectStore + Send + Sync)> {
         self.projects.as_deref()

@@ -1,11 +1,11 @@
 //! Jira is contacted only on the named events (feature 533, FR-001, FR-020, SC-001, FR-019).
 //!
-//! The Jira source is reached through one capability (`Capabilities::jira_source`), called in one
-//! function (`start_jira_load` in `shell/issues.rs`), which `start_issue_load` calls — and that is
-//! called only when the reducer accepted `SourceChanged(Issue)` or `IssueRetry` (the allow-list of
-//! `issues_are_requested_only_on_named_events.rs`). The function checks the switch and the
-//! project's connection before it asks for the source. The adapter is constructed in
-//! `Capabilities::real()` and nowhere else, and no Jira issue type is serialisable.
+//! A request passes one gate (`jira_request` in `shell/issues.rs`): the switch and the project's
+//! connection, checked by running it in `jira_request_path` (`main_tests.rs`). The load is reached
+//! only when the reducer accepted `SourceChanged(Issue)` or `IssueRetry` (the allow-list of
+//! `issues_are_requested_only_on_named_events.rs`). Scanned here: the search is called only when a
+//! search is due, the adapter is constructed in `Capabilities::real()` and nowhere else, and no Jira
+//! issue type is serialisable.
 
 #[path = "support/source_scan.rs"]
 mod source_scan;
@@ -49,48 +49,8 @@ fn occurrences(needle: &str) -> Vec<(String, String)> {
     found
 }
 
-#[test]
-fn the_source_is_asked_for_only_inside_the_load_function() {
-    let uses = occurrences(".jira_source()");
-    assert_eq!(
-        uses,
-        vec![(
-            "crates/micold-client/src/shell/issues.rs".to_string(),
-            "let source = app.caps.jira_source();".to_string()
-        )],
-        "{uses:?}"
-    );
-}
-
-#[test]
-fn the_one_gate_checks_the_switch_and_the_connection_before_the_source() {
-    let path = root().join("crates/micold-client/src/shell/issues.rs");
-    let text = fs::read_to_string(path).unwrap();
-    let start = text.find("fn jira_request(").expect("jira_request exists");
-    let body = &text[start..];
-    let source = body.find(".jira_source()").expect("asks for the source");
-    let switch = body.find("jira_enabled").expect("checks the switch");
-    let connection = body
-        .find(".jira_connections")
-        .expect("looks the connection up");
-    assert!(switch < source && connection < source, "checks come first");
-}
-
-#[test]
-fn the_load_function_is_called_only_by_the_general_load_path() {
-    let calls: Vec<_> = occurrences("start_jira_load(")
-        .into_iter()
-        .filter(|(_, line)| !line.starts_with("fn start_jira_load("))
-        .collect();
-    assert_eq!(
-        calls,
-        vec![(
-            "crates/micold-client/src/shell/issues.rs".to_string(),
-            "return start_jira_load(app, seq);".to_string()
-        )],
-        "{calls:?}"
-    );
-}
+// The gate itself (switch off, no connection, no token file, a rotated token) is run by
+// `jira_request_path` in `main_tests.rs`; what stays here is the structure no behaviour reveals.
 
 /// The body of `name` in the shell's issue module, up to the next top-level item.
 fn function_body(name: &str) -> String {
