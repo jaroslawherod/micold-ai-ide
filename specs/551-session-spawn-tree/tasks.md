@@ -111,19 +111,19 @@ description: "Task list for the session tree of agent-spawned sessions (#551)"
 
 ### Tests
 
-- [ ] T032 [P] [US4] Write a failing settings test in `crates/micold-core/tests/settings_roundtrip.rs`: `folded_origins: BTreeSet<SessionId>` (`#[serde(default)]`) round-trips, a file without it loads empty, `settings_version` does not move [U18] [A12]
-- [ ] T033 [P] [US4] Write failing reducer tests in `crates/micold-client/tests/sidebar_tree.rs`: `Msg::ToggleOrigin` folds and expands; a folded origin reports its direct-child count and an attention rollup over descendants (FR-011); fold then restart then snapshot arrives still folded, with no pruning (FR-017); a never-folded origin is expanded [U19] [A10] [A11] [A12]
+- [x] T032 [P] [US4] Write a failing settings test in `crates/micold-core/tests/settings_roundtrip.rs`: `folded_origins: BTreeSet<SessionId>` (`#[serde(default)]`) round-trips, a file without it loads empty, `settings_version` does not move [U18] [A12]
+- [x] T033 [P] [US4] Write failing reducer tests in `crates/micold-client/tests/sidebar_spawn_tree.rs`: `Msg::ToggleOrigin` folds and expands; a folded origin reports its direct-child count and an attention rollup over descendants (FR-011); fold then restart then snapshot arrives still folded, with no pruning (FR-017); a never-folded origin is expanded [U19] [A10] [A11] [A12]
 
 ### Implementation
 
-- [ ] T034 [US4] Add `Settings.folded_origins` in `crates/micold-core/src/settings.rs` (stored as folded, not expanded) [U18]
-- [ ] T035 [US4] Add `Msg::ToggleOrigin(SessionId)` and the folded set in `crates/micold-client/src/features/sidebar.rs`, persisted through the existing settings path, with the count and attention rollup reusing the existing attention derivation [U19]
-- [ ] T036 [US4] Add the folded-summary builder method (count, attention dot) to `TreeItem` in `crates/micold-client/src/ui/material/tree_view.rs` with a showcase entry, and wire fold toggling and the summary in `crates/micold-client/src/ui/sidebar.rs` [U19]
-- [ ] T037 [US4] Document folding and its persistence in `docs/user-guide/worktrees-and-sessions.md` [U19]
+- [x] T034 [US4] Add `Settings.folded_origins` in `crates/micold-core/src/settings.rs` (stored as folded, not expanded) [U18]
+- [x] T035 [US4] Add `Msg::ToggleOrigin(SessionId)` and the folded set in `crates/micold-client/src/features/sidebar.rs`, persisted through the existing settings path, with the count and attention rollup reusing the existing attention derivation [U19]
+- [x] T036 [US4] Add the folded-summary builder method (count, attention dot) to `TreeItem` in `crates/micold-client/src/ui/material/tree_view.rs` with a showcase entry, and wire fold toggling and the summary in `crates/micold-client/src/ui/sidebar.rs` [U19]
+- [x] T037 [US4] Document folding and its persistence in `docs/user-guide/worktrees-and-sessions.md` [U19]
 
 ### Outer loop
 
-- [ ] T041 [US4] Run the fold acceptance behaviors (`sidebar_spawn_tree`, `settings_roundtrip`) and confirm each is green: [A10] [A11] [A12]
+- [x] T041 [US4] Run the fold acceptance behaviors (`sidebar_spawn_tree`, `settings_roundtrip`) and confirm each is green: [A10] [A11] [A12]
 
 ## Dependencies & Order
 

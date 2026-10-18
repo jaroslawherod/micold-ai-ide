@@ -658,6 +658,8 @@ impl ValidSettings {
             legacy_default_daemon: None,
             plan_usage_enabled: self.plan_usage_enabled,
             plan_usage_warn_percent: self.plan_usage_warn_percent,
+            // Not in the form (feature 551): the sidebar writes it on a toggle, a save keeps it.
+            folded_origins: Default::default(),
         }
     }
 }

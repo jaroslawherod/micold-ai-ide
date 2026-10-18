@@ -370,6 +370,7 @@ fn a_sidebar_row_is_either_a_worktree_or_the_project_root_and_never_both() {
         SidebarEntry::Default(DefaultNode {
             display_name: "Default",
             expanded: false,
+            folded: Default::default(),
             sessions: Vec::new(),
         }),
         SidebarEntry::Worktree(WorktreeNode {
@@ -377,6 +378,7 @@ fn a_sidebar_row_is_either_a_worktree_or_the_project_root_and_never_both() {
             display_name: "a".into(),
             tags: vec![Tag::Type(ConventionalType::Feat)],
             expanded: false,
+            folded: Default::default(),
             sessions: Vec::new(),
             shown_for_current_session: false,
             daemon: String::new(),
@@ -458,6 +460,7 @@ fn default_entry(sessions: Vec<Session>) -> SidebarEntry {
     SidebarEntry::Default(DefaultNode {
         display_name: "Default",
         expanded: !sessions.is_empty(),
+        folded: Default::default(),
         sessions,
     })
 }
@@ -468,6 +471,7 @@ fn worktree_entry(dir: &str, tags: Vec<Tag>, sessions: Vec<Session>) -> SidebarE
         display_name: dir.to_string(),
         tags,
         expanded: !sessions.is_empty(),
+        folded: Default::default(),
         sessions,
         shown_for_current_session: false,
         daemon: String::new(),
@@ -533,6 +537,7 @@ fn an_open_locations_sessions_are_rows_and_a_closed_ones_are_not() {
         display_name: "feat-a".to_string(),
         tags: vec![],
         expanded: false,
+        folded: Default::default(),
         sessions: vec![
             session(SessionLocation::Worktree("feat-a".into())),
             session(SessionLocation::Worktree("feat-a".into())),
@@ -801,6 +806,7 @@ fn a_session_row_stays_one_line_when_it_gains_a_cli_label() {
     let entries = vec![SidebarEntry::Default(DefaultNode {
         display_name: DEFAULT_LOCATION_LABEL,
         expanded: true,
+        folded: Default::default(),
         sessions: vec![claude, copilot],
     })];
     let heights = row_heights(&entries);
@@ -876,6 +882,7 @@ fn a_session_on_an_uninstalled_cli_is_still_listed_and_still_identified() {
     let entries = vec![SidebarEntry::Default(DefaultNode {
         display_name: DEFAULT_LOCATION_LABEL,
         expanded: true,
+        folded: Default::default(),
         sessions: vec![session.clone()],
     })];
 
@@ -924,6 +931,7 @@ fn a_location_holding_a_long_history_costs_no_more_per_row() {
     let entries = vec![SidebarEntry::Default(DefaultNode {
         display_name: DEFAULT_LOCATION_LABEL,
         expanded: true,
+        folded: Default::default(),
         sessions: sessions.clone(),
     })];
 
@@ -1062,6 +1070,7 @@ fn a_detached_worktree_projects_none() {
         display_name: "a".into(),
         tags: vec![],
         expanded: false,
+        folded: Default::default(),
         sessions: vec![],
         shown_for_current_session: false,
         daemon: String::new(),
@@ -1390,6 +1399,7 @@ mod parallel_runs {
             display_name: dir.into(),
             tags: vec![Tag::Type(ConventionalType::Feat)],
             expanded: false,
+            folded: Default::default(),
             sessions: vec![],
             shown_for_current_session: false,
             daemon: String::new(),
@@ -1400,6 +1410,7 @@ mod parallel_runs {
         SidebarEntry::Default(DefaultNode {
             display_name: "Default",
             expanded: false,
+            folded: Default::default(),
             sessions: vec![],
         })
     }
@@ -1713,6 +1724,7 @@ fn row_state(fixture: &str, asked: &[&str], branch: &str) -> Option<PrState> {
         display_name: "w".into(),
         tags: vec![],
         expanded: false,
+        folded: Default::default(),
         sessions: vec![],
         shown_for_current_session: false,
         daemon: String::new(),
