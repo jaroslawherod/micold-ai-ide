@@ -2734,7 +2734,11 @@ fn switching_jira_off_over_a_stored_connection_asks_and_each_answer_is_saved() {
                 })
                 .collect()
         };
-        assert_eq!(told(&mut rx), vec![], "nothing is applied until it is answered");
+        assert_eq!(
+            told(&mut rx),
+            vec![],
+            "nothing is applied until it is answered"
+        );
 
         let _ = update_inner(
             &mut app,
@@ -12473,7 +12477,12 @@ mod jira_request_path {
     }
 
     fn issues(app: &App) -> &IssueList {
-        &app.core.worktree_form.form.as_ref().expect("form open").issues
+        &app.core
+            .worktree_form
+            .form
+            .as_ref()
+            .expect("form open")
+            .issues
     }
 
     /// Switch on, a connection, the form open on a Jira-only project, a token file holding `first`.
@@ -12512,7 +12521,10 @@ mod jira_request_path {
         send(&mut rig.app, FormMsg::SourceChanged(BranchSource::Issue));
         assert!(matches!(issues(&rig.app), IssueList::Loaded { .. }));
         let seen = rig.source.seen();
-        assert!(!seen.is_empty() && seen.iter().all(|t| t == "first"), "{seen:?}");
+        assert!(
+            !seen.is_empty() && seen.iter().all(|t| t == "first"),
+            "{seen:?}"
+        );
     }
 
     #[test]
@@ -12555,7 +12567,10 @@ mod jira_request_path {
         assert!(matches!(issues(&rig.app), IssueList::Loaded { .. }));
         let seen = rig.source.seen();
         assert_eq!(seen[0], "revoked", "{seen:?}");
-        assert!(seen.len() > 1 && seen[1..].iter().all(|t| t == "rotated"), "{seen:?}");
+        assert!(
+            seen.len() > 1 && seen[1..].iter().all(|t| t == "rotated"),
+            "{seen:?}"
+        );
     }
 
     /// Type `text` over an incomplete listing; `settle` runs the debounce and the search.
