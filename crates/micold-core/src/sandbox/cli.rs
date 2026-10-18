@@ -14,7 +14,7 @@ use std::time::Duration;
 use super::argv;
 use super::dialect::Dialect;
 use super::exec::{CommandOutput, CommandRunner, StreamEvent};
-use super::image::{ImageSource, ImageSourceKind};
+use super::image::{ImageChoice, OwnImage};
 use super::parse::{self, ContainerFacts, ImageFacts};
 use super::runtime::{
     classify, ContainerId, ContainerRuntime, IdentityMapping, LimitSupport, Progress,
@@ -168,58 +168,32 @@ impl<R: CommandRunner> ContainerRuntime for CliRuntime<R> {
 
     fn acquire_image(
         &self,
-        source: &ImageSource,
+        source: &ImageChoice,
         progress: &mut dyn FnMut(Progress),
     ) -> Result<ImageFacts, RuntimeError> {
-        // Already here: nothing to acquire. Checked first for every source, so a machine that is
-        // offline with the image present never touches the network (Principle IV).
-        if let Some(facts) = self.inspect_image(&source.reference)? {
-            progress(Progress {
-                stage: "Ready".into(),
-                detail: Some(source.reference.clone()),
-                percent: Some(100),
-            });
-            return Ok(facts);
+        let reference = source.reference();
+        // Already here: nothing to acquire. Checked first for every reference, so a machine that is
+        // offline with the image present never touches the network (Principle IV), and a local
+        // `micold-basic:dev` is used as it is. An archive is always loaded: the user may have
+        // replaced the file, and the name it is tagged with says nothing about which file it was.
+        if !matches!(source, ImageChoice::Own(OwnImage::Archive(_))) {
+            if let Some(facts) = self.inspect_image(reference)? {
+                progress(Progress {
+                    stage: "Ready".into(),
+                    detail: Some(reference.to_string()),
+                    percent: Some(100),
+                });
+                return Ok(facts);
+            }
         }
 
-        match source.kind {
-            ImageSourceKind::Registry => {
-                let args: Vec<OsString> = ["pull", source.reference.as_str()]
-                    .iter()
-                    .map(OsString::from)
-                    .collect();
+        match source {
+            ImageChoice::Basic | ImageChoice::Own(OwnImage::Reference(_)) => {
+                let args: Vec<OsString> = ["pull", reference].iter().map(OsString::from).collect();
                 let mut on_line = |event: StreamEvent<'_>| {
                     progress(match event {
                         StreamEvent::Line(line) => pull_progress(line),
                         StreamEvent::Quiet { elapsed } => still_working("Downloading", elapsed),
-                    })
-                };
-                let out = self.finish(self.runner.run_streaming(
-                    &self.program(),
-                    &args,
-                    &mut on_line,
-                ))?;
-                let _ = out;
-            }
-            ImageSourceKind::ImportedFile => {
-                let path = source.path.as_ref().ok_or_else(|| RuntimeError::Unknown {
-                    stderr: "importing from a file needs the archive's path".into(),
-                })?;
-                let args: Vec<OsString> = vec![
-                    OsString::from("load"),
-                    OsString::from("-i"),
-                    path.as_os_str().to_os_string(),
-                ];
-                // `load` without a terminal prints nothing until the import is over, so the quiet
-                // ticks are the only progress a large archive gets (#790).
-                let mut on_line = |event: StreamEvent<'_>| {
-                    progress(match event {
-                        StreamEvent::Line(line) => Progress {
-                            stage: "Importing".into(),
-                            detail: Some(line.to_string()),
-                            percent: None,
-                        },
-                        StreamEvent::Quiet { elapsed } => still_working("Importing", elapsed),
                     })
                 };
                 self.finish(
@@ -227,19 +201,49 @@ impl<R: CommandRunner> ContainerRuntime for CliRuntime<R> {
                         .run_streaming(&self.program(), &args, &mut on_line),
                 )?;
             }
-            ImageSourceKind::LocalBuild => {
-                // Deliberately not built from here. `mise run image` builds it, because building
-                // needs a Linux daemon binary cross-compiled and staged beside the Containerfile —
-                // a build-system job, not a runtime-adapter one. What the app does is say so.
-                return Err(RuntimeError::ImageNotFound {
-                    reference: source.reference.clone(),
-                });
+            ImageChoice::Own(OwnImage::Archive(path)) => {
+                let args: Vec<OsString> = vec![
+                    OsString::from("load"),
+                    OsString::from("-i"),
+                    path.as_os_str().to_os_string(),
+                ];
+                // `load` without a terminal prints nothing until the import is over, so the quiet
+                // ticks are the only progress a large archive gets (#790).
+                let mut loaded = String::new();
+                let mut on_line = |event: StreamEvent<'_>| {
+                    progress(match event {
+                        StreamEvent::Line(line) => {
+                            if let Some(name) = line.trim().strip_prefix("Loaded image") {
+                                let name = name.trim_start_matches(" ID").trim_start_matches(':');
+                                loaded = name.trim().to_string();
+                            }
+                            Progress {
+                                stage: "Importing".into(),
+                                detail: Some(line.to_string()),
+                                percent: None,
+                            }
+                        }
+                        StreamEvent::Quiet { elapsed } => still_working("Importing", elapsed),
+                    })
+                };
+                self.finish(
+                    self.runner
+                        .run_streaming(&self.program(), &args, &mut on_line),
+                )?;
+                // The archive names no reference the container could be created from, so what it
+                // loaded is tagged with the fixed one `ImageChoice::reference` returns.
+                if loaded.is_empty() {
+                    return Err(RuntimeError::ImageNotFound {
+                        reference: path.display().to_string(),
+                    });
+                }
+                self.run(&["tag", loaded.as_str(), reference])?;
             }
         }
 
-        self.inspect_image(&source.reference)?
+        self.inspect_image(reference)?
             .ok_or_else(|| RuntimeError::ImageNotFound {
-                reference: source.reference.clone(),
+                reference: reference.to_string(),
             })
     }
 

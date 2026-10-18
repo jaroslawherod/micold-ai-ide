@@ -50,7 +50,7 @@ use std::time::{Duration, Instant};
 use micold_core::protocol::auth::Token;
 use micold_core::sandbox::cli::CliRuntime;
 use micold_core::sandbox::exec::SystemRunner;
-use micold_core::sandbox::image::{ImageSource, ImageSourceKind};
+use micold_core::sandbox::image::{ImageChoice, OwnImage};
 use micold_core::sandbox::runtime::{ContainerRuntime, Progress, RuntimeKind};
 use micold_core::sandbox::{CredentialLayout, MountSet, SandboxProfile, SandboxSpec, SecretMount};
 
@@ -132,11 +132,7 @@ fn sandbox_real_first_enable_is_under_five_minutes_and_never_goes_quiet() {
 
     let profile = SandboxProfile {
         runtime: RuntimeKind::Docker,
-        image: ImageSource {
-            kind: ImageSourceKind::ImportedFile,
-            reference: PROBE_TAG.to_string(),
-            path: Some(archive.clone()),
-        },
+        image: ImageChoice::Own(OwnImage::Archive(archive.clone())),
         ..SandboxProfile::default()
     };
     let (uid, gid) = micold_core::sandbox::host_identity();

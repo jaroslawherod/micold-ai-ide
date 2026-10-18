@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 
 use super::dialect::Dialect;
 use super::exec::CommandOutput;
-use super::image::ImageSource;
+use super::image::ImageChoice;
 use super::parse::{ContainerFacts, ImageFacts};
 use super::{ResourceBudget, SandboxProfile, SandboxSpec};
 
@@ -249,10 +249,10 @@ pub trait ContainerRuntime {
     /// Is the image present locally, and what fingerprint does it carry (FR-024, FR-024d)?
     fn inspect_image(&self, reference: &str) -> Result<Option<ImageFacts>, RuntimeError>;
 
-    /// Make the image available: pull, import from a file, or build (FR-024a–c).
+    /// Make the image available: pull the basic image or the user's reference, or load their archive.
     fn acquire_image(
         &self,
-        source: &ImageSource,
+        source: &ImageChoice,
         progress: &mut dyn FnMut(Progress),
     ) -> Result<ImageFacts, RuntimeError>;
 

@@ -15,7 +15,7 @@ use micold_core::protocol::version::{
 };
 use micold_core::sandbox::argv;
 use micold_core::sandbox::dialect::Dialect;
-use micold_core::sandbox::image::{ImageSource, ImageSourceKind};
+use micold_core::sandbox::image::{ImageChoice, ImageSource, ImageSourceKind, OwnImage};
 use micold_core::sandbox::runtime::{
     IdentityMapping, LimitSupport, RuntimeCapabilities, RuntimeKind,
 };
@@ -248,11 +248,7 @@ fn the_token_is_in_no_generated_argument_vector() {
     token.write_to(&host_path).expect("the token is written");
 
     let profile = SandboxProfile {
-        image: ImageSource {
-            reference: "micold-daemon:dev".into(),
-            kind: ImageSourceKind::LocalBuild,
-            path: None,
-        },
+        image: ImageChoice::Own(OwnImage::Reference("micold-daemon:dev".into())),
         ..SandboxProfile::default()
     };
     let spec = SandboxSpec {
@@ -265,8 +261,8 @@ fn the_token_is_in_no_generated_argument_vector() {
             dir.path().join("state"),
             dir.path(),
             SecretMount {
-                host: host_path.clone(),
-                container: PathBuf::from(CONTAINER_TOKEN_PATH),
+                host: dir.path().to_path_buf(),
+                container: PathBuf::from("/run/micold/ssh"),
             },
         ),
         uid: 1000,
@@ -299,12 +295,17 @@ fn the_token_is_in_no_generated_argument_vector() {
         .collect();
     assert_no_trace_of(&token, "the network argv", &network.join(" "));
 
-    // And the mechanism that replaces it is present: the file is mounted where the image looks.
+    // Nothing mounts a token file any more: the client reaches the container over SSH, and only
+    // the server's own key material is mounted (feature 806).
+    assert!(
+        !rendered.iter().any(|a| a.contains(CONTAINER_TOKEN_PATH)),
+        "no token mount: {rendered:?}"
+    );
     assert!(
         rendered
             .iter()
-            .any(|a| a.contains(CONTAINER_TOKEN_PATH) && a.contains(&*host_path.to_string_lossy())),
-        "the token must reach the container as a mount: {rendered:?}"
+            .any(|a| a.ends_with("/run/micold/ssh/authorized_keys:ro")),
+        "the SSH keys reach the container as mounts: {rendered:?}"
     );
 }
 

@@ -19,8 +19,6 @@ use micold_core::sandbox::lifecycle::bring_up;
 use micold_core::sandbox::runtime::{RuntimeError, RuntimeKind};
 use micold_core::sandbox::{CredentialLayout, MountSet, SandboxProfile, SandboxSpec, SecretMount};
 
-const FINGERPRINT: &str = "b7f3a1c9";
-
 /// The project that lives somewhere the runtime will not go.
 const SHARED: &str = "/mnt/team-share/webapp";
 
@@ -105,15 +103,8 @@ fn a_project_the_runtime_will_not_share_fails_by_name() {
         };
         let rt = CliRuntime::new(kind, runner_rejecting_the_mount(kind, &refusal(kind)));
 
-        let failure = bring_up(
-            &rt,
-            &profile,
-            &mounts(),
-            FINGERPRINT,
-            |_| spec(&profile),
-            &mut |_| {},
-        )
-        .expect_err("a mount the runtime refuses is a failed bring-up");
+        let failure = bring_up(&rt, &profile, &mounts(), |_| spec(&profile), &mut |_| {})
+            .expect_err("a mount the runtime refuses is a failed bring-up");
 
         match &failure.error {
             RuntimeError::MountRejected { path, detail } => {

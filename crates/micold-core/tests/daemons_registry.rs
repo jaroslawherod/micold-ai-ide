@@ -11,6 +11,7 @@ fn container(name: &str, port: u16) -> DaemonRuntime {
         profile: SandboxProfile::default(),
         container_name: name.to_string(),
         port,
+        migration: None,
     })
 }
 
@@ -104,8 +105,11 @@ fn an_unusable_container_field_is_refused_naming_the_field() {
         profile: SandboxProfile::default(),
         container_name: "c1".into(),
         port: 7728,
+        migration: None,
     };
-    bad_image.profile.image.reference = String::new();
+    bad_image.profile.image = micold_core::sandbox::image::ImageChoice::Own(
+        micold_core::sandbox::image::OwnImage::Reference(String::new()),
+    );
     assert_eq!(
         r.add("A", DaemonRuntime::Container(bad_image), false),
         Err(RegistryError::InvalidField { field: "image" }),

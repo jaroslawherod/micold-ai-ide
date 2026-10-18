@@ -13,7 +13,8 @@
 //! state requires a [`ConsentedFallback`](super::placement::ConsentedFallback), which only the user
 //! can produce, and `lifecycle_never_falls_back_on_its_own` asserts it as a property of the graph.
 
-use super::image::ImageSource;
+use super::basic_image::is_released_image;
+use super::image::ImageChoice;
 use super::parse::ContainerFacts;
 use super::placement::ConsentedFallback;
 use super::runtime::{
@@ -64,6 +65,16 @@ pub enum Stage {
 }
 
 impl Stage {
+    /// The provisioning step this stage belongs to: getting the image is `Acquire`, everything
+    /// else that happens to the container is `CreateContainer`.
+    pub fn step(self) -> crate::provision::Step {
+        use crate::provision::Step;
+        match self {
+            Stage::Probing | Stage::Acquiring => Step::Acquire,
+            Stage::Creating | Stage::Starting => Step::CreateContainer,
+        }
+    }
+
     /// The user-facing name, used in the failure message.
     pub fn label(self) -> &'static str {
         match self {
@@ -151,6 +162,9 @@ pub struct Started {
     /// locations in this list, because on Linux and macOS a container path equals its host path and
     /// translating one the container lacks would open the host's own file of the same name (C16c).
     pub mounted: Option<Vec<String>>,
+    /// Whether the container is a running released-image one, attached as it is
+    /// ([`Adoption::Legacy`]): it is reached over the token channel, not provisioned.
+    pub legacy: bool,
 }
 
 /// What to do about a container that already carries our name (US6 scenario 5, FR-024d).
@@ -166,6 +180,10 @@ pub enum Adoption {
     /// Ours and running. Use it: this is the ordinary case, and re-creating it would end every
     /// session the user left running.
     Attach(ContainerId),
+    /// A running container of the released all-in-one daemon image, which carries its own daemon
+    /// and is reached over the token channel. Attached, not recreated, so its sessions survive;
+    /// the user moves it to the basic image by restarting it when no session runs.
+    Legacy(ContainerId),
     /// Ours but stopped. Start it — the state is intact, only the process is gone.
     Start(ContainerId),
     /// Not ours. Replace it, naming why.
@@ -185,26 +203,15 @@ pub enum StaleReason {
     /// Built from a different image than the profile now names — the user changed the image
     /// setting, or upgraded the application.
     DifferentImage { found: String, expected: String },
-    /// Same image reference, different build. Only meaningful for a locally built image, where the
-    /// container and the client came from one working tree and have no business disagreeing
-    /// (research R8).
-    StaleBuild {
-        found: Option<String>,
-        expected: String,
-    },
 }
 
 impl StaleReason {
     /// One sentence, for the log and for the diagnostics the user can ask for.
     pub fn describe(&self) -> String {
         match self {
-            StaleReason::DifferentImage { found, expected } => format!(
-                "the existing sandbox was built from `{found}`, not `{expected}`"
-            ),
-            StaleReason::StaleBuild { found, expected } => format!(
-                "the existing sandbox was built from a different source tree ({} rather than {expected})",
-                found.as_deref().unwrap_or("an unlabelled build")
-            ),
+            StaleReason::DifferentImage { found, expected } => {
+                format!("the existing sandbox was built from `{found}`, not `{expected}`")
+            }
         }
     }
 }
@@ -214,16 +221,18 @@ impl StaleReason {
 /// Pure: it takes the facts and returns the decision, so every branch is testable without a
 /// runtime — including the ones that are awkward to arrange with one (an image that changed under
 /// a running container, a build with no fingerprint at all).
-pub fn adopt(
-    existing: Option<&ContainerFacts>,
-    expected_image: &str,
-    expected_fingerprint: &str,
-    strict_fingerprint: bool,
-) -> Adoption {
+pub fn adopt(existing: Option<&ContainerFacts>, expected_image: &str) -> Adoption {
     let Some(facts) = existing else {
         return Adoption::Create;
     };
     let id = ContainerId(facts.id.clone());
+
+    // A running container of a released all-in-one daemon image is attached as it is (FR-017): the
+    // daemon inside it may have sessions, and replacing it would end them. Stopped, it holds
+    // nothing, and is replaced by the basic image like any other difference.
+    if facts.running && facts.image != expected_image && is_released_image(&facts.image) {
+        return Adoption::Legacy(id);
+    }
 
     if facts.image != expected_image {
         return Adoption::Replace {
@@ -231,19 +240,6 @@ pub fn adopt(
             reason: StaleReason::DifferentImage {
                 found: facts.image.clone(),
                 expected: expected_image.to_string(),
-            },
-        };
-    }
-
-    // The fingerprint is only decisive for a locally built image. A released client and a released
-    // daemon are built separately and legitimately differ, so comparing them here would replace a
-    // perfectly good sandbox on every normal start.
-    if strict_fingerprint && facts.fingerprint.as_deref() != Some(expected_fingerprint) {
-        return Adoption::Replace {
-            id,
-            reason: StaleReason::StaleBuild {
-                found: facts.fingerprint.clone(),
-                expected: expected_fingerprint.to_string(),
             },
         };
     }
@@ -263,7 +259,6 @@ pub fn bring_up<R, F>(
     runtime: &R,
     profile: &SandboxProfile,
     mounts: &MountSet,
-    expected_fingerprint: &str,
     spec_for: F,
     observe: &mut dyn FnMut(SandboxState),
 ) -> Result<Started, Failure>
@@ -296,25 +291,21 @@ where
         stage: Stage::Creating,
         error,
     })?;
-    let decision = adopt(
-        existing.as_ref(),
-        &profile.image.reference,
-        expected_fingerprint,
-        profile.image.refuses_fingerprint_mismatch(),
-    );
+    let decision = adopt(existing.as_ref(), profile.image.reference());
 
     // Read before the decision is consumed, and only for the two branches that keep a container
     // somebody else created: what *it* mounts is what a sandboxed session's paths can reach, and
     // this client's own mount set describes the container it would have made instead (C16c).
     let mounted = match &decision {
-        Adoption::Attach(_) | Adoption::Start(_) => {
+        Adoption::Attach(_) | Adoption::Start(_) | Adoption::Legacy(_) => {
             existing.as_ref().map(|f| f.mount_destinations.clone())
         }
         Adoption::Create | Adoption::Replace { .. } => None,
     };
 
+    let legacy = matches!(decision, Adoption::Legacy(_));
     let id = match decision {
-        Adoption::Attach(id) => id,
+        Adoption::Attach(id) | Adoption::Legacy(id) => id,
         Adoption::Start(id) => {
             runtime.start(&id).map_err(|error| Failure {
                 stage: Stage::Starting,
@@ -340,6 +331,7 @@ where
         capabilities,
         unsatisfiable,
         mounted,
+        legacy,
     })
 }
 
@@ -360,7 +352,7 @@ fn create_and_start<R: ContainerRuntime>(
 
 fn acquire<R: ContainerRuntime>(
     runtime: &R,
-    image: &ImageSource,
+    image: &ImageChoice,
     observe: &mut dyn FnMut(SandboxState),
 ) -> Result<(), Failure> {
     let mut report = |p: Progress| observe(SandboxState::Acquiring(p));
@@ -808,7 +800,7 @@ mod mounted_tests {
         }
         fn acquire_image(
             &self,
-            _source: &ImageSource,
+            _source: &ImageChoice,
             _progress: &mut dyn FnMut(Progress),
         ) -> Result<ImageFacts, RuntimeError> {
             Ok(ImageFacts {
@@ -883,15 +875,8 @@ mod mounted_tests {
             time_zone: None,
             home: PathBuf::from("/home/u"),
         };
-        bring_up(
-            &Fake { existing },
-            &profile,
-            &mounts,
-            "fingerprint",
-            |_| spec,
-            &mut |_| {},
-        )
-        .expect("the fake answers every call")
+        bring_up(&Fake { existing }, &profile, &mounts, |_| spec, &mut |_| {})
+            .expect("the fake answers every call")
     }
 
     /// U58: a container this bring-up made shares exactly this mount set, so there is nothing to
@@ -919,7 +904,7 @@ mod mounted_tests {
         let expected = Some(DESTINATIONS.map(str::to_string).to_vec());
         assert_eq!(
             run(Some(existing(
-                &SandboxProfile::default().image.reference,
+                SandboxProfile::default().image.reference(),
                 true
             )))
             .mounted,
@@ -928,7 +913,7 @@ mod mounted_tests {
         );
         assert_eq!(
             run(Some(existing(
-                &SandboxProfile::default().image.reference,
+                SandboxProfile::default().image.reference(),
                 false
             )))
             .mounted,
@@ -955,10 +940,7 @@ mod adoption_tests {
 
     #[test]
     fn nothing_there_means_create_one() {
-        assert_eq!(
-            adopt(None, "micold-daemon:0.27.0", "abc", false),
-            Adoption::Create
-        );
+        assert_eq!(adopt(None, "micold-daemon:0.27.0"), Adoption::Create);
     }
 
     #[test]
@@ -967,7 +949,7 @@ mod adoption_tests {
         // user left running, on every launch.
         let f = facts("micold-daemon:0.27.0", Some("abc"), true);
         assert_eq!(
-            adopt(Some(&f), "micold-daemon:0.27.0", "abc", false),
+            adopt(Some(&f), "micold-daemon:0.27.0"),
             Adoption::Attach(ContainerId("9f2b".into()))
         );
     }
@@ -978,7 +960,7 @@ mod adoption_tests {
         // up as a recovery.
         let f = facts("micold-daemon:0.27.0", Some("abc"), false);
         assert_eq!(
-            adopt(Some(&f), "micold-daemon:0.27.0", "abc", false),
+            adopt(Some(&f), "micold-daemon:0.27.0"),
             Adoption::Start(ContainerId("9f2b".into()))
         );
     }
@@ -986,7 +968,7 @@ mod adoption_tests {
     #[test]
     fn a_different_image_is_replaced_with_the_reason_named() {
         let f = facts("micold-daemon:0.26.0", Some("abc"), true);
-        match adopt(Some(&f), "micold-daemon:0.27.0", "abc", false) {
+        match adopt(Some(&f), "micold-daemon:0.27.0") {
             Adoption::Replace { reason, .. } => {
                 let text = reason.describe();
                 assert!(text.contains("0.26.0"), "{text}");
@@ -997,35 +979,42 @@ mod adoption_tests {
     }
 
     #[test]
-    fn a_stale_build_is_replaced_only_under_the_strict_policy() {
-        // Research R8's asymmetry, at the container level this time. A released client and daemon
-        // legitimately differ, so a non-strict comparison must leave a working sandbox alone.
-        let f = facts("micold-daemon:dev", Some("old"), true);
-
+    fn a_fingerprint_difference_never_replaces_a_container() {
+        // Release 806 compares nothing but the image: the handshake version rule decides whether a
+        // daemon is current, and provisioning replaces a stale one in place (R10).
+        let f = facts("micold-basic:dev", Some("old"), true);
         assert_eq!(
-            adopt(Some(&f), "micold-daemon:dev", "new", false),
-            Adoption::Attach(ContainerId("9f2b".into())),
-            "a released image must not be replaced over a fingerprint difference"
+            adopt(Some(&f), "micold-basic:dev"),
+            Adoption::Attach(ContainerId("9f2b".into()))
         );
-
-        match adopt(Some(&f), "micold-daemon:dev", "new", true) {
-            Adoption::Replace { reason, .. } => {
-                assert!(reason.describe().contains("source tree"));
-            }
-            other => panic!("expected Replace, got {other:?}"),
-        }
     }
 
     #[test]
-    fn a_container_with_no_fingerprint_at_all_is_stale_under_the_strict_policy() {
-        // An image built before the label existed. Under the strict policy that is exactly as
-        // untrustworthy as a wrong one, and saying so is what makes `mise run image` reliable.
-        let f = facts("micold-daemon:dev", None, true);
-        match adopt(Some(&f), "micold-daemon:dev", "new", true) {
-            Adoption::Replace { reason, .. } => {
-                assert!(reason.describe().contains("unlabelled"));
-            }
-            other => panic!("expected Replace, got {other:?}"),
-        }
+    fn a_running_released_image_container_is_adopted_as_legacy_and_a_stopped_one_replaced() {
+        let released = "ghcr.io/jaroslawherod/micold-daemon:0.30.0";
+        let running = facts(released, Some("abc"), true);
+        assert_eq!(
+            adopt(Some(&running), crate::sandbox::basic_image::BASIC_IMAGE),
+            Adoption::Legacy(ContainerId("9f2b".into()))
+        );
+        let stopped = facts(released, Some("abc"), false);
+        assert!(matches!(
+            adopt(Some(&stopped), crate::sandbox::basic_image::BASIC_IMAGE),
+            Adoption::Replace { .. }
+        ));
+        let other = facts("acme/x:1", None, true);
+        assert!(matches!(
+            adopt(Some(&other), crate::sandbox::basic_image::BASIC_IMAGE),
+            Adoption::Replace { .. }
+        ));
+    }
+
+    #[test]
+    fn stages_map_onto_provisioning_steps() {
+        use crate::provision::Step;
+        assert_eq!(Stage::Acquiring.step(), Step::Acquire);
+        assert_eq!(Stage::Probing.step(), Step::Acquire);
+        assert_eq!(Stage::Creating.step(), Step::CreateContainer);
+        assert_eq!(Stage::Starting.step(), Step::CreateContainer);
     }
 }

@@ -29,10 +29,8 @@ One field on the root document:
     "placement": "host_process",         // "host_process" | "local_sandbox"
     "sandbox": {
       "runtime": "docker",               // "docker" | "podman"
-      "image": {
-        "kind": "registry",              // "registry" | "imported_file" | "local_build"
-        "reference": "ghcr.io/jaroslawherod/micold-daemon:<version>",
-        "path": null                     // set only when kind = "imported_file"
+      "image_choice": {                  // feature 806 replaced the old "image" block; a file that
+        "kind": "basic"                  // still has one is read through the migration
       },
       "budget": {
         "cpus_milli": 2000,              // null = runtime default

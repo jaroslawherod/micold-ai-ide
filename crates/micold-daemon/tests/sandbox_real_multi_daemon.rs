@@ -47,6 +47,7 @@ async fn sandbox_real_multi_daemon_stopping_one_leaves_the_other_working() {
                 profile: Default::default(),
                 container_name: boxes[0].container.clone(),
                 port: boxes[0].port,
+                migration: None,
             }),
             true,
         )

@@ -17,6 +17,7 @@ fn container(name: &str, port: u16) -> DaemonRuntime {
         profile: SandboxProfile::default(),
         container_name: name.to_string(),
         port,
+        migration: None,
     })
 }
 

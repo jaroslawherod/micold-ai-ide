@@ -21,6 +21,7 @@ fn container() -> DaemonRuntime {
         profile: SandboxProfile::default(),
         container_name: "c".into(),
         port: 7001,
+        migration: None,
     })
 }
 

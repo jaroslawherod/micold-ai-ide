@@ -77,6 +77,7 @@ fn settings_showing_in(
                         container_name: "box-ctr".into(),
                         port: 7001,
                         profile: Default::default(),
+                        migration: None,
                     },
                 ),
                 false,

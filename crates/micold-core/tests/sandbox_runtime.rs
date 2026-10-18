@@ -283,7 +283,7 @@ fn idempotence_does_not_swallow_a_real_failure() {
 /// K-10: acquisition reports progress more than once for multi-layer output (obligation C-8).
 #[test]
 fn acquiring_an_image_emits_progress_while_it_runs() {
-    use micold_core::sandbox::image::{ImageSource, ImageSourceKind};
+    use micold_core::sandbox::image::{ImageChoice, OwnImage};
 
     // Both runtimes report a layered pull line by line, and both print image inspect in the same
     // shape, so one fixture serves both — the thing under test is that the adapter forwards each
@@ -304,11 +304,7 @@ fn acquiring_an_image_emits_progress_while_it_runs() {
         runner.push_ok(fixture("docker_inspect_image.json"));
 
         let rt = CliRuntime::new(kind, runner);
-        let source = ImageSource {
-            kind: ImageSourceKind::Registry,
-            reference: "micold-daemon:0.27.0".to_string(),
-            path: None,
-        };
+        let source = ImageChoice::Own(OwnImage::Reference("micold-daemon:0.27.0".to_string()));
 
         let mut reports = Vec::new();
         let facts = rt
@@ -355,20 +351,16 @@ impl CommandRunner for SilentThenCanned {
 /// past SC-004's ten seconds. Every quiet tick of the runner must reach the indicator.
 #[test]
 fn a_silent_import_still_reports_progress_on_every_quiet_tick() {
-    use micold_core::sandbox::image::{ImageSource, ImageSourceKind};
+    use micold_core::sandbox::image::{ImageChoice, OwnImage};
 
     for kind in RuntimeKind::ALL {
         let inner = RecordingRunner::new();
-        // inspect: absent -> load (one line, at the end) -> inspect: present
-        inner.push(Ok(CommandOutput::err(1, "Error: No such image: probe:1")));
+        // An archive is always loaded: load (one line, at the end) -> tag -> inspect: present
         inner.push_ok("Loaded image: probe:1");
+        inner.push_ok("");
         inner.push_ok(fixture("docker_inspect_image.json"));
         let rt = CliRuntime::new(kind, SilentThenCanned { inner, ticks: 12 });
-        let source = ImageSource {
-            kind: ImageSourceKind::ImportedFile,
-            reference: "probe:1".to_string(),
-            path: Some("/tmp/probe.tar".into()),
-        };
+        let source = ImageChoice::Own(OwnImage::Archive("/tmp/probe.tar".into()));
 
         let mut reports = Vec::new();
         rt.acquire_image(&source, &mut |p| reports.push(p))
@@ -391,40 +383,14 @@ fn a_silent_import_still_reports_progress_on_every_quiet_tick() {
 /// machine with the image and no network must not be made to reach for one.
 #[test]
 fn an_image_already_present_is_not_fetched() {
-    use micold_core::sandbox::image::ImageSource;
+    use micold_core::sandbox::image::ImageChoice;
 
     let runner = RecordingRunner::new();
     runner.push_ok(fixture("docker_inspect_image.json"));
     let rt = CliRuntime::new(RuntimeKind::Docker, runner);
 
-    rt.acquire_image(&ImageSource::default(), &mut |_| {})
+    rt.acquire_image(&ImageChoice::Basic, &mut |_| {})
         .expect("already present");
-}
-
-/// A local build is not built from here: `mise run image` does that, because it needs a Linux
-/// daemon binary cross-compiled and staged. What the app owes the user is saying so, not guessing.
-#[test]
-fn a_missing_local_build_is_reported_rather_than_built() {
-    use micold_core::sandbox::image::{ImageSource, ImageSourceKind};
-
-    let runner = RecordingRunner::new();
-    runner.push(Ok(CommandOutput::err(
-        1,
-        "Error: No such image: micold-daemon:dev",
-    )));
-    let rt = CliRuntime::new(RuntimeKind::Docker, runner);
-
-    let source = ImageSource {
-        kind: ImageSourceKind::LocalBuild,
-        reference: "micold-daemon:dev".to_string(),
-        path: None,
-    };
-    match rt.acquire_image(&source, &mut |_| {}) {
-        Err(RuntimeError::ImageNotFound { reference }) => {
-            assert_eq!(reference, "micold-daemon:dev")
-        }
-        other => panic!("expected ImageNotFound, got {other:?}"),
-    }
 }
 
 /// An absent image is `Ok(None)`, not an error: "is it here?" has a negative answer.

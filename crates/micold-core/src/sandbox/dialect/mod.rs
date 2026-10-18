@@ -70,7 +70,14 @@ impl Dialect {
         match self.identity {
             // Read at start time, never baked into the image: one image serves every user, and
             // files written into a project come out owned by the person who ran the app.
-            IdentityMapping::ExplicitUidGid => vec!["--user".into(), format!("{uid}:{gid}")],
+            // `--group-add 0`: the basic image's entrypoint appends the uid's passwd line, and
+            // `/etc/passwd` is writable by gid 0 only (contracts/basic-image.md).
+            IdentityMapping::ExplicitUidGid => vec![
+                "--user".into(),
+                format!("{uid}:{gid}"),
+                "--group-add".into(),
+                "0".into(),
+            ],
             // Podman rootless already runs as the invoking user; `keep-id` maps them to the same
             // uid *inside*, which is what makes the written files match.
             IdentityMapping::KeepId => vec!["--userns=keep-id".into()],
@@ -123,7 +130,11 @@ mod tests {
         // as root writes root-owned files into the user's project, and the user finds out when
         // they try to edit one.
         let docker = Dialect::for_kind(RuntimeKind::Docker).identity_args(1000, 1000);
-        assert_eq!(docker, vec!["--user", "1000:1000"]);
+        assert_eq!(
+            docker,
+            vec!["--user", "1000:1000", "--group-add", "0"],
+            "gid 0 as a supplementary group lets the entrypoint append the passwd line"
+        );
 
         let podman = Dialect::for_kind(RuntimeKind::Podman).identity_args(1000, 1000);
         assert_eq!(podman, vec!["--userns=keep-id"]);

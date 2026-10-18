@@ -45,7 +45,7 @@ use std::process::Command;
 use micold_core::protocol::auth::Token;
 use micold_core::sandbox::cli::CliRuntime;
 use micold_core::sandbox::exec::{CommandOutput, CommandRunner, SystemRunner};
-use micold_core::sandbox::image::{ImageSource, ImageSourceKind};
+use micold_core::sandbox::image::{ImageChoice, OwnImage};
 use micold_core::sandbox::lifecycle::{self, SandboxState};
 use micold_core::sandbox::runtime::{ContainerId, ContainerRuntime, RuntimeError, RuntimeKind};
 use micold_core::sandbox::{
@@ -93,11 +93,7 @@ impl Fixture {
 
         let profile = SandboxProfile {
             runtime: RuntimeKind::Docker,
-            image: ImageSource {
-                kind: ImageSourceKind::LocalBuild,
-                reference: IMAGE.to_string(),
-                path: None,
-            },
+            image: ImageChoice::Own(OwnImage::Reference(IMAGE.to_string())),
             network,
             ..SandboxProfile::default()
         };
@@ -443,11 +439,7 @@ impl Fixture {
 
         let profile = SandboxProfile {
             runtime: RuntimeKind::Docker,
-            image: ImageSource {
-                kind: ImageSourceKind::LocalBuild,
-                reference: IMAGE.to_string(),
-                path: None,
-            },
+            image: ImageChoice::Own(OwnImage::Reference(IMAGE.to_string())),
             network: NetworkPosture::NoOutbound,
             ..SandboxProfile::default()
         };
@@ -551,11 +543,7 @@ async fn sandbox_real_a_sandbox_stopped_under_an_attached_client_comes_back_with
 
     let profile = SandboxProfile {
         runtime: RuntimeKind::Docker,
-        image: ImageSource {
-            kind: ImageSourceKind::LocalBuild,
-            reference: IMAGE.to_string(),
-            path: None,
-        },
+        image: ImageChoice::Own(OwnImage::Reference(IMAGE.to_string())),
         network: NetworkPosture::NoOutbound,
         ..SandboxProfile::default()
     };
@@ -592,15 +580,8 @@ async fn sandbox_real_a_sandbox_stopped_under_an_attached_client_comes_back_with
     let bring_up = || {
         let token = Token::generate();
         token.write_to(&token_path).expect("write the token");
-        lifecycle::bring_up(
-            &runtime,
-            &profile,
-            &mounts,
-            micold_core::protocol::version::BUILD_FINGERPRINT,
-            |_| spec.clone(),
-            &mut |_| {},
-        )
-        .map(|started| (started, token))
+        lifecycle::bring_up(&runtime, &profile, &mounts, |_| spec.clone(), &mut |_| {})
+            .map(|started| (started, token))
     };
     let attach = |token: Token| async move {
         let credentials = Credentials {

@@ -1588,6 +1588,7 @@ fn a_created_worktree_is_bound_to_the_daemon_chosen_in_the_form() {
                 profile: Default::default(),
                 container_name: "other".into(),
                 port: 7001,
+                migration: None,
             }),
             true,
         )
@@ -2443,6 +2444,7 @@ fn a_daemon_form_save_syncs_the_legacy_daemon_block() {
         profile: profile.clone(),
         container_name: "saved".into(),
         port: 4321,
+        migration: None,
     });
     let registry = DaemonRegistry::new(entries, start.next_daemon_id);
 
@@ -12167,6 +12169,7 @@ mod two_daemons {
             profile: Default::default(),
             container_name: "box".into(),
             port: 7001,
+            migration: None,
         });
         app.core.settings.daemons = DaemonRegistry::new(
             vec![

@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 
 use micold_core::sandbox::cli::CliRuntime;
 use micold_core::sandbox::exec::{CommandOutput, RecordingRunner};
-use micold_core::sandbox::image::{ImageSource, ImageSourceKind};
+use micold_core::sandbox::image::{ImageChoice, OwnImage};
 use micold_core::sandbox::lifecycle::{
     bring_up, container_lost, mount_set_changed, mount_set_out_of_date, restart, service_absent,
     survive_logout_changed, with_reasons, OutOfDate, RestartRequested, SandboxState, Stage,
@@ -22,7 +22,6 @@ use micold_core::sandbox::{CredentialLayout, MountSet, SandboxProfile, SandboxSp
 /// adoption branch under test is always `Create` — the adoption decisions themselves are covered
 /// by `lifecycle`'s own tests, which drive them directly rather than through eight canned
 /// responses.
-const FINGERPRINT: &str = "b7f3a1c9";
 
 fn fixture(name: &str) -> String {
     std::fs::read_to_string(
@@ -90,14 +89,9 @@ fn a_successful_bring_up_walks_the_stages_in_order() {
     let rt = CliRuntime::new(RuntimeKind::Docker, happy_runner());
 
     let mut seen = Vec::new();
-    let started = bring_up(
-        &rt,
-        &profile,
-        &mounts(),
-        FINGERPRINT,
-        |_| spec(&profile),
-        &mut |s| seen.push(s),
-    )
+    let started = bring_up(&rt, &profile, &mounts(), |_| spec(&profile), &mut |s| {
+        seen.push(s)
+    })
     .expect("bring up");
 
     assert_eq!(started.id.0, "9f2b1c4d7e8a");
@@ -123,11 +117,7 @@ fn a_successful_bring_up_walks_the_stages_in_order() {
 #[test]
 fn acquisition_progress_reaches_the_observer() {
     let profile = SandboxProfile {
-        image: ImageSource {
-            kind: ImageSourceKind::Registry,
-            reference: "micold-daemon:0.27.0".into(),
-            path: None,
-        },
+        image: ImageChoice::Own(OwnImage::Reference("micold-daemon:0.27.0".into())),
         ..SandboxProfile::default()
     };
 
@@ -149,18 +139,11 @@ fn acquisition_progress_reaches_the_observer() {
     let rt = CliRuntime::new(RuntimeKind::Docker, r);
 
     let mut progress = Vec::new();
-    bring_up(
-        &rt,
-        &profile,
-        &mounts(),
-        FINGERPRINT,
-        |_| spec(&profile),
-        &mut |s| {
-            if let SandboxState::Acquiring(p) = s {
-                progress.push(p);
-            }
-        },
-    )
+    bring_up(&rt, &profile, &mounts(), |_| spec(&profile), &mut |s| {
+        if let SandboxState::Acquiring(p) = s {
+            progress.push(p);
+        }
+    })
     .expect("bring up");
 
     assert!(
@@ -180,15 +163,8 @@ fn a_failure_names_the_stage_and_carries_a_remedy() {
     r.push(Ok(CommandOutput::err(125, fixture("err_daemon_down.txt"))));
     let rt = CliRuntime::new(RuntimeKind::Docker, r);
 
-    let failure = bring_up(
-        &rt,
-        &profile,
-        &mounts(),
-        FINGERPRINT,
-        |_| spec(&profile),
-        &mut |_| {},
-    )
-    .expect_err("a downed runtime cannot bring a sandbox up");
+    let failure = bring_up(&rt, &profile, &mounts(), |_| spec(&profile), &mut |_| {})
+        .expect_err("a downed runtime cannot bring a sandbox up");
     assert_eq!(failure.stage, Stage::Probing);
     assert!(matches!(failure.error, RuntimeError::NotRunning { .. }));
     assert!(failure.reason().contains("checking the container runtime"));
@@ -219,15 +195,8 @@ fn a_late_failure_is_attributed_to_its_own_stage() {
     )));
     let rt = CliRuntime::new(RuntimeKind::Docker, r);
 
-    let failure = bring_up(
-        &rt,
-        &profile,
-        &mounts(),
-        FINGERPRINT,
-        |_| spec(&profile),
-        &mut |_| {},
-    )
-    .expect_err("a taken port cannot be created over");
+    let failure = bring_up(&rt, &profile, &mounts(), |_| spec(&profile), &mut |_| {})
+        .expect_err("a taken port cannot be created over");
     assert_eq!(failure.stage, Stage::Creating);
     assert!(matches!(
         failure.error,
@@ -246,14 +215,7 @@ fn a_failed_bring_up_yields_no_container_at_all() {
     r.push(Ok(CommandOutput::err(127, "docker: command not found")));
     let rt = CliRuntime::new(RuntimeKind::Docker, r);
 
-    let result = bring_up(
-        &rt,
-        &profile,
-        &mounts(),
-        FINGERPRINT,
-        |_| spec(&profile),
-        &mut |_| {},
-    );
+    let result = bring_up(&rt, &profile, &mounts(), |_| spec(&profile), &mut |_| {});
     assert!(result.is_err());
     // There is no `unwrap_or_default`, no fallback container, and no second attempt against a
     // different placement. The caller is handed the failure and has to decide.
@@ -294,15 +256,8 @@ fn unenforceable_limits_are_reported_without_failing_the_bring_up() {
     r.push_ok("");
     let rt = CliRuntime::new(RuntimeKind::Docker, r);
 
-    let started = bring_up(
-        &rt,
-        &profile,
-        &mounts(),
-        FINGERPRINT,
-        |_| spec(&profile),
-        &mut |_| {},
-    )
-    .expect("an unenforceable limit is not a failure");
+    let started = bring_up(&rt, &profile, &mounts(), |_| spec(&profile), &mut |_| {})
+        .expect("an unenforceable limit is not a failure");
     assert_eq!(started.unsatisfiable.len(), 1);
     assert_eq!(started.unsatisfiable[0].field, "storage");
     assert!(started.unsatisfiable[0].reason.contains("pquota"));
