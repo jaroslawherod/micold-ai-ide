@@ -1200,6 +1200,30 @@ pub enum DaemonMsg {
         /// `false` for history, `true` for an event as the CLI wrote it.
         live: bool,
     },
+    /// A terminal-only request addressed to a structured session's AI process, refused (feature
+    /// 938, FR-019, contracts/wire.md). Sent to the requesting client only; the shell instances
+    /// of the same session still serve these requests.
+    SessionRequestRefused {
+        /// The session the request addressed.
+        session: SessionId,
+        /// Which request was refused.
+        request: RefusedRequest,
+        /// Why, for the user.
+        reason: String,
+    },
+}
+
+/// A terminal-only request a structured session's AI process cannot serve (feature 938, FR-019).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RefusedRequest {
+    /// `SessionInput`: raw terminal bytes.
+    Input,
+    /// `SessionResize`: a terminal grid size.
+    Resize,
+    /// `ScrollbackRequest`: terminal scrollback.
+    Scrollback,
+    /// `SessionInterrupt`: Ctrl-C to a PTY.
+    Interrupt,
 }
 
 // ---------------------------------------------------------------------------------------------

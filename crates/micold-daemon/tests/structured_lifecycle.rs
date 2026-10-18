@@ -211,3 +211,174 @@ async fn events_written_before_an_exit_stay_in_the_history() {
     assert_eq!(events_of(&got), expected);
     assert!(got.iter().all(|r| !r.live), "history, not live events");
 }
+
+/// Every frame `client` receives within `window`.
+async fn frames_within(
+    client: &mut conn::Client,
+    window: Duration,
+) -> Vec<micold_core::protocol::messages::DaemonMsg> {
+    use futures_util::StreamExt;
+    use micold_core::protocol::codec::Frame;
+    let end = tokio::time::Instant::now() + window;
+    let mut got = Vec::new();
+    while let Ok(Some(Ok(frame))) = tokio::time::timeout_at(end, client.next()).await {
+        if let Frame::Control(msg) = frame {
+            got.push(msg);
+        }
+    }
+    got
+}
+
+fn refusals(
+    frames: &[micold_core::protocol::messages::DaemonMsg],
+) -> Vec<(
+    micold_core::protocol::messages::RefusedRequest,
+    SessionId,
+    String,
+)> {
+    use micold_core::protocol::messages::DaemonMsg::SessionRequestRefused;
+    frames
+        .iter()
+        .filter_map(|m| match m {
+            SessionRequestRefused {
+                session,
+                request,
+                reason,
+            } => Some((*request, *session, reason.clone())),
+            _ => None,
+        })
+        .collect()
+}
+
+/// US5 scenario 4, FR-019: input, resize, scrollback and interrupt addressed to a structured
+/// session's AI process are each refused with a reason, to the sending client only.
+#[tokio::test]
+#[allow(clippy::await_holding_lock)]
+async fn terminal_only_requests_to_a_structured_primary_are_refused_to_the_sender() {
+    use futures_util::SinkExt;
+    use micold_core::protocol::codec::Frame;
+    use micold_core::protocol::grid::LineId;
+    use micold_core::protocol::messages::{ClientMsg, RefusedRequest, SessionProcess};
+    let _serial = one_at_a_time();
+    fake_stream_cli();
+    let project = tempfile::tempdir().unwrap();
+    let session = structured_session(SessionLocation::Default);
+    let id = session.id;
+    let state: Arc<DaemonState> = service(project.path(), vec![session]);
+    stream_script(project.path(), "");
+    state.start_session(id, LaunchMode::Fresh).expect("starts");
+    let mut sender = viewer(&state, project.path(), id).await;
+    let mut bystander = viewer(&state, project.path(), id).await;
+    let requests = [
+        ClientMsg::SessionInput {
+            session: id,
+            serial: 0,
+            bytes: b"ls\n".to_vec(),
+            process: None,
+        },
+        ClientMsg::SessionResize {
+            session: id,
+            cols: 100,
+            rows: 30,
+            process: Some(SessionProcess::Primary),
+        },
+        ClientMsg::ScrollbackRequest {
+            session: id,
+            req: 5,
+            ranges: vec![LineId(0)..LineId(5)],
+        },
+        ClientMsg::SessionInterrupt { session: id },
+    ];
+    for msg in requests {
+        sender.send(Frame::Control(msg)).await.expect("sent");
+    }
+    let got = refusals(&frames_within(&mut sender, Duration::from_secs(2)).await);
+    let kinds: Vec<_> = got.iter().map(|(request, ..)| *request).collect();
+    assert_eq!(
+        kinds,
+        [
+            RefusedRequest::Input,
+            RefusedRequest::Resize,
+            RefusedRequest::Scrollback,
+            RefusedRequest::Interrupt
+        ]
+    );
+    assert!(got.iter().all(|(_, session, why)| *session == id && !why.is_empty()));
+    let others = frames_within(&mut bystander, Duration::from_millis(500)).await;
+    assert!(refusals(&others).is_empty(), "only the sender is told");
+}
+
+/// FR-019: the same requests to one of the structured session's shell instances are served.
+#[tokio::test]
+#[allow(clippy::await_holding_lock)]
+async fn the_same_requests_to_its_shell_instance_are_served() {
+    use futures_util::SinkExt;
+    use micold_core::protocol::codec::Frame;
+    use micold_core::protocol::grid::LineId;
+    use micold_core::protocol::messages::{ClientMsg, DaemonMsg, SessionProcess};
+    use micold_core::session::ShellInstanceId;
+    let _serial = one_at_a_time();
+    fake_stream_cli();
+    let project = tempfile::tempdir().unwrap();
+    let session = structured_session(SessionLocation::Default);
+    let id = session.id;
+    let state: Arc<DaemonState> = service(project.path(), vec![session]);
+    stream_script(project.path(), "");
+    state.start_session(id, LaunchMode::Fresh).expect("starts");
+    let instance = ShellInstanceId(1);
+    state.open_shell(id, instance).expect("shell opens");
+    let shell = Some(SessionProcess::Shell(instance));
+    let mut client = viewer(&state, project.path(), id).await;
+    let marker = project.path().join("shell-served");
+    let requests = [
+        ClientMsg::SessionInput {
+            session: id,
+            serial: 0,
+            bytes: format!("touch '{}'\n", marker.display()).into_bytes(),
+            process: shell,
+        },
+        ClientMsg::SessionResize {
+            session: id,
+            cols: 100,
+            rows: 30,
+            process: shell,
+        },
+    ];
+    for msg in requests {
+        client.send(Frame::Control(msg)).await.expect("sent");
+    }
+    // With the shell attached, the scrollback request and the interrupt without a `process` reach
+    // the shell, not the AI process.
+    client
+        .send(Frame::Control(ClientMsg::SetViewedTerminals {
+            project: project.path().to_path_buf(),
+            terminals: vec![micold_core::protocol::messages::TerminalRef {
+                session: id,
+                process: SessionProcess::Shell(instance),
+            }],
+        }))
+        .await
+        .expect("the view is sent");
+    for msg in [
+        ClientMsg::ScrollbackRequest {
+            session: id,
+            req: 5,
+            ranges: vec![LineId(0)..LineId(5)],
+        },
+        ClientMsg::SessionInterrupt { session: id },
+    ] {
+        client.send(Frame::Control(msg)).await.expect("sent");
+    }
+    let got = frames_within(&mut client, Duration::from_secs(2)).await;
+    assert!(refusals(&got).is_empty(), "a shell serves them: {got:?}");
+    assert!(
+        got.iter()
+            .any(|m| matches!(m, DaemonMsg::ScrollbackResponse { req: 5, .. })),
+        "the scrollback is answered"
+    );
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while !marker.exists() {
+        assert!(Instant::now() < deadline, "the shell never ran the typed command");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+}
