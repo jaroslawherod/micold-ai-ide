@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-xelisc
 - **Started**: 2026-10-17
 - **Phase**: implement
-- **Next step**: M4a implemented (tests green: features_daemons, daemons_section_geometry); run scripts/gate.sh, push, reviews A/B, PR files
+- **Next step**: M4a: reviews done (CLEAN); full gate running on f29f6826; push when green; PR files are in the scratchpad; then return DONE
 
 ## Pull requests
 
@@ -86,6 +86,8 @@ stash@{0} survivors (all used by M1a–M2, stash dropped 2026-10-18; backed up i
 
 | M1c review A (code-review high) | 1 | 92eb8da19e833dfac69f4c82ff46e16132a896ac:9a5aa584e8579a2c9767db3d680952aefd1e27ab | CHANGES: 1 MAJOR (Tunnel did not retry a closed stream — fixed with a red test), 3 MINOR (relay reaped + survives accept errors, key dir sanitised; delete 409 declined) |
 | M1c review B (conformance, sonnet) | 1 | 92eb8da19e833dfac69f4c82ff46e16132a896ac:9a5aa584e8579a2c9767db3d680952aefd1e27ab | CHANGES: 1 MAJOR (no cycle-log entries — added, honest that tests came with the code), 1 MINOR (declined) |
+| M4a review A (code-review high) | 1 | f29f682624d1c0bd2370fef030eb8ec1d6d102af:153fa9f2b3d8ac3525be149d44e1053093c2e8c4 | CLEAN — 3 MINOR declined (Declined review findings): default provider is one value, MIN_MEMORY floor reused, `offered()` slice order |
+| M4a review B (conformance, sonnet) | 1 | same | CLEAN — Verify 22 + 10 passed; 1 MINOR: file fields are plain text paths (no picker; same as the SSH form's key file), noted in the cycle log |
 
 ## Declined review findings
 
@@ -106,6 +108,7 @@ stash@{0} survivors (all used by M1a–M2, stash dropped 2026-10-18; backed up i
 | M1b | A | F10: `KeyGen::generate` is synchronous in an async start | only the fake exists; #806 owns the live one and can wrap it in `spawn_blocking` |
 | M1c | A F4 MINOR | `deleted_from` maps only 404 to done; a uid-precondition 409 fails | a recreated object must not be reported deleted; failing is the safe reading |
 | M1c | B F2 MINOR | `kube_connector` has `expect(dead_code)` until M4b | T029 requires choosing `LiveCluster` once; the wiring is the deliverable, M4b is its first caller |
+| M4a | A (code-review high) | F1 default providers from the Settings draft only; F2 `MIN_MEMORY` floor for pod memory; F3 `offered()` slices by position | no per-provider switch exists yet (cycle log); the floor is the shared #806 resources field's; Kubernetes is last in both lists and a test pins the Add form's choices |
 
 ## Handover
 
