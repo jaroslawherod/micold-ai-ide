@@ -1703,7 +1703,8 @@ Keystrokes stream straight to the CLI as you press them, exactly like a standalo
   are unavailable are skipped, and with only one available project nothing changes. All three
   levels wrap: past the last entry the next press goes to the first, and back.
 - **Quick-switcher**: **Ctrl+Shift+P** (Cmd+Shift+P on macOS) opens a search box over the list of
-  the active project's locations, each followed by its open sessions, also from a focused terminal;
+  the active project's locations, each followed by its open sessions, then the other known
+  projects, also from a focused terminal;
   the app takes it and the terminal never sees it. The tag filter applies, as it does to the
   sidebar, and a session closed in the sidebar is not listed. Type part of a name: the letters
   must appear in that order, in any case, and names that start with what you typed come first.
@@ -1711,7 +1712,12 @@ Keystrokes stream straight to the CLI as you press them, exactly like a standalo
   it, so Down reaches them. Up and Down move the highlight, Enter or a click chooses; Escape, the
   same chord or a click outside closes it. Choosing is a row click and never starts a session: a
   location with a session shows it, an empty one is highlighted in the sidebar, and a session is
-  shown with its row opened and selected in the sidebar.
+  shown with its row opened and selected in the sidebar. A project is listed with its running and
+  unread counts, in the project switcher's order, and choosing it switches to it exactly as the
+  project switcher does; the sessions of the project you leave keep running. A project marked
+  unavailable is shown but cannot be highlighted or chosen. Only the active project's locations
+  and sessions are listed; another project appears only as its own entry, and its locations and
+  sessions are listed once it is active.
 
 ### Links
 

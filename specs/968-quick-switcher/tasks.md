@@ -21,10 +21,9 @@ describe (`scripts/check-user-guide-updated.sh` fires on `feat`).
 **Cross-platform**: Principle VI: the chord uses the platform primary modifier (`is_primary_shift`)
 and a physical key; no `cfg` arm beyond the macOS test variant.
 
-**Scope note (ledger D4, provisional)**: only the active project's locations and sessions are
+**Scope note (ledger D4, decided by the user)**: only the active project's locations and sessions are
 entries. Every "which entries exist" rule is in `features/quick_switch.rs::candidates` and its
-tests; if the user picks option B, only those tasks (T009, T013, T022, T025, T027, T029), the
-choose path for a non-active entry, the T031 doc bullet and FR-003/FR-004 change.
+tests; option B (all projects) was not chosen.
 
 ## Format: `[ID] [P?] [Story] Description`
 
@@ -305,14 +304,14 @@ chosen.
 
 ### Tests for User Story 3 (MANDATORY — Constitution Principle I) ⚠️
 
-- [ ] T027 [P] [US3] Write the failing `candidates` tests (project entries) in
+- [x] T027 [P] [US3] Write the failing `candidates` tests (project entries) in
   `crates/micold-client/tests/quick_switch.rs`: after the active project's locations and sessions,
   every `state.switcher_entries()` entry with `!is_active` in that order (unavailable ones
   included), named by its `label`, `context` = `"<n> running · <m> unread"` plus `unavailable` for
   an unavailable one, `selectable == available`; the active project is not a project entry
   (US3-4); no location or session of another project is listed (US3-5, D4); on the welcome screen
   the list is every known project; with no known project and no active one the list is empty
-- [ ] T028 [US3] Write the failing reducer and apply tests in
+- [x] T028 [US3] Write the failing reducer and apply tests in
   `crates/micold-client/tests/quick_switch.rs`: `Chosen(Project(p))` for an available project
   closes and returns `Step::Project(p)`; applied, `p` is active, its current session is restored
   and the previous project's sessions keep running (count unchanged, US3-2, SC-005); for an
@@ -323,12 +322,12 @@ chosen.
 
 ### Implementation for User Story 3
 
-- [ ] T029 [US3] Add project entries to `candidates` in
+- [x] T029 [US3] Add project entries to `candidates` in
   `crates/micold-client/src/features/quick_switch.rs` (data-model.md `candidates` step 2) and the
   two `Project` arms of U3 in `update`, until T027 and T028 pass
-- [ ] T030 [US3] Add an unavailable project row (disabled, `Project · unavailable`) to the
+- [x] T030 [US3] Add an unavailable project row (disabled, `Project · unavailable`) to the
   showcase sample of T019 in `crates/micold-client/src/showcase/sections/`
-- [ ] T031 [US3] Complete the **Quick-switcher** bullet in
+- [x] T031 [US3] Complete the **Quick-switcher** bullet in
   `docs/user-guide/worktrees-and-sessions.md`: the other known projects follow with their running
   and unread counts, unavailable ones are shown but cannot be chosen, only the active project's
   locations and sessions are listed; check that the bullet and the `terminal-panes.md` row now

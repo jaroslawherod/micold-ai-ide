@@ -26,7 +26,7 @@ fn keys(entries: &[Entry]) -> Vec<SessionLocation> {
         .filter_map(|e| match &e.candidate.key {
             EntryKey::Location(l) => Some(l.clone()),
             EntryKey::Session(_) => None,
-            other => panic!("projects are not listed yet, got {other:?}"),
+            EntryKey::Project(_) => None,
         })
         .collect()
 }
@@ -811,4 +811,205 @@ fn choosing_a_session_closed_meanwhile_changes_nothing() {
         .retain(|s| s.id != helper);
     assert!(update(&mut state, Msg::Chosen(session_key(helper))).is_none());
     assert!(state.quick_switch.open.is_some(), "FR-013: nothing changes");
+}
+
+// ---- projects (T027, T028) ----
+
+use micold_core::project::{Availability, Project};
+
+fn project_at(path: &str) -> std::path::PathBuf {
+    std::path::PathBuf::from(path)
+}
+
+/// `/repo` active, then `/alpha`, `/beta` (unavailable) and `/gamma` known, in that order.
+fn with_projects() -> State {
+    let mut state = three();
+    for (name, availability) in [
+        ("alpha", Availability::Available),
+        ("beta", Availability::Unavailable),
+        ("gamma", Availability::Available),
+    ] {
+        state.workspace.projects.push(Project {
+            path: project_at(&format!("/{name}")),
+            display_name: name.to_string(),
+            is_git_repo: true,
+            availability,
+        });
+    }
+    state
+}
+
+fn project_entries(state: &State) -> Vec<Entry> {
+    candidates(state)
+        .into_iter()
+        .filter(|e| e.kind == Kind::Project)
+        .collect()
+}
+
+#[test]
+fn other_projects_follow_the_active_projects_entries_in_switcher_order() {
+    let state = with_projects();
+    let all = candidates(&state);
+    let first_project = all.iter().position(|e| e.kind == Kind::Project).unwrap();
+    assert!(all[..first_project].iter().all(|e| e.kind != Kind::Project));
+    assert!(all[first_project..].iter().all(|e| e.kind == Kind::Project));
+    let names: Vec<_> = all[first_project..]
+        .iter()
+        .map(|e| e.candidate.name.as_str())
+        .collect();
+    assert_eq!(names, ["alpha", "beta", "gamma"], "unavailable included");
+    let keys: Vec<_> = all[first_project..]
+        .iter()
+        .map(|e| e.candidate.key.clone())
+        .collect();
+    assert_eq!(keys[0], EntryKey::Project(project_at("/alpha")));
+    assert!(all[first_project..]
+        .iter()
+        .all(|e| e.candidate.parent.is_none() && !e.current));
+}
+
+#[test]
+fn a_project_shows_its_counts_and_an_unavailable_one_is_not_selectable() {
+    let state = with_projects();
+    let entries = project_entries(&state);
+    assert_eq!(entries[0].context, "0 running · 0 unread");
+    assert!(entries[0].candidate.selectable);
+    assert_eq!(entries[1].context, "0 running · 0 unread · unavailable");
+    assert!(!entries[1].candidate.selectable);
+    assert!(entries[2].candidate.selectable);
+}
+
+#[test]
+fn the_active_project_and_other_projects_contents_are_not_entries() {
+    let mut state = with_projects();
+    let other = project_at("/alpha");
+    state.workspace.sessions.entry(other).or_default().push(
+        micold_core::session::Session::start_new(
+            SessionLocation::Default,
+            micold_core::session::AiCli::ClaudeCode,
+        ),
+    );
+    let all = candidates(&state);
+    assert!(!all
+        .iter()
+        .any(|e| e.candidate.key == EntryKey::Project(project_at("/repo"))));
+    assert_eq!(
+        all.iter().filter(|e| e.kind == Kind::Session).count(),
+        0,
+        "another project's session is not listed (US3-5)"
+    );
+    assert_eq!(all.iter().filter(|e| e.kind == Kind::Project).count(), 3);
+}
+
+#[test]
+fn on_the_welcome_screen_every_known_project_is_listed() {
+    let mut state = with_projects();
+    state.workspace.active = None;
+    let entries = candidates(&state);
+    assert_eq!(entries.len(), 4);
+    assert!(entries.iter().all(|e| e.kind == Kind::Project));
+    assert!(candidates(&State::default()).is_empty());
+}
+
+#[test]
+fn choosing_an_available_project_closes_and_returns_its_step() {
+    let mut state = with_projects();
+    open(&mut state);
+    let choice = update(
+        &mut state,
+        Msg::Chosen(EntryKey::Project(project_at("/gamma"))),
+    )
+    .expect("an available project resolves");
+    assert_eq!(choice.step, Step::Project(project_at("/gamma")));
+    assert!(!choice.close_overview_first);
+    assert!(state.quick_switch.open.is_none());
+}
+
+#[test]
+fn choosing_a_project_with_the_overview_open_leaves_it_to_the_step() {
+    let mut state = with_projects();
+    state.overview.open = true;
+    open(&mut state);
+    let choice = update(
+        &mut state,
+        Msg::Chosen(EntryKey::Project(project_at("/alpha"))),
+    )
+    .unwrap();
+    assert!(!choice.close_overview_first);
+}
+
+#[test]
+fn an_unavailable_project_cannot_be_chosen_and_stays_open() {
+    let mut state = with_projects();
+    open(&mut state);
+    assert!(update(
+        &mut state,
+        Msg::Chosen(EntryKey::Project(project_at("/beta")))
+    )
+    .is_none());
+    assert!(state.quick_switch.open.is_some());
+}
+
+#[test]
+fn the_highlight_skips_an_unavailable_project() {
+    let mut state = with_projects();
+    open(&mut state);
+    update(&mut state, Msg::QueryChanged("a".into()));
+    // Walk to the end; the unavailable one is never highlighted on the way.
+    for _ in 0..12 {
+        update(&mut state, Msg::Moved(Dir::Next));
+        assert_ne!(
+            highlighted(&state),
+            Some(EntryKey::Project(project_at("/beta")))
+        );
+    }
+    assert_eq!(
+        highlighted(&state),
+        Some(EntryKey::Project(project_at("/gamma"))),
+        "stays on the last available project"
+    );
+}
+
+#[test]
+fn opening_with_only_an_unavailable_project_first_highlights_the_first_selectable() {
+    let mut state = State::default();
+    for (name, availability) in [
+        ("beta", Availability::Unavailable),
+        ("alpha", Availability::Available),
+    ] {
+        state.workspace.projects.push(Project {
+            path: project_at(&format!("/{name}")),
+            display_name: name.to_string(),
+            is_git_repo: true,
+            availability,
+        });
+    }
+    open(&mut state);
+    assert_eq!(
+        highlighted(&state),
+        Some(EntryKey::Project(project_at("/alpha")))
+    );
+}
+
+#[test]
+fn applying_a_project_choice_activates_it_and_keeps_every_session_running() {
+    let mut state = with_projects();
+    let before = session_at(&mut state, SessionLocation::Default);
+    let count = session_count(&state);
+    open(&mut state);
+    let choice = update(
+        &mut state,
+        Msg::Chosen(EntryKey::Project(project_at("/gamma"))),
+    )
+    .unwrap();
+    // What the shell does with `Reopened`.
+    let _ = state
+        .switch_active(&project_at("/gamma"))
+        .expect("the switch is accepted");
+    state.finish_navigation(&choice.step, choice.terminal_had_focus);
+    assert_eq!(state.workspace.active, Some(project_at("/gamma")));
+    assert_eq!(session_count(&state), count, "SC-005");
+    assert!(state.workspace.sessions[&project_at("/repo")]
+        .iter()
+        .any(|s| s.id == before));
 }
