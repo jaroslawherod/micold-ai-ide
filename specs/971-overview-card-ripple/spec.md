@@ -28,6 +28,18 @@ pressed-state tint only." Labels: enhancement, flow:feature.
 - **State layer**: the translucent tint a control shows for hover, focus or press (feature 018, §5).
   Layers never sum: the heaviest single layer is what shows.
 
+## Clarifications
+
+### Session 2026-10-18
+
+- Q: When does each ripple start relative to the activation: on pointer press or release, on key
+  press or release? → A: The pointer ripple starts when the primary button goes down (the app's
+  ripple starts on `ButtonPressed`), while the activation stays on release inside the card as an
+  iced `button` does today; the keyboard ripple starts with the activation itself, on the key press
+  that publishes the card's message (cards answer `KeyPressed`, not the release).
+  _(agent-resolved: crates/micold-client/src/ui/material/ripple.rs#update,
+  crates/micold-client/src/ui/material/keyboard_focus.rs#update)_
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Pointer press ripples from where the card was pressed (Priority: P1)
