@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-a1yb7j
 - **Started**: 2026-10-18
 - **Phase**: implement
-- **Next step**: M1 PR #1042: reviews and visual pass done; orchestrator waits on CI and merges; then M2
+- **Next step**: M1 PR #1042 rebased onto main 1927ab5c, gate green at faed02ae, resolution review CLEAN; orchestrator waits on CI and merges; then M2
 
 ## Pull requests
 
@@ -47,6 +47,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | A M1 (code-review high) | 1 | c81d74a8449b3e036a2e8ffe80aa60e5168c827e:5dbd5098f5e91b3d5aae7afdbb0508cf50921e8c | CLEAN: 3 MINOR not fixed (settle_card_menu in State::update, clone in CardMenuEntryChosen, hand-copied MenuItem in with_message) |
 | B M1 (conformance, sonnet) | 1 | c81d74a8449b3e036a2e8ffe80aa60e5168c827e:5dbd5098f5e91b3d5aae7afdbb0508cf50921e8c | CLEAN; Verify: 8 test binaries ok, 144 passed, 0 failed |
 | Visual pass M1 | 1 | c81d74a8449b3e036a2e8ffe80aa60e5168c827e:5dbd5098f5e91b3d5aae7afdbb0508cf50921e8c | B1, B3–B9, B16 PASS; B14, B19 PARTIAL (fixture: no session / seeded unbound daemon); B15 not run (no second window); record in visual-pass.md |
+| Rebase M1 onto main 1927ab5c (sonnet, conflict resolutions) | 1 | 5531061f2042f54caf19e95871eb69221b0e4d96:faed02ae760714e5641773993f2d836b81f2fe7e | CLEAN: 2 MINOR not fixed (module doc line length, pre-existing; CardMenuEntryChosen during activation unreachable and due() filters on open) |
 
 ## Declined review findings
 
