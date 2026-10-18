@@ -2024,7 +2024,11 @@ mod tests {
         runner.push_ok(inspected(
             "new",
             true,
-            &["/proj/P", "/proj/Q", CONTAINER_TOKEN_PATH],
+            &[
+                "/proj/P",
+                "/proj/Q",
+                micold_core::sandbox::argv::CONTAINER_SSH_DIR,
+            ],
         ));
 
         let (id, locations) = reread(&plan, &facts, &ContainerId("old".into()), &runner)
@@ -2034,7 +2038,7 @@ mod tests {
         assert_eq!(
             locations.projects,
             vec!["/proj/P".to_string(), "/proj/Q".to_string()],
-            "its projects, including one this client never registered, and not its token"
+            "its projects, including one this client never registered, and not its key directory"
         );
         assert!(
             locations.shared.iter().any(|l| l.container == "/proj/P"),

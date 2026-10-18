@@ -36,7 +36,7 @@ const TOLERANCE: f32 = 0.5;
 const CLI_SUPPORTING: &str = "Used for new sessions unless you choose otherwise";
 
 /// The supporting line under Image reference, in the open Daemons form.
-const IMAGE_SUPPORTING: &str = "A digest or an exact tag; a moving tag cannot be reported in a bug";
+const IMAGE_SUPPORTING: &str = "A digest or an exact tag; used when no image file is given";
 
 fn settings_showing(section: SettingsSection, source: AvailabilitySource) -> State {
     // The script applied: with no known state there is no note to look at (037, W5).
@@ -76,7 +76,14 @@ fn settings_showing_in(
                     micold_core::daemons::ContainerSettings {
                         container_name: "box-ctr".into(),
                         port: 7001,
-                        profile: Default::default(),
+                        profile: micold_core::sandbox::SandboxProfile {
+                            image: micold_core::sandbox::image::ImageChoice::Own(
+                                micold_core::sandbox::image::OwnImage::Reference(
+                                    "ghcr.io/example/my-own-image:3".into(),
+                                ),
+                            ),
+                            ..Default::default()
+                        },
                         migration: None,
                     },
                 ),
@@ -155,7 +162,7 @@ fn and_so_does_the_one_under_the_image_reference() {
     ));
 
     let supporting = x_of(&painted, IMAGE_SUPPORTING);
-    let notice = x_of(&painted, "ghcr.io/example/my-own-image:3");
+    let notice = x_of(&painted, "Sessions run in that image");
 
     assert!(
         (notice - supporting).abs() <= TOLERANCE,
