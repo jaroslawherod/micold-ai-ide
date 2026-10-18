@@ -1717,6 +1717,9 @@ Keystrokes stream straight to the CLI as you press them, exactly like a standalo
 - **Overview**: **Ctrl+Shift+O** (Cmd+Shift+O on macOS) opens and closes the
   [worktree Overview](overview.md), also from a focused terminal; the app takes it and the
   terminal never sees it.
+- **Overview full screen**: **Ctrl+Shift+F** (Cmd+Shift+F on macOS), while the Overview is open,
+  hides the sidebar so the cards fill the window, and brings it back as it was. It is not a
+  terminal chord: a focused terminal receives Ctrl+Shift+F as before.
 - **Navigation**: **Ctrl+Shift+.** and **Ctrl+Shift+,** (Cmd+Shift+. and Cmd+Shift+, on macOS)
   step to the next and previous location of the project, in the order the sidebar draws them:
   Default, then the worktrees. They work whether or not a terminal is focused, and the terminal

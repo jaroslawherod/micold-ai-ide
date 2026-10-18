@@ -1210,3 +1210,99 @@ fn hook_activity_is_runtime_only() {
     assert_eq!(sessions.len(), 1, "the session itself is persisted");
     assert!(sessions[0].hook_activity.is_none());
 }
+
+// Feature 970: full-screen mode at the app level (FR-009, FR-010, FR-011, SC-004).
+
+fn toggle_full_screen(state: &mut State) {
+    state.update(Message::Overview(Msg::FullScreenToggled {
+        settings_open: false,
+    }));
+}
+
+fn open_and_close_settings(state: &mut State) {
+    use micold_client::features::settings::Msg as SettingsMsg;
+    state.update(Message::Settings(SettingsMsg::Opened));
+    assert!(state.settings.settings_draft.is_some(), "Settings opened");
+    state.update(Message::Settings(SettingsMsg::Cancelled));
+    assert!(state.settings.settings_draft.is_none(), "Settings closed");
+}
+
+/// The sidebar fields the mode must never write.
+fn sidebar_of(state: &State) -> (bool, u16) {
+    (state.sidebar.hidden, state.sidebar.width)
+}
+
+#[test]
+fn settings_open_and_closed_keeps_full_screen() {
+    let mut state = project_with(vec![]);
+    open_overview(&mut state);
+    toggle_full_screen(&mut state);
+    assert!(state.overview.full_screen());
+    open_and_close_settings(&mut state);
+    assert!(state.overview.full_screen());
+}
+
+#[test]
+fn the_mode_writes_no_sidebar_state() {
+    let mut state = project_with(vec![]);
+    state.sidebar.width = 300;
+    let before = sidebar_of(&state);
+    open_overview(&mut state);
+    toggle_full_screen(&mut state);
+    assert!(state.overview.full_screen());
+    assert_eq!(sidebar_of(&state), before, "entering");
+    toggle_full_screen(&mut state);
+    assert!(!state.overview.full_screen());
+    assert_eq!(sidebar_of(&state), before, "leaving");
+}
+
+#[test]
+fn twenty_cycles_return_the_sidebar_as_it_was() {
+    let mut state = project_with(vec![]);
+    let session = add_session(&mut state, SessionLocation::Default);
+    let leave: [Msg; 4] = [
+        Msg::FullScreenToggled {
+            settings_open: false,
+        },
+        Msg::Closed,
+        Msg::Toggled {
+            settings_open: false,
+        },
+        Msg::CardActivated(Activation::OpenSession(session.id)),
+    ];
+    // Collapsed, then expanded at the default width (0), 240 px and 420 px.
+    let sidebars = [(true, 0), (false, 0), (false, 240), (false, 420)];
+    for cycle in 0..20 {
+        let (hidden, width) = sidebars[cycle / 5];
+        state.sidebar.hidden = hidden;
+        state.sidebar.width = width;
+        if !state.overview.open {
+            open_overview(&mut state);
+        }
+        toggle_full_screen(&mut state);
+        assert!(state.overview.full_screen(), "cycle {cycle}: entered");
+        state.update(Message::Overview(leave[cycle % leave.len()].clone()));
+        assert!(!state.overview.full_screen(), "cycle {cycle}: left");
+        assert_eq!(
+            sidebar_of(&state),
+            (hidden, width),
+            "cycle {cycle}: the sidebar is as it was"
+        );
+    }
+}
+
+#[test]
+fn settings_and_a_project_switch_keep_the_mode_and_the_sidebar() {
+    let mut state = project_with(vec![]);
+    state.sidebar.hidden = true;
+    let before = sidebar_of(&state);
+    open_overview(&mut state);
+    toggle_full_screen(&mut state);
+    open_and_close_settings(&mut state);
+    state.update(Message::Overview(Msg::ProjectSwitched));
+    assert!(state.overview.full_screen());
+    assert_eq!(sidebar_of(&state), before);
+    toggle_full_screen(&mut state);
+    assert!(!state.overview.full_screen());
+    assert_eq!(sidebar_of(&state), before);
+}

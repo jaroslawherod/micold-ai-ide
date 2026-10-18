@@ -100,6 +100,8 @@ pyftsubset _static.ttf \
 | `JiraIssues`   | `assignment`           | `E85D`         |
 | `MoveUp`       | `keyboard_arrow_up`    | `E316`         |
 | `MoveDown`     | `keyboard_arrow_down`  | `E313`         |
+| `FullScreen`   | `fullscreen`           | `E5D0`         |
+| `FullScreenExit` | `fullscreen_exit`    | `E5D1`         |
 
 **Why the activity dots are radio-button glyphs** (BUG-004): this file is a static instance
 pinned at **FILL=0**, and at that axis value the nominally-solid dots — `circle` (`EF4A`),

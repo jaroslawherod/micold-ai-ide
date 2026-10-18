@@ -177,6 +177,11 @@ pub enum Icon {
     ChevronLeft,
     /// Next pull request, beside [`Icon::ChevronLeft`] — `chevron_right`.
     ChevronRight,
+    /// The Overview header's toggle into full-screen mode (feature 970, FR-012) — `fullscreen`.
+    FullScreen,
+    /// The same toggle while full-screen mode is on: it leaves it (feature 970) —
+    /// `fullscreen_exit`.
+    FullScreenExit,
 }
 
 impl Icon {
@@ -250,6 +255,8 @@ impl Icon {
         Icon::Open,
         Icon::ChevronLeft,
         Icon::ChevronRight,
+        Icon::FullScreen,
+        Icon::FullScreenExit,
     ];
 
     /// The font codepoint for this icon (Private Use Area; see `assets/fonts/PROVENANCE.md`).
@@ -341,6 +348,8 @@ impl Icon {
             // `chevron_left` / `chevron_right` (feature 1003).
             Icon::ChevronLeft => '\u{e5cb}',
             Icon::ChevronRight => '\u{e5cc}',
+            Icon::FullScreen => '\u{e5d0}',
+            Icon::FullScreenExit => '\u{e5d1}',
         }
     }
 }

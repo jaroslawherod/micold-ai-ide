@@ -760,7 +760,11 @@ pub fn tree_view<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, M
 }
 
 /// `NavigationDrawer` — open (showing its panel) and closed (showing its rail).
-pub fn navigation_drawer<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
+pub fn navigation_drawer<'a>(
+    showcase: &'a Showcase,
+    roles: Roles,
+    index: usize,
+) -> Element<'a, Message> {
     let panel = |roles: Roles| {
         material::Surface::new(
             material::Text::new("The panel", TypeRole::Body, roles),
@@ -789,6 +793,42 @@ pub fn navigation_drawer<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Eleme
             posed(
                 "closed (the rail)",
                 material::NavigationDrawer::new(panel(roles), rail(roles)).open(false),
+                roles,
+            ),
+            // Feature 970: retraction hides the whole drawer, rail included, and gives its width
+            // to what stands beside it.
+            posed(
+                "retracted (zero width; the text beside it starts at the edge)",
+                iced::widget::row![
+                    material::NavigationDrawer::new(panel(roles), rail(roles))
+                        .open(true)
+                        .retracted(true),
+                    material::Text::new("Beside the drawer", TypeRole::Body, roles),
+                ]
+                .spacing(spacing::SM),
+                roles,
+            ),
+            posed(
+                "retracting — press it",
+                iced::widget::column![
+                    material::Button::text(
+                        if showcase.shown(index) {
+                            "Retract the drawer"
+                        } else {
+                            "Show the drawer"
+                        },
+                        roles,
+                    )
+                    .on_press(Message::Reversed(index)),
+                    iced::widget::row![
+                        material::NavigationDrawer::new(panel(roles), rail(roles))
+                            .open(true)
+                            .retracted(!showcase.shown(index)),
+                        material::Text::new("Beside the drawer", TypeRole::Body, roles),
+                    ]
+                    .spacing(spacing::SM),
+                ]
+                .spacing(spacing::XS),
                 roles,
             ),
         ],

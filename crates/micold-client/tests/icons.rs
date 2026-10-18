@@ -76,6 +76,8 @@ fn expected(icon: Icon) -> char {
         Icon::Open => '\u{ea77}',
         Icon::ChevronLeft => '\u{e5cb}',
         Icon::ChevronRight => '\u{e5cc}',
+        Icon::FullScreen => '\u{e5d0}',
+        Icon::FullScreenExit => '\u{e5d1}',
     }
 }
 
@@ -117,8 +119,9 @@ fn all_covers_every_variant_without_duplicates() {
     // card states (`priority_high`, `visibility`, `check_circle`) and location types (`lightbulb`,
     // `bug_report`, `build`, `folder`, `link`, `folder_off`), +1 for feature 972's card menu *Open*
     // entry (`login`), +2 for feature 1003's pull request header's previous/next (`chevron_left`,
-    // `chevron_right`).
-    assert_eq!(Icon::ALL.len(), 68, "curated set size");
+    // `chevron_right`), +2 for feature 970's Overview full-screen toggle (`fullscreen`,
+    // `fullscreen_exit`).
+    assert_eq!(Icon::ALL.len(), 70, "curated set size");
 
     // No duplicate variants.
     for (i, &a) in Icon::ALL.iter().enumerate() {
@@ -211,6 +214,9 @@ fn the_overview_icons_are_pinned_and_distinct_from_every_other_icon() {
         (Icon::TypeOther, '\u{e2c7}'),
         (Icon::TypeIncluded, '\u{e157}'),
         (Icon::TypeOrphan, '\u{eb83}'),
+        // Feature 970 (FR-012): the header's full-screen toggle, one glyph per state.
+        (Icon::FullScreen, '\u{e5d0}'),
+        (Icon::FullScreenExit, '\u{e5d1}'),
     ];
     for (icon, glyph) in overview {
         assert!(Icon::ALL.contains(&icon), "{icon:?} must be in Icon::ALL");

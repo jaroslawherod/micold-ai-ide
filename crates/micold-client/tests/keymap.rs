@@ -311,6 +311,52 @@ fn overview_chord_label_names_the_platform_chord() {
     );
 }
 
+/// Feature 970 (FR-001, FR-014): the Overview's full-screen chord is F with the platform's primary
+/// modifier and Shift, and nothing else.
+#[test]
+fn is_overview_full_screen_chord_is_primary_shift_f_only() {
+    use micold_client::keymap::is_overview_full_screen_chord;
+    for c in ['f', 'F'] {
+        assert!(is_overview_full_screen_chord(&Key::Char(c), primary_shift()));
+    }
+    let shift_only = Mods {
+        shift: true,
+        ..Mods::NONE
+    };
+    let primary_only = Mods {
+        shift: false,
+        ..primary_shift()
+    };
+    let with_alt = Mods {
+        alt: true,
+        ..primary_shift()
+    };
+    for mods in [Mods::NONE, shift_only, primary_only, with_alt] {
+        assert!(
+            !is_overview_full_screen_chord(&Key::Char('f'), mods),
+            "{mods:?}"
+        );
+    }
+    assert!(!is_overview_full_screen_chord(
+        &Key::Char('g'),
+        primary_shift()
+    ));
+}
+
+#[test]
+fn overview_full_screen_chord_label_names_the_platform_chord() {
+    #[cfg(target_os = "macos")]
+    assert_eq!(
+        micold_client::keymap::overview_full_screen_chord_label(),
+        "Cmd+Shift+F"
+    );
+    #[cfg(not(target_os = "macos"))]
+    assert_eq!(
+        micold_client::keymap::overview_full_screen_chord_label(),
+        "Ctrl+Shift+F"
+    );
+}
+
 // ---- Copy / paste chords ----
 
 #[test]

@@ -406,6 +406,22 @@ pub fn overview_chord_label() -> &'static str {
     }
 }
 
+/// Whether the press is the Overview's full-screen chord (feature 970, FR-001, research R7; macOS
+/// `Cmd+Shift+F`, else `Ctrl+Shift+F`). Not in the terminal's reserved tier: the app hears it only
+/// while the terminal is unfocused, which the open Overview always is.
+pub fn is_overview_full_screen_chord(key: &Key, mods: Mods) -> bool {
+    is_primary_shift_chord(key, mods, 'f')
+}
+
+/// The full-screen chord as the platform writes it, for the header's tooltip and docs.
+pub fn overview_full_screen_chord_label() -> &'static str {
+    if cfg!(target_os = "macos") {
+        "Cmd+Shift+F"
+    } else {
+        "Ctrl+Shift+F"
+    }
+}
+
 /// Pane chords (macOS `Cmd+Shift+D/H/W/Arrow`, else `Ctrl+Shift+D/H/W/Arrow`), built like
 /// [`is_release_chord`] (contracts/keybindings.md).
 fn pane_action(key: &Key, mods: Mods) -> Option<PaneAction> {

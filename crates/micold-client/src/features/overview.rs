@@ -66,9 +66,19 @@ pub struct State {
     /// if it goes (a delete that finishes after its dialog closed) the keyboard moves to the
     /// first card instead of being lost. Cleared by any other focus move (feature 972, FR-011).
     pub focus_landed: Option<SessionLocation>,
+    /// Full-screen mode (feature 970, plan D1): the sidebar retracts and the Overview takes the
+    /// window's width. Read only through [`State::full_screen`], which gates it on `open`, so every
+    /// way out of the Overview leaves the mode with no code of its own. Not persisted (FR-001).
+    pub full_screen: bool,
 }
 
 impl State {
+    /// Whether full-screen mode is on: the Overview is open and the mode was entered since it
+    /// opened. The only reader of the field (data-model).
+    pub fn full_screen(&self) -> bool {
+        self.open && self.full_screen
+    }
+
     /// A card was activated: accept it when the Overview is open and no activation is pending.
     /// Returns whether it was accepted, i.e. whether the caller must start the delay timer.
     pub fn request(&mut self, activation: Activation) -> bool {
@@ -134,6 +144,13 @@ pub enum Msg {
     /// The shortcut or the top-bar button. Does nothing while Settings is open, which cannot yield
     /// to another view without losing or saving its draft (research R2).
     Toggled {
+        /// Whether Settings is open.
+        settings_open: bool,
+    },
+    /// The Overview header's *Full screen* button or its chord: enter or leave full-screen mode
+    /// (feature 970, FR-001). Ignored while the Overview is closed, while Settings is open and while
+    /// an activation is pending.
+    FullScreenToggled {
         /// Whether Settings is open.
         settings_open: bool,
     },
@@ -235,6 +252,7 @@ pub fn update(state: &mut State, msg: Msg) -> Vec<crate::features::Outcome> {
         match msg {
             Msg::Closed
             | Msg::Toggled { .. }
+            | Msg::FullScreenToggled { .. }
             | Msg::ActivationRequested(_)
             | Msg::CardMenuOpened { .. } => return Vec::new(),
             _ => {}
@@ -302,12 +320,23 @@ pub fn update(state: &mut State, msg: Msg) -> Vec<crate::features::Outcome> {
                 });
             }
         }
+        Msg::FullScreenToggled { settings_open } => {
+            if state.open && !settings_open {
+                state.full_screen = !state.full_screen;
+            }
+        }
         Msg::Toggled {
             settings_open: true,
         } => {}
         Msg::Toggled {
             settings_open: false,
-        } => state.open = !state.open,
+        } => {
+            state.open = !state.open;
+            // The Overview always opens in the normal layout (FR-001).
+            if state.open {
+                state.full_screen = false;
+            }
+        }
         Msg::Closed | Msg::CardActivated(_) => state.open = false,
     }
     Vec::new()
