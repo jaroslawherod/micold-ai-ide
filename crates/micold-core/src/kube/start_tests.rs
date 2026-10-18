@@ -978,7 +978,6 @@ async fn the_pod_a_start_creates_runs_non_root_on_a_read_only_root() {
     assert_eq!(c["allowPrivilegeEscalation"], false);
 }
 
-
 // --- Copy, Install and Connect (T134) ---
 
 mod connect {
@@ -1163,7 +1162,10 @@ mod connect {
             KubeFailure::Provision { reason } => reason,
             other => panic!("{other:?}"),
         };
-        assert!(reason.starts_with("starting the daemon failed: "), "{reason}");
+        assert!(
+            reason.starts_with("starting the daemon failed: "),
+            "{reason}"
+        );
         assert_eq!(phases, [StartPhase::Copy, StartPhase::Connect]);
         assert_rolled_back(&fake).await;
     }
@@ -1186,7 +1188,10 @@ mod connect {
         let _ = connect(&host).await;
         let commands = host.commands.lock().unwrap().clone();
         let bridge = commands.last().unwrap().last().unwrap();
-        assert!(bridge.starts_with("env MICOLD_IDLE_STOP='off' "), "{bridge}");
+        assert!(
+            bridge.starts_with("env MICOLD_IDLE_STOP='off' "),
+            "{bridge}"
+        );
         assert_eq!(commands.len(), 4, "reach, probe, last, bridge: no copy");
     }
 }

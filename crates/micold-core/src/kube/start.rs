@@ -9,14 +9,6 @@ use std::time::Duration;
 use tokio::io::AsyncReadExt;
 
 use crate::connect::Connected;
-use crate::provision::{
-    AiCliTable, CancelToken, Egress, EventSink, FailureCause, ProvisionEvent, ProvisionTarget,
-    Provisioned, Step, StepBounds,
-};
-use crate::ssh::argv::{PinnedReach, Reach};
-use crate::ssh::provision::{ProvisionOptions, SshHost};
-use crate::ssh::{ReasonContext, SshFailure};
-use crate::sandbox::AiCliSelection;
 use crate::kube::access::{AccessSecret, KeyGen};
 use crate::kube::classify::{CallTarget, KubeFailure};
 use crate::kube::credentials::{self, ReadFile};
@@ -24,6 +16,14 @@ use crate::kube::manifest::{self, PodStamp, SSH_PORT};
 use crate::kube::names::{is_ours, ResourceNames};
 use crate::kube::settings::KubeSettings;
 use crate::kube::{Cluster, Created, ObjectKind, ObjectView};
+use crate::provision::{
+    AiCliTable, CancelToken, Egress, EventSink, FailureCause, ProvisionEvent, ProvisionTarget,
+    Provisioned, Step, StepBounds,
+};
+use crate::sandbox::AiCliSelection;
+use crate::ssh::argv::{PinnedReach, Reach};
+use crate::ssh::provision::{ProvisionOptions, SshHost};
+use crate::ssh::{ReasonContext, SshFailure};
 
 /// What an SSH server's identification line starts with (RFC 4253 §4.2).
 const SSH_IDENT: &str = "SSH-2.0-";
