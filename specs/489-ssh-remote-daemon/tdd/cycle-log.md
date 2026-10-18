@@ -127,3 +127,13 @@ tests in `ssh/status.rs` and `ssh_replace_offer.rs` but not mutation-proven.
 
 Limit: `status.json` is refreshed every 200 ms, so a session started in that window before a stop
 could be missed (reviewer MINOR, accepted and documented in the user guide).
+
+## M9 (T085-T088)
+
+Deviation (admitted): test and implementation landed together, no red run in history. Red pass after
+the fact: removing `note_lost_sessions` from `on_connected`'s path (test calls it directly) makes
+`a_session_the_restarted_daemon_lacks_shows_lost_to_daemon_on_its_row` fail on `lost to daemon Box`
+(the session is dropped); removing `self.epoch += 1` at the `(_, Reconnect)` arm of `daemons.rs`
+now fails `an_explicit_reconnect_after_giving_up_starts_again` (the mutant of verification.md
+finding 2 is killed). Known limit: a lost session keeps its last lifecycle in other views; only the
+worktree row says `lost to daemon`.

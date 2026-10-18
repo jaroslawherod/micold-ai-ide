@@ -93,8 +93,14 @@ fn giving_up_applies_only_while_reconnecting() {
 fn an_explicit_reconnect_after_giving_up_starts_again() {
     let mut states = dropped();
     states.apply(id(1), DaemonEvent::GiveUp);
+    let before = states.epoch(id(1));
     let change = states.apply(id(1), DaemonEvent::Reconnect).unwrap();
     assert_eq!(change.to, DaemonState::Starting);
+    assert_ne!(
+        states.epoch(id(1)),
+        before,
+        "a new epoch restarts the actor (T087)"
+    );
     assert!(states.should_dial(id(1)));
 }
 

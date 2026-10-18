@@ -2077,6 +2077,7 @@ pub fn on_connected(
         // Another window may have saved while this one was disconnected (BUG-475, FR-026b).
         refresh_open_settings(app);
     }
+    micold_client::catalog_sync::note_lost_sessions(&mut app.core, daemon, &catalog);
     reconcile_catalog(&mut app.core, daemon, &catalog, false);
     // The boot-time foreground resolve ran before this catalog existed, so for a client that has
     // just started it answered `NoSessionsForKey` against a project whose sessions were still on

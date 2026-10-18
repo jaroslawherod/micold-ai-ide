@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #489
 - **Worktree branch**: feat/489_run-the-session-daemon-on-a-remote-host-over-ssh
 - **Started**: 2026-10-12
-- **Phase**: close found unbuilt behaviour; M9 pending
-- **Next step**: run M9, then a new close unit
+- **Phase**: M9 done, PR open; new close unit next
+- **Next step**: new close unit after M9 merges
 
 ## Pull requests
 
@@ -38,7 +38,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M6 | T066–T072 | full | Version mismatch explained | #1020 | done |
 | M7 | T073–T081 | full | Replace a mismatched daemon with no sessions | #1026 | done |
 | M8 | T082–T084 | full | Remote daemon artefact for macOS and Windows | #1029 | done |
-| M9 | T085–T088 | full | Session lost across a daemon restart shows `lost to daemon`; Reconnect epoch pinned | — | pending |
+| M9 | T085–T088 | full | Session lost across a daemon restart shows `lost to daemon`; Reconnect epoch pinned | PR pending | done |
 
 ## Decisions
 
@@ -91,7 +91,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-Close unit: branch reset to origin/main (27 behind). The uncommitted reconnect.rs edit was a leftover hand mutant (MAX_DELAY cap removed) of a mutation script still running in this worktree; killed, restored, not a finding. speckit-converge found FR-019 second sentence unbuilt (`session_lost_label` absent_from_catalog has no production caller); tdd-verify (tdd/verification.md, FAIL) found a surviving mutant (`daemons.rs` Reconnect arm epoch) and process gaps (no red runs, test list covers M1/M5 only; accepted, cannot be redone). Both cut into M9 (T085-T088). Not pushed. Next: M9 unit, then a new close unit; at the final PR also close issue #687, and note flaky test issue #973.
+None. M9 implemented: `note_lost_sessions` (catalog_sync.rs) feeds `settings.lost_sessions`; the row label path calls `session_lost_label`. Review A (high): fixed unbound/Default location, closed-session pruning, partial welcome; lifecycle staying Running in other views accepted as known limit (cycle-log). Review B: cycle-log entry added. Task list Phase 10 (T089-T095, TDD remediation) was an uncommitted leftover in the worktree, saved out of this PR; the close unit should re-add it from tdd/verification.md.
 
 ## Open escalation
 

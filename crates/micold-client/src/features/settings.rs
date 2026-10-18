@@ -82,6 +82,9 @@ pub struct State {
     /// routed by binding and nothing falls back to another daemon. Rows read their daemon status
     /// from here, so a state change reaches them in the reducer step that applied it (SC-002).
     pub links: crate::links::DaemonLinks,
+    /// Live sessions their daemon did not list when the client reconnected (feature 489, FR-019):
+    /// kept, and shown as `lost to daemon <name>`. Filled by `catalog_sync::note_lost_sessions`.
+    pub lost_sessions: std::collections::BTreeSet<micold_core::session::SessionId>,
     /// The container runtime is not installed on this machine (set by the sandbox probe).
     pub runtime_missing: bool,
     /// The container daemon that runs the released image as the sandbox adopted it (FR-017); set by

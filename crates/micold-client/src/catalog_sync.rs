@@ -81,6 +81,38 @@ pub fn wire_to_lifecycle(w: &WireLifecycle) -> SessionLifecycle {
     }
 }
 
+/// Record the live sessions this window holds for `daemon` that its fresh catalog does not list: the
+/// daemon restarted, or no longer has them (feature 489, FR-019, second sentence). They are kept by
+/// [`reconcile_catalog`] and shown as `lost to daemon <name>` rather than dropped without a word.
+/// Call it on a (re)connect, before the fold; a later push that omits a session is the daemon
+/// archiving it, which is not this.
+pub fn note_lost_sessions(core: &mut State, daemon: DaemonId, snapshot: &CatalogSnapshot) {
+    let listed: HashSet<SessionId> = snapshot
+        .projects
+        .iter()
+        .flat_map(|p| p.sessions.iter().map(|s| s.id))
+        .collect();
+    let legacy = core.settings.legacy_daemon();
+    let mut lost = Vec::new();
+    // Only projects the catalog holds: one it omits is not yet loaded, not a restart.
+    for project in snapshot.projects.iter().map(|p| &p.path) {
+        for s in core.workspace.sessions.get(project).into_iter().flatten() {
+            let live = matches!(
+                s.lifecycle,
+                SessionLifecycle::Running
+                    | SessionLifecycle::Starting
+                    | SessionLifecycle::Restarting { .. }
+            );
+            // An unbound location is the legacy default's.
+            let on_daemon = session_daemon(core, project, s).unwrap_or(legacy) == daemon;
+            if live && !s.archived && on_daemon && !listed.contains(&s.id) {
+                lost.push(s.id);
+            }
+        }
+    }
+    core.settings.lost_sessions.extend(lost);
+}
+
 /// Reconcile the client's core session state from the daemon's authoritative catalog snapshot
 /// (FR-011). The daemon owns sessions now, so each project's session list is made to mirror the
 /// snapshot: existing sessions have their lifecycle + label updated; sessions the daemon reports
@@ -135,6 +167,13 @@ pub fn reconcile_catalog(
     // borrowed. `note_background_restart` itself no-ops for the active project's session, so
     // background-ness isn't checked here.
     let mut newly_restarting: Vec<SessionId> = Vec::new();
+    // A session the daemon lists again is no longer lost to it.
+    for project in &snapshot.projects {
+        for summary in &project.sessions {
+            core.settings.lost_sessions.remove(&summary.id);
+        }
+    }
+    let lost = core.settings.lost_sessions.clone();
     for project in &snapshot.projects {
         let list = core
             .workspace
@@ -224,11 +263,22 @@ pub fn reconcile_catalog(
                 SessionLocation::Default => "",
             };
             snap_ids.contains(&s.id)
+                || (lost.contains(&s.id) && !s.archived)
                 || bindings
                     .and_then(|b| b.get(key))
                     .is_some_and(|d| *d != daemon)
         });
     }
+    // An id no session carries any more (removed or closed) is not lost to anything.
+    let held: HashSet<SessionId> = core
+        .workspace
+        .sessions
+        .values()
+        .flatten()
+        .filter(|s| !s.archived)
+        .map(|s| s.id)
+        .collect();
+    core.settings.lost_sessions.retain(|id| held.contains(id));
     for id in newly_restarting {
         core.note_background_restart(id);
     }

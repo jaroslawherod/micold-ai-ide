@@ -294,3 +294,50 @@ fn a_missing_runtime_shows_on_a_container_row_only() {
     );
     assert_eq!(state.daemon_row_label("feat-b"), "Host");
 }
+
+/// T085, FR-019 (second sentence): the client reconnects and the daemon, restarted, lists no such
+/// session. Its row says `lost to daemon Box`, never `disconnected`, and the session is kept, not
+/// dropped and not finished. Closing it drops it on the next push.
+#[test]
+fn a_session_the_restarted_daemon_lacks_shows_lost_to_daemon_on_its_row() {
+    use micold_client::catalog_sync::{note_lost_sessions, reconcile_catalog};
+    use micold_core::protocol::messages::{CatalogSnapshot, ProjectSnapshot};
+    let (mut state, _, boxed) = window(&[SessionLifecycle::Running]);
+    let project = std::path::PathBuf::from("/repo");
+    state.settings.links.lost(boxed, "gone");
+    assert_eq!(state.daemon_row_label("feat-a"), "disconnected");
+    state
+        .settings
+        .links
+        .connected(boxed, Outbox::new(mpsc::unbounded().0));
+    let catalog = CatalogSnapshot {
+        schema_version: 1,
+        last_active: Some(project.clone()),
+        projects: vec![ProjectSnapshot {
+            pane_layout: None,
+            path: project.clone(),
+            display_name: "demo".into(),
+            is_git_repo: true,
+            available: true,
+            worktrees: Vec::new(),
+            sessions: Vec::new(),
+        }],
+        env_include_failures: Vec::new(),
+    };
+    note_lost_sessions(&mut state, boxed, &catalog);
+    reconcile_catalog(&mut state, boxed, &catalog, false);
+    assert_eq!(state.daemon_row_label("feat-a"), "lost to daemon Box");
+    assert_eq!(state.workspace.sessions[&project].len(), 1, "kept");
+    assert_eq!(
+        state.daemon_row_label("feat-b"),
+        "Host",
+        "other rows unchanged"
+    );
+    let id = state.workspace.sessions[&project][0].id;
+    assert!(state.settings.lost_sessions.contains(&id));
+    // Closing it lets the next push drop it, and the flag goes with it.
+    state.workspace.sessions.get_mut(&project).unwrap()[0].archived = true;
+    reconcile_catalog(&mut state, boxed, &catalog, false);
+    assert!(state.workspace.sessions[&project].is_empty());
+    assert!(state.settings.lost_sessions.is_empty());
+}

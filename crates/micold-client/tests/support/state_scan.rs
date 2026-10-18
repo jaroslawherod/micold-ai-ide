@@ -78,6 +78,8 @@ pub const MUTATORS: &[&str] = &[
 
 /// Methods that only read the receiver.
 pub const READERS: &[&str] = &[
+    // `settings.legacy_daemon` names the daemon an unbound location runs on (feature 489, M9).
+    "legacy_daemon",
     // `attach.offer.targets` derives the banner's apply targets from the report; it writes nothing
     // (feature 582).
     "targets",

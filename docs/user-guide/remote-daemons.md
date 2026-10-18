@@ -130,7 +130,9 @@ output is complete.
 
 Choose **Stop trying** to end the attempts: the row then shows `not connected to dev@host:
 attempts stopped` and nothing is dialled. **Reconnect** dials again at once and starts the delays
-over. A session whose daemon was stopped, or restarted without it, shows `lost to daemon <name>`.
+over. A session whose daemon was stopped, or restarted without it, shows `lost to daemon <name>`:
+when the connection returns and the host's daemon no longer has the session, its worktree says so
+instead of `disconnected`, and the session stays listed until you remove it.
 
 ## Your local work is not affected
 
