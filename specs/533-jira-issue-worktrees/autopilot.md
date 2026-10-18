@@ -11,6 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Started**: 2026-10-12
 - **Phase**: milestone M6 (implemented, in review)
 - **Next step**: finish M6 gate, Review B, PR; then a new close unit (T066, T067, T079 tick, Status Closed)
+- **CI**: #1007 docs check red (user guide); fixed in settings.md, attempt 1
 
 ## Pull requests
 
