@@ -304,6 +304,30 @@ mod tests {
         assert_eq!(check(&child, 100, &known, false), Ok(()));
     }
 
+    /// A candidate (id 100) followed by a chain of `nodes` sessions in total, the last without an origin.
+    fn chain_of(nodes: usize) -> Vec<OriginNode> {
+        (0..nodes as u128)
+            .map(|n| node(100 + n, wt("a"), (n + 1 < nodes as u128).then_some(101 + n)))
+            .collect()
+    }
+
+    #[test]
+    fn a_chain_of_exactly_the_maximum_depth_is_accepted() {
+        let child = node(1, wt("a"), None);
+        let known = chain_of(MAX_ORIGIN_DEPTH);
+        assert_eq!(check(&child, 100, &known, false), Ok(()));
+    }
+
+    #[test]
+    fn a_chain_one_longer_than_the_maximum_depth_is_rejected_as_a_cycle() {
+        let child = node(1, wt("a"), None);
+        let known = chain_of(MAX_ORIGIN_DEPTH + 1);
+        assert_eq!(
+            check(&child, 100, &known, false),
+            Err(OriginRejected::Cycle)
+        );
+    }
+
     #[test]
     fn a_loop_that_never_reaches_the_child_terminates_as_a_cycle() {
         let child = node(1, wt("a"), None);

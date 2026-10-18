@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #551
 - **Worktree branch**: feat/551_show-sessions-spawned-by-an-agent-as-a-tree-under
 - **Started**: 2026-10-12
-- **Phase**: milestone-M4
-- **Next step**: M4 implemented; scoped gate, reviews A and B, full gate, PR
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -20,6 +20,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #824 | M1 | merged | 6f578693808230b11552a7a47db3bc7214a40e84 |
 | #916 | M2 | merged | 6898a677ce98be25a1fca4a55af813ad36955170 |
 | #962 | M3 | merged | 89a39f17f7c4422dbc57c06fe8c32b4fc830bd25 |
+| #1030 | M4 | merged | 8ee4531564743d6032729cd056a73f655abfb1a0 |
+| close | Close PR | open | |
 
 ## Milestones
 
@@ -28,7 +30,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T016, T025, T038 | full | Origin recorded by the daemon's `record_origin` (nothing sets it until M3), persisted, exposed on wire and MCP; spike T025 outcome recorded | #824 | merged |
 | M2 | T017–T024, T039 | full | Sidebar nests children with child/pending/removed markers | #916 | merged |
 | M3 | T026–T031, T040 | full | Provider readers for spike-confirmed providers, discovery, provider table | #962 | merged |
-| M4 | T032–T037, T041 | full | Fold, count, attention rollup, persisted fold | #1030 | open |
+| M4 | T032–T037, T041 | full | Fold, count, attention rollup, persisted fold | #1030 | merged |
 
 ## Decisions
 
@@ -69,8 +71,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Code A M3 551 | 1 | c5b0216fe24c6f3862fbbf81960a018a707a9366:6898a677ce98be25a1fca4a55af813ad36955170 (pre-edit tree) | 10 findings: fixed #4 (provider-reported failing origin now sets origin_rejected in record_origin), #7 (shared `bindings` iterator in provider.rs), #10 (guide says readers not yet checked against a recording); rest declined, see Declined; fixes since need a scoped round-2 only if the scoped gate shows code changes beyond these |
 | Code A M4 551 | 1 | 4cf6cf705893ed835a746e0463b5f3229d716d3f:89a39f17f7c4422dbc57c06fe8c32b4fc830bd25 (pre-commit tree) | 8 findings: fixed #1 (persist only the toggled id), #2 (chord order ignores folds), #4 (HashMap lookup); declined #3, #5, #6, #7, #8 (see Declined) |
 | Code B M4 551 | 1 (sonnet) | 67ff9d0133d23f9f227d350e378ba49593e4fe3b:65bab60fa4b4800708cfafe1ae6d7aa468f2dff1 | CLEAN (3 MINOR: Part B result recorded here; boot-restore test and Arc sharing not changed). Verify: sidebar_spawn_tree 10 passed, settings_roundtrip 36 passed. Visual pass: Part B steps 3, 4 PASS (c-fold.png, c-fold-restart.png: A reads "claude, 2 agents", children hidden, fold survives restart); cosmetic note: a folded row shows a folder icon where the twisty was |
+| Close diff 551 | 1 (sonnet) | 64d168e9276515a177468fee6751e8983cc5301e:1fae1becb8fa64097695f169ad7243ec5d1f1dae | CHANGES: 1 MAJOR (quickstart step 5 claimed removed marker, screenshot shows pending; fixed, prose only), 2 MINOR (wording softened; phase stays done by the close rule) |
 
 ## Declined review findings
+
+- Close, tdd-verify finding 3 (FR-007 action test missing): declined, `a_child_row_acts_like_a_top_level_row` in `crates/micold-client/src/ui/sidebar.rs` exists (M2). Finding 1 (no recorded red): waiver in `tdd/cycle-log.md`. Findings 6-10 (MED/LOW): not changed. Findings 2 and 5 fixed with new tests that fail under their mutants; finding 4 fixed (test-list states).
 
 - B M2 round 2 F1 (no red phase in cycle-log): same as M1's declined-by-record finding; the log states honestly the tests came with the code and fabricating red output would be false; the tests do assert the behaviour (a reverted catalog_sync copy fails the origin test).
 - A M2 (1 high): archived origin shown as pending - M1's daemon overlay marks an archived origin `removed` (session_origin_removal), so the client never sees `known` for one; cycle-cut member without marker - it is a root by spec, only corrupt data reaches it; main session with an origin - one user session per worktree, the main has none; `agent, ` prefix split between files, 7-argument item, duplicated wrappers, O(n^2) lookups - MINOR taste, not changed. Fixed: indent clamped at 4 levels (MAX_NESTING).

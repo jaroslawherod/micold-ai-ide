@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-12
 
-**Status**: Draft
+**Status**: Closed 2026-10-18 — shipped in PRs #787, #824, #916, #962, #1030
 
 **Input**: User description: "Implement GitHub issue #551: Show sessions spawned by an agent as a tree under their origin session. When an AI CLI session (Claude, and the other providers) spawns a background agent or sub-agent to perform a task, that agent later shows up in the sidebar as a separate session started by the user under the same worktree. The user did not start it, and nothing shows which session it came from. Record the parent/child relationship when a CLI starts a session on behalf of another one; show child sessions nested under their origin session in the sidebar, as a tree, instead of as siblings; do this for every provider that can spawn background agents, each reporting the relationship through whatever mechanism it offers natively. Acceptance: a session spawned by another session appears as a child in the sidebar; a child is never shown as a top-level session started by the user; the relationship survives a daemon restart; a provider with no way to report the relationship keeps today's behaviour, and the gap is documented."
 

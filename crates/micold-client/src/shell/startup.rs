@@ -189,6 +189,11 @@ fn restore_from_disk(
     LoadedFromDisk { settings: loaded }
 }
 
+/// Feature 551, FR-017: the sidebar starts with the folds the settings recorded.
+fn restore_folds(core: &mut State, settings: &Settings) {
+    core.sidebar.folded = settings.folded_origins.clone();
+}
+
 fn boot() -> (App, Task<Message>) {
     // The single assembly point (FR-018). Everything below takes what it needs from `caps`.
     //
@@ -230,7 +235,7 @@ fn boot() -> (App, Task<Message>) {
     let placement = loaded.settings.daemon.placement;
     core.settings.theme_pref = loaded.settings.theme;
     // Feature 551, FR-017: the folds the user left; an origin never folded is expanded.
-    core.sidebar.folded = loaded.settings.folded_origins.clone();
+    restore_folds(&mut core, &loaded.settings);
     let scrollback_lines = loaded.settings.scrollback_lines;
     let env_include_enabled = loaded.settings.env_include_enabled;
     let env_include_script_path = loaded.settings.env_include_script_path.clone();
@@ -464,7 +469,8 @@ fn host_names_at_boot() -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        host_names_at_boot, restore_catalog, restore_from_disk, window_settings, MIN_WINDOW_SIZE,
+        host_names_at_boot, restore_catalog, restore_folds, restore_from_disk, window_settings,
+        MIN_WINDOW_SIZE,
     };
     use micold_client::app::State;
     use micold_core::fs_scan::FakeFolderScanner;
@@ -722,6 +728,19 @@ mod tests {
             vec![session.id],
             "the catalogue was restored under a placement the recovering read did not give it"
         );
+    }
+
+    /// Feature 551, FR-017: an origin folded when the app last ran is still folded at launch.
+    #[test]
+    fn a_folded_origin_stays_folded_at_launch() {
+        let folded = micold_core::session::SessionId::new();
+        let mut settings = Settings::default();
+        settings.folded_origins.insert(folded);
+        let mut core = State::default();
+
+        restore_folds(&mut core, &settings);
+
+        assert_eq!(core.sidebar.folded, [folded].into());
     }
 
     /// The window has a narrowest supported size, and it is the one the documentation names.

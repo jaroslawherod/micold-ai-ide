@@ -17,18 +17,18 @@ and layout gates (`crates/micold-client/tests/`). The rendered pass is quickstar
 
 | id | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| A1 | A session whose provider-reported origin is the worktree's user session is nested under it and is not a top-level sidebar session | US1-1, FR-003, FR-004 | example | PENDING | |
-| A2 | A child of a child nests at depth 3 while the first child stays under the origin | US1-2, FR-003 | example | PENDING | |
-| A3 | A session the user started has no origin and renders top-level as before | US1-3, FR-005 | example | PENDING | |
-| A4 | A child opens and takes actions like any session and its row carries the child marker | US1-4, FR-007, SC-004 | example | PENDING | |
+| A1 | A session whose provider-reported origin is the worktree's user session is nested under it and is not a top-level sidebar session | US1-1, FR-003, FR-004 | example | DONE | |
+| A2 | A child of a child nests at depth 3 while the first child stays under the origin | US1-2, FR-003 | example | DONE | |
+| A3 | A session the user started has no origin and renders top-level as before | US1-3, FR-005 | example | DONE | |
+| A4 | A child opens and takes actions like any session and its row carries the child marker | US1-4, FR-007, SC-004 | example | DONE | |
 | A5 | After a daemon restart the origin, its two children and their nesting are unchanged | US2-1, FR-006, SC-002 | example | DONE | M1 |
 | A6 | A child running at daemon stop is resumable after restart and still nested | US2-2, FR-006 | example | DONE | M1 |
 | A7 | A child whose origin was deleted stays visible top-level marked "origin removed", once | US2-3, FR-008, FR-018 | example | DONE | M1 |
-| A8 | A session from a provider with no signal is top-level and nothing is nested by guesswork | US3-1, FR-002, SC-003 | example | GREEN | M3 |
-| A9 | The user guide lists every provider with its reporting status | US3-2, FR-014, SC-005 | example | GREEN | M3 |
-| A10 | Collapsing an origin hides its children and shows their count | US4-1, FR-011 | example | GREEN | M4 |
-| A11 | A collapsed origin shows that a hidden child needs attention | US4-2, FR-011 | example | GREEN | M4 |
-| A12 | A fold persists across restart and a never-folded origin is expanded | US4-3, FR-017 | example | GREEN | M4 |
+| A8 | A session from a provider with no signal is top-level and nothing is nested by guesswork | US3-1, FR-002, SC-003 | example | DONE | M3 |
+| A9 | The user guide lists every provider with its reporting status | US3-2, FR-014, SC-005 | example | DONE | M3 |
+| A10 | Collapsing an origin hides its children and shows their count | US4-1, FR-011 | example | DONE | M4 |
+| A11 | A collapsed origin shows that a hidden child needs attention | US4-2, FR-011 | example | DONE | M4 |
+| A12 | A fold persists across restart and a never-folded origin is expanded | US4-3, FR-017 | example | DONE | M4 |
 
 ## Inner loop: unit behaviors
 
@@ -39,7 +39,7 @@ and layout gates (`crates/micold-client/tests/`). The rendered pass is quickstar
 | U1 | A self-referencing origin is rejected; an unknown candidate is accepted only when provider-reported | FR-009, R4 | example | DONE | M1 |
 | U2 | An origin in another project or worktree is rejected; same location accepted | FR-009 | example | DONE | M1 |
 | U3 | An origin whose chain reaches the child is rejected; a chain of the bounded length that does not is accepted | FR-009 | example | DONE | M1 |
-| U12 | `SessionTree` shows each session once, nests to any depth, breaks a cycle at the first repeat, keeps catalog order, and classifies an absent origin Pending or Removed by status | FR-003, FR-008, FR-016, A2 | example | PENDING | |
+| U12 | `SessionTree` shows each session once, nests to any depth, breaks a cycle at the first repeat, keeps catalog order, and classifies an absent origin Pending or Removed by status | FR-003, FR-008, FR-016, A2 | example | DONE | |
 
 ### `crates/micold-core/src/store.rs`, `protocol`, `mcp/tools.rs`
 
@@ -63,18 +63,18 @@ and layout gates (`crates/micold-client/tests/`). The rendered pass is quickstar
 
 | id | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U13 | `worktree_tree` and the Default group nest from `SessionTree`; orphans are top-level with pending/removed annotation; a pending child nests when its origin appears | FR-003, FR-004, FR-005, FR-016 | example | PENDING | |
-| U14 | Child rows, orphans included, carry the child marker; user-started top-level rows do not | FR-007, SC-004 | approval | PENDING | |
-| U19 | `ToggleOrigin` folds and expands; folded origin shows count and descendant attention rollup; fold survives a snapshot after restart without pruning | FR-011, FR-017 | example | GREEN | M4 |
+| U13 | `worktree_tree` and the Default group nest from `SessionTree`; orphans are top-level with pending/removed annotation; a pending child nests when its origin appears | FR-003, FR-004, FR-005, FR-016 | example | DONE | |
+| U14 | Child rows, orphans included, carry the child marker; user-started top-level rows do not | FR-007, SC-004 | approval | DONE | |
+| U19 | `ToggleOrigin` folds and expands; folded origin shows count and descendant attention rollup; fold survives a snapshot after restart without pruning | FR-011, FR-017 | example | DONE | M4 |
 
 ### `crates/micold-core/src/provider.rs`, `settings.rs`
 
 | id | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U15 | Default `reported_origin` is `None`; each confirmed fixture yields its parent and the same fixture without the field yields `None`; name/path/time never yields one | FR-001, FR-002 | example | GREEN | M3 |
-| U16 | Discovery records a reported origin once, keeps an unknown one pending, clears a rejected one once and never re-records it | FR-001, FR-010, FR-016 | example | GREEN | M3 |
-| U17 | The provider table lists every `AiCli` variant | FR-014, SC-005 | example | GREEN | M3 |
-| U18 | `folded_origins` round-trips, absent loads empty, `settings_version` unchanged | FR-017 | example | GREEN | M4 |
+| U15 | Default `reported_origin` is `None`; each confirmed fixture yields its parent and the same fixture without the field yields `None`; name/path/time never yields one | FR-001, FR-002 | example | DONE | M3 |
+| U16 | Discovery records a reported origin once, keeps an unknown one pending, clears a rejected one once and never re-records it | FR-001, FR-010, FR-016 | example | DONE | M3 |
+| U17 | The provider table lists every `AiCli` variant | FR-014, SC-005 | example | DONE | M3 |
+| U18 | `folded_origins` round-trips, absent loads empty, `settings_version` unchanged | FR-017 | example | DONE | M4 |
 
 ## Invariants and edge cases still to place
 

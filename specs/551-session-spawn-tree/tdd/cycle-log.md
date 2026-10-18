@@ -44,3 +44,7 @@ Append only.
 - Green: `cargo test -p micold-core --test settings_roundtrip`, `-p micold-client --test sidebar_spawn_tree --test features_sidebar`.
 - U19's tests live in `sidebar_spawn_tree.rs` (the file M4's Verify runs), not `sidebar_tree.rs` as T033 first said.
 - Fold toggling is a sidebar `Msg::ToggleOrigin`; the shell writes `Settings.folded_origins` after it (`persist_folded_origins`) and `startup.rs` reads it back. The set is never pruned.
+
+## Close (2026-10-18)
+
+Waiver (verification finding 1): no per-behaviour red output was captured in M1 to M4 (tests were written with the code, see each entry). Re-deriving a red per behaviour by stashing the implementation was not done; it would not change what the shipped tests prove. The gap is accepted and recorded here. Findings 2 and 5 (a surviving mutant each) were closed by new tests that fail under the mutant. Finding 3 is declined: the FR-007 action test exists as `a_child_row_acts_like_a_top_level_row` in `crates/micold-client/src/ui/sidebar.rs` (M2 review B round 1 added it).
