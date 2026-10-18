@@ -230,19 +230,28 @@ pub fn accordion<'a>(showcase: &'a Showcase, roles: Roles, index: usize) -> Elem
     )
 }
 
-/// `AccordionSection` — a titled section, closed and open, and one that toggles live.
+/// `AccordionSection` — a titled section closed with its summary, open, closed with a required
+/// field still empty, and one that toggles live (feature 890, FR-015).
 pub fn accordion_section<'a>(
     showcase: &'a Showcase,
     roles: Roles,
     index: usize,
 ) -> Element<'a, Message> {
     let body = |roles: Roles| material::Text::new(samples::BODY, TypeRole::Body, roles);
-    let section =
-        |open: bool| material::AccordionSection::new("Network", body(roles), roles).open(open);
+    let section = |open: bool| {
+        material::AccordionSection::new("Network", body(roles), roles)
+            .open(open)
+            .summary("Docker · Basic image")
+    };
     arrange(
         vec![
-            posed("closed", section(false), roles),
+            posed("closed, with a summary", section(false), roles),
             posed("open", section(true), roles),
+            posed(
+                "closed, a required field empty",
+                section(false).required(true),
+                roles,
+            ),
             posed(
                 "press the header, or focus it and press Space or Enter",
                 section(showcase.shown(index)).on_toggle(Message::Reversed(index)),

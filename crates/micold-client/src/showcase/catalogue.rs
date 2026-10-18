@@ -680,7 +680,11 @@ pub const COMPONENTS: &[Entry] = &[
         component: "AccordionSection",
         variants: &[],
         density: &[],
-        posed: &["closed", "open"],
+        posed: &[
+            "closed, with a summary",
+            "open",
+            "closed, a required field empty",
+        ],
         live: &["press the header, or focus it and press Space or Enter"],
         interactive: true,
         section: Section::Components,

@@ -9,20 +9,20 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #890
 - **Worktree branch**: claude/project-thread-rwlog8
 - **Started**: 2026-10-18
-- **Phase**: design PR
-- **Next step**: orchestrator opens the design PR and merges it; then milestone M1 (T001–T005)
+- **Phase**: M1
+- **Next step**: implement M1 (T001–T005)
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| (pending) | Design: spec, plan, tasks | to open (orchestrator, via GitHub MCP) | — |
+| #1063 | Design: spec, plan, tasks | merged (rebase) | ad4d1946127e6dc0c06e4add04416f2fc962db00 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T005 | full | Showcase `AccordionSection` shows summary (closed), open, required marker | — | pending |
+| M1 | T001–T005 | full | Showcase `AccordionSection` shows summary (closed), open, required marker | — | in progress |
 | M2 | T006–T015 | full | Every daemon kind's form in FR-002 sections, Connection open, errors open their section; user guide | — | pending |
 | M3 | T016–T028 | full | One field/section gap, FieldGroup labels, context select, section summaries and markers; user guide | — | pending |
 

@@ -810,6 +810,34 @@ fn a_healthy_pair_produces_no_findings() {
     assert_eq!(all_rules(&lib, &cat), Vec::<String>::new());
 }
 
+/// Feature 890 (FR-015, contract §Shared component): the `AccordionSection` entry poses the
+/// section closed with a summary, open, closed with a required field empty, and the live toggle.
+#[test]
+fn the_accordion_section_poses_its_summary_and_marker() {
+    let entry = COMPONENTS
+        .iter()
+        .find(|e| e.module == "material/accordion_section.rs" && e.component == "AccordionSection")
+        .expect("the gallery has a `material/accordion_section.rs` / `AccordionSection` entry");
+    for pose in [
+        "closed, with a summary",
+        "open",
+        "closed, a required field empty",
+    ] {
+        assert!(
+            entry.posed.contains(&pose),
+            "the AccordionSection entry poses `{pose}`: {:?}",
+            entry.posed
+        );
+    }
+    assert!(
+        entry
+            .live
+            .contains(&"press the header, or focus it and press Space or Enter"),
+        "the AccordionSection entry keeps its live toggle: {:?}",
+        entry.live
+    );
+}
+
 /// The gallery poses a disabled `ToggleChip` (feature 034, T021 — U65): the GitHub issue chip is
 /// disabled whenever the repository has no GitHub remote, so the disabled treatment is a state
 /// users see and the gallery has to show it.
