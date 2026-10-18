@@ -199,6 +199,7 @@ fn a_daemon_added_after_the_upgrade_starts_at_defaults_not_a_copy() {
         links: &mut links,
         bindings: &mut bindings,
         legacy_default: None,
+        legacy_container: None,
         locations: &[],
         sessions: &sessions,
         taken_elsewhere: Vec::new(),

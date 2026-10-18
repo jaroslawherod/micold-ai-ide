@@ -84,6 +84,9 @@ pub struct State {
     pub links: crate::links::DaemonLinks,
     /// The container runtime is not installed on this machine (set by the sandbox probe).
     pub runtime_missing: bool,
+    /// The container daemon that runs the released image as the sandbox adopted it (FR-017); set by
+    /// the shell from the sandbox state.
+    pub legacy_container: Option<micold_core::daemons::DaemonId>,
     /// In-progress Settings edit, present only while the Settings view is shown (feature 006).
     pub settings_draft: Option<SettingsDraft>,
     /// Whether the Jira integration is on, as the service last reported it (feature 533, FR-022).

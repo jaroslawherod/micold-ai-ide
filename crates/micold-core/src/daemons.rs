@@ -252,6 +252,20 @@ impl DaemonRegistry {
         &self.entries
     }
 
+    /// Clear the migration notice of a container daemon that started on the basic image (FR-016).
+    /// Whether there was one to clear.
+    pub fn clear_migration(&mut self, id: DaemonId) -> bool {
+        let Some(DaemonRuntime::Container(c)) = self
+            .entries
+            .iter_mut()
+            .find(|e| e.id == id)
+            .map(|e| &mut e.runtime)
+        else {
+            return false;
+        };
+        c.migration.take().is_some()
+    }
+
     /// The id the next added daemon receives.
     pub fn next_id(&self) -> u32 {
         self.next_id
@@ -715,10 +729,19 @@ pub struct DaemonView {
     /// What is being done now, when it takes long enough to say (copying the build to an SSH
     /// host, feature 489).
     pub activity: Option<String>,
+    /// A sentence under the row about the image the daemon runs on (FR-016, FR-017): the stored
+    /// migration notice, or that a running container is still on the released image.
+    pub notice: Option<String>,
+    /// Stopping (and so restarting) it is not offered yet: a container still on the released image
+    /// is replaced only when no session is running in it (FR-017).
+    pub stop_blocked: bool,
     /// For a remote daemon in `VersionMismatch`: both versions, which side is older and the way out
     /// (feature 489, FR-011). `None` for every other row.
     pub explanation: Option<String>,
 }
+
+/// What a running released-image container's row says (FR-017).
+pub const LEGACY_NOTICE: &str = "Still running on the released daemon image; restart it with no sessions running to move it to the basic image.";
 
 /// Most recent connection errors kept per daemon.
 pub const MAX_CONNECTION_ERRORS: usize = 20;

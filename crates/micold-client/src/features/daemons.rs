@@ -51,6 +51,8 @@ pub struct Model<'a> {
     pub bindings: &'a mut BTreeMap<PathBuf, BTreeMap<String, DaemonId>>,
     /// The daemon an unbound location resolves to, written once by the migration.
     pub legacy_default: Option<DaemonId>,
+    /// The container daemon that is running the released image and was adopted as it is (FR-017).
+    pub legacy_container: Option<DaemonId>,
     /// Every location the window knows, bound explicitly or not.
     pub locations: &'a [WorktreeRef],
     /// The live sessions of each daemon.
@@ -534,6 +536,33 @@ fn resolve(model: &Model<'_>, loc: &WorktreeRef) -> Binding {
     )
 }
 
+/// A sandbox start succeeded for container daemon `id`: retire its migration notice when it came up
+/// on the basic image, but not when it adopted a running released-image container (FR-016, FR-017).
+/// Whether the registry changed and so must be saved.
+pub fn retire_migration(registry: &mut DaemonRegistry, id: DaemonId, adopted_legacy: bool) -> bool {
+    let on_basic = matches!(
+        registry.get(id).map(|e| &e.runtime),
+        Some(DaemonRuntime::Container(c)) if c.profile.image == micold_core::sandbox::image::ImageChoice::Basic
+    );
+    on_basic && !adopted_legacy && registry.clear_migration(id)
+}
+
+/// The container daemon the sandbox state and boot plan describe: the legacy default when it is a
+/// container, else the first container entry, else `None`.
+pub fn sandbox_daemon(
+    registry: &DaemonRegistry,
+    legacy_default: Option<DaemonId>,
+) -> Option<DaemonId> {
+    let is_container = |entry: &&micold_core::daemons::DaemonEntry| {
+        matches!(entry.runtime, DaemonRuntime::Container(_))
+    };
+    legacy_default
+        .and_then(|id| registry.get(id))
+        .filter(is_container)
+        .or_else(|| registry.entries().iter().find(is_container))
+        .map(|entry| entry.id)
+}
+
 /// The list, its empty state and the daemons a worktree can bind to.
 pub fn views(state: &State, model: &Model<'_>) -> ViewModel {
     let rows = model
@@ -559,6 +588,15 @@ pub fn views(state: &State, model: &Model<'_>) -> ViewModel {
                 .cloned()
                 .unwrap_or(DaemonState::Stopped),
             bound: bound_to(model, entry.id),
+            notice: match &entry.runtime {
+                DaemonRuntime::Container(_) if model.legacy_container == Some(entry.id) => {
+                    Some(micold_core::daemons::LEGACY_NOTICE.to_string())
+                }
+                DaemonRuntime::Container(c) => c.migration.map(|m| m.message().to_string()),
+                _ => None,
+            },
+            stop_blocked: model.legacy_container == Some(entry.id)
+                && model.sessions.get(&entry.id).is_some_and(|s| !s.is_empty()),
             explanation: crate::links::remote_mismatch_text(entry, model.links.state(entry.id)),
             activity: match (&entry.runtime, state.provisioning.get(&entry.id)) {
                 (DaemonRuntime::Ssh(_), Some(progress))

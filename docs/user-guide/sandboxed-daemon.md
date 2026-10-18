@@ -15,8 +15,28 @@ Settings → **Daemons** → add or edit a daemon and choose **Container** for w
 
 You need a container runtime installed — Docker or Podman; see **Container runtimes** below.
 
-The first start downloads the service's image, which can take a few minutes on a slow connection.
-After that it starts in seconds.
+The first start downloads the basic image, which can take a few minutes on a slow connection. After
+that it starts in seconds. See [Which image it runs on](#which-image-it-runs-on).
+
+## Which image it runs on
+
+A container daemon starts from the **basic image** (recommended): a small Linux image with an SSH
+server. The application connects to it with its own keys, copies its own service into it, so the
+daemon always has the version of the application you run, and installs the AI CLIs you offer.
+
+To use your own image, choose **My own image** and give a reference (or an image archive path). Your
+image must:
+
+- run an SSH server on port 2222 that accepts the keys in `/run/micold/ssh/authorized_keys` and
+  uses the host key `/run/micold/ssh/host_ed25519_key`;
+- provide `sh`, `uname`, `mkdir`, `cat`, `mv` and `chmod`, and `npm` and `flock` for the AI CLIs.
+
+The simplest way is to start from the basic image: `FROM ghcr.io/jaroslawherod/micold-basic:<tag>`.
+An image with no SSH server fails to start with a message saying so.
+
+A daemon that used to run the released daemon image moves to the basic image on its next start; its
+row says so until it has started. A container still running the released image keeps running, and
+its row says so too: restart it with no sessions running to move it to the basic image.
 
 ## Running a host daemon and container daemons together
 
@@ -53,7 +73,7 @@ taken when the daemon starts, the start fails naming the port; free it or choose
 **Container settings** sit in the same form, under the fields they apply to, for a container daemon:
 
 - **Container runtime**: Docker (default) or Podman.
-- **Image**: the image reference, or an image archive path to import.
+- **Image**: **Basic image (recommended)**, or **My own image** with a reference or an archive path.
 - **Shares, network and AI CLI sign-in**: what the container can see and reach, with the credential
   path it shares; see [What the container can see](#what-the-container-can-see).
 - **Limits**: CPU, memory, process count and writable storage. Leave a field empty for no limit;
@@ -330,14 +350,14 @@ The sandbox does not need a registry. If the machine cannot reach one, bring the
 
 ```sh
 # Somewhere with a connection
-docker pull ghcr.io/jaroslawherod/micold-daemon:<version>
-docker save ghcr.io/jaroslawherod/micold-daemon:<version> -o micold-daemon.tar
+docker pull ghcr.io/jaroslawherod/micold-basic:<tag>
+docker save ghcr.io/jaroslawherod/micold-basic:<tag> -o micold-basic.tar
 
 # On the machine without one
-docker load -i micold-daemon.tar
+docker load -i micold-basic.tar
 ```
 
-Then point the image setting at the reference you imported. Once the image is present, everything
+Then choose **My own image** and give the reference you imported. Once the image is present, everything
 works with the network off entirely.
 
 ## Sessions, restarts and reboots

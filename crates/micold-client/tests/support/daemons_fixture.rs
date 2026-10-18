@@ -105,6 +105,7 @@ impl World {
             links: &mut self.links,
             bindings: &mut self.bindings,
             legacy_default: None,
+            legacy_container: None,
             locations: &self.locations,
             sessions: &self.sessions,
             taken_elsewhere: Vec::new(),

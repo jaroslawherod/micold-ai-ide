@@ -1144,3 +1144,102 @@ fn recent_errors_of_an_ssh_daemon_are_listed_with_the_named_reason() {
         details.errors
     );
 }
+
+fn with_migration(w: &mut World) {
+    use micold_core::daemons::{DaemonRegistry, DaemonRuntime, MigrationNotice};
+    let mut entries = w.registry.entries().to_vec();
+    for entry in &mut entries {
+        if let DaemonRuntime::Container(c) = &mut entry.runtime {
+            c.migration = Some(MigrationNotice::MovedOffReleasedImage);
+        }
+    }
+    w.registry = DaemonRegistry::new(entries, w.registry.next_id());
+}
+
+/// T058 (FR-016): a stored migration shows its sentence; clearing it after a start on the basic
+/// image removes the sentence and reports there was one only once.
+#[test]
+fn a_stored_migration_shows_its_notice_until_it_is_cleared() {
+    let mut w = World::new();
+    with_migration(&mut w);
+    let boxed = w.boxed;
+    let state = State::default();
+    let row = |w: &mut World| {
+        daemons::views(&state, &w.model())
+            .rows
+            .into_iter()
+            .find(|r| r.id == boxed)
+            .unwrap()
+    };
+    assert_eq!(
+        row(&mut w).notice.as_deref(),
+        Some("Moved off the released daemon image; it moves to the basic image on its next start.")
+    );
+    assert!(w.registry.clear_migration(boxed));
+    assert!(!w.registry.clear_migration(boxed));
+    assert_eq!(row(&mut w).notice, None);
+}
+
+/// T058 (FR-017): a running released-image container says so, and its Stop is blocked while it
+/// has a session; the host daemon and a container that is not legacy are never blocked.
+#[test]
+fn a_legacy_container_says_so_and_stops_only_with_no_session_running() {
+    let mut w = World::new();
+    let (host, boxed) = (w.host, w.boxed);
+    let state = State::default();
+    let rows = |w: &mut World| {
+        let mut model = w.model();
+        model.legacy_container = Some(boxed);
+        daemons::views(&state, &model).rows
+    };
+    let by = |rows: &[micold_core::daemons::DaemonView], id| {
+        rows.iter().find(|r| r.id == id).unwrap().clone()
+    };
+    let busy = by(&rows(&mut w), boxed);
+    assert_eq!(
+        busy.notice.as_deref(),
+        Some(micold_core::daemons::LEGACY_NOTICE)
+    );
+    assert!(busy.stop_blocked, "two sessions are running in it");
+    assert!(!by(&rows(&mut w), host).stop_blocked);
+    w.sessions.insert(boxed, Vec::new());
+    assert!(
+        !by(&rows(&mut w), boxed).stop_blocked,
+        "no session: it may restart"
+    );
+}
+
+/// T062 (FR-016, FR-017): a start retires the notice only on the basic image and never for an
+/// adopted released-image container.
+#[test]
+fn a_start_retires_the_migration_notice_only_on_the_basic_image() {
+    use micold_core::daemons::{DaemonRegistry, DaemonRuntime};
+    use micold_core::sandbox::image::{ImageChoice, OwnImage};
+    let mut w = World::new();
+    with_migration(&mut w);
+    let boxed = w.boxed;
+    assert!(
+        !daemons::retire_migration(&mut w.registry, boxed, true),
+        "adopted legacy"
+    );
+    assert!(
+        !daemons::retire_migration(&mut w.registry, w.host, false),
+        "not a container"
+    );
+    let mut entries = w.registry.entries().to_vec();
+    for entry in &mut entries {
+        if let DaemonRuntime::Container(c) = &mut entry.runtime {
+            c.profile.image = ImageChoice::Own(OwnImage::Reference("box:1".into()));
+        }
+    }
+    let mut own = DaemonRegistry::new(entries, w.registry.next_id());
+    assert!(
+        !daemons::retire_migration(&mut own, boxed, false),
+        "own image"
+    );
+    assert!(daemons::retire_migration(&mut w.registry, boxed, false));
+    assert!(
+        !daemons::retire_migration(&mut w.registry, boxed, false),
+        "once"
+    );
+}

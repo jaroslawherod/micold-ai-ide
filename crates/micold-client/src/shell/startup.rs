@@ -201,6 +201,9 @@ fn boot() -> (App, Task<Message>) {
     micold_client::daemon::install_ssh_host(std::sync::Arc::new(
         crate::shell::daemons::system_ssh(),
     ));
+    // The zone a container daemon started over SSH is told (the container's own `-e TZ` reaches
+    // only the daemon the entrypoint starts).
+    micold_client::daemon::install_time_zone(crate::shell::time_zone::host());
     // What Kubernetes daemons are started with (feature 686).
     micold_client::daemon::install_kube(micold_client::daemon::KubeEnv::new(
         caps.kube_connector(),
