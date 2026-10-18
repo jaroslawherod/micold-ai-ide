@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #970
 - **Worktree branch**: claude/project-thread-ag6ana
 - **Started**: 2026-10-18
-- **Phase**: plan
-- **Next step**: plan unit (continue handover) — plan review round 1 (rubrics/plan.md), then commit and set Next step to tasks unit
+- **Phase**: tasks
+- **Next step**: tasks unit
 
 ## Pull requests
 
@@ -37,7 +37,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | Spec review | 1 | 0f936e933b45470ec78960e325652da519ed1345:7dded4dabfe494a9aa98b069d0cec860beee2dd2 | CHANGES: 4 MAJOR, 2 MINOR |
 | Spec review | 2 | 89236166dc9f65c1c4ccda6390048046cc91bcdd:7dded4dabfe494a9aa98b069d0cec860beee2dd2 | CLEAN (2 MINOR, fixed prose only) |
-| Plan review | 1 | 019d75134a7169be6ef97f5bfae77981fdc4b2af:a93373b367d841c8fce00d12b3dcffc6c56e9eb6 | not run: plan unit had no Agent tool |
+| Plan review | 1 | 492e6e945eaee1a4aadbe9442ad1423220268194:32e91cce3fcb38094295f0fa9ffdcd4c201aecb4 | CLEAN (1 MINOR: tree state renamed `ZoomState`, fixed prose only) |
 
 ## Declined review findings
 
@@ -46,13 +46,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-Plan unit part 2 (2026-10-18). Branch rebased onto origin/main (branch-start: REBASED 4). Done: R5
-point resolved — spec.md Story 1 #2 now says rows span the wider Overview and a card may be narrower
-when the new width adds a column (FR-004 unchanged); research.md R5 consequence updated to match.
-Snapshot for plan review round 1 taken (see *Review rounds*) but the review was NOT run: this unit
-had no `Agent` tool to dispatch a fresh `autopilot-reviewer`. Next: plan review round 1
-(review.md + rubrics/plan.md, round-1 model) from a context that can spawn subagents; act on
-findings (review-rounds.md); then set **Next step** to `tasks unit`. No PR.
+None.
 
 ## Open escalation
 
