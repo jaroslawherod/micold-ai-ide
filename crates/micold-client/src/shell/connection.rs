@@ -65,7 +65,7 @@ pub fn update(app: &mut App, id: DaemonId, msg: Msg) -> Task<Message> {
             daemon_build,
         } => {
             daemon_sync::on_version_mismatch(app, id, client, daemon, daemon_build);
-            Task::none()
+            crate::shell::daemons::ask_offer(app, id)
         }
         // Same contract, different package version (US6, FR-022a, BUG-002): record it so the
         // banner can name both builds and offer the restart action, distinct from a contract
@@ -75,7 +75,7 @@ pub fn update(app: &mut App, id: DaemonId, msg: Msg) -> Task<Message> {
             daemon_build,
         } => {
             daemon_sync::on_build_mismatch(app, id, client_build, daemon_build);
-            Task::none()
+            crate::shell::daemons::ask_offer(app, id)
         }
         Msg::RestartServiceRequested => service_control::on_restart_service_requested(app),
         Msg::LogoutSurvivalOutcome(message) => {

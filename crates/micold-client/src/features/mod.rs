@@ -230,6 +230,15 @@ pub enum Outcome {
         /// The repository's identity (`micold-remote://<daemon><path>`).
         path: std::path::PathBuf,
     },
+    /// A mismatched remote daemon that proved it has no running session is to be ended so this
+    /// build's can take its place (feature 489, FR-011): the shell asks its host to stop it and
+    /// reports `Replaced`.
+    RemoteReplaceRequested {
+        /// The daemon.
+        daemon: micold_core::daemons::DaemonId,
+        /// Its host.
+        target: micold_core::ssh::SshTarget,
+    },
 }
 
 /// What an activated link asks the operating system to open (feature 031, data-model §3).

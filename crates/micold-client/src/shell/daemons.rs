@@ -112,6 +112,13 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
                 }
                 rest.push(outcome);
             }
+            Outcome::RemoteReplaceRequested { daemon, target } => {
+                let (daemon, target) = (*daemon, target.clone());
+                tasks.push(Task::perform(
+                    micold_client::daemon::replace_remote(target),
+                    move |result| Message::Daemons(Msg::Replaced(daemon, result)),
+                ));
+            }
             Outcome::RemoteRepositoryRequested { path } => {
                 // Judged by the daemon it names, then opened as a project bound to it.
                 gate.push(path.clone());
@@ -189,6 +196,31 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
         ));
     }
     Task::batch(tasks)
+}
+
+/// Ask a remote daemon that has just reported a version mismatch what it has running, once per
+/// mismatch: the answer decides whether the app offers to replace it (feature 489, FR-011). Until
+/// it arrives the offer is `Unknown`, which promises nothing.
+pub fn ask_offer(app: &mut App, id: DaemonId) -> Task<Message> {
+    use micold_core::daemons::DaemonRuntime;
+    let Some(DaemonRuntime::Ssh(ssh)) = app
+        .core
+        .settings
+        .daemons
+        .get(id)
+        .map(|e| e.runtime.clone())
+    else {
+        return Task::none();
+    };
+    let links = &mut app.core.settings.links;
+    if links.offer(id).is_some() {
+        return Task::none();
+    }
+    links.set_offer(id, micold_core::ssh::ReplaceOffer::Unknown);
+    Task::perform(
+        micold_client::daemon::remote_offer(ssh.target),
+        move |offer| Message::Daemons(Msg::OfferReported(id, offer)),
+    )
 }
 
 /// Read the merged kubeconfig and list its contexts off the UI thread (feature 686, FR-002). Only

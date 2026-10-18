@@ -28,7 +28,7 @@ use micold_core::sandbox::{CredentialShare, NetworkPosture, SandboxProfile};
 use micold_core::session::AiCli;
 use micold_core::session::SessionId;
 use micold_core::ssh::config_hosts::{literal_identity, EffectiveSsh};
-use micold_core::ssh::SshTarget;
+use micold_core::ssh::{ReplaceOffer, SshTarget, WayOut};
 
 pub use super::daemons_kube::{AllowedKind, ContextList, KubeDraft, VOLUME_NOTICE};
 use super::settings::{image_choice, parse_budget, LimitField, ProfileTexts};
@@ -421,6 +421,8 @@ pub struct State {
     pub default_providers: Vec<AiCli>,
     /// The `Host` aliases of the user's SSH configuration, for the picker (feature 489, FR-002).
     pub ssh_hosts: Vec<String>,
+    /// The mismatched remote daemons being replaced now (feature 489, FR-011).
+    replacing: BTreeSet<DaemonId>,
     /// What `ssh -G` resolved for each target seen, so two aliases of one machine are one daemon
     /// (FR-016, R12). A target not in here is judged by the host as typed.
     resolved: BTreeMap<String, EffectiveSsh>,
@@ -563,6 +565,16 @@ pub fn sandbox_daemon(
         .map(|entry| entry.id)
 }
 
+/// Whether the mismatched remote daemon `id` is older and proved to have no running session: the
+/// one case in which the app offers to replace it (feature 489, FR-011). A newer daemon is never
+/// replaced, which would downgrade the host.
+fn replace_offered(model: &Model<'_>, id: DaemonId) -> bool {
+    model.registry.get(id).is_some_and(|entry| {
+        crate::links::remote_mismatch(entry, model.links)
+            .is_some_and(|(explanation, _)| explanation.way_out == WayOut::ReplaceDaemon)
+    })
+}
+
 /// The list, its empty state and the daemons a worktree can bind to.
 pub fn views(state: &State, model: &Model<'_>) -> ViewModel {
     let rows = model
@@ -597,7 +609,9 @@ pub fn views(state: &State, model: &Model<'_>) -> ViewModel {
             },
             stop_blocked: model.legacy_container == Some(entry.id)
                 && model.sessions.get(&entry.id).is_some_and(|s| !s.is_empty()),
-            explanation: crate::links::remote_mismatch_text(entry, model.links.state(entry.id)),
+            explanation: crate::links::remote_mismatch_text(entry, model.links),
+            replace_offered: replace_offered(model, entry.id) && !state.replacing.contains(&entry.id),
+            replacing: state.replacing.contains(&entry.id),
             activity: match (&entry.runtime, state.provisioning.get(&entry.id)) {
                 (DaemonRuntime::Ssh(_), Some(progress))
                     if model.links.state(entry.id) == Some(&DaemonState::Starting) =>
@@ -1610,6 +1624,13 @@ pub enum Msg {
     SshHostEdited(String),
     /// The configured hosts were read for the picker.
     SshHostsLoaded(Vec<String>),
+    /// What a mismatched remote daemon said of its sessions.
+    OfferReported(DaemonId, ReplaceOffer),
+    /// Replace this mismatched remote daemon; refused unless it proved it has no running session.
+    ReplaceRequested(DaemonId),
+    /// The shell ended the daemon (`Ok`, and this build's takes its place), or left it running and
+    /// says why.
+    Replaced(DaemonId, Result<(), ReplaceOffer>),
     /// A host was picked from the user's SSH configuration: user, port and key come from there.
     SshHostChosen(String),
     /// `ssh -G` resolved a target.
@@ -1857,6 +1878,26 @@ fn reduce(state: &mut State, model: &mut Model<'_>, msg: Msg) -> Vec<Outcome> {
         Msg::SurviveLogoutToggled(v) => edit(state, &|d| d.profile.survive_logout = v),
         Msg::SshHostEdited(v) => edit(state, &|d| d.ssh_host = v.clone()),
         Msg::SshHostsLoaded(hosts) => state.ssh_hosts = hosts,
+        Msg::OfferReported(id, offer) => model.links.set_offer(id, offer),
+        Msg::ReplaceRequested(id) => {
+            if replace_offered(model, id) && state.replacing.insert(id) {
+                if let Some(DaemonRuntime::Ssh(ssh)) = model.registry.get(id).map(|e| &e.runtime) {
+                    return vec![Outcome::RemoteReplaceRequested {
+                        daemon: id,
+                        target: ssh.target.clone(),
+                    }];
+                }
+            }
+        }
+        Msg::Replaced(id, result) => {
+            state.replacing.remove(&id);
+            match result {
+                Ok(()) => {
+                    reconnect(state, model, id);
+                }
+                Err(offer) => model.links.set_offer(id, offer),
+            }
+        }
         Msg::SshHostChosen(host) => edit(state, &|d| {
             d.ssh_host = host.clone();
             d.ssh_user.clear();

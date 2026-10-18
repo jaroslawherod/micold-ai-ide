@@ -44,6 +44,9 @@ pub const PATHS_MAPPED: &str = "paths are mapped";
 pub struct DaemonLinks {
     states: DaemonStates,
     outboxes: BTreeMap<DaemonId, Outbox>,
+    /// What a remote daemon in `VersionMismatch` says of its sessions (feature 489, FR-011). Held
+    /// only while it is mismatched.
+    offers: BTreeMap<DaemonId, ReplaceOffer>,
 }
 
 impl DaemonLinks {
@@ -52,6 +55,7 @@ impl DaemonLinks {
         Self {
             states: DaemonStates::at_launch(registry),
             outboxes: BTreeMap::new(),
+            offers: BTreeMap::new(),
         }
     }
 
@@ -84,7 +88,22 @@ impl DaemonLinks {
         if self.states.state(id) != Some(&DaemonState::Connected) {
             self.outboxes.remove(&id);
         }
+        if !matches!(self.states.state(id), Some(DaemonState::VersionMismatch { .. })) {
+            self.offers.remove(&id);
+        }
         change
+    }
+
+    /// What `id`, mismatched, says of its sessions; `None` until it was asked.
+    pub fn offer(&self, id: DaemonId) -> Option<ReplaceOffer> {
+        self.offers.get(&id).copied()
+    }
+
+    /// Record what `id` says of its sessions. Ignored unless it is in `VersionMismatch`.
+    pub fn set_offer(&mut self, id: DaemonId, offer: ReplaceOffer) {
+        if matches!(self.states.state(id), Some(DaemonState::VersionMismatch { .. })) {
+            self.offers.insert(id, offer);
+        }
     }
 
     /// The outbox that reaches `id`, only while it is connected.
@@ -154,7 +173,7 @@ pub fn route(links: &DaemonLinks, registry: &DaemonRegistry, binding: Binding) -
     };
     if links.outbox(id).is_some() {
         Route::To(id)
-    } else if let Some(explanation) = remote_mismatch_text(entry, links.state(id)) {
+    } else if let Some(explanation) = remote_mismatch_text(entry, links) {
         // A mismatched remote daemon refuses with the explanation the state shows (FR-011).
         Route::Unavailable {
             message: explanation,
@@ -167,18 +186,28 @@ pub fn route(links: &DaemonLinks, registry: &DaemonRegistry, binding: Binding) -
 }
 
 /// The explanation of a remote (SSH) daemon in `VersionMismatch`: both versions, which side is
-/// older and the way out (feature 489, FR-011). `None` for any other daemon or state. Whether the
-/// daemon has running sessions is not known here, so the offer is [`ReplaceOffer::Unknown`].
-pub fn remote_mismatch_text(entry: &DaemonEntry, state: Option<&DaemonState>) -> Option<String> {
+/// older and the way out (feature 489, FR-011). `None` for any other daemon or state. The way out
+/// follows what the daemon said of its sessions; until it was asked, nothing makes replacing it safe.
+pub fn remote_mismatch_text(entry: &DaemonEntry, links: &DaemonLinks) -> Option<String> {
+    let (explanation, host) = remote_mismatch(entry, links)?;
+    Some(explanation.text(entry.name.as_str(), &host))
+}
+
+/// The structured explanation behind [`remote_mismatch_text`], with the host it names.
+pub fn remote_mismatch(
+    entry: &DaemonEntry,
+    links: &DaemonLinks,
+) -> Option<(MismatchExplanation, String)> {
     let (DaemonRuntime::Ssh(ssh), Some(DaemonState::VersionMismatch { client, daemon })) =
-        (&entry.runtime, state)
+        (&entry.runtime, links.state(entry.id))
     else {
         return None;
     };
-    Some(
-        MismatchExplanation::new(client, daemon, ReplaceOffer::Unknown)
-            .text(entry.name.as_str(), &ssh.target.describe()),
-    )
+    let offer = links.offer(entry.id).unwrap_or(ReplaceOffer::Unknown);
+    Some((
+        MismatchExplanation::new(client, daemon, offer),
+        ssh.target.describe(),
+    ))
 }
 
 fn no_daemon() -> Route {
@@ -307,7 +336,7 @@ pub fn unavailable_label(
     match links.state(id) {
         Some(DaemonState::Connected) => facts.paths_mapped.then(|| PATHS_MAPPED.to_string()),
         Some(DaemonState::VersionMismatch { client, daemon }) => Some(
-            remote_mismatch_text(entry, links.state(id))
+            remote_mismatch_text(entry, links)
                 .unwrap_or_else(|| mismatch_message(name, client, daemon)),
         ),
         _ if facts.runtime_missing && matches!(entry.runtime, DaemonRuntime::Container(_)) => {
