@@ -123,7 +123,7 @@ keyboard order in `crates/micold-client/tests/overview.rs` (FR-009) are feature 
 
 ## Phase 6: Polish & Cross-Cutting Concerns
 
-- [ ] T012 Visual pass per quickstart §B (steps 1–6) with the `visual-pass` skill on the component showcase's `CardGrid` entry and the client Overview; record the result and screenshots in `specs/1024-overview-larger-cards/visual-pass.md` (FR-007, FR-008, FR-009, FR-011); the record names the resize and sidebar-collapse re-layout (FR-008) and the keyboard focus order (FR-009, SC-004) checks explicitly
+- [X] T012 Visual pass per quickstart §B (steps 1–6) with the `visual-pass` skill on the component showcase's `CardGrid` entry and the client Overview; record the result and screenshots in `specs/1024-overview-larger-cards/visual-pass.md` (FR-007, FR-008, FR-009, FR-011); the record names the resize and sidebar-collapse re-layout (FR-008) and the keyboard focus order (FR-009, SC-004) checks explicitly
 - [ ] T013 Full gate (`mise run gate`, in this container `scripts/gate.sh`) green, including `crates/micold-client/tests/showcase_completeness.rs` still finding the four `CardGrid` poses (quickstart §A)
 
 ---
