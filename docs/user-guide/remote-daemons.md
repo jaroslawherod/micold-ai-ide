@@ -25,7 +25,9 @@ one. A blank or invalid field is refused with the field named: a blank host or o
 ## What you need
 
 - **The computer you reach.** Linux or macOS, on Intel/AMD (`x86_64`) or Arm (`aarch64`), with an
-  SSH server and a writable home directory.
+  SSH server and a writable home directory. A Mac or a Windows PC can start a daemon on a Linux
+  host, because the app carries the Linux builds; a macOS host needs a Mac client of the same
+  architecture (Intel or Arm), which copies its own daemon, since no macOS build ships.
 - **Linux, macOS and Windows clients.** Each uses the `ssh` on its `PATH`. On Windows that is the
   OpenSSH client (`ssh.exe`) that ships with Windows, or the one in Git for Windows; if you use a
   key with a passphrase, the **OpenSSH Authentication Agent** service must be running (set it to
