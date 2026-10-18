@@ -130,6 +130,13 @@ pub enum Outcome {
     /// has focus. The session feature knows the terminal was asked for; the window feature owns
     /// what having focus means.
     FieldFocusCleared,
+    /// The user left this field after focusing it (feature 937, FR-006, research R3).
+    ///
+    /// Applied by the root (`app::field_blurred`), which hands it to the one open draft that owns
+    /// the field.
+    /// A separate outcome from [`Outcome::FieldFocusCleared`]: that one says no field holds the
+    /// keyboard any more, this one says which field was left.
+    FieldBlurred(crate::features::window::FieldId),
     /// Hand this address to the operating system's opener (feature 031, FR-010).
     ///
     /// An effect request like [`Outcome::ClipboardWrite`], and performed the same way: the shell's

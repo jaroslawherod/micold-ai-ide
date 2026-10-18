@@ -218,7 +218,8 @@ fn naming_inputs<'a>(
     // carries its own. It used to be a free-standing muted line above the select, which is
     // the arrangement FR-031a replaces.
     .label("Type")
-    .required(state(FieldId::AddWorktreeType));
+    .required(state(FieldId::AddWorktreeType))
+    .track_focus(FieldId::AddWorktreeType, focused);
 
     // No placeholder: §7.7's migration table moves the whole of the old one into the label
     // and the supporting text. Keeping the example in the placeholder as well would print

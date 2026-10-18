@@ -740,3 +740,68 @@ fn a_required_select_draws_the_marker_after_its_label() {
         );
     }
 }
+
+// ---------------------------------------------------------------------------------------------
+// Leaving the select (feature 937, contract C2, research R2)
+// ---------------------------------------------------------------------------------------------
+
+/// What `on_blur` publishes in these tests; a pick publishes its option's own text.
+const BLUR: &str = "<blur>";
+
+/// A select that reports leaving it as [`BLUR`].
+fn blurring<'a>(selected: Option<&'a str>, r: Roles) -> Select<'a, &'a str, String> {
+    select(selected, r).on_blur(BLUR.to_string())
+}
+
+/// A press well away from the select and its list.
+fn press_away(field: &mut Mounted<'_>) -> Vec<String> {
+    let away = Point::new(
+        field.bounds().x + 4.0,
+        field.bounds().y + field.bounds().height + 400.0,
+    );
+    field.dispatch(
+        Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+        mouse::Cursor::Available(away),
+    )
+}
+
+/// Opening a select and pressing away from it leaves it: one blur, published once.
+#[test]
+fn leaving_an_engaged_select_publishes_the_blur_once() {
+    let mut field = Mounted::new(blurring(None, roles()));
+    assert!(field.press_trigger().is_empty(), "engaging is not leaving");
+
+    assert_eq!(press_away(&mut field), vec![BLUR.to_string()]);
+    assert!(
+        press_away(&mut field).is_empty(),
+        "a select already left published the blur again"
+    );
+}
+
+/// A pick fills the field, so there is nothing to report (R2).
+#[test]
+fn a_pick_is_not_a_blur() {
+    let mut field = Mounted::new(blurring(None, roles()));
+    field.press_trigger();
+
+    let published = field.key(iced::keyboard::key::Named::ArrowDown);
+    assert!(published.is_empty());
+    let published = field.key(iced::keyboard::key::Named::Enter);
+    assert_eq!(published, vec![OPTIONS[0].to_string()], "only the pick");
+}
+
+/// A select nothing ever engaged reports nothing when the user presses elsewhere.
+#[test]
+fn a_select_that_was_never_engaged_does_not_blur() {
+    let mut field = Mounted::new(blurring(None, roles()));
+    assert!(press_away(&mut field).is_empty());
+    assert!(press_away(&mut field).is_empty());
+}
+
+/// Escape closes the list but the select still holds the keyboard: not left yet.
+#[test]
+fn closing_the_list_with_the_select_still_focused_is_not_a_blur() {
+    let mut field = Mounted::new(blurring(None, roles()));
+    field.press_trigger();
+    assert!(field.key(iced::keyboard::key::Named::Escape).is_empty());
+}

@@ -1683,7 +1683,11 @@ pub fn branch_highlight_moved(state: &mut crate::app::State, direction: Directio
 
 /// The branch picker was dismissed.
 pub fn branch_dismissed(state: &mut crate::app::State) {
-    with_form(state, |form| form.branch_list_open = false);
+    with_form(state, |form| {
+        form.branch_list_open = false;
+        // Closing the picker is leaving it (feature 937, research R2).
+        form.required.leave(FieldId::AddWorktreeBranch);
+    });
 }
 
 /// A branch conflict was detected (feature 016).

@@ -294,10 +294,15 @@ pub enum Msg {
 pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::Outcome> {
     match msg {
         Msg::FieldFocusChanged(field, focused) => field_focus_changed(state, field, focused),
-        Msg::Resized { width, height } => resized(state, width, height),
-        Msg::InstallLocationReported(location) => install_location_reported(state, location),
+        Msg::Resized { width, height } => {
+            resized(state, width, height);
+            Vec::new()
+        }
+        Msg::InstallLocationReported(location) => {
+            install_location_reported(state, location);
+            Vec::new()
+        }
     }
-    Vec::new()
 }
 
 /// A text field gained or lost the keyboard (BUG-003).
@@ -306,12 +311,24 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
 /// reported by two different widgets and arrive in whichever order the frame produced them, so an
 /// unguarded `None` on the way out of one field would erase the focus the next one had already
 /// claimed — and clicking straight from one field to another would leave both at rest.
-pub fn field_focus_changed(state: &mut crate::app::State, field: FieldId, focused: bool) {
+///
+/// A blur also returns [`Outcome::FieldBlurred`], whether or not the guard let it clear
+/// `focused_field`: "the user left this field" is true either way, and it is what the owning
+/// draft records for the required error (feature 937, FR-006, research R3).
+pub fn field_focus_changed(
+    state: &mut crate::app::State,
+    field: FieldId,
+    focused: bool,
+) -> Vec<crate::features::Outcome> {
+    use crate::features::Outcome;
     if focused {
         state.window.focused_field = Some(field);
-    } else if state.window.focused_field == Some(field) {
+        return Vec::new();
+    }
+    if state.window.focused_field == Some(field) {
         state.window.focused_field = None;
     }
+    vec![Outcome::FieldBlurred(field)]
 }
 
 /// A terminal took the keyboard (FR-018; T067a-9).

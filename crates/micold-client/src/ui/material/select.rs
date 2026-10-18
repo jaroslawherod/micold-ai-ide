@@ -109,6 +109,8 @@ pub struct Select<'a, T, M> {
     placeholder: String,
     roles: Roles,
     text: FieldText,
+    /// Published once when the user leaves the select (feature 937, contract C2).
+    on_blur: Option<M>,
     /// The trigger and its list, assembled in [`Widget::layout`] — see the module docs for why they
     /// cannot be built any earlier.
     content: Option<Element<'a, M>>,
@@ -133,6 +135,7 @@ where
             placeholder: "Select…".to_string(),
             roles,
             text: FieldText::default(),
+            on_blur: None,
             content: None,
         }
     }
@@ -154,6 +157,17 @@ where
     // to anything but its own style closure, so the caller had to supply what the control knew and
     // in practice none did — the accepted gap in builder form. A component that holds the flag has
     // nobody to ask, so the method has nothing left to mean (contract §3).
+
+    /// Publish `message` once when the user leaves the select (feature 937, contract C2, R2).
+    ///
+    /// Leaving is the select ceasing to be *engaged* — neither holding the keyboard nor having its
+    /// list open — after having been, with no pick in between: a pick fills the field, so there is
+    /// nothing to report. Detected in `update` against the state's `engaged` bit, so a focus taken
+    /// away by the traversal (no shell in hand) is published on the next event the select sees.
+    pub fn on_blur(mut self, message: M) -> Self {
+        self.on_blur = Some(message);
+        self
+    }
 
     /// Which option is currently chosen, as an index into `options`.
     fn chosen(&self) -> Option<usize> {
@@ -198,6 +212,9 @@ struct SelectState {
     /// can still be changed. It is also the honest owner — the traversal lands *here*, not on
     /// anything the application can see.
     focused: bool,
+    /// Whether the select was engaged (`focused || open`) when `update` last looked, so the edge
+    /// out of it can be published as [`Select::on_blur`] (feature 937, research R2).
+    engaged: bool,
     /// The channel described in the module docs. Shared with the [`ListWatch`] built into the
     /// list, which is rebuilt every layout — so the cell lives here, where it survives.
     acted: Rc<Cell<Acted>>,
@@ -209,6 +226,7 @@ impl Default for SelectState {
             open: false,
             highlight: None,
             focused: false,
+            engaged: false,
             acted: Rc::new(Cell::new(Acted::Nothing)),
         }
     }
@@ -227,6 +245,9 @@ impl operation::Focusable for SelectState {
 
     fn focus(&mut self) {
         self.focused = true;
+        // Reached by the traversal with no shell in hand: record it as engaged here, so a focus
+        // that is taken away again before the next `update` is still an edge to publish.
+        self.engaged = true;
     }
 
     fn unfocus(&mut self) {
@@ -261,8 +282,16 @@ impl SelectState {
         if acted == Acted::Took {
             self.open = false;
             self.highlight = None;
+            // A pick is not a blur (feature 937, R2).
+            self.engaged = false;
         }
         acted
+    }
+
+    /// Whether the select has just stopped being engaged, recording the new reading.
+    fn left(&mut self) -> bool {
+        let engaged = self.focused || self.open;
+        std::mem::replace(&mut self.engaged, engaged) && !engaged
     }
 }
 
@@ -478,6 +507,7 @@ where
                     // the same press. `cdk::picker` had always captured for the other control;
                     // this is the half that had gone missing (T030, contract §1.4).
                     shell.capture_event();
+                    self.publish_blur(tree, shell);
                     return;
                 }
             }
@@ -520,6 +550,7 @@ where
                 state, event, layout, cursor, renderer, clipboard, shell, viewport,
             );
         }
+        self.publish_blur(tree, shell);
     }
 
     fn draw(
@@ -600,6 +631,14 @@ where
     T: Clone + ToString + PartialEq + 'a,
     M: Clone + 'a,
 {
+    /// Publish [`Select::on_blur`] when the select has just stopped being engaged.
+    fn publish_blur(&self, tree: &mut Tree, shell: &mut Shell<'_, M>) {
+        let left = tree.state.downcast_mut::<SelectState>().left();
+        if let (true, Some(message)) = (left, &self.on_blur) {
+            shell.publish(message.clone());
+        }
+    }
+
     /// Answer `key` while the list is open, returning whether the key was claimed.
     ///
     /// The rule itself is [`intent_for`] — the same render-free function the base applies for the
@@ -649,6 +688,8 @@ where
                     .cloned();
                 state.open = false;
                 state.highlight = None;
+                // A pick is not a blur (feature 937, R2).
+                state.engaged = false;
                 if let Some(option) = chosen {
                     shell.publish((self.on_selected)(option));
                 }

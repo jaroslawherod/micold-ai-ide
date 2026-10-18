@@ -56,6 +56,7 @@ pub fn interpret(outcome: Outcome) -> Task<Message> {
         | Outcome::ProjectEntered
         | Outcome::RevealSuppressed(_)
         | Outcome::FieldFocusCleared
+        | Outcome::FieldBlurred(_)
         | Outcome::OpenLink(_)
         | Outcome::Insert { .. }
         | Outcome::DaemonRegistryChanged(_)

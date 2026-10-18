@@ -1271,6 +1271,7 @@ pub fn interpret(
         Outcome::ProjectEntered => state.project_entered(),
         Outcome::RevealSuppressed(suppressed) => state.reveal_suppression_set(suppressed),
         Outcome::FieldFocusCleared => crate::features::window::field_focus_cleared(state),
+        Outcome::FieldBlurred(field) => field_blurred(state, field),
         // Held for the next open of the dialog; the shell writes it to disk
         // (`shell::issues::on_issue_provider_changed`).
         Outcome::IssueSourceChosen { project, provider } => {
@@ -1540,4 +1541,64 @@ pub fn should_write_to_shell(shell_lifecycle: micold_core::session::ShellLifecyc
         shell_lifecycle,
         micold_core::session::ShellLifecycle::Running
     )
+}
+
+/// The user left field `id`: record it on the open draft that owns it, if there is one (feature
+/// 937, FR-006, research R3).
+///
+/// The root's, not a feature's: it writes six features' drafts, and a feature that did would
+/// break `feature_write_isolation.rs` (FR-020). The marks live on the draft, so a closed form
+/// takes them with it, and a blur of a field whose draft is not open changes nothing (Principle
+/// II): there is no window-wide set that a reopened form could inherit.
+fn field_blurred(state: &mut State, id: crate::features::window::FieldId) {
+    use crate::features::window::FieldId as F;
+    match id {
+        F::AddWorktreeType | F::AddWorktreeName | F::AddWorktreeBranch => {
+            if let Some(form) = &mut state.worktree_form.form {
+                form.required.leave(id);
+            }
+        }
+        F::RunPrompt | F::RunName | F::RunType | F::RunBaseBranch => {
+            if let Some(dialog) = &mut state.runs.dialog {
+                dialog.required.leave(id);
+            }
+        }
+        F::RenameProjectName => {
+            if let Some(draft) = &mut state.project.rename_draft {
+                draft.required.leave(id);
+            }
+        }
+        F::RenameWorktreeName => {
+            if let Some(draft) = &mut state.worktree.rename_draft {
+                draft.required.leave(id);
+            }
+        }
+        F::SettingsScrollback
+        | F::SettingsEnvIncludeTimeout
+        | F::SettingsLongTaskThreshold
+        | F::SettingsPlanUsageWarn
+        | F::SettingsJiraSite
+        | F::SettingsJiraKey
+        | F::SettingsJiraEmail
+        | F::SettingsJiraToken
+        | F::IssueMappingLabel(_) => {
+            if let Some(draft) = &mut state.settings.settings_draft {
+                draft.required.leave(id);
+            }
+        }
+        F::DaemonRepository(_) => state.daemon_list.repository_marks.leave(id),
+        F::DaemonName
+        | F::DaemonContainerName
+        | F::DaemonImage
+        | F::DaemonImagePath
+        | F::DaemonSshHost
+        | F::DaemonKubeContext
+        | F::DaemonKubeNamespace => {
+            if let Some(draft) = &mut state.daemon_list.draft {
+                draft.required.leave(id);
+            }
+        }
+        // Not a required field of any form: nothing to mark.
+        _ => {}
+    }
 }
