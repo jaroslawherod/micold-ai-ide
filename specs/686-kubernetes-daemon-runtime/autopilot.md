@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-xelisc
 - **Started**: 2026-10-17
 - **Phase**: implement
-- **Next step**: M5: gate, review A and B, PR title/body files (unit 3 in progress).
+- **Next step**: M5 is implemented and reviewed; the full gate is red only on the flaky `review::anchor::tests::two_hundred_comments_locate_inside_the_budget` (100 ms budget). Orchestrator: decide (rerun on a quieter machine, or fix the budget in its own chore), then push.
 
 ## Pull requests
 
@@ -131,7 +131,7 @@ None.
 
 ## Open escalation
 
-None. Clarify round 1 questions remain with the owner as decision cards (spec uses recommended defaults).
+Gate (scripts/gate.sh, 4 runs) fails only on `micold-core review::anchor::tests::two_hundred_comments_locate_inside_the_budget`: `took 101.4–159ms` vs a `< 100 ms` assert (anchor.rs:309); the file is untouched by this branch. Not a root-only test. Logs: scratchpad gate4.log–gate6.log. Rest of the gate (fmt, clippy) green; later gate steps did not run, but `cargo test -p micold-client` passes. Clarify round 1 questions remain with the owner as decision cards (spec uses recommended defaults).
 
 ## Follow-ups not done
 
