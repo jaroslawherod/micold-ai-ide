@@ -64,7 +64,20 @@ No "Bypassed test utility" found: `tempfile`, `FakeJiraSource` and the shared `c
 
 ## Mutation results
 
-Not measured. The profile has no mutation tool and the deliberate-mutant step was not run: the shared build lock was held by another worktree and the suite run occupied the window (see "What was not audited"). Mutants proposed for the follow-up: invert `jira_enabled` in `shell/issues.rs:378` (expect survive: Finding 5), change `REQUEST_TIMEOUT` to 60 s (expect survive: Finding 11), `classify` 80-char cut to 81 (expect caught).
+Measured in M6 (T077) by hand: each mutant applied, the named suite run, the file restored.
+
+| Mutant | Suite | Result |
+| --- | --- | --- |
+| `jira_request` gate inverted (`shell/issues.rs:378`, `true` to `false`) | `jira_request_path` in `main_tests.rs` | caught: 6 of 7 fail (Finding 5 cleared; the 7th is the switch-off test, which an always-off gate meets) |
+| `REQUEST_TIMEOUT` 10 s to 60 s (`shell/jira_http.rs:24`) | `jira_http_adapter` | caught: `the_production_request_budget_is_ten_seconds` (Finding 11 cleared) |
+| `REASON_MAX_CHARS` 80 to 81 (`jira.rs:513`) | `jira_classify` | caught: 2 tests fail |
+| T078: Keep-or-Remove prompt drawn only with the switch on (the shipped bug) | `jira_keep_or_remove_is_drawn` | caught: `the_question_is_drawn_after_the_switch_goes_off_and_save_is_pressed` fails |
+
+No tool measures a score; `mutation_score` stays unmeasured, the four mutants above all die.
+
+### Layout snapshot (Finding 8, T076)
+
+`tests/fixtures/layout_snapshot.txt` changed only in the merged M1-M5 PRs, each reviewed there as part of the diff. M6 leaves it byte-identical (`git diff origin/main -- crates/micold-client/tests/fixtures` is empty) and the `layout_snapshot` test passes in the full gate, so the Keep-or-Remove move changed no recorded geometry. B1-B9 are recorded in `visual/close.md`.
 
 ## Traceability
 
