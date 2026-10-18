@@ -28,11 +28,11 @@ use micold_core::protocol::messages::{
     WireLifecycle, WorktreeSnapshot, WorktreeStatus,
 };
 use micold_core::provider::{ActivitySource, ConversationIdentity, ToolServerSupport};
-use micold_core::structured::{TurnState, UserMessageRefusal};
 use micold_core::session::{
     AiCli, Session, SessionId, SessionKind, SessionLabel, SessionLifecycle, SessionLocation,
     ShellInstanceId, TerminalMode, RESTART_STABLE_AFTER,
 };
+use micold_core::structured::{TurnState, UserMessageRefusal};
 use micold_core::terminal::{LaunchMode, LaunchSpec};
 use micold_core::worktree::{self, Worktree};
 use tokio::sync::mpsc;

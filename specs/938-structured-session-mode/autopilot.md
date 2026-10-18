@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-cl0lw3
 - **Started**: 2026-10-18
 - **Phase**: M3
-- **Next step**: M3 — implement T022–T028
+- **Next step**: M3 — verify.md (implement done; see Handover)
 
 ## Pull requests
 
@@ -83,7 +83,20 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M3 (T022–T028) is implemented, ticked and committed (b03c6091 red tests, core green, f9d7740e
+daemon green, then fmt). Branch reset on origin/main 4793cbab; not pushed. `cargo test -p
+micold-core --all-targets -- structured schema` and `cargo test -p micold-daemon --test
+structured_session --test structured_lifecycle` pass (13 + 4). No review, no gate yet.
+Code: `micold-core/src/structured/{turn,user_message}.rs`; `ClientMsg::SessionUserMessage`,
+protocol 53 (+ `tests/schema_hash.rs` pin); daemon: turn kept in `StructuredSession`
+(`accept_user_message`, `write_user_message`, note at stdout EOF in `read_events`),
+`DaemonState::{send_user_message, session_kind}` (state.rs, above `primary_pty`), server arm
+before `ScrollbackRequest`, `ops::start_with_prompt` structured branch +
+`FirstPromptUndelivered::Message`.
+Next: verify.md, then review.md (diff `4793cbab..HEAD`), gate.md (`scripts/gate.sh`), pr.md
+(title `#938: Structured session mode: run claude with stream-json next to the PTY mode — M3`,
+body ends `Refs #938`, return `PR: to-open`). Stray empty `/run.sh` was created by a mistyped
+redirect; a safety check blocked removing it; leave it to the user.
 
 ## Open escalation
 

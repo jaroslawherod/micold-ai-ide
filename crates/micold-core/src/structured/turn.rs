@@ -77,7 +77,10 @@ mod tests {
     #[test]
     fn a_message_to_a_stopped_session_is_refused() {
         let mut turn = TurnState::Idle;
-        assert_eq!(turn.accept("hi", false), Err(UserMessageRefusal::NotRunning));
+        assert_eq!(
+            turn.accept("hi", false),
+            Err(UserMessageRefusal::NotRunning)
+        );
         assert_eq!(turn, TurnState::Idle);
     }
 

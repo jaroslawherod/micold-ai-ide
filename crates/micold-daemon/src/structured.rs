@@ -251,7 +251,9 @@ impl StructuredSession {
     pub fn write_user_message(&self, text: &str) -> io::Result<()> {
         let line = encode_user_message(text);
         let written = match lock(&self.stdin).as_mut() {
-            Some(stdin) => stdin.write_all(line.as_bytes()).and_then(|()| stdin.flush()),
+            Some(stdin) => stdin
+                .write_all(line.as_bytes())
+                .and_then(|()| stdin.flush()),
             None => Err(io::Error::from(io::ErrorKind::BrokenPipe)),
         };
         if written.is_err() {

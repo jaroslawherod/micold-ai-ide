@@ -545,7 +545,10 @@ fn is_result(r: &structured::Received) -> bool {
 async fn started_times(dir: &Path, n: usize) {
     let deadline = std::time::Instant::now() + Duration::from_secs(10);
     while structured::starts(dir) < n {
-        assert!(std::time::Instant::now() < deadline, "never started {n} times");
+        assert!(
+            std::time::Instant::now() < deadline,
+            "never started {n} times"
+        );
         tokio::time::sleep(Duration::from_millis(20)).await;
     }
 }
@@ -579,7 +582,9 @@ async fn the_first_prompt_is_delivered_once_in_the_sessions_life() {
     assert_eq!(delivered(project.path()), [prompt]);
 
     state.stop_session(id);
-    state.start_session(id, LaunchMode::Fresh).expect("starts again");
+    state
+        .start_session(id, LaunchMode::Fresh)
+        .expect("starts again");
     started_times(project.path(), 2).await;
     state.stop_session(id);
     let mut client = connect(&state).await;
@@ -642,23 +647,40 @@ async fn messages_are_refused_while_blank_mid_turn_stopped_or_to_a_terminal() {
         assert_refused(&got, UserMessageRefusal::Blank, "a blank message");
     }
     // Back to back: the second arrives before the first's result.
-    client.send(Frame::Control(user_message(3, id, "one"))).await.unwrap();
-    client.send(Frame::Control(user_message(4, id, "two"))).await.unwrap();
+    client
+        .send(Frame::Control(user_message(3, id, "one")))
+        .await
+        .unwrap();
+    client
+        .send(Frame::Control(user_message(4, id, "two")))
+        .await
+        .unwrap();
     assert_ok(&answer(&mut client, 3).await, "the first of two");
     let got = answer(&mut client, 4).await;
-    assert_refused(&got, UserMessageRefusal::TurnInProgress, "the second of two");
+    assert_refused(
+        &got,
+        UserMessageRefusal::TurnInProgress,
+        "the second of two",
+    );
     let got = send_text(&mut client, 5, id, "before the result").await;
     assert_refused(&got, UserMessageRefusal::TurnInProgress, "mid-turn");
 
     events_until(&mut client, id, |got| got.iter().any(is_result)).await;
-    assert_ok(&send_text(&mut client, 6, id, "after").await, "after the result");
+    assert_ok(
+        &send_text(&mut client, 6, id, "after").await,
+        "after the result",
+    );
     assert_eq!(delivered(project.path()), ["one", "after"]);
 
     state.stop_session(id);
     let got = send_text(&mut client, 7, id, "stopped").await;
     assert_refused(&got, UserMessageRefusal::NotRunning, "a stopped session");
     let got = send_text(&mut client, 8, terminal_id, "terminal").await;
-    assert_refused(&got, UserMessageRefusal::NotStructured, "a terminal session");
+    assert_refused(
+        &got,
+        UserMessageRefusal::NotStructured,
+        "a terminal session",
+    );
 }
 
 /// Edge case, FR-014: the CLI ends mid-turn: a `TurnEndedWithoutResult` note, and once restarted
@@ -678,7 +700,10 @@ async fn an_exit_mid_turn_ends_the_turn_with_a_note() {
     let deadline = std::time::Instant::now() + Duration::from_secs(10);
     while structured::starts(project.path()) < 2 {
         state.supervise_exited_sessions();
-        assert!(std::time::Instant::now() < deadline, "the crash was never restarted");
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the crash was never restarted"
+        );
         tokio::time::sleep(Duration::from_millis(50)).await;
     }
     let deadline = std::time::Instant::now() + Duration::from_secs(10);
@@ -714,17 +739,26 @@ async fn a_message_reaches_only_its_own_session() {
     for (id, dir) in [(ids[0], &one), (ids[1], &two)] {
         stream_script(dir, &answering_turn(0));
         state
-            .start_session_gated(id, LaunchMode::Fresh, micold_core::occupancy::Additional::Yes)
+            .start_session_gated(
+                id,
+                LaunchMode::Fresh,
+                micold_core::occupancy::Additional::Yes,
+            )
             .expect("starts");
         started_times(dir, 1).await;
     }
     let mut client = connect(&state).await;
-    assert_ok(&send_text(&mut client, 1, ids[0], "for one").await, "the message");
+    assert_ok(
+        &send_text(&mut client, 1, ids[0], "for one").await,
+        "the message",
+    );
     assert_eq!(delivered(&one), ["for one"]);
     tokio::time::sleep(Duration::from_millis(300)).await;
     assert!(
         !two.join("stdin-record").exists()
-            || std::fs::read_to_string(two.join("stdin-record")).unwrap().is_empty(),
+            || std::fs::read_to_string(two.join("stdin-record"))
+                .unwrap()
+                .is_empty(),
         "the other session read nothing"
     );
     for id in ids {
