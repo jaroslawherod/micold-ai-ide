@@ -818,10 +818,13 @@ use crate::session::AiCli;
 
 /// Home with a git config and a Claude sign-in.
 fn home_files(path: &Path) -> std::io::Result<String> {
-    match path.to_str() {
-        Some("/home/u/.gitconfig") => Ok("[user]".into()),
-        Some("/home/u/.claude/.credentials.json") => Ok("{}".into()),
-        _ => Err(std::io::ErrorKind::NotFound.into()),
+    // Compared as paths: on Windows the home is joined with a backslash.
+    if path == Path::new("/home/u/.gitconfig") {
+        Ok("[user]".into())
+    } else if path == Path::new("/home/u/.claude/.credentials.json") {
+        Ok("{}".into())
+    } else {
+        Err(std::io::ErrorKind::NotFound.into())
     }
 }
 

@@ -83,7 +83,8 @@ impl KubeCredential {
     fn sign_in_file(cli: AiCli) -> Option<(String, String)> {
         let path = cli.provider().sandbox_auth_file(Path::new(HOME_DIR))?;
         let name = path.file_name()?.to_string_lossy().into_owned();
-        Some((path.to_string_lossy().into_owned(), name))
+        // The pod is Linux: the client's own separator (a backslash on Windows) must not reach it.
+        Some((path.to_string_lossy().replace('\\', "/"), name))
     }
 
     /// Where the secret is mounted; `None` for a pull secret, which is no mount.
