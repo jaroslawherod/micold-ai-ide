@@ -841,9 +841,9 @@ fn a_picked_port_survives_a_restart() {
     );
     let dialled: Vec<u16> = specs
         .iter()
+        .filter_map(|s| match &s.dial {
             micold_client::daemon::Dial::Container { port, .. }
             | micold_client::daemon::Dial::ContainerSsh { port, .. } => Some(*port),
-            micold_client::daemon::Dial::Container { port, .. } => Some(*port),
             _ => None,
         })
         .collect();
