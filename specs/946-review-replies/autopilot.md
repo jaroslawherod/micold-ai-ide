@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-jjniz9
 - **Started**: 2026-10-17
 - **Phase**: milestone M4
-- **Next step**: M4 review A+B, full gate (`scripts/gate.sh`), push, PR text
+- **Next step**: wait for CI on the M4 PR and merge; then M5
 
 ## Pull requests
 
@@ -29,7 +29,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T018 | full | Send review types the documented batch with C-references; review file v2, protocol 49 | #969 | merged |
 | M2 | T019–T034 | full | report_review_comment; cards show Applied/Answered and replies in every window, after restart | #981 | merged |
 | M3 | T035–T046 | full | Mark a Sent comment by hand; read a full reply | #986 | merged |
-| M4 | T047–T056 | full | Review panel: rows, counts, jump, draft edit/delete, panel buttons | | in progress |
+| M4 | T047–T056 | full | Review panel: rows, counts, jump, draft edit/delete, panel buttons | PR open | gate green, in review |
 | M5 | T057–T067 | full | Comments follow their code; next batch names new lines | | planned |
 
 Polish T068–T070 changes no code: left to the close unit. M1 has 18 tasks (over ~10): Foundational
@@ -70,6 +70,7 @@ split along s6 (M3) is the only scenario split with a deliverable on each side.
 | Review B M3 | 1 | same | CHANGES: F1 MAJOR cycle-log lacked M3 rows (fixed, prose only: rows added); F2 MINOR unused registry param kept (signature fixed by registry) |
 | Review A M4 | 1 | 75287aa65477bd6b1aad7814baa611e293f12b55:049a61a9d4cb670409036a8fe6c70ab413f77e15 | CHANGES: F1 MAJOR fixed (Send/Clear/Discard in the view header while the panel is closed); F2 MAJOR fixed (jump offset adds measured slot heights above the line; a cold jump lands short, see Declined); F3 MINOR fixed (abandoned jump clears `to_show`); F5 MINOR fixed (toggle clears the reason); F4 MINOR declined |
 | Review B M4 | 1 | same | CLEAN (F1 MINOR same as A F1, fixed; F2 MINOR duplicate D7 renumbered) |
+| Review A M4 | 2 | a3b25c06d29137b57ffacd922774d58b4474321c:a435a30292b1b5ed64c456fcbbc1b677cec4553d | CLEAN (1 MINOR: hung-height sum ignores the side; kept, same cold-jump approximation) |
 
 ## Declined review findings
 
