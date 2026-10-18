@@ -65,9 +65,11 @@ impl State {
         true
     }
 
-    /// The delay is over: take the pending activation, once.
+    /// The delay is over: take the pending activation, once. None when the Overview was left some
+    /// other way meanwhile (the activation then has nothing to follow).
     pub fn due(&mut self) -> Option<Activation> {
-        self.activating.take()
+        let pending = self.activating.take();
+        pending.filter(|_| self.open)
     }
 }
 
@@ -322,6 +324,16 @@ mod tests {
         assert_eq!(state.due(), None);
         update(&mut state, Msg::Closed);
         assert!(!state.open);
+    }
+
+    /// A view that took the main area over inside the delay closed the Overview: nothing follows.
+    #[test]
+    fn due_is_empty_when_the_overview_was_left_meanwhile() {
+        let mut state = open();
+        state.request(activation("a"));
+        state.open = false;
+        assert_eq!(state.due(), None);
+        assert_eq!(state.activating, None);
     }
 
     /// T007: `CardActivated` after `due` closes as before (outcome unchanged, FR-008).
