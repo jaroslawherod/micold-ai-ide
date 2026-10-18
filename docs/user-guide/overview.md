@@ -97,7 +97,7 @@ Default, a detached HEAD and an orphan have no branch, so they show no counts. A
 
 ## Activating a card
 
-Click a card, or move to it and press **Enter** or **Space**. The Overview closes, and one of three things follows:
+Click a card, or move to it and press **Enter** or **Space**. A click shows a ripple that spreads from the point you pressed across the card, and the Overview closes about 0.3 seconds later, so you see the card respond. While it waits, further clicks, **Enter**, **Space** and **Escape** change nothing: the first card you activated stands. Then one of three things follows:
 
 - **The location has a session**: its main session is selected and shown, as if you had clicked it in the sidebar.
 - **The location has no session**: its row is revealed in the sidebar (scrolled into view and marked as selected), and the menu of AI CLIs opens at the row's start button. Nothing starts until you pick one.

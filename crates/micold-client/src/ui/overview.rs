@@ -31,7 +31,7 @@ pub fn view<'a>(state: &State, scheme: ColorScheme) -> Element<'a, Message> {
         .enumerate()
         .map(|(index, model)| {
             let card = OverviewCard::new(model, r).on_press(Message::Overview(
-                crate::features::overview::Msg::CardActivated(model.activation.clone()),
+                crate::features::overview::Msg::ActivationRequested(model.activation.clone()),
             ));
             // The first card is named so opening the Overview can put the keyboard on it (R13).
             if index == 0 {
@@ -373,6 +373,40 @@ mod tests {
         assert!(
             strip(true) > 0.0,
             "a disconnect must show the stale-data strip"
+        );
+    }
+
+    /// T008 (FR-008): a card's press asks for the activation; the delay and the close follow in
+    /// the root.
+    #[test]
+    fn a_card_press_requests_its_activation() {
+        use micold_core::project::{Availability, Project};
+        let mut state = State::default();
+        let path = std::path::PathBuf::from("/repo");
+        state
+            .workspace
+            .projects
+            .push(Project::new(path.clone(), true, Availability::Available));
+        state.workspace.active = Some(path);
+        state.overview.open = true;
+        let expected = cards(&state)[0].activation.clone();
+        let mut mounted = Mounted::new(view(&state, ColorScheme::Dark).map(|m| format!("{m:?}")));
+        let at = iced::Point::new(100.0, 60.0);
+        mounted.press(at);
+        let published = mounted.send(
+            iced::Event::Mouse(iced::mouse::Event::ButtonReleased(
+                iced::mouse::Button::Left,
+            )),
+            iced::mouse::Cursor::Available(at),
+        );
+        assert_eq!(
+            published,
+            [format!(
+                "{:?}",
+                Message::Overview(crate::features::overview::Msg::ActivationRequested(
+                    expected
+                ))
+            )]
         );
     }
 }

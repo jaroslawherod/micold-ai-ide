@@ -657,6 +657,26 @@ fn overview_message(app: &mut App, msg: micold_client::features::overview::Msg) 
     use micold_client::ui::overview::follow_up;
     use micold_core::overview::Activation;
     let was_open = app.core.overview.open;
+    // Feature 971 (D3): an accepted activation keeps the Overview up while the card's ripple plays.
+    let msg = match msg {
+        Msg::ActivationRequested(activation) => {
+            return if app.core.overview.request(activation) {
+                Task::perform(
+                    tokio::time::sleep(
+                        micold_client::features::overview::OVERVIEW_ACTIVATION_DELAY,
+                    ),
+                    |()| Message::Overview(Msg::ActivationDue),
+                )
+            } else {
+                Task::none()
+            };
+        }
+        Msg::ActivationDue => match app.core.overview.due() {
+            Some(activation) => Msg::CardActivated(activation),
+            None => return Task::none(),
+        },
+        other => other,
+    };
     let Msg::CardActivated(activation) = msg else {
         app.core.update(Message::Overview(msg));
         return if !was_open && app.core.overview.open {

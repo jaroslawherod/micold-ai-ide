@@ -390,9 +390,10 @@ fn card_model(
 pub fn overview_card<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, Message> {
     use micold_core::overview::{CardReason as R, CardState as S, LocationType as T};
     let card = |m: micold_core::overview::CardModel| {
-        iced::widget::container(Element::from(material::OverviewCard::<Message>::new(
-            &m, roles,
-        )))
+        // An inert press, so the ripple shows without closing anything (feature 971, FR-009).
+        iced::widget::container(Element::from(
+            material::OverviewCard::<Message>::new(&m, roles).on_press(Message::NoOp),
+        ))
         .width(Length::Fixed(320.0))
     };
     let mut default = card_model("Default", T::ProjectRoot, S::Idle, R::Idle);
