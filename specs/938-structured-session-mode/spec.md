@@ -83,18 +83,18 @@ beyond what the clarifications below settle; every richer view belongs to a late
 
 ### Session 2026-10-18
 
-- Q: With which permission behaviour does a structured session run until #942 brings permission
+- Q1: With which permission behaviour does a structured session run until #942 brings permission
   prompts? → A: The same permission configuration a terminal session of that location uses (FR-006
   already requires the same launch rules, and the daemon launches Claude with the user's own
   configuration plus only the tool-server binding, no permission override); a tool use that would
   need the user's approval is refused by the CLI and that refusal reaches clients as events.
   _(agent-resolved: crates/micold-core/src/provider.rs#ToolServerSupport, spec.md#FR-006)_
-- Q: How does the user choose the structured kind for a session, and what does a window show for a
+- Q2: How does the user choose the structured kind for a session, and what does a window show for a
   structured session before #939 delivers the transcript view? → A: A per-session choice in the
   new-session flow, beside the existing AI CLI chevron, offered for Claude Code sessions only; the
   session's pane shows a plain, read-only, line-per-event log until #939 replaces it.
   _(decided by user)_
-- Q: Does the event history survive a daemon restart? → A: Yes, under the existing **Save terminal
+- Q3: Does the event history survive a daemon restart? → A: Yes, under the existing **Save terminal
   history** setting, like a terminal session's history. While it is on, the daemon saves each
   structured session's event history to disk with the saved terminal histories and restores it
   after a restart, so a client viewing the session then sees the earlier events followed by those
@@ -281,6 +281,14 @@ session is started, the resumed run's events, with no gap and no duplicate.
 6. **Given** a saved event history that cannot be read in full (damaged, cut short, or written by
    another version), **When** the daemon restores the session, **Then** none of it is shown, the
    session runs with an empty history, the daemon logs why, and the next save replaces the file.
+7. **Given** a saved event history whose session no longer exists (a removal was interrupted, or
+   the session was archived), or any saved event history while saving is off, **When** the daemon
+   starts, **Then** that file is deleted before any client can view a session.
+8. **Given** a save of a session's event history is in progress, **When** the session is removed
+   or **Save terminal history** is turned off, **Then** once that completes no saved event history
+   of the session exists on disk.
+9. **Given** saving was off while a structured session wrote events, **When** the user turns it on,
+   **Then** the next save writes the session's whole in-memory history, earlier events included.
 
 ---
 
@@ -313,7 +321,9 @@ marker and the pane.
    read-only, with no input.
 4. **Given** the change that makes the kind selectable, **When** a user reads the user guide,
    **Then** it describes the structured kind, how to choose it, that it is Claude Code only, and
-   what it does not yet do, naming each later issue of the epic.
+   what it does not yet do, naming each later issue of the epic, and that **Save terminal history**
+   keeps a structured session's events across a restart; the setting's note in Settings → Terminal
+   says it covers structured sessions' events too.
 
 ---
 
@@ -359,6 +369,15 @@ marker and the pane.
   viewing after a restart is told they were omitted, as before the restart.
 - A daemon in the sandbox container saves event histories where it saves terminal histories, under
   the same rules.
+- A session is removed, or **Save terminal history** turned off, while a save of its event history
+  is in progress: the removal or the deletion wins, and no event history of it is left on disk.
+- **Save terminal history** turned on while structured sessions already hold events: the next save
+  of each writes its whole in-memory history, events from before the change included.
+- **Save terminal history** turned off while the daemon is not running: the saved event histories
+  are deleted when it next starts, before any client can view a session.
+- The daemon is killed during a save: the file on disk is the previous whole save or none, never a
+  part-written one; a left-over temporary file is never read, is replaced by the next save, and
+  is deleted with the session's saved event history.
 
 ## Requirements *(mandatory)*
 
@@ -445,8 +464,9 @@ marker and the pane.
   to disk, and after a daemon restart it starts at the resume.
 - **FR-021b**: Turning **Save terminal history** off MUST delete every saved event history at once,
   as it deletes the saved terminal histories; removing a session MUST delete its saved event
-  history; when the daemon starts, saved event histories of sessions that no longer exist MUST be
-  deleted, as saved terminal histories are. In-memory event histories are unchanged by the setting.
+  history; when the daemon starts, saved event histories of sessions that no longer exist, and
+  every saved event history when the setting is off, MUST be deleted, as saved terminal histories
+  are. In-memory event histories are unchanged by the setting.
 - **FR-021c**: A saved event history that cannot be read in full MUST NOT be shown in part and MUST
   NOT stop the session: the session's history starts empty, the daemon logs the session and the
   reason, and the next save replaces the file.

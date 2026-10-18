@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-cl0lw3
 - **Started**: 2026-10-18
 - **Phase**: design revision
-- **Next step**: design revision — fresh review round 1 of spec, plan/research/data-model, tasks
+- **Next step**: design revision PR to open (orchestrator); then M4
 
 ## Pull requests
 
@@ -20,6 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1044 | M1 parser, fixtures, kind persisted | merged (rebase) | 613faba7880da73fd7e6228cda6c8af60d7ea85c |
 | #1056 | M2 daemon runs a structured session, streams events | merged (rebase) | 4793cbab05478fe50b1434ab61a1c99c717701e5 |
 | #1064 | M3 first prompt and user messages | merged (rebase) | 1fab9ea568ba3d8e00c60cb14c16f3277120fecf |
+| to-open | design revision: event history saved under Save terminal history (M7) | reviews clean, specs-only gate green | — |
 
 ## Milestones
 
@@ -67,6 +68,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 review A (code-review high) | 1 | a88fe9259fe8470c367121d7f982506069cbe4be:2c9fe052b0e42a603aa745424724d5a5fdbe8410 | 9 findings: 2 fixed (F1 per-message spawn_blocking reordered turns — accept now on the connection loop, write off it; F2 turn guard held across `on_event` at EOF), 7 declined |
 | M3 review A (code-review high, sonnet) | 2 | 83111196a2ccba7189d864995a4bc4576a907f2c:25ea31c8f8fcdbd6212cf65e8452d43a890b4b71 | CLEAN (3 MINOR, not fixed: `running` read before the turn lock at EOF, refusal answered via spawn_blocking, no dedicated order test — the refusal test covers it) |
 | M3 review B (conformance, sonnet) | 1 | 42359e030cca65c2395966e97e553098c6ef5fa9:8b37008a71fb40230b6fe64505177caaf1cde800 | CLEAN (2 MINOR: T024 red was a compile error, right reason shown by mutation; Verify read from the full gate log) |
+| Revision review spec | 1 | e0ff3114af0e20d59a968874d970b56ded98c2fa:1b32faee25fb96fda33a6c60adb7b7a6f022e6f6 | CHANGES: 2 MAJOR (F1 scenarios for FR-021b startup cleanup and FR-023 note; F2 concurrency edge cases — fixed), 2 MINOR (F3 Q-numbering fixed; F4 declined) |
+| Revision review plan | 1 | e0ff3114af0e20d59a968874d970b56ded98c2fa:1b32faee25fb96fda33a6c60adb7b7a6f022e6f6 | CLEAN (1 MINOR declined) |
+| Revision review tasks | 1 | e0ff3114af0e20d59a968874d970b56ded98c2fa:1b32faee25fb96fda33a6c60adb7b7a6f022e6f6 | CLEAN (3 MINOR fixed: T056 test first, T054 startup sweep/race/saver-pass cases, ID-gap note) |
+| Revision review spec (sonnet) | 2 | 7497d055378edd3e6c97a8eea28e417fb1c95801:1b32faee25fb96fda33a6c60adb7b7a6f022e6f6 | CLEAN (1 MINOR fixed: FR-021b and scenario 7 cover purge at start with saving off) |
 
 ## Declined review findings
 
@@ -92,20 +97,12 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 | A 1 | F7 `unwrap_or_default` in encode | serializing `&str` fields cannot fail; MINOR |
 | M3 | A 1 | F8 sleeps in negative-delivery tests | an absence check needs a time bound; margins match the M2 tests; MINOR |
 | M3 | A 1 | F9 user text in a `Debug` ClientMsg | `SessionInput` carries typed terminal bytes the same way; the daemon never logs a `ClientMsg` with `?` |
+| Revision | spec 1 | F4 User Story 7 before User Story 6 | US6's number is referenced by merged tasks, plan and PRs; renumbering churns merged artifacts; tasks.md notes the order |
+| Revision | plan 1 | F1 `format.rs` split has no task | T052 already names `terminal_history/format.rs` and the pinned fixture test |
 
 ## Handover
 
-Design revision unit (decision 3 changed). Done: branch reset to origin/main (1fab9ea5); spec.md
-(In short, Terms, Q2/Q3 clarifications, US7, edge cases, FR-021a–c, FR-023, Key entity, SC-007,
-Assumption), research.md (R5 amended, new R14), data-model.md (seq, EventHistory::restored,
-SavedEvents, HistoryStore additions, daemon state), plan.md, quickstart.md, tasks.md (T029 amended,
-Phase 9 US7 T049–T055 = M7, US6 → Phase 10 + T056, M8) and this ledger edited; committed locally,
-not pushed. Next: fresh review round 1 (session model) of the changed spec, plan/research/
-data-model and tasks — per tasks/review.md, run via the scratchpad's run-review.sh — fix, round 2+
-with sonnet, then specs-only gate (tasks/gate.md), push with
---force-with-lease=claude/project-thread-cl0lw3:, write pr-title.md (`#938: Structured session mode:
-run claude with stream-json next to the PTY mode — design revision`) and pr-body.md (ends
-`Refs #938`), return PR: to-open. No open findings yet.
+None.
 
 ## Open escalation
 
