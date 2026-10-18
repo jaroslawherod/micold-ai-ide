@@ -59,7 +59,7 @@ only while closed; a section without them looks exactly as today (FR-011 to FR-0
 
 - [X] T003 [US3] In `C/src/ui/material/accordion_section.rs` add the builder inputs `summary: Option<String>` (default `None`) and `required: bool` (default `false`) with `.summary(impl Into<String>)`, `.summary_maybe(Option<String>)` (mirrors `Button::on_press_maybe`) and `.required(bool)`. While closed: the header becomes `row![column![title, summary], Space::Fill, chevron]` with the summary drawn by `Ellipsized::at_role(text, TypeRole::Caption, roles.on_surface_variant)` inside the same header `Button`; the title text becomes `format!("{title}{}", micold_core::required::MARKER)` when `required`, in the title's own role and tint (as `form_field.rs` marks a field label). While open, or with neither input: the header is built exactly as today. Doc comments state FR-011–FR-013 (research R4, R5). Makes T001 pass.
 - [X] T004 [US3] In `C/src/showcase/sections/surfaces.rs::accordion_section` add the poses `closed, with a summary` (summary `Docker · Basic image`), `open`, and `closed, a required field empty` (`.required(true)`), keeping the live toggle; update the entry's captions in `C/src/showcase/catalogue.rs` so T002 passes (FR-015).
-- [ ] T005 [US3] Visual pass of quickstart Part B step 1 (showcase, both themes, narrow window) with the `visual-pass` skill; record it under `specs/890-daemon-settings-accordion/visual-pass/m1/`.
+- [X] T005 [US3] Visual pass of quickstart Part B step 1 (showcase, both themes, narrow window) with the `visual-pass` skill; record it under `specs/890-daemon-settings-accordion/visual-pass/m1/`.
 
 **Checkpoint**: M1 deliverable observable in the component showcase.
 

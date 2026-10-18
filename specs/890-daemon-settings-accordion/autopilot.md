@@ -10,19 +10,20 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-rwlog8
 - **Started**: 2026-10-18
 - **Phase**: M1
-- **Next step**: implement M1 (T001–T005)
+- **Next step**: orchestrator opens the M1 PR, waits on CI and merges; then milestone M2 (T006–T015)
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1063 | Design: spec, plan, tasks | merged (rebase) | ad4d1946127e6dc0c06e4add04416f2fc962db00 |
+| (pending) | M1: AccordionSection summary and required marker | to open (orchestrator, via GitHub MCP) | — |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T005 | full | Showcase `AccordionSection` shows summary (closed), open, required marker | — | in progress |
+| M1 | T001–T005 | full | Showcase `AccordionSection` shows summary (closed), open, required marker | (pending, orchestrator) | PR to open |
 | M2 | T006–T015 | full | Every daemon kind's form in FR-002 sections, Connection open, errors open their section; user guide | — | pending |
 | M3 | T016–T028 | full | One field/section gap, FieldGroup labels, context select, section summaries and markers; user guide | — | pending |
 
@@ -49,6 +50,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Plan | 1 | 6a71819950f543013db8bf4fd875133e7b90b673:7d34cc6b80783b6daaee02c86a179f7f5f8d7174 | CLEAN, no findings |
 | Tasks (analyze) | 1 | — | 0 CRITICAL/HIGH; 2 MEDIUM, 7 LOW — fixed per D7 |
 | Tasks | 1 | ba794e2c48f587ac992b44fca4cfd51218aef620:939f376280476c9b308aca897e3933cf3dad7586 | CLEAN; 1 MINOR (M1 not the P1 story) — declined, see Declined |
+| Review A M1 (code-review high) | 1 | — (run on f8a8cb27) | 7 unranked findings: 3 fixed (two-line header fit now asserted; empty summary drawn as none, U8; narrow test finds summary by text), 4 declined |
+| Review B M1 (conformance, sonnet) | 1 | 0f60a67f0434ccd3637739a1679e21c9a10fb5a8:e79bfd617bd71c89b048059deb323c4dcef46cfe | CLEAN; 3 MINOR — F2, F3 fixed prose only (cycle-log note, research R4); F1 Verify not runnable in its sandbox (unit ran both: 13 + 41 passed) |
+| Visual pass M1 (quickstart B1) | 1 | — | PASS, both themes, 150px narrow; visual-pass/m1/ |
 
 ## Declined review findings
 
@@ -56,6 +60,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+
+- Review A M1: title position differs between headers with and without a summary — declined, the two-line header is the design (research R4).
+- Review A M1: `Mounted::painted_text` duplicates `tests/support/layout.rs::painted_text` — declined, in-crate tests cannot reach `tests/support` (`material` is `pub(crate)`; same reason `test_support.rs` exists).
+- Review A M1: required pose also carries the summary — declined, matches how M3 sections pose both; FR-015 asks for "closed with the marker".
+- Review A M1: marker hidden while open — declined, FR-012 and research R5 (the open field shows its own marker).
 
 ## Handover
 
@@ -67,3 +76,4 @@ None.
 
 ## Follow-ups not done
 
+- M1 visual pass: on an inert header (no `on_toggle`, the showcase's static poses) the title dims as a disabled button but the summary keeps `on_surface_variant`. Every daemon-form section has a toggle, so no form shows it; dim the summary with the header if an inert use appears.
