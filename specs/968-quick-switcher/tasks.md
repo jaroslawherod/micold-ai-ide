@@ -94,7 +94,9 @@ from #803. Nothing here is observable alone; it ships inside M1.
   same; physical `KeyP` with logical `l` (Dvorak) decodes to `ToggleSwitcher` (FR-016); the K2
   near misses keep their outputs (Ctrl+P → `0x10`, Shift+P, Alt+Shift+P, primary+Alt+Shift+P);
   Ctrl+Shift+E/T/O/D/H/W/C/V/Arrows/`[ ] , .`/PageUp/PageDown never decode to `ToggleSwitcher` and
-  the switcher chord decodes to nothing else (FR-002); `route_key(true, ToggleSwitcher) ==
+  the switcher chord decodes to nothing else (FR-002's app-chord half; the system and input-method
+  lists are not data in the repo, so that half rests on spec.md *Assumptions* and quickstart §C);
+  `route_key(true, ToggleSwitcher) ==
   route_key(false, ToggleSwitcher) == KeyRouting::ToggleSwitcher`; docs test: both strings of
   `switcher_chord_labels()` appear in `docs/user-guide/terminal-panes.md` and
   `docs/user-guide/worktrees-and-sessions.md` (FR-017, SC-006; stays red until T020)
@@ -155,7 +157,12 @@ name, Enter; the terminal shows its session and its sidebar row is selected.
   `Chosen` key not in a fresh `candidates` returns `None` and stays open with the query kept
   (FR-013); a list change (a worktree added while open) keeps the query and keeps the highlight on
   the same key, and moves it to the first entry when that key leaves; two `State`s are independent
-  (FR-015); while open, `navigation::update` returns `Step::None` for every #803 chord (FR-012)
+  (FR-015); while open, `navigation::update` returns `Step::None` for every #803 chord (FR-012);
+  Tab (the type-ahead's `Dismiss` intent) closes as `Dismissed` does; `list` reports
+  `Empty::NoMatches` for a non-empty query that matches nothing and `Empty::NothingToSwitchTo` with
+  no entries, and Enter (`Chosen` of no highlight) then changes nothing (FR-014); SC-001 for
+  locations: in a project of 50 locations, for each location some query of at most 4 characters of
+  its name leaves it within the first 3 selectable entries (at most 2 `Moved(Next)`)
 - [ ] T011 [P] [US1] Write the failing apply tests in `crates/micold-client/tests/quick_switch.rs`
   driving the switcher through `apply_navigation` / `finish_navigation` as
   `tests/navigation_apply.rs` does (reuse its helpers; move them to `tests/support/` when both need
@@ -163,14 +170,21 @@ name, Enter; the terminal shows its session and its sidebar row is selected.
   reveal scroll and, with `terminal_had_focus` true, gives the terminal the keyboard; with it false,
   `sidebar.keyboard_row` is the chosen row (FR-010, SC-004); choosing a location without a session
   starts no session, makes it the stop and puts `keyboard_row` on it (US1-7); with the Overview open
-  a `Stop` closes it first (research R5); the running-session count is unchanged across open,
+  the resolved choice says to close it before the `Stop` is applied (`Choice::close_overview_first`,
+  decided in `features/quick_switch.rs`, research R5), and applied that way the Overview is closed
+  and the stop's row is revealed; the running-session count is unchanged across open,
   filter, choose and close (FR-011, SC-005)
 - [ ] T012 [P] [US1] Write the failing registry tests in
   `crates/micold-client/tests/overlay_registry.rs`: `QuickSwitcherDialog` is open exactly when
   `state.quick_switch.open.is_some()`, sits on `Layer::Dialog`, its cancellation is
   `Message::QuickSwitch(Msg::Dismissed)`, and Escape and an outside click while it is topmost
   resolve to that cancellation (FR-009); and in `crates/micold-client/tests/showcase_completeness.rs`
-  the quick-switcher dialog variant is listed (Principle VIII)
+  the quick-switcher dialog variant is listed (Principle VIII); and the routing tests beside the
+  #803 ones in `crates/micold-client/src/ui/material/terminal_pane.rs` and
+  `crates/micold-client/src/ui/mod.rs` (contracts/keys.md K3): with a terminal focused the chord
+  publishes `Toggled { terminal_had_focus: true }` and is captured (0 PTY bytes); unfocused,
+  `app_chord` gives `Toggled { terminal_had_focus: false }`; pressed while the switcher's field has
+  the keyboard, it still reaches `Toggled` (research R8)
 
 ### Implementation for User Story 1
 
@@ -179,11 +193,15 @@ name, Enter; the terminal shows its session and its sidebar row is selected.
   `candidates` step 1 without its sessions): one entry per `navigation::location_order(state)` via
   `navigation::location_node`, `parent: None`, `selectable: true`, `context` from the tag labels,
   `current` as T009 states; until T009 passes
-- [ ] T014 [US1] Implement `pub fn update(state: &mut State, msg: Msg) -> Option<Step>` in
-  `crates/micold-client/src/features/quick_switch.rs` with the U1 gate, U2 derivation (`candidates`,
-  `quick_switch::filter`, `reseat`, never stored), U3 resolution for keys not listed and location
-  keys, and U4 restore; and `pub fn list(state: &State) -> (Vec<Entry>, Vec<Ranked>, Option<usize>)`
-  the view and `update` both read; until T010 passes
+- [ ] T014 [US1] Implement `pub fn update(state: &mut State, msg: Msg) -> Option<Choice>` in
+  `crates/micold-client/src/features/quick_switch.rs` returning `Option<Choice>` (`pub struct
+  Choice { pub step: Step, pub terminal_had_focus: bool, pub close_overview_first: bool }`,
+  `close_overview_first` true only for a `Stop` with the Overview open) with the U1 gate, U2
+  derivation (`candidates`, `quick_switch::filter`, `reseat`, never stored), U3 resolution for keys
+  not listed and location keys, and U4 restore; and `pub fn list(state: &State) -> List` (`entries:
+  Vec<Entry>`, `ranked: Vec<Ranked>`, `highlighted: Option<usize>`, `empty: Option<Empty>` with
+  `pub enum Empty { NoMatches, NothingToSwitchTo }`) the view and `update` both read; until T010
+  passes
 - [ ] T015 [US1] Add `QuickSwitcherDialog` (`floating_surface!` with `id:
   SurfaceId::new("quick_switcher")`, `layer: Dialog`, `cancelled_by:
   Message::QuickSwitch(Msg::Dismissed)`, `Registered::open_in` reading
@@ -198,27 +216,25 @@ name, Enter; the terminal shows its session and its sidebar row is selected.
   holding `material::Typeahead::new(query, rows, QueryChanged, roles).open(true).highlighted(i)
   .selected(current).empty_message(..).on_move(Moved).on_pick(Chosen(key)).on_dismiss(Dismissed)`;
   each row `picker::Row::new(name, spans).details("<Kind> · <context>")`, `.disabled()` when not
-  selectable; the empty message is "No matches" with a non-empty query and "Nothing to switch to"
-  with no entries (FR-014). Glue only: every decision comes from `quick_switch::list`
+  selectable; the empty message renders `List::empty` ("No matches" / "Nothing to switch to",
+  FR-014). Glue only: every decision comes from `quick_switch::list`
 - [ ] T017 [US1] Create `crates/micold-client/src/shell/quick_switch.rs` (registered in
   `crates/micold-client/src/shell/mod.rs`) with `pub fn update(app: &mut App, msg: Msg) ->
   Task<Message>`: run `features::quick_switch::update`; on open return
-  `operation::focus(QUICK_SWITCHER_FIELD_ID)`; for a returned `Step`, a `Stop` with the Overview
-  open first dispatches the Overview's close, then `shell::navigation::apply_step(app, step,
-  terminal_had_focus)` with the flag recorded at open; route `Message::QuickSwitch` to it in
+  `operation::focus(QUICK_SWITCHER_FIELD_ID)`; for a returned `Choice`, dispatch the Overview's
+  close when `close_overview_first`, then `shell::navigation::apply_step(app, choice.step,
+  choice.terminal_had_focus)`; no decision of its own; route `Message::QuickSwitch` to it in
   `crates/micold-client/src/main.rs` beside `Message::Navigation`; until T011 passes
 - [ ] T018 [US1] Wire the chord's two routes (contracts/keys.md K3): `KeyRouting::ToggleSwitcher`
   in `crates/micold-client/src/ui/material/terminal_pane.rs` publishes
   `Message::QuickSwitch(Msg::Toggled { terminal_had_focus: true })` and captures the event (0 PTY
   bytes); `app_chord` in `crates/micold-client/src/ui/mod.rs` maps `is_switcher_chord` to `Toggled
-  { terminal_had_focus: false }`; extend the routing tests beside the #803 ones in those two files
-  first (red), including the chord pressed while the switcher's field has the keyboard reaching
-  `Toggled` — if the text field captures it, the dialog's content maps the press itself (research
-  R8)
+  { terminal_had_focus: false }`; if the text field captures the chord, the dialog's content maps
+  the press itself (research R8); until T012's routing tests pass
 - [ ] T019 [US1] Add the quick-switcher to the showcase's dialogs section in
   `crates/micold-client/src/showcase/sections/` and `crates/micold-client/src/showcase/catalogue.rs`
-  (sample rows: a query with an emphasised match, a location row with tags, a current row) until
-  T012's showcase test passes
+  (sample rows: a query with an emphasised match, a location row with tags, a current row; the
+  session row is T025's, the unavailable project T030's) until T012's showcase test passes
 - [ ] T020 [US1] Document the quick-switcher (contracts/keys.md K4, research R10): in
   `docs/user-guide/terminal-panes.md` §Keyboard shortcuts add the row "Quick-switcher (jump to a
   location, session or project)" with `Ctrl+Shift+P` and `Cmd+Shift+P`; in
@@ -268,7 +284,8 @@ sub-row is selected under an opened row.
   after it with its rank") until T021 passes (`mise run test-core`)
 - [ ] T025 [US2] Add session entries to `candidates` in
   `crates/micold-client/src/features/quick_switch.rs` (data-model.md `candidates` step 1), and the
-  `Session` arm of U3 in `update`, until T022 and T023 pass
+  `Session` arm of U3 in `update`, until T022 and T023 pass; add a session row (`Session ·
+  <location>`) to the showcase sample of T019 in `crates/micold-client/src/showcase/sections/`
 - [ ] T026 [US2] Update the **Quick-switcher** bullet in `docs/user-guide/worktrees-and-sessions.md`:
   each location is followed by its open sessions, a session is found by its name, a location's
   name keeps its sessions listed after it, closed sessions are not listed
@@ -301,15 +318,16 @@ chosen.
   and the previous project's sessions keep running (count unchanged, US3-2, SC-005); for an
   unavailable project it returns `None` and stays open; `Moved` never highlights it and opening with
   an unavailable project first highlights the first selectable entry (D5); `Moved(Next)` at the
-  last available project stays there
+  last available project stays there; choosing a project with the Overview open leaves it as
+  `Step::Project` already does (`close_overview_first` false)
 
 ### Implementation for User Story 3
 
 - [ ] T029 [US3] Add project entries to `candidates` in
   `crates/micold-client/src/features/quick_switch.rs` (data-model.md `candidates` step 2) and the
   two `Project` arms of U3 in `update`, until T027 and T028 pass
-- [ ] T030 [US3] Add an unavailable project row (disabled, `Project · unavailable`) and a session
-  row to the showcase sample of T019 in `crates/micold-client/src/showcase/sections/`
+- [ ] T030 [US3] Add an unavailable project row (disabled, `Project · unavailable`) to the
+  showcase sample of T019 in `crates/micold-client/src/showcase/sections/`
 - [ ] T031 [US3] Complete the **Quick-switcher** bullet in
   `docs/user-guide/worktrees-and-sessions.md`: the other known projects follow with their running
   and unread counts, unavailable ones are shown but cannot be chosen, only the active project's
@@ -429,9 +447,10 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
   helper's name and Enter shows that helper with its sub-row selected under the opened row; typing
   a worktree's name keeps its sessions right after it; the user guide says so
 - **Satisfies**: US2 acceptance scenarios 1–4; FR-003 (sessions), FR-004 (sessions), FR-005
-  (kept-by-location), FR-006 (sessions), FR-008 (sessions); SC-001, SC-004 (sessions)
+  (kept-by-location), FR-006 (sessions), FR-008 (sessions), FR-013 (sessions); SC-001 (sessions),
+  SC-004 (sessions)
 - **Verify**: `mise run test-core` (kept-by-location tests) and `mise run gate`
-  (`tests/quick_switch.rs` session tests); quickstart §B B2, B3, B11
+  (`tests/quick_switch.rs` session tests, `tests/showcase_completeness.rs`); quickstart §B B2, B3, B11
 - **Depends on**: M1
 - **Tier**: full (T024 is a new ranking rule in core, not an existing pattern)
 
@@ -443,7 +462,8 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
   does; an unavailable project is shown with its badge and cannot be highlighted or chosen; on the
   welcome screen it lists every known project; the user guide describes the complete switcher
 - **Satisfies**: US3 acceptance scenarios 1–5; US4 acceptance scenario 1; FR-003 (projects),
-  FR-004 (projects), FR-006 (projects), FR-008 (projects); SC-005 (project switch)
+  FR-004 (projects), FR-006 (projects), FR-008 (projects); SC-004 (projects), SC-005 (project
+  switch)
 - **Verify**: `mise run gate` (`tests/quick_switch.rs` project tests,
   `tests/showcase_completeness.rs`); quickstart §B B5, B6, B12
 - **Depends on**: M1, M2
