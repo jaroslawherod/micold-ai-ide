@@ -10,19 +10,20 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-a1yb7j
 - **Started**: 2026-10-18
 - **Phase**: implement
-- **Next step**: M1 PR: orchestrator opens it, runs reviews A (code-review high) and B (conformance), then CI and merge; then M2
+- **Next step**: M1 PR #1042: reviews and visual pass done; orchestrator waits on CI and merges; then M2
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1034 | Design: spec, plan, research, contracts, tasks | merged | 1fae1becb8fa64097695f169ad7243ec5d1f1dae |
+| #1042 | M1: card context menu (T001–T013) | open (draft) | — |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T013 | full | Right-click a card: *Open* + row-menu entries, run as the row menu does; registry dismissal | pending (branch pushed) | implemented, gate green |
+| M1 | T001–T013 | full | Right-click a card: *Open* + row-menu entries, run as the row menu does; registry dismissal | #1042 | implemented, gate green, reviewed |
 | M2 | T014–T019 (T016b) | light | Target mark on the card; empty-space right-click dismisses | — | pending |
 | M3 | T020–T028 | full | Menu key / Shift+F10 open, arrow/Enter navigation, focus return | — | pending |
 
@@ -43,6 +44,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Plan | 1 | ddc1f4f2a559acde12172eb355263991ae37114a:fe5fce887724a3fa7f184edd604ecb3f472b830a | CLEAN |
 | Tasks | 1 | c3044e31781aae114ef17bc23ba9864d7455f4e7:fe73a9896b90d8e7dfd5ee8ec9c76a9e4daaa49e | CHANGES: F1 MAJOR (keyboard reducer effects in M1, tested only in M3) fixed: assertions moved T023→T004 |
 | Tasks | 2 | 7e95c7a89d11a89ad961016242462c7b04b0e816:fe73a9896b90d8e7dfd5ee8ec9c76a9e4daaa49e | CLEAN (sonnet) |
+| A M1 (code-review high) | 1 | c81d74a8449b3e036a2e8ffe80aa60e5168c827e:5dbd5098f5e91b3d5aae7afdbb0508cf50921e8c | CLEAN: 3 MINOR not fixed (settle_card_menu in State::update, clone in CardMenuEntryChosen, hand-copied MenuItem in with_message) |
+| B M1 (conformance, sonnet) | 1 | c81d74a8449b3e036a2e8ffe80aa60e5168c827e:5dbd5098f5e91b3d5aae7afdbb0508cf50921e8c | CLEAN; Verify: 8 test binaries ok, 144 passed, 0 failed |
+| Visual pass M1 | 1 | c81d74a8449b3e036a2e8ffe80aa60e5168c827e:5dbd5098f5e91b3d5aae7afdbb0508cf50921e8c | B1, B3–B9, B16 PASS; B14, B19 PARTIAL (fixture: no session / seeded unbound daemon); B15 not run (no second window); record in visual-pass.md |
 
 ## Declined review findings
 
@@ -59,4 +63,5 @@ None.
 
 ## Follow-ups not done
 
-- M1 reviews A and B and the visual pass (quickstart §B B1, B3–B9, B14–B16, B19) not run by unit 3: no subagent tool in its environment. Full gate (`scripts/gate.sh`) green at 7c0df56f.
+- Review A M1 MINORs left (taste, no behaviour change): `settle_card_menu` called from `State::update` (app.rs:1041); `inner.clone()` for `CardMenuEntryChosen` (main.rs:665); `with_message` copies `MenuItem` fields by hand (ui/overview.rs:661) — a `MenuItem::map_message` would be sturdier.
+- Visual pass: the worktree Rename dialog does not take keyboard focus on open (pre-existing on every path: `rename_started` sets no focus); over the Overview, typed Return can reach the still-focused card behind the dialog. Seen once in B3. Candidate for M3 (focus handling) or its own issue.
