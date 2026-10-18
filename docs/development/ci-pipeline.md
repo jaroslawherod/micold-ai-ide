@@ -340,6 +340,26 @@ Dev Drive step lists `CACHEDIR.TAG` in `target`, that rust-cache prints `Restore
 (or `No cache found`) with no `ENOENT` annotation, and that its post step saves (`Saving cache`)
 after a miss. If the hit rate has regressed, the mount is the first suspect.
 
+## Real-runtime daemon tests build only their own targets
+
+The `sandbox against a real runtime (linux)` job's `Test (real runtime, daemon)` step used to run
+`cargo test --release -p micold-daemon ... sandbox_real_`, which compiles every test binary of the
+crate (149 in release) before the name filter selects 25 tests. A run measured 947 s for the step,
+928 s of it the compile and 16 s the tests. Splitting the tests across a `--partition` matrix did
+not help: each leg compiled everything again.
+
+The step now passes `--test 'sandbox_real_*'` (cargo accepts globs), so only the `sandbox_real_*`
+integration targets are built; the job is a single job again and its key, `if:` and `needs:` are
+unchanged.
+
+- **No test lost.** `cargo test --release -p micold-daemon --features sandbox-real-runtime
+  sandbox_real_ -- --list` lists 25 tests with and without the glob. The daemon has no
+  `sandbox_real_` doctests, so the old command ran none either.
+- **`--release` stays.** `sandbox_real_session_start` compares the release daemon in the image with
+  `CARGO_BIN_EXE_micold-daemon`; the profiles must match (see the comment in `ci.yml`).
+- **Not split:** the `Test (daemon)` (macOS) and `Test (daemon, Windows)` steps live in the `test`
+  job and are untouched.
+
 ## Reading a run
 
 The `classify change` job writes its verdict to the run summary, so the top of any run says which

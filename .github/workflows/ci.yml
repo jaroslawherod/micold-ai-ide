@@ -628,8 +628,14 @@ jobs:
       # The test refuses to report a number when the profiles disagree -- and refusing is a failure,
       # which is why `--no-fail-fast` is here too. Without it cargo stops at that target and every
       # target after it is skipped in silence, `sandbox_real_staleness` included.
+      #
+      # Issue 955: the step builds only the `sandbox_real_*` integration targets (`--test
+      # 'sandbox_real_*'`, a cargo glob) instead of every test binary of the crate. A run of this
+      # step spent ~930 s of its ~950 s compiling 149 release test binaries for 25 tests that take
+      # ~16 s; the 25 tests all live in those targets (`-- --list` gives 25 with and without the
+      # glob), and the daemon has no `sandbox_real_` doctests, so none are lost.
       - name: Test (real runtime, daemon)
-        run: cargo test --release -p micold-daemon --features sandbox-real-runtime sandbox_real_ --no-fail-fast -- --test-threads=1
+        run: cargo test --release -p micold-daemon --features sandbox-real-runtime --test 'sandbox_real_*' sandbox_real_ --no-fail-fast -- --test-threads=1
 
   # Constitution Principle VII: documentation ships and is verified in CI.
   # Feature 021 (FR-027): the restructuring treats the existing suite as its behavior
