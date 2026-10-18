@@ -285,7 +285,10 @@ pub fn bridge_with_env(
         }
         remote.push(' ');
     }
-    remote.push_str(&format!("\"{}/micold-daemon\" remote bridge", remote_dir(build)));
+    remote.push_str(&format!(
+        "\"{}/micold-daemon\" remote bridge",
+        remote_dir(build)
+    ));
     command(reach, platform, timeout, &remote, None)
 }
 
