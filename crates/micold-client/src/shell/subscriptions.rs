@@ -248,6 +248,15 @@ fn daemon_connections(app: &App) -> Subscription<Message> {
             }
         }
     }
+    // A running released-image container is dialled with its token, not provisioned (FR-017).
+    if app.sandbox.legacy {
+        if let Some(id) = crate::shell::sandbox::BootPlan::sandbox_daemon(
+            registry,
+            app.core.settings.legacy_default_daemon,
+        ) {
+            states.set_legacy(id, true);
+        }
+    }
     micold_client::daemon::connections(
         registry,
         &states,

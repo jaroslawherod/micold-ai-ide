@@ -17,14 +17,12 @@ mod sandbox_real_support;
 use std::time::{Duration, Instant};
 
 use futures_util::StreamExt;
-use micold_core::connect::{connect_at, Connected};
 use micold_core::daemons::{DaemonEvent, DaemonId, DaemonRegistry, DaemonRuntime, DaemonState};
-use micold_core::endpoint::DialAddress;
 use micold_core::protocol::codec::Frame;
 
 use sandbox_real_support::{
-    credentials, fake_ai_cli, open_session, start_container_daemons, start_host_daemon, Terminal,
-    FAKE_ECHO, FAKE_READY,
+    fake_ai_cli, open_session, start_container_daemons, start_host_daemon, Terminal, FAKE_ECHO,
+    FAKE_READY,
 };
 
 const DAEMON_BIN: &str = env!("CARGO_BIN_EXE_micold-daemon");
@@ -33,7 +31,7 @@ const DAEMON_BIN: &str = env!("CARGO_BIN_EXE_micold-daemon");
 async fn sandbox_real_multi_daemon_stopping_one_leaves_the_other_working() {
     let dir = tempfile::tempdir().unwrap();
     let fake = fake_ai_cli(&dir.path().join("fake-bin"));
-    let mut boxes = start_container_daemons(dir.path(), "md-multi", 17770, 1, &fake);
+    let mut boxes = start_container_daemons(dir.path(), "md-multi", 17770, 1);
     let (host, mut host_conn, host_serial) =
         start_host_daemon(&dir.path().join("host"), DAEMON_BIN, &fake, "md-multi-host").await;
 
@@ -47,6 +45,7 @@ async fn sandbox_real_multi_daemon_stopping_one_leaves_the_other_working() {
                 profile: Default::default(),
                 container_name: boxes[0].container.clone(),
                 port: boxes[0].port,
+                migration: None,
             }),
             true,
         )
@@ -123,17 +122,11 @@ async fn sandbox_real_multi_daemon_stopping_one_leaves_the_other_working() {
     };
     states.apply(box_id, DaemonEvent::Lost(lost));
 
-    // A redial fails too, which is what the application's retry loop would see.
-    let redial = connect_at(
-        &DialAddress::Loopback {
-            port: boxes[0].port,
-        },
-        "multi-daemon-redial",
-        &credentials(&boxes[0].token),
-    )
-    .await;
+    // A redial fails too, which is what the application's retry loop would see: the stopped
+    // container no longer publishes its SSH port.
+    let redial = tokio::net::TcpStream::connect(("127.0.0.1", boxes[0].port)).await;
     assert!(
-        !matches!(redial, Ok(Some(Connected::Ready(..)))),
+        redial.is_err(),
         "a stopped container daemon accepted a connection"
     );
 

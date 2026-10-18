@@ -284,6 +284,12 @@ pub fn copy(reach: &Reach, platform: ClientPlatform, timeout: u32, build: &str) 
     command(reach, platform, timeout, &remote, None)
 }
 
+/// The data home a container's daemon keeps its state under (`<this>/micold-ai-ide`): the basic
+/// image's `ENV XDG_DATA_HOME`, which an SSH session does not inherit (sshd builds the session's
+/// environment afresh), and the parent of the state directory provisioning installs the AI CLIs
+/// into.
+pub const CONTAINER_DATA_HOME: &str = "/var/lib";
+
 /// The bridge: the remote daemon binary's relay, whose stdin/stdout carry the protocol.
 pub fn bridge(reach: &Reach, platform: ClientPlatform, timeout: u32, build: &str) -> SshCommand {
     bridge_with_env(reach, platform, timeout, build, &[])

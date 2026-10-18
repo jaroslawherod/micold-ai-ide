@@ -872,7 +872,7 @@ fn env_include_settings(app: &App) -> EnvIncludeSettings {
 /// still says the user wanted a container and the thing answering is a host process.
 fn availability_source(app: &App) -> AvailabilitySource {
     match (app.sandbox.state.accepts_sessions(), &app.sandbox_boot) {
-        (true, Some(plan)) => AvailabilitySource::Image(plan.profile.image.reference.clone()),
+        (true, Some(plan)) => AvailabilitySource::Image(plan.profile.image.reference().to_string()),
         _ => AvailabilitySource::ThisComputer,
     }
 }

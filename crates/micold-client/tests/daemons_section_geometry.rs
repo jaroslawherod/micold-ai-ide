@@ -29,6 +29,7 @@ fn container(name: &str, port: u16) -> DaemonRuntime {
         profile: SandboxProfile::default(),
         container_name: name.into(),
         port,
+        migration: None,
     })
 }
 
@@ -185,7 +186,10 @@ fn the_container_form_paints_five_titles_with_only_container_open() {
             "title {title:?} missing: {shown:?}"
         );
     }
-    assert!(has(&shown, "Image source"), "Container is open: {shown:?}");
+    assert!(
+        has(&shown, "Basic image (recommended)"),
+        "Container is open: {shown:?}"
+    );
     for closed_body in [
         "The container starts with none of your credentials",
         "Names still resolve either way",

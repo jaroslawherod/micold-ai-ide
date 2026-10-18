@@ -30,6 +30,10 @@
 #![cfg(feature = "sandbox-real-runtime")]
 
 use std::path::PathBuf;
+
+mod sandbox_real_support;
+use sandbox_real_support::{image, make_keys, wait_for_sshd};
+
 /// The host home path, which is what the sandbox's `HOME` is set to (research R2).
 fn host_home() -> PathBuf {
     PathBuf::from(std::env::var("HOME").unwrap_or_else(|_| "/tmp".into()))
@@ -47,19 +51,17 @@ fn make_sandbox_home(state: &std::path::Path) {
 use std::process::Command;
 use std::time::{Duration, Instant};
 
-use micold_core::protocol::auth::Token;
 use micold_core::sandbox::cli::CliRuntime;
 use micold_core::sandbox::exec::SystemRunner;
-use micold_core::sandbox::image::{ImageSource, ImageSourceKind};
+use micold_core::sandbox::image::{ImageChoice, OwnImage};
 use micold_core::sandbox::runtime::{ContainerRuntime, Progress, RuntimeKind};
-use micold_core::sandbox::{CredentialLayout, MountSet, SandboxProfile, SandboxSpec, SecretMount};
+use micold_core::sandbox::{CredentialLayout, MountSet, SandboxProfile, SandboxSpec};
 
-const IMAGE: &str = "micold-daemon:dev";
 /// A throwaway tag, so making a reference cold never touches the one a developer is using.
 const PROBE_TAG: &str = "micold-enable-probe:sc004";
 const CONTAINER: &str = "micold-real-enable";
 const NETWORK: &str = "micold-real-enable-net";
-/// Nothing connects over this; it exists because every spec publishes a control port. Distinct from
+/// The host port the container's SSH port is published on; every spec publishes one. Distinct from
 /// the default so a developer's own sandbox cannot lose the bind while this runs.
 const PORT: u16 = 17730;
 
@@ -117,7 +119,7 @@ fn sandbox_real_first_enable_is_under_five_minutes_and_never_goes_quiet() {
     // --- make the reference cold -------------------------------------------------------------
     // Not timed: this is the test building a starting state, not the application doing work.
     let archive = dir.path().join("sandbox-image.tar");
-    docker_ok(&["tag", IMAGE, PROBE_TAG]);
+    docker_ok(&["tag", &image(), PROBE_TAG]);
     docker_ok(&["save", "-o", archive.to_str().unwrap(), PROBE_TAG]);
     docker_ok(&["rmi", PROBE_TAG]);
     let archive_bytes = std::fs::metadata(&archive).unwrap().len();
@@ -126,17 +128,11 @@ fn sandbox_real_first_enable_is_under_five_minutes_and_never_goes_quiet() {
         "the probe reference must be absent, or nothing is being acquired"
     );
 
-    let token = Token::generate();
-    let token_path = state.join("sandbox.token");
-    token.write_to(&token_path).unwrap();
+    let (_keys, ssh_keys) = make_keys(&state, PORT);
 
     let profile = SandboxProfile {
         runtime: RuntimeKind::Docker,
-        image: ImageSource {
-            kind: ImageSourceKind::ImportedFile,
-            reference: PROBE_TAG.to_string(),
-            path: Some(archive.clone()),
-        },
+        image: ImageChoice::Own(OwnImage::Archive(archive.clone())),
         ..SandboxProfile::default()
     };
     let (uid, gid) = micold_core::sandbox::host_identity();
@@ -149,10 +145,7 @@ fn sandbox_real_first_enable_is_under_five_minutes_and_never_goes_quiet() {
             &CredentialLayout::default(),
             state.clone(),
             &host_home(),
-            SecretMount {
-                host: token_path,
-                container: PathBuf::from("/run/micold/token"),
-            },
+            ssh_keys,
         ),
         uid,
         gid,
@@ -187,25 +180,9 @@ fn sandbox_real_first_enable_is_under_five_minutes_and_never_goes_quiet() {
         .unwrap_or_else(|e| panic!("start: {}", e.reason()));
     let launched = started.elapsed();
 
-    // "Enabled" is the daemon answering, not the container existing. The daemon writes its own log
-    // into the state directory, which is a host path here, so this reads the daemon's word for it
-    // rather than the runtime's.
-    let log = state.join("micold-daemon.log");
-    let ready_deadline = Instant::now() + Duration::from_secs(60);
-    loop {
-        if std::fs::read_to_string(&log)
-            .map(|s| s.contains("listening (sandboxed)"))
-            .unwrap_or(false)
-        {
-            break;
-        }
-        assert!(
-            Instant::now() < ready_deadline,
-            "the daemon never reported itself listening within 60s of start; log so far:\n{}",
-            std::fs::read_to_string(&log).unwrap_or_else(|_| "<no log written>".into())
-        );
-        std::thread::sleep(Duration::from_millis(50));
-    }
+    // "Enabled" is the container answering: the basic image starts sshd, and the daemon is
+    // provisioned over it afterwards (the daemon crate's suites), so this waits for the SSH banner.
+    wait_for_sshd(PORT, Duration::from_secs(60), "the container's sshd");
     let total = started.elapsed();
 
     // --- what it did ---------------------------------------------------------------------------

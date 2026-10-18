@@ -90,6 +90,7 @@ fn a_successful_start_retires_the_fallback() {
             capabilities: caps(),
             unsatisfiable: Vec::new(),
             mounted: None,
+            legacy: false,
         },
         SandboxLocations::default(),
     );
@@ -123,6 +124,7 @@ fn unenforceable_limits_survive_a_successful_start() {
                 reason: "overlay2 without pquota".into(),
             }],
             mounted: None,
+            legacy: false,
         },
         SandboxLocations::default(),
     );

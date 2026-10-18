@@ -18,23 +18,44 @@ use std::process::Command;
 use std::time::{Duration, Instant};
 
 use futures_util::{SinkExt, StreamExt};
-use micold_core::connect::{connect_at, Connected, Credentials, DaemonConnection};
-use micold_core::endpoint::DialAddress;
+use micold_core::connect::{Connected, DaemonConnection, Welcome};
 use micold_core::project::{Availability, Project};
-use micold_core::protocol::auth::Token;
 use micold_core::protocol::codec::Frame;
 use micold_core::protocol::grid::GridFrame;
-use micold_core::protocol::messages::{CatalogSnapshot, ClientMsg, PresentedToken};
+use micold_core::protocol::messages::{CatalogSnapshot, ClientMsg};
+use micold_core::provision::keys::DaemonKeys;
+use micold_core::provision::{
+    self, AiCliTable, CancelToken, Egress, EventSink, Ownership, ProvisionTarget, StepBounds,
+};
+use micold_core::sandbox::basic_image::DEV_BASIC_IMAGE;
 use micold_core::sandbox::dialect::Dialect;
 use micold_core::sandbox::runtime::RuntimeKind;
+use micold_core::sandbox::AiCliSelection;
 use micold_core::session::{
     AiCli, Session, SessionId, SessionLabel, SessionLocation, TerminalMode,
 };
+use micold_core::ssh::argv::{current_build_id, PinnedReach, Reach};
+use micold_core::ssh::provision::ProvisionOptions;
+use micold_core::ssh::{ClientPlatform, ReasonContext, SystemSsh};
 use micold_core::store::ProjectStore;
 use micold_core::workspace::Workspace;
 
-/// Built by `mise run image` from the working tree.
-pub const IMAGE: &str = "micold-daemon:dev";
+/// The environment variable CI's `sandbox-runtime` job (and `mise run image`) name the basic image
+/// with; unset, the local `:dev` tag.
+pub const IMAGE_TAG_ENV: &str = "MICOLD_BASIC_IMAGE_TAG";
+
+/// The basic image these suites start containers from: built by `mise run image` from
+/// `packaging/basic` (feature 806, T055).
+pub fn image() -> String {
+    std::env::var(IMAGE_TAG_ENV)
+        .ok()
+        .filter(|tag| !tag.is_empty())
+        .unwrap_or_else(|| DEV_BASIC_IMAGE.to_string())
+}
+
+/// The state directory inside the container (the basic image's contract), where the host's
+/// `<data_home>/micold-ai-ide` is mounted.
+pub const CONTAINER_STATE: &str = "/var/lib/micold-ai-ide";
 
 // ---------------------------------------------------------------------------------------------
 // Reading a terminal back off the wire
@@ -252,7 +273,7 @@ const XDG_OVERRIDDEN: [&str; 2] = ["XDG_RUNTIME_DIR", "XDG_DATA_HOME"];
 static ORIGINAL_XDG: std::sync::OnceLock<Vec<(&'static str, Option<std::ffi::OsString>)>> =
     std::sync::OnceLock::new();
 
-fn original_xdg() -> &'static Vec<(&'static str, Option<std::ffi::OsString>)> {
+pub fn original_xdg() -> &'static Vec<(&'static str, Option<std::ffi::OsString>)> {
     ORIGINAL_XDG.get_or_init(|| {
         XDG_OVERRIDDEN
             .iter()
@@ -310,11 +331,11 @@ pub fn cli_out(args: &[&str]) -> String {
 pub struct SandboxSpec<'a> {
     pub container: &'a str,
     pub network: &'a str,
-    /// Never 7727: a developer's own sandbox must neither be disturbed nor accidentally probed.
+    /// The host port the container's SSH server (2222) is published on, on loopback. Never 7727's
+    /// neighbourhood: a developer's own sandbox must neither be disturbed nor accidentally probed.
     pub port: u16,
     pub data_home: &'a Path,
     pub project: &'a Path,
-    pub token_path: &'a Path,
     /// The daemon's `HOME`, and so the session's. Passing the **host** home is what `argv::create`
     /// does, and it is what makes "`ls ~` shows nothing" worth asserting at all. The directory
     /// actually mounted there is the application's own (FR-004d), never the host's.
@@ -341,6 +362,38 @@ pub struct Sandbox {
 impl Drop for Sandbox {
     fn drop(&mut self) {
         purge(&self.container, &self.network);
+    }
+}
+
+/// What [`wait_for_accept`] needs to provision and dial a container [`start_sandbox`] started.
+struct Started {
+    container: String,
+    keys: DaemonKeys,
+    state: PathBuf,
+    /// Replaces the stand-in AI CLI's script for this container's install step.
+    standin_script: Option<String>,
+}
+
+/// Make the AI CLI the install step puts in the container behind `port` run `script` instead of the
+/// default stand-in. Call after [`start_sandbox`] and before the first [`wait_for_accept`].
+pub fn use_standin_script(port: u16, script: &str) {
+    STARTED
+        .lock()
+        .unwrap()
+        .get_mut(&port)
+        .unwrap_or_else(|| panic!("no sandbox was started on port {port}"))
+        .standin_script = Some(script.to_string());
+}
+
+static STARTED: std::sync::Mutex<BTreeMap<u16, Started>> = std::sync::Mutex::new(BTreeMap::new());
+
+/// The runner for `ssh`/`ssh-keygen`, with this target's own daemon as the build to copy.
+fn ssh_host() -> SystemSsh {
+    SystemSsh {
+        own_daemon: PathBuf::from(env!("CARGO_BIN_EXE_micold-daemon")),
+        bundled_dir: None,
+        ssh_path: None,
+        cancel: None,
     }
 }
 
@@ -386,6 +439,11 @@ fn wait_until_absent(program: &str, list: &[&str], key: &str, name: &str) {
     }
 }
 
+/// Create and start the container the application would start from the basic image: the state
+/// directory mounted at `/var/lib/micold-ai-ide`, the daemon's SSH keys mounted as the image's
+/// contract names them, the SSH port published on loopback. The daemon is not started here: the
+/// first [`wait_for_accept`] provisions it over SSH, as the client does.
+///
 /// Mounts the *state* directory, one level below the data home — the image sets
 /// `XDG_DATA_HOME=/var/lib`, so `/var/lib/micold-ai-ide` is where the daemon reads its catalogue.
 /// Mounting the data home itself gives the daemon an empty catalogue, and every session start then
@@ -394,26 +452,46 @@ pub fn start_sandbox(spec: &SandboxSpec<'_>) -> Sandbox {
     purge(spec.container, spec.network);
     cli(&["network", "create", "--driver", "bridge", spec.network]);
 
+    let state = spec.data_home.join("micold-ai-ide");
+    std::fs::create_dir_all(&state).unwrap();
+    // The keys the container's sshd reads and the client dials with, made the way the client makes
+    // them (`DaemonKeys::ensure`) and pinned for this port before the container exists.
+    let keys = block_on_thread(async {
+        let keys = DaemonKeys::ensure(&state.join("ssh"), ClientPlatform::current(), &ssh_host())
+            .await
+            .unwrap_or_else(|f| panic!("could not make the daemon's SSH keys: {f:?}"));
+        keys.write_known_hosts(spec.port).expect("pin the host key");
+        keys
+    });
+
     let (uid, gid) = micold_core::sandbox::host_identity();
-    let publish = format!("127.0.0.1:{}:7727", spec.port);
-    let home_env = format!("HOME={}", spec.home);
-    let image_env = format!("MICOLD_IMAGE_REFERENCE={IMAGE}");
-    let project_mount = format!("{0}:{0}:rw", spec.project.display());
-    let state_mount = format!(
-        "{}:/var/lib/micold-ai-ide:rw",
-        spec.data_home.join("micold-ai-ide").display()
+    let image = image();
+    let publish = format!(
+        "127.0.0.1:{}:{}",
+        spec.port,
+        micold_core::sandbox::argv::CONTAINER_SSH_PORT
     );
-    let token_mount = format!("{}:/run/micold/token:ro", spec.token_path.display());
+    let home_env = format!("HOME={}", spec.home);
+    let micold_home_env = format!("MICOLD_HOME={}", spec.home);
+    let image_env = format!("MICOLD_IMAGE_REFERENCE={image}");
+    let project_mount = format!("{0}:{0}:rw", spec.project.display());
+    let state_mount = format!("{}:{CONTAINER_STATE}:rw", state.display());
     // The sandbox's own writable home, at the path `HOME` names (FR-004d). Created here rather than
     // left to the runtime, which would create a missing bind source owned by **root** — leaving the
     // uid the container runs as unable to write to its own home, which is the defect this mount
     // exists to fix arriving by another route.
-    let home_dir = spec
-        .data_home
-        .join("micold-ai-ide")
-        .join(micold_core::sandbox::SANDBOX_HOME_DIR);
+    let home_dir = state.join(micold_core::sandbox::SANDBOX_HOME_DIR);
     std::fs::create_dir_all(&home_dir).unwrap();
     let home_mount = format!("{}:{}:rw", home_dir.display(), spec.home);
+    // The three server-side key files, as single read-only files at the names sshd is configured
+    // with (`packaging/basic/sshd_config`) — what `argv::mount_args` mounts.
+    let ssh_dir = micold_core::sandbox::argv::CONTAINER_SSH_DIR;
+    let key_mounts = [
+        ("host_ed25519", "host_ed25519_key"),
+        ("host_ed25519.pub", "host_ed25519_key.pub"),
+        ("authorized_keys", "authorized_keys"),
+    ]
+    .map(|(file, as_name)| format!("{}:{ssh_dir}/{as_name}:ro", keys.dir.join(file).display()));
 
     let mut args: Vec<String> = [
         "create",
@@ -427,15 +505,15 @@ pub fn start_sandbox(spec: &SandboxSpec<'_>) -> Sandbox {
         &publish,
         "-e",
         &home_env,
+        // The entrypoint adds the passwd entry sshd needs, with this as the home (the sessions'
+        // `HOME`), as `argv::create` passes it.
+        "-e",
+        &micold_home_env,
         // What `argv::create` passes so a `StaleDevImage` refusal can name the image to rebuild
         // (FR-024d). Mirrored here because a harness that omits it would have hidden the defect
         // that it was never passed at all.
         "-e",
         &image_env,
-        // Pinned rather than inherited: an unsandboxed comparison must run the same shell, and a
-        // probe's output must not depend on whose login files the host happens to have.
-        "-e",
-        "SHELL=/bin/sh",
         // Home first, for the reason `argv::mount_args` gives: the project usually lives *under*
         // the user's home, so it has to land on top of this mount rather than under it.
         "-v",
@@ -444,12 +522,14 @@ pub fn start_sandbox(spec: &SandboxSpec<'_>) -> Sandbox {
         &project_mount,
         "-v",
         &state_mount,
-        "-v",
-        &token_mount,
     ]
     .iter()
     .map(|s| s.to_string())
     .collect();
+    for mount in &key_mounts {
+        args.push("-v".to_string());
+        args.push(mount.clone());
+    }
     // From the dialect, not spelled here: Docker's `--user uid:gid` and podman's `--userns=keep-id`
     // are the one place the two runtimes genuinely differ (R3), and it is the difference the last
     // box of quickstart §B.2 — a file written into the project is owned by the host user, not root
@@ -470,15 +550,41 @@ pub fn start_sandbox(spec: &SandboxSpec<'_>) -> Sandbox {
         args.push(format!("{}={value}", micold_core::spawn::IDLE_STOP_ENV));
     }
     args.extend(spec.extra.iter().cloned());
-    args.push(IMAGE.to_string());
+    args.push(image);
 
     cli(&args.iter().map(String::as_str).collect::<Vec<_>>());
     cli(&["start", spec.container]);
 
+    STARTED.lock().unwrap().insert(
+        spec.port,
+        Started {
+            container: spec.container.to_string(),
+            keys,
+            state,
+            standin_script: None,
+        },
+    );
     Sandbox {
         container: spec.container.to_string(),
         network: spec.network.to_string(),
     }
+}
+
+/// Run `future` to completion on a thread of its own: the callers are inside `#[tokio::test]`
+/// runtimes, which cannot be blocked on from within.
+fn block_on_thread<T: Send>(future: impl std::future::Future<Output = T> + Send) -> T {
+    std::thread::scope(|scope| {
+        scope
+            .spawn(|| {
+                tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .expect("runtime")
+                    .block_on(future)
+            })
+            .join()
+            .expect("helper thread")
+    })
 }
 
 /// Write the catalogue the containerised daemon will adopt, and return the session it may start.
@@ -528,13 +634,6 @@ pub fn seed_with_mode(
     id
 }
 
-pub fn credentials(token: &Token) -> Credentials {
-    Credentials {
-        auth_token: Some(PresentedToken::new(token.as_str())),
-        require_fingerprint_match: false,
-    }
-}
-
 /// The daemon's expected next input serial for `session`, from an authoritative catalogue.
 ///
 /// The client's own `SessionInputStamper::seed_from_catalog` reads exactly this field for exactly
@@ -554,23 +653,129 @@ pub fn input_serial(catalog: &CatalogSnapshot, session: SessionId) -> u64 {
         .unwrap_or_default()
 }
 
-/// Connect, returning the connection **and the welcome catalogue** — the latter because the input
-/// serial travels in it and a probe cannot type without one. See [`input_serial`].
-pub async fn wait_for_accept(
-    port: u16,
-    credentials: &Credentials,
-) -> (DaemonConnection, CatalogSnapshot) {
-    let address = DialAddress::Loopback { port };
-    let deadline = Instant::now() + Duration::from_secs(60);
-    loop {
-        match connect_at(&address, "sandbox-real-probe", credentials).await {
-            Ok(Some(Connected::Ready(conn, welcome))) => return (*conn, welcome.catalog),
-            Ok(Some(Connected::Refused(reason))) => {
-                panic!("the sandboxed daemon refused this client: {reason:?}")
+/// Provision the daemon in the container [`start_sandbox`] started on `port` and connect to it,
+/// returning the connection **and the welcome catalogue** — the latter because the input serial
+/// travels in it and a probe cannot type without one. See [`input_serial`].
+///
+/// The client's own sequence (`container_attempt`): wait for the container to answer, ask it its
+/// login name, then copy this build, install the stand-in AI CLIs (no network: [`standin_table`])
+/// and bridge. A second call on a running container copies and installs nothing and bridges again,
+/// which is how a reconnect works.
+pub async fn wait_for_accept(port: u16) -> (DaemonConnection, CatalogSnapshot) {
+    let (conn, welcome) = provision_and_connect(port).await;
+    (conn, welcome.catalog)
+}
+
+/// [`wait_for_accept`], with the whole welcome: the daemon's build string and settings.
+pub async fn provision_and_connect(port: u16) -> (DaemonConnection, Welcome) {
+    let (container, client_key, known_hosts, state, script) = {
+        let started = STARTED.lock().unwrap();
+        let s = started
+            .get(&port)
+            .unwrap_or_else(|| panic!("no sandbox was started on port {port}"));
+        (
+            s.container.clone(),
+            s.keys.client_key(),
+            s.keys.known_hosts(),
+            s.state.clone(),
+            s.standin_script.clone(),
+        )
+    };
+    let host = ssh_host();
+    let bounds = StepBounds::container();
+    let login = provision::login::wait_for_login(
+        &host,
+        dialect().program,
+        &container,
+        bounds.acquire + bounds.create_container,
+    )
+    .await
+    .unwrap_or_else(|reason| panic!("the container {container} did not start: {reason}"));
+    let platform = ClientPlatform::current();
+    let target = ProvisionTarget {
+        reach: Reach::Pinned(PinnedReach {
+            host: "127.0.0.1".to_string(),
+            port,
+            user: login,
+            key: client_key,
+            known_hosts,
+        }),
+        owned: Ownership::AppOwned {
+            ai_clis: AiCliSelection::all(),
+            table: standin_table(&state, &[], script.as_deref()),
+            state_dir: PathBuf::from(CONTAINER_STATE),
+            egress: Egress::Direct,
+        },
+        bounds,
+        // As the client's container target: the image's data home rides the bridge command.
+        env: vec![(
+            "XDG_DATA_HOME".to_string(),
+            micold_core::ssh::argv::CONTAINER_DATA_HOME.to_string(),
+        )],
+    };
+    let opts = ProvisionOptions {
+        platform,
+        client_arch: std::env::consts::ARCH.to_string(),
+        timeout_secs: 30,
+        build_id: current_build_id(),
+        client_build: "micold-ai-ide/sandbox-real".to_string(),
+    };
+    let sink: EventSink = std::sync::Arc::new(|_| {});
+    match provision::run(&host, &target, &opts, &CancelToken::new(), &sink).await {
+        Ok(provisioned) => {
+            for warning in &provisioned.warnings {
+                eprintln!("provisioning warning: {warning:?}");
             }
-            _ if Instant::now() < deadline => tokio::time::sleep(Duration::from_millis(200)).await,
-            _ => panic!("the sandboxed daemon never accepted within 60s"),
+            match provisioned.connected {
+                Connected::Ready(conn, welcome) => (*conn, welcome),
+                Connected::Refused(reason) => {
+                    panic!("the sandboxed daemon refused this client: {reason:?}")
+                }
+            }
         }
+        Err(failure) => panic!(
+            "provisioning the container {container} failed: {}\n{}",
+            failure.reason(&ReasonContext {
+                host: "127.0.0.1".to_string(),
+                port,
+                timeout_secs: 30,
+                platform,
+            }),
+            failure.output
+        ),
+    }
+}
+
+/// Whether a daemon process (not a bridge, whose command line ends in `remote bridge`) is running
+/// in `container`.
+pub fn daemon_running(container: &str) -> bool {
+    runtime_cmd(dialect().program)
+        .args([
+            "exec",
+            container,
+            "pgrep",
+            "-f",
+            "/remote/.*/micold-daemon$",
+        ])
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
+/// Provision the container's daemon (which records it for the entrypoint), disconnect, and restart
+/// the container so the entrypoint starts the daemon with the container's own environment.
+pub async fn provision_then_restart(container: &str, port: u16) {
+    {
+        let (_conn, _catalog) = wait_for_accept(port).await;
+    }
+    cli(&["restart", "-t", "1", container]);
+    let deadline = Instant::now() + Duration::from_secs(30);
+    while !daemon_running(container) {
+        assert!(
+            Instant::now() < deadline,
+            "the entrypoint did not start the provisioned daemon after the restart"
+        );
+        tokio::time::sleep(Duration::from_millis(250)).await;
     }
 }
 
@@ -626,9 +831,6 @@ pub const FAKE_READY: &str = "FAKE-AI-READY";
 /// echo of the input never satisfies a wait for the answer.
 pub const FAKE_ECHO: &str = "FAKE-AI-ECHO:";
 
-/// Where the stand-in's directory is mounted inside a container.
-pub const FAKE_DIR_IN_CONTAINER: &str = "/opt/micold-fake";
-
 /// Write a `claude` script into `dir` and return `dir`, which goes first on `PATH`: no sign-in, no
 /// network, no cost. It is *not* the shipped image's CLI, which is why it is mounted rather than
 /// baked in.
@@ -648,11 +850,25 @@ pub fn fake_ai_cli(dir: &Path) -> PathBuf {
 }
 
 /// `npm pack` one stand-in package (`standin-cli/<variant>`) into `into` and return the tarball.
-fn pack_standin(variant: &str, into: &Path) -> PathBuf {
-    let source = Path::new(env!("CARGO_MANIFEST_DIR"))
+fn pack_standin(variant: &str, into: &Path, script: Option<&str>) -> PathBuf {
+    let mut source = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests/sandbox_real_support/standin-cli")
         .join(variant);
     std::fs::create_dir_all(into).expect("pack dir");
+    if let Some(script) = script {
+        // A copy of the package with its script replaced, so a suite can script its own AI CLI.
+        let custom = into.join("custom-src");
+        std::fs::create_dir_all(custom.join("bin")).expect("custom package dir");
+        std::fs::copy(source.join("package.json"), custom.join("package.json"))
+            .expect("copy package.json");
+        let cli = custom.join("bin/cli.sh");
+        std::fs::write(&cli, script).expect("write the script");
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&cli, std::fs::Permissions::from_mode(0o755)).expect("chmod");
+        }
+        source = custom;
+    }
     let out = Command::new("npm")
         .args(["pack", "--silent", "--pack-destination"])
         .arg(into)
@@ -667,39 +883,35 @@ fn pack_standin(variant: &str, into: &Path) -> PathBuf {
     into.join(String::from_utf8_lossy(&out.stdout).trim())
 }
 
-/// An [`AiCliTable`](micold_core::provision::AiCliTable) mapping every AI CLI to the stand-in
-/// package packed into `dir` (the daemon's state directory, so the target sees it), or to the
-/// variant whose install fails for each CLI in `failing`. No registry, no network (FR-025).
+/// An [`AiCliTable`] mapping every AI CLI to the stand-in package, or to the variant whose install
+/// fails for each CLI in `failing`. The tarballs are packed into `<state>/standin` on the host; the
+/// rows name them by the path the **container** sees, because the install runs there. No registry,
+/// no network (FR-025).
+///
+/// `script` replaces the good variant's script (see [`use_standin_script`]).
 pub fn standin_table(
-    dir: &Path,
+    state: &Path,
     failing: &[micold_core::session::AiCli],
-) -> micold_core::provision::AiCliTable {
-    let good = pack_standin("good", dir);
-    let bad = pack_standin("failing", dir);
-    micold_core::provision::AiCliTable::from_tarballs(
-        micold_core::session::AiCli::ALL.into_iter().map(|cli| {
-            (
-                cli,
-                if failing.contains(&cli) {
-                    bad.clone()
-                } else {
-                    good.clone()
-                },
-            )
-        }),
-    )
-}
-
-/// Extra `create` arguments that put the stand-in first on the container's `PATH`.
-pub fn fake_ai_cli_args(dir: &Path) -> Vec<String> {
-    vec![
-        "-v".to_string(),
-        format!("{}:{FAKE_DIR_IN_CONTAINER}:ro", dir.display()),
-        "-e".to_string(),
-        format!(
-            "PATH={FAKE_DIR_IN_CONTAINER}:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-        ),
-    ]
+    script: Option<&str>,
+) -> AiCliTable {
+    let dir = state.join("standin");
+    let in_container = |tarball: PathBuf| {
+        PathBuf::from(CONTAINER_STATE)
+            .join("standin")
+            .join(tarball.file_name().expect("tarball name"))
+    };
+    let good = in_container(pack_standin("good", &dir, script));
+    let bad = in_container(pack_standin("failing", &dir, None));
+    AiCliTable::from_tarballs(micold_core::session::AiCli::ALL.into_iter().map(|cli| {
+        (
+            cli,
+            if failing.contains(&cli) {
+                bad.clone()
+            } else {
+                good.clone()
+            },
+        )
+    }))
 }
 
 impl Terminal<'_> {
@@ -748,7 +960,6 @@ impl Terminal<'_> {
 pub struct ContainerDaemon {
     pub container: String,
     pub port: u16,
-    pub token: Token,
     pub project: PathBuf,
     pub session: SessionId,
     pub log: PathBuf,
@@ -758,7 +969,7 @@ pub struct ContainerDaemon {
 impl ContainerDaemon {
     /// Connect, with the welcome catalogue's input serial for the seeded session.
     pub async fn connect(&self) -> (DaemonConnection, u64) {
-        let (conn, catalog) = wait_for_accept(self.port, &credentials(&self.token)).await;
+        let (conn, catalog) = wait_for_accept(self.port).await;
         let serial = input_serial(&catalog, self.session);
         (conn, serial)
     }
@@ -771,17 +982,17 @@ impl ContainerDaemon {
 }
 
 /// Start `count` container daemons, each with its own container, network, port, state directory
-/// and project under `base`, all with the stand-in on `PATH` and an AI CLI session seeded.
+/// and project under `base`, all with the stand-in AI CLIs installed by provisioning and an AI CLI
+/// session seeded.
 /// Names and ports derive from `tag` and `first_port`, so concurrent targets do not collide.
 pub fn start_container_daemons(
     base: &Path,
     tag: &str,
     first_port: u16,
     count: u16,
-    fake_dir: &Path,
 ) -> Vec<ContainerDaemon> {
     let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
-    let extra = fake_ai_cli_args(fake_dir);
+    let extra: Vec<String> = Vec::new();
     (0..count)
         .map(|i| {
             let dir = base.join(format!("box{i}"));
@@ -791,9 +1002,6 @@ pub fn start_container_daemons(
             let session =
                 seed_with_mode(&data, &project, &format!("{tag}-{i}"), TerminalMode::AiCli);
             let state = data.join("micold-ai-ide");
-            let token = Token::generate();
-            let token_path = state.join("sandbox.token");
-            token.write_to(&token_path).unwrap();
             let container = format!("micold-{tag}-{i}");
             let network = format!("{container}-net");
             let port = first_port + i;
@@ -803,7 +1011,6 @@ pub fn start_container_daemons(
                 port,
                 data_home: &data,
                 project: &project,
-                token_path: &token_path,
                 home: &home,
                 survive_logout: false,
                 extra: &extra,
@@ -811,7 +1018,6 @@ pub fn start_container_daemons(
             ContainerDaemon {
                 container,
                 port,
-                token,
                 project,
                 session,
                 log: state.join("micold-daemon.log"),

@@ -367,6 +367,7 @@ fn form<'a>(
         let view = ContainerView {
             profile: &draft.profile,
             image_path: &draft.image_path,
+            image_reference: &draft.image_reference,
             cpus: &draft.cpus,
             memory_mib: &draft.memory_mib,
             pids: &draft.pids,

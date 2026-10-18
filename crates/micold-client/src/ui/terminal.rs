@@ -1465,6 +1465,7 @@ mod tests {
                     profile: Default::default(),
                     container_name: "box-ctr".into(),
                     port: 7001,
+                    migration: None,
                 }),
                 true,
             )

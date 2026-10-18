@@ -30,13 +30,12 @@ mod sandbox_real_support;
 use std::time::{Duration, Instant};
 
 use futures_util::{SinkExt, StreamExt};
-use micold_core::protocol::auth::Token;
 use micold_core::protocol::codec::Frame;
 use micold_core::protocol::messages::{ClientMsg, DaemonMsg};
 
 use sandbox_real_support::{
-    cli_out, credentials, input_serial, open_session, seed, start_sandbox, wait_for_accept,
-    SandboxSpec, Terminal,
+    cli_out, input_serial, open_session, seed, start_sandbox, wait_for_accept, SandboxSpec,
+    Terminal,
 };
 
 const CONTAINER: &str = "micold-staleness-probe";
@@ -78,9 +77,6 @@ async fn sandbox_real_a_project_registered_after_boot_is_outside_the_running_con
     std::fs::write(late.join("marker.txt"), LATE_MARKER).unwrap();
 
     let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
-    let token = Token::generate();
-    let token_path = data.join("micold-ai-ide").join("sandbox.token");
-    token.write_to(&token_path).unwrap();
     let daemon_log = data.join("micold-ai-ide").join("micold-daemon.log");
 
     let _sandbox = start_sandbox(&SandboxSpec {
@@ -89,14 +85,13 @@ async fn sandbox_real_a_project_registered_after_boot_is_outside_the_running_con
         port: PORT,
         data_home: &data,
         project: &project,
-        token_path: &token_path,
         home: &home,
         survive_logout: false,
         extra: &[],
     });
 
     let started_at = cli_out(&["inspect", "-f", "{{.State.StartedAt}}", CONTAINER]);
-    let (mut conn, catalog) = wait_for_accept(PORT, &credentials(&token)).await;
+    let (mut conn, catalog) = wait_for_accept(PORT).await;
     let serial = input_serial(&catalog, session);
     let screen = open_session(&mut conn, &project, session, &daemon_log).await;
 
@@ -192,9 +187,6 @@ async fn sandbox_real_sessions_survive_a_client_restart() {
     let session = seed(&data, &project, "survival");
 
     let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
-    let token = Token::generate();
-    let token_path = data.join("micold-ai-ide").join("sandbox.token");
-    token.write_to(&token_path).unwrap();
     let daemon_log = data.join("micold-ai-ide").join("micold-daemon.log");
 
     let _sandbox = start_sandbox(&SandboxSpec {
@@ -203,7 +195,6 @@ async fn sandbox_real_sessions_survive_a_client_restart() {
         port: SURVIVAL_PORT,
         data_home: &data,
         project: &project,
-        token_path: &token_path,
         home: &home,
         survive_logout: false,
         extra: &[],
@@ -211,7 +202,7 @@ async fn sandbox_real_sessions_survive_a_client_restart() {
 
     let pid_before;
     {
-        let (mut conn, catalog) = wait_for_accept(SURVIVAL_PORT, &credentials(&token)).await;
+        let (mut conn, catalog) = wait_for_accept(SURVIVAL_PORT).await;
         let serial = input_serial(&catalog, session);
         let screen = open_session(&mut conn, &project, session, &daemon_log).await;
         let mut term = Terminal::new(
@@ -234,7 +225,7 @@ async fn sandbox_real_sessions_survive_a_client_restart() {
     // Seeded from the *daemon's* catalogue, exactly as a restarted client seeds its stamper
     // (`SessionInputStamper::seed_from_catalog`, BUG-006). This is the half of a client restart the
     // probe would otherwise skip, and skipping it made the session look dead.
-    let (mut conn, catalog) = wait_for_accept(SURVIVAL_PORT, &credentials(&token)).await;
+    let (mut conn, catalog) = wait_for_accept(SURVIVAL_PORT).await;
     let serial = input_serial(&catalog, session);
     assert!(
         serial > 0,
@@ -342,9 +333,6 @@ async fn sandbox_real_the_survival_opt_in_brings_the_sandbox_back_without_the_ap
     let session = seed(&data, &project, "reboot");
 
     let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
-    let token = Token::generate();
-    let token_path = data.join("micold-ai-ide").join("sandbox.token");
-    token.write_to(&token_path).unwrap();
     let daemon_log = data.join("micold-ai-ide").join("micold-daemon.log");
 
     let _sandbox = start_sandbox(&SandboxSpec {
@@ -353,7 +341,6 @@ async fn sandbox_real_the_survival_opt_in_brings_the_sandbox_back_without_the_ap
         port: REBOOT_PORT,
         data_home: &data,
         project: &project,
-        token_path: &token_path,
         home: &home,
         survive_logout: true,
         extra: &[],
@@ -375,7 +362,7 @@ async fn sandbox_real_the_survival_opt_in_brings_the_sandbox_back_without_the_ap
 
     let before = state_of(REBOOT_CONTAINER);
     {
-        let (mut conn, catalog) = wait_for_accept(REBOOT_PORT, &credentials(&token)).await;
+        let (mut conn, catalog) = wait_for_accept(REBOOT_PORT).await;
         let serial = input_serial(&catalog, session);
         let screen = open_session(&mut conn, &project, session, &daemon_log).await;
         let mut term = Terminal::new(
@@ -415,7 +402,7 @@ async fn sandbox_real_the_survival_opt_in_brings_the_sandbox_back_without_the_ap
 
     // Nothing on the host was asked to do this: no client connected, no `start` was issued, and
     // the application is not running at all.
-    let (mut conn, catalog) = wait_for_accept(REBOOT_PORT, &credentials(&token)).await;
+    let (mut conn, catalog) = wait_for_accept(REBOOT_PORT).await;
     assert!(
         catalog
             .projects
@@ -453,9 +440,6 @@ async fn sandbox_real_without_the_opt_in_nothing_brings_the_sandbox_back() {
     seed(&data, &project, "no-reboot");
 
     let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
-    let token = Token::generate();
-    let token_path = data.join("micold-ai-ide").join("sandbox.token");
-    token.write_to(&token_path).unwrap();
 
     let _sandbox = start_sandbox(&SandboxSpec {
         container: NO_REBOOT_CONTAINER,
@@ -463,7 +447,6 @@ async fn sandbox_real_without_the_opt_in_nothing_brings_the_sandbox_back() {
         port: NO_REBOOT_PORT,
         data_home: &data,
         project: &project,
-        token_path: &token_path,
         home: &home,
         survive_logout: false,
         extra: &[],

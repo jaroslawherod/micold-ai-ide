@@ -11,7 +11,7 @@
 //! asserted on both, so a change that quietly makes one of them special fails here.
 
 use micold_core::sandbox::argv;
-use micold_core::sandbox::image::ImageSource;
+use micold_core::sandbox::image::{ImageChoice, OwnImage};
 use micold_core::sandbox::pathmap::{self, WINDOWS_MOUNT_ROOT};
 use micold_core::sandbox::placement::{GitRouting, Placement};
 use micold_core::sandbox::runtime::{
@@ -61,10 +61,7 @@ fn spec_for(windows_host: bool) -> SandboxSpec {
         (NIX_PROJECT, NIX_HOME, NIX_STATE, NIX_TOKEN)
     };
     let profile = SandboxProfile {
-        image: ImageSource {
-            reference: "micold-daemon:0.27.0".into(),
-            ..ImageSource::default()
-        },
+        image: ImageChoice::Own(OwnImage::Reference("micold-daemon:0.27.0".into())),
         credentials: BTreeSet::from([
             CredentialShare::GitConfig,
             CredentialShare::GitCredentials,
@@ -139,9 +136,20 @@ fn mapped_volumes(
 ) -> Vec<(String, String, String)> {
     let fixed = [
         spec.mounts.state.host.to_string_lossy().into_owned(),
-        spec.mounts.secret.host.to_string_lossy().into_owned(),
         spec.mounts.home.host.to_string_lossy().into_owned(),
-    ];
+    ]
+    .into_iter()
+    .chain(
+        ["host_ed25519", "host_ed25519.pub", "authorized_keys"].map(|f| {
+            spec.mounts
+                .secret
+                .host
+                .join(f)
+                .to_string_lossy()
+                .into_owned()
+        }),
+    )
+    .collect::<Vec<_>>();
     volumes(args)
         .into_iter()
         .filter(|(host, _, _)| !fixed.contains(host))
@@ -217,13 +225,13 @@ fn rule_m1_holds_under_both_mappings() {
         let allowed: Vec<&Path> = spec.mounts.host_paths();
         for (host, _, _) in volumes(&argv::create(&spec, &caps())) {
             assert!(
-                allowed.iter().any(|p| p.to_string_lossy() == host),
+                allowed.iter().any(|p| Path::new(&host).starts_with(p)),
                 "argv mounted {host:?}, which is not in the mount set (windows_host={windows_host})"
             );
         }
         assert_eq!(
             volumes(&argv::create(&spec, &caps())).len(),
-            allowed.len(),
+            allowed.len() + 2, // the key directory is mounted as three single files
             "argv must mount the whole set and nothing else (windows_host={windows_host})"
         );
     }

@@ -17,7 +17,6 @@ use iced::Task;
 use micold_client::app::Message;
 use micold_client::features::sandbox::{Msg as SandboxMsg, SandboxLocations};
 use micold_core::endpoint::DEFAULT_SANDBOX_PORT;
-use micold_core::protocol::auth::{host_token_path, Token, CONTAINER_TOKEN_PATH};
 use micold_core::sandbox::cli::CliRuntime;
 use micold_core::sandbox::exec::{CommandRunner, SystemRunner};
 use micold_core::sandbox::lifecycle::{bring_up, Failure, SandboxState, Started};
@@ -279,17 +278,6 @@ pub fn start<R: CommandRunner>(
     runner: R,
     observe: &mut dyn FnMut(SandboxState),
 ) -> Result<Ready, Failure> {
-    // A fresh token per sandbox lifetime. Written 0600 and mounted read-only, so it reaches the
-    // container through the filesystem rather than through argv — where `inspect` would show it.
-    let token = Token::generate();
-    let token_path = host_token_path(&facts.state_dir);
-    if let Err(e) = token.write_to(&token_path) {
-        return Err(preparation_failed(format!(
-            "could not write the sandbox token to {}: {e}",
-            token_path.display()
-        )));
-    }
-
     // The sandbox's own home, created here rather than left to the runtime (FR-004d). A bind
     // source the runtime has to create it creates as **root**, which leaves the uid the container
     // runs as unable to write to its own `HOME` — the failure this mount exists to fix, arriving by
@@ -377,17 +365,7 @@ pub fn start<R: CommandRunner>(
         home: facts.home.clone(),
     };
 
-    // The fingerprint this client was built with. A sandbox whose container carries a different
-    // one came from another source tree, which only matters — and only refuses — for a locally
-    // built image (research R8).
-    let started = bring_up(
-        &runtime,
-        profile,
-        &mounts,
-        micold_core::protocol::version::BUILD_FINGERPRINT,
-        build_spec,
-        observe,
-    )?;
+    let started = bring_up(&runtime, profile, &mounts, build_spec, observe)?;
     let locations = locations_for(&mounts, facts, started.mounted.as_deref());
     let shared = profile
         .credentials
@@ -401,6 +379,47 @@ pub fn start<R: CommandRunner>(
     Ok(Ready { started, locations })
 }
 
+/// The directory of this daemon's SSH keys on the host, and where the container sees it (feature
+/// 806): the client creates the keys before the container, which mounts the files read-only.
+fn keys_mount(state_dir: &std::path::Path) -> SecretMount {
+    SecretMount {
+        host: state_dir.join(KEYS_DIR),
+        container: PathBuf::from(micold_core::sandbox::argv::CONTAINER_SSH_DIR),
+    }
+}
+
+/// The key directory's name under a daemon's state directory.
+pub use micold_core::provision::keys::KEYS_DIR;
+
+/// Create the daemon's SSH keys and pin its host key for the published port, before the container
+/// that mounts them is created (feature 806, FR-006). A process that chose no `ssh` runner (a
+/// test) has none to make them with, and its container is not provisioned either.
+fn prepare_keys(state_dir: &std::path::Path, port: u16) -> Result<(), Failure> {
+    let Some(host) = micold_client::daemon::ssh_host() else {
+        return Ok(());
+    };
+    let dir = state_dir.join(KEYS_DIR);
+    let keys = tokio::runtime::Handle::current()
+        .block_on(micold_core::provision::keys::DaemonKeys::ensure(
+            &dir,
+            micold_core::ssh::ClientPlatform::current(),
+            &*host,
+        ))
+        .map_err(|f| {
+            preparation_failed(format!(
+                "could not create the container's SSH keys in {}: {}",
+                dir.display(),
+                f.output
+            ))
+        })?;
+    keys.write_known_hosts(port).map_err(|e| {
+        preparation_failed(format!(
+            "could not pin the container's host key in {}: {e}",
+            dir.display()
+        ))
+    })
+}
+
 /// The mount set this client creates its container from. No side effects: [`start`] prepares the
 /// host paths it names, and [`reread`] only reads what a running container shares through it.
 fn mount_set(profile: &SandboxProfile, projects: &[PathBuf], facts: &HostFacts) -> MountSet {
@@ -410,10 +429,7 @@ fn mount_set(profile: &SandboxProfile, projects: &[PathBuf], facts: &HostFacts) 
         &facts.layout,
         facts.state_dir.clone(),
         &facts.home,
-        SecretMount {
-            host: host_token_path(&facts.state_dir),
-            container: PathBuf::from(CONTAINER_TOKEN_PATH),
-        },
+        keys_mount(&facts.state_dir),
     );
     match &facts.history_dir {
         Some(dir) => mounts.with_history(dir),
@@ -447,10 +463,7 @@ pub fn share(app: &crate::App) -> Result<Option<micold_core::path_insert::Sandbo
         &CredentialLayout::default(),
         plan.state_dir.clone(),
         std::path::Path::new(""),
-        SecretMount {
-            host: host_token_path(&plan.state_dir),
-            container: PathBuf::from(CONTAINER_TOKEN_PATH),
-        },
+        keys_mount(&plan.state_dir),
     );
     Ok(Some(micold_core::path_insert::SandboxShare {
         mounts,
@@ -787,6 +800,7 @@ impl BringUp {
                 cancelled,
                 launched: AtomicBool::new(false),
             };
+            prepare_keys(&facts.state_dir, plan.port)?;
             let outcome = start(
                 &plan.profile,
                 &plan.projects,
@@ -1099,6 +1113,7 @@ fn apply(app: &mut crate::App, msg: SandboxMsg) -> Task<Message> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use micold_core::protocol::auth::CONTAINER_TOKEN_PATH;
 
     #[test]
     fn the_container_name_is_fixed() {
@@ -2039,7 +2054,11 @@ mod tests {
         runner.push_ok(inspected(
             "new",
             true,
-            &["/proj/P", "/proj/Q", CONTAINER_TOKEN_PATH],
+            &[
+                "/proj/P",
+                "/proj/Q",
+                micold_core::sandbox::argv::CONTAINER_SSH_DIR,
+            ],
         ));
 
         let (id, locations) = reread(&plan, &facts, &ContainerId("old".into()), &runner)
@@ -2049,7 +2068,7 @@ mod tests {
         assert_eq!(
             locations.projects,
             vec!["/proj/P".to_string(), "/proj/Q".to_string()],
-            "its projects, including one this client never registered, and not its token"
+            "its projects, including one this client never registered, and not its key directory"
         );
         assert!(
             locations.shared.iter().any(|l| l.container == "/proj/P"),

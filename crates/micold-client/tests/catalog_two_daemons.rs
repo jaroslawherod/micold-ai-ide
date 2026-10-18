@@ -208,6 +208,7 @@ fn a_dropped_daemons_sessions_stay_unfinished_and_read_as_lost() {
                     profile: Default::default(),
                     container_name: "beta".into(),
                     port: 7001,
+                    migration: None,
                 }),
                 true,
             )

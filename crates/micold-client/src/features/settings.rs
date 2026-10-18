@@ -59,6 +59,7 @@ use micold_core::issue_types::{
 use micold_core::mcp::policy::CrossSessionAccess;
 use micold_core::naming::ConventionalType;
 use micold_core::required::{RequiredMarks, Requirement};
+use micold_core::sandbox::image::{ImageChoice, ImageSourceProblem, OwnImage, OwnImageDraft};
 use micold_core::sandbox::placement::PlacementKind;
 use micold_core::sandbox::runtime::RuntimeCapabilities;
 use micold_core::sandbox::{
@@ -527,6 +528,8 @@ pub struct DaemonDraft {
     /// The archive to import, as typed. Text rather than the profile's `Option<PathBuf>` for the
     /// same reason the numbers are text: an empty field is a state the user passes through.
     pub image_path: String,
+    /// The reference of "My own image", as typed (feature 806).
+    pub image_reference: String,
     /// The processor limit, in cores as typed. Empty means *unset* — the runtime's own default —
     /// which is a different intent from any number, and is why the profile holds an `Option`
     /// (rule RB-2).
@@ -720,11 +723,34 @@ pub(crate) const MAX_MIB: u64 = 1024 * 1024;
 /// The kernel's own `pid_max` ceiling on 64-bit Linux.
 const MAX_PIDS: u32 = 4_194_304;
 
+/// The image a form stands for: `Basic` stays `Basic`; "My own image" is its reference and
+/// archive texts validated (feature 806, FR-003). The archive wins when both are set.
+pub fn image_choice(
+    kind: &ImageChoice,
+    reference: &str,
+    archive: &str,
+) -> Result<ImageChoice, ImageSourceProblem> {
+    match kind {
+        ImageChoice::Basic => Ok(ImageChoice::Basic),
+        ImageChoice::Own(_) => {
+            let archive = archive.trim();
+            OwnImageDraft {
+                reference: reference.to_string(),
+                archive: (!archive.is_empty()).then(|| PathBuf::from(archive)),
+            }
+            .validate()
+            .map(ImageChoice::Own)
+        }
+    }
+}
+
 /// A sandbox profile's path and limits as the text fields show them (page and Daemons form).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ProfileTexts {
     /// The archive path; empty when none.
     pub image_path: String,
+    /// The reference of "My own image"; empty when none.
+    pub image_reference: String,
     /// Cores; empty when unset.
     pub cpus: String,
     /// MiB; empty when unset.
@@ -740,12 +766,14 @@ impl ProfileTexts {
     pub fn of(profile: &SandboxProfile) -> Self {
         let b = &profile.budget;
         Self {
-            image_path: profile
-                .image
-                .path
-                .as_ref()
-                .map(|p| p.display().to_string())
-                .unwrap_or_default(),
+            image_path: match &profile.image {
+                ImageChoice::Own(OwnImage::Archive(p)) => p.display().to_string(),
+                _ => String::new(),
+            },
+            image_reference: match &profile.image {
+                ImageChoice::Own(OwnImage::Reference(r)) => r.clone(),
+                _ => String::new(),
+            },
             cpus: b.cpus_milli.map(cores_text).unwrap_or_default(),
             memory_mib: b
                 .memory_bytes
@@ -901,10 +929,16 @@ impl SettingsDraft {
         let plan_usage_warn_percent = self.plan_usage_warn()?;
 
         let mut profile = self.daemon.profile.clone();
-        profile.image.path = {
-            let trimmed = self.daemon.image_path.trim();
-            (!trimmed.is_empty()).then(|| PathBuf::from(trimmed))
-        };
+        profile.image = image_choice(
+            &profile.image,
+            &self.daemon.image_reference,
+            &self.daemon.image_path,
+        )
+        .map_err(|problem| FieldError {
+            field: FieldId::DaemonImage,
+            section: SettingsSection::Daemons,
+            message: problem.message(),
+        })?;
         profile.budget = self.budget()?;
         self.mapping()?;
         let jira = self.jira_action()?;
@@ -1220,6 +1254,7 @@ impl SettingsDraft {
                     placement: _,
                     profile: _,
                     image_path: _,
+                    image_reference: _,
                     cpus: _,
                     memory_mib: _,
                     pids: _,
@@ -1276,6 +1311,7 @@ impl SettingsDraft {
             daemon.placement,
             daemon.profile,
             daemon.image_path,
+            daemon.image_reference,
             daemon.cpus,
             daemon.memory_mib,
             daemon.pids,
@@ -1327,6 +1363,7 @@ impl SettingsDraft {
                 // An unset limit seeds an *empty* field rather than a zero or the word
                 // "unlimited": empty is what the user types to unset it (rule RB-2).
                 image_path: profile_texts.image_path,
+                image_reference: profile_texts.image_reference,
                 cpus: profile_texts.cpus,
                 memory_mib: profile_texts.memory_mib,
                 pids: profile_texts.pids,

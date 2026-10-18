@@ -8,6 +8,8 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
+use super::basic_image::{is_released_image, BASIC_IMAGE};
+
 /// The registry namespace the release publishes into — this repository's owner on GHCR.
 ///
 /// Split out from [`DEFAULT_IMAGE`] so the release workflow has one string to check itself
@@ -167,6 +169,10 @@ pub enum ImageSourceProblem {
     MovingTag { tag: String },
     /// An import with nothing to import.
     MissingArchivePath,
+    /// "My own image" with no reference and no archive.
+    MissingImage,
+    /// The reference names the released daemon image (FR-003).
+    ReleasedImage,
     /// An archive path on a source that will never read it — a leftover from a changed mind.
     UnusedArchivePath,
 }
@@ -188,9 +194,130 @@ impl ImageSourceProblem {
             ImageSourceProblem::MissingArchivePath => {
                 "Importing from a file needs the archive's path.".to_string()
             }
+            ImageSourceProblem::MissingImage => {
+                "Enter an image reference or choose an archive.".to_string()
+            }
+            ImageSourceProblem::ReleasedImage => RELEASED_IMAGE_REFUSED.to_string(),
             ImageSourceProblem::UnusedArchivePath => {
                 "This archive path is not used by the selected image source.".to_string()
             }
+        }
+    }
+}
+
+/// Which image a container daemon starts from (feature 806, FR-001): exactly two choices.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum ImageChoice {
+    /// The pinned basic image ([`BASIC_IMAGE`]); the client copies its own daemon into it.
+    #[default]
+    Basic,
+    /// The user's own image, which must run an SSH server.
+    Own(OwnImage),
+}
+
+/// Where the user's own image comes from.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum OwnImage {
+    /// A reference the runtime pulls (or finds locally).
+    Reference(String),
+    /// An archive produced by `docker save`, loaded with the runtime's `load`.
+    Archive(PathBuf),
+}
+
+/// What the form holds while "My own image" is edited: both fields, either may be empty.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct OwnImageDraft {
+    /// The reference field.
+    pub reference: String,
+    /// The archive picker's value.
+    pub archive: Option<PathBuf>,
+}
+
+/// The local name an archive's image is tagged with after `load`, since an archive names no
+/// reference the container could be created from.
+pub const LOADED_ARCHIVE_IMAGE: &str = "micold-own-image:archive";
+
+/// The message for a reference naming the released daemon image (FR-003).
+pub const RELEASED_IMAGE_REFUSED: &str =
+    "The released daemon image is no longer used; choose the basic image.";
+
+impl OwnImageDraft {
+    /// The image this draft stands for, or the problem to show beside the image field.
+    pub fn validate(&self) -> Result<OwnImage, ImageSourceProblem> {
+        if let Some(path) = &self.archive {
+            return Ok(OwnImage::Archive(path.clone()));
+        }
+        let reference = self.reference.trim();
+        if reference.is_empty() {
+            return Err(ImageSourceProblem::MissingImage);
+        }
+        if let Err(e) = ImageRef::parse(reference) {
+            return Err(ImageSourceProblem::Unparseable(e));
+        }
+        if is_released_image(reference) {
+            return Err(ImageSourceProblem::ReleasedImage);
+        }
+        Ok(OwnImage::Reference(reference.to_string()))
+    }
+}
+
+impl From<&ImageChoice> for OwnImageDraft {
+    fn from(choice: &ImageChoice) -> Self {
+        match choice {
+            ImageChoice::Own(OwnImage::Reference(r)) => Self {
+                reference: r.clone(),
+                archive: None,
+            },
+            ImageChoice::Own(OwnImage::Archive(p)) => Self {
+                reference: String::new(),
+                archive: Some(p.clone()),
+            },
+            ImageChoice::Basic => Self::default(),
+        }
+    }
+}
+
+impl ImageChoice {
+    /// The reference the runtime pulls and the container records: [`BASIC_IMAGE`] for `Basic`; for
+    /// an archive, [`LOADED_ARCHIVE_IMAGE`], the name it is tagged with once loaded.
+    pub fn reference(&self) -> &str {
+        match self {
+            ImageChoice::Basic => BASIC_IMAGE,
+            ImageChoice::Own(OwnImage::Reference(r)) => r,
+            ImageChoice::Own(OwnImage::Archive(_)) => LOADED_ARCHIVE_IMAGE,
+        }
+    }
+
+    /// Everything wrong with this choice, as values.
+    pub fn validate(&self) -> Vec<ImageSourceProblem> {
+        match self {
+            ImageChoice::Basic => Vec::new(),
+            ImageChoice::Own(_) => OwnImageDraft::from(self)
+                .validate()
+                .err()
+                .into_iter()
+                .collect(),
+        }
+    }
+}
+
+impl ImageSource {
+    /// What this stored (pre-806) source becomes, and whether it was the released image the
+    /// migration moves off (contracts/daemon-settings.md, read rules).
+    pub fn into_choice(mut self) -> (ImageChoice, bool) {
+        self.repair_retired_namespace();
+        match self.kind {
+            ImageSourceKind::Registry if is_released_image(&self.reference) => {
+                (ImageChoice::Basic, true)
+            }
+            ImageSourceKind::ImportedFile => match self.path {
+                Some(path) => (ImageChoice::Own(OwnImage::Archive(path)), false),
+                None => (ImageChoice::Basic, false),
+            },
+            _ if self.reference.trim().is_empty() => (ImageChoice::Basic, false),
+            _ => (ImageChoice::Own(OwnImage::Reference(self.reference)), false),
         }
     }
 }
@@ -330,6 +457,93 @@ impl ImageRef {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_default_choice_is_the_digest_pinned_basic_image() {
+        assert_eq!(ImageChoice::default(), ImageChoice::Basic);
+        assert_eq!(ImageChoice::Basic.reference(), BASIC_IMAGE);
+        assert!(ImageRef::parse(BASIC_IMAGE).unwrap().digest.is_some());
+    }
+
+    #[test]
+    fn an_own_image_draft_is_refused_naming_what_is_wrong() {
+        let draft = |reference: &str| OwnImageDraft {
+            reference: reference.into(),
+            archive: None,
+        };
+        assert_eq!(draft("").validate(), Err(ImageSourceProblem::MissingImage));
+        assert!(draft("")
+            .validate()
+            .unwrap_err()
+            .message()
+            .contains("image"));
+        let e = draft("::bad ref::").validate().unwrap_err();
+        assert!(matches!(e, ImageSourceProblem::Unparseable(_)), "{e:?}");
+        let released = draft("ghcr.io/jaroslawherod/micold-daemon:0.30.0")
+            .validate()
+            .unwrap_err();
+        assert_eq!(
+            released.message(),
+            "The released daemon image is no longer used; choose the basic image."
+        );
+        assert_eq!(
+            draft(" alpine:3 ").validate(),
+            Ok(OwnImage::Reference("alpine:3".into()))
+        );
+        let archive = OwnImageDraft {
+            reference: String::new(),
+            archive: Some("/x.tar".into()),
+        };
+        assert_eq!(archive.validate(), Ok(OwnImage::Archive("/x.tar".into())));
+    }
+
+    #[test]
+    fn each_stored_source_becomes_the_choice_the_contract_names() {
+        let src = |kind, reference: &str, path: Option<&str>| ImageSource {
+            kind,
+            reference: reference.into(),
+            path: path.map(PathBuf::from),
+        };
+        let reg = ImageSourceKind::Registry;
+        let own = |r: &str| ImageChoice::Own(OwnImage::Reference(r.into()));
+        for released in [
+            "ghcr.io/jaroslawherod/micold-daemon:0.30.0",
+            "ghcr.io/micold/micold-daemon:0.10.0",
+            "ghcr.io/jaroslawherod/micold-daemon",
+        ] {
+            assert_eq!(
+                src(reg, released, None).into_choice(),
+                (ImageChoice::Basic, true)
+            );
+        }
+        assert_eq!(
+            src(reg, "acme/x:1", None).into_choice(),
+            (own("acme/x:1"), false)
+        );
+        assert_eq!(
+            src(ImageSourceKind::LocalBuild, "micold-daemon:dev", None).into_choice(),
+            (own("micold-daemon:dev"), false)
+        );
+        assert_eq!(
+            src(ImageSourceKind::ImportedFile, "x:1", Some("/a.tar")).into_choice(),
+            (ImageChoice::Own(OwnImage::Archive("/a.tar".into())), false)
+        );
+    }
+
+    #[test]
+    fn a_choice_round_trips_through_json_in_the_contract_shape() {
+        let json = serde_json::to_string(&ImageChoice::Basic).unwrap();
+        assert_eq!(json, r#"{"kind":"basic"}"#);
+        let own = ImageChoice::Own(OwnImage::Reference("a:1".into()));
+        assert_eq!(
+            serde_json::to_string(&own).unwrap(),
+            r#"{"kind":"own","reference":"a:1"}"#
+        );
+        assert_eq!(
+            serde_json::from_str::<ImageChoice>(&json).unwrap(),
+            ImageChoice::Basic
+        );
+    }
 
     #[test]
     fn a_persisted_reference_into_the_retired_namespace_is_replaced_by_the_default() {

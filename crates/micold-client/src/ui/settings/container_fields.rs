@@ -14,6 +14,7 @@
 //! carrying the runtime's own reason is the only arrangement that does all three.
 
 use crate::app::Message;
+use crate::features::daemons::ImageKind;
 use crate::features::daemons::{Msg as DaemonsMsg, Section};
 use crate::features::sandbox::SandboxLimit;
 use crate::features::window::FieldId;
@@ -23,7 +24,6 @@ use crate::ui::settings::{caution, field_note, name_of, note, Named};
 use iced::widget::column;
 use iced::Element;
 use micold_core::required::FieldRequirement;
-use micold_core::sandbox::image::ImageSourceKind;
 use micold_core::sandbox::placement::PlacementKind;
 use micold_core::sandbox::runtime::{LimitSupport, RuntimeCapabilities, RuntimeKind};
 use micold_core::sandbox::{CredentialShare, NetworkPosture, SandboxProfile};
@@ -39,11 +39,14 @@ const NETWORKS: &[Named<NetworkPosture>] = &[
     Named(NetworkPosture::Outbound, "Allow outbound connections"),
 ];
 
-const IMAGE_SOURCES: &[Named<ImageSourceKind>] = &[
-    Named(ImageSourceKind::Registry, "Pull from a registry"),
-    Named(ImageSourceKind::ImportedFile, "Load from a file"),
-    Named(ImageSourceKind::LocalBuild, "Build from this checkout"),
+/// The two entries of the image form (feature 806, FR-001).
+const IMAGE_SOURCES: &[Named<ImageKind>] = &[
+    Named(ImageKind::Basic, "Basic image (recommended)"),
+    Named(ImageKind::Own, "My own image"),
 ];
+
+/// The note under "My own image" (FR-002).
+const OWN_IMAGE_NOTE: &str = "Your image must run an SSH server; see the user guide.";
 
 /// What the fields read: one daemon's profile, the typed texts beside it and the machine facts.
 #[derive(Debug, Clone, Copy)]
@@ -52,6 +55,8 @@ pub struct ContainerView<'a> {
     pub profile: &'a SandboxProfile,
     /// The archive path as typed.
     pub image_path: &'a str,
+    /// The image reference as typed.
+    pub image_reference: &'a str,
     /// The processor limit as typed.
     pub cpus: &'a str,
     /// The memory limit as typed.
@@ -394,25 +399,22 @@ pub fn sections<'a>(
     )
     .label("Container runtime");
 
+    let kind = ImageKind::of(&view.profile.image);
     let image_kind = Select::new(
         IMAGE_SOURCES,
-        Some(Named(
-            view.profile.image.kind,
-            name_of(IMAGE_SOURCES, view.profile.image.kind),
-        )),
-        |chosen: Named<ImageSourceKind>| Message::Daemons(DaemonsMsg::ImageKindChosen(chosen.0)),
+        Some(Named(kind, name_of(IMAGE_SOURCES, kind))),
+        |chosen: Named<ImageKind>| Message::Daemons(DaemonsMsg::ImageKindChosen(chosen.0)),
         roles,
     )
-    .label("Image source")
-    .supporting(match view.profile.image.kind {
-        ImageSourceKind::Registry => "Needs the network the first time only",
-        ImageSourceKind::ImportedFile => "Works with no network at all",
-        ImageSourceKind::LocalBuild => "Built by `mise run image` from this working tree",
+    .label("Image")
+    .supporting(match kind {
+        ImageKind::Basic => "The app copies its own daemon into it and installs the AI tools",
+        ImageKind::Own => OWN_IMAGE_NOTE,
     });
 
-    let reference = TextField::new("", &view.profile.image.reference, roles)
+    let reference = TextField::new("", view.image_reference, roles)
         .label("Image reference")
-        .supporting("A digest or an exact tag; a moving tag cannot be reported in a bug")
+        .supporting("A digest or an exact tag; used when no image file is given")
         .required(errors.reference_required)
         .error(errors.reference)
         .track_focus(FieldId::DaemonImage, focused)
@@ -421,7 +423,7 @@ pub fn sections<'a>(
 
     let archive = TextField::new("", view.image_path, roles)
         .label("Image file")
-        .supporting("The archive to load, when the image comes from a file")
+        .supporting("An archive made by `docker save`, loaded instead of the reference")
         .required(errors.path_required)
         .error(errors.path)
         .track_focus(FieldId::DaemonImagePath, focused)
@@ -441,12 +443,11 @@ pub fn sections<'a>(
 
     // FR-023b, at the point the image is chosen: the note is about that field's value, so it shares
     // the column the field's own supporting line sits in (see `field_note`).
-    let container: Vec<Element<'a, Message>> = vec![
-        runtime.into(),
-        image_kind.into(),
-        field_note(reference, missing_cli, roles),
-        archive.into(),
-    ];
+    let mut container: Vec<Element<'a, Message>> = vec![runtime.into(), image_kind.into()];
+    if kind == ImageKind::Own {
+        container.push(field_note(reference, missing_cli, roles));
+        container.push(archive.into());
+    }
 
     let mut credentials: Vec<Element<'a, Message>> = vec![note(
         "The container starts with none of your credentials. Share only what the agent needs.",
@@ -545,6 +546,7 @@ mod tests {
         ContainerView {
             profile,
             image_path: "",
+            image_reference: "",
             cpus: "",
             memory_mib: "",
             pids: "",

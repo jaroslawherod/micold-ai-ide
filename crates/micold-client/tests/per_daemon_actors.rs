@@ -17,6 +17,7 @@ fn container(name: &str, port: u16) -> DaemonRuntime {
         profile: SandboxProfile::default(),
         container_name: name.to_string(),
         port,
+        migration: None,
     })
 }
 
@@ -84,9 +85,20 @@ fn a_rename_and_auto_start_restart_nothing_but_a_runtime_edit_restarts_only_its_
 }
 
 #[test]
-fn a_container_actor_dials_its_own_port_and_token() {
+fn a_container_actor_dials_its_own_port_over_ssh_and_a_legacy_one_with_its_token() {
     let (registry, _, boxed) = registry();
     let spec = specs(&registry)
+        .into_iter()
+        .find(|s| s.key.id == boxed)
+        .unwrap();
+    assert!(
+        matches!(spec.dial, Dial::ContainerSsh { port: 7001, .. }),
+        "a container is provisioned over SSH on the entry's port: {:?}",
+        spec.dial
+    );
+    let mut states = DaemonStates::at_launch(&registry);
+    states.set_legacy(boxed, true);
+    let spec = actor_specs(&registry, &states, Path::new("/state"), None, false)
         .into_iter()
         .find(|s| s.key.id == boxed)
         .unwrap();

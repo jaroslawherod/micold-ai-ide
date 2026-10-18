@@ -15,6 +15,7 @@ fn entry(id: u32, name: &str, container: &str, port: u16) -> DaemonEntry {
             profile: SandboxProfile::default(),
             container_name: container.into(),
             port,
+            migration: None,
         }),
         auto_start: false,
     }

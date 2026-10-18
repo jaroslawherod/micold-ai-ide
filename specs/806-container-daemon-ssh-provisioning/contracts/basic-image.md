@@ -11,7 +11,9 @@
   `ENTRYPOINT ["/usr/local/bin/micold-entrypoint"]`.
 - `entrypoint.sh` → `/usr/local/bin/micold-entrypoint`: add the passwd/group line for `$(id -u)` with
   home `$MICOLD_HOME` when absent; start `$HOME/.micold/remote/$(cat $HOME/.micold/remote/last)/micold-daemon`
-  in the background when that file exists; `exec /usr/sbin/sshd -D -e -f /etc/micold/sshd_config`.
+  in the background when that file exists; run `/usr/sbin/sshd -D -e -f /etc/micold/sshd_config` as the main process, and on SIGTERM/SIGINT send
+  SIGTERM to every daemon (not bridge) process, wait up to 10 s (the runtime's default grace) for them to be gone (their orderly stop
+  saves terminal history, feature 041 FR-002), then stop sshd.
 - `sshd_config`: `Port 2222`, `ListenAddress 0.0.0.0`, `HostKey /run/micold/ssh/host_ed25519_key`,
   `AuthorizedKeysFile /run/micold/ssh/authorized_keys`, `PubkeyAuthentication yes`,
   `PasswordAuthentication no`, `KbdInteractiveAuthentication no`, `PermitRootLogin no`,

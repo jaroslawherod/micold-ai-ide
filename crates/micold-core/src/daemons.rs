@@ -25,14 +25,65 @@ pub struct DaemonName(String);
 
 /// The container runtime's settings.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(from = "RawContainerSettings")]
 pub struct ContainerSettings {
     /// What the container may reach and run.
     #[serde(default)]
     pub profile: SandboxProfile,
     /// The container's name, which is also how an existing one is found and adopted.
     pub container_name: String,
-    /// The loopback port its control channel is published on.
+    /// The loopback port the container's SSH server is published on.
     pub port: u16,
+    /// A one-time notice from the read-repair, kept until a start on the basic image succeeds
+    /// (FR-016). Omitted from the file when there is none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub migration: Option<MigrationNotice>,
+}
+
+/// What the read-repair did to a stored daemon that the user should be told (FR-016).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MigrationNotice {
+    /// The stored image was the released daemon image; the daemon moves to the basic image on its
+    /// next start.
+    MovedOffReleasedImage,
+}
+
+impl MigrationNotice {
+    /// The row text (contracts/daemon-settings.md).
+    pub fn message(self) -> &'static str {
+        match self {
+            MigrationNotice::MovedOffReleasedImage => {
+                "Moved off the released daemon image; it moves to the basic image on its next start."
+            }
+        }
+    }
+}
+
+/// The stored shape of [`ContainerSettings`]: the profile's read may have moved it off the released
+/// image, which becomes the stored [`MigrationNotice`].
+#[derive(Deserialize)]
+struct RawContainerSettings {
+    #[serde(default)]
+    profile: SandboxProfile,
+    container_name: String,
+    port: u16,
+    #[serde(default)]
+    migration: Option<MigrationNotice>,
+}
+
+impl From<RawContainerSettings> for ContainerSettings {
+    fn from(mut raw: RawContainerSettings) -> Self {
+        if raw.profile.take_moved_off_released() {
+            raw.migration = Some(MigrationNotice::MovedOffReleasedImage);
+        }
+        Self {
+            profile: raw.profile,
+            container_name: raw.container_name,
+            port: raw.port,
+            migration: raw.migration,
+        }
+    }
 }
 
 /// What a daemon runs in. Runtime is data, so later runtimes add a variant, not a surface.
@@ -545,6 +596,9 @@ impl Link {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct DaemonStates {
     states: BTreeMap<DaemonId, Link>,
+    /// The container daemons whose running container is a released-image one, reached over the
+    /// token channel until it is restarted (feature 806, FR-017).
+    legacy: std::collections::BTreeSet<DaemonId>,
 }
 
 impl DaemonStates {
@@ -571,6 +625,21 @@ impl DaemonStates {
     /// Forget `id`.
     pub fn remove(&mut self, id: DaemonId) {
         self.states.remove(&id);
+        self.legacy.remove(&id);
+    }
+
+    /// Record that `id`'s container is a running released-image one (or no longer is).
+    pub fn set_legacy(&mut self, id: DaemonId, legacy: bool) {
+        if legacy {
+            self.legacy.insert(id);
+        } else {
+            self.legacy.remove(&id);
+        }
+    }
+
+    /// Whether `id`'s container is a released-image one, dialled with its token.
+    pub fn is_legacy(&self, id: DaemonId) -> bool {
+        self.legacy.contains(&id)
     }
 
     /// Every tracked daemon, in id order.
@@ -705,10 +774,15 @@ pub fn migrated_entry(config: &crate::settings::DaemonConfig) -> DaemonEntry {
         PlacementKind::HostProcess => ("Host", DaemonRuntime::Host),
         PlacementKind::LocalSandbox => (
             "Container",
-            DaemonRuntime::Container(ContainerSettings {
-                profile: config.sandbox.clone(),
-                container_name: crate::sandbox::CONTAINER_NAME.to_string(),
-                port: crate::endpoint::DEFAULT_SANDBOX_PORT,
+            DaemonRuntime::Container({
+                let mut profile = config.sandbox.clone();
+                let moved = profile.take_moved_off_released();
+                ContainerSettings {
+                    profile,
+                    container_name: crate::sandbox::CONTAINER_NAME.to_string(),
+                    port: crate::endpoint::DEFAULT_SANDBOX_PORT,
+                    migration: moved.then_some(MigrationNotice::MovedOffReleasedImage),
+                }
             }),
         ),
     };
@@ -756,6 +830,16 @@ impl DaemonEntry {
             })
             .collect();
         Some(base.join("daemons").join(slug))
+    }
+
+    /// Where this daemon's SSH keys live on the host (`<state dir>/ssh`).
+    pub fn keys_dir(
+        &self,
+        base: &std::path::Path,
+        legacy_default: Option<DaemonId>,
+    ) -> Option<std::path::PathBuf> {
+        self.state_dir(base, legacy_default)
+            .map(|dir| dir.join(crate::provision::keys::KEYS_DIR))
     }
 
     /// Where this daemon's token lives on the host.

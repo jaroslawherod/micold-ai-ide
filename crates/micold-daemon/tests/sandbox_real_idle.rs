@@ -1,22 +1,22 @@
 //! §B.5–B.6 of the quickstart — the idle rule, measured from *outside* the container (feature 028,
-//! US4, FR-019/FR-020/FR-022, lifecycle contract §5.17/§5.18).
+//! US4, FR-019/FR-020/FR-022, lifecycle contract §5.17/§5.18), as feature 806 reshaped it.
 //!
 //! `crates/micold-daemon/tests/idle_stop.rs` already proves the rule itself: nobody connected for
 //! the window, the daemon writes its reason, hands the sessions back resumable and exits. None of
-//! that is what this file is for, and repeating it here against a container would only make the
-//! same assertion slower.
+//! that is what this file is for.
 //!
-//! What a host-placement test cannot say is whether the *container* ends. A daemon inside a
-//! sandbox can obey the rule perfectly and leave a container sitting there running nothing — or
-//! worse, leave one the runtime dutifully restarts, so the idle stop becomes an idle restart loop
-//! and the machine keeps a service alive for nobody by a route the rule never sees. §5.17 is a
-//! claim about the container's state, so it is measured as one: `exited`, and `RestartCount`
-//! unchanged.
+//! What changed with 806: the container's process is `sshd`, not the daemon, so a daemon that
+//! stops itself no longer ends the container — it ends the *daemon*, and the next connection
+//! starts it again through the bridge. §5.17 is therefore measured as that: the daemon process is
+//! gone, the container is still up and was not restarted by the runtime, and a client that
+//! connects afterwards gets a daemon. The idle window reaches the daemon the entrypoint starts
+//! (`~/.micold/remote/last`, run with the container's environment), so the probes restart the
+//! container once provisioned, which is also what a runtime restart under the survival opt-in
+//! does.
 //!
-//! §5.18 is the single approved exception, and it needs measuring for the opposite reason. It is
-//! the only place where the two placements deliberately differ, which makes it the only place a
-//! difference can hide: a sandbox that stopped itself despite the opt-in would look, from the
-//! outside, exactly like a sandbox whose restart policy had failed.
+//! §5.18 is the single approved exception: with the opt-in the container is created with the idle
+//! rule switched off, and the daemon the entrypoint starts must still be there long after the
+//! window that would have stopped the other probe's.
 //!
 //! Behind `sandbox-real-runtime` (Principle VI: the default suite needs nothing installed).
 //!
@@ -30,10 +30,9 @@ mod sandbox_real_support;
 
 use std::time::{Duration, Instant};
 
-use micold_core::protocol::auth::Token;
-
 use sandbox_real_support::{
-    cli_out, credentials, seed, start_sandbox, wait_for_accept, SandboxSpec,
+    cli_out, daemon_running, provision_then_restart, seed, start_sandbox, wait_for_accept,
+    SandboxSpec,
 };
 
 const IDLE_CONTAINER: &str = "micold-idle-probe";
@@ -46,14 +45,12 @@ const KEPT_PORT: u16 = 17742;
 
 /// The window these probes run under.
 ///
-/// Long enough that connecting, handshaking and disconnecting all happen comfortably inside a
-/// *non*-idle daemon — a window shorter than the handshake would stop the daemon before the client
-/// arrived, and the test would pass for the wrong reason. Short enough that the suite stays a suite.
+/// Long enough that the entrypoint's daemon comes up comfortably before it expires, short enough
+/// that the suite stays a suite.
 const WINDOW: &str = "5s";
 
 /// `{{.State.Status}}` and `{{.RestartCount}}` as one reading, because the two failures this file
-/// separates are `running`/0 (the rule never fired) and `running`/1+ (it fired and the runtime
-/// undid it), and taking them at different instants makes the second look like the first.
+/// separates are `running`/0 (nothing restarted it) and `running`/1+ (the runtime did).
 fn status_of(container: &str) -> (String, String) {
     let raw = cli_out(&[
         "inspect",
@@ -68,32 +65,14 @@ fn status_of(container: &str) -> (String, String) {
     )
 }
 
-/// Wait for `container` to reach `exited`, or say what it was doing instead.
-fn wait_for_exit(container: &str, within: Duration) -> String {
-    let deadline = Instant::now() + within;
-    loop {
-        let (status, restarts) = status_of(container);
-        if status == "exited" {
-            return restarts;
-        }
-        assert!(
-            Instant::now() < deadline,
-            "the sandbox was still `{status}` {within:?} after a {WINDOW} idle window \
-             (RestartCount {restarts}); the daemon inside it may have stopped, but the container \
-             did not — §5.17 is a claim about the container"
-        );
-        std::thread::sleep(Duration::from_millis(250));
-    }
-}
-
 /// T047, FR-019/FR-020, lifecycle contract §5.17.
 ///
-/// The container ends when the daemon inside it does, and stays ended. `RestartCount` is half the
-/// assertion rather than a detail: a sandbox created with a restart policy would come straight back
-/// up, turning the idle stop into a restart loop that keeps the machine busy on behalf of nobody.
-/// Off is the default here precisely because that is the configuration the rule has to hold under.
+/// The daemon ends when nobody is connected for the window, and stays ended: the container is up
+/// and the runtime has not restarted anything. `RestartCount` is half the assertion rather than a
+/// detail — a sandbox created with a restart policy would otherwise hide a container that died and
+/// came back. A client that arrives afterwards gets a daemon again.
 #[tokio::test]
-async fn sandbox_real_idle_sandbox_stops_and_stays_stopped() {
+async fn sandbox_real_idle_daemon_stops_and_the_next_connection_starts_it() {
     let dir = tempfile::tempdir().unwrap();
     let data = dir.path().join("data");
     let project = dir.path().join("project");
@@ -101,9 +80,6 @@ async fn sandbox_real_idle_sandbox_stops_and_stays_stopped() {
     seed(&data, &project, "idle");
 
     let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
-    let token = Token::generate();
-    let token_path = data.join("micold-ai-ide").join("sandbox.token");
-    token.write_to(&token_path).unwrap();
 
     // Through `extra` rather than through `create`: the argv builder is pure by obligation C-1, so
     // it has no business reading this process's environment, and a test's own timing belongs in
@@ -115,27 +91,33 @@ async fn sandbox_real_idle_sandbox_stops_and_stays_stopped() {
         port: IDLE_PORT,
         data_home: &data,
         project: &project,
-        token_path: &token_path,
         home: &home,
         survive_logout: false,
         extra: &["-e".to_string(), window],
     });
-
-    // Connect and leave. Without this the container might be exiting for a reason that has nothing
-    // to do with the idle rule — a daemon that never came up at all also ends up `exited`.
-    {
-        let (_conn, _catalog) = wait_for_accept(IDLE_PORT, &credentials(&token)).await;
-    }
+    provision_then_restart(IDLE_CONTAINER, IDLE_PORT).await;
 
     // Generous against the window, because what is being measured is *that* it stops, not when:
     // the rule ticks at a fraction of the window, and the ordered shutdown persists every session
     // before anything is killed.
-    let restarts = wait_for_exit(IDLE_CONTAINER, Duration::from_secs(60));
+    let deadline = Instant::now() + Duration::from_secs(60);
+    while daemon_running(IDLE_CONTAINER) {
+        assert!(
+            Instant::now() < deadline,
+            "the daemon was still running 60s after a {WINDOW} idle window"
+        );
+        tokio::time::sleep(Duration::from_millis(250)).await;
+    }
+    let (status, restarts) = status_of(IDLE_CONTAINER);
     assert_eq!(
-        restarts, "0",
-        "the sandbox came back after stopping itself; an idle stop the runtime undoes is an idle \
-         restart loop, which keeps a service running for nobody by a route the rule cannot see"
+        (status.as_str(), restarts.as_str()),
+        ("running", "0"),
+        "the container stays up (sshd is its process) and the runtime restarted nothing: its \
+         restart count covers restart-policy restarts, not the `docker restart` this test issued"
     );
+
+    // Not stuck: the next client gets a daemon.
+    let (_conn, _catalog) = wait_for_accept(IDLE_PORT).await;
 }
 
 /// T048, FR-022, lifecycle contract §5.18 — the one approved difference between the placements.
@@ -152,9 +134,6 @@ async fn sandbox_real_idle_is_off_for_the_keep_running_opt_in() {
     seed(&data, &project, "kept");
 
     let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
-    let token = Token::generate();
-    let token_path = data.join("micold-ai-ide").join("sandbox.token");
-    token.write_to(&token_path).unwrap();
 
     // No window through `extra`: `argv::idle_stop_value` puts `off` in the argv for this spec, and
     // the harness reads it from there. Passing a window here as well would test which of the two
@@ -165,7 +144,6 @@ async fn sandbox_real_idle_is_off_for_the_keep_running_opt_in() {
         port: KEPT_PORT,
         data_home: &data,
         project: &project,
-        token_path: &token_path,
         home: &home,
         survive_logout: true,
         extra: &[],
@@ -185,25 +163,18 @@ async fn sandbox_real_idle_is_off_for_the_keep_running_opt_in() {
          the thing they asked to keep running. Got: {env}"
     );
 
-    {
-        let (_conn, _catalog) = wait_for_accept(KEPT_PORT, &credentials(&token)).await;
-    }
+    provision_then_restart(KEPT_CONTAINER, KEPT_PORT).await;
 
     // Several times the window that would have stopped the other probe. There is no event to wait
     // for here — the assertion is that nothing happens — so the only honest shape is to wait past
     // the point where something would have.
     tokio::time::sleep(Duration::from_secs(20)).await;
 
-    let (status, restarts) = status_of(KEPT_CONTAINER);
-    assert_eq!(
-        status, "running",
-        "the sandbox stopped itself despite the opt-in (RestartCount {restarts}); §5.18 is the \
-         only place the two placements may differ, and this is the difference"
+    assert!(
+        daemon_running(KEPT_CONTAINER),
+        "the daemon stopped itself despite the opt-in; §5.18 is the only place the two placements \
+         may differ, and this is the difference"
     );
-    assert_eq!(
-        restarts, "0",
-        "the sandbox is running because the runtime restarted it, not because it never stopped — \
-         which is the restart policy covering for the idle rule, and hides exactly the defect \
-         this test exists to catch"
-    );
+    let (status, _) = status_of(KEPT_CONTAINER);
+    assert_eq!(status, "running");
 }

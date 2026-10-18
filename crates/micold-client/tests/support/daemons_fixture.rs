@@ -19,6 +19,7 @@ pub fn container(name: &str, port: u16) -> DaemonRuntime {
         profile: SandboxProfile::default(),
         container_name: name.into(),
         port,
+        migration: None,
     })
 }
 

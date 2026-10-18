@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 
 use micold_core::sandbox::argv;
 use micold_core::sandbox::dialect::Dialect;
-use micold_core::sandbox::image::ImageSource;
+use micold_core::sandbox::image::{ImageChoice, OwnImage};
 use micold_core::sandbox::runtime::{
     IdentityMapping, LimitSupport, RuntimeCapabilities, RuntimeKind,
 };
@@ -154,7 +154,7 @@ fn user_exposed_ports_and_the_control_port_are_both_published_to_loopback() {
     let args = argv_strings(&s);
 
     for expected in [
-        "127.0.0.1:7727:7727",
+        "127.0.0.1:7727:2222",
         "127.0.0.1:3000:3000",
         "127.0.0.1:8080:8080",
     ] {
@@ -204,10 +204,7 @@ fn an_explicit_stop_survives_a_reboot() {
 #[test]
 fn nothing_follows_the_image_reference() {
     let profile = SandboxProfile {
-        image: ImageSource {
-            reference: "micold-daemon:0.27.0".into(),
-            ..ImageSource::default()
-        },
+        image: ImageChoice::Own(OwnImage::Reference("micold-daemon:0.27.0".into())),
         ..SandboxProfile::default()
     };
     let args = argv_strings(&spec(&profile));
@@ -238,7 +235,7 @@ fn both_dialects_preserve_the_same_guarantees() {
             .collect();
 
         assert!(args.iter().any(|a| a == "unless-stopped"), "{kind}");
-        assert!(args.iter().any(|a| a == "127.0.0.1:7727:7727"), "{kind}");
+        assert!(args.iter().any(|a| a == "127.0.0.1:7727:2222"), "{kind}");
         assert!(
             args.iter()
                 .any(|a| a == &format!("{STATE_DIR}:{STATE_CONTAINER_DIR}:rw")),

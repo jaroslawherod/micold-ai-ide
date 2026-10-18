@@ -70,6 +70,7 @@ fn only_that_daemon_is_marked_and_others_stay_connected() {
                 profile: SandboxProfile::default(),
                 container_name: "box".into(),
                 port: 7001,
+                migration: None,
             }),
             true,
         )

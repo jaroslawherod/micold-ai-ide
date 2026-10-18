@@ -37,7 +37,7 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use image::ImageSource;
+use image::{ImageChoice, ImageSource};
 use runtime::RuntimeKind;
 
 /// Processor share, in thousandths of a core. `1000` is one core.
@@ -243,7 +243,7 @@ impl ResourceBudget {
 /// embedded resolver forwards them from the host side — names resolve, connections to them do not.
 /// That is a small metadata channel, and it is documented rather than claimed away: the posture is
 /// "no outbound connections", not "no outbound traffic of any kind".
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NetworkPosture {
     /// The default. Outbound connections fail; the control channel is unaffected.
@@ -306,13 +306,16 @@ impl CredentialShare {
 /// different answers, and conflating them is how a user ends up being told their settings are
 /// wrong when in fact their Docker installation cannot do what they asked (rule SP-3).
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(from = "RawProfile")]
 pub struct SandboxProfile {
     /// Which container runtime drives the sandbox. Docker at release (FR-021).
     #[serde(default)]
     pub runtime: RuntimeKind,
-    /// Where the image comes from.
-    #[serde(default)]
-    pub image: ImageSource,
+    /// Which image the container starts from (FR-001). Read from the stored `image_choice`, or,
+    /// for a file written before feature 806, from the old `image` through
+    /// [`ImageSource::into_choice`].
+    #[serde(rename = "image_choice", default)]
+    pub image: ImageChoice,
     /// What the sandbox may consume.
     #[serde(default)]
     pub budget: ResourceBudget,
@@ -328,6 +331,57 @@ pub struct SandboxProfile {
     /// manages it only on Linux (FR-014a/b, research R6).
     #[serde(default)]
     pub survive_logout: bool,
+    /// Set on read when the stored image was the released daemon image that the migration moved
+    /// to [`ImageChoice::Basic`] (FR-016). Never written: whoever owns the profile turns it into a
+    /// stored `MigrationNotice` and clears it ([`Self::take_moved_off_released`]).
+    #[serde(skip)]
+    pub moved_off_released: bool,
+}
+
+impl SandboxProfile {
+    /// Whether the read moved this profile off the released image, clearing the fact.
+    pub fn take_moved_off_released(&mut self) -> bool {
+        std::mem::take(&mut self.moved_off_released)
+    }
+}
+
+/// The stored shape of a [`SandboxProfile`]: both the `image_choice` of feature 806 and the `image`
+/// it replaces. `image_choice` wins when both are present.
+#[derive(Deserialize)]
+struct RawProfile {
+    #[serde(default)]
+    runtime: RuntimeKind,
+    #[serde(default)]
+    image: Option<ImageSource>,
+    #[serde(default)]
+    image_choice: Option<ImageChoice>,
+    #[serde(default)]
+    budget: ResourceBudget,
+    #[serde(default)]
+    network: NetworkPosture,
+    #[serde(default)]
+    credentials: BTreeSet<CredentialShare>,
+    #[serde(default)]
+    survive_logout: bool,
+}
+
+impl From<RawProfile> for SandboxProfile {
+    fn from(raw: RawProfile) -> Self {
+        let (image, moved_off_released) = match (raw.image_choice, raw.image) {
+            (Some(choice), _) => (choice, false),
+            (None, Some(old)) => old.into_choice(),
+            (None, None) => (ImageChoice::Basic, false),
+        };
+        Self {
+            runtime: raw.runtime,
+            image,
+            budget: raw.budget,
+            network: raw.network,
+            credentials: raw.credentials,
+            survive_logout: raw.survive_logout,
+            moved_off_released,
+        }
+    }
 }
 
 /// One project directory shared with the sandbox.
@@ -454,15 +508,16 @@ pub struct StateMount {
     pub container: PathBuf,
 }
 
-/// The client's authentication token, mounted read-only (research R1).
+/// The daemon's SSH key directory, whose server-side files are mounted read-only (feature 806).
 ///
-/// The token reaches the container through the filesystem rather than through the command line, so
-/// it does not appear in `inspect` output or in the host's process list.
+/// Kept under the old name so the many places that build a [`MountSet`] do not change shape: `host`
+/// is the daemon's key directory (`DaemonKeys::dir`) and `container` is `/run/micold/ssh`; `argv`
+/// mounts `host_ed25519`, `host_ed25519.pub` and `authorized_keys` from it, as single files.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SecretMount {
-    /// The `0600` file in the per-user state directory.
+    /// The daemon's key directory.
     pub host: PathBuf,
-    /// Where the daemon reads it from.
+    /// Where the SSH server reads its keys from.
     pub container: PathBuf,
 }
 

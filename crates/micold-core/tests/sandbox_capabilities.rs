@@ -13,7 +13,7 @@
 //! erase the user's stored intent the first time they opened the app on a machine that could not
 //! enforce it — and moving back would not bring it back (RC-3).
 
-use micold_core::sandbox::image::ImageSource;
+use micold_core::sandbox::image::ImageChoice;
 use micold_core::sandbox::parse::{ContainerFacts, ImageFacts};
 use micold_core::sandbox::runtime::{
     reconcile, CapabilityCache, ContainerId, ContainerRuntime, IdentityMapping, LimitSupport,
@@ -86,7 +86,7 @@ impl ContainerRuntime for Counting {
     }
     fn acquire_image(
         &self,
-        _source: &ImageSource,
+        _source: &ImageChoice,
         _progress: &mut dyn FnMut(Progress),
     ) -> Result<ImageFacts, RuntimeError> {
         unreachable!("the capability cache never touches an image")

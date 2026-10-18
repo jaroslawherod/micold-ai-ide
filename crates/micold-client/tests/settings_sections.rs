@@ -51,7 +51,14 @@ use std::path::{Path, PathBuf};
 ///
 /// Feature 533's Jira connections are edited by the connect form, which M2 lands (T022 onward); the
 /// switch itself is rendered by Settings → Jira.
-const DEFERRED: &[(&str, &str)] = &[("jira_connections", "M2 (T022) connect form")];
+const DEFERRED: &[(&str, &str)] = &[
+    ("jira_connections", "M2 (T022) connect form"),
+    // Read-repair state (`#[serde(skip)]`): shown through `ContainerSettings.migration`'s notice.
+    (
+        "daemon.sandbox.moved_off_released",
+        "M5 (T058) migration notice",
+    ),
+];
 
 /// Settings stored with the others but chosen outside the Settings screen, each with the client
 /// source that holds its control and the message that control sends. No Settings section will ever

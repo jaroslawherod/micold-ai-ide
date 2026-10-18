@@ -21,6 +21,7 @@ fn fixture() -> (DaemonRegistry, DaemonLinks, DaemonId, DaemonId) {
                 profile: SandboxProfile::default(),
                 container_name: "box".into(),
                 port: 7001,
+                migration: None,
             }),
             true,
         )

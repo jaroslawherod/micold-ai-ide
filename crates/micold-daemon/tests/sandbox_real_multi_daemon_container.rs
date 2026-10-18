@@ -1,6 +1,6 @@
 //! Feature 491, US5 scenario 1 (FR-018, SC-006): a container daemon, driven by the client, starts
-//! a session that produces output and accepts input. The AI CLI is a script on `PATH`, not the
-//! shipped one: no sign-in, no network, no cost.
+//! a session that produces output and accepts input. The AI CLI is the stand-in package the
+//! install step puts in the container, not the shipped one: no sign-in, no network, no cost.
 //!
 //! Behind `sandbox-real-runtime` (Principle VI). `mise run image && mise run test-sandbox`.
 
@@ -11,14 +11,13 @@ mod sandbox_real_support;
 use std::time::Duration;
 
 use sandbox_real_support::{
-    fake_ai_cli, open_session, start_container_daemons, Terminal, FAKE_ECHO, FAKE_READY,
+    open_session, start_container_daemons, Terminal, FAKE_ECHO, FAKE_READY,
 };
 
 #[tokio::test]
 async fn sandbox_real_multi_daemon_container_session_produces_output_and_accepts_input() {
     let dir = tempfile::tempdir().unwrap();
-    let fake = fake_ai_cli(&dir.path().join("fake-bin"));
-    let daemons = start_container_daemons(dir.path(), "md-container", 17760, 1, &fake);
+    let daemons = start_container_daemons(dir.path(), "md-container", 17760, 1);
     let d = &daemons[0];
 
     let (mut conn, serial) = d.connect().await;

@@ -380,6 +380,7 @@ fn set_changed(target: &mut Settings, saved: &Settings, baseline: Option<&Settin
                                 storage_bytes: _,
                             },
                         network: _,
+                        moved_off_released: _,
                         credentials: _,
                         survive_logout: _,
                     },

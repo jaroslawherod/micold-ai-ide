@@ -96,6 +96,19 @@ pub fn idle_stop_value(survive_logout: bool) -> Option<&'static str> {
     survive_logout.then_some(IDLE_STOP_OFF)
 }
 
+/// The port the container's SSH server listens on (`packaging/basic/sshd_config`).
+pub const CONTAINER_SSH_PORT: u16 = 2222;
+
+/// Where the container's SSH server reads its keys from.
+pub const CONTAINER_SSH_DIR: &str = "/run/micold/ssh";
+
+/// The key directory's files that are mounted, and the names they carry in the container.
+const SSH_MOUNT_FILES: [(&str, &str); 3] = [
+    ("host_ed25519", "host_ed25519_key"),
+    ("host_ed25519.pub", "host_ed25519_key.pub"),
+    ("authorized_keys", "authorized_keys"),
+];
+
 pub fn create(spec: &SandboxSpec, caps: &RuntimeCapabilities) -> Vec<OsString> {
     let dialect = Dialect::for_kind(caps.kind);
     let mut args: Vec<OsString> = vec!["create".into(), "--name".into(), (&spec.name).into()];
@@ -118,7 +131,9 @@ pub fn create(spec: &SandboxSpec, caps: &RuntimeCapabilities) -> Vec<OsString> {
     // The control channel is always published to loopback, whatever the network posture — that is
     // the whole point of the masquerade-disabled bridge.
     args.push("-p".into());
-    args.push(format!("127.0.0.1:{p}:{p}", p = spec.control_port).into());
+    // It is the container's SSH port: the client provisions and tunnels the daemon through it
+    // (feature 806), so there is no daemon port and no `MICOLD_LISTEN_ADDR` here.
+    args.push(format!("127.0.0.1:{}:{CONTAINER_SSH_PORT}", spec.control_port).into());
     for port in &spec.published_ports {
         args.push("-p".into());
         args.push(format!("127.0.0.1:{port}:{port}").into());
@@ -142,7 +157,10 @@ pub fn create(spec: &SandboxSpec, caps: &RuntimeCapabilities) -> Vec<OsString> {
     // cannot see the reference it was created from. Without this the refusal carries `image: ""`
     // and the remedy is missing exactly the word the developer needs to act on it.
     args.push("-e".into());
-    args.push(format!("MICOLD_IMAGE_REFERENCE={}", spec.profile.image.reference).into());
+    args.push(format!("MICOLD_IMAGE_REFERENCE={}", spec.profile.image.reference()).into());
+    // The daemon's home inside the container, where the client installs its state (FR-004d).
+    args.push("-e".into());
+    args.push(format!("MICOLD_HOME={}", spec.mounts.home.container.display()).into());
 
     // How long this daemon should tolerate having nobody connected (FR-022, contract §5.18). Beside
     // the image reference and for the same reason: a daemon inside a container cannot see how its
@@ -156,7 +174,7 @@ pub fn create(spec: &SandboxSpec, caps: &RuntimeCapabilities) -> Vec<OsString> {
     args.extend(budget_args(spec, caps));
     args.extend(mount_args(&spec.mounts));
 
-    args.push((&spec.profile.image.reference).into());
+    args.push(spec.profile.image.reference().into());
     args
 }
 
@@ -221,15 +239,22 @@ fn mount_args(mounts: &MountSet) -> Vec<OsString> {
         )
         .into(),
     );
-    args.push("-v".into());
-    args.push(
-        format!(
-            "{}:{}:ro",
-            mounts.secret.host.display(),
-            mounts.secret.container.display()
-        )
-        .into(),
-    );
+    // The SSH material, as three single files so nothing else in the key directory (the client's
+    // private key) reaches the container. `secret.host` is the daemon's key directory.
+    for (host, container) in SSH_MOUNT_FILES {
+        args.push("-v".into());
+        args.push(
+            format!(
+                "{}:{}/{}:ro",
+                mounts.secret.host.join(host).display(),
+                // A container path is POSIX on every host: `Path::join` would put a `\` in it on
+                // Windows.
+                mounts.secret.container.display(),
+                container
+            )
+            .into(),
+        );
+    }
     // Credentials are read-only, with one exception (rule N-4): the AI CLI's sign-in token, which
     // the CLI replaces itself whenever it refreshes it. The sandbox may *use* the user's identity
     // when they opted in, and may keep that one token current, but never rewrite the rest.
@@ -244,7 +269,7 @@ fn mount_args(mounts: &MountSet) -> Vec<OsString> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::sandbox::image::ImageSource;
+    use crate::sandbox::image::{ImageChoice, OwnImage};
     use crate::sandbox::runtime::{IdentityMapping, LimitSupport, RuntimeKind};
     use crate::sandbox::{
         Bytes, CredentialMount, CredentialShare, HomeMount, MilliCpus, NetworkPosture,
@@ -272,10 +297,7 @@ mod tests {
         SandboxSpec {
             name: "micold-sandbox".into(),
             profile: SandboxProfile {
-                image: ImageSource {
-                    reference: "micold-daemon:0.27.0".into(),
-                    ..ImageSource::default()
-                },
+                image: ImageChoice::Own(OwnImage::Reference("micold-daemon:0.27.0".into())),
                 ..SandboxProfile::default()
             },
             mounts: MountSet {
@@ -293,8 +315,8 @@ mod tests {
                     container: PathBuf::from("/var/lib/micold"),
                 },
                 secret: SecretMount {
-                    host: PathBuf::from("/run/user/1000/micold/token"),
-                    container: PathBuf::from("/run/micold/token"),
+                    host: PathBuf::from("/home/u/.local/share/micold-ai-ide/ssh"),
+                    container: PathBuf::from("/run/micold/ssh"),
                 },
                 credentials: Vec::new(),
                 history: None,
@@ -422,8 +444,8 @@ mod tests {
                 .filter(|(_, a)| a.as_str() == "-v")
                 .filter_map(|(i, _)| args.get(i + 1).cloned())
                 .collect();
-            // sandbox home + projects + state volume + secret + one credential
-            assert_eq!(mounted.len(), 5, "{kind} mounted: {mounted:?}");
+            // sandbox home + projects + state volume + three SSH key files + one credential
+            assert_eq!(mounted.len(), 7, "{kind} mounted: {mounted:?}");
             // The home is the application's own directory mounted *at* the host home path — not
             // the host home mounted anywhere. Asserting the pair, not just the destination, is
             // what keeps the two apart: `/home/u:/home/u` would satisfy a destination-only check
@@ -440,7 +462,9 @@ mod tests {
             assert!(mounted
                 .iter()
                 .any(|m| m.contains("micold-ai-ide:/var/lib/micold")));
-            assert!(mounted.iter().any(|m| m.ends_with("/run/micold/token:ro")));
+            assert!(mounted
+                .iter()
+                .any(|m| m.ends_with("/run/micold/ssh/authorized_keys:ro")));
             assert!(mounted
                 .iter()
                 .any(|m| m.contains(".gitconfig") && m.ends_with(":ro")));
@@ -497,7 +521,7 @@ mod tests {
         for kind in RuntimeKind::ALL {
             let args = strings(&create(&s, &caps(kind, LimitSupport::Supported)));
             assert!(!args.iter().any(|a| a.contains(".gitconfig")), "{kind}");
-            assert!(!args.iter().any(|a| a.contains("ssh")), "{kind}");
+            assert!(!args.iter().any(|a| a.contains(".ssh")), "{kind}");
         }
     }
 
@@ -521,10 +545,10 @@ mod tests {
         for kind in RuntimeKind::ALL {
             let args = strings(&create(&spec(), &caps(kind, LimitSupport::Supported)));
             assert!(
-                args.iter().any(|a| a == "127.0.0.1:7727:7727"),
+                args.iter().any(|a| a == "127.0.0.1:7727:2222"),
                 "{kind}: {args:?}"
             );
-            assert!(!args.iter().any(|a| a == "7727:7727"), "{kind}");
+            assert!(!args.iter().any(|a| a == "7727:2222"), "{kind}");
         }
     }
 
@@ -538,7 +562,7 @@ mod tests {
         for kind in RuntimeKind::ALL {
             let s = spec();
             let args = strings(&create(&s, &caps(kind, LimitSupport::Supported)));
-            let expected = format!("MICOLD_IMAGE_REFERENCE={}", s.profile.image.reference);
+            let expected = format!("MICOLD_IMAGE_REFERENCE={}", s.profile.image.reference());
             assert!(
                 args.contains(&expected),
                 "{kind}: expected {expected:?} in {args:?}"
@@ -604,7 +628,7 @@ mod tests {
             );
 
             let args = strings(&create(&s, &caps(kind, LimitSupport::Supported)));
-            assert!(args.iter().any(|a| a == "127.0.0.1:7727:7727"), "{kind}");
+            assert!(args.iter().any(|a| a == "127.0.0.1:7727:2222"), "{kind}");
         }
     }
 
@@ -646,8 +670,70 @@ mod tests {
         for kind in RuntimeKind::ALL {
             let args = strings(&create(&s, &caps(kind, LimitSupport::Supported)));
             assert!(args.iter().any(|a| a == "127.0.0.1:3000:3000"), "{kind}");
-            assert!(args.iter().any(|a| a == "127.0.0.1:7727:7727"), "{kind}");
+            assert!(args.iter().any(|a| a == "127.0.0.1:7727:2222"), "{kind}");
         }
+    }
+
+    #[test]
+    fn the_container_is_reached_over_ssh_with_no_token_and_no_daemon_port() {
+        // Feature 806, FR-005: for the basic image and the user's own alike, the container publishes
+        // its SSH port to loopback only, mounts the three server-side key files read-only, and
+        // carries neither a token mount nor a daemon listen address.
+        use crate::sandbox::image::{ImageChoice, OwnImage};
+        let mut own = spec();
+        own.profile.image = ImageChoice::Own(OwnImage::Reference("acme/ssh:1".into()));
+        for s in [spec(), own] {
+            for kind in RuntimeKind::ALL {
+                let args = strings(&create(&s, &caps(kind, LimitSupport::Supported)));
+                let published: Vec<_> = args
+                    .iter()
+                    .filter(|a| a.starts_with("127.0.0.1:") && a.ends_with(":2222"))
+                    .collect();
+                assert_eq!(published.len(), 1, "{kind}: {args:?}");
+                for (host, container) in [
+                    ("host_ed25519", "/run/micold/ssh/host_ed25519_key:ro"),
+                    (
+                        "host_ed25519.pub",
+                        "/run/micold/ssh/host_ed25519_key.pub:ro",
+                    ),
+                    ("authorized_keys", "/run/micold/ssh/authorized_keys:ro"),
+                ] {
+                    assert!(
+                        args.iter()
+                            .any(|a| a.contains(&format!("{host}:")) && a.ends_with(container)),
+                        "{kind} mounts {host}: {args:?}"
+                    );
+                }
+                assert!(
+                    args.iter().any(|a| a.starts_with("MICOLD_HOME=")),
+                    "{kind}: {args:?}"
+                );
+                assert!(
+                    !args
+                        .iter()
+                        .any(|a| a.contains("/run/micold/token") || a.contains("LISTEN_ADDR")),
+                    "{kind}: {args:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn only_the_explicit_uid_dialect_adds_group_zero_for_the_passwd_line() {
+        let docker = strings(&create(
+            &spec(),
+            &caps(RuntimeKind::Docker, LimitSupport::Supported),
+        ));
+        let at = docker
+            .iter()
+            .position(|a| a == "--group-add")
+            .expect("--group-add");
+        assert_eq!(docker[at + 1], "0");
+        let podman = strings(&create(
+            &spec(),
+            &caps(RuntimeKind::Podman, LimitSupport::Supported),
+        ));
+        assert!(!podman.iter().any(|a| a == "--group-add"));
     }
 
     #[test]

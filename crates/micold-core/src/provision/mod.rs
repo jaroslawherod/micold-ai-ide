@@ -8,6 +8,7 @@ pub mod ai_cli;
 pub mod attempt;
 pub mod failure;
 pub mod keys;
+pub mod login;
 pub mod relay;
 
 use std::path::PathBuf;

@@ -22,7 +22,7 @@ mod required {
     use micold_client::features::window::FieldId;
     use micold_core::daemons::DaemonId;
     use micold_core::required::FieldRequirement;
-    use micold_core::sandbox::image::ImageSourceKind;
+    use micold_core::sandbox::image::{ImageChoice, OwnImage};
 
     fn open() -> State {
         let mut state = State::default();
@@ -55,11 +55,17 @@ mod required {
     }
 
     #[test]
-    fn a_container_daemon_requires_name_container_name_and_image() {
+    fn a_container_daemon_requires_name_and_container_name_and_its_own_image_only_when_chosen() {
         let mut state = open();
         let draft = state.draft.as_mut().unwrap();
         draft.runtime = DraftRuntime::Container;
-        draft.profile.image.reference.clear();
+        // The basic image names nothing to fill in.
+        assert_eq!(
+            listed(&state),
+            vec![FieldId::DaemonName, FieldId::DaemonContainerName]
+        );
+        let draft = state.draft.as_mut().unwrap();
+        draft.profile.image = ImageChoice::Own(OwnImage::Reference(String::new()));
         assert_eq!(
             listed(&state),
             vec![
@@ -76,18 +82,15 @@ mod required {
     }
 
     #[test]
-    fn the_image_file_is_required_only_for_the_imported_file_source() {
+    fn an_own_image_needs_a_reference_or_an_archive_not_both() {
         let mut state = open();
         let draft = state.draft.as_mut().unwrap();
         draft.runtime = DraftRuntime::Container;
-        assert!(!listed(&state).contains(&FieldId::DaemonImagePath));
-        let draft = state.draft.as_mut().unwrap();
-        draft.profile.image.kind = ImageSourceKind::ImportedFile;
-        draft.image_path = " ".into();
-        assert!(listed(&state).contains(&FieldId::DaemonImagePath));
-        assert!(empty(&state).contains(&FieldId::DaemonImagePath));
+        draft.profile.image = ImageChoice::Own(OwnImage::Reference(String::new()));
+        assert!(empty(&state).contains(&FieldId::DaemonImage));
         state.draft.as_mut().unwrap().image_path = "/tmp/image.tar".into();
-        assert!(!empty(&state).contains(&FieldId::DaemonImagePath));
+        assert!(!empty(&state).contains(&FieldId::DaemonImage));
+        assert!(!listed(&state).contains(&FieldId::DaemonImagePath));
     }
 
     #[test]

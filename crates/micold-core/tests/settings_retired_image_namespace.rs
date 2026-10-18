@@ -7,7 +7,8 @@
 //! nobody who had ever opened the sandbox section. Their file holds the old namespace as a value,
 //! and a serde default cannot reach a field that is present.
 
-use micold_core::sandbox::image::{ImageSourceKind, DEFAULT_IMAGE};
+use micold_core::daemons::{DaemonRuntime, MigrationNotice};
+use micold_core::sandbox::image::{ImageChoice, OwnImage};
 use micold_core::settings::{JsonFileSettingsStore, SettingsStore};
 
 /// A v4 document as the app wrote it before 0.12.0 — trimmed to the fields under test, which the
@@ -40,14 +41,25 @@ fn load(document: &str) -> micold_core::settings::Settings {
 #[test]
 fn a_stored_reference_into_the_retired_namespace_loads_as_the_current_default() {
     let settings = load(&document("registry", "ghcr.io/micold/micold-daemon:0.10.0"));
-    assert_eq!(settings.daemon.sandbox.image.reference, DEFAULT_IMAGE);
+    // Repaired, then moved off the released image: the final choice is the basic image, and the
+    // migrated daemon carries the notice (FR-016).
+    assert_eq!(settings.daemon.sandbox.image, ImageChoice::Basic);
+    let notices: Vec<_> = settings
+        .daemons
+        .iter()
+        .filter_map(|e| match &e.runtime {
+            DaemonRuntime::Container(c) => c.migration,
+            _ => None,
+        })
+        .collect();
+    assert_eq!(notices, [MigrationNotice::MovedOffReleasedImage]);
 }
 
 #[test]
 fn a_stored_reference_the_user_chose_survives_the_load() {
     let chosen = "registry.example.com/team/micold-daemon:2.0.0";
     let settings = load(&document("registry", chosen));
-    assert_eq!(settings.daemon.sandbox.image.reference, chosen);
+    assert_eq!(settings.daemon.sandbox.image.reference(), chosen);
 }
 
 #[test]
@@ -56,12 +68,13 @@ fn a_local_build_keeps_its_name_even_in_the_retired_namespace() {
         "local_build",
         "ghcr.io/micold/micold-daemon:0.10.0",
     ));
+    assert!(matches!(
+        settings.daemon.sandbox.image,
+        ImageChoice::Own(OwnImage::Reference(_))
+    ));
     assert_eq!(
-        settings.daemon.sandbox.image.kind,
-        ImageSourceKind::LocalBuild
-    );
-    assert_eq!(
-        settings.daemon.sandbox.image.reference, "ghcr.io/micold/micold-daemon:0.10.0",
+        settings.daemon.sandbox.image.reference(),
+        "ghcr.io/micold/micold-daemon:0.10.0",
         "an image already on this machine is not made unreachable to fix a pull nobody does"
     );
 }
