@@ -55,12 +55,20 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review plan | 2 | 2e543df9ccb26d8f478193d8cdf4e3ebcbb65767:5233609a4f479ef50bc8ee7f209f6969d2f950a2 | CLEAN (1 MINOR, fixed, prose only) |
 | Review tasks | 1 | 04c1c7e294dde5831e98cdfcec29ca4f3d9203f8:5eed6c26bf89d047cf687661f1602dd39770ae1e | CHANGES: 2 MAJOR (T042 client call sites; stale checklist — fixed, spec gained a plain-language summary), 2 MINOR (F3 fixed; F4 already noted in T029) |
 | Review tasks | 2 | f741a87ee478cc18590ea2227bdf989249aa490d:96c0440120fd62354a731049322b3adec98be5e1 | CLEAN (2 MINOR: T042 test list, line wrap — fixed, prose only) |
+| M1 review A (code-review high) | 1 | c931c49619d8dbc13c1b4396c5944008406defed:bf97dc4a7be50771bcceb7ce878792ec43fc39b0 | 10 findings: 4 fixed (split-delta uuid leak in fixtures + script, lenient init `tools`, `null` tool input, single `raw` copy), 6 declined |
+| M1 review B (conformance, sonnet) | 1 | b697707771467cbdcf3dc27783bf157d45976967:b37bc607eaeeb1f53cde3a4d02c4ac77a1b8903d | CLEAN |
 
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
 | — | Review tasks 1 | F4 T029 partly green before T030 | already documented in T029; only daemon-restart cases are red-first |
+| M1 | A | `Result` without `is_error`/`subtype` becomes `Unrecognised` | US2 scenario 3 / FR-012: a known type missing a field the model expects is kept as unrecognised |
+| M1 | A | `StoredSession.kind` should use a `Stored*` mirror | data-model.md and plan name `StoredSession.kind: SessionKind` with `skip_serializing_if = "SessionKind::is_terminal"`; a downgrade drops an unknown key either way |
+| M1 | A | `Session.kind` is a `pub` field | every `Session` field is `pub`, `provider` included (same FR-001-style "fixed for life" rule); the constructors are the only way to choose it |
+| M1 | A | `structured_args` should default to `None` on the trait | Decision 9: the trait's own rule "No method has a default" (feature 026 FR-021) |
+| M1 | A | refusal sentence hardcodes "Claude Code" | the sentence is specified (T004, FR-003); one CLI has the mode |
+| M1 | A | `LineSplitter` buffer has no cap | research R4 rejects a maximum line length (tool results run to several MiB, lines read whole) |
 
 ## Handover
 
