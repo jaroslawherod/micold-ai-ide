@@ -517,6 +517,17 @@ fn resolve(model: &Model<'_>, loc: &WorktreeRef) -> Binding {
     )
 }
 
+/// A sandbox start succeeded for container daemon `id`: retire its migration notice when it came up
+/// on the basic image, but not when it adopted a running released-image container (FR-016, FR-017).
+/// Whether the registry changed and so must be saved.
+pub fn retire_migration(registry: &mut DaemonRegistry, id: DaemonId, adopted_legacy: bool) -> bool {
+    let on_basic = matches!(
+        registry.get(id).map(|e| &e.runtime),
+        Some(DaemonRuntime::Container(c)) if c.profile.image == micold_core::sandbox::image::ImageChoice::Basic
+    );
+    on_basic && !adopted_legacy && registry.clear_migration(id)
+}
+
 /// The container daemon the sandbox state and boot plan describe: the legacy default when it is a
 /// container, else the first container entry, else `None`.
 pub fn sandbox_daemon(

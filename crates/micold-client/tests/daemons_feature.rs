@@ -1208,3 +1208,38 @@ fn a_legacy_container_says_so_and_stops_only_with_no_session_running() {
         "no session: it may restart"
     );
 }
+
+/// T062 (FR-016, FR-017): a start retires the notice only on the basic image and never for an
+/// adopted released-image container.
+#[test]
+fn a_start_retires_the_migration_notice_only_on_the_basic_image() {
+    use micold_core::daemons::{DaemonRegistry, DaemonRuntime};
+    use micold_core::sandbox::image::{ImageChoice, OwnImage};
+    let mut w = World::new();
+    with_migration(&mut w);
+    let boxed = w.boxed;
+    assert!(
+        !daemons::retire_migration(&mut w.registry, boxed, true),
+        "adopted legacy"
+    );
+    assert!(
+        !daemons::retire_migration(&mut w.registry, w.host, false),
+        "not a container"
+    );
+    let mut entries = w.registry.entries().to_vec();
+    for entry in &mut entries {
+        if let DaemonRuntime::Container(c) = &mut entry.runtime {
+            c.profile.image = ImageChoice::Own(OwnImage::Reference("box:1".into()));
+        }
+    }
+    let mut own = DaemonRegistry::new(entries, w.registry.next_id());
+    assert!(
+        !daemons::retire_migration(&mut own, boxed, false),
+        "own image"
+    );
+    assert!(daemons::retire_migration(&mut w.registry, boxed, false));
+    assert!(
+        !daemons::retire_migration(&mut w.registry, boxed, false),
+        "once"
+    );
+}

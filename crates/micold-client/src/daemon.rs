@@ -247,9 +247,23 @@ pub fn actor_keys(registry: &DaemonRegistry) -> Vec<ActorKey> {
         .filter(|e| e.runtime.is_startable())
         .map(|e| ActorKey {
             id: e.id,
-            fingerprint: serde_json::to_string(&e.runtime).unwrap_or_default(),
+            fingerprint: serde_json::to_string(&identity_of(&e.runtime)).unwrap_or_default(),
         })
         .collect()
+}
+
+/// The runtime as it counts toward an actor's identity: a container's migration notice is for the
+/// row, so clearing it after a start must not restart the actor that just connected.
+fn identity_of(runtime: &DaemonRuntime) -> DaemonRuntime {
+    match runtime {
+        DaemonRuntime::Container(c) => {
+            DaemonRuntime::Container(micold_core::daemons::ContainerSettings {
+                migration: None,
+                ..c.clone()
+            })
+        }
+        other => other.clone(),
+    }
 }
 
 /// The actors that should be running: one per startable entry the client should be dialling, so a
@@ -1458,6 +1472,29 @@ mod tests {
                 ..
             }
         ));
+    }
+
+    /// Clearing a container's migration notice after its start must not change the actor's identity.
+    #[test]
+    fn clearing_the_migration_notice_keeps_the_actors_identity() {
+        use micold_core::daemons::{DaemonRuntime, MigrationNotice};
+        let runtime = |migration| {
+            let mut c = match micold_core::daemons::DaemonRuntime::Container(
+                serde_json::from_str(r#"{"container_name":"c","port":7001}"#).unwrap(),
+            ) {
+                DaemonRuntime::Container(c) => c,
+                _ => unreachable!(),
+            };
+            c.migration = migration;
+            DaemonRuntime::Container(c)
+        };
+        assert_eq!(
+            serde_json::to_string(&super::identity_of(&runtime(Some(
+                MigrationNotice::MovedOffReleasedImage
+            ))))
+            .unwrap(),
+            serde_json::to_string(&super::identity_of(&runtime(None))).unwrap()
+        );
     }
 
     fn quiet() -> micold_core::provision::EventSink {

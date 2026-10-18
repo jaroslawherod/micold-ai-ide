@@ -992,19 +992,16 @@ fn apply(app: &mut crate::App, msg: SandboxMsg) -> Task<Message> {
             let adopted_legacy = started.legacy;
             app.sandbox.started(started, locations);
             // The first start on the basic image retires the migration notice (FR-016).
-            if !adopted_legacy {
-                let daemon = app.sandbox_daemon();
-                let basic = matches!(
-                    app.core.settings.daemons.get(daemon).map(|e| &e.runtime),
-                    Some(micold_core::daemons::DaemonRuntime::Container(c))
-                        if c.profile.image == micold_core::sandbox::image::ImageChoice::Basic
-                );
-                if basic && app.core.settings.daemons.clear_migration(daemon) {
-                    let registry = app.core.settings.daemons.clone();
-                    app.apply_daemon_outcome(
-                        &micold_client::features::Outcome::DaemonRegistryChanged(registry),
-                    );
-                }
+            let daemon = app.sandbox_daemon();
+            if micold_client::features::daemons::retire_migration(
+                &mut app.core.settings.daemons,
+                daemon,
+                adopted_legacy,
+            ) {
+                let registry = app.core.settings.daemons.clone();
+                app.apply_daemon_outcome(&micold_client::features::Outcome::DaemonRegistryChanged(
+                    registry,
+                ));
             }
             iced::Task::none()
         }
