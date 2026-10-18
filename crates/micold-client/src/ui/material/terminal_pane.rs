@@ -2327,6 +2327,42 @@ mod tests {
             );
         }
 
+        // Feature 968 (contracts/keys.md K3, SC-002).
+
+        #[test]
+        fn the_switcher_chord_is_published_as_a_toggle_and_captured() {
+            #[cfg(target_os = "macos")]
+            let modifiers = keyboard::Modifiers::LOGO | keyboard::Modifiers::SHIFT;
+            #[cfg(not(target_os = "macos"))]
+            let modifiers = keyboard::Modifiers::CTRL | keyboard::Modifiers::SHIFT;
+            let (captured, messages) =
+                press_focused(&Event::Keyboard(keyboard::Event::KeyPressed {
+                    key: keyboard::Key::Character("p".into()),
+                    modified_key: keyboard::Key::Character("P".into()),
+                    physical_key: Physical::Code(iced::keyboard::key::Code::KeyP),
+                    location: keyboard::Location::Standard,
+                    modifiers,
+                    text: None,
+                    repeat: false,
+                }));
+            assert!(captured, "the chord must not reach anyone else");
+            assert!(
+                bytes_sent(&messages).is_empty(),
+                "the PTY must receive 0 bytes (SC-002)"
+            );
+            assert!(
+                matches!(
+                    messages.as_slice(),
+                    [Message::QuickSwitch(
+                        crate::features::quick_switch::Msg::Toggled {
+                            terminal_had_focus: true
+                        }
+                    )]
+                ),
+                "published: {messages:?}"
+            );
+        }
+
         #[test]
         fn physical_keys_map_onto_the_navigation_keys() {
             use crate::keymap::PhysicalKey;

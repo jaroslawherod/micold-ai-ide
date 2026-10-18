@@ -106,6 +106,19 @@ fn dialogs() -> Vec<Dialog> {
                 })
             },
         },
+        // The quick switcher (feature 968): a dialog that is open exactly while its state is.
+        Dialog {
+            id: "quick_switcher",
+            cancel: Message::QuickSwitch(micold_client::features::quick_switch::Msg::Dismissed),
+            open: |state| {
+                state.quick_switch.open = Some(micold_client::features::quick_switch::Open {
+                    query: String::new(),
+                    highlighted: None,
+                    terminal_had_focus: false,
+                    keyboard_row_before: None,
+                })
+            },
+        },
         // Dismiss group's question (feature 483, G5).
         Dialog {
             id: "confirm_dismiss_run_group",
@@ -238,17 +251,17 @@ fn every_dialog_is_in_the_list() {
     //
     // Nine, then eight. Settings was the largest of the original nine and is no longer a dialog at
     // all — it is a view (FR-026), so it neither floats nor takes Escape. Feature 804 removed the
-    // placement question the view used to ask (`confirm_placement`). Thirteen with the Changes view's discard confirmation (feature 482). Fourteen with Run in parallel (feature 483). Fifteen with Dismiss group's question (feature 483). Sixteen with Pick this one's question (feature 483). Eighteen with the cleanup offer and its second confirmation (feature 483). Eighteen again with the additional-session confirmation (feature 776) replacing `confirm_placement`. Nineteen with the full-reply dialog (feature 946).
+    // placement question the view used to ask (`confirm_placement`). Thirteen with the Changes view's discard confirmation (feature 482). Fourteen with Run in parallel (feature 483). Fifteen with Dismiss group's question (feature 483). Sixteen with Pick this one's question (feature 483). Eighteen with the cleanup offer and its second confirmation (feature 483). Eighteen again with the additional-session confirmation (feature 776) replacing `confirm_placement`. Nineteen with the full-reply dialog (feature 946). Twenty with the quick switcher (feature 968).
     assert_eq!(
         dialogs().len(),
-        19,
+        20,
         "the dialog list has drifted. Add the new dialog here, or the twenty-two states this file \
          is meant to cover are no longer twenty-two"
     );
     assert_eq!(
         every_state().len(),
-        40,
-        "nineteen dialogs plus nothing open, each with the filter panel open and closed"
+        42,
+        "twenty dialogs (the quick switcher is the twentieth, feature 968) plus nothing open, each with the filter panel open and closed"
     );
 
     let registered_dialogs = registry::probes()
