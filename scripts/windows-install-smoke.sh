@@ -66,6 +66,10 @@ win() {
 		*) printf '%s\n' "$line" ;;
 		esac
 	done
+	# No answer in time: a late one would be read as the next question's, so end the session and let
+	# every later question fail at once.
+	echo "PowerShell gave no answer in ${ps_timeout_secs}s; stopping it" >&2
+	kill "$PS_PID" 2>/dev/null
 	return 1
 }
 
@@ -130,6 +134,8 @@ done
 # show for it (FR-003). Without one Windows draws its generic exe icon.
 cat >"$logs/group-icons.ps1" <<'PS1'
 param([string]$Path)
+# Both exes are checked in the one PowerShell `win` keeps open, so the type is compiled only once.
+if (-not ('MicoldResources' -as [type])) {
 Add-Type -TypeDefinition @'
 using System;
 using System.Runtime.InteropServices;
@@ -155,6 +161,7 @@ public static class MicoldResources {
     }
 }
 '@
+}
 [MicoldResources]::GroupIcons($Path)
 PS1
 for bin in micold-ai-ide.exe micold-daemon.exe; do
