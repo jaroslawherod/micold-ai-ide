@@ -319,7 +319,7 @@ FR-021, FR-021a).
 
 **Independent Test**: `cargo test -p micold-daemon --test structured_resume`.
 
-- [ ] T029 [US3] Write failing tests in `crates/micold-daemon/tests/structured_resume.rs`: a new
+- [X] T029 [US3] Write failing tests in `crates/micold-daemon/tests/structured_resume.rs`: a new
   structured session's first argv has `--session-id <id>` and no `--resume` (US3 scenario 2);
   once its conversation is recorded (set up as the terminal resume tests do), stop/start and
   `SessionRestart` launch with the structured args and `--resume <same id>` (US3 scenario 1,
@@ -334,7 +334,7 @@ FR-021, FR-021a).
   back terminal (harmless while the kind is unreachable from the UI, before M8). Stop/start and
   `SessionRestart` resume through the `launch_args(spec)` path T020 shares, so those cases pin
   behaviour M2 built.
-- [ ] T030 [US3] Make T029 pass: restore passes `StoredSession.kind` into `Session::restored` in
+- [X] T030 [US3] Make T029 pass: restore passes `StoredSession.kind` into `Session::restored` in
   `crates/micold-daemon/src/state.rs` (and `crates/micold-daemon/src/catalog.rs` where the record is
   read), and the structured start path uses the same `launch_args(spec)` resume decision as the
   terminal one.

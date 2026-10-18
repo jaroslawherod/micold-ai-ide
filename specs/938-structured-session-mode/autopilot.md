@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #938
 - **Worktree branch**: claude/project-thread-cl0lw3
 - **Started**: 2026-10-18
-- **Phase**: design revision
-- **Next step**: design revision PR to open (orchestrator); then M4
+- **Phase**: M4
+- **Next step**: M4 verify (tasks/verify.md), then reviews
 
 ## Pull requests
 
@@ -20,7 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1044 | M1 parser, fixtures, kind persisted | merged (rebase) | 613faba7880da73fd7e6228cda6c8af60d7ea85c |
 | #1056 | M2 daemon runs a structured session, streams events | merged (rebase) | 4793cbab05478fe50b1434ab61a1c99c717701e5 |
 | #1064 | M3 first prompt and user messages | merged (rebase) | 1fab9ea568ba3d8e00c60cb14c16f3277120fecf |
-| to-open | design revision: event history saved under Save terminal history (M7) | reviews clean, specs-only gate green | — |
+| #1070 | design revision: event history saved under Save terminal history (M7) | merged (rebase) | bd88174731b916d4fe47de2f16f4865dc197a3eb |
 
 ## Milestones
 
@@ -29,7 +29,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T010 | full | parser types every recorded fixture line; kind persisted | #1044 | merged |
 | M2 | T011–T021 | full | daemon runs a structured session and streams events; lifecycle parity | #1056 | merged |
 | M3 | T022–T028 | full | first prompt and user messages | #1064 | merged |
-| M4 | T029–T030 | full | resume | — | planned |
+| M4 | T029–T030 | full | resume | — | in progress |
 | M5 | T031–T032 | full | late and multiple viewers | — | planned |
 | M6 | T033–T036 | full | terminal-only requests refused | — | planned |
 | M7 | T049–T055 | full | event history saved under Save terminal history, restored after a daemon restart | — | planned |
@@ -49,6 +49,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | 8 | M1 | Real CLI writes line types the model does not type (`active_goal`, `autocompact_state`, `rate_limit_event`, `system` status/post_turn_summary/task_summary) | T008 amended: no `Unreadable`, and no `Unrecognised` for a known type; the others are `Unrecognised` (FR-012), as SC-001 says "each known event type recognised" | agent | recorded fixtures, SC-001 |
 | 9 | M1 | `structured_args` "default `None`" vs `AiCliProvider`'s rule "No method has a default" (feature 026 FR-021) | trait method without a default, implemented in all six impls | agent | provider.rs trait doc |
 | 10 | M1 | Fixtures keep `\r\n` byte for byte under `* text=auto eol=lf` | `.gitattributes`: `crates/micold-core/tests/fixtures/stream-json/*.jsonl -text` | agent | tolerance.jsonl CRLF line |
+| 11 | M4 | T030 predicted a code change (restore drops the kind) | None needed: M1's `StoredSession::into_session` already restores the kind and M2's start path shares the terminal `LaunchSpec`; T029's tests are test-after, each pinned by a deliberate mutant (cycle-log 9) | agent | store.rs into_session; tests/structured_resume.rs |
 
 ## Review rounds
 
