@@ -610,7 +610,8 @@ pub fn views(state: &State, model: &Model<'_>) -> ViewModel {
             stop_blocked: model.legacy_container == Some(entry.id)
                 && model.sessions.get(&entry.id).is_some_and(|s| !s.is_empty()),
             explanation: crate::links::remote_mismatch_text(entry, model.links),
-            replace_offered: replace_offered(model, entry.id) && !state.replacing.contains(&entry.id),
+            replace_offered: replace_offered(model, entry.id)
+                && !state.replacing.contains(&entry.id),
             replacing: state.replacing.contains(&entry.id),
             activity: match (&entry.runtime, state.provisioning.get(&entry.id)) {
                 (DaemonRuntime::Ssh(_), Some(progress))

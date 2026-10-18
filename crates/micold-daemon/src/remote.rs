@@ -107,7 +107,9 @@ fn run_stop() -> i32 {
             EXIT_SESSIONS_RUNNING
         }
         StopDecision::Unknown => {
-            eprintln!("micold-daemon remote stop: the daemon's sessions are not known; not stopped");
+            eprintln!(
+                "micold-daemon remote stop: the daemon's sessions are not known; not stopped"
+            );
             EXIT_UNKNOWN
         }
         StopDecision::End(_) => match micold_core::spawn::stop_running_daemon(&endpoint) {

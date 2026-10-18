@@ -31,7 +31,11 @@ fn world(client: &str, daemon: &str) -> (daemons_fixture::World, State, DaemonId
 fn row(w: &mut daemons_fixture::World, state: &State, id: DaemonId) -> (bool, bool, String) {
     let vm = daemons::views(state, &w.model());
     let r = vm.rows.iter().find(|r| r.id == id).unwrap();
-    (r.replace_offered, r.replacing, r.explanation.clone().unwrap())
+    (
+        r.replace_offered,
+        r.replacing,
+        r.explanation.clone().unwrap(),
+    )
 }
 
 #[test]
@@ -98,10 +102,7 @@ fn a_replacement_runs_once_and_a_success_reconnects() {
     assert!(daemons::update(&mut state, &mut w.model(), Msg::ReplaceRequested(id)).is_empty());
     daemons::update(&mut state, &mut w.model(), Msg::Replaced(id, Ok(())));
     assert!(
-        !matches!(
-            w.links.state(id),
-            Some(DaemonState::VersionMismatch { .. })
-        ),
+        !matches!(w.links.state(id), Some(DaemonState::VersionMismatch { .. })),
         "the daemon is dialled again"
     );
 }

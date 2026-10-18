@@ -88,7 +88,10 @@ impl DaemonLinks {
         if self.states.state(id) != Some(&DaemonState::Connected) {
             self.outboxes.remove(&id);
         }
-        if !matches!(self.states.state(id), Some(DaemonState::VersionMismatch { .. })) {
+        if !matches!(
+            self.states.state(id),
+            Some(DaemonState::VersionMismatch { .. })
+        ) {
             self.offers.remove(&id);
         }
         change
@@ -101,7 +104,10 @@ impl DaemonLinks {
 
     /// Record what `id` says of its sessions. Ignored unless it is in `VersionMismatch`.
     pub fn set_offer(&mut self, id: DaemonId, offer: ReplaceOffer) {
-        if matches!(self.states.state(id), Some(DaemonState::VersionMismatch { .. })) {
+        if matches!(
+            self.states.state(id),
+            Some(DaemonState::VersionMismatch { .. })
+        ) {
             self.offers.insert(id, offer);
         }
     }
