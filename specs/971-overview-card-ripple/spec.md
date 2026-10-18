@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-18
 
-**Status**: Draft
+**Status**: Closed 2026-10-18 — shipped in PRs #1038, #1045, #1054 and the close PR
 
 **Input**: User description: "Implement GitHub issue #971: Overview: ripple feedback when clicking
 a card. The problem you want solved: Clicking an overview card gives no pressed feedback beyond the
