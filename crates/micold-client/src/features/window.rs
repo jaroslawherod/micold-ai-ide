@@ -202,8 +202,9 @@ pub enum FieldId {
     DaemonMemoryRequest,
     /// Settings → Daemons: one AI CLI's install checkbox in the Kubernetes form (feature 686).
     DaemonKubeProvider(micold_core::session::AiCli),
-    /// Settings → Daemons: one allowed-credential checkbox in the Kubernetes form (feature 686).
-    DaemonKubeAllowed(crate::features::daemons_kube::AllowedKind),
+    /// Settings → Daemons: one allowed-credential checkbox in the Kubernetes form, by its place in `AllowedKind::all()`
+    /// (feature 686; a number, so this file names no other feature).
+    DaemonKubeAllowed(u8),
     /// Settings → Daemons: the Kubernetes form's kube context (feature 686).
     DaemonKubeContext,
     /// Settings → Daemons: the Kubernetes form's namespace (feature 686).
