@@ -60,6 +60,10 @@ pub fn interpret(outcome: Outcome) -> Task<Message> {
         | Outcome::Insert { .. }
         | Outcome::DaemonRegistryChanged(_)
         | Outcome::KubeContextsRequested
+        | Outcome::KubeStopRequested { .. }
+        | Outcome::KubeRemoveRequested { .. }
+        | Outcome::KubeKeysDelete { .. }
+        | Outcome::KubeLogsRequested { .. }
         | Outcome::DaemonSessionsEnded { .. }
         | Outcome::DaemonBound { .. }
         | Outcome::IssueSourceChosen { .. }

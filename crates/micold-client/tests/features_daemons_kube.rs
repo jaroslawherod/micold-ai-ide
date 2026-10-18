@@ -34,3 +34,30 @@ fn a_blank_context_is_refused_naming_it() {
         error.field
     );
 }
+
+#[test]
+fn placement_fields_round_trip_and_each_refuses_an_invalid_value_naming_it() {
+    let mut draft = KubeDraft::new(&[]);
+    draft.context = "prod".into();
+    draft.namespace = "dev".into();
+    draft.node_selector = "pool=gpu".into();
+    draft.tolerations = "gpu=true:NoSchedule".into();
+    draft.volume_size = "40Gi".into();
+    draft.storage_class = "fast".into();
+    let settings = draft.settings().unwrap();
+    assert_eq!(KubeDraft::of(&settings), draft);
+    for (field, edit) in [
+        (
+            "node_selector",
+            (|d: &mut KubeDraft| d.node_selector = "=x".into()) as fn(&mut KubeDraft),
+        ),
+        ("tolerations", |d| d.tolerations = "x".into()),
+        ("volume_size", |d| d.volume_size = "1023Mi".into()),
+        ("volume_size", |d| d.volume_size = String::new()),
+        ("storage_class", |d| d.storage_class = "Bad Name".into()),
+    ] {
+        let mut bad = draft.clone();
+        edit(&mut bad);
+        assert_eq!(bad.settings().unwrap_err().field, field);
+    }
+}

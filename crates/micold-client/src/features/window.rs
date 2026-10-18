@@ -211,6 +211,10 @@ pub enum FieldId {
     DaemonKubeNamespace,
     /// Settings → Daemons: the Kubernetes form's image (feature 686).
     DaemonKubeImage,
+    /// Settings → Daemons: the Kubernetes form's volume size (feature 686).
+    DaemonKubeVolumeSize,
+    /// Settings → Daemons: the Kubernetes form's storage class (feature 686).
+    DaemonKubeStorageClass,
     /// Settings → Daemons: the Kubernetes form's allowed SSH key file (feature 686).
     DaemonKubeSshKeyFile,
     /// Settings → Daemons: the Kubernetes form's allowed registry auth file (feature 686).

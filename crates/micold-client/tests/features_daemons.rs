@@ -493,4 +493,350 @@ mod kubernetes {
             auths: "/home/u/.docker/config.json".into()
         }));
     }
+
+    // M4b: placement fields (U107), applies on next start (A19, A20), Logs (U108).
+
+    #[test]
+    fn the_placement_fields_open_filled_and_save() {
+        let (mut w, id) = world();
+        let mut state = open(&mut w, id);
+        let draft = state.draft.as_ref().unwrap();
+        assert_eq!(draft.kube.volume_size, "10Gi");
+        send(
+            &mut state,
+            &mut w,
+            Msg::NodeSelectorEdited("pool=gpu\ndisk".into()),
+        );
+        send(
+            &mut state,
+            &mut w,
+            Msg::TolerationsEdited("gpu=true:NoSchedule".into()),
+        );
+        send(&mut state, &mut w, Msg::VolumeSizeEdited("50Gi".into()));
+        send(&mut state, &mut w, Msg::StorageClassEdited("fast".into()));
+        send(&mut state, &mut w, Msg::Saved);
+        assert!(state.form_error.is_none(), "{:?}", state.form_error);
+        let k = stored(&w, id);
+        assert_eq!(k.node_selector.len(), 2);
+        assert_eq!(k.tolerations.len(), 1);
+        assert_eq!(k.volume_size.to_k8s(), "50Gi");
+        assert_eq!(k.storage_class.as_deref(), Some("fast"));
+        let reopened = open(&mut w, id);
+        let kube = &reopened.draft.as_ref().unwrap().kube;
+        assert_eq!(kube.node_selector, "disk=\npool=gpu");
+        assert_eq!(kube.storage_class, "fast");
+    }
+
+    #[test]
+    fn the_list_editors_feed_the_draft_and_follow_a_replaced_text() {
+        use iced::widget::text_editor::{Action, Edit};
+        use micold_client::app::EditorAction;
+        let (mut w, id) = world();
+        let mut state = open(&mut w, id);
+        let typed = |c| EditorAction(Action::Edit(Edit::Insert(c)));
+        for c in "pool=gpu".chars() {
+            send(&mut state, &mut w, Msg::NodeSelectorAction(typed(c)));
+        }
+        send(&mut state, &mut w, Msg::TolerationsAction(typed('x')));
+        let kube = &state.draft.as_ref().unwrap().kube;
+        assert_eq!(kube.node_selector.trim_end(), "pool=gpu");
+        assert_eq!(kube.tolerations.trim_end(), "x");
+        send(&mut state, &mut w, Msg::NodeSelectorEdited("a=b".into()));
+        let kube = &state.draft.as_ref().unwrap().kube;
+        assert_eq!(kube.node_selector_editor.content().text().trim_end(), "a=b");
+    }
+
+    #[test]
+    fn each_placement_field_refuses_an_invalid_value_naming_it() {
+        for (msg, field) in [
+            (Msg::NodeSelectorEdited("=x".into()), "node_selector"),
+            (Msg::TolerationsEdited("nonsense".into()), "tolerations"),
+            (Msg::VolumeSizeEdited("500Mi".into()), "volume_size"),
+            (Msg::VolumeSizeEdited("lots".into()), "volume_size"),
+            (Msg::StorageClassEdited("Not Valid".into()), "storage_class"),
+        ] {
+            let (mut w, id) = world();
+            let before = w.registry.clone();
+            let mut state = open(&mut w, id);
+            send(&mut state, &mut w, msg);
+            send(&mut state, &mut w, Msg::Saved);
+            assert_eq!(state.form_error.as_ref().unwrap().field, field);
+            assert_eq!(w.registry, before);
+        }
+    }
+
+    fn dial(w: &mut World, id: DaemonId) {
+        w.links.apply(id, micold_core::daemons::DaemonEvent::Start);
+        assert!(w.links.should_dial(id));
+    }
+
+    #[test]
+    fn editing_a_running_daemon_saves_asks_nothing_and_applies_on_next_start() {
+        let (mut w, id) = world();
+        dial(&mut w, id);
+        w.sessions
+            .insert(id, vec![micold_core::session::SessionId::new()]);
+        let mut state = open(&mut w, id);
+        send(&mut state, &mut w, Msg::VolumeSizeEdited("30Gi".into()));
+        let out = send(&mut state, &mut w, Msg::Saved);
+        assert!(
+            matches!(out.as_slice(), [Outcome::DaemonRegistryChanged(_)]),
+            "{out:?}"
+        );
+        assert!(state.prompt().is_none());
+        assert_eq!(stored(&w, id).volume_size.to_k8s(), "30Gi");
+        assert!(daemons::details(&state, id).applies_on_next_start);
+        assert_eq!(daemons::APPLIES_ON_NEXT_START, "Applies on next start");
+        send(&mut state, &mut w, Msg::Started(id));
+        assert!(!daemons::details(&state, id).applies_on_next_start);
+    }
+
+    #[test]
+    fn logs_fetch_the_last_200_lines_on_demand_and_keep_the_answer() {
+        let (mut w, id) = world();
+        let mut state = State::default();
+        assert_eq!(daemons::details(&state, id).pod_log, None);
+        let out = send(&mut state, &mut w, Msg::LogsRequested(id));
+        assert_eq!(
+            out,
+            vec![Outcome::KubeLogsRequested {
+                daemon: id,
+                settings: stored(&w, id),
+                tail: 200
+            }]
+        );
+        send(
+            &mut state,
+            &mut w,
+            Msg::LogsFetched(id, Ok("line\n".into())),
+        );
+        assert_eq!(
+            daemons::details(&state, id).pod_log,
+            Some(Ok("line\n".into()))
+        );
+        send(&mut state, &mut w, Msg::LogsFetched(id, Err("boom".into())));
+        assert_eq!(
+            daemons::details(&state, id).pod_log,
+            Some(Err("boom".into()))
+        );
+    }
+
+    // M4b: Stop, Remove, Forget locally (U105, U106, U143, A23).
+
+    fn names(w: &World, id: DaemonId) -> micold_core::kube::names::ResourceNames {
+        let k = stored(w, id);
+        micold_core::kube::names::ResourceNames::new(&k.context.0, &k.namespace.0, "Cluster")
+    }
+
+    fn with_sessions(
+        w: &mut World,
+        id: DaemonId,
+        n: usize,
+    ) -> Vec<micold_core::session::SessionId> {
+        let s: Vec<_> = (0..n)
+            .map(|_| micold_core::session::SessionId::new())
+            .collect();
+        w.sessions.insert(id, s.clone());
+        s
+    }
+
+    #[test]
+    fn stop_with_running_sessions_confirms_naming_how_many_end() {
+        let (mut w, id) = world();
+        dial(&mut w, id);
+        let sessions = with_sessions(&mut w, id, 2);
+        let mut state = State::default();
+        assert!(send(&mut state, &mut w, Msg::Stopped(id)).is_empty());
+        assert_eq!(
+            state.prompt().unwrap().text,
+            "Stop Cluster? 2 running sessions will end. Worktrees on its volume are kept."
+        );
+        assert!(w.links.should_dial(id));
+        let out = send(&mut state, &mut w, Msg::RemovalConfirmed);
+        assert_eq!(
+            out,
+            vec![
+                Outcome::DaemonSessionsEnded {
+                    daemon: id,
+                    sessions
+                },
+                Outcome::KubeStopRequested {
+                    daemon: id,
+                    settings: stored(&w, id),
+                    name: "Cluster".into()
+                },
+            ]
+        );
+        assert!(!w.links.should_dial(id));
+        assert!(w.registry.get(id).is_some());
+    }
+
+    #[test]
+    fn stop_with_one_session_says_so_and_declining_changes_nothing() {
+        let (mut w, id) = world();
+        dial(&mut w, id);
+        with_sessions(&mut w, id, 1);
+        let mut state = State::default();
+        send(&mut state, &mut w, Msg::Stopped(id));
+        assert!(state
+            .prompt()
+            .unwrap()
+            .text
+            .contains("1 running session will end"));
+        assert!(send(&mut state, &mut w, Msg::RemovalCancelled).is_empty());
+        assert!(w.links.should_dial(id));
+    }
+
+    #[test]
+    fn stop_without_sessions_goes_straight_to_the_cluster() {
+        let (mut w, id) = world();
+        dial(&mut w, id);
+        let mut state = State::default();
+        let out = send(&mut state, &mut w, Msg::Stopped(id));
+        assert!(state.prompt().is_none());
+        assert_eq!(
+            out,
+            vec![Outcome::KubeStopRequested {
+                daemon: id,
+                settings: stored(&w, id),
+                name: "Cluster".into()
+            }]
+        );
+    }
+
+    #[test]
+    fn remove_names_what_is_deleted_and_deletes_nothing_before_confirmation() {
+        let (mut w, id) = world();
+        let n = names(&w, id);
+        let before = w.registry.clone();
+        let mut state = State::default();
+        assert!(send(&mut state, &mut w, Msg::RemovalRequested(id)).is_empty());
+        let text = &state.prompt().unwrap().text;
+        let secrets = n.all_secrets(&stored(&w, id).allowed).join(", ");
+        assert!(
+            text.starts_with(&format!(
+                "Remove Cluster? This deletes from prod/dev: pod {}, volume {} with its worktrees, secrets {secrets}. This computer's SSH key for Cluster is deleted too.",
+                n.pod(),
+                n.pvc()
+            )),
+            "{text}"
+        );
+        assert!(text.contains("0 worktrees"), "{text}");
+        assert_eq!(w.registry, before);
+        send(&mut state, &mut w, Msg::RemovalCancelled);
+        assert_eq!(w.registry, before);
+    }
+
+    #[test]
+    fn remove_confirmed_asks_the_cluster_and_forgets_only_when_it_is_done() {
+        let (mut w, id) = world();
+        dial(&mut w, id);
+        let sessions = with_sessions(&mut w, id, 1);
+        let mut state = State::default();
+        send(&mut state, &mut w, Msg::RemovalRequested(id));
+        let out = send(&mut state, &mut w, Msg::RemovalConfirmed);
+        assert_eq!(
+            out,
+            vec![
+                Outcome::DaemonSessionsEnded {
+                    daemon: id,
+                    sessions
+                },
+                Outcome::KubeRemoveRequested {
+                    daemon: id,
+                    settings: stored(&w, id),
+                    name: "Cluster".into()
+                },
+            ]
+        );
+        assert!(w.registry.get(id).is_some());
+        assert!(!w.links.should_dial(id));
+        let out = send(&mut state, &mut w, Msg::KubeRemoved(id, Ok(())));
+        assert!(w.registry.get(id).is_none());
+        assert_eq!(
+            out,
+            vec![
+                Outcome::DaemonRegistryChanged(w.registry.clone()),
+                Outcome::KubeKeysDelete { daemon: id }
+            ]
+        );
+    }
+
+    #[test]
+    fn an_unreachable_cluster_offers_forget_locally_naming_what_stays() {
+        let (mut w, id) = world();
+        let n = names(&w, id);
+        let mut state = State::default();
+        send(&mut state, &mut w, Msg::RemovalRequested(id));
+        send(&mut state, &mut w, Msg::RemovalConfirmed);
+        let out = send(
+            &mut state,
+            &mut w,
+            Msg::KubeRemoved(id, Err("timed out".into())),
+        );
+        assert!(out.is_empty());
+        assert!(w.registry.get(id).is_some());
+        let secrets = n.all_secrets(&stored(&w, id).allowed).join(", ");
+        assert_eq!(
+            state.prompt().unwrap().text,
+            format!(
+                "The cluster could not be reached (timed out). Forget Cluster on this computer only? These stay in prod/dev: {}, {}, {secrets}; this computer's key stays authorized in {} until they are deleted.",
+                n.pod(), n.pvc(), n.access_secret()
+            )
+        );
+        let out = send(&mut state, &mut w, Msg::RemovalConfirmed);
+        assert!(w.registry.get(id).is_none());
+        assert_eq!(
+            out,
+            vec![
+                Outcome::DaemonRegistryChanged(w.registry.clone()),
+                Outcome::KubeKeysDelete { daemon: id }
+            ]
+        );
+    }
+
+    #[test]
+    fn each_kubernetes_confirmation_labels_its_button_with_its_action() {
+        let (mut w, id) = world();
+        for (msg, label) in [
+            (Msg::RemovalRequested(id), "Remove"),
+            (Msg::ForgetLocallyRequested(id), "Forget locally"),
+        ] {
+            let mut state = State::default();
+            send(&mut state, &mut w, msg);
+            assert_eq!(state.prompt().unwrap().confirm_label, label);
+        }
+    }
+
+    #[test]
+    fn forget_locally_can_be_asked_for_directly_and_touches_no_cluster() {
+        let (mut w, id) = world();
+        let mut state = State::default();
+        send(&mut state, &mut w, Msg::ForgetLocallyRequested(id));
+        assert!(state
+            .prompt()
+            .unwrap()
+            .text
+            .starts_with("Forget Cluster on this computer only? These stay in prod/dev: "));
+        let out = send(&mut state, &mut w, Msg::RemovalConfirmed);
+        assert!(out.contains(&Outcome::KubeKeysDelete { daemon: id }));
+        assert!(!out.iter().any(|o| matches!(
+            o,
+            Outcome::KubeRemoveRequested { .. } | Outcome::KubeStopRequested { .. }
+        )));
+        assert!(w.registry.get(id).is_none());
+    }
+
+    #[test]
+    fn stop_of_a_non_kubernetes_daemon_is_unchanged() {
+        let mut w = World::new();
+        let boxed = w.boxed;
+        w.links
+            .apply(boxed, micold_core::daemons::DaemonEvent::Start);
+        let mut state = State::default();
+        let out = send(&mut state, &mut w, Msg::Stopped(boxed));
+        assert!(out.is_empty());
+        assert!(state.prompt().is_none());
+        assert!(!w.links.should_dial(boxed));
+    }
 }

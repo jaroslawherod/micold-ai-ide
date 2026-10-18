@@ -41,6 +41,22 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
     } else {
         Vec::new()
     };
+    // A forgotten Kubernetes daemon is gone from the registry when its key files are deleted: the
+    // key they are filed under comes from its settings, read first.
+    let kube_keys: BTreeMap<DaemonId, String> = app
+        .core
+        .settings
+        .daemons
+        .entries()
+        .iter()
+        .filter_map(|e| match &e.runtime {
+            micold_core::daemons::DaemonRuntime::Kubernetes(k) => Some((
+                e.id,
+                daemon_key(&k.context.0, &k.namespace.0, e.name.as_str()),
+            )),
+            _ => None,
+        })
+        .collect();
     let outcomes = app.core.update_daemons(msg, taken_elsewhere);
     let mut rest = Vec::new();
     let mut bound = Vec::new();
@@ -49,6 +65,26 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
     for outcome in outcomes {
         match &outcome {
             Outcome::KubeContextsRequested => tasks.push(list_kube_contexts()),
+            Outcome::KubeStopRequested {
+                daemon,
+                settings,
+                name,
+            } => tasks.push(stop_kube(app, *daemon, settings, name)),
+            Outcome::KubeRemoveRequested {
+                daemon,
+                settings,
+                name,
+            } => tasks.push(remove_kube(app, *daemon, settings, name)),
+            Outcome::KubeLogsRequested {
+                daemon,
+                settings,
+                tail,
+            } => tasks.push(kube_logs(app, *daemon, settings, *tail)),
+            Outcome::KubeKeysDelete { daemon } => {
+                if let Some(key) = kube_keys.get(daemon) {
+                    delete_kube_keys(key);
+                }
+            }
             Outcome::DaemonRegistryChanged(_) => app.apply_daemon_outcome(&outcome),
             Outcome::DaemonBound { daemon, .. } => {
                 app.apply_daemon_outcome(&outcome);
@@ -128,6 +164,104 @@ fn list_kube_contexts() -> Task<Message> {
                 .unwrap_or_else(|joined| Err(joined.to_string()))
         },
         |listed| Message::Daemons(Msg::ContextsListed(listed)),
+    )
+}
+
+/// The key a Kubernetes daemon's client-side key files are filed under: the same key its cluster
+/// objects carry (`ResourceNames`).
+fn daemon_key(context: &str, namespace: &str, name: &str) -> String {
+    micold_core::kube::names::DaemonKey::of(context, namespace, name)
+        .as_str()
+        .to_string()
+}
+
+/// The directory holding every Kubernetes daemon's key directory.
+pub fn kube_keys_root() -> PathBuf {
+    micold_core::paths::data_subdir("kube-keys")
+        .unwrap_or_else(|| std::env::temp_dir().join("micold-kube-keys"))
+}
+
+/// Delete this client's key files and pinned host key for the daemon filed under `key`.
+fn delete_kube_keys(key: &str) {
+    let _ = micold_client::kube::keys::KubeKeys::new(&kube_keys_root(), key).delete();
+}
+
+/// Stop the pod of a Kubernetes daemon off the UI thread (FR-014). A failure is shown in the
+/// daemon's log lines.
+fn stop_kube(
+    app: &App,
+    daemon: DaemonId,
+    settings: &micold_core::kube::settings::KubeSettings,
+    name: &str,
+) -> Task<Message> {
+    let connect = app.caps.kube_connector();
+    let (context, namespace) = (settings.context.0.clone(), settings.namespace.0.clone());
+    let names = micold_core::kube::names::ResourceNames::new(&context, &namespace, name);
+    Task::perform(
+        async move {
+            let cluster = connect(context).await?;
+            micold_core::kube::lifecycle::stop(&*cluster, &namespace, &names).await
+        },
+        move |result| match result {
+            Ok(()) => Message::NoOp,
+            Err(failure) => {
+                Message::Daemons(Msg::LogLine(daemon, format!("Stop failed: {failure}")))
+            }
+        },
+    )
+}
+
+/// Delete every cluster object of a Kubernetes daemon off the UI thread (FR-015).
+fn remove_kube(
+    app: &App,
+    daemon: DaemonId,
+    settings: &micold_core::kube::settings::KubeSettings,
+    name: &str,
+) -> Task<Message> {
+    let connect = app.caps.kube_connector();
+    let (context, namespace) = (settings.context.0.clone(), settings.namespace.0.clone());
+    let allowed = settings.allowed.clone();
+    let names = micold_core::kube::names::ResourceNames::new(&context, &namespace, name);
+    Task::perform(
+        async move {
+            let cluster = connect(context).await?;
+            micold_core::kube::lifecycle::remove(&*cluster, &namespace, &names, &allowed).await
+        },
+        move |result| {
+            Message::Daemons(Msg::KubeRemoved(
+                daemon,
+                result.map_err(|failure| failure.to_string()),
+            ))
+        },
+    )
+}
+
+/// Fetch the tail of a Kubernetes daemon's pod log off the UI thread (FR-018).
+fn kube_logs(
+    app: &App,
+    daemon: DaemonId,
+    settings: &micold_core::kube::settings::KubeSettings,
+    tail: u32,
+) -> Task<Message> {
+    let connect = app.caps.kube_connector();
+    let (context, namespace) = (settings.context.0.clone(), settings.namespace.0.clone());
+    let name = app
+        .core
+        .settings
+        .daemons
+        .get(daemon)
+        .map(|e| e.name.as_str().to_string())
+        .unwrap_or_default();
+    let pod = micold_core::kube::names::ResourceNames::new(&context, &namespace, &name).pod();
+    Task::perform(
+        async move {
+            let cluster = connect(context).await.map_err(|f| f.to_string())?;
+            cluster
+                .logs(&namespace, &pod, tail)
+                .await
+                .map_err(|f| f.to_string())
+        },
+        move |result| Message::Daemons(Msg::LogsFetched(daemon, result)),
     )
 }
 

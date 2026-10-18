@@ -11,7 +11,7 @@
 //! (`DaemonsMsg::Saved`), so it declares no `SETTINGS` and `tests/settings_sections.rs` records
 //! `daemons`, `next_daemon_id` and `legacy_default_daemon` as chosen here.
 
-use crate::app::Message;
+use crate::app::{EditorAction, Message};
 use crate::features::daemons::{
     runtime_choices, DaemonDetails, Draft, DraftRuntime, FormError, Msg as DaemonsMsg, State,
     ViewModel,
@@ -20,7 +20,9 @@ use crate::features::daemons_kube::{AllowedKind, ContextList};
 use crate::features::settings::DaemonDraft;
 use crate::features::window::FieldId;
 use crate::ui::focus::TrackFocus;
-use crate::ui::material::{Button, Checkbox, Select, StageProgress, Tag, TextField};
+use crate::ui::material::{
+    Button, Checkbox, KeyValueList, Select, StageProgress, Tag, TextField, TolerationList,
+};
 use crate::ui::settings::container_fields::{self, ContainerView, FieldErrors};
 use crate::ui::settings::{caution, group, name_of, note, page, Named};
 use iced::widget::{column, row};
@@ -47,6 +49,9 @@ pub const EMPTY_TITLE: &str = "No daemons are set up";
 /// What a daemon is, and what happens until one is added.
 pub const EMPTY_BODY: &str = "A daemon runs your sessions and terminals, on this computer or in a \
      container. Until one is added, worktrees cannot start sessions. Add one to get going.";
+
+/// The runtime label of a Kubernetes daemon's row.
+const KUBERNETES_LABEL: &str = "Kubernetes";
 
 fn state_tag<'a>(state: &DaemonState, roles: Roles) -> Element<'a, Message> {
     let (text, accent) = match state {
@@ -105,7 +110,7 @@ fn bound_line(view: &DaemonView) -> String {
     format!("Worktrees: {}", names.join(", "))
 }
 
-fn actions<'a>(view: &DaemonView, open: bool, roles: Roles) -> Element<'a, Message> {
+fn actions<'a>(view: &DaemonView, open: bool, kube: bool, roles: Roles) -> Element<'a, Message> {
     let id = view.id;
     let mut buttons = row![].spacing(spacing::XS);
     match view.state {
@@ -143,6 +148,11 @@ fn actions<'a>(view: &DaemonView, open: bool, roles: Roles) -> Element<'a, Messa
             );
         }
     }
+    if kube {
+        buttons = buttons.push(
+            Button::text("Logs", roles).on_press(Message::Daemons(DaemonsMsg::LogsRequested(id))),
+        );
+    }
     buttons = buttons
         .push(Button::text("Edit", roles).on_press(Message::Daemons(DaemonsMsg::EditOpened(id))))
         .push(
@@ -153,6 +163,12 @@ fn actions<'a>(view: &DaemonView, open: bool, roles: Roles) -> Element<'a, Messa
             Button::text("Remove", roles)
                 .on_press(Message::Daemons(DaemonsMsg::RemovalRequested(id))),
         );
+    if kube {
+        buttons = buttons.push(
+            Button::text("Forget locally", roles)
+                .on_press(Message::Daemons(DaemonsMsg::ForgetLocallyRequested(id))),
+        );
+    }
     buttons.into()
 }
 
@@ -215,7 +231,21 @@ fn daemon_row<'a>(
     if view.runtime_label == micold_core::daemons::SSH_RUNTIME_LABEL {
         body = body.push(repository_step(&view, state, focused, roles));
     }
-    body = body.push(actions(&view, open, roles));
+    let kube = view.runtime_label == KUBERNETES_LABEL;
+    if kube {
+        let details = crate::features::daemons::details(state, view.id);
+        if details.applies_on_next_start {
+            body = body.push(note(crate::features::daemons::APPLIES_ON_NEXT_START, roles));
+        }
+        match details.pod_log {
+            Some(Ok(log)) => {
+                body = body.push(group("Pod log", roles)).push(note(log, roles));
+            }
+            Some(Err(why)) => body = body.push(caution(why, roles)),
+            None => {}
+        }
+    }
+    body = body.push(actions(&view, open, kube, roles));
     if open {
         body = body.push(details_block(
             crate::features::daemons::details(state, view.id),
@@ -434,7 +464,7 @@ fn form<'a>(
 }
 
 /// The Kubernetes fields: context, namespace, image, AI CLIs, resources and allowed credentials
-/// (feature 686, M4a). Placement, volume size and the rest follow in M4b.
+/// (feature 686, M4a), then placement, volume size and storage class (M4b).
 fn kube_form<'a>(
     mut fields: iced::widget::Column<'a, Message>,
     draft: &'a Draft,
@@ -515,10 +545,46 @@ fn kube_form<'a>(
             control, error, focused, roles,
         ));
     }
-    if let Some(notice) = draft.volume_notice() {
-        let size = kube.volume_size_text();
-        fields = fields.push(note(format!("Volume size {size}. {notice}"), roles));
+    fields = fields
+        .push(group("Placement and storage", roles))
+        .push(note("Node selector, one key=value per line", roles))
+        .push(Element::from(
+            KeyValueList::new(kube.node_selector_editor.content(), roles)
+                .on_action(|a| Message::Daemons(DaemonsMsg::NodeSelectorAction(EditorAction(a)))),
+        ));
+    if let Some(message) = error_of(state, "node_selector") {
+        fields = fields.push(caution(message, roles));
     }
+    fields = fields
+        .push(note("Tolerations, one per line", roles))
+        .push(Element::from(
+            TolerationList::new(kube.tolerations_editor.content(), roles)
+                .on_action(|a| Message::Daemons(DaemonsMsg::TolerationsAction(EditorAction(a)))),
+        ));
+    if let Some(message) = error_of(state, "tolerations") {
+        fields = fields.push(caution(message, roles));
+    }
+    fields = fields
+        .push(
+            TextField::new("20Gi", &kube.volume_size, roles)
+                .label("Volume size")
+                .supporting(
+                    draft
+                        .volume_notice()
+                        .unwrap_or("In Kubernetes form, e.g. 20Gi"),
+                )
+                .track_focus(FieldId::DaemonKubeVolumeSize, focused)
+                .error(error_of(state, "volume_size"))
+                .on_input(|v| Message::Daemons(DaemonsMsg::VolumeSizeEdited(v))),
+        )
+        .push(
+            TextField::new("", &kube.storage_class, roles)
+                .label("Storage class")
+                .supporting("Empty uses the cluster default")
+                .track_focus(FieldId::DaemonKubeStorageClass, focused)
+                .error(error_of(state, "storage_class"))
+                .on_input(|v| Message::Daemons(DaemonsMsg::StorageClassEdited(v))),
+        );
     fields = fields.push(group("Allowed credentials", roles)).push(note(
         "Nothing reaches the pod unless it is ticked here.",
         roles,

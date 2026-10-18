@@ -16,6 +16,9 @@ use micold_core::daemons::{
     Binding, ConnectionError, DaemonDiagnostics, DaemonEvent, DaemonId, DaemonName, DaemonRegistry,
     DaemonRuntime, DaemonState, DaemonView, RegistryError, StateChange, WorktreeRef,
 };
+use micold_core::kube::lifecycle::leftovers;
+use micold_core::kube::names::ResourceNames;
+use micold_core::kube::settings::KubeSettings;
 use micold_core::provision::{ProvisionEvent, Step};
 use micold_core::required::{RequiredMarks, Requirement};
 use micold_core::sandbox::image::{ImageSourceKind, ImageSourceProblem};
@@ -24,7 +27,7 @@ use micold_core::sandbox::{CredentialShare, NetworkPosture, SandboxProfile};
 use micold_core::session::AiCli;
 use micold_core::session::SessionId;
 
-pub use super::daemons_kube::{AllowedKind, ContextList, KubeDraft, VOLUME_NOTICE};
+pub use super::daemons_kube::{AllowedKind, ContextList, Editor, KubeDraft, VOLUME_NOTICE};
 use super::settings::{parse_budget, LimitField, ProfileTexts};
 use super::window::FieldId;
 use super::Outcome;
@@ -254,11 +257,19 @@ pub struct RemovalPrompt {
     pub running_sessions: usize,
     /// The whole sentence, stating both counts.
     pub text: String,
+    /// What the confirm button says: the action it carries out (`Stop`, `Remove`, ...).
+    pub confirm_label: &'static str,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Pending {
     Remove(DaemonId),
+    /// Stop a Kubernetes daemon's pod.
+    StopKube(DaemonId),
+    /// Delete a Kubernetes daemon's cluster objects, then forget it.
+    RemoveKube(DaemonId),
+    /// Forget a Kubernetes daemon on this computer only.
+    ForgetLocally(DaemonId),
     Edit {
         id: DaemonId,
         name: String,
@@ -276,7 +287,18 @@ pub struct DaemonDetails {
     pub log: Vec<String>,
     /// Why the container runtime is unusable, when it is.
     pub runtime_missing: Option<String>,
+    /// A Kubernetes daemon was edited while running: the note says the change waits for the next
+    /// start (FR-005).
+    pub applies_on_next_start: bool,
+    /// The pod's log tail as last fetched, or why it could not be (FR-018).
+    pub pod_log: Option<Result<String, String>>,
 }
+
+/// What the details say of an edit saved while the pod runs (FR-005).
+pub const APPLIES_ON_NEXT_START: &str = "Applies on next start";
+
+/// How many lines of the pod's log Logs fetches.
+pub const LOG_TAIL_LINES: u32 = 200;
 
 /// The list as the view draws it.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -355,6 +377,9 @@ pub struct State {
     /// [`FieldId::DaemonRepository`], so each remote daemon's step is its own field.
     pub repository_marks: RequiredMarks<FieldId>,
     ended: Vec<SessionId>,
+    /// Kubernetes daemons edited while running, until they are started again.
+    applies_on_next_start: BTreeSet<DaemonId>,
+    pod_logs: BTreeMap<DaemonId, Result<String, String>>,
     /// The kubeconfig contexts the Kubernetes form offers (feature 686, FR-002).
     pub contexts: ContextList,
     /// The AI CLIs a new Kubernetes daemon installs: the providers enabled in Settings (FR-018).
@@ -499,6 +524,8 @@ pub fn details(state: &State, id: DaemonId) -> DaemonDetails {
             .unwrap_or_default(),
         log: diagnostics.map(DaemonDiagnostics::log).unwrap_or_default(),
         runtime_missing: state.runtime_missing.get(&id).cloned(),
+        applies_on_next_start: state.applies_on_next_start.contains(&id),
+        pod_log: state.pod_logs.get(&id).cloned(),
     }
 }
 
@@ -563,6 +590,7 @@ pub fn start(state: &mut State, model: &mut Model<'_>, id: DaemonId) -> Option<S
         return None;
     }
     state.runtime_missing.remove(&id);
+    state.applies_on_next_start.remove(&id);
     daemon_event(state, model.links, id, DaemonEvent::Start)
 }
 
@@ -900,6 +928,7 @@ fn prompt_for(model: &Model<'_>, id: DaemonId, action: &str, effect: &str) -> Re
         worktrees_affected,
         running_sessions,
         text,
+        confirm_label: "Continue",
     }
 }
 
@@ -948,7 +977,11 @@ pub fn save(state: &mut State, model: &mut Model<'_>) -> Result<Vec<Outcome>, Fo
         }
         Some(id) => {
             let runtime_changed = model.registry.get(id).map(|e| &e.runtime) != Some(&runtime);
-            if runtime_changed && model.links.should_dial(id) {
+            let kube = matches!(runtime, DaemonRuntime::Kubernetes(_));
+            if kube && runtime_changed && model.links.should_dial(id) {
+                // The pod is not changed silently: the new settings wait for the next start.
+                state.applies_on_next_start.insert(id);
+            } else if runtime_changed && model.links.should_dial(id) {
                 let prompt = prompt_for(
                     model,
                     id,
@@ -1004,6 +1037,13 @@ pub fn confirm(state: &mut State, model: &mut Model<'_>) -> Vec<Outcome> {
     };
     let mut out = Vec::new();
     match pending {
+        Pending::StopKube(id) => return stop_kube(state, model, id),
+        Pending::RemoveKube(id) => return remove_kube(model, id),
+        Pending::ForgetLocally(id) => {
+            out = end_sessions(model, id);
+            out.extend(forget(state, model, id));
+            return out;
+        }
         Pending::Remove(id) => {
             let sessions = model.sessions.get(&id).cloned().unwrap_or_default();
             model.links.apply(id, DaemonEvent::Stop);
@@ -1053,6 +1093,194 @@ pub fn confirm(state: &mut State, model: &mut Model<'_>) -> Vec<Outcome> {
     }
     out.push(Outcome::DaemonRegistryChanged(model.registry.clone()));
     out
+}
+
+/// A Kubernetes daemon's name and settings.
+fn kube_of(model: &Model<'_>, id: DaemonId) -> Option<(String, KubeSettings)> {
+    let entry = model.registry.get(id)?;
+    match &entry.runtime {
+        DaemonRuntime::Kubernetes(k) => Some((entry.name.as_str().to_string(), k.clone())),
+        _ => None,
+    }
+}
+
+/// The names of a Kubernetes daemon's cluster objects (as `core/kube/start.rs` builds them).
+fn kube_names(name: &str, settings: &KubeSettings) -> ResourceNames {
+    ResourceNames::new(&settings.context.0, &settings.namespace.0, name)
+}
+
+/// A confirmation with `text`, counted as 491's prompts are.
+fn kube_prompt(
+    model: &Model<'_>,
+    id: DaemonId,
+    name: String,
+    text: String,
+    confirm_label: &'static str,
+) -> RemovalPrompt {
+    RemovalPrompt {
+        daemon: id,
+        name,
+        worktrees_affected: bound_to(model, id).len(),
+        running_sessions: model.sessions.get(&id).map_or(0, Vec::len),
+        text,
+        confirm_label,
+    }
+}
+
+/// Stop `id`'s sessions and its link, returning the outcome that ends the sessions.
+fn end_sessions(model: &mut Model<'_>, id: DaemonId) -> Vec<Outcome> {
+    let sessions = model.sessions.get(&id).cloned().unwrap_or_default();
+    model.links.apply(id, DaemonEvent::Stop);
+    if sessions.is_empty() {
+        Vec::new()
+    } else {
+        vec![Outcome::DaemonSessionsEnded {
+            daemon: id,
+            sessions,
+        }]
+    }
+}
+
+/// Stop of a Kubernetes daemon (FR-014): confirmed first when sessions run, else at once.
+fn request_kube_stop(state: &mut State, model: &mut Model<'_>, id: DaemonId) -> Vec<Outcome> {
+    let sessions = model.sessions.get(&id).map_or(0, Vec::len);
+    if sessions == 0 {
+        return stop_kube(state, model, id);
+    }
+    let Some((name, _)) = kube_of(model, id) else {
+        return Vec::new();
+    };
+    let text = format!(
+        "Stop {name}? {} will end. Worktrees on its volume are kept.",
+        plural(sessions, "running session", "running sessions"),
+    );
+    let prompt = kube_prompt(model, id, name, text, "Stop");
+    state.pending = Some((Pending::StopKube(id), prompt));
+    Vec::new()
+}
+
+fn stop_kube(_state: &mut State, model: &mut Model<'_>, id: DaemonId) -> Vec<Outcome> {
+    let Some((name, settings)) = kube_of(model, id) else {
+        return Vec::new();
+    };
+    let mut out = end_sessions(model, id);
+    out.push(Outcome::KubeStopRequested {
+        daemon: id,
+        settings,
+        name,
+    });
+    out
+}
+
+/// Remove of a Kubernetes daemon (FR-015): the confirmation names what is deleted; nothing is
+/// deleted before it.
+fn request_kube_removal(state: &mut State, model: &Model<'_>, id: DaemonId) {
+    let Some((name, settings)) = kube_of(model, id) else {
+        return;
+    };
+    let names = kube_names(&name, &settings);
+    let left = leftovers(&settings.allowed, &names);
+    let (wt, sessions) = (
+        bound_to(model, id).len(),
+        model.sessions.get(&id).map_or(0, Vec::len),
+    );
+    let text = format!(
+        "Remove {name}? This deletes from {}/{}: pod {}, volume {} with its worktrees, secrets {}. \
+         This computer's SSH key for {name} is deleted too. {} will show \"no daemon\" until bound \
+         again, and {} will stop.",
+        settings.context.0,
+        settings.namespace.0,
+        left.pod,
+        left.pvc,
+        left.secrets.join(", "),
+        plural(wt, "worktree", "worktrees"),
+        plural(sessions, "running session", "running sessions"),
+    );
+    let prompt = kube_prompt(model, id, name, text, "Remove");
+    state.pending = Some((Pending::RemoveKube(id), prompt));
+}
+
+/// The confirmed removal: the sessions end and the shell deletes the cluster objects; the entry
+/// stays until it reports.
+fn remove_kube(model: &mut Model<'_>, id: DaemonId) -> Vec<Outcome> {
+    let Some((name, settings)) = kube_of(model, id) else {
+        return Vec::new();
+    };
+    let mut out = end_sessions(model, id);
+    out.push(Outcome::KubeRemoveRequested {
+        daemon: id,
+        settings,
+        name,
+    });
+    out
+}
+
+/// The prompt to forget `id` on this computer only, after `unreachable` (the cluster error) or on
+/// request.
+fn request_forget_locally(
+    state: &mut State,
+    model: &Model<'_>,
+    id: DaemonId,
+    unreachable: Option<&str>,
+) {
+    let Some((name, settings)) = kube_of(model, id) else {
+        return;
+    };
+    let names = kube_names(&name, &settings);
+    let left = leftovers(&settings.allowed, &names);
+    let why = unreachable
+        .map(|e| format!("The cluster could not be reached ({e}). "))
+        .unwrap_or_default();
+    let text = format!(
+        "{why}Forget {name} on this computer only? These stay in {}/{}: {}, {}, {}; this \
+         computer's key stays authorized in {} until they are deleted.",
+        settings.context.0,
+        settings.namespace.0,
+        left.pod,
+        left.pvc,
+        left.secrets.join(", "),
+        names.access_secret(),
+    );
+    let prompt = kube_prompt(model, id, name, text, "Forget locally");
+    state.pending = Some((Pending::ForgetLocally(id), prompt));
+}
+
+/// The shell's answer to [`Outcome::KubeRemoveRequested`].
+fn kube_removed(
+    state: &mut State,
+    model: &mut Model<'_>,
+    id: DaemonId,
+    result: Result<(), String>,
+) -> Vec<Outcome> {
+    match result {
+        Ok(()) if model.registry.get(id).is_some() => forget(state, model, id),
+        Ok(()) => Vec::new(),
+        Err(why) => {
+            request_forget_locally(state, model, id, Some(&why));
+            Vec::new()
+        }
+    }
+}
+
+/// Forget a Kubernetes daemon here: its entry, its state, and this client's key files. Bindings
+/// are left as for 491; the cluster is not touched.
+fn forget(state: &mut State, model: &mut Model<'_>, id: DaemonId) -> Vec<Outcome> {
+    model.links.apply(id, DaemonEvent::Stop);
+    model.links.remove(id);
+    model.registry.remove(id);
+    if state.draft.as_ref().and_then(|d| d.editing) == Some(id) {
+        state.draft = None;
+    }
+    state.diagnostics.remove(&id);
+    state.versions.remove(&id);
+    state.runtime_missing.remove(&id);
+    state.applies_on_next_start.remove(&id);
+    state.pod_logs.remove(&id);
+    state.details_shown.remove(&id);
+    vec![
+        Outcome::DaemonRegistryChanged(model.registry.clone()),
+        Outcome::KubeKeysDelete { daemon: id },
+    ]
 }
 
 /// Where an op for `location` goes. A location with no daemon is refused: no session or terminal
@@ -1164,6 +1392,18 @@ pub enum Msg {
     KubeSshKeyEdited(String),
     /// The allowed registry auth file field changed.
     PullFileEdited(String),
+    /// The Kubernetes node selector text changed (one `key=value` row per line).
+    NodeSelectorEdited(String),
+    /// The Kubernetes tolerations text changed (one row per line).
+    TolerationsEdited(String),
+    /// The node selector editor was acted on (typing, cursor, selection).
+    NodeSelectorAction(crate::app::EditorAction),
+    /// The tolerations editor was acted on.
+    TolerationsAction(crate::app::EditorAction),
+    /// The Kubernetes volume size text changed (`20Gi`).
+    VolumeSizeEdited(String),
+    /// The Kubernetes storage class field changed.
+    StorageClassEdited(String),
     /// The connect-at-launch box changed.
     AutoStartToggled(bool),
     /// Start this daemon, and only it.
@@ -1176,8 +1416,17 @@ pub enum Msg {
     GaveUp(DaemonId),
     /// Ask to remove this daemon: opens the counted confirmation.
     RemovalRequested(DaemonId),
-    /// Confirm the removal (or the counted edit).
+    /// Confirm the removal (or the counted edit, a Kubernetes stop, or forgetting locally).
     RemovalConfirmed,
+    /// The shell finished deleting a Kubernetes daemon's cluster objects (`Ok`), or could not
+    /// (`Err` with why); the daemon is forgotten only on `Ok`, else the forget-locally prompt opens.
+    KubeRemoved(DaemonId, Result<(), String>),
+    /// Ask to forget this Kubernetes daemon on this computer only: opens its confirmation.
+    ForgetLocallyRequested(DaemonId),
+    /// Show the last lines of this Kubernetes daemon's pod log.
+    LogsRequested(DaemonId),
+    /// The pod log the shell fetched, or why it could not.
+    LogsFetched(DaemonId, Result<String, String>),
     /// Decline it: nothing changes.
     RemovalCancelled,
     /// Show or hide this daemon's errors and log tail.
@@ -1346,11 +1595,24 @@ pub fn update(state: &mut State, model: &mut Model<'_>, msg: Msg) -> Vec<Outcome
                 state.provisioning.entry(id).or_default().apply(event);
             }
         }
+        Msg::NodeSelectorEdited(v) => edit(state, &|d| d.kube.set_node_selector(v.clone())),
+        Msg::TolerationsEdited(v) => edit(state, &|d| d.kube.set_tolerations(v.clone())),
+        Msg::NodeSelectorAction(action) => edit(state, &|d| {
+            d.kube.node_selector = d.kube.node_selector_editor.perform(action.0.clone());
+        }),
+        Msg::TolerationsAction(action) => edit(state, &|d| {
+            d.kube.tolerations = d.kube.tolerations_editor.perform(action.0.clone());
+        }),
+        Msg::VolumeSizeEdited(v) => edit(state, &|d| d.kube.volume_size = v.clone()),
+        Msg::StorageClassEdited(v) => edit(state, &|d| d.kube.storage_class = v.clone()),
         Msg::AutoStartToggled(v) => edit(state, &|d| d.auto_start = v),
         Msg::Started(id) => {
             start(state, model, id);
         }
         Msg::Stopped(id) => {
+            if kube_of(model, id).is_some() {
+                return request_kube_stop(state, model, id);
+            }
             stop(state, model, id);
         }
         Msg::Reconnected(id) => {
@@ -1360,7 +1622,25 @@ pub fn update(state: &mut State, model: &mut Model<'_>, msg: Msg) -> Vec<Outcome
             give_up(state, model, id);
         }
         Msg::RemovalRequested(id) => {
-            request_removal(state, model, id);
+            if kube_of(model, id).is_some() {
+                request_kube_removal(state, model, id);
+            } else {
+                request_removal(state, model, id);
+            }
+        }
+        Msg::ForgetLocallyRequested(id) => request_forget_locally(state, model, id, None),
+        Msg::KubeRemoved(id, result) => return kube_removed(state, model, id, result),
+        Msg::LogsRequested(id) => {
+            if let Some((_, settings)) = kube_of(model, id) {
+                return vec![Outcome::KubeLogsRequested {
+                    daemon: id,
+                    settings,
+                    tail: LOG_TAIL_LINES,
+                }];
+            }
+        }
+        Msg::LogsFetched(id, result) => {
+            state.pod_logs.insert(id, result);
         }
         Msg::RemovalConfirmed => {
             let out = confirm(state, model);

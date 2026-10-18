@@ -59,6 +59,7 @@ mod form_field_anatomy;
 pub mod glyph;
 mod icon_button;
 mod icon_label;
+pub(crate) mod key_value_list;
 mod keyboard_focus;
 /// A toggle that names what it toggles — a glyph and a short word in one control (feature 026,
 /// T066a). The terminal bar's AI-CLI mode toggle carries the session's CLI with it.
@@ -154,6 +155,7 @@ mod text_field;
 #[cfg(test)]
 mod text_field_anatomy;
 mod toggle_chip;
+pub(crate) mod toleration_list;
 mod toolbar;
 mod tree_view;
 /// The application's typographic vocabulary, pinned. In-crate for the same reason as the style
@@ -183,6 +185,7 @@ pub use form_field::{FormField, Layer as FieldLayer};
 pub use glyph::Glyph;
 pub use icon_button::IconButton;
 pub use icon_label::IconLabel;
+pub use key_value_list::KeyValueList;
 pub use labelled_toggle::LabelledToggle;
 pub use menu::{menu_panel_size, ContextMenu, MenuItem, MenuOverlay, MenuTrigger};
 pub use modal::Modal;
@@ -218,6 +221,7 @@ pub use text::{Text, TypeRole, ROBOTO, ROBOTO_MEDIUM_BYTES, ROBOTO_REGULAR_BYTES
 pub use text_area::TextArea;
 pub use text_field::TextField;
 pub use toggle_chip::{chip_label, chip_neutral_accent, ToggleChip};
+pub use toleration_list::TolerationList;
 pub use toolbar::Toolbar;
 pub use tree_view::{TreeItem, TreeView};
 pub use typeahead::Typeahead;

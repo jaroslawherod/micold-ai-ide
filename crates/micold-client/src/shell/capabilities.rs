@@ -117,10 +117,6 @@ pub struct Capabilities {
     /// Feature 039: the system's desktop notifications (research R4).
     notifier: Arc<dyn DesktopNotifier>,
     /// Feature 686: connects to the cluster of a kubeconfig context (the live adapter).
-    #[expect(
-        dead_code,
-        reason = "the Kubernetes start (feature 686, M4b) is its first caller"
-    )]
     kube_connector: KubeConnector,
 }
 
@@ -391,10 +387,6 @@ impl Capabilities {
     }
 
     /// Connecting to a Kubernetes cluster by kubeconfig context (feature 686).
-    #[expect(
-        dead_code,
-        reason = "the Kubernetes start (feature 686, M4b) is its first caller"
-    )]
     pub fn kube_connector(&self) -> KubeConnector {
         Arc::clone(&self.kube_connector)
     }

@@ -157,6 +157,15 @@ pub enum Dial {
         /// The host and connection settings.
         target: SshTarget,
     },
+    /// Start a pod in a cluster and bridge to it (feature 686). Held as the context and namespace
+    /// only: `KubeSettings` is not `Hash`, and the full settings are in the actor key's fingerprint.
+    /// One try per start, like [`Dial::Ssh`].
+    Kubernetes {
+        /// The kubeconfig context.
+        context: String,
+        /// The namespace the daemon's objects live in.
+        namespace: String,
+    },
 }
 
 /// Everything one actor needs, and its subscription identity (it is hashed whole). A change to any
@@ -210,8 +219,10 @@ pub fn actor_specs(
         // An SSH daemon makes one try per start: once unreachable it is not dialled until the user
         // starts it again, which moves it to `Starting` and puts its actor back.
         .filter(|e| {
-            !(matches!(e.runtime, DaemonRuntime::Ssh(_))
-                && matches!(states.state(e.id), Some(DaemonState::Unreachable { .. })))
+            !(matches!(
+                e.runtime,
+                DaemonRuntime::Ssh(_) | DaemonRuntime::Kubernetes(_)
+            ) && matches!(states.state(e.id), Some(DaemonState::Unreachable { .. })))
         })
         .filter_map(|entry| {
             let key = keys.iter().find(|k| k.id == entry.id)?.clone();
@@ -223,6 +234,10 @@ pub fn actor_specs(
                 },
                 DaemonRuntime::Ssh(s) => Dial::Ssh {
                     target: s.target.clone(),
+                },
+                DaemonRuntime::Kubernetes(k) => Dial::Kubernetes {
+                    context: k.context.0.clone(),
+                    namespace: k.namespace.0.clone(),
                 },
                 _ => return None,
             };
@@ -366,13 +381,13 @@ fn actor(spec: ActorSpec) -> impl Stream<Item = Message> {
                         return;
                     }
                 },
-                Dial::Container { .. } | Dial::Ssh { .. } => None,
+                Dial::Container { .. } | Dial::Ssh { .. } | Dial::Kubernetes { .. } => None,
             };
 
             // Reconnect loop: connect, pump until the link drops, surface it, back off, repeat. A
             // half-open connection is caught by the keepalive inside `pump`, so the client never sits
             // forever presenting stale content as live (FR-026/027).
-            let remote = matches!(spec.dial, Dial::Ssh { .. });
+            let remote = matches!(spec.dial, Dial::Ssh { .. } | Dial::Kubernetes { .. });
             let (spec_ref, endpoint_ref) = (&spec, endpoint.as_ref());
             let mut loop_output = output.clone();
             reconnect_loop(
@@ -472,6 +487,19 @@ async fn connect_and_pump(
                 Ok(c) => Ok(c),
                 // A link that was up and is down is retried; a start that never connected is
                 // reported once and ends the actor.
+                Err(reason) if life.established => {
+                    return report(id, output, ConnectionMsg::ConnectFailed(reason)).await;
+                }
+                Err(reason) => {
+                    return report(id, output, ConnectionMsg::StartFailed(reason))
+                        .await
+                        .ended();
+                }
+            }
+        }
+        (Dial::Kubernetes { context, namespace }, _) => {
+            match kube_attempt(None, context, namespace).await {
+                Ok(c) => Ok(c),
                 Err(reason) if life.established => {
                     return report(id, output, ConnectionMsg::ConnectFailed(reason)).await;
                 }
@@ -595,7 +623,7 @@ async fn connect_and_pump(
 
     // A daemon on a remote host knows its own paths only; the client keys everything by identities
     // that name the daemon too. The translation is this one seam (feature 489, research R5).
-    let remote = matches!(spec.dial, Dial::Ssh { .. });
+    let remote = matches!(spec.dial, Dial::Ssh { .. } | Dial::Kubernetes { .. });
     let welcome_catalog = if remote {
         remote_path::wrap_catalog(welcome.catalog, id)
     } else {
@@ -811,6 +839,21 @@ async fn ssh_attempt(
     })
 }
 
+/// One bring-up of a Kubernetes daemon. Without the shared SSH image (#806) there is nothing to
+/// run in the pod, so it fails at once with [`KubeFailure::Unavailable`] and makes no cluster call.
+/// M5 replaces this with the real start.
+pub async fn kube_attempt(
+    cluster: Option<&dyn micold_core::kube::Cluster>,
+    context: &str,
+    namespace: &str,
+) -> Result<Connected, String> {
+    let _ = (cluster, context, namespace);
+    if !crate::features::daemons::SHARED_SSH_IMAGE_AVAILABLE {
+        return Err(micold_core::kube::classify::KubeFailure::Unavailable.to_string());
+    }
+    Err("starting a Kubernetes daemon is not implemented".to_string())
+}
+
 async fn report(id: DaemonId, output: &mut mpsc::Sender<Message>, msg: ConnectionMsg) -> PumpEnd {
     if output.send(Message::daemon(id, msg)).await.is_err() {
         PumpEnd::AppGone
@@ -874,6 +917,28 @@ mod tests {
             )
             .unwrap();
         (registry, id)
+    }
+
+    /// T133: a started Kubernetes daemon is dialled with `Dial::Kubernetes`; once unreachable it
+    /// is not, until started again.
+    #[test]
+    fn a_started_kubernetes_daemon_gets_a_kubernetes_spec() {
+        let mut registry = DaemonRegistry::default();
+        let settings = micold_core::kube::settings::KubeSettings::new("kind-dev", "dev", &[]);
+        let id = registry
+            .add("Cluster", DaemonRuntime::Kubernetes(settings), false)
+            .unwrap();
+        let dir = std::path::Path::new("/nonexistent");
+        let mut states = DaemonStates::default();
+        states.insert(id, DaemonState::Starting);
+        let specs = actor_specs(&registry, &states, dir, None, false);
+        assert!(matches!(
+            specs.as_slice(),
+            [s] if matches!(&s.dial, Dial::Kubernetes { context, namespace }
+                if context == "kind-dev" && namespace == "dev")
+        ));
+        states.insert(id, DaemonState::Unreachable { reason: "x".into() });
+        assert!(actor_specs(&registry, &states, dir, None, false).is_empty());
     }
 
     /// T011: a started SSH daemon is dialled with `Dial::Ssh`; once it is unreachable it is not,
