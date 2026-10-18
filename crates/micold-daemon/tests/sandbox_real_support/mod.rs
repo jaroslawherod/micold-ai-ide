@@ -717,6 +717,21 @@ pub async fn provision_outcome(
     Result<provision::Provisioned, provision::ProvisionFailure>,
     Vec<provision::Step>,
 ) {
+    provision_outcome_with(port, bounds, AiCliSelection::all(), &[]).await
+}
+
+/// [`provision_outcome`] with the daemon's AI CLI selection and the CLIs whose stand-in install
+/// fails (feature 806, FR-010, FR-012).
+pub async fn provision_outcome_with(
+    port: u16,
+    bounds: StepBounds,
+    ai_clis: AiCliSelection,
+    failing: &[AiCli],
+) -> (
+    String,
+    Result<provision::Provisioned, provision::ProvisionFailure>,
+    Vec<provision::Step>,
+) {
     let (container, client_key, known_hosts, state, script) = {
         let started = STARTED.lock().unwrap();
         let s = started
@@ -760,8 +775,8 @@ pub async fn provision_outcome(
             known_hosts,
         }),
         owned: Ownership::AppOwned {
-            ai_clis: AiCliSelection::all(),
-            table: standin_table(&state, &[], script.as_deref()),
+            ai_clis,
+            table: standin_table(&state, failing, script.as_deref()),
             state_dir: PathBuf::from(CONTAINER_STATE),
             egress: Egress::Direct,
         },

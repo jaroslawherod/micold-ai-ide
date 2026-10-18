@@ -729,6 +729,9 @@ pub struct DaemonView {
     /// What is being done now, when it takes long enough to say (copying the build to an SSH
     /// host, feature 489).
     pub activity: Option<String>,
+    /// AI CLIs whose install failed at the last start, each naming the CLI and the installer's
+    /// output; the daemon is connected without them (feature 806, FR-012).
+    pub install_warnings: Vec<String>,
     /// A sentence under the row about the image the daemon runs on (FR-016, FR-017): the stored
     /// migration notice, or that a running container is still on the released image.
     pub notice: Option<String>,

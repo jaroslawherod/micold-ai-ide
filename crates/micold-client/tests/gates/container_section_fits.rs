@@ -13,12 +13,14 @@ use crate::support::layout as lay;
 use iced::Size;
 use micold_client::app::{State, MIN_WINDOW_SIZE};
 use micold_client::features::connection::ConnectionStatus;
+use micold_client::features::daemons::DraftRuntime;
 use micold_client::features::daemons::Msg as DaemonsMsg;
 use micold_client::features::settings::{SettingsDraft, SettingsSection};
 use micold_core::daemons::{ContainerSettings, DaemonRuntime};
 use micold_core::env_include::EnvIncludeOutcome;
 use micold_core::sandbox::image::{ImageChoice, OwnImage};
 use micold_core::sandbox::SandboxProfile;
+use micold_core::session::AiCli;
 
 /// Half a pixel, matching every geometry gate beside this one.
 const TOLERANCE: f32 = 0.5;
@@ -145,4 +147,47 @@ fn the_basic_image_shows_none_of_the_own_image_fields() {
             "{absent:?} must not be painted for the basic image"
         );
     }
+}
+
+#[test]
+fn the_five_ai_cli_checkboxes_and_their_note_fit_and_share_one_column() {
+    for window in [NARROW, WIDE] {
+        let drawn = painted(&settings_editing(ImageChoice::Basic), window);
+        let x: Vec<f32> = AiCli::ALL
+            .iter()
+            .map(|cli| x_of(&drawn, cli.provider().display_name()))
+            .collect();
+        assert_eq!(x.len(), 5, "the app supports five AI CLIs");
+        assert!(
+            x.iter().all(|v| (v - x[0]).abs() <= TOLERANCE),
+            "the checkbox labels start in one column at {}: {x:?}",
+            window.width
+        );
+        let note = drawn
+            .iter()
+            .find(|d| d.content.starts_with("Changes apply at the next start"))
+            .expect("the note under the checkboxes is painted");
+        assert!(note.excess() <= TOLERANCE, "{:?}", note.content);
+    }
+}
+
+#[test]
+fn a_remote_ssh_daemon_shows_no_ai_cli_section() {
+    let mut state = State::default();
+    state.settings.settings_draft = Some(SettingsDraft {
+        section: SettingsSection::Daemons,
+        ..SettingsDraft::default()
+    });
+    let _ = state.update_daemons(DaemonsMsg::AddOpened, Vec::new());
+    let _ = state.update_daemons(DaemonsMsg::RuntimeChosen(DraftRuntime::Ssh), Vec::new());
+    let drawn = painted(&state, NARROW);
+    assert!(
+        drawn.iter().any(|d| d.content == "Host*"),
+        "the SSH form must be on screen — painted: {:?}",
+        drawn.iter().map(|d| &d.content).collect::<Vec<_>>()
+    );
+    assert!(
+        !drawn.iter().any(|d| d.content == "AI tools in this daemon"),
+        "an SSH daemon's AI CLIs are its own host's"
+    );
 }

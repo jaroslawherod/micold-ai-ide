@@ -29,8 +29,8 @@ use micold_core::sandbox::parse::ContainerFacts;
 use micold_core::session::AiCli;
 
 use sandbox_real_support::{
-    cli, cli_out, image, provision_outcome, runtime_cmd, seed, start_sandbox, start_sandbox_from,
-    wait_for_accept, SandboxSpec,
+    cli, cli_out, image, provision_outcome, provision_outcome_with, runtime_cmd, seed,
+    start_sandbox, start_sandbox_from, wait_for_accept, SandboxSpec,
 };
 
 const FRESH_CONTAINER: &str = "micold-provision-probe";
@@ -387,4 +387,73 @@ async fn sandbox_real_provision_a_released_image_setting_starts_on_the_basic_ima
         DaemonRuntime::Container(c) => c.migration.is_none(),
         _ => true,
     }));
+}
+
+/// The CLIs `offered.json` lists in the state directory the harness mounts.
+fn offered_clis(state: &Path) -> Vec<AiCli> {
+    micold_core::provision::ai_cli::read_offered(&state.join("micold-ai-ide/ai-clis"))
+        .expect("offered.json is readable")
+        .map(|o| o.clis.into_iter().map(|c| c.cli).collect())
+        .unwrap_or_default()
+}
+
+/// T075, US5 #1, FR-012: a CLI whose install fails is a warning naming it with the installer's
+/// output; the daemon still connects, the failed CLI is not offered and the other is.
+#[tokio::test]
+async fn sandbox_real_provision_a_failing_ai_cli_install_warns_and_connects() {
+    use micold_core::sandbox::AiCliSelection;
+    let d = dirs("install-fails");
+    let _sandbox = start_sandbox(&spec(&d, FRESH_CONTAINER, FRESH_NETWORK, FRESH_PORT + 20));
+    let selection = AiCliSelection([AiCli::ClaudeCode, AiCli::Codex].into_iter().collect());
+    let (_, outcome, _) = provision_outcome_with(
+        FRESH_PORT + 20,
+        StepBounds::container(),
+        selection,
+        &[AiCli::Codex],
+    )
+    .await;
+    let provisioned = outcome.expect("a failed AI CLI install does not stop the daemon");
+    assert!(
+        matches!(provisioned.connected, Connected::Ready(..)),
+        "the daemon connects"
+    );
+    let warning = provisioned
+        .warnings
+        .iter()
+        .find(|w| w.cli == AiCli::Codex)
+        .unwrap_or_else(|| panic!("no warning for Codex: {:?}", provisioned.warnings));
+    assert!(
+        warning.text().contains("Codex") && !warning.output.trim().is_empty(),
+        "the warning names the CLI and carries the installer's output: {}",
+        warning.text()
+    );
+    assert_eq!(offered_clis(&d.data), [AiCli::ClaudeCode]);
+}
+
+/// T075, US1 #2, FR-010: a CLI deselected before a restart stops being offered, and an emptied
+/// selection offers nothing.
+#[tokio::test]
+async fn sandbox_real_provision_deselecting_a_cli_stops_it_being_offered_after_restart() {
+    use micold_core::sandbox::AiCliSelection;
+    let d = dirs("deselect");
+    let _sandbox = start_sandbox(&spec(&d, FRESH_CONTAINER, FRESH_NETWORK, FRESH_PORT + 30));
+    let port = FRESH_PORT + 30;
+    for (selection, want) in [
+        (
+            AiCliSelection([AiCli::ClaudeCode, AiCli::Codex].into_iter().collect()),
+            vec![AiCli::ClaudeCode, AiCli::Codex],
+        ),
+        (
+            AiCliSelection([AiCli::ClaudeCode].into_iter().collect()),
+            vec![AiCli::ClaudeCode],
+        ),
+        (AiCliSelection(Default::default()), Vec::new()),
+    ] {
+        let (_, outcome, _) =
+            provision_outcome_with(port, StepBounds::container(), selection, &[]).await;
+        outcome.expect("provisioning succeeds");
+        let mut offered = offered_clis(&d.data);
+        offered.sort();
+        assert_eq!(offered, want);
+    }
 }

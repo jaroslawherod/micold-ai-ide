@@ -1333,3 +1333,97 @@ mod ai_cli_selection {
         assert_ne!(profile_of(&w, boxed).ai_clis, before);
     }
 }
+
+/// US5 #1, FR-012: an AI CLI whose install fails is listed in the row and in the recent errors,
+/// naming the CLI with the installer's output, and the row keeps it once the daemon connects.
+mod install_warnings {
+    use super::*;
+    use daemons::Msg;
+    use micold_core::provision::ProvisionWarning;
+    use micold_core::session::AiCli;
+
+    fn row(
+        state: &State,
+        w: &mut World,
+        id: micold_core::daemons::DaemonId,
+    ) -> micold_core::daemons::DaemonView {
+        let vm = daemons::views(state, &w.model());
+        vm.rows.into_iter().find(|r| r.id == id).unwrap()
+    }
+
+    fn provisioning(
+        state: &mut State,
+        w: &mut World,
+        id: micold_core::daemons::DaemonId,
+        e: ProvisionEvent,
+    ) {
+        send(state, w, Msg::Provisioning(id, e));
+    }
+
+    #[test]
+    fn install_lines_show_in_the_row_while_the_clis_install() {
+        let mut w = World::new();
+        let mut state = State::default();
+        let id = w.boxed;
+        daemons::start(&mut state, &mut w.model(), id);
+        provisioning(
+            &mut state,
+            &mut w,
+            id,
+            ProvisionEvent::Entered(Step::InstallAiClis),
+        );
+        provisioning(
+            &mut state,
+            &mut w,
+            id,
+            ProvisionEvent::InstallLine("added 3 packages".into()),
+        );
+        let activity = row(&state, &mut w, id).activity.unwrap();
+        assert!(activity.contains("installing the AI CLIs"), "{activity}");
+        assert!(activity.contains("added 3 packages"), "{activity}");
+    }
+
+    #[test]
+    fn a_failed_install_is_listed_in_the_row_and_the_errors_and_survives_connecting() {
+        let mut w = World::new();
+        let mut state = State::default();
+        let id = w.boxed;
+        daemons::start(&mut state, &mut w.model(), id);
+        let warning = ProvisionWarning {
+            cli: AiCli::Codex,
+            output: "npm ERR! 404 not found".into(),
+        };
+        provisioning(
+            &mut state,
+            &mut w,
+            id,
+            ProvisionEvent::Warned(warning.clone()),
+        );
+        daemons::daemon_event(&mut state, &mut w.links, id, DaemonEvent::Connected);
+        let shown = row(&state, &mut w, id);
+        assert_eq!(shown.state, DaemonState::Connected);
+        assert_eq!(shown.install_warnings, [warning.text()]);
+        assert!(shown.install_warnings[0].contains("npm ERR! 404 not found"));
+        let errors = daemons::details(&state, id).errors;
+        assert!(
+            errors.iter().any(|e| e.reason == warning.text()),
+            "recent errors name the CLI and the output: {errors:?}"
+        );
+    }
+
+    #[test]
+    fn the_next_start_clears_the_warnings() {
+        let mut w = World::new();
+        let mut state = State::default();
+        let id = w.boxed;
+        daemons::start(&mut state, &mut w.model(), id);
+        let warning = ProvisionWarning {
+            cli: AiCli::Pi,
+            output: String::new(),
+        };
+        provisioning(&mut state, &mut w, id, ProvisionEvent::Warned(warning));
+        daemons::daemon_event(&mut state, &mut w.links, id, DaemonEvent::Stop);
+        daemons::start(&mut state, &mut w.model(), id);
+        assert!(row(&state, &mut w, id).install_warnings.is_empty());
+    }
+}

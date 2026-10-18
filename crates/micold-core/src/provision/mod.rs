@@ -168,6 +168,8 @@ pub enum ProvisionEvent {
         /// Whether it installed.
         ok: bool,
     },
+    /// One AI CLI's install failed: the start goes on, and the row keeps this (FR-012).
+    Warned(ProvisionWarning),
 }
 
 /// Receives the sequence's events.
@@ -580,13 +582,15 @@ where
             let ok = found.is_some_and(|r| r.ok);
             sink(ProvisionEvent::InstallDone { cli: row.cli, ok });
             if !ok {
-                warnings.push(ProvisionWarning {
+                let warning = ProvisionWarning {
                     cli: row.cli,
                     output: found.map_or_else(
                         || "the installer reported no result".to_string(),
                         |r| r.output.clone(),
                     ),
-                });
+                };
+                sink(ProvisionEvent::Warned(warning.clone()));
+                warnings.push(warning);
             }
         }
         Ok(warnings)

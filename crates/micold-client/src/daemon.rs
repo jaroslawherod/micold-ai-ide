@@ -1147,7 +1147,7 @@ async fn container_attempt(
     .await
     .map_err(|reason| {
         format!(
-            "the container {} did not start: {reason}",
+            "the container {} is not ready: {reason}",
             reach.container_name
         )
     })?;

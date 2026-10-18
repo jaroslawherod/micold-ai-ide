@@ -187,6 +187,24 @@ of the same drop are still inserted. A project you registered after the sandbox 
 shared yet; the notice says so, and restarting the sandbox shares it. A pasted screenshot goes in
 the session's worktree, or in the service's data directory when the worktree cannot be written to.
 
+### Choosing the AI CLIs for a daemon
+
+Each container daemon has its own list of AI CLIs, ticked in **Settings → Daemons → Container**
+under *AI tools in this daemon*. A new daemon has only Claude Code ticked; a daemon from before
+this setting existed has every CLI ticked. A change applies at the next start (on a running daemon
+you are asked to restart it first): the start installs what is ticked, and only the ticked CLIs
+that installed are offered for sessions on that daemon. Untick everything and the daemon offers
+none; a CLI you unticked after an earlier start stops being offered at the next one.
+
+If a CLI fails to install, the daemon still connects and works with the others. **Settings →
+Daemons** lists the CLI by name with the installer's output under the daemon's row and in its recent
+errors, and that CLI is not offered until a later start installs it. A default AI CLI that is
+unticked or failed to install on a daemon starts nothing there and says it is not available.
+
+With outbound connections blocked (see [Network](#network)) the install still works: the
+application downloads the CLI's package for the container through a relay that allows only the
+package registry. If the relay cannot reach it, the install fails naming the network setting.
+
 ### The AI CLIs come from the image
 
 A session runs its AI CLI inside the container. That means the CLI comes from the image, and the one
