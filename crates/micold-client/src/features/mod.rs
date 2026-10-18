@@ -299,6 +299,7 @@ pub mod overview;
 pub mod plan_usage;
 pub mod pr_status;
 pub mod project;
+pub mod quick_switch;
 pub mod runs;
 pub mod sandbox;
 pub mod session;
