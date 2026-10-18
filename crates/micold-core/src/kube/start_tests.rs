@@ -982,106 +982,11 @@ async fn the_pod_a_start_creates_runs_non_root_on_a_read_only_root() {
 
 mod connect {
     use super::*;
-    use crate::protocol::codec::{DaemonCodec, Frame};
-    use crate::protocol::messages::{DaemonMsg, RefusalReason};
     use crate::provision::CancelToken;
     use crate::ssh::argv::{ClientPlatform, PinnedReach};
     use crate::ssh::provision::ProvisionOptions;
-    use crate::ssh::{Artefacts, SshCommand, SshOutput, SshRunner, SshStdio};
-    use futures_util::future::BoxFuture;
-    use futures_util::{SinkExt, StreamExt};
-    use std::collections::VecDeque;
-    use std::io;
-    use tokio_util::codec::Framed;
 
-    const PROBE_HAVE: &str =
-        "MICOLD_PROBE os=Linux arch=x86_64 home_writable=1 have=1 dir=/h/.micold/remote/b\n";
-
-    /// A pod whose SSH answers `run`s in order and hands out one bridge.
-    #[derive(Default)]
-    struct Host {
-        runs: Mutex<VecDeque<io::Result<SshOutput>>>,
-        bridge: Mutex<Option<SshStdio>>,
-        commands: Mutex<Vec<Vec<String>>>,
-    }
-
-    impl Host {
-        fn say(self, stdout: &str, status: i32, stderr: &str) -> Self {
-            self.runs.lock().unwrap().push_back(Ok(SshOutput {
-                status: Some(status),
-                stdout: stdout.as_bytes().to_vec(),
-                stderr: stderr.into(),
-                ..SshOutput::default()
-            }));
-            self
-        }
-        /// The reach, probe and `last` answers of a pod that has the build.
-        fn with_build() -> Self {
-            Self::default()
-                .say("", 0, "")
-                .say(PROBE_HAVE, 0, "")
-                .say("", 0, "")
-        }
-        fn bridge(self, stdio: SshStdio) -> Self {
-            *self.bridge.lock().unwrap() = Some(stdio);
-            self
-        }
-    }
-
-    impl SshRunner for Host {
-        fn run(
-            &self,
-            cmd: SshCommand,
-            _stdin: Vec<u8>,
-            _deadline: Option<Duration>,
-            _progress: Option<crate::ssh::ProvisionProgress>,
-        ) -> BoxFuture<'_, io::Result<SshOutput>> {
-            self.commands.lock().unwrap().push(cmd.args);
-            let next = self.runs.lock().unwrap().pop_front();
-            Box::pin(async move { next.expect("unscripted ssh run") })
-        }
-        fn open(&self, cmd: SshCommand) -> io::Result<SshStdio> {
-            self.commands.lock().unwrap().push(cmd.args);
-            self.bridge
-                .lock()
-                .unwrap()
-                .take()
-                .ok_or_else(|| io::Error::other("no bridge"))
-        }
-    }
-
-    impl Artefacts for Host {
-        fn own(&self) -> io::Result<Vec<u8>> {
-            Ok(vec![7; 10])
-        }
-        fn bundled(&self, _: &str, _: &str) -> Option<Vec<u8>> {
-            None
-        }
-    }
-
-    fn refusing_bridge() -> SshStdio {
-        let (near, far) = tokio::io::duplex(4096);
-        tokio::spawn(async move {
-            let mut daemon = Framed::new(far, DaemonCodec::new());
-            let _hello = daemon.next().await;
-            let reason = RefusalReason::NotPermitted {
-                detail: "no".into(),
-            };
-            let _ = daemon
-                .send(Frame::Control(DaemonMsg::Refused { reason }))
-                .await;
-            let _ = daemon.next().await;
-        });
-        let (r, w) = tokio::io::split(near);
-        SshStdio::from_parts(r, w)
-    }
-
-    fn closed_bridge() -> SshStdio {
-        let (near, far) = tokio::io::duplex(64);
-        drop(far);
-        let (r, w) = tokio::io::split(near);
-        SshStdio::from_parts(r, w)
-    }
+    use crate::kube::fake_host::{closed_bridge, refusing_bridge, welcoming_bridge, Host};
 
     fn opts() -> ProvisionOptions {
         ProvisionOptions {
@@ -1193,5 +1098,14 @@ mod connect {
             "{bridge}"
         );
         assert_eq!(commands.len(), 4, "reach, probe, last, bridge: no copy");
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_daemon_that_welcomes_the_client_is_ready_and_nothing_is_rolled_back() {
+        let host = Host::with_build().bridge(welcoming_bridge());
+        let (outcome, phases, fake) = connect(&host).await;
+        assert!(matches!(outcome, ConnectOutcome::Ready(_)));
+        assert_eq!(phases, [StartPhase::Copy, StartPhase::Connect]);
+        assert_eq!(fake.names(NS, ObjectKind::Pod), [names().pod()]);
     }
 }

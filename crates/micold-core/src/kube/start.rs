@@ -798,7 +798,7 @@ pub async fn connect_pod(
 
 /// Undo what the attempt created, newest first, and the key it added to an adopted secret.
 /// Best effort: a failure here must not hide the failure that caused the rollback.
-async fn rollback(r: &StartRequest<'_>, attempt: &Attempt) {
+pub async fn rollback(r: &StartRequest<'_>, attempt: &Attempt) {
     for made in attempt.created.iter().rev() {
         let _ = r
             .cluster
