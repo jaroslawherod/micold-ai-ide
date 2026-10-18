@@ -1030,6 +1030,13 @@ impl State {
                 drain(outcomes, |outcome| interpret(self, outcome));
             }
 
+            // The switcher's own reducer. A dismissal reaches here from the registry (Escape, an
+            // outside click, a dialog opening over it); a chosen entry's `Choice` is the shell's
+            // to apply, and the shell routes every real press to its own entry point instead.
+            Message::QuickSwitch(msg) => {
+                let _ = crate::features::quick_switch::update(self, msg);
+            }
+
             // The closing dialog's snapshot is a binary-owned render detail (`App::dismissing`),
             // so releasing it is the binary's business; the pure core never knew about it.
             Message::OverlayTransitionFinished
@@ -1038,7 +1045,6 @@ impl State {
             // The binary resolves and applies a navigation press, dispatching its follow-ups
             // through its own `update` (feature 803, contracts/ui.md U3).
             | Message::Navigation(_)
-            | Message::QuickSwitch(_)
             // Focus is the rendering stack's, and moving it is a widget operation — see
             // [`Message::FocusMoved`].
             | Message::FocusMoved { .. } => {}

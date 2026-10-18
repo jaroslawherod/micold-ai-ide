@@ -196,7 +196,8 @@ fn every_popover_is_in_the_table() {
     // Twenty with `confirm_daemon_removal` and `bind_daemon` (feature 491).
     // Twenty with `confirm_additional_session` (feature 776) replacing `confirm_placement` (feature 804).
     // Twenty-one with `review_full_reply`, the dialog that shows a whole reply (feature 946).
-    const DIALOGS: usize = 21;
+    // Twenty-two with `quick_switcher`, the palette that jumps to a location (feature 968).
+    const DIALOGS: usize = 22;
     assert_eq!(
         micold_client::overlay::registry::probes().len(),
         DIALOGS + DISPLACES.len(),

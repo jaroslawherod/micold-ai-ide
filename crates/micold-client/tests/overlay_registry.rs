@@ -590,7 +590,8 @@ fn the_keyboard_subscription_names_no_surface() {
     // drift from — the rendering stack owns the order. The Overview chord (feature 813, FR-011)
     // is exempt for the same reason: it names a toggle, not a surface a key dismisses, so there
     // is no dismissal table in it to drift. So are the navigation chords (feature 803, K3): they
-    // name a direction, and the resolver asks the registry whether a surface is open (U1).
+    // name a direction, and the resolver asks the registry whether a surface is open (U1). So is the
+    // quick switcher's chord (feature 968, K3): it names a toggle, and the reducer asks the registry.
     let named: Vec<&str> = body
         .match_indices("Message::")
         .map(|(at, _)| body[at..].split_whitespace().next().unwrap_or_default())
@@ -599,6 +600,7 @@ fn the_keyboard_subscription_names_no_surface() {
                 && !m.starts_with("Message::FocusMoved")
                 && !m.starts_with("Message::Overview(crate::features::overview::Msg::Toggled")
                 && !m.starts_with("Message::Navigation(")
+                && !m.starts_with("Message::QuickSwitch(")
         })
         .collect();
     assert!(

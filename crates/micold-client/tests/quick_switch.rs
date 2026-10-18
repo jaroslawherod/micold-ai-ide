@@ -497,3 +497,106 @@ fn opening_filtering_and_closing_start_and_stop_no_session() {
     update(&mut state, Msg::Dismissed);
     assert_eq!(session_count(&state), before, "FR-011");
 }
+
+// ---- the registry-bound rules (T010 leftovers, T012) ----
+
+#[test]
+fn while_open_no_navigation_chord_moves_anything() {
+    // FR-012: the switcher is a surface, so `navigation::update`'s gate stops every #803 chord.
+    let mut state = three();
+    state.sidebar.nav_stop = Some(worktree("feat-a"));
+    open(&mut state);
+    for (action, _) in micold_client::keymap::NAV_CHORDS {
+        assert_eq!(
+            micold_client::features::navigation::update(&state, action),
+            Step::None,
+            "{action:?} moved while the switcher was open"
+        );
+    }
+}
+
+/// Press `key` (with `modifiers`) in the open switcher's dialog, as the runtime would: the dialog
+/// is built from the state, its field focused, and the event run through the interface.
+fn press_in_dialog(
+    state: &State,
+    key: iced::keyboard::Key,
+    modifiers: iced::keyboard::Modifiers,
+) -> (Vec<Message>, iced::event::Status) {
+    use iced::advanced::{clipboard, mouse};
+    use iced_runtime::user_interface::{Cache, UserInterface};
+    let mut renderer = support::layout::renderer();
+    let outcome = micold_core::env_include::EnvIncludeOutcome::MissingScript;
+    let element = micold_client::ui::quick_switcher::dialog(
+        state,
+        micold_core::theme::ColorScheme::Dark,
+        &outcome,
+    )
+    .expect("the switcher is open");
+    let mut ui = UserInterface::build(
+        element,
+        support::layout::WINDOW,
+        Cache::default(),
+        &mut renderer,
+    );
+    let mut focus: Box<dyn iced::advanced::widget::Operation<()>> =
+        Box::new(iced::advanced::widget::operation::focusable::focus(
+            micold_client::ui::quick_switcher::QUICK_SWITCHER_FIELD_ID.clone(),
+        ));
+    ui.operate(&renderer, focus.as_mut());
+    let event = iced::Event::Keyboard(iced::keyboard::Event::KeyPressed {
+        key: key.clone(),
+        modified_key: key,
+        physical_key: iced::keyboard::key::Physical::Unidentified(
+            iced::keyboard::key::NativeCode::Unidentified,
+        ),
+        location: iced::keyboard::Location::Standard,
+        modifiers,
+        text: None,
+        repeat: false,
+    });
+    let mut messages = Vec::new();
+    let (_, statuses) = ui.update(
+        &[event],
+        mouse::Cursor::Unavailable,
+        &mut renderer,
+        &mut clipboard::Null,
+        &mut messages,
+    );
+    (messages, statuses[0])
+}
+
+#[test]
+fn tab_in_the_dialog_dismisses_it() {
+    let mut state = three();
+    open(&mut state);
+    let (messages, _) = press_in_dialog(
+        &state,
+        iced::keyboard::Key::Named(iced::keyboard::key::Named::Tab),
+        iced::keyboard::Modifiers::empty(),
+    );
+    assert_eq!(messages, vec![Message::QuickSwitch(Msg::Dismissed)]);
+}
+
+#[test]
+fn the_chord_pressed_in_the_field_still_reaches_the_toggle() {
+    // Research R8: either the field leaves the press uncaptured (so `app_chord_listener` hears
+    // it) or the dialog maps it itself. Exactly one of the two must hold.
+    let mut state = three();
+    open(&mut state);
+    #[cfg(target_os = "macos")]
+    let primary = iced::keyboard::Modifiers::LOGO;
+    #[cfg(not(target_os = "macos"))]
+    let primary = iced::keyboard::Modifiers::CTRL;
+    let (messages, status) = press_in_dialog(
+        &state,
+        iced::keyboard::Key::Character("p".into()),
+        primary | iced::keyboard::Modifiers::SHIFT,
+    );
+    let mapped = messages
+        .iter()
+        .any(|m| matches!(m, Message::QuickSwitch(Msg::Toggled { .. })));
+    assert!(
+        mapped || status == iced::event::Status::Ignored,
+        "the field swallowed the chord: {messages:?}, {status:?}"
+    );
+}

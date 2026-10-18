@@ -27,7 +27,7 @@ the pane. Selecting and scrolling belong to the focused pane.
 
 With the terminal focused, the pane chords act on the focused pane. The app takes every chord
 below: the terminal never receives them, so they shadow the same keys with Shift in a terminal
-program. The Overview and location chords work whether or not a terminal is focused.
+program. The Overview, quick-switcher and location chords work whether or not a terminal is focused.
 
 | Action | Linux / Windows | macOS |
 |---|---|---|
@@ -36,6 +36,7 @@ program. The Overview and location chords work whether or not a terminal is focu
 | Close the focused pane | Ctrl+Shift+W | Cmd+Shift+W |
 | Focus the pane to the left / right / above / below | Ctrl+Shift+Arrow | Cmd+Shift+Arrow |
 | Open or close the [worktree Overview](overview.md) | Ctrl+Shift+O | Cmd+Shift+O |
+| Quick-switcher (jump to a location, session or project) | Ctrl+Shift+P | Cmd+Shift+P |
 | Previous / next location ([Default and the worktrees](worktrees-and-sessions.md)) | Ctrl+Shift+, / Ctrl+Shift+. | Cmd+Shift+, / Cmd+Shift+. |
 | Previous / next session of the current location | Ctrl+Shift+[ / Ctrl+Shift+] | Cmd+Shift+[ / Cmd+Shift+] |
 | Previous / next project (unavailable projects are skipped) | Ctrl+Shift+PageUp / Ctrl+Shift+PageDown | Cmd+Shift+PageUp / Cmd+Shift+PageDown (laptop: Cmd+Shift+Fn+Up / Cmd+Shift+Fn+Down) |

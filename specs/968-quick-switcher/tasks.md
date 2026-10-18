@@ -174,7 +174,7 @@ name, Enter; the terminal shows its session and its sidebar row is selected.
   decided in `features/quick_switch.rs`, research R5), and applied that way the Overview is closed
   and the stop's row is revealed; the running-session count is unchanged across open,
   filter, choose and close (FR-011, SC-005)
-- [ ] T012 [P] [US1] Write the failing registry tests in
+- [X] T012 [P] [US1] Write the failing registry tests in
   `crates/micold-client/tests/overlay_registry.rs`: `QuickSwitcherDialog` is open exactly when
   `state.quick_switch.open.is_some()`, sits on `Layer::Dialog`, its cancellation is
   `Message::QuickSwitch(Msg::Dismissed)`, and Escape and an outside click while it is topmost
@@ -202,14 +202,14 @@ name, Enter; the terminal shows its session and its sidebar row is selected.
   Vec<Entry>`, `ranked: Vec<Ranked>`, `highlighted: Option<usize>`, `empty: Option<Empty>` with
   `pub enum Empty { NoMatches, NothingToSwitchTo }`) the view and `update` both read; until T010
   passes
-- [ ] T015 [US1] Add `QuickSwitcherDialog` (`floating_surface!` with `id:
+- [X] T015 [US1] Add `QuickSwitcherDialog` (`floating_surface!` with `id:
   SurfaceId::new("quick_switcher")`, `layer: Dialog`, `cancelled_by:
   Message::QuickSwitch(Msg::Dismissed)`, `Registered::open_in` reading
   `state.quick_switch.open.is_some()`) in `crates/micold-client/src/features/quick_switch.rs`, and
   its one `REGISTERED` line with `crate::ui::quick_switcher::dialog` in
   `crates/micold-client/src/overlay/registry.rs` (contracts/ui.md U6); until T012's registry tests
   pass
-- [ ] T016 [US1] Create `crates/micold-client/src/ui/quick_switcher.rs` (registered in
+- [X] T016 [US1] Create `crates/micold-client/src/ui/quick_switcher.rs` (registered in
   `crates/micold-client/src/ui/mod.rs`) with `pub const QUICK_SWITCHER_FIELD_ID` and `pub fn
   dialog(state: &State) -> Element<Message>` per contracts/ui.md U6: `Surface::new(
   material::dialog::fields(column![typeahead]), SurfaceKind::Dialog, roles)` (no `actions` row)
@@ -218,24 +218,24 @@ name, Enter; the terminal shows its session and its sidebar row is selected.
   each row `picker::Row::new(name, spans).details("<Kind> · <context>")`, `.disabled()` when not
   selectable; the empty message renders `List::empty` ("No matches" / "Nothing to switch to",
   FR-014). Glue only: every decision comes from `quick_switch::list`
-- [ ] T017 [US1] Create `crates/micold-client/src/shell/quick_switch.rs` (registered in
+- [X] T017 [US1] Create `crates/micold-client/src/shell/quick_switch.rs` (registered in
   `crates/micold-client/src/shell/mod.rs`) with `pub fn update(app: &mut App, msg: Msg) ->
   Task<Message>`: run `features::quick_switch::update`; on open return
   `operation::focus(QUICK_SWITCHER_FIELD_ID)`; for a returned `Choice`, dispatch the Overview's
   close when `close_overview_first`, then `shell::navigation::apply_step(app, choice.step,
   choice.terminal_had_focus)`; no decision of its own; route `Message::QuickSwitch` to it in
   `crates/micold-client/src/main.rs` beside `Message::Navigation`; until T011 passes
-- [ ] T018 [US1] Wire the chord's two routes (contracts/keys.md K3): `KeyRouting::ToggleSwitcher`
+- [X] T018 [US1] Wire the chord's two routes (contracts/keys.md K3): `KeyRouting::ToggleSwitcher`
   in `crates/micold-client/src/ui/material/terminal_pane.rs` publishes
   `Message::QuickSwitch(Msg::Toggled { terminal_had_focus: true })` and captures the event (0 PTY
   bytes); `app_chord` in `crates/micold-client/src/ui/mod.rs` maps `is_switcher_chord` to `Toggled
   { terminal_had_focus: false }`; if the text field captures the chord, the dialog's content maps
   the press itself (research R8); until T012's routing tests pass
-- [ ] T019 [US1] Add the quick-switcher to the showcase's dialogs section in
+- [X] T019 [US1] Add the quick-switcher to the showcase's dialogs section in
   `crates/micold-client/src/showcase/sections/` and `crates/micold-client/src/showcase/catalogue.rs`
   (sample rows: a query with an emphasised match, a location row with tags, a current row; the
   session row is T025's, the unavailable project T030's) until T012's showcase test passes
-- [ ] T020 [US1] Document the quick-switcher (contracts/keys.md K4, research R10): in
+- [X] T020 [US1] Document the quick-switcher (contracts/keys.md K4, research R10): in
   `docs/user-guide/terminal-panes.md` §Keyboard shortcuts add the row "Quick-switcher (jump to a
   location, session or project)" with `Ctrl+Shift+P` and `Cmd+Shift+P`; in
   `docs/user-guide/worktrees-and-sessions.md` §Interacting with the terminal add a

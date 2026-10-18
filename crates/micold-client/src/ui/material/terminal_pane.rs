@@ -1737,8 +1737,18 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                         shell.capture_event();
                     }
                 }
-                // Wired with the switcher's subscription listener (feature 968, T017).
-                KeyRouting::ToggleSwitcher => {}
+                // Feature 968 (contracts/keys.md K3): unfocused, the chord belongs to the
+                // `ui::app_chord` listener; handling it here too would toggle twice.
+                KeyRouting::ToggleSwitcher => {
+                    if self.focused {
+                        shell.publish(Message::QuickSwitch(
+                            crate::features::quick_switch::Msg::Toggled {
+                                terminal_had_focus: true,
+                            },
+                        ));
+                        shell.capture_event();
+                    }
+                }
                 KeyRouting::Pane(action) => {
                     shell.publish(Message::Session(SessionMsg::Pane(PaneMsg::Chord(action))));
                     shell.capture_event();

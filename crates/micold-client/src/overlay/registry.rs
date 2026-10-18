@@ -272,6 +272,7 @@ register! {
             crate::features::project::ProjectContextMenu,
             crate::features::runs::GroupContextMenu,
     },
+    crate::features::quick_switch::QuickSwitcherDialog => crate::ui::quick_switcher::dialog,
     crate::features::runs::ParallelRunDialog => crate::ui::parallel_dialog::dialog,
     crate::features::runs::ConfirmDismissGroupDialog => crate::ui::confirm_dismiss_group::dialog,
     crate::features::runs::ConfirmPickRunDialog => crate::ui::confirm_pick_run::dialog,
