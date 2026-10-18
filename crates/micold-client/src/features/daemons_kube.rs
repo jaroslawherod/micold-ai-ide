@@ -16,6 +16,7 @@ use micold_core::session::AiCli;
 
 use super::daemons::{invalid_field, FormError};
 use super::settings::{cores_text, parse_cores, parse_mib, LimitField, MAX_MIB};
+use crate::app::Editor;
 use crate::kube::live::ContextEntry;
 use crate::ui::material::{key_value_list, toleration_list};
 
@@ -70,49 +71,6 @@ impl AllowedKind {
             }
             .label(),
         }
-    }
-}
-
-/// A multi-line field's editor state beside the text it edits (feature 686, M4b): equal, cloned
-/// and shown by its text, so the draft stays comparable.
-#[derive(Default)]
-pub struct Editor(iced::widget::text_editor::Content);
-
-impl Editor {
-    /// An editor showing `text`.
-    pub fn new(text: &str) -> Self {
-        Self(iced::widget::text_editor::Content::with_text(text))
-    }
-
-    /// The content the widget draws and edits.
-    pub fn content(&self) -> &iced::widget::text_editor::Content {
-        &self.0
-    }
-
-    /// Apply an edit and return the text now shown.
-    pub fn perform(&mut self, action: iced::widget::text_editor::Action) -> String {
-        self.0.perform(action);
-        self.0.text()
-    }
-}
-
-impl Clone for Editor {
-    fn clone(&self) -> Self {
-        Self::new(&self.0.text())
-    }
-}
-
-impl PartialEq for Editor {
-    fn eq(&self, other: &Self) -> bool {
-        self.0.text() == other.0.text()
-    }
-}
-
-impl Eq for Editor {}
-
-impl std::fmt::Debug for Editor {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Editor({:?})", self.0.text())
     }
 }
 

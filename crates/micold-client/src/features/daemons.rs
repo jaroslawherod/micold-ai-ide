@@ -27,7 +27,7 @@ use micold_core::sandbox::{CredentialShare, NetworkPosture, SandboxProfile};
 use micold_core::session::AiCli;
 use micold_core::session::SessionId;
 
-pub use super::daemons_kube::{AllowedKind, ContextList, Editor, KubeDraft, VOLUME_NOTICE};
+pub use super::daemons_kube::{AllowedKind, ContextList, KubeDraft, VOLUME_NOTICE};
 use super::settings::{parse_budget, LimitField, ProfileTexts};
 use super::window::FieldId;
 use super::Outcome;
@@ -1598,10 +1598,10 @@ pub fn update(state: &mut State, model: &mut Model<'_>, msg: Msg) -> Vec<Outcome
         Msg::NodeSelectorEdited(v) => edit(state, &|d| d.kube.set_node_selector(v.clone())),
         Msg::TolerationsEdited(v) => edit(state, &|d| d.kube.set_tolerations(v.clone())),
         Msg::NodeSelectorAction(action) => edit(state, &|d| {
-            d.kube.node_selector = d.kube.node_selector_editor.perform(action.0.clone());
+            d.kube.node_selector = d.kube.node_selector_editor.perform(&action);
         }),
         Msg::TolerationsAction(action) => edit(state, &|d| {
-            d.kube.tolerations = d.kube.tolerations_editor.perform(action.0.clone());
+            d.kube.tolerations = d.kube.tolerations_editor.perform(&action);
         }),
         Msg::VolumeSizeEdited(v) => edit(state, &|d| d.kube.volume_size = v.clone()),
         Msg::StorageClassEdited(v) => edit(state, &|d| d.kube.storage_class = v.clone()),
