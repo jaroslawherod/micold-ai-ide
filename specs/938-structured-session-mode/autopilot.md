@@ -73,26 +73,38 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M2 unit 3 (context cap). Unit 3 added T014, T015 (red, Cycle 5, U8/U9): `tests/structured_session.rs` (8 tests, all red), `tests/structured_lifecycle.rs` (4; 3 parity cases pass already since both kinds take the PTY path, `events_written_before_an_exit_stay_in_the_history` red); `support/structured.rs` gained `pid-record`, `starts-record`/`starts()`, `clear_records`, `viewer`, `events_until` (`Received {event, live, omitted, at}`), `fixture_events`, `events_of`, `seqs_increase`, `structured_session(location)`; it uses `crate::conn`, so includers declare `mod conn`. Red log: Cycle 5. Earlier units, done and committed: T011, T016 (`structured/history.rs`, `EventHistory`,
-`MAX_EVENTS`/`MAX_BYTES`, `StructuredEvent::text_len`), T012, T017 (`structured_wire.rs`; `kind`
-on `SessionCreate`/`SessionSummary`, serde-default; `DaemonMsg::StructuredEvents`; protocol 52;
-`StructuredEvent`/`SequencedEvent` now `Eq`; every literal got `kind: Default::default()`; the
-daemon's `SessionCreate` arm binds `kind` but does not use it yet), T013
-(`crates/micold-daemon/tests/support/structured.rs`: `fake_stream_cli()`, `fixture`, `RECORDED`,
-`stream_script`, `record`, `fixture_lines`; script lines `replay <file>`, `pause`, `await-stdin`,
-`stderr`, `exit`, else a literal stdout line; smoke-tested by hand). Deviation: like
-`support/history.rs` it is included with `#[path = "support/structured.rs"] mod structured;`, not
-from `support/mod.rs` (that is the framer support). Cycle log: Cycle 4. Test list: U6, U7.
-Next: T018 (env-edit list: a small trait over `CommandBuilder` and `std::process::Command` with
-set/remove, `strip_inherited_terminal_identity` + windows `prefer_process_path` applied through it),
-T019, T020, T021 per the survey below; then run both test files green (`--no-fail-fast`), flip
-U8/U9 to DONE, Cycle 6, tick T018–T021, then verify.md, reviews, gate, push, pr-title/pr-body.
-Test expectations to honour: the structured stderr `warn!` line must carry the session id; the
-history must outlive the process (viewer after exit gets it as `live: false`); a structured
-Copilot `SessionCreate` answers `OperationError` whose `message` is the `KindRefusal` text;
-`primary_pty(structured)` is `None`; `remove_session` must still end the structured tree.
-Gate note: `cargo test` as root fails 3 core permission tests; `scripts/gate.sh` re-runs them as
-a normal user. Build detached with `$SCRATCHPAD/m2/bg.sh <log> "<cmd>"` + `hold.sh <log>`.
+M2 unit 4 (context cap). Done this unit, committed: T018 (`supervisor.rs`: `EnvTarget` trait over
+`CommandBuilder`/`std::process::Command`, `EnvEdit`, `env_hygiene`/`apply_env_hygiene`; the
+PTY spawns call `apply_env_hygiene`; `SupervisedChild` extracted from `PtySession` (child +
+exit cache: `is_alive`/`exit_outcome`/`pid`/`kill`), `Supervised::new`, `ensure_cwd_exists`
+pub(crate)), T019 (`src/structured.rs`: `EventStream {history, broadcast}` with `push`/`subscribe`
+(snapshot+subscribe under one lock), `StructuredSession::spawn(id, &LaunchSpec, extra_args,
+on_event)` = structured_args + launch_args + extra; stdout reader → `LineSplitter`/`parse_line`,
+stderr reader → `warn!(session = %id.0, "claude stderr: …")`; `teardown`/`Drop`; 2 unit tests).
+`cargo check -p micold-daemon --lib --tests` was green before the last edits; re-check first.
+Next: T020. A WIP patch of state.rs is at
+`$SCRATCHPAD/m2/t020-state-wip.patch` (`git apply` it): `Proc` became `#[derive(Clone)] enum
+Proc { Pty{pty,framer}, Structured(Arc<StructuredSession>) }` with `pty()`, `terminal()`,
+`is_alive`, `exit_outcome`, `kill`, `same`; every `.pty`/`.framer` site converted EXCEPT
+`is_primary`/`swap_primary`/`respawn_primary` (take `&Proc`, compare with `same`, respawn a
+structured primary with `StructuredSession::spawn` in `LaunchMode::Resume`, no carry_history).
+Still to do in T020: an `Inner` map `event_streams: HashMap<SessionId, Arc<EventStream>>`
+(get-or-create at start, kept across restarts and exits; dropping on delete is T032), `kind` in
+`SpawnPlan` + the `start_session_gated` branch (structured: same env/availability gates, then
+`StructuredSession::spawn(id,&spec,&extra, move |e| stream.push(e))`, no seed); idempotence
+check at :4147 must be "hosted" (`inner.sessions.contains_key`) not `live_session` (PTY only);
+a `register_proc(id, Proc)` beside `register_session`; `create_session_of_kind` in catalog
+(`SessionKind::check` first → new `CreateSessionError::Kind(KindRefusal)`, Display = refusal
+text; `Session::start_new_of_kind`) and state (old fns delegate with Terminal). T021: server
+`SessionCreate` passes `kind`, answers `Kind` with `OperationError{kind: Refused, message:
+refusal.to_string()}`; `TerminalStreams` value → `Option<Arc<PtySession>>` (None = structured
+stream, kept while wanted and not finished); for `Primary` of a session with an event stream and
+a structured primary, spawn `stream_events(session, stream, tx)`: send snapshot as one `live:
+false` message (with omitted; chunking/Lagged are T032), then each recv'd event with seq > last as
+`live: true`. Then run both test files green, Cycle 6, tick T020/T021, verify.md etc.
+Windows note for a follow-up: `std::process::Command` does not resolve `claude.cmd` via PATHEXT
+as `CommandBuilder` does.
+
 Survey findings (unit 1), to save the next unit the reads:
 - `portable_pty` 0.9 has `impl Child for std::process::Child` (and `ExitStatus: From<std>`), so
   `supervisor::Supervised` (child + `platform::ProcessTree`, `exit_status`/`terminate`/`reaped`)

@@ -33,6 +33,7 @@ pub mod server;
 pub mod singleton;
 pub mod state;
 pub mod status_relay;
+pub mod structured;
 pub mod supervision;
 pub mod supervisor;
 pub mod terminal;

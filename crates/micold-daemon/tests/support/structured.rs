@@ -212,7 +212,13 @@ pub fn starts(dir: &Path) -> usize {
 
 /// Remove what an earlier start of the stand-in recorded in `dir`.
 pub fn clear_records(dir: &Path) {
-    for name in ["argv-record", "cwd-record", "env-record", "pid-record", "stdin-record"] {
+    for name in [
+        "argv-record",
+        "cwd-record",
+        "env-record",
+        "pid-record",
+        "stdin-record",
+    ] {
         let _ = std::fs::remove_file(dir.join(name));
     }
 }

@@ -132,7 +132,9 @@ fn a_structured_launch_is_the_terminal_launch_behind_the_structured_args() {
     let state = service(dir, vec![terminal, structured]);
     stream_script(dir, "");
 
-    state.start_session(t, LaunchMode::Fresh).expect("terminal starts");
+    state
+        .start_session(t, LaunchMode::Fresh)
+        .expect("terminal starts");
     let records: Vec<String> = ["argv-record", "cwd-record", "env-record"]
         .iter()
         .map(|name| without_id(&record(dir, name), t))
@@ -141,11 +143,19 @@ fn a_structured_launch_is_the_terminal_launch_behind_the_structured_args() {
     structured::clear_records(dir);
 
     state
-        .start_session_gated(s, LaunchMode::Fresh, micold_core::occupancy::Additional::Yes)
+        .start_session_gated(
+            s,
+            LaunchMode::Fresh,
+            micold_core::occupancy::Additional::Yes,
+        )
         .expect("structured starts");
     let argv = record(dir, "argv-record");
     let args: Vec<&str> = argv.lines().collect();
-    assert_eq!(args[..7], STRUCTURED_ARGS, "the structured args first: {args:#?}");
+    assert_eq!(
+        args[..7],
+        STRUCTURED_ARGS,
+        "the structured args first: {args:#?}"
+    );
     let id_at = args
         .iter()
         .position(|a| *a == "--session-id")
@@ -346,7 +356,10 @@ async fn session_create_keeps_terminal_the_default_and_lists_each_kind() {
     let without_kind: ClientMsg = serde_json::from_value(json).expect("decodes without a kind");
     client.send(Frame::Control(without_kind)).await.unwrap();
     let terminal = created(&mut client, 1).await;
-    assert_eq!(kind_of(&state, project.path(), terminal), SessionKind::Terminal);
+    assert_eq!(
+        kind_of(&state, project.path(), terminal),
+        SessionKind::Terminal
+    );
     assert!(state.primary_pty(terminal).is_some(), "on the PTY path");
 
     client
@@ -407,7 +420,11 @@ async fn own_events(
 ) -> Client {
     stream_script(cwd, &replay(fixture_name));
     state
-        .start_session_gated(id, LaunchMode::Fresh, micold_core::occupancy::Additional::Yes)
+        .start_session_gated(
+            id,
+            LaunchMode::Fresh,
+            micold_core::occupancy::Additional::Yes,
+        )
         .expect("starts");
     let mut client = viewer(state, project, id).await;
     // The stand-in reads its script at start: wait for its first event before the next rewrite.
