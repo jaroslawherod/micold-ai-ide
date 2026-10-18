@@ -1324,6 +1324,7 @@ mod tests {
             "{forward}"
         );
         assert!(!cmd.args.contains(&"ClearAllForwardings=yes".to_string()));
+        assert!(cmd.args.contains(&"ExitOnForwardFailure=yes".to_string()));
         assert!(stdin.contains("export HTTPS_PROXY=http://127.0.0.1:17728"));
         // The check never carries a forward.
         let (check, _) = fake.first("have_clis");

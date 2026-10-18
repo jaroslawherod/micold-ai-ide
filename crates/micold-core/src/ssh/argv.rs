@@ -179,6 +179,8 @@ fn command(
         }
     };
     if let Some(Forward { relay_port }) = forward {
+        // A forward that cannot bind must end the command: the proxy address is then not ours.
+        args.extend(["-o".into(), "ExitOnForwardFailure=yes".into()]);
         args.extend([
             "-R".into(),
             format!("127.0.0.1:{RELAY_REMOTE_PORT}:127.0.0.1:{relay_port}"),
