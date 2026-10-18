@@ -193,6 +193,8 @@ pub async fn run() -> io::Result<()> {
     // Feature 487: images pasted into sessions are removed with their session. Whatever a crash
     // left behind goes now, before any session starts (FR-014).
     if let Some(dir) = micold_core::paths::data_dir() {
+        // Feature 806: what provisioning installed under the data directory is what is offered.
+        state.set_ai_clis_dir(dir.join("ai-clis"));
         state.set_pasted_data_dir(dir);
     }
     let sweeping = Arc::clone(&state);

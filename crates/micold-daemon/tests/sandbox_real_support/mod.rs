@@ -647,6 +647,49 @@ pub fn fake_ai_cli(dir: &Path) -> PathBuf {
     dir.to_path_buf()
 }
 
+/// `npm pack` one stand-in package (`standin-cli/<variant>`) into `into` and return the tarball.
+fn pack_standin(variant: &str, into: &Path) -> PathBuf {
+    let source = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/sandbox_real_support/standin-cli")
+        .join(variant);
+    std::fs::create_dir_all(into).expect("pack dir");
+    let out = Command::new("npm")
+        .args(["pack", "--silent", "--pack-destination"])
+        .arg(into)
+        .arg(&source)
+        .output()
+        .expect("run npm pack (the real-runtime suite needs Node.js on the host)");
+    assert!(
+        out.status.success(),
+        "npm pack: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    into.join(String::from_utf8_lossy(&out.stdout).trim())
+}
+
+/// An [`AiCliTable`](micold_core::provision::AiCliTable) mapping every AI CLI to the stand-in
+/// package packed into `dir` (the daemon's state directory, so the target sees it), or to the
+/// variant whose install fails for each CLI in `failing`. No registry, no network (FR-025).
+pub fn standin_table(
+    dir: &Path,
+    failing: &[micold_core::session::AiCli],
+) -> micold_core::provision::AiCliTable {
+    let good = pack_standin("good", dir);
+    let bad = pack_standin("failing", dir);
+    micold_core::provision::AiCliTable::from_tarballs(
+        micold_core::session::AiCli::ALL.into_iter().map(|cli| {
+            (
+                cli,
+                if failing.contains(&cli) {
+                    bad.clone()
+                } else {
+                    good.clone()
+                },
+            )
+        }),
+    )
+}
+
 /// Extra `create` arguments that put the stand-in first on the container's `PATH`.
 pub fn fake_ai_cli_args(dir: &Path) -> Vec<String> {
     vec![
