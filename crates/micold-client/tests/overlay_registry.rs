@@ -584,7 +584,7 @@ fn the_keyboard_subscription_names_no_surface() {
         .filter(|m| {
             !m.starts_with("Message::EscapePressed")
                 && !m.starts_with("Message::FocusMoved")
-                && !m.starts_with("Message::Overview(")
+                && !m.starts_with("Message::Overview(crate::features::overview::Msg::Toggled")
                 && !m.starts_with("Message::Navigation(")
         })
         .collect();

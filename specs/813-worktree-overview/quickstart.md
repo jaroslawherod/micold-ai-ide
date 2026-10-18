@@ -49,6 +49,8 @@ Screenshot each step that names a look, in light and dark.
 | B15 | Showcase: `OverviewCard`, `CardGrid`, `ProgressBar`; greyscale screenshot of B1. | Five states told apart by icon and word in both schemes. | FR-021, SC-005 |
 | B16 | From B1 alone, name every location that needs you. | Correct in under 5 s. | SC-001, SC-002 |
 
+Note (B8, B9): the `OfferStart` chain (reveal the row, focus the start control, bounds, `StartMenuAnchored`, `StartMenuOpened`) lives in `main.rs` and has no automated test; only `follow_up`'s value is asserted. It is covered by this visual pass only, so a missing B9 result is an untested gap, not a pass.
+
 ## §C — macOS and Windows
 
 Repeat B1, B7 (Cmd+Shift+O on macOS) and B15 on macOS and Windows. Expected: the same results

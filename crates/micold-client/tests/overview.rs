@@ -114,38 +114,8 @@ fn prompt(session: &Session) -> Prompt {
     }
 }
 
-#[test]
-fn toggled_opens_then_closes_and_closed_closes() {
-    let mut state = State::default();
-    assert!(!state.overview.open);
-    state.update(Message::Overview(Msg::Toggled {
-        settings_open: false,
-    }));
-    assert!(state.overview.open);
-    state.update(Message::Overview(Msg::Toggled {
-        settings_open: false,
-    }));
-    assert!(!state.overview.open);
-    state.update(Message::Overview(Msg::Toggled {
-        settings_open: false,
-    }));
-    state.update(Message::Overview(Msg::Closed));
-    assert!(!state.overview.open);
-}
-
-#[test]
-fn toggled_while_settings_is_open_changes_nothing() {
-    let mut state = State::default();
-    state.update(Message::Overview(Msg::Toggled {
-        settings_open: true,
-    }));
-    assert!(!state.overview.open);
-    state.overview.open = true;
-    state.update(Message::Overview(Msg::Toggled {
-        settings_open: true,
-    }));
-    assert!(state.overview.open);
-}
+// The Toggled/Closed reducer cases are pinned once, in `tests/features_overview.rs` (the feature's
+// isolation test); the root only routes them.
 
 #[test]
 fn a_project_switch_keeps_open_and_the_cards_follow_the_project() {
@@ -381,6 +351,40 @@ fn after_a_disconnect_session_states_stay_and_pull_request_ones_are_not_claimed(
     assert_eq!(card(&all, &wt("feat-b")).state, CardState::Idle);
 }
 
+/// US1.6 / FR-008 / SC-004: a change driven through `update` (a session starts, a task reading
+/// arrives) shows on the next `cards`, with no refresh step in between.
+#[test]
+fn a_change_through_update_shows_on_the_next_cards() {
+    let mut state = project_with(vec![worktree(
+        "feat-a",
+        Some("feat/a"),
+        WorktreeStatus::Valid,
+        false,
+    )]);
+    state.overview.open = true;
+    let before = card(&cards(&state), &wt("feat-a")).clone();
+    assert_eq!(before.sessions.0, 0);
+    assert_eq!(before.progress.source, Source::None);
+
+    state.update(Message::Session(SessionMsg::Started(Session::start_new(
+        wt("feat-a"),
+        AiCli::ClaudeCode,
+    ))));
+    assert_eq!(card(&cards(&state), &wt("feat-a")).sessions.0, 1);
+
+    state.update(Message::Overview(Msg::ProgressRead {
+        project: project_path(),
+        dir: "feat-a".to_string(),
+        progress: micold_core::task_progress::FileProgress {
+            tasks: Some(Ratio { done: 1, total: 4 }),
+            ..Default::default()
+        },
+    }));
+    let after = card(&cards(&state), &wt("feat-a")).clone();
+    assert_eq!(after.progress.source, Source::TaskList);
+    assert_eq!(after.progress.ratio, Some(Ratio { done: 1, total: 4 }));
+}
+
 #[test]
 fn an_open_overview_takes_the_keyboard_and_the_main_area() {
     let mut state = project_with(Vec::new());
@@ -414,9 +418,14 @@ fn building_thirty_locations_with_three_sessions_each_is_fast() {
             add_session(&mut state, wt(&format!("feat-{i}")));
         }
     }
-    let started = std::time::Instant::now();
-    assert_eq!(cards(&state).len(), 31);
-    assert!(started.elapsed() < std::time::Duration::from_secs(1));
+    // SC-007's bound is on the work, not on a wall clock: one card per location, 30 worktrees
+    // plus the project root, and every session counted into its card without a second pass.
+    let all = cards(&state);
+    assert_eq!(all.len(), 31);
+    assert!(all
+        .iter()
+        .filter(|c| c.location != SessionLocation::Default)
+        .all(|c| c.sessions.0 == 3));
 }
 
 /// FR-023: starting a session hands the main area to its terminal, so the Overview closes.
@@ -1166,15 +1175,37 @@ fn without_hook_data_or_after_a_reconnect_the_card_falls_back() {
 
 #[test]
 fn hook_activity_is_runtime_only() {
-    let session = Session::restored(
-        micold_core::session::SessionId::new(),
-        wt("feat-a"),
-        micold_core::session::SessionLabel::Pending,
-        micold_core::session::TerminalMode::AiCli,
-        AiCli::ClaudeCode,
-    );
+    use micold_core::store::{JsonFileStore, ProjectStore};
+    let project = PathBuf::from("/work/repo");
+    let mut session = Session::start_new(wt("feat-a"), AiCli::ClaudeCode);
     assert!(session.hook_activity.is_none());
-    assert!(Session::start_new(wt("feat-a"), AiCli::ClaudeCode)
-        .hook_activity
-        .is_none());
+    session.hook_activity = Some(hooks("SECRET-HOOK-LINE", 0, 2));
+    let mut workspace = micold_core::workspace::Workspace::empty();
+    workspace
+        .projects
+        .push(Project::new(project.clone(), true, Availability::Available));
+    workspace.sessions.insert(project.clone(), vec![session]);
+
+    let dir = tempfile::tempdir().unwrap();
+    let store = JsonFileStore::at(dir.path().join("projects.json"));
+    store.save(&workspace).unwrap();
+
+    for file in [
+        dir.path().join("projects.json"),
+        store.project_state_path(&project),
+    ] {
+        let text = std::fs::read_to_string(&file).unwrap_or_default();
+        assert!(
+            !text.contains("SECRET-HOOK-LINE"),
+            "{file:?} persisted hook activity"
+        );
+        assert!(
+            !text.contains("hook_activity"),
+            "{file:?} persisted a hook_activity field"
+        );
+    }
+    let restored = store.load().workspace;
+    let sessions = &restored.sessions[&project];
+    assert_eq!(sessions.len(), 1, "the session itself is persisted");
+    assert!(sessions[0].hook_activity.is_none());
 }

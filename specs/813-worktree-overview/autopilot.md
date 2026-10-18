@@ -11,8 +11,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #813
 - **Worktree branch**: claude/project-thread-2lmupk
 - **Started**: 2026-10-17
-- **Phase**: milestones
-- **Next step**: M6 PR (orchestrator opens from scratchpad title/body), CI, merge; then close unit (T070–T071). M5 visual pass for M5 (quickstart §B2–B4, ProgressBar/OverviewCard showcase) NOT run: no xdotool/Vulkan in the cloud container; see visual-pass-m5.md. Run it where a display exists.
+- **Phase**: done
+- **Next step**: handoff. Close PR merges, run ends. Open for a human: T070b (quickstart §B2–B3, B6–B14, B16 at a display), T071b (§C on macOS/Windows), T078 (mutation re-runs).
 
 ## Pull requests
 
@@ -24,6 +24,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #936 | M3 | merged | d93c9dbc687412cced0a9b7854cf44323ee3930e |
 | #951 | M4 | merged | 35b8584fbc0734c15ffe2b14bfb67595ec66d9fe |
 | #976 | M5 | merged | c3df49b331943d973840651d85e1419b8685754a |
+| #985 | M6 | merged | 511194cd3dfc1eb9853250e9c730782afbe2e462 |
+| pending | close | PR to open (title/body written) | |
 
 ## Milestones
 
@@ -34,7 +36,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 | T031–T039 | full | Ctrl/Cmd+Shift+O and attention badge | #936 | merged |
 | M4 | T040–T049 | full | Card activation and keyboard traversal | #951 | merged |
 | M5 | T050–T060 | full | Task summary and progress on cards | #976 | merged |
-| M6 | T061–T069 | full | Hook-fed agent activity (protocol 50) | pending (title/body written) | PR to open |
+| M6 | T061–T069 | full | Hook-fed agent activity (protocol 50) | #985 | merged |
 
 M1 holds 18 US1 tasks plus setup and foundational: kept whole because no smaller cut has an
 observable deliverable (the grid needs the rules, card, grid, view and button together); US1's PR
@@ -74,6 +76,8 @@ counts are split off as M2 along acceptance scenario 3. Polish T070–T071 chang
 | M1 visual pass | 1 | dd716a91 | B15 states/grid/greyscale PASS, B1 reduced PASS; type word only in tooltip FAIL (FR-002), fixed test-first |
 | M3 review A (code-review high) | 1 | 88916a9c:84b25cec | CLEAN |
 | M3 review B (conformance, sonnet) | 1 | 88916a9c:84b25cec | CHANGES: F1 MAJOR cycle-log lacked M3 (fixed: M3 entries added, red = compile errors), F2 MINOR toolbar mapping untested (fixed: pure fns + test), F3 MINOR settings_open false (confirmed: Settings replaces the body, no terminal pane exists then) |
+| Close review (sonnet) | 1 | 3ad2ed8f:511194cd | CHANGES: F1 F2 F3 MAJOR (CI claim for macOS/Windows, T070/T071 ticked over a partial pass, banner test name), F4 F5 MINOR; all fixed (prose and a test rename, no behaviour) |
+| Close converge | - | - | NONE unbuilt (dead `task_progress::Source::Hooks` variant noted) |
 | M3 visual pass | - | - | not run: no xdotool/sway in the container; notes in visual-pass/m3/notes.md; geometry pinned by layout snapshot |
 
 ## Declined review findings

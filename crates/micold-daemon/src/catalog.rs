@@ -1905,6 +1905,21 @@ fn wire_lifecycle(lifecycle: SessionLifecycle) -> WireLifecycle {
 }
 
 #[cfg(test)]
+mod summary_tests {
+    //! Feature 813: the catalog projects durable state only, so it carries no hook activity.
+
+    use super::*;
+
+    /// The catalog cannot see the hook-fed live state; the overlay in `DaemonState` fills it in.
+    #[test]
+    fn a_catalog_session_summary_carries_no_hook_activity() {
+        let session = Session::start_new(SessionLocation::Default, AiCli::default());
+        let summary = session_summary(&session, &HashSet::new());
+        assert_eq!(summary.hook_activity, None);
+    }
+}
+
+#[cfg(test)]
 mod notify_tests {
     //! Feature 613, T002: the effective switch per kind, and the service write keeping the kinds.
 

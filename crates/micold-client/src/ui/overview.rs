@@ -241,8 +241,10 @@ pub fn follow_up(activation: &micold_core::overview::Activation) -> Option<Messa
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ui::material::test_support::laid_out;
-    use iced::Size;
+    use crate::ui::material::test_support::{Mounted, WINDOW};
+    use iced::advanced::widget::operation::Outcome;
+    use iced::advanced::widget::Operation;
+    use iced::{Rectangle, Size};
 
     /// U1: the Overview outranks Changes and Compare in the crossfade key, and Settings outranks it.
     #[test]
@@ -257,47 +259,120 @@ mod tests {
             "Settings first"
         );
         state.settings.settings_draft = None;
-        state.overview.open = false;
-        assert_ne!(crate::ui::main_content_key(&state), u64::MAX - 3);
+        let overview = crate::ui::main_content_key(&state);
+        state.update(Message::Changes(crate::features::changes::Msg::Opened {
+            project: "/p".into(),
+            entry: SessionLocation::Default,
+        }));
+        let changes = {
+            state.overview.open = false;
+            crate::ui::main_content_key(&state)
+        };
+        assert_ne!(overview, changes, "Overview outranks Changes");
+        state.changes.open = None;
+        state.runs.compare = Some(crate::features::runs::CompareView {
+            group: micold_core::runs::GroupId(uuid::Uuid::nil()),
+            project: "/p".into(),
+            reads: Default::default(),
+        });
+        let compare = crate::ui::main_content_key(&state);
+        assert_ne!(overview, compare, "Overview outranks Compare");
+        assert_ne!(changes, compare);
     }
 
-    /// F1: thirty cards in a short window lay out inside it; the grid scrolls, not the page.
+    /// Every scrollable under the element, as (viewport, content) bounds.
+    struct FindScrollables(Vec<(Rectangle, Rectangle)>);
+
+    impl Operation<Vec<(Rectangle, Rectangle)>> for FindScrollables {
+        fn traverse(
+            &mut self,
+            operate: &mut dyn FnMut(&mut dyn Operation<Vec<(Rectangle, Rectangle)>>),
+        ) {
+            operate(self);
+        }
+
+        fn scrollable(
+            &mut self,
+            _id: Option<&iced::widget::Id>,
+            bounds: Rectangle,
+            content_bounds: Rectangle,
+            _translation: iced::Vector,
+            _state: &mut dyn iced::advanced::widget::operation::Scrollable,
+        ) {
+            self.0.push((bounds, content_bounds));
+        }
+
+        fn finish(&self) -> Outcome<Vec<(Rectangle, Rectangle)>> {
+            Outcome::Some(self.0.clone())
+        }
+    }
+
+    /// F1: thirty cards in a short window scroll inside the grid, not the page. Built through the
+    /// real `view` and asked, as the runtime would, which scrollables it holds: the containers
+    /// and the responsive wrapper around the grid are `Fill` whatever their content does, so
+    /// their size cannot show whether the grid scrolls itself; only the scrollable can.
     #[test]
     fn thirty_cards_lay_out_bounded_in_a_short_window() {
-        let r = crate::ui::material::test_support::roles();
-        let models: Vec<CardModel> = (0..30)
-            .map(|i| CardModel {
-                location: SessionLocation::Worktree(format!("w{i}")),
-                display_name: format!("feat-{i}"),
-                branch: None,
-                kind: LocationType::Feature,
-                sessions: (1, 0),
-                state: micold_core::overview::CardState::Idle,
-                reason: micold_core::overview::CardReason::Idle,
-                summary: "s".into(),
-                prs: micold_core::overview::PrDisplay::Hidden,
-                progress: Default::default(),
-                activity: None,
-                activation: micold_core::overview::Activation::RevealOnly(
-                    micold_core::session::SessionLocation::Default,
-                ),
+        use micold_core::project::{Availability, Project};
+        use micold_core::worktree::{Worktree, WorktreeStatus};
+        let mut state = State::default();
+        let path = std::path::PathBuf::from("/repo");
+        state
+            .workspace
+            .projects
+            .push(Project::new(path.clone(), true, Availability::Available));
+        state.workspace.active = Some(path);
+        state.worktree.worktrees = (0..30)
+            .map(|i| Worktree {
+                dir_name: format!("feat-{i}"),
+                path: format!("/repo/.claude/worktrees/feat-{i}").into(),
+                branch: Some(format!("feat/{i}")),
+                status: WorktreeStatus::Valid,
+                included: false,
             })
             .collect();
-        let element: Element<'_, ()> = container(CardGrid::new(
-            models.iter().map(|m| OverviewCard::new(m, r)).collect(),
-            r,
-        ))
-        .padding(spacing::LG)
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .into();
-        let room = Size::new(900.0, 300.0);
-        // `bounds()`, not the size accessor: the material boundary scan reads any `.size(` call
-        // as a raw text size.
-        let laid = laid_out(element, room).bounds();
+        assert_eq!(
+            cards(&state).len(),
+            31,
+            "the window holds 30 cards and the root"
+        );
+        let mut mounted = Mounted::new(view(&state, ColorScheme::Dark).map(|_| String::new()));
+        let scrollables = mounted
+            .drive(FindScrollables(Vec::new()))
+            .expect("the operation finishes");
+        let [(viewport, content)] = scrollables[..] else {
+            panic!("the grid must hold exactly one scrollable of its own: {scrollables:?}");
+        };
         assert!(
-            laid.height <= room.height + 0.01,
-            "grew to {laid:?} in {room:?}"
+            viewport.height <= WINDOW.height + 0.01,
+            "the grid grew to {viewport:?} in {WINDOW:?}"
+        );
+        assert!(
+            content.height > viewport.height,
+            "thirty cards fit without scrolling: {content:?} in {viewport:?}"
+        );
+    }
+
+    /// Edge case: after a disconnect the window says the cards may be stale. The strip that says
+    /// so is the connection banner, empty while connected and present once the link is lost. This
+    /// pins the banner only; that the root view places it above the Overview is not asserted.
+    #[test]
+    fn the_connection_banner_has_height_only_when_disconnected() {
+        use crate::features::connection::connection_status;
+        let room = Size::new(900.0, 300.0);
+        let roles = crate::ui::material::test_support::roles();
+        let strip = |disconnected: bool| {
+            let status = connection_status(None, None, None, disconnected);
+            crate::ui::material::test_support::size_of(
+                crate::ui::connection_banner(&status, roles),
+                room,
+            )
+            .height
+        };
+        assert_eq!(strip(false), 0.0, "no strip while connected");
+        assert!(
+            strip(true) > 0.0,
+            "a disconnect must show the stale-data strip"
         );
     }
 }

@@ -455,9 +455,11 @@ prompt) and its todo ratio as current activity; otherwise US4's text.
 
 ## Phase 8: Polish & Cross-Cutting (close unit; no code)
 
-- [ ] T070 Run quickstart.md §B with the `visual-pass` skill and record the evidence in
-  specs/813-worktree-overview/ (B1–B16)
-- [ ] T071 Record quickstart.md §C (macOS, Windows) results, or name the CI jobs that cover them
+- [x] T070 Record the quickstart.md §B results in specs/813-worktree-overview/visual-pass/close.md (B1, B4, B5, B15 passed in
+  earlier milestones; the rest could not be run here)
+- [ ] T070b Run quickstart.md §B2–B3, B6–B14, B16 at a display with the `visual-pass` skill and add the evidence (human pass, no display in the cloud container)
+- [x] T071 Record quickstart.md §C: CI jobs that cover macOS and Windows are named in visual-pass/close.md
+- [ ] T071b Run quickstart.md §C (B1, B7, B15) on a real macOS and Windows desktop (human pass)
 
 ---
 
@@ -568,3 +570,37 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Tier**: full
 
 Polish (T070–T071) changes no code: it is left to the close unit.
+
+---
+
+## Phase 9: TDD remediation
+
+Source: `specs/813-worktree-overview/tdd/verification.md` (verdict FAIL). The feature is not done until T072-T078 (the
+HIGH findings and the loosened gate) are cleared and `tdd-verify` is re-run.
+
+- [x] T072 [TDD] S1: make `hook_activity_is_runtime_only` serialise a `Session` carrying `hook_activity: Some(..)` through the
+  persistence format and assert the field is absent after the round trip (crates/micold-client/tests/overview.rs:1168);
+  proof: `scripts/build-lock.sh cargo test -p micold-client --test overview hook_activity_is_runtime_only`, then fails if
+  the field loses its skip
+- [x] T073 [TDD] S2: replace `thirty_cards_lay_out_bounded_in_a_short_window` with a test that builds the real `ui::overview::view` from
+  a `State` with 30 cards under an outer scrollable and asserts the grid is bounded (crates/micold-client/src/ui/overview.rs:~262);
+  proof: removing `CardGrid`'s own `Scrollable` turns it red
+- [x] T074 [TDD] S3: in `a_card_shows_its_type_and_state_with_their_words` collect the five state icons into a set and assert
+  `len() == 5` (crates/micold-client/src/ui/material/overview_card.rs:~431); proof: mapping `Done` to
+  `CardNeedsAction` makes `scripts/build-lock.sh cargo test -p micold-client --lib overview_card` fail
+- [x] T075 [TDD] Loosened gate: narrow the `Message::Overview(` exemption in the scan
+  (crates/micold-client/tests/overlay_registry.rs:~573) to the named toggle message, or record in the test why any
+  `Overview(..)` is safe; proof: `scripts/build-lock.sh cargo test -p micold-client --test overlay_registry`
+- [x] T076 [TDD] B1: test that a `tasks.md` change under a watched worktree root reaches `Msg::ProgressRead` (temp dir, real
+  watcher, bounded wait on a condition, not a sleep) (crates/micold-client/src/shell/overview_watch.rs:90); proof: `cargo test
+  -p micold-client --lib overview_watch`
+- [x] T077 [TDD] B3: direct unit test that `catalog.rs` `session_summary` gives `hook_activity: None`
+  (crates/micold-daemon/src/catalog.rs); proof: `scripts/build-lock.sh cargo test -p micold-daemon --lib catalog::`
+- [ ] T078 (deferred: mutation re-runs not done at close; T072-T074 each name a mutation they were shown red under, in the worker's run only, not in the cycle log; `tdd/verification.md` verdict FAIL is stale until `tdd-verify` is re-run) [TDD] Re-run mutants queued in verification.md (order tie, attention min/max, MAX_TODOS, fork filter, two icon
+  mappings) and record caught or survived; proof: report updated, tree restored and green
+- [x] T079 [TDD] S4: add literal (signals, state, reason) rows from data-model.md beside `table()` (crates/micold-core/src/overview.rs:619)
+- [x] T080 [TDD] S5: delete the duplicate tests in crates/micold-client/tests/features_overview.rs or move the isolation claim there only
+- [x] T081 [TDD] S6, S7, S8: drop the wall-clock bound (tests/overview.rs:417), call the real `on_disconnected` (tests/overview.rs:378),
+  compare `main_content_key` against the Changes and Compare keys (ui/overview.rs:~246); S7 skipped: `on_disconnected` needs the binary crate's `App`
+- [x] T082 [TDD] B2, B4, B5: a test for the connection banner that carries the stale-data strip (the root view placing it above the Overview is not asserted), a state-change-then-`cards` test (US1.6), and a note
+  in quickstart B8 naming the OfferStart chain as visual-pass only

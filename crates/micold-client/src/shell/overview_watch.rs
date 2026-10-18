@@ -104,4 +104,61 @@ mod tests {
             ]
         );
     }
+
+    /// FR-008 / SC-004: a `tasks.md` written under a watched worktree reaches the Overview as a
+    /// `ProgressRead` carrying the new task ratio, through the real watcher and debouncer. Waits on
+    /// that condition up to a bound; a sleep would either flake or pass on a dead watcher.
+    #[test]
+    fn a_tasks_file_change_reaches_progress_read() {
+        use iced::futures::StreamExt;
+        use std::time::Duration;
+
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().canonicalize().unwrap();
+        let feature = root.join("specs/001-thing");
+        std::fs::create_dir_all(&feature).unwrap();
+        let read = |resolved: &Resolved, _batch: Vec<PathBuf>| {
+            Some(Message::Overview(Msg::ProgressRead {
+                project: PathBuf::from("/project"),
+                dir: "wt".to_string(),
+                progress: task_progress::read(&resolved.root, Some("1")),
+            }))
+        };
+        let resolve_root = root.clone();
+        let resolve = move || Resolved {
+            targets: targets(&resolve_root),
+            root: resolve_root,
+            git_dirs: Vec::new(),
+        };
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let seen = runtime.block_on(async {
+            let mut stream = Box::pin(watch_loop(resolve, read, true));
+            // The initial read proves the watch is up (it is sent after the targets are watched)
+            // and that no task list means no ratio yet.
+            let first = tokio::time::timeout(Duration::from_secs(10), stream.next())
+                .await
+                .expect("the initial read arrives")
+                .expect("the stream is open");
+            assert!(matches!(
+                first,
+                Message::Overview(Msg::ProgressRead { ref progress, .. }) if progress.tasks.is_none()
+            ));
+            std::fs::write(feature.join("tasks.md"), "- [x] T001 a\n- [ ] T002 b\n").unwrap();
+            let wait = async {
+                while let Some(message) = stream.next().await {
+                    if let Message::Overview(Msg::ProgressRead { dir, progress, .. }) = message {
+                        if progress.tasks.is_some() {
+                            return Some(dir);
+                        }
+                    }
+                }
+                None
+            };
+            tokio::time::timeout(Duration::from_secs(10), wait).await
+        });
+        assert_eq!(seen.ok().flatten().as_deref(), Some("wt"));
+    }
 }
