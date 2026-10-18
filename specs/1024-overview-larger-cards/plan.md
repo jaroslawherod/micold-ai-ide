@@ -102,7 +102,8 @@ Post-design re-check: unchanged, all PASS.
 
 The laid-out gates use the **grid width** (what `responsive` gives `CardGrid`). The main pane is
 48 px wider (the Overview's 2 × 24 px padding): the five-card threshold of 1464 px of grid is a
-1512 px main pane, and SC-001–SC-003's main-pane widths map the same way.
+1512 px main pane. The spec's pixel widths (thresholds, edge cases, SC-001–SC-004) are grid
+widths (spec *Terms*), so the gates test them as written.
 
 | Layer | Where | What it proves | FR / SC |
 |---|---|---|---|

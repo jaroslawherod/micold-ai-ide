@@ -9,18 +9,20 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1024
 - **Worktree branch**: claude/project-thread-iq9j8q
 - **Started**: 2026-10-18
-- **Phase**: plan done
-- **Next step**: tasks unit
+- **Phase**: tasks done
+- **Next step**: design PR open; after merge, milestone M1
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
+| (orchestrator opens) | Design: spec, plan, tasks | to open | — |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
+| M1 | T001–T013 | full | Overview shows at most five cards per row, exactly five from 1464 px of grid, wider cards; narrow panes reflow; user guide Layout | — | planned |
 
 ## Decisions
 
@@ -28,6 +30,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | 1 | clarify | "Larger": wider only, or also taller? | Wider only; height, text size, one-line summary as 813 | agent | specs/813-worktree-overview/spec.md#Terms; spec.md FR-010, Out of scope |
 | 2 | clarify | Narrow pane: reflow or sideways scroll? | Reflow down to one column, never sideways | agent | specs/813-worktree-overview/spec.md#Edge Cases (Narrow window) |
+| 3 | tasks | One milestone or one per story (milestones.md rule 2)? | One: US2 and US3 have no code of their own, only gates over US1's cap in the same file; tests travel with code (rule 7); ~150-line diff | agent | tasks.md Phase 4/5 *Implementation*: "None beyond T006–T007" |
+| 4 | tasks | speckit-analyze F1: spec widths main pane or grid? | Grid widths; spec Terms gained a line, plan *Test strategy* paragraph fixed to match (plan changed in the tasks unit) | agent | plan.md: 1464 px grid = 1512 px pane; gates measure the grid |
+| 5 | tasks | speckit-analyze F4: red only a compile error | T006 adds the signature and builder without the rule, records a behavioural red; T007 adds the clamp | agent | tasks.md T005–T007 |
 
 ## Review rounds
 
@@ -36,6 +41,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Spec | 1 | ad3ae2b289c1c952308d426584a1f3b8589063bd:8ee4531564743d6032729cd056a73f655abfb1a0 | CHANGES: 1 MAJOR, 2 MINOR (all fixed) |
 | Spec | 2 | 42de4d6686a2c4fbf4edd34a2fac84019f53f76e:9fd139b98e5f41fd86197ed391d3122b7f68fe6b | CLEAN |
 | Plan | 1 | e45c58b4b1535563f0e6bedadc7591b9a695a39b:6c3e08958c02ee674bc1558fc34574eb1171dc3a | CLEAN: 2 MINOR (fixed, prose only) |
+| Tasks | 1 | b267855a5af0a7210aa2095640d6a8c9b29b6ab1:2f920b0d219ba52f0b54bcc54bb3385b679b2841 | CLEAN: 1 MINOR (checklist tick, fixed) |
 
 ## Declined review findings
 
