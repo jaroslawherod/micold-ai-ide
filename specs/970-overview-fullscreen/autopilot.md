@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-ag6ana
 - **Started**: 2026-10-18
 - **Phase**: tasks (design PR)
-- **Next step**: tasks review, then gate and design PR
+- **Next step**: design PR
 
 ## Pull requests
 
@@ -51,6 +51,7 @@ R6) to stay near 10 tasks. M4 is 10 tasks; its serde field is a persistence-form
 | Spec review | 1 | 0f936e933b45470ec78960e325652da519ed1345:7dded4dabfe494a9aa98b069d0cec860beee2dd2 | CHANGES: 4 MAJOR, 2 MINOR |
 | Spec review | 2 | 89236166dc9f65c1c4ccda6390048046cc91bcdd:7dded4dabfe494a9aa98b069d0cec860beee2dd2 | CLEAN (2 MINOR, fixed prose only) |
 | Plan review | 1 | 492e6e945eaee1a4aadbe9442ad1423220268194:32e91cce3fcb38094295f0fa9ffdcd4c201aecb4 | CLEAN (1 MINOR: tree state renamed `ZoomState`, fixed prose only) |
+| Tasks review | 1 | de0b3a34548aa9cfd42aed76365f2eab957ca1a1:a2c8ebd18334b6968d29ad0003a6e495dfeffbb5 | CLEAN (3 MINOR: M1 Satisfies, T012/T013 order, guide [P]; fixed prose only) |
 
 ## Declined review findings
 

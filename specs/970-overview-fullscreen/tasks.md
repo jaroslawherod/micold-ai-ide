@@ -77,8 +77,8 @@ reflow is US2).
 - [ ] T009 [P] [US1] Chord in `crates/micold-client/src/keymap.rs`: `pub fn is_overview_full_screen_chord(key: &Key, mods: Mods) -> bool` on `is_primary_shift_chord(.., 'f')` and `pub fn overview_full_screen_chord_label() -> &'static str` beside `overview_chord_label`; not added to the terminal's reserved tier (research R7). In `crates/micold-client/src/ui/mod.rs` `app_chord`, after the `is_overview_chord` arm, emit `Message::Overview(overview::Msg::FullScreenToggled { settings_open: false })` (the update ignores it while closed; Settings open is filled where the root routes it, as for `Toggled`)
 - [ ] T010 [P] [US1] Icons in `crates/micold-client/src/icons.rs`: variants `FullScreen` (Material Symbols `fullscreen`, U+E5D0) and `FullScreenExit` (`fullscreen_exit`, U+E5D1) in the enum, `glyph`, `all` and any name table, both in the shipped full-coverage font (`assets/fonts/PROVENANCE.md`)
 - [ ] T011 [US1] Drawer retraction in `crates/micold-client/src/ui/material/navigation_drawer.rs` (plan D2, research R2–R3): builder `pub fn retracted(mut self, retracted: bool) -> Self` (doc: hides the whole drawer without touching its open state); `Track` gains `presence: Progress` built with `Progress::new(target)` (1 shown, 0 retracted) so a drawer built retracted starts at 0; `layout` multiplies the width the open/close logic yields (panel + handle, or rail) by the `EMPHASIZED`-eased presence and translates the children left by the rest; at presence ≤ `CLOSED` and retracted, all children `parked` and the node 0 wide; `update` retargets presence and advances it with `on_layout_frame(.., SLIDE, ..)` (reversal from the current value is `Progress::retarget`'s); `update`, `mouse_interaction`, `draw`, `operate` and `overlay` reach no child while parked. Request redraws only while `Progress::animating` (idle quiescence)
-- [ ] T012 [US1] Glue in `crates/micold-client/src/ui/mod.rs`: build the drawer with `.retracted(state.overview.full_screen())` (glue exception, quickstart §B 1); confirm with LSP `findReferences` on `overview::Msg::Toggled` where the root fills `settings_open`, and fill it the same way for `FullScreenToggled` in `crates/micold-client/src/app.rs` (and `crates/micold-client/src/ui/overview.rs` for the header button)
-- [ ] T013 [US1] Overview header in `crates/micold-client/src/ui/overview.rs` (plan D5, contracts/ui.md *Overview header*): pure `full_screen_label(on)`, `full_screen_tooltip(on)`, `full_screen_icon(on)`; a header row above the grid with, at its end, `Button::outlined(full_screen_label(on))` with leading `full_screen_icon(on)`, wrapped in the shared `Tooltip` with `full_screen_tooltip(on)`, emitting `Msg::FullScreenToggled { settings_open }`; `on` is `state.overview.full_screen()`. Keyboard focus comes from `Button`'s `TakesTheKeyboard` (FR-012); the connection-lost state keeps the header (spec Edge *Connection lost*)
+- [ ] T012 [US1] Glue in `crates/micold-client/src/ui/mod.rs`: build the drawer with `.retracted(state.overview.full_screen())` (glue exception, quickstart §B 1); confirm with LSP `findReferences` on `overview::Msg::Toggled` where the root fills `settings_open`, and fill it the same way for `FullScreenToggled` in `crates/micold-client/src/app.rs`
+- [ ] T013 [US1] Overview header in `crates/micold-client/src/ui/overview.rs` (plan D5, contracts/ui.md *Overview header*): pure `full_screen_label(on)`, `full_screen_tooltip(on)`, `full_screen_icon(on)`; a header row above the grid with, at its end, `Button::outlined(full_screen_label(on))` with leading `full_screen_icon(on)`, wrapped in the shared `Tooltip` with `full_screen_tooltip(on)`, emitting `Msg::FullScreenToggled { settings_open }` with `settings_open` filled as the toolbar fills it for `Toggled` (`state.settings.settings_draft.is_some()`); `on` is `state.overview.full_screen()`. Keyboard focus comes from `Button`'s `TakesTheKeyboard` (FR-012); the connection-lost state keeps the header (spec Edge *Connection lost*)
 - [ ] T014 [US1] Showcase poses in `crates/micold-client/src/showcase/sections/surfaces.rs`: `NavigationDrawer` entries "retracted" (built `.retracted(true)`) and "retracting" (a toggle in the showcase state that flips `.retracted`); list them where `crates/micold-client/tests/showcase_completeness.rs` checks poses (Principle VIII, contracts/ui.md *Component API*)
 - [ ] T015 [P] [US1] User guide (FR-013, plan D6): in `docs/user-guide/overview.md` add a `## Full screen` section after *Opening and closing it*: the *Full screen* button in the Overview's header and Ctrl+Shift+F (Cmd+Shift+F on macOS) enter and leave it; the sidebar slides away and the cards fill the window's width; the top bar stays; leaving the Overview by a card, Escape, the top-bar button or Ctrl+Shift+O also leaves full screen, and the sidebar returns exactly as you left it (collapsed or expanded, same width); Settings and a project switch keep it; the Overview always opens in the normal layout. Add the chord to `## Keyboard` there, as a row of the shortcut table in `docs/user-guide/terminal-panes.md` (beside the Overview row, line ~38) and to the list in `docs/user-guide/worktrees-and-sessions.md` (beside **Overview**, line ~1684)
 
@@ -214,7 +214,8 @@ Changes no code: left to the close unit (milestones rule 4).
 ### Parallel Opportunities
 
 - T002, T003, T004, T006 (different files from T001 and T005); T009 and T010 beside T008.
-- Every user-guide task (T015, T026, T031, T041).
+- Every user-guide task (T015, T026, T031, T041) beside the code tasks; they all edit
+  `docs/user-guide/overview.md`, so among themselves they run in task order.
 - T032 and T033 (core vs client).
 
 ## Parallel Example: User Story 1
@@ -256,8 +257,9 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
   shortcut and every way out of the Overview bring the sidebar back exactly as it was; the user
   guide describes it
 - **Satisfies**: US1 scenarios 1–4; US4 scenarios 1–4; US2 scenarios 1, 2, 4 for the sidebar's
-  edge; FR-001–FR-005 (sidebar), FR-007 (sidebar), FR-009–FR-012, FR-013 (Overview page, shortcut
-  lists), FR-014; SC-001, SC-004, SC-005, SC-006
+  edge; FR-001–FR-003, FR-005 (sidebar), FR-007 (sidebar), FR-009–FR-012, FR-013 (Overview page,
+  shortcut lists), FR-014; SC-004, SC-005, SC-006 (FR-004 and SC-001 hold at rest through the
+  unchanged grid; their gate is T020 in M2)
 - **Verify**: `cargo test -p micold-client navigation_drawer overview keymap icons app_chord
   showcase_completeness`; quickstart §B 1–2, 4–5
 - **Depends on**: —
