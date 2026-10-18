@@ -39,6 +39,7 @@ pub mod panes;
 pub mod pasted_image;
 pub mod persist;
 pub mod pr_status;
+pub mod quick_switch;
 pub mod routing;
 pub mod runs;
 pub mod runs_watch;
