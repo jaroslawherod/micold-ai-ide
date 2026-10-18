@@ -1,7 +1,8 @@
 //! Harness of the `kube_real_*` tests (feature 686, FR-021, research K12): a throwaway kind
 //! cluster, the SSH image loaded into it, RBAC fixtures, a package source and a git remote the pod
 //! can reach, and a client wired to the live cluster. Every test skips with a printed reason when
-//! `docker`, `kind` or `kubectl` is absent, so a machine without them never fails.
+//! `docker`, `kind` or `kubectl` is absent, so a machine without them never fails. The harness
+//! never deletes the cluster (`scripts/test-kube.sh` does); a bare `cargo test` leaves it running.
 #![cfg(feature = "kube-real-runtime")]
 #![allow(dead_code)]
 
@@ -260,9 +261,22 @@ rules:
 - apiGroups: [""]
   resources: ["secrets", "persistentvolumeclaims"]
   verbs: ["get","list","watch","create","update","patch","delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata: {{name: {account}-{namespace}}}
+rules:
 - apiGroups: [""]
   resources: ["namespaces"]
-  verbs: ["get","list"]
+  resourceNames: ["{namespace}"]
+  verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata: {{name: {account}-{namespace}}}
+roleRef: {{apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: {account}-{namespace}}}
+subjects:
+- {{kind: ServiceAccount, name: {account}, namespace: {namespace}}}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -538,7 +552,6 @@ pub struct Working {
 /// Clone the suite's remote into the pod, add it as a project, make a worktree and start a
 /// session of the stand-in `claude` in it (the terminal is viewed so its grid streams).
 pub async fn work(connection: &mut DaemonConnection, suite: &Suite, seen: &mut String) -> Working {
-    use micold_core::protocol::messages::{SessionProcess, TerminalRef};
     use micold_core::session::AiCli;
     use micold_core::worktree::CreateMode;
     let dest = "/data/repos/kube-real-repo";
@@ -622,13 +635,6 @@ pub async fn work(connection: &mut DaemonConnection, suite: &Suite, seen: &mut S
         .await
         .expect("start the session");
     view(connection, &project, session).await;
-    let _ = (
-        SessionProcess::Primary,
-        TerminalRef {
-            session,
-            process: SessionProcess::Primary,
-        },
-    );
     Working { project, session }
 }
 

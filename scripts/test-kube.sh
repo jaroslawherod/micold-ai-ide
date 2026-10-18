@@ -16,7 +16,7 @@ done
 
 cleanup() {
   # The git remote the tests start outlives each test binary; stop it with the run.
-  pkill -f 'git daemon --reuseaddr --export-all --listen=0.0.0.0 --port=9418' 2>/dev/null || true
+  pkill -f 'git[ -]daemon .*--port=9418' 2>/dev/null || true
   if [ "${MICOLD_KUBE_TEST_KEEP:-}" != 1 ]; then
     kind delete cluster --name micold-kube-test >/dev/null 2>&1 || true
   fi
