@@ -1737,6 +1737,8 @@ impl Widget<Message, Theme, Renderer> for TerminalPane<'_> {
                         shell.capture_event();
                     }
                 }
+                // Wired with the switcher's subscription listener (feature 968, T017).
+                KeyRouting::ToggleSwitcher => {}
                 KeyRouting::Pane(action) => {
                     shell.publish(Message::Session(SessionMsg::Pane(PaneMsg::Chord(action))));
                     shell.capture_event();
@@ -1811,6 +1813,7 @@ pub(crate) fn to_keymap_physical(physical: &keyboard::key::Physical) -> keymap::
         Physical::Code(Code::BracketRight) => keymap::PhysicalKey::BracketRight,
         Physical::Code(Code::PageUp) => keymap::PhysicalKey::PageUp,
         Physical::Code(Code::PageDown) => keymap::PhysicalKey::PageDown,
+        Physical::Code(Code::KeyP) => keymap::PhysicalKey::KeyP,
         _ => keymap::PhysicalKey::Other,
     }
 }

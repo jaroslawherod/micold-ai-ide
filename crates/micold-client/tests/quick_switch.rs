@@ -2,8 +2,8 @@
 
 mod support;
 
-use micold_client::features::quick_switch::State as SwitcherState;
 use micold_client::app::State;
+use micold_client::features::quick_switch::State as SwitcherState;
 use micold_core::session::SessionLocation;
 use support::sidebar_fixture::{deliver, listed, session_at, state_with_active, worktree};
 
