@@ -155,8 +155,7 @@ mod tests {
                 walk(c, iced::Vector::new(b.x, b.y), out);
             }
             // The innermost box of the card's height is the card: its row is as tall, but holds it.
-            if out.len() == before && (b.height - super::super::overview_card::HEIGHT).abs() < EPS
-            {
+            if out.len() == before && (b.height - super::super::overview_card::HEIGHT).abs() < EPS {
                 out.push(b);
             }
         }
