@@ -399,6 +399,9 @@ pub fn view_with<'a>(
             sidebar::collapsed_strip(scheme),
         )
         .open(!state.sidebar.hidden)
+        // Full screen slides the whole drawer off without touching the sidebar's own state
+        // (feature 970, FR-009); every way out of the Overview clears it through `full_screen()`.
+        .retracted(state.overview.full_screen())
         .handle(
             material::ResizeHandle::new(roles)
                 .on_resize(|x| Message::Sidebar(SidebarMsg::DragMoved(x.max(0.0) as u16))),
@@ -1329,6 +1332,14 @@ fn app_chord(event: iced::keyboard::Event) -> Option<Message> {
         return Some(Message::Overview(crate::features::overview::Msg::Toggled {
             settings_open: false,
         }));
+    }
+    // Settings open drops this listener, so `settings_open` is always false here.
+    if crate::keymap::is_overview_full_screen_chord(&input.key, input.mods) {
+        return Some(Message::Overview(
+            crate::features::overview::Msg::FullScreenToggled {
+                settings_open: false,
+            },
+        ));
     }
     if crate::keymap::is_switcher_chord(&input) {
         return Some(Message::QuickSwitch(

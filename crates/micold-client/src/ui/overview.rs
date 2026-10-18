@@ -8,8 +8,8 @@ use crate::features::overview::{MenuOrigin, Msg};
 use crate::features::sidebar::{RunRow, SidebarEntry, WorktreeNode};
 use crate::icons::Icon;
 use crate::ui::cdk::context_area::ContextArea;
-use crate::ui::material::{CardGrid, MenuItem, OverviewCard};
-use iced::widget::container;
+use crate::ui::material::{Button, CardGrid, MenuItem, OverviewCard, Tooltip};
+use iced::widget::{column, container, row, Space};
 use iced::{Element, Length};
 use micold_core::location_state::location_state;
 use micold_core::occupancy::main_session;
@@ -58,7 +58,8 @@ pub fn view<'a>(state: &State, scheme: ColorScheme) -> Element<'a, Message> {
         })
         .collect();
     // The grid scrolls itself; an outer scrollable would give it unbounded height.
-    let pane = container(CardGrid::new(cards, r).on_scroll(Message::Overview(Msg::GridScrolled)))
+    let grid = CardGrid::new(cards, r).on_scroll(Message::Overview(Msg::GridScrolled));
+    let pane = container(column![header(state, r), grid].spacing(spacing::SM))
         .padding(spacing::LG)
         .width(Length::Fill)
         .height(Length::Fill);
@@ -108,6 +109,50 @@ pub fn focus_return_target(state: &State, target: &SessionLocation) -> Option<Se
         .find(|model| &model.location == target)
         .or(cards.first())
         .map(|model| model.location.clone())
+}
+
+/// The full-screen toggle's label: its action (feature 970, contracts/ui.md *Overview header*).
+pub fn full_screen_label(on: bool) -> &'static str {
+    if on {
+        "Exit full screen"
+    } else {
+        "Full screen"
+    }
+}
+
+/// The full-screen toggle's tooltip: its action and the platform's chord (FR-012).
+pub fn full_screen_tooltip(on: bool) -> String {
+    format!(
+        "{} ({})",
+        full_screen_label(on),
+        crate::keymap::overview_full_screen_chord_label()
+    )
+}
+
+/// The full-screen toggle's leading glyph, showing which way it goes.
+pub fn full_screen_icon(on: bool) -> Icon {
+    if on {
+        Icon::FullScreenExit
+    } else {
+        Icon::FullScreen
+    }
+}
+
+/// The Overview's header row: the full-screen toggle at its end (feature 970, plan D5). Settings
+/// open is filled as the top bar fills it for the Overview toggle; the update ignores it then.
+fn header<'a>(state: &State, r: tokens::Roles) -> Element<'a, Message> {
+    let on = state.overview.full_screen();
+    let settings_open = state.settings.settings_draft.is_some();
+    let toggle = Tooltip::new(
+        Button::outlined(full_screen_label(on), r)
+            .leading(full_screen_icon(on))
+            .on_press(Message::Overview(Msg::FullScreenToggled { settings_open })),
+        full_screen_tooltip(on),
+        r,
+    );
+    row![Space::new().width(Length::Fill), toggle]
+        .width(Length::Fill)
+        .into()
 }
 
 /// The card menu of `location` (feature 972, FR-002): *Open* first, then exactly that location's
@@ -514,7 +559,8 @@ mod tests {
         state.overview.open = true;
         let expected = cards(&state)[0].activation.clone();
         let mut mounted = Mounted::new(view(&state, ColorScheme::Dark).map(|m| format!("{m:?}")));
-        let at = iced::Point::new(100.0, 60.0);
+        // Below the header row (feature 970), inside the first card.
+        let at = iced::Point::new(100.0, 120.0);
         mounted.press(at);
         let published = mounted.send(
             iced::Event::Mouse(iced::mouse::Event::ButtonReleased(
@@ -532,4 +578,24 @@ mod tests {
             )]
         );
     }
+    // Feature 970 (FR-012, contracts/ui.md *Overview header*): the full-screen toggle's words and
+    // glyph name its action, and the tooltip carries the platform's chord.
+    #[test]
+    fn the_full_screen_toggle_names_its_action_and_chord() {
+        assert_eq!(full_screen_label(false), "Full screen");
+        assert_eq!(full_screen_label(true), "Exit full screen");
+        for on in [false, true] {
+            assert_eq!(
+                full_screen_tooltip(on),
+                format!(
+                    "{} ({})",
+                    full_screen_label(on),
+                    crate::keymap::overview_full_screen_chord_label()
+                )
+            );
+        }
+        assert_eq!(full_screen_icon(false), Icon::FullScreen);
+        assert_eq!(full_screen_icon(true), Icon::FullScreenExit);
+    }
+
 }

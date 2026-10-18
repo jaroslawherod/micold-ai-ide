@@ -44,6 +44,7 @@ pub struct NavigationDrawer<'a, M, Theme = iced::Theme, Renderer = iced::Rendere
     rail: Element<'a, M, Theme, Renderer>,
     handle: Option<Element<'a, M, Theme, Renderer>>,
     open: bool,
+    retracted: bool,
 }
 
 impl<'a, M, Theme, Renderer> NavigationDrawer<'a, M, Theme, Renderer> {
@@ -57,6 +58,7 @@ impl<'a, M, Theme, Renderer> NavigationDrawer<'a, M, Theme, Renderer> {
             rail: rail.into(),
             handle: None,
             open: true,
+            retracted: false,
         }
     }
 
@@ -64,6 +66,15 @@ impl<'a, M, Theme, Renderer> NavigationDrawer<'a, M, Theme, Renderer> {
     /// is the drawer's own business.
     pub fn open(mut self, open: bool) -> Self {
         self.open = open;
+        self
+    }
+
+    /// Hide the whole drawer, rail and handle included, without touching whether it is open: the
+    /// drawer slides off at its left edge and gives its width to the content beside it, and comes
+    /// back as it was given when no longer retracted (feature 970, plan D2). A drawer built
+    /// retracted starts at zero width, not sliding there.
+    pub fn retracted(mut self, retracted: bool) -> Self {
+        self.retracted = retracted;
         self
     }
 
@@ -81,6 +92,15 @@ impl<'a, M, Theme, Renderer> NavigationDrawer<'a, M, Theme, Renderer> {
         out
     }
 
+    /// Where the retraction is headed: 1 shown, 0 retracted.
+    fn presence_target(&self) -> f32 {
+        if self.retracted {
+            0.0
+        } else {
+            1.0
+        }
+    }
+
     /// Which child is on screen at `progress` — the drawer's whole reason to exist.
     fn showing_rail(&self, progress: f32) -> bool {
         !self.open && progress <= CLOSED
@@ -91,6 +111,16 @@ impl<'a, M, Theme, Renderer> NavigationDrawer<'a, M, Theme, Renderer> {
 struct Track {
     progress: Progress,
     rail_showing: bool,
+    /// How much of the drawer is on screen: 1 shown, 0 retracted (feature 970, plan D2). Separate
+    /// from `progress`, which is whether it is open, so retraction gives back what it took.
+    presence: Progress,
+    /// Retracted and settled: every child parked, so no method reaches one. Set by `layout`.
+    gone: bool,
+}
+
+/// Built at `target` and eased on `emphasized`, the curve 018 §6.3's *sidebar slide* row names.
+fn emphasized_track(target: f32) -> Progress {
+    Progress::new(target).easing(EMPHASIZED.x1, EMPHASIZED.y1, EMPHASIZED.x2, EMPHASIZED.y2)
 }
 
 /// A node parked where it cannot be seen. The inactive child still needs a layout entry — the tree,
@@ -112,13 +142,10 @@ where
         // slide open on the first frame of the session. On `emphasized`, the curve 018 §6.3's
         // *sidebar slide* row names.
         tree::State::new(Track {
-            progress: Progress::new(if self.open { 1.0 } else { 0.0 }).easing(
-                EMPHASIZED.x1,
-                EMPHASIZED.y1,
-                EMPHASIZED.x2,
-                EMPHASIZED.y2,
-            ),
+            progress: emphasized_track(if self.open { 1.0 } else { 0.0 }),
             rail_showing: !self.open,
+            presence: emphasized_track(self.presence_target()),
+            gone: self.retracted,
         })
     }
 
@@ -142,6 +169,273 @@ where
     }
 
     fn layout(
+        &mut self,
+        tree: &mut Tree,
+        renderer: &Renderer,
+        limits: &layout::Limits,
+    ) -> layout::Node {
+        let node = self.layout_shown(tree, renderer, limits);
+        let track = tree.state.downcast_mut::<Track>();
+        let presence = track.presence.value();
+        track.gone = self.retracted && presence <= CLOSED;
+        if track.gone {
+            let height = node.size().height;
+            let parked_all = node.children().iter().cloned().map(parked).collect();
+            return layout::Node::with_children(Size::new(0.0, height), parked_all);
+        }
+        if presence >= 1.0 {
+            return node;
+        }
+        // Retracting: the drawer narrows to its shown fraction and slides left by the rest, so it
+        // leaves at its left edge and the content beside it follows its right edge.
+        let full = node.size();
+        let width = (full.width * presence).clamp(0.0, full.width);
+        let shift = Vector::new(width - full.width, 0.0);
+        let moved = node
+            .children()
+            .iter()
+            .map(|child| child.clone().translate(shift))
+            .collect();
+        layout::Node::with_children(Size::new(width, full.height), moved)
+    }
+
+    fn update(
+        &mut self,
+        tree: &mut Tree,
+        event: &Event,
+        layout: Layout<'_>,
+        cursor: mouse::Cursor,
+        renderer: &Renderer,
+        clipboard: &mut dyn Clipboard,
+        shell: &mut Shell<'_, M>,
+        viewport: &Rectangle,
+    ) {
+        // Advance first, so the children are updated against the arrangement they are about to be
+        // drawn in rather than the previous frame's.
+        let target = if self.open { 1.0 } else { 0.0 };
+        let track = tree.state.downcast_mut::<Track>();
+        // `on_layout_frame`, not `on_frame`: this widget's `layout` reads the progress to size the
+        // revealed panel, and iced re-lays-out only when asked (BUG-001).
+        track.progress.on_layout_frame(event, target, SLIDE, shell);
+        // The retraction, on the same slide; reversing midway retargets from where it is.
+        track
+            .presence
+            .on_layout_frame(event, self.presence_target(), SLIDE, shell);
+        // Which child `layout` put on screen, not what the advanced progress would pick: the event
+        // is delivered through that layout, until the next one.
+        let rail_showing = track.rail_showing;
+        if track.gone {
+            return;
+        }
+
+        // Only the child on screen hears about the event. The parked one is not merely invisible —
+        // it is somewhere the pointer can never be, so forwarding to it would be feeding it
+        // coordinates that mean nothing.
+        let mut children = self.parts_mut();
+        for (index, (child, child_tree)) in children.iter_mut().zip(&mut tree.children).enumerate()
+        {
+            let on_screen = if index == 1 {
+                rail_showing
+            } else {
+                !rail_showing
+            };
+            let Some(child_layout) = layout.children().nth(index) else {
+                continue;
+            };
+            if !on_screen {
+                continue;
+            }
+            child.as_widget_mut().update(
+                child_tree,
+                event,
+                child_layout,
+                cursor,
+                renderer,
+                clipboard,
+                shell,
+                viewport,
+            );
+        }
+    }
+
+    fn mouse_interaction(
+        &self,
+        tree: &Tree,
+        layout: Layout<'_>,
+        cursor: mouse::Cursor,
+        viewport: &Rectangle,
+        renderer: &Renderer,
+    ) -> mouse::Interaction {
+        let track = tree.state.downcast_ref::<Track>();
+        if track.gone {
+            return mouse::Interaction::default();
+        }
+        let rail_showing = track.rail_showing;
+        self.parts()
+            .into_iter()
+            .zip(&tree.children)
+            .zip(layout.children())
+            .enumerate()
+            .filter(|(index, _)| {
+                if *index == 1 {
+                    rail_showing
+                } else {
+                    !rail_showing
+                }
+            })
+            .map(|(_, ((child, child_tree), child_layout))| {
+                child.as_widget().mouse_interaction(
+                    child_tree,
+                    child_layout,
+                    cursor,
+                    viewport,
+                    renderer,
+                )
+            })
+            .max()
+            .unwrap_or_default()
+    }
+
+    fn draw(
+        &self,
+        tree: &Tree,
+        renderer: &mut Renderer,
+        theme: &Theme,
+        style: &renderer::Style,
+        layout: Layout<'_>,
+        cursor: mouse::Cursor,
+        viewport: &Rectangle,
+    ) {
+        let track = tree.state.downcast_ref::<Track>();
+        if track.gone {
+            return;
+        }
+        if track.presence.value() < 1.0 {
+            // Mid-retraction the children hang past the drawer's left edge: clip them to it.
+            renderer.with_layer(layout.bounds(), |renderer| {
+                self.draw_children(tree, renderer, theme, style, layout, cursor, viewport);
+            });
+        } else {
+            self.draw_children(tree, renderer, theme, style, layout, cursor, viewport);
+        }
+    }
+
+    fn operate(
+        &mut self,
+        tree: &mut Tree,
+        layout: Layout<'_>,
+        renderer: &Renderer,
+        operation: &mut dyn Operation,
+    ) {
+        // Retracted, nothing in the drawer can take the keyboard or be found (FR-002).
+        if tree.state.downcast_ref::<Track>().gone {
+            return;
+        }
+        let mut children = self.parts_mut();
+        for ((child, child_tree), child_layout) in children
+            .iter_mut()
+            .zip(&mut tree.children)
+            .zip(layout.children())
+        {
+            child
+                .as_widget_mut()
+                .operate(child_tree, child_layout, renderer, operation);
+        }
+    }
+
+    fn overlay<'b>(
+        &'b mut self,
+        tree: &'b mut Tree,
+        layout: Layout<'b>,
+        renderer: &Renderer,
+        viewport: &Rectangle,
+        translation: Vector,
+    ) -> Option<overlay::Element<'b, M, Theme, Renderer>> {
+        let track = tree.state.downcast_ref::<Track>();
+        if track.gone {
+            return None;
+        }
+        let rail_showing = track.rail_showing;
+        let index = usize::from(rail_showing);
+        let child_layout = layout.children().nth(index)?;
+        let child = if rail_showing {
+            &mut self.rail
+        } else {
+            &mut self.panel
+        };
+        child.as_widget_mut().overlay(
+            &mut tree.children[index],
+            child_layout,
+            renderer,
+            viewport,
+            translation,
+        )
+    }
+}
+
+impl<M, Theme, Renderer> NavigationDrawer<'_, M, Theme, Renderer>
+where
+    Renderer: renderer::Renderer,
+{
+    /// Draws the child on screen; the panel clipped to the width it occupies.
+    #[allow(clippy::too_many_arguments)]
+    fn draw_children(
+        &self,
+        tree: &Tree,
+        renderer: &mut Renderer,
+        theme: &Theme,
+        style: &renderer::Style,
+        layout: Layout<'_>,
+        cursor: mouse::Cursor,
+        viewport: &Rectangle,
+    ) {
+        let rail_showing = tree.state.downcast_ref::<Track>().rail_showing;
+
+        for (index, ((child, child_tree), child_layout)) in self
+            .parts()
+            .into_iter()
+            .zip(&tree.children)
+            .zip(layout.children())
+            .enumerate()
+        {
+            let on_screen = if index == 1 {
+                rail_showing
+            } else {
+                !rail_showing
+            };
+            if !on_screen {
+                continue;
+            }
+            if index == 0 {
+                // The retracting panel is clipped to the width it currently occupies, so its
+                // content is cut off at the edge instead of spilling past it.
+                renderer.with_layer(child_layout.bounds(), |renderer| {
+                    child.as_widget().draw(
+                        child_tree,
+                        renderer,
+                        theme,
+                        style,
+                        child_layout,
+                        cursor,
+                        viewport,
+                    );
+                });
+            } else {
+                child.as_widget().draw(
+                    child_tree,
+                    renderer,
+                    theme,
+                    style,
+                    child_layout,
+                    cursor,
+                    viewport,
+                );
+            }
+        }
+    }
+
+    /// The layout as open or closed, before retraction narrows it.
+    fn layout_shown(
         &mut self,
         tree: &mut Tree,
         renderer: &Renderer,
@@ -201,191 +495,6 @@ where
         nodes.extend(handle.map(|h| h.translate(Vector::new(width, 0.0))));
 
         layout::Node::with_children(Size::new(width + handle_width, height), nodes)
-    }
-
-    fn update(
-        &mut self,
-        tree: &mut Tree,
-        event: &Event,
-        layout: Layout<'_>,
-        cursor: mouse::Cursor,
-        renderer: &Renderer,
-        clipboard: &mut dyn Clipboard,
-        shell: &mut Shell<'_, M>,
-        viewport: &Rectangle,
-    ) {
-        // Advance first, so the children are updated against the arrangement they are about to be
-        // drawn in rather than the previous frame's.
-        let target = if self.open { 1.0 } else { 0.0 };
-        let track = tree.state.downcast_mut::<Track>();
-        // `on_layout_frame`, not `on_frame`: this widget's `layout` reads the progress to size the
-        // revealed panel, and iced re-lays-out only when asked (BUG-001).
-        track.progress.on_layout_frame(event, target, SLIDE, shell);
-        // Which child `layout` put on screen, not what the advanced progress would pick: the event
-        // is delivered through that layout, until the next one.
-        let rail_showing = track.rail_showing;
-
-        // Only the child on screen hears about the event. The parked one is not merely invisible —
-        // it is somewhere the pointer can never be, so forwarding to it would be feeding it
-        // coordinates that mean nothing.
-        let mut children = self.parts_mut();
-        for (index, (child, child_tree)) in children.iter_mut().zip(&mut tree.children).enumerate()
-        {
-            let on_screen = if index == 1 {
-                rail_showing
-            } else {
-                !rail_showing
-            };
-            let Some(child_layout) = layout.children().nth(index) else {
-                continue;
-            };
-            if !on_screen {
-                continue;
-            }
-            child.as_widget_mut().update(
-                child_tree,
-                event,
-                child_layout,
-                cursor,
-                renderer,
-                clipboard,
-                shell,
-                viewport,
-            );
-        }
-    }
-
-    fn mouse_interaction(
-        &self,
-        tree: &Tree,
-        layout: Layout<'_>,
-        cursor: mouse::Cursor,
-        viewport: &Rectangle,
-        renderer: &Renderer,
-    ) -> mouse::Interaction {
-        let rail_showing = tree.state.downcast_ref::<Track>().rail_showing;
-        self.parts()
-            .into_iter()
-            .zip(&tree.children)
-            .zip(layout.children())
-            .enumerate()
-            .filter(|(index, _)| {
-                if *index == 1 {
-                    rail_showing
-                } else {
-                    !rail_showing
-                }
-            })
-            .map(|(_, ((child, child_tree), child_layout))| {
-                child.as_widget().mouse_interaction(
-                    child_tree,
-                    child_layout,
-                    cursor,
-                    viewport,
-                    renderer,
-                )
-            })
-            .max()
-            .unwrap_or_default()
-    }
-
-    fn draw(
-        &self,
-        tree: &Tree,
-        renderer: &mut Renderer,
-        theme: &Theme,
-        style: &renderer::Style,
-        layout: Layout<'_>,
-        cursor: mouse::Cursor,
-        viewport: &Rectangle,
-    ) {
-        let rail_showing = tree.state.downcast_ref::<Track>().rail_showing;
-
-        for (index, ((child, child_tree), child_layout)) in self
-            .parts()
-            .into_iter()
-            .zip(&tree.children)
-            .zip(layout.children())
-            .enumerate()
-        {
-            let on_screen = if index == 1 {
-                rail_showing
-            } else {
-                !rail_showing
-            };
-            if !on_screen {
-                continue;
-            }
-            if index == 0 {
-                // The retracting panel is clipped to the width it currently occupies, so its
-                // content is cut off at the edge instead of spilling past it.
-                renderer.with_layer(child_layout.bounds(), |renderer| {
-                    child.as_widget().draw(
-                        child_tree,
-                        renderer,
-                        theme,
-                        style,
-                        child_layout,
-                        cursor,
-                        viewport,
-                    );
-                });
-            } else {
-                child.as_widget().draw(
-                    child_tree,
-                    renderer,
-                    theme,
-                    style,
-                    child_layout,
-                    cursor,
-                    viewport,
-                );
-            }
-        }
-    }
-
-    fn operate(
-        &mut self,
-        tree: &mut Tree,
-        layout: Layout<'_>,
-        renderer: &Renderer,
-        operation: &mut dyn Operation,
-    ) {
-        let mut children = self.parts_mut();
-        for ((child, child_tree), child_layout) in children
-            .iter_mut()
-            .zip(&mut tree.children)
-            .zip(layout.children())
-        {
-            child
-                .as_widget_mut()
-                .operate(child_tree, child_layout, renderer, operation);
-        }
-    }
-
-    fn overlay<'b>(
-        &'b mut self,
-        tree: &'b mut Tree,
-        layout: Layout<'b>,
-        renderer: &Renderer,
-        viewport: &Rectangle,
-        translation: Vector,
-    ) -> Option<overlay::Element<'b, M, Theme, Renderer>> {
-        let rail_showing = tree.state.downcast_ref::<Track>().rail_showing;
-        let index = usize::from(rail_showing);
-        let child_layout = layout.children().nth(index)?;
-        let child = if rail_showing {
-            &mut self.rail
-        } else {
-            &mut self.panel
-        };
-        child.as_widget_mut().overlay(
-            &mut tree.children[index],
-            child_layout,
-            renderer,
-            viewport,
-            translation,
-        )
     }
 }
 
@@ -626,6 +735,221 @@ mod tests {
                 expected,
                 "open {open} at progress {progress} beside a {rail} rail: what draw and update read"
             );
+        }
+    }
+
+    // Feature 970 (plan D2; contracts/ui.md *Geometry gates — Drawer*): retraction hides the whole
+    // drawer at its left edge without touching whether it is open.
+
+    /// The panel's width in the retraction gates.
+    const PANEL_WIDTH: f32 = 300.0;
+
+    /// How long a retraction may take to settle (FR-005).
+    const SETTLED_BY: u64 = 500;
+
+    /// `cubic-bezier(0.2, 0, 0, 1)` at linear time `t`, solved by bisection: the reference curve
+    /// the retraction is checked against, independent of `cdk::motion`'s solver.
+    fn emphasized(t: f32) -> f32 {
+        fn bezier(p1: f32, p2: f32, u: f32) -> f32 {
+            let v = 1.0 - u;
+            3.0 * v * v * u * p1 + 3.0 * v * u * u * p2 + u * u * u
+        }
+        let (mut lo, mut hi) = (0.0_f32, 1.0_f32);
+        for _ in 0..60 {
+            let mid = (lo + hi) / 2.0;
+            if bezier(EMPHASIZED.x1, EMPHASIZED.x2, mid) < t {
+                lo = mid;
+            } else {
+                hi = mid;
+            }
+        }
+        bezier(EMPHASIZED.y1, EMPHASIZED.y2, (lo + hi) / 2.0)
+    }
+
+    /// The sidebar as the app builds it: a panel, the collapsed strip and a resize handle.
+    fn sidebar<'a>(open: bool, retracted: bool) -> Element<'a, ()> {
+        NavigationDrawer::new(
+            Space::new().width(PANEL_WIDTH).height(100.0),
+            Space::new().width(RAIL_WIDTH).height(100.0),
+        )
+        .open(open)
+        .handle(Space::new().width(crate::ui::material::resize_handle::WIDTH))
+        .retracted(retracted)
+        .into()
+    }
+
+    /// A drawer in the widget tree, rebuilt each frame as a view would build it.
+    struct Harness {
+        tree: Tree,
+        node: layout::Node,
+        start: std::time::Instant,
+    }
+
+    impl Harness {
+        fn new(open: bool, retracted: bool) -> Self {
+            let drawer = sidebar(open, retracted);
+            let mut harness = Self {
+                tree: Tree::new(drawer.as_widget()),
+                node: layout::Node::new(Size::ZERO),
+                start: std::time::Instant::now(),
+            };
+            harness.lay_out(open, retracted);
+            harness
+        }
+
+        fn lay_out(&mut self, open: bool, retracted: bool) -> &layout::Node {
+            let mut drawer = sidebar(open, retracted);
+            self.tree.diff(drawer.as_widget());
+            let renderer = crate::ui::material::test_support::renderer();
+            let limits = layout::Limits::new(Size::ZERO, Size::new(1000.0, 100.0));
+            self.node = drawer
+                .as_widget_mut()
+                .layout(&mut self.tree, &renderer, &limits);
+            &self.node
+        }
+
+        /// One redraw at `at` ms through the drawer's own `update`, then the layout it asks for.
+        fn frame(&mut self, open: bool, retracted: bool, at: u64) -> &layout::Node {
+            let mut drawer = sidebar(open, retracted);
+            self.tree.diff(drawer.as_widget());
+            let renderer = crate::ui::material::test_support::renderer();
+            let event = Event::Window(iced::window::Event::RedrawRequested(
+                self.start + Duration::from_millis(at),
+            ));
+            let mut messages = Vec::<()>::new();
+            let mut shell = Shell::new(&mut messages);
+            drawer.as_widget_mut().update(
+                &mut self.tree,
+                &event,
+                Layout::new(&self.node),
+                mouse::Cursor::Unavailable,
+                &renderer,
+                &mut iced::advanced::clipboard::Null,
+                &mut shell,
+                &Rectangle::new(iced::Point::ORIGIN, Size::new(1000.0, 100.0)),
+            );
+            self.lay_out(open, retracted)
+        }
+
+        fn width(&self) -> f32 {
+            self.node.size().width
+        }
+
+        /// The x of child `index` (panel 0, rail 1, handle 2).
+        fn child_x(&self, index: usize) -> f32 {
+            Layout::new(&self.node)
+                .children()
+                .nth(index)
+                .expect("a child node")
+                .bounds()
+                .x
+        }
+
+        fn every_child_parked(&self) -> bool {
+            (0..3).all(|index| self.child_x(index) < -1.0e30)
+        }
+    }
+
+    #[test]
+    fn a_retracted_drawer_settles_at_zero_width_with_every_child_parked() {
+        for open in [true, false] {
+            let mut harness = Harness::new(open, false);
+            assert!(harness.width() > 0.0, "open {open}: shown first");
+            for at in (0..=SETTLED_BY).step_by(16) {
+                harness.frame(open, true, at);
+            }
+            assert_eq!(harness.width(), 0.0, "open {open}: settled at zero width");
+            assert!(
+                harness.every_child_parked(),
+                "open {open}: panel, rail and handle parked"
+            );
+        }
+    }
+
+    #[test]
+    fn a_drawer_built_retracted_starts_at_zero_width() {
+        for open in [true, false] {
+            let harness = Harness::new(open, true);
+            assert_eq!(harness.width(), 0.0, "open {open}: the first layout");
+            assert!(harness.every_child_parked(), "open {open}: nothing on screen");
+        }
+    }
+
+    #[test]
+    fn a_retracting_drawer_narrows_on_the_emphasized_curve() {
+        let full = PANEL_WIDTH + crate::ui::material::resize_handle::WIDTH;
+        let slide = SLIDE.as_millis() as f32;
+        for retracting in [true, false] {
+            let mut harness = Harness::new(true, !retracting);
+            let mut last = harness.width();
+            for (step, at) in (0..=SETTLED_BY).step_by(16).enumerate() {
+                harness.frame(true, retracting, at);
+                // A track's first frame steps one 16 ms frame; later gaps are measured.
+                let t = ((step as f32 + 1.0) * 16.0 / slide).min(1.0);
+                let shown = if retracting {
+                    1.0 - emphasized(t)
+                } else {
+                    emphasized(t)
+                };
+                let width = harness.width();
+                assert!(
+                    (width - full * shown).abs() <= 0.5,
+                    "retracting {retracting} at {at} ms: width {width}, expected {}",
+                    full * shown
+                );
+                assert!(width >= 0.0, "never negative");
+                if retracting {
+                    assert!(width <= last, "monotone at {at} ms: {last} then {width}");
+                } else {
+                    assert!(width >= last, "monotone at {at} ms: {last} then {width}");
+                }
+                if width > 0.0 {
+                    assert!(
+                        (harness.child_x(0) - (width - full)).abs() <= 0.01,
+                        "at {at} ms the panel is translated left by what is hidden"
+                    );
+                }
+                last = width;
+            }
+            let settled = if retracting { 0.0 } else { full };
+            assert_eq!(harness.width(), settled, "settled by {SETTLED_BY} ms");
+        }
+    }
+
+    #[test]
+    fn a_retraction_reversed_midway_continues_from_its_width() {
+        let full = PANEL_WIDTH + crate::ui::material::resize_handle::WIDTH;
+        let mut harness = Harness::new(true, false);
+        let mut last = harness.width();
+        let mut largest_step = 0.0_f32;
+        let mut at = 0;
+        while at <= 200 {
+            harness.frame(true, true, at);
+            largest_step = largest_step.max((last - harness.width()).abs());
+            last = harness.width();
+            at += 16;
+        }
+        harness.frame(true, false, at);
+        let width = harness.width();
+        assert!(
+            (width - last).abs() <= largest_step + 0.5,
+            "reversed at {at} ms: {last} then {width}, a jump"
+        );
+        assert!(
+            width > 0.0 && width < full,
+            "no jump to either end: {width}"
+        );
+    }
+
+    #[test]
+    fn leaving_retraction_shows_the_drawer_as_given() {
+        let handle = crate::ui::material::resize_handle::WIDTH;
+        for (open, given) in [(true, PANEL_WIDTH + handle), (false, RAIL_WIDTH)] {
+            let mut harness = Harness::new(open, true);
+            for at in (0..=SETTLED_BY).step_by(16) {
+                harness.frame(open, false, at);
+            }
+            assert_eq!(harness.width(), given, "open {open}: as given");
         }
     }
 }

@@ -32,6 +32,24 @@ there is no badge. The badge shows whether or not the Overview is open.
 The Overview replaces the main area; the sidebar and the top bar stay. Switching project keeps it
 open and shows the new project's cards.
 
+## Full screen
+
+To give the cards the whole window, press **Full screen** at the right end of the Overview's
+header, or press **Ctrl+Shift+F** (**Cmd+Shift+F** on macOS). The sidebar, its collapsed strip
+included, slides away and the cards fill the window's width; the top bar stays, with the Overview
+button, its badge and the project switcher. The button then reads **Exit full screen**; press it or
+the shortcut again and the sidebar slides back. The button's tooltip names the shortcut, and Tab
+reaches it.
+
+Leaving the Overview leaves full screen in the same step: activating a card, **Escape**, the
+top-bar **Overview** button or **Ctrl+Shift+O** close the Overview and bring the sidebar back. The
+sidebar always returns exactly as you left it: collapsed or expanded, at the same width. Full
+screen never changes the sidebar itself.
+
+Opening and closing [Settings](settings.md) keeps full screen, and so does switching project. The
+Overview always opens in the normal layout: full screen is not remembered once the Overview closes,
+nor across restarts.
+
 ## One card per location
 
 Each card shows:
@@ -141,7 +159,7 @@ too, or to the first card if that one is gone. With no card focused the keys do 
 
 ## Keyboard
 
-Opening the Overview puts the keyboard on its first card. **Tab** and **Shift+Tab** move to the next and previous card; the arrow keys do the same (**Right** and **Down** forward, **Left** and **Up** back). The focused card shows a ring. **Menu** or **Shift+F10** opens its menu (see *Acting on a card*). **Escape** closes the Overview, after any dialog or unsaved Settings draft that Escape would close first. While a terminal has the keyboard, the arrow keys and Escape go to the terminal.
+Opening the Overview puts the keyboard on its first card. **Tab** and **Shift+Tab** move to the next and previous card; the arrow keys do the same (**Right** and **Down** forward, **Left** and **Up** back). The focused card shows a ring. **Menu** or **Shift+F10** opens its menu (see *Acting on a card*). **Escape** closes the Overview, after any dialog or unsaved Settings draft that Escape would close first. **Ctrl+Shift+F** (**Cmd+Shift+F** on macOS) enters and leaves [full screen](#full-screen) while the Overview is open. While a terminal has the keyboard, the arrow keys and Escape go to the terminal.
 
 ## The five states, worst first
 

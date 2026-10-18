@@ -30,6 +30,20 @@ fn the_overview_chord_toggles_the_overview() {
     ));
 }
 
+/// Feature 970 (FR-001): the full-screen chord reaches the Overview; its update ignores it while
+/// the Overview is closed.
+#[test]
+fn the_full_screen_chord_toggles_full_screen() {
+    assert!(matches!(
+        app_chord(primary_shift("f", Code::KeyF)),
+        Some(Message::Overview(
+            crate::features::overview::Msg::FullScreenToggled {
+                settings_open: false
+            }
+        ))
+    ));
+}
+
 #[test]
 fn the_switcher_chord_toggles_the_switcher_without_the_terminal() {
     let message = app_chord(primary_shift("p", Code::KeyP));

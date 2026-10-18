@@ -36,6 +36,7 @@ program. The Overview, quick-switcher and location chords work whether or not a 
 | Close the focused pane | Ctrl+Shift+W | Cmd+Shift+W |
 | Focus the pane to the left / right / above / below | Ctrl+Shift+Arrow | Cmd+Shift+Arrow |
 | Open or close the [worktree Overview](overview.md) | Ctrl+Shift+O | Cmd+Shift+O |
+| Enter or leave the Overview's [full screen](overview.md#full-screen) (only while the Overview is open; not reserved from a focused terminal) | Ctrl+Shift+F | Cmd+Shift+F |
 | Quick-switcher (jump to a location, session or project) | Ctrl+Shift+P | Cmd+Shift+P |
 | Previous / next location ([Default and the worktrees](worktrees-and-sessions.md)) | Ctrl+Shift+, / Ctrl+Shift+. | Cmd+Shift+, / Cmd+Shift+. |
 | Previous / next session of the current location | Ctrl+Shift+[ / Ctrl+Shift+] | Cmd+Shift+[ / Cmd+Shift+] |
