@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #489
 - **Worktree branch**: feat/489_run-the-session-daemon-on-a-remote-host-over-ssh
 - **Started**: 2026-10-12
-- **Phase**: M6 implemented, gate and reviews next
-- **Next step**: M6 scoped gate with review A, review B, full gate, PR
+- **Phase**: M6 reviewed, final gate and PR
+- **Next step**: rebase, full gate, push, PR for M6
 
 ## Pull requests
 
@@ -66,6 +66,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Conformance B M3 | 1 | a6a3a59724167f056348879bfc89da0d364ddddc:009e6393a452cac9a09765bfc662b80b107e19cc | CLEAN (test-ssh and test-core green), 2 MINOR noted |
 | Code A M4 | 1 | dfcc707c664f16e2b5a44168300e3ab0c7bfbbc6:2a8db33bcecb8469fb979f349f204f66893325ed | CLEAN, 3 MINOR (cut-test comment fixed, prose only; weak negative asserts F1/F3 noted) |
 | Conformance B M4 | 1 | dfcc707c664f16e2b5a44168300e3ab0c7bfbbc6:2a8db33bcecb8469fb979f349f204f66893325ed | CLEAN, 3 MINOR (Verify not observed by B for build lock; full gate runs the ssh tests) |
+| Code A M6 | 1 | 3119bf6c93fa134055b4b5817033d5d9c36e995f:0123d9179934298a9280fc744ba0338b87ee3aff | CLEAN, 3 MINOR noted (Unknown wording until M7; version ordering kept; private --target-dir by R10) |
+| Conformance B M6 | 1 | b5ca53f73272b78ba456f49db756803c35baf049:ba1847571e81b78fd1454575256be759d946ea59 | CLEAN (test-ssh incl. ssh_real_mismatch and test-core green), 1 MINOR noted |
 
 ## Declined review findings
 
@@ -80,9 +82,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M6 (T066-T072) is implemented, ticked and committed (0123d9179). Done: scoped gate (only failure was the unrelated flaky `pr_list_read_a_second_ask_shares_the_read_under_way`, green alone); Review A round 1 CLEAN (3 MINOR: Unknown offer wording is by design until M7; version ordering duplicates links::version_order, accepted because mismatch.rs handles build strings and pre-release; private --target-dir for the stale build is the research R10 decision). Snapshot 3119bf6c93fa134055b4b5817033d5d9c36e995f:0123d9179934298a9280fc744ba0338b87ee3aff. test-ssh ran green incl. ssh_real_mismatch (2 tests).
-In flight when handed over: full `mise run gate` (started detached, log in the old scratchpad `fg.log`; rerun it if no green result is found) and Review B (sonnet, autopilot-reviewer, round 1; its result may be lost: dispatch it again if so).
-Next: read B's result (fix BLOCKER/MAJOR), full green `mise run gate` on the final tree, record Review rounds (Code A M6 CLEAN, Conformance B M6), rebase onto origin/main right before the final push, push, open PR "feat(489): explain a version mismatch of a remote daemon (#489)" per tasks/pr.md, record the PR number, return DONE.
+None.
 
 ## Open escalation
 
