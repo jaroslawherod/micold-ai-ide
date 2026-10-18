@@ -1,0 +1,16 @@
+{
+  "name": "micold-standin-cli-failing",
+  "version": "1.0.0",
+  "description": "Failing stand-in for the AI CLIs in real-runtime provisioning tests: no network, no sign-in",
+  "scripts": { "preinstall": "echo standin install refused; exit 1" },
+  "bin": {
+    "claude": "bin/cli.sh",
+    "copilot": "bin/cli.sh",
+    "pi": "bin/cli.sh",
+    "codex": "bin/cli.sh",
+    "opencode": "bin/cli.sh"
+  },
+  "files": ["bin"],
+  "license": "UNLICENSED",
+  "private": true
+}

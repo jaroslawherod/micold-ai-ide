@@ -4,9 +4,11 @@
 //! them has a step of its own inside it. Nothing here names a container runtime, so a runtime
 //! that only knows how to forward a port can use it.
 
+pub mod ai_cli;
 pub mod attempt;
 pub mod failure;
 pub mod keys;
+pub mod relay;
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -14,6 +16,7 @@ use std::time::Duration;
 
 use tokio::time::Instant;
 
+pub use ai_cli::AiCliTable;
 pub use attempt::CancelToken;
 pub use failure::{FailureCause, ProvisionFailure, ProvisionWarning, Step};
 pub use keys::DaemonKeys;
@@ -51,10 +54,6 @@ pub enum Egress {
         allow: Vec<HostPort>,
     },
 }
-
-/// The pinned table of AI CLI packages. A placeholder until the install step fills it.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct AiCliTable;
 
 /// Who owns the target.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -465,6 +464,132 @@ async fn start_step(
     .await
 }
 
+/// The CLIs of `selected` the table has a row for, in the table's order.
+fn selected_rows<'a>(
+    table: &'a AiCliTable,
+    selected: &AiCliSelection,
+) -> Vec<&'a ai_cli::AiCliRow> {
+    table
+        .rows()
+        .iter()
+        .filter(|r| selected.0.contains(&r.cli))
+        .collect()
+}
+
+/// Step 4: install the selected AI CLIs the target lacks, under one bound for the check and the
+/// installs together. Entered only when something is missing; a CLI that fails to install is a
+/// warning, not a failure (FR-012).
+#[allow(clippy::too_many_arguments)]
+async fn install_step(
+    host: &dyn SshHost,
+    target: &ProvisionTarget,
+    opts: &ProvisionOptions,
+    cancel: &CancelToken,
+    sink: &EventSink,
+    selected: &AiCliSelection,
+    table: &AiCliTable,
+    state_dir: &std::path::Path,
+    egress: &Egress,
+) -> Result<Vec<ProvisionWarning>, ProvisionFailure> {
+    install_step_with(
+        host,
+        target,
+        opts,
+        cancel,
+        sink,
+        (selected, table, state_dir, egress),
+        relay::Relay::start,
+    )
+    .await
+}
+
+/// [`install_step`] with the relay's starter given, so a test can make it fail to bind.
+async fn install_step_with<F, Fut>(
+    host: &dyn SshHost,
+    target: &ProvisionTarget,
+    opts: &ProvisionOptions,
+    cancel: &CancelToken,
+    sink: &EventSink,
+    (selected, table, state_dir, egress): (&AiCliSelection, &AiCliTable, &std::path::Path, &Egress),
+    start_relay: F,
+) -> Result<Vec<ProvisionWarning>, ProvisionFailure>
+where
+    F: FnOnce(Vec<HostPort>) -> Fut,
+    Fut: std::future::Future<Output = std::io::Result<relay::Relay>>,
+{
+    let step = Step::InstallAiClis;
+    let rows = selected_rows(table, selected);
+    if rows.is_empty() {
+        return Ok(Vec::new());
+    }
+    let bound = target.bounds.install;
+    guard(step, Some(bound), cancel, async {
+        // What is already there? Nothing missing: no step, no download (invariant 1).
+        let cmd = argv::install(&target.reach, opts.platform, opts.timeout_secs, None);
+        let script = ai_cli::check_script(&rows, state_dir).into_bytes();
+        let out = host
+            .run(cmd, script, Some(bound), None)
+            .await
+            .map_err(|e| io_fail(step, e))?;
+        let out = checked(step, out, Some(bound), true)?;
+        let have = ai_cli::parse_installed(&String::from_utf8_lossy(&out.stdout));
+        let missing: Vec<&ai_cli::AiCliRow> = rows
+            .iter()
+            .copied()
+            .filter(|r| !have.contains(&r.cli))
+            .collect();
+        if missing.is_empty() {
+            return Ok(Vec::new());
+        }
+        sink(ProvisionEvent::Entered(step));
+
+        // Held until the command ends: dropping it stops the relay.
+        let relay = match egress {
+            Egress::Direct => None,
+            Egress::Relay { allow } => Some(
+                start_relay(allow.clone())
+                    .await
+                    .map_err(|_| fail(step, FailureCause::PostureBlocksDownload))?,
+            ),
+        };
+        let cmd = argv::install(
+            &target.reach,
+            opts.platform,
+            opts.timeout_secs,
+            relay.as_ref().map(relay::Relay::port),
+        );
+        let script = ai_cli::install_script(&rows, &missing, state_dir, relay.is_some());
+        let out = host
+            .run(cmd, script.into_bytes(), Some(bound), None)
+            .await
+            .map_err(|e| io_fail(step, e))?;
+        drop(relay);
+        let out = checked(step, out, Some(bound), true)?;
+        let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+        for line in stdout.lines().filter(|l| !l.starts_with("MICOLD_INSTALL ")) {
+            sink(ProvisionEvent::InstallLine(line.to_string()));
+        }
+        let results = ai_cli::parse_install_output(&stdout);
+        let mut warnings = Vec::new();
+        for row in &missing {
+            let found = results.iter().find(|r| r.cli == row.cli);
+            let ok = found.is_some_and(|r| r.ok);
+            sink(ProvisionEvent::InstallDone { cli: row.cli, ok });
+            if !ok {
+                warnings.push(ProvisionWarning {
+                    cli: row.cli,
+                    output: found.map_or_else(
+                        || "the installer reported no result".to_string(),
+                        |r| r.output.clone(),
+                    ),
+                });
+            }
+        }
+        Ok(warnings)
+    })
+    .await
+}
+
 /// The whole sequence: [`ensure_build`], then the daemon. A refused handshake is returned as
 /// `Ok` with [`Connected::Refused`] (after `Entered(VersionCheck)`): explaining it, and replacing
 /// the daemon only when no session runs, is the caller's (489 FR-011).
@@ -476,8 +601,21 @@ pub async fn run(
     sink: &EventSink,
 ) -> Result<Provisioned, ProvisionFailure> {
     let (_, copied) = ensure_build(host, target, opts, cancel, sink).await?;
-    // The AI CLIs are installed on app-owned targets only; the install step arrives with the
-    // pinned table, and a user's host never enters it.
+    // The AI CLIs are installed on app-owned targets only: a user's host never enters the step.
+    let warnings = match &target.owned {
+        Ownership::AppOwned {
+            ai_clis,
+            table,
+            state_dir,
+            egress,
+        } => {
+            install_step(
+                host, target, opts, cancel, sink, ai_clis, table, state_dir, egress,
+            )
+            .await?
+        }
+        Ownership::UserHost => Vec::new(),
+    };
     sink(ProvisionEvent::Entered(Step::Start));
     let connected = start_step(host, target, opts, cancel).await?;
     if matches!(connected, Connected::Refused(_)) {
@@ -485,7 +623,7 @@ pub async fn run(
     }
     Ok(Provisioned {
         connected,
-        warnings: Vec::new(),
+        warnings,
         copied,
     })
 }
@@ -522,6 +660,8 @@ mod tests {
             "bridge"
         } else if String::from_utf8_lossy(stdin).contains("MICOLD_PROBE") {
             "probe"
+        } else if String::from_utf8_lossy(stdin).contains("MICOLD_HAVE_CLI") {
+            "have_clis"
         } else {
             "install"
         }
@@ -532,6 +672,8 @@ mod tests {
     struct Fake {
         script: Mutex<HashMap<&'static str, VecDeque<io::Result<SshOutput>>>>,
         seen: Mutex<Vec<&'static str>>,
+        /// Every `run`, with its command line and stdin.
+        runs: Mutex<Vec<(&'static str, SshCommand, Vec<u8>)>>,
         bridge: Mutex<Option<SshStdio>>,
         percent: Vec<u8>,
         hang: Option<&'static str>,
@@ -550,6 +692,12 @@ mod tests {
         fn kinds(&self) -> Vec<&'static str> {
             self.seen.lock().unwrap().clone()
         }
+        /// The command line and stdin of the first `run` of `kind`.
+        fn first(&self, kind: &str) -> (SshCommand, String) {
+            let runs = self.runs.lock().unwrap();
+            let (_, cmd, stdin) = runs.iter().find(|r| r.0 == kind).expect("ran");
+            (cmd.clone(), String::from_utf8_lossy(stdin).into_owned())
+        }
         fn count(&self, kind: &str) -> usize {
             self.kinds().iter().filter(|k| **k == kind).count()
         }
@@ -565,6 +713,10 @@ mod tests {
         ) -> BoxFuture<'_, io::Result<SshOutput>> {
             let k = kind(&cmd, &stdin);
             self.seen.lock().unwrap().push(k);
+            self.runs
+                .lock()
+                .unwrap()
+                .push((k, cmd.clone(), stdin.clone()));
             if k == "copy" {
                 for p in &self.percent {
                     if let Some(f) = &progress {
@@ -639,7 +791,12 @@ mod tests {
         }
     }
 
+    /// An app-owned target with nothing selected: the install step has nothing to do.
     fn owned_target(bounds: StepBounds) -> ProvisionTarget {
+        owned_with(bounds, AiCliSelection(Default::default()), Egress::Direct)
+    }
+
+    fn owned_with(bounds: StepBounds, ai_clis: AiCliSelection, egress: Egress) -> ProvisionTarget {
         ProvisionTarget {
             reach: Reach::Pinned(argv::PinnedReach {
                 host: "127.0.0.1".into(),
@@ -649,10 +806,10 @@ mod tests {
                 known_hosts: "/k/known_hosts".into(),
             }),
             owned: Ownership::AppOwned {
-                ai_clis: AiCliSelection::new_daemon(),
-                table: AiCliTable,
+                ai_clis,
+                table: AiCliTable::pinned(),
                 state_dir: "/var/lib/micold-ai-ide".into(),
-                egress: Egress::Direct,
+                egress,
             },
             bounds,
         }
@@ -1013,6 +1170,200 @@ mod tests {
         assert!(u.reason(&ctx).starts_with(
             "copying the daemon failed: the daemon build could not be written in the target"
         ));
+    }
+
+    const HAVE_CLAUDE: &str = "MICOLD_HAVE_CLI ClaudeCode\n";
+
+    fn claude_only() -> AiCliSelection {
+        AiCliSelection::new_daemon()
+    }
+
+    /// A target and host that get as far as the install step with the build present.
+    fn through_copy(fake: Fake) -> Fake {
+        fake.say("reach", ok("")).say("probe", ok(PROBE_HAVE))
+    }
+
+    #[tokio::test]
+    async fn missing_cli_are_installed_after_the_copy_and_before_the_start_with_progress() {
+        let mut fake = Fake {
+            percent: vec![100],
+            ..Fake::default()
+        }
+        .say("reach", ok(""))
+        .say("probe", ok(PROBE_ABSENT))
+        .say("copy", ok(""))
+        .say("probe", ok(PROBE_HAVE))
+        .say("have_clis", ok(""))
+        .say(
+            "install",
+            ok("added 3 packages\nMICOLD_INSTALL ClaudeCode ok\n"),
+        )
+        .say("last", ok(""));
+        *fake.bridge.get_mut().unwrap() = Some(refusing_bridge());
+        let target = owned_with(StepBounds::container(), claude_only(), Egress::Direct);
+        let (result, events) = run_with(&fake, &target, &CancelToken::new()).await;
+        assert!(result.unwrap().warnings.is_empty());
+        assert_eq!(
+            entered(&events),
+            [
+                Step::Reach,
+                Step::Probe,
+                Step::Copy,
+                Step::InstallAiClis,
+                Step::Start,
+                Step::VersionCheck
+            ]
+        );
+        assert!(events.contains(&ProvisionEvent::InstallLine("added 3 packages".into())));
+        assert!(events.contains(&ProvisionEvent::InstallDone {
+            cli: crate::session::AiCli::ClaudeCode,
+            ok: true
+        }));
+        let (cmd, _) = fake.first("install");
+        assert!(
+            cmd.args.contains(&"ClearAllForwardings=yes".to_string()),
+            "Direct egress forwards nothing"
+        );
+    }
+
+    /// FR-012: a CLI that fails is a warning naming it, and the start still succeeds.
+    #[tokio::test]
+    async fn a_failed_install_is_a_warning_and_the_start_still_succeeds() {
+        let mut fake = through_copy(Fake::default())
+            .say("have_clis", ok(""))
+            .say(
+                "install",
+                ok("npm ERR! 404 Not Found\nMICOLD_INSTALL ClaudeCode failed\n"),
+            )
+            .say("last", ok(""));
+        *fake.bridge.get_mut().unwrap() = Some(refusing_bridge());
+        let target = owned_with(StepBounds::container(), claude_only(), Egress::Direct);
+        let (result, events) = run_with(&fake, &target, &CancelToken::new()).await;
+        let done = result.unwrap();
+        assert_eq!(
+            done.warnings,
+            [ProvisionWarning {
+                cli: crate::session::AiCli::ClaudeCode,
+                output: "npm ERR! 404 Not Found".into()
+            }]
+        );
+        assert!(events.contains(&ProvisionEvent::InstallDone {
+            cli: crate::session::AiCli::ClaudeCode,
+            ok: false
+        }));
+        assert!(entered(&events).contains(&Step::Start));
+    }
+
+    /// Invariant 1: a second start with everything installed downloads nothing and never enters
+    /// the step.
+    #[tokio::test]
+    async fn nothing_missing_skips_the_step_and_runs_no_install() {
+        let mut fake = through_copy(Fake::default())
+            .say("have_clis", ok(HAVE_CLAUDE))
+            .say("last", ok(""));
+        *fake.bridge.get_mut().unwrap() = Some(refusing_bridge());
+        let target = owned_with(
+            StepBounds::container(),
+            claude_only(),
+            Egress::Relay {
+                allow: AiCliTable::pinned().allow(),
+            },
+        );
+        let (result, events) = run_with(&fake, &target, &CancelToken::new()).await;
+        assert!(result.is_ok());
+        assert!(!entered(&events).contains(&Step::InstallAiClis));
+        assert_eq!(fake.count("install"), 0);
+        assert_eq!(
+            fake.kinds(),
+            ["reach", "probe", "have_clis", "last", "bridge"]
+        );
+    }
+
+    #[tokio::test]
+    async fn an_install_that_outlives_its_bound_is_timed_out_on_the_install_step() {
+        let mut bounds = StepBounds::container();
+        bounds.install = secs(1);
+        let fake = through_copy(Fake {
+            hang: Some("install"),
+            ..Fake::default()
+        })
+        .say("have_clis", ok(""));
+        let target = owned_with(bounds, claude_only(), Egress::Direct);
+        let (result, _) = run_with(&fake, &target, &CancelToken::new()).await;
+        let f = failure(result);
+        assert_eq!(
+            (f.step, f.cause),
+            (
+                Step::InstallAiClis,
+                FailureCause::TimedOut { bound: secs(1) }
+            )
+        );
+    }
+
+    #[tokio::test]
+    async fn a_relay_install_forwards_the_relay_port_and_exports_the_proxy() {
+        let mut fake = through_copy(Fake::default())
+            .say("have_clis", ok(""))
+            .say("install", ok("MICOLD_INSTALL ClaudeCode ok\n"))
+            .say("last", ok(""));
+        *fake.bridge.get_mut().unwrap() = Some(refusing_bridge());
+        let target = owned_with(
+            StepBounds::container(),
+            claude_only(),
+            Egress::Relay {
+                allow: AiCliTable::pinned().allow(),
+            },
+        );
+        let (result, _) = run_with(&fake, &target, &CancelToken::new()).await;
+        assert!(result.is_ok());
+        let (cmd, stdin) = fake.first("install");
+        let at = cmd.args.iter().position(|a| a == "-R").expect("a forward");
+        let forward = &cmd.args[at + 1];
+        assert!(
+            forward.starts_with("127.0.0.1:17728:127.0.0.1:"),
+            "{forward}"
+        );
+        assert!(!cmd.args.contains(&"ClearAllForwardings=yes".to_string()));
+        assert!(stdin.contains("export HTTPS_PROXY=http://127.0.0.1:17728"));
+        // The check never carries a forward.
+        let (check, _) = fake.first("have_clis");
+        assert!(!check.args.contains(&"-R".to_string()));
+    }
+
+    #[tokio::test]
+    async fn a_relay_that_cannot_bind_blocks_the_download() {
+        let fake = Fake::default().say("have_clis", ok(""));
+        let target = owned_with(
+            StepBounds::container(),
+            claude_only(),
+            Egress::Relay { allow: Vec::new() },
+        );
+        let Ownership::AppOwned {
+            ai_clis,
+            table,
+            state_dir,
+            egress,
+        } = &target.owned
+        else {
+            unreachable!()
+        };
+        let (sink, _) = recorder();
+        let err = install_step_with(
+            &fake,
+            &target,
+            &opts(),
+            &CancelToken::new(),
+            &sink,
+            (ai_clis, table, state_dir, egress),
+            |_| async { Err(io::Error::from(io::ErrorKind::AddrInUse)) },
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(
+            (err.step, err.cause),
+            (Step::InstallAiClis, FailureCause::PostureBlocksDownload)
+        );
+        assert_eq!(fake.count("install"), 0, "nothing runs without the relay");
     }
 
     #[test]

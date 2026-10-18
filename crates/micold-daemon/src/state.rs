@@ -135,6 +135,8 @@ pub struct DaemonState {
     /// (feature 487). Set once at startup; absent for tests that give the state none, which then
     /// remove and sweep only what lies in worktrees.
     pasted_data_dir: std::sync::OnceLock<PathBuf>,
+    /// Where `offered.json` lists the AI CLIs a provisioning step installed (feature 806, FR-012).
+    ai_clis_dir: std::sync::OnceLock<PathBuf>,
     /// Whether the warning for a missing history directory (a sandbox made before the feature,
     /// R15) has been logged in this service run.
     history_directory_warned: std::sync::atomic::AtomicBool,
@@ -711,9 +713,67 @@ impl DaemonState {
             terminal_colors: TerminalColors::default(),
             history_store: std::sync::OnceLock::new(),
             pasted_data_dir: std::sync::OnceLock::new(),
+            ai_clis_dir: std::sync::OnceLock::new(),
             history_directory_warned: std::sync::atomic::AtomicBool::new(false),
             saver: Mutex::new(history::Saver::default()),
             setting_change: Mutex::new(()),
+        }
+    }
+
+    /// Record the `ai-clis` directory whose `offered.json` says which AI CLIs this daemon offers
+    /// (feature 806). A no-op if already set; with none set, or no file in it, nothing changes.
+    pub fn set_ai_clis_dir(&self, dir: PathBuf) {
+        let _ = self.ai_clis_dir.set(dir);
+    }
+
+    /// What a provisioning step recorded as installed, read afresh on each call (FR-012). Missing:
+    /// `None`, today's behaviour. Malformed: ignored and logged.
+    fn offered_clis(&self) -> Option<micold_core::provision::ai_cli::Offered> {
+        let dir = self.ai_clis_dir.get()?;
+        match micold_core::provision::ai_cli::read_offered(dir) {
+            Ok(offered) => offered,
+            Err(why) => {
+                tracing::warn!(dir = %dir.display(), %why, "offered.json ignored");
+                None
+            }
+        }
+    }
+
+    /// `resolved` with the offered CLIs' `bin` directories in front of its `PATH`, so a session
+    /// finds what provisioning installed. Without an `offered.json`, `resolved` unchanged.
+    fn with_offered_path(&self, mut resolved: ResolvedEnv) -> ResolvedEnv {
+        let Some(offered) = self.offered_clis() else {
+            return resolved;
+        };
+        let bins: Vec<PathBuf> = offered.clis.into_iter().map(|c| c.bin).collect();
+        if bins.is_empty() {
+            return resolved;
+        }
+        let current = session_path(&resolved.vars);
+        let joined = std::env::join_paths(bins.into_iter().chain(std::env::split_paths(&current)))
+            .map(|p| p.to_string_lossy().into_owned());
+        let Ok(joined) = joined else {
+            return resolved;
+        };
+        match resolved
+            .vars
+            .iter_mut()
+            .find(|(name, _)| name.eq_ignore_ascii_case("PATH"))
+        {
+            Some((_, value)) => *value = joined,
+            None => resolved.vars.push(("PATH".to_string(), joined)),
+        }
+        resolved
+    }
+
+    /// `available` limited to the CLIs `offered.json` lists, when there is one.
+    fn only_offered(&self, available: Vec<AiCli>) -> Vec<AiCli> {
+        match self.offered_clis() {
+            Some(offered) => available
+                .into_iter()
+                .filter(|cli| offered.clis.iter().any(|o| o.cli == *cli))
+                .collect(),
+            None => available,
         }
     }
 
@@ -1077,6 +1137,11 @@ impl DaemonState {
     /// Environment page lists the directory with what the script printed. The log line names the
     /// directory and the outcome's kind only, never the script's output.
     fn spawn_env_for(&self, cwd: &Path) -> ResolvedEnv {
+        self.with_offered_path(self.resolved_env_for(cwd))
+    }
+
+    /// [`Self::spawn_env_for`] before the offered CLIs' directories join `PATH`.
+    fn resolved_env_for(&self, cwd: &Path) -> ResolvedEnv {
         let (script_path, timeout_secs, cell) = {
             let mut inner = self.lock();
             let settings = inner.catalog.settings_wire();
@@ -1200,7 +1265,9 @@ impl DaemonState {
     /// answer to `ClientMsg::AiCliAvailabilityRequest`. May block on a first environment-include
     /// resolution for `cwd`; the caller runs it off the connection loop.
     pub fn ai_clis_available_in(&self, cwd: &Path) -> Vec<AiCli> {
-        micold_core::provider::available_in(&self.spawn_path_for(cwd))
+        self.only_offered(micold_core::provider::available_in(
+            &self.spawn_path_for(cwd),
+        ))
     }
 
     /// [`Self::ai_clis_available_in`] with the state of the environment that was walked (feature
@@ -1209,7 +1276,9 @@ impl DaemonState {
     pub fn availability_in(&self, cwd: &Path) -> (Vec<AiCli>, SpawnEnv) {
         let resolved = self.spawn_env_for(cwd);
         (
-            micold_core::provider::available_in(&session_path(&resolved.vars)),
+            self.only_offered(micold_core::provider::available_in(&session_path(
+                &resolved.vars,
+            ))),
             resolved.env,
         )
     }
@@ -4052,7 +4121,11 @@ impl DaemonState {
         let ai_cli_env = if plan.mode == TerminalMode::AiCli {
             let provider = plan.provider.provider();
             let resolved = self.spawn_env_for(&plan.cwd);
-            if !provider.is_available(&session_path(&resolved.vars)) {
+            if !provider.is_available(&session_path(&resolved.vars))
+                || !self
+                    .only_offered(vec![plan.provider])
+                    .contains(&plan.provider)
+            {
                 // Is there a folder to have looked in (037 M2 review F2)? The script cannot be
                 // sourced in a directory that does not exist, and `env_include::resolve` reports
                 // that attempt as timed out. Without this a session whose folder was deleted was
@@ -5859,5 +5932,108 @@ impl DaemonState {
     /// Whether `project` currently has an attachment (test/observability).
     pub fn is_attached(&self, project: &Path) -> bool {
         self.lock().attachments.contains_key(project)
+    }
+}
+
+/// `offered.json` (feature 806, FR-012): what provisioning installed is what a daemon offers.
+#[cfg(test)]
+mod offered_tests {
+    use super::*;
+    use micold_core::settings::JsonFileSettingsStore;
+    use micold_core::store::JsonFileStore;
+
+    /// A daemon whose `ai-clis` directory is `<store>/ai-clis`, and that directory.
+    fn daemon(store: &Path) -> (DaemonState, PathBuf) {
+        let state = DaemonState::new(Catalog::load(
+            Box::new(JsonFileStore::at(store.join("projects.json"))),
+            Box::new(JsonFileSettingsStore::at(store.join("settings.json"))),
+        ));
+        let dir = store.join("ai-clis");
+        std::fs::create_dir_all(&dir).unwrap();
+        state.set_ai_clis_dir(dir.clone());
+        (state, dir)
+    }
+
+    /// A `bin` directory holding a file per command of `clis`.
+    fn bin_of(root: &Path, name: &str, clis: &[AiCli]) -> PathBuf {
+        let bin = root.join(name);
+        std::fs::create_dir_all(&bin).unwrap();
+        for cli in clis {
+            std::fs::write(bin.join(cli.provider().command()), b"#!/bin/sh\n").unwrap();
+        }
+        bin
+    }
+
+    fn offer(dir: &Path, entries: &[(AiCli, &Path)]) {
+        let clis: Vec<_> = entries
+            .iter()
+            .map(|(cli, bin)| format!(r#"{{"cli":"{cli:?}","bin":{:?}}}"#, bin.to_string_lossy()))
+            .collect();
+        std::fs::write(
+            dir.join("offered.json"),
+            format!(r#"{{"version":1,"clis":[{}]}}"#, clis.join(",")),
+        )
+        .unwrap();
+    }
+
+    fn path_of(state: &DaemonState, cwd: &Path) -> Vec<PathBuf> {
+        std::env::split_paths(&state.spawn_path_for(cwd)).collect()
+    }
+
+    #[test]
+    fn the_listed_cli_is_offered_and_its_bin_leads_the_spawn_path() {
+        let store = tempfile::tempdir().unwrap();
+        let (state, dir) = daemon(store.path());
+        let bin = bin_of(store.path(), "claude-bin", &[AiCli::ClaudeCode]);
+        offer(&dir, &[(AiCli::ClaudeCode, &bin)]);
+        let cwd = tempfile::tempdir().unwrap();
+        assert_eq!(path_of(&state, cwd.path())[0], bin);
+        assert_eq!(state.ai_clis_available_in(cwd.path()), [AiCli::ClaudeCode]);
+        let spawn = state.spawn_env_for(cwd.path());
+        assert!(spawn
+            .vars
+            .iter()
+            .any(|(k, v)| k == "PATH" && v.starts_with(&*bin.to_string_lossy())));
+    }
+
+    #[test]
+    fn exactly_the_listed_clis_are_offered_even_when_another_resolves_on_the_path() {
+        let store = tempfile::tempdir().unwrap();
+        let (state, dir) = daemon(store.path());
+        // Both commands exist in the bin directory, only Pi is listed.
+        let bin = bin_of(store.path(), "bin", &[AiCli::ClaudeCode, AiCli::Pi]);
+        offer(&dir, &[(AiCli::Pi, &bin)]);
+        let cwd = tempfile::tempdir().unwrap();
+        assert_eq!(state.ai_clis_available_in(cwd.path()), [AiCli::Pi]);
+        assert_eq!(state.availability_in(cwd.path()).0, [AiCli::Pi]);
+    }
+
+    #[test]
+    fn a_missing_or_malformed_file_changes_nothing() {
+        let store = tempfile::tempdir().unwrap();
+        let (state, dir) = daemon(store.path());
+        let cwd = tempfile::tempdir().unwrap();
+        // Today's behaviour is that of a daemon told of no directory at all.
+        let plain = DaemonState::new(Catalog::load(
+            Box::new(JsonFileStore::at(store.path().join("p2.json"))),
+            Box::new(JsonFileSettingsStore::at(store.path().join("s2.json"))),
+        ));
+        let today = plain.ai_clis_available_in(cwd.path());
+        assert_eq!(state.ai_clis_available_in(cwd.path()), today, "no file");
+        std::fs::write(dir.join("offered.json"), "{ not json").unwrap();
+        assert_eq!(state.ai_clis_available_in(cwd.path()), today, "malformed");
+        assert_eq!(path_of(&state, cwd.path()), path_of(&plain, cwd.path()));
+    }
+
+    #[test]
+    fn the_file_is_read_on_each_query() {
+        let store = tempfile::tempdir().unwrap();
+        let (state, dir) = daemon(store.path());
+        let bin = bin_of(store.path(), "bin", &[AiCli::Pi]);
+        let cwd = tempfile::tempdir().unwrap();
+        offer(&dir, &[]);
+        assert!(state.ai_clis_available_in(cwd.path()).is_empty());
+        offer(&dir, &[(AiCli::Pi, &bin)]);
+        assert_eq!(state.ai_clis_available_in(cwd.path()), [AiCli::Pi]);
     }
 }
