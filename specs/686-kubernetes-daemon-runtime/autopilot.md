@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-xelisc
 - **Started**: 2026-10-17
 - **Phase**: implement
-- **Next step**: M9 implemented (T088–T096, T105 ticked); full gate (scripts/gate.sh) then reviews A/B, push, PR files in the scratchpad (pr-title/pr-body-686-M9). The real verification is CI job kube-cluster on the PR (no docker/kind/kubectl here).
+- **Next step**: M9 pushed, gate green (scripts/gate.sh); PR files in the scratchpad (pr-title/pr-body-686-M9); orchestrator opens the PR, reads the kube-cluster job log and sends fixes. Then close.
 
 ## Pull requests
 
@@ -44,7 +44,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M6 | T138, T139, T141, T142, T033, T140 | full | (#806) AI CLI install, drift prompt, Add entry, user guide 🎯 MVP | — | merged (#1015) |
 | M7 | T047–T055, T100 | full | (#806) Clone + worktrees in the pod (RepoClone) | — | merged (#1025) |
 | M8 | T057, T058, T060, T061, T062, T101 | full | (#806) Reconnect; pod gone → stopped with reason | #1028 | merged |
-| M9 | T088–T096, T105 | full | (#806) kube_real_* suite, `mise run test-kube`, CI job kube-cluster | — | implemented, gate running |
+| M9 | T088–T096, T105 | full | (#806) kube_real_* suite, `mise run test-kube`, CI job kube-cluster | — | implemented, gate green, PR pending |
 Cut notes (revision 2): tasks.md "Revision 2 task map" lists kept/changed/removed T001–T105; new tasks T106–T143 (T137 unused; T143 is M1a's persistence test rework). Order: everything independent of #806 first (M1a–M4b, all `docs-not-needed`: Kubernetes cannot be added before M6), then the #806-blocked milestones (M5–M9). US1 split along the #806 boundary: connect (M5) before CLI install + Add entry (M6), so the Add entry appears only when US1.1 works (no half-wired UI). User-guide tasks T046/T071/T078/T087 folded into T033 (M6), since the guide page appears with the Add entry. Polish T097–T098: close unit.
 stash@{0} survivors (all used by M1a–M2, stash dropped 2026-10-18; backed up in /mnt/project-files/backups/686-m1-wip.bundle): keep `kubeconfig.rs` (T020/T026), `lifecycle.rs` (T079/T081), `manifest.rs` (T019, after the SSH image/env/port 2222/access-secret mount changes), `start_tests.rs` (T021, drop the `Image` phase and the volume-size refusal; `Tunnel` = identification line), `Quantity::{to_k8s, parse_k8s}`, `ResourceNames::all_secrets`, `ObjectKind::noun`, `KubeFailure::StopTimeout` + `From<ApiFailure>`, `FakeCluster::hold_on_delete`. Discard `StartPlan::for_image`. Design revision part 4: plan fixed by tasks unit — data-model StartPlan and contract §3 item 1 say `Tunnel` reads the identification line from one `Cluster::port_forward` stream; the client relay is first used in M5.
 
