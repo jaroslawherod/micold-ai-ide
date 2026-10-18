@@ -995,6 +995,21 @@ fn opening_with_only_an_unavailable_project_first_highlights_the_first_selectabl
 fn applying_a_project_choice_activates_it_and_keeps_every_session_running() {
     let mut state = with_projects();
     let before = session_at(&mut state, SessionLocation::Default);
+    let remembered = micold_core::session::Session::start_new(
+        SessionLocation::Default,
+        micold_core::session::AiCli::ClaudeCode,
+    );
+    let remembered_id = remembered.id;
+    state
+        .workspace
+        .sessions
+        .entry(project_at("/gamma"))
+        .or_default()
+        .push(remembered);
+    state
+        .workspace
+        .foreground_by_project
+        .insert(project_at("/gamma"), remembered_id);
     let count = session_count(&state);
     open(&mut state);
     let choice = update(
@@ -1008,6 +1023,7 @@ fn applying_a_project_choice_activates_it_and_keeps_every_session_running() {
         .expect("the switch is accepted");
     state.finish_navigation(&choice.step, choice.terminal_had_focus);
     assert_eq!(state.workspace.active, Some(project_at("/gamma")));
+    assert_eq!(state.session.active, Some(remembered_id), "restored");
     assert_eq!(session_count(&state), count, "SC-005");
     assert!(state.workspace.sessions[&project_at("/repo")]
         .iter()
