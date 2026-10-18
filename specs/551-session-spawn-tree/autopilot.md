@@ -90,7 +90,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+Done (M4, two local commits, NOT pushed, no PR yet): T032-T037, T041 implemented and ticked; tdd test-list and cycle-log updated; docs section "Folding" in worktrees-and-sessions.md. Review A (code-review high) round 1 done and acted on (see Review rounds / Declined). Scoped gate GREEN on the final tree (snapshot f8218d524ee6bacd6cc56979c79678a11ca0e38b:501b8a6f1926e6f02ec0cd3a8851e88211a223b9). Design: `Msg::ToggleOrigin` + `State.sidebar.folded`; `SessionRow.fold` (Fold: folded, children, needs_attention(in_view)); nodes carry `folded: Arc<BTreeSet>`; `TreeItem::folded_summary`; shell `persist_folded_origins(store, core, id)` after the toggle in main.rs; startup reads `Settings.folded_origins`; chord order uses `unfolded_sessions()`. Tests for U19 live in `tests/sidebar_spawn_tree.rs` (not sidebar_tree.rs).
+Next: (1) review B: `autopilot-reviewer`, model sonnet, rubric rubrics/conformance.md, once, with brief.py milestone M4 (Verify: `cargo test -p micold-client --test sidebar_spawn_tree`, `cargo test -p micold-core --test settings_roundtrip`); (2) visual pass through an `autopilot-worker` (visual-pass skill; folded row visible: quickstart Part B steps 3, 4; save evidence in specs/551-session-spawn-tree/visual/, e.g. c-fold.png); also showcase has two new folded rows in atoms.rs; (3) fix findings, scoped gate; (4) full gate `mise run gate` (detached, hold.sh); (5) push and open PR titled `feat(551): fold an origin's children and keep the fold (#551)`, body per pr.md ending `Refs #551`, record the PR in the ledger. Mention in the PR body: #962 needed CI re-runs for flaky tests (idle_race on macOS, issue #1021; real-sshd timing flake).
 
 ## Open escalation
 
