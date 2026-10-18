@@ -8,6 +8,7 @@ use std::time::Duration;
 
 use tokio::io::AsyncReadExt;
 
+use crate::connect::Connected;
 use crate::kube::access::{AccessSecret, KeyGen};
 use crate::kube::classify::{CallTarget, KubeFailure};
 use crate::kube::credentials::{self, ReadFile};
@@ -15,6 +16,14 @@ use crate::kube::manifest::{self, PodStamp, SSH_PORT};
 use crate::kube::names::{is_ours, ResourceNames};
 use crate::kube::settings::KubeSettings;
 use crate::kube::{Cluster, Created, ObjectKind, ObjectView};
+use crate::provision::{
+    AiCliTable, CancelToken, Egress, EventSink, FailureCause, ProvisionEvent, ProvisionTarget,
+    Provisioned, Step, StepBounds,
+};
+use crate::sandbox::AiCliSelection;
+use crate::ssh::argv::{PinnedReach, Reach};
+use crate::ssh::provision::{ProvisionOptions, SshHost};
+use crate::ssh::{ReasonContext, SshFailure};
 
 /// What an SSH server's identification line starts with (RFC 4253 §4.2).
 const SSH_IDENT: &str = "SSH-2.0-";
@@ -634,9 +643,162 @@ async fn tunnel(r: &StartRequest<'_>) -> Result<(), KubeFailure> {
     }
 }
 
+/// The daemon's state directory inside the pod, on the volume (a pod path: never `Path::join`ed).
+pub const STATE_DIR: &str = "/var/lib/micold-ai-ide";
+
+/// The daemon's environment: it outlives the client (FR-010), so its idle stop is off.
+pub fn daemon_env() -> Vec<(String, String)> {
+    vec![(
+        crate::spawn::IDLE_STOP_ENV.to_string(),
+        crate::spawn::IDLE_STOP_OFF.to_string(),
+    )]
+}
+
+/// The shared sequence's target for the pod: SSH through the relay's loopback port, AI CLIs
+/// installed by M6 (none selected here), the 120 s step bounds and the 15 minute install.
+pub fn pod_target(reach: PinnedReach) -> ProvisionTarget {
+    ProvisionTarget {
+        reach: Reach::Pinned(reach),
+        owned: crate::provision::Ownership::AppOwned {
+            ai_clis: AiCliSelection(Default::default()),
+            table: AiCliTable::pinned(),
+            state_dir: STATE_DIR.into(),
+            egress: Egress::Direct,
+        },
+        bounds: StepBounds {
+            install: StartPhase::Install.bound(),
+            ..StepBounds::container()
+        },
+        env: daemon_env(),
+    }
+}
+
+/// Everything the `Copy`, `Install` and `Connect` phases need besides the pod.
+pub struct ConnectRequest<'a> {
+    /// Runs `ssh`/`scp` toward the relay's loopback port.
+    pub host: &'a dyn SshHost,
+    /// The target ([`pod_target`]).
+    pub target: &'a ProvisionTarget,
+    /// The client's platform and build.
+    pub opts: &'a ProvisionOptions,
+    /// Stops the sequence.
+    pub cancel: &'a CancelToken,
+}
+
+/// How the `Copy`/`Install`/`Connect` phases ended.
+pub enum ConnectOutcome {
+    /// The daemon accepted the handshake (a refusal is [`ConnectOutcome::Failed`]).
+    Ready(Box<Provisioned>),
+    /// The start failed; this attempt was rolled back.
+    Failed(KubeFailure),
+}
+
+/// The phase a provisioning step belongs to.
+fn phase_of(step: Step) -> StartPhase {
+    match step {
+        Step::InstallAiClis => StartPhase::Install,
+        Step::Start | Step::VersionCheck => StartPhase::Connect,
+        _ => StartPhase::Copy,
+    }
+}
+
+/// A provisioning failure as the start's: a changed host key names the pod (US4), anything else
+/// carries 806's reason text.
+fn provision_failure(
+    failure: &crate::provision::ProvisionFailure,
+    c: &ConnectRequest<'_>,
+    pod: &str,
+) -> KubeFailure {
+    match &failure.cause {
+        FailureCause::Cancelled => KubeFailure::Cancelled,
+        FailureCause::Ssh(SshFailure::HostKeyChanged | SshFailure::HostKeyUnknown) => {
+            KubeFailure::HostKeyMismatch {
+                pod: pod.to_string(),
+            }
+        }
+        _ => {
+            let (host, port) = match &c.target.reach {
+                Reach::Pinned(p) => (p.host.clone(), p.port),
+                Reach::UserConfig(t) => (t.host.clone(), t.port.unwrap_or(22)),
+            };
+            KubeFailure::Provision {
+                reason: failure.reason(&ReasonContext {
+                    host,
+                    port,
+                    timeout_secs: c.opts.timeout_secs,
+                    platform: c.opts.platform,
+                }),
+            }
+        }
+    }
+}
+
+/// Copy the daemon, install the AI CLIs and connect, after [`start`] returned `Ready` and the
+/// relay is open: one `provision::run` call, its steps shown as the `Copy`, `Install` and
+/// `Connect` phases. A failure undoes what `started` created (FR-013). `on_event` sees every
+/// provisioning event (copy percentage, installer lines) for the daemon's diagnostics.
+pub async fn connect_pod(
+    request: &StartRequest<'_>,
+    started: &Started,
+    c: &ConnectRequest<'_>,
+    on_phase: &mut (dyn FnMut(StartPhase) + Send),
+    on_event: &mut (dyn FnMut(&ProvisionEvent) + Send),
+) -> ConnectOutcome {
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+    let sink: EventSink = std::sync::Arc::new(move |event| {
+        let _ = tx.send(event);
+    });
+    on_phase(StartPhase::Copy);
+    let mut shown = Some(StartPhase::Copy);
+    let mut show = |event: ProvisionEvent, on_phase: &mut (dyn FnMut(StartPhase) + Send)| {
+        if let ProvisionEvent::Entered(step) = &event {
+            let phase = phase_of(*step);
+            if shown != Some(phase) {
+                shown = Some(phase);
+                on_phase(phase);
+            }
+        }
+        on_event(&event);
+    };
+    let result = {
+        let work = crate::provision::run(c.host, c.target, c.opts, c.cancel, &sink);
+        tokio::pin!(work);
+        loop {
+            tokio::select! {
+                done = &mut work => break done,
+                Some(event) = rx.recv() => show(event, on_phase),
+            }
+        }
+    };
+    drop(sink);
+    while let Ok(event) = rx.try_recv() {
+        show(event, on_phase);
+    }
+    let failure = match result {
+        Ok(done) if matches!(done.connected, Connected::Ready(..)) => {
+            return ConnectOutcome::Ready(Box::new(done));
+        }
+        Ok(done) => {
+            let Connected::Refused(reason) = done.connected else {
+                unreachable!("matched above")
+            };
+            KubeFailure::VersionMismatch {
+                reason: format!("the daemon in the pod refused this client: {reason:?}"),
+            }
+        }
+        Err(failure) => provision_failure(&failure, c, &started.pod),
+    };
+    rollback(request, &started.attempt).await;
+    ConnectOutcome::Failed(failure.at(&CallTarget {
+        context: &request.settings.context.0,
+        server: request.server,
+        namespace: namespace(request),
+    }))
+}
+
 /// Undo what the attempt created, newest first, and the key it added to an adopted secret.
 /// Best effort: a failure here must not hide the failure that caused the rollback.
-async fn rollback(r: &StartRequest<'_>, attempt: &Attempt) {
+pub async fn rollback(r: &StartRequest<'_>, attempt: &Attempt) {
     for made in attempt.created.iter().rev() {
         let _ = r
             .cluster

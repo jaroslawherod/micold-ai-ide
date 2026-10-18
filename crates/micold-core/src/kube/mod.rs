@@ -6,6 +6,8 @@ pub mod classify;
 pub mod credentials;
 #[cfg(any(test, feature = "kube-fake"))]
 pub mod fake;
+#[cfg(any(test, feature = "kube-fake"))]
+pub mod fake_host;
 pub mod kubeconfig;
 pub mod lifecycle;
 pub mod manifest;

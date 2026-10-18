@@ -288,13 +288,11 @@ mod tests {
         );
     }
 
-    /// SC-006: 200 comments against a 5,000-line file stay inside the send path's budget.
-    #[test]
-    fn two_hundred_comments_locate_inside_the_budget() {
+    /// SC-006's workload: 200 comments against a 5,000-line file, each quote found `Moved`.
+    fn locate_two_hundred_comments() {
         let mut all: Vec<String> = (0..5000).map(|n| format!("    let v{n} = {n};")).collect();
         all.splice(0..0, filler("new", 7));
         let side = lines(&all);
-        let started = Instant::now();
         for n in 0..200_usize {
             let first = 20 + n * 20;
             let quote: Vec<String> = (first..first + 3)
@@ -306,6 +304,22 @@ mod tests {
             );
             assert!(matches!(locate(&quote, last, &side), Located::Moved(_)));
         }
+    }
+
+    /// SC-006, functionally: every one of the 200 quotes locates as `Moved`.
+    #[test]
+    fn two_hundred_comments_all_locate() {
+        locate_two_hundred_comments();
+    }
+
+    /// SC-006: 200 comments against a 5,000-line file stay inside the send path's budget. A
+    /// wall-clock budget is a release-build number, so a debug build ignores it and CI's release
+    /// step runs it (BUG-001, as feature 021's BUG-003).
+    #[test]
+    #[cfg_attr(debug_assertions, ignore = "a release-build budget (BUG-001)")]
+    fn two_hundred_comments_locate_inside_the_budget() {
+        let started = Instant::now();
+        locate_two_hundred_comments();
         assert!(
             started.elapsed().as_millis() < 100,
             "took {:?}",

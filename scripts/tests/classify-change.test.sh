@@ -65,23 +65,26 @@ run() {
   printf 'ok    %-46s docs_only=%-5s %s\n' "$name" "$got_docs" "$got_reason"
 }
 
-# run_pkg <name> <want_packaging> <dir> <base> <head> [env assignments...]
-# The second output (#952): does the change touch a path declared `micold-packaging`? Unlike
-# `docs_only`, every failure path must land on `true` here too -- a lost verdict runs the slow job.
-run_pkg() {
-  local name="$1" want="$2" dir="$3" base="$4" head="$5"
-  shift 5
+# run_gate <output> <name> <want> <dir> <base> <head> [env assignments...]
+# The path-gate outputs (#952, #954): does the change touch a path declared `micold-packaging` /
+# `micold-daemon-runtime`? Unlike `docs_only`, every failure path must land on `true` here too -- a
+# lost verdict runs the slow job.
+run_gate() {
+  local key="$1" name="$2" want="$3" dir="$4" base="$5" head="$6"
+  shift 6
   cases=$((cases + 1))
 
   local got
-  got="$(cd "$dir" && env "$@" "$CLASSIFY" "$base" "$head" 2>/dev/null | sed -n 's/^packaging=//p')"
+  got="$(cd "$dir" && env "$@" "$CLASSIFY" "$base" "$head" 2>/dev/null | sed -n "s/^$key=//p")"
   if [ "$got" != "$want" ]; then
-    printf 'FAIL  %-46s want packaging=%-5s got=%s\n' "$name" "$want" "${got:-<none>}"
+    printf 'FAIL  %-46s want %s=%-5s got=%s\n' "$name" "$key" "$want" "${got:-<none>}"
     failures=$((failures + 1))
     return
   fi
-  printf 'ok    %-46s packaging=%s\n' "$name" "$got"
+  printf 'ok    %-46s %s=%s\n' "$name" "$key" "$got"
 }
+run_pkg() { run_gate packaging "$@"; }
+run_dr() { run_gate daemon_runtime "$@"; }
 
 # --- documentation-only ------------------------------------------------------------------------
 
@@ -221,6 +224,56 @@ rm -rf "$d"
 
 d="$(new_repo)"
 run_pkg "empty diff" false "$d" HEAD HEAD
+rm -rf "$d"
+
+# --- daemon-runtime paths (#954) ----------------------------------------------------------------
+
+dr_case() { # <name> <want> <path>
+  local d
+  d="$(new_repo)"
+  mkdir -p "$d/$(dirname "$3")"; printf 'a\n' > "$d/$3"; commit_in "$d" dr
+  run_dr "$1" "$2" "$d" HEAD~1 HEAD
+  rm -rf "$d"
+}
+dr_case "daemon source"                  true  crates/micold-daemon/src/a.rs
+dr_case "daemon test"                    true  crates/micold-daemon/tests/sandbox_real_x.rs
+dr_case "daemon Cargo.toml"              true  crates/micold-daemon/Cargo.toml
+dr_case "core source"                    true  crates/micold-core/src/a.rs
+dr_case "core sandbox source"            true  crates/micold-core/src/sandbox/mod.rs
+dr_case "core test"                      true  crates/micold-core/tests/sandbox_real_x.rs
+dr_case "workspace Cargo.toml"           true  Cargo.toml
+dr_case "Cargo.lock"                     true  Cargo.lock
+dr_case "rust-toolchain.toml"            true  rust-toolchain.toml
+dr_case ".cargo/config.toml"             true  .cargo/config.toml
+dr_case "sandbox Containerfile"          true  packaging/sandbox/Containerfile
+dr_case "basic image entrypoint"         true  packaging/basic/entrypoint.sh
+dr_case "basic-image-hash.sh"            true  scripts/basic-image-hash.sh
+dr_case "icon read by build.rs"          true  assets/icon/icon.ico
+dr_case "ci.yml itself"                  true  .github/workflows/ci.yml
+dr_case "client UI source"               false crates/micold-client/src/ui/a.rs
+dr_case "client feature source"          false crates/micold-client/src/features/a.rs
+dr_case "client Cargo.toml"              false crates/micold-client/Cargo.toml
+dr_case "windows packaging"              false packaging/windows/installer.iss
+dr_case "documentation only"             false docs/page.md
+dr_case "release.yml"                    false .github/workflows/release.yml
+
+d="$(new_repo)"
+mkdir -p "$d/crates/micold-daemon/src" "$d/crates/micold-client/src/ui"
+printf 'a\n' > "$d/crates/micold-daemon/src/x.rs"; printf 'fn a() {}\n' > "$d/crates/micold-client/src/ui/a.rs"
+commit_in "$d" mixed
+run_dr "daemon among UI" true "$d" HEAD~1 HEAD
+rm -rf "$d"
+
+d="$(new_repo)"
+printf 'a\n' > "$d/docs/page.md"; commit_in "$d" docs
+run_dr "unresolvable base ref" true "$d" origin/nope HEAD
+run_dr "all-zero base" true "$d" 0000000000000000000000000000000000000000 HEAD
+run_dr "FORCE_FULL_CI over docs" true "$d" HEAD~1 HEAD FORCE_FULL_CI=1
+run_dr "FORCE_FULL_CI=false over docs" false "$d" HEAD~1 HEAD FORCE_FULL_CI=false
+rm -rf "$d"
+
+d="$(new_repo)"
+run_dr "empty diff" false "$d" HEAD HEAD
 rm -rf "$d"
 
 echo

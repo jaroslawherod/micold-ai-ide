@@ -135,6 +135,8 @@ pub struct ProvisionTarget {
     pub owned: Ownership,
     /// Each step's bound.
     pub bounds: StepBounds,
+    /// The daemon's environment, quoted into the remote bridge command (empty for a user's host).
+    pub env: Vec<(String, String)>,
 }
 
 impl ProvisionTarget {
@@ -145,6 +147,7 @@ impl ProvisionTarget {
             reach: Reach::UserConfig(target.clone()),
             owned: Ownership::UserHost,
             bounds: StepBounds::user_host(connect_deadline),
+            env: Vec::new(),
         }
     }
 }
@@ -431,11 +434,12 @@ async fn start_step(
                 return Err(fail(Step::Start, FailureCause::DaemonStart).with_output(out.stderr));
             }
         }
-        let cmd = argv::bridge(
+        let cmd = argv::bridge_with_env(
             &target.reach,
             opts.platform,
             opts.timeout_secs,
             &opts.build_id,
+            &target.env,
         );
         let stdio = host.open(cmd).map_err(|e| io_fail(Step::Start, e))?;
         let tail = stdio.stderr_tail();
@@ -789,6 +793,7 @@ mod tests {
             reach: Reach::UserConfig(SshTarget::new("host", None, None, None).unwrap()),
             owned: Ownership::UserHost,
             bounds,
+            env: Vec::new(),
         }
     }
 
@@ -813,6 +818,7 @@ mod tests {
                 egress,
             },
             bounds,
+            env: Vec::new(),
         }
     }
 

@@ -270,16 +270,31 @@ pub fn copy(reach: &Reach, platform: ClientPlatform, timeout: u32, build: &str) 
 pub const CONTAINER_DATA_HOME: &str = "/var/lib";
 
 /// The bridge: the remote daemon binary's relay, whose stdin/stdout carry the protocol.
-///
-/// For a pinned reach (a container) the daemon is started with the image's data home, so it reads
-/// the catalogue and the `ai-clis` the provisioning wrote to the state mount; without it the
-/// session's `HOME` would give it a private, empty data directory.
 pub fn bridge(reach: &Reach, platform: ClientPlatform, timeout: u32, build: &str) -> SshCommand {
-    let env = match reach {
-        Reach::Pinned(_) => format!("XDG_DATA_HOME={CONTAINER_DATA_HOME} "),
-        Reach::UserConfig(_) => String::new(),
-    };
-    let remote = format!("{env}\"{}/micold-daemon\" remote bridge", remote_dir(build));
+    bridge_with_env(reach, platform, timeout, build, &[])
+}
+
+/// [`bridge`] with the daemon's environment: sshd clears the login environment, so what the
+/// daemon needs (686 FR-010: `MICOLD_IDLE_STOP=off`) rides the remote command as `env K='v'`.
+pub fn bridge_with_env(
+    reach: &Reach,
+    platform: ClientPlatform,
+    timeout: u32,
+    build: &str,
+    env: &[(String, String)],
+) -> SshCommand {
+    let mut remote = String::new();
+    if !env.is_empty() {
+        remote.push_str("env");
+        for (key, value) in env {
+            remote.push_str(&format!(" {key}='{}'", value.replace('\'', "'\\''")));
+        }
+        remote.push(' ');
+    }
+    remote.push_str(&format!(
+        "\"{}/micold-daemon\" remote bridge",
+        remote_dir(build)
+    ));
     command(reach, platform, timeout, &remote, None)
 }
 
@@ -380,6 +395,24 @@ mod tests {
     }
 
     #[test]
+    fn the_daemons_environment_rides_the_remote_command_quoted() {
+        let env = [
+            ("MICOLD_IDLE_STOP".to_string(), "off".to_string()),
+            ("A".to_string(), "it's".to_string()),
+        ];
+        let cmd = bridge_with_env(&pinned(), ClientPlatform::Linux, 15, "b", &env);
+        let remote = cmd.args.last().unwrap();
+        assert_eq!(
+            remote,
+            "env MICOLD_IDLE_STOP='off' A='it'\\''s' \"$HOME/.micold/remote/b/micold-daemon\" remote bridge"
+        );
+        assert_eq!(
+            bridge_with_env(&pinned(), ClientPlatform::Linux, 15, "b", &[]),
+            bridge(&pinned(), ClientPlatform::Linux, 15, "b")
+        );
+    }
+
+    #[test]
     fn a_key_path_may_appear_but_no_secret_does() {
         let joined = bridge(&target(), ClientPlatform::Linux, 15, "b")
             .args
@@ -431,23 +464,6 @@ mod tests {
                 && last.contains(".micold/remote/1.0-abc/"),
             "{last}"
         );
-    }
-
-    #[test]
-    fn a_container_bridge_starts_the_daemon_with_the_images_data_home_and_a_host_one_does_not() {
-        let last = |reach: &Reach| {
-            bridge(reach, ClientPlatform::Linux, 15, "b")
-                .args
-                .last()
-                .unwrap()
-                .clone()
-        };
-        assert!(
-            last(&pinned()).starts_with("XDG_DATA_HOME=/var/lib \""),
-            "{}",
-            last(&pinned())
-        );
-        assert!(last(&target()).starts_with('"'), "{}", last(&target()));
     }
 
     #[test]

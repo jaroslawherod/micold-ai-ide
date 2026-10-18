@@ -44,6 +44,7 @@ jobs:
     outputs:
       docs_only: ${{ steps.verdict.outputs.docs_only }}
       packaging: ${{ steps.verdict.outputs.packaging }}
+      daemon_runtime: ${{ steps.verdict.outputs.daemon_runtime }}
       reason: ${{ steps.verdict.outputs.reason }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -78,6 +79,7 @@ jobs:
         env:
           DOCS_ONLY: ${{ steps.verdict.outputs.docs_only }}
           PACKAGING: ${{ steps.verdict.outputs.packaging }}
+          DAEMON_RUNTIME: ${{ steps.verdict.outputs.daemon_runtime }}
           REASON: ${{ steps.verdict.outputs.reason }}
         run: |
           if [ "$DOCS_ONLY" = "true" ]; then
@@ -93,6 +95,8 @@ jobs:
             echo "Reason: \`${REASON:-unavailable}\`"
             echo
             echo "Packaging paths touched: \`${PACKAGING:-unavailable}\`"
+            echo
+            echo "Daemon-runtime paths touched: \`${DAEMON_RUNTIME:-unavailable}\`"
             if [ -s "$RUNNER_TEMP/offenders.txt" ]; then
               echo
               echo '<details><summary>Paths that made this code-affecting</summary>'
@@ -174,7 +178,49 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+      # Issue 958: Windows `build + test` ran 1093-1839 s between runs, the daemon test step
+      # (406-654 s) the largest and most variable part. A Dev Drive (ReFS in performance mode:
+      # asynchronous scanning of the build output, cheaper metadata operations) is Microsoft's
+      # remedy for many small files and freshly built executables. The volume is mounted at the
+      # workspace's own `target` folder, so every path (`CARGO_TARGET_DIR=target`, rust-cache,
+      # `target/remote-daemon`, the installer scripts) is unchanged. It must run before rust-cache
+      # so the restore lands on the Dev Drive. Best effort: if the image cannot make a Dev Drive
+      # the leg builds in a plain `target` as before.
+      - name: Mount a Dev Drive at target (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $target = Join-Path $env:GITHUB_WORKSPACE 'target'
+          try {
+            $vhd = Join-Path $env:RUNNER_TEMP 'devdrive.vhdx'
+            $part = New-VHD -Path $vhd -SizeBytes 30GB -Dynamic |
+              Mount-VHD -Passthru | Initialize-Disk -PartitionStyle GPT -PassThru |
+              New-Partition -UseMaximumSize
+            $part | Format-Volume -DevDrive -FileSystem ReFS -Confirm:$false -Force | Out-Null
+            New-Item -ItemType Directory -Force -Path $target | Out-Null
+            $part | Add-PartitionAccessPath -AccessPath "$target\"
+            # A fresh volume root has no entries, not even `.` and `..`, and libuv's scandir
+            # reports that as ENOENT, so rust-cache's key globbing failed and it neither restored
+            # nor saved. Cargo's own cache tag makes the root non-empty.
+            Set-Content -Path (Join-Path $target 'CACHEDIR.TAG') -Encoding ascii -Value @(
+              'Signature: 8a477f597d28d172789f06886806bc55',
+              '# This file is a cache directory tag created by cargo.',
+              '# For information about cache directory tags see https://bford.info/cachedir/')
+            Get-ChildItem -Force $target | Format-Table -AutoSize Mode, Name | Out-String | Write-Output
+            "Dev Drive mounted at $target" | Tee-Object -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          } catch {
+            Write-Output "::warning::No Dev Drive, building in the workspace: $_"
+            "Dev Drive: none ($_)" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+            if ((Test-Path $target) -and -not (Get-ChildItem -Force $target)) { Remove-Item -Force $target }
+          }
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        id: rust-cache
+      # Issue 958: record the cache outcome per run, so the Windows hit rate can be read off the
+      # run summary (docs/development/ci-pipeline.md, "The Windows build cache").
+      - name: Report rust-cache hit (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: echo "rust-cache cache-hit=${{ steps.rust-cache.outputs.cache-hit }}" | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Install iced system dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
@@ -449,6 +495,7 @@ jobs:
         run: |
           cargo test --release -p micold-core --test typeahead_budget
           cargo test --release -p micold-core --test jira_site_release
+          cargo test --release -p micold-core --lib review::anchor::tests::two_hundred_comments_locate_inside_the_budget
 
   # Feature 030 (FR-015, FR-018): each setup .exe installs only on its own architecture, so ARM64 is
   # packaged and smoke-tested natively, on the runner the release uses for it. The `test` matrix has
@@ -503,7 +550,13 @@ jobs:
   sandbox-runtime:
     name: sandbox against a real runtime (linux)
     needs: classify
-    if: needs.classify.outputs.docs_only != 'true'
+    # Pull requests run it only when a path declared `micold-daemon-runtime` changed (or the
+    # `full-ci` label forces `daemon_runtime=true`); main pushes and the nightly schedule always run
+    # it. A skipped job satisfies `ci-complete`. An unset output (classify failed) is not 'true',
+    # but then `docs_only` is unset too and `classify` itself is red, which blocks `ci-complete`.
+    if: >-
+      needs.classify.outputs.docs_only != 'true'
+      && (github.event_name != 'pull_request' || needs.classify.outputs.daemon_runtime == 'true')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -584,7 +637,13 @@ jobs:
   ssh-remote:
     name: remote daemon over a real sshd (linux)
     needs: classify
-    if: needs.classify.outputs.docs_only != 'true'
+    # Pull requests run it only when a path declared `micold-daemon-runtime` changed (or the
+    # `full-ci` label forces `daemon_runtime=true`); main pushes and the nightly schedule always run
+    # it. A skipped job satisfies `ci-complete`. An unset output (classify failed) is not 'true',
+    # but then `docs_only` is unset too and `classify` itself is red, which blocks `ci-complete`.
+    if: >-
+      needs.classify.outputs.docs_only != 'true'
+      && (github.event_name != 'pull_request' || needs.classify.outputs.daemon_runtime == 'true')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

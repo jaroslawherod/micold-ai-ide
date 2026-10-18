@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-xelisc
 - **Started**: 2026-10-17
 - **Phase**: implement
-- **Next step**: M4b committed; full gate running/green then push; the orchestrator opens the PR from pr-title-686-M4b.txt / pr-body-686-M4b.md, waits on CI, merges; then M5 (blocked on #806)
+- **Next step**: M5 implemented and reviewed; the flaky 946 budget test is fixed in its own commit (specs/946-review-replies BUG-001: timing assertion release-only, run by CI's release step). Gate, then push; the orchestrator waits on CI and merges #1011.
 
 ## Pull requests
 
@@ -23,6 +23,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #992 | M2 | merged | 767530b33afc20e128d27d78852508d7416bffa2 |
 | #996 | M3 | merged | 8408b815f208a74217f877563e819cf6a543fcc2 |
 | #1000 | M4a | merged | 3ef301a489e845ccbfe2f0af813187b8244e7575 |
+| #1005 | M4b | merged | 21ad41546a8228d56012eac2ae359387b0981700 |
 
 ## Milestones
 
@@ -34,8 +35,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T079, T072, T056, T073, T081, T075, T059, T076, T128 | full | Core Stop/Remove/forget-locally; failure + pod-gone classifiers; preflight | — | merged (#992) |
 | M3 | T063, T064, T065, T067, T068, T069, T102 | full | Allowed credentials as secrets, daemon_env, security contexts (core) | — | merged (#996) |
 | M4a | T024, T130, T066, T031, T131, T070, T032 | full | Kubernetes form via Edit (Add entry hidden), shared resources fields, credentials list | — | merged (#1000) |
-| M4b | T083, T084, T080, T132, T085, T086, T082, T133, T129 | full | Placement fields, Stop/Remove/Forget locally/Logs from the row, Start → Unavailable | — | in review |
-| M5 | T134, T022, T074, T135, T030, T077, T136 | full | (#806) Copy + Connect over SSH through the relay; failures at client level | — | blocked on #806 |
+| M4b | T083, T084, T080, T132, T085, T086, T082, T133, T129 | full | Placement fields, Stop/Remove/Forget locally/Logs from the row, Start → Unavailable | — | merged (#1005) |
+| M5 | T134, T022, T074, T135, T030, T077, T136 | full | (#806) Copy + Connect over SSH through the relay; failures at client level | — | implemented, in review (unblocked 2026-10-18, decision below) |
 | M6 | T138, T139, T141, T142, T033, T140 | full | (#806) AI CLI install, drift prompt, Add entry, user guide 🎯 MVP | — | blocked on #806 |
 | M7 | T047–T055, T100 | full | (#806) Clone + worktrees in the pod (RepoClone) | — | blocked on #806 |
 | M8 | T057, T058, T060, T061, T062, T101 | full | (#806) Reconnect; pod gone → stopped with reason | — | blocked on #806 |
@@ -58,6 +59,13 @@ stash@{0} survivors (all used by M1a–M2, stash dropped 2026-10-18; backed up i
 | 9 | implement M1a | FR-004 image source | owner (verbatim): "use basic image with ssh where you can copy daemon and install ai cli" — replaces decision 1: no build/push/registry; the pod runs a basic image with sshd, the client copies the daemon binary in over SSH and installs the AI CLIs (with decision 8). Changes the start sequence (no `Image` phase; a copy/install step) and likely the manifests. Design revision pending before more implementation | owner | owner instruction 2026-10-17T21:34Z |
 | 10 | implement M1a | Same mechanism for the local sandbox container? | owner (verbatim): "should use same mechanism for local \"sandbox\" container". Orchestrator default: #686 builds the sshd-image + copy-daemon-over-SSH + install-CLIs mechanism as a shared part both runtimes can use; moving the local sandbox container runtime onto it is #806's scope (commented there) | owner + orchestrator default | owner instruction 2026-10-17T21:35Z |
 | 11 | design rev 2 | Who builds the shared sshd image + copy-daemon + install-CLIs mechanism? | #806's separate run builds it; #686 consumes it (contracts/shared-ssh-image.md, to write) and orders milestones: work independent of it first (core types done, kubeconfig, manifests + pod/PVC/secret lifecycle, port-forward tunnel, stop/remove, failure reasons, Settings form), copy-daemon + install-CLIs last, marked "blocked on #806" | owner via coordinator | coordinator message 2026-10-17 |
+
+## Decisions (M5)
+
+- Orchestrator (2026-10-18): #806 is not closed, but what M5 needs is on main (M2 `micold_core::provision` #982, M3 static musl daemons #988, M4 AI CLI install + registry-only relay 08687287/ccc232e7). Start M5 against `specs/806-container-daemon-ssh-provisioning/contracts/provisioning.md`; #806's pending M5–M7 (container migration, per-daemon CLI selection, step bounds/rollback) are not needed. Stop with ESCALATE if something is.
+- Unit (M5 re-check, tasks.md drift fixed): T134/T135 name `provision::run` and a scripted `SshHost` instead of "#806's provisioning fake"; the one call covers Copy+Install+Connect; HostKeyAlias dropped (PinnedReach has none; known_hosts names `[127.0.0.1]:<relay port>`); `ProvisionTarget.env` added for `daemon_env` (not in the 806 contract); T022/T074 paths `crates/micold-client/tests/`; T030 `Dial::Kubernetes`, `kube_attempt` takes `KubeSettings`; `(#806)` tags dropped from T022/T074/T030/T077/T134/T135.
+
+- Unit 3 (M5 client half, drift fixed in tasks.md T030): `Dial::Kubernetes { name, settings: KubeDial }`; `kube_attempt(&KubeEnv, name, &KubeSettings, sink) -> (Connected, Relay)`, the `Relay` held by `connect_and_pump` for the link's life; `KubeEnv {connect, keygen, host, keys_root, home}` installed once by `shell/startup.rs` (`install_kube`); live `SshKeygen` in `shell/daemons.rs` (ssh-keygen, empty pair on failure, refused by `kube_attempt`); `KubeConnector` moved to `micold_client::kube`; `known_hosts` is `[127.0.0.1]:<relay port> <key>` (`host_alias` removed). A `None` image is `Unavailable` (the pinned SSH image is M6's). The pod login user is `POD_SSH_USER = "dev"` (the 806 image's; no contract text names it: confirm at M6). `provision::start::rollback` is now pub. T077: `StartFailed` and install lines go to `DaemonDiagnostics::push_log`. Shared test doubles: `micold_core::kube::fake_host` (Host, refusing/welcoming/closed bridges), `tests/kube_daemon_common`. Copy of a missing build is not exercised in the client tests (core covers it); the host's `have=1` probe is scripted.
 
 ## Decisions (M3)
 
@@ -91,6 +99,7 @@ stash@{0} survivors (all used by M1a–M2, stash dropped 2026-10-18; backed up i
 | M1c review B (conformance, sonnet) | 1 | 92eb8da19e833dfac69f4c82ff46e16132a896ac:9a5aa584e8579a2c9767db3d680952aefd1e27ab | CHANGES: 1 MAJOR (no cycle-log entries — added, honest that tests came with the code), 1 MINOR (declined) |
 | M4a review A (code-review high) | 1 | f29f682624d1c0bd2370fef030eb8ec1d6d102af:153fa9f2b3d8ac3525be149d44e1053093c2e8c4 | CLEAN — 3 MINOR declined (Declined review findings): default provider is one value, MIN_MEMORY floor reused, `offered()` slice order |
 | M4a review B (conformance, sonnet) | 1 | same | CLEAN — Verify 22 + 10 passed; 1 MINOR: file fields are plain text paths (no picker; same as the SSH form's key file), noted in the cycle log |
+| M5 | A (code-review high) + B (conformance) | ade6ca29b89171b2bf51f114e355f5de2b13fe52:21e2ef5743bdc4b335c71cbd7303f9bfd6df9de6 | A: CLEAN (F1 MINOR fixed: drift text; F2 MINOR declined: `RefusalReason` has no Display, Debug kept until M6 words it); B: CHANGES, F1 MAJOR fixed (A15/A16/A17 tests added), F2 MINOR fixed (cycle-log) |
 
 ## Declined review findings
 
@@ -118,11 +127,11 @@ stash@{0} survivors (all used by M1a–M2, stash dropped 2026-10-18; backed up i
 
 ## Handover
 
-None. (M4a unit 2: code written; see Next step.)
+None.
 
 ## Open escalation
 
-None. Clarify round 1 questions remain with the owner as decision cards (spec uses recommended defaults).
+Gate (scripts/gate.sh, 4 runs) fails only on `micold-core review::anchor::tests::two_hundred_comments_locate_inside_the_budget`: `took 101.4–159ms` vs a `< 100 ms` assert (anchor.rs:309); the file is untouched by this branch. Not a root-only test. Logs: scratchpad gate4.log–gate6.log. Rest of the gate (fmt, clippy) green; later gate steps did not run, but `cargo test -p micold-client` passes. Clarify round 1 questions remain with the owner as decision cards (spec uses recommended defaults).
 
 ## Follow-ups not done
 

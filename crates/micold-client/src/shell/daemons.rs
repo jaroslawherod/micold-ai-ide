@@ -321,6 +321,53 @@ fn bundled_dir(exe: &Path) -> PathBuf {
     }
 }
 
+/// Makes key pairs with the machine's `ssh-keygen` (feature 686, the host key and this client's
+/// key). `KeyGen` cannot fail, so a failed run returns empty lines, which the start refuses.
+pub struct SshKeygen;
+
+impl micold_core::kube::access::KeyGen for SshKeygen {
+    fn generate(&self, comment: &str) -> micold_core::kube::access::KeyPair {
+        make_key_pair(comment).unwrap_or(micold_core::kube::access::KeyPair {
+            private_openssh: String::new(),
+            public_line: String::new(),
+        })
+    }
+}
+
+fn make_key_pair(comment: &str) -> std::io::Result<micold_core::kube::access::KeyPair> {
+    let dir = kube_keys_root().join(format!(".keygen-{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir_all(&dir)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700))?;
+    }
+    let path = dir.join("key");
+    let made = (|| {
+        let argv = micold_core::provision::keys::keygen_argv(
+            micold_core::ssh::ClientPlatform::current(),
+            &path,
+        );
+        let mut command = std::process::Command::new(&argv.program);
+        command
+            .args(&argv.args)
+            .args(["-C", comment])
+            .envs(argv.env.iter().map(|(k, v)| (k, v)));
+        let status = micold_core::process::no_window(&mut command).status()?;
+        if !status.success() {
+            return Err(std::io::Error::other("ssh-keygen failed"));
+        }
+        Ok(micold_core::kube::access::KeyPair {
+            private_openssh: std::fs::read_to_string(&path)?,
+            public_line: std::fs::read_to_string(path.with_extension("pub"))?
+                .trim()
+                .to_string(),
+        })
+    })();
+    let _ = std::fs::remove_dir_all(&dir);
+    made
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

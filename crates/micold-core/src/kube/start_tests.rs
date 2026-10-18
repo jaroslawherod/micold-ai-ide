@@ -64,22 +64,34 @@ async fn run_reading(
     let mut on_phase = move |p: StartPhase| sink.lock().unwrap().push(p);
     let names = names();
     let keys = FakeKeyGen::default();
-    let request = StartRequest {
+    let request = start_request(fake, settings, &names, &keys, client, drift, read);
+    let outcome = start(&request, &mut on_phase).await;
+    let phases = seen.lock().unwrap().clone();
+    (outcome, phases)
+}
+
+fn start_request<'a>(
+    fake: &'a FakeCluster,
+    settings: &'a KubeSettings,
+    names: &'a ResourceNames,
+    keys: &'a FakeKeyGen,
+    client: &'a ClientKey,
+    drift: DriftChoice,
+    read: ReadFile<'a>,
+) -> StartRequest<'a> {
+    StartRequest {
         cluster: fake,
-        keys: &keys,
+        keys,
         server: "https://10.0.0.1:6443",
         settings,
-        names: &names,
+        names,
         image: IMAGE,
         client,
         drift,
         home: Path::new("/home/u"),
         hosts: &[],
         read,
-    };
-    let outcome = start(&request, &mut on_phase).await;
-    let phases = seen.lock().unwrap().clone();
-    (outcome, phases)
+    }
 }
 
 async fn run(fake: &FakeCluster, settings: &KubeSettings) -> (StartOutcome, Vec<StartPhase>) {
@@ -964,4 +976,136 @@ async fn the_pod_a_start_creates_runs_non_root_on_a_read_only_root() {
     let c = &pod["spec"]["containers"][0]["securityContext"];
     assert_eq!(c["readOnlyRootFilesystem"], true);
     assert_eq!(c["allowPrivilegeEscalation"], false);
+}
+
+// --- Copy, Install and Connect (T134) ---
+
+mod connect {
+    use super::*;
+    use crate::provision::CancelToken;
+    use crate::ssh::argv::{ClientPlatform, PinnedReach};
+    use crate::ssh::provision::ProvisionOptions;
+
+    use crate::kube::fake_host::{closed_bridge, refusing_bridge, welcoming_bridge, Host};
+
+    fn opts() -> ProvisionOptions {
+        ProvisionOptions {
+            platform: ClientPlatform::Linux,
+            client_arch: "x86_64".into(),
+            timeout_secs: 15,
+            build_id: "b".into(),
+            client_build: "test".into(),
+        }
+    }
+
+    fn reach() -> PinnedReach {
+        PinnedReach {
+            host: "127.0.0.1".into(),
+            port: 40222,
+            user: "micold".into(),
+            key: "/k/id_ed25519".into(),
+            known_hosts: "/k/known_hosts".into(),
+        }
+    }
+
+    /// Start the pod, then connect to it over `host`: the outcome, the phases shown and the
+    /// cluster.
+    async fn connect(host: &Host) -> (ConnectOutcome, Vec<StartPhase>, FakeCluster) {
+        let fake = cluster();
+        let s = settings();
+        let names = names();
+        let keys = FakeKeyGen::default();
+        let c1 = client("c1");
+        let request = start_request(&fake, &s, &names, &keys, &c1, DriftChoice::Ask, &no_files);
+        let mut ignore = |_: StartPhase| {};
+        let started = ready(start(&request, &mut ignore).await);
+        let target = pod_target(reach());
+        let cancel = CancelToken::new();
+        let c = ConnectRequest {
+            host,
+            target: &target,
+            opts: &opts(),
+            cancel: &cancel,
+        };
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let sink = seen.clone();
+        let mut on_phase = move |p: StartPhase| sink.lock().unwrap().push(p);
+        let mut on_event = |_: &crate::provision::ProvisionEvent| {};
+        let outcome = connect_pod(&request, &started, &c, &mut on_phase, &mut on_event).await;
+        let phases = seen.lock().unwrap().clone();
+        (outcome, phases, fake)
+    }
+
+    fn failure(outcome: ConnectOutcome) -> KubeFailure {
+        match outcome {
+            ConnectOutcome::Failed(f) => f,
+            ConnectOutcome::Ready(_) => panic!("connected"),
+        }
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_changed_host_key_names_the_pod_and_rolls_the_attempt_back() {
+        let host = Host::default().say(
+            "",
+            255,
+            "@@@ WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED! @@@\nHost key verification failed.",
+        );
+        let (outcome, phases, fake) = connect(&host).await;
+        assert_eq!(
+            failure(outcome),
+            KubeFailure::HostKeyMismatch { pod: names().pod() }
+        );
+        assert_eq!(phases, [StartPhase::Copy]);
+        assert_rolled_back(&fake).await;
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_daemon_that_will_not_start_carries_the_provisioning_reason() {
+        let host = Host::with_build().bridge(closed_bridge());
+        let (outcome, phases, fake) = connect(&host).await;
+        let reason = match failure(outcome) {
+            KubeFailure::Provision { reason } => reason,
+            other => panic!("{other:?}"),
+        };
+        assert!(
+            reason.starts_with("starting the daemon failed: "),
+            "{reason}"
+        );
+        assert_eq!(phases, [StartPhase::Copy, StartPhase::Connect]);
+        assert_rolled_back(&fake).await;
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_daemon_of_another_build_is_a_version_mismatch_and_no_session_starts() {
+        let host = Host::with_build().bridge(refusing_bridge());
+        let (outcome, phases, fake) = connect(&host).await;
+        assert!(matches!(
+            failure(outcome),
+            KubeFailure::VersionMismatch { .. }
+        ));
+        assert_eq!(phases, [StartPhase::Copy, StartPhase::Connect]);
+        assert_rolled_back(&fake).await;
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn the_daemon_runs_with_its_idle_stop_off_and_the_build_present_is_not_copied() {
+        let host = Host::with_build().bridge(refusing_bridge());
+        let _ = connect(&host).await;
+        let commands = host.commands.lock().unwrap().clone();
+        let bridge = commands.last().unwrap().last().unwrap();
+        assert!(
+            bridge.starts_with("env MICOLD_IDLE_STOP='off' "),
+            "{bridge}"
+        );
+        assert_eq!(commands.len(), 4, "reach, probe, last, bridge: no copy");
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_daemon_that_welcomes_the_client_is_ready_and_nothing_is_rolled_back() {
+        let host = Host::with_build().bridge(welcoming_bridge());
+        let (outcome, phases, fake) = connect(&host).await;
+        assert!(matches!(outcome, ConnectOutcome::Ready(_)));
+        assert_eq!(phases, [StartPhase::Copy, StartPhase::Connect]);
+        assert_eq!(fake.names(NS, ObjectKind::Pod), [names().pod()]);
+    }
 }

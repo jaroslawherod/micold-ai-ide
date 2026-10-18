@@ -22,8 +22,8 @@ shapes:
 | `build + test (macos-latest)` | runs | **skipped** |
 | `build + test (windows-latest)` | runs | **skipped** |
 | `assertion freeze (advisory)` | runs | **skipped** |
-| `sandbox against a real runtime (linux)` | runs | **skipped** |
-| `remote daemon over a real sshd (linux)` | runs | **skipped** |
+| `sandbox against a real runtime (linux)` | runs on main pushes and nightly; on a pull request only with [daemon-runtime paths](#path-gated-jobs) or `full-ci` | **skipped** |
+| `remote daemon over a real sshd (linux)` | runs on main pushes and nightly; on a pull request only with [daemon-runtime paths](#path-gated-jobs) or `full-ci` | **skipped** |
 | `package + smoke (windows-11-arm)` | runs on main pushes and nightly; on a pull request only with [packaging paths](#path-gated-jobs) or `full-ci` | **skipped** |
 | `docs check` | runs | **runs** |
 | `ci complete` | runs | runs |
@@ -133,7 +133,7 @@ Two rules govern it:
 
 ## Path-gated jobs
 
-Beyond the docs-only verdict, `classify change` publishes a second boolean, `packaging`, true when
+Beyond the docs-only verdict, `classify change` publishes two more booleans. The first, `packaging`, is true when
 **any** touched path is declared `micold-packaging` in `.gitattributes` (`packaging/**`, the two
 `scripts/windows-install*.sh`, the workspace `Cargo.toml` and `Cargo.lock`, `release.yml`, and the
 installer's other inputs: its icon, `LICENSE`, `remote-daemon-bundle.sh`, `build-lock.sh` and the
@@ -151,6 +151,20 @@ classify against); GitHub notifies the author of the schedule's last edit.
 Like `docs_only`, every failure path lands on `packaging=true`. `ci.yml` itself is not a packaging
 path: a step edit to the job is proven on the next `main` push or night. Add `full-ci` when you
 want it earlier.
+
+The second, `daemon_runtime`, is true when **any** touched path is declared `micold-daemon-runtime`
+(#954): `crates/micold-core/**`, `crates/micold-daemon/**`, the workspace `Cargo.toml` and
+`Cargo.lock`, the toolchain pins (`rust-toolchain.toml`, `.cargo/config.toml`),
+`packaging/sandbox/**` and `packaging/basic/**` (the two images the sandbox job builds),
+`scripts/basic-image-hash.sh`, the icon `micold-core`'s `build.rs` reads, and **`ci.yml` itself**.
+It gates `sandbox against a real runtime` (15–20 minutes) and `remote daemon over a real sshd`
+(about 5 minutes) with the same rule as above: always on `main` pushes and the nightly, on a pull
+request only when `daemon_runtime` is true, which `full-ci` forces. One attribute serves both jobs:
+they test the same two crates, the sandbox job only adds the image directories, and the sshd job is
+never the critical path, so a second attribute would save a few minutes on the rarest change
+(`packaging/**` alone) at the price of a second output to keep in step. `micold-client` is outside
+the set: no `sandbox_real_*` or `ssh_real_*` test calls into it, and the `test` job builds it. A UI-only
+change skips both jobs; a daemon change runs both. Every failure path lands on `daemon_runtime=true`.
 
 To gate another job the same way: declare an attribute in `.gitattributes`, emit one more boolean
 from `scripts/classify-change.sh` (the `packaging` block is the pattern), pin it in
@@ -288,6 +302,43 @@ The script now starts one PowerShell and sends it every question over a pipe (`w
 so the cost is paid once. The checks, their order and their timeouts are unchanged. Expect the step
 to take well under 5 minutes; if a run shows it creeping up, compare the timestamps between the
 `==` lines in the log with the numbers above.
+
+## The Windows build cache
+
+Issue 958. The Windows leg of `build + test` is the slowest and the least predictable job of a
+code-affecting run, so it sets the run's wall clock.
+
+**Before** (the Windows `build + test` job over the last 10 successful code-affecting CI runs on
+`main`, 2026-10-17 to 2026-10-18, from the Actions jobs API): median 1600 s, min 1093 s, max
+1839 s, mean 1503 s, standard deviation 241 s. The rust-cache restore step takes 36-77 s. The
+daemon test step is the largest part (median 614 s, 406-629 s), then core tests (~160 s) and
+`cargo build --workspace` (~110 s). Runs whose post-cache step took 120-250 s saved a new cache
+(a miss on the exact key); the rest saved nothing.
+
+**What changed**: a Windows-only step in the `test` job creates a 30 GB dynamic VHDX, formats it as
+a Dev Drive (ReFS, Defender in performance mode) and mounts it at the workspace's `target` folder,
+before rust-cache runs so the restore lands on it. The step then writes Cargo's `CACHEDIR.TAG` into
+the volume root: a fresh volume root has no entries at all (no `.` or `..`), libuv's `scandir` reports
+that as ENOENT, and rust-cache's key globbing over the workspace (`**/.cargo/config.toml`) then
+failed, so the first run with the drive neither restored nor saved a cache and rebuilt from scratch
+(2062 s). A drive letter would not help (an empty `E:\` fails the same way), and a junction from
+`target` to a lettered drive was rejected: Git's GNU tar, which `@actions/cache` prefers on Windows,
+archives a junction as a symlink, while it walks a volume mount point as a directory.
+Because the path is unchanged, `CARGO_TARGET_DIR`,
+rust-cache, `target/remote-daemon` and the installer scripts need no change (an absolute
+`CARGO_TARGET_DIR` such as `E:/target` was rejected: rust-cache joins it onto the workspace path and
+`windows-installer.sh` treats only `/`-prefixed paths as absolute). The rust-cache step also reports
+`cache-hit` in the run summary. If the image cannot make a Dev Drive the step warns and the leg
+builds in a plain `target`; the run summary says which happened. The ARM64 job is untouched. No
+Defender exclusions were added, and sccache was not adopted (a second cache beside rust-cache that
+does not touch the test steps).
+
+**After**: not yet measured. It needs 10 runs with the change; take them from the pull request's
+CI runs plus runs on `main` after the merge, with the same query (job durations of `build + test
+(windows-latest)`), and add the median, min, max and spread here. In each run's log check that the
+Dev Drive step lists `CACHEDIR.TAG` in `target`, that rust-cache prints `Restored from cache key`
+(or `No cache found`) with no `ENOENT` annotation, and that its post step saves (`Saving cache`)
+after a miss. If the hit rate has regressed, the mount is the first suspect.
 
 ## Reading a run
 

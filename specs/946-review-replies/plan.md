@@ -144,3 +144,5 @@ fallback sentence covers the report tool's absence between M1 and M2.
 ## Complexity Tracking
 
 No constitution violation to justify.
+
+**Bugfix**: 2026-10-18 — BUG-001 Updated from bugfix patch (SC-006 timing is release-only)

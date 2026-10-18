@@ -101,6 +101,16 @@ pub enum KubeFailure {
         /// The pod.
         pod: String,
     },
+    /// Copying, installing or starting the daemon over SSH failed (806's reason text).
+    Provision {
+        /// The step, its cause and the tool's last output lines.
+        reason: String,
+    },
+    /// A daemon of another build already runs in the pod (FR-017); no session starts on it.
+    VersionMismatch {
+        /// What the daemon refused with.
+        reason: String,
+    },
     /// A phase did not finish within its bound.
     PhaseTimeout {
         /// The phase.
@@ -383,6 +393,7 @@ impl fmt::Display for KubeFailure {
                 "the SSH host key of {pod} does not match the one in its access secret; refusing \
                  to connect"
             ),
+            K::Provision { reason } | K::VersionMismatch { reason } => f.write_str(reason),
             K::PhaseTimeout { phase } => {
                 write!(f, "{phase} did not finish within {}", bound_text(*phase))
             }

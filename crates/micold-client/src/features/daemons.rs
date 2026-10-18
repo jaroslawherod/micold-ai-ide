@@ -562,6 +562,10 @@ pub fn daemon_event(
         | DaemonEvent::Lost(reason)
         | DaemonEvent::StartFailed(reason) => {
             diagnostics.record_error(reason.clone());
+            // The details view's log keeps what a start said, with the phase output before it.
+            if matches!(&event, DaemonEvent::StartFailed(_)) {
+                diagnostics.push_log(format!("start failed: {reason}"));
+            }
         }
         DaemonEvent::Refused { client, daemon } => {
             diagnostics.record_error(format!(
@@ -1616,6 +1620,13 @@ pub fn update(state: &mut State, model: &mut Model<'_>, msg: Msg) -> Vec<Outcome
         // A late event of a start that already ended must not outlive it.
         Msg::Provisioning(id, event) => {
             if model.links.state(id) == Some(&DaemonState::Starting) {
+                if let ProvisionEvent::InstallLine(line) = &event {
+                    state
+                        .diagnostics
+                        .entry(id)
+                        .or_default()
+                        .push_log(line.clone());
+                }
                 state.provisioning.entry(id).or_default().apply(event);
             }
         }
