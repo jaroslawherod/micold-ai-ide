@@ -150,6 +150,12 @@ fn actions<'a>(view: &DaemonView, open: bool, kube: bool, roles: Roles) -> Eleme
             buttons = buttons.push(stop_button(view, roles));
         }
         DaemonState::Starting | DaemonState::Connected => {
+            if kube && view.state == DaemonState::Starting {
+                buttons = buttons.push(
+                    Button::text("Cancel", roles)
+                        .on_press(Message::Daemons(DaemonsMsg::StartCancelled(id))),
+                );
+            }
             buttons = buttons.push(stop_button(view, roles));
         }
     }

@@ -108,6 +108,8 @@ None.
 
 ## Follow-ups not done
 
-- Close: tdd-verify finding 1 (no red phase recorded for any milestone) is waived (T058), not remediated. `start_stop_and_restart_keep_the_one_session` does not prove the restart took effect (finding left by the close review).
-- Building without the repo build lock (MICOLD_NO_BUILD_LOCK=1, the lock queue was hours long) raced other worktrees on target-shared: one stale `micold-daemon` binary (v40) and one stale micold_core rlib failed tests that passed on rerun. Not a code fault.
-- TDD red phase was not recorded for M1 (tests written with the implementation; no tdd/ dir).
+None. Resolved by the chore "776 follow-ups" (PR in `specs/quick/2026-10-18-776-follow-ups.autopilot.md`, not committed):
+
+- Red phase (tdd-verify finding 1, T058) and "no tdd/ dir for M1": recorded retroactively in `specs/776-one-session-per-worktree/tdd/test-list.md` and `tdd/cycle-log.md` (each behavior RED_RECONSTRUCTED or an explicit TEST_AFTER with the reason). T058 is done.
+- `start_stop_and_restart_keep_the_one_session`: now proves the restart took effect (a stopped session comes back in a new PTY handle; red against a no-op `SessionRestart` handler). It also found that a restart of a running session is a start, hence a no-op, by design (`start_session_gated`).
+- Stale binary / rlib when building with `MICOLD_NO_BUILD_LOCK=1`: not a code fault (an unlocked build raced other worktrees on `target-shared/`); the rerun passed and CLAUDE.md says to keep the lock. Nothing to fix.

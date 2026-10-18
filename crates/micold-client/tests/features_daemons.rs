@@ -150,6 +150,7 @@ mod kubernetes {
     use micold_client::kube::live::ContextEntry;
     use micold_core::daemons::{DaemonId, DaemonRuntime};
     use micold_core::kube::credentials::KubeCredential;
+    use micold_core::kube::start::DriftChoice;
     use micold_core::session::AiCli;
 
     fn world() -> (World, DaemonId) {
@@ -180,11 +181,11 @@ mod kubernetes {
     }
 
     #[test]
-    fn the_add_form_omits_kubernetes_in_a_build_without_the_mechanism() {
+    fn the_add_form_lists_kubernetes_with_the_shared_ssh_image_available() {
         let mut state = State::default();
         daemons::begin_add(&mut state);
         let choices = runtime_choices(state.draft.as_ref().unwrap());
-        assert!(!choices.contains(&DraftRuntime::Kubernetes));
+        assert!(choices.contains(&DraftRuntime::Kubernetes));
         assert!(choices.contains(&DraftRuntime::Container));
     }
 
@@ -841,5 +842,176 @@ mod kubernetes {
         assert!(out.is_empty());
         assert!(state.prompt().is_none());
         assert!(!w.links.should_dial(boxed));
+    }
+
+    // M6: the drift prompt and Cancel (T139, U141).
+
+    fn drifted(w: &mut World, id: DaemonId, sessions: usize) -> State {
+        dial(w, id);
+        with_sessions(w, id, sessions);
+        let mut state = State::default();
+        let fields = vec!["Node selector".to_string(), "Image".to_string()];
+        assert!(send(&mut state, w, Msg::KubeDrift(id, fields)).is_empty());
+        state
+    }
+
+    #[test]
+    fn a_drifted_pod_asks_whether_to_recreate_it_counting_the_sessions_that_end() {
+        let (mut w, id) = world();
+        let state = drifted(&mut w, id, 2);
+        let prompt = state.prompt().unwrap();
+        assert_eq!(
+            prompt.text,
+            "The running pod differs from the settings (Node selector, Image). Recreate it? \
+             Its 2 running sessions will end; the volume is kept."
+        );
+        assert_eq!(prompt.confirm_label, "Recreate pod");
+        assert_eq!(prompt.decline_label, "Keep running pod");
+    }
+
+    #[test]
+    fn recreate_continues_the_start_with_recreate_and_ends_the_sessions() {
+        let (mut w, id) = world();
+        let mut state = drifted(&mut w, id, 1);
+        assert!(state
+            .prompt()
+            .unwrap()
+            .text
+            .contains("Its 1 running session will end"));
+        let sessions = w.sessions[&id].clone();
+        let out = send(&mut state, &mut w, Msg::RemovalConfirmed);
+        assert_eq!(
+            out,
+            vec![Outcome::DaemonSessionsEnded {
+                daemon: id,
+                sessions
+            }]
+        );
+        assert_eq!(state.drift_answers().get(&id), Some(&DriftChoice::Recreate));
+        assert!(state.prompt().is_none());
+        assert!(w.links.should_dial(id), "the start goes on");
+    }
+
+    #[test]
+    fn keep_continues_the_start_with_keep_and_so_does_dismissing_the_prompt() {
+        let (mut w, id) = world();
+        let mut state = drifted(&mut w, id, 2);
+        assert!(send(&mut state, &mut w, Msg::RemovalCancelled).is_empty());
+        assert_eq!(state.drift_answers().get(&id), Some(&DriftChoice::Keep));
+        assert!(state.prompt().is_none());
+        assert!(w.links.should_dial(id));
+    }
+
+    #[test]
+    fn starting_again_forgets_an_earlier_answer() {
+        let (mut w, id) = world();
+        let mut state = drifted(&mut w, id, 0);
+        send(&mut state, &mut w, Msg::RemovalCancelled);
+        send(&mut state, &mut w, Msg::Stopped(id));
+        send(&mut state, &mut w, Msg::Started(id));
+        assert!(state.drift_answers().is_empty());
+    }
+
+    #[test]
+    fn cancel_on_a_starting_row_asks_the_shell_to_stop_the_start() {
+        let (mut w, id) = world();
+        dial(&mut w, id);
+        let mut state = State::default();
+        let out = send(&mut state, &mut w, Msg::StartCancelled(id));
+        assert_eq!(
+            out,
+            vec![Outcome::KubeStartCancelRequested {
+                daemon: id,
+                name: "Cluster".into()
+            }]
+        );
+    }
+
+    #[test]
+    fn cancel_asks_nothing_of_a_daemon_that_is_not_starting() {
+        let (mut w, id) = world();
+        let mut state = State::default();
+        assert!(send(&mut state, &mut w, Msg::StartCancelled(id)).is_empty());
+    }
+
+    fn second_kube(w: &mut World) -> DaemonId {
+        let id = w
+            .registry
+            .add("Other", kubernetes("prod", "dev2"), false)
+            .unwrap();
+        w.links = micold_client::links::DaemonLinks::at_launch(&w.registry);
+        id
+    }
+
+    #[test]
+    fn two_drifting_daemons_are_asked_one_after_the_other() {
+        let (mut w, a) = world();
+        let b = second_kube(&mut w);
+        dial(&mut w, a);
+        dial(&mut w, b);
+        let mut state = State::default();
+        let f = vec!["Image".to_string()];
+        send(&mut state, &mut w, Msg::KubeDrift(a, f.clone()));
+        send(&mut state, &mut w, Msg::KubeDrift(b, f));
+        assert!(state.prompt().unwrap().name.contains("Cluster"));
+        send(&mut state, &mut w, Msg::RemovalCancelled);
+        assert_eq!(state.drift_answers().get(&a), Some(&DriftChoice::Keep));
+        assert!(state.prompt().unwrap().name.contains("Other"));
+        send(&mut state, &mut w, Msg::RemovalConfirmed);
+        assert_eq!(state.drift_answers().get(&b), Some(&DriftChoice::Recreate));
+        assert!(state.prompt().is_none());
+    }
+
+    #[test]
+    fn a_drift_prompt_behind_another_prompt_is_shown_when_that_closes() {
+        let (mut w, id) = world();
+        let b = second_kube(&mut w);
+        dial(&mut w, b);
+        with_sessions(&mut w, b, 1);
+        let mut state = State::default();
+        send(&mut state, &mut w, Msg::Stopped(b));
+        let stop_text = state.prompt().unwrap().text.clone();
+        dial(&mut w, id);
+        send(&mut state, &mut w, Msg::KubeDrift(id, vec!["Image".into()]));
+        assert_eq!(state.prompt().unwrap().text, stop_text, "not clobbered");
+        send(&mut state, &mut w, Msg::RemovalCancelled);
+        assert!(state
+            .prompt()
+            .unwrap()
+            .text
+            .starts_with("The running pod differs"));
+    }
+
+    #[test]
+    fn cancel_of_a_daemon_whose_drift_prompt_is_queued_drops_it() {
+        let (mut w, a) = world();
+        let b = second_kube(&mut w);
+        dial(&mut w, a);
+        dial(&mut w, b);
+        let mut state = State::default();
+        let f = vec!["Image".to_string()];
+        send(&mut state, &mut w, Msg::KubeDrift(a, f.clone()));
+        send(&mut state, &mut w, Msg::KubeDrift(b, f));
+        assert!(send(&mut state, &mut w, Msg::StartCancelled(b)).is_empty());
+        send(&mut state, &mut w, Msg::RemovalCancelled);
+        assert!(state.prompt().is_none());
+        assert!(matches!(
+            w.links.state(b),
+            Some(micold_core::daemons::DaemonState::Unreachable { reason })
+                if reason == "start cancelled"
+        ));
+    }
+
+    #[test]
+    fn cancel_while_the_drift_prompt_is_open_ends_the_start_as_cancelled() {
+        let (mut w, id) = world();
+        let mut state = drifted(&mut w, id, 0);
+        assert!(send(&mut state, &mut w, Msg::StartCancelled(id)).is_empty());
+        assert!(state.prompt().is_none());
+        assert!(matches!(
+            w.links.state(id),
+            Some(micold_core::daemons::DaemonState::Unreachable { reason })
+                if reason == "start cancelled"
+        ));
     }
 }

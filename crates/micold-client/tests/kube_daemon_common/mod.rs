@@ -10,6 +10,7 @@ use micold_core::connect::Connected;
 use micold_core::kube::fake::{FakeCluster, FakeKeyGen};
 use micold_core::kube::fake_host::{welcoming_bridge, Host};
 use micold_core::kube::settings::KubeSettings;
+use micold_core::kube::start::DriftChoice;
 use micold_core::kube::Cluster;
 use micold_core::provision::{EventSink, ProvisionEvent};
 
@@ -47,13 +48,13 @@ pub fn client(cluster: &Arc<FakeCluster>, host: Host) -> Client {
         let cluster = shared.clone() as Arc<dyn Cluster>;
         Box::pin(async move { Ok(cluster) })
     });
-    let env = KubeEnv {
+    let env = KubeEnv::new(
         connect,
-        keygen: Arc::new(FakeKeyGen::default()),
-        host: host.clone(),
-        keys_root: root.path().to_path_buf(),
-        home: root.path().to_path_buf(),
-    };
+        Arc::new(FakeKeyGen::default()),
+        host.clone(),
+        root.path().to_path_buf(),
+        root.path().to_path_buf(),
+    );
     Client { root, host, env }
 }
 
@@ -69,10 +70,32 @@ pub fn sink() -> (EventSink, Arc<Mutex<Vec<ProvisionEvent>>>) {
     (Arc::new(move |e| keep.lock().unwrap().push(e)), seen)
 }
 
+/// The settings of a daemon added with the default image (none stated: #806's pinned one) and
+/// these AI CLIs to install.
+pub fn default_image_settings(clis: &[micold_core::session::AiCli]) -> KubeSettings {
+    KubeSettings::new(CONTEXT, NS, clis)
+}
+
 /// One start of the daemon by `client`.
 pub async fn attempt(
     client: &Client,
 ) -> Result<(Connected, micold_client::kube::relay::Relay), String> {
-    let (sink, _) = sink();
-    kube_attempt(&client.env, NAME, &settings(), &sink).await
+    attempt_with(client, &settings()).await.0
+}
+
+/// One start of a daemon with `settings`, and what its sink saw.
+pub async fn attempt_with(
+    client: &Client,
+    settings: &KubeSettings,
+) -> (
+    Result<(Connected, micold_client::kube::relay::Relay), String>,
+    Arc<Mutex<Vec<ProvisionEvent>>>,
+) {
+    let (sink, seen) = sink();
+    (
+        kube_attempt(&client.env, NAME, settings, DriftChoice::Ask, &sink)
+            .await
+            .map_err(|e| e.to_string()),
+        seen,
+    )
 }

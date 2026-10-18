@@ -16,7 +16,7 @@ use micold_client::app::Message;
 use micold_client::features::daemons::DraftRuntime;
 use micold_client::features::daemons::Msg;
 use micold_client::features::Outcome;
-use micold_core::daemons::DaemonId;
+use micold_core::daemons::{DaemonEvent, DaemonId};
 use micold_core::protocol::messages::ClientMsg;
 
 use crate::App;
@@ -75,6 +75,15 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
                 settings,
                 name,
             } => tasks.push(stop_kube(app, *daemon, settings, name)),
+            Outcome::KubeStartCancelRequested { daemon, name } => {
+                // No token: no attempt is running to end the start, so end it here.
+                if !micold_client::daemon::cancel_installed_kube_start(name) {
+                    let ended = DaemonEvent::StartFailed("start cancelled".to_string());
+                    tasks.push(Task::done(Message::Daemons(Msg::EventReported(
+                        *daemon, ended,
+                    ))));
+                }
+            }
             Outcome::KubeRemoveRequested {
                 daemon,
                 settings,
@@ -479,6 +488,7 @@ mod tests {
             Path::new("/nonexistent"),
             None,
             false,
+            &Default::default(),
         );
     }
 }

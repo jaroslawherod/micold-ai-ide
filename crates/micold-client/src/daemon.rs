@@ -11,6 +11,7 @@
 //! the whole re-architecture rests on.
 
 use crate::features::connection::Msg as ConnectionMsg;
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
@@ -22,6 +23,7 @@ use micold_core::connect::{connect_at, connect_or_spawn, Connected, Credentials,
 use micold_core::daemons::{DaemonId, DaemonRegistry, DaemonRuntime, DaemonState, DaemonStates};
 use micold_core::endpoint::{self, DialAddress};
 use micold_core::kube::settings::KubeSettings;
+use micold_core::kube::start::DriftChoice;
 use micold_core::protocol::codec::{CodecError, Frame};
 use micold_core::protocol::keepalive::{self, Keepalive, KeepaliveAction};
 use micold_core::protocol::messages::{ClientMsg, DaemonMsg};
@@ -205,7 +207,20 @@ pub enum Dial {
         name: String,
         /// The daemon's settings.
         settings: KubeDial,
+        /// What to do with a pod that runs with other settings: the user's answer to the drift
+        /// prompt, `Ask` until there is one. Part of the identity, so an answer restarts the actor.
+        drift: DriftDial,
     },
+}
+
+/// A [`DriftChoice`] as part of an actor's identity.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DriftDial(pub DriftChoice);
+
+impl std::hash::Hash for DriftDial {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        std::mem::discriminant(&self.0).hash(state);
+    }
 }
 
 /// A Kubernetes daemon's settings as part of an actor's identity: `KubeSettings` is not `Hash`, so
@@ -278,6 +293,26 @@ pub fn actor_specs(
     legacy_default: Option<DaemonId>,
     strict_fingerprint: bool,
 ) -> Vec<ActorSpec> {
+    actor_specs_answered(
+        registry,
+        states,
+        state_dir,
+        legacy_default,
+        strict_fingerprint,
+        &BTreeMap::new(),
+    )
+}
+
+/// [`actor_specs`] with the answers the user gave to the drift prompts (feature 686): a Kubernetes
+/// daemon in `drift` is dialled with that choice, the others with `Ask`.
+pub fn actor_specs_answered(
+    registry: &DaemonRegistry,
+    states: &DaemonStates,
+    state_dir: &Path,
+    legacy_default: Option<DaemonId>,
+    strict_fingerprint: bool,
+    drift: &BTreeMap<DaemonId, DriftChoice>,
+) -> Vec<ActorSpec> {
     let keys = actor_keys(registry);
     registry
         .entries()
@@ -314,6 +349,7 @@ pub fn actor_specs(
                 DaemonRuntime::Kubernetes(k) => Dial::Kubernetes {
                     name: entry.name.as_str().to_string(),
                     settings: KubeDial(Box::new(k.clone())),
+                    drift: DriftDial(drift.get(&entry.id).copied().unwrap_or(DriftChoice::Ask)),
                 },
                 _ => return None,
             };
@@ -341,14 +377,16 @@ pub fn connections(
     state_dir: &Path,
     legacy_default: Option<DaemonId>,
     strict_fingerprint: bool,
+    drift: &BTreeMap<DaemonId, DriftChoice>,
 ) -> Subscription<Message> {
     Subscription::batch(
-        actor_specs(
+        actor_specs_answered(
             registry,
             states,
             state_dir,
             legacy_default,
             strict_fingerprint,
+            drift,
         )
         .into_iter()
         .map(|spec| Subscription::run_with(spec, |spec| actor(spec.clone()))),
@@ -613,7 +651,14 @@ async fn connect_and_pump(
                 }
             }
         }
-        (Dial::Kubernetes { name, settings }, _) => {
+        (
+            Dial::Kubernetes {
+                name,
+                settings,
+                drift,
+            },
+            _,
+        ) => {
             let Some(env) = KUBE_ENV.get() else {
                 return report(
                     id,
@@ -624,15 +669,30 @@ async fn connect_and_pump(
                 .ended();
             };
             let sink = provisioning_sink(id, output);
-            match kube_attempt(env, name, &settings.0, &sink).await {
+            // A lost link is reconnected to the running pod: a drift found then is kept.
+            let drift = if life.established {
+                DriftChoice::Keep
+            } else {
+                drift.0
+            };
+            match kube_attempt(env, name, &settings.0, drift, &sink).await {
                 Ok((c, relay)) => {
                     held_relay = Some(relay);
                     Ok(c)
                 }
+                // A first start that finds the pod changed asks what to do; the answer restarts
+                // this actor with the choice (a lost link is retried, not asked about).
+                Err(KubeAttemptError::Drift { fields }) if !life.established => {
+                    return report(id, output, ConnectionMsg::KubeDrift(fields))
+                        .await
+                        .ended();
+                }
                 Err(reason) if life.established => {
-                    return report(id, output, ConnectionMsg::ConnectFailed(reason)).await;
+                    return report(id, output, ConnectionMsg::ConnectFailed(reason.to_string()))
+                        .await;
                 }
                 Err(reason) => {
+                    let reason = reason.to_string();
                     return report(id, output, ConnectionMsg::StartFailed(reason))
                         .await
                         .ended();
@@ -1125,6 +1185,106 @@ pub struct KubeEnv {
     pub keys_root: PathBuf,
     /// This machine's home directory, where the allowed credentials' source files are.
     pub home: PathBuf,
+    /// The cancel token of each Kubernetes daemon's start under way, by daemon name.
+    pub cancels: std::sync::Mutex<BTreeMap<String, CancelToken>>,
+}
+
+impl KubeEnv {
+    /// An environment with no start under way.
+    pub fn new(
+        connect: crate::kube::KubeConnector,
+        keygen: std::sync::Arc<dyn micold_core::kube::access::KeyGen>,
+        host: std::sync::Arc<dyn SshHost>,
+        keys_root: PathBuf,
+        home: PathBuf,
+    ) -> Self {
+        Self {
+            connect,
+            keygen,
+            host,
+            keys_root,
+            home,
+            cancels: std::sync::Mutex::default(),
+        }
+    }
+}
+
+/// Stop the start of the Kubernetes daemon `name` that is under way: it ends cancelled and is
+/// rolled back. Whether there was a start to stop.
+pub fn cancel_kube_start(env: &KubeEnv, name: &str) -> bool {
+    let cancels = env.cancels.lock().unwrap_or_else(|e| e.into_inner());
+    cancels.get(name).map(CancelToken::cancel).is_some()
+}
+
+/// Stop the start of the Kubernetes daemon `name` on the environment the shell installed.
+pub fn cancel_installed_kube_start(name: &str) -> bool {
+    KUBE_ENV
+        .get()
+        .is_some_and(|env| cancel_kube_start(env, name))
+}
+
+/// Removes a start's cancel token when the attempt ends, however it ends.
+struct Registered<'a> {
+    env: &'a KubeEnv,
+    name: &'a str,
+}
+
+impl<'a> Registered<'a> {
+    fn new(env: &'a KubeEnv, name: &'a str, token: &CancelToken) -> Self {
+        env.cancels
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(name.to_string(), token.clone());
+        Self { env, name }
+    }
+}
+
+impl Drop for Registered<'_> {
+    fn drop(&mut self) {
+        self.env
+            .cancels
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(self.name);
+    }
+}
+
+/// Why one bring-up of a Kubernetes daemon did not connect.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum KubeAttemptError {
+    /// The pod runs with other settings than the daemon's, and the start was not told what to do
+    /// about it ([`DriftChoice::Ask`]): the fields that differ. The attempt is not rolled back.
+    Drift {
+        /// The settings that differ, in the user's words.
+        fields: Vec<String>,
+    },
+    /// The start failed, with the reason in the user's words; it is rolled back.
+    Failed(String),
+}
+
+impl From<String> for KubeAttemptError {
+    fn from(reason: String) -> Self {
+        Self::Failed(reason)
+    }
+}
+
+impl From<&str> for KubeAttemptError {
+    fn from(reason: &str) -> Self {
+        Self::Failed(reason.to_string())
+    }
+}
+
+impl std::fmt::Display for KubeAttemptError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Drift { fields } => write!(
+                f,
+                "the pod runs with other settings ({}): recreate it or keep it",
+                fields.join(", ")
+            ),
+            Self::Failed(reason) => f.write_str(reason),
+        }
+    }
 }
 
 static KUBE_ENV: std::sync::OnceLock<KubeEnv> = std::sync::OnceLock::new();
@@ -1139,24 +1299,23 @@ pub const POD_SSH_USER: &str = "dev";
 
 /// One bring-up of a Kubernetes daemon: the start sequence up to a running pod, the relay to its
 /// SSH port with its host key pinned, then the shared copy, install and connect sequence over it.
-/// The relay returned must outlive the connection. A drift, or any failure, is the reason in the
-/// user's words; the attempt is already rolled back.
+/// The relay returned must outlive the connection. A failure is the reason in the user's words and
+/// the attempt is already rolled back; a drift is [`KubeAttemptError::Drift`] unless `drift` says
+/// what to do about it. [`cancel_kube_start`] stops the attempt while it runs.
 pub async fn kube_attempt(
     env: &KubeEnv,
     name: &str,
     settings: &KubeSettings,
+    drift: DriftChoice,
     sink: &EventSink,
-) -> Result<(Connected, crate::kube::relay::Relay), String> {
+) -> Result<(Connected, crate::kube::relay::Relay), KubeAttemptError> {
     use micold_core::kube::start::{
-        connect_pod, pod_target, start, ConnectOutcome, ConnectRequest, DriftChoice, StartOutcome,
+        connect_pod, pod_target, start, ConnectOutcome, ConnectRequest, StartOutcome, StartPhase,
         StartRequest,
     };
-    let fail = |f: micold_core::kube::classify::KubeFailure| f.to_string();
-    let image = settings
-        .image
-        .as_ref()
-        .map(|i| i.to_reference())
-        .ok_or_else(|| fail(micold_core::kube::classify::KubeFailure::Unavailable))?;
+    let fail =
+        |f: micold_core::kube::classify::KubeFailure| KubeAttemptError::Failed(f.to_string());
+    let image = settings.pod_image();
     let (context, namespace) = (&settings.context.0, &settings.namespace.0);
     let names = micold_core::kube::names::ResourceNames::new(context, namespace, name);
     let keys = crate::kube::keys::KubeKeys::new(&env.keys_root, names.key().as_str());
@@ -1165,8 +1324,10 @@ pub async fn kube_attempt(
         .map_err(|e| format!("cannot write the SSH key files: {e}"))?;
     if client.public_key.is_empty() {
         let _ = keys.delete();
-        return Err("cannot make an SSH key: is `ssh-keygen` installed?".to_string());
+        return Err("cannot make an SSH key: is `ssh-keygen` installed?".into());
     }
+    let cancel = CancelToken::new();
+    let _registered = Registered::new(env, name, &cancel);
     let cluster = (env.connect)(context.clone()).await.map_err(fail)?;
     let read = |path: &Path| std::fs::read_to_string(path);
     let request = StartRequest {
@@ -1177,7 +1338,7 @@ pub async fn kube_attempt(
         names: &names,
         image: &image,
         client: &client,
-        drift: DriftChoice::Ask,
+        drift,
         home: &env.home,
         hosts: &[],
         read: &read,
@@ -1185,10 +1346,9 @@ pub async fn kube_attempt(
     let started = match start(&request, &mut |_| {}).await {
         StartOutcome::Ready(started) => started,
         StartOutcome::Drift { fields } => {
-            return Err(format!(
-                "the pod runs with other settings ({}): stop it, then start it again",
-                fields.join(", ")
-            ))
+            return Err(KubeAttemptError::Drift {
+                fields: fields.iter().map(|f| f.to_string()).collect(),
+            })
         }
         StartOutcome::Failed(failure) => return Err(fail(failure)),
     };
@@ -1218,15 +1378,18 @@ pub async fn kube_attempt(
     if let Err(reason) = pinned {
         // The pod is rolled back like any failed connect.
         micold_core::kube::start::rollback(&request, &started.attempt).await;
-        return Err(reason);
+        return Err(reason.into());
     }
-    let target = pod_target(micold_core::ssh::argv::PinnedReach {
-        host: "127.0.0.1".to_string(),
-        port: relay.addr().port(),
-        user: POD_SSH_USER.to_string(),
-        key: keys.private_key(),
-        known_hosts: keys.known_hosts(),
-    });
+    let target = pod_target(
+        micold_core::ssh::argv::PinnedReach {
+            host: "127.0.0.1".to_string(),
+            port: relay.addr().port(),
+            user: POD_SSH_USER.to_string(),
+            key: keys.private_key(),
+            known_hosts: keys.known_hosts(),
+        },
+        &settings.providers,
+    );
     let opts = ProvisionOptions {
         platform: ClientPlatform::current(),
         client_arch: std::env::consts::ARCH.to_string(),
@@ -1234,7 +1397,6 @@ pub async fn kube_attempt(
         build_id: current_build_id(),
         client_build: CLIENT_BUILD.to_string(),
     };
-    let cancel = CancelToken::new();
     let connect = ConnectRequest {
         host: &*env.host,
         target: &target,
@@ -1242,7 +1404,25 @@ pub async fn kube_attempt(
         cancel: &cancel,
     };
     let forward = |event: &micold_core::provision::ProvisionEvent| sink(event.clone());
-    match connect_pod(&request, &started, &connect, &mut |_| {}, &mut { forward }).await {
+    // The row's activity "Installing <cli>" is the log's first line of the install.
+    let clis = settings
+        .providers
+        .iter()
+        .map(|cli| cli.provider().display_name())
+        .collect::<Vec<_>>()
+        .join(", ");
+    let mut on_phase = |phase: StartPhase| {
+        if phase == StartPhase::Install {
+            sink(micold_core::provision::ProvisionEvent::InstallLine(
+                format!("Installing {clis}"),
+            ));
+        }
+    };
+    match connect_pod(&request, &started, &connect, &mut on_phase, &mut {
+        forward
+    })
+    .await
+    {
         ConnectOutcome::Ready(done) => Ok((done.connected, relay)),
         ConnectOutcome::Failed(failure) => Err(fail(failure)),
     }
@@ -1328,11 +1508,36 @@ mod tests {
         let specs = actor_specs(&registry, &states, dir, None, false);
         assert!(matches!(
             specs.as_slice(),
-            [s] if matches!(&s.dial, Dial::Kubernetes { name, settings }
+            [s] if matches!(&s.dial, Dial::Kubernetes { name, settings, .. }
                 if name == "Cluster" && settings.0.context.0 == "kind-dev" && settings.0.namespace.0 == "dev")
         ));
         states.insert(id, DaemonState::Unreachable { reason: "x".into() });
         assert!(actor_specs(&registry, &states, dir, None, false).is_empty());
+    }
+
+    /// The answer to the drift prompt is part of the actor's identity, so giving it restarts the
+    /// daemon's actor with the choice (feature 686, contract §3).
+    #[test]
+    fn a_drift_answer_changes_the_kubernetes_actor_and_defaults_to_asking() {
+        use micold_core::kube::start::DriftChoice;
+        let mut registry = DaemonRegistry::default();
+        let settings = micold_core::kube::settings::KubeSettings::new("kind-dev", "dev", &[]);
+        let id = registry
+            .add("Cluster", DaemonRuntime::Kubernetes(settings), false)
+            .unwrap();
+        let mut states = DaemonStates::default();
+        states.insert(id, DaemonState::Starting);
+        let dir = std::path::Path::new("/nonexistent");
+        let asked = actor_specs(&registry, &states, dir, None, false);
+        let answer = std::collections::BTreeMap::from([(id, DriftChoice::Recreate)]);
+        let answered = super::actor_specs_answered(&registry, &states, dir, None, false, &answer);
+        assert_ne!(asked[0], answered[0]);
+        assert!(
+            matches!(&asked[0].dial, Dial::Kubernetes { drift, .. } if drift.0 == DriftChoice::Ask)
+        );
+        assert!(
+            matches!(&answered[0].dial, Dial::Kubernetes { drift, .. } if drift.0 == DriftChoice::Recreate)
+        );
     }
 
     /// T011: a started SSH daemon is dialled with `Dial::Ssh`; once it is unreachable it is not,

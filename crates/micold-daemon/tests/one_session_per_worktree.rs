@@ -933,7 +933,12 @@ async fn start_stop_and_restart_keep_the_one_session() {
     until_live(&state, sid(1), true).await;
     one(&state);
 
-    // Restart replaces the process of the same session.
+    // Restart of a stopped session brings the same session back in a new process. A restart of a
+    // running session is a start, so it is a no-op there (`start_session_gated`): the control is
+    // for a stopped one.
+    let before = state.live_session(sid(1)).expect("running before the stop");
+    send(&mut client, ClientMsg::SessionStop { session: sid(1) }).await;
+    until_live(&state, sid(1), false).await;
     send(
         &mut client,
         ClientMsg::SessionRestart {
@@ -942,12 +947,22 @@ async fn start_stop_and_restart_keep_the_one_session() {
         },
     )
     .await;
-    // The connection handles messages in order: once this create is answered, the restart before
-    // it has been handled.
+    // The restart took effect: the session runs again, in a new process (a new PTY handle), not
+    // the one it ran in before the stop.
+    tokio::time::timeout(BOUND, async {
+        while !state
+            .live_session(sid(1))
+            .is_some_and(|now| !Arc::ptr_eq(&now, &before))
+        {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("the restart brings the session back in a new process");
+    one(&state);
+    // Running again, the worktree still refuses a second session.
     send(&mut client, create(9, project.path(), "wt")).await;
     assert_refused(answer(&mut client, 9).await, sid(1));
-    until_live(&state, sid(1), true).await;
-    one(&state);
     kill_all(&state, project.path());
 }
 

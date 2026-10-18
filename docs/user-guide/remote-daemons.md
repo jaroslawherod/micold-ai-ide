@@ -1,5 +1,7 @@
 # Running the session daemon on another computer over SSH
 
+To run it in a Kubernetes cluster instead, see [Kubernetes](kubernetes-daemons.md).
+
 A daemon can run on a computer you reach with SSH, a build machine or a server, and your worktrees
 bound to it run their sessions there. Micold uses the `ssh` you already have, with your own keys,
 agent and `~/.ssh/config`; it stores no password or key.

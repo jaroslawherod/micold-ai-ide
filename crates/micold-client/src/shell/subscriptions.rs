@@ -263,6 +263,7 @@ fn daemon_connections(app: &App) -> Subscription<Message> {
         &app.placement.state_dir,
         app.core.settings.legacy_default_daemon,
         app.placement.strict_fingerprint,
+        app.core.daemon_list.drift_answers(),
     )
 }
 

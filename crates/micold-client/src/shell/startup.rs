@@ -205,15 +205,15 @@ fn boot() -> (App, Task<Message>) {
     // only the daemon the entrypoint starts).
     micold_client::daemon::install_time_zone(crate::shell::time_zone::host());
     // What Kubernetes daemons are started with (feature 686).
-    micold_client::daemon::install_kube(micold_client::daemon::KubeEnv {
-        connect: caps.kube_connector(),
-        keygen: std::sync::Arc::new(crate::shell::daemons::SshKeygen),
-        host: std::sync::Arc::new(crate::shell::daemons::system_ssh()),
-        keys_root: crate::shell::daemons::kube_keys_root(),
-        home: directories::UserDirs::new()
+    micold_client::daemon::install_kube(micold_client::daemon::KubeEnv::new(
+        caps.kube_connector(),
+        std::sync::Arc::new(crate::shell::daemons::SshKeygen),
+        std::sync::Arc::new(crate::shell::daemons::system_ssh()),
+        crate::shell::daemons::kube_keys_root(),
+        directories::UserDirs::new()
             .map(|dirs| dirs.home_dir().to_path_buf())
             .unwrap_or_default(),
-    });
+    ));
     let mut core = State::default();
     // Feature 028 (FR-019): before anything else is loaded, where is this executable running from?
     // Asked here because `current_exe()` is a syscall and this is the boundary; the verdict is a
