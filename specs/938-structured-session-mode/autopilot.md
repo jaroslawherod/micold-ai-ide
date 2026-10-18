@@ -120,7 +120,7 @@ finds this file by its **Worktree branch** line. Keep it true.
   `set_event_stream_bounds`, `event_bounds`, `remove_live_by_ids` drops `event_streams`.
 - **Gate**: `scripts/gate.sh` started detached at handover; log
   `$SCRATCHPAD/m5/gate.log` (SCRATCHPAD per cloud.md). Hold on it with `scripts/autopilot/hold.sh`
-  (pattern `^GATE_EXIT=` or the script's own exit line) before rerunning.
+  (it ends with `GATE_EXIT=<code>`) before rerunning.
 - **Next**: tasks/verify.md for M5 (`cargo test -p micold-daemon --test structured_history`),
   then reviews A/B (review.md), gate, push with
   `--force-with-lease=claude/project-thread-cl0lw3:`, PR title/body to the scratchpad, `PR: to-open`.
