@@ -112,3 +112,18 @@ string still read `CARGO_PKG_VERSION`, so the suffix never reached the explanati
 Limit: the stand-in daemon refuses this build's client, so a session cannot be started on it to prove
 "running sessions untouched"; the real-ssh test shows the refusal ends no process (same pid, a second
 dial is refused alike) and the client tests show the route sends nothing.
+
+## M7 (T073-T081): replace a mismatched daemon with no sessions
+
+Deviation (admitted): the tests and the implementation of `ssh/status.rs`, `runtime_status.rs`,
+`remote status | stop`, the client Replace action and the real-ssh replace cases landed together in
+WIP commits, so there is no red-before-green run in the history. Red pass after the fact (mutate
+production, run, restore): changing `decide_stop`'s `running_sessions == 0` to `>= 0` fails
+`remote::tests::only_a_status_proving_no_sessions_ends_the_daemon`; restored, it passes.
+`mise run test-ssh` passes both replace cases (offered with no sessions then connects; withheld while
+a session runs, on a matching-version daemon since a refused client cannot start sessions on a
+mismatched one). Other mutants (unknown `status_version`, newer daemon never offered) are covered by
+tests in `ssh/status.rs` and `ssh_replace_offer.rs` but not mutation-proven.
+
+Limit: `status.json` is refreshed every 200 ms, so a session started in that window before a stop
+could be missed (reviewer MINOR, accepted and documented in the user guide).

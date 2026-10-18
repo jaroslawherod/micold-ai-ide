@@ -97,8 +97,8 @@ direction.
   daemon, because that would downgrade the host.
 - **The daemon is older than the app:** when it has no running sessions, the row offers **Replace
   daemon**. Choosing it stops the old daemon on the host, copies the matching build, starts it and
-  connects. The stop happens only when the host reports zero sessions at that moment; if one
-  started in between, nothing is stopped and the row stays as it was.
+  connects. The stop happens only when the host reports zero sessions at that moment; a session
+  that started in the last fraction of a second before the stop may not be counted yet.
 - **The daemon is older but has sessions:** Micold shows no Replace action and never ends running
   sessions on its own. Finish or stop the sessions (or stop the `micold-daemon` process on the host
   yourself), then choose **Reconnect**.
