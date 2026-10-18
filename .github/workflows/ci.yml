@@ -195,6 +195,14 @@ jobs:
             $part | Format-Volume -DevDrive -FileSystem ReFS -Confirm:$false -Force | Out-Null
             New-Item -ItemType Directory -Force -Path $target | Out-Null
             $part | Add-PartitionAccessPath -AccessPath "$target\"
+            # A fresh volume root has no entries, not even `.` and `..`, and libuv's scandir
+            # reports that as ENOENT, so rust-cache's key globbing failed and it neither restored
+            # nor saved. Cargo's own cache tag makes the root non-empty.
+            Set-Content -Path (Join-Path $target 'CACHEDIR.TAG') -Encoding ascii -Value @(
+              'Signature: 8a477f597d28d172789f06886806bc55',
+              '# This file is a cache directory tag created by cargo.',
+              '# For information about cache directory tags see https://bford.info/cachedir/')
+            Get-ChildItem -Force $target | Format-Table -AutoSize Mode, Name | Out-String | Write-Output
             "Dev Drive mounted at $target" | Tee-Object -FilePath $env:GITHUB_STEP_SUMMARY -Append
           } catch {
             Write-Output "::warning::No Dev Drive, building in the workspace: $_"
