@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-xelisc
 - **Started**: 2026-10-17
 - **Phase**: implement
-- **Next step**: M5 implemented and reviewed; the flaky 946 budget test is fixed in its own commit (specs/946-review-replies BUG-001: timing assertion release-only, run by CI's release step). Gate, then push; the orchestrator waits on CI and merges #1011.
+- **Next step**: M6 core half done (T138/T141 core). Client half: Cancel from the row, drift prompt, Add entry (flip SHARED_SSH_IMAGE_AVAILABLE), kube_attempt default image + providers (T139/T142), user guide T033, acceptance T140; then reviews A/B, gate, PR files.
 
 ## Pull requests
 
@@ -24,6 +24,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #996 | M3 | merged | 8408b815f208a74217f877563e819cf6a543fcc2 |
 | #1000 | M4a | merged | 3ef301a489e845ccbfe2f0af813187b8244e7575 |
 | #1005 | M4b | merged | 21ad41546a8228d56012eac2ae359387b0981700 |
+| #1011 | M5 | merged | c7d0dbf8393d4686551c81f404bad4028978e1f7 |
 
 ## Milestones
 
@@ -36,8 +37,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 | T063, T064, T065, T067, T068, T069, T102 | full | Allowed credentials as secrets, daemon_env, security contexts (core) | — | merged (#996) |
 | M4a | T024, T130, T066, T031, T131, T070, T032 | full | Kubernetes form via Edit (Add entry hidden), shared resources fields, credentials list | — | merged (#1000) |
 | M4b | T083, T084, T080, T132, T085, T086, T082, T133, T129 | full | Placement fields, Stop/Remove/Forget locally/Logs from the row, Start → Unavailable | — | merged (#1005) |
-| M5 | T134, T022, T074, T135, T030, T077, T136 | full | (#806) Copy + Connect over SSH through the relay; failures at client level | — | implemented, in review (unblocked 2026-10-18, decision below) |
-| M6 | T138, T139, T141, T142, T033, T140 | full | (#806) AI CLI install, drift prompt, Add entry, user guide 🎯 MVP | — | blocked on #806 |
+| M5 | T134, T022, T074, T135, T030, T077, T136 | full | (#806) Copy + Connect over SSH through the relay; failures at client level | — | merged (#1011) |
+| M6 | T138, T139, T141, T142, T033, T140 | full | (#806) AI CLI install, drift prompt, Add entry, user guide 🎯 MVP | — | in progress (unblocked 2026-10-18) |
 | M7 | T047–T055, T100 | full | (#806) Clone + worktrees in the pod (RepoClone) | — | blocked on #806 |
 | M8 | T057, T058, T060, T061, T062, T101 | full | (#806) Reconnect; pod gone → stopped with reason | — | blocked on #806 |
 | M9 | T088–T096, T105 | full | (#806) kube_real_* suite, `mise run test-kube`, CI job kube-cluster | — | blocked on #806 |
@@ -59,6 +60,10 @@ stash@{0} survivors (all used by M1a–M2, stash dropped 2026-10-18; backed up i
 | 9 | implement M1a | FR-004 image source | owner (verbatim): "use basic image with ssh where you can copy daemon and install ai cli" — replaces decision 1: no build/push/registry; the pod runs a basic image with sshd, the client copies the daemon binary in over SSH and installs the AI CLIs (with decision 8). Changes the start sequence (no `Image` phase; a copy/install step) and likely the manifests. Design revision pending before more implementation | owner | owner instruction 2026-10-17T21:34Z |
 | 10 | implement M1a | Same mechanism for the local sandbox container? | owner (verbatim): "should use same mechanism for local \"sandbox\" container". Orchestrator default: #686 builds the sshd-image + copy-daemon-over-SSH + install-CLIs mechanism as a shared part both runtimes can use; moving the local sandbox container runtime onto it is #806's scope (commented there) | owner + orchestrator default | owner instruction 2026-10-17T21:35Z |
 | 11 | design rev 2 | Who builds the shared sshd image + copy-daemon + install-CLIs mechanism? | #806's separate run builds it; #686 consumes it (contracts/shared-ssh-image.md, to write) and orders milestones: work independent of it first (core types done, kubeconfig, manifests + pod/PVC/secret lifecycle, port-forward tunnel, stop/remove, failure reasons, Settings form), copy-daemon + install-CLIs last, marked "blocked on #806" | owner via coordinator | coordinator message 2026-10-17 |
+
+## Decisions (M6)
+
+- #806 status (orchestrator, 2026-10-18): #806 is open, but M6 builds on what is on main: `provision::run` installs the AI CLIs (806 M4), and `sandbox::basic_image` pins the image. Task-text drift fixed in tasks.md T138/T139/T141/T142: (1) install runs inside M5's `connect_pod`, so T141 is `pod_target(reach, providers)` + failure mapping, not a new phase; (2) #806 only *warns* on a failed CLI install and goes on to start the daemon, so `connect_pod` turns the warnings into `KubeFailure::Provision` (FR-012, US4.5) and rolls back; (3) the install timeout maps to `PhaseTimeout { Install }`; (4) test paths are `crates/micold-client/tests/`; (5) the install fake is `kube::fake_host::Host` (+ `then_hang`); (6) no pinned digest exists (806 T049), so the default image is `KubeSettings::pod_image()` = `micold-basic:<content hash>` tag; (7) the Add gate is `SHARED_SSH_IMAGE_AVAILABLE`. Nothing M6 needs sits only in #806's M5–M7.
 
 ## Decisions (M5)
 

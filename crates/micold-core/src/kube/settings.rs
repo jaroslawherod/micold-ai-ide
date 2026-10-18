@@ -192,6 +192,21 @@ impl KubeSettings {
         }
     }
 
+    /// The image the pod runs: the one given, else #806's pinned basic image (FR-004, FR-024).
+    /// No digest is pinned yet (806 T049), so the reference is the content-hash tag.
+    pub fn pod_image(&self) -> String {
+        self.image.as_ref().map_or_else(
+            || {
+                format!(
+                    "{}:{}",
+                    crate::sandbox::basic_image::BASIC_IMAGE_REPOSITORY,
+                    crate::sandbox::basic_image::BASIC_IMAGE_CONTENT_HASH
+                )
+            },
+            ImageRef::to_reference,
+        )
+    }
+
     /// Whether the given image can change under a running daemon, as the sandbox flags it.
     pub fn image_is_moving(&self) -> bool {
         self.image.as_ref().is_some_and(ImageRef::is_moving)
@@ -466,6 +481,19 @@ mod tests {
         assert_eq!(value["image"], raw, "stored as the reference given");
         let back: KubeSettings = serde_json::from_value(value).unwrap();
         assert_eq!(back, s);
+    }
+
+    #[test]
+    fn the_default_pod_image_is_the_pinned_basic_image_and_a_given_one_wins() {
+        let mut s = KubeSettings::new("c", "n", &[]);
+        let pinned = s.pod_image();
+        assert!(
+            pinned.starts_with("ghcr.io/jaroslawherod/micold-basic:"),
+            "{pinned}"
+        );
+        assert!(ImageRef::parse(&pinned).is_ok(), "{pinned}");
+        s.image = Some(ImageRef::parse("ghcr.io/acme/ssh:1").unwrap());
+        assert_eq!(s.pod_image(), "ghcr.io/acme/ssh:1");
     }
 
     #[test]

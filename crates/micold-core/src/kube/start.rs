@@ -1,6 +1,7 @@
 //! The start sequence of a Kubernetes daemon (feature 686, research K6, contract §2–§3). This
 //! milestone runs it through `Tunnel`; `Copy`, `Install` and `Connect` come later.
 
+use std::collections::BTreeSet;
 use std::fmt;
 use std::future::Future;
 use std::path::Path;
@@ -21,6 +22,7 @@ use crate::provision::{
     Provisioned, Step, StepBounds,
 };
 use crate::sandbox::AiCliSelection;
+use crate::session::AiCli;
 use crate::ssh::argv::{PinnedReach, Reach};
 use crate::ssh::provision::{ProvisionOptions, SshHost};
 use crate::ssh::{ReasonContext, SshFailure};
@@ -655,12 +657,12 @@ pub fn daemon_env() -> Vec<(String, String)> {
 }
 
 /// The shared sequence's target for the pod: SSH through the relay's loopback port, AI CLIs
-/// installed by M6 (none selected here), the 120 s step bounds and the 15 minute install.
-pub fn pod_target(reach: PinnedReach) -> ProvisionTarget {
+/// installing the daemon's `providers`, the 120 s step bounds and the 15 minute install.
+pub fn pod_target(reach: PinnedReach, providers: &BTreeSet<AiCli>) -> ProvisionTarget {
     ProvisionTarget {
         reach: Reach::Pinned(reach),
         owned: crate::provision::Ownership::AppOwned {
-            ai_clis: AiCliSelection(Default::default()),
+            ai_clis: AiCliSelection(providers.clone()),
             table: AiCliTable::pinned(),
             state_dir: STATE_DIR.into(),
             egress: Egress::Direct,
@@ -711,6 +713,11 @@ fn provision_failure(
 ) -> KubeFailure {
     match &failure.cause {
         FailureCause::Cancelled => KubeFailure::Cancelled,
+        FailureCause::TimedOut { .. } if failure.step == Step::InstallAiClis => {
+            KubeFailure::PhaseTimeout {
+                phase: StartPhase::Install,
+            }
+        }
         FailureCause::Ssh(SshFailure::HostKeyChanged | SshFailure::HostKeyUnknown) => {
             KubeFailure::HostKeyMismatch {
                 pod: pod.to_string(),
@@ -775,6 +782,16 @@ pub async fn connect_pod(
         show(event, on_phase);
     }
     let failure = match result {
+        // A CLI that did not install fails the start naming it (FR-012, US4.5); 806's own
+        // sequence only warns, as its container start continues without it.
+        Ok(done) if !done.warnings.is_empty() => KubeFailure::Provision {
+            reason: done
+                .warnings
+                .iter()
+                .map(crate::provision::ProvisionWarning::text)
+                .collect::<Vec<_>>()
+                .join("\n"),
+        },
         Ok(done) if matches!(done.connected, Connected::Ready(..)) => {
             return ConnectOutcome::Ready(Box::new(done));
         }

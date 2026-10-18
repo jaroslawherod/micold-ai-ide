@@ -23,6 +23,8 @@ pub struct Host {
     pub runs: Mutex<VecDeque<io::Result<SshOutput>>>,
     pub bridge: Mutex<Option<SshStdio>>,
     pub commands: Mutex<Vec<Vec<String>>>,
+    /// Once the scripted runs are used up, a further `run` never answers instead of panicking.
+    pub hang: std::sync::atomic::AtomicBool,
 }
 
 impl Host {
@@ -42,6 +44,11 @@ impl Host {
             .say(PROBE_HAVE, 0, "")
             .say("", 0, "")
     }
+    /// A `run` after the scripted ones never answers (a stuck installer).
+    pub fn then_hang(self) -> Self {
+        self.hang.store(true, std::sync::atomic::Ordering::Relaxed);
+        self
+    }
     pub fn bridge(self, stdio: SshStdio) -> Self {
         *self.bridge.lock().unwrap() = Some(stdio);
         self
@@ -58,7 +65,13 @@ impl SshRunner for Host {
     ) -> BoxFuture<'_, io::Result<SshOutput>> {
         self.commands.lock().unwrap().push(cmd.args);
         let next = self.runs.lock().unwrap().pop_front();
-        Box::pin(async move { next.expect("unscripted ssh run") })
+        let hang = next.is_none() && self.hang.load(std::sync::atomic::Ordering::Relaxed);
+        Box::pin(async move {
+            if hang {
+                std::future::pending::<()>().await;
+            }
+            next.expect("unscripted ssh run")
+        })
     }
     fn open(&self, cmd: SshCommand) -> io::Result<SshStdio> {
         self.commands.lock().unwrap().push(cmd.args);
