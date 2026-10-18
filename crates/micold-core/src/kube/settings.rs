@@ -617,14 +617,19 @@ mod tests {
     #[test]
     fn two_ssh_keys_or_two_pull_files_are_refused_for_sharing_a_secret() {
         let mut s = KubeSettings::new("kind-dev", "dev", &[]);
-        s.allowed.insert(KubeCredential::GitSshKey { key: "/a".into() });
+        s.allowed
+            .insert(KubeCredential::GitSshKey { key: "/a".into() });
         assert!(s.validate().is_ok());
-        s.allowed.insert(KubeCredential::GitSshKey { key: "/b".into() });
+        s.allowed
+            .insert(KubeCredential::GitSshKey { key: "/b".into() });
         assert!(s.validate().is_err());
-        s.allowed.remove(&KubeCredential::GitSshKey { key: "/b".into() });
-        s.allowed.insert(KubeCredential::RegistryPull { auths: "/p".into() });
+        s.allowed
+            .remove(&KubeCredential::GitSshKey { key: "/b".into() });
+        s.allowed
+            .insert(KubeCredential::RegistryPull { auths: "/p".into() });
         assert!(s.validate().is_ok());
-        s.allowed.insert(KubeCredential::RegistryPull { auths: "/q".into() });
+        s.allowed
+            .insert(KubeCredential::RegistryPull { auths: "/q".into() });
         assert!(s.validate().is_err());
     }
 }
