@@ -1,0 +1,20 @@
+{
+  "name": "micold-standin-cli-slow",
+  "version": "1.0.0",
+  "description": "Slow stand-in: its install outlives any test, so a stop can land mid-install",
+  "bin": {
+    "claude": "bin/cli.sh",
+    "copilot": "bin/cli.sh",
+    "pi": "bin/cli.sh",
+    "codex": "bin/cli.sh",
+    "opencode": "bin/cli.sh"
+  },
+  "files": [
+    "bin"
+  ],
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "preinstall": "sleep 600"
+  }
+}

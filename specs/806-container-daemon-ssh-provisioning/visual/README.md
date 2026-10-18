@@ -5,7 +5,8 @@ Real client (`micold-ai-ide`, debug build), `ICED_BACKEND=tiny-skia`, private Xv
 | # | Check | Verdict | Evidence |
 |---|-------|---------|----------|
 | 1 | Image select shows exactly "Basic image (recommended)" and "My own image" | PASS | `b1-image-select.png` |
-| 1 | AI CLIs: five boxes, only Claude Code ticked | NOT-CHECKABLE | The form has no AI CLI section yet (T077/T078 open; T070 says "without the AI CLI boxes") |
+| 1 | AI CLIs: five boxes, only Claude Code ticked | PASS | `b1-ai-cli-section.png` (fresh build of HEAD f0ca1c0d): "AI tools in this daemon" lists Claude Code (ticked), GitHub Copilot, Pi Coding Agent, Codex, OpenCode (unticked), with the note "Changes apply at the next start...". The heading reads "AI tools", not "AI CLIs" as the quickstart says. |
+| 5 | Install failure: row names Codex as not installed with npm output | NOT-CHECKABLE | The warning only comes from a real provisioning run (`ProvisionEvent::Warned`, shown by `ui/settings/daemons.rs` under the row); it needs a container runtime and an SSH server in it, and neither the showcase nor persisted settings can inject one. Covered by `tests/daemons_feature.rs` (state level), not seen on screen. |
 | 3 | CPU and memory fields exist and take 2 / 4 GiB | PASS (form only) | `b3-limits.png`: "Processor limit" 2 (cores), "Memory limit" 4096 (mebibytes). `docker inspect` not checked. |
 | 4 | "My own image": SSH-server note, reference and archive fields | PASS | `b4-own-image.png`: "Your image must run an SSH server; see the user guide.", Image reference, Image file |
 | 6 | Migration: row says moved off the released image | PASS | `b6-migration-row.png`: "Moved off the released daemon image; it moves to the basic image on its next start." |

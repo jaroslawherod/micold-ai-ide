@@ -49,6 +49,13 @@ default, like every `sandbox_real_*` test. The end-to-end runs on the Linux runn
 Windows rest on the render-free tests (`daemon_rows_uniform`, `per_daemon_actors`, the registry
 and state-machine tests), which run on every platform.
 
+The provisioning end-to-end suite (feature 806, FR-025) is `sandbox_real_provision.rs` in the same
+directory, so that second step runs it too: fresh start, reuse without copying, an image without an
+SSH server, a failing install, a migrated daemon, a `NoOutbound` install through the relay, a stop
+during a long install that leaves no container or daemon, and two concurrent starts that give one
+container and one daemon. The 489 suite below runs on the shared provisioning. Locally:
+`mise run image && mise run test-sandbox`; neither runs by default.
+
 `remote daemon over a real sshd` (feature 489) installs `openssh-server` and runs the `ssh_real_*`
 tests (`mise run test-ssh` locally): a rootless `sshd` on loopback that logs in as the runner's own
 user, the client's own build copied to a private `$HOME` and started through the bridge. They are

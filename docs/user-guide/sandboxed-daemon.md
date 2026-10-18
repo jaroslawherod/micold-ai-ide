@@ -453,6 +453,13 @@ container runtime"*, *"…while getting the sandbox image"*, *"…while creating
 *"…while starting the sandbox"* — so you can tell a missing runtime from a missing image without
 reading the detail.
 
+### How long each step may take
+
+Getting the image may take up to 15 minutes, installing the AI CLIs up to 10 minutes in total, and
+every other step of a start up to 2 minutes. A step that passes its limit fails the start, naming
+the step and the limit. Stopping a start, or a start that fails, removes the container it created
+and stops the daemon it started; your daemon's saved data stays.
+
 ### The catalogue
 
 | Cause | What the application says | What to do |

@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #806
 - **Worktree branch**: claude/project-thread-uwrpqv
 - **Started**: 2026-10-17
-- **Phase**: M6
-- **Next step**: M6 continues from *Handover*
+- **Phase**: M7
+- **Next step**: close (T088–T089) after M7 merges
 
 ## Pull requests
 
@@ -23,6 +23,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #995 | M4 AI CLI install step + registry-only relay | merged | abe058a2424ea0551edb2f6667ac732064434557 |
 | #1018 | M5b part 1 (image pin, bridge env, notices, migration) | merged | 6dbe317600b3c8430dd392b5a94293c85e6fbf2f |
 | #1027 | M5c (real-runtime provision suite, form tests, row text) | merged | dc2d379365c2379b201dca8d3a6fadd40f39c632 |
+| #1043 | M6 per-daemon AI CLI selection, install warnings | merged | f0ca1c0d133038f1e710a4a616cbbfbf994f4ace |
 | #998 | M5 subset (container daemons over SSH on the basic image; pulled in T047, T055, T065) | merged | d526eaca82b43d60d5f2eb85926259f0fefc45e4 |
 
 ## Milestones
@@ -36,9 +37,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M5 | T042–T044, T049–T054, T057, T060, T061 | full | container daemons on the pinned basic image over SSH (`Dial::ContainerSsh`), two-entry image form, migration read-repair, legacy adoption; shipped as a subset (orchestrator limit on parts) | (opened by the orchestrator) | gate green at c43d8040 |
 | M5b | T045, T046, T048, T056, T058, T059, T062–T064, T066–T070 (T047, T055, T065 done in #998) | full | the rest of M5: notices and gated legacy restart, tests, real-runtime suites on the basic image, CI pin check, user guide, visual pass | — | pending (new milestone) |
 | M6 | T071–T074, T076, T077 (T075, T078 open, see Follow-ups) | full | per-daemon AI CLI selection; install warnings in the row | (opened by the orchestrator) | gate green at 88af2fbe |
-| M7 | T079–T086 | full | step bounds, cancel, rollback, concurrent starts; end-to-end suite in CI | — | pending |
+| M7 | T079–T086 (+ M6b folded in: T075 NoOutbound cases, T078 visual pass) | full | step bounds, cancel, rollback, concurrent starts; end-to-end suite in CI | — | implemented incl. started_daemon rollback in the SSH attempt, strict PostureBlocksDownload test (`provision::run_with_relay` seam); gate green at d3b19972 (reviews A r2 clean) |
 
 Milestone notes:
+- M6b (T075 NoOutbound real-runtime cases, T078 visual pass) was folded into M7; T078's §B 5 is not checkable without a container runtime and is left to CI.
 - M1 is the basic image, not the P1 story (milestones rule 1): US1 needs `BASIC_IMAGE` pinned to a digest that only exists after `basic-image.yml` runs on `main`, so the image must merge first. The shared provisioning follows as M2 because #686 waits on it (unit scope).
 - M5 (29 tasks) is not split: `ImageChoice` replaces `ImageSource` in stored settings, so the migration (US4), the two-entry form (US3, FR-003) and legacy adoption (FR-017) must land with the container switch; any split leaves `main` with a form offering the released image or a running legacy container replaced with its sessions.
 - Order change vs plan *Delivery order*: AI CLI install (plan step 5) moved before the container target (step 4) so containers never lose their AI CLIs on `main`.
@@ -85,6 +87,7 @@ Milestone notes:
 | M5c review B (conformance, sonnet) | 1 | 7e4573e8c7115d81ab1304374e86f7d297622b16:c0850e4685b784cc72b8b989fab3015053b0dbfe | CHANGES: 3 MAJOR, 1 MINOR (F1 cycle-log row added; F2 fixed as A F2; F3 declined; F4 declined) |
 | M6 review A (reviewer agent) | 1 | fa4cd4b9de1fd016af7218f9e0fe3ab73fbbb121:fd94d65f8ca3be327a3179413bfae126f0a57192 | CHANGES: 2 MAJOR, 1 MINOR (F1 `Warned` lossy: the sink retries a full channel for it; F2 duplicates: cleared on `Entered(Acquire)`; F3 declined, see below) |
 | M6 review B (conformance, sonnet) | 1 | fa4cd4b9de1fd016af7218f9e0fe3ab73fbbb121:fd94d65f8ca3be327a3179413bfae126f0a57192 | CHANGES: 3 BLOCKER, 2 MAJOR, 1 MINOR (F1 tasks ticked; F2 `NoOutbound` real-runtime cases and F3 visual pass deferred, in Follow-ups; F4 test now drives selected/failed sets; F5 cycle-log M6 section added; F6 declined) |
+- M7 A r1 (e831de79:e5cf3805): CHANGES (1 BLOCKER, 2 MAJOR, 2 MINOR). B r1 (same snapshot): CHANGES (3 MAJOR, 2 MINOR). Fixed: daemon found running is never rolled back (`login::daemon_running` pre-check), every runtime command bounded (`limiting_commands`), unused token documented. Round 2 (scoped, sonnet): CLEAN. Gate green after merging origin/main (one mcp_audit_log paste flake on an earlier run, passes alone x3).
 
 ## Declined review findings
 
@@ -110,11 +113,12 @@ Milestone notes:
 
 - M6 review A F3 (MINOR): the stale-`offered.json`-then-empty case is covered by `an_empty_selection_rewrites_offered_json_to_offer_nothing` and by the CI case `sandbox_real_provision_deselecting_a_cli_stops_it_being_offered_after_restart`; no change.
 - M6 review B F6 (MINOR): the fail-fast login and the "is not ready" wording are the ledger follow-up the orchestrator assigned to this milestone (see Handover); no task added.
+- M7 A F3 / B F5 (create timeout rolls back by name, could remove a name-race winner): declined, needs a name race and the loser's `create` dying at once; no attempt-unique label exists to tell the container apart; the winner's next start re-adopts or recreates.
+- M7 B F2/F3, A F4/F5 (real-runtime stop and race tests drive `provision::run`, not the client's `container_attempt`/`bring_up_attempt`): declined for this PR, T082 and FR-020/023 are met by the suites plus unit tests of the client path (`StartRollback`, lifecycle rollback and name-race tests); logged as a follow-up.
 
 ## Handover
 
-M6 shipped as a gated subset (unit 2). **Done**: T071–T074, T076, T077; the install warnings (`ProvisionEvent::Warned` from the install step; the row lists them via `DaemonView.install_warnings`, recent errors name the CLI with the output, the next attempt clears them; install lines show in the activity text; container rows now show start activity); the user guide section (T078 docs); the empty-selection and fail-fast-login follow-ups (`wait_for_login` fails at once when `id -un` says `cannot find name for user ID`, with a reason naming the image); T075 partly (failing install, deselect, empty selection; compile-checked only).
-**Open (new milestone M6b)**: T075 `NoOutbound` real-runtime cases (relay install completes; forced relay failure names `PostureBlocksDownload` within its bound); T078 visual pass for quickstart §B 1 and 5 with evidence under `visual/` (README rows for the AI CLI section and an install warning are still NOT-CHECKABLE).
+None.
 
 ## Open escalation
 
@@ -132,3 +136,5 @@ None.
 - Red CI #998, part 8 (history/mcp suites): `sandbox_real_history` (6) and `sandbox_real_mcp` failed on the basic image. Causes: (1) a daemon the client starts over SSH does not inherit the container's `-e` env (`MICOLD_IMAGE_REFERENCE`, `TZ`), so the history suite now provisions then restarts the container (shared `provision_then_restart` in `sandbox_real_support`, as `sandbox_real_idle` does) so the entrypoint's daemon runs with it; (2) `docker stop` signals only PID 1 (sshd, `exec`'d), so the daemon was killed unsaved: `packaging/basic/entrypoint.sh` now runs sshd as a child and on SIGTERM/SIGINT stops every daemon (up to 10 s, the runtime's default stop grace) then sshd (contract + README updated; simulated with stub scripts, the real image is verified by CI); (3) `sandbox_real_mcp` compared `<runtime> port` output to the host port; it names the container port 2222. Follow-up (product): a bridge-started daemon lacks the container env (`MICOLD_IMAGE_REFERENCE`, `TZ`); only an entrypoint-started one has it. `cargo test --no-run`/clippy with `sandbox-real-runtime` clean; suites not run here.
 - Part 8: `BASIC_IMAGE_CONTENT_HASH` moved to the new tree hash (the entrypoint changed); `BASIC_IMAGE` (tag + digest) still names the last published image until `basic-image.yml` publishes this tree on `main` (T049 re-pins it).
 - **M6b (new milestone)**: T075's `NoOutbound` cases and T078's visual pass (see Handover). The visual pass needs a display; the cloud container has no xdotool.
+
+- M7: a real-runtime test that drives the client's own start path (`bring_up_attempt` with a cancel, two racing `bring_up_attempt`s, `container_attempt` dropped after `Entered(Start)`) and asserts no container or daemon is left; needs the harness to build a `SandboxProfile`/mount set.

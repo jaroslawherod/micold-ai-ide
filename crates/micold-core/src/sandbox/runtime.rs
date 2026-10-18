@@ -325,6 +325,10 @@ pub enum RuntimeError {
     SandboxStopped { name: String },
     /// The runtime did not answer in time.
     Timeout { operation: String },
+    /// The start was stopped while the runtime was working (feature 806, FR-020).
+    Cancelled,
+    /// A container with this name exists already: another client's `create` won (FR-023).
+    NameInUse { name: String },
     /// Unclassified. Retains stderr so the log has the whole story.
     Unknown { stderr: String },
 }
@@ -365,6 +369,10 @@ impl RuntimeError {
                 format!("The sandbox container `{name}` is no longer running.")
             }
             RuntimeError::Timeout { operation } => format!("{operation} did not finish in time."),
+            RuntimeError::Cancelled => "The start was stopped.".to_string(),
+            RuntimeError::NameInUse { name } => {
+                format!("A container named `{name}` already exists.")
+            }
             RuntimeError::Unknown { stderr } => {
                 let line = stderr.lines().next().unwrap_or("no detail").trim();
                 format!("The runtime reported: {line}")
@@ -419,6 +427,10 @@ impl RuntimeError {
             RuntimeError::Timeout { .. } => {
                 "Retry; if it persists, restart the runtime.".to_string()
             }
+            RuntimeError::Cancelled => "Start it again when you are ready.".to_string(),
+            RuntimeError::NameInUse { .. } => {
+                "Retry: the existing container is used as it is.".to_string()
+            }
             RuntimeError::Unknown { .. } => {
                 "Retry. The runtime's own output is in the diagnostics.".to_string()
             }
@@ -433,6 +445,13 @@ impl fmt::Display for RuntimeError {
 }
 
 impl std::error::Error for RuntimeError {}
+
+/// The first double-quoted word of `text`, without the leading `/` Docker puts on names.
+fn quoted_name(text: &str) -> Option<String> {
+    let start = text.find('"')? + 1;
+    let len = text[start..].find('"')?;
+    Some(text[start..start + len].trim_start_matches('/').to_string())
+}
 
 /// Classify a failed invocation into the closed enumeration (obligation C-6).
 ///
@@ -476,6 +495,12 @@ pub fn classify(kind: RuntimeKind, out: &CommandOutput) -> RuntimeError {
     if has("pull access denied") || has("manifest unknown") || has("repository does not exist") {
         return RuntimeError::ImageNotFound {
             reference: String::new(),
+        };
+    }
+    // Before the port check: both say "already in use", and only this one is about the name.
+    if has("container name") && has("already in use") {
+        return RuntimeError::NameInUse {
+            name: quoted_name(&out.stderr).unwrap_or_default(),
         };
     }
     if has("address already in use") || has("bind for") {
@@ -716,6 +741,8 @@ mod tests {
             RuntimeError::Timeout {
                 operation: "start".into(),
             },
+            RuntimeError::Cancelled,
+            RuntimeError::NameInUse { name: "n".into() },
             RuntimeError::Unknown {
                 stderr: "boom".into(),
             },
@@ -724,6 +751,23 @@ mod tests {
             assert!(!e.reason().trim().is_empty(), "{e:?} has no reason");
             assert!(!e.remedy().trim().is_empty(), "{e:?} has no remedy");
         }
+    }
+
+    #[test]
+    fn a_name_conflict_is_told_apart_from_a_port_in_use() {
+        let docker = CommandOutput {
+            code: Some(125),
+            stdout: String::new(),
+            stderr: "docker: Error response from daemon: Conflict. The container name \
+                     \"/micold-sandbox\" is already in use by container \"3f2a\"."
+                .to_string(),
+        };
+        assert_eq!(
+            classify(RuntimeKind::Docker, &docker),
+            RuntimeError::NameInUse {
+                name: "micold-sandbox".to_string()
+            }
+        );
     }
 
     #[test]

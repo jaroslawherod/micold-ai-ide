@@ -245,13 +245,13 @@ only; a blocked Codex install shows npm's output and the daemon still connects (
 - [X] T072 [P] [US1] Write form tests in `crates/micold-client/src/ui/settings/container_fields.rs`: one checkbox per `AiCli::ALL`; a newly added daemon has only Claude Code ticked; the "changes apply at the next start" note; an empty selection saves; a change on a running daemon goes through the restart confirmation; the section is not shown for a remote SSH daemon (US6 #3)
 - [X] T073 [P] [US5] Write client tests in `crates/micold-client/src/features/daemons.rs`: `InstallLine` events show in the row; `ProvisionWarning`s from `Provisioned.warnings` are listed in the row and in recent errors naming the CLI with the installer output (US5 #1, FR-012)
 - [X] T074 [P] [US1] Extend `crates/micold-client/tests/unavailable_default_says_so.rs`: a stored default AI CLI that is deselected, or whose install failed, starts nothing, substitutes nothing and says it is not available on that daemon (D4)
-- [ ] T075 [US5] Add to `crates/micold-daemon/tests/sandbox_real_provision.rs`: a stand-in CLI whose install fails → warning with its output, daemon connected, that CLI not offered, the other offered (US5 #1); deselecting a CLI stops it being offered after restart (US1 #2); under the `NoOutbound` posture the install goes through the relay and completes, and with the relay forced to fail it fails naming the posture (`PostureBlocksDownload`) within its bound (edge case "No-outbound network posture")
+- [x] T075 [US5] Add to `crates/micold-daemon/tests/sandbox_real_provision.rs`: a stand-in CLI whose install fails → warning with its output, daemon connected, that CLI not offered, the other offered (US5 #1); deselecting a CLI stops it being offered after restart (US1 #2); under the `NoOutbound` posture the install goes through the relay and completes, and with the relay forced to fail it fails naming the posture (`PostureBlocksDownload`) within its bound (edge case "No-outbound network posture")
 - [X] T076 [P] [US1] Extend `crates/micold-client/tests/gates/container_section_fits.rs` with the five AI CLI checkboxes
 
 ### Implementation
 
 - [X] T077 [US1] Add `SandboxProfile.ai_clis: AiCliSelection` (serde default `all()`) in `crates/micold-core/src/sandbox/mod.rs`; the add-daemon path sets `new_daemon()`; `crates/micold-client/src/shell/sandbox.rs` passes the stored selection into `Ownership::AppOwned`
-- [ ] T078 [US1] Add the AI CLI `Checkbox` list and note in `crates/micold-client/src/ui/settings/container_fields.rs`; show install lines and warnings in `crates/micold-client/src/ui/settings/daemons.rs` and recent errors in `crates/micold-client/src/features/daemons.rs`; document the AI CLI selection, the empty selection and the install under no-outbound in `docs/user-guide/sandboxed-daemon.md` (FR-026); visual pass for quickstart §B 1 and 5, evidence under `specs/806-container-daemon-ssh-provisioning/visual/`
+- [x] T078 [US1] Add the AI CLI `Checkbox` list and note in `crates/micold-client/src/ui/settings/container_fields.rs`; show install lines and warnings in `crates/micold-client/src/ui/settings/daemons.rs` and recent errors in `crates/micold-client/src/features/daemons.rs`; document the AI CLI selection, the empty selection and the install under no-outbound in `docs/user-guide/sandboxed-daemon.md` (FR-026); visual pass for quickstart §B 1 and 5, evidence under `specs/806-container-daemon-ssh-provisioning/visual/` (§B 1 passed; §B 5 needs a real provisioning run, recorded not-checkable in `visual/README.md`, left to CI's real-runtime suite)
 
 **Checkpoint (M6)**: US1 #2 and US5 #1 hold.
 
@@ -265,17 +265,17 @@ R12, R14).
 
 ### Tests (write first, must fail)
 
-- [ ] T079 [P] [US5] Write `AttemptLedger` tests in `crates/micold-core/src/provision/attempt.rs`: rollback removes a container created in this attempt and stops one whose daemon this attempt started; never touches an adopted container or a daemon found running; host state dir untouched (FR-020)
-- [ ] T080 [P] [US5] Write tests in `crates/micold-core/src/sandbox/exec.rs` and `crates/micold-core/src/sandbox/lifecycle.rs`: `acquire_image` fails with `TimedOut { 15 min }` on `Acquire` (fake clock / injected bound); a cancel kills the runtime child; `bring_up` records into the ledger; a `create` that fails with a name conflict re-inspects and adopts the winner once (`Attach`), never retries further (FR-023)
-- [ ] T081 [P] [US5] Write client tests in `crates/micold-client/src/shell/sandbox.rs`: `InFlight::cancel()` sets the `CancelToken`, the start ends `stopped` with rollback; a failed start rolls back and shows `unreachable` with the reason in recent errors (US5 #3)
-- [ ] T082 [US5] Add to `crates/micold-daemon/tests/sandbox_real_provision.rs`: stop during a long install leaves no container or daemon process (FR-020); two concurrent starts of one daemon give one container and one daemon (FR-023); add to `crates/micold-daemon/tests/sandbox_real_multi_daemon_container.rs` a case where one daemon is provisioning or fails provisioning while another stays connected and responsive (FR-022)
+- [x] T079 [P] [US5] Write `AttemptLedger` tests in `crates/micold-core/src/provision/attempt.rs`: rollback removes a container created in this attempt and stops one whose daemon this attempt started; never touches an adopted container or a daemon found running; host state dir untouched (FR-020)
+- [x] T080 [P] [US5] Write tests in `crates/micold-core/src/sandbox/exec.rs` and `crates/micold-core/src/sandbox/lifecycle.rs`: `acquire_image` fails with `TimedOut { 15 min }` on `Acquire` (fake clock / injected bound); a cancel kills the runtime child; `bring_up` records into the ledger; a `create` that fails with a name conflict re-inspects and adopts the winner once (`Attach`), never retries further (FR-023)
+- [x] T081 [P] [US5] Write client tests in `crates/micold-client/src/shell/sandbox.rs`: `InFlight::cancel()` sets the `CancelToken`, the start ends `stopped` with rollback; a failed start rolls back and shows `unreachable` with the reason in recent errors (US5 #3)
+- [x] T082 [US5] Add to `crates/micold-daemon/tests/sandbox_real_provision.rs`: stop during a long install leaves no container or daemon process (FR-020); two concurrent starts of one daemon give one container and one daemon (FR-023); add to `crates/micold-daemon/tests/sandbox_real_multi_daemon_container.rs` a case where one daemon is provisioning or fails provisioning while another stays connected and responsive (FR-022)
 
 ### Implementation
 
-- [ ] T083 [US5] Add `AttemptLedger` and `rollback` in `crates/micold-core/src/provision/attempt.rs`
-- [ ] T084 [US5] Bound `acquire_image` at 15 min and kill on cancel in `crates/micold-core/src/sandbox/exec.rs`; `bring_up` takes the `CancelToken`, records into the ledger and re-adopts on a create conflict in `crates/micold-core/src/sandbox/lifecycle.rs`
-- [ ] T085 [US5] Carry the `CancelToken` in `InFlight` and roll back on failure or cancel in `crates/micold-client/src/shell/sandbox.rs`
-- [ ] T086 [US5] Make sure `.github/workflows/ci.yml` `sandbox-runtime` runs `sandbox_real_provision` and `ssh-remote` runs `ssh_real_*`; document the real-runtime task in `docs/development/` where the sandbox suite is documented (FR-025); note in `docs/user-guide/sandboxed-daemon.md` the step bounds and that stopping a start leaves nothing behind
+- [x] T083 [US5] Add `AttemptLedger` and `rollback` in `crates/micold-core/src/provision/attempt.rs`
+- [x] T084 [US5] Bound `acquire_image` at 15 min and kill on cancel in `crates/micold-core/src/sandbox/exec.rs`; `bring_up` takes the `CancelToken`, records into the ledger and re-adopts on a create conflict in `crates/micold-core/src/sandbox/lifecycle.rs`
+- [x] T085 [US5] Carry the `CancelToken` in `InFlight` and roll back on failure or cancel in `crates/micold-client/src/shell/sandbox.rs`
+- [x] T086 [US5] Make sure `.github/workflows/ci.yml` `sandbox-runtime` runs `sandbox_real_provision` and `ssh-remote` runs `ssh_real_*`; document the real-runtime task in `docs/development/` where the sandbox suite is documented (FR-025); note in `docs/user-guide/sandboxed-daemon.md` the step bounds and that stopping a start leaves nothing behind
 
 **Checkpoint (M7)**: US5 #2–#3 hold; SC-004 in CI.
 

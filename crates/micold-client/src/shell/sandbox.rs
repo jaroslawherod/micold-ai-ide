@@ -10,16 +10,15 @@
 //! enough to read.
 
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
 
 use iced::Task;
 use micold_client::app::Message;
 use micold_client::features::sandbox::{Msg as SandboxMsg, SandboxLocations};
 use micold_core::endpoint::DEFAULT_SANDBOX_PORT;
+use micold_core::provision::{rollback, AttemptLedger, CancelToken};
 use micold_core::sandbox::cli::CliRuntime;
 use micold_core::sandbox::exec::{CommandRunner, SystemRunner};
-use micold_core::sandbox::lifecycle::{bring_up, Failure, SandboxState, Started};
+use micold_core::sandbox::lifecycle::{bring_up_attempt, Failure, SandboxState, Started};
 use micold_core::sandbox::runtime::RuntimeCapabilities;
 use micold_core::sandbox::{CredentialLayout, MountSet, SandboxProfile, SandboxSpec, SecretMount};
 
@@ -269,6 +268,7 @@ pub struct Ready {
 ///
 /// `observe` is called as each stage is entered, so the view can show progress while the image is
 /// being acquired — the one stage that may take minutes (SC-004).
+#[cfg(test)]
 pub fn start<R: CommandRunner>(
     profile: &SandboxProfile,
     projects: &[PathBuf],
@@ -276,6 +276,34 @@ pub fn start<R: CommandRunner>(
     container_name: &str,
     port: u16,
     runner: R,
+    observe: &mut dyn FnMut(SandboxState),
+) -> Result<Ready, Failure> {
+    start_attempt(
+        profile,
+        projects,
+        facts,
+        container_name,
+        port,
+        runner,
+        &CancelToken::new(),
+        &mut AttemptLedger::new(),
+        observe,
+    )
+}
+
+/// [`start`] as one cancellable attempt: `cancel` kills a pull in progress and stops the steps
+/// after it, and `ledger` records the container this attempt created, for [`rollback`] (FR-019,
+/// FR-020).
+#[allow(clippy::too_many_arguments)]
+pub fn start_attempt<R: CommandRunner>(
+    profile: &SandboxProfile,
+    projects: &[PathBuf],
+    facts: &HostFacts,
+    container_name: &str,
+    port: u16,
+    runner: R,
+    cancel: &CancelToken,
+    ledger: &mut AttemptLedger,
     observe: &mut dyn FnMut(SandboxState),
 ) -> Result<Ready, Failure> {
     // The sandbox's own home, created here rather than left to the runtime (FR-004d). A bind
@@ -351,7 +379,11 @@ pub fn start<R: CommandRunner>(
         }
     }
 
-    let runtime = CliRuntime::new(profile.runtime, runner);
+    // The image comes within its bound or the start fails naming it; a cancel kills the pull.
+    let bounds = micold_core::provision::StepBounds::container();
+    let runtime = CliRuntime::new(profile.runtime, runner)
+        .limiting_acquire(bounds.acquire, cancel.clone())
+        .limiting_commands(bounds.create_container, cancel.clone());
     let build_spec = |_caps: &RuntimeCapabilities| SandboxSpec {
         name: container_name.to_string(),
         profile: profile.clone(),
@@ -365,7 +397,9 @@ pub fn start<R: CommandRunner>(
         home: facts.home.clone(),
     };
 
-    let started = bring_up(&runtime, profile, &mounts, build_spec, observe)?;
+    let started = bring_up_attempt(
+        &runtime, profile, &mounts, build_spec, cancel, ledger, observe,
+    )?;
     let locations = locations_for(&mounts, facts, started.mounted.as_deref());
     let shared = profile
         .credentials
@@ -648,47 +682,42 @@ pub fn cancel(running: &mut Option<InFlight>) {
 #[derive(Debug, Clone)]
 pub struct InFlight {
     task: iced::task::Handle,
-    cancelled: Arc<AtomicBool>,
+    cancelled: CancelToken,
 }
 
 impl InFlight {
     fn cancel(self) {
-        self.cancelled.store(true, Ordering::SeqCst);
+        self.cancelled.cancel();
         self.task.abort();
     }
 }
 
 /// The runner a bring-up drives the runtime through, which refuses every command once the bring-up
-/// is cancelled and remembers whether the container was already being made (#369).
+/// is cancelled (#369). What the attempt created is in its [`AttemptLedger`], not here.
 struct Cancellable<R> {
     runner: R,
-    cancelled: Arc<AtomicBool>,
-    launched: AtomicBool,
+    cancelled: CancelToken,
 }
 
 impl<R: CommandRunner> Cancellable<R> {
-    fn admit(&self, args: &[std::ffi::OsString]) -> std::io::Result<()> {
-        if self.cancelled.load(Ordering::SeqCst) {
+    fn admit(&self) -> std::io::Result<()> {
+        if self.cancelled.is_cancelled() {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::Interrupted,
                 "the sandbox bring-up was cancelled",
             ));
         }
-        // Marked before the command runs: a cancel that lands while it runs still cleans up.
-        if args.first().is_some_and(|a| a == "create" || a == "start") {
-            self.launched.store(true, Ordering::SeqCst);
-        }
         Ok(())
     }
 
-    /// Remove the container, if this bring-up was cancelled after it began making one. By name,
-    /// because a `create` interrupted mid-way never reported an id.
-    fn clean_up(&self, runtime: micold_core::sandbox::runtime::RuntimeKind, container_name: &str) {
-        use micold_core::sandbox::runtime::{ContainerId, ContainerRuntime};
-        if self.cancelled.load(Ordering::SeqCst) && self.launched.load(Ordering::SeqCst) {
-            let _ = CliRuntime::new(runtime, &self.runner)
-                .remove(&ContainerId(container_name.to_string()));
-        }
+    /// Undo what the attempt created when it failed or was cancelled (FR-020). Through the
+    /// unwrapped runner: the wrapper refuses commands once cancelled, and this is one.
+    fn roll_back(
+        &self,
+        ledger: &AttemptLedger,
+        runtime: micold_core::sandbox::runtime::RuntimeKind,
+    ) {
+        let _ = rollback(ledger, &CliRuntime::new(runtime, &self.runner));
     }
 }
 
@@ -698,7 +727,7 @@ impl<R: CommandRunner> CommandRunner for Cancellable<R> {
         program: &std::ffi::OsStr,
         args: &[std::ffi::OsString],
     ) -> std::io::Result<micold_core::sandbox::exec::CommandOutput> {
-        self.admit(args)?;
+        self.admit()?;
         self.runner.run(program, args)
     }
 
@@ -708,8 +737,19 @@ impl<R: CommandRunner> CommandRunner for Cancellable<R> {
         args: &[std::ffi::OsString],
         on_line: &mut dyn FnMut(micold_core::sandbox::exec::StreamEvent<'_>),
     ) -> std::io::Result<micold_core::sandbox::exec::CommandOutput> {
-        self.admit(args)?;
+        self.admit()?;
         self.runner.run_streaming(program, args, on_line)
+    }
+
+    fn run_limited(
+        &self,
+        program: &std::ffi::OsStr,
+        args: &[std::ffi::OsString],
+        limits: &micold_core::sandbox::exec::RunLimits,
+        on_event: &mut dyn FnMut(micold_core::sandbox::exec::StreamEvent<'_>),
+    ) -> std::io::Result<micold_core::sandbox::exec::CommandOutput> {
+        self.admit()?;
+        self.runner.run_limited(program, args, limits, on_event)
     }
 }
 
@@ -742,7 +782,7 @@ impl BringUp {
     /// none is in flight, so the one it replaces has finished; it is cancelled regardless, so two
     /// can never run against the one container.
     pub fn run(self, running: &mut Option<InFlight>) -> iced::Task<micold_client::app::Message> {
-        let cancelled = Arc::new(AtomicBool::new(false));
+        let cancelled = CancelToken::new();
         let (task, handle) = self.task(cancelled.clone()).abortable();
         let in_flight = InFlight {
             task: handle,
@@ -756,7 +796,7 @@ impl BringUp {
 
     /// Run it against the real container runtime. Private: every caller goes through [`Self::run`],
     /// or the bring-up it starts cannot be cancelled.
-    fn task(self, cancelled: Arc<AtomicBool>) -> iced::Task<micold_client::app::Message> {
+    fn task(self, cancelled: CancelToken) -> iced::Task<micold_client::app::Message> {
         #[cfg(test)]
         SCHEDULED.with(|scheduled| scheduled.borrow_mut().push(self.clone()));
         #[cfg(not(test))]
@@ -782,28 +822,33 @@ impl BringUp {
     fn stream<R: CommandRunner + 'static>(
         self,
         runner: R,
-        cancelled: Arc<AtomicBool>,
+        cancelled: CancelToken,
     ) -> impl iced::futures::Stream<Item = Message> + Send + 'static {
         let Self { plan, after } = self;
         reported(after, move |observe| {
             let facts = HostFacts::gather(plan.state_dir);
             let runner = Cancellable {
                 runner,
-                cancelled,
-                launched: AtomicBool::new(false),
+                cancelled: cancelled.clone(),
             };
             prepare_keys(&facts.state_dir, plan.port)?;
-            let outcome = start(
+            let mut ledger = AttemptLedger::new();
+            let outcome = start_attempt(
                 &plan.profile,
                 &plan.projects,
                 &facts,
                 &plan.container_name,
                 plan.port,
                 &runner,
+                &cancelled,
+                &mut ledger,
                 observe,
             )
             .map(|ready| (ready.started, ready.locations));
-            runner.clean_up(plan.profile.runtime, &plan.container_name);
+            // A failed start leaves no container it made; a cancelled one none at all (FR-020).
+            if outcome.is_err() || cancelled.is_cancelled() {
+                runner.roll_back(&ledger, plan.profile.runtime);
+            }
             outcome
         })
     }
@@ -1256,16 +1301,22 @@ mod tests {
     struct CancelledDuring {
         runtime: std::sync::Arc<micold_core::sandbox::exec::RecordingRunner>,
         cancel_on: &'static str,
-        cancelled: std::sync::Arc<std::sync::atomic::AtomicBool>,
+        cancelled: CancelToken,
     }
 
     impl CancelledDuring {
         fn new(cancel_on: &'static str) -> Self {
-            let runtime = a_runtime_that_creates_the_sandbox();
+            Self::scripted(a_runtime_that_creates_the_sandbox(), cancel_on)
+        }
+
+        fn scripted(
+            runtime: micold_core::sandbox::exec::RecordingRunner,
+            cancel_on: &'static str,
+        ) -> Self {
             Self {
                 runtime: std::sync::Arc::new(runtime),
                 cancel_on,
-                cancelled: std::sync::Arc::default(),
+                cancelled: CancelToken::new(),
             }
         }
     }
@@ -1278,11 +1329,83 @@ mod tests {
         ) -> std::io::Result<micold_core::sandbox::exec::CommandOutput> {
             let out = self.runtime.run(program, args);
             if args.first().is_some_and(|first| first == self.cancel_on) {
-                self.cancelled
-                    .store(true, std::sync::atomic::Ordering::SeqCst);
+                self.cancelled.cancel();
             }
             out
         }
+    }
+
+    /// A bring-up whose `start` fails: the messages it reports and the runtime commands it issued.
+    async fn bring_up_whose_start_fails() -> (Vec<Message>, Vec<String>) {
+        use iced::futures::StreamExt;
+        let state_dir = tempfile::tempdir().expect("tempdir");
+        let plan = BootPlan {
+            profile: SandboxProfile::default(),
+            state_dir: state_dir.path().to_path_buf(),
+            projects: Vec::new(),
+            container_name: CONTAINER_NAME.to_string(),
+            port: DEFAULT_SANDBOX_PORT,
+        };
+        let runtime = CancelledDuring::scripted(
+            a_runtime_that_creates_the_sandbox_then(Ok(
+                micold_core::sandbox::exec::CommandOutput::err(
+                    1,
+                    "Error: cannot start the container",
+                ),
+            )),
+            "never",
+        );
+        let (log, cancelled) = (runtime.runtime.clone(), runtime.cancelled.clone());
+        let messages: Vec<Message> = BringUp::now(plan)
+            .stream(runtime, cancelled)
+            .collect()
+            .await;
+        let commands = log
+            .calls()
+            .iter()
+            .map(|call| call.args_lossy().join(" "))
+            .collect();
+        (messages, commands)
+    }
+
+    /// A start that fails after the container was made removes that container and reports the
+    /// runtime's words (FR-018, FR-020, US5 #3).
+    #[tokio::test]
+    async fn a_failed_start_rolls_back_the_container_it_made_and_reports_why() {
+        let (messages, commands) = bring_up_whose_start_fails().await;
+
+        assert_eq!(
+            commands.last().map(String::as_str),
+            Some("rm -f 9f2b1c4d7e8a"),
+            "a failed start left its container behind: {commands:?}"
+        );
+        let failed = messages.iter().find_map(|m| match m {
+            Message::Sandbox(SandboxMsg::Failed(failure)) => Some(failure.reason()),
+            _ => None,
+        });
+        assert!(
+            failed.is_some_and(|reason| reason.contains("cannot start the container")),
+            "the failure did not carry the runtime's output: {messages:?}"
+        );
+    }
+
+    /// `InFlight::cancel` is what a stop calls: it sets the token the attempt checks.
+    #[tokio::test]
+    async fn cancelling_the_in_flight_start_sets_its_token() {
+        let plan = BootPlan {
+            profile: SandboxProfile::default(),
+            state_dir: PathBuf::from("/nonexistent"),
+            projects: Vec::new(),
+            container_name: CONTAINER_NAME.to_string(),
+            port: DEFAULT_SANDBOX_PORT,
+        };
+        let mut running = None;
+        let _task = BringUp::now(plan).run(&mut running);
+        let token = running.as_ref().expect("in flight").cancelled.clone();
+        assert!(!token.is_cancelled());
+        cancel(&mut running);
+        assert!(token.is_cancelled());
+        assert!(running.is_none());
     }
 
     async fn bring_up_cancelled_during(cancel_on: &'static str) -> Vec<String> {
@@ -1334,7 +1457,7 @@ mod tests {
         );
         assert_eq!(
             commands.last().map(String::as_str),
-            Some("rm -f micold-sandbox"),
+            Some("rm -f 9f2b1c4d7e8a"),
             "a cancelled bring-up left its container behind: {commands:?}"
         );
     }
@@ -1918,6 +2041,15 @@ mod tests {
     /// probe (version, info), the image already present, no sandbox yet, the network, create's own
     /// probe, create, start.
     fn a_runtime_that_creates_the_sandbox() -> micold_core::sandbox::exec::RecordingRunner {
+        a_runtime_that_creates_the_sandbox_then(Ok(micold_core::sandbox::exec::CommandOutput::ok(
+            "",
+        )))
+    }
+
+    /// [`a_runtime_that_creates_the_sandbox`] whose `start` answers `start`.
+    fn a_runtime_that_creates_the_sandbox_then(
+        start: std::io::Result<micold_core::sandbox::exec::CommandOutput>,
+    ) -> micold_core::sandbox::exec::RecordingRunner {
         use micold_core::sandbox::exec::{CommandOutput, RecordingRunner};
         let fixture = |name: &str| {
             std::fs::read_to_string(
@@ -1939,7 +2071,7 @@ mod tests {
         runtime.push_ok(fixture("docker_version.json"));
         runtime.push_ok(fixture("docker_info.json"));
         runtime.push_ok("9f2b1c4d7e8a");
-        runtime.push_ok("");
+        runtime.push(start);
         runtime
     }
 

@@ -23,14 +23,20 @@ use std::path::Path;
 use std::time::{Duration, Instant};
 
 use micold_core::connect::Connected;
-use micold_core::provision::{FailureCause, Provisioned, Step, StepBounds};
+use micold_core::provision::{
+    rollback, AiCliTable, AttemptLedger, Egress, FailureCause, Provisioned, Step, StepBounds,
+};
+use micold_core::sandbox::cli::CliRuntime;
+use micold_core::sandbox::exec::SystemRunner;
 use micold_core::sandbox::lifecycle::{adopt, Adoption};
 use micold_core::sandbox::parse::ContainerFacts;
+use micold_core::sandbox::runtime::ContainerId;
 use micold_core::session::AiCli;
 
 use sandbox_real_support::{
-    cli, cli_out, image, provision_outcome, provision_outcome_with, runtime_cmd, seed,
-    start_sandbox, start_sandbox_from, wait_for_accept, SandboxSpec,
+    cli, cli_out, containers_named, daemon_count, failed, image, provision_outcome,
+    provision_outcome_with, runtime_cmd, runtime_kind, seed, start_no_outbound_sandbox,
+    start_sandbox, start_sandbox_from, wait_for_accept, ProvisionRun, SandboxSpec,
 };
 
 const FRESH_CONTAINER: &str = "micold-provision-probe";
@@ -456,4 +462,152 @@ async fn sandbox_real_provision_deselecting_a_cli_stops_it_being_offered_after_r
         offered.sort();
         assert_eq!(offered, want);
     }
+}
+
+const NO_OUTBOUND_CONTAINER: &str = "micold-provision-nooutbound-probe";
+const NO_OUTBOUND_NETWORK: &str = "micold-provision-nooutbound-probe-net";
+const NO_OUTBOUND_PORT: u16 = 17766;
+
+const STOP_CONTAINER: &str = "micold-provision-stop-probe";
+const STOP_NETWORK: &str = "micold-provision-stop-probe-net";
+const STOP_PORT: u16 = 17767;
+
+const RACE_CONTAINER: &str = "micold-provision-race-probe";
+const RACE_NETWORK: &str = "micold-provision-race-probe-net";
+const RACE_PORT: u16 = 17768;
+
+/// The registry-only relay (the pinned table's allow list) as the client opens it under `NoOutbound`.
+fn registry_relay() -> Egress {
+    Egress::Relay {
+        allow: AiCliTable::pinned().allow(),
+    }
+}
+
+/// `bounds` with the install bound shortened to `install`.
+fn install_bound(install: Duration) -> StepBounds {
+    StepBounds {
+        install,
+        ..StepBounds::container()
+    }
+}
+
+/// T075, edge case "No-outbound network posture": on a `NoOutbound` network the install goes
+/// through the relay and completes (the stand-in packages come from the state directory, so the
+/// path exercised is the `ssh -R` forward and the proxy environment, not the registry itself).
+#[tokio::test]
+async fn sandbox_real_provision_no_outbound_install_goes_through_the_relay_and_completes() {
+    let d = dirs("no-outbound");
+    let _sandbox = start_no_outbound_sandbox(&spec(
+        &d,
+        NO_OUTBOUND_CONTAINER,
+        NO_OUTBOUND_NETWORK,
+        NO_OUTBOUND_PORT,
+    ));
+    let (_, outcome, steps) = ProvisionRun {
+        egress: registry_relay(),
+        ..ProvisionRun::new(install_bound(Duration::from_secs(120)))
+    }
+    .run(NO_OUTBOUND_PORT)
+    .await;
+    let provisioned = outcome.unwrap_or_else(|f| {
+        panic!(
+            "a relayed install failed at {:?}: {:?}\n{}",
+            f.step, f.cause, f.output
+        )
+    });
+    assert!(steps.contains(&Step::InstallAiClis), "steps: {steps:?}");
+    assert!(
+        provisioned.warnings.is_empty(),
+        "no install warns: {:?}",
+        provisioned.warnings
+    );
+    assert!(
+        !offered_clis(&d.data).is_empty(),
+        "the relayed install recorded the CLIs it installed"
+    );
+}
+
+/// T075, edge case "No-outbound network posture": with the relay unable to open, the install fails
+/// on its own step inside its bound, names the network setting as the cause (not a bare ssh
+/// failure) and nothing is offered.
+#[tokio::test]
+async fn sandbox_real_provision_no_outbound_a_failed_relay_fails_the_install_within_its_bound() {
+    let d = dirs("no-outbound-fail");
+    let _sandbox = start_no_outbound_sandbox(&spec(
+        &d,
+        NO_OUTBOUND_CONTAINER,
+        NO_OUTBOUND_NETWORK,
+        NO_OUTBOUND_PORT + 10,
+    ));
+    let bound = Duration::from_secs(30);
+    let started = Instant::now();
+    let (_, outcome, _) = ProvisionRun {
+        egress: registry_relay(),
+        relay_fails: true,
+        ..ProvisionRun::new(install_bound(bound))
+    }
+    .run(NO_OUTBOUND_PORT + 10)
+    .await;
+    let failure = failed(outcome, "the install cannot succeed without its relay");
+    assert!(
+        started.elapsed() < bound + Duration::from_secs(15),
+        "the failure took {:?}, over its bound {bound:?}",
+        started.elapsed()
+    );
+    assert_eq!(failure.step, Step::InstallAiClis);
+    assert_eq!(failure.cause, FailureCause::PostureBlocksDownload);
+    assert!(offered_clis(&d.data).is_empty(), "nothing was installed");
+}
+
+/// T082, FR-020: a stop (the cancel token) during a long install ends the run as `Cancelled`
+/// promptly, starts no daemon, and after the rollback no container is left.
+#[tokio::test]
+async fn sandbox_real_provision_stop_during_a_long_install_leaves_no_container_or_daemon() {
+    let d = dirs("stop");
+    let _sandbox = start_sandbox(&spec(&d, STOP_CONTAINER, STOP_NETWORK, STOP_PORT));
+    let started = Instant::now();
+    let (_, outcome, steps) = ProvisionRun {
+        slow_install: true,
+        cancel_on: Some(Step::InstallAiClis),
+        ..ProvisionRun::new(install_bound(Duration::from_secs(300)))
+    }
+    .run(STOP_PORT)
+    .await;
+    let failure = failed(outcome, "a stopped start does not succeed");
+    assert_eq!(
+        failure.cause,
+        FailureCause::Cancelled,
+        "step {:?}",
+        failure.step
+    );
+    assert!(steps.contains(&Step::InstallAiClis) && !steps.contains(&Step::Start));
+    assert!(
+        started.elapsed() < Duration::from_secs(120),
+        "the stop took {:?} to take effect",
+        started.elapsed()
+    );
+    assert_eq!(daemon_count(STOP_CONTAINER), 0, "no daemon was started");
+    // The client's own rollback of a start that created the container (FR-020).
+    let mut ledger = AttemptLedger::new();
+    ledger.record_created(ContainerId(STOP_CONTAINER.to_string()));
+    rollback(&ledger, &CliRuntime::new(runtime_kind(), SystemRunner)).expect("the rollback runs");
+    assert_eq!(containers_named(STOP_CONTAINER), 0, "the container is gone");
+}
+
+/// T082, FR-023: two starts of one daemon at once give one container and one daemon.
+#[tokio::test]
+async fn sandbox_real_provision_two_concurrent_starts_give_one_container_and_one_daemon() {
+    let d = dirs("race");
+    let _sandbox = start_sandbox(&spec(&d, RACE_CONTAINER, RACE_NETWORK, RACE_PORT));
+    let run = || ProvisionRun::new(StepBounds::container()).run(RACE_PORT);
+    let ((_, first, _), (_, second, _)) = tokio::join!(run(), run());
+    let ok = [&first, &second].iter().filter(|r| r.is_ok()).count();
+    assert!(
+        ok >= 1,
+        "at least one concurrent start connects: {:?} / {:?}",
+        first.as_ref().err(),
+        second.as_ref().err()
+    );
+    assert_eq!(containers_named(RACE_CONTAINER), 1, "one container");
+    assert_eq!(daemon_count(RACE_CONTAINER), 1, "one daemon");
 }
