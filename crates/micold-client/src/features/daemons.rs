@@ -1820,7 +1820,13 @@ pub fn add_repository(state: &mut State, model: &Model<'_>, id: DaemonId) -> Vec
     // FR-006): this daemon's step alone is marked.
     if typed.trim().is_empty() {
         state.repository_marks.leave(FieldId::DaemonRepository(id));
-        state.repository_error = None;
+        if state
+            .repository_error
+            .as_ref()
+            .is_some_and(|(for_id, _)| *for_id == id)
+        {
+            state.repository_error = None;
+        }
         return Vec::new();
     }
     let located = micold_core::ssh::RemoteLocation::new(id, &typed);
