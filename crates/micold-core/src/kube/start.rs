@@ -649,8 +649,10 @@ async fn tunnel(r: &StartRequest<'_>) -> Result<(), KubeFailure> {
     }
 }
 
-/// The daemon's state directory inside the pod, on the volume (a pod path: never `Path::join`ed).
-pub const STATE_DIR: &str = "/var/lib/micold-ai-ide";
+/// The daemon's state directory inside the pod, on the volume (a pod path: never `Path::join`ed):
+/// its `paths::data_dir()` under [`super::manifest::POD_HOME`], where it looks for the AI CLIs
+/// the start installs. The root filesystem is read-only.
+pub const STATE_DIR: &str = "/data/home/.local/share/micold-ai-ide";
 
 /// The daemon's environment: it outlives the client (FR-010), so its idle stop is off.
 pub fn daemon_env() -> Vec<(String, String)> {

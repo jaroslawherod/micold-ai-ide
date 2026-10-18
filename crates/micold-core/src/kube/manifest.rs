@@ -21,6 +21,10 @@ pub const IMAGE_USER_UID: u32 = 10001;
 /// Where the daemon's volume is mounted.
 pub const DATA_MOUNT: &str = "/data";
 
+/// The pod's `HOME`, on the volume: also the home of the image's passwd entry for
+/// [`IMAGE_USER_UID`], which is what an SSH login (the daemon) gets.
+pub const POD_HOME: &str = "/data/home";
+
 /// Where the access secret is mounted, read-only.
 pub const ACCESS_MOUNT: &str = "/run/micold/ssh";
 
@@ -164,7 +168,7 @@ fn container(settings: &KubeSettings, names: &ResourceNames, image: &str) -> Val
         "name": CONTAINER,
         "image": image,
         "env": [
-            { "name": "HOME", "value": "/data/home" },
+            { "name": "HOME", "value": POD_HOME },
             { "name": "TMPDIR", "value": "/tmp" },
             { "name": ACCESS_DIR_ENV, "value": ACCESS_MOUNT },
         ],
@@ -382,6 +386,22 @@ mod tests {
         );
         assert_eq!(other["spec"]["containers"][0]["image"], "other:1");
         assert_eq!((SSH_PORT, IMAGE_USER_UID), (2222, 10001));
+    }
+
+    #[test]
+    fn the_daemons_state_directory_is_its_data_directory_under_the_logins_home() {
+        // The daemon reads `offered.json` from `paths::data_dir()/ai-clis`; over SSH its HOME is
+        // the passwd entry's, so the install must land there, on the volume, not the read-only root.
+        let containerfile = include_str!("../../../../packaging/basic/Containerfile");
+        assert!(
+            containerfile.contains(&format!(":{IMAGE_USER_UID}:0:micold:{POD_HOME}:")),
+            "the basic image's entry for uid {IMAGE_USER_UID} has another home than {POD_HOME}"
+        );
+        assert_eq!(
+            crate::kube::start::STATE_DIR,
+            format!("{POD_HOME}/.local/share/{}", crate::paths::APP_ID)
+        );
+        assert!(POD_HOME.starts_with(&format!("{DATA_MOUNT}/")));
     }
 
     #[test]
