@@ -42,17 +42,17 @@ fn make_sandbox_home(state: &std::path::Path) {
 
 use std::process::Command;
 
-use micold_core::protocol::auth::Token;
 use micold_core::sandbox::cli::CliRuntime;
-use micold_core::sandbox::exec::{CommandOutput, CommandRunner, SystemRunner};
+use micold_core::sandbox::exec::SystemRunner;
 use micold_core::sandbox::image::{ImageChoice, OwnImage};
 use micold_core::sandbox::lifecycle::{self, SandboxState};
 use micold_core::sandbox::runtime::{ContainerId, ContainerRuntime, RuntimeError, RuntimeKind};
 use micold_core::sandbox::{
-    CredentialLayout, MountSet, NetworkPosture, SandboxProfile, SandboxSpec, SecretMount,
+    CredentialLayout, MountSet, NetworkPosture, SandboxProfile, SandboxSpec,
 };
 
-const IMAGE: &str = "micold-daemon:dev";
+mod sandbox_real_support;
+use sandbox_real_support::{image, make_keys, sshd_answers};
 
 /// A sandbox brought up through the real adapter, torn down whatever the test does.
 ///
@@ -87,13 +87,11 @@ impl Fixture {
         make_sandbox_home(&state);
         std::fs::create_dir_all(&project).unwrap();
 
-        let token = Token::generate();
-        let token_path = state.join("sandbox.token");
-        token.write_to(&token_path).unwrap();
+        let (_keys, ssh_keys) = make_keys(&state, port);
 
         let profile = SandboxProfile {
             runtime: RuntimeKind::Docker,
-            image: ImageChoice::Own(OwnImage::Reference(IMAGE.to_string())),
+            image: ImageChoice::Own(OwnImage::Reference(image())),
             network,
             ..SandboxProfile::default()
         };
@@ -108,10 +106,7 @@ impl Fixture {
                 &CredentialLayout::default(),
                 state.clone(),
                 &host_home(),
-                SecretMount {
-                    host: token_path,
-                    container: PathBuf::from("/run/micold/token"),
-                },
+                ssh_keys,
             ),
             uid,
             gid,
@@ -221,14 +216,10 @@ fn sandbox_real_no_outbound_blocks_egress_while_the_control_port_still_answers()
     // The published port is host-side DNAT and is unaffected by the missing masquerade rule. If
     // this fails the posture was implemented as `--internal` somewhere, and the control channel
     // this feature runs on is gone with the egress.
-    let reachable = std::net::TcpStream::connect_timeout(
-        &format!("127.0.0.1:{}", fx.port).parse().unwrap(),
-        std::time::Duration::from_secs(20),
-    );
     assert!(
-        reachable.is_ok(),
-        "the daemon's published port is unreachable under NoOutbound — the posture severed the \
-         control channel it is required to leave working (C-5): {reachable:?}"
+        sshd_answers(fx.port, std::time::Duration::from_secs(20)),
+        "the container's published SSH port does not answer under NoOutbound — the posture severed \
+         the control channel it is required to leave working (C-5)"
     );
 }
 
@@ -439,11 +430,12 @@ impl Fixture {
 
         let profile = SandboxProfile {
             runtime: RuntimeKind::Docker,
-            image: ImageChoice::Own(OwnImage::Reference(IMAGE.to_string())),
+            image: ImageChoice::Own(OwnImage::Reference(image())),
             network: NetworkPosture::NoOutbound,
             ..SandboxProfile::default()
         };
 
+        let (_keys, ssh_keys) = make_keys(&previous.state, port);
         let (uid, gid) = micold_core::sandbox::host_identity();
         let spec = SandboxSpec {
             name: name.clone(),
@@ -454,10 +446,7 @@ impl Fixture {
                 &CredentialLayout::default(),
                 previous.state.clone(),
                 &host_home(),
-                SecretMount {
-                    host: previous.state.join("sandbox.token"),
-                    container: PathBuf::from("/run/micold/token"),
-                },
+                ssh_keys,
             ),
             uid,
             gid,
@@ -504,17 +493,11 @@ impl Fixture {
 /// never [`lifecycle::restart`], whose `RestartRequested` is the one thing this path must not need.
 #[tokio::test]
 async fn sandbox_real_a_sandbox_stopped_under_an_attached_client_comes_back_without_user_action() {
-    use micold_core::connect::{connect_at, Connected, Credentials};
-    use micold_core::endpoint::DialAddress;
-    use micold_core::protocol::messages::PresentedToken;
     use micold_core::sandbox::lifecycle::{service_absent, UnattendedBringUps};
 
     const PORT: u16 = 17808;
-    /// How long a started container gets to accept a dial: the handshake tests' allowance.
+    /// How long a started container gets to show its SSH banner.
     const LISTEN_ALLOWANCE: std::time::Duration = std::time::Duration::from_secs(30);
-    /// How often the dial is retried. Pacing for the test, not a rule it checks.
-    const REDIAL: std::time::Duration = std::time::Duration::from_millis(200);
-
     struct Purged {
         name: String,
         network: String,
@@ -539,11 +522,11 @@ async fn sandbox_real_a_sandbox_stopped_under_an_attached_client_comes_back_with
     std::fs::create_dir_all(&state_dir).unwrap();
     make_sandbox_home(&state_dir);
     std::fs::create_dir_all(&project).unwrap();
-    let token_path = state_dir.join("sandbox.token");
+    let (_keys, ssh_keys) = make_keys(&state_dir, PORT);
 
     let profile = SandboxProfile {
         runtime: RuntimeKind::Docker,
-        image: ImageChoice::Own(OwnImage::Reference(IMAGE.to_string())),
+        image: ImageChoice::Own(OwnImage::Reference(image())),
         network: NetworkPosture::NoOutbound,
         ..SandboxProfile::default()
     };
@@ -553,10 +536,7 @@ async fn sandbox_real_a_sandbox_stopped_under_an_attached_client_comes_back_with
         &CredentialLayout::default(),
         state_dir.clone(),
         &host_home(),
-        SecretMount {
-            host: token_path.clone(),
-            container: PathBuf::from("/run/micold/token"),
-        },
+        ssh_keys,
     );
     let (uid, gid) = micold_core::sandbox::host_identity();
     let spec = SandboxSpec {
@@ -571,53 +551,23 @@ async fn sandbox_real_a_sandbox_stopped_under_an_attached_client_comes_back_with
         time_zone: None,
         home: host_home(),
     };
-    let runtime = CliRuntime::new(
-        RuntimeKind::Docker,
-        ControlPublishedToTheImage { port: PORT },
-    );
+    let runtime = CliRuntime::new(RuntimeKind::Docker, SystemRunner);
 
-    // What `shell::sandbox::start` does on every bring-up: a fresh token, then `bring_up`.
-    let bring_up = || {
-        let token = Token::generate();
-        token.write_to(&token_path).expect("write the token");
-        lifecycle::bring_up(&runtime, &profile, &mounts, |_| spec.clone(), &mut |_| {})
-            .map(|started| (started, token))
-    };
-    let attach = |token: Token| async move {
-        let credentials = Credentials {
-            auth_token: Some(PresentedToken::new(token.as_str())),
-            require_fingerprint_match: false,
-        };
-        let deadline = std::time::Instant::now() + LISTEN_ALLOWANCE;
-        let mut last = String::from("never dialled");
-        while std::time::Instant::now() < deadline {
-            match connect_at(
-                &DialAddress::Loopback { port: PORT },
-                "real-test-client",
-                &credentials,
-            )
-            .await
-            {
-                Ok(Some(Connected::Ready(conn, _))) => return Ok(conn),
-                Ok(Some(Connected::Refused(reason))) => {
-                    panic!("the daemon refused the token it was brought up with: {reason:?}")
-                }
-                Ok(None) => {
-                    last = "nothing listening".to_string();
-                    tokio::time::sleep(REDIAL).await;
-                }
-                Err(e) => {
-                    last = format!("io error: {e}");
-                    tokio::time::sleep(REDIAL).await;
-                }
-            }
+    // What `shell::sandbox::start` does on every bring-up. The client dials the daemon over SSH
+    // afterwards; what the container has to do for that, and what this checks, is have its sshd up.
+    let bring_up =
+        || lifecycle::bring_up(&runtime, &profile, &mounts, |_| spec.clone(), &mut |_| {});
+    let attach = || {
+        if sshd_answers(PORT, LISTEN_ALLOWANCE) {
+            Ok(())
+        } else {
+            Err("no SSH banner".to_string())
         }
-        Err(last)
     };
 
-    let (started, token) = bring_up()
+    let started = bring_up()
         .unwrap_or_else(|failure| panic!("the first bring-up failed: {}", failure.reason()));
-    let attached = attach(token).await.unwrap_or_else(|last| {
+    attach().unwrap_or_else(|last| {
         panic!(
             "the client could not attach to a sandbox it had just brought up ({last}): {}",
             container_logs(&name)
@@ -630,13 +580,12 @@ async fn sandbox_real_a_sandbox_stopped_under_an_attached_client_comes_back_with
         .output()
         .expect("docker stop");
     assert!(out.status.success(), "docker stop failed");
-    drop(attached);
 
     // The client's dial is refused and its liveness check finds the container stopped.
     let mut state = lifecycle::container_lost(&SandboxState::Running(started.id), &name)
         .expect("losing the container must move the sandbox out of Running");
     let mut budget = UnattendedBringUps::default();
-    let _reattached = loop {
+    loop {
         let Some(again) = service_absent(&state, budget) else {
             panic!(
                 "all {} unattended bring-ups were spent and the client never attached again; the \
@@ -647,60 +596,13 @@ async fn sandbox_real_a_sandbox_stopped_under_an_attached_client_comes_back_with
         budget = again.budget;
         tokio::time::sleep(again.after).await;
         state = match bring_up() {
-            Ok((started, token)) => match attach(token).await {
-                Ok(conn) => break conn,
+            Ok(started) => match attach() {
+                Ok(()) => break,
                 Err(_) => lifecycle::container_lost(&SandboxState::Running(started.id), &name)
                     .expect("a started sandbox that does not answer is a lost one"),
             },
             Err(failure) => SandboxState::Failed(failure),
         };
-    };
-}
-
-/// The real runner, with the control publish pointed at the port the image's daemon listens on.
-///
-/// `argv::create` publishes `127.0.0.1:{p}:{p}`, while the image fixes the daemon's listen address
-/// at [`DEFAULT_SANDBOX_PORT`](micold_core::endpoint::DEFAULT_SANDBOX_PORT) — so a sandbox created
-/// on any other port starts, and nothing answers it. The application always uses that port; a test
-/// must not, since a developer's own sandbox may hold it. This rewrites that one argument, the way
-/// the daemon's real-runtime fixture maps `{port}:7727` by hand, and passes everything else through.
-struct ControlPublishedToTheImage {
-    port: u16,
-}
-
-impl ControlPublishedToTheImage {
-    fn rewrite(&self, args: &[std::ffi::OsString]) -> Vec<std::ffi::OsString> {
-        let published = format!("127.0.0.1:{p}:{p}", p = self.port);
-        args.iter()
-            .map(|arg| match arg.to_str() {
-                Some(a) if a == published => format!(
-                    "127.0.0.1:{}:{}",
-                    self.port,
-                    micold_core::endpoint::DEFAULT_SANDBOX_PORT
-                )
-                .into(),
-                _ => arg.clone(),
-            })
-            .collect()
-    }
-}
-
-impl CommandRunner for ControlPublishedToTheImage {
-    fn run(
-        &self,
-        program: &std::ffi::OsStr,
-        args: &[std::ffi::OsString],
-    ) -> std::io::Result<CommandOutput> {
-        SystemRunner.run(program, &self.rewrite(args))
-    }
-
-    fn run_streaming(
-        &self,
-        program: &std::ffi::OsStr,
-        args: &[std::ffi::OsString],
-        on_line: &mut dyn FnMut(micold_core::sandbox::exec::StreamEvent<'_>),
-    ) -> std::io::Result<CommandOutput> {
-        SystemRunner.run_streaming(program, &self.rewrite(args), on_line)
     }
 }
 

@@ -131,7 +131,7 @@ async fn probe(shared: bool, container: &str, port: u16) {
     // cannot go on passing for a share that the application has since widened again.
     let extra = if shared {
         let mounts = MountSet::build(
-            &[project.clone()],
+            std::slice::from_ref(&project),
             &SandboxProfile {
                 credentials: BTreeSet::from([CredentialShare::AiCliAuth]),
                 ..SandboxProfile::default()

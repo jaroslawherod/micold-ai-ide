@@ -40,7 +40,7 @@ fn kind() -> RuntimeKind {
     }
 }
 
-const IMAGE: &str = "micold-daemon:dev";
+mod sandbox_real_support;
 /// Comfortably above the image's own size — a cap below it makes the container unstartable, which
 /// would answer a different question — and low enough that exceeding it costs under a second.
 const CAP_MIB: u64 = 512;
@@ -68,7 +68,7 @@ fn exceed_the_cap() -> Outcome {
             &format!("size={CAP_MIB}m"),
             "--entrypoint",
             "sh",
-            IMAGE,
+            &sandbox_real_support::image(),
             "-c",
             &format!("dd if=/dev/zero of=/big bs=1M count={WRITE_MIB} 2>&1; echo rc=$?"),
         ])
