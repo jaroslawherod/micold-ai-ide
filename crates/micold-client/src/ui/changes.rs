@@ -591,19 +591,26 @@ pub fn reply_dialog<'a>(
     _env_include_outcome: &'a micold_core::env_include::EnvIncludeOutcome,
 ) -> Option<Element<'a, Message>> {
     let reply = changes::reply_dialog(&state.changes)?;
-    Some(reply_dialog_surface(reply, tokens::roles(scheme)))
+    Some(reply_dialog_surface(
+        reply,
+        Message::Changes(Msg::ReplyClosed),
+        tokens::roles(scheme),
+    ))
 }
 
 /// The full-reply dialog's surface around `reply`; the showcase poses it too.
-pub fn reply_dialog_surface<'a>(reply: String, r: Roles) -> Element<'a, Message> {
+pub fn reply_dialog_surface<'a, M: Clone + 'a>(
+    reply: String,
+    close: M,
+    r: Roles,
+) -> Element<'a, M> {
     let fields = crate::ui::material::dialog::fields(column![
         Text::new("Reply", TypeRole::Headline, r),
         crate::ui::material::Scrollable::new(Text::new(reply, TypeRole::Body, r).muted(), r)
             .height(Length::Fixed(280.0)),
     ]);
-    let actions = crate::ui::material::dialog::actions(row![
-        Button::filled("Close", r).on_press(Message::Changes(Msg::ReplyClosed)),
-    ]);
+    let actions =
+        crate::ui::material::dialog::actions(row![Button::filled("Close", r).on_press(close),]);
     crate::ui::material::Surface::new(
         crate::ui::material::dialog::body(fields, actions),
         crate::ui::material::SurfaceKind::Dialog,
