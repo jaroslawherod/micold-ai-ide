@@ -135,7 +135,7 @@ the rename dialog opens over the Overview, and after renaming the card shows the
 - [X] T011 [US1] src/ui/material/overview_card.rs `OverviewCard::on_secondary_press(impl Fn((u16,
   u16)) -> M)` wrapping the card in `cdk::context_area::ContextArea`; src/ui/material/card_grid.rs
   `CardGrid::on_scroll(M)` on its scrollable; T007 passes
-- [ ] T012 [US1] Wiring (glue, quickstart §B B1, B3–B9, B14–B16, B19): src/ui/overview.rs view passes
+- [X] T012 [US1] Wiring (glue, quickstart §B B1, B3–B9, B14–B16, B19): src/ui/overview.rs view passes
   `.on_secondary_press(|anchor| CardMenuOpened { location, anchor, origin: Pointer })` per card and
   `.on_scroll(GridScrolled)` to the grid; src/ui/mod.rs `view_with` pushes the card-menu surface
   (`MenuOverlay::new(card_menu_items(..), CardMenuDismissed, roles).anchor(clamped)`, anchor
@@ -145,7 +145,7 @@ the rename dialog opens over the Overview, and after renaming the card shows the
   behaves as it does from the row menu (Edge: entry fails, stale entry, by construction) and its
   dialog draws over the Overview as over any main area (research R4); B19 checks the bind dialog;
   tests/context_menu_anchor_call_sites.rs stays green
-- [ ] T013 [US1] docs/user-guide/overview.md: new section *Acting on a card* after *Activating a
+- [X] T013 [US1] docs/user-guide/overview.md: new section *Acting on a card* after *Activating a
   card*: right-click (Ctrl+click / two-finger click on macOS) opens the menu at the pointer; *Open*
   then the row menu's entries; which entries keep the Overview open and which close it; Escape, a
   click outside or scrolling closes it without running anything

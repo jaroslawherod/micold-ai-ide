@@ -393,9 +393,12 @@ fn every_entry_is_wrapped_and_open_is_the_cards_activation() {
     }
 }
 
+/// A way the Overview closes.
+type Closer = Box<dyn Fn(&mut State)>;
+
 #[test]
 fn the_menu_closes_when_the_overview_closes() {
-    let closers: Vec<(&str, Box<dyn Fn(&mut State)>)> = vec![
+    let closers: Vec<(&str, Closer)> = vec![
         (
             "Closed",
             Box::new(|state: &mut State| state.update(Message::Overview(Msg::Closed))),

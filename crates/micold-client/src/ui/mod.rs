@@ -628,6 +628,25 @@ pub fn view_with<'a>(
                 .into()
         });
 
+    // An Overview card's context menu (feature 972, FR-001): *Open*, then the card's location's
+    // row-menu entries, at the press point, clamped inside the window like the menus above.
+    let card_menu: Option<cdk::overlay::Surface<'a, Message>> =
+        state.overview.card_menu.as_ref().map(|menu| {
+            let items = overview::card_menu_items(state, &menu.location);
+            let (x, y) = crate::features::project::clamp_menu_anchor(
+                menu.anchor,
+                material::menu_panel_size(items.len()),
+                state.window.window_size,
+            );
+            material::MenuOverlay::new(
+                items,
+                Message::Overview(crate::features::overview::Msg::CardMenuDismissed),
+                roles,
+            )
+            .anchor(iced::Point::new(x as f32, y as f32))
+            .into()
+        });
+
     // A terminal tab's right-click context menu (feature 012, BUG-005, FR-010b). Only present while
     // a tab's menu is open.
     //
@@ -767,6 +786,7 @@ pub fn view_with<'a>(
         .push_maybe(worktree_menu)
         .push_maybe(group_menu)
         .push_maybe(session_menu)
+        .push_maybe(card_menu)
         .push_maybe(shell_instance_menu)
         .push_maybe(session_start_menu)
         .push_maybe(modal)

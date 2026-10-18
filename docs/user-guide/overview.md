@@ -105,6 +105,24 @@ Click a card, or move to it and press **Enter** or **Space**. A click shows a ri
 
 The revealed mark stays until you select something else in the sidebar. A card in any state, **Idle** included, activates the same way.
 
+## Acting on a card
+
+Right-click a card (on macOS, Ctrl+click or a two-finger click) to open its menu at the pointer. It
+lists **Open** first, which does what clicking the card does, followed by exactly the entries of
+that location's menu in the sidebar, in the same order (for example *Review changes*, *Copy name*,
+*Rename*, *Delete*). An entry does what it does from the sidebar, including any confirmation it
+asks for.
+
+- **Entries that navigate** (*Open*, *Review changes*, an entry that starts or selects a session)
+  close the Overview and show their result.
+- **Every other entry** (rename, delete, copy, bind to a daemon) acts in place: the Overview stays
+  open, any dialog the entry opens shows over it, and the card reflects the result.
+
+**Escape**, a click outside the menu, or scrolling the grid closes the menu without running
+anything; a click that closes it does not also activate what it landed on. Right-clicking another
+card closes the menu and opens that card's. The menu also closes when its location goes away or the
+Overview closes.
+
 ## Keyboard
 
 Opening the Overview puts the keyboard on its first card. **Tab** and **Shift+Tab** move to the next and previous card; the arrow keys do the same (**Right** and **Down** forward, **Left** and **Up** back). The focused card shows a ring. **Escape** closes the Overview, after any dialog or unsaved Settings draft that Escape would close first. While a terminal has the keyboard, the arrow keys and Escape go to the terminal.
