@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #968
 - **Worktree branch**: claude/project-thread-ftdy5c
 - **Started**: 2026-10-18
-- **Phase**: plan
-- **Next step**: plan unit: review plan round 1
+- **Phase**: tasks
+- **Next step**: tasks unit
 
 ## Pull requests
 
@@ -38,7 +38,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
 | Review spec | 1 | 06e0b7cb93e4b1df3ad203f637ff3bcdfeb41cb2:8ee4531564743d6032729cd056a73f655abfb1a0 | CLEAN: 3 MINOR, fixed, prose only |
-| Review plan | 1 | 96ee1ce3727ec57086e810a9cf02650703d31bd7:f745f268a3ce6dae0a47b8157e100bb4ce069394 | running |
+| Review plan | 1 | 96ee1ce3727ec57086e810a9cf02650703d31bd7:f745f268a3ce6dae0a47b8157e100bb4ce069394 | CLEAN, no findings |
 
 ## Declined review findings
 
