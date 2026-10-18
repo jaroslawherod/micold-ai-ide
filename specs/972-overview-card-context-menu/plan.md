@@ -39,7 +39,7 @@ already held, O(entries)
 Shift+F10 unchanged outside a focused card
 
 **Scale/Scope**: 1 feature module extended, 1 registered surface, 1 item builder extracted,
-5 shared-component builder additions, 1 icon, 1 user-guide section
+6 shared-component builder additions, 1 icon, 1 user-guide section
 
 ## Constitution Check
 
@@ -176,8 +176,8 @@ crates/micold-client/src/
 ├── ui/mod.rs                         # location_menu_items (extracted), card menu surface, key listener
 ├── ui/overview.rs                    # card_id, card_menu_items, card_menu_entry, settle, focus target, anchor
 ├── ui/material/{overview_card.rs,card_grid.rs,menu.rs,keyboard_focus.rs,composition_contrast.rs}
-└── showcase/{catalogue.rs,sections/*}
-crates/micold-client/tests/{overview_card_menu.rs (new),popover_displacement.rs,overlay_registry.rs,icons.rs,icons_font.rs,showcase_completeness.rs,gates/context_menu_anchor.rs}
+└── showcase/{catalogue.rs,sections/{floating.rs,…}}
+crates/micold-client/tests/{overview_card_menu.rs (new),popover_displacement.rs,overlay_registry.rs,overlay_registration.rs,icons.rs,icons_font.rs,showcase_completeness.rs,worktree_menu_pull_request.rs,context_menu_anchor_call_sites.rs,layout_snapshot.rs + gates/context_menu_anchor.rs}
 docs/user-guide/{overview.md,icons.md}
 ```
 
