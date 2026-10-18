@@ -658,25 +658,43 @@ async fn connect_and_pump(
                 .ended();
             };
             let sink = provisioning_sink(id, output);
-            // A lost link is reconnected to the running pod: a drift found then is kept.
-            let drift = if life.established {
-                DriftChoice::Keep
+            // A lost link is reconnected to the running pod, after a look at whether it is still
+            // there: a drift found then is kept.
+            // A daemon that never connected is on its first start, which creates the pod if it
+            // is missing: that is the user's Start, not a re-dial.
+            let tried = if life.established {
+                kube_reconnect(env, name, &settings.0, &sink).await
             } else {
-                drift.0
+                kube_attempt(env, name, &settings.0, drift.0, &sink)
+                    .await
+                    .map_err(KubeReconnectError::Attempt)
             };
-            match kube_attempt(env, name, &settings.0, drift, &sink).await {
+            match tried {
                 Ok((c, relay)) => {
                     held_relay = Some(relay);
                     Ok(c)
                 }
+                // The pod is gone: the daemon stops with the reason and nothing is recreated until
+                // the user starts it (FR-011).
+                Err(KubeReconnectError::Gone(reason)) => {
+                    return report(id, output, ConnectionMsg::PodGone(reason))
+                        .await
+                        .ended();
+                }
+                // The lookup could not tell: keep trying with the back-off.
+                Err(KubeReconnectError::Lookup(reason)) => {
+                    return report(id, output, ConnectionMsg::ConnectFailed(reason)).await;
+                }
                 // A first start that finds the pod changed asks what to do; the answer restarts
                 // this actor with the choice (a lost link is retried, not asked about).
-                Err(KubeAttemptError::Drift { fields }) if !life.established => {
+                Err(KubeReconnectError::Attempt(KubeAttemptError::Drift { fields }))
+                    if !life.established =>
+                {
                     return report(id, output, ConnectionMsg::KubeDrift(fields))
                         .await
                         .ended();
                 }
-                Err(reason) if life.established => {
+                Err(KubeReconnectError::Attempt(reason)) if life.established => {
                     return report(id, output, ConnectionMsg::ConnectFailed(reason.to_string()))
                         .await;
                 }
@@ -1311,6 +1329,55 @@ static KUBE_ENV: std::sync::OnceLock<KubeEnv> = std::sync::OnceLock::new();
 /// Install what Kubernetes daemons are started with. The first call wins.
 pub fn install_kube(env: KubeEnv) {
     let _ = KUBE_ENV.set(env);
+}
+
+/// Why a re-dial of a Kubernetes daemon did not connect (feature 686, FR-011).
+#[derive(Debug)]
+pub enum KubeReconnectError {
+    /// The pod is gone (deleted, evicted, node lost); the text is the reason the row shows.
+    Gone(String),
+    /// Looking the pod up failed (a 5xx, a timeout): neither gone nor reachable.
+    Lookup(String),
+    /// The pod is there but the bring-up failed.
+    Attempt(KubeAttemptError),
+}
+
+impl std::fmt::Display for KubeReconnectError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Gone(reason) | Self::Lookup(reason) => f.write_str(reason),
+            Self::Attempt(e) => e.fmt(f),
+        }
+    }
+}
+
+/// Re-dial a Kubernetes daemon whose link was lost, or that the user reconnects: look the pod up
+/// first, and when it is gone report why instead of creating one. A pod that runs is adopted, so
+/// no second pod and no duplicate session appear; a drift is kept.
+pub async fn kube_reconnect(
+    env: &KubeEnv,
+    name: &str,
+    settings: &KubeSettings,
+    sink: &EventSink,
+) -> Result<(Connected, crate::kube::relay::Relay), KubeReconnectError> {
+    use micold_core::kube::classify::PodGone;
+    let (context, namespace) = (&settings.context.0, &settings.namespace.0);
+    let names = micold_core::kube::names::ResourceNames::new(context, namespace, name);
+    let lookup = |e: String| KubeReconnectError::Lookup(format!("cannot look up the pod: {e}"));
+    let cluster = (env.connect)(context.clone())
+        .await
+        .map_err(|f| lookup(f.to_string()))?;
+    let status = cluster
+        .pod_status(namespace, &names.pod())
+        .await
+        .map_err(|f| lookup(f.message))?;
+    // The cluster port has no node lookup: a lost node shows as the pod's phase `Unknown`.
+    if let Some(gone) = PodGone::classify(status.as_ref(), true) {
+        return Err(KubeReconnectError::Gone(gone.to_string()));
+    }
+    kube_attempt(env, name, settings, DriftChoice::Keep, sink)
+        .await
+        .map_err(KubeReconnectError::Attempt)
 }
 
 /// The account the pod's SSH server logs this client in as (the image's, #806).

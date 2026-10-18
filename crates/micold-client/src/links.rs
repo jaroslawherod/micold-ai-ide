@@ -140,6 +140,11 @@ impl DaemonLinks {
         self.states.established(id)
     }
 
+    /// Why `id` is stopped, when its Kubernetes pod was found gone (feature 686).
+    pub fn stopped_reason(&self, id: DaemonId) -> Option<&str> {
+        self.states.stopped_reason(id)
+    }
+
     /// Whether the client should be dialling `id` (tracked and not stopped).
     pub fn should_dial(&self, id: DaemonId) -> bool {
         self.states.should_dial(id)

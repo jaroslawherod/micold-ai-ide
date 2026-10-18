@@ -493,6 +493,10 @@ pub enum DaemonEvent {
     GiveUp,
     /// The user asked to reconnect now: the attempts start again with the first delay.
     Reconnect,
+    /// The client found the daemon's pod gone (deleted, evicted, node lost): the daemon is
+    /// `Stopped` with this reason, and nothing recreates the pod until the user starts it
+    /// (feature 686, FR-011).
+    Gone(String),
 }
 
 /// A state change of exactly one daemon: the only thing a transition reports (FR-007).
@@ -519,6 +523,8 @@ struct Link {
     /// Whether the connection had been established when `epoch` was last bumped: the restarted
     /// actor then retries a failed first dial instead of reporting a failed start.
     resumed: bool,
+    /// Why a daemon whose pod is gone is stopped; cleared by the next start (feature 686).
+    stopped_reason: Option<String>,
 }
 
 impl Link {
@@ -530,6 +536,7 @@ impl Link {
             attempts_stopped: false,
             epoch: 0,
             resumed: false,
+            stopped_reason: None,
         }
     }
 
@@ -537,13 +544,21 @@ impl Link {
     fn next_state(&mut self, event: DaemonEvent) -> Option<DaemonState> {
         match (&self.state, event) {
             (DaemonState::Stopped, DaemonEvent::Start) => {
+                self.stopped_reason = None;
                 self.established = false;
                 self.resumed = false;
                 self.attempts_stopped = false;
                 Some(DaemonState::Starting)
             }
             (DaemonState::Stopped, _) => None,
-            (_, DaemonEvent::Stop) => Some(DaemonState::Stopped),
+            (_, DaemonEvent::Gone(reason)) => {
+                self.stopped_reason = Some(reason);
+                Some(DaemonState::Stopped)
+            }
+            (_, DaemonEvent::Stop) => {
+                self.stopped_reason = None;
+                Some(DaemonState::Stopped)
+            }
             (DaemonState::Connected, DaemonEvent::Start | DaemonEvent::Reconnect) => None,
             (_, DaemonEvent::Start) => {
                 self.failures = 0;
@@ -671,6 +686,11 @@ impl DaemonStates {
         self.states.get(&id).is_some_and(|link| link.established)
     }
 
+    /// Why `id` is stopped, when its pod was found gone (feature 686, FR-011).
+    pub fn stopped_reason(&self, id: DaemonId) -> Option<&str> {
+        self.states.get(&id)?.stopped_reason.as_deref()
+    }
+
     /// The restart counter of `id`'s actor: it changes when the user reconnects.
     pub fn epoch(&self, id: DaemonId) -> u32 {
         self.states.get(&id).map_or(0, |link| link.epoch)
@@ -746,6 +766,8 @@ pub struct DaemonView {
     pub replace_offered: bool,
     /// A replacement of it is under way.
     pub replacing: bool,
+    /// For a Kubernetes daemon stopped because its pod is gone: why (feature 686, FR-011).
+    pub stopped_reason: Option<String>,
 }
 
 /// What a running released-image container's row says (FR-017).

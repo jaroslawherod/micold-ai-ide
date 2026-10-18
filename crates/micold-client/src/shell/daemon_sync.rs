@@ -676,6 +676,19 @@ pub fn on_start_failed(app: &mut App, daemon: DaemonId, reason: String) -> Task<
     Task::none()
 }
 
+/// A Kubernetes daemon's pod is gone (feature 686, FR-011): the daemon is stopped with the reason,
+/// its sessions show `lost to daemon <name>`, and nothing is dialled until the user starts it.
+pub fn on_pod_gone(app: &mut App, daemon: DaemonId, reason: String) -> Task<Message> {
+    crate::log_line(&format!(
+        "kube: daemon {} pod gone reason={reason}",
+        daemon.0
+    ));
+    daemon_event(app, daemon, DaemonEvent::Gone(reason));
+    app.daemon_catalogs.remove(&daemon);
+    app.disconnected.insert(daemon);
+    Task::none()
+}
+
 /// A daemon answered and said no (#370). Reported on this dial: none of [`refused_dial`]'s grace
 /// applies, because that grace is for a service not listening yet, and this one is listening. Nor
 /// is a bring-up started — the service is there, and a new container would meet the same answer.

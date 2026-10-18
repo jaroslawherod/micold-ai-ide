@@ -72,6 +72,7 @@ fn state_note(view: &DaemonView) -> Option<String> {
         DaemonState::Reconnecting { reason } => {
             Some(format!("reconnecting to {}: {reason}", view.endpoint))
         }
+        DaemonState::Stopped => view.stopped_reason.clone(),
         DaemonState::Unreachable { reason } if reason == ATTEMPTS_STOPPED => Some(format!(
             "not connected to {}: {ATTEMPTS_STOPPED}",
             view.endpoint
