@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-xelisc
 - **Started**: 2026-10-17
 - **Phase**: implement
-- **Next step**: M7: scoped re-review B on the F1/F2 fix diff (git diff 62a795e9), then scripts/gate.sh, PR files, push.
+- **Next step**: M7 pushed, gate green (scripts/gate.sh); PR files in the scratchpad (pr-title/pr-body-686-M7); orchestrator opens the PR, waits for CI and merges. Then M8.
 
 ## Pull requests
 
@@ -83,7 +83,7 @@ stash@{0} survivors (all used by M1a–M2, stash dropped 2026-10-18; backed up i
 
 ## Review rounds
 
-| M7 B (conformance, sonnet, scoped to the F1/F2 fix) | 2 | 07ebdb8d7f5012cdb1b0b07b80e4cb2c0a1af0e2:62a795e9d0795da82cbf322e0b064d9ac38321d1 | pending |
+| M7 B (conformance, sonnet, scoped to the F1/F2 fix) | 2 | 07ebdb8d7f5012cdb1b0b07b80e4cb2c0a1af0e2:62a795e9d0795da82cbf322e0b064d9ac38321d1 CLEAN — 1 MINOR (refusal order: not-connected now precedes no-remote; both send nothing) |
 | M4b review A (code-review high) | 1 | e6a9bc19:3ef301a4 | CLEAN — 2 MINOR declined/follow-up |
 | M4b review B (conformance, sonnet) | 1 | 13e04614:826e419b | CLEAN — Verify green |
 | Review | Round | Snapshot | Verdict |
@@ -146,7 +146,7 @@ None.
 
 ## Open escalation
 
-Gate (scripts/gate.sh, 4 runs) fails only on `micold-core review::anchor::tests::two_hundred_comments_locate_inside_the_budget`: `took 101.4–159ms` vs a `< 100 ms` assert (anchor.rs:309); the file is untouched by this branch. Not a root-only test. Logs: scratchpad gate4.log–gate6.log. Rest of the gate (fmt, clippy) green; later gate steps did not run, but `cargo test -p micold-client` passes. Clarify round 1 questions remain with the owner as decision cards (spec uses recommended defaults).
+None. (The anchor-timing flake seen in earlier gate runs did not recur; gate8 green. #806: nothing from its pending work is needed by M7; schema_hash pin moved 50 → 51.)
 
 ## Follow-ups not done
 
