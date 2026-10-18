@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-cl0lw3
 - **Started**: 2026-10-18
 - **Phase**: M1
-- **Next step**: M1 — verify.md (gate + review A high, review B), then PR
+- **Next step**: M1 — PR to open (branch pushed; title/body in the scratchpad), then CI and merge
 
 ## Pull requests
 
@@ -22,7 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T010 | full | parser types every recorded fixture line; kind persisted | — | in progress |
+| M1 | T001–T010 | full | parser types every recorded fixture line; kind persisted | to-open | gate green |
 | M2 | T011–T021 | full | daemon runs a structured session and streams events; lifecycle parity | — | planned |
 | M3 | T022–T028 | full | first prompt and user messages | — | planned |
 | M4 | T029–T030 | full | resume | — | planned |
