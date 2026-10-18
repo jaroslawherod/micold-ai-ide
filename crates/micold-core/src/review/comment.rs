@@ -650,18 +650,7 @@ impl EntryReview {
         by: Reporter,
         at: u64,
     ) -> Result<Status, ReviewError> {
-        let reply = reply.replace("\r\n", "\n").replace('\r', "\n");
-        let reply = reply.trim();
-        if outcome == Outcome::Answered && reply.is_empty() {
-            return Err(ReviewError::Invalid(
-                "an answered comment needs an explanation in reply".to_owned(),
-            ));
-        }
-        if reply.chars().count() > MAX_REPLY_CHARS {
-            return Err(ReviewError::Invalid(format!(
-                "the reply is over the {MAX_REPLY_CHARS}-character limit"
-            )));
-        }
+        let reply = checked_reply(outcome, reply)?;
         let comment = self
             .comments
             .iter_mut()
@@ -684,13 +673,52 @@ impl EntryReview {
             sent_at,
             report: Report {
                 outcome,
-                reply: reply.to_owned(),
+                reply,
                 first_at,
                 last_at: at.max(first_at),
                 by,
             },
         };
         Ok(previous)
+    }
+
+    /// The user marks the Sent comment `id` applied or answered by hand (feature 946, W14, FR-006):
+    /// a report by [`Reporter::User`] at `at`, with `note` as the reply. Only a Sent comment can
+    /// be marked (research R9). Refused, changing nothing: `Invalid` for a blank answered note or
+    /// one over [`MAX_REPLY_CHARS`], `NotFound`, `InSend`, `Draft`, and `Refused` for a comment
+    /// already reported.
+    pub fn mark(
+        &mut self,
+        id: CommentId,
+        outcome: Outcome,
+        note: &str,
+        at: u64,
+    ) -> Result<(), ReviewError> {
+        let reply = checked_reply(outcome, note)?;
+        let comment = self
+            .comments
+            .iter_mut()
+            .find(|comment| comment.id == id)
+            .ok_or(ReviewError::NotFound)?;
+        if self.sending.as_ref().is_some_and(|ids| ids.contains(&id)) {
+            return Err(ReviewError::InSend);
+        }
+        let sent_at = match comment.state {
+            CommentState::Sent { at: sent_at } => sent_at,
+            CommentState::Draft => return Err(ReviewError::Draft),
+            CommentState::Reported { .. } => return Err(ReviewError::Refused),
+        };
+        comment.state = CommentState::Reported {
+            sent_at,
+            report: Report {
+                outcome,
+                reply,
+                first_at: at,
+                last_at: at,
+                by: Reporter::User,
+            },
+        };
+        Ok(())
     }
 
     /// Where pending comment `id` is: `NotFound` when this entry has no such comment, `InSend` when
@@ -713,6 +741,24 @@ impl EntryReview {
 
 /// The longest reply a report may carry, in characters (FR-004).
 pub const MAX_REPLY_CHARS: usize = 20_000;
+
+/// `reply` with `\r\n` and `\r` as `\n` and trimmed, or `Invalid` when an answered comment's is
+/// blank or any is over [`MAX_REPLY_CHARS`] (FR-004).
+fn checked_reply(outcome: Outcome, reply: &str) -> Result<String, ReviewError> {
+    let reply = reply.replace("\r\n", "\n").replace('\r', "\n");
+    let reply = reply.trim();
+    if outcome == Outcome::Answered && reply.is_empty() {
+        return Err(ReviewError::Invalid(
+            "an answered comment needs an explanation in reply".to_owned(),
+        ));
+    }
+    if reply.chars().count() > MAX_REPLY_CHARS {
+        return Err(ReviewError::Invalid(format!(
+            "the reply is over the {MAX_REPLY_CHARS}-character limit"
+        )));
+    }
+    Ok(reply.to_owned())
+}
 
 /// `text` trimmed, or `Invalid` when nothing is left.
 fn checked_text(text: &str) -> Result<String, ReviewError> {
@@ -1535,5 +1581,131 @@ mod tests {
             Err(ReviewError::InSend)
         );
         assert_eq!(review, before);
+    }
+
+    #[test]
+    fn mark_on_a_sent_comment_is_a_report_by_the_user() {
+        let mut review = one_sent_one_draft();
+        review
+            .mark(id(9), Outcome::Applied, "", NOW + 7)
+            .expect("applied with an empty note");
+        assert_eq!(
+            state_of(&review, 9),
+            CommentState::Reported {
+                sent_at: NOW,
+                report: Report {
+                    outcome: Outcome::Applied,
+                    reply: String::new(),
+                    first_at: NOW + 7,
+                    last_at: NOW + 7,
+                    by: Reporter::User,
+                },
+            }
+        );
+        let mut review = one_sent_one_draft();
+        review
+            .mark(id(9), Outcome::Answered, "\r\n  not now\r\nlater \n", NOW + 8)
+            .expect("answered");
+        let CommentState::Reported { report, .. } = state_of(&review, 9) else {
+            panic!("reported");
+        };
+        assert_eq!(report.reply(), "not now\nlater");
+        assert_eq!(report.by(), Reporter::User);
+        assert_eq!((report.first_at(), report.last_at()), (NOW + 8, NOW + 8));
+    }
+
+    #[test]
+    fn refused_marks_say_why_and_change_nothing() {
+        let mut review = one_sent_one_draft();
+        let mut already = sample(reported(Outcome::Applied, "", Reporter::User));
+        already.id = id(8);
+        let mut comments = review.comments().to_vec();
+        comments.push(already);
+        review = EntryReview::from_comments(comments);
+        let before = review.clone();
+        assert_eq!(
+            review.mark(id(5), Outcome::Applied, "", NOW),
+            Err(ReviewError::NotFound)
+        );
+        assert_eq!(
+            review.mark(id(1), Outcome::Applied, "", NOW),
+            Err(ReviewError::Draft)
+        );
+        assert_eq!(
+            review.mark(id(8), Outcome::Applied, "", NOW),
+            Err(ReviewError::Refused)
+        );
+        assert!(matches!(
+            review.mark(id(9), Outcome::Answered, " \n ", NOW),
+            Err(ReviewError::Invalid(_))
+        ));
+        let over = "é".repeat(MAX_REPLY_CHARS + 1);
+        assert!(matches!(
+            review.mark(id(9), Outcome::Answered, &over, NOW),
+            Err(ReviewError::Invalid(_))
+        ));
+        assert_eq!(review, before);
+        review
+            .mark(id(9), Outcome::Answered, &"é".repeat(MAX_REPLY_CHARS), NOW)
+            .expect("exactly the limit is accepted");
+    }
+
+    #[test]
+    fn a_comment_in_the_open_send_refuses_a_mark() {
+        let mut review = one_sent_one_draft();
+        review.begin_send(EntryKind::Worktree, &[]).expect("send");
+        let before = review.clone();
+        assert_eq!(
+            review.mark(id(1), Outcome::Applied, "", NOW),
+            Err(ReviewError::InSend)
+        );
+        assert_eq!(review, before);
+    }
+
+    #[test]
+    fn no_operation_turns_a_sent_or_reported_comment_back_into_a_draft() {
+        type Op = fn(&mut EntryReview);
+        let ops: [(&str, Op); 6] = [
+            ("finish_send", |r| {
+                let snapshot = SendSnapshot {
+                    ids: vec![id(9)],
+                    prompt: String::new(),
+                };
+                r.finish_send(&snapshot, NOW + 1);
+            }),
+            ("report", |r| {
+                let _ = r.report(CommentRef::of(id(9)), Outcome::Applied, "", agent(), NOW);
+            }),
+            ("mark", |r| {
+                let _ = r.mark(id(9), Outcome::Answered, "no", NOW);
+            }),
+            ("clear_sent", |r| r.clear_sent()),
+            ("set_text", |r| {
+                let _ = r.set_text(id(9), "again");
+            }),
+            ("delete", |r| {
+                let _ = r.delete(id(9));
+            }),
+        ];
+        for starting in [
+            CommentState::Sent { at: NOW },
+            reported(Outcome::Answered, "why", agent()),
+        ] {
+            for (name, op) in &ops {
+                let mut review = one_sent_one_draft();
+                let mut comments = review.comments().to_vec();
+                comments[1].state = starting.clone();
+                review = EntryReview::from_comments(comments);
+                op(&mut review);
+                assert!(
+                    review
+                        .comments()
+                        .iter()
+                        .filter(|c| c.id == id(9))
+                        .all(|c| c.state != CommentState::Draft),
+                    "{name} turned {starting:?} back into a draft"
+                );
+            }
+        }
     }
 }

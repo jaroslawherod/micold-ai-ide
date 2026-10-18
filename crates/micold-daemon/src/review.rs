@@ -128,9 +128,9 @@ impl Reviews {
             ReviewEditOp::Delete { id } => edited.delete(id)?,
             ReviewEditOp::ClearSent => edited.clear_sent(),
             ReviewEditOp::DiscardPending => edited.discard_pending(),
-            // Feature 946's later milestones answer these (T040, T063); until then they store
-            // nothing.
-            ReviewEditOp::Mark { .. } | ReviewEditOp::Reanchor { .. } => {
+            ReviewEditOp::Mark { id, outcome, note } => edited.mark(id, outcome, &note, now)?,
+            // Feature 946's M5 answers this (T063); until then it stores nothing.
+            ReviewEditOp::Reanchor { .. } => {
                 return Err(Refusal::new(
                     ErrorKind::Refused,
                     "this review action is not available in this build",
