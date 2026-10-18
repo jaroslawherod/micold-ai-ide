@@ -141,6 +141,7 @@ crates/micold-client/src/
 crates/micold-client/tests/
 ├── structured_start_menu.rs   # reducer: entries, chevron rule, kind on create (FR-022)
 ├── structured_log.rs          # reducer: snapshot/live/omitted marker (FR-022a)
+├── layout_snapshot.rs         # + #[path = "gates/structured_row_marker_fits.rs"] module
 └── gates/structured_row_marker_fits.rs  # geometry gate: the row marker stays inside its row
 scripts/capture-stream-json.sh # NEW: records fixtures from a real CLI (R11)
 docs/user-guide/worktrees-and-sessions.md   # structured section (FR-023)
