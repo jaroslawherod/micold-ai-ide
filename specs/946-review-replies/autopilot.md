@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #946
 - **Worktree branch**: claude/project-thread-jjniz9
 - **Started**: 2026-10-17
-- **Phase**: milestone M5
-- **Next step**: wait for CI and merge of M5 PR; then close
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -22,6 +22,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #981 | M2 | merged (rebase); `build + test (windows-latest)` failed once in history_stop_request::ten_busy_sessions_are_all_saved_within_the_bound (timing, unrelated), passed on one re-run | 0b2a7018c3675b303aa3051a6174f29ad28f0f5a |
 | #986 | M3 | merged (rebase) | 7760297461597a165b3d0d03d93843cc7f62438e |
 | #993 | M4 | merged (rebase); `build + test (windows-latest)` failed once in history_stop_request (timing, same flake as #981), passed on one re-run | e47c5539f3f7549d1643b63e7b35bf738bbb525f |
+| #997 | M5 | merged (rebase) | 7953641dfaa024322df8e87acf9fb2a2da7c7771 |
+| (close) | close the spec | open | |
 
 ## Milestones
 
@@ -31,7 +33,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T019–T034 | full | report_review_comment; cards show Applied/Answered and replies in every window, after restart | #981 | merged |
 | M3 | T035–T046 | full | Mark a Sent comment by hand; read a full reply | #986 | merged |
 | M4 | T047–T056 | full | Review panel: rows, counts, jump, draft edit/delete, panel buttons | #993 | merged |
-| M5 | T057–T067 | full | Comments follow their code; next batch names new lines | (pending) | done (T057–T066); T067, T034, T046 visual passes not runnable here (no xdotool), left unticked |
+| M5 | T057–T067 | full | Comments follow their code; next batch names new lines | #997 | merged (T057–T066); T067, T034, T046 visual passes not runnable here (no xdotool), left unticked |
 
 Polish T068–T070 changes no code: left to the close unit. M1 has 18 tasks (over ~10): Foundational
 (statuses, store v2, the one-edit wire delta 48 → 49) has no deliverable of its own and US2 is
@@ -101,4 +103,4 @@ None.
 
 - M2 T034: visual pass of quickstart §B steps 4–6, 10 not run (cloud container: no xdotool/Xvfb driver). Run it on a machine with a display before or at the close unit.
 - M3 T046: visual pass of quickstart §B step 7 and the full-reply dialog not run (same reason); fold into the same display run.
-
+- Close (2026-10-18): converge found no unbuilt behaviour; tdd-verify FAIL with F2, F3, F5, F10 fixed (tests/log), F1/F4 accepted as recorded process gaps (cycle-log note), F6/F7 follow the repo's budget convention, F8: visual passes T034, T046, T056, T067, T068 and macOS/Windows hardware steps remain follow-ups for a run with a display. Close review: 2 MINOR (wording) fixed.
