@@ -92,7 +92,7 @@ docs/user-guide/{agent-tools,worktrees-and-sessions}.md
 | FR-001, FR-004 | pre-check and refusal fallback open the existing confirmation; blocked start and row entry already do (regression tests) |
 | FR-002 | `on_additional_session_confirmed` sends `allow_additional_session: true` (776), with the chosen CLI |
 | FR-003 | `additional_cancelled` (776); fallback creates nothing before confirm |
-| FR-005 | daemon and MCP untouched; proven by the daemon refusal tests (`mcp_create_session.rs`) and the `mcp_tools_catalog.rs` pin |
+| FR-005 | daemon and MCP untouched; proven by the daemon refusal tests (`mcp_create_session.rs`) and the new `mcp_tools_catalog.rs` pin (T011) |
 | FR-006 | tool descriptions in `micold-core/src/mcp/tools.rs` and the two user-guide pages; `mcp_tools_catalog.rs` pins the text |
 | FR-007 | the pre-check and fallback send nothing flagged until `AdditionalConfirmed`; daemon refusal unchanged |
 | SC-001..004 | client tests per route; catalog-unchanged assertion on decline; existing daemon tests for SC-004 |

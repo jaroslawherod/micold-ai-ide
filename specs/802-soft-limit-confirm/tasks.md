@@ -21,7 +21,7 @@ description: "Task list for 802 soft session limit confirmation"
 
 **Independent test**: a start request for an occupied location opens the confirmation and sends nothing; a stale `Refused` reply opens it.
 
-- [ ] T004 [US1] Tests first, failing, in `crates/micold-client/src/main_tests.rs`: (a) start for an occupied location opens the confirmation and sends no `SessionCreate`; (b) `Refused` with a session-id `detail` and `additional == false` opens it, no error notice; (c) other `Refused` replies and an `automatic` refusal still `notify_error`; (d) confirm sends exactly one `SessionCreate { allow_additional_session: true }` with the chosen CLI; cancel sends nothing and the catalog is unchanged; (e) blocked start and row entry still open it (regression). Rewrite `a_refused_session_create_shows_the_refusal_text_and_changes_nothing` to the new behaviour.
+- [ ] T004 [US1] Tests first, failing, in `crates/micold-client/src/main_tests.rs`: (a) start for an occupied location opens the confirmation and sends no `SessionCreate`; (b) `Refused` with a session-id `detail` and `additional == false` opens it, no error notice; (c) other `Refused` replies and an `automatic` refusal still `notify_error`; (d) confirm sends exactly one `SessionCreate { allow_additional_session: true }` with the chosen CLI; cancel sends nothing and the catalog is unchanged; (e) blocked start and row entry still open it (regression); (f) with several sessions the dialog names the main one. Rewrite `a_refused_session_create_shows_the_refusal_text_and_changes_nothing` to the new behaviour.
 - [ ] T005 [P] [US1] Test first in `crates/micold-client/tests/confirm_additional_session_generic.rs`: the dialog draws generic text ("already has a session") when the catalog lacks the occupant.
 - [ ] T006 [US1] Pre-check: put the open-or-send decision in a reducer function in `crates/micold-client/src/features/session.rs` (`State::start_offered(location)` false opens the confirmation with the chosen provider); make `on_session_start_requested` in `crates/micold-client/src/shell/daemon_sync.rs` a thin dispatcher over it.
 - [ ] T007 [US1] Refusal fallback: in the `PendingOp::CreateSession` error arm of `crates/micold-client/src/shell/daemon_sync.rs` recognise `ErrorKind::Refused` with a session-id `detail` (typed fields, not message text) for `additional == false && !automatic` and open the confirmation with the stored location and provider; otherwise `notify_error`.
@@ -32,20 +32,20 @@ description: "Task list for 802 soft session limit confirmation"
 
 **Independent test**: after confirm, two un-archived sessions, original still main (776 behaviour, regression).
 
-- [ ] T010 [US2] Regression test in `crates/micold-client/src/main_tests.rs` (or `crates/micold-client/tests/`): after the confirmed flagged create, the catalog lists both sessions with the original main and the new one selected; deleting one leaves the other. Passes with T006-T007; if it fails, fix in `crates/micold-client/src/shell/daemon_sync.rs`.
+- [ ] T010 [US2] Regression test in `crates/micold-client/src/main_tests.rs` (or `crates/micold-client/tests/`): after the confirmed flagged create, the catalog lists both sessions with the original main and the new one selected; stopping or deleting one leaves the other. Passes with T006-T007; if it fails, fix in `crates/micold-client/src/shell/daemon_sync.rs`.
 
 ## Phase 5: User Story 3 - Agent create has a documented rule (P2)
 
 **Independent test**: `mcp_tools_catalog.rs` pins the new description text; daemon refusal tests unchanged.
 
-- [ ] T011 [US3] Test first: extend `crates/micold-core/tests/mcp_tools_catalog.rs` to pin that `create_session` and `start_session` descriptions say a person is asked to confirm and an agent is refused unless `allow_additional_session: true`, and why.
+- [ ] T011 [US3] Test first (observed failing before T012): extend `crates/micold-core/tests/mcp_tools_catalog.rs` to pin that `create_session` and `start_session` descriptions say a person is asked to confirm and an agent is refused unless `allow_additional_session: true`, and why.
 - [ ] T012 [US3] Update the `create_session` and `start_session` descriptions in `crates/micold-core/src/mcp/tools.rs`.
 - [ ] T013 [P] [US3] Document the agent rule and its reason in `docs/user-guide/agent-tools.md`.
-- [ ] T014 [US3] Confirm no daemon change: run `crates/micold-daemon` `mcp_create_session.rs` refusal and flagged-create tests unchanged (FR-005, FR-007).
+- [ ] T014 [US3] Confirm no daemon change: run `crates/micold-daemon` `mcp_create_session.rs` refusal and flagged-create tests unchanged (FR-005, FR-007). The delete-while-open and disconnected-while-open edge cases rest on those existing 776 daemon tests and T004(d); no new test.
 
 ## Dependencies
 
-T001 -> T002 -> T003 -> T004/T005 -> T006/T007/T008 -> T009, T010. US3 (T011-T014) depends on nothing in US1; ordered after for review size.
+T001 -> T002 -> T003 -> T004/T005 -> T006/T007/T008 -> T009, T010. US3 (T011-T014) has no code dependency on US1; M2 follows M1 for review size only.
 
 ## Implementation Strategy
 
