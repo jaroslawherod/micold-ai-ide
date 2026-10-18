@@ -19,8 +19,8 @@ shapes:
 | `classify change` | runs | runs |
 | `fmt + clippy` | runs | **skipped** |
 | `build + test (ubuntu-latest)` | runs | **skipped** |
-| `build + test (macos-latest)` | runs | **skipped** |
-| `build + test (windows-latest)` | runs | **skipped** |
+| `build + test (macos-latest)` | runs; the full daemon suite only on main pushes, nightly and `full-ci` ([why](#platform-daemon-suites-run-after-the-merge)) | **skipped** |
+| `build + test (windows-latest)` | runs; the full daemon suite only on main pushes, nightly and `full-ci` | **skipped** |
 | `assertion freeze (advisory)` | runs | **skipped** |
 | `sandbox against a real runtime (linux)` | runs on main pushes and nightly; on a pull request only with [daemon-runtime paths](#path-gated-jobs) or `full-ci` | **skipped** |
 | `remote daemon over a real sshd (linux)` | runs on main pushes and nightly; on a pull request only with [daemon-runtime paths](#path-gated-jobs) or `full-ci` | **skipped** |
@@ -171,6 +171,38 @@ from `scripts/classify-change.sh` (the `packaging` block is the pattern), pin it
 `scripts/tests/classify-change.test.sh`, expose it as a `classify` output, and put it in the
 job's `if:`.
 
+## Platform daemon suites run after the merge
+
+On macOS and Windows a pull request builds, runs the render-free core tests and the component and
+architecture gates, packages and smoke-tests, but **skips the full daemon suite** (#956): the
+`Test (daemon)` step on macOS and `Test (daemon, Windows)` on Windows (about 7–11 minutes, the
+largest part of those legs). They run in full when:
+
+- the event is a push to `main` or the nightly schedule; or
+- the pull request carries the `full-ci` label (`classify change` exposes it as the `full_ci`
+  output, and the two steps read that one output).
+
+Ubuntu is unchanged: `cargo test --workspace` runs the whole suite, daemon included, on every
+code-affecting pull request, so the platform-independent daemon logic is still gated before merge.
+The targeted `Test (daemon Windows process supervision)` step also stays on every pull request.
+
+**The accepted cost:** a break that only macOS or Windows sees (a `cfg(unix)` arm, a path
+separator, ConPTY behaviour) is found after the merge. Add `full-ci` to a pull request that edits
+platform-specific code in `micold-daemon`.
+
+**Notification.** When `ci complete` fails on a push to `main` or on the nightly run, its last step
+(`scripts/ci-notify-failure.sh`, cases in `scripts/tests/ci-notify-failure.test.sh`) says so:
+
+- push: a comment on the merged pull request that carries the commit, mentioning its author (a bot
+  author is named, not mentioned);
+- no merged pull request (a direct push) or the nightly run: the tracking issue **CI is red on
+  main** is opened, or commented on when one is already open.
+
+The step has `pull-requests: write` and `issues: write` through `permissions:` on the `ci complete`
+job alone; no other job holds them. It does not run on pull requests. Auto-revert is not done. A
+merge queue (the ruleset would then run the full suite on the queued commit before it lands) is the
+stronger alternative; it is a repository setting, outside this change.
+
 ## The merge gate
 
 The default branch requires exactly one status check: **`ci complete`**. It summarises the run
@@ -197,8 +229,9 @@ can fix it — the ruleset lives in repository settings, not in the repo.
 
 `build + test` (all three legs), `package + smoke (windows-11-arm)`, `sandbox against a real runtime`
 and `remote daemon over a real sshd` list `fmt + clippy` in `needs:` (#957). A formatting or clippy
-failure now ends the run in about 2 minutes instead of the ~25 the heavy jobs took to report; a
-green run starts those jobs about 95 s later. `static Linux daemons` and `assertion freeze` stay
+failure now shows red at about 2 minutes instead of the ~25 the heavy jobs took to report. The run
+itself closes when `static Linux daemons` finishes (about 3 minutes), because that job does not wait
+on lint; a green run starts those jobs about 95 s later. `static Linux daemons` and `assertion freeze` stay
 parallel with lint: they are short and the daemons job feeds `test`, so gating it would serialise
 the two.
 
