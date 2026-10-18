@@ -8231,16 +8231,28 @@ mod issue_source {
         (error.field, error.section)
     }
 
-    /// A22 (blank) — a blank label refuses the save with an error on that entry, and nothing is
-    /// written (US3-5, FR-019).
+    /// A22 (blank) — a blank label refuses the save: its field reads "required" and nothing is
+    /// written (US3-5, FR-019; feature 937, FR-005).
     #[test]
     fn issue_an_invalid_mapping_blank_label_is_not_saved() {
         use micold_client::features::window::FieldId;
+        use micold_core::required::FieldRequirement;
         let (mut rig, store) = file_rig(labelled(), micold_core::issue_types::default_mapping());
         save_with_added_label(&mut rig, "");
+        let draft = rig
+            .app
+            .core
+            .settings
+            .settings_draft
+            .as_ref()
+            .expect("still open");
+        assert_eq!(draft.section, SettingsSection::GithubIssues);
         assert_eq!(
-            refusal(&rig.app),
-            (FieldId::IssueMappingLabel(3), SettingsSection::GithubIssues),
+            draft.required.state_in(
+                &draft.required_fields(SettingsSection::GithubIssues),
+                FieldId::IssueMappingLabel(3)
+            ),
+            FieldRequirement::Missing,
             "the blank entry is the one marked"
         );
         assert!(
