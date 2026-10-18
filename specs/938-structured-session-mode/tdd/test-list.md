@@ -10,3 +10,5 @@ before its implementation). Scope so far: M1 (T001–T010). Later milestones app
 | U3 | `structured_args()` is the stream-json argv for Claude Code only | FR-005 | `micold-core/src/provider.rs::structured_args_tests::only_claude_code_has_structured_args` | DONE |
 | U4 | `LineSplitter`: whole lines across chunks, one `\r` removed, 8 MiB unsplit, `finish()`, lossy UTF-8, empty lines | R4, FR-014 | `micold-core/src/structured/lines.rs::tests` (7 tests), `parse.rs::tests` (2) | DONE |
 | U5 | `parse_line`/`pair_tool_calls` over the five recorded fixtures and `tolerance.jsonl` | FR-011–FR-015, FR-024, SC-001, SC-002 | `micold-core/tests/structured_parse.rs` (7 tests) | DONE |
+| U6 | `EventHistory`: seq from 0, eviction past either bound counted in `omitted`, `bytes` = retained line text, defaults 5,000 / 64 MiB | R5, FR-018 | `micold-core/src/structured/history.rs::tests` (6 tests) | DONE |
+| U7 | Wire delta: `SessionCreate.kind`/`SessionSummary.kind` default `Terminal`; `StructuredEvents` round-trips every event variant (JSON and postcard) | FR-001, FR-016, FR-020 | `micold-core/tests/structured_wire.rs` (3 tests) | DONE |

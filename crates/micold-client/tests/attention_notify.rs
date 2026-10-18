@@ -99,6 +99,7 @@ fn summary(id: SessionId, seq: u64, activity: ActivitySignal) -> SessionSummary 
         lifecycle: WireLifecycle::Running,
         activity,
         provider: AiCli::ClaudeCode,
+        kind: Default::default(),
         input_serial: 0,
         live_shells: Vec::new(),
         attention_seq: seq,

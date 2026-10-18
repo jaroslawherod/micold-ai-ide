@@ -984,6 +984,7 @@ where
                 worktree_dir,
                 provider,
                 allow_additional_session,
+                kind,
             } => {
                 // The catalog write stays on the loop: it is a small atomic file write, and it is
                 // what mints the id every later message refers to. Only the spawn — the slow half

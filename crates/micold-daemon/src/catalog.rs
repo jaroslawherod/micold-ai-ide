@@ -1922,6 +1922,7 @@ fn session_summary(session: &Session, removed: &HashSet<SessionId>) -> SessionSu
         // happens to collide across two providers' stores must not be able to change which CLI a
         // known session runs (data-model invariant 3).
         provider: session.provider,
+        kind: Default::default(),
         lifecycle: wire_lifecycle(session.lifecycle.clone()),
         activity: ActivitySignal::Unknown,
         input_serial: 0,

@@ -321,6 +321,7 @@ fn sample_client_msgs() -> Vec<ClientMsg> {
             project: PathBuf::from("/a"),
             worktree_dir: "feat-x".into(),
             provider: AiCli::ClaudeCode,
+            kind: Default::default(),
             allow_additional_session: false,
         },
         // The same message on the second provider (feature 026, T021). Both variants ride the
@@ -331,6 +332,7 @@ fn sample_client_msgs() -> Vec<ClientMsg> {
             project: PathBuf::from("/a"),
             worktree_dir: "feat-y".into(),
             provider: AiCli::Copilot,
+            kind: Default::default(),
             allow_additional_session: true,
         },
         ClientMsg::SessionDelete {
@@ -410,6 +412,7 @@ fn sample_summary() -> SessionSummary {
         id: sid(),
         worktree_dir: Some("feat-x".into()),
         provider: AiCli::Copilot,
+        kind: Default::default(),
         title: SessionLabel::Named("Fix login".into()),
         lifecycle: WireLifecycle::Failed {
             reason: "crash loop".into(),
@@ -1895,6 +1898,7 @@ fn the_main_marker_and_set_main_round_trip() {
         lifecycle: WireLifecycle::Idle,
         activity: ActivitySignal::Unknown,
         provider: AiCli::ClaudeCode,
+        kind: Default::default(),
         input_serial: 0,
         live_shells: Vec::new(),
         attention_seq: 0,

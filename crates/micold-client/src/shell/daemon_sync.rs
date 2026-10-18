@@ -2606,6 +2606,7 @@ pub fn on_session_start_requested(
             project,
             worktree_dir,
             provider,
+            kind: Default::default(),
             allow_additional_session: false,
         });
     }
@@ -2629,6 +2630,7 @@ fn additional_session_request(
         project,
         worktree_dir,
         provider,
+        kind: Default::default(),
         allow_additional_session: true,
     }
 }
@@ -3752,6 +3754,7 @@ pub(crate) mod tests {
             worktree_dir: None,
             title: SessionLabel::Named(title.into()),
             provider: AiCli::ClaudeCode,
+            kind: Default::default(),
             lifecycle,
             activity: ActivitySignal::Unknown,
             input_serial,
@@ -4555,6 +4558,7 @@ pub(crate) mod tests {
     ) -> SessionSummary {
         SessionSummary {
             provider,
+            kind: Default::default(),
             ..summary_at(id, title, lifecycle, 0)
         }
     }

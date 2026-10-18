@@ -227,6 +227,7 @@ mod derived_labels {
                     lifecycle: WireLifecycle::Idle,
                     activity: ActivitySignal::Unknown,
                     provider: AiCli::ClaudeCode,
+                    kind: Default::default(),
                     input_serial: 0,
                     live_shells: Vec::new(),
                     attention_seq: 0,

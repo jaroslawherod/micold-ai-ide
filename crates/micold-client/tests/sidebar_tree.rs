@@ -1062,6 +1062,7 @@ fn a_summary_carrying_agent_runs_lists_every_worktree_and_session() {
                 lifecycle: WireLifecycle::Running,
                 activity: ActivitySignal::Working,
                 provider: AiCli::ClaudeCode,
+                kind: Default::default(),
                 input_serial: 0,
                 live_shells: Vec::new(),
                 attention_seq: 0,
