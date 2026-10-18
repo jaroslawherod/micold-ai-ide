@@ -99,7 +99,7 @@ stash@{0} survivors (all used by M1a–M2, stash dropped 2026-10-18; backed up i
 | M1c review B (conformance, sonnet) | 1 | 92eb8da19e833dfac69f4c82ff46e16132a896ac:9a5aa584e8579a2c9767db3d680952aefd1e27ab | CHANGES: 1 MAJOR (no cycle-log entries — added, honest that tests came with the code), 1 MINOR (declined) |
 | M4a review A (code-review high) | 1 | f29f682624d1c0bd2370fef030eb8ec1d6d102af:153fa9f2b3d8ac3525be149d44e1053093c2e8c4 | CLEAN — 3 MINOR declined (Declined review findings): default provider is one value, MIN_MEMORY floor reused, `offered()` slice order |
 | M4a review B (conformance, sonnet) | 1 | same | CLEAN — Verify 22 + 10 passed; 1 MINOR: file fields are plain text paths (no picker; same as the SSH form's key file), noted in the cycle log |
-| M5 | A (code-review high) + B (conformance) | ade6ca29b89171b2bf51f114e355f5de2b13fe52:21e2ef5743bdc4b335c71cbd7303f9bfd6df9de6 | A: CLEAN (F1 MINOR fixed: drift text; F2 MINOR declined: `RefusalReason` has no Display, Debug kept until M6 words it); B pending |
+| M5 | A (code-review high) + B (conformance) | ade6ca29b89171b2bf51f114e355f5de2b13fe52:21e2ef5743bdc4b335c71cbd7303f9bfd6df9de6 | A: CLEAN (F1 MINOR fixed: drift text; F2 MINOR declined: `RefusalReason` has no Display, Debug kept until M6 words it); B: CHANGES, F1 MAJOR fixed (A15/A16/A17 tests added), F2 MINOR fixed (cycle-log) |
 
 ## Declined review findings
 

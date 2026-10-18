@@ -102,3 +102,59 @@ async fn a_changed_host_key_names_the_pod() {
     let pod = ResourceNames::new(CONTEXT, NS, NAME).pod();
     assert!(reason.contains(&pod), "{reason}");
 }
+
+fn pending() -> micold_core::kube::PodStatusView {
+    micold_core::kube::PodStatusView {
+        phase: "Pending".into(),
+        ..Default::default()
+    }
+}
+
+#[tokio::test]
+async fn an_image_that_cannot_be_pulled_names_the_image_and_the_error() {
+    let cluster = cluster();
+    cluster.progress(
+        &ResourceNames::new(CONTEXT, NS, NAME).pod(),
+        vec![micold_core::kube::PodStatusView {
+            waiting: Some(("ErrImagePull".into(), "manifest unknown".into())),
+            scheduled: Some(true),
+            ..pending()
+        }],
+    );
+    let reason = failing(Host::default(), cluster).await;
+    assert!(
+        reason.contains(IMAGE) && reason.contains("manifest unknown"),
+        "{reason}"
+    );
+}
+
+#[tokio::test]
+async fn an_unschedulable_pod_gives_the_schedulers_reason() {
+    let cluster = cluster();
+    cluster.progress(
+        &ResourceNames::new(CONTEXT, NS, NAME).pod(),
+        vec![micold_core::kube::PodStatusView {
+            scheduled: Some(false),
+            schedule_reason: Some(("Unschedulable".into(), "0/3 nodes are available".into())),
+            ..pending()
+        }],
+    );
+    let reason = failing(Host::default(), cluster).await;
+    assert!(reason.contains("0/3 nodes are available"), "{reason}");
+}
+
+#[tokio::test]
+async fn a_context_the_kubeconfig_lacks_is_named() {
+    let cluster = cluster();
+    let mut client = client(&cluster, Host::default());
+    client.env.connect = std::sync::Arc::new(|context: String| {
+        Box::pin(async move {
+            Err(micold_core::kube::classify::KubeFailure::ContextMissing {
+                context,
+                looked_in: Vec::new(),
+            })
+        })
+    });
+    let reason = attempt(&client).await.err().expect("the start fails");
+    assert!(reason.contains(CONTEXT), "{reason}");
+}
