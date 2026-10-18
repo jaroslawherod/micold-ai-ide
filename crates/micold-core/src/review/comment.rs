@@ -1604,7 +1604,12 @@ mod tests {
         );
         let mut review = one_sent_one_draft();
         review
-            .mark(id(9), Outcome::Answered, "\r\n  not now\r\nlater \n", NOW + 8)
+            .mark(
+                id(9),
+                Outcome::Answered,
+                "\r\n  not now\r\nlater \n",
+                NOW + 8,
+            )
             .expect("answered");
         let CommentState::Reported { report, .. } = state_of(&review, 9) else {
             panic!("reported");
