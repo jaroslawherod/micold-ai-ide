@@ -498,11 +498,9 @@ fn resolve_pending_of(app: &mut App, daemon: DaemonId) -> Task<Message> {
         .collect();
     for key in cloning {
         if let Some(pending) = app.pending_clones.remove(&key) {
-            app.core
-                .update(Message::WorktreeForm(FormMsg::CreateFailed(format!(
-                    "{} disconnected while cloning {}.",
-                    pending.daemon_name, pending.plan.url
-                ))));
+            app.core.update(Message::WorktreeForm(FormMsg::CreateFailed(
+                pending.on_disconnect(),
+            )));
         }
     }
     let reqs: Vec<u64> = app
@@ -1586,11 +1584,12 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
             }
             _ => {}
         },
-        // FR-024: a stage push names the step in flight. Peeked, not removed — the
-        // operation is still running and its terminal reply still needs the pending op.
+        // A Kubernetes daemon answered its clone request (feature 686).
         reply @ (DaemonMsg::RepoCloned { .. } | DaemonMsg::RepoCloneFailed { .. }) => {
             on_repo_clone_reply(app, daemon, &reply);
         }
+        // FR-024: a stage push names the step in flight. Peeked, not removed — the
+        // operation is still running and its terminal reply still needs the pending op.
         DaemonMsg::OperationProgress { req, stage, detail } => {
             if matches!(
                 app.pending_ops.get(&req),
@@ -3422,18 +3421,7 @@ pub fn send_worktree_create(
 }
 
 /// A worktree create that waits for its clone in a Kubernetes daemon's pod (feature 686).
-pub struct PendingClone {
-    /// The clone asked for.
-    pub plan: micold_client::features::kube_clone::ClonePlan,
-    /// The daemon's name, for the failure text.
-    pub daemon_name: String,
-    /// The worktree to create in the clone.
-    pub names: micold_core::naming::DerivedNames,
-    /// How to obtain its branch.
-    pub mode: CreateMode,
-    /// The session to start with it.
-    pub session: Option<micold_core::protocol::messages::SessionDefinition>,
-}
+pub type PendingClone = micold_client::features::kube_clone::Pending;
 
 /// The form's chosen daemon, when it is a Kubernetes one.
 fn kubernetes_choice(app: &App) -> Option<DaemonId> {
@@ -3472,10 +3460,6 @@ fn start_kubernetes_create(
         || "this project".to_string(),
         |n| n.to_string_lossy().into_owned(),
     );
-    let plan = match micold_client::features::kube_clone::plan(&project_name, id, &remotes) {
-        Ok(plan) => plan,
-        Err(why) => return fail(app, why),
-    };
     let daemon_name = app
         .core
         .settings
@@ -3488,60 +3472,58 @@ fn start_kubernetes_create(
             format!("{daemon_name} is not connected. Start it in Settings, under Daemons."),
         );
     };
-    if app.pending_clones.contains_key(&(id, plan.dest.clone())) {
-        return fail(
-            app,
-            format!("{daemon_name} is already cloning {}.", plan.url),
-        );
-    }
     let session = app
         .core
         .worktree_form
         .form
         .as_ref()
         .and_then(|f| f.session_definition());
+    let pending = match PendingClone::begin(
+        &project_name,
+        id,
+        &daemon_name,
+        &remotes,
+        |dest| app.pending_clones.contains_key(&(id, dest.to_string())),
+        names,
+        mode,
+        session,
+    ) {
+        Ok(pending) => pending,
+        Err(why) => return fail(app, why),
+    };
     app.core.update(Message::WorktreeForm(FormMsg::CloneStarted(
-        plan.activity.clone(),
+        pending.plan.activity.clone(),
     )));
-    outbox.send(plan.request());
-    app.pending_clones.insert(
-        (id, plan.dest.clone()),
-        PendingClone {
-            plan,
-            daemon_name,
-            names,
-            mode,
-            session,
-        },
-    );
+    outbox.send(pending.plan.request());
+    app.pending_clones
+        .insert((id, pending.plan.dest.clone()), pending);
 }
 
 /// The daemon answered a clone request: create the worktree in the clone, or end the create.
 fn on_repo_clone_reply(app: &mut App, daemon: DaemonId, reply: &DaemonMsg) {
-    use micold_client::features::kube_clone::Step;
+    use micold_client::features::kube_clone::Output;
     let (DaemonMsg::RepoCloned { dest } | DaemonMsg::RepoCloneFailed { dest, .. }) = reply else {
         return;
     };
     let Some(pending) = app.pending_clones.remove(&(daemon, dest.clone())) else {
         return;
     };
-    match pending.plan.on_reply(&pending.daemon_name, reply) {
-        Some(Step::Create { .. }) if app.outbox_for(daemon).is_none() => {
-            app.core
-                .update(Message::WorktreeForm(FormMsg::CreateFailed(format!(
-                    "{} disconnected after cloning.",
-                    pending.daemon_name
-                ))));
-        }
-        Some(Step::Create { project }) => {
-            let binding = micold_core::daemons::Binding::Bound(daemon);
-            let path = project.clone();
-            send_op_bound(app, binding, PendingOp::ProjectAdd, move |req| {
-                ClientMsg::ProjectAdd { req, path }
-            });
-            let (branch, dir_name) = (pending.names.branch, pending.names.dir_name);
-            let (mode, session) = (pending.mode, pending.session);
-            send_op_bound(
+    let connected = app.outbox_for(daemon).is_some();
+    let binding = micold_core::daemons::Binding::Bound(daemon);
+    for output in pending.on_reply(connected, reply).unwrap_or_default() {
+        match output {
+            Output::ProjectAdd { path } => {
+                send_op_bound(app, binding, PendingOp::ProjectAdd, move |req| {
+                    ClientMsg::ProjectAdd { req, path }
+                });
+            }
+            Output::WorktreeCreate {
+                project,
+                branch,
+                dir_name,
+                mode,
+                session,
+            } => send_op_bound(
                 app,
                 binding,
                 PendingOp::WorktreeCreate {
@@ -3557,13 +3539,12 @@ fn on_repo_clone_reply(app: &mut App, daemon: DaemonId, reply: &DaemonMsg) {
                     mode,
                     session,
                 },
-            );
+            ),
+            Output::Failed(text) => {
+                app.core
+                    .update(Message::WorktreeForm(FormMsg::CreateFailed(text)));
+            }
         }
-        Some(Step::Failed(text)) => {
-            app.core
-                .update(Message::WorktreeForm(FormMsg::CreateFailed(text)));
-        }
-        None => {}
     }
 }
 

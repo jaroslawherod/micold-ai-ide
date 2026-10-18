@@ -79,3 +79,129 @@ fn a_failed_clone_ends_the_create_with_the_contract_text() {
     };
     assert_eq!(plan.on_reply("Dev", &other), None);
 }
+
+mod sequencing {
+    use super::*;
+    use micold_client::features::kube_clone::{Output, Pending};
+    use micold_core::naming::DerivedNames;
+    use micold_core::worktree::CreateMode;
+
+    fn names() -> DerivedNames {
+        DerivedNames {
+            branch: "feat/x".into(),
+            dir_name: "feat-x".into(),
+        }
+    }
+
+    fn begin(remotes: &[GitRemote]) -> Result<Pending, String> {
+        Pending::begin(
+            "app",
+            DaemonId(2),
+            "Dev",
+            remotes,
+            |_| false,
+            names(),
+            CreateMode::NewBranch,
+            None,
+        )
+    }
+
+    fn pending() -> Pending {
+        begin(&[remote("origin", "git@github.com:acme/app.git")]).unwrap()
+    }
+
+    fn cloned(p: &Pending) -> DaemonMsg {
+        DaemonMsg::RepoCloned {
+            dest: p.plan.dest.clone(),
+        }
+    }
+
+    #[test]
+    fn the_sequence_is_clone_then_project_then_worktree() {
+        let p = pending();
+        let mut order = vec![match p.plan.request() {
+            ClientMsg::RepoClone { .. } => "RepoClone",
+            _ => "other",
+        }];
+        let out = p.on_reply(true, &cloned(&p)).unwrap();
+        for o in &out {
+            order.push(match o {
+                Output::ProjectAdd { .. } => "ProjectAdd",
+                Output::WorktreeCreate { .. } => "WorktreeCreate",
+                Output::Failed(_) => "Failed",
+            });
+        }
+        assert_eq!(order, ["RepoClone", "ProjectAdd", "WorktreeCreate"]);
+        let Output::WorktreeCreate {
+            project,
+            branch,
+            dir_name,
+            ..
+        } = &out[1]
+        else {
+            panic!()
+        };
+        assert_eq!(
+            &out[0],
+            &Output::ProjectAdd {
+                path: project.clone()
+            }
+        );
+        assert_eq!((branch.as_str(), dir_name.as_str()), ("feat/x", "feat-x"));
+    }
+
+    #[test]
+    fn a_refusal_sends_nothing() {
+        assert!(begin(&[]).is_err());
+        let busy = Pending::begin(
+            "app",
+            DaemonId(2),
+            "Dev",
+            &[remote("origin", "git@github.com:acme/app.git")],
+            |_| true,
+            names(),
+            CreateMode::NewBranch,
+            None,
+        );
+        assert_eq!(
+            busy.unwrap_err(),
+            "Dev is already cloning git@github.com:acme/app.git."
+        );
+    }
+
+    #[test]
+    fn a_failed_clone_creates_nothing() {
+        let p = pending();
+        let reply = DaemonMsg::RepoCloneFailed {
+            dest: p.plan.dest.clone(),
+            failure: CloneFailureWire::AuthRequired,
+        };
+        let out = p.on_reply(true, &reply).unwrap();
+        assert!(matches!(out.as_slice(), [Output::Failed(_)]), "{out:?}");
+    }
+
+    #[test]
+    fn a_daemon_gone_after_the_clone_fails_the_create() {
+        let p = pending();
+        assert_eq!(
+            p.on_reply(false, &cloned(&p)).unwrap(),
+            vec![Output::Failed("Dev disconnected after cloning.".into())]
+        );
+    }
+
+    #[test]
+    fn a_disconnect_mid_clone_says_so() {
+        assert_eq!(
+            pending().on_disconnect(),
+            "Dev disconnected while cloning git@github.com:acme/app.git."
+        );
+    }
+
+    #[test]
+    fn an_answer_about_another_clone_is_ignored() {
+        let other = DaemonMsg::RepoCloned {
+            dest: "/data/repos/else".into(),
+        };
+        assert_eq!(pending().on_reply(true, &other), None);
+    }
+}
