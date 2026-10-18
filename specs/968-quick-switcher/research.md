@@ -98,7 +98,9 @@ a change to that function, its tests and the spec's FR-003/FR-004, and nothing e
   OutsideClick, FR-009); the terminal yields the keyboard while it is open and takes it back when
   it closes (`terminal_focused` is derived, feature 023), and the #803 chords do nothing while it
   is open (their U1 gate reads `registry::topmost`, FR-012). The view, `ui/quick_switcher.rs`,
-  composes the shared `material::dialog` with a `material::Typeahead` held open (`.open(true)`),
+  composes a `material::Surface` of `SurfaceKind::Dialog` whose content is `material::dialog::fields(column![..])`
+  (the free function that spaces §7.4's dialog column; no `actions` row: the switcher has no
+  buttons) holding a `material::Typeahead` held open (`.open(true)`),
   rows as `picker::Row` (label: the name with match spans; details: kind and context; `enabled`:
   selectable), `.highlighted(..)`, `.selected(..)` for the current entry, `.empty_message(..)`.
 - **Rationale**: the registry is the one place surfaces are made dismissible and keyboard-taking;
