@@ -27,6 +27,9 @@ Code pointers are as of `origin/main` at plan time.
   resume, a missing CLI, a missing conversation and a missing folder report exactly as today.
 - **Permissions (FR-006a)**: no `--permission-mode`, no `--allowedTools`, no
   `--dangerously-skip-permissions`. A test asserts the argv contains none of them.
+- **Alternatives**: a separate structured `LaunchSpec`/arg builder — rejected, resume and hook
+  arguments would be duplicated and could drift from the terminal path. A per-provider flag on
+  `SessionKind` — rejected, the provider owns its argv.
 
 ## R3. Spawning over pipes
 
@@ -51,6 +54,9 @@ Code pointers are as of `origin/main` at plan time.
   partial line at EOF, which parses as an unreadable line (edge case). Invalid UTF-8 is decoded
   lossily into an unreadable line's text.
 - **Rationale**: pure, platform-agnostic, unit-testable (Principle VI).
+- **Alternatives**: `BufRead::lines` in the daemon thread — rejected, it fails the read on invalid
+  UTF-8 (losing the line, FR-014) and keeps the `\r`; a max line length — rejected, tool results run
+  to several MiB and the spec says lines are read whole.
 
 ## R5. Event history bound and sequence
 
@@ -62,6 +68,8 @@ Code pointers are as of `origin/main` at plan time.
   drops it; nothing is written to disk.
 - **Rationale**: a count alone does not bound memory with multi-MiB tool results; bytes alone lets
   thousands of tiny deltas pile up. Partial-message deltas are many per turn, hence 5,000.
+- **Alternatives**: unbounded history — rejected, FR-018. A time-based window — rejected, an idle
+  session would lose its whole history. Spilling to disk — rejected, FR-021a.
 
 ## R6. Carrying events: no gap, no duplicate, frame size
 
@@ -91,6 +99,8 @@ Code pointers are as of `origin/main` at plan time.
   quotes, non-ASCII unchanged).
 - **Wire**: correlated `ClientMsg::SessionUserMessage { req, session, text }` →
   `OperationOk`/`OperationError` with the refusal sentence.
+- **Alternatives**: queueing messages sent mid-turn — rejected, FR-008 refuses them and queueing
+  is #941's input design. Turn state in the client — rejected, two clients could both send.
 
 ## R8. First prompt
 
@@ -99,6 +109,8 @@ Code pointers are as of `origin/main` at plan time.
   start, so no trust/readiness wait). Only the create path passes a prompt; supervision respawns,
   `SessionStart` and `SessionRestart` pass `None`, so the prompt goes once in the session's life
   (FR-007).
+- **Alternatives**: passing the prompt as a `-p` argument — rejected, `--input-format stream-json`
+  reads the prompt from stdin, and an argv prompt would be resent on every respawn (FR-007).
 
 ## R9. Parsing approach and dependencies
 
@@ -110,6 +122,10 @@ Code pointers are as of `origin/main` at plan time.
   Known `type`s: `system`/`init`, `assistant`, `user`, `result`, `stream_event`. Other `system`
   subtypes are `Unrecognised` (kept whole).
 - **Rationale**: `serde_json` is already a core dependency (`first_turn.rs`); no new crate.
+- **Alternatives**: one typed `#[serde(tag = "type")]` enum deserialized straight from the line —
+  rejected, one bad field loses the whole line instead of keeping it `Unrecognised`. `Value`-only
+  events — rejected, every consumer would re-parse. A schema crate (`schemars`/generated types) —
+  rejected, no published schema for the CLI's stream and a new dependency.
 
 ## R10. Client
 
@@ -136,6 +152,8 @@ Code pointers are as of `origin/main` at plan time.
   (replace with placeholders) before commit.
 - **Risk**: capture needs a logged-in CLI. If the implementing unit has none, it escalates (cannot
   satisfy FR-024 with synthetic data).
+- **Alternatives**: hand-written fixtures only — rejected, FR-024 requires recorded ones.
+  Capturing in CI — rejected, CI has no account (FR-025).
 
 ## R12. Stand-in CLI for daemon tests
 
@@ -145,8 +163,13 @@ Code pointers are as of `origin/main` at plan time.
   waiting for one stdin line before each turn after the first when told to; appends every stdin
   line to `stdin-record`; writes `stderr <text>` directives to stderr. No network, no account
   (FR-025).
+- **Alternatives**: a shell-script stand-in — rejected, not portable to Windows (Principle VI). Mocking
+  the spawn inside the daemon — rejected, it would skip the pipe, thread and process-tree code
+  under test.
 
 ## R13. Protocol version
 
 - **Decision**: bump `PROTOCOL_VERSION` 51 → 52; new fields `#[serde(default)]`. An older client is
   refused by the existing handshake (spec edge case).
+- **Alternatives**: no bump with defaulted fields only — rejected, an old client would silently
+  drop `StructuredEvents` and show an empty pane for a structured session.
