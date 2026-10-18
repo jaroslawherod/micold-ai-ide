@@ -60,7 +60,7 @@ decisions below settle the design questions the spec leaves to planning.
 - **Decision**: `AccordionSection::summary(text)` (and `summary_maybe(Option<String>)`, mirroring
   `Button::on_press_maybe`) draws, while closed only, an `Ellipsized::at_role(text,
   TypeRole::Caption, roles.on_surface_variant)` line under the title, inside the header button. The
-  header becomes `row![column![title, summary], Space::Fill, chevron]`.
+  header becomes `row![column![title, summary].width(Fill), chevron]` (M1: the column fills instead of a `Space::Fill`, which would split the width and cut the summary at half the header).
 - **Rationale**: `ui/material/ellipsized.rs` is the library's one-line truncating label (FR-011's
   "ellipsized"); putting the line inside the header button keeps the whole header one press target
   and one focus stop (FR-013). Under the title rather than beside it: at the narrowest Settings

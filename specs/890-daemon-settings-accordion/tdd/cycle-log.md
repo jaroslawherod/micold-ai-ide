@@ -33,3 +33,11 @@ instead — with both filling, the summary would be cut at half the header.
   FAILED, `left: ["Network", "", "\u{e313}"] right: ["Network", "\u{e313}"]`. Green: 13 passed.
 - U1 strengthened: both lines must fit inside the fixed 40dp header (the button's
   `density::BUTTON_BASE`); passes. U3 finds the summary by its text rather than by size.
+
+### M1 review B notes
+
+- U5 and U6 are characterisation tests: U5 pins today's 40dp header (measured on stubs that draw
+  nothing new) and U6 pins the existing toggle and focus behaviour with a summary and the marker
+  present. Neither had a red against a real change; they guard FR-013's "as today".
+- T003's `Space::Fill` wording is superseded by research R4's amended layout (see Refactor above);
+  the task text stays as written.
