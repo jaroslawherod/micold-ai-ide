@@ -12324,3 +12324,214 @@ mod two_daemons {
         assert!(app.core.notifications.queue.is_active());
     }
 }
+
+// --- feature 533 T074: the shell's Jira request path, with the switch, the connection and the
+// token file each taken away after the form opened --------------------------------------------
+//
+// `jira_source_state.rs` drives the reducer; these drive what only the shell does: the gate every
+// request passes and the token read at request time. The source is a double that records the token
+// it was asked with, so a request that went out when it should not have shows as a recorded call.
+
+mod jira_request_path {
+    use super::*;
+    use micold_client::features::worktree_form::{
+        BranchSource, IssueList, Msg as FormMsg, SearchState,
+    };
+    use micold_core::github::{Issue, IssueLoadError, IssuePage};
+    use micold_core::jira::{connection_key, ApiToken, JiraConnection, JiraSource};
+    use std::sync::Mutex;
+
+    const PROJECT: &str = "/repo/demo";
+
+    /// Records the token of every call; answers one issue, or the search's two.
+    #[derive(Default)]
+    struct Recording {
+        tokens: Mutex<Vec<String>>,
+    }
+
+    impl Recording {
+        fn seen(&self) -> Vec<String> {
+            self.tokens.lock().unwrap().clone()
+        }
+    }
+
+    fn found(key: &str, number: u64) -> Issue {
+        Issue::jira(
+            key,
+            number,
+            "Add login".to_string(),
+            Vec::new(),
+            "2026-10-01T00:00:00Z".to_string(),
+        )
+    }
+
+    impl JiraSource for Recording {
+        fn list_open(
+            &self,
+            _: &JiraConnection,
+            token: &ApiToken,
+            _: Option<&str>,
+        ) -> Result<IssuePage, IssueLoadError> {
+            self.tokens.lock().unwrap().push(token.expose().to_string());
+            if token.expose() == "revoked" {
+                return Err(IssueLoadError::Other("revoked".to_string()));
+            }
+            Ok(IssuePage {
+                issues: vec![found("ABC-1", 1)],
+                total_open: 9,
+                next_cursor: Some("more".to_string()),
+            })
+        }
+
+        fn search_open(
+            &self,
+            _: &JiraConnection,
+            token: &ApiToken,
+            _: &str,
+        ) -> Result<Vec<Issue>, IssueLoadError> {
+            self.tokens.lock().unwrap().push(token.expose().to_string());
+            Ok(vec![found("ABC-2", 2)])
+        }
+    }
+
+    struct Rig {
+        app: App,
+        source: Arc<Recording>,
+        dir: tempfile::TempDir,
+    }
+
+    impl Rig {
+        fn token_file(&self) -> PathBuf {
+            micold_core::store::jira_token_path(self.dir.path(), std::path::Path::new(PROJECT))
+        }
+
+        fn store_token(&self, token: &str) {
+            std::fs::write(self.token_file(), token).unwrap();
+        }
+    }
+
+    fn send(app: &mut App, msg: FormMsg) {
+        let work = update_inner(app, Message::WorktreeForm(msg));
+        settle(app, work);
+    }
+
+    fn issues(app: &App) -> &IssueList {
+        &app.core.worktree_form.form.as_ref().expect("form open").issues
+    }
+
+    /// Switch on, a connection, the form open on a Jira-only project, a token file holding `first`.
+    fn rig() -> Rig {
+        let dir = tempfile::tempdir().unwrap();
+        let source = Arc::new(Recording::default());
+        let mut app = base_app();
+        app.caps = app
+            .caps
+            .clone()
+            .with_jira(source.clone(), dir.path().to_path_buf());
+        app.core.workspace.active = Some(PathBuf::from(PROJECT));
+        app.core.settings.jira_enabled = true;
+        app.core.settings.jira_connections.insert(
+            connection_key(std::path::Path::new(PROJECT)),
+            JiraConnection::parse("https://acme.atlassian.net", "ABC", "me@acme.com").unwrap(),
+        );
+        let rig = Rig { app, source, dir };
+        rig.store_token("first");
+        let mut rig = rig;
+        send(&mut rig.app, FormMsg::Opened);
+        send(&mut rig.app, FormMsg::RemotesListed(Ok(Vec::new())));
+        rig
+    }
+
+    fn failure(app: &App) -> String {
+        match issues(app) {
+            IssueList::Failed { error } => format!("{error:?}"),
+            other => panic!("expected a failed load, found {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_connected_request_reads_the_token_file_and_lists_the_issues() {
+        let mut rig = rig();
+        send(&mut rig.app, FormMsg::SourceChanged(BranchSource::Issue));
+        assert!(matches!(issues(&rig.app), IssueList::Loaded { .. }));
+        let seen = rig.source.seen();
+        assert!(!seen.is_empty() && seen.iter().all(|t| t == "first"), "{seen:?}");
+    }
+
+    #[test]
+    fn with_the_switch_off_nothing_is_asked() {
+        let mut rig = rig();
+        rig.app.core.settings.jira_enabled = false;
+        send(&mut rig.app, FormMsg::SourceChanged(BranchSource::Issue));
+        assert!(failure(&rig.app).contains("isn't connected"));
+        assert_eq!(rig.source.seen(), Vec::<String>::new());
+    }
+
+    #[test]
+    fn with_no_connection_nothing_is_asked() {
+        let mut rig = rig();
+        rig.app.core.settings.jira_connections.clear();
+        send(&mut rig.app, FormMsg::SourceChanged(BranchSource::Issue));
+        assert!(failure(&rig.app).contains("isn't connected"));
+        assert_eq!(rig.source.seen(), Vec::<String>::new());
+    }
+
+    #[test]
+    fn with_no_token_file_nothing_is_asked_and_settings_is_named() {
+        let mut rig = rig();
+        std::fs::remove_file(rig.token_file()).unwrap();
+        send(&mut rig.app, FormMsg::SourceChanged(BranchSource::Issue));
+        let message = failure(&rig.app);
+        assert!(message.contains("no API token is stored"), "{message}");
+        assert!(message.contains("Settings > Jira"), "{message}");
+        assert_eq!(rig.source.seen(), Vec::<String>::new());
+    }
+
+    #[test]
+    fn a_rotated_token_is_used_by_the_next_request() {
+        let mut rig = rig();
+        rig.store_token("revoked");
+        send(&mut rig.app, FormMsg::SourceChanged(BranchSource::Issue));
+        assert!(failure(&rig.app).contains("revoked"));
+        rig.store_token("rotated\n");
+        send(&mut rig.app, FormMsg::IssueRetry);
+        assert!(matches!(issues(&rig.app), IssueList::Loaded { .. }));
+        let seen = rig.source.seen();
+        assert_eq!(seen[0], "revoked", "{seen:?}");
+        assert!(seen.len() > 1 && seen[1..].iter().all(|t| t == "rotated"), "{seen:?}");
+    }
+
+    /// Type `text` over an incomplete listing; `settle` runs the debounce and the search.
+    fn start_search(rig: &mut Rig, text: &str) {
+        send(&mut rig.app, FormMsg::SourceChanged(BranchSource::Issue));
+        send(&mut rig.app, FormMsg::IssueQueryChanged(text.to_string()));
+    }
+
+    #[test]
+    fn a_search_reads_the_token_file_and_finds_beyond_the_list() {
+        let mut rig = rig();
+        start_search(&mut rig, "zzz");
+        let IssueList::Loaded { searched, .. } = issues(&rig.app) else {
+            panic!("loaded");
+        };
+        assert_eq!(searched.len(), 1);
+        assert_eq!(rig.source.seen().last().map(String::as_str), Some("first"));
+    }
+
+    #[test]
+    fn a_search_with_the_switch_off_asks_nothing() {
+        let mut rig = rig();
+        send(&mut rig.app, FormMsg::SourceChanged(BranchSource::Issue));
+        let asked = rig.source.seen().len();
+        rig.app.core.settings.jira_enabled = false;
+        send(&mut rig.app, FormMsg::IssueQueryChanged("zzz".to_string()));
+        assert!(matches!(
+            issues(&rig.app),
+            IssueList::Loaded {
+                search: SearchState::Failed { .. },
+                ..
+            }
+        ));
+        assert_eq!(rig.source.seen().len(), asked, "the search asked nothing");
+    }
+}
