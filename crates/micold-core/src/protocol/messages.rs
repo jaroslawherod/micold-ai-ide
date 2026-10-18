@@ -656,6 +656,18 @@ pub enum ClientMsg {
         #[serde(default)]
         kind: SessionKind,
     },
+    /// A user message for a structured session (feature 938, FR-008): written to its CLI as one
+    /// stream-json user message. Answered `OperationOk(Ack)` once written; `OperationError` with
+    /// the `UserMessageRefusal` sentence when the text is blank, the session is not running, a turn
+    /// is in progress or the session is a terminal one. The text is never logged.
+    SessionUserMessage {
+        /// Correlation id.
+        req: u64,
+        /// Target session.
+        session: SessionId,
+        /// The message, delivered unchanged.
+        text: String,
+    },
     /// Delete a session record.
     SessionDelete {
         /// Correlation id.

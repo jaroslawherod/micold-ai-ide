@@ -182,7 +182,10 @@
 /// And 51 → 52 for feature 938's first wire delta (contracts/wire.md, M2): `kind` on
 /// `ClientMsg::SessionCreate` and `SessionSummary` (serde-defaulted), and
 /// `DaemonMsg::StructuredEvents`, which an older client cannot decode.
-pub const PROTOCOL_VERSION: u32 = 52;
+///
+/// And 52 → 53 for feature 938's user messages (contracts/wire.md, M3):
+/// `ClientMsg::SessionUserMessage`, which an older daemon cannot decode.
+pub const PROTOCOL_VERSION: u32 = 53;
 
 // `build.rs` emits `pub const SCHEMA_HASH: [u8; 32] = [...];` into this file.
 include!(concat!(env!("OUT_DIR"), "/schema_hash.rs"));
