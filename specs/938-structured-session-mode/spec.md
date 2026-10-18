@@ -16,6 +16,19 @@ deltas) with a tolerant parser (unknown event types are kept, not fatal); daemon
 abstraction supports both kinds; protocol carries events to the client; session resume works
 (`--resume`); tests with recorded event fixtures."
 
+## In short (for non-technical readers)
+
+Today every AI session in the app shows the AI tool's own text screen, as if it ran in a terminal
+window. This feature adds a second way to run a Claude Code session: the app talks to Claude in
+a machine-readable form instead, receiving each step of Claude's work (its replies, the tools it
+uses and their results, the end of each answer) as a separate, labelled item. On its own it shows
+those items as a plain list; later features of the same epic turn them into a proper, readable
+conversation view with input, permission prompts and usage figures. The terminal way stays the
+default and keeps working as before. A user chooses the new way per session from the menu beside
+the start-session button; it is offered for Claude Code only. Sessions run this way survive
+restarts and continue the same conversation, several windows can watch the same session, and
+nothing Claude writes, even something unexpected, can break the session.
+
 ## Context: where this sits in epic #945
 
 Epic #945 builds a structured view of Claude sessions next to today's terminal view, in order:

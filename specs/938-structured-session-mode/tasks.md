@@ -429,8 +429,15 @@ structured_log --test layout_snapshot`, then quickstart §B.
 - [ ] T041 [US6] Make T037 pass: `crates/micold-core/src/structured/log_line.rs`.
 - [ ] T042 [US6] Make T038 pass in `crates/micold-client/src/features/session.rs`
   (`StartMenuEntry.kind`, `start_menu_entries`, `start_affordance_offers_a_choice`,
-  `StartRequested` carrying the kind) and `crates/micold-client/src/shell/daemon_sync.rs`
-  (`SessionCreate.kind`).
+  `StartRequested` carrying the kind), `crates/micold-client/src/shell/daemon_sync.rs`
+  (`SessionCreate.kind`), and every place that maps start-menu entries into the chevron's list or
+  builds or handles `StartRequested`: `crates/micold-client/src/ui/mod.rs` (the chevron list from
+  `start_menu_entries`), `crates/micold-client/src/ui/sidebar.rs` (the plain press and the chevron
+  pick) and `crates/micold-client/src/main.rs` (its constructions and the handler); find them all
+  with `LSP findReferences` on `StartRequested`. Existing tests that build `StartRequested`
+  (`tests/session_start_press.rs`, `tests/session_default_no_worktree.rs`, `tests/app_state.rs`,
+  `src/main_tests.rs`) get `kind: SessionKind::Terminal` added mechanically and must keep passing
+  (SC-004).
 - [ ] T043 [US6] Make T039 pass: new render-free `crates/micold-client/src/features/structured_log.rs`
   (registered in `features/mod.rs`) and routing of `StructuredEvents` to it in
   `crates/micold-client/src/shell/daemon_sync.rs`.
@@ -534,7 +541,7 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
   the terminal session's arguments, cwd and environment, stream every fixture line as a typed
   event, in order, live; stderr goes to the log only; non-Claude structured requests are refused.
 - **Satisfies**: US1 acceptance scenarios 1–3; US2 scenario 5; US5 scenarios 1, 2, 3, 5, 6;
-  FR-003, FR-005, FR-006, FR-006a, FR-009, FR-010, FR-014, FR-016, FR-017 (single attach), FR-020,
+  FR-003, FR-005, FR-006, FR-006a, FR-009, FR-010, FR-014 (CLI lines), FR-016, FR-017 (single attach), FR-020,
   FR-025; SC-001, SC-002, SC-004, SC-006
 - **Verify**: `cargo test -p micold-daemon --test structured_session --test structured_lifecycle`
 - **Depends on**: M1
@@ -545,7 +552,7 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Tasks**: T022–T028
 - **Deliverable**: a structured session receives its first prompt once and accepts a client's
   user message per turn, refusing blank, not-running and mid-turn messages with a reason.
-- **Satisfies**: US1 acceptance scenarios 4–5; FR-007, FR-008, FR-025
+- **Satisfies**: US1 acceptance scenarios 4–5; FR-007, FR-008, FR-014 (turn-ended note), FR-025
 - **Verify**: `cargo test -p micold-daemon --test structured_session` and
   `cargo test -p micold-core structured::`
 - **Depends on**: M2
@@ -566,7 +573,7 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Tasks**: T031–T032
 - **Deliverable**: a client viewing a structured session late gets its bounded history then live
   events with no gap or duplicate, told when events were omitted, in frames under the wire limit.
-- **Satisfies**: US4 acceptance scenarios 1–3; FR-016, FR-017, FR-018; SC-005
+- **Satisfies**: US4 acceptance scenarios 1–3; FR-014 (oversized stand-in), FR-016, FR-017 (late attach), FR-018; SC-005
 - **Verify**: `cargo test -p micold-daemon --test structured_history`
 - **Depends on**: M2
 - **Tier**: full
