@@ -138,6 +138,36 @@ scripts/build-lock.sh                 micold-packaging
 /rust-toolchain.toml                  micold-packaging
 /.cargo/config.toml                   micold-packaging
 
+# The daemon-runtime set (#954).
+#
+# `micold-daemon-runtime` marks paths that can change what the two real-runtime jobs of ci.yml build
+# or test: `sandbox against a real runtime` (the `sandbox_real_*` targets of micold-core and
+# micold-daemon, against the :dev sandbox and basic images) and `remote daemon over a real sshd`
+# (the `ssh_real_*` targets of micold-daemon). One attribute serves both: their code paths are the
+# same two crates, the sandbox job only adds the two image directories, and the sshd job (about
+# five minutes) is never the critical path, so a second attribute would buy a minute-scale saving
+# at the price of a second output to keep in step. Pull requests run both jobs only when a change
+# touches the set -- or carries `full-ci` -- and main pushes and the nightly always run them. A path
+# is outside the set until declared; the failure direction is "run it". The client's own sources are
+# outside it on purpose: no `sandbox_real_*` or `ssh_real_*` test calls into micold-client (the
+# daemon only dev-depends on it for other tests, and the `test` job builds it). Read by
+# scripts/classify-change.sh (`daemon_runtime=` output), pinned by
+# scripts/tests/classify-change.test.sh.
+crates/micold-core/**                 micold-daemon-runtime
+crates/micold-daemon/**               micold-daemon-runtime
+/Cargo.toml                           micold-daemon-runtime
+/Cargo.lock                           micold-daemon-runtime
+/rust-toolchain.toml                  micold-daemon-runtime
+/.cargo/config.toml                   micold-daemon-runtime
+# The two images the sandbox job builds, and the script that pins the basic image's content hash.
+packaging/sandbox/**                  micold-daemon-runtime
+packaging/basic/**                    micold-daemon-runtime
+scripts/basic-image-hash.sh           micold-daemon-runtime
+# micold-core's build.rs reads the icon.
+/assets/icon/icon.ico                 micold-daemon-runtime
+# The workflow itself: an edit to either job's steps is proven by the PR that makes it.
+/.github/workflows/ci.yml             micold-daemon-runtime
+
 # What a user can see, and what documents it (Constitution Principle VII).
 #
 # `micold-user-facing` marks the paths whose change a reader of the user guide could notice;

@@ -22,8 +22,8 @@ shapes:
 | `build + test (macos-latest)` | runs | **skipped** |
 | `build + test (windows-latest)` | runs | **skipped** |
 | `assertion freeze (advisory)` | runs | **skipped** |
-| `sandbox against a real runtime (linux)` | runs | **skipped** |
-| `remote daemon over a real sshd (linux)` | runs | **skipped** |
+| `sandbox against a real runtime (linux)` | runs on main pushes and nightly; on a pull request only with [daemon-runtime paths](#path-gated-jobs) or `full-ci` | **skipped** |
+| `remote daemon over a real sshd (linux)` | runs on main pushes and nightly; on a pull request only with [daemon-runtime paths](#path-gated-jobs) or `full-ci` | **skipped** |
 | `package + smoke (windows-11-arm)` | runs on main pushes and nightly; on a pull request only with [packaging paths](#path-gated-jobs) or `full-ci` | **skipped** |
 | `docs check` | runs | **runs** |
 | `ci complete` | runs | runs |
@@ -133,7 +133,7 @@ Two rules govern it:
 
 ## Path-gated jobs
 
-Beyond the docs-only verdict, `classify change` publishes a second boolean, `packaging`, true when
+Beyond the docs-only verdict, `classify change` publishes two more booleans. The first, `packaging`, is true when
 **any** touched path is declared `micold-packaging` in `.gitattributes` (`packaging/**`, the two
 `scripts/windows-install*.sh`, the workspace `Cargo.toml` and `Cargo.lock`, `release.yml`, and the
 installer's other inputs: its icon, `LICENSE`, `remote-daemon-bundle.sh`, `build-lock.sh` and the
@@ -151,6 +151,20 @@ classify against); GitHub notifies the author of the schedule's last edit.
 Like `docs_only`, every failure path lands on `packaging=true`. `ci.yml` itself is not a packaging
 path: a step edit to the job is proven on the next `main` push or night. Add `full-ci` when you
 want it earlier.
+
+The second, `daemon_runtime`, is true when **any** touched path is declared `micold-daemon-runtime`
+(#954): `crates/micold-core/**`, `crates/micold-daemon/**`, the workspace `Cargo.toml` and
+`Cargo.lock`, the toolchain pins (`rust-toolchain.toml`, `.cargo/config.toml`),
+`packaging/sandbox/**` and `packaging/basic/**` (the two images the sandbox job builds),
+`scripts/basic-image-hash.sh`, the icon `micold-core`'s `build.rs` reads, and **`ci.yml` itself**.
+It gates `sandbox against a real runtime` (15–20 minutes) and `remote daemon over a real sshd`
+(about 5 minutes) with the same rule as above: always on `main` pushes and the nightly, on a pull
+request only when `daemon_runtime` is true, which `full-ci` forces. One attribute serves both jobs:
+they test the same two crates, the sandbox job only adds the image directories, and the sshd job is
+never the critical path, so a second attribute would save a few minutes on the rarest change
+(`packaging/**` alone) at the price of a second output to keep in step. `micold-client` is outside
+the set: no `sandbox_real_*` or `ssh_real_*` test calls into it, and the `test` job builds it. A UI-only
+change skips both jobs; a daemon change runs both. Every failure path lands on `daemon_runtime=true`.
 
 To gate another job the same way: declare an attribute in `.gitattributes`, emit one more boolean
 from `scripts/classify-change.sh` (the `packaging` block is the pattern), pin it in

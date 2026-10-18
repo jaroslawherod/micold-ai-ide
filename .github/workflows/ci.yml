@@ -44,6 +44,7 @@ jobs:
     outputs:
       docs_only: ${{ steps.verdict.outputs.docs_only }}
       packaging: ${{ steps.verdict.outputs.packaging }}
+      daemon_runtime: ${{ steps.verdict.outputs.daemon_runtime }}
       reason: ${{ steps.verdict.outputs.reason }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -78,6 +79,7 @@ jobs:
         env:
           DOCS_ONLY: ${{ steps.verdict.outputs.docs_only }}
           PACKAGING: ${{ steps.verdict.outputs.packaging }}
+          DAEMON_RUNTIME: ${{ steps.verdict.outputs.daemon_runtime }}
           REASON: ${{ steps.verdict.outputs.reason }}
         run: |
           if [ "$DOCS_ONLY" = "true" ]; then
@@ -93,6 +95,8 @@ jobs:
             echo "Reason: \`${REASON:-unavailable}\`"
             echo
             echo "Packaging paths touched: \`${PACKAGING:-unavailable}\`"
+            echo
+            echo "Daemon-runtime paths touched: \`${DAEMON_RUNTIME:-unavailable}\`"
             if [ -s "$RUNNER_TEMP/offenders.txt" ]; then
               echo
               echo '<details><summary>Paths that made this code-affecting</summary>'
@@ -503,7 +507,13 @@ jobs:
   sandbox-runtime:
     name: sandbox against a real runtime (linux)
     needs: classify
-    if: needs.classify.outputs.docs_only != 'true'
+    # Pull requests run it only when a path declared `micold-daemon-runtime` changed (or the
+    # `full-ci` label forces `daemon_runtime=true`); main pushes and the nightly schedule always run
+    # it. A skipped job satisfies `ci-complete`. An unset output (classify failed) is not 'true',
+    # but then `docs_only` is unset too and `classify` itself is red, which blocks `ci-complete`.
+    if: >-
+      needs.classify.outputs.docs_only != 'true'
+      && (github.event_name != 'pull_request' || needs.classify.outputs.daemon_runtime == 'true')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -603,7 +613,13 @@ jobs:
   ssh-remote:
     name: remote daemon over a real sshd (linux)
     needs: classify
-    if: needs.classify.outputs.docs_only != 'true'
+    # Pull requests run it only when a path declared `micold-daemon-runtime` changed (or the
+    # `full-ci` label forces `daemon_runtime=true`); main pushes and the nightly schedule always run
+    # it. A skipped job satisfies `ci-complete`. An unset output (classify failed) is not 'true',
+    # but then `docs_only` is unset too and `classify` itself is red, which blocks `ci-complete`.
+    if: >-
+      needs.classify.outputs.docs_only != 'true'
+      && (github.event_name != 'pull_request' || needs.classify.outputs.daemon_runtime == 'true')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
