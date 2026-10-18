@@ -209,7 +209,9 @@ mod tests {
             target,
             CloneTarget::for_url("https://github.com/other/My_Repo.git")
         );
-        assert!(CloneTarget::for_url("").dest.starts_with("/data/repos/repo-"));
+        assert!(CloneTarget::for_url("")
+            .dest
+            .starts_with("/data/repos/repo-"));
     }
 
     #[test]

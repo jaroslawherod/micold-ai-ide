@@ -2016,5 +2016,5 @@ fn hook_activity_round_trips_and_defaults_to_none() {
 /// Feature 686: the pod clone messages arrived with protocol 51 (`main` was at 50).
 #[test]
 fn the_repo_clone_messages_are_protocol_51_or_later() {
-    assert!(micold_core::protocol::version::PROTOCOL_VERSION >= 51);
+    assert!(std::hint::black_box(micold_core::protocol::version::PROTOCOL_VERSION) >= 51);
 }

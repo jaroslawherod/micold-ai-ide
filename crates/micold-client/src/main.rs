@@ -195,6 +195,10 @@ struct App {
     /// The daemon each in-flight request was sent to, by `req`: a disconnect resolves only the
     /// requests of the daemon that dropped (feature 491, FR-007).
     pending_daemon: HashMap<u64, micold_core::daemons::DaemonId>,
+    /// Worktree creates waiting on their clone in a Kubernetes daemon's pod, by (daemon, clone
+    /// path) (feature 686, FR-007).
+    pending_clones:
+        HashMap<(micold_core::daemons::DaemonId, String), shell::daemon_sync::PendingClone>,
     /// Scrollback ranges asked for and not yet answered, keyed by `req` (`010` BUG-021).
     ///
     /// A scroll gesture computes the same un-cached run on every wheel notch, because nothing it

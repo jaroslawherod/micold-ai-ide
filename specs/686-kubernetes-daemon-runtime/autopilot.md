@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-xelisc
 - **Started**: 2026-10-17
 - **Phase**: implement
-- **Next step**: M7 in progress: core clone.rs + protocol (T047/T048/T051/T052) first, then daemon repo_clone (T049/T053), client (T050/T054), docs T055.
+- **Next step**: M7 handover: fix Review B F1/F2 (see Handover), scoped re-review, gate, PR files.
 
 ## Pull requests
 
@@ -141,7 +141,17 @@ stash@{0} survivors (all used by M1a–M2, stash dropped 2026-10-18; backed up i
 
 ## Handover
 
-None.
+M7 (unit hit the context cap; nothing pushed, no PR). Branch = origin/main + commit 76e252db + uncommitted work (committed in the handover commit).
+
+Done: core `kube/clone.rs`, protocol 51 (`RepoClone`/`RepoCloned`/`RepoCloneFailed`, `CloneFailureWire`), daemon `repo_clone.rs` (+ server.rs arm, `no_window`), client `features/kube_clone.rs` (`plan`, `ClonePlan::on_reply`), tests `tests/features_kube_clone.rs`, shell glue in `shell/daemon_sync.rs` (`start_kubernetes_create`, `on_repo_clone_reply`, `PendingClone`, `App.pending_clones`, disconnect cleanup, duplicate-clone refusal), docs T055, tasks ticked, ledger drift note. Gate fixes already made: fmt, clippy const assert, per-feature isolation test file, `GitCli` taken from `app.caps.git()`, `no_window` on the daemon's git.
+
+Open (Review B, round 1, CHANGES):
+- F1 MAJOR: sequencing sits in `daemon_sync.rs` untested. Move it into a render-free reducer in `features/kube_clone.rs` (a `Pending` with `begin(..) -> Result<Vec<ClientMsg>, String>`, `on_reply(..) -> outputs` [ProjectAdd, WorktreeCreate in order, or a failure text], `on_disconnect`), make daemon_sync only forward its outputs, and assert in `tests/features_kube_clone.rs` the order [RepoClone, ProjectAdd, WorktreeCreate], that a refusal sends nothing, and the disconnect failure.
+- F2 MAJOR: cycle-log has no red. Do a mutation check (break `remote_for`, `checked_dest`, the atomic rename in turn; tests must fail), record it in tdd/cycle-log.md; mark U79–U85, U100–U102, A2 done in tdd/test-list.md.
+- F3/F4 MINOR: startup.rs `pending_clones` indent (cosmetic), move the RepoClone arm above the FR-024 comment in `on_daemon_event`.
+Review A: CLEAN (3 MINOR; F1 and F3 fixed, F2 git timeout declined: out of scope, bounded by the client's connection).
+Then: re-run Review B scoped (sonnet) on the fix diff, `scripts/gate.sh` (the last run was cut by ENOSPC; target-shared/debug was wiped, expect a long first build; use CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0), write pr-title-686-M7.txt (`#686: Support a Kubernetes session daemon runtime — M7 worktrees cloned into the pod`) and pr-body-686-M7.md (ends `Refs #686`) in the scratchpad, push with `--force-with-lease=claude/project-thread-xelisc:`.
+Note: T050's test file is `tests/features_kube_clone.rs` (not features_daemons.rs; the isolation test requires one file per feature); M7's Verify line should read `cargo test -p micold-client --test features_kube_clone`.
 
 ## Open escalation
 

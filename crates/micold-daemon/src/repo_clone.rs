@@ -42,9 +42,12 @@ fn checked_dest(root: Option<&Path>, dest: &str) -> Result<PathBuf, CloneFailure
         )));
     };
     let dest = PathBuf::from(dest);
-    let plain = dest
-        .components()
-        .all(|c| matches!(c, Component::RootDir | Component::Normal(_) | Component::Prefix(_)));
+    let plain = dest.components().all(|c| {
+        matches!(
+            c,
+            Component::RootDir | Component::Normal(_) | Component::Prefix(_)
+        )
+    });
     if !dest.is_absolute() || !plain || dest == root || !dest.starts_with(root) {
         return Err(refuse(format!(
             "{} is outside {}",
@@ -60,7 +63,8 @@ fn git(dir: Option<&Path>, args: &[&str]) -> Result<(), CloneFailureWire> {
     if let Some(dir) = dir {
         cmd.arg("-C").arg(dir);
     }
-    cmd.args(args)
+    micold_core::process::no_window(&mut cmd)
+        .args(args)
         .env("GIT_TERMINAL_PROMPT", "0")
         .env("LC_ALL", "C");
     if std::env::var_os("GIT_SSH_COMMAND").is_none() {

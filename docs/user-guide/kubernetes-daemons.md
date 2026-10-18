@@ -120,6 +120,23 @@ When **Start** finds the pod running with settings that differ from the saved on
 **Recreate pod** deletes the pod and creates it again with the saved settings. **Keep running pod**
 continues with the pod unchanged. Micold never recreates a pod on its own.
 
+## Worktrees on a Kubernetes daemon
+
+When you create a worktree that runs on a Kubernetes daemon, the pod has no copy of your project, so
+Micold asks the daemon to clone the project's git remote (`origin`, or the only remote) onto its
+volume, under `/data/repos`, and creates the worktree there. The form says "Cloning <project>" while
+it runs. The worktree appears under the daemon's name with its in-pod path, and survives the pod
+being deleted, because the clone is on the volume. Creating a second worktree of the same project
+fetches the existing clone instead of cloning again.
+
+- A project with no git remote is refused: "<project> has no git remote; a Kubernetes daemon clones
+  from it". With several remotes and none called `origin`, the refusal names them.
+- Commits you have not pushed stay on your computer; the pod sees only what the remote holds.
+- A remote that needs a credential needs it allowed for the daemon (see Allowed credentials);
+  otherwise the create stops with "cloning <url> needs a credential: allow Git credentials or an SSH
+  key for <daemon>". A full volume stops it with "the volume of <daemon> is full". Nothing
+  half-cloned is left behind.
+
 ## Stop, Remove and Forget locally
 
 - **Stop** deletes the pod and keeps the volume, so worktrees survive. It asks first when sessions
