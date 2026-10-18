@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #937
 - **Worktree branch**: claude/project-thread-rkhzho
 - **Started**: 2026-10-17
-- **Phase**: M7 done, close unit next
-- **Next step**: after M7 merges, a new close unit (T049–T050, Status, close PR). Close unit 1 ran tdd-verify (PASS_WITH_GAPS, tdd/verification.md) and found the repository_marks hole as F1; speckit-converge not run separately (M2 review B was CHANGES and fixed, no clean B re-run), the F1 check was by reading the code against FR-006
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -23,6 +23,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1046 | M4: required error on submit in the dialogs | merged | a50adf7af2dba0be4fa366d6381aef69c45fb998 |
 | #1052 | M5: required error on save in Settings and the daemon form | merged | ac51bd570332a39bbbb8d2bf06e2578b450859e4 |
 | #1062 | M6: required error on leaving a field (blur), selects included | merged | 48604e4bf5ba6bf6765908ec1bca9ba0d26707e4 |
+| #1073 | M7: Settings reopens with no stale repository required error | merged | 61f4585ef59cd53694337a480397266b25030a92 |
+| to-open | Close: T049–T050, visual pass, spec Status | pr-ready | |
 
 ## Milestones
 
@@ -34,7 +36,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M4 | T029–T035 | full | Required error on submit in the dialogs; Create and Start runs enabled | #1046 | merged |
 | M5 | T036–T041 | full | Required error on save in Settings and the daemon form | #1052 | merged |
 | M6 | T042–T048 | full | Required error on leaving a field (blur), selects included | #1062 | merged |
-| M7 | T051–T052 | full | Settings reopens with no stale repository required error (close found, FR-006) | to-open | pr-ready |
+| M7 | T051–T052 | full | Settings reopens with no stale repository required error (close found, FR-006) | #1073 | merged |
 
 ## Decisions
 
@@ -63,6 +65,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 (M5 rows) | M5 review B (conformance, sonnet) | 1 | 4a15019a:b596a5f4 | CLEAN (2 MINOR: red not observed separately, noted in cycle-log; T040 needs no UI edit, noted) |
 (M6 rows) | M6 review A (high) | 1 | working tree | fixed: successful add clears the repository mark, select `focus()` records engaged; declined: see below |
 (M6 rows) | M6 review B (conformance, sonnet) | 1 | 60c5452f:ac51bd57 | CLEAN (3 MINOR: test paths in tasks.md fixed; two-State test accepted, marks live on the draft) |
+| Close review (docs, sonnet) | 1 | 3390be6a875fe4ec5924ee995dedf18487d3ee9d:61f4585ef59cd53694337a480397266b25030a92 | CLEAN |
 
 ## Declined review findings
 

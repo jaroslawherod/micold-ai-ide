@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-17
 
-**Status**: Draft
+**Status**: Closed 2026-10-18 — shipped in PRs #948, #963, #974, #980, #1046, #1052, #1062, #1073 and the close PR
 
 **Input**: Issue #937, "Forms show which fields are required, following Material Design". Forms in
 the app do not show which fields are required; the user finds out only when validation fails. Mark
