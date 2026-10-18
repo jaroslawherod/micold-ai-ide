@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-ag6ana
 - **Started**: 2026-10-18
 - **Phase**: plan
-- **Next step**: plan unit — speckit-plan for specs/970-overview-fullscreen/spec.md (clarify CLEAN)
+- **Next step**: plan unit (continue handover) — plan review round 1 (rubrics/plan.md), then commit and set Next step to tasks unit
 
 ## Pull requests
 
@@ -45,7 +45,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+Plan unit, handed over at 164k context. Done: speckit-plan wrote plan.md, research.md (R1–R9),
+data-model.md, contracts/ui.md, quickstart.md (committed in this handover commit, no PR). Next:
+review round 1 of plan.md with a fresh `autopilot-reviewer` (review.md + rubrics/plan.md; record the
+review-snapshot in *Review rounds*), act on findings (review-rounds.md), commit, set **Next step**
+to `tasks unit`, return DONE with PR: none. Open points a reviewer may raise: research R5 notes
+Story 1 #2's "each card at least as wide" clause is false when the zoom raises the column count
+(FR-004 still holds); SC-002's width range is met by interpolating between the two rest layouts.
+No review findings yet.
 
 ## Open escalation
 
