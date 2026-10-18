@@ -167,3 +167,4 @@ the core baseline still fails only the four root-user tests named above).
   default one cut the form off, which the first run showed).
 - Decision: "providers enabled in Settings" has no per-provider switch yet; the default is the
   Settings draft's `default_ai_cli` (Claude Code when no draft is open).
+- File pickers: the SSH key and registry files are plain path text fields (the crate has no dialog), as the SSH form's key file is; review B F1.
