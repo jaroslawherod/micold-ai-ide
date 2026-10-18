@@ -10,13 +10,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #968
 - **Worktree branch**: claude/project-thread-ftdy5c
 - **Started**: 2026-10-18
-- **Phase**: tasks
-- **Next step**: tasks unit — speckit-analyze, tasks review, checklists, design PR
+- **Phase**: design PR
+- **Next step**: orchestrator opens the design PR (branch pushed), waits on CI and merges; then milestone M1
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
+| pending | design (spec, plan, tasks) | branch pushed, PR to open | — |
 
 ## Milestones
 
@@ -45,6 +46,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review spec | 1 | 06e0b7cb93e4b1df3ad203f637ff3bcdfeb41cb2:8ee4531564743d6032729cd056a73f655abfb1a0 | CLEAN: 3 MINOR, fixed, prose only |
 | Review plan | 1 | 96ee1ce3727ec57086e810a9cf02650703d31bd7:f745f268a3ce6dae0a47b8157e100bb4ce069394 | CLEAN, no findings |
 | Review tasks | 1 | e5bd85269a8ad9d34b6748a7abc64f4fcc86a62a:8af03b922fe8dbea230e8f5930cb7cdc4f6d81e1 | CHANGES: 1 MAJOR ([P] on shared test file), 1 MINOR (T016 before T015), both fixed |
+| Review tasks | 2 | 2d709358b85fc04a2ea24af63fdf9e8e53f684ca:5a006c9ebfbf54f70f5c50de2febf64543ca50db | CLEAN (sonnet, scoped) |
 
 ## Declined review findings
 
