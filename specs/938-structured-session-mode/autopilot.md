@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #938
 - **Worktree branch**: claude/project-thread-cl0lw3
 - **Started**: 2026-10-18
-- **Phase**: M2
-- **Next step**: M2 — push and PR (see Handover)
+- **Phase**: M3
+- **Next step**: M3 — implement T022–T028
 
 ## Pull requests
 
@@ -18,14 +18,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1035 | design PR (spec, plan, research, contracts, tasks) | merged (rebase) | 0d6ced4e44dcf63df729fc15bdd8765cdf045a8d |
 | #1044 | M1 parser, fixtures, kind persisted | merged (rebase) | 613faba7880da73fd7e6228cda6c8af60d7ea85c |
+| #1056 | M2 daemon runs a structured session, streams events | merged (rebase) | 4793cbab05478fe50b1434ab61a1c99c717701e5 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T010 | full | parser types every recorded fixture line; kind persisted | #1044 | merged |
-| M2 | T011–T021 | full | daemon runs a structured session and streams events; lifecycle parity | — | planned |
-| M3 | T022–T028 | full | first prompt and user messages | — | planned |
+| M2 | T011–T021 | full | daemon runs a structured session and streams events; lifecycle parity | #1056 | merged |
+| M3 | T022–T028 | full | first prompt and user messages | — | in progress |
 | M4 | T029–T030 | full | resume | — | planned |
 | M5 | T031–T032 | full | late and multiple viewers | — | planned |
 | M6 | T033–T036 | full | terminal-only requests refused | — | planned |
@@ -82,14 +83,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M2 (T011–T021) is implemented and ticked. Reviews are done: A round 1 (3 fixed, 7 declined), A
-round 2 CLEAN, B round 1 (F3 fixed, F1 and F2 declined as T032's). The full gate
-(`scripts/gate.sh`) is green on 46439326, local and not pushed. Branch rebased on origin/main
-f857a657.
-Next: pr.md. Push the branch (`git push --force-with-lease -u origin claude/project-thread-cl0lw3`),
-write `$SCRATCHPAD/pr-title.md` (`#938: Structured session mode: run claude with stream-json next
-to the PTY mode — M2`) and `$SCRATCHPAD/pr-body.md` (ending `Refs #938`), then return
-`PR: to-open`. Only the ledger may change before the push: the gate stamp is for 46439326's tree.
+None.
 
 ## Open escalation
 
