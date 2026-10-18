@@ -116,6 +116,11 @@ pub fn modals() -> Vec<Modal> {
             open_discard_pending,
         ),
         row(
+            "review_full_reply",
+            Message::Changes(micold_client::features::changes::Msg::ReplyClosed),
+            open_full_reply,
+        ),
+        row(
             "confirm_forget_project",
             Message::Project(ProjectMsg::ForgetCancelled),
             |s| s.project.forget_target = Some(PathBuf::from("/p")),
@@ -196,4 +201,46 @@ pub fn open_discard_pending(state: &mut State) {
         },
     );
     let _ = changes::update(&mut state.changes, ChangesMsg::DiscardPendingPressed);
+}
+
+/// Open the Changes view's full-reply dialog (feature 946, FR-006): a view with one answered
+/// comment, then **Show all** on it.
+pub fn open_full_reply(state: &mut State) {
+    use micold_client::features::changes::{self, Msg as ChangesMsg};
+    use micold_core::review::comment::{
+        CommentId, CommentState, EntryReview, Outcome, Reporter, ReviewComment,
+    };
+    let project = PathBuf::from("/p");
+    let _ = changes::update(
+        &mut state.changes,
+        ChangesMsg::Opened {
+            project: project.clone(),
+            entry: micold_core::session::SessionLocation::Default,
+        },
+    );
+    let sent = ReviewComment {
+        id: CommentId::new(),
+        path: micold_core::review::RelPath::from_native("a.rs").unwrap(),
+        side: micold_core::review::Side::New,
+        range: micold_core::review::LineRange::new(1, 1).unwrap(),
+        quote: vec!["a".into()],
+        text: "t".into(),
+        state: CommentState::Sent { at: 1 },
+        created: 1,
+    };
+    let (id, reference) = (sent.id, sent.reference());
+    let mut entry = EntryReview::from_comments(vec![sent]);
+    entry
+        .report(reference, Outcome::Answered, "because", Reporter::User, 2)
+        .unwrap();
+    let _ = changes::update(
+        &mut state.changes,
+        ChangesMsg::ReviewChanged {
+            project,
+            worktree_dir: String::new(),
+            comments: entry.comments().to_vec(),
+            sending: false,
+        },
+    );
+    let _ = changes::update(&mut state.changes, ChangesMsg::ShowReply(id));
 }

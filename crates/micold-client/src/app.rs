@@ -881,10 +881,13 @@ impl State {
         // prompt in between would show it only to have that same loop dismiss (decline) it.
         self.agent_confirm.update_depth += 1;
         match message {
-            // The Changes view's discard confirmation is a registered dialog: the registry closes
-            // it (Escape, another dialog opening) by sending its cancellation here, and closing it
-            // is pure state with no effect to run.
-            Message::Changes(msg @ crate::features::changes::Msg::DiscardCancelled) => {
+            // The Changes view's discard confirmation and full-reply dialog are registered
+            // dialogs: the registry closes them (Escape, another dialog opening) by sending their
+            // cancellation here, and closing one is pure state with no effect to run.
+            Message::Changes(
+                msg @ (crate::features::changes::Msg::DiscardCancelled
+                | crate::features::changes::Msg::ReplyClosed),
+            ) => {
                 let _ = crate::features::changes::update(&mut self.changes, msg);
             }
             // Daemon connection messages are runtime, not pure state — the binary handles them in

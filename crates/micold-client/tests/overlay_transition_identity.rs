@@ -106,13 +106,14 @@ fn no_two_snapshots_share_an_identity() {
 /// Nine until feature 027 turned Settings into a view (FR-026): a surface that does not float has
 /// no exit transition to remember, so it leaves `modals()` and the count comes down with it. Nine
 /// again with `confirm_link_open`, the question a sandboxed file link asks before it opens
-/// (FR-018a). Eleven with the Changes view's discard confirmation (feature 482).
+/// (FR-018a). Eleven with the Changes view's discard confirmation (feature 482). Thirteen with the
+/// full-reply dialog (feature 946).
 #[test]
 fn every_variant_is_covered() {
     // Bump deliberately: a new dialog needs a row in `modals()`.
     assert_eq!(
         every_snapshot().len(),
-        12,
+        13,
         "a dialog was added or removed — update modals()"
     );
 }
