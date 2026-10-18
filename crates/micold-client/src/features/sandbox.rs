@@ -210,6 +210,9 @@ fn mib(bytes: Option<Bytes>) -> String {
 pub struct Sandbox {
     /// Where in bring-up it is.
     pub state: SandboxState,
+    /// The running container is a released-image one, adopted as it is and reached over the token
+    /// channel until the user restarts it (feature 806, FR-017).
+    pub legacy: bool,
     /// Limits the user set that the selected runtime cannot enforce (FR-015). Empty until the
     /// capability probe has run, and **not** an error: the sandbox runs, the view says so.
     pub unsatisfiable: Vec<UnsatisfiableLimit>,
@@ -290,6 +293,7 @@ impl Default for Sandbox {
     fn default() -> Self {
         Self {
             state: SandboxState::Disabled,
+            legacy: false,
             unsatisfiable: Vec::new(),
             capabilities: None,
             fallback: None,
@@ -322,6 +326,7 @@ impl Sandbox {
     /// Adopt the result of a successful bring-up, and the locations that container shares
     /// (feature 031, T18).
     pub fn started(&mut self, started: Started, locations: SandboxLocations) {
+        self.legacy = started.legacy;
         self.unsatisfiable = started.unsatisfiable;
         self.capabilities = Some(started.capabilities);
         self.locations = Some((started.id.clone(), locations));

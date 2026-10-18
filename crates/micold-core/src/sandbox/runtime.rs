@@ -16,7 +16,7 @@ use super::parse::{ContainerFacts, ImageFacts};
 use super::{ResourceBudget, SandboxProfile, SandboxSpec};
 
 /// Which container runtime drives the sandbox (FR-020, FR-021).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum RuntimeKind {
     /// The runtime supported at release (FR-021), and the default.

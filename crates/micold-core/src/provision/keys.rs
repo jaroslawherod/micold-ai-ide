@@ -13,6 +13,9 @@ use crate::owner_only;
 use crate::ssh::argv::{ClientPlatform, SshCommand};
 use crate::ssh::{SshFailure, SshRunner};
 
+/// The keys directory's name inside a daemon's state directory.
+pub const KEYS_DIR: &str = "ssh";
+
 /// The directory holding one daemon's keys and the files derived from them.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DaemonKeys {

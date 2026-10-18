@@ -24,7 +24,13 @@ use micold_core::endpoint::{self, DialAddress};
 use micold_core::protocol::codec::{CodecError, Frame};
 use micold_core::protocol::keepalive::{self, Keepalive, KeepaliveAction};
 use micold_core::protocol::messages::{ClientMsg, DaemonMsg};
-use micold_core::provision::{run as ssh_run, CancelToken, EventSink, ProvisionTarget};
+use micold_core::provision::ai_cli::AiCliTable;
+use micold_core::sandbox::AiCliSelection;
+use micold_core::provision::keys::DaemonKeys;
+use micold_core::provision::{
+    run as ssh_run, CancelToken, Egress, EventSink, Ownership, ProvisionTarget, StepBounds,
+};
+use micold_core::ssh::argv::{PinnedReach, Reach};
 use micold_core::sandbox::placement::PlacementKind;
 use micold_core::ssh::argv::{current_build_id, DEFAULT_CONNECT_TIMEOUT_SECS};
 use micold_core::ssh::provision::ProvisionOptions;
@@ -77,6 +83,11 @@ static SSH_HOST: std::sync::OnceLock<std::sync::Arc<dyn SshHost>> = std::sync::O
 /// wins; later ones are ignored.
 pub fn install_ssh_host(host: std::sync::Arc<dyn SshHost>) {
     let _ = SSH_HOST.set(host);
+}
+
+/// The runner installed by [`install_ssh_host`], when the process chose one.
+pub fn ssh_host() -> Option<std::sync::Arc<dyn SshHost>> {
+    SSH_HOST.get().cloned()
 }
 
 /// How many messages may queue in each direction before backpressure. Input is small and rare
@@ -157,6 +168,19 @@ pub enum Dial {
         /// The host and connection settings.
         target: SshTarget,
     },
+    /// Provision and bridge to a container daemon over the container's own SSH server, published
+    /// on loopback, with the app's own keys (feature 806). A running released-image container is
+    /// [`Dial::Container`] instead.
+    ContainerSsh {
+        /// The port the container's SSH server is published on (the daemon's own entry).
+        port: u16,
+        /// The runtime the login name is asked of.
+        runtime: micold_core::sandbox::runtime::RuntimeKind,
+        /// The container's name.
+        container_name: String,
+        /// The daemon's key directory on the host.
+        keys_dir: PathBuf,
+    },
 }
 
 /// Everything one actor needs, and its subscription identity (it is hashed whole). A change to any
@@ -217,9 +241,15 @@ pub fn actor_specs(
             let key = keys.iter().find(|k| k.id == entry.id)?.clone();
             let dial = match &entry.runtime {
                 DaemonRuntime::Host => Dial::Host,
-                DaemonRuntime::Container(c) => Dial::Container {
+                DaemonRuntime::Container(c) if states.is_legacy(entry.id) => Dial::Container {
                     port: c.port,
                     token_path: entry.token_path(state_dir, legacy_default)?,
+                },
+                DaemonRuntime::Container(c) => Dial::ContainerSsh {
+                    port: c.port,
+                    runtime: c.profile.runtime,
+                    container_name: c.container_name.clone(),
+                    keys_dir: entry.keys_dir(state_dir, legacy_default)?,
                 },
                 DaemonRuntime::Ssh(s) => Dial::Ssh {
                     target: s.target.clone(),
@@ -366,7 +396,7 @@ fn actor(spec: ActorSpec) -> impl Stream<Item = Message> {
                         return;
                     }
                 },
-                Dial::Container { .. } | Dial::Ssh { .. } => None,
+                Dial::Container { .. } | Dial::Ssh { .. } | Dial::ContainerSsh { .. } => None,
             };
 
             // Reconnect loop: connect, pump until the link drops, surface it, back off, repeat. A
@@ -472,6 +502,34 @@ async fn connect_and_pump(
                 Ok(c) => Ok(c),
                 // A link that was up and is down is retried; a start that never connected is
                 // reported once and ends the actor.
+                Err(reason) if life.established => {
+                    return report(id, output, ConnectionMsg::ConnectFailed(reason)).await;
+                }
+                Err(reason) => {
+                    return report(id, output, ConnectionMsg::StartFailed(reason))
+                        .await
+                        .ended();
+                }
+            }
+        }
+        (
+            Dial::ContainerSsh {
+                port,
+                runtime,
+                container_name,
+                keys_dir,
+            },
+            _,
+        ) => {
+            let sink = provisioning_sink(id, output);
+            let target = ContainerReach {
+                port: *port,
+                runtime: *runtime,
+                container_name,
+                keys_dir,
+            };
+            match container_attempt(SSH_HOST.get().map(|h| &**h), &target, &sink).await {
+                Ok(c) => Ok(c),
                 Err(reason) if life.established => {
                     return report(id, output, ConnectionMsg::ConnectFailed(reason)).await;
                 }
@@ -811,6 +869,105 @@ async fn ssh_attempt(
     })
 }
 
+/// What one container bring-up needs beyond the shared sequence.
+struct ContainerReach<'a> {
+    port: u16,
+    runtime: micold_core::sandbox::runtime::RuntimeKind,
+    container_name: &'a str,
+    keys_dir: &'a Path,
+}
+
+/// The sequence's target for a container: pinned loopback reach with the daemon's own keys, the
+/// pinned AI CLIs installed through a registry-only relay, and the container's step bounds.
+fn container_target(login: String, reach: &ContainerReach<'_>, keys: &DaemonKeys) -> ProvisionTarget {
+    let table = AiCliTable::pinned();
+    ProvisionTarget {
+        reach: Reach::Pinned(PinnedReach {
+            host: "127.0.0.1".to_string(),
+            port: reach.port,
+            user: login,
+            key: keys.client_key(),
+            known_hosts: keys.known_hosts(),
+        }),
+        owned: Ownership::AppOwned {
+            ai_clis: AiCliSelection::all(),
+            egress: Egress::Relay {
+                allow: table.allow(),
+            },
+            table,
+            state_dir: PathBuf::from(CONTAINER_STATE_DIR),
+        },
+        bounds: StepBounds::container(),
+    }
+}
+
+/// The state directory inside a container (the basic image's contract).
+const CONTAINER_STATE_DIR: &str = "/var/lib/micold-ai-ide";
+
+/// One bring-up of a container daemon through the shared provisioning sequence: wait for the
+/// container, ask it its login name, pin its host key, then provision, bridge and handshake.
+async fn container_attempt(
+    host: Option<&dyn SshHost>,
+    reach: &ContainerReach<'_>,
+    sink: &EventSink,
+) -> Result<Connected, String> {
+    let Some(host) = host else {
+        return Err("this build cannot run `ssh`".to_string());
+    };
+    let bounds = StepBounds::container();
+    let login = micold_core::provision::login::wait_for_login(
+        host,
+        reach.runtime.program(),
+        reach.container_name,
+        bounds.acquire + bounds.create_container,
+    )
+    .await
+    .map_err(|reason| {
+        format!(
+            "the container {} did not start: {reason}",
+            reach.container_name
+        )
+    })?;
+    let platform = ClientPlatform::current();
+    let keys = DaemonKeys::ensure(reach.keys_dir, platform, host)
+        .await
+        .map_err(|f| {
+            f.reason(&ReasonContext {
+                host: "127.0.0.1".to_string(),
+                port: reach.port,
+                timeout_secs: DEFAULT_CONNECT_TIMEOUT_SECS,
+                platform,
+            })
+        })?;
+    keys.write_known_hosts(reach.port)
+        .map_err(|e| format!("could not pin the container's host key: {e}"))?;
+    let timeout_secs = DEFAULT_CONNECT_TIMEOUT_SECS;
+    let opts = ProvisionOptions {
+        platform,
+        client_arch: std::env::consts::ARCH.to_string(),
+        timeout_secs,
+        build_id: current_build_id(),
+        client_build: CLIENT_BUILD.to_string(),
+    };
+    ssh_run(
+        host,
+        &container_target(login, reach, &keys),
+        &opts,
+        &CancelToken::new(),
+        sink,
+    )
+    .await
+    .map(|p| p.connected)
+    .map_err(|failure| {
+        failure.reason(&ReasonContext {
+            host: "127.0.0.1".to_string(),
+            port: reach.port,
+            timeout_secs,
+            platform,
+        })
+    })
+}
+
 async fn report(id: DaemonId, output: &mut mpsc::Sender<Message>, msg: ConnectionMsg) -> PumpEnd {
     if output.send(Message::daemon(id, msg)).await.is_err() {
         PumpEnd::AppGone
@@ -896,6 +1053,84 @@ mod tests {
             },
         );
         assert!(actor_specs(&registry, &states, dir, None, false).is_empty());
+    }
+
+    use super::{container_target, ContainerReach};
+    use micold_core::provision::keys::DaemonKeys;
+    use micold_core::provision::{Egress, Ownership, StepBounds};
+    use micold_core::ssh::argv::Reach;
+    use std::path::PathBuf;
+
+    fn container_registry() -> (DaemonRegistry, DaemonId) {
+        let mut registry = DaemonRegistry::default();
+        let id = registry
+            .add(
+                "Box",
+                DaemonRuntime::Container(micold_core::daemons::ContainerSettings {
+                    container_name: "box-ctr".into(),
+                    port: 7001,
+                    profile: Default::default(),
+                    migration: None,
+                }),
+                false,
+            )
+            .unwrap();
+        (registry, id)
+    }
+
+    /// T053: a container daemon is dialled over its SSH server with its own keys directory; a
+    /// running released-image container (legacy) keeps the token channel (FR-017).
+    #[test]
+    fn a_container_is_dialled_over_ssh_and_a_legacy_one_with_its_token() {
+        let (registry, id) = container_registry();
+        let base = std::path::Path::new("/state");
+        let mut states = DaemonStates::default();
+        states.insert(id, DaemonState::Starting);
+        let specs = actor_specs(&registry, &states, base, None, false);
+        assert!(
+            matches!(specs.as_slice(), [s] if matches!(&s.dial,
+                Dial::ContainerSsh { port: 7001, container_name, keys_dir, .. }
+                    if container_name == "box-ctr"
+                        && keys_dir == &base.join("daemons").join("box-ctr").join("ssh"))),
+            "{specs:?}"
+        );
+
+        states.set_legacy(id, true);
+        let specs = actor_specs(&registry, &states, base, None, false);
+        assert!(
+            matches!(specs.as_slice(), [s] if matches!(&s.dial, Dial::Container { port: 7001, .. })),
+            "{specs:?}"
+        );
+    }
+
+    /// T053: the container's target is pinned loopback reach with the daemon's own keys, installs
+    /// through a registry-only relay and uses the container's bounds.
+    #[test]
+    fn the_container_target_is_pinned_app_owned_and_relayed() {
+        let keys = DaemonKeys {
+            dir: PathBuf::from("/state/ssh"),
+        };
+        let reach = ContainerReach {
+            port: 7001,
+            runtime: Default::default(),
+            container_name: "box-ctr",
+            keys_dir: &keys.dir,
+        };
+        let target = container_target("node".into(), &reach, &keys);
+        let Reach::Pinned(pinned) = &target.reach else {
+            panic!("a container is reached pinned: {target:?}");
+        };
+        assert_eq!(
+            (pinned.host.as_str(), pinned.port, pinned.user.as_str()),
+            ("127.0.0.1", 7001, "node")
+        );
+        assert_eq!(pinned.key, keys.client_key());
+        assert_eq!(pinned.known_hosts, keys.known_hosts());
+        assert!(matches!(
+            &target.owned,
+            Ownership::AppOwned { egress: Egress::Relay { allow }, .. } if !allow.is_empty()
+        ));
+        assert_eq!(target.bounds, StepBounds::container());
     }
 
     fn quiet() -> micold_core::provision::EventSink {

@@ -547,6 +547,9 @@ impl Link {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct DaemonStates {
     states: BTreeMap<DaemonId, Link>,
+    /// The container daemons whose running container is a released-image one, reached over the
+    /// token channel until it is restarted (feature 806, FR-017).
+    legacy: std::collections::BTreeSet<DaemonId>,
 }
 
 impl DaemonStates {
@@ -573,6 +576,21 @@ impl DaemonStates {
     /// Forget `id`.
     pub fn remove(&mut self, id: DaemonId) {
         self.states.remove(&id);
+        self.legacy.remove(&id);
+    }
+
+    /// Record that `id`'s container is a running released-image one (or no longer is).
+    pub fn set_legacy(&mut self, id: DaemonId, legacy: bool) {
+        if legacy {
+            self.legacy.insert(id);
+        } else {
+            self.legacy.remove(&id);
+        }
+    }
+
+    /// Whether `id`'s container is a released-image one, dialled with its token.
+    pub fn is_legacy(&self, id: DaemonId) -> bool {
+        self.legacy.contains(&id)
     }
 
     /// Every tracked daemon, in id order.
@@ -763,6 +781,16 @@ impl DaemonEntry {
             })
             .collect();
         Some(base.join("daemons").join(slug))
+    }
+
+    /// Where this daemon's SSH keys live on the host (`<state dir>/ssh`).
+    pub fn keys_dir(
+        &self,
+        base: &std::path::Path,
+        legacy_default: Option<DaemonId>,
+    ) -> Option<std::path::PathBuf> {
+        self.state_dir(base, legacy_default)
+            .map(|dir| dir.join(crate::provision::keys::KEYS_DIR))
     }
 
     /// Where this daemon's token lives on the host.

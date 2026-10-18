@@ -389,7 +389,7 @@ fn keys_mount(state_dir: &std::path::Path) -> SecretMount {
 }
 
 /// The key directory's name under a daemon's state directory.
-pub const KEYS_DIR: &str = "ssh";
+pub use micold_core::provision::keys::KEYS_DIR;
 
 /// The mount set this client creates its container from. No side effects: [`start`] prepares the
 /// host paths it names, and [`reread`] only reads what a running container shares through it.
