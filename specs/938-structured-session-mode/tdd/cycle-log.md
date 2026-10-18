@@ -150,4 +150,13 @@ Append only. Newest last.
 - Test fix: the daemon-restart case waits until the stand-in read the first prompt before the first
   daemon stops it; without that the stop could kill it before it recorded its start (7 of 8 runs
   failed `never started 2 times`).
+- Review A fix: "the first prompt is not sent again" no longer rests on a 300 ms sleep. After each
+  resume the case sends a user message and waits until the stand-in read it, then compares
+  everything it read (`[PROMPT, "after the resume"]` and `["after the resume"]`). The continuity
+  case also checks that seqs increase across the resume. Deliberate mutant: `StructuredProcess`
+  writing "the first prompt" to stdin on a `LaunchMode::Resume` start ->
+  `stop_start_and_restart_resume_the_same_conversation` FAILED with `left: ["the first prompt",
+  "the first prompt", "the first prompt", "after the resume"]`, and
+  `a_daemon_restart_keeps_the_kind_and_resumes_the_conversation` FAILED with
+  `left: ["the first prompt", "after the resume"]`. Restored: `ok. 4 passed`.
 
