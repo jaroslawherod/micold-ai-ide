@@ -1868,6 +1868,9 @@ pub fn create_interrupted(state: &mut crate::app::State, message: String) {
 pub enum Msg {
     /// Open the add-worktree form (FR-005).
     Opened,
+    /// A Kubernetes daemon is cloning the project's remote before the create (feature 686,
+    /// FR-007): the text to show while it runs.
+    CloneStarted(String),
     /// The daemon picker changed (feature 491, FR-006).
     DaemonChosen(micold_core::daemons::DaemonId),
     /// The form's type selection changed.
@@ -2024,6 +2027,7 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
         Msg::OverwriteConfirmed => overwrite_confirmed(state),
         Msg::ResolutionCancelled => resolution_cancelled(state),
         Msg::CreateStarted(mode) => create_started(state, mode),
+        Msg::CloneStarted(text) => with_form(state, |form| form.stage_detail = Some(text)),
         Msg::CreateStageChanged(stage, detail) => create_stage_changed(state, stage, detail),
         Msg::Created(worktree) => return created(state, worktree),
         Msg::CreateFailed(message) => return create_failed(state, message),

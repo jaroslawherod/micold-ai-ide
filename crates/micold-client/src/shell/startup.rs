@@ -421,6 +421,7 @@ fn boot() -> (App, Task<Message>) {
             scrollback_inflight: HashMap::new(),
             pending_ops: HashMap::new(),
             pending_daemon: HashMap::new(),
+            pending_clones: HashMap::new(),
             probe: probe_config().map(|config| RefCell::new(config.probe())),
             scene_ready: false,
             scene_frames: 0,

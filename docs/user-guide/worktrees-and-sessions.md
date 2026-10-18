@@ -721,6 +721,13 @@ worktree by hand keeps working whatever the notice says.
 To send one prompt to several AI CLIs at once, each in its own new worktree, use **Run in
 parallel** beside **Add a worktree**; see [Running a prompt in parallel](parallel-runs.md).
 
+### On a Kubernetes daemon
+
+A worktree bound to a Kubernetes daemon comes from the project's git remote: the daemon clones it
+onto its volume first, so commits you have not pushed stay local. A project with no remote is
+refused, and a remote that needs a credential needs it allowed for the daemon. See
+[Kubernetes daemons](kubernetes-daemons.md#worktrees-on-a-kubernetes-daemon).
+
 ## Working from an existing branch
 
 The **Daemon** select (see [Creating a worktree](#creating-a-worktree)) is on this form too. When a
