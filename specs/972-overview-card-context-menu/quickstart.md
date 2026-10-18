@@ -26,7 +26,7 @@ Screenshot each step that names a look, in light and dark.
 
 | # | Do | Expect | Covers |
 |---|---|---|---|
-| B1 | Open the Overview; right-click `feat-42_alpha`'s card. | Menu at the pointer: *Open*, then the same entries as its sidebar row menu, same order and icons. The card shows the target mark. | US1.1, US2.1, FR-001, FR-002, FR-006 |
+| B1 | Open the Overview; right-click `feat-42_alpha`'s card. | Menu at the pointer: *Open*, then the same entries as its sidebar row menu, same order and icons. The card shows the target mark (from M2). | US1.1, US2.1, FR-001, FR-002, FR-006 |
 | B2 | Move the pointer over the menu and onto another card. | Mark stays on `feat-42_alpha` only; the other card shows only hover. | US2.1 |
 | B3 | Choose *Rename*; rename to `feat-42_beta`. | Dialog over the Overview; after confirming the card shows the new name; Overview still open. | US1 Independent Test, US1.5, FR-005 |
 | B4 | Right-click; choose *Rename*; cancel. | Overview unchanged. | Edge: dialog cancelled |
@@ -43,6 +43,8 @@ Screenshot each step that names a look, in light and dark.
 | B15 | Open a card menu, then delete that worktree from a second window. | Menu closes; nothing runs. | FR-012, Edge: target disappears |
 | B16 | Open a card menu; press Ctrl+Shift+O. | Overview and menu close together. | FR-012, Edge: Overview closes |
 | B17 | Showcase: `OverviewCard` targeted, `MenuOverlay` highlighted. | Mark and highlight visible in both schemes and in a greyscale screenshot. | FR-006 |
+| B18 | Close the Overview; focus a terminal; press Shift+F10, then the Menu key. | The terminal receives them as before; no card menu opens. | Edge: keys elsewhere |
+| B19 | Right-click a worktree card with no daemon bound; choose *Bind to daemon...*; cancel. | The bind dialog shows over the Overview; after cancel the Overview is unchanged. | FR-005, Assumption: dialogs over the Overview |
 
 Note: the keyboard-open chain (`CardMenuRequested` → `focused_bounds_task` → `CardMenuOpened`) and
 the focus-return drain live in `main.rs`; their decisions (`focus_return_target`,

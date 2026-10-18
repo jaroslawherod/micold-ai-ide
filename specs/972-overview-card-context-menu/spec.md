@@ -210,7 +210,8 @@ second entry runs for that card.
   first card.
 - **FR-012**: A card menu MUST close, without running an entry, when its target location stops being
   listed, the Overview's grid scrolls beneath it, or the Overview closes.
-- **FR-013**: The primary click, Enter and Space on a card MUST keep their feature 813 behaviour.
+- **FR-013**: The primary click, Enter and Space on a card MUST keep their feature 813 behaviour
+  while no card menu is open (while one is open, Enter and Space belong to the menu, FR-010).
 - **FR-014**: At most one card menu (and no other context menu) MUST be open at a time.
 
 ### Key Entities
