@@ -16,8 +16,9 @@ const STAND_IN: &str = "claude.exe";
 
 /// The stand-in `claude`. At start it writes, in its cwd, its arguments to `argv-record` (one per
 /// line), its cwd to `cwd-record` and `TERM`, `PATH` and every `MICOLD_*` variable to
-/// `env-record` (`NAME=value`, sorted; `NAME` alone when unset), and from then on appends every
-/// stdin line to `stdin-record`. Then it runs `.fake-stream`, one line at a time:
+/// `env-record` (`NAME=value`, sorted; `NAME` alone when unset), its pid to `pid-record`, appends
+/// one line to `starts-record` (one per start), and from then on appends every stdin line to
+/// `stdin-record`. Then it runs `.fake-stream`, one line at a time:
 ///
 /// - `replay <file>` writes the file's bytes to stdout line by line, as they are, a trailing
 ///   partial line included;
@@ -47,6 +48,10 @@ fn main() {
     }
     env.sort();
     let _ = std::fs::write("env-record", env.join("\n") + "\n");
+    let _ = std::fs::write("pid-record", format!("{}\n", std::process::id()));
+    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open("starts-record") {
+        let _ = writeln!(f, "start {}", std::process::id());
+    }
 
     let (lines_tx, lines_rx) = mpsc::channel::<()>();
     std::thread::spawn(move || {
@@ -196,4 +201,121 @@ pub fn fixture_lines(name: &str) -> Vec<String> {
     let mut lines = splitter.push(&bytes);
     lines.extend(splitter.finish());
     lines
+}
+
+/// How many times the stand-in has started in `dir`.
+pub fn starts(dir: &Path) -> usize {
+    std::fs::read_to_string(dir.join("starts-record"))
+        .map(|text| text.lines().count())
+        .unwrap_or(0)
+}
+
+/// Remove what an earlier start of the stand-in recorded in `dir`.
+pub fn clear_records(dir: &Path) {
+    for name in ["argv-record", "cwd-record", "env-record", "pid-record", "stdin-record"] {
+        let _ = std::fs::remove_file(dir.join(name));
+    }
+}
+
+/// One event as a viewing client received it.
+#[derive(Debug, Clone)]
+pub struct Received {
+    pub event: micold_core::structured::SequencedEvent,
+    /// The `live` flag of the message that carried it.
+    pub live: bool,
+    /// The `omitted` count of that message.
+    pub omitted: u64,
+    pub at: Instant,
+}
+
+/// A client of `state` viewing `id`'s `Primary`, as a window does with `SetViewedTerminals`.
+pub async fn viewer(
+    state: &std::sync::Arc<micold_daemon::state::DaemonState>,
+    project: &Path,
+    id: micold_core::session::SessionId,
+) -> crate::conn::Client {
+    use futures_util::SinkExt;
+    use micold_core::protocol::codec::Frame;
+    use micold_core::protocol::messages::{ClientMsg, SessionProcess, TerminalRef};
+    let mut client = crate::conn::connect_as(state, "test-client").await;
+    client
+        .send(Frame::Control(ClientMsg::SetViewedTerminals {
+            project: project.to_path_buf(),
+            terminals: vec![TerminalRef {
+                session: id,
+                process: SessionProcess::Primary,
+            }],
+        }))
+        .await
+        .expect("the view is sent");
+    client
+}
+
+/// The `StructuredEvents` of `id` that `client` receives until `done` holds for them, within 15 s.
+pub async fn events_until(
+    client: &mut crate::conn::Client,
+    id: micold_core::session::SessionId,
+    done: impl Fn(&[Received]) -> bool,
+) -> Vec<Received> {
+    use futures_util::StreamExt;
+    use micold_core::protocol::codec::Frame;
+    use micold_core::protocol::messages::DaemonMsg;
+    let mut got = Vec::new();
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(15);
+    while !done(&got) {
+        let left = deadline.saturating_duration_since(tokio::time::Instant::now());
+        assert!(!left.is_zero(), "the events never completed: {got:#?}");
+        match tokio::time::timeout(left, client.next()).await {
+            Ok(Some(Ok(Frame::Control(DaemonMsg::StructuredEvents {
+                session,
+                omitted,
+                events,
+                live,
+            })))) => {
+                assert_eq!(session, id, "only the viewed session's events");
+                let at = Instant::now();
+                got.extend(events.into_iter().map(|event| Received {
+                    event,
+                    live,
+                    omitted,
+                    at,
+                }));
+            }
+            Ok(Some(Ok(_))) | Err(_) => {}
+            Ok(Some(Err(e))) => panic!("codec error: {e:?}"),
+            Ok(None) => panic!("the connection closed"),
+        }
+    }
+    got
+}
+
+/// The events the parser makes of the fixture `name`, in order.
+pub fn fixture_events(name: &str) -> Vec<micold_core::structured::StructuredEvent> {
+    fixture_lines(name)
+        .iter()
+        .map(|line| micold_core::structured::parse_line(line))
+        .collect()
+}
+
+/// The events of `got`, without their seq.
+pub fn events_of(got: &[Received]) -> Vec<micold_core::structured::StructuredEvent> {
+    got.iter().map(|r| r.event.event.clone()).collect()
+}
+
+/// Whether the seqs of `got` strictly increase.
+pub fn seqs_increase(got: &[Received]) -> bool {
+    got.windows(2).all(|w| w[0].event.seq < w[1].event.seq)
+}
+
+/// A structured Claude Code session record at `location`.
+pub fn structured_session(
+    location: micold_core::session::SessionLocation,
+) -> micold_core::session::Session {
+    let mut session = micold_core::session::Session::start_new_of_kind(
+        location,
+        AiCli::ClaudeCode,
+        micold_core::session::SessionKind::Structured,
+    );
+    session.set_mode(micold_core::session::TerminalMode::AiCli);
+    session
 }

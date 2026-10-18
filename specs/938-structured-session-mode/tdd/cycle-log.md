@@ -74,3 +74,15 @@ Append only. Newest last.
   broke.
 - run: `cargo test -p micold-core --all-targets --no-fail-fast` -> all pass but the three
   root-only permission tests the gate re-runs as a normal user.
+
+## Cycle 5 (U8, U9, M2): daemon tests — RED
+
+- red (T014, T015): `cargo test -p micold-daemon --no-fail-fast --test structured_session --test
+  structured_lifecycle` -> `structured_session`: `FAILED. 0 passed; 8 failed` (no events reach a
+  viewer: `the events never completed: []`; the structured argv is the terminal one, `range end
+  index 7 out of range for slice of length 2`; a structured Copilot `SessionCreate` is created,
+  not refused; `SessionSummary.kind` is `Terminal`). `structured_lifecycle`: `FAILED. 3 passed; 1
+  failed` — the history after an exit is empty. The three parity cases pass now because both kinds
+  still take the PTY path; they guard T020 against drifting from it.
+- The stand-in also records `pid-record` and one `starts-record` line per start (kill and
+  crash-loop counts).

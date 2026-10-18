@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-cl0lw3
 - **Started**: 2026-10-18
 - **Phase**: M2
-- **Next step**: M2 — T014, T015, then T018–T021 (see Handover)
+- **Next step**: M2 — T018–T021, then verify, reviews, gate, push, PR (see Handover)
 
 ## Pull requests
 
@@ -73,7 +73,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M2 unit 2 (context cap). Done and committed: T011, T016 (`structured/history.rs`, `EventHistory`,
+M2 unit 3 (context cap). Unit 3 added T014, T015 (red, Cycle 5, U8/U9): `tests/structured_session.rs` (8 tests, all red), `tests/structured_lifecycle.rs` (4; 3 parity cases pass already since both kinds take the PTY path, `events_written_before_an_exit_stay_in_the_history` red); `support/structured.rs` gained `pid-record`, `starts-record`/`starts()`, `clear_records`, `viewer`, `events_until` (`Received {event, live, omitted, at}`), `fixture_events`, `events_of`, `seqs_increase`, `structured_session(location)`; it uses `crate::conn`, so includers declare `mod conn`. Red log: Cycle 5. Earlier units, done and committed: T011, T016 (`structured/history.rs`, `EventHistory`,
 `MAX_EVENTS`/`MAX_BYTES`, `StructuredEvent::text_len`), T012, T017 (`structured_wire.rs`; `kind`
 on `SessionCreate`/`SessionSummary`, serde-default; `DaemonMsg::StructuredEvents`; protocol 52;
 `StructuredEvent`/`SequencedEvent` now `Eq`; every literal got `kind: Default::default()`; the
@@ -83,8 +83,14 @@ daemon's `SessionCreate` arm binds `kind` but does not use it yet), T013
 `stderr`, `exit`, else a literal stdout line; smoke-tested by hand). Deviation: like
 `support/history.rs` it is included with `#[path = "support/structured.rs"] mod structured;`, not
 from `support/mod.rs` (that is the framer support). Cycle log: Cycle 4. Test list: U6, U7.
-Next: T014, T015 (red; add U8, U9 rows; see `tests/history_restart_in_run.rs` for
-`service`/`connect_as`/`start_session_gated` usage), then T018–T021 per the survey below.
+Next: T018 (env-edit list: a small trait over `CommandBuilder` and `std::process::Command` with
+set/remove, `strip_inherited_terminal_identity` + windows `prefer_process_path` applied through it),
+T019, T020, T021 per the survey below; then run both test files green (`--no-fail-fast`), flip
+U8/U9 to DONE, Cycle 6, tick T018–T021, then verify.md, reviews, gate, push, pr-title/pr-body.
+Test expectations to honour: the structured stderr `warn!` line must carry the session id; the
+history must outlive the process (viewer after exit gets it as `live: false`); a structured
+Copilot `SessionCreate` answers `OperationError` whose `message` is the `KindRefusal` text;
+`primary_pty(structured)` is `None`; `remove_session` must still end the structured tree.
 Gate note: `cargo test` as root fails 3 core permission tests; `scripts/gate.sh` re-runs them as
 a normal user. Build detached with `$SCRATCHPAD/m2/bg.sh <log> "<cmd>"` + `hold.sh <log>`.
 Survey findings (unit 1), to save the next unit the reads:

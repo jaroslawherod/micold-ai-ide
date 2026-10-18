@@ -181,7 +181,7 @@ CLI.
   appends every stdin line to `stdin-record`; replays the fixture named in `.fake-stream` line by
   line to stdout, honouring the directives `pause <ms>`, `await-stdin` (block until one more stdin
   line), `stderr <text>` (write to stderr) and `exit <code>`; idles when the script ends.
-- [ ] T014 [US1] Write failing tests in `crates/micold-daemon/tests/structured_session.rs`:
+- [x] T014 [US1] Write failing tests in `crates/micold-daemon/tests/structured_session.rs`:
   (a) a structured Claude session's argv begins with the seven structured args, carries
   `--session-id <id>`, the `--settings` hook file and `--mcp-config` last exactly as a terminal
   session at the same location (the `--settings` hook file is the only source of the activity and
@@ -203,7 +203,7 @@ CLI.
   one (FR-020, US5 scenario 5); (i) two structured sessions running at once, in the same worktree
   and in two worktrees, each deliver only their own fixture's events (Principle II).
 
-- [ ] T015 [US5] Write failing tests in `crates/micold-daemon/tests/structured_lifecycle.rs`
+- [x] T015 [US5] Write failing tests in `crates/micold-daemon/tests/structured_lifecycle.rs`
   for the lifecycle the `Proc::Structured` primary of T020 must have (US5 scenarios 1–2, FR-009):
   the lifecycle states observed for stop, kill and restart of a structured session equal those of
   a terminal session in the same order; a stand-in that runs `exit 1` at once on every start is
