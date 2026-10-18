@@ -2247,6 +2247,11 @@ mod tests {
 
         /// Press `event` in a focused pane: whether the pane captured it, and what it published.
         fn press_focused(event: &Event) -> (bool, Vec<Message>) {
+            press_with_focus(event, true)
+        }
+
+        /// As [`press_focused`], for a pane whose focus is `focused`.
+        fn press_with_focus(event: &Event, focused: bool) -> (bool, Vec<Message>) {
             let renderer = super::presses::headless();
             let grid = grid(0);
             let mut clipboard = RecordingClipboard::holding(PRIOR);
@@ -2254,7 +2259,7 @@ mod tests {
                 &grid,
                 TermPalette::from_scheme(micold_core::theme::ColorScheme::Dark),
             )
-            .focused(true)
+            .focused(focused)
             .into();
             let mut tree = Tree::new(&element);
             let node = element.as_widget_mut().layout(
@@ -2370,6 +2375,34 @@ mod tests {
                     )]
                 ),
                 "published: {messages:?}"
+            );
+        }
+
+        #[test]
+        fn an_unfocused_pane_publishes_nothing_for_the_switcher_chord() {
+            #[cfg(target_os = "macos")]
+            let modifiers = keyboard::Modifiers::LOGO | keyboard::Modifiers::SHIFT;
+            #[cfg(not(target_os = "macos"))]
+            let modifiers = keyboard::Modifiers::CTRL | keyboard::Modifiers::SHIFT;
+            let (captured, messages) = press_with_focus(
+                &Event::Keyboard(keyboard::Event::KeyPressed {
+                    key: keyboard::Key::Character("p".into()),
+                    modified_key: keyboard::Key::Character("P".into()),
+                    physical_key: Physical::Code(iced::keyboard::key::Code::KeyP),
+                    location: keyboard::Location::Standard,
+                    modifiers,
+                    text: None,
+                    repeat: false,
+                }),
+                false,
+            );
+            assert!(
+                !captured,
+                "unfocused, the chord is left for the app-level listener (K3)"
+            );
+            assert!(
+                messages.is_empty(),
+                "handling it here too would toggle twice: {messages:?}"
             );
         }
 

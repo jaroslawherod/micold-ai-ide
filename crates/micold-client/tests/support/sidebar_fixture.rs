@@ -9,6 +9,22 @@ use micold_core::runs::{GroupId, NewGroup, Run, RunGroup, RunStatus};
 use micold_core::session::{AiCli, Session, SessionId, SessionLocation};
 use micold_core::worktree::{Worktree, WorktreeStatus};
 
+/// A known project named `name`, at `/<name>`, with the given availability.
+pub fn project(name: &str, availability: Availability) -> Project {
+    Project {
+        path: PathBuf::from(format!("/{name}")),
+        display_name: name.to_string(),
+        is_git_repo: true,
+        availability,
+    }
+}
+
+/// A session at the project root, for a project other than the active one (it is pushed into
+/// `workspace.sessions` under that project's path by the caller).
+pub fn foreign_session() -> Session {
+    Session::start_new(SessionLocation::Default, AiCli::ClaudeCode)
+}
+
 /// A state with the project `/repo` open and nothing else.
 pub fn state_with_active() -> State {
     let mut state = State::default();

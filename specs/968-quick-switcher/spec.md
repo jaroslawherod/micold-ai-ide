@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-18
 
-**Status**: Draft
+**Status**: Closed 2026-10-18 — shipped in PRs #1036, #1057, #1061, #1071, and the close PR
 
 **Input**: User description: "Issue #968: Quick-switcher to jump directly to a project, worktree or
 session. Problem: #803 adds next/previous keyboard navigation for projects, worktrees and sessions.
