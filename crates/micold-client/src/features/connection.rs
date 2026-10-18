@@ -237,6 +237,9 @@ pub enum Msg {
     /// A Kubernetes start found its pod running with other settings and stopped to ask: the fields
     /// that differ (feature 686). The actor has ended; the answer restarts it.
     KubeDrift(Vec<String>),
+    /// A Kubernetes daemon's pod was found gone on a re-dial, with why (feature 686, FR-011): the
+    /// daemon is stopped with that reason and nothing recreates the pod until the user starts it.
+    PodGone(String),
     /// A start step began or the copy advanced (features 489 and 806).
     Provisioning(micold_core::provision::ProvisionEvent),
     /// A daemon answered and refused the handshake, with a human-facing reason — a stale `:dev`

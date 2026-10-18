@@ -49,6 +49,7 @@ pub fn update(app: &mut App, id: DaemonId, msg: Msg) -> Task<Message> {
             ));
             Task::none()
         }
+        Msg::PodGone(reason) => daemon_sync::on_pod_gone(app, id, reason),
         Msg::Provisioning(event) => {
             app.core.update(Message::Daemons(
                 micold_client::features::daemons::Msg::Provisioning(id, event),

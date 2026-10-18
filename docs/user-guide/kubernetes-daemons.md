@@ -155,12 +155,35 @@ Choose **Logs** on the row for the last 200 lines of the pod's log, fetched when
 the output of the daemon copy and AI CLI installs while a start runs. Recent errors are listed
 under the row.
 
+## Sessions outlive the client
+
+Sessions and terminals run in the pod, so closing Micold or losing the network does not stop them.
+When you open Micold again, or the network returns, the daemon reconnects to the same pod and its
+sessions are shown running, with the output they produced while you were away. Reconnecting never
+creates a second pod or a duplicate session.
+
 ## When the connection drops
 
-As for [an SSH daemon](remote-daemons.md#when-the-network-drops), the row shows **Reconnecting** and
-sessions keep running in the pod. If the pod itself is gone, the row says why and sessions show
-`lost to its daemon`: `stopped: the pod was deleted`, `stopped: the pod was evicted: <message>` or
-`stopped: the pod's node <node> was lost`. Micold does not recreate it; choose **Start**.
+As for [an SSH daemon](remote-daemons.md#when-the-network-drops), the row shows **Reconnecting**
+while Micold retries (after 1, 2, 4, 8, then every 15 seconds), and its sessions show
+`disconnected`. Choose **Stop** on the attempt to give up; the row then shows **Unreachable**, and
+**Reconnect** on it dials the pod again with the first delay. If the cluster cannot say whether the
+pod is there (a timeout or a server error), the row stays **Reconnecting** and Micold keeps trying.
+
+## When the pod is gone
+
+If the pod was deleted, evicted or lost with its node while you were away, the row says
+**Stopped** with the reason, and the sessions that were running show `lost to daemon <name>`:
+
+| Text | Meaning |
+|---|---|
+| `stopped: the pod was deleted` | Someone deleted the pod, or it is being deleted. |
+| `stopped: the pod was evicted: <message>` | The cluster evicted it; the message is the kubelet's. |
+| `stopped: the pod's node <node> was lost` | The node it ran on is gone or does not answer. |
+
+Micold does not recreate the pod by itself. Choose **Start**: a new pod is created on the kept
+volume and every worktree is still there. If someone else removed the daemon meanwhile (pod and
+volume), Start creates a new, empty volume and pod, and its worktrees are gone.
 
 ## When it does not start
 

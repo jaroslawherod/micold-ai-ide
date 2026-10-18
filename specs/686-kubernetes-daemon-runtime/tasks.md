@@ -299,15 +299,15 @@ in the list and open in Edit; the Add form's runtime list omits Kubernetes (FR-0
 
 ### Tests (write first, must fail)
 
-- [ ] T057 [P] [US2] [U17] [U103] State tests in `core/daemons.rs`: `Reconnecting` or `Unreachable` + `Gone(reason)` → `Stopped` with `stopped_reason`; `Start` from `Stopped` → `Starting` and clears it; plus a reducer test in `client-tests/features_daemons.rs` that the row shows `stopped` with the reason.
-- [ ] T058 [P] [US2] [A6] [A7] [A8] [A9] [A22] [U114] [U115] Actor tests over `FakeCluster` in `client-tests/kube_daemon_reconnect.rs`: tunnel dropped with the pod running → relay re-opened, re-dial, sessions shown with output since the drop, no pod create; Reconnect on an `unreachable` daemon whose pod runs does the same (US5.4); pod deleted, evicted or node lost → `Stopped` with the reason, sessions `lost to its daemon`, no create call, actor ended; a 5xx or timeout on lookup → stays `Reconnecting` with 489's back-off; Start after `Gone` → a new pod on the same PVC; after another client's Remove → `Gone(Deleted)`, and Start creates a new, empty PVC and pod (FR-023); another daemon untouched.
+- [x] T057 [P] [US2] [U17] [U103] State tests in `core/daemons.rs`: `Reconnecting` or `Unreachable` + `Gone(reason)` → `Stopped` with `stopped_reason`; `Start` from `Stopped` → `Starting` and clears it; plus a reducer test in `client-tests/features_daemons.rs` that the row shows `stopped` with the reason.
+- [x] T058 [P] [US2] [A6] [A7] [A8] [A9] [A22] [U114] [U115] Actor tests over `FakeCluster` in `client-tests/kube_daemon_reconnect.rs`: tunnel dropped with the pod running → relay re-opened, re-dial, sessions shown with output since the drop, no pod create; Reconnect on an `unreachable` daemon whose pod runs does the same (US5.4); pod deleted, evicted or node lost → `Stopped` with the reason, sessions `lost to daemon <name>` (the 489 label), no create call, actor ended (`kube_reconnect`, the look-up the actor makes before each re-dial; a lost node is the pod's phase `Unknown`, the `Cluster` port has no node look-up); a 5xx or timeout on lookup → stays `Reconnecting` with 489's back-off; Start after `Gone` → a new pod on the same PVC; after another client's Remove → `Gone(Deleted)`, and Start creates a new, empty PVC and pod (FR-023); another daemon untouched.
 
 ### Implementation
 
-- [ ] T060 [US2] [U17] `DaemonEvent::Gone`, `DaemonView.stopped_reason` and the transitions in `core/daemons.rs`.
-- [ ] T061 [US2] [A6] [A7] [A8] [A9] [A22] [U103] [U114] [U115] Pod lookup (`PodGone`) before each re-dial and the Reconnect action in `client/daemon.rs`; sessions marked `lost to its daemon` through the 489 FR-019 path in `client/links.rs`; the row shows the reason in `client/ui/settings/daemons.rs`.
-- [ ] T062 [US2] User guide `docs/user-guide/kubernetes-daemons.md`: sessions survive the client, Reconnect, and what "stopped: the pod was …" means.
-- [ ] T101 [US2] [A6] [A7] [A8] [A9] [A22] Acceptance (M8): `kube_daemon_reconnect` green for A6–A9, A22.
+- [x] T060 [US2] [U17] `DaemonEvent::Gone`, `DaemonView.stopped_reason` and the transitions in `core/daemons.rs`.
+- [x] T061 [US2] [A6] [A7] [A8] [A9] [A22] [U103] [U114] [U115] Pod lookup (`PodGone`) before each re-dial and the Reconnect action in `client/daemon.rs`; sessions marked `lost to daemon <name>` through the 489 FR-019 path (`session_lost_label` already maps `Stopped`) in `client/links.rs`; the row shows the reason in `client/ui/settings/daemons.rs`.
+- [x] T062 [US2] User guide `docs/user-guide/kubernetes-daemons.md`: sessions survive the client, Reconnect, and what "stopped: the pod was …" means.
+- [x] T101 [US2] [A6] [A7] [A8] [A9] [A22] Acceptance (M8): `kube_daemon_reconnect` green for A6–A9, A22.
 
 ---
 

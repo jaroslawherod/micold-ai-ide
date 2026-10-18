@@ -613,6 +613,7 @@ pub fn views(state: &State, model: &Model<'_>) -> ViewModel {
             replace_offered: replace_offered(model, entry.id)
                 && !state.replacing.contains(&entry.id),
             replacing: state.replacing.contains(&entry.id),
+            stopped_reason: model.links.stopped_reason(entry.id).map(str::to_string),
             activity: match (&entry.runtime, state.provisioning.get(&entry.id)) {
                 (DaemonRuntime::Ssh(_), Some(progress))
                     if model.links.state(entry.id) == Some(&DaemonState::Starting) =>
@@ -684,6 +685,7 @@ pub fn daemon_event(
                 diagnostics.push_log(format!("start failed: {reason}"));
             }
         }
+        DaemonEvent::Gone(reason) => diagnostics.push_log(reason.clone()),
         DaemonEvent::Refused { client, daemon } => {
             diagnostics.record_error(format!(
                 "version mismatch: client {client}, daemon {daemon}"
