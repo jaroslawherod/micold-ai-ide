@@ -74,27 +74,6 @@ fn function_body(name: &str) -> String {
 }
 
 #[test]
-fn the_search_is_asked_for_only_inside_the_search_function_behind_the_gate() {
-    let uses = occurrences(".search_open(connection");
-    let files: Vec<_> = uses.iter().map(|(file, _)| file.as_str()).collect();
-    assert_eq!(
-        files,
-        ["crates/micold-client/src/shell/issues.rs"],
-        "{uses:?}"
-    );
-    let search = function_body("fn start_jira_search(");
-    assert!(
-        search.contains("jira_request("),
-        "the search goes through the same gate as the load"
-    );
-    assert!(
-        search.find("jira_request(") < search.find(".search_open(connection"),
-        "the gate comes first"
-    );
-    assert!(function_body("fn start_jira_load(").contains("jira_request("));
-}
-
-#[test]
 fn the_search_function_is_called_only_when_a_search_is_due() {
     let calls: Vec<_> = occurrences("start_jira_search(")
         .into_iter()

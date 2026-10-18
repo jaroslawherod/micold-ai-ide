@@ -53,3 +53,5 @@ mise run gate         # fmt, clippy, workspace tests, script tests
 | B7 | Two windows: switch off in one | the other loses the picker within a second (SC-006) |
 | B8 | Remove connection | token file gone; no Jira in dialog (US3 AS3) |
 | B9 | Linux, macOS, Windows: token file permissions | owner-only (Edge "Platform") |
+
+Recorded in `visual/close.md` (2026-10-18). B1-B6, B8 and B9 on Linux pass. B7: Keep-or-Remove prompt passes; SC-006 timing not met (3.3 to 3.7 s), an accepted deviation, follow-up #1022. Missing access (category 4): B9 on macOS and Windows, light scheme, narrow window.

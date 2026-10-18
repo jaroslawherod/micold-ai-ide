@@ -186,8 +186,8 @@ GUI exception (quickstart §B).
 
 ## Phase 8: Polish and cross-cutting (no code changes: left to the close unit)
 
-- [ ] T066 Record quickstart §B (B1-B9) with the `visual-pass` skill against the `fake_jira` example, including the two-window and token-file-permission arms; per-OS arms with no access are recorded as missing access (category 4) in `specs/533-jira-issue-worktrees/quickstart.md`.
-- [ ] T067 Record the follow-up "put the GitHub picker under an integrations switch" as the open issue it stays, in the ledger and the close PR body.
+- [x] T066 (B1-B9 recorded in `visual/close.md`; B9 macOS/Windows and light scheme, narrow window recorded as missing access; SC-006 not met, accepted deviation, #1022) Record quickstart §B (B1-B9) with the `visual-pass` skill against the `fake_jira` example, including the two-window and token-file-permission arms; per-OS arms with no access are recorded as missing access (category 4) in `specs/533-jira-issue-worktrees/quickstart.md`.
+- [x] T067 (recorded in the ledger's Follow-ups and the close PR body) Record the follow-up "put the GitHub picker under an integrations switch" as the open issue it stays, in the ledger and the close PR body.
 
 ## Dependencies and execution order
 
@@ -282,3 +282,15 @@ The feature is not done until the HIGH findings (T071-T074) are cleared. Finding
 - **Verify**: `mise run gate`; quickstart §B B7 (`visual/close.md`)
 - **Depends on**: M5
 - **Tier**: full
+
+## Phase 10: TDD remediation (second audit, `tdd/verification.md` at `55582a4a4`)
+
+The feature is not done until T080 and T081 are cleared or T081's deviation is accepted in writing. Findings refer to `tdd/verification.md`. All tasks except T086 change tests only.
+
+- [x] T080 [US1] Finding 15 (HIGH): make the `Recording` double in `crates/micold-client/src/main_tests.rs:12461-12469` record the search text and assert in `a_search_reads_the_token_file_and_finds_beyond_the_list` (`:12597`) that the source received exactly the typed text; prove by re-running the mutant `search_open(connection, token, "")` at `crates/micold-client/src/shell/issues.rs:467` (the test must fail), restoring it, and `scripts/build-lock.sh cargo test -p micold-client --bin micold-ai-ide jira_request_path`.
+- [x] T081 (recorded in tdd/cycle-log.md "Close"; user decision pending, stated in the close PR) Finding 14 (HIGH): record in `tdd/cycle-log.md` and the ledger that M1-M3 and M5 have no red and M4 and M6 no corroborated order, with the user's decision (accept as a process deviation, or not); no code change possible. Prove by the entry existing and `tdd/verification.md` Finding 14 referencing it.
+- [x] T082 Finding 16 (MED): in `crates/micold-core/tests/jira_connection.rs:162-176` take `data_dir().expect("the test environment has a data dir")` and assert `jira_token_dir() == Some(data.join("jira"))` once; prove with `mise run test-core`.
+- [x] T083 Finding 17 (MED): in `crates/micold-core/tests/jira_classify.rs:103-116` drop the closing loop or give every outcome a path by which the sentinel could appear; prove with `scripts/build-lock.sh cargo test -p micold-core --test jira_classify`.
+- [x] T084 Findings 6, 9 (MED): replace the `find`-order assertions at `crates/micold-client/tests/jira_is_requested_only_on_named_events.rs:77-95` with a `jira_request_path` search case that fails when the gate is skipped, keep only the file-level "constructed in `real()`" pin at `:116-126`; replace the 3 s server sleep at `crates/micold-client/tests/jira_http_adapter.rs:61` with a wait on the client closing the socket; prove with `mise run gate`.
+- [x] T085 Finding 10 (MED): replace the re-implemented expectations at `crates/micold-core/tests/jira_connection.rs:156-159` and `crates/micold-client/tests/jira_http_adapter.rs:158-161` with literal expected strings; prove with `mise run test`.
+- [ ] T086 (stays open: SC-006 accepted deviation, #1022) Finding 18 (MED, new behaviour): if issue #1022 is fixed, add a test that a second window drops the Jira picker within one second of the daemon echo (SC-006) and re-run quickstart B7; otherwise leave it open and record the accepted deviation in the close PR body.

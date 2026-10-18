@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-12
 
-**Status**: Draft
+**Status**: Closed 2026-10-18 — shipped in PRs #785, #819, #871, #894, #903, #920, #1007
 
 **Input**: User description: "Implement GitHub issue #533: Create worktrees from Jira issues. The create-worktree dialog can start from a GitHub issue; a project tracked in Jira has no equivalent. A project can be connected to Jira and the dialog then offers its Jira issues the way it offers GitHub issues. Integrations with outside services are off until the user turns them on, and their parts of the interface appear only while they are on."
 
@@ -179,6 +179,7 @@ A project that has both a GitHub remote and a Jira connection lets the user choo
 - **SC-004**: A scan of `settings.json`, project files, logs and the session history after a full connect, load, failure and remove cycle finds the token zero times.
 - **SC-005**: With the site down or refusing, 100 percent of picker loads show a notice with a Retry, and a worktree can still be created by hand from the same dialog.
 - **SC-006**: Turning the switch off stops Jira requests within one second in every open window, and no Jira control remains.
+  - **Recorded deviation (decided by user, 2026-10-18)**: not met in the manual pass. The daemon writes the setting 0.13 s after the click, but a second window drops its Jira picker 3.3 to 3.7 s after it (five measurements, `visual/close.md`, `visual/B7r-timings.txt`). The Jira code is not the lag (`adopt_daemon_settings` runs `sync_jira_availability` synchronously). It is unproven whether the cause is headless-sway redraw of an unfocused window or the 3 s keepalive `PING_INTERVAL`. Accepted; follow-up #1022.
 
 ## Assumptions
 

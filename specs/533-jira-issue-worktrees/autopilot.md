@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #533
 - **Worktree branch**: feat/533_create-worktrees-from-jira-issues
 - **Started**: 2026-10-12
-- **Phase**: close (escalated on SC-006)
+- **Phase**: close (review and gate for the close PR)
 - **Next step**: close unit: answer the SC-006 escalation, then T066, T067, tdd-verify check, Status Closed, close PR
 - **CI**: #1007 docs check red (user guide); fixed in settings.md, attempt 1
 
@@ -43,6 +43,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
+| 1 | close | SC-006 not met (other window lags 3.3-3.7 s): chase it or accept as a deviation? | Accept; record in the spec and the close PR; follow-up issue #1022 | decided by user | visual/close.md, B7r-timings.txt |
 
 ## Review rounds
 
@@ -87,7 +88,7 @@ None.
 
 ## Open escalation
 
-SC-006 not met (other window drops the Jira picker 3.3-3.7 s after the click; daemon write at 0.13 s; cause unknown). Chase the lag (new milestone) or accept as a recorded deviation? Recommendation: accept, record in spec/close PR, open a follow-up issue. Evidence: Keep arm without pointer motion showed no change through 2.64 s while a pointer wiggle changed A at 3.27 s, which points at redraw/frame-callback of an unfocused window in headless sway, not at settings propagation; the 3 s figure also equals keepalive PING_INTERVAL. Unproven.
+None.
 
 ## M2 review notes
 
@@ -96,7 +97,8 @@ SC-006 not met (other window drops the Jira picker 3.3-3.7 s after the click; da
 
 ## Follow-ups not done
 
-- SC-006: another window drops the Jira picker 3.3-3.7 s after the click, not within 1 s (visual/close.md, T079). Daemon echo is at 0.13 s; cause unknown, check whether any setting shows it.
+- SC-006: accepted deviation (decided by user); follow-up issue #1022 (other window drops the Jira picker 3.3-3.7 s after the click; headless-sway redraw vs 3 s keepalive PING_INTERVAL, unproven).
+- GitHub issue picker under an integrations switch (T067): stays an open follow-up, not built here.
 
 - Main took PROTOCOL_VERSION 41 and 42 (feature 776) before M1 merged: M1 is now 42 -> 43, then main took 43 and 44: M1 is now 44 -> 45; spec artifacts updated.
 - Main then took 43 (feature 552) too: M1 is now 44 -> 45.
@@ -109,3 +111,4 @@ SC-006 not met (other window drops the Jira picker 3.3-3.7 s after the click; da
 - converge: nothing else unbuilt; T066/T067 left open for the second close unit.
 - tdd-verify: FAIL (see tdd/verification.md); HIGH findings 1-4 fixed (T071-T073, core tests pass), 11/7/9 fixed in client tests (T075, ports of T076); T074/T076/T077 need a test seam: M6.
 - visual pass B7 FAILED: switch cannot be saved off over a stored connection (T078); SC-006 timing 1.05 s unproven (T079). B1-B6, B8, B9 (Linux) pass; light scheme, narrow window, macOS/Windows perms: missing access.
+- tdd-verify (final): FAIL on Finding 14 only (no red for M1-M3, M5; M4, M6 order uncorroborated): unrepairable, recorded as a process deviation in tdd/cycle-log.md (T081); user decision pending, stated in the close PR. Finding 15 (search text mutant) fixed T080; T082-T085 test-only fixes; T086 open (SC-006, #1022).

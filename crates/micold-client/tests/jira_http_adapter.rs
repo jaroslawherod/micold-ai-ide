@@ -58,7 +58,8 @@ fn serve(response: Option<String>) -> (String, mpsc::Receiver<String>) {
             Some(response) => {
                 stream.write_all(response.as_bytes()).unwrap();
             }
-            None => thread::sleep(Duration::from_secs(3)),
+            // Hold the connection open until the client gives up and closes it.
+            None => while stream.read(&mut chunk).is_ok_and(|n| n > 0) {},
         }
     });
     (origin, rx)
@@ -167,7 +168,11 @@ fn a_search_body_carries_only_the_search_jql_and_the_page_size() {
     assert_eq!(keys, expected);
     assert_eq!(
         json["jql"].as_str(),
-        micold_core::jira::search_jql(&connection(&origin).project_key, "login \"x\"").as_deref()
+        Some(
+            "project = \"ABC\" AND statusCategory != Done AND \
+             (summary ~ \"login \\\"x\\\"*\" OR labels = \"login \\\"x\\\"\") \
+             ORDER BY updated DESC"
+        )
     );
     assert!(!body.contains(SENTINEL));
 }

@@ -12426,11 +12426,17 @@ mod jira_request_path {
     #[derive(Default)]
     struct Recording {
         tokens: Mutex<Vec<String>>,
+        searches: Mutex<Vec<String>>,
     }
 
     impl Recording {
         fn seen(&self) -> Vec<String> {
             self.tokens.lock().unwrap().clone()
+        }
+
+        /// The text of every search the source was asked for.
+        fn searched_for(&self) -> Vec<String> {
+            self.searches.lock().unwrap().clone()
         }
     }
 
@@ -12466,9 +12472,10 @@ mod jira_request_path {
             &self,
             _: &JiraConnection,
             token: &ApiToken,
-            _: &str,
+            text: &str,
         ) -> Result<Vec<Issue>, IssueLoadError> {
             self.tokens.lock().unwrap().push(token.expose().to_string());
+            self.searches.lock().unwrap().push(text.to_string());
             Ok(vec![found("ABC-2", 2)])
         }
     }
@@ -12606,6 +12613,18 @@ mod jira_request_path {
         };
         assert_eq!(searched.len(), 1);
         assert_eq!(rig.source.seen().last().map(String::as_str), Some("first"));
+        assert_eq!(rig.source.searched_for(), ["zzz"], "the typed text is sent");
+    }
+
+    #[test]
+    fn a_search_with_no_token_file_asks_nothing() {
+        let mut rig = rig();
+        send(&mut rig.app, FormMsg::SourceChanged(BranchSource::Issue));
+        let asked = rig.source.seen().len();
+        std::fs::remove_file(rig.token_file()).unwrap();
+        send(&mut rig.app, FormMsg::IssueQueryChanged("zzz".to_string()));
+        assert_eq!(rig.source.seen().len(), asked, "the search asked nothing");
+        assert!(rig.source.searched_for().is_empty());
     }
 
     #[test]
