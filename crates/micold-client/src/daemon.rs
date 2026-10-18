@@ -989,7 +989,19 @@ fn provisioning_sink(id: DaemonId, output: &mpsc::Sender<Message>) -> EventSink 
     let sender = std::sync::Mutex::new(output.clone());
     std::sync::Arc::new(move |event| {
         if let Ok(mut sender) = sender.lock() {
-            let _ = sender.try_send(Message::daemon(id, ConnectionMsg::Provisioning(event)));
+            // A failed install is said once, so it is not dropped for a full channel the way a
+            // progress event is: it is retried for a moment first (feature 806, FR-012).
+            let keep = matches!(event, ProvisionEvent::Warned(_));
+            let mut message = Message::daemon(id, ConnectionMsg::Provisioning(event));
+            for _ in 0..if keep { 100 } else { 1 } {
+                match sender.try_send(message) {
+                    Err(e) if e.is_full() => {
+                        message = e.into_inner();
+                        std::thread::sleep(std::time::Duration::from_millis(10));
+                    }
+                    _ => break,
+                }
+            }
         }
     })
 }

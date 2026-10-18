@@ -1956,6 +1956,10 @@ fn reduce(state: &mut State, model: &mut Model<'_>, msg: Msg) -> Vec<Outcome> {
         Msg::Provisioning(id, event) => {
             if model.links.state(id) == Some(&DaemonState::Starting) {
                 match &event {
+                    // A new attempt re-runs the install of a CLI that failed: say it once.
+                    ProvisionEvent::Entered(Step::Acquire) => {
+                        state.install_warnings.remove(&id);
+                    }
                     ProvisionEvent::InstallLine(line) => {
                         state
                             .diagnostics

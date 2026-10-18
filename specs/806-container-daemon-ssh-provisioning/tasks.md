@@ -242,11 +242,11 @@ only; a blocked Codex install shows npm's output and the daemon still connects (
 ### Tests (write first, must fail)
 
 - [X] T071 [P] [US1] Write tests in `crates/micold-core/src/sandbox/mod.rs`: a `SandboxProfile` deserialised without `ai_clis` has `all()` (D3); an empty selection round-trips; extend `crates/micold-core/tests/settings_released_image_migration.rs` with the `ai_clis` rows of the read-rules table
-- [ ] T072 [P] [US1] Write form tests in `crates/micold-client/src/ui/settings/container_fields.rs`: one checkbox per `AiCli::ALL`; a newly added daemon has only Claude Code ticked; the "changes apply at the next start" note; an empty selection saves; a change on a running daemon goes through the restart confirmation; the section is not shown for a remote SSH daemon (US6 #3)
-- [ ] T073 [P] [US5] Write client tests in `crates/micold-client/src/features/daemons.rs`: `InstallLine` events show in the row; `ProvisionWarning`s from `Provisioned.warnings` are listed in the row and in recent errors naming the CLI with the installer output (US5 #1, FR-012)
-- [ ] T074 [P] [US1] Extend `crates/micold-client/tests/unavailable_default_says_so.rs`: a stored default AI CLI that is deselected, or whose install failed, starts nothing, substitutes nothing and says it is not available on that daemon (D4)
+- [X] T072 [P] [US1] Write form tests in `crates/micold-client/src/ui/settings/container_fields.rs`: one checkbox per `AiCli::ALL`; a newly added daemon has only Claude Code ticked; the "changes apply at the next start" note; an empty selection saves; a change on a running daemon goes through the restart confirmation; the section is not shown for a remote SSH daemon (US6 #3)
+- [X] T073 [P] [US5] Write client tests in `crates/micold-client/src/features/daemons.rs`: `InstallLine` events show in the row; `ProvisionWarning`s from `Provisioned.warnings` are listed in the row and in recent errors naming the CLI with the installer output (US5 #1, FR-012)
+- [X] T074 [P] [US1] Extend `crates/micold-client/tests/unavailable_default_says_so.rs`: a stored default AI CLI that is deselected, or whose install failed, starts nothing, substitutes nothing and says it is not available on that daemon (D4)
 - [ ] T075 [US5] Add to `crates/micold-daemon/tests/sandbox_real_provision.rs`: a stand-in CLI whose install fails → warning with its output, daemon connected, that CLI not offered, the other offered (US5 #1); deselecting a CLI stops it being offered after restart (US1 #2); under the `NoOutbound` posture the install goes through the relay and completes, and with the relay forced to fail it fails naming the posture (`PostureBlocksDownload`) within its bound (edge case "No-outbound network posture")
-- [ ] T076 [P] [US1] Extend `crates/micold-client/tests/gates/container_section_fits.rs` with the five AI CLI checkboxes
+- [X] T076 [P] [US1] Extend `crates/micold-client/tests/gates/container_section_fits.rs` with the five AI CLI checkboxes
 
 ### Implementation
 
