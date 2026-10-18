@@ -49,6 +49,15 @@ fn occurrences(needle: &str) -> Vec<(String, String)> {
     found
 }
 
+/// What no behaviour reveals: a second caller of the capability would bypass the gate that
+/// `jira_request_path` runs. The file, not the line, is pinned, so a refactor inside it passes.
+#[test]
+fn the_source_is_asked_for_only_in_the_gate_module_and_once() {
+    let uses = occurrences(".jira_source()");
+    assert_eq!(uses.len(), 1, "{uses:?}");
+    assert_eq!(uses[0].0, "crates/micold-client/src/shell/issues.rs", "{uses:?}");
+}
+
 // The gate itself (switch off, no connection, no token file, a rotated token) is run by
 // `jira_request_path` in `main_tests.rs`; what stays here is the structure no behaviour reveals.
 

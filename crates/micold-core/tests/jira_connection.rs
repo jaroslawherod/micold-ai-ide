@@ -163,5 +163,11 @@ fn the_token_file_is_named_after_the_project_in_the_jira_directory() {
 fn the_token_directory_is_jira_under_the_data_dir() {
     use micold_core::paths::data_dir;
     use micold_core::store::jira_token_dir;
-    assert_eq!(jira_token_dir(), data_dir().map(|dir| dir.join("jira")));
+    let dir = jira_token_dir();
+    // The literal directory name is the contract: changing it would orphan stored tokens.
+    assert_eq!(
+        dir.as_deref().and_then(|d| d.file_name()),
+        data_dir().map(|_| std::ffi::OsStr::new("jira")),
+    );
+    assert_eq!(dir.as_deref().and_then(|d| d.parent()), data_dir().as_deref());
 }
