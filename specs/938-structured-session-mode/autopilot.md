@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-cl0lw3
 - **Started**: 2026-10-18
 - **Phase**: M5
-- **Next step**: M5 verify (T031–T032 implemented, green), then reviews, gate, PR
+- **Next step**: M5 PR to open (reviews done, gate green); then M6
 
 ## Pull requests
 
@@ -31,7 +31,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T011–T021 | full | daemon runs a structured session and streams events; lifecycle parity | #1056 | merged |
 | M3 | T022–T028 | full | first prompt and user messages | #1064 | merged |
 | M4 | T029–T030 | full | resume | #1072 | merged |
-| M5 | T031–T032 | full | late and multiple viewers | — | in progress |
+| M5 | T031–T032 | full | late and multiple viewers | to open | reviews done, gate green |
 | M6 | T033–T036 | full | terminal-only requests refused | — | planned |
 | M7 | T049–T055 | full | event history saved under Save terminal history, restored after a daemon restart | — | planned |
 | M8 | T037–T047, T056 | full | chevron entry, row marker, log pane, user guide, setting note | — | planned |
@@ -78,6 +78,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M4 review A (code-review high, sonnet) | 2 | 98bcb395bfd2300f09a61eb563ade201255d60af:cea110aaea3aabc4c2f93cc0e196486797906f49 | CLEAN |
 | M4 review B (conformance, sonnet) | 1 | 6a0863fabf5c27b5ea526eb41d05e07bf2d31892:6574ac82466bbcc1f1f37374b317511a52d9889a | CLEAN |
 | Revision review spec (sonnet) | 2 | 7497d055378edd3e6c97a8eea28e417fb1c95801:1b32faee25fb96fda33a6c60adb7b7a6f022e6f6 | CLEAN (1 MINOR fixed: FR-021b and scenario 7 cover purge at start with saving off) |
+| M5 review A (code-review high) | 1 | 08ffe9fb82c67bdbf328f60fed45034f77cf54fd:404a706fc8eb3bff573d8b0a9d4d72f748468f22 | 9 findings: 1 MAJOR declined (F1 per-viewer serialization), 8 MINOR declined |
+| M5 review B (conformance, sonnet) | 1 | 08ffe9fb82c67bdbf328f60fed45034f77cf54fd:404a706fc8eb3bff573d8b0a9d4d72f748468f22 | CLEAN |
 
 ## Declined review findings
 
@@ -109,22 +111,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M4 | A 1 | F8 stand-ins stopped only at each test's end | a failing case ends its test process's runtime and the daemon's process groups with it, as in the M2/M3 structured tests; MINOR |
 | Revision | spec 1 | F4 User Story 7 before User Story 6 | US6's number is referenced by merged tasks, plan and PRs; renumbering churns merged artifacts; tasks.md notes the order |
 | Revision | plan 1 | F1 `format.rs` split has no task | T052 already names `terminal_history/format.rs` and the pinned fixture test |
+| M5 | A 1 | F1 MAJOR snapshot measured and encoded per viewer on the async worker; clone under the history lock | R6 sends each viewer its own snapshot; the history is bounded (R5, 64 MiB) and a local daemon has a handful of viewers; measuring adds one serialization pass to the one framing already does; caching sizes or an `Arc` history is an optimisation outside T032 |
+| M5 | A 1 | F2 a viewer of a deleted session keeps its `EventStream` until it stops viewing; F3 a start racing a delete re-inserts the entry | the client stops viewing a deleted session; the race needs a start and a delete of one id at once; MINOR |
+| M5 | A 1 | F4 stand-in warn logged per viewer; F5 lag re-snapshot unthrottled into the unbounded client channel | MINOR; a lag needs 1,024 events unread by one viewer |
+| M5 | A 1 | F6 continuation rule is adjacency-based | Decision 12: a re-snapshot starting one past the last held seq holds the same events onward, so keeping the log loses nothing; MINOR |
+| M5 | A 1 | F7–F9 test-only bounds setter is `pub`, a second byte-count writer, `MESSAGE_OVERHEAD` comment vs value | the codebase's test setters are `pub` and documented; 256 leaves margin over the ~120 bytes measured; MINOR |
 
 ## Handover
 
-- **Done**: branch reset to origin/main (768812fb, #1072 recorded); T031–T032 implemented and
-  ticked in 0ef4827e (tests/structured_history.rs 7 tests green, lag case 20/20; mutant checks and
-  cycle 10 in tdd/cycle-log.md; U14 in test-list; wire.md client rule amended, Decision 12).
-  Code: `structured.rs` `StreamBounds`, `EventStream::with_bounds`, `MESSAGE_LIMIT`,
-  `history_messages`, `on_wire`; `server.rs` `stream_events`; `state.rs`
-  `set_event_stream_bounds`, `event_bounds`, `remove_live_by_ids` drops `event_streams`.
-- **Gate**: `scripts/gate.sh` started detached at handover; log
-  `$SCRATCHPAD/m5/gate.log` (SCRATCHPAD per cloud.md). Hold on it with `scripts/autopilot/hold.sh`
-  (it ends with `GATE_EXIT=<code>`) before rerunning.
-- **Next**: tasks/verify.md for M5 (`cargo test -p micold-daemon --test structured_history`),
-  then reviews A/B (review.md), gate, push with
-  `--force-with-lease=claude/project-thread-cl0lw3:`, PR title/body to the scratchpad, `PR: to-open`.
-- **Open findings**: none. No PR opened yet.
+None.
 
 ## Open escalation
 
