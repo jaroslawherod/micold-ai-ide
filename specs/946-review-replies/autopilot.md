@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #946
 - **Worktree branch**: claude/project-thread-jjniz9
 - **Started**: 2026-10-17
-- **Phase**: milestone M3
-- **Next step**: M3 PR: orchestrator opens it from the scratchpad pr-title.md/pr-body.md, waits on CI, merges; then M4 (pr-title.md/pr-body.md in the scratchpad)
+- **Phase**: milestone M4
+- **Next step**: M4 implement (see Handover), then verify/review/gate/PR
 
 ## Pull requests
 
@@ -20,6 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #950 | design (spec, plan, tasks) | merged (rebase) | 1a621e02d4181bd2120a6febb9d121397ce27872 |
 | #969 | M1 | merged (rebase); `remote daemon over a real sshd` failed once in ssh_real_concurrent (timing, unrelated), passed on re-run | e12d7c2c4849b3e6b2b6a283c8f0224e9b63fe05 |
 | #981 | M2 | merged (rebase); `build + test (windows-latest)` failed once in history_stop_request::ten_busy_sessions_are_all_saved_within_the_bound (timing, unrelated), passed on one re-run | 0b2a7018c3675b303aa3051a6174f29ad28f0f5a |
+| #986 | M3 | merged (rebase) | 7760297461597a165b3d0d03d93843cc7f62438e |
 
 ## Milestones
 
@@ -27,8 +28,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T018 | full | Send review types the documented batch with C-references; review file v2, protocol 49 | #969 | merged |
 | M2 | T019–T034 | full | report_review_comment; cards show Applied/Answered and replies in every window, after restart | #981 | merged |
-| M3 | T035–T046 | full | Mark a Sent comment by hand; read a full reply | (to open) | PR ready |
-| M4 | T047–T056 | full | Review panel: rows, counts, jump, draft edit/delete, panel buttons | | planned |
+| M3 | T035–T046 | full | Mark a Sent comment by hand; read a full reply | #986 | merged |
+| M4 | T047–T056 | full | Review panel: rows, counts, jump, draft edit/delete, panel buttons | | in progress |
 | M5 | T057–T067 | full | Comments follow their code; next batch names new lines | | planned |
 
 Polish T068–T070 changes no code: left to the close unit. M1 has 18 tasks (over ~10): Foundational
@@ -80,7 +81,16 @@ split along s6 (M3) is the only scenario split with a deliverable on each side.
 
 ## Handover
 
-None.
+M4 in progress (branch reset to origin/main 77602974; nothing committed yet when this was written, check `git status`).
+Done (tests green, `cargo test -p micold-client --lib review_`): T047+T050 `ui/material/review_panel_row.rs` (new, registered in mod.rs; `ReviewPanelRow::new(lines_label,text,Status,roles)` with `.reply .selected .not_in_diff .on_press .on_edit .on_delete`, `HEIGHT` 104, `status_label`), T048+T051 `.highlighted(bool)` on `ReviewCommentCard` (Parts.highlighted, 2px primary outline). Ticked in tasks.md. Tests were written together with the implementation (not red-first): say so in tdd/cycle-log.md (add an M4 section).
+Next: T049+T052 in `features/changes.rs` + `tests/features_changes.rs` (helpers there: `showing_with`, `reported`, `comment`, `push`, `select`). Design decided:
+- `Panel { open (default true), focus: Option<CommentId>, offset, viewport, hidden: Option<Why>, to_show: bool }` as `OpenView.panel` (add to `Msg::Opened` init); `Msg::{PanelToggled, PanelScrolled{offset,viewport}, PanelRowSelected(CommentId)}`; edit/delete/Show all/send/clear/discard reuse EditComment, DeleteComment, ShowReply, SendPressed, ClearSentPressed, DiscardPendingPressed (no new messages).
+- `PanelRow { id, path, side, lines ("Line 3"/"Lines 3–5", "Old line…" for Side::Old), text (start, `reply::shortened(.., 200)`), status, reply: Option<String> (display + shortened), not_in_diff (shown_list is Some and lacks the path), selected (== focus), editable (Draft && !sending), has_full_reply }`; `panel_rows(state)` sorted by path bytewise, range start, side (New first), created; `status_counts(state) -> [(Status,usize)]`; `panel_empty_text`; `review_toolbar_label` "Review (n)" (n = comments).
+- `Jump::{Shown{path,line}, Hidden(Why)}`, `Why::{KindToggledOff, NotListed}` with `message()`: not listed and any toggle off -> KindToggledOff, else NotListed; PR source -> NotListed. `PanelRowSelected`: Shown -> select file like FileSelected, set focus, `to_show`; when diff already loaded for the file (or on DiffRead) set `diff_offset` = row index * diff_view::ROW_HEIGHT (20; row index via `micold_core::review::diff::UnifiedIndex`/`SideIndex` by `state.layout`, minus 2 rows) and return new `Effect::ScrollDiff{offset}`; Hidden -> `panel.hidden=Some(why)`, focus None, no jump.
+- Scrolling plumbing: `VirtualRows::id(Id)` -> `Scrollable::id`; `DiffView::scroll_id`; `pub static DIFF_SCROLL_ID` LazyLock in ui (like SIDEBAR_SCROLL_ID in ui/sidebar.rs, re-exported in ui/mod.rs); `shell/changes.rs::run` maps `Effect::ScrollDiff` to `iced::widget::operation::scroll_to(DIFF_SCROLL_ID.clone(), AbsoluteOffset{x:0,y})`.
+- VirtualRows has ONE fixed row height, so no file-header rows: T053 puts the file path in each row's `lines_label` ("path · Lines 3–5"); record this as a Decision in the ledger.
+- 200-comment timing test as the client's existing timing tests do (SC-006, < 100 ms).
+Then T053 (ui/changes.rs third pane right of diff via `container(panel_pane).width(FillPortion(2))`, toolbar toggle "Review (n)" ToggleChip, panel header with Send review / Clear sent / Discard drafts moved from the main header, hidden-reason text, `.highlighted(focus==id)` in `comment_or_editor`), T054 (showcase poses in showcase/sections/review.rs + catalogue.rs), T055 (docs/user-guide/reviewing-changes.md), T056 (visual pass cannot run here, no xdotool: say so in PR body, create specs/946-review-replies/visual-pass/ note). Then verify/review A+B/gate (`scripts/gate.sh`)/push/PR text per the cloud overrides in the prompt (PR title "#946: Diff view: inline review comments batched and sent to the agent (M4)").
 
 ## Open escalation
 
