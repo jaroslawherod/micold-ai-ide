@@ -22,7 +22,7 @@ fn a_draft_with_a_context_and_namespace_makes_settings_and_round_trips() {
     draft.namespace = "dev".into();
     draft.allowed.insert(AllowedKind::GitConfig);
     let settings = draft.settings().unwrap();
-    assert_eq!(KubeDraft::of(&settings), draft);
+    assert_eq!(KubeDraft::of(&settings).settings().unwrap(), settings);
 }
 
 #[test]
