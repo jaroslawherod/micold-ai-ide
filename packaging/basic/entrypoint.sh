@@ -19,7 +19,10 @@ home="${MICOLD_HOME:-${HOME:-/}}"
 
 if ! grep -q "^[^:]*:[^:]*:${uid}:" /etc/passwd; then
   if [ -w /etc/passwd ]; then
-    echo "micold:x:${uid}:${gid}:micold:${home}:/bin/sh" >>/etc/passwd
+    # The image's own `micold` entry is for the Kubernetes pod's uid 10001; the client logs in as
+    # `micold`, so that name must resolve to this uid. Rewrite in place: /etc itself is not writable.
+    rest="$(grep -v '^micold:' /etc/passwd || true)"
+    printf '%s\nmicold:x:%s:%s:micold:%s:/bin/sh\n' "$rest" "$uid" "$gid" "$home" >/etc/passwd
   else
     echo "micold-entrypoint: /etc/passwd is not writable; sshd cannot resolve uid ${uid}" >&2
   fi
