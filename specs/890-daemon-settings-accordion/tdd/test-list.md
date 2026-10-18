@@ -12,3 +12,4 @@ lettered case. M2 and M3 add their own rows.
 | U5 | unit | Without summary (marker or not) the header height is today's 40dp | FR-013, US3-2 | T001 e | DONE | `accordion_section::tests::a_plain_header_is_as_tall_as_today` |
 | U6 | unit | Summary + marker keep one toggle per press/Space/Enter, no focus stop in a closed body | FR-013, SC-005 | T001 f | DONE | `accordion_section::tests::a_summary_and_marker_leave_the_headers_behaviour_alone` |
 | U7 | unit | The showcase entry poses closed with summary, open, closed required, live toggle | FR-015, US3-4 | T002 | DONE | `tests/showcase_completeness.rs::the_accordion_section_poses_its_summary_and_marker` |
+| U8 | unit | An empty summary is drawn as none | FR-013 | T003 | DONE | `accordion_section::tests::an_empty_summary_is_drawn_as_none` |

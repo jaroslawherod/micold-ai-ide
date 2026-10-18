@@ -25,3 +25,11 @@ passed, 0 failed.
 reads the same draw; the focus-stop counter takes a section (`stops`). Deviation from research R4:
 the header row drops the `Space::Fill` when a summary is shown and lets the title column fill
 instead — with both filling, the summary would be cut at half the header.
+
+### M1 review A fixes
+
+- **U8** (added): an empty summary is drawn as none. Red with the fix reverted
+  (`cargo test -p micold-client --lib accordion_section`): `an_empty_summary_is_drawn_as_none`
+  FAILED, `left: ["Network", "", "\u{e313}"] right: ["Network", "\u{e313}"]`. Green: 13 passed.
+- U1 strengthened: both lines must fit inside the fixed 40dp header (the button's
+  `density::BUTTON_BASE`); passes. U3 finds the summary by its text rather than by size.

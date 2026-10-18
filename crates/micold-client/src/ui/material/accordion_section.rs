@@ -98,7 +98,7 @@ impl<'a, M: Clone + 'a> From<AccordionSection<'a, M>> for Element<'a, M> {
             s.title
         };
         let title = Text::new(title, TypeRole::Action, s.roles);
-        let header: Element<'a, M> = match s.summary.filter(|_| !s.open) {
+        let header: Element<'a, M> = match s.summary.filter(|text| !s.open && !text.is_empty()) {
             // The summary is a second line of the same button, so the header stays one press
             // target and one focus stop (FR-011, FR-013). The column fills the row, so the
             // summary is cut against everything the chevron leaves it.
@@ -318,6 +318,7 @@ mod tests {
     fn a_closed_section_paints_its_summary_under_the_title() {
         for r in [roles(), dark_roles()] {
             let mut m = Mounted::new(section(false, r).summary(SUMMARY));
+            let header = m.node.children()[0].bounds();
             let painted = m.painted_text();
             let title = painted_with("Network", &painted).expect("the title is painted");
             let summary = painted_with(SUMMARY, &painted)
@@ -340,6 +341,11 @@ mod tests {
             assert!(
                 summary.bounds.y >= title.bounds.y + title.bounds.height - 0.5,
                 "the summary sits under the title: {summary:?} vs {title:?}"
+            );
+            assert!(
+                title.bounds.y >= header.y - 0.5
+                    && summary.bounds.y + summary.bounds.height <= header.y + header.height + 0.5,
+                "both lines fit inside the fixed-height header {header:?}: {title:?}, {summary:?}"
             );
         }
     }
@@ -368,7 +374,7 @@ mod tests {
         let painted = m.painted_text();
         let summary = painted
             .iter()
-            .find(|p| p.size == TypeRole::Caption.size() && p.content != "Network")
+            .find(|p| p.content.starts_with("Docker"))
             .unwrap_or_else(|| panic!("the summary is painted: {painted:?}"));
         assert!(
             summary.content.ends_with('…'),
@@ -406,6 +412,22 @@ mod tests {
                 "an open section's title has no marker: {open:?}"
             );
         }
+    }
+
+    /// An empty summary is no summary: the header is drawn as without one (review A, M1).
+    #[test]
+    fn an_empty_summary_is_drawn_as_none() {
+        let contents = |s: AccordionSection<'static, String>| -> Vec<String> {
+            Mounted::new(s)
+                .painted_text()
+                .into_iter()
+                .map(|p| p.content)
+                .collect()
+        };
+        assert_eq!(
+            contents(section(false, roles()).summary("")),
+            contents(section(false, roles())),
+        );
     }
 
     /// Without a summary or a marker the header is as tall as today; the marker alone does not
