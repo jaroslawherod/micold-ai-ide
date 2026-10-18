@@ -48,6 +48,7 @@ pub struct Typeahead<'a, M> {
     on_focus: Option<M>,
     on_dismiss: Option<M>,
     id: Option<iced::widget::Id>,
+    in_flow: bool,
 }
 
 impl<'a, M: Clone + 'a> Typeahead<'a, M> {
@@ -81,6 +82,7 @@ impl<'a, M: Clone + 'a> Typeahead<'a, M> {
             on_focus: None,
             on_dismiss: None,
             id: None,
+            in_flow: false,
         }
     }
 
@@ -102,6 +104,14 @@ impl<'a, M: Clone + 'a> Typeahead<'a, M> {
     /// result set — which is what lets [`Self::empty_message`] ever be seen.
     pub fn open(mut self, open: bool) -> Self {
         self.open = open;
+        self
+    }
+
+    /// Lay the result list out beneath the field in the parent's flow, on the parent's own
+    /// surface, instead of floating it: for a field that sits in a card (a dialog) which the list
+    /// should be inside of. Open and close are not animated in this mode.
+    pub fn in_flow(mut self, in_flow: bool) -> Self {
+        self.in_flow = in_flow;
         self
     }
 
@@ -166,6 +176,7 @@ impl<'a, M: Clone + 'a> From<Typeahead<'a, M>> for Element<'a, M> {
             on_focus,
             on_dismiss,
             id,
+            in_flow,
         } = t;
 
         let highlighted_enabled = highlighted
@@ -180,6 +191,7 @@ impl<'a, M: Clone + 'a> From<Typeahead<'a, M>> for Element<'a, M> {
             empty_message,
             on_pick.as_deref(),
             r,
+            in_flow,
         );
 
         // Clearing is emptying the query, so it goes through the caller's own input handler
@@ -218,13 +230,16 @@ impl<'a, M: Clone + 'a> From<Typeahead<'a, M>> for Element<'a, M> {
         // The list arrives and leaves rather than appearing and vanishing (FR-018, FR-019). The
         // wrapper animates what it looks like; `.exit(…)` tells the behaviour half how long to keep
         // producing an overlay at all, so the two cannot disagree about when the list is gone.
-        let menu = animated_menu(panel, open, r);
+        let menu = if in_flow {
+            panel
+        } else {
+            animated_menu(panel, open, r)
+        };
 
-        let mut behaviour = Behaviour::new(field, menu, open, GAP).exit(EXIT).keyboard(
-            highlighted,
-            row_count,
-            highlighted_enabled,
-        );
+        let mut behaviour = Behaviour::new(field, menu, open, GAP)
+            .exit(EXIT)
+            .keyboard(highlighted, row_count, highlighted_enabled)
+            .in_flow(in_flow);
 
         // Enter takes the highlighted row, so the message is resolved here rather than in the
         // behaviour half — which knows an index but nothing about what sits at it.

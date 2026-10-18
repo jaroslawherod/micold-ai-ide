@@ -58,6 +58,9 @@ pub struct Row {
     /// What the row stands for, so a list that reuses the row for another choice starts its
     /// tooltip's wait again. See [`Row::key`].
     pub key: Option<u64>,
+    /// Keep each line of the row to one line, cut with "…" where the width runs out, instead of
+    /// wrapping. See [`Row::single_line`].
+    pub single_line: bool,
 }
 
 impl Row {
@@ -70,7 +73,16 @@ impl Row {
             details: None,
             tooltip: None,
             key: None,
+            single_line: false,
         }
+    }
+
+    /// Keep the label (and the second line, if any) to one line each, cut with "…" around the
+    /// emphasis where the width runs out — for a list whose names can be longer than its width and
+    /// whose rows must stay one height. Without it a row with details wraps (038).
+    pub fn single_line(mut self) -> Self {
+        self.single_line = true;
+        self
     }
 
     /// Give the row a second line: `text` under the label, smaller and lower in emphasis, with
@@ -216,7 +228,7 @@ pub(super) fn row_element<'a, M: Clone + 'a>(
                 details_base
             };
             let label = EmphasisedLabel::<M>::new(item.label, item.spans, ROW_ROLE, base, accent)
-                .wrapping();
+                .wrap(!item.single_line);
             let details = EmphasisedLabel::<M>::new(
                 details,
                 detail_spans,
@@ -224,7 +236,7 @@ pub(super) fn row_element<'a, M: Clone + 'a>(
                 details_base,
                 details_accent,
             )
-            .wrapping();
+            .wrap(!item.single_line);
 
             // The marker is centred on the label's first line, not on the row: a row five lines
             // tall with its check half-way down would point at no line in particular.
@@ -324,7 +336,20 @@ pub(super) fn menu_element<'a, M: Clone + 'a>(
     empty_message: Option<String>,
     on_pick: Option<&dyn Fn(usize) -> M>,
     r: Roles,
+    inline: bool,
 ) -> Element<'a, M> {
+    // In flow, the list sits on the surface it is part of (a dialog's card) rather than floating on
+    // a surface of its own, so it takes the menu's padding and nothing of its elevation or outline.
+    let panel = move |content: Element<'a, M>| -> Element<'a, M> {
+        if inline {
+            iced::widget::container(content)
+                .padding(spacing::XS)
+                .width(Length::Fill)
+                .into()
+        } else {
+            super::menu_panel(content, Length::Fill, r, true, spacing::XS)
+        }
+    };
     if rows.is_empty() {
         // An open list with nothing to say occupies nothing, so the caller can leave it open
         // through an empty query without a bare surface appearing under the field (C3.2).
@@ -336,12 +361,10 @@ pub(super) fn menu_element<'a, M: Clone + 'a>(
         };
         // Prose about the search rather than a row of it, so it is `Caption` and muted — it must
         // not read as a result that can be picked.
-        return super::menu_panel(
-            super::Text::new(message, TypeRole::Caption, r).muted(),
-            Length::Fill,
-            r,
-            true,
-            spacing::XS,
+        return panel(
+            super::Text::new(message, TypeRole::Caption, r)
+                .muted()
+                .into(),
         );
     }
 
@@ -392,7 +415,7 @@ pub(super) fn menu_element<'a, M: Clone + 'a>(
     // `spacing::XS`, not §7.5's panel padding: the type-ahead's rows are the third copy of
     // the item row and T108 decides whether they become the shared one. Until then it keeps the
     // padding it had, rather than acquiring half of a change it is not part of.
-    super::menu_panel(capped, Length::Fill, r, true, spacing::XS)
+    panel(capped.into())
 }
 
 /// A single-line label whose matched characters are drawn in the emphasis treatment, truncated so
@@ -437,12 +460,13 @@ impl<M> EmphasisedLabel<M> {
         }
     }
 
-    /// Show the whole text, on as many lines as the width needs, instead of one truncated line.
+    /// Show the whole text, on as many lines as the width needs (`true`), instead of one truncated
+    /// line (`false`).
     ///
     /// A word wider than the label breaks inside the word, so nothing is cut or drawn outside the
     /// label (038 FR-004).
-    fn wrapping(mut self) -> Self {
-        self.wrap = true;
+    fn wrap(mut self, wrap: bool) -> Self {
+        self.wrap = wrap;
         self
     }
 }
@@ -847,7 +871,7 @@ mod tests {
             r.on_surface,
             r.primary,
         )
-        .wrapping()
+        .wrap(true)
         .into();
         let renderer = super::super::test_support::renderer();
         let mut tree = Tree::new(element.as_widget());
@@ -1002,6 +1026,31 @@ mod tests {
         );
     }
 
+    /// 968 B9: a single-line row with details keeps both lines to one line each, so a very long name
+    /// does not make its row taller than a short one.
+    #[test]
+    fn a_single_line_row_with_details_is_as_tall_for_a_long_name_as_for_a_short_one() {
+        let row = |label: &str| {
+            row_element(
+                Row::new(label, Vec::new())
+                    .single_line()
+                    .details("Location · repo", Vec::new()),
+                false,
+                false,
+                Some(()),
+                roles(),
+            )
+        };
+        let short = bounds_at(row("main"), 200.0, &[]);
+        let long = bounds_at(row(LONG_TITLE), 200.0, &[]);
+        assert!(
+            (long.height - short.height).abs() < TOLERANCE,
+            "a long name makes its row {}dp high, a short one {}dp",
+            long.height,
+            short.height,
+        );
+    }
+
     /// A7 (US1 scenario 7): the picked-row marker sits beside the first line, whatever the row's
     /// height.
     #[test]
@@ -1054,7 +1103,8 @@ mod tests {
     impl Listed {
         fn new(rows: Vec<Row>, highlighted: Option<usize>) -> Self {
             let renderer = super::super::test_support::renderer();
-            let mut element = menu_element::<()>(rows, highlighted, None, None, None, roles());
+            let mut element =
+                menu_element::<()>(rows, highlighted, None, None, None, roles(), false);
             let mut tree = Tree::new(element.as_widget());
             let node = element.as_widget_mut().layout(
                 &mut tree,
@@ -1071,7 +1121,7 @@ mod tests {
 
         /// The same list position by position, holding `rows` now: what a narrowed list is.
         fn rebuilt(mut self, rows: Vec<Row>) -> Self {
-            self.element = menu_element::<()>(rows, None, None, None, None, roles());
+            self.element = menu_element::<()>(rows, None, None, None, None, roles(), false);
             self.tree.diff(self.element.as_widget());
             self.node = self.element.as_widget_mut().layout(
                 &mut self.tree,

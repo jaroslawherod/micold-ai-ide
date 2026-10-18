@@ -60,6 +60,7 @@ pub struct Picker<'a, M, Theme = iced::Theme, Renderer = iced::Renderer> {
     on_pick: Option<M>,
     on_dismiss: Option<M>,
     on_focus: Option<M>,
+    in_flow: bool,
 }
 
 impl<'a, M: Clone + 'a, Theme, Renderer> Picker<'a, M, Theme, Renderer> {
@@ -86,7 +87,19 @@ impl<'a, M: Clone + 'a, Theme, Renderer> Picker<'a, M, Theme, Renderer> {
             on_pick: None,
             on_dismiss: None,
             on_focus: None,
+            in_flow: false,
         }
+    }
+
+    /// Lay the menu out beneath the field, in the parent's flow, instead of floating it: the
+    /// element grows to hold it, and a surface the picker sits on (a dialog's card) encloses it.
+    ///
+    /// Nothing is animated in this mode — the menu is there while `open` and absent otherwise —
+    /// and the keyboard rule is applied by the picker's own `update`, where the events arrive.
+    /// Dismissing by a press elsewhere is the caller's (a dialog's scrim does it).
+    pub fn in_flow(mut self, in_flow: bool) -> Self {
+        self.in_flow = in_flow;
+        self
     }
 
     /// Where the keyboard is, how many rows it can reach, and whether the one it is on can be
@@ -139,6 +152,31 @@ impl<'a, M: Clone + 'a, Theme, Renderer> Picker<'a, M, Theme, Renderer> {
     }
 }
 
+impl<M: Clone, Theme, Renderer> Picker<'_, M, Theme, Renderer> {
+    /// The field's layout, and the menu's when it is laid out in the flow beneath it.
+    fn parts<'l>(&self, layout: Layout<'l>) -> (Layout<'l>, Option<Layout<'l>>) {
+        if !(self.in_flow && self.open) {
+            return (layout, None);
+        }
+        let mut children = layout.children();
+        let field = children.next().unwrap_or(layout);
+        (field, children.next())
+    }
+
+    /// The keyboard rule's inputs and outputs, as the menu's overlay and the in-flow menu both read
+    /// them.
+    fn keys(&self) -> Keys<'_, M> {
+        Keys {
+            highlight: self.highlight,
+            rows: self.rows,
+            highlighted_enabled: self.highlighted_enabled,
+            on_move: self.on_move.as_deref(),
+            on_pick: self.on_pick.clone(),
+            on_dismiss: self.on_dismiss.clone(),
+        }
+    }
+}
+
 impl<M, Theme, Renderer> Widget<M, Theme, Renderer> for Picker<'_, M, Theme, Renderer>
 where
     M: Clone,
@@ -171,16 +209,30 @@ where
     }
 
     /// Only the field is laid out. The menu never occupies space in the form — that is the whole
-    /// point of anchoring it in an overlay (FR-001a).
+    /// point of anchoring it in an overlay (FR-001a) — unless the picker is [in flow](Self::in_flow).
     fn layout(
         &mut self,
         tree: &mut Tree,
         renderer: &Renderer,
         limits: &layout::Limits,
     ) -> layout::Node {
-        self.field
+        let (field_tree, menu_tree) = tree.children.split_at_mut(1);
+        let field = self
+            .field
             .as_widget_mut()
-            .layout(&mut tree.children[0], renderer, limits)
+            .layout(&mut field_tree[0], renderer, limits);
+        if !(self.in_flow && self.open) {
+            return field;
+        }
+        let (width, below) = (field.size().width, field.size().height + self.gap);
+        let room = Size::new(width, (limits.max().height - below).max(0.0));
+        let menu = self.menu.as_widget_mut().layout(
+            &mut menu_tree[0],
+            renderer,
+            &layout::Limits::new(Size::ZERO, room).width(width),
+        );
+        let size = Size::new(width, below + menu.size().height);
+        layout::Node::with_children(size, vec![field, menu.move_to(Point::new(0.0, below))])
     }
 
     fn update(
@@ -215,16 +267,43 @@ where
             }
         }
 
+        let (field_layout, menu_layout) = self.parts(layout);
+
+        if menu_layout.is_some() {
+            if let Event::Keyboard(keyboard::Event::KeyPressed { key, .. }) = event {
+                if let Some((message, claim)) = self.keys().message_for(key) {
+                    shell.publish(message);
+                    if claim == Claim::Taken {
+                        shell.capture_event();
+                        return;
+                    }
+                }
+            }
+        }
+
+        let (field_tree, menu_tree) = tree.children.split_at_mut(1);
         self.field.as_widget_mut().update(
-            &mut tree.children[0],
+            &mut field_tree[0],
             event,
-            layout,
+            field_layout,
             cursor,
             renderer,
             clipboard,
             shell,
             viewport,
         );
+        if let Some(menu_layout) = menu_layout {
+            self.menu.as_widget_mut().update(
+                &mut menu_tree[0],
+                event,
+                menu_layout,
+                cursor,
+                renderer,
+                clipboard,
+                shell,
+                viewport,
+            );
+        }
     }
 
     fn draw(
@@ -237,15 +316,27 @@ where
         cursor: mouse::Cursor,
         viewport: &Rectangle,
     ) {
+        let (field_layout, menu_layout) = self.parts(layout);
         self.field.as_widget().draw(
             &tree.children[0],
             renderer,
             theme,
             style,
-            layout,
+            field_layout,
             cursor,
             viewport,
         );
+        if let Some(menu_layout) = menu_layout {
+            self.menu.as_widget().draw(
+                &tree.children[1],
+                renderer,
+                theme,
+                style,
+                menu_layout,
+                cursor,
+                viewport,
+            );
+        }
     }
 
     fn mouse_interaction(
@@ -256,13 +347,24 @@ where
         viewport: &Rectangle,
         renderer: &Renderer,
     ) -> mouse::Interaction {
-        self.field.as_widget().mouse_interaction(
+        let (field_layout, menu_layout) = self.parts(layout);
+        let field = self.field.as_widget().mouse_interaction(
             &tree.children[0],
-            layout,
+            field_layout,
             cursor,
             viewport,
             renderer,
-        )
+        );
+        match menu_layout {
+            Some(menu_layout) => field.max(self.menu.as_widget().mouse_interaction(
+                &tree.children[1],
+                menu_layout,
+                cursor,
+                viewport,
+                renderer,
+            )),
+            _ => field,
+        }
     }
 
     fn operate(
@@ -272,9 +374,16 @@ where
         renderer: &Renderer,
         operation: &mut dyn Operation,
     ) {
+        let (field_layout, menu_layout) = self.parts(layout);
+        let (field_tree, menu_tree) = tree.children.split_at_mut(1);
         self.field
             .as_widget_mut()
-            .operate(&mut tree.children[0], layout, renderer, operation);
+            .operate(&mut field_tree[0], field_layout, renderer, operation);
+        if let Some(menu_layout) = menu_layout {
+            self.menu
+                .as_widget_mut()
+                .operate(&mut menu_tree[0], menu_layout, renderer, operation);
+        }
     }
 
     /// The list, floated beneath the field.
@@ -285,11 +394,23 @@ where
     fn overlay<'b>(
         &'b mut self,
         tree: &'b mut Tree,
-        layout: Layout<'_>,
+        layout: Layout<'b>,
         _renderer: &Renderer,
         _viewport: &Rectangle,
         translation: Vector,
     ) -> Option<overlay::Element<'b, M, Theme, Renderer>> {
+        if self.in_flow {
+            // The menu is in the tree, so only what the menu itself floats (a row's tooltip) is
+            // produced here.
+            let menu_layout = self.parts(layout).1?;
+            return self.menu.as_widget_mut().overlay(
+                &mut tree.children[1],
+                menu_layout,
+                _renderer,
+                _viewport,
+                translation,
+            );
+        }
         // Not `if !self.open`. A list that vanished the instant it closed would have nothing left
         // to fade, which is the defect this replaces — so the question is whether any of it is still
         // on screen, not whether the caller still wants it (contract picker-base §C1.5).
@@ -308,6 +429,14 @@ where
             ..bounds
         };
 
+        let keys = Keys {
+            highlight: self.highlight,
+            rows: self.rows,
+            highlighted_enabled: self.highlighted_enabled,
+            on_move: self.on_move.as_deref(),
+            on_pick: self.on_pick.clone(),
+            on_dismiss: self.on_dismiss.clone(),
+        };
         let (menu, state) = (&mut self.menu, &mut tree.children[1]);
         Some(overlay::Element::new(Box::new(Menu {
             content: menu,
@@ -316,14 +445,7 @@ where
             gap: self.gap,
             leaving,
             on_dismiss: self.on_dismiss.clone(),
-            keys: Keys {
-                highlight: self.highlight,
-                rows: self.rows,
-                highlighted_enabled: self.highlighted_enabled,
-                on_move: self.on_move.as_deref(),
-                on_pick: self.on_pick.clone(),
-                on_dismiss: self.on_dismiss.clone(),
-            },
+            keys,
         })))
     }
 }
