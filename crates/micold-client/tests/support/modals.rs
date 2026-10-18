@@ -61,7 +61,6 @@ pub fn modals() -> Vec<Modal> {
                     required: Default::default(),
                     path: PathBuf::from("/tmp"),
                     text: String::new(),
-                    error: None,
                 })
             },
         ),
@@ -83,7 +82,6 @@ pub fn modals() -> Vec<Modal> {
                     required: Default::default(),
                     dir_name: "wt".to_string(),
                     text: String::new(),
-                    error: None,
                 })
             },
         ),

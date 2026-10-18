@@ -115,8 +115,6 @@ pub struct WorktreeRenameDraft {
     pub dir_name: String,
     /// The current editable display name.
     pub text: String,
-    /// The last validation error, if the user tried to confirm an invalid name.
-    pub error: Option<micold_core::project::RenameError>,
     /// Whether the user left the name field or attempted a confirm (feature 937).
     pub required: RequiredMarks<FieldId>,
 }
@@ -393,7 +391,6 @@ pub fn rename_started(state: &mut crate::app::State, dir: String) {
         required: Default::default(),
         dir_name: dir,
         text,
-        error: None,
     });
 }
 
@@ -401,7 +398,6 @@ pub fn rename_started(state: &mut crate::app::State, dir: String) {
 pub fn rename_text_changed(state: &mut crate::app::State, text: String) {
     if let Some(draft) = &mut state.worktree.rename_draft {
         draft.text = text;
-        draft.error = None;
     }
 }
 
@@ -420,9 +416,11 @@ pub fn rename_confirmed(state: &mut crate::app::State) {
     };
     match state.workspace.set_worktree_name(&dir, &text) {
         Ok(()) => state.worktree.rename_draft = None,
-        Err(error) => {
+        // A blank name is the only refusal: the field reads `Missing` from the attempt, with no
+        // separate line (feature 937, FR-005, R4).
+        Err(_) => {
             if let Some(draft) = &mut state.worktree.rename_draft {
-                draft.error = Some(error);
+                draft.required.leave(FieldId::RenameWorktreeName);
             }
         }
     }

@@ -20,7 +20,8 @@ with these fields:
   AI CLIs installed on this computer, and a remove button. **Add run** adds another row.
 
 The dialog shows a `* required` line above its first field. Fields marked `*` must be filled: **Prompt**, **Type**, **Name** and **Base branch**. Ticket is
-optional and carries no mark.
+optional and carries no mark. **Start runs** is always available: press it with a required field empty and every empty
+required field shows "This field is required" at once, and no run starts. Typing into a field clears its message.
 
 Under the list the dialog shows the names it will create, for example
 `feat/login-page-1 → .claude/worktrees/feat-login-page-1`: the branch, then the worktree folder.

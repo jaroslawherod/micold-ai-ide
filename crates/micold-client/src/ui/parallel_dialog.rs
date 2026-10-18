@@ -70,6 +70,7 @@ pub fn modal<'a>(
         TextField::new("", &dialog.naming.name, r)
             .label("Name")
             .required(state(FieldId::RunName))
+            .error(dialog.name_error.clone())
             .supporting("e.g. login page")
             .track_focus(FieldId::RunName, focused)
             .on_input(|a0| msg(Msg::NameChanged(a0))),
@@ -123,7 +124,7 @@ pub fn modal<'a>(
     }
 
     material::Surface::new(
-        material::dialog::body(fields, actions(dialog, r)),
+        material::dialog::body(fields, actions(r)),
         SurfaceKind::Dialog,
         r,
     )
@@ -131,10 +132,11 @@ pub fn modal<'a>(
     .into()
 }
 
-fn actions<'a>(dialog: &ParallelDialog, r: Roles) -> Element<'a, Message> {
+fn actions<'a>(r: Roles) -> Element<'a, Message> {
     row![
-        Button::filled("Start runs", r)
-            .on_press_maybe(dialog.validate().is_ok().then_some(msg(Msg::Confirmed))),
+        // Always pressable: with a required field empty, pressing it marks them and starts nothing
+        // (feature 937, FR-012).
+        Button::filled("Start runs", r).on_press(msg(Msg::Confirmed)),
         Button::outlined("Cancel", r).on_press(msg(Msg::Dismissed)),
     ]
     .spacing(spacing::SM)

@@ -255,8 +255,13 @@ pub struct ParallelDialog {
     pub offered: Vec<AiCli>,
     /// What a new run starts on.
     pub default_cli: AiCli,
-    /// The first failing rule, shown once the user has changed something or pressed confirm.
+    /// The form's own failing rule (the run count, a provider not offered), shown once the user
+    /// has changed something or pressed confirm. Emptiness is never here: it is a required error
+    /// on the field (feature 937).
     pub error: Option<String>,
+    /// Why the Name cannot be turned into names, shown as the Name field's own error instead of
+    /// the required message (feature 937, FR-010).
+    pub name_error: Option<String>,
     /// Which fields the user has left and whether a confirm was attempted, for the required
     /// errors (feature 937). Fresh on open, dropped with the dialog.
     pub required: RequiredMarks<FieldId>,
@@ -320,6 +325,7 @@ impl ParallelDialog {
             offered: opening.offered,
             default_cli: opening.default_cli,
             error: None,
+            name_error: None,
         }
     }
 
@@ -371,8 +377,32 @@ impl ParallelDialog {
         Ok(())
     }
 
+    /// The refusal that is not about a field being empty and belongs to no one field: the run
+    /// count and the providers (feature 937, FR-010).
+    fn form_invalid(&self) -> Option<Invalid> {
+        if !(MIN_RUNS..=MAX_RUNS).contains(&self.runs.len()) {
+            return Some(Invalid::RunCount);
+        }
+        let cli = self.runs.iter().find(|cli| !self.offered.contains(cli))?;
+        Some(Invalid::ProviderNotOffered(*cli))
+    }
+
+    /// Why the Name cannot be made into branch and folder names, when it is not empty: the Name
+    /// field's own error, shown instead of the required message (feature 937, FR-010).
+    fn name_invalid(&self) -> Option<NamingError> {
+        if self.naming.type_.is_none() || self.naming.name.trim().is_empty() {
+            return None;
+        }
+        derive(&self.naming)
+            .err()
+            .or_else(|| self.derived_names().err())
+    }
+
+    /// Refreshes the two kinds of error the dialog shows besides the required ones: the form's own
+    /// line and the Name field's error. Emptiness is the fields' business ([`Self::required`]).
     fn revalidate(&mut self) {
-        self.error = self.validate().err().map(|invalid| invalid.to_string());
+        self.error = self.form_invalid().map(|invalid| invalid.to_string());
+        self.name_error = self.name_invalid().map(|error| error.to_string());
     }
 }
 
@@ -1216,8 +1246,11 @@ fn confirmed(state: &mut State) -> Effect {
     let Some(dialog) = &mut state.dialog else {
         return Effect::None;
     };
-    if let Err(invalid) = dialog.validate() {
-        dialog.error = Some(invalid.to_string());
+    // Every empty required field reads `Missing` at once; nothing is started while any is
+    // (feature 937, FR-006).
+    dialog.required.attempt();
+    if dialog.validate().is_err() {
+        dialog.revalidate();
         return Effect::None;
     }
     let dialog = state.dialog.take().expect("checked above");

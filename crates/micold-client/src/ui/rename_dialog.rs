@@ -7,7 +7,6 @@ use crate::ui::focus::TrackFocus;
 use crate::ui::material::{self, Button, RequiredLegend, SurfaceKind, Text, TextField, TypeRole};
 use iced::widget::{column, row};
 use iced::{Element, Length};
-use micold_core::project::RenameError;
 use micold_core::required::FieldRequirement;
 use micold_core::theme::ColorScheme;
 use micold_core::tokens;
@@ -21,7 +20,6 @@ pub(crate) struct RenameSpec<'a> {
     pub text: &'a str,
     /// How the name field is marked (feature 937): required, and missing once left or confirmed.
     pub required: FieldRequirement,
-    pub error: Option<RenameError>,
     pub on_input: fn(String) -> Message,
     pub on_confirm: Message,
     pub on_cancel: Message,
@@ -51,11 +49,6 @@ pub(crate) fn view<'a>(
         fields = fields.push(RequiredLegend::new(r));
     }
     fields = fields.push(input);
-
-    // Show the validation problem when a blank name was submitted.
-    if let Some(error) = spec.error {
-        fields = fields.push(Text::new(error.message(), TypeRole::Caption, r).tint(r.error));
-    }
 
     let actions = material::dialog::actions(row![
         Button::filled("Rename", r).on_press(spec.on_confirm),
