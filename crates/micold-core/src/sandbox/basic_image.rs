@@ -29,7 +29,7 @@ pub const BASIC_IMAGE_CONTENT_HASH: &str = "33a24de0abcf727f";
 ///
 /// `scripts/basic-image-hash.sh --check` and CI's pin check (`docker manifest inspect` of this
 /// reference) keep it honest.
-pub const BASIC_IMAGE: &str = "ghcr.io/jaroslawherod/micold-basic:33a24de0abcf727f@sha256:ab15041b7e70f400c8de089b75537c7d5a93f9eac9625311916b82b750f437aa";
+pub const BASIC_IMAGE: &str = "ghcr.io/jaroslawherod/micold-basic:6009b58e0dd70464@sha256:ab15041b7e70f400c8de089b75537c7d5a93f9eac9625311916b82b750f437aa";
 
 /// The tag a local build of `packaging/basic/` carries (`docker build -t micold-basic:dev`), and the
 /// one the real-runtime suite starts from by default.
