@@ -487,7 +487,6 @@ mod tests {
             links.states(),
             Path::new("/nonexistent"),
             None,
-            false,
             &Default::default(),
         );
     }

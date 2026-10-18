@@ -30,7 +30,8 @@ use micold_core::protocol::messages::{ClientMsg, DaemonMsg};
 use micold_core::provision::ai_cli::AiCliTable;
 use micold_core::provision::keys::DaemonKeys;
 use micold_core::provision::{
-    run as ssh_run, CancelToken, Egress, EventSink, Ownership, ProvisionTarget, StepBounds,
+    run as ssh_run, CancelToken, Egress, EventSink, Ownership, ProvisionEvent, ProvisionTarget,
+    Step, StepBounds,
 };
 use micold_core::sandbox::placement::PlacementKind;
 use micold_core::sandbox::{AiCliSelection, NetworkPosture};
@@ -58,9 +59,6 @@ pub struct Placement {
     pub kind: PlacementKind,
     /// The state directory the sandbox token lives in.
     pub state_dir: std::path::PathBuf,
-    /// Whether a build-fingerprint mismatch refuses the connection — true only for a locally built
-    /// image, whose daemon came from this same working tree (research R8).
-    pub strict_fingerprint: bool,
 }
 
 /// What the client presents to a sandboxed daemon.
@@ -69,11 +67,11 @@ pub struct Placement {
 /// remembered in memory, so a sandbox started by a previous run of this client is still reachable
 /// by this one. A missing token file is not fixed up here: the handshake refuses, which is the
 /// honest outcome, and the remedy is to restart the sandbox so a new token is issued.
-fn sandbox_credentials(token_path: &Path, strict_fingerprint: bool) -> Credentials {
+fn sandbox_credentials(token_path: &Path) -> Credentials {
     let token = micold_core::protocol::auth::Token::read_from(token_path).ok();
     Credentials {
         auth_token: token.map(|t| micold_core::protocol::messages::PresentedToken::new(t.as_str())),
-        require_fingerprint_match: strict_fingerprint,
+        require_fingerprint_match: false,
     }
 }
 
@@ -244,8 +242,6 @@ pub struct ActorSpec {
     pub key: ActorKey,
     /// How to reach it.
     pub dial: Dial,
-    /// Whether a build-fingerprint mismatch refuses the connection (a locally built image, R8).
-    pub strict_fingerprint: bool,
     /// Bumped when the user reconnects, so the actor restarts with the first delay of its backoff
     /// and a daemon is never dialled by two actors at once.
     pub epoch: u32,
@@ -291,14 +287,12 @@ pub fn actor_specs(
     states: &DaemonStates,
     state_dir: &Path,
     legacy_default: Option<DaemonId>,
-    strict_fingerprint: bool,
 ) -> Vec<ActorSpec> {
     actor_specs_answered(
         registry,
         states,
         state_dir,
         legacy_default,
-        strict_fingerprint,
         &BTreeMap::new(),
     )
 }
@@ -310,7 +304,6 @@ pub fn actor_specs_answered(
     states: &DaemonStates,
     state_dir: &Path,
     legacy_default: Option<DaemonId>,
-    strict_fingerprint: bool,
     drift: &BTreeMap<DaemonId, DriftChoice>,
 ) -> Vec<ActorSpec> {
     let keys = actor_keys(registry);
@@ -356,7 +349,6 @@ pub fn actor_specs_answered(
             Some(ActorSpec {
                 key,
                 dial,
-                strict_fingerprint,
                 epoch: states.epoch(entry.id),
                 resumed: states.resumed(entry.id),
             })
@@ -376,20 +368,12 @@ pub fn connections(
     states: &DaemonStates,
     state_dir: &Path,
     legacy_default: Option<DaemonId>,
-    strict_fingerprint: bool,
     drift: &BTreeMap<DaemonId, DriftChoice>,
 ) -> Subscription<Message> {
     Subscription::batch(
-        actor_specs_answered(
-            registry,
-            states,
-            state_dir,
-            legacy_default,
-            strict_fingerprint,
-            drift,
-        )
-        .into_iter()
-        .map(|spec| Subscription::run_with(spec, |spec| actor(spec.clone()))),
+        actor_specs_answered(registry, states, state_dir, legacy_default, drift)
+            .into_iter()
+            .map(|spec| Subscription::run_with(spec, |spec| actor(spec.clone()))),
     )
 }
 
@@ -705,7 +689,7 @@ async fn connect_and_pump(
         // place it would be easiest to lose.
         (Dial::Container { port, token_path }, _) => {
             let address = DialAddress::Loopback { port: *port };
-            let credentials = sandbox_credentials(token_path, spec.strict_fingerprint);
+            let credentials = sandbox_credentials(token_path);
             match connect_at(&address, CLIENT_BUILD, &credentials).await {
                 Ok(Some(c)) => Ok(c),
                 Ok(None) => Err(std::io::Error::new(
@@ -1119,6 +1103,9 @@ async fn container_attempt(
         return Err("this build cannot run `ssh`".to_string());
     };
     let bounds = StepBounds::container();
+    // The wait below is the runtime pulling the image and creating the container, which can take
+    // minutes: say so in the row instead of leaving it on a bare "starting" (feature 806).
+    sink(ProvisionEvent::Entered(Step::Acquire));
     let login = micold_core::provision::login::wait_for_login(
         host,
         reach.runtime.program(),
@@ -1505,14 +1492,14 @@ mod tests {
         let dir = std::path::Path::new("/nonexistent");
         let mut states = DaemonStates::default();
         states.insert(id, DaemonState::Starting);
-        let specs = actor_specs(&registry, &states, dir, None, false);
+        let specs = actor_specs(&registry, &states, dir, None);
         assert!(matches!(
             specs.as_slice(),
             [s] if matches!(&s.dial, Dial::Kubernetes { name, settings, .. }
                 if name == "Cluster" && settings.0.context.0 == "kind-dev" && settings.0.namespace.0 == "dev")
         ));
         states.insert(id, DaemonState::Unreachable { reason: "x".into() });
-        assert!(actor_specs(&registry, &states, dir, None, false).is_empty());
+        assert!(actor_specs(&registry, &states, dir, None).is_empty());
     }
 
     /// The answer to the drift prompt is part of the actor's identity, so giving it restarts the
@@ -1528,9 +1515,9 @@ mod tests {
         let mut states = DaemonStates::default();
         states.insert(id, DaemonState::Starting);
         let dir = std::path::Path::new("/nonexistent");
-        let asked = actor_specs(&registry, &states, dir, None, false);
+        let asked = actor_specs(&registry, &states, dir, None);
         let answer = std::collections::BTreeMap::from([(id, DriftChoice::Recreate)]);
-        let answered = super::actor_specs_answered(&registry, &states, dir, None, false, &answer);
+        let answered = super::actor_specs_answered(&registry, &states, dir, None, &answer);
         assert_ne!(asked[0], answered[0]);
         assert!(
             matches!(&asked[0].dial, Dial::Kubernetes { drift, .. } if drift.0 == DriftChoice::Ask)
@@ -1548,7 +1535,7 @@ mod tests {
         let dir = std::path::Path::new("/nonexistent");
         let mut states = DaemonStates::default();
         states.insert(id, DaemonState::Starting);
-        let specs = actor_specs(&registry, &states, dir, None, false);
+        let specs = actor_specs(&registry, &states, dir, None);
         assert!(
             matches!(specs.as_slice(), [s] if matches!(&s.dial, Dial::Ssh { target } if target.host == "build-box"))
         );
@@ -1559,7 +1546,7 @@ mod tests {
                 reason: "no route".into(),
             },
         );
-        assert!(actor_specs(&registry, &states, dir, None, false).is_empty());
+        assert!(actor_specs(&registry, &states, dir, None).is_empty());
     }
 
     use super::{container_target, ContainerReach};
@@ -1593,7 +1580,7 @@ mod tests {
         let base = std::path::Path::new("/state");
         let mut states = DaemonStates::default();
         states.insert(id, DaemonState::Starting);
-        let specs = actor_specs(&registry, &states, base, None, false);
+        let specs = actor_specs(&registry, &states, base, None);
         assert!(
             matches!(specs.as_slice(), [s] if matches!(&s.dial,
                 Dial::ContainerSsh { port: 7001, container_name, keys_dir, .. }
@@ -1603,7 +1590,7 @@ mod tests {
         );
 
         states.set_legacy(id, true);
-        let specs = actor_specs(&registry, &states, base, None, false);
+        let specs = actor_specs(&registry, &states, base, None);
         assert!(
             matches!(specs.as_slice(), [s] if matches!(&s.dial, Dial::Container { port: 7001, .. })),
             "{specs:?}"
@@ -1704,6 +1691,40 @@ mod tests {
 
     fn quiet() -> micold_core::provision::EventSink {
         std::sync::Arc::new(|_| {})
+    }
+
+    /// The row says "getting the image" while the actor waits for the container, which is the long
+    /// part of a first start (feature 806, T045).
+    #[tokio::test]
+    async fn a_container_start_announces_getting_the_image_before_it_waits() {
+        let events = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let seen = events.clone();
+        let sink: micold_core::provision::EventSink =
+            std::sync::Arc::new(move |e| seen.lock().unwrap().push(e));
+        let dir = tempfile::tempdir().unwrap();
+        let reach = ContainerReach {
+            port: 7001,
+            runtime: micold_core::sandbox::runtime::RuntimeKind::Docker,
+            container_name: "box-ctr",
+            keys_dir: dir.path(),
+            network: micold_core::sandbox::NetworkPosture::Outbound,
+            image: "img",
+            survive_logout: false,
+            time_zone: None,
+        };
+        // `NoSsh` never finds the container, so the attempt is still waiting when the timeout ends it.
+        let waited = tokio::time::timeout(
+            std::time::Duration::from_millis(300),
+            super::container_attempt(Some(&NoSsh), &reach, &sink),
+        )
+        .await;
+        assert!(waited.is_err(), "the container never answers");
+        assert_eq!(
+            events.lock().unwrap().first(),
+            Some(&micold_core::provision::ProvisionEvent::Entered(
+                micold_core::provision::Step::Acquire
+            ))
+        );
     }
 
     /// T011: a bring-up that cannot start `ssh` is a failure in words, with no retry loop behind
@@ -1930,11 +1951,11 @@ mod tests {
         states.insert(id, DaemonState::Starting);
         states.apply(id, DaemonEvent::Connected);
         states.apply(id, DaemonEvent::Lost("eof".into()));
-        let before = actor_specs(&registry, &states, dir, None, false);
+        let before = actor_specs(&registry, &states, dir, None);
         assert_eq!(before.len(), 1, "the attempts run in one actor");
 
         states.apply(id, DaemonEvent::Reconnect);
-        let after = actor_specs(&registry, &states, dir, None, false);
+        let after = actor_specs(&registry, &states, dir, None);
         assert_eq!(after.len(), 1);
         assert_ne!(after[0], before[0], "a new epoch restarts the one actor");
         assert!(
@@ -1944,9 +1965,9 @@ mod tests {
         assert_eq!(after[0].key, before[0].key);
 
         states.apply(id, DaemonEvent::GiveUp);
-        assert!(actor_specs(&registry, &states, dir, None, false).is_empty());
+        assert!(actor_specs(&registry, &states, dir, None).is_empty());
         states.apply(id, DaemonEvent::Reconnect);
-        assert_eq!(actor_specs(&registry, &states, dir, None, false).len(), 1);
+        assert_eq!(actor_specs(&registry, &states, dir, None).len(), 1);
     }
 
     /// T051 (FR-013): a remote daemon in every state but connected changes nothing of a connected
@@ -1978,7 +1999,7 @@ mod tests {
         baseline.insert(local, DaemonState::Starting);
         assert!(baseline.connected(local, outbox.clone()));
         let local_spec = |links: &DaemonLinks| {
-            actor_specs(&registry, links.states(), dir, None, false)
+            actor_specs(&registry, links.states(), dir, None)
                 .into_iter()
                 .find(|s| s.key.id == local)
         };

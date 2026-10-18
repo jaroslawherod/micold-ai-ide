@@ -33,7 +33,7 @@ fn specs(registry: &DaemonRegistry) -> Vec<ActorSpec> {
     for e in registry.entries() {
         states.insert(e.id, DaemonState::Starting);
     }
-    actor_specs(registry, &states, Path::new("/state"), None, false)
+    actor_specs(registry, &states, Path::new("/state"), None)
 }
 
 fn outbox() -> Outbox {
@@ -98,7 +98,7 @@ fn a_container_actor_dials_its_own_port_over_ssh_and_a_legacy_one_with_its_token
     );
     let mut states = DaemonStates::at_launch(&registry);
     states.set_legacy(boxed, true);
-    let spec = actor_specs(&registry, &states, Path::new("/state"), None, false)
+    let spec = actor_specs(&registry, &states, Path::new("/state"), None)
         .into_iter()
         .find(|s| s.key.id == boxed)
         .unwrap();
@@ -122,7 +122,7 @@ fn a_stopped_daemon_has_no_actor_so_it_is_neither_spawned_nor_reconnected() {
     let mut states = DaemonStates::default();
     states.insert(host, DaemonState::Stopped);
     states.insert(boxed, DaemonState::Starting);
-    let specs = actor_specs(&registry, &states, Path::new("/state"), None, false);
+    let specs = actor_specs(&registry, &states, Path::new("/state"), None);
     assert_eq!(specs.len(), 1);
     assert_eq!(specs[0].key.id, boxed);
 }

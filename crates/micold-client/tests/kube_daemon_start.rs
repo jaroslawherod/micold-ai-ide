@@ -132,7 +132,6 @@ async fn an_unreachable_cluster_fails_promptly_and_the_daemon_has_its_own_actor(
         &states,
         std::path::Path::new("/nonexistent"),
         None,
-        false,
     );
     assert!(specs
         .iter()

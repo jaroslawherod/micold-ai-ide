@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #806
 - **Worktree branch**: claude/project-thread-uwrpqv
 - **Started**: 2026-10-17
-- **Phase**: M5b
-- **Next step**: M5b part 1 shipped (PR files in the scratchpad); then M5b part 2 (*Handover*)
+- **Phase**: M5c
+- **Next step**: M5c part 2 (*Handover*)
 
 ## Pull requests
 
@@ -21,6 +21,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #982 | M2 shared provisioning | merged (Windows job failed once on an unrelated timing test, micold-daemon history_stop_request ten_busy_sessions_are_all_saved_within_the_bound; passed on re-run) | 198a12312b8b801dce177e47998024902732f0ac |
 | #988 | M3 static Linux daemons (two CI fixes: SIGPIPE in remote-daemon-bundle.test.sh; zig crashed on the Windows ARM64 runner, so musl daemons are built once in the Linux `linux-daemons` job and downloaded by packaging jobs) | merged | 32798973fe5df793f5c85b6ed52a84e52230591d |
 | #995 | M4 AI CLI install step + registry-only relay | merged | abe058a2424ea0551edb2f6667ac732064434557 |
+| #1018 | M5b part 1 (image pin, bridge env, notices, migration) | merged | 6dbe317600b3c8430dd392b5a94293c85e6fbf2f |
 | #998 | M5 subset (container daemons over SSH on the basic image; pulled in T047, T055, T065) | merged | d526eaca82b43d60d5f2eb85926259f0fefc45e4 |
 
 ## Milestones
@@ -96,9 +97,8 @@ Milestone notes:
 
 ## Handover
 
-M5b part 1 is committed on the branch (PR files in the scratchpad). **Done**: T049 re-pin (`BASIC_IMAGE` = tag `6009b58e0dd70464`, index digest `sha256:ab15041b…` from `basic-image.yml` run 39128313716 on `d526eaca`, read from ghcr's anonymous manifest endpoint); the bridge-started container daemon now gets `MICOLD_IMAGE_REFERENCE`, `TZ`, `MICOLD_IDLE_STOP=off` (survive_logout) and `XDG_DATA_HOME` through `ProvisionTarget.env` (`container_env` in `daemon.rs`; `Dial::ContainerSsh` carries `image` and `survive_logout`, `daemon::install_time_zone` is set at startup), which also closes follow-up (a) of the survive-logout idle env; T056 (`settings_released_image_migration.rs`); T058 + T062 (`DaemonView.notice`/`stop_blocked`, `Model.legacy_container`, `settings.legacy_container` set by `shell/sandbox.rs` after each sandbox message, `DaemonRegistry::clear_migration` after the first non-legacy `Started` on Basic); T069 (user guide "Which image it runs on").
-
-**Next step (fresh unit, M5b part 2)**: T045 (`prepare_keys`/`container_attempt` tests with a fake `SshHost`; the `Entered(Acquire)`/`Entered(CreateContainer)` events are not emitted by the actor), T046 geometry gate, T063, T064, T066, T068 (two-entry `Select`, archive picker), the real-runtime suites T048/T059/T067 (compile only here; CI's sandbox job runs them), T070 visual pass, and follow-up items (6) `strict_fingerprint` dead code, (7) "getting the image" row text. The history/idle real-runtime suites may now drop their `provision_then_restart` workaround (the bridge-started daemon has the container env): leave it until CI shows them green. The UI of the notices is not visually checked (T070).
+M5c part 1, uncommitted work committed on the branch (no PR yet; the gate has NOT run, reviews not run). Previous PR #1018 merged as 6dbe317600b3c8430dd392b5a94293c85e6fbf2f. **Done** (tasks ticked): T045 (the actor now emits `Entered(Step::Acquire)` before waiting for the container, so the row says "getting the image" = follow-up 7; test `a_container_start_announces_getting_the_image_before_it_waits`; the shell `prepare_keys` fake-host test of the old task text is superseded, the keys are made by `container_attempt` and `DaemonKeys::ensure` is tested in core), T046 (`tests/gates/container_section_fits.rs`, registered in `layout_snapshot.rs`), T063 (`argv.rs` test for both image choices), T064 + T066 (tests in `container_fields.rs`, restart confirmation for Own in `daemons_feature.rs`), T068 (the two-entry Select was already in; the archive "picker" stays the existing text field, there is no file dialog in the client), follow-up 6 (`strict_fingerprint` removed from `Placement`, `ActorSpec`, `actor_specs*`, `connections`). `cargo check --workspace --all-targets` was clean.
+**Next step (fresh unit, M5c part 2)**: (1) the real-runtime suites T048, T059, T067 in a new `crates/micold-daemon/tests/sandbox_real_provision.rs` (feature `sandbox-real-runtime`; compile only here: `cargo test -p micold-daemon --features sandbox-real-runtime --no-run`; helpers in `tests/sandbox_real_support/mod.rs`: `start_sandbox`, `provision_and_connect`, `provision_then_restart`, `purge`, `cli_out`, `standin_table`; copy the shape of `sandbox_real_idle.rs`); (2) T070 visual pass (visual-pass skill, see memory cloud-visual-pass: ICED_BACKEND=tiny-skia on Xvfb, python ctypes XTest, no xdotool) saved under `specs/806-container-daemon-ssh-provisioning/visual/`; (3) tick T048/T059/T067/T070, run `scripts/gate.sh` detached, review A (code-review high, `origin/main...HEAD`) and review B (conformance), merge origin/main right before the final gate, write `$SCRATCHPAD/pr-title` and `pr-body.md` (title starts "#806: Container daemon: configurable resources, Dockerfile or image source; build from current daemon binary by default" plus the M5c suffix pr.md requires), push `--force-with-lease`. Disk was ~14 GB free: wipe `target-shared/debug` before the gate.
 
 ## Open escalation
 

@@ -482,6 +482,35 @@ fn a_running_daemon_asks_before_new_container_settings_apply() {
     assert_eq!(profile_of(&w, boxed).budget.pids, Some(300));
 }
 
+/// FR-014, US2 #4: the restart confirmation is the same on "My own image" as on the basic image.
+#[test]
+fn a_running_daemon_on_its_own_image_asks_before_new_limits_apply() {
+    use daemons::Msg;
+    let mut w = World::new();
+    let mut state = State::default();
+    let boxed = w.boxed;
+    let before = profile_of(&w, boxed).budget.memory_bytes;
+    daemons::start(&mut state, &mut w.model(), boxed);
+    daemons::begin_edit(&mut state, &w.model(), boxed);
+    send(
+        &mut state,
+        &mut w,
+        Msg::ImageKindChosen(daemons::ImageKind::Own),
+    );
+    send(
+        &mut state,
+        &mut w,
+        Msg::ImageEdited("registry.example/own:1".into()),
+    );
+    send(&mut state, &mut w, Msg::MemoryLimitEdited("6144".into()));
+    let out = send(&mut state, &mut w, Msg::Saved);
+    assert!(out.is_empty(), "{out:?}");
+    assert!(state.prompt().is_some());
+    assert_eq!(profile_of(&w, boxed).budget.memory_bytes, before);
+    send(&mut state, &mut w, Msg::RemovalConfirmed);
+    assert_ne!(profile_of(&w, boxed).budget.memory_bytes, before);
+}
+
 #[test]
 fn an_ssh_entry_shows_no_container_profile_and_switching_to_ssh_drops_it() {
     use daemons::Msg;
@@ -901,7 +930,6 @@ fn a_picked_port_survives_a_restart() {
         links.states(),
         std::path::Path::new("/state"),
         None,
-        false,
     );
     let dialled: Vec<u16> = specs
         .iter()
