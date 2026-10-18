@@ -323,8 +323,9 @@ pub fn text_area<'a>(_showcase: &'a Showcase, roles: Roles, _i: usize) -> Elemen
     )
 }
 
-/// `ReviewCommentCard` — draft (Edit, Delete), sent, outdated, draft in a send, and applied and
-/// answered with a short and a shortened reply (946).
+/// `ReviewCommentCard` — draft (Edit, Delete), sent (with Mark applied and Answer…), outdated,
+/// draft in a send, and applied and answered with a short and a shortened reply (946), and the
+/// dialog that shows a whole reply.
 pub fn review_comment<'a>(
     _showcase: &'a Showcase,
     roles: Roles,
@@ -345,6 +346,15 @@ pub fn review_comment<'a>(
             posed("draft", sized(card(CardState::Draft)), roles),
             posed("sent", sized(card(CardState::Sent)), roles),
             posed(
+                "sent, mark actions",
+                sized(
+                    card(CardState::Sent)
+                        .on_mark_applied(Message::NoOp)
+                        .on_answer(Message::NoOp),
+                ),
+                roles,
+            ),
+            posed(
                 "outdated",
                 sized(card(CardState::Draft).outdated(true)),
                 roles,
@@ -357,7 +367,16 @@ pub fn review_comment<'a>(
             ),
             posed(
                 "answered, shortened reply",
-                sized(card(CardState::Answered).reply(LONG_REPLY, true)),
+                sized(
+                    card(CardState::Answered)
+                        .reply(LONG_REPLY, true)
+                        .on_show_reply(Message::NoOp),
+                ),
+                roles,
+            ),
+            posed(
+                "full reply dialog",
+                crate::ui::changes::reply_dialog_surface(format!("{LONG_REPLY} frame."), roles),
                 roles,
             ),
         ],

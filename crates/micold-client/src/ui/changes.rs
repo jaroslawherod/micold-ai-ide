@@ -18,8 +18,8 @@ use micold_core::tokens::{self, spacing, Rgb, Roles};
 
 use crate::app::{EditorAction, Message, State};
 use crate::features::changes::{
-    base_line, can_pick, card_model, committed_available, composer_placed, diff_body,
-    discard_prompt, file_comments, list_body, pending_counts, review_of, selected_file,
+    self as changes, base_line, can_pick, card_model, committed_available, composer_placed,
+    diff_body, discard_prompt, file_comments, list_body, pending_counts, review_of, selected_file,
     send_action, tidy_actions, ComposerTarget, DiffBody, ListBody, Msg, OpenView, Source,
     DEFAULT_ENTRY_NOTE,
 };
@@ -398,14 +398,14 @@ fn diff_pane<'a>(
                                 diff = diff.slot(
                                     pick.side,
                                     pick.head,
-                                    composer_box(&open.text, composer, true, r),
+                                    composer_box(&open.text, composer, true, "Comment", r),
                                 );
                             }
                             None => {
                                 unplaced = Some(
                                     column![
                                         Text::new(UNPLACED, TypeRole::Caption, r).muted(),
-                                        composer_box(&open.text, composer, false, r),
+                                        composer_box(&open.text, composer, false, "Comment", r),
                                     ]
                                     .spacing(spacing::XS),
                                 );
@@ -469,7 +469,8 @@ pub fn range_label(comment: &ReviewComment) -> String {
 }
 
 /// A comment's card, or the composer editing it (C2, C3): its status and reply (946 FR-007), and
-/// Edit and Delete only on a pending comment no send has taken.
+/// Edit and Delete only on a pending comment no send has taken, Mark applied and Answer… on a
+/// Sent one (946 FR-006), with the answer's composer under the card while it is open.
 fn comment_or_editor<'a>(
     view: &'a OpenView,
     comment: &'a ReviewComment,
@@ -479,7 +480,7 @@ fn comment_or_editor<'a>(
 ) -> Element<'a, Message> {
     if let Some(open) = view.composer.as_ref() {
         if open.target == ComposerTarget::Edit(comment.id) {
-            return composer_box(&open.text, composer, true, r);
+            return composer_box(&open.text, composer, true, "Comment", r);
         }
     }
     let model = card_model(comment, sending);
@@ -494,13 +495,29 @@ fn comment_or_editor<'a>(
         .outdated(view.outdated.contains(&comment.id));
     if let Some((reply, shortened)) = model.reply {
         card = card.reply(reply, shortened);
+        if shortened {
+            card = card.on_show_reply(Message::Changes(Msg::ShowReply(comment.id)));
+        }
     }
     if model.editable {
         card = card
             .on_edit(Message::Changes(Msg::EditComment(comment.id)))
             .on_delete(Message::Changes(Msg::DeleteComment(comment.id)));
     }
-    card.into()
+    if model.markable {
+        card = card
+            .on_mark_applied(Message::Changes(Msg::MarkApplied(comment.id)))
+            .on_answer(Message::Changes(Msg::AnswerComment(comment.id)));
+    }
+    let card: Element<'a, Message> = card.into();
+    match view.composer.as_ref() {
+        Some(open) if open.target == ComposerTarget::Answer(comment.id) => column![
+            card,
+            composer_box(&open.text, composer, true, "Why not, or what you did", r)
+        ]
+        .into(),
+        _ => card,
+    }
 }
 
 /// The composer (C2): the text area, Cancel and Save. Save (and Ctrl/Cmd+Enter) only with some
@@ -509,6 +526,7 @@ fn composer_box<'a>(
     text: &'a str,
     editor: Option<&'a text_editor::Content>,
     placed: bool,
+    placeholder: &'a str,
     r: Roles,
 ) -> Element<'a, Message> {
     let has_text = placed && !text.trim().is_empty();
@@ -516,7 +534,7 @@ fn composer_box<'a>(
     let area: Element<'a, Message> = match editor {
         Some(content) => {
             let mut area = TextArea::new(content, r)
-                .placeholder("Comment")
+                .placeholder(placeholder)
                 .on_action(|action| Message::Changes(Msg::ComposerAction(EditorAction(action))));
             if has_text {
                 area = area.on_submit(save.clone());
@@ -564,4 +582,33 @@ pub fn discard_dialog<'a>(
         .width(Length::Fixed(460.0))
         .into(),
     )
+}
+
+/// The full-reply dialog (946 FR-006), built as [`discard_dialog`] is; `None` when it is not open.
+pub fn reply_dialog<'a>(
+    state: &'a State,
+    scheme: ColorScheme,
+    _env_include_outcome: &'a micold_core::env_include::EnvIncludeOutcome,
+) -> Option<Element<'a, Message>> {
+    let reply = changes::reply_dialog(&state.changes)?;
+    Some(reply_dialog_surface(reply, tokens::roles(scheme)))
+}
+
+/// The full-reply dialog's surface around `reply`; the showcase poses it too.
+pub fn reply_dialog_surface<'a>(reply: String, r: Roles) -> Element<'a, Message> {
+    let fields = crate::ui::material::dialog::fields(column![
+        Text::new("Reply", TypeRole::Headline, r),
+        crate::ui::material::Scrollable::new(Text::new(reply, TypeRole::Body, r).muted(), r)
+            .height(Length::Fixed(280.0)),
+    ]);
+    let actions = crate::ui::material::dialog::actions(row![
+        Button::filled("Close", r).on_press(Message::Changes(Msg::ReplyClosed)),
+    ]);
+    crate::ui::material::Surface::new(
+        crate::ui::material::dialog::body(fields, actions),
+        crate::ui::material::SurfaceKind::Dialog,
+        r,
+    )
+    .width(Length::Fixed(560.0))
+    .into()
 }

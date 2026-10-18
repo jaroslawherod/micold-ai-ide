@@ -1741,6 +1741,7 @@ fn a_pushed_report_shows_its_status_and_reply_in_every_window() {
                 in_send: false,
                 reply: Some(("Renamed␉as ␛asked\nok".to_owned(), false)),
                 editable: false,
+                markable: false,
             }
         );
         assert_eq!(card_of(&second), card);
@@ -1779,4 +1780,169 @@ fn drafts_and_sent_comments_keep_their_cards() {
     );
     let model = card_model(&draft, true);
     assert_eq!((model.editable, model.in_send), (false, true));
+}
+
+// ---- Mark by hand and read a full reply (946 M3, T037, FR-006, W14) ----
+
+use micold_client::features::changes::reply_dialog;
+use micold_core::review::reply;
+
+/// The `ReviewEdit` an effect carries, if it is one.
+fn edit_of(effect: Effect) -> Option<ReviewEditOp> {
+    match effect {
+        Effect::ReviewEdit { edit, .. } => Some(edit),
+        _ => None,
+    }
+}
+
+/// A view with `comment` pushed for `feat-a`.
+fn showing_with(comment: &ReviewComment) -> State {
+    let mut state = showing(commentable());
+    push(&mut state, "feat-a", vec![comment.clone()]);
+    state
+}
+
+/// US1 s6. Only a Sent card offers the two hand marks; Draft and Reported cards offer neither.
+#[test]
+fn only_a_sent_card_offers_mark_applied_and_answer() {
+    let sent = comment("b.rs", Side::New, 2, 2, CommentState::Sent { at: 5 });
+    assert!(card_model(&sent, false).markable);
+    assert!(
+        card_model(&sent, true).markable,
+        "another send does not hold it"
+    );
+    let draft = comment("b.rs", Side::New, 2, 2, CommentState::Draft);
+    assert!(!card_model(&draft, false).markable);
+    for outcome in [Outcome::Applied, Outcome::Answered] {
+        let done = reported(sent.clone(), outcome, "ok");
+        assert!(!card_model(&done, false).markable, "{outcome:?}");
+    }
+}
+
+/// W14. **Mark applied** sends `Mark { Applied, "" }` for a Sent comment and nothing otherwise.
+#[test]
+fn mark_applied_sends_a_mark_for_a_sent_comment_only() {
+    let sent = comment("b.rs", Side::New, 2, 2, CommentState::Sent { at: 5 });
+    let mut state = showing_with(&sent);
+    assert_eq!(
+        edit_of(changes::update(&mut state, Msg::MarkApplied(sent.id))),
+        Some(ReviewEditOp::Mark {
+            id: sent.id,
+            outcome: Outcome::Applied,
+            note: String::new(),
+        })
+    );
+    let draft = comment("b.rs", Side::New, 3, 3, CommentState::Draft);
+    let done = reported(
+        comment("b.rs", Side::New, 4, 4, CommentState::Sent { at: 5 }),
+        Outcome::Applied,
+        "",
+    );
+    push(&mut state, "feat-a", vec![draft.clone(), done.clone()]);
+    for id in [draft.id, done.id, CommentId::new()] {
+        assert_eq!(
+            changes::update(&mut state, Msg::MarkApplied(id)),
+            Effect::None
+        );
+    }
+}
+
+/// W14. **Answer…** opens the composer; Save is a no-op while the note is blank, then sends
+/// `Mark { Answered, note }` and closes it.
+#[test]
+fn answer_opens_the_composer_and_saves_an_answered_mark() {
+    let sent = comment("b.rs", Side::New, 2, 2, CommentState::Sent { at: 5 });
+    let mut state = showing_with(&sent);
+    assert_eq!(
+        changes::update(&mut state, Msg::AnswerComment(sent.id)),
+        Effect::None
+    );
+    let composer = state.open.as_ref().unwrap().composer.clone().unwrap();
+    assert_eq!(composer.target, ComposerTarget::Answer(sent.id));
+    assert_eq!(composer.text, "");
+    changes::update(&mut state, Msg::ComposerEdited("  \n ".into()));
+    assert_eq!(
+        changes::update(&mut state, Msg::ComposerSaved),
+        Effect::None
+    );
+    assert!(
+        state.open.as_ref().unwrap().composer.is_some(),
+        "still open"
+    );
+    changes::update(&mut state, Msg::ComposerEdited("Kept on purpose".into()));
+    assert_eq!(
+        edit_of(changes::update(&mut state, Msg::ComposerSaved)),
+        Some(ReviewEditOp::Mark {
+            id: sent.id,
+            outcome: Outcome::Answered,
+            note: "Kept on purpose".into(),
+        })
+    );
+    assert!(state.open.as_ref().unwrap().composer.is_none());
+}
+
+/// **Answer…** on a comment that is not Sent opens nothing; an Answer composer closes when its
+/// comment leaves the entry or is reported meanwhile, so Save never targets either.
+#[test]
+fn an_answer_composer_closes_when_its_comment_is_gone_or_reported() {
+    let sent = comment("b.rs", Side::New, 2, 2, CommentState::Sent { at: 5 });
+    let mut state = showing_with(&sent);
+    let draft = comment("b.rs", Side::New, 3, 3, CommentState::Draft);
+    push(&mut state, "feat-a", vec![sent.clone(), draft.clone()]);
+    changes::update(&mut state, Msg::AnswerComment(draft.id));
+    assert!(
+        state.open.as_ref().unwrap().composer.is_none(),
+        "a draft is not answered"
+    );
+
+    for after in [
+        vec![draft.clone()],
+        vec![reported(sent.clone(), Outcome::Applied, ""), draft.clone()],
+    ] {
+        changes::update(&mut state, Msg::AnswerComment(sent.id));
+        assert!(state.open.as_ref().unwrap().composer.is_some());
+        push(&mut state, "feat-a", after);
+        assert!(state.open.as_ref().unwrap().composer.is_none());
+        push(&mut state, "feat-a", vec![sent.clone(), draft.clone()]);
+    }
+    changes::update(&mut state, Msg::AnswerComment(sent.id));
+    push(&mut state, "feat-b", vec![]);
+    assert!(
+        state.open.as_ref().unwrap().composer.is_some(),
+        "another entry's push leaves it"
+    );
+}
+
+/// FR-006. **Show all** opens the whole reply, made displayable; closing clears it, and so does
+/// the comment leaving the entry.
+#[test]
+fn show_all_opens_the_full_reply_and_closing_or_losing_the_comment_clears_it() {
+    let sent = comment("b.rs", Side::New, 2, 2, CommentState::Sent { at: 5 });
+    let long = format!("{}\tend\u{1b}", "x".repeat(CARD_CHARS + 50));
+    let answered = reported(sent.clone(), Outcome::Answered, &long);
+    let mut state = showing_with(&answered);
+    assert_eq!(reply_dialog(&state), None);
+    changes::update(&mut state, Msg::ShowReply(answered.id));
+    let full = reply_dialog(&state).expect("the dialog is open");
+    assert_eq!(full, reply::display(&long));
+    assert!(full.chars().count() > CARD_CHARS, "not shortened");
+    changes::update(&mut state, Msg::ReplyClosed);
+    assert_eq!(reply_dialog(&state), None);
+
+    changes::update(&mut state, Msg::ShowReply(answered.id));
+    push(&mut state, "feat-b", vec![]);
+    assert!(
+        reply_dialog(&state).is_some(),
+        "another entry's push leaves it"
+    );
+    push(&mut state, "feat-a", vec![]);
+    assert_eq!(reply_dialog(&state), None, "its comment left the entry");
+    assert_eq!(state.open.as_ref().unwrap().reply_open, None);
+
+    changes::update(&mut state, Msg::ShowReply(CommentId::new()));
+    assert_eq!(
+        state.open.as_ref().unwrap().reply_open,
+        None,
+        "no such comment"
+    );
 }

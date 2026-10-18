@@ -263,6 +263,7 @@ register! {
     crate::features::agent_confirm::ConfirmAgentRequestDialog => crate::ui::confirm_agent_request::dialog,
     crate::features::attach::AttachDialog => crate::ui::attach_dialog::dialog,
     crate::features::changes::ConfirmDiscardPendingDialog => crate::ui::changes::discard_dialog,
+    crate::features::changes::FullReplyDialog => crate::ui::changes::reply_dialog,
     crate::features::help::AboutDialog => crate::ui::about::dialog,
     crate::features::help::HelpMenu {
         displaces:
