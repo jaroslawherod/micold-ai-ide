@@ -150,6 +150,9 @@ pub enum Outcome {
     /// The daemon registry changed (feature 491, FR-011): the shell persists it
     /// (`Settings::set_registry`) and brings the links in step (`sync_links`).
     DaemonRegistryChanged(micold_core::daemons::DaemonRegistry),
+    /// The Kubernetes form opened: list the kubeconfig's contexts off the UI thread and answer
+    /// with `daemons::Msg::ContextsListed` (feature 686, FR-002). The shell's.
+    KubeContextsRequested,
     /// These sessions ended because their daemon was removed or its runtime settings changed:
     /// the shell stops them on that daemon and shows them as ended (FR-012, FR-014).
     DaemonSessionsEnded {
@@ -234,6 +237,7 @@ pub mod attention;
 pub mod changes;
 pub mod connection;
 pub mod daemons;
+pub mod daemons_kube;
 pub mod help;
 pub mod navigation;
 pub mod notifications;

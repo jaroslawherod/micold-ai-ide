@@ -267,6 +267,71 @@ pub fn limits<'a>(view: &ContainerView<'a>) -> [LimitControl<'a>; 4] {
     })
 }
 
+/// One limit's text field: the one copy of how a limit is drawn, used by the container form and the
+/// Kubernetes form (feature 686, T131; #806 inherits it, contract shared-ssh-image §5).
+pub fn limit_field<'a>(
+    l: LimitControl<'a>,
+    error: Option<String>,
+    focused: Option<FieldId>,
+    roles: Roles,
+) -> Element<'a, Message> {
+    let mut input = TextField::new("", l.value, roles)
+        .label(l.label)
+        .supporting(l.supporting)
+        .error(error)
+        .track_focus(l.field, focused);
+    if let Some(on_input) = l.on_input {
+        input = input
+            .on_input(on_input)
+            .on_submit(Message::Daemons(DaemonsMsg::Saved));
+    }
+    input.into()
+}
+
+/// The Kubernetes form's four resource fields: CPU request, CPU limit, memory request, memory limit
+/// (FR-005). Each is edited on its own; an empty one is unset.
+pub fn kube_resources<'a>(
+    draft: &'a crate::features::daemons_kube::KubeDraft,
+) -> [LimitControl<'a>; 4] {
+    let control = |field, label, value: &'a str, supporting: &str, on_input| LimitControl {
+        field,
+        label,
+        value,
+        supporting: supporting.to_string(),
+        on_input: Some(on_input),
+    };
+    [
+        control(
+            FieldId::DaemonCpuRequest,
+            "CPU request",
+            &draft.cpu_request,
+            "Cores, e.g. 0.5. Empty reserves none.",
+            (|v| Message::Daemons(DaemonsMsg::CpuRequestEdited(v))) as fn(String) -> Message,
+        ),
+        control(
+            FieldId::DaemonCpuLimit,
+            "CPU limit",
+            &draft.cpu_limit,
+            "Cores, e.g. 2 or 1.5. Empty sets no limit.",
+            |v| Message::Daemons(DaemonsMsg::KubeCpuLimitEdited(v)),
+        ),
+        control(
+            FieldId::DaemonMemoryRequest,
+            "Memory request",
+            &draft.memory_request,
+            "Mebibytes. Empty reserves none.",
+            |v| Message::Daemons(DaemonsMsg::MemoryRequestEdited(v)),
+        ),
+        control(
+            FieldId::DaemonMemoryLimit,
+            "Memory limit",
+            &draft.memory_limit,
+            "Mebibytes. Empty sets no limit.",
+            |v| Message::Daemons(DaemonsMsg::KubeMemoryLimitEdited(v)),
+        ),
+    ]
+}
+
 /// What to say beneath the survival opt-in, and whether it is a caution (feature 027, FR-014d).
 ///
 /// A free function rather than a `match` inside the view, because the claim FR-014d makes is about
@@ -438,17 +503,7 @@ pub fn sections<'a>(
     )];
     let [e0, e1, e2, e3] = errors.limits;
     for (l, error) in limits(view).into_iter().zip([e0, e1, e2, e3]) {
-        let mut input = TextField::new("", l.value, roles)
-            .label(l.label)
-            .supporting(l.supporting)
-            .error(error)
-            .track_focus(l.field, focused);
-        if let Some(on_input) = l.on_input {
-            input = input
-                .on_input(on_input)
-                .on_submit(Message::Daemons(DaemonsMsg::Saved));
-        }
-        limit_fields.push(input.into());
+        limit_fields.push(limit_field(l, error, focused, roles));
     }
 
     let sessions: Vec<Element<'a, Message>> =

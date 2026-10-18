@@ -21,12 +21,15 @@ use micold_core::required::{RequiredMarks, Requirement};
 use micold_core::sandbox::image::{ImageSourceKind, ImageSourceProblem};
 use micold_core::sandbox::runtime::RuntimeKind;
 use micold_core::sandbox::{CredentialShare, NetworkPosture, SandboxProfile};
+use micold_core::session::AiCli;
 use micold_core::session::SessionId;
 
+pub use super::daemons_kube::{AllowedKind, ContextList, KubeDraft, VOLUME_NOTICE};
 use super::settings::{parse_budget, LimitField, ProfileTexts};
 use super::window::FieldId;
 use super::Outcome;
 use crate::floating_surface;
+use crate::kube::live::ContextEntry;
 use crate::links::{route, DaemonLinks, Route};
 use crate::overlay::registry::Registered;
 use crate::overlay::SurfaceId;
@@ -62,6 +65,23 @@ pub enum DraftRuntime {
     Container,
     /// A host reached through the user's own `ssh` (feature 489).
     Ssh,
+    /// A pod in a Kubernetes cluster (feature 686).
+    Kubernetes,
+}
+
+/// Whether this build has #806's shared SSH image mechanism, without which a Kubernetes daemon
+/// cannot start (FR-024). While it is `false` the Add form does not offer Kubernetes; a Kubernetes
+/// daemon already in the settings still opens in Edit. #806 flips it.
+pub const SHARED_SSH_IMAGE_AVAILABLE: bool = false;
+
+/// The runtimes the form's "Runs in" choice offers for `draft`: Kubernetes only once the shared
+/// mechanism exists, or while editing a Kubernetes daemon (FR-024).
+pub fn runtime_choices(draft: &Draft) -> Vec<DraftRuntime> {
+    let mut choices = vec![DraftRuntime::Container, DraftRuntime::Host, DraftRuntime::Ssh];
+    if SHARED_SSH_IMAGE_AVAILABLE || draft.editing.is_some() && draft.kube_edited {
+        choices.push(DraftRuntime::Kubernetes);
+    }
+    choices
 }
 
 /// The add/edit form's fields, as typed (the port is text so a bad one can be reported).
@@ -99,12 +119,23 @@ pub struct Draft {
     pub ssh_port: String,
     /// The private key file; blank takes it from the SSH configuration (SSH runtime only).
     pub ssh_key_file: String,
+    /// The Kubernetes fields (feature 686); used while `runtime` is Kubernetes.
+    pub kube: KubeDraft,
+    /// Whether the daemon being edited is a Kubernetes one, so its runtime stays on offer.
+    pub kube_edited: bool,
     /// Which fields the user has left and whether a save was attempted, for the required errors
     /// (feature 937). Fresh when the form opens, dropped with it.
     pub required: RequiredMarks<FieldId>,
 }
 
 impl Draft {
+    /// The note under the volume size once the daemon exists (FR-005), so an edit is not taken to
+    /// resize a volume that is already there.
+    pub fn volume_notice(&self) -> Option<&'static str> {
+        (self.editing.is_some() && self.runtime == DraftRuntime::Kubernetes)
+            .then_some(VOLUME_NOTICE)
+    }
+
     /// The fields the form refuses empty for the runtime chosen now, in display order, with
     /// whether each is empty (feature 937, FR-002). Mirrors [`runtime_of`] and the registry's
     /// validation: the SSH host only over SSH, the container name and image reference for a
@@ -118,6 +149,16 @@ impl Draft {
                 FieldId::DaemonSshHost,
                 Requirement::text(true, &self.ssh_host),
             )),
+            DraftRuntime::Kubernetes => {
+                fields.push((
+                    FieldId::DaemonKubeContext,
+                    Requirement::text(true, &self.kube.context),
+                ));
+                fields.push((
+                    FieldId::DaemonKubeNamespace,
+                    Requirement::text(true, &self.kube.namespace),
+                ));
+            }
             DraftRuntime::Container => {
                 fields.push((
                     FieldId::DaemonContainerName,
@@ -310,6 +351,10 @@ pub struct State {
     /// [`FieldId::DaemonRepository`], so each remote daemon's step is its own field.
     pub repository_marks: RequiredMarks<FieldId>,
     ended: Vec<SessionId>,
+    /// The kubeconfig contexts the Kubernetes form offers (feature 686, FR-002).
+    pub contexts: ContextList,
+    /// The AI CLIs a new Kubernetes daemon installs: the providers enabled in Settings (FR-018).
+    pub default_providers: Vec<AiCli>,
 }
 
 impl State {
@@ -391,6 +436,7 @@ pub fn views(state: &State, model: &Model<'_>) -> ViewModel {
                 DaemonRuntime::Container(c) => format!("127.0.0.1:{}", c.port),
                 DaemonRuntime::Host => "local".to_string(),
                 DaemonRuntime::Ssh(s) => s.target.describe(),
+                DaemonRuntime::Kubernetes(k) => k.endpoint(entry.name.as_str()),
                 DaemonRuntime::Unsupported { kind, .. } => format!("unsupported ({kind})"),
                 _ => String::new(),
             },
@@ -554,6 +600,8 @@ pub fn begin_add(state: &mut State) {
         pids: texts.pids,
         storage_mib: texts.storage_mib,
         auto_start: true,
+        kube: KubeDraft::new(&state.default_providers),
+        kube_edited: false,
         ssh_host: String::new(),
         ssh_user: String::new(),
         ssh_port: String::new(),
@@ -568,7 +616,10 @@ pub fn begin_edit<'s>(state: &'s mut State, model: &Model<'_>, id: DaemonId) -> 
     // A runtime this build does not know is kept opaque: editing it as a host would replace it.
     if !matches!(
         entry.runtime,
-        DaemonRuntime::Container(_) | DaemonRuntime::Host | DaemonRuntime::Ssh(_)
+        DaemonRuntime::Container(_)
+            | DaemonRuntime::Host
+            | DaemonRuntime::Ssh(_)
+            | DaemonRuntime::Kubernetes(_)
     ) {
         return None;
     }
@@ -598,6 +649,12 @@ pub fn begin_edit<'s>(state: &'s mut State, model: &Model<'_>, id: DaemonId) -> 
             String::new(),
             SandboxProfile::default(),
         ),
+        DaemonRuntime::Kubernetes(_) => (
+            DraftRuntime::Kubernetes,
+            String::new(),
+            String::new(),
+            SandboxProfile::default(),
+        ),
         _ => (
             DraftRuntime::Host,
             String::new(),
@@ -606,9 +663,15 @@ pub fn begin_edit<'s>(state: &'s mut State, model: &Model<'_>, id: DaemonId) -> 
         ),
     };
     let texts = ProfileTexts::of(&profile);
+    let kube = match &entry.runtime {
+        DaemonRuntime::Kubernetes(k) => KubeDraft::of(k),
+        _ => KubeDraft::new(&state.default_providers),
+    };
     state.flipped_sections.clear();
     state.draft = Some(Draft {
         editing: Some(id),
+        kube,
+        kube_edited: runtime == DraftRuntime::Kubernetes,
         name: entry.name.as_str().to_string(),
         runtime,
         container_name,
@@ -679,7 +742,7 @@ fn form_error(registry: &DaemonRegistry, draft: &Draft, err: RegistryError) -> F
 }
 
 /// The refused field and the sentence beside it.
-fn invalid_field(field: &'static str) -> FormError {
+pub(crate) fn invalid_field(field: &'static str) -> FormError {
     let message = match field {
         "port" => "Enter a port between 1 and 65535.".to_string(),
         "image" => "The image reference is not valid.".to_string(),
@@ -687,6 +750,19 @@ fn invalid_field(field: &'static str) -> FormError {
         "host" => "Enter a host name, or a Host alias from your SSH configuration.".to_string(),
         "user" => "Enter a user name without an @.".to_string(),
         "key_file" => "That key file does not exist.".to_string(),
+        "context" => "Choose a kube context.".to_string(),
+        "namespace" => {
+            "Enter a namespace: lowercase letters, digits and dashes, up to 63.".to_string()
+        }
+        "node_selector" => "Enter node selector labels as key=value.".to_string(),
+        "tolerations" => "A toleration is key[=value]:Effect or key:Exists:Effect.".to_string(),
+        "volume_size" => "The volume must be at least 1 GiB.".to_string(),
+        "storage_class" => "Enter a storage class name.".to_string(),
+        "allowed" => "Allow at most one SSH key and one registry file.".to_string(),
+        "ssh_key_file" => "Enter the SSH key file to allow.".to_string(),
+        "pull_file" => "Enter the registry credentials file to allow.".to_string(),
+        "cpu_request" => "The CPU request must not exceed the CPU limit.".to_string(),
+        "memory_request" => "The memory request must not exceed the memory limit.".to_string(),
         other => format!("{other} is not valid."),
     };
     FormError { field, message }
@@ -700,6 +776,7 @@ fn runtime_of(
 ) -> Result<DaemonRuntime, FormError> {
     match draft.runtime {
         DraftRuntime::Host => Ok(DaemonRuntime::Host),
+        DraftRuntime::Kubernetes => draft.kube.settings().map(DaemonRuntime::Kubernetes),
         DraftRuntime::Ssh => {
             fn blank(v: &str) -> Option<&str> {
                 Some(v.trim()).filter(|v| !v.is_empty())
@@ -1059,6 +1136,30 @@ pub enum Msg {
     RepositoryAdded(DaemonId),
     /// A start step began, or the copy advanced, for this daemon (feature 806, FR-018).
     Provisioning(DaemonId, ProvisionEvent),
+    /// The kubeconfig's contexts were read (feature 686): the list, or why there is none.
+    ContextsListed(Result<Vec<ContextEntry>, String>),
+    /// A kube context was chosen.
+    ContextChosen(String),
+    /// The Kubernetes namespace field changed.
+    NamespaceEdited(String),
+    /// The Kubernetes image field changed.
+    KubeImageEdited(String),
+    /// An AI CLI to install was ticked or unticked.
+    ProviderToggled(AiCli, bool),
+    /// The Kubernetes CPU request field changed.
+    CpuRequestEdited(String),
+    /// The Kubernetes CPU limit field changed.
+    KubeCpuLimitEdited(String),
+    /// The Kubernetes memory request field changed.
+    MemoryRequestEdited(String),
+    /// The Kubernetes memory limit field changed.
+    KubeMemoryLimitEdited(String),
+    /// An allowed credential was ticked or unticked.
+    AllowedToggled(AllowedKind, bool),
+    /// The allowed SSH key file field changed.
+    KubeSshKeyEdited(String),
+    /// The allowed registry auth file field changed.
+    PullFileEdited(String),
     /// The connect-at-launch box changed.
     AutoStartToggled(bool),
     /// Start this daemon, and only it.
@@ -1151,7 +1252,10 @@ pub fn update(state: &mut State, model: &mut Model<'_>, msg: Msg) -> Vec<Outcome
         }
         Msg::EditOpened(id) => {
             state.form_error = None;
-            begin_edit(state, model, id);
+            let kube = begin_edit(state, model, id).is_some_and(|d| d.kube_edited);
+            if kube {
+                return vec![Outcome::KubeContextsRequested];
+            }
         }
         Msg::Saved => match save(state, model) {
             Ok(out) => {
@@ -1170,7 +1274,40 @@ pub fn update(state: &mut State, model: &mut Model<'_>, msg: Msg) -> Vec<Outcome
             }
         }
         Msg::NameEdited(v) => edit(state, &|d| d.name = v.clone()),
-        Msg::RuntimeChosen(v) => edit(state, &|d| d.runtime = v),
+        Msg::RuntimeChosen(v) => {
+            edit(state, &|d| d.runtime = v);
+            if v == DraftRuntime::Kubernetes {
+                return vec![Outcome::KubeContextsRequested];
+            }
+        }
+        Msg::ContextsListed(Ok(list)) => state.contexts = ContextList::Found(list),
+        Msg::ContextsListed(Err(why)) => state.contexts = ContextList::Failed(why),
+        Msg::ContextChosen(name) => {
+            let contexts = state.contexts.clone();
+            edit(state, &|d| d.kube.choose_context(&name, &contexts));
+        }
+        Msg::NamespaceEdited(v) => edit(state, &|d| d.kube.namespace = v.clone()),
+        Msg::KubeImageEdited(v) => edit(state, &|d| d.kube.image = v.clone()),
+        Msg::ProviderToggled(cli, on) => edit(state, &|d| {
+            if on {
+                d.kube.providers.insert(cli);
+            } else {
+                d.kube.providers.remove(&cli);
+            }
+        }),
+        Msg::CpuRequestEdited(v) => edit(state, &|d| d.kube.cpu_request = v.clone()),
+        Msg::KubeCpuLimitEdited(v) => edit(state, &|d| d.kube.cpu_limit = v.clone()),
+        Msg::MemoryRequestEdited(v) => edit(state, &|d| d.kube.memory_request = v.clone()),
+        Msg::KubeMemoryLimitEdited(v) => edit(state, &|d| d.kube.memory_limit = v.clone()),
+        Msg::AllowedToggled(kind, on) => edit(state, &|d| {
+            if on {
+                d.kube.allowed.insert(kind);
+            } else {
+                d.kube.allowed.remove(&kind);
+            }
+        }),
+        Msg::KubeSshKeyEdited(v) => edit(state, &|d| d.kube.ssh_key_file = v.clone()),
+        Msg::PullFileEdited(v) => edit(state, &|d| d.kube.pull_file = v.clone()),
         Msg::ContainerNameEdited(v) => edit(state, &|d| d.container_name = v.clone()),
         Msg::PortEdited(v) => edit(state, &|d| d.port = v.clone()),
         Msg::ImageEdited(v) => edit(state, &|d| d.profile.image.reference = v.clone()),

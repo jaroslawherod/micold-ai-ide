@@ -45,8 +45,10 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
     let mut rest = Vec::new();
     let mut bound = Vec::new();
     let mut gate = Vec::new();
+    let mut tasks = Vec::new();
     for outcome in outcomes {
         match &outcome {
+            Outcome::KubeContextsRequested => tasks.push(list_kube_contexts()),
             Outcome::DaemonRegistryChanged(_) => app.apply_daemon_outcome(&outcome),
             Outcome::DaemonBound { daemon, .. } => {
                 app.apply_daemon_outcome(&outcome);
@@ -97,7 +99,36 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
     for path in gate {
         let _ = crate::shell::workspace::on_folder_chosen(app, path);
     }
-    Task::none()
+    Task::batch(tasks)
+}
+
+/// Read the merged kubeconfig and list its contexts off the UI thread (feature 686, FR-002). Only
+/// names and default namespaces leave the files: no credential is read into the form.
+fn list_kube_contexts() -> Task<Message> {
+    use micold_client::kube::live;
+    use micold_core::ssh::argv::ClientPlatform;
+    let read = || {
+        let home = directories::UserDirs::new()
+            .map(|dirs| dirs.home_dir().to_path_buf())
+            .unwrap_or_default();
+        let env = std::env::var_os("KUBECONFIG");
+        let paths = micold_core::kube::kubeconfig::candidates(
+            env.as_deref(),
+            &home,
+            ClientPlatform::current(),
+        );
+        live::read_kubeconfigs(&paths)
+            .map(|config| live::list_contexts(&config))
+            .map_err(|failure| failure.to_string())
+    };
+    Task::perform(
+        async move {
+            tokio::task::spawn_blocking(read)
+                .await
+                .unwrap_or_else(|joined| Err(joined.to_string()))
+        },
+        |listed| Message::Daemons(Msg::ContextsListed(listed)),
+    )
 }
 
 /// The `ssh` executable on Windows: the one on `PATH`, then the OpenSSH that ships with Windows

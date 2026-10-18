@@ -196,6 +196,20 @@ pub enum FieldId {
     DaemonCpuLimit,
     /// Settings → Daemons: the form's memory limit (feature 804).
     DaemonMemoryLimit,
+    /// Settings → Daemons: the Kubernetes form's CPU request (feature 686).
+    DaemonCpuRequest,
+    /// Settings → Daemons: the Kubernetes form's memory request (feature 686).
+    DaemonMemoryRequest,
+    /// Settings → Daemons: the Kubernetes form's kube context (feature 686).
+    DaemonKubeContext,
+    /// Settings → Daemons: the Kubernetes form's namespace (feature 686).
+    DaemonKubeNamespace,
+    /// Settings → Daemons: the Kubernetes form's image (feature 686).
+    DaemonKubeImage,
+    /// Settings → Daemons: the Kubernetes form's allowed SSH key file (feature 686).
+    DaemonKubeSshKeyFile,
+    /// Settings → Daemons: the Kubernetes form's allowed registry auth file (feature 686).
+    DaemonKubePullFile,
     /// Settings → Daemons: the form's process-count limit (feature 804).
     DaemonPidLimit,
     /// Settings → Daemons: the form's writable-storage limit (feature 804).

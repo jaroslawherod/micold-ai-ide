@@ -59,6 +59,7 @@ pub fn interpret(outcome: Outcome) -> Task<Message> {
         | Outcome::OpenLink(_)
         | Outcome::Insert { .. }
         | Outcome::DaemonRegistryChanged(_)
+        | Outcome::KubeContextsRequested
         | Outcome::DaemonSessionsEnded { .. }
         | Outcome::DaemonBound { .. }
         | Outcome::IssueSourceChosen { .. }

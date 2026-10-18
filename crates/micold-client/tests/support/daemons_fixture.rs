@@ -22,6 +22,15 @@ pub fn container(name: &str, port: u16) -> DaemonRuntime {
     })
 }
 
+/// A Kubernetes daemon's runtime on context `ctx`, namespace `ns`.
+pub fn kubernetes(ctx: &str, ns: &str) -> DaemonRuntime {
+    DaemonRuntime::Kubernetes(micold_core::kube::settings::KubeSettings::new(
+        ctx,
+        ns,
+        &[micold_core::session::AiCli::ClaudeCode],
+    ))
+}
+
 pub struct World {
     pub registry: DaemonRegistry,
     pub links: DaemonLinks,
