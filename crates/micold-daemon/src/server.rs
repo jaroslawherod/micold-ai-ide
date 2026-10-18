@@ -41,7 +41,10 @@ use micold_core::endpoint;
 
 /// A human-facing build string named in diagnostics and the handshake.
 pub fn daemon_build() -> String {
-    format!("micold-daemon {}", env!("CARGO_PKG_VERSION"))
+    format!(
+        "micold-daemon {}",
+        micold_core::protocol::version::PACKAGE_VERSION
+    )
 }
 
 /// The environment variable naming the address a containerised daemon listens on (feature 027).

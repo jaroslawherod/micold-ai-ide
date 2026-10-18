@@ -79,6 +79,9 @@ fn state_note(view: &DaemonView) -> Option<String> {
         DaemonState::Unreachable { reason } => {
             Some(format!("Daemon {} unreachable: {reason}", view.name))
         }
+        DaemonState::VersionMismatch { .. } if view.explanation.is_some() => {
+            view.explanation.clone()
+        }
         DaemonState::VersionMismatch { client, daemon } => Some(format!(
             "Daemon {} version mismatch: client {client}, daemon {daemon}. Update the daemon's \
              image or this application, then reconnect.",

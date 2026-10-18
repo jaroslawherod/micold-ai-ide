@@ -715,6 +715,9 @@ pub struct DaemonView {
     /// What is being done now, when it takes long enough to say (copying the build to an SSH
     /// host, feature 489).
     pub activity: Option<String>,
+    /// For a remote daemon in `VersionMismatch`: both versions, which side is older and the way out
+    /// (feature 489, FR-011). `None` for every other row.
+    pub explanation: Option<String>,
 }
 
 /// Most recent connection errors kept per daemon.

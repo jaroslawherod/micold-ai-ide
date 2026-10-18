@@ -40,9 +40,25 @@ impl Dialer {
     /// A dialer whose `ssh` is `wrapper` and whose host is `alias`, with `timeout_secs` as the
     /// connection timeout (the host-key and authentication failure tests change both).
     pub fn with_ssh(wrapper: PathBuf, alias: &str, timeout_secs: u32) -> Self {
+        Self::with_daemon(
+            wrapper,
+            alias,
+            timeout_secs,
+            PathBuf::from(env!("CARGO_BIN_EXE_micold-daemon")),
+        )
+    }
+
+    /// Like [`Dialer::with_ssh`], copying `own_daemon` to the host instead of this build's daemon
+    /// (the version-mismatch tests copy a daemon built as another version).
+    pub fn with_daemon(
+        wrapper: PathBuf,
+        alias: &str,
+        timeout_secs: u32,
+        own_daemon: PathBuf,
+    ) -> Self {
         Self {
             runner: SystemSsh {
-                own_daemon: PathBuf::from(env!("CARGO_BIN_EXE_micold-daemon")),
+                own_daemon,
                 bundled_dir: None,
                 ssh_path: Some(wrapper),
                 cancel: None,
