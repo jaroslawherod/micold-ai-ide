@@ -10,21 +10,23 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #968
 - **Worktree branch**: claude/project-thread-ftdy5c
 - **Started**: 2026-10-18
-- **Phase**: M1 PR
-- **Next step**: M1 — orchestrator opens the PR from the pushed branch, waits on CI and merges; then M2
+- **Phase**: M2 PR
+- **Next step**: M2 — orchestrator opens the PR from the pushed branch, waits on CI and merges; then M3
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1036 | design (spec, plan, tasks) | merged | c687792e717f3312881d09e87ed8e6f1ea374022 |
+| #1057 | M1 | merged | 7dded4dabfe494a9aa98b069d0cec860beee2dd2 |
+| pending | M2 | branch pushed, orchestrator opens the PR | — |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T020 | full | Chord opens the switcher over the active project's locations; filter, choose = row click, close | pending | in review |
-| M2 | T021–T026 | full | Sessions listed under their locations, found by name, kept by a location match | — | planned |
+| M1 | T001–T020 | full | Chord opens the switcher over the active project's locations; filter, choose = row click, close | #1057 | merged |
+| M2 | T021–T026 | full | Sessions listed under their locations, found by name, kept by a location match | pending | in review |
 | M3 | T027–T031 | light | Other known projects listed (unavailable badged, unselectable); complete user-guide bullet | — | planned |
 
 ## Decisions
@@ -59,6 +61,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | A | MINOR: user-guide row says "location, session or project" while M1 lists locations | the row text is fixed by contracts/keys.md K4 / T020; M2 (sessions) and M3 (projects) make it true before the feature closes. |
 | M1 | A | MINOR: stored highlight key not written back when its entry leaves, so it can return | `list()` already shows the first entry while the key is absent, which FR-013 asks; the return-on-reappear case is outside FR-013 and needs a write in a pure read path. |
 | M1 | A | MINOR: `terminal_had_focus` taken from the publisher, not `terminal_focused()` at open | mirrors the #803 Overview chord's existing split; latent only, no failing case. |
+
+## M2 notes
+
+Review A (autopilot-reviewer, high): CLEAN; MINOR doc-comment width in showcase surfaces.rs declined (comment only; re-gate not worth it). Review B (sonnet): CHANGES F1 cycle-log rows missing — fixed (rows added, red-not-observed stated). Full gate green at the pushed tree.
 
 ## Handover
 
