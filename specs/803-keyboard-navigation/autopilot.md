@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #803
 - **Worktree branch**: claude/project-thread-ah7xxz
 - **Started**: 2026-10-17
-- **Phase**: milestone M3 (pushed, awaiting PR)
-- **Next step**: orchestrator opens the M3 PR from the scratchpad title/body, waits on CI, merges; then M4 (T030–T037)
+- **Phase**: milestone M4 (pushed, awaiting PR)
+- **Next step**: orchestrator opens the M4 PR from the scratchpad title/body, waits on CI, merges; then the close unit (T038–T039)
 
 ## Pull requests
 
@@ -19,7 +19,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #949 | design: spec, plan, tasks | merged | c410a749a8c6a417aa91f9011fd2a16fe2e340a8 |
 | #967 | M1 | merged | c5e61c3ea91a464695dcf9fb42b53121fac37490 |
 | #984 | M2 | merged | 380ceef79760b7f896b15b683276bdd0924aa959 |
-| — | M3 | orchestrator opens it (title/body in the scratchpad) | — |
+| #987 | M3 | merged | 2107a1a117dfa8aa2f6e45cddcb5af83a78850a9 |
+| — | M4 | orchestrator opens it (title/body in the scratchpad) | — |
 
 ## Milestones
 
@@ -27,8 +28,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T016 | full | Location chords step through locations (both focus states, stop, 0 PTY bytes), docs rows | #967 | merged |
 | M2 | T017–T023 | full | Keyboard lands on the sidebar row with a focus ring (FR-010), showcase variant | #984 | merged |
-| M3 | T024–T029 | light | Session chords cycle a location's sessions, docs rows | pending PR | in review |
-| M4 | T030–T037 | full | Project chords; all six chords in the user guide | — | pending |
+| M3 | T024–T029 | light | Session chords cycle a location's sessions, docs rows | #987 | merged |
+| M4 | T030–T037 | full | Project chords; all six chords in the user guide | pending PR | in review |
 
 US1 split along acceptance scenario 4 (FR-010 sidebar ring) into M1/M2: one milestone would exceed ~800 changed lines. Polish (T038–T039) changes no code: close unit.
 
@@ -47,6 +48,8 @@ US1 split along acceptance scenario 4 (FR-010 sidebar ring) into M1/M2: one mile
 | D7 | implement | Plan names `Message::Navigate(NavAction)`; the root-vocabulary, overlay-subscription and feature-registration guards refuse a single-feature root variant | Feature wrapper `Message::Navigation(navigation::Msg::Pressed(NavAction))`, shape-B entry `shell::navigation::update`; `navigation`→`sidebar` read allowlisted; `tests/features_navigation.rs` isolation test | agent-resolved | tests/root_vocabulary_is_cross_cutting.rs, feature_registration_cost.rs, overlay_registry.rs |
 
 ## Review rounds
+
+- M4: A (headless, round 1) tree 0e6bcec8…: CLEAN, 2 MINOR fixed (refused-switch guard, reveal scroll). B (sonnet) CHANGES: MAJOR missing M4 cycle-log (fixed), MINOR unavailable-active test (added). Round 2 (sonnet, fix diff): CLEAN. Full gate (`scripts/gate.sh`) green. Visual pass: not run, nothing drawn differently (project chords reuse the M2 ring).
 
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|

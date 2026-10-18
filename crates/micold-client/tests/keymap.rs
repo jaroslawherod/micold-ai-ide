@@ -840,3 +840,58 @@ fn the_user_guide_lists_every_navigation_chord_in_both_forms() {
         }
     }
 }
+
+// ---- Project chords (feature 803, T030) ----
+
+const PROJECT_PREVIOUS: NavAction = NavAction {
+    level: NavLevel::Project,
+    dir: Dir::Previous,
+};
+const PROJECT_NEXT: NavAction = NavAction {
+    level: NavLevel::Project,
+    dir: Dir::Next,
+};
+
+fn project_chords() -> [(PhysicalKey, NamedKey, NavAction); 2] {
+    [
+        (PhysicalKey::PageUp, NamedKey::PageUp, PROJECT_PREVIOUS),
+        (PhysicalKey::PageDown, NamedKey::PageDown, PROJECT_NEXT),
+    ]
+}
+
+#[test]
+fn project_chords_decode_by_physical_key_and_by_the_named_key_fallback() {
+    for (physical, named, action) in project_chords() {
+        let out = encode(
+            &kp(Key::Named(named), physical, chord_mods()),
+            TermMode::default(),
+        );
+        assert_eq!(out, KeyOutput::Navigate(action), "{physical:?}");
+        let out = encode(
+            &kp(Key::Named(named), PhysicalKey::Other, chord_mods()),
+            TermMode::default(),
+        );
+        assert_eq!(out, KeyOutput::Navigate(action), "fallback {named:?}");
+    }
+}
+
+#[test]
+fn page_keys_without_shift_or_the_primary_modifier_keep_their_outputs() {
+    let shift_only = Mods {
+        shift: true,
+        ..Mods::NONE
+    };
+    let primary_only = Mods {
+        shift: false,
+        ..chord_mods()
+    };
+    for (physical, named, _) in project_chords() {
+        for mods in [Mods::NONE, shift_only, primary_only] {
+            let out = encode(&kp(Key::Named(named), physical, mods), TermMode::default());
+            assert!(
+                !matches!(out, KeyOutput::Navigate(_)),
+                "{named:?} with {mods:?} is not a navigation chord, got {out:?}"
+            );
+        }
+    }
+}

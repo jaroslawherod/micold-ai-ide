@@ -20,3 +20,12 @@
 | T024, T026 → T027 | Session rows of `NAV_CHORDS`: `[`/`]` by physical `BracketLeft`/`BracketRight`, logical fallback, plain Ctrl+[ / Ctrl+] stay `0x1b` / `0x1d`, labels; `to_keymap_physical` maps both codes | **Deviation:** tests and code were written in the same step; the red run was not captured (`PhysicalKey::BracketLeft` did not exist, so the tests did not compile) | `--test keymap` (37 tests) and `--lib physical_keys` pass |
 | T025 → T028 | `session_step`: main then helpers, wrap both ways, one session / no current / stop → `Step::None`, collapsed row opens after `Selected` | **Deviation:** same step as the code; `Step::None` was the arm for `NavLevel::Session`, so the stepping tests would fail on it | `--test navigation` (13 tests) passes |
 | T029 | User guide rows for the session chords | the docs test failed until both pages listed the four labels | `the_user_guide_lists_every_navigation_chord_in_both_forms` passes |
+
+# TDD cycle log: 803 M4
+
+| Task | Behaviour | Red evidence | Green |
+|---|---|---|---|
+| T030, T033 | project rows of `NAV_CHORDS`: `PageUp`/`PageDown` by physical key and named-key fallback; near misses (no Shift, no primary) keep their outputs; labels | **Deviation: test-after.** The rows were added with the tests in one step; the labels were first observed red through the docs test (`terminal-panes.md lists Ctrl+Shift+PageUp`) | `--test keymap` passes |
+| T032 | `to_keymap_physical` maps `Code::PageUp`/`PageDown` | `physical_keys_map_onto_the_navigation_keys` failed: left `Other`, right `PageUp` (the mapping was first added to the wrong file) | `--lib` passes |
+| T031 → T034, T035 | `project_step` (order, unavailable skipped, wrap, one project, welcome screen first/last, no project), `apply_navigation` `Reopened` follow-up, `finish_navigation` lands on the restored session or none, a refused switch leaves the keyboard | **Deviation: test-after.** Written beside the code; reviewer A's finding (refused switch) was then covered by a new assertion | `--test navigation` passes |
+| T036, T037 | user guide rows and Navigation bullet (wrap rule, Fn+Up/Down laptop form) | `the_user_guide_lists_every_navigation_chord_in_both_forms` red until both pages listed the six labels | `--test keymap` docs test passes |

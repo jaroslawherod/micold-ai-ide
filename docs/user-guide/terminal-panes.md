@@ -38,6 +38,7 @@ program. The Overview and location chords work whether or not a terminal is focu
 | Open or close the [worktree Overview](overview.md) | Ctrl+Shift+O | Cmd+Shift+O |
 | Previous / next location ([Default and the worktrees](worktrees-and-sessions.md)) | Ctrl+Shift+, / Ctrl+Shift+. | Cmd+Shift+, / Cmd+Shift+. |
 | Previous / next session of the current location | Ctrl+Shift+[ / Ctrl+Shift+] | Cmd+Shift+[ / Cmd+Shift+] |
+| Previous / next project (unavailable projects are skipped) | Ctrl+Shift+PageUp / Ctrl+Shift+PageDown | Cmd+Shift+PageUp / Cmd+Shift+PageDown (laptop: Cmd+Shift+Fn+Up / Cmd+Shift+Fn+Down) |
 
 A new pane takes focus. Moving focus towards an edge with no pane there leaves it where it is. A
 split that is refused (6 panes, or a pane too small) shows its reason next to the panes. The

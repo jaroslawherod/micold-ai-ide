@@ -1382,7 +1382,11 @@ impl State {
                 self.reveal_scroll_armed();
                 Vec::new()
             }
-            Step::None | Step::Project(_) => Vec::new(),
+            // The switcher's own path: `Reopened` switches, restores and tells the daemon.
+            Step::Project(path) => vec![Message::Project(crate::features::project::Msg::Reopened(
+                path,
+            ))],
+            Step::None => Vec::new(),
         }
     }
 
@@ -1402,9 +1406,22 @@ impl State {
         if terminal_had_focus {
             return;
         }
-        if let Step::Session(id) = step {
-            self.release_terminal();
-            self.sidebar.keyboard_row = Some(crate::features::sidebar::RowRef::Session(*id));
+        match step {
+            Step::Session(id) => {
+                self.release_terminal();
+                self.sidebar.keyboard_row = Some(crate::features::sidebar::RowRef::Session(*id));
+            }
+            // The switch restored the project's current session, if it had one.
+            Step::Project(path) if self.workspace.active.as_ref() == Some(path) => {
+                self.release_terminal();
+                self.reveal_scroll_armed();
+                self.sidebar.keyboard_row = self
+                    .session
+                    .active
+                    .map(crate::features::sidebar::RowRef::Session);
+            }
+            // A refused switch (the project turned unavailable) left everything where it was.
+            Step::Project(_) | Step::None | Step::Stop(_) => {}
         }
     }
 }
