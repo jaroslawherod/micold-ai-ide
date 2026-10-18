@@ -225,7 +225,7 @@ No new code beyond keeping them wired; the tests prove nothing regressed.
 
 - [x] T068 [US3] Replace the three `IMAGE_SOURCES` with the two-entry `Select` in `crates/micold-client/src/ui/settings/container_fields.rs`, reusing the existing reference `TextField` and archive picker for "My own image", plus the SSH-server note
 - [x] T069 [US3] Write `docs/user-guide/sandboxed-daemon.md`: the image choice, what an own image must provide (sshd on port 2222 accepting `/run/micold/ssh/authorized_keys` with host key `/run/micold/ssh/host_ed25519_key`, `sh uname mkdir cat mv chmod`, `npm` and `flock` for AI CLIs; simplest `FROM ghcr.io/jaroslawherod/micold-basic:<tag>`), the resources, the migration and legacy notices; no mention of the released image as an option (FR-026)
-- [ ] T070 [US3] Visual pass (`visual-pass` skill) for quickstart §B steps 1 (without the AI CLI boxes), 3, 4, 6 and 7; save the evidence under `specs/806-container-daemon-ssh-provisioning/visual/`; time step 1 from "add" to a session running, excluding the pull, and record it against SC-002 (< 5 min)
+- [x] T070 [US3] Visual pass (`visual-pass` skill) for quickstart §B steps 1 (without the AI CLI boxes), 3, 4, 6 and 7; save the evidence under `specs/806-container-daemon-ssh-provisioning/visual/`; time step 1 from "add" to a session running, excluding the pull, and record it against SC-002 (< 5 min)
 
 **Checkpoint (M5)**: US1 #1/#3/#4, US2, US3 and US4 hold; no form offers the released image.
 
