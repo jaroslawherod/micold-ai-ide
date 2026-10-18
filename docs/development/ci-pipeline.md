@@ -135,7 +135,9 @@ Two rules govern it:
 
 Beyond the docs-only verdict, `classify change` publishes a second boolean, `packaging`, true when
 **any** touched path is declared `micold-packaging` in `.gitattributes` (`packaging/**`, the two
-`scripts/windows-install*.sh`, the workspace `Cargo.toml` and `Cargo.lock`, `release.yml`). The
+`scripts/windows-install*.sh`, the workspace `Cargo.toml` and `Cargo.lock`, `release.yml`, and the
+installer's other inputs: its icon, `LICENSE`, `remote-daemon-bundle.sh`, `build-lock.sh` and the
+toolchain pins). The
 `package + smoke (windows-11-arm)` job — about 21 minutes, the pipeline's critical path — runs when:
 
 - the event is a push to `main` or the nightly schedule (03:17 UTC), always; or
