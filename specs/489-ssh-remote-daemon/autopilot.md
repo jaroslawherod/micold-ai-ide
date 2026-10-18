@@ -88,7 +88,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M7 implemented and ticked; test-ssh green; T081 docs written. Next: scoped gate + review A/B, full gate, PR.
+M7 done: PR #1026 rebased onto origin/main (one conflict in features/daemons.rs, both sides kept), full gate green. Next: orchestrator waits on CI and merges.
 
 ## Open escalation
 
