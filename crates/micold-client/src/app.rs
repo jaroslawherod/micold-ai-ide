@@ -1272,6 +1272,9 @@ pub fn interpret(
         Outcome::RevealSuppressed(suppressed) => state.reveal_suppression_set(suppressed),
         Outcome::FieldFocusCleared => crate::features::window::field_focus_cleared(state),
         Outcome::FieldBlurred(field) => field_blurred(state, field),
+        // A page starts fresh: a repository field left empty last time must not show the required
+        // error on reopening (feature 937, FR-006). The marks are the daemons feature's.
+        Outcome::SettingsOpened => state.daemon_list.repository_marks = Default::default(),
         // Held for the next open of the dialog; the shell writes it to disk
         // (`shell::issues::on_issue_provider_changed`).
         Outcome::IssueSourceChosen { project, provider } => {

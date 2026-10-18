@@ -280,5 +280,5 @@ Polish (T049–T050) changes no code and is left to the close unit.
 
 ## Phase: TDD remediation (close, verification.md F1)
 
-- [ ] T051 [US3] Test first, in `tests/required_blur.rs`: leave a daemon's repository field empty, reopen Settings (`features::settings::opened`), and read `Required` for it; observe it red
-- [ ] T052 [US3] Clear `state.daemon_list.repository_marks` in `features::settings::opened` (`client/features/settings.rs`), the one place a Settings page starts; `scripts/gate.sh` green
+- [x] T051 [US3] Test first, in `tests/required_blur.rs`: leave a daemon's repository field empty, reopen Settings (`features::settings::opened`), and read `Required` for it; observe it red
+- [x] T052 [US3] Clear `state.daemon_list.repository_marks` when `Message::Settings(Opened)` reaches the root (`app.rs`; the settings feature may not write daemons state), the one place a Settings page starts; `scripts/gate.sh` green

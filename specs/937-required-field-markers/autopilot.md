@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #937
 - **Worktree branch**: claude/project-thread-rkhzho
 - **Started**: 2026-10-17
-- **Phase**: M7 (cut by close)
-- **Next step**: run M7 (T051–T052), then a new close unit (T049–T050, Status, close PR). Close unit 1 ran tdd-verify (PASS_WITH_GAPS, tdd/verification.md) and found the repository_marks hole as F1; speckit-converge not run separately (M2 review B was CHANGES and fixed, no clean B re-run), the F1 check was by reading the code against FR-006
+- **Phase**: M7 done, close unit next
+- **Next step**: after M7 merges, a new close unit (T049–T050, Status, close PR). Close unit 1 ran tdd-verify (PASS_WITH_GAPS, tdd/verification.md) and found the repository_marks hole as F1; speckit-converge not run separately (M2 review B was CHANGES and fixed, no clean B re-run), the F1 check was by reading the code against FR-006
 
 ## Pull requests
 
@@ -34,7 +34,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M4 | T029–T035 | full | Required error on submit in the dialogs; Create and Start runs enabled | #1046 | merged |
 | M5 | T036–T041 | full | Required error on save in Settings and the daemon form | #1052 | merged |
 | M6 | T042–T048 | full | Required error on leaving a field (blur), selects included | #1062 | merged |
-| M7 | T051–T052 | full | Settings reopens with no stale repository required error (close found, FR-006) | — | pending |
+| M7 | T051–T052 | full | Settings reopens with no stale repository required error (close found, FR-006) | to-open | pr-ready |
 
 ## Decisions
 
@@ -101,3 +101,7 @@ None.
 - M4 review A (code-review high): 8 findings, none held up. Declined: whitespace-only base branch / rename name is `Missing` (`Requirement::text` trims), non-name `preview()` errors only arise with Type and Name filled so they belong to Name, `revalidate` runs after every edit message; MINOR duplication of `validate` rules not extracted. Review B: F1 cycle-log entry added (red not observed, stated), F2 test placement noted in tasks.md.
 - M6: `repository_marks` (M5, window-wide on daemons State) outlives the Settings page, so a repository field left empty once shows the required error on reopen; clear it when Settings closes or the daemon goes (not done).
 - M6: `features/required.rs` of T043/T046 was dropped for `app::field_blurred` (feature_write_isolation FR-020); tests in `tests/required_blur.rs`.
+
+## M7 notes
+
+- Review B (sonnet, snapshot a25ab500…:e0beeb31) CLEAN. Review A folded into the same reviewer (diff is ~30 lines). Gate first failed `feature_write_isolation` and `root_is_routing_only` (settings feature may not write `daemon_list`; root arm may not decide): fixed with `Outcome::SettingsOpened`, applied in `interpret`. Gate green (`scripts/gate.sh`).

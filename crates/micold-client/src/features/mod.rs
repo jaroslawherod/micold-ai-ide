@@ -137,6 +137,9 @@ pub enum Outcome {
     /// A separate outcome from [`Outcome::FieldFocusCleared`]: that one says no field holds the
     /// keyboard any more, this one says which field was left.
     FieldBlurred(crate::features::window::FieldId),
+    /// Settings was opened (feature 937, FR-006). Applied by the root, which clears the daemons
+    /// feature's repository marks: the settings feature may not write another feature's state.
+    SettingsOpened,
     /// Hand this address to the operating system's opener (feature 031, FR-010).
     ///
     /// An effect request like [`Outcome::ClipboardWrite`], and performed the same way: the shell's
