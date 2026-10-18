@@ -12,7 +12,7 @@ lavapipe, private data dir, throwaway git repo as the project. Screenshots in `v
 | B2 worktree without session: one start action | pass | `b2-row-no-session-hover.png`: one split start control ("+" and chevron CLI picker) |
 | B2 Default rule | pass | Default shows the same "+" / chevron control while it has no session (`b2-default-cli-menu.png`) |
 | B4 one session: no sub-rows, no expander | pass | `b4-sidebar-one-session.png` |
-| B4 two sessions: collapsed expander, "helper, <cli>" | NOT OBSERVED | no UI path reaches a second session (see below) |
+| B4 two sessions: collapsed expander, "helper, <cli>" | NOT OBSERVED here; observed in the M5 pass below (`b5-helper-added-selected.png`) | no UI path reached a second session until M5 added "Start another session..." (see below) |
 
 ## Not observable
 A second session on one worktree could not be created through the client: the worktree row menu

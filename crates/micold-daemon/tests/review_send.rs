@@ -680,6 +680,15 @@ async fn us3_s1_with_no_session_running_one_starts_and_its_first_input_is_the_pr
 
     let (result, seen) = send(&mut client, 2, &project, "wt").await;
     let new = started_session(&result);
+    let sessions = s.state.sessions_for(&project);
+    assert_eq!(
+        sessions
+            .iter()
+            .map(|session| session.id)
+            .collect::<Vec<_>>(),
+        [new],
+        "the entry's own session is started and none was added (FR-001)"
+    );
     let (cwd, cli) = s
         .state
         .session_cwd_and_cli(new)

@@ -663,6 +663,7 @@ fn the_current_sessions_row_is_found_by_walking_the_rows_as_drawn() {
 
 // --- Feature 776 (M4): worktrees only, a press opens the main session -----------------------
 
+// Covers US5 s1 (FR-017).
 #[test]
 fn a_worktree_with_one_session_has_no_expander_and_a_press_selects_it() {
     let only = session(SessionLocation::Worktree("feat-a".into()));
@@ -675,6 +676,7 @@ fn a_worktree_with_one_session_has_no_expander_and_a_press_selects_it() {
     assert_eq!(node.main_session(), Some(id));
 }
 
+// Covers US5 s3-s4 (FR-017, FR-018).
 #[test]
 fn several_sessions_list_the_main_first_and_a_press_selects_the_main_not_the_last_viewed() {
     let mut helper = session(SessionLocation::Worktree("feat-a".into()));

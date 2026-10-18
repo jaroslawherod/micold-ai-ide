@@ -850,6 +850,28 @@ async fn main_session_the_refusal_names_the_marked_main_not_the_first() {
     }
 }
 
+/// `answer` is a refusal of a second session that names `existing`, the session that holds the
+/// location.
+fn assert_refused(answer: DaemonMsg, existing: SessionId) {
+    match answer {
+        DaemonMsg::OperationError {
+            kind,
+            message,
+            detail,
+            ..
+        } => {
+            assert_eq!(kind, ErrorKind::Refused, "{message}");
+            assert!(message.contains("already has a main session"), "{message}");
+            assert_eq!(
+                detail,
+                Some(existing.0.to_string()),
+                "names the existing session"
+            );
+        }
+        other => panic!("a second session is refused: {other:?}"),
+    }
+}
+
 /// Wait until `session` has (or has not) a hosting process.
 async fn until_live(state: &DaemonState, session: SessionId, live: bool) {
     tokio::time::timeout(BOUND, async {
@@ -920,7 +942,10 @@ async fn start_stop_and_restart_keep_the_one_session() {
         },
     )
     .await;
-    tokio::time::sleep(Duration::from_millis(300)).await;
+    // The connection handles messages in order: once this create is answered, the restart before
+    // it has been handled.
+    send(&mut client, create(9, project.path(), "wt")).await;
+    assert_refused(answer(&mut client, 9).await, sid(1));
     until_live(&state, sid(1), true).await;
     one(&state);
     kill_all(&state, project.path());
@@ -1045,7 +1070,10 @@ async fn wire_start_beside_a_running_session_needs_the_flag() {
     };
 
     send(&mut client, start(false)).await;
-    tokio::time::sleep(Duration::from_millis(500)).await;
+    // The connection handles messages in order: once this create is answered, the start before
+    // it has been handled (and refused).
+    send(&mut client, create(1, project.path(), "wt")).await;
+    assert_refused(answer(&mut client, 1).await, sid(1));
     assert!(state.live_session(sid(2)).is_none(), "refused: not started");
 
     send(&mut client, start(true)).await;
@@ -1080,10 +1108,7 @@ async fn no_sequence_without_the_flag_ever_shows_two_sessions() {
     at_most_one();
     let own = state.sessions_for(project.path())[0].id;
     send(&mut b, create(2, project.path(), "wt")).await;
-    assert!(matches!(
-        answer(&mut b, 2).await,
-        DaemonMsg::OperationError { .. }
-    ));
+    assert_refused(answer(&mut b, 2).await, own);
     at_most_one();
     send(&mut b, ClientMsg::SessionStop { session: own }).await;
     until_live(&state, own, false).await;
@@ -1102,10 +1127,7 @@ async fn no_sequence_without_the_flag_ever_shows_two_sessions() {
         at_most_one();
     }
     send(&mut b, create(3, project.path(), "wt")).await;
-    assert!(matches!(
-        answer(&mut b, 3).await,
-        DaemonMsg::OperationError { .. }
-    ));
+    assert_refused(answer(&mut b, 3).await, own);
     at_most_one();
     delete(&mut a, 4, own).await;
     at_most_one();
@@ -1128,5 +1150,6 @@ async fn deleting_an_extra_keeps_the_other_session() {
     delete(&mut client, 1, sid(2)).await;
     assert_eq!(unarchived_in(&state, project.path(), "wt"), 1);
     let kept = state.sessions_for(project.path());
-    assert_eq!(kept.first().map(|s| s.id), Some(sid(1)));
+    // `sessions_for` lists only un-archived sessions, so the list is exactly the survivors.
+    assert_eq!(kept.iter().map(|s| s.id).collect::<Vec<_>>(), [sid(1)]);
 }
