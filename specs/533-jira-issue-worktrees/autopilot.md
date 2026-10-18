@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #533
 - **Worktree branch**: feat/533_create-worktrees-from-jira-issues
 - **Started**: 2026-10-12
-- **Phase**: milestone M6
-- **Next step**: implement M6 (T078 test first, T074 seam and tests, T076, T077, T079), then a new close unit (T066, T067, Status Closed). Uncommitted close-unit work (test-strength fixes T071-T073 T075, tdd/verification.md, visual/close.md and B-step evidence) rides in the M6 PR
+- **Phase**: milestone M6 (implemented, in review)
+- **Next step**: finish M6 gate, Review B, PR; then a new close unit (T066, T067, T079 tick, Status Closed)
 
 ## Pull requests
 
@@ -63,6 +63,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Tasks | 1 | bae8666f588552c1c7a2447bfe65696f43efeeae:c779f5c824f46d2e9d3649c1647476dc206ab227 | CLEAN (2 MINOR fixed; speckit-analyze 2 HIGH, 4 MEDIUM fixed before review) |
 | Code A (M5) | 1 | 49a404c7bb63f7867eb675cfe36caada0985a331:b6c38e8f20351df17ba252d088def630e00811a9 | 9 findings: lenient unknown issue_source value, clone, duplicated read-modify-write fixed; rest declined; visual-pass toast fixed (NotFound silent) |
 | Conformance B (M5, sonnet) | 1 | 49a404c7bb63f7867eb675cfe36caada0985a331:b6c38e8f20351df17ba252d088def630e00811a9 | CLEAN (2 MINOR fixed, prose only) |
+| Code A (M6) | 1 | 8e830d74ea771f5b9236fe9ed55680fcb9dfd894:d83f04d897c1e9d5f4a8af590ef2594330d9c64e | 8 findings: tautological token-dir test, deleted structural guard and prompt test that bypassed the shell fixed; ledger refreshed; rest declined |
 
 ## Declined review findings
 
@@ -74,6 +75,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 | A | no Jira search beyond the cap | declared M3 deviation; M4 |
 | M3 | B | F2/F3 test gaps (no-token path, rotation, leak extension) | recorded in tdd/cycle-log.md with where the behaviour is covered; follow-up |
 | M5 | A | blocking save in the update handler; disk value wins over memory; chips shown for every branch source; outcome only with an active project | same as save_binding (feature 491) precedent; the chip row is the remembered choice, visible with both sources (T064) |
+| M6 | A | `closed_origin` ephemeral port may be reused by a parallel test | T076 asked for a bound-then-closed port; the window is microseconds and a reuse needs the same port handed out twice. MINOR |
+| M6 | A | test helper duplication, expected-text coupling, 550 KB of PNG evidence | MINOR; PNGs are the recorded visual evidence the spec's T066 requires |
 
 ## Handover
 

@@ -2687,6 +2687,63 @@ fn turning_the_jira_switch_on_and_saving_tells_the_service() {
     assert_eq!(told, vec![(Some(true), None, None)]);
 }
 
+/// Feature 533 (US2 AS5, T078): Save over a switch turned off with a stored connection raises the
+/// question and tells the service nothing; each answer is applied by the save it held.
+#[test]
+fn switching_jira_off_over_a_stored_connection_asks_and_each_answer_is_saved() {
+    use micold_client::features::settings::KeepOrRemove;
+
+    for (choice, removes) in [(KeepOrRemove::Keep, false), (KeepOrRemove::Remove, true)] {
+        let (mut app, mut rx) = connected_app();
+        let connection = micold_core::jira::JiraConnection::parse(
+            "https://acme.atlassian.net",
+            "ABC",
+            "me@acme.com",
+        )
+        .expect("a valid connection");
+        app.core.workspace.active = Some(PathBuf::from("/work/app"));
+        feed(
+            &mut app,
+            DaemonMsg::SettingsChanged {
+                settings: DaemonSettings {
+                    jira_enabled: true,
+                    jira_connections: [("/work/app".to_owned(), connection)].into(),
+                    ..quiet_settings()
+                },
+            },
+        );
+        let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Opened));
+        let _ = update_inner(
+            &mut app,
+            Message::Settings(SettingsMsg::JiraEnabledToggled(false)),
+        );
+        let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Saved));
+
+        let draft = app.core.settings.settings_draft.as_ref().expect("open");
+        assert!(draft.jira.prompt.is_some(), "Save asks before applying");
+        let told = |rx: &mut SentRx| -> Vec<(Option<bool>, bool)> {
+            drain(rx)
+                .into_iter()
+                .filter_map(|msg| match msg {
+                    ClientMsg::SettingsSet {
+                        jira_enabled,
+                        jira_connection,
+                        ..
+                    } => Some((jira_enabled, jira_connection.is_some())),
+                    _ => None,
+                })
+                .collect()
+        };
+        assert_eq!(told(&mut rx), vec![], "nothing is applied until it is answered");
+
+        let _ = update_inner(
+            &mut app,
+            Message::Settings(SettingsMsg::JiraKeepOrRemoveChosen(choice)),
+        );
+        assert_eq!(told(&mut rx), vec![(Some(false), removes)], "{removes}");
+    }
+}
+
 /// Feature 533 (FR-022): the window adopts the service's Jira switch and connections, and an open
 /// untouched Settings page follows them.
 #[test]
