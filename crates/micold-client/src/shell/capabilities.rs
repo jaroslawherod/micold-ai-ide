@@ -82,10 +82,7 @@ use micold_core::store::{JsonFileStore, ProjectStore};
 use std::path::PathBuf;
 
 use micold_client::kube::live::LiveCluster;
-use micold_core::kube::classify::KubeFailure;
 use micold_core::kube::Cluster;
-use std::future::Future;
-use std::pin::Pin;
 
 use crate::shell::link_opener::{LinkOpener, SystemLinkOpener};
 use micold_client::features::attention::DesktopNotifier;
@@ -120,12 +117,7 @@ pub struct Capabilities {
     kube_connector: KubeConnector,
 }
 
-/// Connects to the cluster of the named kubeconfig context.
-pub type KubeConnector = Arc<
-    dyn Fn(String) -> Pin<Box<dyn Future<Output = Result<Arc<dyn Cluster>, KubeFailure>> + Send>>
-        + Send
-        + Sync,
->;
+pub use micold_client::kube::KubeConnector;
 
 /// Find `gh` on this machine: the include's `PATH`, this process's `PATH`, then the well-known
 /// install directories (contracts/github-issue-source.md §1).

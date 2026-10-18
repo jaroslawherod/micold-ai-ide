@@ -21,6 +21,7 @@ use iced::Subscription;
 use micold_core::connect::{connect_at, connect_or_spawn, Connected, Credentials, SPAWN_TIMEOUT};
 use micold_core::daemons::{DaemonId, DaemonRegistry, DaemonRuntime, DaemonState, DaemonStates};
 use micold_core::endpoint::{self, DialAddress};
+use micold_core::kube::settings::KubeSettings;
 use micold_core::protocol::codec::{CodecError, Frame};
 use micold_core::protocol::keepalive::{self, Keepalive, KeepaliveAction};
 use micold_core::protocol::messages::{ClientMsg, DaemonMsg};
@@ -157,15 +158,27 @@ pub enum Dial {
         /// The host and connection settings.
         target: SshTarget,
     },
-    /// Start a pod in a cluster and bridge to it (feature 686). Held as the context and namespace
-    /// only: `KubeSettings` is not `Hash`, and the full settings are in the actor key's fingerprint.
-    /// One try per start, like [`Dial::Ssh`].
+    /// Start a pod in a cluster and bridge to it (feature 686). One try per start, like
+    /// [`Dial::Ssh`].
     Kubernetes {
-        /// The kubeconfig context.
-        context: String,
-        /// The namespace the daemon's objects live in.
-        namespace: String,
+        /// The daemon's name, which its object names derive from.
+        name: String,
+        /// The daemon's settings.
+        settings: KubeDial,
     },
+}
+
+/// A Kubernetes daemon's settings as part of an actor's identity: `KubeSettings` is not `Hash`, so
+/// its serialised form is hashed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KubeDial(pub KubeSettings);
+
+impl std::hash::Hash for KubeDial {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        serde_json::to_string(&self.0)
+            .unwrap_or_default()
+            .hash(state);
+    }
 }
 
 /// Everything one actor needs, and its subscription identity (it is hashed whole). A change to any
@@ -236,8 +249,8 @@ pub fn actor_specs(
                     target: s.target.clone(),
                 },
                 DaemonRuntime::Kubernetes(k) => Dial::Kubernetes {
-                    context: k.context.0.clone(),
-                    namespace: k.namespace.0.clone(),
+                    name: entry.name.as_str().to_string(),
+                    settings: KubeDial(k.clone()),
                 },
                 _ => return None,
             };
@@ -471,6 +484,8 @@ async fn connect_and_pump(
     output: &mut mpsc::Sender<Message>,
     life: &mut LinkLife,
 ) -> PumpEnd {
+    // The relay of a Kubernetes daemon lives as long as its connection.
+    let mut held_relay: Option<crate::kube::relay::Relay> = None;
     let attempt = match (&spec.dial, endpoint) {
         // Unchanged: auto-spawn a detached host process and poll until it accepts. Only the host
         // entry ever reaches here; a container daemon is never spawned by the client.
@@ -497,9 +512,22 @@ async fn connect_and_pump(
                 }
             }
         }
-        (Dial::Kubernetes { context, namespace }, _) => {
-            match kube_attempt(None, context, namespace).await {
-                Ok(c) => Ok(c),
+        (Dial::Kubernetes { name, settings }, _) => {
+            let Some(env) = KUBE_ENV.get() else {
+                return report(
+                    id,
+                    output,
+                    ConnectionMsg::StartFailed("this build cannot reach a cluster".to_string()),
+                )
+                .await
+                .ended();
+            };
+            let sink = provisioning_sink(id, output);
+            match kube_attempt(env, name, &settings.0, &sink).await {
+                Ok((c, relay)) => {
+                    held_relay = Some(relay);
+                    Ok(c)
+                }
                 Err(reason) if life.established => {
                     return report(id, output, ConnectionMsg::ConnectFailed(reason)).await;
                 }
@@ -527,6 +555,8 @@ async fn connect_and_pump(
             }
         }
     };
+    // Dropping the relay ends the pod's forward: it lives until this function returns.
+    let _relay_lives_until_return = &held_relay;
 
     let connected = match attempt {
         Ok(c) => c,
@@ -839,19 +869,140 @@ async fn ssh_attempt(
     })
 }
 
-/// One bring-up of a Kubernetes daemon. Without the shared SSH image (#806) there is nothing to
-/// run in the pod, so it fails at once with [`KubeFailure::Unavailable`] and makes no cluster call.
-/// M5 replaces this with the real start.
+/// What a Kubernetes daemon's start needs from the shell (this module names no concrete
+/// implementation, `tests/no_concrete_implementations.rs`).
+pub struct KubeEnv {
+    /// Connects to the cluster of a kubeconfig context.
+    pub connect: crate::kube::KubeConnector,
+    /// Makes the pod's host key and this client's key.
+    pub keygen: std::sync::Arc<dyn micold_core::kube::access::KeyGen>,
+    /// Runs `ssh` and `scp` toward the relay.
+    pub host: std::sync::Arc<dyn SshHost>,
+    /// The directory holding every Kubernetes daemon's key directory.
+    pub keys_root: PathBuf,
+    /// This machine's home directory, where the allowed credentials' source files are.
+    pub home: PathBuf,
+}
+
+static KUBE_ENV: std::sync::OnceLock<KubeEnv> = std::sync::OnceLock::new();
+
+/// Install what Kubernetes daemons are started with. The first call wins.
+pub fn install_kube(env: KubeEnv) {
+    let _ = KUBE_ENV.set(env);
+}
+
+/// The account the pod's SSH server logs this client in as (the image's, #806).
+pub const POD_SSH_USER: &str = "dev";
+
+/// One bring-up of a Kubernetes daemon: the start sequence up to a running pod, the relay to its
+/// SSH port with its host key pinned, then the shared copy, install and connect sequence over it.
+/// The relay returned must outlive the connection. A drift, or any failure, is the reason in the
+/// user's words; the attempt is already rolled back.
 pub async fn kube_attempt(
-    cluster: Option<&dyn micold_core::kube::Cluster>,
-    context: &str,
-    namespace: &str,
-) -> Result<Connected, String> {
-    let _ = (cluster, context, namespace);
-    if !crate::features::daemons::SHARED_SSH_IMAGE_AVAILABLE {
-        return Err(micold_core::kube::classify::KubeFailure::Unavailable.to_string());
+    env: &KubeEnv,
+    name: &str,
+    settings: &KubeSettings,
+    sink: &EventSink,
+) -> Result<(Connected, crate::kube::relay::Relay), String> {
+    use micold_core::kube::start::{
+        connect_pod, pod_target, start, ConnectOutcome, ConnectRequest, DriftChoice, StartOutcome,
+        StartRequest,
+    };
+    let fail = |f: micold_core::kube::classify::KubeFailure| f.to_string();
+    let image = settings
+        .image
+        .as_ref()
+        .map(|i| i.to_reference())
+        .ok_or_else(|| fail(micold_core::kube::classify::KubeFailure::Unavailable))?;
+    let (context, namespace) = (&settings.context.0, &settings.namespace.0);
+    let names = micold_core::kube::names::ResourceNames::new(context, namespace, name);
+    let keys = crate::kube::keys::KubeKeys::new(&env.keys_root, names.key().as_str());
+    let client = keys
+        .load_or_create(&*env.keygen, || uuid::Uuid::new_v4().to_string())
+        .map_err(|e| format!("cannot write the SSH key files: {e}"))?;
+    if client.public_key.is_empty() {
+        let _ = keys.delete();
+        return Err("cannot make an SSH key: is `ssh-keygen` installed?".to_string());
     }
-    Err("starting a Kubernetes daemon is not implemented".to_string())
+    let cluster = (env.connect)(context.clone()).await.map_err(fail)?;
+    let read = |path: &Path| std::fs::read_to_string(path);
+    let request = StartRequest {
+        cluster: &*cluster,
+        keys: &*env.keygen,
+        server: "",
+        settings,
+        names: &names,
+        image: &image,
+        client: &client,
+        drift: DriftChoice::Ask,
+        home: &env.home,
+        hosts: &[],
+        read: &read,
+    };
+    let started = match start(&request, &mut |_| {}).await {
+        StartOutcome::Ready(started) => started,
+        StartOutcome::Drift { fields } => {
+            return Err(format!(
+                "the pod runs with other settings ({}): stop it, or start it again to recreate it",
+                fields.join(", ")
+            ))
+        }
+        StartOutcome::Failed(failure) => return Err(fail(failure)),
+    };
+    let relay = crate::kube::relay::Relay::open(
+        cluster.clone(),
+        namespace.clone(),
+        started.pod.clone(),
+        micold_core::kube::manifest::SSH_PORT,
+    )
+    .await
+    .map_err(|e| format!("cannot open the local relay to the pod: {e}"))?;
+    let pinned = async {
+        let secret = cluster
+            .get(
+                namespace,
+                micold_core::kube::ObjectKind::Secret,
+                &names.access_secret(),
+            )
+            .await
+            .map_err(|e| format!("cannot read the pod's host key: {e:?}"))?
+            .and_then(|view| micold_core::kube::access::AccessSecret::parse(&view.data))
+            .ok_or("the pod's access secret has no host key")?;
+        keys.write_known_hosts(relay.addr().port(), &secret.host_key.public_line)
+            .map_err(|e| format!("cannot pin the pod's host key: {e}"))
+    }
+    .await;
+    if let Err(reason) = pinned {
+        // The pod is rolled back like any failed connect.
+        micold_core::kube::start::rollback(&request, &started.attempt).await;
+        return Err(reason);
+    }
+    let target = pod_target(micold_core::ssh::argv::PinnedReach {
+        host: "127.0.0.1".to_string(),
+        port: relay.addr().port(),
+        user: POD_SSH_USER.to_string(),
+        key: keys.private_key(),
+        known_hosts: keys.known_hosts(),
+    });
+    let opts = ProvisionOptions {
+        platform: ClientPlatform::current(),
+        client_arch: std::env::consts::ARCH.to_string(),
+        timeout_secs: DEFAULT_CONNECT_TIMEOUT_SECS,
+        build_id: current_build_id(),
+        client_build: CLIENT_BUILD.to_string(),
+    };
+    let cancel = CancelToken::new();
+    let connect = ConnectRequest {
+        host: &*env.host,
+        target: &target,
+        opts: &opts,
+        cancel: &cancel,
+    };
+    let forward = |event: &micold_core::provision::ProvisionEvent| sink(event.clone());
+    match connect_pod(&request, &started, &connect, &mut |_| {}, &mut { forward }).await {
+        ConnectOutcome::Ready(done) => Ok((done.connected, relay)),
+        ConnectOutcome::Failed(failure) => Err(fail(failure)),
+    }
 }
 
 async fn report(id: DaemonId, output: &mut mpsc::Sender<Message>, msg: ConnectionMsg) -> PumpEnd {
@@ -934,8 +1085,8 @@ mod tests {
         let specs = actor_specs(&registry, &states, dir, None, false);
         assert!(matches!(
             specs.as_slice(),
-            [s] if matches!(&s.dial, Dial::Kubernetes { context, namespace }
-                if context == "kind-dev" && namespace == "dev")
+            [s] if matches!(&s.dial, Dial::Kubernetes { name, settings }
+                if name == "Cluster" && settings.0.context.0 == "kind-dev" && settings.0.namespace.0 == "dev")
         ));
         states.insert(id, DaemonState::Unreachable { reason: "x".into() });
         assert!(actor_specs(&registry, &states, dir, None, false).is_empty());

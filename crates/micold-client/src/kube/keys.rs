@@ -18,16 +18,10 @@ pub const KNOWN_HOSTS: &str = "known_hosts";
 /// The file holding this client's id.
 pub const CLIENT_ID: &str = "client_id";
 
-/// The `HostKeyAlias` an SSH connection to the daemon uses and its `known_hosts` line names.
-pub fn host_alias(daemon_key: &str) -> String {
-    format!("micold-kube-{daemon_key}")
-}
-
 /// One daemon's key files.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KubeKeys {
     dir: PathBuf,
-    daemon_key: String,
 }
 
 impl KubeKeys {
@@ -50,7 +44,6 @@ impl KubeKeys {
             } else {
                 &component
             }),
-            daemon_key: daemon_key.to_string(),
         }
     }
 
@@ -92,11 +85,10 @@ impl KubeKeys {
     }
 
     /// Pin the pod's host key: `known_hosts` becomes the one line
-    /// `micold-kube-<daemon key> <host public key>`.
-    pub fn write_known_hosts(&self, host_public_line: &str) -> io::Result<()> {
+    /// `[127.0.0.1]:<relay port> <host public key>`.
+    pub fn write_known_hosts(&self, port: u16, host_public_line: &str) -> io::Result<()> {
         let line = format!(
-            "{} {}\n",
-            host_alias(&self.daemon_key),
+            "[127.0.0.1]:{port} {}\n",
             key_without_comment(host_public_line)
         );
         owner_only::write(&self.dir, KNOWN_HOSTS, line.as_bytes()).map(|_| ())
@@ -145,7 +137,8 @@ mod tests {
         let root = tempfile::tempdir().unwrap();
         let keys = keys(root.path());
         make(&keys, "c1");
-        keys.write_known_hosts("ssh-ed25519 HOST pod").unwrap();
+        keys.write_known_hosts(40001, "ssh-ed25519 HOST pod")
+            .unwrap();
         for file in [PRIVATE_KEY, PUBLIC_KEY, KNOWN_HOSTS, CLIENT_ID] {
             assert_eq!(mode(&root.path().join("k1").join(file)), 0o600, "{file}");
         }
@@ -153,17 +146,17 @@ mod tests {
     }
 
     #[test]
-    fn known_hosts_is_one_line_naming_the_alias_and_the_key_without_its_comment() {
+    fn known_hosts_is_one_line_naming_the_relay_port_and_the_key_without_its_comment() {
         let root = tempfile::tempdir().unwrap();
         let keys = keys(root.path());
-        keys.write_known_hosts("ssh-ed25519 HOSTKEY micold-host-x")
+        keys.write_known_hosts(40001, "ssh-ed25519 HOSTKEY micold-host-x")
             .unwrap();
         let text = std::fs::read_to_string(keys.known_hosts()).unwrap();
-        assert_eq!(text, "micold-kube-k1 ssh-ed25519 HOSTKEY\n");
-        keys.write_known_hosts("ssh-ed25519 OTHER").unwrap();
+        assert_eq!(text, "[127.0.0.1]:40001 ssh-ed25519 HOSTKEY\n");
+        keys.write_known_hosts(40002, "ssh-ed25519 OTHER").unwrap();
         let text = std::fs::read_to_string(keys.known_hosts()).unwrap();
         assert_eq!(
-            text, "micold-kube-k1 ssh-ed25519 OTHER\n",
+            text, "[127.0.0.1]:40002 ssh-ed25519 OTHER\n",
             "replaced, not appended"
         );
     }
@@ -196,7 +189,7 @@ mod tests {
         let root = tempfile::tempdir().unwrap();
         let keys = keys(root.path());
         make(&keys, "c1");
-        keys.write_known_hosts("ssh-ed25519 H").unwrap();
+        keys.write_known_hosts(40001, "ssh-ed25519 H").unwrap();
         keys.delete().unwrap();
         assert!(!root.path().join("k1").exists());
         keys.delete().unwrap();

@@ -201,6 +201,16 @@ fn boot() -> (App, Task<Message>) {
     micold_client::daemon::install_ssh_host(std::sync::Arc::new(
         crate::shell::daemons::system_ssh(),
     ));
+    // What Kubernetes daemons are started with (feature 686).
+    micold_client::daemon::install_kube(micold_client::daemon::KubeEnv {
+        connect: caps.kube_connector(),
+        keygen: std::sync::Arc::new(crate::shell::daemons::SshKeygen),
+        host: std::sync::Arc::new(crate::shell::daemons::system_ssh()),
+        keys_root: crate::shell::daemons::kube_keys_root(),
+        home: directories::UserDirs::new()
+            .map(|dirs| dirs.home_dir().to_path_buf())
+            .unwrap_or_default(),
+    });
     let mut core = State::default();
     // Feature 028 (FR-019): before anything else is loaded, where is this executable running from?
     // Asked here because `current_exe()` is a syscall and this is the boundary; the verdict is a
