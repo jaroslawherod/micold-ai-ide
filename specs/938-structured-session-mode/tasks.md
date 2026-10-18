@@ -221,11 +221,11 @@ CLI.
   `crates/micold-core/src/protocol/version.rs` by one (51 → 52 if `main` is still at 51) with a
   doc line naming feature 938's first wire delta; fix every exhaustive match the new variant
   breaks (`LSP findReferences`).
-- [ ] T018 [US1] Generalise the PTY spawn's environment hygiene in
+- [x] T018 [US1] Generalise the PTY spawn's environment hygiene in
   `crates/micold-daemon/src/supervisor.rs`: turn `strip_inherited_terminal_identity` and
   `prefer_process_path` into one env-edit list both a `portable_pty::CommandBuilder` and a
   `std::process::Command` can apply (R3); existing PTY tests pass unchanged (SC-004).
-- [ ] T019 [US1] Add `crates/micold-daemon/src/structured.rs` (`StructuredSession`, registered in
+- [x] T019 [US1] Add `crates/micold-daemon/src/structured.rs` (`StructuredSession`, registered in
   `crates/micold-daemon/src/lib.rs` or `main.rs` beside `supervisor`): spawn with piped
   stdin/stdout/stderr, `process::no_window`, `process_group(0)` on Unix, the env-edit list of T018,
   and `platform::ProcessTree` adoption as `PtySession::spawn_answering` does; a stdout reader

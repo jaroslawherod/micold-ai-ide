@@ -88,7 +88,9 @@ fn walk(session: Session) -> Vec<WireLifecycle> {
     assert!(state.stop_session(id));
     seen.push(settled(&state, dir, id));
     stream_script(dir, "pause 300\nexit 1\n");
-    state.start_session(id, LaunchMode::Fresh).expect("starts again");
+    state
+        .start_session(id, LaunchMode::Fresh)
+        .expect("starts again");
     seen.push(settled(&state, dir, id));
     stream_script(dir, "");
     let deadline = Instant::now() + Duration::from_secs(10);
