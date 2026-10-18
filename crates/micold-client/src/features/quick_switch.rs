@@ -7,7 +7,7 @@ use micold_core::quick_switch::{self, Candidate, EntryKey, Ranked};
 use micold_core::typeahead::Query;
 
 use crate::app::{Message, State as Root};
-use crate::features::navigation::{self, location_node, Step};
+use crate::features::navigation::{self, Step};
 use crate::features::sidebar::RowRef;
 use crate::floating_surface;
 use crate::overlay::registry::Registered;
@@ -113,17 +113,18 @@ pub struct List {
 
 /// The list for the open palette's query and highlight (empty query, no highlight when closed).
 pub fn list(state: &Root) -> List {
+    derive(state).0
+}
+
+/// [`list`] with the rule-facing candidates it was ranked from, built once.
+fn derive(state: &Root) -> (List, Vec<Candidate>) {
     let open = state.quick_switch.open.as_ref();
     let entries = candidates(state);
+    let rule: Vec<Candidate> = entries.iter().map(|e| e.candidate.clone()).collect();
     let query = Query::new(open.map_or("", |o| o.query.as_str()));
-    let ranked = {
-        let rule: Vec<Candidate> = entries.iter().map(|e| e.candidate.clone()).collect();
-        let ranked = quick_switch::filter(&rule, &query);
-        let highlighted =
-            quick_switch::reseat(&rule, &ranked, open.and_then(|o| o.highlighted.as_ref()));
-        (ranked, highlighted)
-    };
-    let (ranked, highlighted) = ranked;
+    let ranked = quick_switch::filter(&rule, &query);
+    let highlighted =
+        quick_switch::reseat(&rule, &ranked, open.and_then(|o| o.highlighted.as_ref()));
     let empty = if !ranked.is_empty() {
         None
     } else if entries.is_empty() {
@@ -131,12 +132,13 @@ pub fn list(state: &Root) -> List {
     } else {
         Some(Empty::NoMatches)
     };
-    List {
+    let list = List {
         entries,
         ranked,
         highlighted,
         empty,
-    }
+    };
+    (list, rule)
 }
 
 /// The key of the highlighted entry of `list`.
@@ -192,13 +194,8 @@ pub fn update(state: &mut Root, msg: Msg) -> Option<Choice> {
             None
         }
         Msg::Moved(dir) => {
-            let current = list(state);
+            let (current, rule) = derive(state);
             if let Some(at) = current.highlighted {
-                let rule: Vec<Candidate> = current
-                    .entries
-                    .iter()
-                    .map(|e| e.candidate.clone())
-                    .collect();
                 let to = quick_switch::step(&rule, &current.ranked, at, dir);
                 let key = rule[current.ranked[to].index].key.clone();
                 if let Some(open) = &mut state.quick_switch.open {
@@ -243,24 +240,23 @@ fn close(state: &mut Root) {
 /// The palette's entries in FR-004 order (data-model.md *Entry*): the active project's locations
 /// in `navigation::location_order`. Sessions (M2) and other projects (M3) are not listed yet.
 pub fn candidates(state: &Root) -> Vec<Entry> {
-    let order = navigation::location_order(state);
+    let nodes = navigation::location_nodes(state);
     let current = state
         .sidebar
         .nav_stop
         .clone()
-        .filter(|stop| order.contains(stop))
+        .filter(|stop| nodes.iter().any(|(at, _)| at == stop))
         .or_else(|| state.current_session_location());
-    order
+    nodes
         .into_iter()
-        .filter_map(|location| {
-            let node = location_node(state, &location)?;
+        .map(|(location, node)| {
             let context = node
                 .tags()
                 .iter()
                 .map(micold_core::naming::Tag::label)
                 .collect::<Vec<_>>()
                 .join(" · ");
-            Some(Entry {
+            Entry {
                 candidate: Candidate {
                     key: EntryKey::Location(location.clone()),
                     name: node.name().to_string(),
@@ -270,7 +266,7 @@ pub fn candidates(state: &Root) -> Vec<Entry> {
                 kind: Kind::Location,
                 context,
                 current: current.as_ref() == Some(&location),
-            })
+            }
         })
         .collect()
 }

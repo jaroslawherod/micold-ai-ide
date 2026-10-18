@@ -1215,8 +1215,8 @@ fn app_chord_listener() -> Subscription<Message> {
 }
 
 /// The message for an app chord — [`crate::features::overview::Msg::Toggled`] for the Overview
-/// chord, [`crate::features::quick_switch::Msg::Toggled`] for the switcher's, `features::navigation::Msg::Pressed` for a navigation chord — and nothing for any other
-/// key. A named function, not a closure, for the same `TypeId` reason as [`escape_message`].
+/// chord, [`crate::features::quick_switch::Msg::Toggled`] for the switcher's,
+/// `features::navigation::Msg::Pressed` for a navigation chord — and nothing for any other key. A named function, not a closure, for the same `TypeId` reason as [`escape_message`].
 fn app_chord(event: iced::keyboard::Event) -> Option<Message> {
     use crate::ui::material::terminal_pane::{to_keymap_key, to_keymap_mods, to_keymap_physical};
     let iced::keyboard::Event::KeyPressed {

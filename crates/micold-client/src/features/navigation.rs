@@ -36,21 +36,34 @@ pub enum Step {
 /// Default, then each worktree row as drawn. Worktrees the tag filter hides and those of a
 /// collapsed run group are not drawn, so they are not in the order.
 pub fn location_order(state: &State) -> Vec<SessionLocation> {
-    let mut order = Vec::new();
+    location_nodes(state)
+        .into_iter()
+        .map(|(location, _)| location)
+        .collect()
+}
+
+/// [`location_order`]'s locations with their rows, from one walk of the sidebar's entries.
+pub(crate) fn location_nodes(state: &State) -> Vec<(SessionLocation, LocationNode)> {
+    let mut nodes = Vec::new();
     for entry in state.sidebar_entries() {
         match entry {
-            SidebarEntry::Default(_) => order.push(SessionLocation::Default),
-            SidebarEntry::Worktree(node) => order.push(node.location()),
+            SidebarEntry::Default(node) => {
+                nodes.push((SessionLocation::Default, LocationNode::Default(node)));
+            }
+            SidebarEntry::Worktree(node) => {
+                nodes.push((node.location(), LocationNode::Worktree(node)));
+            }
             SidebarEntry::Group(group) if group.expanded => {
-                order.extend(group.runs.iter().filter_map(|run| match &run.row {
-                    RunRow::Worktree(node) => Some(node.location()),
-                    RunRow::NoWorktree => None,
-                }));
+                for run in group.runs {
+                    if let RunRow::Worktree(node) = run.row {
+                        nodes.push((node.location(), LocationNode::Worktree(node)));
+                    }
+                }
             }
             SidebarEntry::Group(_) => {}
         }
     }
-    order
+    nodes
 }
 
 /// What `action` lands on in `state` (contracts/ui.md U1, U2).
@@ -177,22 +190,7 @@ impl LocationNode {
 
 /// The sidebar's node for `location`, a run's worktree included; `None` when no row stands for it.
 pub(crate) fn location_node(state: &State, location: &SessionLocation) -> Option<LocationNode> {
-    state
-        .sidebar_entries()
+    location_nodes(state)
         .into_iter()
-        .find_map(|entry| match entry {
-            SidebarEntry::Default(node) if *location == SessionLocation::Default => {
-                Some(LocationNode::Default(node))
-            }
-            SidebarEntry::Worktree(node) if node.location() == *location => {
-                Some(LocationNode::Worktree(node))
-            }
-            SidebarEntry::Group(group) => group.runs.into_iter().find_map(|run| match run.row {
-                RunRow::Worktree(node) if node.location() == *location => {
-                    Some(LocationNode::Worktree(node))
-                }
-                _ => None,
-            }),
-            _ => None,
-        })
+        .find_map(|(at, node)| (at == *location).then_some(node))
 }
