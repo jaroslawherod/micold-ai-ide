@@ -184,6 +184,9 @@ fn a_missing_cli_fails_both_kinds_alike() {
 
 /// FR-009: the events written before an exit stay in the history a viewer receives.
 #[tokio::test(flavor = "multi_thread")]
+// The guard serialises this case with the others that change `PATH`; it is meant to be held
+// across the awaits, and nothing else on this runtime takes it.
+#[allow(clippy::await_holding_lock)]
 async fn events_written_before_an_exit_stay_in_the_history() {
     let _serial = one_at_a_time();
     fake_stream_cli();

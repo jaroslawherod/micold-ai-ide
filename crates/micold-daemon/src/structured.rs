@@ -152,18 +152,26 @@ impl StructuredSession {
         };
 
         let output_ended = Arc::new(ReadersDone(2.into()));
-        let readers = vec![
+        let readers = [
             spawn_reader(
                 format!("stream-out-{id}"),
                 Arc::clone(&output_ended),
                 move || read_events(stdout, on_event),
-            )?,
+            ),
             spawn_reader(
                 format!("stream-err-{id}"),
                 Arc::clone(&output_ended),
                 move || log_stderr(id, stderr),
-            )?,
+            ),
         ];
+        // A reader that could not start leaves no owner for the child: end it here.
+        let readers = match readers.into_iter().collect::<io::Result<Vec<_>>>() {
+            Ok(readers) => readers,
+            Err(e) => {
+                let _ = process.kill();
+                return Err(e);
+            }
+        };
         Ok(Self {
             id,
             process,
@@ -249,9 +257,19 @@ fn spawn_reader(
     read: impl FnOnce() + Send + 'static,
 ) -> io::Result<JoinHandle<()>> {
     std::thread::Builder::new().name(name).spawn(move || {
+        // Counted on unwind too, so a panicking reader does not hold every teardown to its wait.
+        let _done = CountsDone(done);
         read();
-        done.one_done();
     })
+}
+
+/// Counts its reader done when dropped.
+struct CountsDone(Arc<ReadersDone>);
+
+impl Drop for CountsDone {
+    fn drop(&mut self) {
+        self.0.one_done();
+    }
 }
 
 /// Read `stdout` to its end, one event per line in order, the trailing partial line last (R4,

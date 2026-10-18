@@ -3395,7 +3395,7 @@ impl DaemonState {
             Vec::new()
         };
         drop(inner);
-        for pty in ptys {
+        for pty in Self::end_removed(ptys) {
             let _ = pty.kill();
         }
         if outcome == AttachOutcome::Attached {
@@ -3821,7 +3821,7 @@ impl DaemonState {
         };
         self.broadcast_origin_events();
         self.revoke_tool_credentials(&ids);
-        Ok(ptys)
+        Ok(Self::end_removed(ptys))
     }
 
     /// Withdraw the tool-server credentials and binding files of sessions that have left the
@@ -3876,11 +3876,14 @@ impl DaemonState {
     /// whichever process it is streaming. The explicit `kill()` is what makes teardown prompt rather
     /// than dependent on when some other task happens to let go — the primary always got one, and
     /// shell instances silently did not.
-    fn remove_live_by_ids(inner: &mut Inner, ids: Vec<SessionId>) -> Vec<Arc<PtySession>> {
+    ///
+    /// Hand what this returns to [`Self::end_removed`] once the lock is released: a structured
+    /// process blocks in its teardown, which must not happen under the lock (feature 938).
+    fn remove_live_by_ids(inner: &mut Inner, ids: Vec<SessionId>) -> Vec<Proc> {
         let mut removed = Vec::new();
         for id in ids {
-            if let Some(live) = inner.sessions.remove(&id) {
-                removed.extend(live.procs.values().filter_map(Proc::pty).cloned());
+            if let Some(mut live) = inner.sessions.remove(&id) {
+                removed.extend(std::mem::take(&mut live.procs).into_values());
             }
             // Every caller here is an archive/forget path — the session is not coming back, so its
             // recorded size goes with it (FR-020a). A mere stop/kill does *not* come through here,
@@ -3892,6 +3895,22 @@ impl DaemonState {
             inner.carried.remove(&id);
         }
         removed
+    }
+
+    /// End the structured processes of [`Self::remove_live_by_ids`] and return its PTYs for the
+    /// caller to `kill()`. Called **off** the lock: a structured process is killed and torn down
+    /// here (feature 938).
+    fn end_removed(removed: Vec<Proc>) -> Vec<Arc<PtySession>> {
+        removed
+            .into_iter()
+            .filter_map(|proc| match proc {
+                Proc::Pty { pty, .. } => Some(pty),
+                Proc::Structured(child) => {
+                    let _ = child.kill();
+                    None
+                }
+            })
+            .collect()
     }
 
     /// Add (open) a project by path, discovering its git/availability facts, persisting (T053). The
@@ -3925,7 +3944,7 @@ impl DaemonState {
             (ids, ptys)
         };
         self.revoke_tool_credentials(&ids);
-        Ok(ptys)
+        Ok(Self::end_removed(ptys))
     }
 
     /// Rename a project's display name (validated by the caller), persisting (T053).
@@ -3952,7 +3971,7 @@ impl DaemonState {
         if owner.is_some() {
             self.remove_pasted_images(session, worktree.as_deref());
         }
-        Ok((owner, ptys))
+        Ok((owner, Self::end_removed(ptys)))
     }
 
     /// Make `session` the main session of its location (FR-021) and push the catalog when the
