@@ -24,7 +24,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T010 | full | Person start on an occupied location asks to confirm | #1048 | merged |
-| M2 | T011–T014 | light | Agent rule documented in tool descriptions and guide | #PRNUM | open |
+| M2 | T011–T014 | light | Agent rule documented in tool descriptions and guide | #1055 | open |
 
 ## Decisions
 
