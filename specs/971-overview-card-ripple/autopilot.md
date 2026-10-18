@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #971
 - **Worktree branch**: claude/project-thread-kqz6b6
 - **Started**: 2026-10-18
-- **Phase**: M2 implemented, PR pending
-- **Next step**: orchestrator opens the M2 PR and merges it, then close
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -18,14 +18,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1038 | Design | merged | 47dff0df84df09f826e6b80ed76120a6f340c6f8 |
 | #1045 | M1 | merged | 47e382d124f1f74f15a57dafe6883228837e5e62 |
-| pending | M2 | orchestrator opens | — |
+| #1054 | M2 | merged | ee269b6de3413a816b3973ae1e2d5aa1ce2fe610 |
+| pending | Close | orchestrator opens | — |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T015 | full | Pointer ripple and delayed close (US1 + US3) | #1045 | merged |
-| M2 | T016–T021 | full | Keyboard ripple from the centre (US2) | pending (orchestrator opens) | implemented, gate green |
+| M2 | T016–T021 | full | Keyboard ripple from the centre (US2) | #1054 | merged |
 
 ## Decisions
 
@@ -48,6 +49,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 Review B (conformance, sonnet) | 1 | working tree after A's fix | CHANGES (1 MAJOR: T006 clauses untested; fixed by narrowing T006 in tasks.md with a note, prose-only; 2 MINOR not done: focus-layer-while-running pixel test, main.rs mapping test) |
 | M2 Review A (code-review, high) | 1 | ce20ddf2d3d1c43f06940623beab40bbb132e849:86d8f9af2acadf7985f05d0a3ef44c5a5d8ec89f | 7 findings, none BLOCKER/MAJOR; repeat guard added, rest declined (see below) |
 | M2 Review B (conformance, sonnet) | 1 | working tree after A's fix | CHANGES (1 MAJOR: no red evidence; fixed with tdd/cycle-log.md; 2 MINOR: repeat test added, FR-004 layer note in the log) |
+| Close converge | 1 | (inline) | converged: all 21 tasks ticked, every milestone reviewed |
+| Close tdd-verify | 1 | (inline) | FAIL on T012 wiring untested; fixed with a main_tests.rs test (mutant killed); rest accepted/declined, see tdd/verification.md |
+| Close diff review | 1 | d036cb55e608:ee269b6de341 | CLEAN (2 MINOR, prose fixed: verification.md frontmatter) |
 | Tasks review | 1 | 692a6cdaf4f4331ba12138092649840f944c834a:acadbf3d40fc9533de4b1134a4cf4676f4c49bf3 | CHANGES (1 MAJOR: [P] tasks sharing overview_card.rs; fixed, 3 MINOR fixed; marker/path edits only, no new round). speckit-analyze: C1/I1 fixed by moving request/due into pure tested code (plan D3 revised), I2-I4/E1-E4/A1 fixed |
 
 ## Declined review findings

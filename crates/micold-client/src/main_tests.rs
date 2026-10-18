@@ -241,6 +241,43 @@ fn selecting_a_session_closes_the_overview_and_shows_it() {
     assert_eq!(app.core.session.active, Some(id));
 }
 
+/// Feature 971 (T012, FR-007): an activation request keeps the Overview up, and the delay's
+/// `ActivationDue` then follows it: the Overview closes and the session shows. A second
+/// `ActivationDue` does nothing.
+#[test]
+fn an_overview_activation_follows_once_its_delay_is_due() {
+    // The delay is a `tokio::time::sleep`, which needs a runtime to be built.
+    let runtime = tokio::runtime::Runtime::new().expect("tokio runtime");
+    let _guard = runtime.enter();
+    use micold_client::features::overview::Msg as OverviewMsg;
+    let (mut app, _rx) = connected_app();
+    app.core.workspace.active = Some(std::path::PathBuf::from("/tmp/project"));
+    app.core.overview.open = true;
+    let id = SessionId::new();
+    let activation = micold_core::overview::Activation::OpenSession(id);
+
+    let _ = update_inner(
+        &mut app,
+        Message::Overview(OverviewMsg::ActivationRequested(activation)),
+    );
+    assert!(
+        app.core.overview.open,
+        "the Overview stays up for the ripple"
+    );
+    assert_eq!(app.core.session.active, None, "nothing is followed yet");
+
+    let _ = update_inner(&mut app, Message::Overview(OverviewMsg::ActivationDue));
+    assert!(!app.core.overview.open);
+    assert_eq!(app.core.session.active, Some(id));
+
+    app.core.session.active = None;
+    let _ = update_inner(&mut app, Message::Overview(OverviewMsg::ActivationDue));
+    assert_eq!(
+        app.core.session.active, None,
+        "a second due follows nothing"
+    );
+}
+
 /// T061 (BUG-003, `006-real-terminal-emulator` FR-014a): displaying a session must state the
 /// pane's size *before* starting it, so the daemon spawns the process at that size instead of
 /// its 100×30 seed.
