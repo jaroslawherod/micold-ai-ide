@@ -22,7 +22,9 @@ use crate::pane_layout::PaneLayout;
 use crate::project::{Availability, Project};
 use crate::review::store::ReviewFile;
 use crate::runs::store::RunsFile;
-use crate::session::{AiCli, Session, SessionId, SessionLabel, SessionLocation, TerminalMode};
+use crate::session::{
+    AiCli, Session, SessionId, SessionKind, SessionLabel, SessionLocation, TerminalMode,
+};
 use crate::workspace::Workspace;
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
@@ -290,6 +292,11 @@ struct StoredSession {
     /// main; nothing is rewritten on load.
     #[serde(default, skip_serializing_if = "is_false")]
     main: bool,
+    /// Terminal or structured (feature 938, FR-004). Additive and defaulted, and not written for a
+    /// terminal session, so a record from before the feature loads terminal, a terminal record is
+    /// written exactly as before, and no `schema_version` bump is needed.
+    #[serde(default, skip_serializing_if = "SessionKind::is_terminal")]
+    kind: SessionKind,
 }
 
 fn is_false(value: &bool) -> bool {
@@ -410,6 +417,7 @@ impl StoredSession {
             origin_rejected: session.origin_rejected,
             agents: session.agents.clone(),
             main: session.main,
+            kind: session.kind,
         }
     }
 
@@ -421,7 +429,7 @@ impl StoredSession {
             (None, Some(l)) if !l.is_empty() => SessionLabel::Derived(l),
             (None, _) => SessionLabel::Pending,
         };
-        let mut session = Session::restored(
+        let mut session = Session::restored_of_kind(
             SessionId::from_uuid(self.id),
             Self::stored_to_location(self.worktree_dir),
             label,
@@ -431,6 +439,8 @@ impl StoredSession {
             // setter and no mutation path by design (FR-001, FR-005), and this struct's fields
             // being `pub` means an assignment here would look like compliance and be the opposite.
             self.provider.into(),
+            // A constructor argument for the same reason as `provider`: fixed for life (FR-002).
+            self.kind,
         );
         session.archived = self.archived;
         session.attention_seq = self.attention_seq;

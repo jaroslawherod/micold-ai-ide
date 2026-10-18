@@ -843,7 +843,15 @@ impl AiCliProvider for ClaudeProvider {
     }
 
     fn structured_args(&self) -> Option<&'static [&'static str]> {
-        None
+        Some(&[
+            "-p",
+            "--input-format",
+            "stream-json",
+            "--output-format",
+            "stream-json",
+            "--verbose",
+            "--include-partial-messages",
+        ])
     }
 
     fn folder_trust(&self) -> FolderTrust {
