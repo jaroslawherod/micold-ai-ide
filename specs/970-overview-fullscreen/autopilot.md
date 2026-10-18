@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-ag6ana
 - **Started**: 2026-10-18
 - **Phase**: implement M1
-- **Next step**: M1 PR — final full gate, push, PR
+- **Next step**: M1 PR — full gate green, branch pushed; orchestrator opens the PR from the scratchpad title/body, records its number, waits on CI
 
 ## Pull requests
 
@@ -22,7 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T017 | full | Full screen hides the sidebar and gives it back (US1 + US4) | — | in progress |
+| M1 | T001–T017 | full | Full screen hides the sidebar and gives it back (US1 + US4) | — (to open) | verified, gate green |
 | M2 | T018–T026 | full | The cards zoom with the sidebar (US2 #1–4) | — | pending |
 | M3 | T027–T031 | full | The zoom keeps your place (US2 #5) | — | pending |
 | M4 | T032–T041 | full | Reduce motion (US3) | — | pending |
