@@ -23,6 +23,9 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# Every tool is here, so a test that would skip for a missing one fails instead.
+export MICOLD_KUBE_TEST_REQUIRED=1
+
 # shellcheck disable=SC2086
 ${CARGO_WRAP:-} cargo build -p micold-daemon
 # shellcheck disable=SC2086
