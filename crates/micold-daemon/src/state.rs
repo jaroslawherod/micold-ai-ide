@@ -185,8 +185,11 @@ struct Inner {
     /// budget (`attempts: 0`) and is cleared by a start rather than by a survival.
     start_failures: HashMap<SessionId, String>,
     /// Each structured session's events (feature 938, R6): the history and the live channel, kept
-    /// apart from the process so a restart continues it and an exit keeps it (FR-009).
+    /// apart from the process so a restart continues it and an exit keeps it (FR-009); dropped
+    /// with the session's record (`remove_live_by_ids`).
     event_streams: HashMap<SessionId, Arc<crate::structured::EventStream>>,
+    /// The bounds a new entry of `event_streams` gets (feature 938); lowered only by tests.
+    event_bounds: crate::structured::StreamBounds,
     /// The final activity signal of a session whose process has exited, kept until it runs again
     /// (`010` BUG-018).
     ///
@@ -745,6 +748,7 @@ impl DaemonState {
                 worktrees: HashMap::new(),
                 start_failures: HashMap::new(),
                 event_streams: HashMap::new(),
+                event_bounds: crate::structured::StreamBounds::default(),
                 ended: HashMap::new(),
                 env_include_cache: HashMap::new(),
                 worktree_gates: HashMap::new(),
@@ -969,6 +973,12 @@ impl DaemonState {
             .first_prompt_bound
             .lock()
             .expect("first-prompt bound poisoned") = bound;
+    }
+
+    /// Bound the event streams of structured sessions started from now on (feature 938), so a test
+    /// need not write 5,000 events to see eviction or 1,024 to see a viewer lag.
+    pub fn set_event_stream_bounds(&self, bounds: crate::structured::StreamBounds) {
+        self.lock().event_bounds = bounds;
     }
 
     /// Override the turn duration from which a finished turn is **Long task finished**, so a test
@@ -3894,6 +3904,8 @@ impl DaemonState {
             inner.ended.remove(&id);
             // And the history its last process left (feature 041, R4).
             inner.carried.remove(&id);
+            // And a structured session's events (feature 938).
+            inner.event_streams.remove(&id);
         }
         removed
     }
@@ -4514,7 +4526,14 @@ impl DaemonState {
         spec: &LaunchSpec,
         extra: &[OsString],
     ) -> io::Result<Proc> {
-        let stream = Arc::clone(self.lock().event_streams.entry(id).or_default());
+        let stream =
+            {
+                let mut inner = self.lock();
+                let bounds = inner.event_bounds;
+                Arc::clone(inner.event_streams.entry(id).or_insert_with(|| {
+                    Arc::new(crate::structured::EventStream::with_bounds(bounds))
+                }))
+            };
         StructuredSession::spawn(id, spec, extra, move |event| stream.push(event))
             .map(|child| Proc::Structured(Arc::new(child)))
     }
