@@ -96,8 +96,9 @@ visual pass in both themes.
    **Then** the group has a short label above it in one shared style, and the checkboxes align to the
    same left edge as the section's text fields.
 4. **Given** the Kubernetes context chooser, **When** contexts are found in the kubeconfig, **Then**
-   the user picks one from a single control consistent with the form's other choosers rather than
-   from a column of full-width buttons, and can still type a context by hand.
+   the user picks one from a select above the *Context* field, as the SSH form's host select sits
+   above its *Host* field, rather than from a column of full-width buttons, and can still type a
+   context by hand in the *Context* field.
 5. **Given** light and dark themes, **When** the forms are shown, **Then** both follow the theme with
    no fixed colours.
 
@@ -132,9 +133,10 @@ summary, an open one (summary hidden), and one with a required field still empty
 
 - Switching *Runs in* to another kind shows that kind's sections in their default state (first
   open); fields of the kind left behind are not shown and are dropped on save exactly as today.
-- A kind with only one section (if any, see FR-002): the section is open on arrival and can still be
-  closed.
-- Two sections each holding an error: both are open.
+- SSH has a single section (Connection): it is open on arrival and, like every section, can be
+  closed; the header keeps the SSH form consistent with the others.
+- Two sections each holding an error, or a required field left empty after a refused save: both
+  are open.
 - Kubernetes contexts failed to load: the failure message shows inside the section that holds the
   context field; typing a context by hand still works.
 - No contexts found or not yet loaded: the context field alone shows, as today.
@@ -168,7 +170,9 @@ summary, an open one (summary hidden), and one with a required field still empty
   "Resources".
 - **FR-004**: When a form opens or *Runs in* changes, the kind's first section MUST be open and the
   others closed. A section holding the field of a shown validation error MUST be open (as 804
-  FR-012 does for container sections, extended to every section of every kind).
+  FR-012 does for container sections, extended to every section of every kind). A field marked
+  "required" after a refused save counts as a shown error: every section holding such a field is
+  open.
 - **FR-005**: Opening or closing a section MUST NOT change any field value, the draft, or what is
   saved; every field's validation and save behaviour MUST stay as it is today.
 
@@ -179,12 +183,17 @@ summary, an open one (summary hidden), and one with a required field still empty
   gap.
 - **FR-007**: An explanation that concerns one field MUST be that field's own supporting text. An
   explanation that concerns the whole section MUST be the first line of the section's body, in one
-  shared muted style. No free-floating explanation line between two fields.
-- **FR-008**: A group of checkboxes MUST have a group label above it in one shared style, and align
-  with the section's other controls.
-- **FR-009**: The Kubernetes context MUST be chosen through a single chooser offering the
-  kubeconfig's contexts that still accepts a typed context, consistent with the form's other choosers
-  (as the SSH host chooser does), instead of one button per context.
+  shared muted style. No free-floating explanation line between two fields. Cautions and warnings stay directly
+  under the control they concern (e.g. the unshared sign-in caution under its share, 804 FR-004g; a
+  node-selector or toleration error under its editor).
+- **FR-008**: A group of checkboxes, and a multi-line editor (node selector, tolerations), MUST have
+  a group label above it in one shared style, and align with the section's other controls. An
+  explanation of the whole group (e.g. the AI CLI note, "Nothing reaches the pod unless it is ticked
+  here.") goes directly under that group label.
+- **FR-009**: The Kubernetes contexts found in the kubeconfig MUST be offered in a select placed
+  above the *Context* text field, shown only when contexts were found, following the SSH form's host
+  select over its *Host* field; choosing one fills the *Context* field, which stays for typing. It
+  replaces today's one button per context. No new combined select-and-type component is added.
 - **FR-010**: The plain muted group labels the daemon forms use today as section headings MUST be
   gone from the daemon forms; every heading in them is a section header.
 

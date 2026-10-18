@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-rwlog8
 - **Started**: 2026-10-18
 - **Phase**: spec
-- **Next step**: spec review round 1 (rubrics/spec.md) in a fresh reviewer — the spec unit had no Agent tool to dispatch one — then clarify unit
+- **Next step**: spec review round 2 (scoped, sonnet) on the fix diff since 24cc8d1b:3b6f429d, then clarify unit
 
 ## Pull requests
 
@@ -33,7 +33,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
-| Spec | 1 | ff5d9b34bca4f542e8b0d5f6e38885647997eb63:7dded4dabfe494a9aa98b069d0cec860beee2dd2 (pre-commit tree; take a fresh snapshot) | not run: no Agent tool in the spec unit |
+| Spec | 1 | 24cc8d1b:3b6f429d | CHANGES: 1 MAJOR (F1 FR-009 chooser), 3 MINOR — all fixed (F1 SSH select pattern; F2 required errors force sections open; F3 cautions/group notes placement; F4 SSH single section stated) |
 
 ## Declined review findings
 
