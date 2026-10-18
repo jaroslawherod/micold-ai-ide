@@ -9,21 +9,23 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #971
 - **Worktree branch**: claude/project-thread-kqz6b6
 - **Started**: 2026-10-18
-- **Phase**: M1 implemented, PR pending
-- **Next step**: orchestrator opens the M1 PR and merges it, then milestone M2
+- **Phase**: M2 implemented, PR pending
+- **Next step**: orchestrator opens the M2 PR and merges it, then close
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1038 | Design | merged | 47dff0df84df09f826e6b80ed76120a6f340c6f8 |
+| #1045 | M1 | merged | 47e382d124f1f74f15a57dafe6883228837e5e62 |
+| pending | M2 | orchestrator opens | — |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T015 | full | Pointer ripple and delayed close (US1 + US3) | pending (orchestrator opens) | implemented, gate green |
-| M2 | T016–T021 | full | Keyboard ripple from the centre (US2) | — | pending |
+| M1 | T001–T015 | full | Pointer ripple and delayed close (US1 + US3) | #1045 | merged |
+| M2 | T016–T021 | full | Keyboard ripple from the centre (US2) | pending (orchestrator opens) | implemented, gate green |
 
 ## Decisions
 
@@ -44,12 +46,20 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Plan review | 2 | (sonnet, fix diff) | CLEAN (1 MINOR fixed, prose only) |
 | M1 Review A (headless, high) | 1 | ae3d5687d5d54bfd2cf87e968b020773873245f5:75dd5aaf8e0810749a83845071d0836361c486fa | CHANGES (1 MAJOR: due() ignores a closed Overview; fixed with open check + test; 2 MINOR declined) |
 | M1 Review B (conformance, sonnet) | 1 | working tree after A's fix | CHANGES (1 MAJOR: T006 clauses untested; fixed by narrowing T006 in tasks.md with a note, prose-only; 2 MINOR not done: focus-layer-while-running pixel test, main.rs mapping test) |
+| M2 Review A (code-review, high) | 1 | ce20ddf2d3d1c43f06940623beab40bbb132e849:86d8f9af2acadf7985f05d0a3ef44c5a5d8ec89f | 7 findings, none BLOCKER/MAJOR; repeat guard added, rest declined (see below) |
+| M2 Review B (conformance, sonnet) | 1 | working tree after A's fix | CHANGES (1 MAJOR: no red evidence; fixed with tdd/cycle-log.md; 2 MINOR: repeat test added, FR-004 layer note in the log) |
 | Tasks review | 1 | 692a6cdaf4f4331ba12138092649840f944c834a:acadbf3d40fc9533de4b1134a4cf4676f4c49bf3 | CHANGES (1 MAJOR: [P] tasks sharing overview_card.rs; fixed, 3 MINOR fixed; marker/path edits only, no new round). speckit-analyze: C1/I1 fixed by moving request/due into pure tested code (plan D3 revised), I2-I4/E1-E4/A1 fixed |
 
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| M2 | A | F1 any captured Enter/Space ripples, not only the card's | Builder is opt-in and documented for a single activatable control; only the card uses it |
+| M2 | A | F2 no redraw requested after a key press | Same mechanism as the pointer path: the published message redraws; visual pass shows it animating |
+| M2 | A | F3 modifiers ignored | Consistent with keyboard_focus message_for; the `repeat` half was fixed |
+| M2 | A | F4 Enter while a click ripple runs is dropped | FR-005/D2: no restart while running |
+| M2 | A | F5 test fixture duplication | MINOR; the checks are two lines each |
+| M2 | A | F7 ripple vs close delay coupling | M1 ties the delay to MEDIUM_2; the ripple outlasts it |
 | M1 | A | F2 Closed from Session select dropped during delay | Spec FR-007 / plan D3 accept it: the first activation stands; the delayed target is the user's last explicit choice only if no other. Recorded as accepted consequence |
 | M1 | A | F3 stale timer after project switch + reactivation | Needs a project switch, reopen and a new activation inside 300 ms; effect is an early close of the new activation. Declined as out of proportion |
 
@@ -73,5 +83,7 @@ None.
 
 ## M2 notes
 
-- Review A (code-review high): 7 findings. Fixed: auto-repeat (`repeat: true`) never starts a ripple; doc says the builder suits a single activatable control. Declined: redraw chaining after a key (same mechanism as the pointer path: the published message redraws); Ctrl/Alt modifiers (consistent with keyboard_focus message_for); Enter mid-click dropped (FR-005, D2: no restart while running); ripple/close-delay coupling (M1 test ties the delay to MEDIUM_2); fixture duplication (MINOR); T021 open (this step).
-- No separate red-first log was kept (tests and code written together, as in M1).
+- Gate: `scripts/gate.sh` green (GATE_EXIT=0) on the code tree. Red phase proven afterwards by disabling the builder (4 failed, 45 passed; green 49), in `tdd/cycle-log.md`.
+- Visual pass (quickstart §B step 2): showcase on Xvfb with tiny-skia; Enter and Space on a card focused by a click each ripple from the card centre, clipped to the rounded shape, other cards show none, and it settles to the focus layer; evidence `visual-pass-m2.png` (Enter, Space, after fade). Step 4 (real client with a project) was not run in this cloud environment: the 300 ms delay and gating are unit-tested (M1) and the keyboard path publishes the same `ActivationRequested`.
+- Tab traversal did not land on a showcase card within 34 presses here; focus came from a click, then keys.
+- Review A: 7 findings; fixed the `repeat: true` guard, declined the rest (table above). Review B: see Review rounds.

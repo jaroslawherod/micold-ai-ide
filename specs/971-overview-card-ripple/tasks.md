@@ -61,7 +61,7 @@ All code is in `crates/micold-client/src/` (paths below are relative to it, exce
 - [x] T018 [US2] In `ui/material/ripple.rs`, add the `Ripple::centred_on_keys` builder and the post-child key handling (D2; T016, T017).
 - [x] T019 [US2] In `ui/material/overview_card.rs`, enable `.centred_on_keys()` on the card's ripple (D2; completes FR-009 keyboard half in the showcase).
 - [x] T020 [US2] Update `docs/user-guide/overview.md`: Enter or Space on a focused card ripples from the centre.
-- [ ] T021 Run the full gate (`scripts/gate.sh`); then quickstart §B step 2 and step 4 (keyboard part) through the `visual-pass` skill, saving evidence in the spec directory.
+- [x] T021 Run the full gate (`scripts/gate.sh`); then quickstart §B step 2 and step 4 (keyboard part) through the `visual-pass` skill, saving evidence in the spec directory.
 
 ## Dependencies & Execution Order
 
