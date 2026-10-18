@@ -9,14 +9,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #802
 - **Worktree branch**: feat/802_make-one-session-per-worktree-a-soft-limit-confirm
 - **Started**: 2026-10-18
-- **Phase**: tasks
-- **Next step**: tasks unit
+- **Phase**: design-pr
+- **Next step**: wait for design PR merge, then milestone M1
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| #… | Design | open / merged | … |
+| #PR | Design | open | … |
 
 ## Milestones
 
@@ -35,6 +35,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
+| Tasks | 1 | 471eeafeb7ec5564f4a5f78ffedb530b70558563:5c04aae81ae8fdebe67666ab2815c46dd9d39475 | CLEAN (analyze MEDIUMs fixed first; spec gained 2 edge cases) |
 | Plan | 1 | 4e8358f18d72867574a948bd7aa91fab461bf1c0:81b665a7eb821c4ee43acafbca13247dc284ad2e | CHANGES: 2 MAJOR (F1 stale dialog text, F2 automatic start origin) fixed in plan/research/data-model/contracts; MINORs F3-F5 fixed; prose-only plan changes, no round 2 |
 | Spec | 1 | 19c41bceb94cb337a85c1abb9c7f545c8e17ea66:1800df279b79d4dcbfab1a413ced53e497f5fa90 | CHANGES: 2 MAJOR (F1 routes table, F2 FR-022 wording) fixed; MINORs F3-F5 fixed; claims about behaviour re-checked by me against code; prose-only per rules, no round 2 |
 
