@@ -45,6 +45,9 @@ jobs:
       docs_only: ${{ steps.verdict.outputs.docs_only }}
       packaging: ${{ steps.verdict.outputs.packaging }}
       daemon_runtime: ${{ steps.verdict.outputs.daemon_runtime }}
+      # #956: the `full-ci` label as a boolean, so the macOS and Windows `Test (daemon)` steps read
+      # it from here rather than each parsing the label list.
+      full_ci: ${{ steps.verdict.outputs.full_ci }}
       reason: ${{ steps.verdict.outputs.reason }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -73,6 +76,7 @@ jobs:
           fi
           scripts/classify-change.sh "$BASE" HEAD 2> "$RUNNER_TEMP/offenders.txt" \
             | tee -a "$GITHUB_OUTPUT"
+          echo "full_ci=$FORCE_FULL_CI" >> "$GITHUB_OUTPUT"
           cat "$RUNNER_TEMP/offenders.txt"
       - name: Summarise the verdict
         if: always()
@@ -255,13 +259,16 @@ jobs:
       # Ensure the full workspace (client GUI binary + daemon) compiles on every platform.
       - name: Build (workspace)
         run: cargo build --workspace
+      # #956: the two `Test (daemon)` steps (this one and macOS's, below) run in full on main pushes,
+      # the nightly and `full-ci` pull requests; an ordinary pull request skips them, and Linux's
+      # `Test (full workspace)` stays the full gate. See docs/development/ci-pipeline.md.
       # Feature 030 (FR-025): the daemon's own suite on Windows -- the singleton, the pipe's DACL, the
       # stop path and the process-tree teardown are all Windows-specific code. Linux already runs it
       # in the full-workspace step below. `!cancelled()` so a red core step above does not hide
       # which daemon behaviours differ on this platform. The timeout bounds a hung test: libtest has
       # none of its own, and a hang otherwise holds the runner until GitHub's six-hour limit.
       - name: Test (daemon, Windows)
-        if: ${{ !cancelled() && runner.os == 'Windows' }}
+        if: ${{ !cancelled() && runner.os == 'Windows' && (github.event_name != 'pull_request' || needs.classify.outputs.full_ci == 'true') }}
         timeout-minutes: 20
         shell: bash
         run: cargo test -p micold-daemon --all-targets --no-fail-fast
@@ -458,7 +465,7 @@ jobs:
       # here and run nowhere -- among them the `waitid(WNOWAIT)` exit check and the `kill(-pid)`
       # group signal, which differ from Linux in what `getpgid` answers for a zombie.
       - name: Test (daemon)
-        if: runner.os == 'macOS'
+        if: runner.os == 'macOS' && (github.event_name != 'pull_request' || needs.classify.outputs.full_ci == 'true')
         # Several of these start a real daemon and wait on it; a test that cannot find the one it
         # started waits forever, and a job's own limit is six hours.
         timeout-minutes: 20
@@ -847,6 +854,11 @@ jobs:
     # both this and that every job above appears in `needs:`.
     if: always()
     runs-on: ubuntu-latest
+    # #956: the grant is for this job alone, and only the notification step below uses it.
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
     steps:
       - name: Gate on every covered job
         env:
@@ -891,3 +903,17 @@ jobs:
             echo "| assertions | \`$ASSERTIONS\` | yes |"
           } >> "$GITHUB_STEP_SUMMARY"
           exit $status
+      # #956: the macOS and Windows daemon suites run after the merge, so a red `main` or nightly run
+      # must reach somebody. A pull request needs no notice (its author is watching the check).
+      # `failure()` is true when the gate step above exited 1.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: failure() && github.event_name != 'pull_request'
+      - name: Notify about the red run
+        if: failure() && github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: scripts/ci-notify-failure.sh
