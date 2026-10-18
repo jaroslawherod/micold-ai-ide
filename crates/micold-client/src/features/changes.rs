@@ -13,12 +13,10 @@ use micold_core::protocol::messages::ReviewEditOp;
 use micold_core::pull_request::{
     BranchPrState, BranchPullRequest, DiffReadFailure, ReadingFailure,
 };
+use micold_core::review::anchor::{self, locate, Located};
 use micold_core::review::base::{Base, BaseUnavailable, ReviewScope, Toggles};
 use micold_core::review::changes::{ChangeKind, ChangeList, ChangedFile};
-use micold_core::review::anchor::{self, locate, Located};
-use micold_core::review::comment::{
-    CommentId, CommentState, Move, Outcome, ReviewComment, Status,
-};
+use micold_core::review::comment::{CommentId, CommentState, Move, Outcome, ReviewComment, Status};
 use micold_core::review::diff::{
     parse_unified, side_by_side_rows, unified_rows, FileDiff, LoadedDiff, SideRow, Spans,
     UnifiedRow,
@@ -1226,9 +1224,7 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
                 .map(|r| {
                     r.comments
                         .iter()
-                        .filter(|c| {
-                            c.side == Side::Old && is_pending(c) && is_outdated(view, c)
-                        })
+                        .filter(|c| c.side == Side::Old && is_pending(c) && is_outdated(view, c))
                         .map(|c| c.id)
                         .collect()
                 })

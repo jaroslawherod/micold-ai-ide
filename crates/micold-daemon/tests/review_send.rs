@@ -939,7 +939,17 @@ async fn w16_a_draft_whose_code_moved_is_sent_and_stored_at_its_new_lines() {
     s.start(sid(1), false).await;
     let mut client = window(&s.state, &project).await;
     let quote = ["fn a() {}", "fn b() {}"];
-    let comments = add(&mut client, 1, &project, "wt", "src/a.rs", 3, &quote, "Rename.").await;
+    let comments = add(
+        &mut client,
+        1,
+        &project,
+        "wt",
+        "src/a.rs",
+        3,
+        &quote,
+        "Rename.",
+    )
+    .await;
     let file = entry_dir(&project, "wt").join("src/a.rs");
     let before = std::fs::read_to_string(&file).unwrap();
     std::fs::write(&file, format!("{}{before}", "new\n".repeat(5))).unwrap();
@@ -971,8 +981,28 @@ async fn w16_the_daemon_judges_current_side_drafts_and_the_client_removed_side_o
     s.start(sid(1), false).await;
     let mut client = window(&s.state, &project).await;
 
-    let gone = add(&mut client, 1, &project, "wt", "src/a.rs", 3, &["fn a() {}"], "Gone.").await;
-    let kept = add(&mut client, 2, &project, "wt", "src/b.rs", 1, &["keep"], "Kept.").await;
+    let gone = add(
+        &mut client,
+        1,
+        &project,
+        "wt",
+        "src/a.rs",
+        3,
+        &["fn a() {}"],
+        "Gone.",
+    )
+    .await;
+    let kept = add(
+        &mut client,
+        2,
+        &project,
+        "wt",
+        "src/b.rs",
+        1,
+        &["keep"],
+        "Kept.",
+    )
+    .await;
     let removed = {
         let (result, seen) = request(
             &mut client,
@@ -995,10 +1025,12 @@ async fn w16_the_daemon_judges_current_side_drafts_and_the_client_removed_side_o
         result.expect("added");
         seen.last().unwrap().1.clone()
     };
-    std::fs::write(entry_dir(&project, "wt").join("src/a.rs"), "something else\n").unwrap();
-    let id_of = |all: &[ReviewComment], text: &str| {
-        all.iter().find(|c| c.text == text).unwrap().id
-    };
+    std::fs::write(
+        entry_dir(&project, "wt").join("src/a.rs"),
+        "something else\n",
+    )
+    .unwrap();
+    let id_of = |all: &[ReviewComment], text: &str| all.iter().find(|c| c.text == text).unwrap().id;
     let (gone_id, kept_id, removed_id) = (
         id_of(&gone, "Gone."),
         id_of(&kept, "Kept."),

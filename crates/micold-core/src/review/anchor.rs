@@ -97,8 +97,9 @@ pub fn locate(quote: &[String], last: LineRange, lines: &SideLines) -> Located {
     match best {
         None => Located::Gone,
         Some(_) if tied => Located::Ambiguous,
-        Some((_, start)) => LineRange::new(start, start + wanted_u32 - 1)
-            .map_or(Located::Gone, Located::Moved),
+        Some((_, start)) => {
+            LineRange::new(start, start + wanted_u32 - 1).map_or(Located::Gone, Located::Moved)
+        }
     }
 }
 
@@ -123,9 +124,7 @@ mod tests {
     /// A 30-line file whose lines 10–12 are the quote.
     fn file() -> (Vec<String>, Vec<String>) {
         let mut all = filler("line", 30);
-        let quote: Vec<String> = ["fn a() {", "    body();", "}"]
-            .map(str::to_owned)
-            .to_vec();
+        let quote: Vec<String> = ["fn a() {", "    body();", "}"].map(str::to_owned).to_vec();
         all.splice(9..12, quote.clone());
         (all, quote)
     }
@@ -295,7 +294,10 @@ mod tests {
             let quote: Vec<String> = (first..first + 3)
                 .map(|k| format!("    let v{k} = {k};"))
                 .collect();
-            let last = range(u32::try_from(first + 1).unwrap(), u32::try_from(first + 3).unwrap());
+            let last = range(
+                u32::try_from(first + 1).unwrap(),
+                u32::try_from(first + 3).unwrap(),
+            );
             assert!(matches!(locate(&quote, last, &side), Located::Moved(_)));
         }
         assert!(
