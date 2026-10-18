@@ -107,7 +107,7 @@ R11, R13). Feature 686 can adopt this phase by supplying `Reach::Pinned` and `Ow
 ### Implementation
 
 - [x] T028 Write `scripts/remote-daemon-bundle.sh` (489 T085): `cargo zigbuild --release -p micold-daemon` for both musl targets, statically linked, output `micold-daemon-linux-x86_64` / `micold-daemon-linux-aarch64` into a given directory; `--dry-run` prints the plan
-- [x] T029 Include the two builds from `scripts/macos-bundle.sh`, `scripts/windows-installer.sh`, the `[package.metadata.deb]` assets of `crates/micold-client/Cargo.toml` (the build for the other architecture), and build them in the bundle jobs of `.github/workflows/ci.yml` and the `deb`, `rpm`, macOS and Windows jobs of `.github/workflows/release.yml` (install `cargo-zigbuild` and zig there)
+- [x] T029 Include the two builds from `scripts/macos-bundle.sh`, `scripts/windows-installer.sh`, the `[package.metadata.deb]` assets of `crates/micold-client/Cargo.toml` (the build for the other architecture), and build them once in a `linux-daemons` job of `.github/workflows/ci.yml` and of `release.yml` (install `cargo-zigbuild` and zig there); the CI macOS/Windows jobs and the release macOS/Windows jobs download that artifact, the `deb`/`rpm` jobs build in place (zig crashes on the Windows ARM64 runner, so no packaging host cross-links)
 - [x] T030 Map the probed `uname -m` to the bundled file names and return `NoMatchingBuild` in `crates/micold-core/src/ssh/system.rs` (`bundled`) and the probe step of `crates/micold-core/src/provision/mod.rs`
 - [x] T031 Document per-platform requirements (`ssh.exe`, agent service, supported remote OS) and the bundled Linux builds for both architectures in `docs/user-guide/remote-daemons.md` (489 T086)
 

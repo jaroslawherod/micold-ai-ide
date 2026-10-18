@@ -77,15 +77,21 @@ done
 
 release="$(cat "$ROOT/.github/workflows/release.yml")"
 ci="$(cat "$ROOT/.github/workflows/ci.yml")"
-for job in deb rpm macos; do
+for job in deb rpm linux-daemons; do
   body="$(awk -v j="  $job:" '$0 == j {on=1; next} on && /^  [a-z-]+:$/ {exit} on' <<<"$release")"
   expect_has "the $job job in release.yml builds the Linux daemons" "$body" "remote-daemon-bundle.sh"
 done
-# The Windows job reaches the same script through windows-installer.sh, so it needs the tools.
-body="$(awk '$0 == "  windows:" {on=1; next} on && /^  [a-z-]+:$/ {exit} on' <<<"$release")"
-expect_has "the windows job in release.yml installs the cross-build tools" "$body" "install-zigbuild"
-expect_has "ci.yml builds them for the macOS bundle" "$ci" "--remote-dir target/remote-daemon"
-expect_has "ci.yml builds them for the Windows installer" "$ci" "scripts/windows-installer.sh --arch x64"
+# macOS and Windows never cross-link Linux themselves (zig crashes on the Windows ARM64 runner): they
+# download what `linux-daemons` built.
+for job in macos windows; do
+  body="$(awk -v j="  $job:" '$0 == j {on=1; next} on && /^  [a-z-]+:$/ {exit} on' <<<"$release")"
+  expect_has "the $job job in release.yml needs linux-daemons" "$body" "linux-daemons"
+  expect_has "the $job job in release.yml downloads the Linux daemons" "$body" "download-artifact"
+done
+body="$(awk '$0 == "  linux-daemons:" {on=1; next} on && /^  [a-z-]+:$/ {exit} on' <<<"$ci")"
+expect_has "ci.yml builds the Linux daemons once" "$body" "remote-daemon-bundle.sh"
+expect_has "ci.yml hands the macOS bundle the downloaded daemons" "$ci" "--remote-dir target/remote-daemon"
+expect_has "ci.yml hands the Windows installer the downloaded daemons" "$ci" "MICOLD_REMOTE_DIR: target/remote-daemon"
 
 if [ "$failures" -gt 0 ]; then
   printf '\n%d failure(s)\n' "$failures"

@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-uwrpqv
 - **Started**: 2026-10-17
 - **Phase**: M3
-- **Next step**: M3 pushed; orchestrator opens the PR from the scratchpad pr-title / pr-body.md, waits on CI and merges, then M4
+- **Next step**: M3 pushed (red-CI fix: daemons built once in `linux-daemons`, downloaded by macOS/Windows jobs); orchestrator opens the PR from the scratchpad pr-title / pr-body.md, waits on CI and merges, then M4
 
 ## Pull requests
 
@@ -19,6 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #975 | design (spec, plan, tasks) | merged | edae87f2b49c0d1ab6315393fe395222c2809a8d |
 | #979 | M1 basic image | merged | 110b724e0371648d2de53c5f5c033f57acad16b2 |
 | #982 | M2 shared provisioning | merged (Windows job failed once on an unrelated timing test, micold-daemon history_stop_request ten_busy_sessions_are_all_saved_within_the_bound; passed on re-run) | 198a12312b8b801dce177e47998024902732f0ac |
+| #988 | M3 static Linux daemons | open | — |
 
 ## Milestones
 
@@ -26,7 +27,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T009 | full | basic image published by `basic-image.yml` on merge (prints the `BASIC_IMAGE` pin) | #979 | merged |
 | M2 | T010–T025, T087 | full | shared `micold_core::provision` (contract); 489 remote daemons start through it, row shows shared steps — #686 can plan onto it from here | #982 | merged |
-| M3 | T026–T031 | full | static Linux musl daemons (x86_64, aarch64) in every package; `NoMatchingBuild` | — | PR pending push |
+| M3 | T026–T031 | full | static Linux musl daemons (x86_64, aarch64) in every package; `NoMatchingBuild` | #988 | #988 open |
 | M4 | T032–T041 | full | AI CLI install step + registry-only relay on app-owned targets; daemon offers only installed CLIs — #686 has the full contract | — | pending |
 | M5 | T042–T070 | full | container daemons on the pinned basic image over SSH; two-entry image form; migration and legacy containers | — | pending |
 | M6 | T071–T078 | full | per-daemon AI CLI selection; install warnings in the row | — | pending |
