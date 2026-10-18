@@ -212,7 +212,7 @@ impl GitRemote {
                 .ok_or_else(|| format!("git {args:?} failed"))
         };
         git(&seed, &["init", "-q"])?;
-        std::fs::write(seed.join("README.md"), "kube real\n").map_err(|e| e.to_string())?;
+        std::fs::write(seed.join("seed.txt"), "kube real\n").map_err(|e| e.to_string())?;
         git(&seed, &["add", "."])?;
         git(&seed, &["commit", "-q", "-m", "init"])?;
         let bare = base.join("repo.git");
