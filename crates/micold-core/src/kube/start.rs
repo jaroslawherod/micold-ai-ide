@@ -3,12 +3,14 @@
 
 use std::fmt;
 use std::future::Future;
+use std::path::Path;
 use std::time::Duration;
 
 use tokio::io::AsyncReadExt;
 
 use crate::kube::access::{AccessSecret, KeyGen};
 use crate::kube::classify::{CallTarget, KubeFailure};
+use crate::kube::credentials::{self, ReadFile};
 use crate::kube::manifest::{self, PodStamp, SSH_PORT};
 use crate::kube::names::{is_ours, ResourceNames};
 use crate::kube::settings::KubeSettings;
@@ -157,6 +159,12 @@ pub struct StartRequest<'a> {
     pub client: &'a ClientKey,
     /// What to do about a drifted pod.
     pub drift: DriftChoice,
+    /// This machine's home directory, where the allowed credentials' source files are.
+    pub home: &'a Path,
+    /// The remote hosts whose `known_hosts` lines go with an allowed SSH key.
+    pub hosts: &'a [String],
+    /// How the `Secrets` phase reads a source file (the only place one is read).
+    pub read: ReadFile<'a>,
 }
 
 /// A start that reached a running container.
@@ -241,7 +249,7 @@ async fn sequence(
     use StartPhase::*;
     run_phase(Preflight, on_phase, preflight(r)).await?;
     run_phase(Volume, on_phase, volume(r, attempt)).await?;
-    run_phase(Secrets, on_phase, access_secret(r, attempt)).await?;
+    run_phase(Secrets, on_phase, secrets(r, attempt)).await?;
     let drifted = run_phase(Pod, on_phase, pod(r, attempt)).await?;
     if !drifted.is_empty() {
         return Ok(drifted);
@@ -355,6 +363,53 @@ async fn check_claim(r: &StartRequest<'_>) -> Result<(), KubeFailure> {
     let claim = r.names.pvc();
     let events = r.cluster.events(namespace(r), &claim).await?;
     KubeFailure::from_pvc(&claim, &events).map_or(Ok(()), Err)
+}
+
+/// The `Secrets` phase: the access secret, then the allowed credentials' secrets (FR-008).
+async fn secrets(r: &StartRequest<'_>, attempt: &mut Attempt) -> Result<(), KubeFailure> {
+    access_secret(r, attempt).await?;
+    credential_secrets(r, attempt).await
+}
+
+/// Create or refresh one secret per allowed credential, and delete the secrets of withdrawn ones
+/// that are ours. With nothing allowed it only reads, to find what a withdrawal left behind.
+async fn credential_secrets(
+    r: &StartRequest<'_>,
+    attempt: &mut Attempt,
+) -> Result<(), KubeFailure> {
+    for credential in &r.settings.allowed {
+        let name = r.names.secret(credential);
+        let data = credential.secret_data(r.home, r.hosts, r.read)?;
+        let manifest = manifest::typed_secret(r.names, &name, credential.secret_type(), &data);
+        if let Ensured::Adopted(view) =
+            ensure(r, ObjectKind::Secret, manifest.clone(), attempt).await?
+        {
+            // The source may have changed since the secret was written.
+            if view.data != data {
+                let version = &view.resource_version;
+                r.cluster
+                    .replace(namespace(r), ObjectKind::Secret, &name, version, manifest)
+                    .await?;
+            }
+        }
+    }
+    for kind in credentials::every_kind() {
+        let name = r.names.secret(&kind);
+        let allowed = r.settings.allowed.iter().any(|a| r.names.secret(a) == name);
+        if allowed {
+            continue;
+        }
+        if let Some(view) = r
+            .cluster
+            .get(namespace(r), ObjectKind::Secret, &name)
+            .await?
+        {
+            if is_ours(&view.labels, r.names.key()) {
+                delete_and_wait(r, ObjectKind::Secret, &name, &view.uid).await?;
+            }
+        }
+    }
+    Ok(())
 }
 
 /// The access secret, created with a generated host key, or this client's key added to it.
