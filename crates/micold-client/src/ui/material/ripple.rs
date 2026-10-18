@@ -140,6 +140,18 @@ fn ripple_opacity(resumes: f32, strength: f32) -> f32 {
     resumes + (state::PRESSED - resumes) * strength.clamp(0.0, 1.0)
 }
 
+/// Whether `event` is the press of Enter or Space.
+fn is_activation_key(event: &Event) -> bool {
+    use iced::keyboard::{key::Named, Event::KeyPressed, Key};
+    matches!(
+        event,
+        Event::Keyboard(KeyPressed {
+            key: Key::Named(Named::Enter | Named::Space),
+            ..
+        })
+    )
+}
+
 /// `content` with Material's press indication.
 ///
 /// ```ignore
@@ -152,6 +164,8 @@ pub struct Ripple<'a, M, Theme = iced::Theme, Renderer = iced::Renderer> {
     tint: Color,
     /// The corner radius of the surface being wrapped, so the ripple can be clipped to its shape.
     radius: f32,
+    /// Whether a key the child captures (Enter or Space) also starts a ripple, from the centre.
+    centred_on_keys: bool,
 }
 
 impl<'a, M> Ripple<'a, M> {
@@ -170,7 +184,20 @@ impl<'a, M> Ripple<'a, M> {
             content: content.into(),
             tint: super::style::color(tint),
             radius,
+            centred_on_keys: false,
         }
+    }
+
+    /// Also ripple, from the element's centre, when the child captures Enter or Space (feature
+    /// 971, D2). Off by default, so every other wrapped control is unchanged.
+    ///
+    /// The ripple only observes: it starts when the child consumed the key (a focused control that
+    /// answers it), so an unfocused one never ripples, and it never starts one while another runs,
+    /// so auto-repeat does not restart it (FR-005).
+    #[must_use]
+    pub fn centred_on_keys(mut self) -> Self {
+        self.centred_on_keys = true;
+        self
     }
 }
 
@@ -225,6 +252,7 @@ where
             }
         }
 
+        let captured_before = shell.is_event_captured();
         self.content.as_widget_mut().update(
             &mut tree.children[0],
             event,
@@ -235,6 +263,18 @@ where
             shell,
             viewport,
         );
+
+        // After the child, because only the child knows whether it answered the key.
+        if self.centred_on_keys
+            && !captured_before
+            && shell.is_event_captured()
+            && is_activation_key(event)
+        {
+            let state = tree.state.downcast_mut::<RippleState>();
+            if state.is_idle() {
+                state.press(None, bounds.size());
+            }
+        }
     }
 
     /// Offers this ripple's own state, then forwards.
@@ -668,5 +708,84 @@ mod tests {
                 );
             }
         }
+    }
+
+    // ---- Feature 971: the keyboard origin (FR-004, FR-005) ----
+
+    use super::super::keyboard_focus::TakesTheKeyboard;
+    use super::super::test_support::{named_key, Mounted};
+    use iced::keyboard::key::Named;
+
+    /// A focusable block answering Enter, inside a ripple that does or does not follow keys.
+    fn keyed(centred: bool) -> Mounted<'static> {
+        let block = iced::widget::container(iced::widget::text("x"))
+            .width(200)
+            .height(60);
+        let focusable = TakesTheKeyboard::new(block, true)
+            .key(Named::Enter, "go".to_string())
+            .key(Named::Space, "go".to_string());
+        let ripple = Ripple::new(
+            focusable,
+            micold_core::tokens::roles(micold_core::theme::ColorScheme::Light).on_surface,
+            8.0,
+        );
+        Mounted::new(if centred {
+            ripple.centred_on_keys()
+        } else {
+            ripple
+        })
+    }
+
+    fn state_of<'m>(m: &'m Mounted<'_>) -> &'m RippleState {
+        m.tree.state.downcast_ref::<RippleState>()
+    }
+
+    /// T017 (FR-002): with the builder, a captured Enter or Space presses at the centre.
+    #[test]
+    fn a_captured_activation_key_presses_at_the_centre() {
+        for key in [Named::Enter, Named::Space] {
+            let mut m = keyed(true);
+            m.focus_next();
+            m.send(named_key(key), mouse::Cursor::Unavailable);
+            let b = m.node.bounds();
+            let o = state_of(&m).origin().expect("a ripple started");
+            assert!((o.x - b.width / 2.0).abs() <= 1.0 && (o.y - b.height / 2.0).abs() <= 1.0);
+        }
+    }
+
+    /// T017 (FR-005): auto-repeat while the ripple runs does not restart it.
+    #[test]
+    fn a_repeated_key_does_not_restart_the_ripple() {
+        let mut m = keyed(true);
+        m.focus_next();
+        let cursor = mouse::Cursor::Unavailable;
+        m.send(named_key(Named::Enter), cursor);
+        for _ in 0..10 {
+            m.tree
+                .state
+                .downcast_mut::<RippleState>()
+                .advance(EXPAND, FADE);
+        }
+        let before = state_of(&m).expansion();
+        assert!(before > 0.0);
+        m.send(named_key(Named::Enter), cursor);
+        assert_eq!(state_of(&m).expansion(), before);
+    }
+
+    /// T017: without the builder, or with the key not captured, nothing starts.
+    #[test]
+    fn without_the_builder_or_a_capture_a_key_starts_nothing() {
+        let cursor = mouse::Cursor::Unavailable;
+        let mut plain = keyed(false);
+        plain.focus_next();
+        plain.send(named_key(Named::Enter), cursor);
+        assert!(state_of(&plain).is_idle());
+        let mut unfocused = keyed(true);
+        unfocused.send(named_key(Named::Enter), cursor);
+        assert!(state_of(&unfocused).is_idle());
+        let mut other = keyed(true);
+        other.focus_next();
+        other.send(named_key(Named::Escape), cursor);
+        assert!(state_of(&other).is_idle());
     }
 }
