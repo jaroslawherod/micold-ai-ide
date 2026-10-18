@@ -210,6 +210,8 @@ struct MinimalProvider {
     input_readiness: micold_core::provider::InputReadiness,
     /// Where this provider records the folders it trusts (feature 034).
     folder_trust: micold_core::provider::FolderTrust,
+    /// The argv that makes a launch structured, if this provider has such a mode (feature 938).
+    structured_args: Option<&'static [&'static str]>,
 }
 
 impl MinimalProvider {
@@ -230,6 +232,7 @@ impl MinimalProvider {
             },
             input_readiness: micold_core::provider::InputReadiness::OutputSettled,
             folder_trust: micold_core::provider::FolderTrust::NeverAsks,
+            structured_args: None,
         }
     }
 
@@ -343,7 +346,7 @@ impl AiCliProvider for MinimalProvider {
         self.folder_trust
     }
     fn structured_args(&self) -> Option<&'static [&'static str]> {
-        None
+        self.structured_args
     }
     fn activity_source(&self, _config_dir: &Path, _cwd: &Path, id: Uuid) -> ActivitySource {
         // Its own arithmetic, from its own root — not `claude`'s per-cwd directory and not
@@ -649,6 +652,22 @@ fn readiness_and_folder_trust_are_the_providers_own_answers() {
         would_ask_trust(port.folder_trust(), &at, Path::new("/minimal/project")),
         "with no record, a provider that keeps one asks"
     );
+}
+
+/// A structured mode is the provider's own answer, not decided by which CLI a session runs
+/// (feature 938, FR-003/FR-005): a provider that says `claude_code` may have none.
+#[test]
+fn the_structured_argv_is_the_providers_own_answer() {
+    let minimal = MinimalProvider::new("/minimal");
+    let port: &dyn AiCliProvider = &minimal;
+    assert_eq!(port.id(), AiCli::ClaudeCode);
+    assert_eq!(port.structured_args(), None);
+    let structured = MinimalProvider {
+        structured_args: Some(&["--stream"]),
+        ..MinimalProvider::new("/minimal")
+    };
+    let port: &dyn AiCliProvider = &structured;
+    assert_eq!(port.structured_args(), Some(&["--stream"][..]));
 }
 
 #[test]
