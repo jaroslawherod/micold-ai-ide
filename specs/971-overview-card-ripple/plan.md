@@ -108,20 +108,26 @@ now builds `CardActivated`).
 `features::overview::State` gains `activating: Option<Activation>` and `fn request(&mut self, a)
 -> bool` (pure): when `open` and `activating.is_none()` it stores `a` and returns true; otherwise
 false. `update`:
-- `ActivationRequested(a)`: `update` calls `request(a)`; no outcome, the Overview stays open. The root reads `activating` before and after `update` (never calls `request` itself) to learn whether it was accepted.
+- `ActivationRequested(a)`: `update` itself does nothing (no outcome, the Overview stays open); acceptance is the separate pure `request`, so the decision is unit-tested rather than left in `main.rs`.
 - `ActivationRequested`, `Closed`, `Toggled` while `activating.is_some()`: ignored (US3-3). Accepted
   consequence: a `Closed` sent by another path inside the 300 ms (for example a session selected
   elsewhere) is dropped too; the pending activation then closes the view itself.
 - `ProjectSwitched` clears `activating`.
 
-`main.rs::overview_message`: on `ActivationRequested(a)` it calls `request`; when it returned true
-it returns `Task::perform(tokio::time::sleep(OVERVIEW_ACTIVATION_DELAY), |_| ActivationDue)`. On
-`ActivationDue` it does `activating.take()` (so `activating` is `None` before anything else runs,
-and the follow-up's own `Closed` at `main.rs:916` is not ignored) and, if it got `Some(a)`, handles
+`State` also gets the pure `fn due(&mut self) -> Option<Activation>` (`activating.take()`, so
+`activating` is `None` before anything else runs and the follow-up's own `Closed` at `main.rs:916`
+is not ignored). Both `request` and `due` are tested red-first; `main.rs::overview_message` keeps no
+decision beyond two `if let`s: on `ActivationRequested(a)` it calls `request` and, when true, returns
+`Task::perform(tokio::time::sleep(OVERVIEW_ACTIVATION_DELAY), |_| ActivationDue)`. On
+`ActivationDue` it calls `due()` and, if `Some(a)`, handles
 `Msg::CardActivated(a)` through the existing path unchanged (`follow_up`, `revealed_scroll`,
-`OfferStart` chain), so the outcome is identical (FR-008). `ActivationDue` with nothing stored is a
+`OfferStart` chain), so the outcome is identical (FR-008). `ActivationDue` with nothing stored (`due()` is `None`) is a
 no-op. `OVERVIEW_ACTIVATION_DELAY = Duration::from_millis(duration::MEDIUM_2)`, the token `ripple.rs`
 uses for EXPAND, so they cannot drift.
+
+Other cards may still ripple on a pointer press during the delay (feedback only; their
+`ActivationRequested` is ignored, so no outcome). Enter, Space and Escape reach no outcome; focus
+moves by arrow keys are unaffected.
 
 ### D4 Showcase (FR-009)
 `overview_card` in `surfaces.rs` gives its sample cards `.on_press(Message::…)` with a no-op/existing
@@ -141,8 +147,8 @@ state) · FR-006 D1 · FR-007 D3 · FR-008 D3 · FR-009 D4.
 | FR-004 | client unit in `ripple.rs` | existing `beneath_a_ripple…` plus a focused-card case |
 | FR-005, SC-004 | client unit + `tests/ripple_state.rs` | two cards independent; repeat key no restart; idle after fade, no frames |
 | FR-006 | client unit | plain card press/Enter leaves no ripple |
-| FR-007 | `features/overview.rs` unit (pure `request`/`update`) | accept → pending; second request/Closed/Toggled ignored; `ProjectSwitched` clears; delay constant equals MEDIUM_2 |
-| SC-005 (300 ms ±1 frame, ripple seen) | quickstart §B visual pass (timing in `main.rs` is not unit-tested: the binary root has no harness) | |
+| FR-007 | `features/overview.rs` unit (pure `request`/`due`/`update`) | accept → pending; second request/Closed/Toggled ignored; `due` takes once, then `None`; `ProjectSwitched` clears; delay constant equals MEDIUM_2 |
+| SC-005 (300 ms ±1 frame, ripple seen) | quickstart §B visual pass: only the wall-clock timing is manual; the constant and the gating are unit-tested | |
 | FR-008, SC-006 | existing 813 `CardActivated` tests unchanged; `ui/overview.rs` test that a card emits `ActivationRequested` with its `activation` | |
 | FR-009, SC-005 | quickstart §B visual pass (showcase and client) | `visual-pass` skill |
 

@@ -125,12 +125,12 @@ shown.
 1. **Given** the Overview is open, **When** the user activates a card with the pointer or the
    keyboard, **Then** the Overview stays up for the ripple's expand time (300 ms) so the ripple on that
    card plays, and then closes and the location's main session is shown as feature 813 specifies.
-3. **Given** a card has been activated and the Overview has not closed yet, **When** the user
-   clicks another card or presses Enter, Space or Escape, **Then** nothing changes: the first
-   activation's target stands and the close is neither hastened nor postponed.
 2. **Given** the user activates a card, **When** the Overview closes, **Then** the outcome of the
    activation (which location is selected, which session is shown, the offer to start a session)
    is the same as without this feature.
+3. **Given** a card has been activated and the Overview has not closed yet, **When** the user
+   clicks another card or presses Enter, Space or Escape, **Then** nothing changes: the first
+   activation's target stands and the close is neither hastened nor postponed.
 
 ---
 
@@ -160,6 +160,9 @@ shown.
   FR-022a; none otherwise, including after a pointer press) without a visible step.
 - **Reduced motion and platforms (Principle VI)**: the ripple behaves the same on Linux, macOS and
   Windows; the app has no reduced-motion setting today, so none applies here.
+- **Close from elsewhere during the delay**: a close requested by another path inside the 300 ms
+  (for example a session picked elsewhere) is dropped; the pending activation then closes the view
+  itself and shows its own target.
 - **Pointer button**: only the primary pointer button starts a ripple, matching the other
   ripple-capable controls.
 
@@ -185,7 +188,7 @@ shown.
 - **FR-007**: Activating a card in the Overview MUST keep the Overview up for the ripple's expand
   time (300 ms) before it closes and shows the location's main session, so the ripple on that card
   is seen for pointer and keyboard activation alike. During that time the Overview MUST take no
-  further card activation or key; the first activation's outcome stands.
+  further card activation, Enter, Space or Escape; the first activation's outcome stands.
 - **FR-008**: The outcome of activating a card (feature 813, FR-013 and FR-014) MUST be unchanged:
   the same location is selected, the same session shown, the same offer made.
 - **FR-009**: The component showcase's Overview card sample MUST demonstrate the pointer and
