@@ -57,6 +57,10 @@ where
 
 fn sample_client_msgs() -> Vec<ClientMsg> {
     vec![
+        ClientMsg::RepoClone {
+            url: "git@github.com:acme/app.git".into(),
+            dest: "/data/repos/app-1a2b3c4d".into(),
+        },
         ClientMsg::Hello {
             protocol_version: 1,
             schema_hash: [7u8; 32],
@@ -817,6 +821,17 @@ fn sample_daemon_msgs() -> Vec<DaemonMsg> {
                 target: "micold_daemon::supervisor".into(),
                 message: "session gave up after 3 attempts".into(),
             }],
+        },
+        DaemonMsg::RepoCloned {
+            dest: "/data/repos/app-1a2b3c4d".into(),
+        },
+        DaemonMsg::RepoCloneFailed {
+            dest: "/data/repos/app-1a2b3c4d".into(),
+            failure: micold_core::protocol::messages::CloneFailureWire::Other("fatal: x".into()),
+        },
+        DaemonMsg::RepoCloneFailed {
+            dest: "/data/repos/app-1a2b3c4d".into(),
+            failure: micold_core::protocol::messages::CloneFailureWire::DiskFull,
         },
     ]
 }
@@ -1996,4 +2011,10 @@ fn hook_activity_round_trips_and_defaults_to_none() {
         .remove("hook_activity");
     let older: SessionSummary = serde_json::from_value(json).expect("decode without the field");
     assert_eq!(older.hook_activity, None);
+}
+
+/// Feature 686: the pod clone messages arrived with protocol 51 (`main` was at 50).
+#[test]
+fn the_repo_clone_messages_are_protocol_51_or_later() {
+    assert!(micold_core::protocol::version::PROTOCOL_VERSION >= 51);
 }

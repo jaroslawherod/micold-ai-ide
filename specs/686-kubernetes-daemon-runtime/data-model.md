@@ -185,7 +185,7 @@ stop or remove.
 `activity` for "Pulling image", "Opening tunnel", "Copying daemon", "Installing <cli>", "Cloning
 <repo>".
 
-## Protocol delta (`PROTOCOL_VERSION` 48 → 49; blocked on #806)
+## Protocol delta (`PROTOCOL_VERSION` 50 → 51; blocked on #806)
 
 `ClientMsg::RepoClone { url: String, dest: String }` → `DaemonMsg::RepoCloned { dest }` |
 `DaemonMsg::RepoCloneFailed { dest, failure: CloneFailureWire }`. Handled in
