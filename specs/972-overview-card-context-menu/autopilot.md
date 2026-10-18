@@ -9,20 +9,20 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #972
 - **Worktree branch**: claude/project-thread-a1yb7j
 - **Started**: 2026-10-18
-- **Phase**: tasks
-- **Next step**: design PR open; after merge: milestone M1
+- **Phase**: implement
+- **Next step**: milestone M1, continue at T006 (see Handover)
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| (orchestrator opens) | Design: spec, plan, research, contracts, tasks | pushed, PR pending | — |
+| #1034 | Design: spec, plan, research, contracts, tasks | merged | 1fae1becb8fa64097695f169ad7243ec5d1f1dae |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T013 | full | Right-click a card: *Open* + row-menu entries, run as the row menu does; registry dismissal | — | pending |
+| M1 | T001–T013 | full | Right-click a card: *Open* + row-menu entries, run as the row menu does; registry dismissal | — | in progress |
 | M2 | T014–T019 (T016b) | light | Target mark on the card; empty-space right-click dismisses | — | pending |
 | M3 | T020–T028 | full | Menu key / Shift+F10 open, arrow/Enter navigation, focus return | — | pending |
 
@@ -51,7 +51,30 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M1 unit 1 handed over at 160k context. Branch `claude/project-thread-a1yb7j` (no PR yet; do not run
+`branch-start.sh` to reset: the commit below is unmerged M1 work, it rebases onto main).
+
+- Done: T001–T003 (ticked). `Icon::Open` (`login`, U+EA77) + docs/user-guide/icons.md row;
+  `ui::location_menu_items(state, &SessionLocation)` extracted, the worktree row menu calls it.
+- T004 + T005 tests written in `crates/micold-client/tests/overview_card_menu.rs` (one file, both
+  parts) and committed **red** (types missing; evidence in tdd/cycle-log.md). Not ticked: they
+  tick with T009/T010 green. It uses `ui::overview::{card_menu_items, cards}`,
+  `features::overview::{update, CardMenu, MenuOrigin, Msg, OverviewCardMenu, State}`,
+  `features::Outcome`; `CardMenu` must derive `Debug, Clone, PartialEq` (compared with `assert_eq!`).
+- Next: T006 (displacement/registry/registration tests), T007, T008, then T009–T013.
+- Findings for T009: `session::menu_toggled` and `start_menu_toggled` report no
+  `SurfaceOpened`, so for R2's "session menu / start menu displace the card menu" they must return
+  `surface_opened(.., ID)` (give `SessionContextMenu` an `ID` const) and the registry gains
+  `displaces: OverviewCardMenu` on them; `tests/popover_displacement.rs` uses `State::default()`,
+  but a card menu survives `settle_card_menu` only with the Overview open and its target listed
+  (a project with a Default card): give the pair test a base state with a project and
+  `overview.open = true`, and add `overview_card_menu` to DISPLACES and the opener. The
+  displacement table changes for five rows (project/worktree/run_group/session/session_start
+  each gain `overview_card_menu`).
+- `Msg::ProjectSwitched` must also clear `card_menu`/`focus_return` (test expects it; the
+  Overview stays open on a switch). `GridScrolled`: app.rs `Message::Overview` arm calls
+  `dismiss_on_scroll_beneath()`. settle at the outermost epilogue beside `agent_confirm::release`.
+- Running tests: a foreground Bash may wait 250 s; start cargo detached and `hold.sh`.
 
 ## Open escalation
 

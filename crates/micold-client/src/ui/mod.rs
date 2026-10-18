@@ -557,85 +557,14 @@ pub fn view_with<'a>(
     // right-press did not carry rather than a decision about where a menu belongs.
     let worktree_menu: Option<cdk::overlay::Surface<'a, Message>> =
         state.worktree.menu_open.as_ref().map(|menu| {
-            let dir = &menu.dir_name;
             // Feature 482: the Default row's menu reuses this one with the wire's name for the
-            // project root, `""`, and offers only **Review changes** (V1).
-            if dir.is_empty() {
-                let mut items = vec![review_changes_item(
-                    micold_core::session::SessionLocation::Default,
-                )];
-                items.extend(additional_session_item(
-                    state,
-                    &micold_core::session::SessionLocation::Default,
-                ));
-                items.extend(single_session_items(
-                    state,
-                    &micold_core::session::SessionLocation::Default,
-                ));
-                let (x, y) = crate::features::project::clamp_menu_anchor(
-                    menu.anchor,
-                    material::menu_panel_size(items.len()),
-                    state.window.window_size,
-                );
-                return material::MenuOverlay::new(
-                    items,
-                    Message::Worktree(WorktreeMsg::MenuDismissed),
-                    roles,
-                )
-                .anchor(iced::Point::new(x as f32, y as f32))
-                .into();
-            }
-            let included = state
-                .worktree
-                .worktrees
-                .iter()
-                .any(|w| &w.dir_name == dir && w.included);
-            // Feature 040 (FR-010): the entry is offered exactly when the row shows a pull request.
-            let has_pull_request = crate::features::sidebar::pull_request_address_to_open(
-                &state.worktree.worktrees,
-                &state.pr_status.statuses,
-                dir,
-            )
-            .is_some();
-            let mut items = worktree_menu_items(
-                dir,
-                &state.worktree_display_name(dir),
-                included,
-                has_pull_request,
-            );
-            // FR-019: the sub-row's actions for the one session of a worktree, above Delete.
-            let at = items.len() - 1;
-            let location = micold_core::session::SessionLocation::Worktree(dir.to_string());
-            if let Some(item) = additional_session_item(state, &location) {
-                items.insert(at, item);
-            }
-            let at = items.len() - 1;
-            for (offset, item) in single_session_items(state, &location)
-                .into_iter()
-                .enumerate()
-            {
-                items.insert(at + offset, item);
-            }
-            // Feature 491 (T036): a worktree with no daemon offers the explicit bind, above Delete
-            // like the other non-destructive entries.
-            if let (Some(project), true) = (
-                state.workspace.active.clone(),
-                crate::features::worktree::bind_offered(state, dir),
-            ) {
-                items.insert(
-                    items.len() - 1,
-                    material::MenuItem::new(
-                        Icon::Daemons,
-                        "Bind to daemon...",
-                        Message::Daemons(crate::features::daemons::Msg::BindRequested(
-                            micold_core::daemons::WorktreeRef {
-                                project,
-                                worktree: dir.to_string(),
-                            },
-                        )),
-                    ),
-                );
-            }
+            // project root, `""`.
+            let location = if menu.dir_name.is_empty() {
+                micold_core::session::SessionLocation::Default
+            } else {
+                micold_core::session::SessionLocation::Worktree(menu.dir_name.clone())
+            };
+            let items = location_menu_items(state, &location);
             let (x, y) = crate::features::project::clamp_menu_anchor(
                 menu.anchor,
                 material::menu_panel_size(items.len()),
@@ -841,6 +770,75 @@ pub fn view_with<'a>(
         .push_maybe(modal)
         .push_maybe(snackbar)
         .into()
+}
+
+/// The entries of a location's row menu, in order (feature 972, R1): the worktree row menu and the
+/// Overview card menu are both built from this, so the two cannot drift (FR-002, SC-002).
+///
+/// The Default row offers **Review changes** (feature 482, V1) and its session entries; a worktree
+/// row offers [`worktree_menu_items`] with its session entries and *Bind to daemon...* above
+/// **Delete**.
+pub fn location_menu_items(
+    state: &State,
+    location: &micold_core::session::SessionLocation,
+) -> Vec<material::MenuItem<Message>> {
+    let micold_core::session::SessionLocation::Worktree(dir) = location else {
+        let mut items = vec![review_changes_item(location.clone())];
+        items.extend(additional_session_item(state, location));
+        items.extend(single_session_items(state, location));
+        return items;
+    };
+    let included = state
+        .worktree
+        .worktrees
+        .iter()
+        .any(|w| &w.dir_name == dir && w.included);
+    // Feature 040 (FR-010): the entry is offered exactly when the row shows a pull request.
+    let has_pull_request = crate::features::sidebar::pull_request_address_to_open(
+        &state.worktree.worktrees,
+        &state.pr_status.statuses,
+        dir,
+    )
+    .is_some();
+    let mut items = worktree_menu_items(
+        dir,
+        &state.worktree_display_name(dir),
+        included,
+        has_pull_request,
+    );
+    // FR-019: the sub-row's actions for the one session of a worktree, above Delete.
+    let at = items.len() - 1;
+    if let Some(item) = additional_session_item(state, location) {
+        items.insert(at, item);
+    }
+    let at = items.len() - 1;
+    for (offset, item) in single_session_items(state, location)
+        .into_iter()
+        .enumerate()
+    {
+        items.insert(at + offset, item);
+    }
+    // Feature 491 (T036): a worktree with no daemon offers the explicit bind, above Delete like the
+    // other non-destructive entries.
+    if let (Some(project), true) = (
+        state.workspace.active.clone(),
+        crate::features::worktree::bind_offered(state, dir),
+    ) {
+        items.insert(
+            items.len() - 1,
+            material::MenuItem::new(
+                Icon::Daemons,
+                "Bind to daemon...",
+                Message::Daemons(crate::features::daemons::Msg::BindRequested(
+                    micold_core::daemons::WorktreeRef {
+                        project,
+                        worktree: dir.to_string(),
+                    },
+                )),
+            ),
+        );
+    }
+    items
 }
 
 /// The items in a worktree's right-click context menu (feature 008, FR-013; "Copy name" added

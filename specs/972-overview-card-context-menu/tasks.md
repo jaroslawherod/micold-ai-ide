@@ -47,12 +47,12 @@ No setup: the client crate, its test layout and the overlay registry exist (feat
 **Purpose**: the *Open* glyph and the one item builder the row menu and the card menu share (R1,
 R10).
 
-- [ ] T001 [P] Test first: in tests/icons.rs pin `Icon::Open` to Material Symbols `login`'s
+- [X] T001 [P] Test first: in tests/icons.rs pin `Icon::Open` to Material Symbols `login`'s
   codepoint and add it to the distinctness list; in tests/icons_font.rs assert the glyph is in
   `assets/fonts/MaterialSymbolsOutlined.ttf`; both fail (variant missing)
-- [ ] T002 Add `Icon::Open` (`login`) in src/icons.rs and its row (*Open*: the card menu's first
+- [X] T002 Add `Icon::Open` (`login`) in src/icons.rs and its row (*Open*: the card menu's first
   entry) in docs/user-guide/icons.md; T001 passes
-- [ ] T003 [P] Extract the body of the `worktree_menu` closure in src/ui/mod.rs (today ~548–637:
+- [X] T003 [P] Extract the body of the `worktree_menu` closure in src/ui/mod.rs (today ~548–637:
   Default branch, `worktree_menu_items`, `additional_session_item`, `single_session_items`,
   *Bind to daemon...*) into `pub fn location_menu_items(state: &State, location: &SessionLocation)
   -> Vec<material::MenuItem<Message>>`; the closure calls it with `SessionLocation::Default` for

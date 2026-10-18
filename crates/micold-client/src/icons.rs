@@ -169,6 +169,9 @@ pub enum Icon {
     TypeIncluded,
     /// A missing or invalid worktree on its Overview card (feature 813) — `folder_off`.
     TypeOrphan,
+    /// **Open**, the first entry of an Overview card's menu (feature 972, R10) — `login`, an arrow
+    /// entering a door: going into the location, not opening a browser.
+    Open,
 }
 
 impl Icon {
@@ -239,6 +242,7 @@ impl Icon {
         Icon::TypeOther,
         Icon::TypeIncluded,
         Icon::TypeOrphan,
+        Icon::Open,
     ];
 
     /// The font codepoint for this icon (Private Use Area; see `assets/fonts/PROVENANCE.md`).
@@ -325,6 +329,8 @@ impl Icon {
             Icon::TypeOther => '\u{e2c7}',
             Icon::TypeIncluded => '\u{e157}',
             Icon::TypeOrphan => '\u{eb83}',
+            // `login` (feature 972, R10).
+            Icon::Open => '\u{ea77}',
         }
     }
 }
