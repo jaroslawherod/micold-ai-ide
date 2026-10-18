@@ -58,5 +58,5 @@ with `columns` clamped to `clamp(1, 8)` (the cap ignored, a scratch edit, restor
 `cards_at_2400_are_half_again_as_wide_as_before_and_as_tall`,
 `full_rows_hold_five_cards_from_the_threshold_up` (`card_grid.rs:278`, row counts),
 `max_columns_sets_the_cap`, `thirty_cards_scroll_vertically` (`:232`, the `vec![5; 6]` row shape).
-The last-row alignment assertion (`:290`) is not reached by that mutant, as the row-count assert fails first. Restored, green again.
+(Line numbers are as of the mutant run, before T015.) The last-row alignment assertion is not reached by that mutant, as the row-count assert fails first; it has no recorded red of its own (M4 in verification.md, dropping the row padding, failed 2 tests). Restored, green again.
 T015 then dropped the `vec![5; 6]` check as a duplicate of the row-count assert in the `full_rows` test.
