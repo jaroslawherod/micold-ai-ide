@@ -58,6 +58,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review tasks | 2 | f741a87ee478cc18590ea2227bdf989249aa490d:96c0440120fd62354a731049322b3adec98be5e1 | CLEAN (2 MINOR: T042 test list, line wrap — fixed, prose only) |
 | M1 review A (code-review high) | 1 | c931c49619d8dbc13c1b4396c5944008406defed:bf97dc4a7be50771bcceb7ce878792ec43fc39b0 | 10 findings: 4 fixed (split-delta uuid leak in fixtures + script, lenient init `tools`, `null` tool input, single `raw` copy), 6 declined |
 | M1 review B (conformance, sonnet) | 1 | b697707771467cbdcf3dc27783bf157d45976967:b37bc607eaeeb1f53cde3a4d02c4ac77a1b8903d | CLEAN |
+| M2 review A (code-review high) | 1 | 6ff1da44088f251211d8c2ac4981f0dbf7e7529d:3f735466dce7f7ee16e1f6f946425617725d6029 | 10 findings: 3 fixed (F1 structured teardown under the state lock, F5 child left running when a reader fails to start, F6 reader counted done on unwind), 7 declined |
+| M2 review B (conformance, sonnet) | 1 | 6ff1da44088f251211d8c2ac4981f0dbf7e7529d:3f735466dce7f7ee16e1f6f946425617725d6029 | CHANGES: 1 MAJOR declined (T032), 2 MINOR (F3 test-list fixed; F2 declined, T032) |
 
 ## Declined review findings
 
@@ -70,6 +72,12 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | A | `structured_args` should default to `None` on the trait | Decision 9: the trait's own rule "No method has a default" (feature 026 FR-021) |
 | M1 | A | refusal sentence hardcodes "Claude Code" | the sentence is specified (T004, FR-003); one CLI has the mode |
 | M1 | A | `LineSplitter` buffer has no cap | research R4 rejects a maximum line length (tool results run to several MiB, lines read whole) |
+| M2 | A F2 / B F1 | `event_streams` entry never dropped on delete | T032 (M5): "drop the history map entry on session delete" |
+| M2 | A F4 / B F2 | snapshot cloned under the history lock; `Lagged` skips events | T032 (M5): chunked snapshots and re-snapshot on `RecvError::Lagged` |
+| M2 | A F3 | history's 64 MiB bound counts `raw` only | research R5 bounds "retained line text" |
+| M2 | A F7 | Windows `claude.cmd` not resolved by `Command` | recorded under *Follow-ups not done* (not this milestone) |
+| M2 | A F8 | crash restart of a structured session uses `--resume` | same as a terminal session's restart (FR-009 parity); resume is M4 |
+| M2 | A F9, F10 | old readers may push after a timed-out teardown; `ReadersDone` could be a channel | MINOR; the teardown shape copies `PtySession`'s |
 
 ## Handover
 
