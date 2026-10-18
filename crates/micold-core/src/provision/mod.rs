@@ -486,30 +486,6 @@ fn selected_rows<'a>(
 /// Step 4: install the selected AI CLIs the target lacks, under one bound for the check and the
 /// installs together. Entered only when something is missing; a CLI that fails to install is a
 /// warning, not a failure (FR-012).
-#[allow(clippy::too_many_arguments)]
-async fn install_step(
-    host: &dyn SshHost,
-    target: &ProvisionTarget,
-    opts: &ProvisionOptions,
-    cancel: &CancelToken,
-    sink: &EventSink,
-    selected: &AiCliSelection,
-    table: &AiCliTable,
-    state_dir: &std::path::Path,
-    egress: &Egress,
-) -> Result<Vec<ProvisionWarning>, ProvisionFailure> {
-    install_step_with(
-        host,
-        target,
-        opts,
-        cancel,
-        sink,
-        (selected, table, state_dir, egress),
-        relay::Relay::start,
-    )
-    .await
-}
-
 /// [`install_step`] with the relay's starter given, so a test can make it fail to bind.
 async fn install_step_with<F, Fut>(
     host: &dyn SshHost,
@@ -608,6 +584,25 @@ pub async fn run(
     cancel: &CancelToken,
     sink: &EventSink,
 ) -> Result<Provisioned, ProvisionFailure> {
+    run_with_relay(host, target, opts, cancel, sink, relay::Relay::start).await
+}
+
+/// [`run`] with the install relay's starter given. A real-runtime test passes one that fails, to
+/// see the cause a relay that cannot open names (`PostureBlocksDownload`), which a real start never
+/// shows on a healthy host.
+#[doc(hidden)]
+pub async fn run_with_relay<F, Fut>(
+    host: &dyn SshHost,
+    target: &ProvisionTarget,
+    opts: &ProvisionOptions,
+    cancel: &CancelToken,
+    sink: &EventSink,
+    start_relay: F,
+) -> Result<Provisioned, ProvisionFailure>
+where
+    F: FnOnce(Vec<HostPort>) -> Fut,
+    Fut: std::future::Future<Output = std::io::Result<relay::Relay>>,
+{
     let (_, copied) = ensure_build(host, target, opts, cancel, sink).await?;
     // The AI CLIs are installed on app-owned targets only: a user's host never enters the step.
     let warnings = match &target.owned {
@@ -617,8 +612,14 @@ pub async fn run(
             state_dir,
             egress,
         } => {
-            install_step(
-                host, target, opts, cancel, sink, ai_clis, table, state_dir, egress,
+            install_step_with(
+                host,
+                target,
+                opts,
+                cancel,
+                sink,
+                (ai_clis, table, state_dir, egress),
+                start_relay,
             )
             .await?
         }

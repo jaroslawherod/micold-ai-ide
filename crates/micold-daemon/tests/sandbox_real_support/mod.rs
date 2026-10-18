@@ -781,6 +781,8 @@ pub struct ProvisionRun {
     pub cancel: CancelToken,
     /// Cancel `cancel` as soon as this step is entered.
     pub cancel_on: Option<provision::Step>,
+    /// The install relay cannot open (an address in use), as on a host that blocks it.
+    pub relay_fails: bool,
 }
 
 impl ProvisionRun {
@@ -793,6 +795,7 @@ impl ProvisionRun {
             slow_install: false,
             cancel: CancelToken::new(),
             cancel_on: None,
+            relay_fails: false,
         }
     }
 
@@ -806,6 +809,7 @@ impl ProvisionRun {
             slow_install,
             cancel,
             cancel_on,
+            relay_fails,
         } = self;
         let (container, client_key, known_hosts, state, script) = {
             let started = STARTED.lock().unwrap();
@@ -884,7 +888,15 @@ impl ProvisionRun {
                 seen.lock().unwrap().push(step);
             }
         });
-        let outcome = provision::run(&host, &target, &opts, &cancel, &sink).await;
+        let outcome =
+            provision::run_with_relay(&host, &target, &opts, &cancel, &sink, |allow| async move {
+                if relay_fails {
+                    Err(std::io::Error::from(std::io::ErrorKind::AddrInUse))
+                } else {
+                    provision::relay::Relay::start(allow).await
+                }
+            })
+            .await;
         let steps = steps.lock().unwrap().clone();
         (container, outcome, steps)
     }

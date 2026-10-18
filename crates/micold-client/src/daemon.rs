@@ -29,10 +29,13 @@ use micold_core::protocol::keepalive::{self, Keepalive, KeepaliveAction};
 use micold_core::protocol::messages::{ClientMsg, DaemonMsg};
 use micold_core::provision::ai_cli::AiCliTable;
 use micold_core::provision::keys::DaemonKeys;
+use micold_core::provision::AttemptLedger;
 use micold_core::provision::{
     run as ssh_run, CancelToken, Egress, EventSink, Ownership, ProvisionEvent, ProvisionTarget,
     Step, StepBounds,
 };
+use micold_core::sandbox::cli::CliRuntime;
+use micold_core::sandbox::exec::SystemRunner;
 use micold_core::sandbox::placement::PlacementKind;
 use micold_core::sandbox::{AiCliSelection, NetworkPosture};
 use micold_core::ssh::argv::{current_build_id, DEFAULT_CONNECT_TIMEOUT_SECS};
@@ -628,7 +631,14 @@ async fn connect_and_pump(
                 ai_clis,
                 time_zone: HOST_TIME_ZONE.get().and_then(|z| z.as_deref()),
             };
-            match container_attempt(SSH_HOST.get().map(|h| &**h), &target, &sink).await {
+            match container_attempt(
+                SSH_HOST.get().map(|h| &**h),
+                &target,
+                &sink,
+                !life.established,
+            )
+            .await
+            {
                 Ok(c) => Ok(c),
                 Err(reason) if life.established => {
                     return report(id, output, ConnectionMsg::ConnectFailed(reason)).await;
@@ -1156,10 +1166,15 @@ const CONTAINER_STATE_DIR: &str = "/var/lib/micold-ai-ide";
 
 /// One bring-up of a container daemon through the shared provisioning sequence: wait for the
 /// container, ask it its login name, pin its host key, then provision, bridge and handshake.
+///
+/// `roll_back` is a first start: when it fails, is cancelled or is dropped after the daemon was
+/// started, the container whose daemon it started is stopped (FR-020). A re-dial of a link that was
+/// up leaves the container alone.
 async fn container_attempt(
     host: Option<&dyn SshHost>,
     reach: &ContainerReach<'_>,
     sink: &EventSink,
+    roll_back: bool,
 ) -> Result<Connected, String> {
     let Some(host) = host else {
         return Err("this build cannot run `ssh`".to_string());
@@ -1202,23 +1217,88 @@ async fn container_attempt(
         build_id: current_build_id(),
         client_build: CLIENT_BUILD.to_string(),
     };
-    ssh_run(
+    let cancel = CancelToken::new();
+    let (runtime, name) = (reach.runtime, reach.container_name.to_string());
+    let mut undo = StartRollback::new(roll_back.then(|| {
+        Box::new(move |ledger: AttemptLedger| {
+            let _ =
+                micold_core::provision::rollback(&ledger, &CliRuntime::new(runtime, SystemRunner));
+        }) as Box<dyn FnOnce(AttemptLedger) + Send>
+    }));
+    let recording = undo.recording_sink(sink, &name);
+    let result = ssh_run(
         host,
         &container_target(login, reach, &keys),
         &opts,
-        &CancelToken::new(),
-        sink,
+        &cancel,
+        &recording,
     )
-    .await
-    .map(|p| p.connected)
-    .map_err(|failure| {
-        failure.reason(&ReasonContext {
+    .await;
+    match result {
+        Ok(p) => {
+            undo.disarm();
+            Ok(p.connected)
+        }
+        Err(failure) => Err(failure.reason(&ReasonContext {
             host: "127.0.0.1".to_string(),
             port: reach.port,
             timeout_secs,
             platform,
+        })),
+    }
+}
+
+/// Stops the container whose daemon an attempt started when the attempt ends any way but
+/// connected, including when its future is dropped by a cancel (feature 806, FR-019, FR-020).
+struct StartRollback {
+    ledger: std::sync::Arc<std::sync::Mutex<AttemptLedger>>,
+    undo: Option<Box<dyn FnOnce(AttemptLedger) + Send>>,
+}
+
+impl StartRollback {
+    /// `None` for an attempt that must leave the container alone.
+    fn new(undo: Option<Box<dyn FnOnce(AttemptLedger) + Send>>) -> Self {
+        Self {
+            ledger: std::sync::Arc::default(),
+            undo,
+        }
+    }
+
+    /// `sink`, also noting in the ledger that the daemon of container `name` is being started.
+    fn recording_sink(&self, sink: &EventSink, name: &str) -> EventSink {
+        let (ledger, inner, name) = (self.ledger.clone(), sink.clone(), name.to_string());
+        std::sync::Arc::new(move |event| {
+            if matches!(event, ProvisionEvent::Entered(Step::Start)) {
+                ledger
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .record_daemon_started(micold_core::sandbox::runtime::ContainerId(
+                        name.clone(),
+                    ));
+            }
+            inner(event);
         })
-    })
+    }
+
+    /// The attempt connected: nothing to undo.
+    fn disarm(&mut self) {
+        self.undo = None;
+    }
+}
+
+impl Drop for StartRollback {
+    fn drop(&mut self) {
+        let Some(undo) = self.undo.take() else { return };
+        let ledger = self
+            .ledger
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
+        if !ledger.is_empty() {
+            // A runtime command blocks: keep it off the async worker that dropped the attempt.
+            std::thread::spawn(move || undo(ledger));
+        }
+    }
 }
 
 /// What a Kubernetes daemon's start needs from the shell (this module names no concrete
@@ -1660,7 +1740,7 @@ mod tests {
         assert!(actor_specs(&registry, &states, dir, None).is_empty());
     }
 
-    use super::{container_target, ContainerReach};
+    use super::{container_target, AttemptLedger, ContainerReach, EventSink, StartRollback};
     use micold_core::provision::keys::DaemonKeys;
     use micold_core::provision::{Egress, Ownership, StepBounds};
     use micold_core::ssh::argv::Reach;
@@ -1833,7 +1913,7 @@ mod tests {
         // `NoSsh` never finds the container, so the attempt is still waiting when the timeout ends it.
         let waited = tokio::time::timeout(
             std::time::Duration::from_millis(300),
-            super::container_attempt(Some(&NoSsh), &reach, &sink),
+            super::container_attempt(Some(&NoSsh), &reach, &sink, true),
         )
         .await;
         assert!(waited.is_err(), "the container never answers");
@@ -2134,5 +2214,45 @@ mod tests {
             assert_eq!(links.outbox(local), Some(&outbox), "the same handle");
             assert_eq!(local_spec(&links).as_ref(), Some(&expected));
         }
+    }
+
+    /// Runs `body` on a rollback armed to report the ledger it undoes.
+    fn rolled_back(body: impl FnOnce(&mut StartRollback)) -> Option<AttemptLedger> {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let undo = Box::new(move |ledger| tx.send(ledger).unwrap())
+            as Box<dyn FnOnce(AttemptLedger) + Send>;
+        let mut rollback = StartRollback::new(Some(undo));
+        body(&mut rollback);
+        drop(rollback);
+        rx.recv_timeout(std::time::Duration::from_millis(300)).ok()
+    }
+
+    fn entered_start(rollback: &StartRollback) {
+        let sink: EventSink = std::sync::Arc::new(|_| {});
+        rollback.recording_sink(&sink, "ctr")(micold_core::provision::ProvisionEvent::Entered(
+            micold_core::provision::Step::Start,
+        ));
+    }
+
+    #[test]
+    fn an_attempt_that_started_the_daemon_stops_that_container_when_it_ends() {
+        let ledger = rolled_back(|r| entered_start(r)).expect("rolled back");
+        assert_eq!(
+            ledger.started_daemon,
+            Some(micold_core::sandbox::runtime::ContainerId("ctr".into()))
+        );
+    }
+
+    #[test]
+    fn an_attempt_that_never_reached_the_start_or_connected_undoes_nothing() {
+        assert_eq!(rolled_back(|_| {}), None, "daemon never started");
+        assert_eq!(
+            rolled_back(|r| {
+                entered_start(r);
+                r.disarm();
+            }),
+            None,
+            "connected"
+        );
     }
 }

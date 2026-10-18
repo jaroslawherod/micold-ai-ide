@@ -23,15 +23,20 @@ use std::path::Path;
 use std::time::{Duration, Instant};
 
 use micold_core::connect::Connected;
-use micold_core::provision::{AiCliTable, Egress, FailureCause, Provisioned, Step, StepBounds};
+use micold_core::provision::{
+    rollback, AiCliTable, AttemptLedger, Egress, FailureCause, Provisioned, Step, StepBounds,
+};
+use micold_core::sandbox::cli::CliRuntime;
+use micold_core::sandbox::exec::SystemRunner;
 use micold_core::sandbox::lifecycle::{adopt, Adoption};
 use micold_core::sandbox::parse::ContainerFacts;
+use micold_core::sandbox::runtime::ContainerId;
 use micold_core::session::AiCli;
 
 use sandbox_real_support::{
     cli, cli_out, containers_named, daemon_count, failed, image, provision_outcome,
-    provision_outcome_with, runtime_cmd, seed, start_no_outbound_sandbox, start_sandbox,
-    start_sandbox_from, wait_for_accept, ProvisionRun, SandboxSpec,
+    provision_outcome_with, runtime_cmd, runtime_kind, seed, start_no_outbound_sandbox,
+    start_sandbox, start_sandbox_from, wait_for_accept, ProvisionRun, SandboxSpec,
 };
 
 const FRESH_CONTAINER: &str = "micold-provision-probe";
@@ -522,17 +527,9 @@ async fn sandbox_real_provision_no_outbound_install_goes_through_the_relay_and_c
     );
 }
 
-/// Port the install relay's `ssh -R` forward binds inside the target (`ai_cli::install_script`'s
-/// `HTTPS_PROXY`); holding it makes the forward, and so the relayed install, fail.
-const RELAY_REMOTE_PORT: u16 = 17728;
-
-/// T075, edge case "No-outbound network posture": with the relay forced to fail the install fails
-/// on its own step inside its bound instead of hanging, and nothing is offered.
-///
-/// Assumption: the relay is made to fail from outside by occupying the remote end of its forward
-/// (`ExitOnForwardFailure=yes` ends the command); `Relay::start` itself cannot be made to fail
-/// through the public `run`, so this asserts the failing step and bound, and names the cause only
-/// when it is the posture one.
+/// T075, edge case "No-outbound network posture": with the relay unable to open, the install fails
+/// on its own step inside its bound, names the network setting as the cause (not a bare ssh
+/// failure) and nothing is offered.
 #[tokio::test]
 async fn sandbox_real_provision_no_outbound_a_failed_relay_fails_the_install_within_its_bound() {
     let d = dirs("no-outbound-fail");
@@ -542,19 +539,11 @@ async fn sandbox_real_provision_no_outbound_a_failed_relay_fails_the_install_wit
         NO_OUTBOUND_NETWORK,
         NO_OUTBOUND_PORT + 10,
     ));
-    cli(&[
-        "exec",
-        "-d",
-        NO_OUTBOUND_CONTAINER,
-        "node",
-        "-e",
-        &format!("require('net').createServer().listen({RELAY_REMOTE_PORT}, '127.0.0.1')"),
-    ]);
-    std::thread::sleep(Duration::from_secs(1));
     let bound = Duration::from_secs(30);
     let started = Instant::now();
     let (_, outcome, _) = ProvisionRun {
         egress: registry_relay(),
+        relay_fails: true,
         ..ProvisionRun::new(install_bound(bound))
     }
     .run(NO_OUTBOUND_PORT + 10)
@@ -565,17 +554,9 @@ async fn sandbox_real_provision_no_outbound_a_failed_relay_fails_the_install_wit
         "the failure took {:?}, over its bound {bound:?}",
         started.elapsed()
     );
-    assert_eq!(failure.step, Step::InstallAiClis, "{:?}", failure.cause);
+    assert_eq!(failure.step, Step::InstallAiClis);
+    assert_eq!(failure.cause, FailureCause::PostureBlocksDownload);
     assert!(offered_clis(&d.data).is_empty(), "nothing was installed");
-}
-
-/// Undo a cancelled start's container, as the client's rollback does (FR-020).
-///
-/// Assumes the rollback is the runtime's `rm -f`; `provision::run` itself creates no container
-/// (the harness does), so the container's removal belongs to the caller's rollback. Swap this body
-/// for `provision::attempt::rollback(ledger, runtime)` once a start is driven through `bring_up`.
-fn roll_back_cancelled_start(container: &str) {
-    cli(&["rm", "-f", container]);
 }
 
 /// T082, FR-020: a stop (the cancel token) during a long install ends the run as `Cancelled`
@@ -606,7 +587,10 @@ async fn sandbox_real_provision_stop_during_a_long_install_leaves_no_container_o
         started.elapsed()
     );
     assert_eq!(daemon_count(STOP_CONTAINER), 0, "no daemon was started");
-    roll_back_cancelled_start(STOP_CONTAINER);
+    // The client's own rollback of a start that created the container (FR-020).
+    let mut ledger = AttemptLedger::new();
+    ledger.record_created(ContainerId(STOP_CONTAINER.to_string()));
+    rollback(&ledger, &CliRuntime::new(runtime_kind(), SystemRunner)).expect("the rollback runs");
     assert_eq!(containers_named(STOP_CONTAINER), 0, "the container is gone");
 }
 
