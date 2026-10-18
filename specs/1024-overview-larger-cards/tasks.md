@@ -193,3 +193,13 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
   pass recorded in `specs/1024-overview-larger-cards/visual-pass.md`)
 - **Depends on**: —
 - **Tier**: full
+
+## Phase 7: TDD remediation
+
+TDD verification (`tdd/verification.md`) verdict is FAIL: the feature is not done until T014 is cleared. T015-T018 are MED/LOW follow-ups.
+
+- [x] T014 [US3] [U7] Finding 1 (`card_grid.rs:229-236`, `:283-293`): revert only the `columns` clamp to ignore `max` in a scratch copy, run `scripts/build-lock.sh cargo test -p micold-client --lib card_grid`, and record in `tdd/cycle-log.md` a dated "retroactive red" entry (failing test names and output) for the `vec![5; 6]` and last-row-alignment assertions, marked as recorded after the fact; restore and re-run green
+- [x] T015 [US3] Finding 3 (`card_grid.rs:229-236`): drop the duplicate `vec![5; 6]` row-shape check from `thirty_cards_scroll_vertically`, or move it to its own test named for the rule; proof: `scripts/build-lock.sh cargo test -p micold-client --lib card_grid` green and mutant M1 still fails a test
+- [x] T016 Finding 4: update `tdd/test-list.md` A3 to DONE (T012) and bump `updated_at`; note in `visual-pass.md` or the list that FR-007/FR-008 at about 2400 px were not visually checked
+- [x] T017 [US1] [U4] Finding 5 (`crates/micold-client/src/ui/overview.rs:45`): add a test that the Overview's grid at 2400 px holds five per row, or state in the test list that FR-011 rests on `CardGrid::new` defaults; proof: `scripts/build-lock.sh cargo test -p micold-client overview`
+- [x] T018 Findings 6-7 (`card_grid.rs`): rename the `U4 (1024)` doc ids so they do not collide with feature 813's, and name the 16 px gap and 0.01 tolerance as constants; proof: `mise run gate`
