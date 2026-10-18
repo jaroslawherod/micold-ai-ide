@@ -686,6 +686,179 @@ mod tests {
             })
     }
 
+    /// Data-model's table as literal rows (signals, state, reason), independent of `table()`.
+    #[test]
+    fn card_state_matches_the_literal_rows_of_the_data_model() {
+        use BlockedReason::{Failed, NeedsPermission, Resumable};
+        let open = CurrentPr {
+            open: true,
+            ..CurrentPr::default()
+        };
+        let known = |current: Option<CurrentPr>, removable| PrSignal::Known { current, removable };
+        let rows = [
+            // 1
+            (
+                LocationState::Blocked(NeedsPermission),
+                false,
+                PrSignal::Unknown,
+                CardState::NeedsAction,
+                CardReason::NeedsPermission,
+            ),
+            // 2
+            (
+                LocationState::Idle,
+                true,
+                PrSignal::Unknown,
+                CardState::NeedsAction,
+                CardReason::AgentRequest,
+            ),
+            // 3
+            (
+                LocationState::Blocked(Failed),
+                false,
+                PrSignal::Unknown,
+                CardState::NeedsAttention,
+                CardReason::SessionFailed,
+            ),
+            // 4
+            (
+                LocationState::Blocked(Resumable),
+                false,
+                PrSignal::Unknown,
+                CardState::NeedsAttention,
+                CardReason::Resumable,
+            ),
+            // 5
+            (
+                LocationState::Idle,
+                false,
+                known(
+                    Some(CurrentPr {
+                        checks_failing: true,
+                        ..open
+                    }),
+                    false,
+                ),
+                CardState::NeedsAttention,
+                CardReason::ChecksFailing,
+            ),
+            // 6
+            (
+                LocationState::Idle,
+                false,
+                known(
+                    Some(CurrentPr {
+                        changes_requested: true,
+                        ..open
+                    }),
+                    false,
+                ),
+                CardState::NeedsAttention,
+                CardReason::ChangesRequested,
+            ),
+            // 7
+            (
+                LocationState::Idle,
+                false,
+                known(
+                    Some(CurrentPr {
+                        conflict: true,
+                        ..open
+                    }),
+                    false,
+                ),
+                CardState::NeedsAttention,
+                CardReason::MergeConflict,
+            ),
+            // 8
+            (
+                LocationState::Running,
+                false,
+                PrSignal::Unknown,
+                CardState::Working,
+                CardReason::Working,
+            ),
+            // 9
+            (
+                LocationState::Idle,
+                false,
+                known(
+                    Some(CurrentPr {
+                        merged: true,
+                        ..CurrentPr::default()
+                    }),
+                    true,
+                ),
+                CardState::Done,
+                CardReason::Merged,
+            ),
+            // 9 needs removable: merged but not removable falls through to 10
+            (
+                LocationState::Idle,
+                false,
+                known(
+                    Some(CurrentPr {
+                        merged: true,
+                        ..CurrentPr::default()
+                    }),
+                    false,
+                ),
+                CardState::Idle,
+                CardReason::Idle,
+            ),
+            // 10
+            (
+                LocationState::Idle,
+                false,
+                PrSignal::Unknown,
+                CardState::Idle,
+                CardReason::Idle,
+            ),
+            (
+                LocationState::Unknown,
+                false,
+                PrSignal::Unknown,
+                CardState::Idle,
+                CardReason::ActivityUnknown,
+            ),
+            // Several signals: the first row wins (scenario 1.5).
+            (
+                LocationState::Running,
+                true,
+                known(
+                    Some(CurrentPr {
+                        checks_failing: true,
+                        ..open
+                    }),
+                    false,
+                ),
+                CardState::NeedsAction,
+                CardReason::AgentRequest,
+            ),
+            (
+                LocationState::Running,
+                false,
+                known(
+                    Some(CurrentPr {
+                        conflict: true,
+                        ..open
+                    }),
+                    false,
+                ),
+                CardState::NeedsAttention,
+                CardReason::MergeConflict,
+            ),
+        ];
+        for (location, agent_request, pr, state, reason) in rows {
+            let signals = CardSignals {
+                location,
+                agent_request,
+                pr,
+            };
+            assert_eq!(card_state(&signals), (state, reason), "{signals:?}");
+        }
+    }
+
     #[test]
     fn card_state_follows_the_table_for_every_combination_of_signals() {
         let all = every_signal();

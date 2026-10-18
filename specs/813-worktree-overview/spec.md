@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-17
 
-**Status**: Draft
+**Status**: Closed 2026-10-18 — shipped in PRs #927, #930, #932, #936, #951, #976, #985 and the close PR (human display passes T070b, T071b outstanding)
 
 **Input**: User description: "Implement GitHub issue #813: feat: worktree overview with
 state-aware cards (sessions, PRs, task progress). Add a project Overview: a grid of Material cards,

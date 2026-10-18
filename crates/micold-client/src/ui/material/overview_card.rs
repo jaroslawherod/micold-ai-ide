@@ -437,8 +437,9 @@ mod tests {
             assert_eq!(w.type_icon, Icon::TypeFeature);
             state_icons.push(w.state_icon);
         }
-        state_icons.dedup();
-        assert_eq!(state_icons.len(), 5, "{state_icons:?}");
+        let distinct: std::collections::BTreeSet<String> =
+            state_icons.iter().map(|i| format!("{i:?}")).collect();
+        assert_eq!(distinct.len(), 5, "{state_icons:?}");
         let types = [
             LocationType::Feature,
             LocationType::Bugfix,
