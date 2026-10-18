@@ -4,6 +4,13 @@ The **Overview** shows every location of the open project at a glance: one card 
 (**Default**) and one for each worktree, so you can see which sessions need you without opening
 each worktree in turn.
 
+## Layout
+
+The cards sit in a grid of up to five cards per row. The cards share the row's width equally, so a
+wider window makes each card wider rather than adding more cards to a row. A narrower window shows
+fewer cards per row, down to one. With more cards than fit on screen, the grid scrolls down; it
+never scrolls sideways.
+
 ## Opening and closing it
 
 Press **Overview** in the top bar, next to the project switcher. Press it again to close the

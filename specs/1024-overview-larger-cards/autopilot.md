@@ -9,20 +9,20 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1024
 - **Worktree branch**: claude/project-thread-iq9j8q
 - **Started**: 2026-10-18
-- **Phase**: tasks done
-- **Next step**: design PR open; after merge, milestone M1
+- **Phase**: implement M1
+- **Next step**: M1 T012 visual pass, T013 gate, reviews A and B
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| (orchestrator opens) | Design: spec, plan, tasks | to open | — |
+| #1033 | Design: spec, plan, tasks | merged | 384f526b502ebf324670262862084f45c3531947 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T013 | full | Overview shows at most five cards per row, exactly five from 1464 px of grid, wider cards; narrow panes reflow; user guide Layout | — | planned |
+| M1 | T001–T013 | full | Overview shows at most five cards per row, exactly five from 1464 px of grid, wider cards; narrow panes reflow; user guide Layout | — | in progress |
 
 ## Decisions
 
