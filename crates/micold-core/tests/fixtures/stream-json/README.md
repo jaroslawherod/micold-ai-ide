@@ -12,7 +12,11 @@ scrubbed. One is **synthetic**: `tolerance.jsonl`, written by hand.
 - Scrubbed by the script's `scrub_stream_json` (tested by
   `scripts/tests/capture-stream-json.test.sh`): the scratch repo path → `<CWD>`, the home
   directory → `<HOME>`, the session uuid → `<SESSION_ID>`, e-mail addresses and account /
-  organisation identifiers → `<ACCOUNT>`. Nothing else was edited.
+  organisation identifiers → `<ACCOUNT>`. First, `scrub_split_deltas` does the same for the
+  path and uuid where the CLI cut them across `input_json_delta` chunks: it joins each run of
+  chunks, scrubs the joined text and cuts it again at the original chunk lengths, so the joined
+  deltas equal the scrubbed `tool_use` input. `tool-turn` and `error-result` were recorded before
+  that step existed and had it applied afterwards. Nothing else was edited.
 
 | Fixture | Prompt | Extra flags | Shows |
 |---|---|---|---|

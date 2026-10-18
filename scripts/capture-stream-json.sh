@@ -34,6 +34,59 @@ scrub_stream_json() {
       -e 's/"((account|organization)_?([Uu]uid|[Ii]d)|email|emailAddress|email_address)":"[^"]*"/"\1":"<ACCOUNT>"/g'
 }
 
+# Scrub stdin to stdout where a line-by-line sed cannot: the CLI streams a tool call's input as
+# `input_json_delta` chunks, which can cut the scratch path or the session uuid in two. Each run of
+# consecutive chunks of one block is joined, <cwd>, <home> and <session id> are replaced in the
+# joined text, and the text is cut again at the original chunk lengths (the last chunk takes the
+# rest), so every line stays one event. Lines it does not change pass through byte for byte.
+scrub_split_deltas() {
+  python3 -I -c '
+import json, sys
+secrets = [(sys.argv[1], "<CWD>"), (sys.argv[2], "<HOME>"), (sys.argv[3], "<SESSION_ID>")]
+
+def chunk_of(line):
+    try:
+        value = json.loads(line)
+        delta = value["event"]["delta"]
+        if value.get("type") == "stream_event" and delta.get("type") == "input_json_delta":
+            return value, value["event"].get("index")
+    except (ValueError, KeyError, TypeError, AttributeError):
+        pass
+    return None, None
+
+def flush(run, out):
+    joined = "".join(v["event"]["delta"]["partial_json"] for _, v in run)
+    scrubbed = joined
+    for secret, placeholder in secrets:
+        if secret:
+            scrubbed = scrubbed.replace(secret, placeholder)
+    if scrubbed == joined:
+        out.extend(line for line, _ in run)
+        return
+    at = 0
+    for i, (_, value) in enumerate(run):
+        size = len(value["event"]["delta"]["partial_json"])
+        piece = scrubbed[at:] if i == len(run) - 1 else scrubbed[at:at + size]
+        at += len(piece)
+        value["event"]["delta"]["partial_json"] = piece
+        out.append(json.dumps(value, ensure_ascii=False, separators=(",", ":")) + "\n")
+
+out, run, run_index = [], [], None
+for line in sys.stdin:
+    value, index = chunk_of(line)
+    if value is None or (run and index != run_index):
+        flush(run, out)
+        run = []
+    if value is None:
+        out.append(line)
+    else:
+        run.append((line, value))
+        run_index = index
+flush(run, out)
+sys.stdout.write("".join(out))
+' "$2" "$3" "$1"
+}
+
 # The one stdin line that carries <prompt> as a user message (contracts/claude-stream-json.md).
 user_message_line() {
   jq -cn --arg text "$1" '{type:"user",message:{role:"user",content:[{type:"text",text:$text}]}}'
@@ -68,6 +121,7 @@ capture_main() {
   user_message_line "$prompt" \
     | (cd "$repo" && claude -p --input-format stream-json --output-format stream-json --verbose \
          --include-partial-messages "$session_flag" "$sid" "$@") \
+    | scrub_split_deltas "$sid" "$repo" "$HOME" \
     | scrub_stream_json "$sid" "$repo" "$HOME" > "$out" \
     || echo "claude exited non-zero (kept: an error result is a fixture too)" >&2
   echo "session $sid -> $out ($(wc -l < "$out") lines)" >&2

@@ -3,7 +3,6 @@
 //! changed, structured only for Claude Code, persisted without a schema bump.
 
 use micold_core::project::{Availability, Project};
-use micold_core::provider::AiCliProvider;
 use micold_core::session::{
     AiCli, KindRefusal, Session, SessionId, SessionKind, SessionLabel, SessionLocation,
     TerminalMode,
