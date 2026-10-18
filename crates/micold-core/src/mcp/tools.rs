@@ -608,8 +608,11 @@ const TOOLS: &[Tool] = &[
             (prompt_delivered: false). A worktree has at most one session by \
             default: a second is refused, naming the existing one and the way to ask for another. \
             Pass allow_additional_session: true to start another beside it on purpose (the limit \
-            is soft: policy, the CLI check and every other check still apply). The first session \
-            of a worktree is its main session; extra sessions are helpers.",
+            is soft: policy, the CLI check and every other check still apply). A person is asked to \
+            confirm a second session; an agent is refused unless it sets \
+            allow_additional_session: true, because nobody is present to confirm and silently \
+            doubling the sessions in one worktree is the harm the limit guards against. The \
+            first session of a worktree is its main session; extra sessions are helpers.",
         properties: || {
             json!({
                 "worktree": {"type": "string", "minLength": 1,
@@ -635,7 +638,8 @@ const TOOLS: &[Tool] = &[
             default: starting a session while another session of its worktree is starting or \
             running is refused (Conflict), naming the running one; stop it first, or pass \
             allow_additional_session: true to run both on purpose (policy and every other check \
-            still apply). Returns the session's lifecycle.",
+            still apply). A person is asked to confirm; an agent is refused unless it sets the \
+            flag, because nobody is present to confirm. Returns the session's lifecycle.",
         properties: || {
             let mut properties = session_property();
             properties["allow_additional_session"] = json!({"type": "boolean", "default": false,

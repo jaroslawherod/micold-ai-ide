@@ -1160,3 +1160,23 @@ fn report_review_comment_refuses_checks_one_to_four_in_order() {
     .contains("over the 20000-character limit"));
     report(json!({"comment": "C-1a2b3c4d", "outcome": "applied", "reply": "x".repeat(20_000)}));
 }
+
+/// Feature 802, FR-005 and FR-006: both descriptions say a person is asked to confirm, an agent is
+/// refused unless it sets `allow_additional_session: true`, and why.
+#[test]
+fn session_start_tools_state_the_person_confirms_agent_refused_rule() {
+    let tools = tools_list();
+    for name in ["create_session", "start_session"] {
+        let description = tools
+            .iter()
+            .find(|t| t["name"] == name)
+            .and_then(|t| t["description"].as_str())
+            .unwrap();
+        assert!(
+            description.contains("person is asked to confirm")
+                && description.contains("agent is refused unless it sets")
+                && description.contains("nobody is present to confirm"),
+            "{name}: {description:?}"
+        );
+    }
+}
