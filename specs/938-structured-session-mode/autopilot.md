@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-cl0lw3
 - **Started**: 2026-10-18
 - **Phase**: plan
-- **Next step**: plan unit — clarify done (CLEAN, 2 rounds); Q1/Q2 answers are provisional (recommended options), the user may still change them
+- **Next step**: plan unit (handover) — plan artifacts drafted, review round 1 of the plan not yet run
 
 ## Pull requests
 
@@ -45,7 +45,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+Plan unit handed over at the 150k cap (most of it spent reading daemon/client code).
+- Done: `speckit-plan` ran; plan.md, research.md, data-model.md, contracts/{claude-stream-json,wire}.md,
+  quickstart.md written and committed. No `after_plan` hooks registered.
+- Next: plan review round 1 (tasks/review.md with rubrics/plan.md, round-1 model), act on findings,
+  then set Next step to `tasks unit` and return DONE.
+- Note: this unit had no `Agent` tool, so it could not dispatch the reviewer; the next plan unit
+  needs one (or the orchestrator dispatches the review).
+- Open findings: none. Clarify answers FR-021a/FR-022/FR-022a still provisional.
 
 ## Open escalation
 
