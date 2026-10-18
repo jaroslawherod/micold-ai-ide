@@ -902,6 +902,9 @@ jobs:
           CLASSIFY: ${{ needs.classify.result }}
           LINT: ${{ needs.lint.result }}
           TEST: ${{ needs.test.result }}
+          # A red `linux-daemons` skips `test` and the ARM64 job (both need its artifact), and a skip
+          # reads as satisfied, so it is gated by name too.
+          LINUXDAEMONS: ${{ needs.linux-daemons.result }}
           WINARM: ${{ needs.windows-arm64-package.result }}
           SANDBOX: ${{ needs.sandbox-runtime.result }}
           SSHREMOTE: ${{ needs.ssh-remote.result }}
@@ -920,6 +923,7 @@ jobs:
           check classify "$CLASSIFY"
           check lint "$LINT"
           check test "$TEST"
+          check linux-daemons "$LINUXDAEMONS"
           check windows-arm64 "$WINARM"
           check sandbox "$SANDBOX"
           check ssh-remote "$SSHREMOTE"
@@ -933,6 +937,7 @@ jobs:
             echo "| classify | \`$CLASSIFY\` | yes |"
             echo "| lint | \`$LINT\` | yes |"
             echo "| test | \`$TEST\` | yes |"
+            echo "| linux-daemons | \`$LINUXDAEMONS\` | yes |"
             echo "| windows-arm64-package | \`$WINARM\` | yes |"
             echo "| sandbox-runtime | \`$SANDBOX\` | yes |"
             echo "| ssh-remote | \`$SSHREMOTE\` | yes |"
