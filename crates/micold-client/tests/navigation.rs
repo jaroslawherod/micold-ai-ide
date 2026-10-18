@@ -6,7 +6,7 @@ use micold_client::features::sidebar::TagFilter;
 use micold_client::keymap::{NavAction, NavLevel};
 use micold_core::naming::ConventionalType;
 use micold_core::navigation::Dir;
-use micold_core::session::{SessionId, SessionLocation};
+use micold_core::session::{AiCli, Session, SessionId, SessionLocation};
 
 mod support;
 use support::sidebar_fixture::{
@@ -217,4 +217,87 @@ fn nothing_happens_while_settings_or_a_surface_is_open() {
             "surface {i} open (FR-012)"
         );
     }
+}
+
+// ---- The session level (US2, contracts/ui.md U2 session row) ----
+
+const NEXT_SESSION: NavAction = NavAction {
+    level: NavLevel::Session,
+    dir: Dir::Next,
+};
+const PREVIOUS_SESSION: NavAction = NavAction {
+    level: NavLevel::Session,
+    dir: Dir::Previous,
+};
+
+/// A worktree `feat-a` holding a main session and two helpers; returns them in list order.
+fn main_and_two_helpers() -> (State, [SessionId; 3]) {
+    let mut state = state_with_active();
+    deliver(&mut state, vec![listed("feat-a")]);
+    let location = worktree("feat-a");
+    let mut main = Session::start_new(location.clone(), AiCli::ClaudeCode);
+    main.main = true;
+    let first = Session::start_new(location.clone(), AiCli::ClaudeCode);
+    let second = Session::start_new(location, AiCli::ClaudeCode);
+    let ids = [main.id, first.id, second.id];
+    state
+        .workspace
+        .sessions
+        .entry(std::path::PathBuf::from("/repo"))
+        .or_default()
+        .extend([main, first, second]);
+    (state, ids)
+}
+
+#[test]
+fn next_session_steps_through_main_then_helpers_and_wraps() {
+    let (mut state, [main, first, second]) = main_and_two_helpers();
+    state.session.active = Some(main);
+    assert_eq!(update(&state, NEXT_SESSION), Step::Session(first), "AS1");
+    state.session.active = Some(first);
+    assert_eq!(update(&state, NEXT_SESSION), Step::Session(second));
+    state.session.active = Some(second);
+    assert_eq!(update(&state, NEXT_SESSION), Step::Session(main), "wrap");
+}
+
+#[test]
+fn previous_session_wraps_backwards() {
+    let (mut state, [main, first, second]) = main_and_two_helpers();
+    state.session.active = Some(main);
+    assert_eq!(update(&state, PREVIOUS_SESSION), Step::Session(second));
+    state.session.active = Some(second);
+    assert_eq!(update(&state, PREVIOUS_SESSION), Step::Session(first));
+}
+
+#[test]
+fn one_session_no_current_session_or_a_stop_changes_nothing() {
+    let (state, ids) = four_locations();
+    let mut one = state.clone();
+    one.session.active = Some(ids[1]);
+    assert_eq!(update(&one, NEXT_SESSION), Step::None, "AS2");
+    assert_eq!(update(&one, PREVIOUS_SESSION), Step::None);
+    let (mut many, [main, ..]) = main_and_two_helpers();
+    assert_eq!(update(&many, NEXT_SESSION), Step::None, "AS4: no current");
+    many.session.active = Some(main);
+    many.sidebar.nav_stop = Some(worktree("feat-a"));
+    assert_eq!(
+        update(&many, NEXT_SESSION),
+        Step::None,
+        "a stop is not a session"
+    );
+}
+
+#[test]
+fn a_helper_chosen_on_a_collapsed_row_opens_it() {
+    let (mut state, [main, first, _]) = main_and_two_helpers();
+    state.session.active = Some(main);
+    state.sidebar.expanded.clear();
+    let Step::Session(id) = update(&state, NEXT_SESSION) else {
+        panic!("a step onto a helper");
+    };
+    assert_eq!(id, first);
+    state.update(Message::Session(
+        micold_client::features::session::Msg::Selected(id),
+    ));
+    assert!(state.location_open(&worktree("feat-a")), "AS3 (FR-009)");
 }

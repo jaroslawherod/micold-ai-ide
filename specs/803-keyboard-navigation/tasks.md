@@ -103,15 +103,15 @@ sidebar row (FR-010).
 
 ### Tests for User Story 2 (MANDATORY — Constitution Principle I) ⚠️
 
-- [ ] T024 [P] [US2] Extend the failing key tests in `crates/micold-client/tests/keymap.rs` with the two session rows: physical `BracketLeft`/`BracketRight` with the primary modifier + Shift → `Navigate(Session Previous/Next)`; logical fallback `[`/`{` and `]`/`}` with `physical = Other`; Ctrl+[ without Shift still gives `0x1b` and Ctrl+] gives `0x1d`; the K5 uniqueness, reserved-output and docs tests now run over four rows
-- [ ] T025 [P] [US2] Write the failing session-level tests in `crates/micold-client/tests/navigation.rs` (U2 session row): order is the current location node's `listed_sessions()` (main first, helpers in spawn-tree order); Next from main → first helper and two more presses → main (wrap); Previous wraps backwards; one session → `Step::None`; no current session → `Step::None`; `nav_stop` set → `Step::None`; after applying a helper's step on a collapsed location row that row is open by `effective_open` (FR-009)
-- [ ] T026 [P] [US2] Extend the `to_keymap_physical` test in `crates/micold-client/src/ui/material/terminal_pane.rs`: `Code::BracketLeft` → `BracketLeft`, `Code::BracketRight` → `BracketRight`
+- [x] T024 [P] [US2] Extend the failing key tests in `crates/micold-client/tests/keymap.rs` with the two session rows: physical `BracketLeft`/`BracketRight` with the primary modifier + Shift → `Navigate(Session Previous/Next)`; logical fallback `[`/`{` and `]`/`}` with `physical = Other`; Ctrl+[ without Shift still gives `0x1b` and Ctrl+] gives `0x1d`; the K5 uniqueness, reserved-output and docs tests now run over four rows
+- [x] T025 [P] [US2] Write the failing session-level tests in `crates/micold-client/tests/navigation.rs` (U2 session row): order is the current location node's `listed_sessions()` (main first, helpers in spawn-tree order); Next from main → first helper and two more presses → main (wrap); Previous wraps backwards; one session → `Step::None`; no current session → `Step::None`; `nav_stop` set → `Step::None`; after applying a helper's step on a collapsed location row that row is open by `effective_open` (FR-009)
+- [x] T026 [P] [US2] Extend the `to_keymap_physical` test in `crates/micold-client/src/ui/material/terminal_pane.rs`: `Code::BracketLeft` → `BracketLeft`, `Code::BracketRight` → `BracketRight`
 
 ### Implementation for User Story 2
 
-- [ ] T027 [US2] Add `PhysicalKey::BracketLeft`/`BracketRight` and the two session rows of K1 to `NAV_CHORDS` and the fallback in `crates/micold-client/src/keymap.rs`, and their mapping in `to_keymap_physical` in `crates/micold-client/src/ui/material/terminal_pane.rs`, until T024 and T026 pass (docs test stays red until T029)
-- [ ] T028 [US2] Implement the session level of `update` in `crates/micold-client/src/features/navigation.rs` until T025 passes
-- [ ] T029 [US2] Add the "Previous / next session" row (`Ctrl+Shift+[` / `Ctrl+Shift+]`, `Cmd+Shift+[` / `Cmd+Shift+]`) to `docs/user-guide/terminal-panes.md` §Keyboard shortcuts and the session chords to the **Navigation** bullet of `docs/user-guide/worktrees-and-sessions.md`, noting that plain Ctrl+[ and Ctrl+] still reach the terminal; until the docs test passes
+- [x] T027 [US2] Add `PhysicalKey::BracketLeft`/`BracketRight` and the two session rows of K1 to `NAV_CHORDS` and the fallback in `crates/micold-client/src/keymap.rs`, and their mapping in `to_keymap_physical` in `crates/micold-client/src/ui/material/terminal_pane.rs`, until T024 and T026 pass (docs test stays red until T029)
+- [x] T028 [US2] Implement the session level of `update` in `crates/micold-client/src/features/navigation.rs` until T025 passes
+- [x] T029 [US2] Add the "Previous / next session" row (`Ctrl+Shift+[` / `Ctrl+Shift+]`, `Cmd+Shift+[` / `Cmd+Shift+]`) to `docs/user-guide/terminal-panes.md` §Keyboard shortcuts and the session chords to the **Navigation** bullet of `docs/user-guide/worktrees-and-sessions.md`, noting that plain Ctrl+[ and Ctrl+] still reach the terminal; until the docs test passes
 
 **Checkpoint**: location and session chords work; `NAV_CHORDS` has four rows.
 

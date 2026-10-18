@@ -6,7 +6,7 @@
 
 use std::path::PathBuf;
 
-use micold_core::session::{SessionId, SessionLocation};
+use micold_core::session::{Session, SessionId, SessionLocation};
 
 use crate::app::State;
 use crate::features::sidebar::{RunRow, SidebarEntry};
@@ -65,7 +65,8 @@ pub fn update(state: &State, action: NavAction) -> Step {
     }
     match action.level {
         NavLevel::Location => location_step(state, action.dir),
-        NavLevel::Session | NavLevel::Project => Step::None,
+        NavLevel::Session => session_step(state, action.dir),
+        NavLevel::Project => Step::None,
     }
 }
 
@@ -86,6 +87,44 @@ fn location_step(state: &State, dir: micold_core::navigation::Dir) -> Step {
     match main_session_at(state, &target) {
         Some(id) => Step::Session(id),
         None => Step::Stop(target),
+    }
+}
+
+/// The current location's sessions, main first then the helpers, as its expander lists them.
+/// Nothing at a navigation stop or without a current session; one session stays where it is.
+fn session_step(state: &State, dir: micold_core::navigation::Dir) -> Step {
+    let Some(current) = state.session.active else {
+        return Step::None;
+    };
+    if state.sidebar.nav_stop.is_some() {
+        return Step::None;
+    }
+    let Some(location) = state.current_session_location() else {
+        return Step::None;
+    };
+    let ids = |sessions: Vec<&Session>| sessions.iter().map(|s| s.id).collect::<Vec<_>>();
+    let order: Vec<SessionId> = state
+        .sidebar_entries()
+        .into_iter()
+        .find_map(|entry| match entry {
+            SidebarEntry::Default(node) if location == SessionLocation::Default => {
+                Some(ids(node.listed_sessions()))
+            }
+            SidebarEntry::Worktree(node) if node.location() == location => {
+                Some(ids(node.listed_sessions()))
+            }
+            SidebarEntry::Group(group) => group.runs.iter().find_map(|run| match &run.row {
+                RunRow::Worktree(node) if node.location() == location => {
+                    Some(ids(node.listed_sessions()))
+                }
+                _ => None,
+            }),
+            _ => None,
+        })
+        .unwrap_or_default();
+    match micold_core::navigation::step(&order, Some(&current), dir) {
+        Some(target) if target != current => Step::Session(target),
+        _ => Step::None,
     }
 }
 

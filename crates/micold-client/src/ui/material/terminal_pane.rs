@@ -1807,6 +1807,8 @@ pub(crate) fn to_keymap_physical(physical: &keyboard::key::Physical) -> keymap::
     match physical {
         Physical::Code(Code::Comma) => keymap::PhysicalKey::Comma,
         Physical::Code(Code::Period) => keymap::PhysicalKey::Period,
+        Physical::Code(Code::BracketLeft) => keymap::PhysicalKey::BracketLeft,
+        Physical::Code(Code::BracketRight) => keymap::PhysicalKey::BracketRight,
         _ => keymap::PhysicalKey::Other,
     }
 }
@@ -2331,6 +2333,14 @@ mod tests {
             assert_eq!(
                 to_keymap_physical(&Physical::Code(Code::Period)),
                 PhysicalKey::Period
+            );
+            assert_eq!(
+                to_keymap_physical(&Physical::Code(Code::BracketLeft)),
+                PhysicalKey::BracketLeft
+            );
+            assert_eq!(
+                to_keymap_physical(&Physical::Code(Code::BracketRight)),
+                PhysicalKey::BracketRight
             );
             assert_eq!(
                 to_keymap_physical(&Physical::Code(Code::KeyO)),
