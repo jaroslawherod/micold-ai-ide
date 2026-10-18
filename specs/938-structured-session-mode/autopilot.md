@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-cl0lw3
 - **Started**: 2026-10-18
 - **Phase**: M4
-- **Next step**: M4 verify: review A round 2 (fix diff), full gate, PR
+- **Next step**: M4 PR to open (title/body in the session scratchpad), then CI and merge
 
 ## Pull requests
 
@@ -73,6 +73,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Revision review plan | 1 | e0ff3114af0e20d59a968874d970b56ded98c2fa:1b32faee25fb96fda33a6c60adb7b7a6f022e6f6 | CLEAN (1 MINOR declined) |
 | Revision review tasks | 1 | e0ff3114af0e20d59a968874d970b56ded98c2fa:1b32faee25fb96fda33a6c60adb7b7a6f022e6f6 | CLEAN (3 MINOR fixed: T056 test first, T054 startup sweep/race/saver-pass cases, ID-gap note) |
 | M4 review A (code-review high) | 1 | 6a0863fabf5c27b5ea526eb41d05e07bf2d31892:6574ac82466bbcc1f1f37374b317511a52d9889a | 8 findings: 1 MAJOR fixed (F1 first-prompt-once check rested on a sleep — now ordered by a later user message, mutant-checked), 2 MINOR fixed (F4 seqs across the resume, F6 T030 text amended), 1 moot (F7 Handover reset), 4 declined |
+| M4 review A (code-review high, sonnet) | 2 | 98bcb395bfd2300f09a61eb563ade201255d60af:cea110aaea3aabc4c2f93cc0e196486797906f49 | CLEAN |
 | M4 review B (conformance, sonnet) | 1 | 6a0863fabf5c27b5ea526eb41d05e07bf2d31892:6574ac82466bbcc1f1f37374b317511a52d9889a | CLEAN |
 | Revision review spec (sonnet) | 2 | 7497d055378edd3e6c97a8eea28e417fb1c95801:1b32faee25fb96fda33a6c60adb7b7a6f022e6f6 | CLEAN (1 MINOR fixed: FR-021b and scenario 7 cover purge at start with saving off) |
 
