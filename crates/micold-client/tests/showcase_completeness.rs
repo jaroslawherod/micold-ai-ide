@@ -508,6 +508,21 @@ fn the_state_icon_has_an_entry_posing_its_three_states() {
     }
 }
 
+/// Feature 968, Principle VIII: the quick-switcher dialog is posed in the gallery, with the rows the
+/// spec names (an emphasised match, a location with tags, the current row).
+#[test]
+fn the_quick_switcher_dialog_is_posed() {
+    for pose in [
+        "Quick-switcher dialog",
+        "Quick-switcher dialog, nothing matches",
+    ] {
+        assert!(
+            COMPONENTS.iter().any(|e| e.posed.contains(&pose)),
+            "no gallery entry poses `{pose}`"
+        );
+    }
+}
+
 /// **V4** — a gallery emptied by a refactor must fail rather than agree with an empty library.
 #[test]
 fn v4_the_catalogue_is_not_empty() {

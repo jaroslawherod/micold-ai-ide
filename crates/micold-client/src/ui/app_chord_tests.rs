@@ -31,6 +31,22 @@ fn the_overview_chord_toggles_the_overview() {
 }
 
 #[test]
+fn the_switcher_chord_toggles_the_switcher_without_the_terminal() {
+    let message = app_chord(primary_shift("p", Code::KeyP));
+    assert!(
+        matches!(
+            message,
+            Some(Message::QuickSwitch(
+                crate::features::quick_switch::Msg::Toggled {
+                    terminal_had_focus: false
+                }
+            ))
+        ),
+        "got {message:?}"
+    );
+}
+
+#[test]
 fn a_location_chord_navigates_by_its_physical_key() {
     use crate::keymap::{NavAction, NavLevel};
     use micold_core::navigation::Dir;
