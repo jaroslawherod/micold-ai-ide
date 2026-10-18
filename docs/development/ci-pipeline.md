@@ -244,6 +244,24 @@ the packaging half was still checked.
 `crates/micold-core/tests/macos_package_gate.rs` holds that statement and the workflow together, so
 the description cannot drift from the step.
 
+## The Windows ARM64 smoke step
+
+*"Install and launch it"* in the `windows-arm64-package` job ran 1064-1075 s (run 39107555048:
+07:33:28 to 07:51:23), against 28 s for the same script on the x64 leg of the `test` job. The build
+before it is 173 s; the installer itself is a few seconds.
+
+The cause was neither a fixed sleep nor a launch timeout. `scripts/windows-install-smoke.sh` asked
+Windows about 25 questions (is this pid alive, does the pipe exist, what is the uninstall key's
+version, and so on), each by starting `powershell.exe`, and on `windows-11-arm` every start costs
+about 40 s. The log timestamps between consecutive steps of the script are 42-45 s apart whatever
+the step does (a registry read, a `Start-Process`, one pipe poll), then 60-130 s where a step asks
+two or three.
+
+The script now starts one PowerShell and sends it every question over a pipe (`win` in the script),
+so the cost is paid once. The checks, their order and their timeouts are unchanged. Expect the step
+to take well under 5 minutes; if a run shows it creeping up, compare the timestamps between the
+`==` lines in the log with the numbers above.
+
 ## Reading a run
 
 The `classify change` job writes its verdict to the run summary, so the top of any run says which
