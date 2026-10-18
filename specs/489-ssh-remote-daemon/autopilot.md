@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #489
 - **Worktree branch**: feat/489_run-the-session-daemon-on-a-remote-host-over-ssh
 - **Started**: 2026-10-12
-- **Phase**: M5 PR open
-- **Next step**: merge M5, then M6
+- **Phase**: M6 implemented, gate and reviews next
+- **Next step**: M6 scoped gate with review A, review B, full gate, PR
 
 ## Pull requests
 
@@ -21,7 +21,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #883 | M2 | merged | ce4dbafccc49cfe6ad011d64b556c1ac5c9e9214 |
 | #895 | M3 | merged | 8a04f4206330fa7552531e4694e2244b186d345f |
 | #918 | M4 | merged | 402b31f667bec7632cfe284acd65c59549085fc8 |
-| #964 | M5 | open | — |
+| #964 | M5 | merged | b81b808f88183a8562cdb5a70faf3ef9e850cf83 |
 
 ## Milestones
 
@@ -31,7 +31,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T028–T038 | full | Remote projects, worktrees and sessions | #883 | done |
 | M3 | T039–T050 | full | Reconnect after a network drop | #895 | done |
 | M4 | T051–T055 | full | Local work unaffected, concurrent clients | #918 | done |
-| M5 | T056–T065 | full | Host picker, failure reasons, daemon management | #964 | in review |
+| M5 | T056–T065 | full | Host picker, failure reasons, daemon management | #964 | done |
 | M6 | T066–T072 | full | Version mismatch explained | — | pending |
 | M7 | T073–T081 | full | Replace a mismatched daemon with no sessions | — | pending |
 | M8 | T082–T084 | full | Remote daemon artefact for macOS and Windows | — | pending |
@@ -80,7 +80,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None. PR #964 was refused a merge again (main moved): second rebase onto origin/main, conflicts in the ssh argv, daemons feature/shell/settings UI, two client test files, the remote-daemons user guide and the real-ssh test support resolved keeping both sides; the provisioning test of spec 806 now gives its second SSH daemon its own port (FR-016 refuses a repeat). Full `mise run gate` green, force-pushed. Orchestrator: wait on CI and merge.
+M6 (T066-T072) implemented and ticked on a branch reset to origin/main after M5 merged: `core/ssh/mismatch.rs`, fixture suffix in `build.rs` + `PACKAGE_VERSION`, `links::remote_mismatch_text` used by route, worktree label and the Daemons row (`DaemonView.explanation`), `ssh_real_stale` fixture and `ssh_real_mismatch.rs` (both directions green under test-ssh), user-guide section. Next: scoped gate with review A, review B, full gate, PR.
 
 ## Open escalation
 
