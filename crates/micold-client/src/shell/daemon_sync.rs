@@ -82,6 +82,9 @@ pub enum PendingOp {
     /// A `SessionCreate`; on success the daemon-assigned session is selected + viewed. Further
     /// variants (project/session-delete) are added as each mutation domain is migrated.
     CreateSession {
+        /// The project the create was sent for: the refusal fallback reopens the confirmation
+        /// only while it is still the active one, since a confirm creates in the active project.
+        project: PathBuf,
         /// Where the session was asked for; the refusal fallback reopens the confirmation here.
         location: SessionLocation,
         /// The CLI the person chose, kept for the confirmation (feature 802, FR-001).
@@ -1757,6 +1760,7 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
                 // refusal, the auto-start's, and the refusal of an already-confirmed create stay the
                 // 776 notice: the service's text names the session, the catalog is unchanged.
                 Some(PendingOp::CreateSession {
+                    project,
                     location,
                     provider,
                     additional,
@@ -1766,12 +1770,16 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
                         && detail
                             .as_deref()
                             .is_some_and(|id| uuid::Uuid::parse_str(id).is_ok());
-                    if occupied && !additional && !automatic {
-                        micold_client::features::session::additional_opened(
-                            &mut app.core,
-                            location,
-                            Some(provider),
-                        );
+                    if occupied
+                        && !additional
+                        && !automatic
+                        && app.core.workspace.active.as_ref() == Some(&project)
+                    {
+                        app.core
+                            .update(Message::Session(SessionMsg::AdditionalOpened {
+                                location,
+                                provider: Some(provider),
+                            }));
                     } else {
                         app.core.notify_error(message);
                     }
@@ -2566,9 +2574,12 @@ pub fn on_session_start_requested(
     app.core.session.start_menu = None;
     // Feature 802 (FR-001, FR-007): a person's start at a location this window sees occupied asks
     // instead of sending a create the daemon would refuse. The auto-start's location is free.
-    if !automatic
-        && !micold_client::features::session::start_decided(&mut app.core, &location, provider)
-    {
+    if !automatic && !app.core.start_offered(&location) {
+        app.core
+            .update(Message::Session(SessionMsg::AdditionalOpened {
+                location,
+                provider: Some(provider),
+            }));
         return Task::none();
     }
     // Correlated create: the daemon owns the id + catalog. The new session arrives via the
@@ -2584,6 +2595,7 @@ pub fn on_session_start_requested(
         // can link; this handler is in the GUI binary, which no integration test can, and a
         // branch that drifted in here would become the feature's untestable mirror.
         let op = PendingOp::CreateSession {
+            project: project.clone(),
             location,
             provider,
             additional: false,
@@ -2640,6 +2652,7 @@ pub fn on_additional_session_confirmed(app: &mut App) -> Task<Message> {
         app.core.workspace.active.clone(),
     ) {
         let op = PendingOp::CreateSession {
+            project: project.clone(),
             location: location.clone(),
             provider,
             additional: true,

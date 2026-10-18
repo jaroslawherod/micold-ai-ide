@@ -2,7 +2,7 @@
 
 use micold_client::app::State;
 use micold_client::features::session::{
-    additional_cancelled, additional_confirmed, additional_opened, start_decided,
+    additional_cancelled, additional_confirmed, additional_opened,
 };
 use micold_core::session::{AiCli, Session, SessionLocation};
 use std::path::PathBuf;
@@ -25,18 +25,20 @@ fn state_with_an_occupant() -> State {
 #[test]
 fn a_start_that_opens_the_confirmation_keeps_its_cli() {
     let mut st = state_with_an_occupant();
-    let sent = start_decided(&mut st, &taken(), AiCli::Copilot);
-    assert!(!sent, "an occupied location must not send the create");
+    assert!(
+        !st.start_offered(&taken()),
+        "an occupied location sends no create"
+    );
+    additional_opened(&mut st, taken(), Some(AiCli::Copilot));
     assert_eq!(st.session.additional_target, Some(taken()));
     assert_eq!(st.additional_request(), Some((taken(), AiCli::Copilot)));
 }
 
 #[test]
-fn a_start_on_a_free_location_is_sent_and_opens_nothing() {
+fn a_free_location_offers_the_start() {
     let mut st = State::default();
     st.workspace.active = Some(PathBuf::from("/a"));
-    assert!(start_decided(&mut st, &taken(), AiCli::Copilot));
-    assert_eq!(st.session.additional_target, None);
+    assert!(st.start_offered(&taken()));
 }
 
 #[test]

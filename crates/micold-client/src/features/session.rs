@@ -1284,21 +1284,6 @@ pub fn additional_opened(
     state.session.additional_provider = provider;
 }
 
-/// Whether a person's start at `location` may go to the daemon (feature 802, FR-001, FR-007).
-/// An occupied location opens the confirmation with `provider` instead and returns `false`: the
-/// window never sends an unflagged create it can see will be refused.
-pub fn start_decided(
-    state: &mut crate::app::State,
-    location: &SessionLocation,
-    provider: AiCli,
-) -> bool {
-    if state.start_offered(location) {
-        return true;
-    }
-    additional_opened(state, location.clone(), Some(provider));
-    false
-}
-
 /// The additional-session confirmation was dismissed: nothing changes (FR-016).
 pub fn additional_cancelled(state: &mut crate::app::State) {
     state.session.additional_target = None;
@@ -1694,6 +1679,13 @@ pub enum Msg {
     // ---- Feature 776: helper sessions and the main session ----
     /// "Start another session..." was chosen on an occupied location; opens the confirmation.
     AdditionalRequested(SessionLocation),
+    /// A person's start at `location` met an occupied location, or the service refused it as
+    /// occupied (feature 802, FR-001, FR-004): opens the confirmation, keeping the CLI chosen
+    /// (`None`: the default). Unlike `AdditionalRequested` it does not judge the catalog.
+    AdditionalOpened {
+        location: SessionLocation,
+        provider: Option<AiCli>,
+    },
     /// The confirmation was accepted. The binary sends `SessionCreate` with
     /// `allow_additional_session: true`.
     AdditionalConfirmed,
@@ -2010,6 +2002,9 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
         Msg::RemoveRequested(id) => remove_requested(state, id),
         Msg::RemoveCancelled => remove_cancelled(state),
         Msg::AdditionalRequested(location) => additional_requested(state, location),
+        Msg::AdditionalOpened { location, provider } => {
+            additional_opened(state, location, provider)
+        }
         Msg::AdditionalConfirmed => additional_confirmed(state),
         Msg::AdditionalCancelled => additional_cancelled(state),
         Msg::StartBlocked(id) => start_blocked(state, id),
