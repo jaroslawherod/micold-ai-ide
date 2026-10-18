@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-xelisc
 - **Started**: 2026-10-17
 - **Phase**: implement
-- **Next step**: M4b committed; full gate running/green then push; the orchestrator opens the PR from pr-title-686-M4b.txt / pr-body-686-M4b.md, waits on CI, merges; then M5 (blocked on #806)
+- **Next step**: M5 unit 1 re-checked the tasks (drift fixed in tasks.md, below) and wrote no code. Unit 2: start at T134 red (core `start.rs` Copy/Install/Connect tests) per Handover.
 
 ## Pull requests
 
@@ -23,6 +23,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #992 | M2 | merged | 767530b33afc20e128d27d78852508d7416bffa2 |
 | #996 | M3 | merged | 8408b815f208a74217f877563e819cf6a543fcc2 |
 | #1000 | M4a | merged | 3ef301a489e845ccbfe2f0af813187b8244e7575 |
+| #1005 | M4b | merged | 21ad41546a8228d56012eac2ae359387b0981700 |
 
 ## Milestones
 
@@ -34,8 +35,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T079, T072, T056, T073, T081, T075, T059, T076, T128 | full | Core Stop/Remove/forget-locally; failure + pod-gone classifiers; preflight | — | merged (#992) |
 | M3 | T063, T064, T065, T067, T068, T069, T102 | full | Allowed credentials as secrets, daemon_env, security contexts (core) | — | merged (#996) |
 | M4a | T024, T130, T066, T031, T131, T070, T032 | full | Kubernetes form via Edit (Add entry hidden), shared resources fields, credentials list | — | merged (#1000) |
-| M4b | T083, T084, T080, T132, T085, T086, T082, T133, T129 | full | Placement fields, Stop/Remove/Forget locally/Logs from the row, Start → Unavailable | — | in review |
-| M5 | T134, T022, T074, T135, T030, T077, T136 | full | (#806) Copy + Connect over SSH through the relay; failures at client level | — | blocked on #806 |
+| M4b | T083, T084, T080, T132, T085, T086, T082, T133, T129 | full | Placement fields, Stop/Remove/Forget locally/Logs from the row, Start → Unavailable | — | merged (#1005) |
+| M5 | T134, T022, T074, T135, T030, T077, T136 | full | (#806) Copy + Connect over SSH through the relay; failures at client level | — | in progress (unblocked 2026-10-18, decision below) |
 | M6 | T138, T139, T141, T142, T033, T140 | full | (#806) AI CLI install, drift prompt, Add entry, user guide 🎯 MVP | — | blocked on #806 |
 | M7 | T047–T055, T100 | full | (#806) Clone + worktrees in the pod (RepoClone) | — | blocked on #806 |
 | M8 | T057, T058, T060, T061, T062, T101 | full | (#806) Reconnect; pod gone → stopped with reason | — | blocked on #806 |
@@ -58,6 +59,11 @@ stash@{0} survivors (all used by M1a–M2, stash dropped 2026-10-18; backed up i
 | 9 | implement M1a | FR-004 image source | owner (verbatim): "use basic image with ssh where you can copy daemon and install ai cli" — replaces decision 1: no build/push/registry; the pod runs a basic image with sshd, the client copies the daemon binary in over SSH and installs the AI CLIs (with decision 8). Changes the start sequence (no `Image` phase; a copy/install step) and likely the manifests. Design revision pending before more implementation | owner | owner instruction 2026-10-17T21:34Z |
 | 10 | implement M1a | Same mechanism for the local sandbox container? | owner (verbatim): "should use same mechanism for local \"sandbox\" container". Orchestrator default: #686 builds the sshd-image + copy-daemon-over-SSH + install-CLIs mechanism as a shared part both runtimes can use; moving the local sandbox container runtime onto it is #806's scope (commented there) | owner + orchestrator default | owner instruction 2026-10-17T21:35Z |
 | 11 | design rev 2 | Who builds the shared sshd image + copy-daemon + install-CLIs mechanism? | #806's separate run builds it; #686 consumes it (contracts/shared-ssh-image.md, to write) and orders milestones: work independent of it first (core types done, kubeconfig, manifests + pod/PVC/secret lifecycle, port-forward tunnel, stop/remove, failure reasons, Settings form), copy-daemon + install-CLIs last, marked "blocked on #806" | owner via coordinator | coordinator message 2026-10-17 |
+
+## Decisions (M5)
+
+- Orchestrator (2026-10-18): #806 is not closed, but what M5 needs is on main (M2 `micold_core::provision` #982, M3 static musl daemons #988, M4 AI CLI install + registry-only relay 08687287/ccc232e7). Start M5 against `specs/806-container-daemon-ssh-provisioning/contracts/provisioning.md`; #806's pending M5–M7 (container migration, per-daemon CLI selection, step bounds/rollback) are not needed. Stop with ESCALATE if something is.
+- Unit (M5 re-check, tasks.md drift fixed): T134/T135 name `provision::run` and a scripted `SshHost` instead of "#806's provisioning fake"; the one call covers Copy+Install+Connect; HostKeyAlias dropped (PinnedReach has none; known_hosts names `[127.0.0.1]:<relay port>`); `ProvisionTarget.env` added for `daemon_env` (not in the 806 contract); T022/T074 paths `crates/micold-client/tests/`; T030 `Dial::Kubernetes`, `kube_attempt` takes `KubeSettings`; `(#806)` tags dropped from T022/T074/T030/T077/T134/T135.
 
 ## Decisions (M3)
 
@@ -118,7 +124,14 @@ stash@{0} survivors (all used by M1a–M2, stash dropped 2026-10-18; backed up i
 
 ## Handover
 
-None. (M4a unit 2: code written; see Next step.)
+M5 unit 1 (context ~110k, reading only; branch reset to origin/main 21ad4154, nothing but the doc edits committed). Next: T134 → T135 → T022/T074/T030/T077 → T136, red first.
+Design (verified against main):
+- `core/kube/start.rs`: after `Tunnel`, add `copy_install_connect` calling `micold_core::provision::run(host, &ProvisionTarget, &ProvisionOptions, &CancelToken, &EventSink)` (mod.rs:596; returns `Provisioned { connected, warnings, copied }`). `StartRequest` needs `host: &dyn SshHost`, `reach: PinnedReach` (relay port, from the client's `kube::relay::Relay::open` which must be opened before this call, so start takes a `relay port` or a callback), `opts: ProvisionOptions`, `cancel`, event sink. `Started` gains `connected`. `Connected::Refused` → `VersionMismatch` (FR-017, KubeFailure variant exists? check classify.rs), `ProvisionFailure` → `KubeFailure::Provision(..)` (new), `FailureCause::Ssh(HostKeyChanged|HostKeyUnknown)` → `HostKeyMismatch { pod }`. Rollback on failure as for earlier phases.
+- `ProvisionTarget` has no env: add `env: Vec<(String,String)>` (additive, default empty; `ProvisionTarget::user_host` sets empty; thread to `argv::bridge`/the start step with shell quoting). sshd clears the login env, so `daemon_env` (MICOLD_IDLE_STOP=off for FR-010) must ride the remote command.
+- AppOwned: `ai_clis: AiCliSelection(empty)` in M5 (install is M6; `run` skips nothing-missing installs), `table: AiCliTable` (see provision/ai_cli.rs for the default constructor), `state_dir: PathBuf::from("/var/lib/micold-ai-ide")`, never `.join` a pod path (Windows CI): format with "/".
+- Client: `client/kube/keys.rs` known_hosts line currently `micold-kube-<key> <host key>`; `PinnedReach` has no HostKeyAlias, so write `[127.0.0.1]:<relay port> <key>` when the relay opens (`KubeKeys::write_known_hosts(port, line)`; update its M1c tests). `kube_attempt(cluster, context, namespace)` in `client/daemon.rs:845` must take `KubeSettings` (Dial::Kubernetes holds only context+namespace; get the settings through ActorSpec or add them to the Dial) and run in the actor with `LiveCluster::connect`, `SSH_HOST` (daemon.rs:74), `provisioning_sink`. The existing test `tests/kube_daemon_start.rs` (T132, asserts Unavailable) is rewritten by T022. Diagnostics: T077 `DaemonDiagnostics::push_log`.
+- The real KeyGen for the host key: none exists for the `KeyGen` port yet (access.rs:25); implement over `provision::keys::keygen_argv` / ssh-keygen in `client/shell/capabilities.rs`.
+- Flaky: daemon `history_*` tests. Windows CI: join pod paths with "/".
 
 ## Open escalation
 
