@@ -5,10 +5,18 @@
 //! focus ring, the ripple and both themes are the button's own rather than a second copy here. The
 //! chevron says which way it goes next: down when closed, up when open.
 //!
+//! Closed, the header can also say what the section holds — a one-line [`summary`] — and that a
+//! required field inside is still empty — the [`required`] marker (feature 890, FR-011, FR-012).
+//! Neither changes how the header is pressed or focused, and a section without them is drawn as
+//! before (FR-013).
+//!
+//! [`summary`]: AccordionSection::summary
+//! [`required`]: AccordionSection::required
+//!
 //! Whether it is open is the caller's: this keeps no state, so a form can hold it as view state and
 //! decide, for example, to show a section open while an error stands in it.
 
-use super::{Accordion, Button, ButtonVariant, Text, TypeRole};
+use super::{Accordion, Button, ButtonVariant, Ellipsized, Text, TypeRole};
 use crate::icons::Icon;
 use iced::widget::{column, row, Space};
 use iced::{alignment, Element, Length};
@@ -25,6 +33,8 @@ pub struct AccordionSection<'a, M> {
     roles: Roles,
     open: bool,
     on_toggle: Option<M>,
+    summary: Option<String>,
+    required: bool,
 }
 
 impl<'a, M: Clone + 'a> AccordionSection<'a, M> {
@@ -36,6 +46,8 @@ impl<'a, M: Clone + 'a> AccordionSection<'a, M> {
             roles,
             open: false,
             on_toggle: None,
+            summary: None,
+            required: false,
         }
     }
 
@@ -50,17 +62,60 @@ impl<'a, M: Clone + 'a> AccordionSection<'a, M> {
         self.on_toggle = Some(message);
         self
     }
+
+    /// A one-line summary of what the section holds, shown under the title while closed only, in
+    /// the caption role and the muted tint, and cut with an ellipsis when the header is too narrow
+    /// for it (feature 890, FR-011). Inside the header, so it adds no press target or focus stop
+    /// (FR-013).
+    pub fn summary(self, summary: impl Into<String>) -> Self {
+        self.summary_maybe(Some(summary.into()))
+    }
+
+    /// The summary from an `Option` — none when `None`. Mirrors [`Button::on_press_maybe`], so a
+    /// caller with an optional summary says so once.
+    pub fn summary_maybe(mut self, summary: Option<String>) -> Self {
+        self.summary = summary;
+        self
+    }
+
+    /// Mark the section as holding a required field that is still empty: while closed, the title
+    /// ends in the form fields' required marker, in the title's own role and tint (feature 890,
+    /// FR-012). Open, the field shows its own marker, so the title does not.
+    pub fn required(mut self, required: bool) -> Self {
+        self.required = required;
+        self
+    }
 }
 
 impl<'a, M: Clone + 'a> From<AccordionSection<'a, M>> for Element<'a, M> {
     fn from(s: AccordionSection<'a, M>) -> Self {
         let chevron = if s.open { Icon::MoveUp } else { Icon::MoveDown };
-        let header = row![
-            Text::new(s.title, TypeRole::Action, s.roles),
-            Space::new().width(Length::Fill),
-            super::glyph::icon(chevron, CHEVRON, s.roles.on_surface_variant),
-        ]
-        .align_y(alignment::Vertical::Center);
+        let chevron = super::glyph::icon(chevron, CHEVRON, s.roles.on_surface_variant);
+        // The marker is a character of the title, as `form_field.rs` marks a field label (FR-012).
+        let title = if s.required && !s.open {
+            format!("{}{}", s.title, micold_core::required::MARKER)
+        } else {
+            s.title
+        };
+        let title = Text::new(title, TypeRole::Action, s.roles);
+        let header: Element<'a, M> = match s.summary.filter(|_| !s.open) {
+            // The summary is a second line of the same button, so the header stays one press
+            // target and one focus stop (FR-011, FR-013). The column fills the row, so the
+            // summary is cut against everything the chevron leaves it.
+            Some(summary) => row![
+                column![
+                    title,
+                    Ellipsized::at_role(summary, TypeRole::Caption, s.roles.on_surface_variant),
+                ]
+                .width(Length::Fill),
+                chevron,
+            ]
+            .align_y(alignment::Vertical::Center)
+            .into(),
+            None => row![title, Space::new().width(Length::Fill), chevron]
+                .align_y(alignment::Vertical::Center)
+                .into(),
+        };
         column![
             Button::with_content(header, ButtonVariant::Text, s.roles)
                 .width(Length::Fill)
@@ -76,8 +131,9 @@ impl<'a, M: Clone + 'a> From<AccordionSection<'a, M>> for Element<'a, M> {
 
 #[cfg(test)]
 mod tests {
+    use super::super::style;
     use super::super::test_support::{
-        bounds_at, dark_roles, named_key, roles, size_of, Mounted, WINDOW,
+        bounds_at, dark_roles, named_key, roles, size_of, Mounted, Painted, WINDOW,
     };
     use super::*;
     use iced::advanced::mouse;
@@ -191,7 +247,11 @@ mod tests {
     fn focus_stops(open: bool) -> usize {
         let r = roles();
         let body = crate::ui::material::TextField::<String>::new("", "v", r).label("Label");
-        let mut m = Mounted::new(AccordionSection::new("Network", body, r).open(open));
+        stops(AccordionSection::new("Network", body, r).open(open))
+    }
+
+    fn stops(section: AccordionSection<'_, String>) -> usize {
+        let mut m = Mounted::new(section);
         let mut count = Count(0);
         m.element.as_widget_mut().operate(
             &mut m.tree,
@@ -236,5 +296,152 @@ mod tests {
         ));
         let at = header_centre(&m);
         assert!(click(&mut m, at).is_empty());
+    }
+
+    /// The summary the M1 tests pose (FR-011).
+    const SUMMARY: &str = "Docker · Basic image";
+
+    /// The header's height before feature 890, measured on `origin/main` (FR-013: a section with
+    /// neither a summary nor a marker looks as it does today).
+    const TODAYS_HEADER_HEIGHT: f32 = 40.0;
+
+    /// A header narrower than [`SUMMARY`] at the caption role.
+    const NARROW: f32 = 120.0;
+
+    fn painted_with(content: &str, painted: &[Painted]) -> Option<Painted> {
+        painted.iter().find(|p| p.content == content).cloned()
+    }
+
+    /// Closed, the summary is painted under the title, one line, in the caption role and the muted
+    /// tint — in both themes (FR-011, US3-1, T001 a, g).
+    #[test]
+    fn a_closed_section_paints_its_summary_under_the_title() {
+        for r in [roles(), dark_roles()] {
+            let mut m = Mounted::new(section(false, r).summary(SUMMARY));
+            let painted = m.painted_text();
+            let title = painted_with("Network", &painted).expect("the title is painted");
+            let summary = painted_with(SUMMARY, &painted)
+                .unwrap_or_else(|| panic!("a closed section paints its summary: {painted:?}"));
+            assert_eq!(
+                summary.size,
+                TypeRole::Caption.size(),
+                "the summary is a caption"
+            );
+            assert_eq!(
+                summary.font,
+                TypeRole::Caption.font(),
+                "the summary is a caption"
+            );
+            assert_eq!(
+                summary.color,
+                style::color(r.on_surface_variant),
+                "the summary is muted"
+            );
+            assert!(
+                summary.bounds.y >= title.bounds.y + title.bounds.height - 0.5,
+                "the summary sits under the title: {summary:?} vs {title:?}"
+            );
+        }
+    }
+
+    /// Open, the summary is not painted (FR-011, US3-1, T001 b).
+    #[test]
+    fn an_open_section_paints_no_summary() {
+        let mut m = Mounted::new(section(true, roles()).summary(SUMMARY));
+        let painted = m.painted_text();
+        assert!(
+            painted_with(SUMMARY, &painted).is_none(),
+            "an open section hides its summary: {painted:?}"
+        );
+    }
+
+    /// Too long for the header, the summary ends in `…` and the chevron stays inside the header
+    /// (FR-011, T001 c).
+    #[test]
+    fn a_narrow_header_ellipsizes_the_summary_and_keeps_the_chevron_inside() {
+        let r = roles();
+        let mut m = Mounted::new(
+            iced::widget::container(section(false, r).summary(SUMMARY))
+                .width(Length::Fixed(NARROW)),
+        );
+        let header = m.node.children()[0].children()[0].bounds();
+        let painted = m.painted_text();
+        let summary = painted
+            .iter()
+            .find(|p| p.size == TypeRole::Caption.size() && p.content != "Network")
+            .unwrap_or_else(|| panic!("the summary is painted: {painted:?}"));
+        assert!(
+            summary.content.ends_with('…'),
+            "a summary wider than its header ends in an ellipsis: {:?}",
+            summary.content
+        );
+        for p in &painted {
+            assert!(
+                p.bounds.x + p.bounds.width <= header.x + header.width + 0.5,
+                "{:?} runs past the header {header:?}",
+                p
+            );
+        }
+    }
+
+    /// Closed and required, the title carries the form fields' marker in its own role and tint;
+    /// open, it does not — in both themes (FR-012, US3-3, T001 d, g).
+    #[test]
+    fn a_closed_required_section_marks_its_title() {
+        let marked = format!("Network{}", micold_core::required::MARKER);
+        for r in [roles(), dark_roles()] {
+            let plain = painted_with("Network", &Mounted::new(section(false, r)).painted_text())
+                .expect("the plain title is painted");
+            let closed = Mounted::new(section(false, r).required(true)).painted_text();
+            let title = painted_with(&marked, &closed)
+                .unwrap_or_else(|| panic!("the closed title carries the marker: {closed:?}"));
+            assert_eq!(
+                (title.size, title.font, title.color),
+                (plain.size, plain.font, plain.color),
+                "the marker is drawn in the title's role and tint"
+            );
+            let open = Mounted::new(section(true, r).required(true)).painted_text();
+            assert!(
+                painted_with("Network", &open).is_some() && painted_with(&marked, &open).is_none(),
+                "an open section's title has no marker: {open:?}"
+            );
+        }
+    }
+
+    /// Without a summary or a marker the header is as tall as today; the marker alone does not
+    /// change it either (FR-013, US3-2, T001 e).
+    #[test]
+    fn a_plain_header_is_as_tall_as_today() {
+        for s in [
+            section(false, roles()),
+            section(false, roles()).required(true),
+        ] {
+            let m = Mounted::new(s);
+            assert_eq!(m.node.children()[0].bounds().height, TODAYS_HEADER_HEIGHT);
+        }
+    }
+
+    /// With both a summary and the marker, the header is still one press target and one focus
+    /// stop: a press, Space and Enter each toggle once, and a closed body offers no stop (FR-013,
+    /// SC-005, T001 f).
+    #[test]
+    fn a_summary_and_marker_leave_the_headers_behaviour_alone() {
+        let r = roles();
+        let mut m = Mounted::new(section(false, r).summary(SUMMARY).required(true));
+        let at = header_centre(&m);
+        assert_eq!(click(&mut m, at), vec!["toggled".to_string()]);
+        for key in [Named::Space, Named::Enter] {
+            let out = m.send(named_key(key), mouse::Cursor::Unavailable);
+            assert_eq!(out, vec!["toggled".to_string()], "{key:?} must toggle once");
+        }
+        let body = crate::ui::material::TextField::<String>::new("", "v", r).label("Label");
+        let decorated = AccordionSection::new("Network", body, r)
+            .summary(SUMMARY)
+            .required(true);
+        assert_eq!(
+            stops(decorated),
+            focus_stops(false),
+            "a closed section's body offers no focus stop, summary or not"
+        );
     }
 }

@@ -284,6 +284,56 @@ impl<'a> Mounted<'a> {
 
     /// The element drawn over `backdrop`: the buffer and its width.
     pub fn drawn(&mut self, backdrop: iced::Color) -> (Vec<u8>, u32) {
+        let size = self.paint();
+        let (w, h) = (size.width.ceil() as u32, size.height.ceil() as u32);
+        (self.renderer.screenshot(Size::new(w, h), 1.0, backdrop), w)
+    }
+
+    /// Every paragraph the element paints, in draw order: what it says, at which size, in which
+    /// face and colour, and where — what `tests/support/layout.rs::painted_text` reads, for the
+    /// in-crate tests that cannot reach it (feature 890, T001).
+    pub fn painted_text(&mut self) -> Vec<Painted> {
+        use iced::advanced::text::Paragraph as _;
+        self.paint();
+        let iced_renderer::fallback::Renderer::Secondary(cpu) = &mut self.renderer else {
+            panic!("reading painted text needs the CPU rasteriser; see `renderer`")
+        };
+        let mut found = Vec::new();
+        for layer in cpu.layers() {
+            for item in &layer.text {
+                for text in item.as_slice() {
+                    if let iced::advanced::graphics::text::Text::Paragraph {
+                        paragraph,
+                        position,
+                        color,
+                        ..
+                    } = text
+                    {
+                        let Some(p) = paragraph.upgrade() else {
+                            continue;
+                        };
+                        found.push(Painted {
+                            content: p
+                                .buffer()
+                                .lines
+                                .iter()
+                                .map(|line| line.text())
+                                .collect::<Vec<_>>()
+                                .join(" "),
+                            size: p.size().0,
+                            font: p.font(),
+                            color: *color,
+                            bounds: Rectangle::new(*position, paragraph.min_bounds),
+                        });
+                    }
+                }
+            }
+        }
+        found
+    }
+
+    /// Draw the element into the renderer at its own size, returning that size.
+    fn paint(&mut self) -> Size {
         let size = self.node.bounds().size();
         let viewport = Rectangle::with_size(size);
         self.renderer.reset(viewport);
@@ -298,8 +348,7 @@ impl<'a> Mounted<'a> {
             mouse::Cursor::Unavailable,
             &viewport,
         );
-        let (w, h) = (size.width.ceil() as u32, size.height.ceil() as u32);
-        (self.renderer.screenshot(Size::new(w, h), 1.0, backdrop), w)
+        size
     }
 
     /// Press the left button at `at`.
@@ -317,6 +366,17 @@ impl<'a> Mounted<'a> {
             mouse::Cursor::Available(at),
         )
     }
+}
+
+/// One paragraph a mounted element painted — [`Mounted::painted_text`].
+#[derive(Debug, Clone)]
+pub struct Painted {
+    pub content: String,
+    pub size: f32,
+    pub font: iced::Font,
+    pub color: iced::Color,
+    /// Where it was drawn and the room its shaped text takes.
+    pub bounds: Rectangle,
 }
 
 /// A press of the named key, with no modifiers and no text.
