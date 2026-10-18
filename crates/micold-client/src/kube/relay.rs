@@ -30,8 +30,12 @@ impl Relay {
             // Connections live in this set, so aborting the task drops them with it.
             let mut connections = tokio::task::JoinSet::new();
             loop {
+                // Reap finished connections so the set does not grow for the relay's life.
+                while connections.try_join_next().is_some() {}
                 let Ok((mut socket, _)) = listener.accept().await else {
-                    break;
+                    // A transient accept error (out of descriptors) must not end the relay.
+                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                    continue;
                 };
                 let (cluster, namespace, pod) = (cluster.clone(), namespace.clone(), pod.clone());
                 connections.spawn(async move {

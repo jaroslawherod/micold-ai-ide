@@ -134,3 +134,10 @@ the core baseline still fails only the four root-user tests named above).
   deleting pod waited out, key race and idempotence, drift Ask/Recreate/Keep, rollback in reverse
   with the added key, adopted objects kept; preflight reviews, classifiers and `Tunnel` are
   M2/M1c. green: see above. refactor: none needed.
+- U129–U131, U86–U89 (T122/T023/T123/T124/T125; `Tunnel` in `kube/start.rs`, `client/kube/{live,relay,keys}.rs`).
+  Tests and code were written together in commit 1dda9203, no separate red run (no meaningful stub
+  for adapter helpers over a real client); review B flagged this and it is recorded here as
+  such. After review A (retry until the bound), a real red: `a_port_that_closes_before_sshd_listens_is_retried_until_it_answers`
+  failed (start failed `ImageContract` on the first closed stream), green after the retry loop.
+  Covers: banner/non-SSH/silent/exited container, relay forwarding and refused forward, key
+  files created once, stable id, owner-only modes, `known_hosts` pinning. refactor: none needed.

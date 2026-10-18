@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-xelisc
 - **Started**: 2026-10-17
 - **Phase**: implement
-- **Next step**: M1c gate + reviews, then write PR title/body files (cloud: orchestrator opens the PR); then M2
+- **Next step**: M1c PR (cloud: orchestrator opens it from the scratchpad files, merges); then M2
 
 ## Pull requests
 
@@ -26,7 +26,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1a | T106–T116, T143, T020, T026 | full | Revision-2 core types (settings with image/AI CLIs/DaemonResources, names, failures, Cluster.replace), kubeconfig; revision-1 listener auth, Transport::Tunnel, daemon_image reverted | #978 | merged |
 | M1b | T019, T117, T118, T021, T025, T119, T120, T027, T121 | full | Pod, PVC, access secret, pod stamp/drift, start through Pull with bounds + rollback over FakeCluster | #983 | merged |
-| M1c | T122, T023, T123, T124, T125, T028, T029, T126, T127 | full | Tunnel phase (SSH identification line), LiveCluster, relay, key files | — | implemented, gating |
+| M1c | T122, T023, T123, T124, T125, T028, T029, T126, T127 | full | Tunnel phase (SSH identification line), LiveCluster, relay, key files | — | gated, reviewed; PR files written |
 | M2 | T079, T072, T056, T073, T081, T075, T059, T076, T128 | full | Core Stop/Remove/forget-locally; failure + pod-gone classifiers; preflight | — | planned |
 | M3 | T063, T064, T065, T067, T068, T069, T102 | full | Allowed credentials as secrets, daemon_env, security contexts (core) | — | planned |
 | M4a | T024, T130, T066, T031, T131, T070, T032 | full | Kubernetes form via Edit (Add entry hidden), shared resources fields, credentials list | — | planned |
@@ -75,6 +75,9 @@ stash@{0} survivors ("686 M1a red WIP"; never drop it; backed up in /mnt/project
 | M1b review A (code-review high) | 1 | 64880871548a615f665134c536fac38ddf6845f1:0b482e1d265b286a31482b1184499377bec88ab5 | 10 findings, none BLOCKER: F1/F2 fixed (a terminating claim or secret is waited out, a vanished object re-created; tests), F5 fixed (rollback removes a key only when this attempt gave the client its first line; test), F8 fixed (one `update_access` loop for add and remove); F3, F4, F6, F7, F9, F10 declined (below) |
 | M1b review B (conformance, sonnet) | 1 | 64880871548a615f665134c536fac38ddf6845f1:0b482e1d265b286a31482b1184499377bec88ab5 | CLEAN — Verify 73 passed; 3 MINOR: F2 counts fixed, F3 (`MICOLD_SSH_DIR` assumed) in Follow-ups, F1 (start tests written with the sequence) accepted and recorded in the cycle log |
 
+| M1c review A (code-review high) | 1 | 92eb8da19e833dfac69f4c82ff46e16132a896ac:9a5aa584e8579a2c9767db3d680952aefd1e27ab | CHANGES: 1 MAJOR (Tunnel did not retry a closed stream — fixed with a red test), 3 MINOR (relay reaped + survives accept errors, key dir sanitised; delete 409 declined) |
+| M1c review B (conformance, sonnet) | 1 | 92eb8da19e833dfac69f4c82ff46e16132a896ac:9a5aa584e8579a2c9767db3d680952aefd1e27ab | CHANGES: 1 MAJOR (no cycle-log entries — added, honest that tests came with the code), 1 MINOR (declined) |
+
 ## Declined review findings
 
 - speckit-analyze D13 (start failure maps to `Unreachable`): already the 491/489 rule, stated in data-model.md state machine delta; no change.
@@ -91,6 +94,8 @@ stash@{0} survivors ("686 M1a red WIP"; never drop it; backed up in /mnt/project
 | M1b | A | F7: access secret mode 0440 root-owned, no `fsGroup` | the pod security context (`fsGroup`, UID) is T064 (M3); T019 fixes `defaultMode` 0440 |
 | M1b | A | F9: `PodStamp` as a string re-parsed; a missing stamp reads as all differing | the contract fixes the annotation as canonical JSON text; a pod without a stamp cannot be told apart from a changed one |
 | M1b | A | F10: `KeyGen::generate` is synchronous in an async start | only the fake exists; #806 owns the live one and can wrap it in `spawn_blocking` |
+| M1c | A F4 MINOR | `deleted_from` maps only 404 to done; a uid-precondition 409 fails | a recreated object must not be reported deleted; failing is the safe reading |
+| M1c | B F2 MINOR | `kube_connector` has `expect(dead_code)` until M4b | T029 requires choosing `LiveCluster` once; the wiring is the deliverable, M4b is its first caller |
 
 ## Handover
 

@@ -475,18 +475,31 @@ async fn tunnel(r: &StartRequest<'_>) -> Result<(), KubeFailure> {
         image: r.image.to_string(),
         missing,
     };
+    // A pod that just started may not have its SSH server listening yet: the stream then closes
+    // at once, so open another until the bound.
     let read = async {
-        let mut stream = r.cluster.port_forward(ns, &pod, SSH_PORT).await?;
-        let mut line = Vec::new();
-        let mut byte = [0u8; 1];
-        while line.len() < BANNER_MAX {
-            match stream.read(&mut byte).await {
-                Ok(1) if byte[0] == b'\n' => break,
-                Ok(1) => line.push(byte[0]),
-                _ => return Ok(None),
+        loop {
+            let mut stream = r.cluster.port_forward(ns, &pod, SSH_PORT).await?;
+            let mut line = Vec::new();
+            let mut byte = [0u8; 1];
+            let mut complete = false;
+            while line.len() < BANNER_MAX {
+                match stream.read(&mut byte).await {
+                    Ok(1) if byte[0] == b'\n' => {
+                        complete = true;
+                        break;
+                    }
+                    Ok(1) => line.push(byte[0]),
+                    _ => break,
+                }
             }
+            if complete || line.len() >= BANNER_MAX {
+                return Ok::<_, KubeFailure>(Some(
+                    String::from_utf8_lossy(&line).trim_end().to_string(),
+                ));
+            }
+            tokio::time::sleep(POLL).await;
         }
-        Ok::<_, KubeFailure>(Some(String::from_utf8_lossy(&line).trim_end().to_string()))
     };
     let line = tokio::time::timeout(StartPhase::Tunnel.bound(), read).await;
     match line {
