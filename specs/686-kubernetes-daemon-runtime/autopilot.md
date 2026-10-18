@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-xelisc
 - **Started**: 2026-10-17
 - **Phase**: implement
-- **Next step**: M3: full gate (scripts/gate.sh), review A (high) and B, write PR files to scratchpad; then M4a
+- **Next step**: M3: final gate after review fixes, push, PR files in scratchpad; then M4a
 
 ## Pull requests
 
@@ -65,6 +65,8 @@ stash@{0} survivors (all used by M1a–M2, stash dropped 2026-10-18; backed up i
 
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
+| M3 A (code-review high) | 1 | 613bbb5d7241ebee3806b0ad999889186b7cc3ab:9c51cf8e543637af11209d1da7e8fda46cb985d2 | CHANGES: F1 MAJOR fixed (GIT_SSH_COMMAND uses a 0600 copy of the key; ssh refuses group-readable keys); F2–F4 MINOR declined/deferred (Follow-ups) |
+| M3 B (conformance) | 1 | same | CHANGES: F1 MAJOR red-run evidence: waiver recorded in cycle-log; F2 MINOR: validate() two-secret rule is a deliberate M3 addition (one secret per kind, ResourceNames) |
 | Spec | 1 | 7330b10a0e165a38d678df142737f8a7c1ea47d0:d93c9dbc687412cced0a9b7854cf44323ee3930e | CHANGES: 4 MAJOR, 3 MINOR — all fixed (F1 pod-gone → stopped + user Start; F2 FR-023 + multi-client edges, FR-016 identity; F3 kubeconfig/exec-plugin edges, FR-022; F4 per-phase bounds in FR-012; F5 Reconnect scenario; F6 provider CLIs in FR-004 marker; F7 version wording) |
 | Spec | 2 (scoped, sonnet) | aed1af6291d0f65b2e21df970370031d92b506f6:171d36233aff56cab8399d2c2c08b7ed1c109dc2 | CLEAN — 1 MINOR fixed in clarify (SC-003, story 4.5, story 6.2 say "applicable phase bound (FR-012)") |
 | Plan | 1 | c2d5b880c183edc0c6dcd702539b137bbeaf2b7e:744377ac1576676ae85cc3ae5c9897190bba1bf2 | CHANGES: 3 MAJOR, 3 MINOR — all fixed (F1 shared `DaemonResources` with separate requests/limits, FR-005 manifest tests, contract wording; F2 `CliRuntime` inherent `build_image`/`push_image`/`repo_digest`, tests over `RecordingRunner`; F3 `sha2` dropped for `sha256_hex`; F4 fields extracted in `container_fields.rs`, recorded in K1; F5 K4 guard restated; F6 FR-007 client reducer tests) |
@@ -113,6 +115,8 @@ None.
 None. Clarify round 1 questions remain with the owner as decision cards (spec uses recommended defaults).
 
 ## Follow-ups not done
+
+- M3 review A MINORs: F2 stale secrets deleted in Secrets phase before Pod drift decision (a kept drifted pod could lose its secret); F3 a rotated credential's payload is not in PodStamp (subPath mounts never update; needs a pod restart); F4 hashed `known_hosts` entries yield an empty pin file (needs ssh-keygen -F or keyscan) and a missing known_hosts fails the start.
 
 - M2 review A (declined/deferred): a 403 or namespace 404 from a create/delete after a green preflight surfaces as `Api` (preflight covers the normal case; `KubeFailure::from_status` is available to the client adapter); `PodGone::classify` and `lifecycle::*` are wired by M4b/M8; Failed/Succeeded non-evicted pods are not in contract §4.
 

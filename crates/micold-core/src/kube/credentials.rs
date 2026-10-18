@@ -209,9 +209,13 @@ pub fn daemon_env(
     {
         env.insert(
             "GIT_SSH_COMMAND".into(),
+            // A mounted secret is group-readable (fsGroup) and root-owned, which ssh refuses for a
+            // private key: use a 0600 copy owned by the daemon user, removed when ssh exits.
             format!(
-                "ssh -i {CREDS_DIR}/ssh/id -o IdentitiesOnly=yes \
-                 -o UserKnownHostsFile={CREDS_DIR}/ssh/known_hosts -o StrictHostKeyChecking=yes"
+                "sh -c 'k=$(mktemp) && cp {CREDS_DIR}/ssh/id \"$k\" && \
+                 ssh -i \"$k\" -o IdentitiesOnly=yes \
+                 -o UserKnownHostsFile={CREDS_DIR}/ssh/known_hosts -o StrictHostKeyChecking=yes \"$@\"; \
+                 r=$?; rm -f \"$k\"; exit $r' --"
             ),
         );
     }
@@ -388,7 +392,9 @@ mod tests {
         let ssh = env(&[KubeCredential::GitSshKey { key: "/k".into() }]);
         let cmd = &ssh["GIT_SSH_COMMAND"];
         assert!(cmd.contains("IdentitiesOnly=yes") && cmd.contains("StrictHostKeyChecking=yes"));
-        assert!(cmd.contains("-i /run/micold/creds/ssh/id"));
+        assert!(
+            cmd.contains("cp /run/micold/creds/ssh/id \"$k\"") && cmd.contains("ssh -i \"$k\"")
+        );
         assert!(!ssh.contains_key("GIT_CONFIG_COUNT"));
     }
 }
