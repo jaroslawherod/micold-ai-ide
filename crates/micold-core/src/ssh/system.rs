@@ -166,6 +166,43 @@ mod tests {
         }
     }
 
+    fn bundle_with(names: &[&str]) -> (tempfile::TempDir, SystemSsh) {
+        let dir = tempfile::tempdir().unwrap();
+        for name in names {
+            std::fs::write(dir.path().join(name), name.as_bytes()).unwrap();
+        }
+        let ssh = SystemSsh {
+            bundled_dir: Some(dir.path().to_path_buf()),
+            ..runner()
+        };
+        (dir, ssh)
+    }
+
+    #[test]
+    fn each_linux_architecture_is_read_from_its_own_bundled_file() {
+        let (_dir, ssh) =
+            bundle_with(&["micold-daemon-linux-x86_64", "micold-daemon-linux-aarch64"]);
+        assert_eq!(
+            ssh.bundled("linux", "x86_64").unwrap(),
+            b"micold-daemon-linux-x86_64"
+        );
+        assert_eq!(
+            ssh.bundled("linux", "aarch64").unwrap(),
+            b"micold-daemon-linux-aarch64"
+        );
+    }
+
+    #[test]
+    fn an_architecture_with_no_bundled_file_has_no_build() {
+        let (_dir, ssh) = bundle_with(&["micold-daemon-linux-x86_64"]);
+        assert!(ssh.bundled("linux", "aarch64").is_none());
+        let unset = SystemSsh {
+            bundled_dir: None,
+            ..runner()
+        };
+        assert!(unset.bundled("linux", "x86_64").is_none());
+    }
+
     #[tokio::test]
     async fn stdin_reaches_the_child_and_its_exit_and_output_come_back() {
         let out = runner()

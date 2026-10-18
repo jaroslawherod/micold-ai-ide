@@ -9,6 +9,8 @@
 #   --bin-dir     directory holding the two shipped binaries: a cargo profile directory, or the
 #                 staging directory `scripts/macos-dmg.sh` fills with `lipo` output
 #   --out         where `micold-ai-ide.app` is written; created if absent
+#   --remote-dir  directory holding the static Linux daemons (`scripts/remote-daemon-bundle.sh`); they
+#                 go to `Contents/Resources/remote/`, where the client looks for them. Optional.
 #   --stage-only  compose and substitute, run no `codesign`. Runs on any OS, which is what makes
 #                 the layout testable without a Mac (research R3)
 #   --version     override the version; defaults to the workspace version from `cargo metadata`
@@ -39,6 +41,8 @@ BIN_DIR=""
 OUT=""
 STAGE_ONLY=0
 VERSION=""
+REMOTE_DIR=""
+REMOTE_BINARIES=("micold-daemon-linux-x86_64" "micold-daemon-linux-aarch64")
 
 die() {
   printf 'macos-bundle: %s\n' "$1" >&2
@@ -54,6 +58,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --bin-dir) BIN_DIR="${2:-}"; shift 2 ;;
     --out) OUT="${2:-}"; shift 2 ;;
+    --remote-dir) REMOTE_DIR="${2:-}"; shift 2 ;;
     --version) VERSION="${2:-}"; shift 2 ;;
     --stage-only) STAGE_ONLY=1; shift ;;
     -h|--help) usage ;;
@@ -73,6 +78,11 @@ done
 for bin in "${BINARIES[@]}"; do
   [ -f "$BIN_DIR/$bin" ] || die "missing binary: $bin (looked in $BIN_DIR)"
 done
+if [ -n "$REMOTE_DIR" ]; then
+  for bin in "${REMOTE_BINARIES[@]}"; do
+    [ -f "$REMOTE_DIR/$bin" ] || die "missing remote daemon: $bin (looked in $REMOTE_DIR)"
+  done
+fi
 [ -f "$ICON" ] || die "missing icon: $ICON_REL"
 [ -f "$TEMPLATE" ] || die "missing template: packaging/macos/Info.plist.in"
 
@@ -99,6 +109,15 @@ for bin in "${BINARIES[@]}"; do
 done
 
 cp "$ICON" "$CONTENTS/Resources/icon.icns"
+
+# Not under Contents/MacOS: that directory holds exactly the two executables (see above).
+if [ -n "$REMOTE_DIR" ]; then
+  mkdir -p "$CONTENTS/Resources/remote"
+  for bin in "${REMOTE_BINARIES[@]}"; do
+    cp "$REMOTE_DIR/$bin" "$CONTENTS/Resources/remote/$bin"
+    chmod 0755 "$CONTENTS/Resources/remote/$bin"
+  done
+fi
 
 # `APPL????` with no trailing newline: the file is eight bytes, and Finder reads it as such.
 printf 'APPL????' > "$CONTENTS/PkgInfo"

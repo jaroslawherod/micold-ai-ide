@@ -43,7 +43,7 @@ run_script() {
     shift
   done
   [ "$#" -gt 0 ] && shift
-  output="$(cd "$ROOT" && env PATH="$dir/bin:$PATH" MICOLD_NO_BUILD_LOCK=1 ISCC="$dir/bin/iscc" \
+  output="$(cd "$ROOT" && env PATH="$dir/bin:$PATH" MICOLD_NO_BUILD_LOCK=1 ISCC="$dir/bin/iscc" MICOLD_REMOTE_DIR="$dir/remote" \
     ${envs[@]+"${envs[@]}"} "$SCRIPT" "$@" 2>&1)"
   status=$?
 }

@@ -11,6 +11,7 @@
 #                 which `lipo` merges into the universal binaries the bundle ships (FR-020)
 #   --bin-dir     a directory that already holds the two shipped binaries, merged or single-arch;
 #                 what `mise run dmg` passes for a local build of this Mac only
+#   --remote-dir  the static Linux daemons from `scripts/remote-daemon-bundle.sh`, passed to the bundle
 #   --out         where the .dmg is written; created if absent
 #   --version     override the version; defaults to the workspace version from `cargo metadata`
 #
@@ -45,6 +46,7 @@ BINARIES=("micold-ai-ide" "micold-daemon")
 BIN_DIR=""
 TARGET_DIR=""
 OUT=""
+REMOTE_DIR=""
 VERSION=""
 
 die() {
@@ -62,6 +64,7 @@ while [ $# -gt 0 ]; do
     --bin-dir) BIN_DIR="${2:-}"; shift 2 ;;
     --target-dir) TARGET_DIR="${2:-}"; shift 2 ;;
     --out) OUT="${2:-}"; shift 2 ;;
+    --remote-dir) REMOTE_DIR="${2:-}"; shift 2 ;;
     --version) VERSION="${2:-}"; shift 2 ;;
     -h|--help) usage ;;
     *) die "unknown argument: $1" ;;
@@ -143,7 +146,9 @@ else
   done
 fi
 
-"$BUNDLE_SH" --bin-dir "$SOURCE" --out "$STAGE" --version "$VERSION"
+remote_args=()
+[ -z "$REMOTE_DIR" ] || remote_args=(--remote-dir "$REMOTE_DIR")
+"$BUNDLE_SH" --bin-dir "$SOURCE" --out "$STAGE" --version "$VERSION" ${remote_args[@]+"${remote_args[@]}"}
 
 # --- the install gesture ---------------------------------------------------
 #

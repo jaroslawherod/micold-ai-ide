@@ -1,6 +1,6 @@
 ; Micold AI IDE: per-user Windows installer (feature 030).
 ; Normative values: specs/030-windows-installer/contracts/windows-installer.md.
-; Built by scripts/windows-installer.sh, which passes /DAppVersion, /DArch and /DBinDir.
+; Built by scripts/windows-installer.sh, which passes /DAppVersion, /DArch, /DBinDir and /DRemoteDir.
 
 #ifndef AppVersion
 #error AppVersion is not defined: build with scripts/windows-installer.sh
@@ -10,6 +10,9 @@
 #endif
 #ifndef BinDir
 #error BinDir is not defined: build with scripts/windows-installer.sh
+#endif
+#ifndef RemoteDir
+#error RemoteDir is not defined: build with scripts/windows-installer.sh
 #endif
 
 [Setup]
@@ -59,6 +62,9 @@ ArchitecturesInstallIn64BitMode=arm64
 ; into the same directory. Guarded by crates/micold-client/tests/packaging_excludes_showcase.rs.
 Source: "{#BinDir}\micold-ai-ide.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#BinDir}\micold-daemon.exe"; DestDir: "{app}"; Flags: ignoreversion
+; The static Linux daemons for remote hosts and containers: `SystemSsh::bundled_dir` reads `{app}\remote`.
+Source: "{#RemoteDir}\micold-daemon-linux-x86_64"; DestDir: "{app}\remote"; Flags: ignoreversion
+Source: "{#RemoteDir}\micold-daemon-linux-aarch64"; DestDir: "{app}\remote"; Flags: ignoreversion
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked

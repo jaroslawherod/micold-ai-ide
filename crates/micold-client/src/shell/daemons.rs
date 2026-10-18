@@ -134,18 +134,48 @@ pub fn system_ssh() -> micold_core::ssh::SystemSsh {
     };
     micold_core::ssh::SystemSsh {
         own_daemon: PathBuf::from(micold_core::spawn::daemon_binary()),
-        // Builds for other platforms ship beside the client when packaged (M8).
-        bundled_dir: std::env::current_exe()
-            .ok()
-            .and_then(|exe| exe.parent().map(|d| d.join("remote"))),
+        // The static Linux builds for remote hosts and containers ship with the package.
+        bundled_dir: std::env::current_exe().ok().map(|exe| bundled_dir(&exe)),
         ssh_path,
         cancel: None,
+    }
+}
+
+/// Where a package puts `micold-daemon-linux-<arch>` relative to the client executable (feature
+/// 806, FR-009): `Contents/Resources/remote` in the macOS bundle (`Contents/MacOS` holds only the
+/// two executables), `../lib/micold-ai-ide/remote` for the Linux packages that install into
+/// `bin/`, and `remote` beside the executable on Windows and in a development tree.
+fn bundled_dir(exe: &Path) -> PathBuf {
+    let dir = exe.parent().unwrap_or_else(|| Path::new("."));
+    match dir.file_name().and_then(|n| n.to_str()) {
+        Some("MacOS") if dir.parent().is_some_and(|c| c.ends_with("Contents")) => {
+            dir.join("../Resources/remote")
+        }
+        Some("bin") => dir.join("../lib/micold-ai-ide/remote"),
+        _ => dir.join("remote"),
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_bundled_builds_are_found_where_each_package_puts_them() {
+        for (exe, want) in [
+            (
+                "/Applications/micold-ai-ide.app/Contents/MacOS/micold-ai-ide",
+                "/Applications/micold-ai-ide.app/Contents/MacOS/../Resources/remote",
+            ),
+            (
+                "/usr/bin/micold-ai-ide",
+                "/usr/bin/../lib/micold-ai-ide/remote",
+            ),
+            ("/opt/app/micold-ai-ide.exe", "/opt/app/remote"),
+        ] {
+            assert_eq!(bundled_dir(Path::new(exe)), PathBuf::from(want), "{exe}");
+        }
+    }
 
     #[test]
     fn windows_ssh_is_taken_from_path_before_the_system_openssh() {

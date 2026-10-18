@@ -260,6 +260,10 @@ mod tests {
                 FailureCause::NoMatchingBuild { os: "linux".into(), arch: "riscv".into() },
                 "no matching daemon build for linux-riscv",
             ),
+            (
+                FailureCause::NoMatchingBuild { os: "linux".into(), arch: "aarch64".into() },
+                "no matching daemon build for linux-aarch64",
+            ),
             (FailureCause::DaemonStart, "the daemon did not start"),
             (
                 FailureCause::TimedOut { bound: Duration::from_secs(120) },
