@@ -17,7 +17,7 @@ holding it and marks the field — press **Cancel**, or Esc, to leave without sa
 Press **Save** with a required field empty and every empty one reads "This field is required" at
 once, across all the sections, and nothing is saved. Settings jumps to the section holding a value
 that is filled in but wrong, which keeps its own message, else to the first section with an empty
-required field.
+required field. Leaving a required field empty also marks that field alone; the others wait for **Save**.
 
 A page or form with a field marked `*` shows a `* required` line above its first field; Appearance,
 which has none, shows no such line. Fields marked `*` must be filled before Settings accepts the form: **Scrollback lines** in

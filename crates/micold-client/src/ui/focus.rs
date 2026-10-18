@@ -29,7 +29,7 @@
 use crate::app::Message;
 use crate::features::window::FieldId;
 use crate::features::window::Msg as WindowMsg;
-use crate::ui::material::{Checkbox, TextField};
+use crate::ui::material::{Checkbox, Select, TextField};
 
 use iced::advanced::widget::operation::scrollable::{AbsoluteOffset, Scrollable};
 use iced::advanced::widget::operation::{Focusable, Outcome};
@@ -62,6 +62,19 @@ impl<'a> TrackFocus for Checkbox<'a, Message> {
             .on_focus_change(move |focused| {
                 Message::Window(WindowMsg::FieldFocusChanged(id, focused))
             })
+    }
+}
+
+/// A select joins the one blur route (feature 937, contract C4, research R3): leaving it reports
+/// `FieldFocusChanged(id, false)` like a text field's blur does, so the owning draft can mark it.
+///
+/// `focused` is unused: a select holds its own focus and draws it itself, so it is not told.
+impl<'a, T> TrackFocus for Select<'a, T, Message>
+where
+    T: Clone + ToString + PartialEq + 'a,
+{
+    fn track_focus(self, id: FieldId, _focused: Option<FieldId>) -> Self {
+        self.on_blur(Message::Window(WindowMsg::FieldFocusChanged(id, false)))
     }
 }
 

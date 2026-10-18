@@ -571,6 +571,11 @@ fn the_repository_step_refuses_what_it_cannot_ask_and_names_a_connected_daemons_
     assert!(state.repository_error.is_some(), "a relative path is named");
 
     set(&mut state, "/home/dev/repo");
+    state
+        .repository_marks
+        .leave(micold_client::features::window::FieldId::DaemonRepository(
+            id,
+        ));
     let out = daemons::add_repository(&mut state, &w.model(), id);
     assert!(out.is_empty(), "the daemon is not connected");
     let (for_id, message) = state.repository_error.clone().unwrap();
@@ -592,6 +597,13 @@ fn the_repository_step_refuses_what_it_cannot_ask_and_names_a_connected_daemons_
     assert!(path.to_string_lossy().ends_with("/home/dev/repo"));
     assert!(state.repository_error.is_none());
     assert!(!state.repositories.contains_key(&id), "the field empties");
+    let field = micold_client::features::window::FieldId::DaemonRepository(id);
+    let (_, emptied) = state.repository_field(id);
+    assert_eq!(
+        state.repository_marks.state(field, emptied),
+        micold_core::required::FieldRequirement::Required,
+        "a successful add empties the field without marking it (feature 937)"
+    );
 }
 
 // Feature 804, M2: the Daemons rail row's Sharing badge follows the daemons, from any section.

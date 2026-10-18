@@ -227,3 +227,65 @@ fn the_scan_finds_a_starred_label_and_nothing_else() {
     let found: Vec<String> = starred_labels(source).into_iter().map(|(_, l)| l).collect();
     assert_eq!(found, vec!["Name*".to_string(), "Ticket *".to_string()]);
 }
+
+/// The views that build a required `Select` (feature 937, research R5): Type and Base branch.
+const SELECT_FORMS: [&str; 2] = ["ui/worktree_form.rs", "ui/parallel_dialog.rs"];
+
+/// The source of every `Select::new(..)` expression in `source`, up to the end of its builder
+/// chain: the `;` that ends the statement, or the `)` that closes the call it is an argument of.
+fn select_expressions(source: &str) -> Vec<(usize, String)> {
+    let code = strip_comments_keep_lines(source);
+    code.match_indices("Select::new(")
+        .map(|(at, _)| {
+            let mut depth = 0i32;
+            let mut end = code.len();
+            for (i, c) in code[at..].char_indices() {
+                match c {
+                    '(' => depth += 1,
+                    ')' => depth -= 1,
+                    _ => {}
+                }
+                if depth < 0 || (depth == 0 && c == ';') {
+                    end = at + i;
+                    break;
+                }
+            }
+            (
+                code[..at].matches('\n').count() + 1,
+                code[at..end].to_string(),
+            )
+        })
+        .collect()
+}
+
+/// A required select that does not `track_focus` never reports being left, so FR-006's blur rule
+/// silently covers text fields only (contract C4).
+#[test]
+fn a_required_select_in_an_inventory_view_tracks_focus() {
+    let mut required_selects = 0;
+    let mut offenders = Vec::new();
+    for (name, src) in rendering_files()
+        .iter()
+        .filter(|(name, _)| SELECT_FORMS.contains(&name.trim_start_matches("src/")))
+    {
+        for (line, expr) in select_expressions(src) {
+            if !expr.contains(".required(") {
+                continue;
+            }
+            required_selects += 1;
+            if !expr.contains(".track_focus(") {
+                offenders.push(format!("{name}:{line}"));
+            }
+        }
+    }
+    assert_eq!(
+        required_selects, 3,
+        "Type in the add-worktree form, Type and Base branch in Run in parallel: the scan moved"
+    );
+    assert!(
+        offenders.is_empty(),
+        "these required selects are built without `.track_focus(FieldId, focused)`, so leaving \
+         them never marks them (feature 937, C4):\n{}",
+        offenders.join("\n")
+    );
+}

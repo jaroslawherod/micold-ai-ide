@@ -86,7 +86,16 @@ and `Typeahead` each take `.required(micold_core::required::FieldRequirement)`:
 - `Required` appends `required::MARKER` (`*`) to the label. The marker is a character of the label,
   so it rests and floats with it, in its role and tint, and is still there when the label is read
   as text. A field with no label gets no marker.
-- `Missing` is `Required` plus the required error (feature 937, later milestones).
+- `Missing` is `Required` plus the required error: the field is drawn invalid with
+  `required::MESSAGE` in the supporting slot. A form reaches it when the user leaves the field empty
+  (blur) or attempts a submit, never on a freshly opened form.
+
+`Select::on_blur(M)` (contract C2) publishes `M` once when the select stops being engaged (neither
+focused nor open) after having been, without a pick in between; a pick fills the field, so it is not
+a blur. Focus taken away by the traversal is published on the next event the select sees. A form wires
+it with `TrackFocus for Select` (`ui/focus.rs`, contract C4): `.track_focus(FieldId, focused)` reports
+`FieldFocusChanged(id, false)`, the same route a text field's blur takes. A required `Select` in an
+inventory view without `track_focus` fails `tests/required_call_sites.rs`.
 
 A form does not compute the state itself: its draft lists `required_fields()` — `(FieldId,
 Requirement)` pairs mirroring its own validation — and keeps a `RequiredMarks<FieldId>`, and the

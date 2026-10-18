@@ -62,6 +62,8 @@ pub const MUTATORS: &[&str] = &[
     "insert",
     "iter_mut",
     "last_mut",
+    // `RequiredMarks::leave` records that the user left a required field (feature 937).
+    "leave",
     "pop",
     "push",
     "push_str",

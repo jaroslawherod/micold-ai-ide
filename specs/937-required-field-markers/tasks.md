@@ -153,16 +153,16 @@ focus and leave a field; the field shows the error with the message, no separate
 
 ### Tests for User Story 3, error on blur (write first, see them fail)
 
-- [ ] T042 [P] [US3] Write failing tests for `Select::on_blur` (C2, R2) in `client/ui/material/select_anatomy.rs`: published once when the select goes from engaged (`focused || open`) to not engaged without a pick in between; not published on a pick; not published by a select that was never engaged
-- [ ] T043 [P] [US3] Write failing tests: in `ctests/features_window.rs`, `field_focus_changed(id, false)` returns `Outcome::FieldBlurred(id)`, also when its guard leaves `focused_field` unchanged (R3); in a new `ctests/features_required.rs`, `features::required::blurred(state, FieldId::AddWorktreeName)` calls `leave` on the open add-worktree form only, a blur of a field whose draft is not open changes nothing, a blur in one window's form leaves another window's form unmarked (Principle II), and a fresh form shows no `Missing` (US3 scenario 3); in `ctests/features_worktree_form.rs`, `FormMsg::BranchDismissed` calls `leave(AddWorktreeBranch)`; extend `ctests/required_call_sites.rs` to fail when a required `Select` in an inventory view (Type, Base branch) is built without `track_focus` (C4, covers T045 and T047)
+- [x] T042 [P] [US3] Write failing tests for `Select::on_blur` (C2, R2) in `client/ui/material/select_anatomy.rs`: published once when the select goes from engaged (`focused || open`) to not engaged without a pick in between; not published on a pick; not published by a select that was never engaged
+- [x] T043 [P] [US3] Write failing tests: in `ctests/features_window.rs`, `field_focus_changed(id, false)` returns `Outcome::FieldBlurred(id)`, also when its guard leaves `focused_field` unchanged (R3); in a new `ctests/required_blur.rs` (driven through the root: `features::required` was dropped, see T046), a blur of `FieldId::AddWorktreeName` calls `leave` on the open add-worktree form only, a blur of a field whose draft is not open changes nothing, a blur in one window's form leaves another window's form unmarked (Principle II), and a fresh form shows no `Missing` (US3 scenario 3); in `ctests/app_state.rs`, `FormMsg::BranchDismissed` calls `leave(AddWorktreeBranch)`; extend `ctests/required_call_sites.rs` to fail when a required `Select` in an inventory view (Type, Base branch) is built without `track_focus` (C4, covers T045 and T047)
 
 ### Implementation for User Story 3, error on blur
 
-- [ ] T044 [US3] Implement `Select::on_blur(M)` in `client/ui/material/select.rs` with an `engaged` bit in `SelectState`, published from `Widget::update` (depends on T042)
-- [ ] T045 [US3] Implement `TrackFocus for Select<'_, T, Message>` in `client/ui/focus.rs` (C4) (depends on T044)
-- [ ] T046 [US3] Add `Outcome::FieldBlurred(FieldId)` (`client/features/mod.rs`, returned by `field_focus_changed` in `client/features/window.rs`), the new `client/features/required.rs` with `blurred(state, id)` matching `id` to its owning draft, its application in `client/app.rs`, and `leave(AddWorktreeBranch)` on `BranchDismissed` in `client/features/worktree_form.rs` (depends on T043)
-- [ ] T047 [US3] Give the required `Select`s their `FieldId` through `TrackFocus` in `client/ui/worktree_form.rs` (Type), `client/ui/parallel_dialog.rs` (Type, Base branch) and the settings and daemon views that list a select in `required_fields()`, so every required field reports its blur (depends on T045, T046)
-- [ ] T048 [P] [US3] Document `Select::on_blur` (C2) and `TrackFocus for Select` (C4) in `docs/development/component-library.md`; add to the user-guide notes in `docs/user-guide/{worktrees-and-sessions,parallel-runs,project-selection,settings}.md` that leaving a required field empty also marks it
+- [x] T044 [US3] Implement `Select::on_blur(M)` in `client/ui/material/select.rs` with an `engaged` bit in `SelectState`, published from `Widget::update` (depends on T042)
+- [x] T045 [US3] Implement `TrackFocus for Select<'_, T, Message>` in `client/ui/focus.rs` (C4) (depends on T044)
+- [x] T046 [US3] Add `Outcome::FieldBlurred(FieldId)` (`client/features/mod.rs`, returned by `field_focus_changed` in `client/features/window.rs`), `field_blurred(state, id)` in `client/app.rs` matching `id` to its owning draft (a `features/required.rs` writing six features' drafts fails `feature_write_isolation.rs`, FR-020, so the root owns it), and `leave(AddWorktreeBranch)` on `BranchDismissed` in `client/features/worktree_form.rs` (depends on T043)
+- [x] T047 [US3] Give the required `Select`s their `FieldId` through `TrackFocus` in `client/ui/worktree_form.rs` (Type), `client/ui/parallel_dialog.rs` (Type, Base branch) and the settings and daemon views that list a select in `required_fields()`, so every required field reports its blur (depends on T045, T046)
+- [x] T048 [P] [US3] Document `Select::on_blur` (C2) and `TrackFocus for Select` (C4) in `docs/development/component-library.md`; add to the user-guide notes in `docs/user-guide/{worktrees-and-sessions,parallel-runs,project-selection,settings}.md` that leaving a required field empty also marks it
 
 **Checkpoint (M6)**: FR-006 complete; all stories done.
 
@@ -263,7 +263,7 @@ its scenarios (1, 2, 4 on submit, dialogs then settings; 3 on blur).
 - **Tasks**: T042–T048
 - **Deliverable**: focusing a required field and leaving it empty (text field, select or branch picker) shows its required error; untouched fields and fresh forms show none, and one window's form never marks another's.
 - **Satisfies**: US3 acceptance scenario 3; FR-006 (blur); edge case *Several sessions and windows*
-- **Verify**: `scripts/gate.sh` (`select_anatomy`, `features_window`, `features_required`, `features_worktree_form`); quickstart §B 2, 6
+- **Verify**: `scripts/gate.sh` (`select_anatomy`, `features_window`, `required_blur`, `app_state`); quickstart §B 2, 6
 - **Depends on**: M4, M5
 - **Tier**: full
 

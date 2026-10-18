@@ -18,6 +18,7 @@
 
 use micold_client::app::State;
 use micold_client::features::window::{self, FieldId};
+use micold_client::features::Outcome;
 use micold_core::install_location::InstallLocation;
 
 #[test]
@@ -199,4 +200,36 @@ fn exactly_one_place_in_the_crate_writes_the_verdict() {
         "found the writer somewhere else: {:?}",
         writers[0]
     );
+}
+
+#[test]
+fn losing_focus_reports_the_field_left_even_when_the_guard_ignores_it() {
+    // Feature 937 (R3): "the user left this field" is true whether or not the guard lets the blur
+    // clear `focused_field`, so the outcome is returned in both cases.
+    let mut st = State::default();
+    window::field_focus_changed(&mut st, FieldId::AddWorktreeName, true);
+    window::field_focus_changed(&mut st, FieldId::AddWorktreeTicket, true);
+
+    let ignored = window::field_focus_changed(&mut st, FieldId::AddWorktreeName, false);
+    assert_eq!(
+        st.window.focused_field,
+        Some(FieldId::AddWorktreeTicket),
+        "the guard left focus alone"
+    );
+    assert!(matches!(
+        ignored.as_slice(),
+        [Outcome::FieldBlurred(FieldId::AddWorktreeName)]
+    ));
+
+    let believed = window::field_focus_changed(&mut st, FieldId::AddWorktreeTicket, false);
+    assert!(matches!(
+        believed.as_slice(),
+        [Outcome::FieldBlurred(FieldId::AddWorktreeTicket)]
+    ));
+}
+
+#[test]
+fn gaining_focus_reports_no_blur() {
+    let mut st = State::default();
+    assert!(window::field_focus_changed(&mut st, FieldId::RunName, true).is_empty());
 }

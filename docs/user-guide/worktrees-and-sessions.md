@@ -451,7 +451,7 @@ project, so it is the same after a restart. With no daemon registered the select
 and **Name** for a new branch or a GitHub issue, **Branch** when you work from an existing one.
 Ticket and the session's fields are optional and carry no mark. **Create** is always available: press it
 with a required field empty and every empty required field shows "This field is required" at once, and nothing is created.
-Typing into a field clears its message.
+Leaving a required field empty also marks it, on its own; a field you have not visited shows nothing until you press **Create**. Typing into a field clears its message.
 
 ### Creating a new branch
 

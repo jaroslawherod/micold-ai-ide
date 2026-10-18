@@ -1846,6 +1846,11 @@ pub fn add_repository(state: &mut State, model: &Model<'_>, id: DaemonId) -> Vec
         Ok(location) => {
             state.repository_error = None;
             state.repositories.remove(&id);
+            // The field was just emptied by a successful add: the blur that pressing Add caused
+            // must not read as an empty required field (feature 937).
+            state
+                .repository_marks
+                .forget(|k| *k == FieldId::DaemonRepository(id));
             vec![Outcome::RemoteRepositoryRequested {
                 path: location.identity(),
             }]

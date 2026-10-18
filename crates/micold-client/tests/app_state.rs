@@ -2492,6 +2492,28 @@ fn requirement(state: &State, field: FieldId) -> micold_core::required::FieldReq
 }
 
 #[test]
+fn dismissing_the_branch_list_leaves_the_branch_field() {
+    use micold_core::required::FieldRequirement::{Missing, Required};
+    let mut state = opened_form();
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::SourceChanged(
+            micold_client::features::worktree_form::BranchSource::Existing,
+        ),
+    ));
+    assert_eq!(requirement(&state, FieldId::AddWorktreeBranch), Required);
+
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::BranchDismissed,
+    ));
+
+    assert_eq!(
+        requirement(&state, FieldId::AddWorktreeBranch),
+        Missing,
+        "closing the picker with no branch picked is leaving it (R2)"
+    );
+}
+
+#[test]
 fn create_is_pressable_with_every_required_field_empty() {
     let state = opened_form();
     assert!(

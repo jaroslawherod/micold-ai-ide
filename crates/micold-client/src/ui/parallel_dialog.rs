@@ -57,7 +57,8 @@ pub fn modal<'a>(
         )
         .placeholder("Select a type…")
         .label("Type")
-        .required(state(FieldId::RunType)),
+        .required(state(FieldId::RunType))
+        .track_focus(FieldId::RunType, focused),
     );
     fields = fields.push(
         TextField::new("", dialog.naming.ticket.as_deref().unwrap_or(""), r)
@@ -86,7 +87,8 @@ pub fn modal<'a>(
         )
         .placeholder("Select a branch…")
         .label("Base branch")
-        .required(state(FieldId::RunBaseBranch)),
+        .required(state(FieldId::RunBaseBranch))
+        .track_focus(FieldId::RunBaseBranch, focused),
     );
 
     // One row per run: its derived name and its provider (D2, D3).
