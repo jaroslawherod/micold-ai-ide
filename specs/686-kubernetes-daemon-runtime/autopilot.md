@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-xelisc
 - **Started**: 2026-10-17
 - **Phase**: implement
-- **Next step**: M6 implemented, reviews A/B round 1 fixed; full gate (scripts/gate.sh) and a scoped re-review of the fix diff, then the PR files in the scratchpad (pr-title-686-M6.txt, pr-body-686-M6.md); the orchestrator opens the PR.
+- **Next step**: M6 gate green (scripts/gate.sh); the orchestrator opens the PR from the scratchpad files (pr-title-686-M6.txt, pr-body-686-M6.md), waits on CI and merges; then M7.
 
 ## Pull requests
 
@@ -38,7 +38,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M4a | T024, T130, T066, T031, T131, T070, T032 | full | Kubernetes form via Edit (Add entry hidden), shared resources fields, credentials list | — | merged (#1000) |
 | M4b | T083, T084, T080, T132, T085, T086, T082, T133, T129 | full | Placement fields, Stop/Remove/Forget locally/Logs from the row, Start → Unavailable | — | merged (#1005) |
 | M5 | T134, T022, T074, T135, T030, T077, T136 | full | (#806) Copy + Connect over SSH through the relay; failures at client level | — | merged (#1011) |
-| M6 | T138, T139, T141, T142, T033, T140 | full | (#806) AI CLI install, drift prompt, Add entry, user guide 🎯 MVP | — | in progress (unblocked 2026-10-18) |
+| M6 | T138, T139, T141, T142, T033, T140 | full | (#806) AI CLI install, drift prompt, Add entry, user guide 🎯 MVP | — | implemented, gate green, PR pending |
 | M7 | T047–T055, T100 | full | (#806) Clone + worktrees in the pod (RepoClone) | — | blocked on #806 |
 | M8 | T057, T058, T060, T061, T062, T101 | full | (#806) Reconnect; pod gone → stopped with reason | — | blocked on #806 |
 | M9 | T088–T096, T105 | full | (#806) kube_real_* suite, `mise run test-kube`, CI job kube-cluster | — | blocked on #806 |
@@ -105,7 +105,7 @@ stash@{0} survivors (all used by M1a–M2, stash dropped 2026-10-18; backed up i
 | M4a review A (code-review high) | 1 | f29f682624d1c0bd2370fef030eb8ec1d6d102af:153fa9f2b3d8ac3525be149d44e1053093c2e8c4 | CLEAN — 3 MINOR declined (Declined review findings): default provider is one value, MIN_MEMORY floor reused, `offered()` slice order |
 | M4a review B (conformance, sonnet) | 1 | same | CLEAN — Verify 22 + 10 passed; 1 MINOR: file fields are plain text paths (no picker; same as the SSH form's key file), noted in the cycle log |
 | M5 | A (code-review high) + B (conformance) | ade6ca29b89171b2bf51f114e355f5de2b13fe52:21e2ef5743bdc4b335c71cbd7303f9bfd6df9de6 | A: CLEAN (F1 MINOR fixed: drift text; F2 MINOR declined: `RefusalReason` has no Display, Debug kept until M6 words it); B: CHANGES, F1 MAJOR fixed (A15/A16/A17 tests added), F2 MINOR fixed (cycle-log) |
-| M6 | A (high) + B (conformance) | cdafddd27dd68fd9d5a51df4d191af4f6a04f64a:991d8c1b71c05e8cca0ed4344c827bd201b94978 | A: CHANGES, F1 MAJOR fixed (drift prompts queued), F3 MINOR fixed, F2 MINOR declined; B: F1 BLOCKER mid-edit artefact, F2 MINOR fixed |
+| M6 | A (high) + B (conformance) | cdafddd27dd68fd9d5a51df4d191af4f6a04f64a:991d8c1b71c05e8cca0ed4344c827bd201b94978 | A: CHANGES, F1 MAJOR fixed (drift prompts queued), F3 MINOR fixed, F2 MINOR declined; B: F1 BLOCKER mid-edit artefact, F2 MINOR fixed; round 2 (sonnet, fix diff): CLEAN, 1 MINOR (unguarded StartFailed on no-token Cancel) left |
 
 ## Declined review findings
 
