@@ -9,7 +9,7 @@
 //!
 //! Runtime is data: a row has a plain label whatever the daemon runs in (FR-015).
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::path::PathBuf;
 
 use micold_core::daemons::{
@@ -393,6 +393,9 @@ pub struct State {
     /// The location the `Bind to daemon...` picker is open for.
     pub bind_target: Option<WorktreeRef>,
     pending: Option<(Pending, RemovalPrompt)>,
+    /// Drift prompts waiting for the open prompt to close, oldest first, with the differing
+    /// fields. Shown one at a time by [`show_next_drift`].
+    drift_queue: VecDeque<(DaemonId, Vec<String>)>,
     diagnostics: BTreeMap<DaemonId, DaemonDiagnostics>,
     versions: BTreeMap<DaemonId, String>,
     runtime_missing: BTreeMap<DaemonId, String>,
@@ -1090,6 +1093,10 @@ pub fn save(state: &mut State, model: &mut Model<'_>) -> Result<Vec<Outcome>, Fo
         Some(id) => {
             let runtime_changed = model.registry.get(id).map(|e| &e.runtime) != Some(&runtime);
             let kube = matches!(runtime, DaemonRuntime::Kubernetes(_));
+            if kube && runtime_changed {
+                // New settings are asked about again, never recreated on an old answer (US5.2).
+                state.drift_answers.remove(&id);
+            }
             if kube && runtime_changed && model.links.should_dial(id) {
                 // The pod is not changed silently: the new settings wait for the next start.
                 state.applies_on_next_start.insert(id);
@@ -1255,20 +1262,36 @@ fn request_drift_answer(
     if model.links.state(id) != Some(&DaemonState::Starting) {
         return Vec::new();
     }
-    let Some((name, _)) = kube_of(model, id) else {
-        return Vec::new();
-    };
-    let sessions = model.sessions.get(&id).map_or(0, Vec::len);
-    let text = format!(
-        "The running pod differs from the settings ({}). Recreate it? Its {} will end; the volume \
-         is kept.",
-        fields.join(", "),
-        plural(sessions, "running session", "running sessions"),
-    );
-    let mut prompt = kube_prompt(model, id, name, text, "Recreate pod");
-    prompt.decline_label = "Keep running pod";
-    state.pending = Some((Pending::Drift(id), prompt));
+    state.drift_queue.retain(|(d, _)| *d != id);
+    state.drift_queue.push_back((id, fields.to_vec()));
+    show_next_drift(state, model);
     Vec::new()
+}
+
+/// Open the next queued drift prompt when no prompt is open. Entries whose daemon is no longer
+/// starting (stopped, removed, cancelled meanwhile) are dropped.
+fn show_next_drift(state: &mut State, model: &Model<'_>) {
+    while state.pending.is_none() {
+        let Some((id, fields)) = state.drift_queue.pop_front() else {
+            return;
+        };
+        if model.links.state(id) != Some(&DaemonState::Starting) {
+            continue;
+        }
+        let Some((name, _)) = kube_of(model, id) else {
+            continue;
+        };
+        let sessions = model.sessions.get(&id).map_or(0, Vec::len);
+        let text = format!(
+            "The running pod differs from the settings ({}). Recreate it? Its {} will end; the \
+             volume is kept.",
+            fields.join(", "),
+            plural(sessions, "running session", "running sessions"),
+        );
+        let mut prompt = kube_prompt(model, id, name, text, "Recreate pod");
+        prompt.decline_label = "Keep running pod";
+        state.pending = Some((Pending::Drift(id), prompt));
+    }
 }
 
 /// The user's answer to the drift prompt: the start goes on with `choice`, which restarts the
@@ -1300,8 +1323,12 @@ fn cancel_kube_start(state: &mut State, model: &mut Model<'_>, id: DaemonId) -> 
     if model.links.state(id) != Some(&DaemonState::Starting) {
         return Vec::new();
     }
-    if matches!(&state.pending, Some((Pending::Drift(d), _)) if *d == id) {
-        state.pending = None;
+    let queued = state.drift_queue.iter().any(|(d, _)| *d == id);
+    state.drift_queue.retain(|(d, _)| *d != id);
+    if queued || matches!(&state.pending, Some((Pending::Drift(d), _)) if *d == id) {
+        if matches!(&state.pending, Some((Pending::Drift(d), _)) if *d == id) {
+            state.pending = None;
+        }
         daemon_event(
             state,
             model.links,
@@ -1688,6 +1715,12 @@ pub fn add_repository(state: &mut State, model: &Model<'_>, id: DaemonId) -> Vec
 /// Apply one message. The registry, the links and the bindings change through `model`; what the
 /// shell must persist or stop comes back as [`Outcome`]s.
 pub fn update(state: &mut State, model: &mut Model<'_>, msg: Msg) -> Vec<Outcome> {
+    let out = reduce(state, model, msg);
+    show_next_drift(state, model);
+    out
+}
+
+fn reduce(state: &mut State, model: &mut Model<'_>, msg: Msg) -> Vec<Outcome> {
     let edit = |state: &mut State, f: &dyn Fn(&mut Draft)| {
         if let Some(draft) = state.draft.as_mut() {
             f(draft);

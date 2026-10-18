@@ -934,6 +934,74 @@ mod kubernetes {
         assert!(send(&mut state, &mut w, Msg::StartCancelled(id)).is_empty());
     }
 
+    fn second_kube(w: &mut World) -> DaemonId {
+        let id = w
+            .registry
+            .add("Other", kubernetes("prod", "dev2"), false)
+            .unwrap();
+        w.links = micold_client::links::DaemonLinks::at_launch(&w.registry);
+        id
+    }
+
+    #[test]
+    fn two_drifting_daemons_are_asked_one_after_the_other() {
+        let (mut w, a) = world();
+        let b = second_kube(&mut w);
+        dial(&mut w, a);
+        dial(&mut w, b);
+        let mut state = State::default();
+        let f = vec!["Image".to_string()];
+        send(&mut state, &mut w, Msg::KubeDrift(a, f.clone()));
+        send(&mut state, &mut w, Msg::KubeDrift(b, f));
+        assert!(state.prompt().unwrap().name.contains("Cluster"));
+        send(&mut state, &mut w, Msg::RemovalCancelled);
+        assert_eq!(state.drift_answers().get(&a), Some(&DriftChoice::Keep));
+        assert!(state.prompt().unwrap().name.contains("Other"));
+        send(&mut state, &mut w, Msg::RemovalConfirmed);
+        assert_eq!(state.drift_answers().get(&b), Some(&DriftChoice::Recreate));
+        assert!(state.prompt().is_none());
+    }
+
+    #[test]
+    fn a_drift_prompt_behind_another_prompt_is_shown_when_that_closes() {
+        let (mut w, id) = world();
+        let b = second_kube(&mut w);
+        dial(&mut w, b);
+        with_sessions(&mut w, b, 1);
+        let mut state = State::default();
+        send(&mut state, &mut w, Msg::Stopped(b));
+        let stop_text = state.prompt().unwrap().text.clone();
+        dial(&mut w, id);
+        send(&mut state, &mut w, Msg::KubeDrift(id, vec!["Image".into()]));
+        assert_eq!(state.prompt().unwrap().text, stop_text, "not clobbered");
+        send(&mut state, &mut w, Msg::RemovalCancelled);
+        assert!(state
+            .prompt()
+            .unwrap()
+            .text
+            .starts_with("The running pod differs"));
+    }
+
+    #[test]
+    fn cancel_of_a_daemon_whose_drift_prompt_is_queued_drops_it() {
+        let (mut w, a) = world();
+        let b = second_kube(&mut w);
+        dial(&mut w, a);
+        dial(&mut w, b);
+        let mut state = State::default();
+        let f = vec!["Image".to_string()];
+        send(&mut state, &mut w, Msg::KubeDrift(a, f.clone()));
+        send(&mut state, &mut w, Msg::KubeDrift(b, f));
+        assert!(send(&mut state, &mut w, Msg::StartCancelled(b)).is_empty());
+        send(&mut state, &mut w, Msg::RemovalCancelled);
+        assert!(state.prompt().is_none());
+        assert!(matches!(
+            w.links.state(b),
+            Some(micold_core::daemons::DaemonState::Unreachable { reason })
+                if reason == "start cancelled"
+        ));
+    }
+
     #[test]
     fn cancel_while_the_drift_prompt_is_open_ends_the_start_as_cancelled() {
         let (mut w, id) = world();
