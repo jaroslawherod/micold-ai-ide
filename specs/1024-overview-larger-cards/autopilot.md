@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-iq9j8q
 - **Started**: 2026-10-18
 - **Phase**: implement M1
-- **Next step**: M1 T012 visual pass, T013 gate, reviews A and B
+- **Next step**: M1 T013 full gate, then PR
 
 ## Pull requests
 
@@ -43,6 +43,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Plan | 1 | e45c58b4b1535563f0e6bedadc7591b9a695a39b:6c3e08958c02ee674bc1558fc34574eb1171dc3a | CLEAN: 2 MINOR (fixed, prose only) |
 | Tasks | 1 | b267855a5af0a7210aa2095640d6a8c9b29b6ab1:2f920b0d219ba52f0b54bcc54bb3385b679b2841 | CLEAN: 1 MINOR (checklist tick, fixed) |
 | M1 A (code-review high) | 1 | b58d5508739c2fa093140968d93349de9ac5322e:a383c665fa3b3b1fcd218274ee4bd82b8278b9fd | CLEAN: 8 MINOR (3 fixed: U7 row shape at 2400, U2 last row by y, cycle-log SHA; 2 are T012/T013 still open; 3 declined) |
+| M1 B (conformance, sonnet) | 1 | d8e86d15844d7dcdb9e341d8ba1274a87963542f:aa9980c85c6a8b7b7bbe54eba935400269781200 | CLEAN; Verify: card_grid 9 passed, 0 failed |
+| M1 visual pass | 1 | aa9980c8 | PASS with limits: 5 columns checked at 1544 px grid (screen 1600 px), 2400 px covered by U2/U5 laid-out tests; Down-arrow not isolated (renderer lag); Tab order walks rows |
 
 ## Declined review findings
 
