@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #802
 - **Worktree branch**: feat/802_make-one-session-per-worktree-a-soft-limit-confirm
 - **Started**: 2026-10-18
-- **Phase**: clarify
-- **Next step**: Run the clarify unit on specs/802-soft-limit-confirm/spec.md
+- **Phase**: plan
+- **Next step**: Run the plan unit (clarify round 1: no critical ambiguities, no spec change)
 
 ## Pull requests
 
