@@ -52,8 +52,10 @@ fixture tests assert on.
 
 ## SequencedEvent
 
-`{ seq: u64, event: StructuredEvent }`. `seq` starts at 0 per session per daemon lifetime and never
-repeats; it is what makes "no gap, no duplicate" checkable (FR-017, SC-005).
+`{ seq: u64, event: StructuredEvent }`. `seq` starts at 0 per session and never repeats within a
+history; a history restored after a daemon restart continues its numbering (R14), one with nothing
+restored starts at 0 again. It is what makes "no gap, no duplicate" checkable (FR-017, FR-021a,
+SC-005, SC-007).
 
 ## EventHistory (daemon memory, per session)
 
@@ -65,8 +67,47 @@ repeats; it is what makes "no gap, no duplicate" checkable (FR-017, SC-005).
 | `omitted: u64` | how many were evicted |
 
 Rules: append assigns `seq`; while `events.len() > MAX_EVENTS || bytes > MAX_BYTES` pop front,
-`omitted += 1` (FR-018). `snapshot()` → `(omitted, Vec<SequencedEvent>)`. Lives across
-stop/start within a daemon (FR-021a); dropped on session delete; never persisted.
+`omitted += 1` (FR-018). `snapshot()` → `(omitted, Vec<SequencedEvent>)`. Invariant: the first
+retained event's `seq` is `omitted`, and `next_seq == omitted + events.len()`. Lives across
+stop/start within a daemon (FR-021a); dropped on session delete. While saving is on it is saved as
+`SavedEvents` and rebuilt by `EventHistory::restored(omitted, events: Vec<StructuredEvent>)`, which
+numbers the events from `omitted` and applies the current bounds (R14).
+
+## SavedEvents (core, file payload; `micold_core::structured::saved`)
+
+The postcard payload inside a `<session uuid>.events` file, framed as 041's saved-history file
+with magic `MICOLDSE` and `EVENTS_FORMAT_VERSION = 1` (R14).
+
+| Type | Fields / variants | Rules |
+|---|---|---|
+| `SavedEvents` | `omitted: u64`, `events: Vec<SavedEvent>` | oldest first; `omitted + events.len()` fits in `u64` |
+| `SavedEvent` | `Line(String)` · `Unreadable(String)` · `TurnEndedWithoutResult` | `Line` is a CLI-sourced event's `raw`, parsed again by `parse_line` on load; `Unreadable` keeps an unreadable line's text and kind; `OversizedOnWire` is never saved |
+
+- `encode_events(omitted, &[SequencedEvent]) -> Vec<u8>` and
+  `decode_events(&[u8]) -> Result<(u64, Vec<StructuredEvent>), DamageReason>`; read cap
+  `MAX_EVENTS_FILE_BYTES = MAX_BYTES + 1 MiB`. Damage reasons are 041's `DamageReason`
+  (`TooLarge`, `NotAHistory`, `OtherVersion`, `Truncated`, `Checksum`, `Malformed`), never a
+  partial result (FR-021c).
+
+## HistoryStore additions (core, `terminal_history::store`)
+
+| Item | Rule |
+|---|---|
+| `FileKind { Terminal, Events }` | extension `.history` / `.events`; temporary `.<name>.tmp` for both |
+| `save_events(id, omitted, &[SequencedEvent])` | as `save`: `Skipped` when off, forgotten or no directory; `Unchanged` on the same checksum; encoding outside the mutex |
+| `load_events(id) -> EventsLoad` | `None` · `Events { omitted, events }` · `Damaged(DamageReason)`; `None` when off, unlisted, forgotten or the file is in `undeleted` |
+| `set_enabled(false)`, `purge`, `forget`, `sweep`, `retry_deletions` | cover both kinds; `sweep(keep)` keeps `<id>.history` and `<id>.events` of every id in `keep` |
+| `last_written` | keyed by `(SessionId, FileKind)` |
+
+## Daemon state additions (`state.rs`, `history.rs`, `structured.rs`)
+
+| Item | Rule |
+|---|---|
+| `event_streams` entry | created by one call used by the structured spawn and the view path: absent → `load_events` off the state lock, then insert if still absent (R14); `Damaged` → empty, one `warn!`, schedule due |
+| `EventStream::restored(omitted, events)` | the stream around `EventHistory::restored`; `EventStream::saved_snapshot()` gives `(omitted, events)` under the history lock |
+| Saver event schedules | `HashMap<SessionId, SaveSchedule>`, count = the history's `next_seq`; walked on the saver tick; marked due when the setting is turned on or after a damaged load |
+| Process end | a structured process end saves its stream after its readers are joined |
+| Orderly stop | `save_all_live` saves every stream with unsaved events inside `STOP_SAVE_BOUND` |
 
 ## TurnState (daemon memory, per live session)
 

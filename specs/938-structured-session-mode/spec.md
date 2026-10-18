@@ -26,8 +26,10 @@ those items as a plain list; later features of the same epic turn them into a pr
 conversation view with input, permission prompts and usage figures. The terminal way stays the
 default and keeps working as before. A user chooses the new way per session from the menu beside
 the start-session button; it is offered for Claude Code only. Sessions run this way survive
-restarts and continue the same conversation, several windows can watch the same session, and
-nothing Claude writes, even something unexpected, can break the session.
+restarts and continue the same conversation; while **Save terminal history** is on, the list of
+items they showed is kept on disk too and is still there after the background service restarts.
+Several windows can watch the same session, and nothing Claude writes, even something unexpected,
+can break the session.
 
 ## Context: where this sits in epic #945
 
@@ -69,7 +71,11 @@ beyond what the clarifications below settle; every richer view belongs to a late
 - **User message**: what the user (or the application on the user's behalf, such as a session's
   first prompt) sends into a structured session; one per turn.
 - **Event history**: the ordered events of one structured session that the daemon holds so that a
-  client attaching later sees what it missed.
+  client attaching later sees what it missed, and, while **Save terminal history** is on, saves to
+  disk so that it survives a daemon restart.
+- **Save terminal history**: the existing setting in Settings → Terminal (feature 041) that keeps
+  terminal sessions' history on disk. It also governs a structured session's saved event history;
+  there is no separate setting.
 - **Recorded fixture**: a file holding the exact lines a real CLI wrote during a real structured
   session, kept in the repository and replayed by tests.
 
@@ -87,11 +93,14 @@ beyond what the clarifications below settle; every richer view belongs to a late
   structured session before #939 delivers the transcript view? → A: A per-session choice in the
   new-session flow, beside the existing AI CLI chevron, offered for Claude Code sessions only; the
   session's pane shows a plain, read-only, line-per-event log until #939 replaces it.
-  _(decided by user, provisional)_
-- Q: Does the event history survive a daemon restart? → A: No. The daemon keeps it for its own
-  lifetime only; after a restart a resumed session continues the conversation and shows events from
-  the resume on. Earlier history is #939's concern (it can read the CLI's own transcript).
-  _(decided by user, provisional)_
+  _(decided by user)_
+- Q: Does the event history survive a daemon restart? → A: Yes, under the existing **Save terminal
+  history** setting, like a terminal session's history. While it is on, the daemon saves each
+  structured session's event history to disk with the saved terminal histories and restores it
+  after a restart, so a client viewing the session then sees the earlier events followed by those
+  of the resumed run. While it is off, the history lives in daemon memory only and after a restart
+  starts at the resume. Turning the setting off deletes the saved event histories with the terminal
+  ones. _(decided by user; replaces the earlier provisional answer "daemon memory only")_
 
 
 ## User Scenarios & Testing *(mandatory)*
@@ -237,6 +246,44 @@ check each refusal.
 
 ---
 
+### User Story 7 - A structured session's events survive a daemon restart (Priority: P2)
+
+While **Save terminal history** is on, a structured session's event history is saved to disk as a
+terminal session's history is, and comes back after the daemon restarts: a client viewing the
+session afterwards sees what it showed before, then the events of the resumed run. While the
+setting is off, nothing of it is written to disk.
+
+**Why this priority**: The user chose that a structured session keeps its history across a restart
+like a terminal session does (clarification Q3); without it a daemon restart empties every
+structured session's log.
+
+**Independent Test**: With saving on and a private history directory, write events in a structured
+session against the stand-in CLI, stop the daemon in order, start a new daemon over the same
+catalog and directory, and view the session: the viewer receives the earlier events, then, once the
+session is started, the resumed run's events, with no gap and no duplicate.
+
+**Acceptance Scenarios**:
+
+1. **Given** saving is on and a structured session has written events, **When** the daemon stops in
+   order and starts again and a client views the session, **Then** the client receives the events
+   the history held before the stop, in order and with their sequence numbers, and after the
+   session is started the resumed run's events follow with the numbering continuing, nothing
+   missing or repeated at the seam.
+2. **Given** saving is on, **When** the daemon ends without an orderly stop, **Then** after it
+   starts again a viewer receives the events saved before the end: at least those written up to
+   the session's last process end, and never more than one minute behind the end otherwise.
+3. **Given** saving is off, **When** the daemon restarts, **Then** no event history of the session
+   was ever written to disk, and the restarted session's history starts at the resume.
+4. **Given** saved event histories, **When** the user turns **Save terminal history** off, **Then**
+   every saved event history is deleted at once with the saved terminal histories, and the event
+   histories the daemon holds in memory are unchanged.
+5. **Given** a saved event history, **When** its session is removed, **Then** its file is deleted.
+6. **Given** a saved event history that cannot be read in full (damaged, cut short, or written by
+   another version), **When** the daemon restores the session, **Then** none of it is shown, the
+   session runs with an empty history, the daemon logs why, and the next save replaces the file.
+
+---
+
 ### User Story 6 - Choose the structured kind and see its events (Priority: P3)
 
 A user picks "Claude Code (structured)" from the start-session chevron of a worktree; the session
@@ -306,6 +353,12 @@ marker and the pane.
   writes on Windows do not produce unreadable lines or stray characters in event text, and stopping
   or killing the session ends the CLI process on every platform (Principle VI).
 - A user message with multi-line text, quotes or non-ASCII characters reaches the CLI unchanged.
+- Saving the event history fails (disk full, no permission): the session keeps running, the failure
+  is logged once per reason, and the save is tried again, as for a terminal history.
+- Only the bounded history is saved: events already evicted (FR-018) are not on disk, and a client
+  viewing after a restart is told they were omitted, as before the restart.
+- A daemon in the sandbox container saves event histories where it saves terminal histories, under
+  the same rules.
 
 ## Requirements *(mandatory)*
 
@@ -380,10 +433,23 @@ marker and the pane.
 - **FR-021**: Restarting or restoring a structured session whose conversation has started MUST
   launch the CLI resuming that conversation in structured mode; a new session MUST start a new
   conversation.
-- **FR-021a**: The event history MUST live in daemon memory only and is not written to disk; after
-  a daemon restart a resumed session's history starts at the resume (earlier history is #939's,
-  read from the CLI's own transcript). Stopping and starting a session within one daemon lifetime
-  keeps its history.
+- **FR-021a**: Stopping and starting a structured session within one daemon lifetime MUST keep its
+  event history. While **Save terminal history** is on, the daemon MUST save each structured
+  session's event history to disk under the rules feature 041 sets for a saved terminal history
+  (only the user can read it, in the per-user local data directory, written whole so that a save
+  never leaves a part-written file, at most one minute behind the events, at each process end and
+  at an orderly daemon stop), and after a daemon restart MUST restore it before the session's
+  events are next viewed or its process next starts, so a client viewing the session receives the
+  saved events in order, then the events of the resumed run, with sequence numbers continuing and
+  no gap or duplicate at the seam. While the setting is off, the event history MUST NOT be written
+  to disk, and after a daemon restart it starts at the resume.
+- **FR-021b**: Turning **Save terminal history** off MUST delete every saved event history at once,
+  as it deletes the saved terminal histories; removing a session MUST delete its saved event
+  history; when the daemon starts, saved event histories of sessions that no longer exist MUST be
+  deleted, as saved terminal histories are. In-memory event histories are unchanged by the setting.
+- **FR-021c**: A saved event history that cannot be read in full MUST NOT be shown in part and MUST
+  NOT stop the session: the session's history starts empty, the daemon logs the session and the
+  reason, and the next save replaces the file.
 
 **Selection and docs**
 
@@ -395,8 +461,10 @@ marker and the pane.
   log with one line per event, in order, including unrecognised events and unreadable lines and
   the omitted-events marker; it offers no input (prompt input is #941).
 - **FR-023**: The user guide MUST describe the structured kind, how to choose it, that it is
-  Claude-only, and what it does not yet do (each later issue of the epic), in the same change that
-  makes it user-selectable.
+  Claude-only, that **Save terminal history** also keeps its event history across a restart, and
+  what it does not yet do (each later issue of the epic), in the same change that makes it
+  user-selectable; the setting's note in Settings → Terminal MUST say that it covers structured
+  sessions' events too, in that change.
 
 **Testing**
 
@@ -413,7 +481,8 @@ marker and the pane.
 - **Structured event**: one of the modelled types, an unrecognised event, or an unreadable line;
   carries its position in the session's stream.
 - **Event history**: a session's bounded, ordered list of structured events in the daemon, with a
-  marker when older events were dropped.
+  marker when older events were dropped; saved to disk, and restored after a daemon restart, while
+  **Save terminal history** is on.
 - **User message**: text sent into a structured session, one per turn.
 - **Recorded fixture**: a captured line-per-event stream from a real CLI run, versioned with the
   tests, with the CLI version it was captured from.
@@ -436,6 +505,10 @@ marker and the pane.
 - **SC-006**: Events reach an attached client as the CLI writes them, not batched per turn: on the
   test stand-in, an event written while the turn is still in progress reaches the client before the
   turn's result is written.
+- **SC-007**: With **Save terminal history** on, a client viewing a structured session after an
+  orderly daemon restart receives 100% of the events its history held before the stop, in order,
+  followed by the resumed run's events with no gap or duplicate; with the setting off, no event
+  history file exists for any session in 100% of test runs.
 
 ## Assumptions
 
@@ -450,3 +523,6 @@ marker and the pane.
 - Hooks configured for the CLI fire in structured mode as they do in terminal mode, so existing
   activity and attention signals need no new source.
 - The stand-in CLI used by tests is a test-only program and ships in no release.
+- A saved event history holds what the session showed (tool results, file contents), as a saved
+  terminal history does; the same setting, the same owner-only files and the same deletion rules
+  are enough for it, and no separate setting is needed (clarification Q3).
