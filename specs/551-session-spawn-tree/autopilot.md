@@ -28,7 +28,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T016, T025, T038 | full | Origin recorded by the daemon's `record_origin` (nothing sets it until M3), persisted, exposed on wire and MCP; spike T025 outcome recorded | #824 | merged |
 | M2 | T017–T024, T039 | full | Sidebar nests children with child/pending/removed markers | #916 | merged |
 | M3 | T026–T031, T040 | full | Provider readers for spike-confirmed providers, discovery, provider table | #962 | merged |
-| M4 | T032–T037, T041 | full | Fold, count, attention rollup, persisted fold | | in progress |
+| M4 | T032–T037, T041 | full | Fold, count, attention rollup, persisted fold | PR pending | gate+PR |
 
 ## Decisions
 
@@ -68,6 +68,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Conformance B M3 551 | 1 | 19a208bc01d7ee5d7c630206731dc659e572ab8d:f3db56932b614d1bcdfe85f073f80b74d8a67556 | CLEAN (one MINOR: daemon Verify unobserved by B; run green by the unit) |
 | Code A M3 551 | 1 | c5b0216fe24c6f3862fbbf81960a018a707a9366:6898a677ce98be25a1fca4a55af813ad36955170 (pre-edit tree) | 10 findings: fixed #4 (provider-reported failing origin now sets origin_rejected in record_origin), #7 (shared `bindings` iterator in provider.rs), #10 (guide says readers not yet checked against a recording); rest declined, see Declined; fixes since need a scoped round-2 only if the scoped gate shows code changes beyond these |
 | Code A M4 551 | 1 | 4cf6cf705893ed835a746e0463b5f3229d716d3f:89a39f17f7c4422dbc57c06fe8c32b4fc830bd25 (pre-commit tree) | 8 findings: fixed #1 (persist only the toggled id), #2 (chord order ignores folds), #4 (HashMap lookup); declined #3, #5, #6, #7, #8 (see Declined) |
+| Code B M4 551 | 1 (sonnet) | 67ff9d0133d23f9f227d350e378ba49593e4fe3b:65bab60fa4b4800708cfafe1ae6d7aa468f2dff1 | CLEAN (3 MINOR: Part B result recorded here; boot-restore test and Arc sharing not changed). Verify: sidebar_spawn_tree 10 passed, settings_roundtrip 36 passed. Visual pass: Part B steps 3, 4 PASS (c-fold.png, c-fold-restart.png: A reads "claude, 2 agents", children hidden, fold survives restart); cosmetic note: a folded row shows a folder icon where the twisty was |
 
 ## Declined review findings
 
@@ -90,8 +91,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-Done (M4, two local commits, NOT pushed, no PR yet): T032-T037, T041 implemented and ticked; tdd test-list and cycle-log updated; docs section "Folding" in worktrees-and-sessions.md. Review A (code-review high) round 1 done and acted on (see Review rounds / Declined). Scoped gate GREEN on the final tree (snapshot f8218d524ee6bacd6cc56979c79678a11ca0e38b:501b8a6f1926e6f02ec0cd3a8851e88211a223b9). Design: `Msg::ToggleOrigin` + `State.sidebar.folded`; `SessionRow.fold` (Fold: folded, children, needs_attention(in_view)); nodes carry `folded: Arc<BTreeSet>`; `TreeItem::folded_summary`; shell `persist_folded_origins(store, core, id)` after the toggle in main.rs; startup reads `Settings.folded_origins`; chord order uses `unfolded_sessions()`. Tests for U19 live in `tests/sidebar_spawn_tree.rs` (not sidebar_tree.rs).
-Next: (1) review B: `autopilot-reviewer`, model sonnet, rubric rubrics/conformance.md, once, with brief.py milestone M4 (Verify: `cargo test -p micold-client --test sidebar_spawn_tree`, `cargo test -p micold-core --test settings_roundtrip`); (2) visual pass through an `autopilot-worker` (visual-pass skill; folded row visible: quickstart Part B steps 3, 4; save evidence in specs/551-session-spawn-tree/visual/, e.g. c-fold.png); also showcase has two new folded rows in atoms.rs; (3) fix findings, scoped gate; (4) full gate `mise run gate` (detached, hold.sh); (5) push and open PR titled `feat(551): fold an origin's children and keep the fold (#551)`, body per pr.md ending `Refs #551`, record the PR in the ledger. Mention in the PR body: #962 needed CI re-runs for flaky tests (idle_race on macOS, issue #1021; real-sshd timing flake).
+None.
 
 ## Open escalation
 
