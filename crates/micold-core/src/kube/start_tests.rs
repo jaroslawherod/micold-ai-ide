@@ -905,7 +905,7 @@ async fn a_withdrawn_secret_of_ours_is_deleted_and_one_not_ours_is_left() {
     let cfg = KubeCredential::GitConfig;
     let fake = cluster();
     fake.progress(&n.pod(), vec![running()]);
-    let allowed = allowing(&[cfg.clone()]);
+    let allowed = allowing(std::slice::from_ref(&cfg));
     let (first, _) = run_reading(
         &fake,
         &allowed,
