@@ -347,7 +347,11 @@ pub fn unread_mark<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a,
                 roles,
             ),
             posed("a worktree row with none", location_row(0, false), roles),
-            posed("a folded origin with three agents", folded_row(false), roles),
+            posed(
+                "a folded origin with three agents",
+                folded_row(false),
+                roles,
+            ),
             posed(
                 "a folded origin with a child needing attention",
                 folded_row(true),

@@ -67,6 +67,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Code B M1 551 (rebased) | 2 (sonnet) | 45c07d7d1709df3cfdffcb90075eeb6db86ba71e:35a170e47eea873fd8569b79ef57ab11de1f4baa | CHANGES: 1 BLOCKER (4 test call sites kept a dropped 4th create_session argument; fixed), 1 MAJOR (Verify unobserved: lock held 15 min; the full gate's cargo test --workspace covers it), 1 MINOR (protocol 42 in artifacts, fixed); no re-run of B for the fixes |
 | Conformance B M3 551 | 1 | 19a208bc01d7ee5d7c630206731dc659e572ab8d:f3db56932b614d1bcdfe85f073f80b74d8a67556 | CLEAN (one MINOR: daemon Verify unobserved by B; run green by the unit) |
 | Code A M3 551 | 1 | c5b0216fe24c6f3862fbbf81960a018a707a9366:6898a677ce98be25a1fca4a55af813ad36955170 (pre-edit tree) | 10 findings: fixed #4 (provider-reported failing origin now sets origin_rejected in record_origin), #7 (shared `bindings` iterator in provider.rs), #10 (guide says readers not yet checked against a recording); rest declined, see Declined; fixes since need a scoped round-2 only if the scoped gate shows code changes beyond these |
+| Code A M4 551 | 1 | 4cf6cf705893ed835a746e0463b5f3229d716d3f:89a39f17f7c4422dbc57c06fe8c32b4fc830bd25 (pre-commit tree) | 8 findings: fixed #1 (persist only the toggled id), #2 (chord order ignores folds), #4 (HashMap lookup); declined #3, #5, #6, #7, #8 (see Declined) |
 
 ## Declined review findings
 
@@ -81,7 +82,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 | A | origin bound to a session of another project stays pending (#6) | That is the specified pending/orphan state (FR-016) |
 | M3 | A | single-client refresh does not broadcast (#8) | Same behaviour as adopted sessions today; the catalog snapshot carries the origin |
 | M3 | A | first line over 64 KiB hides the Codex parent (#9, first half) | Same limit as the existing `rollout_cwd` reader; revisit when a recording exists |
-
+| M4 | A | ToggleOrigin does not check the id has children (#3) | R6: stored as folded and never pruned (FR-017); an id without children folds nothing and shows nothing |
+| M4 | A | folded count is direct children only (#5) | FR-011 says direct children; the attention mark covers all hidden descendants by design |
+| M4 | A | fold set cloned into every node (#6) | Now an Arc; the set is a few UUIDs |
+| M4 | A | `hidden` Vec built eagerly (#7) | Only for folded rows; a few references |
+| M4 | A | duplicated session-row block in ui/sidebar.rs (#8) | The two copies pre-date M4 and differ in depth base and row list; extraction is outside this milestone |
 
 ## Handover
 

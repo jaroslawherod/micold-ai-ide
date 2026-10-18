@@ -65,6 +65,8 @@ const DEFERRED: &[(&str, &str)] = &[
 /// render them, so they are not [`DEFERRED`]; [`a_setting_chosen_elsewhere_has_its_control_there`]
 /// checks the control is where the entry says.
 ///
+/// Feature 551's folded origins are toggled on a session row in the sidebar.
+///
 /// Feature 482's diff layout is chosen in the Changes view's toolbar (FR-006).
 ///
 /// Feature 491's daemon registry is edited in the Daemons section, which saves it with its own form
@@ -72,6 +74,12 @@ const DEFERRED: &[(&str, &str)] = &[
 /// counter and the legacy default it was migrated into are chosen there (T034). Feature 804 moved
 /// the legacy `daemon` block's controls into that form, so they are chosen there too.
 const CHOSEN_ELSEWHERE: &[(&str, &str, &str)] = &[
+    // Feature 551's folded origins are toggled on a session row in the sidebar.
+    (
+        "folded_origins",
+        "src/ui/sidebar.rs",
+        "SidebarMsg::ToggleOrigin(",
+    ),
     ("diff_layout", "src/ui/changes.rs", "Msg::LayoutChosen("),
     ("daemons", "src/ui/settings/daemons.rs", "DaemonsMsg::Saved"),
     (

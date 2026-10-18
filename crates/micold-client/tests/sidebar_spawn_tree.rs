@@ -185,7 +185,10 @@ fn a_folded_origin_shows_that_a_hidden_descendant_needs_attention() {
         let row = rows.iter().find(|r| r.session.id == u).unwrap();
         row.fold.as_ref().unwrap().needs_attention(in_view)
     };
-    assert!(!attention(&state, None), "expanded: the child shows its own mark");
+    assert!(
+        !attention(&state, None),
+        "expanded: the child shows its own mark"
+    );
     toggle(&mut state, u);
     assert!(attention(&state, None), "rolled up over descendants");
     assert!(!attention(&state, Some(g)), "a descendant in view is read");
@@ -206,4 +209,18 @@ fn a_fold_restored_at_boot_survives_the_snapshot_without_pruning() {
     state.workspace = arrived.workspace;
     assert_eq!(listed(&state), vec![u], "still folded as the user left it");
     assert_eq!(state.sidebar.folded.len(), 2, "no pruning");
+}
+
+#[test]
+fn a_chord_still_steps_through_the_sessions_a_fold_hides() {
+    let mut user = session(&wt(), None);
+    user.main = true;
+    let child = session(&wt(), known(&user));
+    let (u, c) = (user.id, child.id);
+    let mut state = state_with(vec![user, child]);
+    toggle(&mut state, u);
+    let n = node(&state);
+    let all: Vec<_> = n.unfolded_sessions().iter().map(|s| s.id).collect();
+    assert_eq!(all, vec![u, c], "the step order keeps the hidden child");
+    assert_eq!(n.listed_sessions().len(), 1);
 }

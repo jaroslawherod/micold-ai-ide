@@ -187,14 +187,20 @@ pub fn persist_settings(store: Option<&(dyn SettingsStore + Send + Sync)>, core:
     write_setting(store, core, &mut |settings| settings.theme = theme);
 }
 
-/// Write the folded origins after a toggle (feature 551, FR-017). Changes only that field.
+/// Write the fold of `origin` after a toggle (feature 551, FR-017): only that id is inserted into
+/// or removed from the stored set, so a fold another window wrote is kept.
 pub fn persist_folded_origins(
     store: Option<&(dyn SettingsStore + Send + Sync)>,
     core: &mut State,
+    origin: micold_core::session::SessionId,
 ) {
-    let folded = core.sidebar.folded.clone();
+    let folded = core.sidebar.folded.contains(&origin);
     write_setting(store, core, &mut |settings| {
-        settings.folded_origins = folded.clone()
+        if folded {
+            settings.folded_origins.insert(origin);
+        } else {
+            settings.folded_origins.remove(&origin);
+        }
     });
 }
 
@@ -1128,6 +1134,7 @@ mod tests {
             daemons: Vec::new(),
             next_daemon_id: 0,
             legacy_default_daemon: None,
+            folded_origins: [micold_core::session::SessionId::new()].into(),
         };
         let store = FakeSettingsStore::loaded(stored.clone());
         let mut core = State {
@@ -1151,6 +1158,26 @@ mod tests {
             stored,
             "every field but `theme` came back unchanged"
         );
+    }
+
+    /// Feature 551, FR-017: a toggle adds or removes its own id and keeps the folds another window
+    /// wrote to the file.
+    #[test]
+    fn a_fold_toggle_changes_only_its_own_id_in_the_stored_set() {
+        use micold_core::session::SessionId;
+        let (other, mine) = (SessionId::new(), SessionId::new());
+        let store = FakeSettingsStore::loaded(Settings {
+            folded_origins: [other].into(),
+            ..Settings::default()
+        });
+        let mut core = State::default();
+        core.sidebar.folded.insert(mine);
+        persist_folded_origins(Some(&store), &mut core, mine);
+        assert_eq!(store.saves()[0].folded_origins, [other, mine].into());
+
+        core.sidebar.folded.remove(&mine);
+        persist_folded_origins(Some(&store), &mut core, mine);
+        assert_eq!(store.saves()[1].folded_origins, [other].into());
     }
 
     /// A refused write is reported, not swallowed.
