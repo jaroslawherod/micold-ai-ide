@@ -141,6 +141,17 @@ pub fn surfaces<'a>(
         );
     }
 
+    // The keyboard-highlighted item of a card menu (feature 972, FR-010): the focus state layer
+    // and ring on the second entry.
+    if open == Some(Floating::MenuHighlighted) {
+        out.push(
+            material::MenuOverlay::new(menu_items(), Message::Dismissed, roles)
+                .open(true)
+                .highlighted(Some(1))
+                .into(),
+        );
+    }
+
     if open == Some(Floating::Modal) {
         out.push(modal_surface(roles));
     }
@@ -241,6 +252,15 @@ pub fn menu_overlay<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a
                 opener(
                     "Open a start list with a disabled item",
                     Floating::MenuWithDisabledItem,
+                    roles,
+                ),
+                roles,
+            ),
+            posed(
+                "with the second item keyboard-highlighted",
+                opener(
+                    "Open a menu with a highlighted item",
+                    Floating::MenuHighlighted,
                     roles,
                 ),
                 roles,

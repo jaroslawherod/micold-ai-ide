@@ -15,7 +15,10 @@ use micold_client::features::worktree::Msg as WorktreeMsg;
 use micold_client::features::Outcome;
 use micold_client::icons::Icon;
 use micold_client::ui::location_menu_items;
-use micold_client::ui::overview::{card_menu_items, cards, is_targeted};
+use micold_client::ui::overview::{
+    card_id, card_menu_entry, card_menu_items, cards, focus_return_target, is_targeted,
+    keyboard_anchor,
+};
 use micold_core::project::{Availability, Project};
 use micold_core::pull_request::{CheckStatus, PrState, PullRequestStatus, ReviewState};
 use micold_core::session::{AiCli, Session, SessionLifecycle, SessionLocation};
@@ -515,4 +518,132 @@ fn only_the_open_menus_target_is_marked_and_it_follows_a_reorder() {
         !is_targeted(&state, &wt("feat-a")),
         "the mark goes with the menu"
     );
+}
+
+// ---- T023: the keyboard part (feature 972, M3) ----
+
+fn moved(forward: bool, items: usize) -> Msg {
+    Msg::CardMenuMoved { forward, items }
+}
+
+fn highlighted(overview: &OverviewState) -> Option<usize> {
+    overview
+        .card_menu
+        .as_ref()
+        .and_then(|menu| menu.highlighted)
+}
+
+#[test]
+fn asking_for_a_card_menu_changes_no_state() {
+    let mut overview = OverviewState {
+        open: true,
+        ..OverviewState::default()
+    };
+    let before = overview.clone();
+    let outcomes = update(&mut overview, Msg::CardMenuRequested(wt("feat-a")));
+    assert_eq!(overview, before, "the root measures the card, then opens");
+    assert!(outcomes.is_empty());
+}
+
+#[test]
+fn up_and_down_step_by_one_and_wrap_at_both_ends() {
+    let mut overview = OverviewState::default();
+    update(
+        &mut overview,
+        opened(wt("feat-a"), ANCHOR, MenuOrigin::Keyboard),
+    );
+    assert_eq!(highlighted(&overview), Some(0));
+    for expected in [1, 2, 0, 1] {
+        update(&mut overview, moved(true, 3));
+        assert_eq!(highlighted(&overview), Some(expected), "down");
+    }
+    for expected in [0, 2, 1] {
+        update(&mut overview, moved(false, 3));
+        assert_eq!(highlighted(&overview), Some(expected), "up");
+    }
+}
+
+#[test]
+fn from_no_highlight_down_starts_at_the_first_and_up_at_the_last() {
+    for (forward, expected) in [(true, 0), (false, 2)] {
+        let mut overview = OverviewState::default();
+        update(
+            &mut overview,
+            opened(wt("feat-a"), ANCHOR, MenuOrigin::Pointer),
+        );
+        assert_eq!(highlighted(&overview), None);
+        update(&mut overview, moved(forward, 3));
+        assert_eq!(highlighted(&overview), Some(expected), "forward: {forward}");
+    }
+}
+
+#[test]
+fn moving_with_no_menu_or_no_entries_changes_nothing() {
+    let mut overview = OverviewState::default();
+    update(&mut overview, moved(true, 3));
+    assert_eq!(overview.card_menu, None);
+    update(
+        &mut overview,
+        opened(wt("feat-a"), ANCHOR, MenuOrigin::Keyboard),
+    );
+    update(&mut overview, moved(true, 0));
+    assert_eq!(highlighted(&overview), Some(0));
+}
+
+#[test]
+fn the_highlighted_entry_runs_as_its_wrapped_message() {
+    let mut state = menu_open_on_feat_a(MenuOrigin::Keyboard);
+    let items = card_menu_items(&state, &wt("feat-a"));
+    assert!(items.len() > 1, "fixture: more than the Open entry");
+    for (index, item) in items.iter().enumerate() {
+        state.overview.card_menu.as_mut().unwrap().highlighted = Some(index);
+        assert_eq!(card_menu_entry(&state), item.message, "entry {index}");
+    }
+    let menu = state.overview.card_menu.as_mut().unwrap();
+    menu.highlighted = None;
+    assert_eq!(card_menu_entry(&state), None, "nothing highlighted");
+    state.overview.card_menu.as_mut().unwrap().highlighted = Some(items.len());
+    assert_eq!(card_menu_entry(&state), None, "a stale index past the list");
+    state.overview.card_menu = None;
+    assert_eq!(card_menu_entry(&state), None, "no menu");
+}
+
+#[test]
+fn focus_goes_back_to_the_target_while_listed_else_to_the_first_card() {
+    let state = project_with(vec![
+        worktree("feat-a", WorktreeStatus::Valid, false),
+        worktree("feat-b", WorktreeStatus::Valid, false),
+    ]);
+    let first = cards(&state)[0].location.clone();
+    assert_eq!(
+        focus_return_target(&state, &wt("feat-b")),
+        Some(wt("feat-b"))
+    );
+    assert_eq!(focus_return_target(&state, &wt("gone")), Some(first));
+    assert_eq!(
+        focus_return_target(&State::default(), &wt("feat-a")),
+        None,
+        "no cards, nowhere to go"
+    );
+}
+
+#[test]
+fn the_keyboard_anchor_lies_inside_the_card() {
+    let bounds = iced::Rectangle {
+        x: 100.0,
+        y: 50.0,
+        width: 280.0,
+        height: 160.0,
+    };
+    let (x, y) = keyboard_anchor(bounds);
+    let inset = micold_core::tokens::spacing::MD;
+    assert_eq!((f32::from(x), f32::from(y)), (100.0 + inset, 50.0 + inset));
+    assert!(f32::from(x) < bounds.x + bounds.width && f32::from(y) < bounds.y + bounds.height);
+}
+
+#[test]
+fn a_card_id_is_stable_and_distinct_per_location() {
+    assert_eq!(card_id(&wt("feat-a")), card_id(&wt("feat-a")));
+    assert_ne!(card_id(&wt("feat-a")), card_id(&wt("feat-b")));
+    assert_ne!(card_id(&wt("feat-a")), card_id(&SessionLocation::Default));
 }

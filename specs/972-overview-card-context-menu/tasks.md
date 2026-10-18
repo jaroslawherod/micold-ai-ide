@@ -206,18 +206,18 @@ the second entry runs for that card.
 
 ### Tests for US3 (write first)
 
-- [ ] T020 [P] [US3] Tests in src/ui/material/keyboard_focus.rs: `.chord(Named::F10,
+- [x] T020 [P] [US3] Tests in src/ui/material/keyboard_focus.rs: `.chord(Named::F10,
   Modifiers::SHIFT, m)` publishes `m` on Shift+F10 only, not on F10 alone or Ctrl+Shift+F10;
   `.key(Named::ContextMenu, m)` publishes on the Menu key (R5, FR-009). Fail (`chord` missing)
-- [ ] T021 [P] [US3] Tests in src/ui/material/overview_card.rs: with `.on_menu_key(m)` a focused
+- [x] T021 [P] [US3] Tests in src/ui/material/overview_card.rs: with `.on_menu_key(m)` a focused
   card publishes `m` on the Menu key and on Shift+F10, not on F10 alone, and captures the event so
   it does not propagate to another handler (Edge: not passed to a terminal); unfocused, nothing; a
   targeted card drops the claim (FR-009, FR-013). Fail
-- [ ] T022 [P] [US3] Tests in src/ui/material/menu.rs (the menu-anatomy tests): with
+- [x] T022 [P] [US3] Tests in src/ui/material/menu.rs (the menu-anatomy tests): with
   `.highlighted(Some(i))` item `i` draws the focus state layer and ring and the others do not; the
   panel size equals `menu_panel_size` with and without a highlight; tests/showcase_completeness.rs
   lists a highlighted `MenuOverlay` (FR-010). Fail
-- [ ] T023 [US3] tests/overview_card_menu.rs, keyboard part (the `Keyboard` origin's
+- [x] T023 [US3] tests/overview_card_menu.rs, keyboard part (the `Keyboard` origin's
   `highlighted` and `focus_return` effects are T004's, M1): `CardMenuRequested(loc)` changes no
   state; `CardMenuMoved
   { forward, items }` steps by one and wraps last→first and first→last, and from `None` starts at
@@ -229,17 +229,17 @@ the second entry runs for that card.
 
 ### Implementation for US3
 
-- [ ] T024 [US3] `TakesTheKeyboard::chord(Named, Modifiers, M)` in
+- [x] T024 [US3] `TakesTheKeyboard::chord(Named, Modifiers, M)` in
   src/ui/material/keyboard_focus.rs (data in the key set, like `.key`); T020 passes
-- [ ] T025 [US3] `OverviewCard::on_menu_key(M)` (claims `Named::ContextMenu` and Shift+F10;
+- [x] T025 [US3] `OverviewCard::on_menu_key(M)` (claims `Named::ContextMenu` and Shift+F10;
   dropped while targeted) in src/ui/material/overview_card.rs; `MenuOverlay::highlighted(Option<usize>)`
   in src/ui/material/menu.rs with the `Indicator` colours `TakesTheKeyboard` uses; the highlighted
   menu in the `MenuOverlay` showcase in src/showcase/sections/floating.rs; T021 and T022 pass
-- [ ] T026 [US3] src/features/overview.rs `Msg::{CardMenuRequested(SessionLocation),
+- [x] T026 [US3] src/features/overview.rs `Msg::{CardMenuRequested(SessionLocation),
   CardMenuMoved { forward: bool, items: usize }, CardMenuActivated}`; src/ui/overview.rs
   `card_id(&SessionLocation)` (replaces `FIRST_CARD_ID`, `start_control_id` pattern),
   `card_menu_entry`, `keyboard_anchor`, `focus_return_target`; T023 passes
-- [ ] T027 [US3] Wiring (glue, quickstart §B B10–B13, B18): src/ui/overview.rs view sets `.id(card_id(..))`
+- [x] T027 [US3] Wiring (glue, quickstart §B B10–B13, B18): src/ui/overview.rs view sets `.id(card_id(..))`
   and `.on_menu_key(CardMenuRequested(location))` per card; src/ui/mod.rs `view_with` passes
   `.highlighted(card_menu.highlighted)`, and `subscription` swaps the Overview arrow listener for a
   named-`fn` card-menu key listener while a card menu is open (Up/Down → `CardMenuMoved`,
@@ -249,7 +249,7 @@ the second entry runs for that card.
   beside `tab_reveal_scroll` that, while the Overview is open and `registry::open_dialog(..)` is
   `None`, takes `focus_return` and focuses `card_id(focus_return_target(..))`; Overview opening
   focuses the first card's `card_id` (was `FIRST_CARD_ID`)
-- [ ] T028 [US3] docs/user-guide/overview.md *Acting on a card* and *Keyboard*: Menu key /
+- [x] T028 [US3] docs/user-guide/overview.md *Acting on a card* and *Keyboard*: Menu key /
   Shift+F10 on a focused card, Up/Down/Enter/Space in the menu, Escape returns focus to the card
 
 **Checkpoint**: every card-menu action is reachable without a pointer (SC-004).

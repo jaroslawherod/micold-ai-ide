@@ -593,6 +593,9 @@ fn the_keyboard_subscription_names_no_surface() {
     // is no dismissal table in it to drift. So are the navigation chords (feature 803, K3): they
     // name a direction, and the resolver asks the registry whether a surface is open (U1). So is the
     // quick switcher's chord (feature 968, K3): it names a toggle, and the reducer asks the registry.
+    // The open card menu's keys (feature 972, FR-010) are exempt too: they name a step in a list
+    // (`Msg::CardMenuMoved`, `Msg::CardMenuActivated`), not a surface a key dismisses; Escape stays
+    // `Message::EscapePressed`.
     let named: Vec<&str> = body
         .match_indices("Message::")
         .map(|(at, _)| body[at..].split_whitespace().next().unwrap_or_default())
@@ -602,6 +605,7 @@ fn the_keyboard_subscription_names_no_surface() {
                 && !m.starts_with("Message::Overview(crate::features::overview::Msg::Toggled")
                 && !m.starts_with("Message::Navigation(")
                 && !m.starts_with("Message::QuickSwitch(")
+                && !m.starts_with("Message::Overview(msg)")
         })
         .collect();
     assert!(
