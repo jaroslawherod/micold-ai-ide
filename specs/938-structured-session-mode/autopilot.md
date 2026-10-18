@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-cl0lw3
 - **Started**: 2026-10-18
 - **Phase**: M2
-- **Next step**: M2 — verify, reviews, gate, push, PR
+- **Next step**: M2 — push and PR (see Handover)
 
 ## Pull requests
 
@@ -60,6 +60,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 review B (conformance, sonnet) | 1 | b697707771467cbdcf3dc27783bf157d45976967:b37bc607eaeeb1f53cde3a4d02c4ac77a1b8903d | CLEAN |
 | M2 review A (code-review high) | 1 | 6ff1da44088f251211d8c2ac4981f0dbf7e7529d:3f735466dce7f7ee16e1f6f946425617725d6029 | 10 findings: 3 fixed (F1 structured teardown under the state lock, F5 child left running when a reader fails to start, F6 reader counted done on unwind), 7 declined |
 | M2 review B (conformance, sonnet) | 1 | 6ff1da44088f251211d8c2ac4981f0dbf7e7529d:3f735466dce7f7ee16e1f6f946425617725d6029 | CHANGES: 1 MAJOR declined (T032), 2 MINOR (F3 test-list fixed; F2 declined, T032) |
+| M2 review A (code-review high, sonnet) | 2 | 826ed0589dfaa8c7d6ce31d4a56ced5687973387:93b677536b14171260bd556c4c255b3ea4aee2cc | CLEAN (5 MINOR, not fixed: worktree retry count ignores structured kills, `end_removed` on async callers, doc wording, detached reader on spawn failure, test-wide lint allow) |
 
 ## Declined review findings
 
@@ -81,7 +82,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M2 (T011–T021) is implemented and ticked. Reviews are done: A round 1 (3 fixed, 7 declined), A
+round 2 CLEAN, B round 1 (F3 fixed, F1 and F2 declined as T032's). The full gate
+(`scripts/gate.sh`) is green on 46439326, local and not pushed. Branch rebased on origin/main
+f857a657.
+Next: pr.md. Push the branch (`git push --force-with-lease -u origin claude/project-thread-cl0lw3`),
+write `$SCRATCHPAD/pr-title.md` (`#938: Structured session mode: run claude with stream-json next
+to the PTY mode — M2`) and `$SCRATCHPAD/pr-body.md` (ending `Refs #938`), then return
+`PR: to-open`. Only the ledger may change before the push: the gate stamp is for 46439326's tree.
 
 ## Open escalation
 
