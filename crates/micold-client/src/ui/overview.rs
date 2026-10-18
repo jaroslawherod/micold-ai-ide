@@ -4,7 +4,7 @@
 //! feature's own business; so it lives here beside the view rather than in `features::overview`.
 
 use crate::app::{Message, State};
-use crate::features::overview::Msg;
+use crate::features::overview::{MenuOrigin, Msg};
 use crate::features::sidebar::{RunRow, SidebarEntry, WorktreeNode};
 use crate::icons::Icon;
 use crate::ui::material::{CardGrid, MenuItem, OverviewCard};
@@ -32,9 +32,18 @@ pub fn view<'a>(state: &State, scheme: ColorScheme) -> Element<'a, Message> {
         .iter()
         .enumerate()
         .map(|(index, model)| {
-            let card = OverviewCard::new(model, r).on_press(Message::Overview(
-                crate::features::overview::Msg::ActivationRequested(model.activation.clone()),
-            ));
+            let location = model.location.clone();
+            let card = OverviewCard::new(model, r)
+                .on_press(Message::Overview(Msg::ActivationRequested(
+                    model.activation.clone(),
+                )))
+                .on_secondary_press(move |anchor| {
+                    Message::Overview(Msg::CardMenuOpened {
+                        location: location.clone(),
+                        anchor,
+                        origin: MenuOrigin::Pointer,
+                    })
+                });
             // The first card is named so opening the Overview can put the keyboard on it (R13).
             if index == 0 {
                 card.id(FIRST_CARD_ID.clone())
@@ -44,7 +53,7 @@ pub fn view<'a>(state: &State, scheme: ColorScheme) -> Element<'a, Message> {
         })
         .collect();
     // The grid scrolls itself; an outer scrollable would give it unbounded height.
-    container(CardGrid::new(cards, r))
+    container(CardGrid::new(cards, r).on_scroll(Message::Overview(Msg::GridScrolled)))
         .padding(spacing::LG)
         .width(Length::Fill)
         .height(Length::Fill)

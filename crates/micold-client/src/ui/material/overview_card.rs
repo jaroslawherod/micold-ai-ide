@@ -147,13 +147,16 @@ pub fn words(model: &CardModel) -> Words {
     }
 }
 
+/// What a secondary press becomes, built from the press point in window pixels.
+type PressAt<'a, M> = Rc<dyn Fn((u16, u16)) -> M + 'a>;
+
 /// The card. See the module documentation.
 #[derive(Clone)]
 pub struct OverviewCard<'a, M> {
     model: CardModel,
     roles: Roles,
     on_press: Option<M>,
-    on_secondary_press: Option<Rc<dyn Fn((u16, u16)) -> M + 'a>>,
+    on_secondary_press: Option<PressAt<'a, M>>,
     id: Option<iced::advanced::widget::Id>,
     _marker: PhantomData<&'a M>,
 }

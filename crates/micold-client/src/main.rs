@@ -678,6 +678,14 @@ fn overview_message(app: &mut App, msg: micold_client::features::overview::Msg) 
         },
         other => other,
     };
+    // A card-menu entry: the reducer closes the menu, then the entry runs as the row menu's own
+    // pick does (feature 972, FR-003, FR-004, research R4), so its failures and dialogs are the
+    // row menu's.
+    if let Msg::CardMenuEntryChosen(inner) = msg {
+        app.core
+            .update(Message::Overview(Msg::CardMenuEntryChosen(inner.clone())));
+        return update_inner(app, *inner);
+    }
     let Msg::CardActivated(activation) = msg else {
         app.core.update(Message::Overview(msg));
         return if !was_open && app.core.overview.open {
