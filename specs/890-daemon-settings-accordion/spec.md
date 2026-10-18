@@ -41,6 +41,14 @@ What remains, and what this feature covers:
 - The section header shows nothing of its contents while closed, so a user must open a section to
   see what it holds.
 
+## Clarifications
+
+### Session 2026-10-18
+
+- Q: Does a required field shown as missing because the user left it empty (feature 937 FR-006), not only after a refused save, keep its section open? → A: Yes. Any required error shown on a field (left empty, or a refused save) counts as a shown error under FR-004. _(agent-resolved: specs/937-required-field-markers/spec.md#FR-006; crates/micold-core/src/required.rs#FieldRequirement::Missing)_
+- Q: Should the Kubernetes "Image" section take the container daemon's "Container" name, since both hold the image and AI CLIs? → A: No. FR-003's shared names are Connection, Credentials, Resources and Sessions; the container's "Container" section also chooses the runtime, which a pod lacks, and keeps 804's name. _(agent-resolved: specs/804-session-service-in-daemons/spec.md#FR-012)_
+- Q: What exact summary text does each section show? → A: The plan's UI contract fixes each section's summary; the spec keeps FR-014's rule and examples. _(agent-resolved: deferred to plan)_
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Every daemon kind's form is split into well-named sections (Priority: P1)
@@ -135,8 +143,8 @@ summary, an open one (summary hidden), and one with a required field still empty
   open); fields of the kind left behind are not shown and are dropped on save exactly as today.
 - SSH has a single section (Connection): it is open on arrival and, like every section, can be
   closed; the header keeps the SSH form consistent with the others.
-- Two sections each holding an error, or a required field left empty after a refused save: both
-  are open.
+- Two sections each holding an error, or a required field showing its required error (left empty,
+  or after a refused save): both are open.
 - Kubernetes contexts failed to load: the failure message shows inside the section that holds the
   context field; typing a context by hand still works.
 - No contexts found or not yet loaded: the context field alone shows, as today.
@@ -170,9 +178,9 @@ summary, an open one (summary hidden), and one with a required field still empty
   "Resources".
 - **FR-004**: When a form opens or *Runs in* changes, the kind's first section MUST be open and the
   others closed. A section holding the field of a shown validation error MUST be open (as 804
-  FR-012 does for container sections, extended to every section of every kind). A field marked
-  "required" after a refused save counts as a shown error: every section holding such a field is
-  open.
+  FR-012 does for container sections, extended to every section of every kind). A required field
+  showing its required error (left empty by the user, or after a refused save; feature 937 FR-006)
+  counts as a shown error: every section holding such a field is open.
 - **FR-005**: Opening or closing a section MUST NOT change any field value, the draft, or what is
   saved; every field's validation and save behaviour MUST stay as it is today.
 
