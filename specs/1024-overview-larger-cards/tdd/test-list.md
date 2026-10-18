@@ -4,7 +4,7 @@ loop: outside-in
 profile: .specify/memory/tdd-profile.md
 spec_criteria: 11 # US1 1–5, US2 1–3, US3 1–3
 planned_at: 384f526b
-updated_at: 384f526b
+updated_at: 1a68b7b6
 suite_baseline: green # scoped: `cargo test -p micold-client --lib card_grid`, see cycle-log.md
 ---
 
@@ -21,7 +21,7 @@ repository tests a view at, so the outer loop runs through them; what only a dis
 | --- | --- | --- | --- | --- | --- |
 | A1  | A grid of 1464 px or wider holds five cards in each full row, never more, cards sharing the width; a partial row and a short grid keep the five-card width at the left | US1 1–5, FR-001, FR-002, FR-004, SC-001 | example | DONE | U2, U3 |
 | A2  | At 2400 px each card is at least 1.5× feature 813's card width and all cards share one height | US2 1–2, FR-005, FR-006, SC-002 | example | DONE | U5 |
-| A3  | Text ellipsis, no text overlap, live re-layout and focus order at the new widths | US2 3, FR-007–FR-009 | example (visual pass) | PENDING | T012 visual-pass.md |
+| A3  | Text ellipsis, no text overlap, live re-layout and focus order at the new widths | US2 3, FR-007–FR-009 | example (visual pass) | DONE (checked at a ~1544 px grid; 2400 px not checked by eye, FR-007/FR-008 there rest on U2/U5) | T012 visual-pass.md |
 | A4  | Below 1464 px the grid reflows to as many columns as fit, down to one, with no overlap, no sideways growth, every card reachable by scrolling | US3 1–3, FR-003, SC-003, SC-004 | example | DONE | U6, U7 |
 
 ## Inner loop: unit behaviors
@@ -55,3 +55,5 @@ None.
 - Full suite: `scripts/build-lock.sh cargo test --workspace`
 - Coverage: none (profile: no coverage tool)
 - Mutation: none (profile: no mutation tool)
+
+FR-011 at the call site: `ui/overview.rs` builds `CardGrid::new(cards, roles)` and sets no `max_columns`, so the Overview's five-per-row cap rests on the `MAX_COLUMNS` default that `max_columns_sets_the_cap` pins. No test builds the Overview view itself; a later `.max_columns(n)` there would not fail a test (accepted: review-visible one-line call).

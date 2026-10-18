@@ -109,6 +109,10 @@ mod tests {
     use micold_core::overview::{CardModel, CardReason, CardState, LocationType};
     use micold_core::session::SessionLocation;
 
+    /// The gap between cards, and the tolerance for comparing laid-out pixels.
+    const GAP: f32 = 16.0;
+    const EPS: f32 = 0.01;
+
     fn cards(n: usize) -> Vec<OverviewCard<'static, ()>> {
         (0..n)
             .map(|i| {
@@ -138,7 +142,7 @@ mod tests {
     fn grid(n: usize) -> Element<'static, ()> {
         CardGrid::new(cards(n), roles())
             .min_width(280.0)
-            .spacing(16.0)
+            .spacing(GAP)
             .into()
     }
 
@@ -151,8 +155,7 @@ mod tests {
                 walk(c, iced::Vector::new(b.x, b.y), out);
             }
             // The innermost box of the card's height is the card: its row is as tall, but holds it.
-            if out.len() == before && (b.height - super::super::overview_card::HEIGHT).abs() < 0.01
-            {
+            if out.len() == before && (b.height - super::super::overview_card::HEIGHT).abs() < EPS {
                 out.push(b);
             }
         }
@@ -161,18 +164,18 @@ mod tests {
         out
     }
 
-    /// U4: columns = max(1, floor((w + gap) / (min + gap))).
+    /// U4 (813): columns = max(1, floor((w + gap) / (min + gap))).
     #[test]
     fn columns_follow_the_width_and_never_drop_below_one() {
-        assert_eq!(columns(279.0, 280.0, 16.0, MAX_COLUMNS), 1);
-        assert_eq!(columns(280.0, 280.0, 16.0, MAX_COLUMNS), 1);
-        assert_eq!(columns(575.0, 280.0, 16.0, MAX_COLUMNS), 1);
-        assert_eq!(columns(576.0, 280.0, 16.0, MAX_COLUMNS), 2);
-        assert_eq!(columns(1000.0, 280.0, 16.0, MAX_COLUMNS), 3);
-        assert_eq!(columns(0.0, 280.0, 16.0, MAX_COLUMNS), 1);
+        assert_eq!(columns(279.0, 280.0, GAP, MAX_COLUMNS), 1);
+        assert_eq!(columns(280.0, 280.0, GAP, MAX_COLUMNS), 1);
+        assert_eq!(columns(575.0, 280.0, GAP, MAX_COLUMNS), 1);
+        assert_eq!(columns(576.0, 280.0, GAP, MAX_COLUMNS), 2);
+        assert_eq!(columns(1000.0, 280.0, GAP, MAX_COLUMNS), 3);
+        assert_eq!(columns(0.0, 280.0, GAP, MAX_COLUMNS), 1);
     }
 
-    /// U4: at 279 px the grid is one column, at 900 px three.
+    /// U4 (813): at 279 px the grid is one column, at 900 px three.
     #[test]
     fn the_laid_out_grid_has_the_columns_its_width_gives() {
         for (width, expected) in [(279.0, 1), (900.0, 3), (1463.0, 4)] {
@@ -182,28 +185,28 @@ mod tests {
             let first_row = boxes.iter().filter(|b| b.y == boxes[0].y).count();
             assert_eq!(first_row, expected, "{width}");
             assert!(
-                boxes.iter().all(|b| b.x + b.width <= width + 0.01),
+                boxes.iter().all(|b| b.x + b.width <= width + EPS),
                 "{width}"
             );
         }
     }
 
-    /// U4: no card overlaps another, and no piece of one grid overlaps any other.
+    /// U4 (813): no card overlaps another, and no piece of one grid overlaps any other.
     #[test]
     fn no_card_overlaps_another() {
         for width in [279.0, 600.0, 1000.0, 1464.0, 2400.0, 3840.0] {
             let node = laid_out(grid(7), Size::new(width, 800.0));
             let boxes = card_boxes(&node);
             assert!(
-                boxes.iter().all(|b| b.x + b.width <= width + 0.01),
+                boxes.iter().all(|b| b.x + b.width <= width + EPS),
                 "{width}: a card passes the right edge"
             );
             for (i, a) in boxes.iter().enumerate() {
                 for b in &boxes[i + 1..] {
-                    let apart = a.x + a.width <= b.x + 0.01
-                        || b.x + b.width <= a.x + 0.01
-                        || a.y + a.height <= b.y + 0.01
-                        || b.y + b.height <= a.y + 0.01;
+                    let apart = a.x + a.width <= b.x + EPS
+                        || b.x + b.width <= a.x + EPS
+                        || a.y + a.height <= b.y + EPS
+                        || b.y + b.height <= a.y + EPS;
                     assert!(apart, "{width}: {a:?} overlaps {b:?}");
                 }
             }
@@ -211,7 +214,7 @@ mod tests {
         }
     }
 
-    /// U4: 30 cards in a 400 px viewport scroll: the content is taller than the grid. Feature 1024
+    /// U4 (813): 30 cards in a 400 px viewport scroll: the content is taller than the grid. Feature 1024
     /// (U7): at 2400 px too, and the grid never grows sideways.
     #[test]
     fn thirty_cards_scroll_vertically() {
@@ -224,28 +227,22 @@ mod tests {
             assert!(node.size().height <= 400.0, "{width}: {:?}", node.size());
             assert!(node.size().width <= width, "{width}: {:?}", node.size());
             assert!(
-                boxes.iter().all(|b| b.x + b.width <= width + 0.01),
+                boxes.iter().all(|b| b.x + b.width <= width + EPS),
                 "{width}"
             );
         }
-        let node = laid_out(grid(30), Size::new(2400.0, 400.0));
-        assert_eq!(
-            row_counts(&card_boxes(&node)),
-            vec![5; 6],
-            "30 cards at 2400 px"
-        );
     }
 
     /// The card width a full row of `n` columns gives in `width`, with the tests' 16 px gap.
     fn row_width(width: f32, n: f32) -> f32 {
-        (width - (n - 1.0) * 16.0) / n
+        (width - (n - 1.0) * GAP) / n
     }
 
     /// The cards of each row, top to bottom.
     fn row_counts(boxes: &[Rectangle]) -> Vec<usize> {
         let mut counts: Vec<(f32, usize)> = Vec::new();
         for b in boxes {
-            match counts.iter_mut().find(|(y, _)| (*y - b.y).abs() < 0.01) {
+            match counts.iter_mut().find(|(y, _)| (*y - b.y).abs() < EPS) {
                 Some((_, n)) => *n += 1,
                 None => counts.push((b.y, 1)),
             }
@@ -256,12 +253,12 @@ mod tests {
     /// U1 (1024): the column count stops at `max`; one pixel under five columns' threshold is four.
     #[test]
     fn columns_are_capped_at_max() {
-        assert_eq!(columns(1463.0, 280.0, 16.0, MAX_COLUMNS), 4);
+        assert_eq!(columns(1463.0, 280.0, GAP, MAX_COLUMNS), 4);
         for width in [1464.0, 2400.0, 3840.0, 10_000.0] {
-            assert_eq!(columns(width, 280.0, 16.0, MAX_COLUMNS), 5, "{width}");
+            assert_eq!(columns(width, 280.0, GAP, MAX_COLUMNS), 5, "{width}");
         }
         assert_eq!(
-            columns(2400.0, 280.0, 16.0, 0),
+            columns(2400.0, 280.0, GAP, 0),
             1,
             "a cap of 0 is treated as 1"
         );
@@ -278,16 +275,16 @@ mod tests {
             assert_eq!(row_counts(&boxes), vec![5, 5, 2], "{width}");
             let w = row_width(width, 5.0);
             for b in &boxes {
-                assert!((b.width - w).abs() < 0.01, "{width}: {} != {w}", b.width);
+                assert!((b.width - w).abs() < EPS, "{width}: {} != {w}", b.width);
             }
             let last_y = boxes.iter().map(|b| b.y).fold(0.0, f32::max);
             let last_x = boxes
                 .iter()
-                .filter(|b| (b.y - last_y).abs() < 0.01)
+                .filter(|b| (b.y - last_y).abs() < EPS)
                 .map(|b| b.x)
                 .fold(f32::MAX, f32::min);
             assert!(
-                (last_x - boxes[0].x).abs() < 0.01,
+                (last_x - boxes[0].x).abs() < EPS,
                 "{width}: last row not left-aligned"
             );
         }
@@ -302,10 +299,10 @@ mod tests {
             let boxes = card_boxes(&node);
             assert_eq!(boxes.len(), n);
             for b in &boxes {
-                assert!((b.width - w).abs() < 0.01, "{n} cards: {} != {w}", b.width);
+                assert!((b.width - w).abs() < EPS, "{n} cards: {} != {w}", b.width);
             }
             assert!(
-                boxes[0].x.abs() < 0.01,
+                boxes[0].x.abs() < EPS,
                 "{n} cards: first starts at {}",
                 boxes[0].x
             );
@@ -317,7 +314,7 @@ mod tests {
     fn max_columns_sets_the_cap() {
         let capped: Element<'static, ()> = CardGrid::new(cards(6), roles())
             .min_width(280.0)
-            .spacing(16.0)
+            .spacing(GAP)
             .max_columns(3)
             .into();
         let node = laid_out(capped, Size::new(2400.0, 800.0));
@@ -337,7 +334,7 @@ mod tests {
         assert_eq!(boxes.len(), 12);
         for b in &boxes {
             assert!(b.width >= 1.5 * before, "{} < 1.5 × {before}", b.width);
-            assert!((b.height - super::super::overview_card::HEIGHT).abs() < 0.01);
+            assert!((b.height - super::super::overview_card::HEIGHT).abs() < EPS);
         }
     }
 }

@@ -9,21 +9,22 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1024
 - **Worktree branch**: claude/project-thread-iq9j8q
 - **Started**: 2026-10-18
-- **Phase**: M1 PR open
-- **Next step**: orchestrator opens the M1 PR, waits on CI and merges; then close the spec
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1033 | Design: spec, plan, tasks | merged | 384f526b502ebf324670262862084f45c3531947 |
-| (orchestrator opens) | M1: five-column cap (T001–T013); gate green at 8046c5f6 | to open | — |
+| #1041 | M1: five-column cap (T001–T013) | merged | 1a68b7b69e3ef783d8cdceb993e38ca877dc79da |
+| (orchestrator opens) | Close: tdd remediation, spec Closed | to open | — |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T013 | full | Overview shows at most five cards per row, exactly five from 1464 px of grid, wider cards; narrow panes reflow; user guide Layout | (orchestrator opens) | PR to open |
+| M1 | T001–T013 | full | Overview shows at most five cards per row, exactly five from 1464 px of grid, wider cards; narrow panes reflow; user guide Layout | #1041 | merged |
 
 ## Decisions
 
@@ -66,3 +67,5 @@ None.
 ## Follow-ups not done
 
 None.
+
+Close review (sonnet, round 1): CLEAN; 3 MINOR (placeholder in Status fixed; stale line numbers noted; alignment-assertion red gap noted in cycle-log). tdd-verify verdict FAIL (test-after history), remediation T014–T018 done. Converge skipped: review B CLEAN for M1.
