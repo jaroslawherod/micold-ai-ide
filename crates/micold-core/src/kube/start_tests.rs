@@ -553,6 +553,20 @@ async fn a_port_nothing_answers_on_fails_the_image_contract_at_the_bound_and_rol
 }
 
 #[tokio::test(start_paused = true)]
+async fn a_port_that_closes_before_sshd_listens_is_retried_until_it_answers() {
+    let fake = cluster();
+    fake.close_next_tunnels(2);
+    let (outcome, _) = run(&fake, &settings()).await;
+    ready(outcome);
+    let opened = fake
+        .calls()
+        .iter()
+        .filter(|c| c.starts_with("port_forward"))
+        .count();
+    assert_eq!(opened, 3);
+}
+
+#[tokio::test(start_paused = true)]
 async fn a_line_that_is_not_ssh_fails_the_image_contract_naming_it() {
     let fake = cluster();
     fake.set_banner(Some("HTTP/1.1 400 Bad Request\r\n"));

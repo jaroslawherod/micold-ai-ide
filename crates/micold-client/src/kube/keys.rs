@@ -33,8 +33,23 @@ pub struct KubeKeys {
 impl KubeKeys {
     /// The key files of `daemon_key` under `root` (the app's data directory for Kubernetes keys).
     pub fn new(root: &Path, daemon_key: &str) -> Self {
+        // The key names a directory that `delete` removes: keep it one plain component.
+        let component: String = daemon_key
+            .chars()
+            .map(|c| {
+                if c.is_alphanumeric() || c == '-' {
+                    c
+                } else {
+                    '_'
+                }
+            })
+            .collect();
         Self {
-            dir: root.join(daemon_key),
+            dir: root.join(if component.is_empty() {
+                "_"
+            } else {
+                &component
+            }),
             daemon_key: daemon_key.to_string(),
         }
     }

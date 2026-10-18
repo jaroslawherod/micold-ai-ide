@@ -26,6 +26,7 @@ struct Inner {
     logs: HashMap<String, String>,
     tunnels: VecDeque<DuplexStream>,
     banner: Option<Vec<u8>>,
+    closed_tunnels: u32,
     calls: Vec<String>,
     next_uid: u64,
     next_version: u64,
@@ -161,6 +162,11 @@ impl FakeCluster {
     /// line by default; `None` for a port nothing answers on.
     pub fn set_banner(&self, banner: Option<&str>) {
         self.lock().banner = banner.map(|b| b.as_bytes().to_vec());
+    }
+
+    /// Close the next `n` tunnels at once, as a pod whose SSH server is not listening yet does.
+    pub fn close_next_tunnels(&self, n: u32) {
+        self.lock().closed_tunnels = n;
     }
 
     /// The daemon-side half of the oldest tunnel opened and not yet taken.
@@ -435,6 +441,10 @@ impl Cluster for FakeCluster {
                     return Err(not_found(pod));
                 }
                 let (client, mut daemon) = tokio::io::duplex(64 * 1024);
+                if inner.closed_tunnels > 0 {
+                    inner.closed_tunnels -= 1;
+                    return Ok(Box::new(client) as Box<dyn AsyncReadWrite>);
+                }
                 if let Some(banner) = &inner.banner {
                     // A fresh duplex has room: this write completes at once.
                     let _ = daemon.write_all(banner).now_or_never();

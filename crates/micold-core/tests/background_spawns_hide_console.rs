@@ -26,6 +26,11 @@ const ALLOWED: &[(&str, &str, &str)] = &[(
     "crates/micold-core/src/spawn.rs",
     "spawn_detached_daemon",
     "the daemon spawn uses DETACHED_PROCESS, and Windows ignores CREATE_NO_WINDOW combined with it",
+),
+(
+    "crates/micold-client/src/kube/live.rs",
+    "login_shell_path",
+    "it returns before the spawn on Windows, so no console can open",
 )];
 
 /// `cfg` attributes that compile a function out of Windows builds.
