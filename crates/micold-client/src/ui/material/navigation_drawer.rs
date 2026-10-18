@@ -348,8 +348,9 @@ where
         renderer: &Renderer,
         operation: &mut dyn Operation,
     ) {
-        // Retracted, nothing in the drawer can take the keyboard or be found (FR-002).
-        if tree.state.downcast_ref::<Track>().gone {
+        // Retracted, nothing in the drawer can take the keyboard or be found (FR-002) — from the
+        // moment the retraction starts, not when it settles, so Tab never lands on a leaving row.
+        if self.retracted {
             return;
         }
         let mut children = self.parts_mut();
@@ -910,6 +911,46 @@ mod tests {
         );
         *node = drawer.as_widget_mut().layout(tree, &renderer, &limits);
         messages
+    }
+
+    /// How many focusable widgets an operation finds in a sidebar whose panel holds a text field.
+    fn focusables(retracted: bool) -> usize {
+        use iced::advanced::widget::operation::{focusable, Outcome};
+        let mut drawer: Element<'_, ()> = NavigationDrawer::new(
+            iced::widget::text_input("", "").on_input(|_| ()),
+            Space::new().width(RAIL_WIDTH).height(100.0),
+        )
+        .open(true)
+        .retracted(retracted)
+        .into();
+        // Built shown, so the retraction has only just started when the operation runs.
+        let mut tree = Tree::new(sidebar(true, false).as_widget());
+        tree.diff(drawer.as_widget());
+        let renderer = crate::ui::material::test_support::renderer();
+        let limits = layout::Limits::new(Size::ZERO, Size::new(1000.0, 100.0));
+        let node = drawer.as_widget_mut().layout(&mut tree, &renderer, &limits);
+        let mut count = focusable::count();
+        drawer.as_widget_mut().operate(
+            &mut tree,
+            Layout::new(&node),
+            &renderer,
+            &mut iced::advanced::widget::operation::black_box::<_, ()>(&mut count),
+        );
+        match count.finish() {
+            Outcome::Some(count) => count.total,
+            _ => 0,
+        }
+    }
+
+    /// Tab cannot land in a drawer that has started to leave, even before it settles.
+    #[test]
+    fn a_retracting_drawer_takes_no_focus() {
+        assert_eq!(
+            focusables(false),
+            1,
+            "shown: the panel's field is reachable"
+        );
+        assert_eq!(focusables(true), 0, "retracting: nothing in it is");
     }
 
     /// A drag on the resize handle that outlives the retraction ends at the release, so the drawer

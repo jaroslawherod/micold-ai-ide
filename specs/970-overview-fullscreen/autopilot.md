@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-ag6ana
 - **Started**: 2026-10-18
 - **Phase**: implement M1
-- **Next step**: M1 PR — full gate green; visual pass, push, PR
+- **Next step**: M1 PR — final full gate, push, PR
 
 ## Pull requests
 
@@ -57,6 +57,7 @@ R6) to stay near 10 tasks. M4 is 10 tasks; its serde field is a persistence-form
 | M1 review A (code-review high) | 1 | 43fe79e5d9dd39a93cefe98ee80f754afe264105:cfbf874fbc35d2b5ecbe356f3992e6fcc0c869c1 | CHANGES: 2 MAJOR fixed (chord under a card menu now ignored; release reaches a gone drawer's children), 1 declined, 5 MINOR not fixed |
 | M1 review A (code-review high) | 2 | ed7739855c19f2a74e84e6499240565858f777fc:89c9bc412a899e37005bfa718a1d0324bdda0745 | CLEAN (9 findings, none BLOCKER/MAJOR on triage: dialogs/switcher are modal and not grid-anchored, ResizeHandle has no touch drag, key repeat shared with the Overview chord; not fixed) |
 | M1 review B (conformance, sonnet) | 1 | ed7739855c19f2a74e84e6499240565858f777fc:89c9bc412a899e37005bfa718a1d0324bdda0745 | CLEAN (1 MINOR: card-menu guard recorded in data-model + user guide, prose only) |
+| M1 visual pass | 1 | — | FAIL → fixed: Tab reached a retracting drawer (operate now gated on `retracted`); Escape dead over the Overview (pre-existing: `dismiss_topmost` asked only the registry); showcase drawer section blank (pre-existing, follow-up) |
 
 ## Declined review findings
 
@@ -74,4 +75,4 @@ None.
 
 ## Follow-ups not done
 
-None.
+- Showcase `NavigationDrawer` section renders blank (its pre-existing open/closed poses too; `size()` Shrink×Fill unchanged from main) — seen by the M1 visual pass, `specs/970-overview-fullscreen/visual-pass.md` finding 3.

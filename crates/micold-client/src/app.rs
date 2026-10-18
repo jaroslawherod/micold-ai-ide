@@ -419,13 +419,19 @@ impl State {
         crate::overlay::registry::close_on_scroll_beneath(self);
     }
 
-    /// Dismiss whatever Escape reaches: the topmost open surface, and no other (contract D1).
+    /// Dismiss whatever Escape reaches: the topmost open surface, and no other (contract D1); with
+    /// none open, the Settings draft, then the Overview — [`on_escape`]'s whole answer (feature 970
+    /// visual pass: asking only the registry left Escape dead over the Overview).
     ///
     /// The counterpart of [`Self::dismiss_on_scroll_beneath`], and deliberately its opposite
     /// shape — a scroll invalidates every anchored menu at once, Escape is a single decision
     /// aimed at whatever holds the user's attention.
     fn dismiss_topmost(&mut self) {
-        crate::overlay::registry::close_topmost(self);
+        if crate::overlay::registry::topmost(self).is_some() {
+            crate::overlay::registry::close_topmost(self);
+        } else if let Some(answer) = on_escape(self) {
+            self.update(answer);
+        }
     }
 
     /// Surface a failed action to the user (see [`notify::Notification`]).
