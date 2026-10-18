@@ -1657,6 +1657,11 @@ Keystrokes stream straight to the CLI as you press them, exactly like a standalo
   **Ctrl+Shift+[** and **Ctrl+Shift+]** (Cmd+Shift+[ and Cmd+Shift+] on macOS) do the same for the
   sessions of the current location: the main session, then its helpers, wrapping at both ends. A
   collapsed row opens to show the session. Plain Ctrl+[ and Ctrl+] still reach the terminal.
+  **Ctrl+Shift+PageUp** and **Ctrl+Shift+PageDown** (Cmd+Shift+PageUp and Cmd+Shift+PageDown on
+  macOS; on a laptop keyboard Cmd+Shift+Fn+Up and Cmd+Shift+Fn+Down) switch to the previous and next
+  project, in the order of the project switcher, exactly as picking it there does. Projects that
+  are unavailable are skipped, and with only one available project nothing changes. All three
+  levels wrap: past the last entry the next press goes to the first, and back.
 
 ### Links
 

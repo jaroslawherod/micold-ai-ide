@@ -301,3 +301,138 @@ fn a_helper_chosen_on_a_collapsed_row_opens_it() {
     ));
     assert!(state.location_open(&worktree("feat-a")), "AS3 (FR-009)");
 }
+
+// ---- Project level (feature 803, US3) ----
+
+const NEXT_PROJECT: NavAction = NavAction {
+    level: NavLevel::Project,
+    dir: Dir::Next,
+};
+const PREVIOUS_PROJECT: NavAction = NavAction {
+    level: NavLevel::Project,
+    dir: Dir::Previous,
+};
+
+fn project_path(name: &str) -> std::path::PathBuf {
+    std::path::PathBuf::from("/").join(name)
+}
+
+/// Projects `/a`, `/b`, `/c` in that order with `/b` unavailable; `/a` active.
+fn three_projects() -> State {
+    use micold_core::project::{Availability, Project};
+    let mut state = State::default();
+    for (name, availability) in [
+        ("a", Availability::Available),
+        ("b", Availability::Unavailable),
+        ("c", Availability::Available),
+    ] {
+        state.workspace.projects.push(Project {
+            path: project_path(name),
+            display_name: name.to_string(),
+            is_git_repo: true,
+            availability,
+        });
+    }
+    state.workspace.active = Some(project_path("a"));
+    state
+}
+
+#[test]
+fn project_steps_skip_unavailable_and_wrap_at_both_ends() {
+    let mut state = three_projects();
+    assert_eq!(
+        update(&state, NEXT_PROJECT),
+        Step::Project(project_path("c")),
+        "AS3: /b is skipped"
+    );
+    assert_eq!(
+        update(&state, PREVIOUS_PROJECT),
+        Step::Project(project_path("c")),
+        "AS2: wrap backwards"
+    );
+    state.workspace.active = Some(project_path("c"));
+    assert_eq!(
+        update(&state, NEXT_PROJECT),
+        Step::Project(project_path("a")),
+        "AS2: wrap forwards"
+    );
+}
+
+#[test]
+fn one_available_project_or_none_changes_nothing() {
+    let mut state = three_projects();
+    state.workspace.projects.remove(2);
+    assert_eq!(update(&state, NEXT_PROJECT), Step::None, "AS4");
+    assert_eq!(update(&state, PREVIOUS_PROJECT), Step::None, "AS4");
+    state.workspace.projects.clear();
+    state.workspace.active = None;
+    assert_eq!(update(&state, NEXT_PROJECT), Step::None);
+}
+
+#[test]
+fn the_welcome_screen_steps_to_the_first_or_last_project() {
+    let mut state = three_projects();
+    state.workspace.active = None;
+    assert_eq!(
+        update(&state, NEXT_PROJECT),
+        Step::Project(project_path("a"))
+    );
+    assert_eq!(
+        update(&state, PREVIOUS_PROJECT),
+        Step::Project(project_path("c"))
+    );
+}
+
+#[test]
+fn a_project_step_reopens_the_project_and_lands_on_its_restored_session() {
+    let mut state = three_projects();
+    state.overview.open = true;
+    let step = Step::Project(project_path("c"));
+    let messages = state.apply_navigation(step.clone(), true);
+    assert_eq!(
+        messages,
+        vec![Message::Project(
+            micold_client::features::project::Msg::Reopened(project_path("c"))
+        )]
+    );
+    assert!(state.overview.open, "closing it is the project switch's");
+    // The switch ran: `/c` holds a session, which became current.
+    state.workspace.active = Some(project_path("c"));
+    let session = Session::start_new(SessionLocation::Default, AiCli::ClaudeCode);
+    let id = session.id;
+    state
+        .workspace
+        .sessions
+        .entry(project_path("c"))
+        .or_default()
+        .push(session);
+    state.session.active = Some(id);
+    state.finish_navigation(&step, false);
+    assert_eq!(
+        state.sidebar.keyboard_row,
+        Some(micold_client::features::sidebar::RowRef::Session(id))
+    );
+    state.session.active = None;
+    state.finish_navigation(&step, false);
+    assert_eq!(state.sidebar.keyboard_row, None, "no session restored");
+    // A refused switch (the project is not active) leaves the keyboard where it was.
+    state.session.active = Some(id);
+    state.sidebar.keyboard_row = None;
+    state.workspace.active = Some(project_path("a"));
+    state.finish_navigation(&step, false);
+    assert_eq!(
+        state.sidebar.keyboard_row, None,
+        "the switch did not happen"
+    );
+}
+
+#[test]
+fn an_unavailable_active_project_steps_to_the_available_ones() {
+    let mut state = three_projects();
+    state.workspace.projects[0].availability = micold_core::project::Availability::Unavailable;
+    assert_eq!(
+        update(&state, NEXT_PROJECT),
+        Step::Project(project_path("c")),
+        "/a is active but gone: /b is skipped, /c is next"
+    );
+}

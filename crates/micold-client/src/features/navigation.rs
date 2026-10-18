@@ -66,7 +66,7 @@ pub fn update(state: &State, action: NavAction) -> Step {
     match action.level {
         NavLevel::Location => location_step(state, action.dir),
         NavLevel::Session => session_step(state, action.dir),
-        NavLevel::Project => Step::None,
+        NavLevel::Project => project_step(state, action.dir),
     }
 }
 
@@ -87,6 +87,23 @@ fn location_step(state: &State, dir: micold_core::navigation::Dir) -> Step {
     match main_session_at(state, &target) {
         Some(id) => Step::Session(id),
         None => Step::Stop(target),
+    }
+}
+
+/// The available known projects in switcher order, stepping from the active one; from the welcome
+/// screen (no active project) `Next` gives the first and `Previous` the last. The only available
+/// project is the active one, so it changes nothing.
+fn project_step(state: &State, dir: micold_core::navigation::Dir) -> Step {
+    let entries = state.switcher_entries();
+    let order: Vec<PathBuf> = entries
+        .iter()
+        .filter(|e| e.available || e.is_active)
+        .map(|e| e.path.clone())
+        .collect();
+    let current = state.workspace.active.as_ref();
+    match micold_core::navigation::step(&order, current, dir) {
+        Some(target) if Some(&target) != current => Step::Project(target),
+        _ => Step::None,
     }
 }
 

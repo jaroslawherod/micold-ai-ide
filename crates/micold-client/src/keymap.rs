@@ -89,6 +89,8 @@ pub enum PhysicalKey {
     Period,
     BracketLeft,
     BracketRight,
+    PageUp,
+    PageDown,
     Other,
 }
 
@@ -112,7 +114,7 @@ pub struct NavAction {
 
 /// The navigation chords, the one place a chord is chosen (contracts/keys.md K1): each is its
 /// physical key with the platform primary modifier plus Shift.
-pub const NAV_CHORDS: [(NavAction, PhysicalKey); 4] = [
+pub const NAV_CHORDS: [(NavAction, PhysicalKey); 6] = [
     (
         NavAction {
             level: NavLevel::Location,
@@ -141,6 +143,21 @@ pub const NAV_CHORDS: [(NavAction, PhysicalKey); 4] = [
         },
         PhysicalKey::BracketRight,
     ),
+    // Provisional (ledger decision D4): the project chords sit on PageUp / PageDown.
+    (
+        NavAction {
+            level: NavLevel::Project,
+            dir: micold_core::navigation::Dir::Previous,
+        },
+        PhysicalKey::PageUp,
+    ),
+    (
+        NavAction {
+            level: NavLevel::Project,
+            dir: micold_core::navigation::Dir::Next,
+        },
+        PhysicalKey::PageDown,
+    ),
 ];
 
 /// The chord of `action` as Linux/Windows and macOS write it (contracts/keys.md K4).
@@ -159,6 +176,8 @@ fn physical_label(physical: PhysicalKey) -> &'static str {
         PhysicalKey::Period => ".",
         PhysicalKey::BracketLeft => "[",
         PhysicalKey::BracketRight => "]",
+        PhysicalKey::PageUp => "PageUp",
+        PhysicalKey::PageDown => "PageDown",
         PhysicalKey::Other => "",
     }
 }
@@ -171,6 +190,8 @@ fn logical_physical(key: &Key) -> PhysicalKey {
         Key::Char('.' | '>') => PhysicalKey::Period,
         Key::Char('[' | '{') => PhysicalKey::BracketLeft,
         Key::Char(']' | '}') => PhysicalKey::BracketRight,
+        Key::Named(NamedKey::PageUp) => PhysicalKey::PageUp,
+        Key::Named(NamedKey::PageDown) => PhysicalKey::PageDown,
         _ => PhysicalKey::Other,
     }
 }

@@ -126,16 +126,16 @@ switcher does.
 
 ### Tests for User Story 3 (MANDATORY — Constitution Principle I) ⚠️
 
-- [ ] T030 [P] [US3] Extend the failing key tests in `crates/micold-client/tests/keymap.rs` with the two project rows: physical `PageUp`/`PageDown` with the primary modifier + Shift → `Navigate(Project Previous/Next)`; the named-key fallback with `physical = Other`; PageUp/PageDown without Shift or without the primary modifier keep their existing outputs
-- [ ] T031 [P] [US3] Write the failing project-level tests in `crates/micold-client/tests/navigation.rs` (U2 project row, U3): order is `switcher_entries()` with `available`, unavailable projects skipped; wrap both ends; one available project → `Step::None`; welcome screen (no active project) → first (Next) / last (Previous); no known project → `Step::None`; `apply_navigation(Step::Project(path), true)` returns `[Message::Project(ProjectMsg::Reopened(path))]`; after `Reopened` ran, `finish_navigation(Step::Project(path), false)` releases the terminal and sets `keyboard_row = Some(RowRef::Session(restored current))` when a session was restored and `None` otherwise; with the Overview open, a project step leaves it to the project switch
-- [ ] T032 [P] [US3] Extend the `to_keymap_physical` test in `crates/micold-client/src/ui/material/terminal_pane.rs`: `Code::PageUp` → `PageUp`, `Code::PageDown` → `PageDown`
+- [x] T030 [P] [US3] Extend the failing key tests in `crates/micold-client/tests/keymap.rs` with the two project rows: physical `PageUp`/`PageDown` with the primary modifier + Shift → `Navigate(Project Previous/Next)`; the named-key fallback with `physical = Other`; PageUp/PageDown without Shift or without the primary modifier keep their existing outputs
+- [x] T031 [P] [US3] Write the failing project-level tests in `crates/micold-client/tests/navigation.rs` (U2 project row, U3): order is `switcher_entries()` with `available`, unavailable projects skipped; wrap both ends; one available project → `Step::None`; welcome screen (no active project) → first (Next) / last (Previous); no known project → `Step::None`; `apply_navigation(Step::Project(path), true)` returns `[Message::Project(ProjectMsg::Reopened(path))]`; after `Reopened` ran, `finish_navigation(Step::Project(path), false)` releases the terminal and sets `keyboard_row = Some(RowRef::Session(restored current))` when a session was restored and `None` otherwise; with the Overview open, a project step leaves it to the project switch
+- [x] T032 [P] [US3] Extend the `to_keymap_physical` test in `crates/micold-client/src/ui/material/terminal_pane.rs`: `Code::PageUp` → `PageUp`, `Code::PageDown` → `PageDown`
 
 ### Implementation for User Story 3
 
-- [ ] T033 [US3] Add `PhysicalKey::PageUp`/`PageDown` and the two project rows of K1 (marked ledger decision D4, provisional) to `NAV_CHORDS` and the fallback in `crates/micold-client/src/keymap.rs`, and their mapping in `to_keymap_physical` in `crates/micold-client/src/ui/material/terminal_pane.rs`, until T030 and T032 pass (docs test stays red until T036)
-- [ ] T034 [US3] Implement the project level of `update` in `crates/micold-client/src/features/navigation.rs`
-- [ ] T035 [US3] Implement `Step::Project` in `State::apply_navigation` (the `Reopened` follow-up) and in `State::finish_navigation` (the restored current session as `keyboard_row`) in `crates/micold-client/src/app.rs`, until T031 passes
-- [ ] T036 [US3] Add the "Previous / next project" row (`Ctrl+Shift+PageUp` / `Ctrl+Shift+PageDown`, `Cmd+Shift+PageUp` / `Cmd+Shift+PageDown`) to `docs/user-guide/terminal-panes.md` §Keyboard shortcuts and the project chords to the **Navigation** bullet of `docs/user-guide/worktrees-and-sessions.md`, with unavailable projects skipped and the macOS laptop form Cmd+Shift+Fn+Up / Cmd+Shift+Fn+Down; until the docs test passes
+- [x] T033 [US3] Add `PhysicalKey::PageUp`/`PageDown` and the two project rows of K1 (marked ledger decision D4, provisional) to `NAV_CHORDS` and the fallback in `crates/micold-client/src/keymap.rs`, and their mapping in `to_keymap_physical` in `crates/micold-client/src/ui/material/terminal_pane.rs`, until T030 and T032 pass (docs test stays red until T036)
+- [x] T034 [US3] Implement the project level of `update` in `crates/micold-client/src/features/navigation.rs`
+- [x] T035 [US3] Implement `Step::Project` in `State::apply_navigation` (the `Reopened` follow-up) and in `State::finish_navigation` (the restored current session as `keyboard_row`) in `crates/micold-client/src/app.rs`, until T031 passes
+- [x] T036 [US3] Add the "Previous / next project" row (`Ctrl+Shift+PageUp` / `Ctrl+Shift+PageDown`, `Cmd+Shift+PageUp` / `Cmd+Shift+PageDown`) to `docs/user-guide/terminal-panes.md` §Keyboard shortcuts and the project chords to the **Navigation** bullet of `docs/user-guide/worktrees-and-sessions.md`, with unavailable projects skipped and the macOS laptop form Cmd+Shift+Fn+Up / Cmd+Shift+Fn+Down; until the docs test passes
 
 **Checkpoint**: all six chords work.
 
@@ -149,7 +149,7 @@ wrap rule (FR-013, SC-006).
 **Independent Test**: the docs test of `crates/micold-client/tests/keymap.rs` with all six rows; read
 both files.
 
-- [ ] T037 [US4] Check that `grep -rn 'Ctrl+Shift+O' docs/user-guide/` finds no shortcut list beyond `terminal-panes.md` and `worktrees-and-sessions.md` (else add the six chords there and that file to the docs test's file list in `crates/micold-client/tests/keymap.rs`), and that the **Navigation** bullet in `docs/user-guide/worktrees-and-sessions.md` states the wrap rule for all three levels
+- [x] T037 [US4] Check that `grep -rn 'Ctrl+Shift+O' docs/user-guide/` finds no shortcut list beyond `terminal-panes.md` and `worktrees-and-sessions.md` (else add the six chords there and that file to the docs test's file list in `crates/micold-client/tests/keymap.rs`), and that the **Navigation** bullet in `docs/user-guide/worktrees-and-sessions.md` states the wrap rule for all three levels
 
 ---
 
