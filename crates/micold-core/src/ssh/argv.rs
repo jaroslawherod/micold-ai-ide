@@ -265,7 +265,27 @@ pub fn copy(reach: &Reach, platform: ClientPlatform, timeout: u32, build: &str) 
 
 /// The bridge: the remote daemon binary's relay, whose stdin/stdout carry the protocol.
 pub fn bridge(reach: &Reach, platform: ClientPlatform, timeout: u32, build: &str) -> SshCommand {
-    let remote = format!("\"{}/micold-daemon\" remote bridge", remote_dir(build));
+    bridge_with_env(reach, platform, timeout, build, &[])
+}
+
+/// [`bridge`] with the daemon's environment: sshd clears the login environment, so what the
+/// daemon needs (686 FR-010: `MICOLD_IDLE_STOP=off`) rides the remote command as `env K='v'`.
+pub fn bridge_with_env(
+    reach: &Reach,
+    platform: ClientPlatform,
+    timeout: u32,
+    build: &str,
+    env: &[(String, String)],
+) -> SshCommand {
+    let mut remote = String::new();
+    if !env.is_empty() {
+        remote.push_str("env");
+        for (key, value) in env {
+            remote.push_str(&format!(" {key}='{}'", value.replace('\'', "'\\''")));
+        }
+        remote.push(' ');
+    }
+    remote.push_str(&format!("\"{}/micold-daemon\" remote bridge", remote_dir(build)));
     command(reach, platform, timeout, &remote, None)
 }
 
@@ -363,6 +383,24 @@ mod tests {
                 assert!(!joined.contains(forbidden), "{forbidden} in {joined}");
             }
         }
+    }
+
+    #[test]
+    fn the_daemons_environment_rides_the_remote_command_quoted() {
+        let env = [
+            ("MICOLD_IDLE_STOP".to_string(), "off".to_string()),
+            ("A".to_string(), "it's".to_string()),
+        ];
+        let cmd = bridge_with_env(&pinned(), ClientPlatform::Linux, 15, "b", &env);
+        let remote = cmd.args.last().unwrap();
+        assert_eq!(
+            remote,
+            "env MICOLD_IDLE_STOP='off' A='it'\\''s' \"$HOME/.micold/remote/b/micold-daemon\" remote bridge"
+        );
+        assert_eq!(
+            bridge_with_env(&pinned(), ClientPlatform::Linux, 15, "b", &[]),
+            bridge(&pinned(), ClientPlatform::Linux, 15, "b")
+        );
     }
 
     #[test]
