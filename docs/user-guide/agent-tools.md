@@ -226,6 +226,12 @@ table above, so two assistants cannot end up editing the same files by accident.
 really wants a second session passes `allow_additional_session: true`; a value that is not a
 boolean is an input error.
 
+When you start a second session yourself in an occupied worktree, the app asks you to confirm. An
+assistant is never asked: nobody is present to answer, and an assistant silently doubling the
+sessions in one worktree is the harm the limit guards against. So an assistant's `create_session`
+or `start_session` is refused unless it sets `allow_additional_session: true`, and no confirmation
+opens in any window.
+
 The first session of a worktree is its **main session**; a session created with
 `allow_additional_session: true` beside it is a helper. The conflict names the main session.
 `list_sessions` rows do not mark which session is main, and the listing order does not indicate
