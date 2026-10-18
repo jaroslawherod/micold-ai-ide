@@ -194,6 +194,12 @@ pkg_case "windows-install-smoke.sh"         true  scripts/windows-install-smoke.
 pkg_case "workspace Cargo.toml"             true  Cargo.toml
 pkg_case "Cargo.lock"                       true  Cargo.lock
 pkg_case "release.yml"                      true  .github/workflows/release.yml
+pkg_case "installer icon"                   true  assets/icon/icon.ico
+pkg_case "LICENSE"                          true  LICENSE
+pkg_case "remote-daemon-bundle.sh"          true  scripts/remote-daemon-bundle.sh
+pkg_case "build-lock.sh"                    true  scripts/build-lock.sh
+pkg_case "rust-toolchain.toml"              true  rust-toolchain.toml
+pkg_case ".cargo/config.toml"               true  .cargo/config.toml
 pkg_case "Rust source only"                 false crates/micold-core/src/a.rs
 pkg_case "crate Cargo.toml only"            false crates/micold-core/Cargo.toml
 pkg_case "documentation only"               false docs/page.md
