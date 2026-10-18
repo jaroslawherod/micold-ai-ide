@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-xelisc
 - **Started**: 2026-10-17
 - **Phase**: implement
-- **Next step**: M5 is implemented and reviewed; the full gate is red only on the flaky `review::anchor::tests::two_hundred_comments_locate_inside_the_budget` (100 ms budget). Orchestrator: decide (rerun on a quieter machine, or fix the budget in its own chore), then push.
+- **Next step**: M5 implemented and reviewed; the flaky 946 budget test is fixed in its own commit (specs/946-review-replies BUG-001: timing assertion release-only, run by CI's release step). Gate, then push; the orchestrator waits on CI and merges #1011.
 
 ## Pull requests
 

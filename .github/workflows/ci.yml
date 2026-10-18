@@ -438,6 +438,7 @@ jobs:
         run: |
           cargo test --release -p micold-core --test typeahead_budget
           cargo test --release -p micold-core --test jira_site_release
+          cargo test --release -p micold-core --lib review::anchor::tests::two_hundred_comments_locate_inside_the_budget
 
   # Feature 030 (FR-015, FR-018): each setup .exe installs only on its own architecture, so ARM64 is
   # packaged and smoke-tested natively, on the runner the release uses for it. The `test` matrix has

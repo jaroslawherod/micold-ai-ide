@@ -396,6 +396,7 @@ as a user message, and a structured session's agent can report through the same 
   trials.
 - **SC-006**: With 200 comments in an entry, opening the panel and sending a review never leave the
   window unresponsive for more than 100 ms at a time.
+  **Bugfix**: 2026-10-18 — BUG-001 This is a release-build number; the locate measurement is asserted in the release test run only.
 - **SC-007**: After a restart, 100% of comments show the same status and reply as before it.
 
 ## Out of Scope
