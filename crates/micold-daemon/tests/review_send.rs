@@ -260,6 +260,7 @@ fn place_quote(project: &Path, dir: &str, path: &str, start: u32, quote: &[&str]
     std::fs::write(&file, lines.join("\n") + "\n").unwrap();
 }
 
+#[allow(clippy::too_many_arguments)] // a test helper: one argument per field of the comment
 async fn add(
     client: &mut Client,
     req: u64,

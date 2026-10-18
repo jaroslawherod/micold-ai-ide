@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-jjniz9
 - **Started**: 2026-10-17
 - **Phase**: milestone M5
-- **Next step**: M5 gate, reviews, PR; wait for CI and merge; then close
+- **Next step**: wait for CI and merge of M5 PR; then close
 
 ## Pull requests
 
@@ -31,7 +31,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T019–T034 | full | report_review_comment; cards show Applied/Answered and replies in every window, after restart | #981 | merged |
 | M3 | T035–T046 | full | Mark a Sent comment by hand; read a full reply | #986 | merged |
 | M4 | T047–T056 | full | Review panel: rows, counts, jump, draft edit/delete, panel buttons | #993 | merged |
-| M5 | T057–T067 | full | Comments follow their code; next batch names new lines | | in progress (T057–T066 done; T067 visual pass not runnable here) |
+| M5 | T057–T067 | full | Comments follow their code; next batch names new lines | (pending) | done (T057–T066); T067, T034, T046 visual passes not runnable here (no xdotool), left unticked |
 
 Polish T068–T070 changes no code: left to the close unit. M1 has 18 tasks (over ~10): Foundational
 (statuses, store v2, the one-edit wire delta 48 → 49) has no deliverable of its own and US2 is
@@ -72,6 +72,8 @@ split along s6 (M3) is the only scenario split with a deliverable on each side.
 | Review A M4 | 1 | 75287aa65477bd6b1aad7814baa611e293f12b55:049a61a9d4cb670409036a8fe6c70ab413f77e15 | CHANGES: F1 MAJOR fixed (Send/Clear/Discard in the view header while the panel is closed); F2 MAJOR fixed (jump offset adds measured slot heights above the line; a cold jump lands short, see Declined); F3 MINOR fixed (abandoned jump clears `to_show`); F5 MINOR fixed (toggle clears the reason); F4 MINOR declined |
 | Review B M4 | 1 | same | CLEAN (F1 MINOR same as A F1, fixed; F2 MINOR duplicate D7 renumbered) |
 | Review A M4 | 2 | a3b25c06d29137b57ffacd922774d58b4474321c:a435a30292b1b5ed64c456fcbbc1b677cec4553d | CLEAN (1 MINOR: hung-height sum ignores the side; kept, same cold-jump approximation) |
+| Review A M5 | 1 | 670df89bfb9d0bfde28c408bd335f27ebacb27b7:0d9e677cc32d06a712c25128f028d05f39a979a0 | CLEAN (2 MINOR: F1 failed W15 write leaves old range in prompt, logged, accepted; F2 draft created between judge and snapshot unjudged, tiny window, accepted) |
+| Review B M5 | 1 | same | CLEAN (3 MINOR: same W15 point; reanchor skipped while a jump scroll is pending, next refresh recomputes; T067 not run) |
 
 ## Declined review findings
 
@@ -89,19 +91,7 @@ split along s6 (M3) is the only scenario split with a deliverable on each side.
 
 ## Handover
 
-M5 code is committed (82e86893, not pushed, no PR yet). Done: T057–T066 ticked (core `anchor.rs` locate/Located/is_outdated and
-`EntryReview::reanchor`; daemon `Reviews::apply_edit` Reanchor (returns `Option<DaemonMsg>`), `review::relocate`, W16 in
-`review_send`; client `Anchor`/`anchors`/`judge_anchors`/`reanchor_effect`, panel rows/jump on shown lines; user guide
-"How comments follow their code"). Targeted tests green: micold-core review::, daemon review_edit + review_send, client
-features_changes. T067 (and T034, T046) visual passes not runnable (no xdotool): left unticked with the note.
-Next, in order: (1) `rm -rf target-shared/debug` (disk 8 GB free), then `CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=0
-CARGO_PROFILE_TEST_DEBUG=0 scripts/gate.sh` detached; (2) review A (`code-review` skill, high) on origin/main...HEAD while it
-builds, review B (conformance, sonnet) via `claude -p --agent autopilot-reviewer`; record rounds in *Review rounds*;
-(3) fix findings, full gate once on the final tree; (4) push with
-`git push -u origin claude/project-thread-jjniz9 --force-with-lease=claude/project-thread-jjniz9:`, write the PR title/body to
-the scratchpad pr-title.md / pr-body.md (title "#946: Diff view: inline review comments batched and sent to the agent (M5)",
-body per tasks/pr.md, ends `Refs #946`, says the visual pass could not run here). Known loose end to weigh in review: if the
-W15 write in `review_send` fails the prompt names the old range (only logged).
+None.
 
 ## Open escalation
 
