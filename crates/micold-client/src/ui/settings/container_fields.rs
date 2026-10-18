@@ -14,10 +14,10 @@
 //! carrying the runtime's own reason is the only arrangement that does all three.
 
 use crate::app::Message;
+use crate::features::daemons::ImageKind;
 use crate::features::daemons::{Msg as DaemonsMsg, Section};
 use crate::features::sandbox::SandboxLimit;
 use crate::features::window::FieldId;
-use crate::features::daemons::ImageKind;
 use crate::ui::focus::TrackFocus;
 use crate::ui::material::{AccordionSection, Checkbox, Select, TextField};
 use crate::ui::settings::{caution, field_note, name_of, note, Named};

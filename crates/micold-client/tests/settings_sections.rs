@@ -54,7 +54,10 @@ use std::path::{Path, PathBuf};
 const DEFERRED: &[(&str, &str)] = &[
     ("jira_connections", "M2 (T022) connect form"),
     // Read-repair state (`#[serde(skip)]`): shown through `ContainerSettings.migration`'s notice.
-    ("daemon.sandbox.moved_off_released", "M5 (T058) migration notice"),
+    (
+        "daemon.sandbox.moved_off_released",
+        "M5 (T058) migration notice",
+    ),
 ];
 
 /// Settings stored with the others but chosen outside the Settings screen, each with the client

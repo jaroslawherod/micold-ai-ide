@@ -745,17 +745,15 @@ fn runtime_of(
         DraftRuntime::Container => {
             let port = container_port(draft, registry, taken_elsewhere, next_port)?;
             let mut profile = draft.profile.clone();
-            profile.image =
-                image_choice(&profile.image, &draft.image_reference, &draft.image_path).map_err(
-                    |problem| FormError {
-                        field: if draft.image_path.trim().is_empty() {
-                            "image"
-                        } else {
-                            "image_path"
-                        },
-                        message: problem.message(),
+            profile.image = image_choice(&profile.image, &draft.image_reference, &draft.image_path)
+                .map_err(|problem| FormError {
+                    field: if draft.image_path.trim().is_empty() {
+                        "image"
+                    } else {
+                        "image_path"
                     },
-                )?;
+                    message: problem.message(),
+                })?;
             profile.budget = parse_budget(
                 &draft.cpus,
                 &draft.memory_mib,

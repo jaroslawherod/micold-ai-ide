@@ -25,14 +25,14 @@ use micold_core::protocol::codec::{CodecError, Frame};
 use micold_core::protocol::keepalive::{self, Keepalive, KeepaliveAction};
 use micold_core::protocol::messages::{ClientMsg, DaemonMsg};
 use micold_core::provision::ai_cli::AiCliTable;
-use micold_core::sandbox::{AiCliSelection, NetworkPosture};
 use micold_core::provision::keys::DaemonKeys;
 use micold_core::provision::{
     run as ssh_run, CancelToken, Egress, EventSink, Ownership, ProvisionTarget, StepBounds,
 };
-use micold_core::ssh::argv::{PinnedReach, Reach};
 use micold_core::sandbox::placement::PlacementKind;
+use micold_core::sandbox::{AiCliSelection, NetworkPosture};
 use micold_core::ssh::argv::{current_build_id, DEFAULT_CONNECT_TIMEOUT_SECS};
+use micold_core::ssh::argv::{PinnedReach, Reach};
 use micold_core::ssh::provision::ProvisionOptions;
 use micold_core::ssh::reconnect::Backoff;
 use micold_core::ssh::remote_path;
@@ -885,7 +885,11 @@ struct ContainerReach<'a> {
 
 /// The sequence's target for a container: pinned loopback reach with the daemon's own keys, the
 /// pinned AI CLIs installed through a registry-only relay, and the container's step bounds.
-fn container_target(login: String, reach: &ContainerReach<'_>, keys: &DaemonKeys) -> ProvisionTarget {
+fn container_target(
+    login: String,
+    reach: &ContainerReach<'_>,
+    keys: &DaemonKeys,
+) -> ProvisionTarget {
     let table = AiCliTable::pinned();
     ProvisionTarget {
         reach: Reach::Pinned(PinnedReach {
