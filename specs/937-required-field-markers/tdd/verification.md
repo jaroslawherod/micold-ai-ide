@@ -51,3 +51,11 @@ fields) are visual: quickstart Part B (T049).
 
 Full smell catalogue over every changed test file; mutants in the client crate; the whole-suite run
 (the gate runs it); the visual pass.
+
+## Close re-verification (M7, PR #1073)
+
+F1 is closed. `reopening_settings_shows_no_stale_repository_error` (`required_blur.rs`) goes through
+`State::update(Message::Settings(Opened))`, marks a daemon's repository field, reopens, and reads
+`Required`. Mutant: the `Outcome::SettingsOpened` arm in `app.rs` made a no-op: that test fails,
+the other nine `required_blur` tests pass; restored. The full gate (`scripts/gate.sh`) is green on the
+final tree. Verdict stays PASS_WITH_GAPS (F2: red phases disclosed in the cycle-log, no action).

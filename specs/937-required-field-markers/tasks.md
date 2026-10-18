@@ -172,8 +172,8 @@ focus and leave a field; the field shows the error with the message, no separate
 
 Changes no code: left to the close unit (milestones rule 4).
 
-- [ ] T049 Run quickstart Part B with the `visual-pass` skill (showcase, add worktree, run in parallel, rename, settings, two windows; light, dark, greyscale) and record it in `specs/937-required-field-markers/visual-pass.md`
-- [ ] T050 Run quickstart Part A (`scripts/gate.sh`) on the final tree and tick the spec's checklist items the pass confirms
+- [x] T049 Run quickstart Part B with the `visual-pass` skill (showcase, add worktree, run in parallel, rename, settings, two windows; light, dark, greyscale) and record it in `specs/937-required-field-markers/visual-pass.md`
+- [x] T050 Run quickstart Part A (`scripts/gate.sh`) on the final tree and tick the spec's checklist items the pass confirms
 
 ---
 
