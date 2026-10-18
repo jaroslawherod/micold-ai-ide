@@ -102,14 +102,14 @@ Decisions and rejected alternatives: [research.md](research.md). Types and the f
 |---|---|---|
 | FR-011–FR-013 | component unit (`accordion_section.rs` tests, `support` `Mounted`/`size_of`/`bounds_at`) | summary drawn closed only and ellipsized at a narrow width; marker closed only; header height unchanged without them; keyboard/pointer toggle and closed focus stops unchanged with both set; light and dark |
 | FR-015 | client integration | `tests/showcase_completeness.rs` (the catalogue lists the three poses) |
-| FR-002, FR-003 | client integration, render-free | `tests/daemon_sections.rs`: `Section::of` per kind, titles; field map complete for every `error_of` name and required `FieldId` |
+| FR-002, FR-003 | client integration, render-free | `tests/features_daemon_sections.rs`: `Section::of` per kind, titles; field map complete for every `error_of` name and required `FieldId` |
 | FR-004, FR-005 | client integration, render-free reducer | `tests/daemons_feature.rs`: default open per kind; `RuntimeChosen` resets; refused save and left-empty required field open their section in each kind; toggling leaves draft and registry equal |
 | FR-001, FR-010, SC-001 | geometry (`tests/daemons_section_geometry.rs`, `support::layout` painted text) | per kind: section titles painted in order, only Connection's body painted, identity fields above and actions below, no group heading text painted |
 | SC-002 | geometry gate (`tests/gates/daemon_form_fits.rs`) | Kubernetes add form, default states, canonical width: bottom of *Cancel* ≤ 800 |
 | FR-006, SC-003 | geometry | every section open, each kind: all field gaps equal one value, all section gaps equal one value, same values across kinds |
 | FR-007, FR-008 | geometry + component unit | group label above and left-aligned with its children and with the section's text fields; `FieldGroup` unit tests; no free-floating note between two fields (contract order) |
 | FR-009 | geometry + reducer | select above the *Context* field when contexts are found, absent otherwise; choosing a context fills *Context* (existing `ContextChosen` reducer test) |
-| FR-014 | client integration, render-free | `tests/daemon_sections.rs`: one test per contract row incl. fallbacks and `marked` |
+| FR-014 | client integration, render-free | `tests/features_daemon_sections.rs`: one test per contract row incl. fallbacks and `marked` |
 | FR-017 | docs | `scripts/check-user-guide-updated.sh` in CI; reviewer reads the section names against the contract |
 | SC-004 | client integration | existing save/edit tests unchanged and green |
 | SC-005, SC-006, themes | quickstart Part B | visual pass, both themes, narrow width |

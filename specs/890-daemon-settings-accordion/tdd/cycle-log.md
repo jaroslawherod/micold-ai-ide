@@ -57,7 +57,7 @@ Connection open, `SectionToggled` leaves draft and registry equal), `daemons_sec
 worktree with the gate copied in: `the Kubernetes add form ends at 1851.0005, past 800`; green on the
 branch (`layout_snapshot` 70 passed).
 
-**Green** — `cargo test -p micold-client --test daemon_sections --test daemons_feature --test
+**Green** — `cargo test -p micold-client --test features_daemon_sections --test daemons_feature --test
 daemons_section_geometry --test layout_snapshot`: all passed.
 
 **Refactor** — `Section`, `title` and `holds` moved out of `features/daemons.rs` into
@@ -74,3 +74,7 @@ daemons_section_geometry --test layout_snapshot`: all passed.
 - **R3** (MINOR): `choosing_the_same_kind_again_keeps_the_sections_the_user_opened`: red, then green
   with `RuntimeChosen` clearing the flips only when the kind changes.
 - Scoped gate had failed clippy (`Some(x).filter(|_| false)` in `daemon_sections.rs`): now `false.then_some(..)`.
+- Full gate found two more things the scoped gate missed: `a_field_note_shares_its_fields_column` opens
+  the container form and needs the Container section opened first (Connection is the default now), and
+  `feature_registration_cost` wants `tests/features_<module>.rs` for the new feature module, so
+  `tests/daemon_sections.rs` became `tests/features_daemon_sections.rs`.
