@@ -168,7 +168,8 @@ mod install {
     /// A pod with the build whose check found Claude Code missing, and whose installer says
     /// `installer`; the daemon then welcomes the client.
     fn installing(installer: &str) -> Host {
-        Host::with_build()
+        Host::with_probe()
+            .say("", 0, "")
             .say(installer, 0, "")
             .say("", 0, "")
             .bridge(welcoming_bridge())
