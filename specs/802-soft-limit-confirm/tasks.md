@@ -38,10 +38,10 @@ description: "Task list for 802 soft session limit confirmation"
 
 **Independent test**: `mcp_tools_catalog.rs` pins the new description text; daemon refusal tests unchanged.
 
-- [ ] T011 [US3] Test first (observed failing before T012): extend `crates/micold-core/tests/mcp_tools_catalog.rs` to pin that `create_session` and `start_session` descriptions say a person is asked to confirm and an agent is refused unless `allow_additional_session: true`, and why.
-- [ ] T012 [US3] Update the `create_session` and `start_session` descriptions in `crates/micold-core/src/mcp/tools.rs`.
-- [ ] T013 [P] [US3] Document the agent rule and its reason in `docs/user-guide/agent-tools.md`.
-- [ ] T014 [US3] Confirm no daemon change: run `crates/micold-daemon` `mcp_create_session.rs` refusal and flagged-create tests unchanged (FR-005, FR-007). The delete-while-open and disconnected-while-open edge cases rest on those existing 776 daemon tests and T004(d); no new test.
+- [x] T011 [US3] Test first (observed failing before T012): extend `crates/micold-core/tests/mcp_tools_catalog.rs` to pin that `create_session` and `start_session` descriptions say a person is asked to confirm and an agent is refused unless `allow_additional_session: true`, and why.
+- [x] T012 [US3] Update the `create_session` and `start_session` descriptions in `crates/micold-core/src/mcp/tools.rs`.
+- [x] T013 [P] [US3] Document the agent rule and its reason in `docs/user-guide/agent-tools.md`.
+- [x] T014 [US3] Confirm no daemon change: run `crates/micold-daemon` `mcp_create_session.rs` refusal and flagged-create tests unchanged (FR-005, FR-007). The delete-while-open and disconnected-while-open edge cases rest on those existing 776 daemon tests and T004(d); no new test.
 
 ## Dependencies
 

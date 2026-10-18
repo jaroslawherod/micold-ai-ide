@@ -154,6 +154,7 @@ async fn ssh_real_repository_worktree_session_and_terminal_work_on_the_host() {
             project: repo.clone(),
             worktree_dir: "feature-x".into(),
             provider: AiCli::ClaudeCode,
+            kind: Default::default(),
             allow_additional_session: true,
         },
         3,

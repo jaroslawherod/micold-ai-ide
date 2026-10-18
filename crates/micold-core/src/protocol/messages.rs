@@ -31,9 +31,10 @@ use crate::protocol::grid::{LineId, WireLine, WireStyle};
 use crate::review::comment::{CommentId, Move, Outcome, ReviewComment};
 use crate::review::Side;
 use crate::runs::{GroupId, Integration, RunGroup};
-use crate::session::{AiCli, SessionId, SessionLabel, ShellInstanceId};
+use crate::session::{AiCli, SessionId, SessionKind, SessionLabel, ShellInstanceId};
 use crate::settings::DiffLayout;
 use crate::settings::JiraConnectionChange;
+use crate::structured::SequencedEvent;
 use crate::theme::ColorScheme;
 use crate::worktree::{BranchCandidate, BranchSituation, CreateMode, CreateStage};
 
@@ -649,6 +650,11 @@ pub enum ClientMsg {
         /// 776, FR-015). Absent means `false`. `true` skips the occupancy check: the session is created beside the existing one.
         #[serde(default)]
         allow_additional_session: bool,
+        /// How the session runs its CLI (feature 938, FR-001). Absent means
+        /// [`SessionKind::Terminal`]. `Structured` for a CLI without a structured mode is refused
+        /// with the `KindRefusal` sentence and writes no record (FR-003).
+        #[serde(default)]
+        kind: SessionKind,
     },
     /// Delete a session record.
     SessionDelete {
@@ -1167,6 +1173,21 @@ pub enum DaemonMsg {
         /// The entries.
         entries: Vec<LogEntry>,
     },
+    // --- Structured sessions (feature 938) ---
+    /// Events of a structured session, to a client viewing its `Primary` (contracts/wire.md,
+    /// FR-016, FR-017). First its history as `live: false` (the first carrying `omitted`), then
+    /// each new event as its own `live: true` message. Seqs strictly increase; none is sent twice
+    /// to one view.
+    StructuredEvents {
+        /// The session.
+        session: SessionId,
+        /// How many of the session's earliest events the history no longer holds.
+        omitted: u64,
+        /// The events, oldest first.
+        events: Vec<SequencedEvent>,
+        /// `false` for history, `true` for an event as the CLI wrote it.
+        live: bool,
+    },
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1338,6 +1359,10 @@ pub struct SessionSummary {
     /// an older frame means `None`. Never logged (FR-020).
     #[serde(default)]
     pub hook_activity: Option<crate::hook_activity::HookActivity>,
+    /// How the session runs its CLI (feature 938, FR-020). Absent on an older frame means
+    /// [`SessionKind::Terminal`].
+    #[serde(default)]
+    pub kind: SessionKind,
 }
 
 /// One agent run on a [`SessionSummary`] — the stored form, unchanged (feature 552).
@@ -1900,6 +1925,7 @@ mod attention_wire_tests {
             lifecycle: WireLifecycle::Running,
             activity: ActivitySignal::AwaitingInput,
             provider: AiCli::ClaudeCode,
+            kind: Default::default(),
             input_serial: 0,
             live_shells: Vec::new(),
             attention_seq: COUNTED,
@@ -1927,6 +1953,7 @@ mod attention_wire_tests {
             lifecycle: WireLifecycle::Running,
             activity: ActivitySignal::AwaitingInput,
             provider: AiCli::ClaudeCode,
+            kind: Default::default(),
             input_serial: 0,
             live_shells: Vec::new(),
             attention_seq: 1,

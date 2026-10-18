@@ -59,3 +59,41 @@ Append only. Newest last.
   `a_session_has_no_kind_setter`, `every_cli_can_run_a_terminal_session`,
   `the_catalog_schema_version_is_unchanged`) guard properties the stubs already had by
   construction.
+
+## Cycle 4 (U6, U7, M2): history and wire delta — RED then GREEN
+
+- red: `EventHistory::append` stubbed (seq always 0, no eviction); wire `kind` fields without
+  `serde(default)`. `cargo test -p micold-core --lib -- structured::history` -> `FAILED. 0 passed;
+  6 failed`; `--test structured_wire` -> `FAILED. 1 passed; 2 failed` (`missing field kind`). The
+  `StructuredEvents` round-trip passed against the stub (the variant is plain derive; its guard is
+  the round-trip itself).
+- green (T016, T017): bounded `append`, `StructuredEvent::text_len`; `#[serde(default)]` on both
+  `kind` fields; `DaemonMsg::StructuredEvents`; `PROTOCOL_VERSION` 51 -> 52 (schema_hash pin
+  follows). `StructuredEvent`/`SequencedEvent` are `Eq` (the one float comes from JSON, no NaN) so
+  `DaemonMsg` keeps its `Eq`. Workspace `cargo check --all-targets` clean: no exhaustive match
+  broke.
+- run: `cargo test -p micold-core --all-targets --no-fail-fast` -> all pass but the three
+  root-only permission tests the gate re-runs as a normal user.
+
+## Cycle 5 (U8, U9, M2): daemon tests — RED
+
+- red (T014, T015): `cargo test -p micold-daemon --no-fail-fast --test structured_session --test
+  structured_lifecycle` -> `structured_session`: `FAILED. 0 passed; 8 failed` (no events reach a
+  viewer: `the events never completed: []`; the structured argv is the terminal one, `range end
+  index 7 out of range for slice of length 2`; a structured Copilot `SessionCreate` is created,
+  not refused; `SessionSummary.kind` is `Terminal`). `structured_lifecycle`: `FAILED. 3 passed; 1
+  failed` — the history after an exit is empty. The three parity cases pass now because both kinds
+  still take the PTY path; they guard T020 against drifting from it.
+- The stand-in also records `pid-record` and one `starts-record` line per start (kill and
+  crash-loop counts).
+
+## Cycle 6 (U8, U9, M2): daemon wiring — GREEN
+
+- green (T020, T021): `Proc::{Pty, Structured}`; `start_session_gated` branches on `SpawnPlan.kind`
+  behind the same gates; `DaemonState.event_streams` (one `EventStream` per session, kept across
+  restarts and exits); `Catalog::create_session_of_kind` refuses with `CreateSessionError::Kind`
+  before writing; the server streams a structured `Primary` with `stream_events`. `cargo test -p
+  micold-daemon --test structured_session --test structured_lifecycle` -> `ok. 8 passed` and `ok. 4
+  passed`.
+- Test fix: the tolerance case's second `events_until` waited for `expected.len()` *new* events
+  after the first call had taken all but one; it now waits for the one left (the partial line).

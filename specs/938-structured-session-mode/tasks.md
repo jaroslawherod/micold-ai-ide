@@ -163,25 +163,25 @@ CLI.
 
 ### Tests for User Story 1 (scenarios 1–3) ⚠️
 
-- [ ] T011 [P] [US1] Write failing unit tests in `crates/micold-core/src/structured/history.rs`
+- [x] T011 [P] [US1] Write failing unit tests in `crates/micold-core/src/structured/history.rs`
   for `EventHistory` (R5): `append` assigns `seq` from 0, strictly increasing; with bounds
   `with_bounds(max_events, max_bytes)` the oldest events are popped while "`events.len() >
   MAX_EVENTS || bytes > MAX_BYTES`" and `omitted` counts them; `snapshot()` returns `(omitted,
   events)`; `bytes` tracks the retained line text; the defaults are `MAX_EVENTS = 5_000` and
   `MAX_BYTES = 64 MiB`.
-- [ ] T012 [P] [US1] Write failing round-trip tests in `crates/micold-core/tests/structured_wire.rs`:
+- [x] T012 [P] [US1] Write failing round-trip tests in `crates/micold-core/tests/structured_wire.rs`:
   `ClientMsg::SessionCreate` JSON without `kind` decodes with `SessionKind::Terminal`;
   `SessionSummary.kind` round-trips both kinds and defaults to `Terminal` when absent;
   `DaemonMsg::StructuredEvents { session, omitted, events, live }` round-trips with one event of
   every `StructuredEvent` variant.
-- [ ] T013 [P] [US1] Write the stand-in CLI in `crates/micold-daemon/tests/support/structured.rs`
+- [x] T013 [P] [US1] Write the stand-in CLI in `crates/micold-daemon/tests/support/structured.rs`
   (R12), compiled the way `support/history.rs`'s `fake_cli` is and registered in
   `crates/micold-daemon/tests/support/mod.rs`: it writes its argv to `argv-record`, its cwd to
   `cwd-record` and the variables `TERM`, `PATH` and every `MICOLD_*` to `env-record` in its cwd;
   appends every stdin line to `stdin-record`; replays the fixture named in `.fake-stream` line by
   line to stdout, honouring the directives `pause <ms>`, `await-stdin` (block until one more stdin
   line), `stderr <text>` (write to stderr) and `exit <code>`; idles when the script ends.
-- [ ] T014 [US1] Write failing tests in `crates/micold-daemon/tests/structured_session.rs`:
+- [x] T014 [US1] Write failing tests in `crates/micold-daemon/tests/structured_session.rs`:
   (a) a structured Claude session's argv begins with the seven structured args, carries
   `--session-id <id>`, the `--settings` hook file and `--mcp-config` last exactly as a terminal
   session at the same location (the `--settings` hook file is the only source of the activity and
@@ -203,7 +203,7 @@ CLI.
   one (FR-020, US5 scenario 5); (i) two structured sessions running at once, in the same worktree
   and in two worktrees, each deliver only their own fixture's events (Principle II).
 
-- [ ] T015 [US5] Write failing tests in `crates/micold-daemon/tests/structured_lifecycle.rs`
+- [x] T015 [US5] Write failing tests in `crates/micold-daemon/tests/structured_lifecycle.rs`
   for the lifecycle the `Proc::Structured` primary of T020 must have (US5 scenarios 1–2, FR-009):
   the lifecycle states observed for stop, kill and restart of a structured session equal those of
   a terminal session in the same order; a stand-in that runs `exit 1` at once on every start is
@@ -214,18 +214,18 @@ CLI.
 
 ### Implementation for User Story 1 (scenarios 1–3)
 
-- [ ] T016 [US1] Make T011 pass: `crates/micold-core/src/structured/history.rs`.
-- [ ] T017 [US1] Make T012 pass in `crates/micold-core/src/protocol/messages.rs`:
+- [x] T016 [US1] Make T011 pass: `crates/micold-core/src/structured/history.rs`.
+- [x] T017 [US1] Make T012 pass in `crates/micold-core/src/protocol/messages.rs`:
   `SessionCreate.kind`, `SessionSummary.kind` (both `#[serde(default)]`),
   `DaemonMsg::StructuredEvents`; bump `PROTOCOL_VERSION` in
   `crates/micold-core/src/protocol/version.rs` by one (51 → 52 if `main` is still at 51) with a
   doc line naming feature 938's first wire delta; fix every exhaustive match the new variant
   breaks (`LSP findReferences`).
-- [ ] T018 [US1] Generalise the PTY spawn's environment hygiene in
+- [x] T018 [US1] Generalise the PTY spawn's environment hygiene in
   `crates/micold-daemon/src/supervisor.rs`: turn `strip_inherited_terminal_identity` and
   `prefer_process_path` into one env-edit list both a `portable_pty::CommandBuilder` and a
   `std::process::Command` can apply (R3); existing PTY tests pass unchanged (SC-004).
-- [ ] T019 [US1] Add `crates/micold-daemon/src/structured.rs` (`StructuredSession`, registered in
+- [x] T019 [US1] Add `crates/micold-daemon/src/structured.rs` (`StructuredSession`, registered in
   `crates/micold-daemon/src/lib.rs` or `main.rs` beside `supervisor`): spawn with piped
   stdin/stdout/stderr, `process::no_window`, `process_group(0)` on Unix, the env-edit list of T018,
   and `platform::ProcessTree` adoption as `PtySession::spawn_answering` does; a stdout reader
@@ -233,7 +233,7 @@ CLI.
   reader thread logging each line with `tracing::warn!(session = %id, "claude stderr: {line}")`
   and never producing an event; `ChildStdin` behind a mutex for later writes; `is_alive`, exit
   outcome, `kill` and teardown with the same semantics as `PtySession`.
-- [ ] T020 [US1] Wire the kind through `crates/micold-daemon/src/catalog.rs` and
+- [x] T020 [US1] Wire the kind through `crates/micold-daemon/src/catalog.rs` and
   `crates/micold-daemon/src/state.rs`: `Catalog::create_session` takes the kind and applies
   `SessionKind::check` before writing any record; the live primary becomes `Proc::{Pty,
   Structured}`, and every terminal-only operation on `Proc::Structured` returns `None` (refusal
@@ -243,7 +243,7 @@ CLI.
   recorded-conversation checks; a `SessionId → (EventHistory, broadcast::Sender<SequencedEvent>)`
   map on `DaemonState` outside `LiveSession`, appended to and broadcast from the reader callback;
   supervision (`supervise_session_exit`) treats both `Proc` variants alike.
-- [ ] T021 [US1] Make T014 pass in `crates/micold-daemon/src/server.rs`: `SessionCreate` passes its
+- [x] T021 [US1] Make T014 pass in `crates/micold-daemon/src/server.rs`: `SessionCreate` passes its
   kind, summaries carry it, and viewing a structured session's `Primary` starts a
   `stream_events` task instead of `stream_view`: under the history lock take the snapshot and
   subscribe in the same critical section, send the history as `live: false` (first message carries

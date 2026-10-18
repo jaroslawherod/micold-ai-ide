@@ -85,6 +85,7 @@ fn create_with(req: u64, project: &Path, dir: &str, allow_additional_session: bo
         project: project.to_path_buf(),
         worktree_dir: dir.to_string(),
         provider: AiCli::ClaudeCode,
+        kind: Default::default(),
         allow_additional_session,
     }
 }

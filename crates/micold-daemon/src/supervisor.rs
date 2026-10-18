@@ -61,10 +61,8 @@ pub struct PtySession {
     id: SessionId,
     /// The VT emulator, shared with the reader thread and the framer (plan W3).
     term: SharedTerm,
-    /// The child process and its process tree. Behind a mutex so liveness checks / kill take
-    /// `&self`, and one mutex for both so that reaping the child and forgetting its pid happen
-    /// together — see [`Supervised`].
-    child: Mutex<Supervised>,
+    /// The child process, its process tree and its exit outcome.
+    process: SupervisedChild,
     /// The PTY master — used for resize. Behind a `Mutex` only so [`PtySession`] is `Sync` (the
     /// trait object is `Send` but not `Sync`); this lets the session live in the shared daemon
     /// registry. `resize` takes `&self` and the lock is never held across an `.await`.
@@ -81,11 +79,6 @@ pub struct PtySession {
     size: Arc<Mutex<WindowSize>>,
     /// Set true when the reader thread sees EOF on the PTY (the child's output ended).
     reader_done: Arc<AtomicBool>,
-    /// The child's exit outcome once reaped — `Some(outcome)` after [`Self::is_alive`] or
-    /// [`Self::exit_outcome`] observes the child gone, `None` while it is still running. Cached
-    /// because `try_wait` only yields the status once; the supervisor reads it after the child dies
-    /// to classify a clean exit vs a crash (US4, FR-005).
-    exit: Arc<Mutex<Option<ExitOutcome>>>,
     /// The reader thread handle, joined by [`Self::teardown`]. Behind a `Mutex` so the teardown
     /// takes `&self`: a window's stream task may hold the last `Arc` (R4).
     reader: Mutex<Option<JoinHandle<()>>>,
@@ -112,7 +105,7 @@ pub const TEARDOWN_WAIT: Duration = Duration::from_secs(2);
 ///
 /// The refusal carries a [`WorkingDirMissing`] inside the `io::Error`, so a caller can tell it from
 /// any other spawn failure without matching the message (BUG-592): see [`shell_open_failure`].
-fn ensure_cwd_exists(cwd: &std::path::Path) -> io::Result<()> {
+pub(crate) fn ensure_cwd_exists(cwd: &std::path::Path) -> io::Result<()> {
     if cwd.is_dir() {
         return Ok(());
     }
@@ -156,7 +149,7 @@ pub fn shell_open_failure(err: &io::Error) -> ShellOpenFailure {
 /// naming the child the moment the child is reaped. Every reap below is followed, under the same
 /// guard, by [`Supervised::reaped`]; every tree teardown happens under it too. A liveness check on
 /// another thread therefore cannot reap between a teardown reading the pid and signalling it.
-struct Supervised {
+pub(crate) struct Supervised {
     child: Box<dyn Child + Send + Sync>,
     /// The child and everything it starts, as the platform reaches them at teardown — a process
     /// group on Unix, a job object on Windows (FR-036). Adopted at spawn, because a job has to
@@ -169,6 +162,18 @@ struct Supervised {
 }
 
 impl Supervised {
+    /// The freshly spawned `child`, with the `tree` adopted from its pid.
+    pub(crate) fn new(
+        child: Box<dyn Child + Send + Sync>,
+        tree: crate::platform::ProcessTree,
+    ) -> Self {
+        Self {
+            child,
+            tree,
+            reaped: false,
+        }
+    }
+
     /// The child's exit status if it has exited, `None` while it runs. On Unix an exited child is
     /// left unreaped, so teardown can still reach what it left running (see
     /// [`crate::platform::ProcessTree::exit_status`]).
@@ -201,6 +206,90 @@ impl Supervised {
     }
 }
 
+/// A command a spawn can edit the environment of: the PTY path's [`CommandBuilder`] and a
+/// structured session's [`std::process::Command`] (feature 938, R3). Both get the same edits from
+/// [`env_hygiene`], so a session's environment does not depend on which way it was spawned.
+pub(crate) trait EnvTarget {
+    /// The variables the command itself carries, as UTF-8: on Windows a [`CommandBuilder`] also
+    /// carries the registry's, which the daemon's own environment does not show.
+    fn own_vars(&self) -> Vec<(String, String)>;
+    /// The command's own value of `key`, if it carries one.
+    #[cfg_attr(not(windows), allow(dead_code))]
+    fn own_var(&self, key: &str) -> Option<std::ffi::OsString>;
+    /// Set `key` to `value` for the child.
+    fn set_var(&mut self, key: std::ffi::OsString, value: std::ffi::OsString);
+    /// Leave `key` out of the child's environment.
+    fn remove_var(&mut self, key: std::ffi::OsString);
+}
+
+impl EnvTarget for CommandBuilder {
+    fn own_vars(&self) -> Vec<(String, String)> {
+        self.iter_full_env_as_str()
+            .map(|(key, value)| (key.to_owned(), value.to_owned()))
+            .collect()
+    }
+    fn own_var(&self, key: &str) -> Option<std::ffi::OsString> {
+        self.get_env(key).map(ToOwned::to_owned)
+    }
+    fn set_var(&mut self, key: std::ffi::OsString, value: std::ffi::OsString) {
+        self.env(key, value);
+    }
+    fn remove_var(&mut self, key: std::ffi::OsString) {
+        self.env_remove(key);
+    }
+}
+
+impl EnvTarget for std::process::Command {
+    fn own_vars(&self) -> Vec<(String, String)> {
+        self.get_envs()
+            .filter_map(|(key, value)| {
+                Some((key.to_str()?.to_owned(), value?.to_str()?.to_owned()))
+            })
+            .collect()
+    }
+    fn own_var(&self, key: &str) -> Option<std::ffi::OsString> {
+        self.get_envs()
+            .find(|(name, _)| *name == std::ffi::OsStr::new(key))
+            .and_then(|(_, value)| value.map(ToOwned::to_owned))
+    }
+    fn set_var(&mut self, key: std::ffi::OsString, value: std::ffi::OsString) {
+        self.env(key, value);
+    }
+    fn remove_var(&mut self, key: std::ffi::OsString) {
+        self.env_remove(key);
+    }
+}
+
+/// One change to a child's environment.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum EnvEdit {
+    /// Give the variable this value.
+    #[cfg_attr(not(windows), allow(dead_code))]
+    Set(std::ffi::OsString, std::ffi::OsString),
+    /// Leave the variable out.
+    Remove(std::ffi::OsString),
+}
+
+/// The edits every session spawn makes before its own variables are applied: on Windows
+/// [`prefer_process_path`], then [`strip_inherited_terminal_identity`].
+pub(crate) fn env_hygiene(target: &impl EnvTarget) -> Vec<EnvEdit> {
+    let mut edits = Vec::new();
+    #[cfg(windows)]
+    edits.extend(prefer_process_path(target));
+    edits.extend(strip_inherited_terminal_identity(target));
+    edits
+}
+
+/// Apply [`env_hygiene`] to `target`.
+pub(crate) fn apply_env_hygiene(target: &mut impl EnvTarget) {
+    for edit in env_hygiene(target) {
+        match edit {
+            EnvEdit::Set(key, value) => target.set_var(key, value),
+            EnvEdit::Remove(key) => target.remove_var(key),
+        }
+    }
+}
+
 /// Put this process's `PATH` in front of the one a Windows child would otherwise get.
 ///
 /// portable-pty seeds a Windows child's environment from the registry, so its `PATH` is the
@@ -209,39 +298,133 @@ impl Supervised {
 /// "cannot find the file specified". The registry entries stay behind, so a CLI installed since
 /// the daemon started is still found. An env-include `PATH` is applied later and still wins.
 #[cfg(windows)]
-fn prefer_process_path(cmd: &mut CommandBuilder) {
-    let Some(mut path) = std::env::var_os("PATH") else {
-        return;
-    };
-    if let Some(registry) = cmd.get_env("PATH").filter(|registry| !registry.is_empty()) {
+fn prefer_process_path(target: &impl EnvTarget) -> Option<EnvEdit> {
+    let mut path = std::env::var_os("PATH")?;
+    if let Some(registry) = target
+        .own_var("PATH")
+        .filter(|registry| !registry.is_empty())
+    {
         path.push(";");
         path.push(registry);
     }
-    cmd.env("PATH", path);
+    Some(EnvEdit::Set("PATH".into(), path))
 }
 
 /// Remove every inherited variable that names another terminal (feature 031, FR-006, contract
 /// session-terminal-identity §2), so a program in the session asks micold's own identity, not the
-/// one of the terminal the daemon was started from. Called before `TERM` and the include values
-/// are applied, so a value the include script sets survives.
+/// one of the terminal the daemon was started from. Applied before `TERM` and the include values
+/// are, so a value the include script sets survives.
 ///
-/// Read from the daemon's own environment, lossily, because the builder lists only its UTF-8
+/// Read from the daemon's own environment, lossily, because the command lists only its UTF-8
 /// entries and an identity variable with other bytes would otherwise slip through; and from the
-/// builder too, which on Windows also carries the registry's variables.
-fn strip_inherited_terminal_identity(cmd: &mut CommandBuilder) {
+/// command too, which on Windows also carries the registry's variables.
+fn strip_inherited_terminal_identity(target: &impl EnvTarget) -> Vec<EnvEdit> {
     let matches =
         |key: &str, value: &str| is_inherited_terminal_identity(key, value, cfg!(windows));
-    let inherited: Vec<std::ffi::OsString> = std::env::vars_os()
+    std::env::vars_os()
         .filter(|(key, value)| matches(&key.to_string_lossy(), &value.to_string_lossy()))
         .map(|(key, _)| key)
         .chain(
-            cmd.iter_full_env_as_str()
+            target
+                .own_vars()
+                .into_iter()
                 .filter(|(key, value)| matches(key, value))
                 .map(|(key, _)| key.into()),
         )
-        .collect();
-    for key in inherited {
-        cmd.env_remove(key);
+        .map(EnvEdit::Remove)
+        .collect()
+}
+
+/// A session's child as supervision sees it, whichever way it was spawned: the [`Supervised`]
+/// child and tree, and the exit outcome once seen. Shared by [`PtySession`] and
+/// [`crate::structured::StructuredSession`] so both have one lifecycle (feature 938, FR-009).
+pub(crate) struct SupervisedChild {
+    /// The child process and its process tree. Behind a mutex so liveness checks / kill take
+    /// `&self`, and one mutex for both so that reaping the child and forgetting its pid happen
+    /// together — see [`Supervised`].
+    child: Mutex<Supervised>,
+    /// The child's exit outcome once reaped — `Some(outcome)` after [`Self::is_alive`] or
+    /// [`Self::exit_outcome`] observes the child gone, `None` while it is still running. Cached
+    /// because `try_wait` only yields the status once; the supervisor reads it after the child dies
+    /// to classify a clean exit vs a crash (US4, FR-005).
+    exit: Mutex<Option<ExitOutcome>>,
+}
+
+impl SupervisedChild {
+    pub(crate) fn new(supervised: Supervised) -> Self {
+        Self {
+            child: Mutex::new(supervised),
+            exit: Mutex::new(None),
+        }
+    }
+
+    /// Whether the child is still running, via a non-blocking exit check. Authoritative for
+    /// liveness (the reader-thread EOF flag is only a hint — a child can close stdout yet linger).
+    /// On observing the child gone, caches its exit success bit for [`Self::exit_outcome`].
+    ///
+    /// It does not reap on Unix: the exited child stays a zombie until [`Self::kill`], so the
+    /// descendants it left running are still reachable then (FR-036).
+    pub(crate) fn is_alive(&self) -> bool {
+        match self.child.lock() {
+            Ok(mut supervised) => match supervised.exit_status() {
+                Ok(Some(status)) => {
+                    self.cache_exit(ExitOutcome::from_status(&status));
+                    false
+                }
+                Ok(None) => true,
+                // An error means we can no longer track the child; treat it as gone (a crash, so
+                // supervision can react) rather than pretend it is alive forever.
+                Err(_) => {
+                    self.cache_exit(ExitOutcome::crashed("could not be reaped"));
+                    false
+                }
+            },
+            Err(_) => false,
+        }
+    }
+
+    /// Record how the child exited the first time it is observed (idempotent — later reaps never
+    /// overwrite the first-seen outcome).
+    fn cache_exit(&self, outcome: ExitOutcome) {
+        if let Ok(mut e) = self.exit.lock() {
+            e.get_or_insert(outcome);
+        }
+    }
+
+    /// The child's exit outcome once it has exited, or `None` while it is still running. Reaps via
+    /// [`Self::is_alive`] if not yet observed, so a caller can poll this directly. Drives the
+    /// restart supervision policy (US4, FR-005): a clean exit stops the session, a crash restarts.
+    pub(crate) fn exit_outcome(&self) -> Option<ExitOutcome> {
+        if self.exit.lock().ok().is_some_and(|e| e.is_none()) {
+            // Not yet observed — attempt a reap now.
+            let _ = self.is_alive();
+        }
+        self.exit.lock().ok().and_then(|e| e.clone())
+    }
+
+    /// The child's OS process id, if known.
+    pub(crate) fn pid(&self) -> Option<u32> {
+        self.child.lock().ok().and_then(|s| s.child.process_id())
+    }
+
+    /// Terminate and reap the child (FR-015a / session close). Terminates the child's whole process
+    /// tree first — its process group on Unix, its job object on Windows — so processes the session
+    /// started don't orphan (FR-036, T061), then kills and reaps the direct child.
+    ///
+    /// On Windows `child.kill()` is `portable-pty`'s, whose killer reports `TerminateProcess`
+    /// inverted (research R3.4). `Child::kill` discards that result in 0.9.0, which is the only
+    /// reason the `?` in [`Supervised::terminate`] is sound there; `tests/windows_process_tree.rs` pins both halves — `Ok`,
+    /// and the process really gone — so an upgrade that starts propagating it fails a test rather
+    /// than every session close.
+    ///
+    /// The tree is terminated under the child's lock, so it cannot be racing a reap that would free
+    /// the pid it signals through. A second `kill()` — the drop after a session close — finds the
+    /// child reaped and signals nothing through its pid.
+    pub(crate) fn kill(&self) -> io::Result<()> {
+        match self.child.lock() {
+            Ok(mut supervised) => supervised.terminate(),
+            Err(_) => Ok(()),
+        }
     }
 }
 
@@ -265,9 +448,7 @@ impl PtySession {
     ) -> io::Result<Self> {
         ensure_cwd_exists(&spec.cwd)?;
         let mut cmd = CommandBuilder::new(spec.provider.provider().command());
-        #[cfg(windows)]
-        prefer_process_path(&mut cmd);
-        strip_inherited_terminal_identity(&mut cmd);
+        apply_env_hygiene(&mut cmd);
         cmd.cwd(&spec.cwd);
         for (k, v) in &spec.env {
             cmd.env(k, v);
@@ -310,9 +491,7 @@ impl PtySession {
         let comspec = std::env::var("COMSPEC").ok();
         let command = default_shell_command(shell.as_deref(), comspec.as_deref());
         let mut cmd = CommandBuilder::new(command);
-        #[cfg(windows)]
-        prefer_process_path(&mut cmd);
-        strip_inherited_terminal_identity(&mut cmd);
+        apply_env_hygiene(&mut cmd);
         cmd.cwd(cwd);
         for (k, v) in env {
             cmd.env(k, v);
@@ -456,17 +635,12 @@ impl PtySession {
         Ok(Self {
             id,
             term,
-            child: Mutex::new(Supervised {
-                child,
-                tree,
-                reaped: false,
-            }),
+            process: SupervisedChild::new(Supervised::new(child, tree)),
             master: Mutex::new(Some(pair.master)),
             writer,
             signals,
             size,
             reader_done,
-            exit: Arc::new(Mutex::new(None)),
             reader: Mutex::new(Some(reader)),
             torn_down: AtomicBool::new(false),
         })
@@ -536,48 +710,14 @@ impl PtySession {
         Ok(())
     }
 
-    /// Whether the child is still running, via a non-blocking exit check. Authoritative for
-    /// liveness (the reader-thread EOF flag is only a hint — a child can close stdout yet linger).
-    /// On observing the child gone, caches its exit success bit for [`Self::exit_outcome`].
-    ///
-    /// It does not reap on Unix: the exited child stays a zombie until [`Self::kill`], so the
-    /// descendants it left running are still reachable then (FR-036).
+    /// Whether the child is still running: [`SupervisedChild::is_alive`].
     pub fn is_alive(&self) -> bool {
-        match self.child.lock() {
-            Ok(mut supervised) => match supervised.exit_status() {
-                Ok(Some(status)) => {
-                    self.cache_exit(ExitOutcome::from_status(&status));
-                    false
-                }
-                Ok(None) => true,
-                // An error means we can no longer track the child; treat it as gone (a crash, so
-                // supervision can react) rather than pretend it is alive forever.
-                Err(_) => {
-                    self.cache_exit(ExitOutcome::crashed("could not be reaped"));
-                    false
-                }
-            },
-            Err(_) => false,
-        }
+        self.process.is_alive()
     }
 
-    /// Record how the child exited the first time it is observed (idempotent — later reaps never
-    /// overwrite the first-seen outcome).
-    fn cache_exit(&self, outcome: ExitOutcome) {
-        if let Ok(mut e) = self.exit.lock() {
-            e.get_or_insert(outcome);
-        }
-    }
-
-    /// The child's exit outcome once it has exited, or `None` while it is still running. Reaps via
-    /// [`Self::is_alive`] if not yet observed, so a caller can poll this directly. Drives the
-    /// restart supervision policy (US4, FR-005): a clean exit stops the session, a crash restarts.
+    /// The child's exit outcome once it has exited: [`SupervisedChild::exit_outcome`].
     pub fn exit_outcome(&self) -> Option<ExitOutcome> {
-        if self.exit.lock().ok().is_some_and(|e| e.is_none()) {
-            // Not yet observed — attempt a reap now.
-            let _ = self.is_alive();
-        }
-        self.exit.lock().ok().and_then(|e| e.clone())
+        self.process.exit_outcome()
     }
 
     /// Whether the PTY reader has seen EOF (the child's output stream ended). A hint for the framer;
@@ -588,27 +728,12 @@ impl PtySession {
 
     /// The child's OS process id, if known.
     pub fn pid(&self) -> Option<u32> {
-        self.child.lock().ok().and_then(|s| s.child.process_id())
+        self.process.pid()
     }
 
-    /// Terminate and reap the child (FR-015a / session close). Terminates the child's whole process
-    /// tree first — its process group on Unix, its job object on Windows — so processes the session
-    /// started don't orphan (FR-036, T061), then kills and reaps the direct child.
-    ///
-    /// On Windows `child.kill()` is `portable-pty`'s, whose killer reports `TerminateProcess`
-    /// inverted (research R3.4). `Child::kill` discards that result in 0.9.0, which is the only
-    /// reason the `?` in [`Supervised::terminate`] is sound there; `tests/windows_process_tree.rs` pins both halves — `Ok`,
-    /// and the process really gone — so an upgrade that starts propagating it fails a test rather
-    /// than every session close.
-    ///
-    /// The tree is terminated under the child's lock, so it cannot be racing a reap that would free
-    /// the pid it signals through. A second `kill()` — the drop after a session close — finds the
-    /// child reaped and signals nothing through its pid.
+    /// Terminate and reap the child and its tree: [`SupervisedChild::kill`].
     pub fn kill(&self) -> io::Result<()> {
-        match self.child.lock() {
-            Ok(mut supervised) => supervised.terminate(),
-            Err(_) => Ok(()),
-        }
+        self.process.kill()
     }
 
     /// End the session so that every byte its process wrote has reached the `Term` (R4): kill the
@@ -750,7 +875,7 @@ mod tests {
 
     /// The pid a teardown would signal the process group of.
     fn signalled_pid(session: &PtySession) -> Option<u32> {
-        session.child.lock().unwrap().tree.signal_target()
+        session.process.child.lock().unwrap().tree.signal_target()
     }
 
     /// Teardown reaches a live session's group through the child's own pid — the only handle Unix

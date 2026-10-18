@@ -310,6 +310,7 @@ fn catalog(sessions: &[(SessionId, &str, WireLifecycle, ActivitySignal)]) -> Cat
                     lifecycle: lifecycle.clone(),
                     activity: activity.clone(),
                     provider: AiCli::ClaudeCode,
+                    kind: Default::default(),
                     input_serial: 0,
                     live_shells: Vec::new(),
                     attention_seq: 1,

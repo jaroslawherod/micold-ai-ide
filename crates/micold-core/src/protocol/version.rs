@@ -178,7 +178,11 @@
 ///
 /// And 50 → 51 for feature 686's pod clones (contracts/kube-runtime.md §6): `ClientMsg::RepoClone`,
 /// `DaemonMsg::RepoCloned` and `DaemonMsg::RepoCloneFailed`. An older daemon cannot decode them.
-pub const PROTOCOL_VERSION: u32 = 51;
+///
+/// And 51 → 52 for feature 938's first wire delta (contracts/wire.md, M2): `kind` on
+/// `ClientMsg::SessionCreate` and `SessionSummary` (serde-defaulted), and
+/// `DaemonMsg::StructuredEvents`, which an older client cannot decode.
+pub const PROTOCOL_VERSION: u32 = 52;
 
 // `build.rs` emits `pub const SCHEMA_HASH: [u8; 32] = [...];` into this file.
 include!(concat!(env!("OUT_DIR"), "/schema_hash.rs"));

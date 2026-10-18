@@ -279,7 +279,9 @@ impl<'a, M: Clone + 'a> From<OverviewCard<'a, M>> for Element<'a, M> {
                 radius: RADIUS,
             });
         // Outermost, so the ripple is the card's only state layer while it runs (feature 971, D1).
-        Ripple::new(focusable, p.text, RADIUS).into()
+        Ripple::new(focusable, p.text, RADIUS)
+            .centred_on_keys()
+            .into()
     }
 }
 
@@ -737,5 +739,54 @@ mod tests {
         let mut m = activatable(&model(CardState::Working, "a"));
         m.press(Point::new(0.5, 0.5));
         assert_eq!(ripple(&m).origin(), Some(Point::new(0.5, 0.5)));
+    }
+
+    // ---- Feature 971: the keyboard ripple (FR-002, FR-004, FR-005, SC-002) ----
+
+    /// T016 (FR-002, SC-002, US2-1, US2-2): Enter and Space on the focused card start a ripple at
+    /// the card's centre, in every state.
+    #[test]
+    fn enter_and_space_on_the_focused_card_ripple_from_the_centre() {
+        let cursor = mouse::Cursor::Unavailable;
+        for state in CardState::ALL {
+            for key in [Named::Enter, Named::Space] {
+                let mut m = activatable(&model(state, "feat-a"));
+                let b = m.node.bounds();
+                m.focus_next();
+                assert!(ripple(&m).is_idle(), "{state:?}: focusing rippled");
+                assert_eq!(m.send(named_key(key), cursor), ["pressed"]);
+                let origin = ripple(&m).origin().expect("the key started a ripple");
+                assert!(
+                    (origin.x - b.width / 2.0).abs() <= 1.0
+                        && (origin.y - b.height / 2.0).abs() <= 1.0,
+                    "{state:?} {key:?}: rippled from {origin:?}"
+                );
+            }
+        }
+    }
+
+    /// T016 (US2-3): a card that does not hold the focus shows no ripple on Enter or Space.
+    #[test]
+    fn enter_and_space_on_an_unfocused_card_do_not_ripple() {
+        let cursor = mouse::Cursor::Unavailable;
+        for key in [Named::Enter, Named::Space] {
+            let mut m = activatable(&model(CardState::Idle, "feat-a"));
+            assert!(m.send(named_key(key), cursor).is_empty());
+            assert!(ripple(&m).is_idle(), "{key:?}");
+        }
+    }
+
+    /// T016 (FR-004, FR-005): the keyboard ripple fades to idle, leaving nothing animating, and a
+    /// second card is untouched.
+    #[test]
+    fn the_keyboard_ripple_fades_to_idle() {
+        let mut m = activatable(&model(CardState::Idle, "feat-a"));
+        m.focus_next();
+        m.send(named_key(Named::Enter), mouse::Cursor::Unavailable);
+        assert!(!ripple(&m).is_idle());
+        settle(&mut m);
+        assert!(ripple(&m).is_idle());
+        let other = activatable(&model(CardState::Idle, "feat-b"));
+        assert!(ripple(&other).is_idle());
     }
 }

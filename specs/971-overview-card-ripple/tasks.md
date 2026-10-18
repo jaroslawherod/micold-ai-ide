@@ -53,15 +53,15 @@ All code is in `crates/micold-client/src/` (paths below are relative to it, exce
 
 ### Tests (write first, see them fail)
 
-- [ ] T016 [US2] Tests in `ui/material/overview_card.rs`: Enter and Space on a focused card start a ripple at the centre; an unfocused card shows none (FR-002, SC-002, US2-1/2/3).
-- [ ] T017 [P] [US2] Tests in `ui/material/ripple.rs`: with `centred_on_keys`, a captured Enter/Space starts a centred press; auto-repeat while running does not restart it; without the builder nothing changes for other controls; a focused-card case keeps the ripple the only state layer (FR-004, FR-005).
+- [x] T016 [US2] Tests in `ui/material/overview_card.rs`: Enter and Space on a focused card start a ripple at the centre; an unfocused card shows none (FR-002, SC-002, US2-1/2/3).
+- [x] T017 [P] [US2] Tests in `ui/material/ripple.rs`: with `centred_on_keys`, a captured Enter/Space starts a centred press; auto-repeat while running does not restart it; without the builder nothing changes for other controls; a focused-card case keeps the ripple the only state layer (FR-004, FR-005).
 
 ### Implementation
 
-- [ ] T018 [US2] In `ui/material/ripple.rs`, add the `Ripple::centred_on_keys` builder and the post-child key handling (D2; T016, T017).
-- [ ] T019 [US2] In `ui/material/overview_card.rs`, enable `.centred_on_keys()` on the card's ripple (D2; completes FR-009 keyboard half in the showcase).
-- [ ] T020 [US2] Update `docs/user-guide/overview.md`: Enter or Space on a focused card ripples from the centre.
-- [ ] T021 Run the full gate (`scripts/gate.sh`); then quickstart §B step 2 and step 4 (keyboard part) through the `visual-pass` skill, saving evidence in the spec directory.
+- [x] T018 [US2] In `ui/material/ripple.rs`, add the `Ripple::centred_on_keys` builder and the post-child key handling (D2; T016, T017).
+- [x] T019 [US2] In `ui/material/overview_card.rs`, enable `.centred_on_keys()` on the card's ripple (D2; completes FR-009 keyboard half in the showcase).
+- [x] T020 [US2] Update `docs/user-guide/overview.md`: Enter or Space on a focused card ripples from the centre.
+- [x] T021 Run the full gate (`scripts/gate.sh`); then quickstart §B step 2 and step 4 (keyboard part) through the `visual-pass` skill, saving evidence in the spec directory.
 
 ## Dependencies & Execution Order
 

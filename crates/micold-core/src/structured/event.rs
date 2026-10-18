@@ -61,6 +61,27 @@ pub enum StructuredEvent {
     OversizedOnWire { original_bytes: u64 },
 }
 
+/// `PartialEq` is total here: the only float, `total_cost_usd`, comes from JSON, which has no NaN,
+/// so the wire messages carrying events can stay `Eq` as every `DaemonMsg` is.
+impl Eq for StructuredEvent {}
+
+impl StructuredEvent {
+    /// The length of the line text the event keeps (`raw`, or an unreadable line's `text`); `0`
+    /// for the daemon's notes. What a history's byte bound counts (research R5).
+    pub fn text_len(&self) -> usize {
+        match self {
+            Self::Init { raw, .. }
+            | Self::Assistant { raw, .. }
+            | Self::User { raw, .. }
+            | Self::Result { raw, .. }
+            | Self::StreamDelta { raw, .. }
+            | Self::Unrecognised { raw } => raw.len(),
+            Self::Unreadable { text } => text.len(),
+            Self::TurnEndedWithoutResult | Self::OversizedOnWire { .. } => 0,
+        }
+    }
+}
+
 /// One block inside a message (FR-011).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ContentBlock {
@@ -116,7 +137,7 @@ pub enum Delta {
 }
 
 /// An event and its place in the session's history (data-model *SequencedEvent*).
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SequencedEvent {
     pub seq: u64,
     pub event: StructuredEvent,

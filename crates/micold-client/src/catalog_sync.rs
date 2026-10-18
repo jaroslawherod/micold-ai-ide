@@ -470,6 +470,7 @@ mod tests {
                             unread: false,
                             main: false,
                             provider: micold_core::session::AiCli::ClaudeCode,
+                            kind: Default::default(),
                             origin: None,
                             agents: Vec::new(),
                             paused_on_user: false,

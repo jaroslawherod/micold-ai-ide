@@ -56,6 +56,7 @@ fn catalog(id: SessionId, unread: bool) -> CatalogSnapshot {
                 lifecycle: WireLifecycle::Running,
                 activity: ActivitySignal::AwaitingInput,
                 provider: AiCli::ClaudeCode,
+                kind: Default::default(),
                 input_serial: 0,
                 live_shells: Vec::new(),
                 attention_seq: 1,
