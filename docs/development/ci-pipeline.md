@@ -317,7 +317,14 @@ daemon test step is the largest part (median 614 s, 406-629 s), then core tests 
 
 **What changed**: a Windows-only step in the `test` job creates a 30 GB dynamic VHDX, formats it as
 a Dev Drive (ReFS, Defender in performance mode) and mounts it at the workspace's `target` folder,
-before rust-cache runs so the restore lands on it. Because the path is unchanged, `CARGO_TARGET_DIR`,
+before rust-cache runs so the restore lands on it. The step then writes Cargo's `CACHEDIR.TAG` into
+the volume root: a fresh volume root has no entries at all (no `.` or `..`), libuv's `scandir` reports
+that as ENOENT, and rust-cache's key globbing over the workspace (`**/.cargo/config.toml`) then
+failed, so the first run with the drive neither restored nor saved a cache and rebuilt from scratch
+(2062 s). A drive letter would not help (an empty `E:\` fails the same way), and a junction from
+`target` to a lettered drive was rejected: Git's GNU tar, which `@actions/cache` prefers on Windows,
+archives a junction as a symlink, while it walks a volume mount point as a directory.
+Because the path is unchanged, `CARGO_TARGET_DIR`,
 rust-cache, `target/remote-daemon` and the installer scripts need no change (an absolute
 `CARGO_TARGET_DIR` such as `E:/target` was rejected: rust-cache joins it onto the workspace path and
 `windows-installer.sh` treats only `/`-prefixed paths as absolute). The rust-cache step also reports
@@ -326,10 +333,12 @@ builds in a plain `target`; the run summary says which happened. The ARM64 job i
 Defender exclusions were added, and sccache was not adopted (a second cache beside rust-cache that
 does not touch the test steps).
 
-**After**: not yet measured. It needs 10 runs with the change; take them from the pull request's CI
-runs plus runs on `main` after the merge, with the same query (job durations of `build + test
-(windows-latest)`), and add the median, min, max and spread here. Also check from the rust-cache log that it restored and saved `target`; if the hit rate has
-regressed, the mount is the first suspect.
+**After**: not yet measured. It needs 10 runs with the change; take them from the pull request's
+CI runs plus runs on `main` after the merge, with the same query (job durations of `build + test
+(windows-latest)`), and add the median, min, max and spread here. In each run's log check that the
+Dev Drive step lists `CACHEDIR.TAG` in `target`, that rust-cache prints `Restored from cache key`
+(or `No cache found`) with no `ENOENT` annotation, and that its post step saves (`Saving cache`)
+after a miss. If the hit rate has regressed, the mount is the first suspect.
 
 ## Reading a run
 
