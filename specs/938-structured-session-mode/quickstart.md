@@ -5,7 +5,7 @@
 | Check | Command | Expect |
 |---|---|---|
 | Parser, history, turn, log lines against fixtures | `cargo test -p micold-core --test structured_parse` and `mise run test-core` | every fixture line → one event, typed; tool calls paired; tolerance fixture: 0 failures, 0 lines lost (SC-001, SC-002) |
-| Daemon against the stand-in | `cargo test -p micold-daemon --test structured_session --test structured_resume --test structured_lifecycle --test structured_history` | US1–US5 scenarios; SC-003, SC-005, SC-006 |
+| Daemon against the stand-in | `cargo test -p micold-daemon --test structured_session --test structured_resume --test structured_lifecycle --test structured_history --test structured_saved_history` | US1–US5 and US7 scenarios; SC-003, SC-005, SC-006, SC-007 |
 | Terminal sessions unchanged | `mise run gate` | every existing test green (SC-004) |
 | Client reducer | `cargo test -p micold-client` | start-menu entries and chevron rule, kind on create, log model |
 
@@ -22,7 +22,8 @@ Prerequisite: a logged-in `claude` on `PATH`; `mise run app` (or the dev client)
    event (init first), read-only, no input box.
 3. Plain `+` press on another row: a terminal session, as before.
 4. Stop and start the structured session: lines continue after the earlier ones; restart the
-   daemon and start it again: the conversation resumes, the log starts at the resume.
+   daemon and view it again: with Save terminal history on, the earlier lines are there and the
+   resumed run's lines follow them once it starts; with it off, the log starts at the resume.
 5. A second window viewing the same session shows the same lines.
 6. Light and dark theme: the log text and the marker read correctly in both.
 

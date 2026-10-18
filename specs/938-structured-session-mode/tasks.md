@@ -14,7 +14,7 @@ MANDATORY. In every phase the test tasks come first and must fail before the imp
 they cover starts.
 
 **Documentation**: Per Constitution Principle VII, the user guide is updated in the milestone that
-makes the structured kind user-selectable (T047, M7).
+makes the structured kind user-selectable (T047, T056, M8).
 
 **Cross-platform**: Per Constitution Principle VI, line splitting, parsing, history, turn gating and
 log text live in render-free `micold-core` and never branch on the OS; the pipe spawn goes through
@@ -22,12 +22,14 @@ log text live in render-free `micold-core` and never branch on the OS; the pipe 
 
 **Organization**: Tasks are grouped by user story. US2 (P1) comes before US1 (P1) because US1's
 daemon forwards what US2's parser produces. US6 is the selection-and-display story added for
-FR-022, FR-022a and FR-023.
+FR-022, FR-022a and FR-023. US7 (P2, FR-021a–FR-021c) was added by the design revision that
+answered clarification Q3 with "saved under Save terminal history"; its tasks are T049–T055, and
+T056 joins US6. Its phase comes before US6's, as the UI milestone is last.
 
 ## Format: `[ID] [P?] [Story] Description`
 
 - **[P]**: can run in parallel (different files, no dependency on an unfinished task)
-- **[Story]**: the user story the task belongs to (US1–US6)
+- **[Story]**: the user story the task belongs to (US1–US7)
 
 ---
 
@@ -324,11 +326,12 @@ FR-021, FR-021a).
   SC-003); a daemon restart over the saved catalog (`service_saving`) lists the session with
   `kind: Structured` and starts it with `--resume <same id>` (US3 scenarios 1, 3; FR-004); the
   first prompt is not written again after either (FR-007); within one daemon, stop/start keeps
-  earlier events in the history, while after a daemon restart the history starts at the resume
-  (FR-021a); a resume whose conversation is missing on disk fails with the same lifecycle report
+  earlier events in the history, while after a daemon restart with no history store (saving off,
+  the test daemons' default) the history starts at the resume (FR-021a; the saving-on case is
+  T054's); a resume whose conversation is missing on disk fails with the same lifecycle report
   and message as a terminal session's (US3 scenario 4).
   The cases red before T030 are the daemon-restart ones: until T030, a restored session comes
-  back terminal (harmless while the kind is unreachable from the UI, before M7). Stop/start and
+  back terminal (harmless while the kind is unreachable from the UI, before M8). Stop/start and
   `SessionRestart` resume through the `launch_args(spec)` path T020 shares, so those cases pin
   behaviour M2 built.
 - [ ] T030 [US3] Make T029 pass: restore passes `StoredSession.kind` into `Session::restored` in
@@ -393,7 +396,70 @@ M2 (T015).
 
 ---
 
-## Phase 9: User Story 6 — Choose the structured kind and see its events (P3)
+## Phase 9: User Story 7 — A structured session's events survive a daemon restart (P2)
+
+**Goal**: while **Save terminal history** is on, each structured session's event history is saved
+beside the terminal histories through 041's store and schedule, and restored after a daemon
+restart; off, nothing is written (FR-021a–FR-021c, SC-007; research R14).
+
+**Independent Test**: `cargo test -p micold-core --test terminal_history_store`, `cargo test -p micold-core --lib structured::` and
+`cargo test -p micold-daemon --test structured_saved_history`.
+
+- [ ] T049 [P] [US7] Write failing unit tests in `crates/micold-core/src/structured/saved.rs`:
+  `encode_events`/`decode_events` round-trip a history holding every saved event kind (each
+  CLI-sourced event comes back equal after `parse_line` of its `raw`; an `Unreadable` whose text is
+  valid JSON stays `Unreadable`; `TurnEndedWithoutResult` kept; `omitted` kept); `OversizedOnWire`
+  is never written; each damage reason — a terminal `.history` file's bytes (`NotAHistory`),
+  another version, cut short, wrong checksum, payload that does not decode, bytes left over,
+  `omitted + len` overflowing, over `MAX_EVENTS_FILE_BYTES` — returns its `DamageReason` and no
+  events; a pinned version-1 fixture decodes, so a change of encoding fails until
+  `EVENTS_FORMAT_VERSION` is bumped.
+- [ ] T050 [P] [US7] Write failing unit tests in `crates/micold-core/src/structured/history.rs`:
+  `EventHistory::restored(omitted, events)` numbers the events from `omitted`, the next append gets
+  `omitted + len`, and lower bounds evict further and add to `omitted`.
+- [ ] T051 [P] [US7] Write failing tests in `crates/micold-core/tests/terminal_history_store.rs` for
+  the events file kind: `save_events`/`load_events` round trip; `Unchanged` on the same bytes;
+  `Skipped` when off, forgotten or with no directory and `create_dir` false; `load_events` is
+  `None` when off, forgotten or undeleted; `set_enabled(false)` and `purge` delete `.events` and
+  `.events.tmp`; `forget` deletes both kinds; `sweep(keep)` keeps `<kept id>.events` and deletes
+  others; a session's `.history` and `.events` saves do not mark each other `Unchanged`. Every
+  existing test in the file keeps passing unchanged.
+- [ ] T052 [US7] Make T049 and T050 pass: new `crates/micold-core/src/structured/saved.rs`
+  (registered in `structured/mod.rs`), `EventHistory::restored` in
+  `crates/micold-core/src/structured/history.rs`, and the shared `frame`/`unframe` split out of
+  `crates/micold-core/src/terminal_history/format.rs` with the terminal format's bytes and its
+  pinned fixture test unchanged (`FORMAT_VERSION` stays 1).
+- [ ] T053 [US7] Make T051 pass in `crates/micold-core/src/terminal_history/store.rs`: `FileKind`,
+  `save_events`, `load_events`, both extensions in the deletion, sweep and retry paths, and
+  `last_written` keyed by session and kind.
+- [ ] T054 [US7] Write failing tests in `crates/micold-daemon/tests/structured_saved_history.rs`
+  (a private history directory and the service setup of `tests/support/history.rs`): saving on, a
+  structured session writes events, the daemon stops in order, a new daemon over the same catalog
+  and directory restores it: a viewer of the stopped session gets the saved events with their
+  `seq`s, and after a start the resumed run's events follow with `seq` continuing, none missing or
+  repeated (US7 scenario 1, SC-007); a session stopped (process-end save) and the daemon then
+  dropped without an orderly stop is restored the same way (scenario 2); saving off, no `.events`
+  file exists after events, a stop and a restart, and the restarted history starts at the resume
+  (scenario 3, SC-007); `SettingsSet { save_terminal_history: Some(false) }` deletes every
+  `.events` file at once and the in-memory history a viewer then gets is unchanged; turning it on
+  again saves the running history (scenario 4); removing the session deletes its `.events` file
+  (scenario 5); a damaged `.events` file gives an empty history, one warning naming the session and
+  the reason, and is replaced after the next save (scenario 6, FR-021c); a terminal session writes
+  no `.events` file and a structured one no `.history` file.
+- [ ] T055 [US7] Make T054 pass: in `crates/micold-daemon/src/state.rs` one call that creates an
+  `event_streams` entry by loading off the state lock and inserting if still absent, used by the
+  structured spawn and the view path, with `forget`, `sweep` and the setting change reaching the
+  events files and marking stream schedules due; in `crates/micold-daemon/src/structured.rs`
+  `EventStream::restored` and `saved_snapshot`; in `crates/micold-daemon/src/history.rs` the
+  saver's event-stream schedules (count = `next_seq`), the save at a structured process end after
+  its readers are joined, and the streams in `save_all_live`; in `crates/micold-daemon/src/server.rs`
+  the view of a structured session whose stream is not loaded yet goes through that call.
+
+**Checkpoint**: M7 — structured event history survives a daemon restart while saving is on.
+
+---
+
+## Phase 10: User Story 6 — Choose the structured kind and see its events (P3)
 
 **Goal**: the "Claude Code (structured)" chevron entry, the row marker, the read-only log pane and
 the user guide (FR-022, FR-022a, FR-023).
@@ -457,13 +523,18 @@ structured_log --test layout_snapshot`, then quickstart §B.
   it from the start-session chevron, that it is Claude Code only, the plain log it shows, and what
   it does not yet do with the issue for each (#939 transcript view, #940 rich rendering, #941
   prompt input and interrupt, #942 permission prompts, #943 slash commands and switching kinds,
-  #944 usage and subagents).
+  #944 usage and subagents); and that, while **Save terminal history** is on, the log is kept
+  across a restart of the background service.
+- [ ] T056 [US6] Extend **Save terminal history**'s note in
+  `crates/micold-client/src/ui/settings/terminal.rs` and its entry in `docs/user-guide/settings.md`
+  to say it also keeps structured sessions' events on disk and that turning it off deletes them
+  (FR-023); update any test that asserts the note's text.
 
-**Checkpoint**: M7 — the structured kind is user-selectable and documented.
+**Checkpoint**: M8 — the structured kind is user-selectable and documented.
 
 ---
 
-## Phase 10: Polish & Cross-Cutting Concerns
+## Phase 11: Polish & Cross-Cutting Concerns
 
 No code changes; done by the close unit in the close PR.
 
@@ -477,8 +548,8 @@ No code changes; done by the close unit in the close PR.
 ### Phase Dependencies
 
 - **Setup (Phase 1)** → **Foundational (Phase 2)** → **US2 parser (Phase 3)** → **US1 sc 1–3
-  (Phase 4)** → **US1 sc 4–5 (Phase 5)** → US3 (6), US4 (7), US5 (8) → **US6 (Phase 9)** →
-  Polish (10).
+  (Phase 4)** → **US1 sc 4–5 (Phase 5)** → US3 (6), US4 (7), US5 (8) → US7 (9) → **US6
+  (Phase 10)** → Polish (11).
 - T002 needs T001; T008 needs T002 and T003.
 
 ### User Story Dependencies
@@ -487,7 +558,9 @@ No code changes; done by the close unit in the close PR.
 - **US1**: US2 (the daemon forwards parsed events).
 - **US3, US4, US5**: US1 scenarios 1–3; US3 also needs US1 scenarios 4–5 (first prompt not
   resent).
-- **US6**: US1–US5 (the UI exposes a finished daemon side).
+- **US7**: US3 (a restored session keeps its kind) and US4 (a restored history reaches a late
+  viewer in frames under the limit).
+- **US6**: US1–US5 and US7 (the UI exposes a finished daemon side).
 
 ### Within Each User Story
 
@@ -495,8 +568,8 @@ No code changes; done by the close unit in the close PR.
 
 ### Parallel Opportunities
 
-- T001 ∥ T003; T004 ∥ T005; T007 ∥ T008; T011 ∥ T012 ∥ T013; T022 ∥ T023; T037 ∥ T038 ∥ T039
-  ∥ T040.
+- T001 ∥ T003; T004 ∥ T005; T007 ∥ T008; T011 ∥ T012 ∥ T013; T022 ∥ T023; T049 ∥ T050 ∥ T051;
+  T037 ∥ T038 ∥ T039 ∥ T040.
 
 ## Parallel Example: User Story 1 (scenarios 1–3)
 
@@ -516,7 +589,7 @@ the rest of epic #945 consumes; M2 is the first point where a test client sees l
 ### Incremental Delivery
 
 Each milestone below merges to `main` on its own. The structured kind stays unreachable from the
-UI until M7; terminal sessions are unchanged throughout (SC-004). Each milestone that changes the
+UI until M8; terminal sessions are unchanged throughout (SC-004). Each milestone that changes the
 wire bumps `PROTOCOL_VERSION` once (M2, M3, M6).
 
 ## Milestones
@@ -591,16 +664,29 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Depends on**: M2
 - **Tier**: full
 
-### M7 — Choose it in the app
+### M7 — Event history survives a daemon restart
 
-- **Tasks**: T037–T047
+- **Tasks**: T049–T055
+- **Deliverable**: with Save terminal history on, a daemon test client viewing a structured session
+  after a daemon restart receives its earlier events, then the resumed run's, numbered without a
+  gap or duplicate; with it off nothing is written; turning it off or removing the session deletes
+  the saved file.
+- **Satisfies**: US7 acceptance scenarios 1–6; FR-021a, FR-021b, FR-021c, FR-025; SC-007
+- **Verify**: `cargo test -p micold-core --test terminal_history_store`, `cargo test -p micold-core --lib structured::` and
+  `cargo test -p micold-daemon --test structured_saved_history`
+- **Depends on**: M4, M5
+- **Tier**: full
+
+### M8 — Choose it in the app
+
+- **Tasks**: T037–T047, T056
 - **Deliverable**: the start-session chevron offers "Claude Code (structured)"; the session's row
   is marked and its pane shows a read-only line-per-event log; the user guide describes it.
 - **Satisfies**: US6 acceptance scenarios 1–4; FR-022, FR-022a, FR-023
 - **Verify**: `cargo test -p micold-client --test structured_start_menu --test structured_log
   --test layout_snapshot`, then quickstart §B (visual-pass evidence in
   `specs/938-structured-session-mode/visual-pass/`)
-- **Depends on**: M3, M4, M5, M6
+- **Depends on**: M3, M4, M5, M6, M7
 - **Tier**: full
 
 T048 (Polish) changes no code and is left to the close unit.

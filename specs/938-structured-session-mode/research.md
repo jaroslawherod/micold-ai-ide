@@ -66,11 +66,12 @@ Code pointers are as of `origin/main` at plan time.
   retained line text; eviction drops from the front and adds to `omitted`. Each event carries a
   monotonic `seq` assigned at append. The map `SessionId → EventHistory` lives on `DaemonState`
   outside `LiveSession`, so stop/start within one daemon keeps it (FR-021a); deleting the session
-  drops it; nothing is written to disk.
+  drops it. Saving it to disk, and restoring it after a daemon restart, is R14.
 - **Rationale**: a count alone does not bound memory with multi-MiB tool results; bytes alone lets
   thousands of tiny deltas pile up. Partial-message deltas are many per turn, hence 5,000.
 - **Alternatives**: unbounded history — rejected, FR-018. A time-based window — rejected, an idle
-  session would lose its whole history. Spilling to disk — rejected, FR-021a.
+  session would lose its whole history. Spilling evicted events to disk — rejected: the bound is
+  what keeps a restored history and its file bounded too (R14).
 
 ## R6. Carrying events: no gap, no duplicate, frame size
 
@@ -176,3 +177,73 @@ Code pointers are as of `origin/main` at plan time.
   refused by the existing handshake (spec edge case).
 - **Alternatives**: no bump with defaulted fields only — rejected, an old client would silently
   drop `StructuredEvents` and show an empty pane for a structured session.
+
+## R14. Saving the event history across a daemon restart
+
+Clarification Q3, FR-021a–FR-021c, US7. Feature 041 (`specs/041-terminal-scrollback-persistence/`)
+already saves a terminal session's history; this reuses its setting, its directory, its store and
+its schedule, and adds only a second kind of file.
+
+- **Setting**: `Settings.save_terminal_history` (041 data-model §8), unchanged on disk and on the
+  wire. No new setting (clarification Q3), so no `SETTINGS_VERSION` or `PROTOCOL_VERSION` change.
+- **Where**: the same directory, `history_dir()` (`terminal-history` under the per-user local data
+  directory), and the same `HistoryStore`, which gains a second file kind: `<session uuid>.events`
+  beside `<session uuid>.history`, written through `.<name>.tmp` by `owner_only::write` as today.
+  `set_enabled(false)`, `purge`, `forget`, `sweep`, `retry_deletions` and the `undeleted`/`unlisted`
+  rules cover both extensions; `last_written` is keyed by session and file kind. One mutex then
+  orders an event save against the setting being turned off and against a removal (041 R9), and
+  the sandbox needs nothing new: the container already has that directory (041 R15, same
+  `create_dir` rule).
+- **Format**: the 041 frame — magic, version, payload length, payload, SHA-256 of all of those,
+  read capped and checked in the same order (041 contracts/saved-history-file.md §2, §4) — with its
+  own magic `MICOLDSE` and `EVENTS_FORMAT_VERSION = 1`. The frame code in
+  `terminal_history/format.rs` is split into a private `frame(magic, version, payload)` /
+  `unframe(bytes, magic, version, cap)` that both formats use, so the terminal format's bytes and
+  its pinned fixture test do not change. The payload is postcard
+  `SavedEvents { omitted: u64, events: Vec<SavedEvent> }`, with
+  `SavedEvent = Line(String) | Unreadable(String) | TurnEndedWithoutResult`: a CLI-sourced event is
+  saved as its `raw` line and parsed again by `parse_line` on load; an unreadable line keeps its
+  kind even when its text happens to parse (a partial last line); `OversizedOnWire` is wire only
+  and never in a history. Read cap `MAX_EVENTS_FILE_BYTES = MAX_BYTES + 1 MiB` (the retained text
+  plus postcard's per-event length and tag). A file over the cap, with another magic (a terminal
+  history renamed), another version, a short body, a wrong checksum, a payload that does not
+  decode, bytes left over or `omitted + events.len()` overflowing is `Damaged` with the existing
+  `DamageReason`s, never partly loaded (FR-021c).
+- **Sequence numbers**: `seq` starts at 0 and eviction is from the front only, so the first retained
+  event's `seq` is always `omitted` and the next is `omitted + len`. The file therefore stores no
+  `seq`. Core `EventHistory::restored(omitted, events)` rebuilds the history with those numbers
+  under the current bounds (evicting further when the bounds are lower), so numbering continues
+  after a restart and a viewer sees no duplicate at the seam (FR-021a). With nothing restored, a
+  history starts at 0 in each daemon run, as before.
+- **When it is saved**: the 041 saver tick (`SAVER_TICK` 5 s) also walks the event streams; each
+  has a `SaveSchedule` (041 data-model §4) whose count is the history's `next_seq`, so a save is due
+  only after a new event and at most every `SAVE_SPACING` (30 s); a write whose checksum equals the
+  last one is `Unchanged`. A structured process end saves after its readers are joined, so a
+  `TurnEndedWithoutResult` note is in the file. The orderly stop's `save_all_live` saves the event
+  streams with the terminals, inside the same `STOP_SAVE_BOUND`. Encoding runs off the state lock
+  on the blocking pool, from a snapshot taken under the history lock. Failures are logged once per
+  session and reason and retried after `SAVE_SPACING`, as for terminals.
+- **When it is restored**: lazily, the first time a daemon run needs the session's stream: its
+  structured spawn, or a client viewing its primary (the view path from R6). Both go through one
+  `DaemonState` call that, when `event_streams` has no entry, loads the file off the state lock and
+  then inserts if still absent, so two first users agree on one stream. `Damaged` gives an empty
+  history, one `warn!` with the session and the reason, and a schedule marked due so the next save
+  replaces the file (FR-021c). Lazy, because a daemon with many stopped structured sessions should
+  not read every history into memory at start.
+- **Setting changes, removal, start**: off deletes every `.events` file with the `.history` files
+  and leaves every in-memory history as it is (041's rule for `carried`); on marks every stream's
+  schedule due. Removing a session forgets it in the store (both files) and drops its stream. At
+  daemon start, `sweep(keep)` keeps `<id>.events` for the same non-archived sessions it keeps
+  `<id>.history` for; saving off at start `purge`s both kinds.
+- **Privacy**: the lines hold what the session showed (tool results, file contents), as a terminal
+  history does: owner-only files in the local data directory, gated by the same setting whose note
+  and guide entry are extended in the milestone that makes the kind selectable (FR-023).
+- **Alternatives**: a separate setting — rejected by clarification Q3. A separate directory and
+  store — rejected, it would duplicate 041's deletion, sweep and ordering rules and need a second
+  sandbox path. Saving the typed events (postcard of `StructuredEvent`) — rejected, every change to
+  the event model in #939–#944 would make saved files unreadable; the raw line is the CLI's own
+  vocabulary and is re-parsed by the current parser. An append-only journal — rejected for now:
+  eviction would need compaction, and rewriting the whole file through a rename is 041's
+  crash-safe rule; the cost is at most one write of the bounded history per 30 s, only when it
+  changed. Reading the CLI's own transcript after a restart — rejected: a different vocabulary (no
+  partial deltas, no daemon notes), a file the app does not own, and not what the user chose.

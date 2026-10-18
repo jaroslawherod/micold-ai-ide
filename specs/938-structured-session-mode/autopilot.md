@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #938
 - **Worktree branch**: claude/project-thread-cl0lw3
 - **Started**: 2026-10-18
-- **Phase**: M3
-- **Next step**: M3 — PR to open (branch pushed; title and body in the scratchpad)
+- **Phase**: design revision
+- **Next step**: design revision — fresh review round 1 of spec, plan/research/data-model, tasks
 
 ## Pull requests
 
@@ -19,6 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1035 | design PR (spec, plan, research, contracts, tasks) | merged (rebase) | 0d6ced4e44dcf63df729fc15bdd8765cdf045a8d |
 | #1044 | M1 parser, fixtures, kind persisted | merged (rebase) | 613faba7880da73fd7e6228cda6c8af60d7ea85c |
 | #1056 | M2 daemon runs a structured session, streams events | merged (rebase) | 4793cbab05478fe50b1434ab61a1c99c717701e5 |
+| #1064 | M3 first prompt and user messages | merged (rebase) | 1fab9ea568ba3d8e00c60cb14c16f3277120fecf |
 
 ## Milestones
 
@@ -26,19 +27,20 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T010 | full | parser types every recorded fixture line; kind persisted | #1044 | merged |
 | M2 | T011–T021 | full | daemon runs a structured session and streams events; lifecycle parity | #1056 | merged |
-| M3 | T022–T028 | full | first prompt and user messages | — | in progress |
+| M3 | T022–T028 | full | first prompt and user messages | #1064 | merged |
 | M4 | T029–T030 | full | resume | — | planned |
 | M5 | T031–T032 | full | late and multiple viewers | — | planned |
 | M6 | T033–T036 | full | terminal-only requests refused | — | planned |
-| M7 | T037–T047 | full | chevron entry, row marker, log pane, user guide | — | planned |
+| M7 | T049–T055 | full | event history saved under Save terminal history, restored after a daemon restart | — | planned |
+| M8 | T037–T047, T056 | full | chevron entry, row marker, log pane, user guide, setting note | — | planned |
 
 ## Decisions
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
 | 1 | clarify | Permission behaviour of a structured session before #942 | Same permission configuration as a terminal session, no override; approvals the CLI would need are refused and show as events (FR-006a) | agent | crates/micold-core/src/provider.rs ToolServerSupport; spec FR-006 |
-| 2 | clarify | How the structured kind is chosen; pane before #939 | Per-session, start-session chevron, Claude only; plain read-only line-per-event log (FR-022, FR-022a) | user (provisional: recommended option) | worktrees-and-sessions.md chevron |
-| 3 | clarify | Does event history survive a daemon restart | No: daemon memory only; history after restart starts at the resume; #939 reads the CLI transcript (FR-021a) | user (provisional: recommended option) | — |
+| 2 | clarify | How the structured kind is chosen; pane before #939 | Per-session, start-session chevron, Claude only; plain read-only line-per-event log (FR-022, FR-022a) | user (confirmed, final) | worktrees-and-sessions.md chevron |
+| 3 | clarify | Does event history survive a daemon restart | Yes, saved under "Save terminal history" like terminal sessions, restored after a daemon restart; off = memory only (FR-021a–c, US7, SC-007; research R14; new milestone M7, UI milestone renumbered M8) | user (final; jaro tapped "Save to disk", replacing the provisional "daemon memory only") | clarify card |
 | 4 | clarify | Where the structured choice is offered | "Claude Code (structured)" entry in the start-session chevron, chevron shown even with one CLI; other entry points create terminal sessions | agent | worktrees-and-sessions.md#choosing-which-ai-cli-a-session-runs |
 | 5 | tasks | Milestone cut | M1 = Setup + Foundational + US2 parser (P1); US1 split along scenarios 1–3 / 4–5 (M2, M3), as US1 with the foundation exceeds ~10 tasks; US5 lifecycle tests moved into M2 where the Proc enum is built; added US6 (P3) to spec for FR-022/022a/023 acceptance scenarios; M2 at 11 and M7 at 11 tasks kept whole (no smaller observable split) | agent | speckit-analyze C1, milestones.md rules 1–3 |
 | 6 | tasks | Plan fixes from speckit-analyze | `start_new_of_kind`/`restored_of_kind` delegation instead of changing 300 callers (I1); PROTOCOL_VERSION bumped per wire-changing milestone (M2, M3, M6), since each merges separately; `OversizedOnWire` variant added to data-model; FR-014 names daemon notes | agent | tests/schema_hash.rs; analyze I1/F4 |
@@ -93,7 +95,17 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+Design revision unit (decision 3 changed). Done: branch reset to origin/main (1fab9ea5); spec.md
+(In short, Terms, Q2/Q3 clarifications, US7, edge cases, FR-021a–c, FR-023, Key entity, SC-007,
+Assumption), research.md (R5 amended, new R14), data-model.md (seq, EventHistory::restored,
+SavedEvents, HistoryStore additions, daemon state), plan.md, quickstart.md, tasks.md (T029 amended,
+Phase 9 US7 T049–T055 = M7, US6 → Phase 10 + T056, M8) and this ledger edited; committed locally,
+not pushed. Next: fresh review round 1 (session model) of the changed spec, plan/research/
+data-model and tasks — per tasks/review.md, run via the scratchpad's run-review.sh — fix, round 2+
+with sonnet, then specs-only gate (tasks/gate.md), push with
+--force-with-lease=claude/project-thread-cl0lw3:, write pr-title.md (`#938: Structured session mode:
+run claude with stream-json next to the PTY mode — design revision`) and pr-body.md (ends
+`Refs #938`), return PR: to-open. No open findings yet.
 
 ## Open escalation
 

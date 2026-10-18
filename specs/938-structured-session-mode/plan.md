@@ -12,7 +12,9 @@ Add a second session kind, **structured**, beside today's terminal kind. A struc
 `--mcp-config` arguments a terminal session gets) over pipes instead of a PTY. The daemon splits
 stdout into lines, parses each into a typed event with a tolerant parser in `micold-core`, keeps a
 bounded per-session event history in memory, and streams history-then-live events to every client
-viewing the session. Clients send user messages with a correlated request; the daemon writes them
+viewing the session. While **Save terminal history** (feature 041) is on, that history is also saved
+to disk beside the saved terminal histories, through 041's store and schedule, and restored after a
+daemon restart (R14). Clients send user messages with a correlated request; the daemon writes them
 as one stream-json line and refuses blank ones, ones sent while not running or mid-turn, and every
 terminal-only request. The kind is chosen once, persisted, carried in session summaries, and
 offered in the client as a "Claude Code (structured)" entry of the start-session chevron; the pane
@@ -28,7 +30,9 @@ shows a plain read-only line-per-event log until #939. Details: [research.md](re
 No new crate (R9).
 
 **Storage**: session kind in the existing catalog file (`StoredSession`, additive defaulted field,
-no `schema_version` bump). Event history in daemon memory only (FR-021a).
+no `schema_version` bump). Event history in daemon memory, and while **Save terminal history** is on
+also in `<session uuid>.events` files in 041's `terminal-history` directory, written by 041's
+`HistoryStore` (R14, FR-021a–FR-021c); no new setting.
 
 **Testing**: `cargo test` — `micold-core` unit + fixture tests for the parser/history/turn logic;
 `micold-daemon` integration tests against a compiled stand-in CLI that replays recorded fixtures
@@ -56,10 +60,12 @@ results).
   driven by failing tests first; daemon behaviour by stand-in integration tests (FR-024, FR-025).
   Only the pane's draw code uses the GUI exception, validated by [quickstart.md](quickstart.md) §B.
 - [x] **II. Multi-Session**: history, turn state and user messages are keyed by `SessionId`; the
-  kind is persisted and restored (FR-004); an isolation test runs two structured sessions at once.
+  kind is persisted and restored (FR-004), and so, while saving is on, is the event history
+  (FR-021a); an isolation test runs two structured sessions at once.
 - [x] **III. Worktree Integration**: the structured session uses the same `SessionLocation::cwd`
   and the same cwd guard; no new location.
-- [x] **IV. Local-First**: nothing new leaves the device; history is in memory; fixtures are files.
+- [x] **IV. Local-First**: nothing new leaves the device; a saved event history is an owner-only file
+  in the per-user local data directory, under the user's existing setting (R14); fixtures are files.
 - [x] **V. Rust + iced**: `SessionKind` is a closed enum fixed at construction (no setter, like
   `provider`); `Proc` becomes an enum so a terminal-only operation on a structured process is a
   type-level `None`, not a runtime flag.
@@ -105,13 +111,18 @@ crates/micold-core/src/
     ├── event.rs               # StructuredEvent, ContentBlock, SequencedEvent
     ├── parse.rs               # parse_line: tolerant line → event
     ├── lines.rs               # LineSplitter: bytes → whole lines, CRLF, trailing partial
-    ├── history.rs             # EventHistory: bounded, seq-numbered, omitted marker
+    ├── history.rs             # EventHistory: bounded, seq-numbered, omitted marker; restored()
+    ├── saved.rs               # SavedEvents: the .events file payload, encode/decode (R14)
     ├── turn.rs                # TurnState + user-message acceptance (FR-008)
     ├── user_message.rs        # encode a user message as one stream-json line
     └── log_line.rs            # one display line per event (FR-022a)
 crates/micold-core/tests/
 ├── structured_parse.rs        # fixture-driven (FR-024, SC-001, SC-002)
+├── terminal_history_store.rs  # + the events file kind beside the terminal one (R14)
 └── fixtures/stream-json/      # recorded *.jsonl + README (CLI version, how captured)
+crates/micold-core/src/terminal_history/
+├── format.rs                  # frame/unframe split out, shared by both file formats (R14)
+└── store.rs                   # FileKind; save_events/load_events; deletions cover both kinds
 
 crates/micold-daemon/src/
 ├── structured.rs              # NEW: StructuredSession — pipe spawn, reader/stderr threads,
@@ -124,13 +135,15 @@ crates/micold-daemon/src/
 │                              #   terminal.rs, the VT emulator, is not used by structured sessions)
 ├── server.rs                  # SessionUserMessage; refusals for Input/Resize/Scrollback/Interrupt;
 │                              #   stream_events task beside stream_view
-└── ops.rs                     # start_with_prompt: structured first prompt = first user message
+├── ops.rs                     # start_with_prompt: structured first prompt = first user message
+└── history.rs                 # saver: event-stream schedules, process-end and orderly-stop saves
 crates/micold-daemon/tests/
 ├── support/structured.rs      # stand-in CLI replaying fixtures, argv/stdin recording
 ├── structured_session.rs      # spawn, forwarding, order, SC-006 liveness
 ├── structured_resume.rs       # US3
 ├── structured_lifecycle.rs    # US5 incl. crash loop and refusals
-└── structured_history.rs      # US4 late attach, two viewers, eviction marker
+├── structured_history.rs      # US4 late attach, two viewers, eviction marker
+└── structured_saved_history.rs # US7 saved and restored across a daemon restart, setting, removal
 
 crates/micold-client/src/
 ├── features/session.rs        # start menu entry "Claude Code (structured)"; chevron rule; kind
@@ -181,19 +194,23 @@ visual pass.
 | FR-019 | R3 `Proc` enum; wire `SessionRequestRefused` | daemon `structured_lifecycle` (input, resize, scrollback, interrupt refused; shell served) |
 | FR-020 | wire `SessionSummary.kind` | core (summary serde); client (kind reaches the row model) |
 | FR-021 | R2 (`launch_args` resume) | daemon `structured_resume` (`--resume` on restart and restore; new session gets `--session-id`) |
-| FR-021a | R5 (history map outside `LiveSession`) | daemon `structured_history` (stop/start keeps), `structured_resume` (daemon restart: history starts at resume) |
+| FR-021a | R5 (history map outside `LiveSession`); R14 (store, frame, schedule, lazy restore); data-model `SavedEvents`, `EventHistory::restored` | core (`saved` round trip, `restored` numbering); daemon `structured_resume` (stop/start keeps; saving off: restart starts at resume), `structured_saved_history` (saving on: restored, seq continues; process-end and orderly-stop saves) |
+| FR-021b | R14 *Setting changes, removal, start*; data-model *HistoryStore additions* | core `terminal_history_store` (off, purge, forget, sweep cover `.events`); daemon `structured_saved_history` (setting off deletes, memory kept; removal deletes) |
+| FR-021c | R14 *Format*, *When it is restored* | core (`decode_events` damage reasons); daemon `structured_saved_history` (damaged file: empty history, logged, replaced) |
 | FR-022 | R10; `features/session.rs`, `ui/sidebar.rs` (US6) | client `structured_start_menu`; gate `structured_row_marker_fits`; §B 1–3 |
 | FR-022a | R10; `log_line.rs`, `features/structured_log.rs`, `ui/terminal.rs` | core (`log_line` per event kind); client `structured_log`; §B 2, 5, 6 |
-| FR-023 | `docs/user-guide/worktrees-and-sessions.md` (M7) | M7 diff review (doc names kind, choice, Claude-only, later issues) |
+| FR-023 | `docs/user-guide/worktrees-and-sessions.md`, `docs/user-guide/settings.md`, the Settings → Terminal note (M8) | M8 diff review (doc names kind, choice, Claude-only, saved history, later issues) |
 | FR-024 | R11; contracts/claude-stream-json.md *Fixtures* | core `structured_parse` |
-| FR-025 | R12 | daemon (all four `structured_*` suites run with the stand-in only) |
+| FR-025 | R12 | daemon (all five `structured_*` suites run with the stand-in only) |
+| SC-007 | R14 | daemon `structured_saved_history` (orderly restart: every held event restored; saving off: no `.events` file) |
 
 ## Delivery
 
-Seven milestones, cut in [tasks.md](tasks.md) *Milestones*: M1 parser and fixtures (with the
+Eight milestones, cut in [tasks.md](tasks.md) *Milestones*: M1 parser and fixtures (with the
 session kind), M2 daemon spawn and streaming, M3 first prompt and user messages, M4 resume, M5
-late and multiple viewers, M6 lifecycle parity and refusals, M7 client selection, log pane and
-user guide. The kind is unreachable from the UI until M7.
+late and multiple viewers, M6 lifecycle parity and refusals, M7 event history saved across a
+daemon restart, M8 client selection, log pane and user guide. The kind is unreachable from the UI
+until M8.
 
 ## Complexity Tracking
 
