@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain
+- [x] No [NEEDS CLARIFICATION] markers remain
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
@@ -31,7 +31,5 @@
 
 ## Notes
 
-- One `[NEEDS CLARIFICATION]` marker remains (User Story 3, scenario 1): how the ripple stays
-  visible when activating a card closes the Overview (feature 813 FR-013). Left for the clarify
-  unit; FR-007 and SC-005 depend on its answer.
+- The User Story 3 marker was resolved in clarify round 3 (300 ms delay, Decision 2); none remain.
 - Items marked incomplete require spec updates before `/speckit-clarify` or `/speckit-plan`.

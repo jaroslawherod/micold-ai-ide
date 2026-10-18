@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #971
 - **Worktree branch**: claude/project-thread-kqz6b6
 - **Started**: 2026-10-18
-- **Phase**: plan done
-- **Next step**: tasks unit
+- **Phase**: tasks done
+- **Next step**: design PR opened by orchestrator, then milestone M1
 
 ## Pull requests
 
@@ -21,6 +21,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
+| M1 | T001–T015 | full | Pointer ripple and delayed close (US1 + US3) | — | pending |
+| M2 | T016–T021 | full | Keyboard ripple from the centre (US2) | — | pending |
 
 ## Decisions
 
@@ -39,6 +41,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Spec review | 1 | ebfa4c4fb7e76f9ccdbb3f7d34edffd3f1217864:8ee4531564743d6032729cd056a73f655abfb1a0 | CLEAN (3 MINOR, fixed: keyboard-arrived focus, dropped option C, auto-repeat/state-change rule) |
 | Plan review | 1 | aba1167a872c9a7b57e1b0ae0bfe019dd07a6048:1613dee11c21702ce5cc9703bc4091eda2128007 | CHANGES (1 MAJOR: CardActivated semantics; fixed with ActivationRequested) |
 | Plan review | 2 | (sonnet, fix diff) | CLEAN (1 MINOR fixed, prose only) |
+| Tasks review | 1 | 692a6cdaf4f4331ba12138092649840f944c834a:acadbf3d40fc9533de4b1134a4cf4676f4c49bf3 | CHANGES (1 MAJOR: [P] tasks sharing overview_card.rs; fixed, 3 MINOR fixed; marker/path edits only, no new round). speckit-analyze: C1/I1 fixed by moving request/due into pure tested code (plan D3 revised), I2-I4/E1-E4/A1 fixed |
 
 ## Declined review findings
 
