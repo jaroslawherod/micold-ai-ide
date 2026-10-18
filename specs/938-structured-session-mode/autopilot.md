@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-cl0lw3
 - **Started**: 2026-10-18
 - **Phase**: M4
-- **Next step**: M4 verify (tasks/verify.md), then reviews
+- **Next step**: M4 verify (tasks/verify.md step 1: scoped gate + review A), see Handover
 
 ## Pull requests
 
@@ -103,7 +103,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+- **Done**: branch reset to origin/main (bd881747, PR #1070 recorded). M4 implement: T029 tests in
+  `crates/micold-daemon/tests/structured_resume.rs` (4 tests, 10/10 runs green), T030 needed no
+  source change (Decision 11, cycle-log 9, test-list U13); T029/T030 ticked. Commit 93547118.
+- **Next**: tasks/verify.md step 1 — scoped gate detached (`scripts/gate.sh` per cloud.md for the
+  full one) with review A (`/code-review high origin/main...HEAD`, run via
+  `$SCRATCHPAD/m3/run-review-a.sh`-style `claude -p`, prompt modelled on `$SCRATCHPAD/m3/review-a.prompt`
+  for M4), then review B (conformance, sonnet, `$SCRATCHPAD/m3/review-b.prompt` adapted to M4,
+  base bd881747), full gate, PR files (`pr-title.md`/`pr-body.md`, `PR: to-open`).
+- **Open findings**: none. No PR opened; branch not pushed.
 
 ## Open escalation
 
