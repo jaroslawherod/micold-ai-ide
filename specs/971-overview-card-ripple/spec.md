@@ -39,6 +39,15 @@ pressed-state tint only." Labels: enhancement, flow:feature.
   that publishes the card's message (cards answer `KeyPressed`, not the release).
   _(agent-resolved: crates/micold-client/src/ui/material/ripple.rs#update,
   crates/micold-client/src/ui/material/keyboard_focus.rs#update)_
+- Q: How does the ripple stay visible when activation closes the Overview (feature 813 FR-013)? →
+  A: The Overview stays up for the ripple's expand time (300 ms, the ripple's `duration::MEDIUM_2`)
+  after the activation, so the ripple plays, then closes and shows the location's main session as
+  feature 813 specifies. _(decided by user)_
+- Q: What does input to the Overview do during that delay? → A: Nothing: the activation's outcome
+  is fixed when it happens, and until the Overview closes it takes no further card activation or
+  key, so a second click, Enter or Escape neither changes the target nor restarts the delay. This
+  keeps the outcome identical to today's, where the Overview is already gone at that point.
+  _(agent-resolved: specs/971-overview-card-ripple/spec.md#FR-008, specs/813-worktree-overview/spec.md#FR-013)_
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -114,11 +123,11 @@ shown.
 **Acceptance Scenarios**:
 
 1. **Given** the Overview is open, **When** the user activates a card with the pointer or the
-   keyboard, **Then** the ripple on that card is visible [NEEDS CLARIFICATION: how the ripple stays
-   visible when activation closes the Overview: (A) the Overview closes once the ripple has had a
-   short, fixed time to show (for example the ripple's expand time, about 300 ms), or (B) the
-   Overview closes at once as today and the ripple shows only while the pointer is held down before
-   release, so a keyboard ripple is never seen in the Overview] and then the location's main session is shown as feature 813 specifies.
+   keyboard, **Then** the Overview stays up for the ripple's expand time (300 ms) so the ripple on that
+   card plays, and then closes and the location's main session is shown as feature 813 specifies.
+3. **Given** a card has been activated and the Overview has not closed yet, **When** the user
+   clicks another card or presses Enter, Space or Escape, **Then** nothing changes: the first
+   activation's target stands and the close is neither hastened nor postponed.
 2. **Given** the user activates a card, **When** the Overview closes, **Then** the outcome of the
    activation (which location is selected, which session is shown, the offer to start a session)
    is the same as without this feature.
@@ -130,7 +139,8 @@ shown.
 - **Plain card**: a card without an activation shows no ripple on pointer press and takes no
   keyboard focus, as today.
 - **Repeated presses**: pressing the same card again while its ripple runs restarts the ripple from
-  the new origin; it does not stack a second circle.
+  the new origin; it does not stack a second circle. This applies where the card stays up (the
+  component showcase); in the Overview the first activation ends input until it closes (US3).
 - **Key auto-repeat**: a repeated Enter or Space key event while the card's ripple runs does not
   restart it; at most one ripple runs on a card at a time.
 - **Concurrent cards (Principle II)**: ripples are per card; pressing a second card while the first
@@ -172,8 +182,10 @@ shown.
   (auto-repeat) while the ripple runs MUST NOT restart it, and once a ripple has
   faded nothing on the card MUST keep animating.
 - **FR-006**: A plain card MUST NOT ripple.
-- **FR-007**: Activating a card MUST let the user see the ripple on that card, for pointer and
-  keyboard activation alike, per the answer to User Story 3's clarification.
+- **FR-007**: Activating a card in the Overview MUST keep the Overview up for the ripple's expand
+  time (300 ms) before it closes and shows the location's main session, so the ripple on that card
+  is seen for pointer and keyboard activation alike. During that time the Overview MUST take no
+  further card activation or key; the first activation's outcome stands.
 - **FR-008**: The outcome of activating a card (feature 813, FR-013 and FR-014) MUST be unchanged:
   the same location is selected, the same session shown, the same offer made.
 - **FR-009**: The component showcase's Overview card sample MUST demonstrate the pointer and
@@ -198,8 +210,7 @@ shown.
 - **SC-004**: A ripple on a card completes (grows and fades) in the same time as a ripple on the
   app's buttons, and the card draws no further frames for it afterwards.
 - **SC-005**: In the client, a user who activates a card sees the ripple on it before the main
-  session is shown, by pointer and by keyboard, on every card state (subject to User Story 3's
-  clarification).
+  session is shown, by pointer and by keyboard, on every card state, and the main session is shown 300 ms (±1 frame) after the activation.
 - **SC-006**: Every existing Overview activation check (feature 813) passes unchanged.
 
 ## Assumptions
@@ -215,6 +226,6 @@ shown.
 
 - A hover state layer on cards (cards show no hover tint today); a separate issue if wanted.
 - A plain pressed-state tint instead of a ripple (the issue's rejected alternative).
-- Changing what activating a card does, beyond the timing User Story 3's clarification settles;
-  keeping the Overview open after activation would change feature 813 FR-013 and is not offered.
+- Changing what activating a card does, beyond the 300 ms delay before the Overview closes
+  (User Story 3); keeping the Overview open after activation would change feature 813 FR-013.
 - Keyboard-origin ripples on controls other than Overview cards.
