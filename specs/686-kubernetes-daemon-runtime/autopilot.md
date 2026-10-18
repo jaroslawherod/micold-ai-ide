@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-xelisc
 - **Started**: 2026-10-17
 - **Phase**: implement
-- **Next step**: open the M1b PR from the scratchpad files (pr-title-686-M1b.txt, pr-body-686-M1b.md); then M1c
+- **Next step**: M1c gate + reviews, then write PR title/body files (cloud: orchestrator opens the PR); then M2
 
 ## Pull requests
 
@@ -18,14 +18,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #965 | design | merged | 0d36906050f9ad7fedde4b06fa0ee0ca31d231c9 |
 | #978 | M1a | merged | 0b482e1d265b286a31482b1184499377bec88ab5 |
+| #983 | M1b | merged | c256c2fe760e00e8aa3252babca54ebe4ee33d5f |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1a | T106–T116, T143, T020, T026 | full | Revision-2 core types (settings with image/AI CLIs/DaemonResources, names, failures, Cluster.replace), kubeconfig; revision-1 listener auth, Transport::Tunnel, daemon_image reverted | #978 | merged |
-| M1b | T019, T117, T118, T021, T025, T119, T120, T027, T121 | full | Pod, PVC, access secret, pod stamp/drift, start through Pull with bounds + rollback over FakeCluster | — | verified, gate green, PR files written |
-| M1c | T122, T023, T123, T124, T125, T028, T029, T126, T127 | full | Tunnel phase (SSH identification line), LiveCluster, relay, key files | — | planned |
+| M1b | T019, T117, T118, T021, T025, T119, T120, T027, T121 | full | Pod, PVC, access secret, pod stamp/drift, start through Pull with bounds + rollback over FakeCluster | #983 | merged |
+| M1c | T122, T023, T123, T124, T125, T028, T029, T126, T127 | full | Tunnel phase (SSH identification line), LiveCluster, relay, key files | — | implemented, gating |
 | M2 | T079, T072, T056, T073, T081, T075, T059, T076, T128 | full | Core Stop/Remove/forget-locally; failure + pod-gone classifiers; preflight | — | planned |
 | M3 | T063, T064, T065, T067, T068, T069, T102 | full | Allowed credentials as secrets, daemon_env, security contexts (core) | — | planned |
 | M4a | T024, T130, T066, T031, T131, T070, T032 | full | Kubernetes form via Edit (Add entry hidden), shared resources fields, credentials list | — | planned |
@@ -103,3 +104,9 @@ None. Clarify round 1 questions remain with the owner as decision cards (spec us
 
 - M1b review A F3: a create in flight when a phase bound fires is not in `Attempt.created`, so rollback misses it (an object with both labels, adopted by the next Start). M2's Remove covers it; consider a name-based sweep of the daemon's three fixed names on a `PhaseTimeout` rollback.
 - The access-secret directory variable is assumed to be `MICOLD_SSH_DIR` (`manifest::ACCESS_DIR_ENV`); #806's image must read it, or the constant changes.
+
+## M1c notes
+
+- Tunnel phase: opens one `port_forward` to `SSH_PORT`, reads the identification line; no line within the Tunnel bound, a non-`SSH-2.0-` line, or an exited container (pod not running) is `ImageContract` (the phase has its own timeout, so it is not `PhaseTimeout`). `Started` stays without a `tunnel` field: the probe stream is dropped; the client relay (`Relay`) opens its own per connection (first used in M5). `FakeCluster` serves an SSH banner by default (`set_banner(None)` = silent port).
+- `client/kube/keys.rs` (`KubeKeys`) uses `micold_core::owner_only` and the core `KeyGen` port; it does not reuse `provision::keys::DaemonKeys` (#806): that one shells out to `ssh-keygen`, names its files `client_ed25519`, and pins `[127.0.0.1]:port`; the Kubernetes contract fixes `id_ed25519`, `client_id` and the `micold-kube-<key>` alias. The real `KeyGen` is wired with Copy/Connect (M5).
+- `LiveCluster::connect(context)` is chosen once as `Capabilities::kube_connector` (expect(dead_code) until M4b). Exec-plugin failures at request time arrive as `Unreachable` text (kube reports them as a request error); resolved plugin paths cover the not-found case (`ExecPlugin`). Untestable against a real cluster here; every decision is in a pure helper with tests.

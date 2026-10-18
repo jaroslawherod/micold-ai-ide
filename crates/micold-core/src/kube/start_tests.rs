@@ -152,7 +152,10 @@ async fn a_first_start_creates_claim_secret_and_pod_and_reports_each_phase() {
     let (outcome, phases) = run(&fake, &settings()).await;
     let started = ready(outcome);
     use StartPhase::*;
-    assert_eq!(phases, [Preflight, Volume, Secrets, Pod, Schedule, Pull]);
+    assert_eq!(
+        phases,
+        [Preflight, Volume, Secrets, Pod, Schedule, Pull, Tunnel]
+    );
     let created: Vec<_> = started
         .attempt
         .created
@@ -505,4 +508,92 @@ async fn a_failed_start_keeps_the_line_of_a_client_that_already_had_one() {
     assert!(matches!(failed(outcome), KubeFailure::PhaseTimeout { .. }));
     let secret = access(&fake).await;
     assert_eq!(secret.authorized.len(), 1, "c1 can still log in");
+}
+
+fn contract(missing: &str) -> KubeFailure {
+    KubeFailure::ImageContract {
+        image: IMAGE.into(),
+        missing: missing.into(),
+    }
+}
+
+async fn assert_rolled_back(fake: &FakeCluster) {
+    for kind in [
+        ObjectKind::Pod,
+        ObjectKind::Secret,
+        ObjectKind::PersistentVolumeClaim,
+    ] {
+        assert!(fake.names(NS, kind).is_empty(), "{kind}");
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn the_tunnel_opens_the_ssh_port_and_reads_the_identification_line() {
+    let fake = cluster();
+    let (outcome, phases) = run(&fake, &settings()).await;
+    ready(outcome);
+    assert_eq!(phases.last(), Some(&StartPhase::Tunnel));
+    let want = format!("port_forward {} 2222", names().pod());
+    assert_eq!(fake.calls().iter().filter(|c| **c == want).count(), 1);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_port_nothing_answers_on_fails_the_image_contract_at_the_bound_and_rolls_back() {
+    let fake = cluster();
+    fake.set_banner(None);
+    let t0 = Instant::now();
+    let (outcome, _) = run(&fake, &settings()).await;
+    assert_eq!(
+        failed(outcome),
+        contract("no SSH server answered on port 2222")
+    );
+    assert!(t0.elapsed() >= StartPhase::Tunnel.bound());
+    assert!(t0.elapsed() < StartPhase::Tunnel.bound() + Duration::from_secs(5));
+    assert_rolled_back(&fake).await;
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_line_that_is_not_ssh_fails_the_image_contract_naming_it() {
+    let fake = cluster();
+    fake.set_banner(Some("HTTP/1.1 400 Bad Request\r\n"));
+    let (outcome, _) = run(&fake, &settings()).await;
+    assert_eq!(
+        failed(outcome),
+        contract("port 2222 answered `HTTP/1.1 400 Bad Request`, not an SSH server")
+    );
+    assert_rolled_back(&fake).await;
+}
+
+#[tokio::test(start_paused = true)]
+async fn an_exited_container_fails_the_image_contract_with_its_reason() {
+    let fake = cluster();
+    fake.set_banner(None);
+    let exited = PodStatusView {
+        phase: "Failed".into(),
+        waiting: Some(("Error".into(), "exit code 1".into())),
+        ..PodStatusView::default()
+    };
+    fake.progress(&names().pod(), vec![running(), running(), exited]);
+    let (outcome, _) = run(&fake, &settings()).await;
+    assert_eq!(failed(outcome), contract("the container exited: Error"));
+    assert_rolled_back(&fake).await;
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_refused_port_forward_is_the_clusters_answer_not_an_image_fault() {
+    let fake = cluster();
+    fake.fail_next(
+        "port_forward",
+        ApiFailure {
+            code: 403,
+            reason: "Forbidden".into(),
+            message: "pods/portforward denied".into(),
+        },
+    );
+    let (outcome, _) = run(&fake, &settings()).await;
+    assert!(matches!(
+        failed(outcome),
+        KubeFailure::Forbidden { .. } | KubeFailure::Api { .. }
+    ));
+    assert_rolled_back(&fake).await;
 }

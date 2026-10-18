@@ -4,7 +4,8 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 use std::sync::Mutex;
 
-use tokio::io::DuplexStream;
+use futures_util::FutureExt;
+use tokio::io::{AsyncWriteExt, DuplexStream};
 
 use super::AsyncReadWrite;
 use super::{
@@ -24,6 +25,7 @@ struct Inner {
     events: HashMap<String, Vec<EventView>>,
     logs: HashMap<String, String>,
     tunnels: VecDeque<DuplexStream>,
+    banner: Option<Vec<u8>>,
     calls: Vec<String>,
     next_uid: u64,
     next_version: u64,
@@ -60,6 +62,7 @@ impl FakeCluster {
     pub fn new() -> Self {
         let fake = Self::default();
         fake.add_namespace("default");
+        fake.set_banner(Some("SSH-2.0-FakeSshd\r\n"));
         fake
     }
 
@@ -152,6 +155,12 @@ impl FakeCluster {
     /// The log a pod returns.
     pub fn set_logs(&self, pod: &str, log: &str) {
         self.lock().logs.insert(pod.into(), log.into());
+    }
+
+    /// What a tunnel's daemon side has already written when it opens: an SSH server's identification
+    /// line by default; `None` for a port nothing answers on.
+    pub fn set_banner(&self, banner: Option<&str>) {
+        self.lock().banner = banner.map(|b| b.as_bytes().to_vec());
     }
 
     /// The daemon-side half of the oldest tunnel opened and not yet taken.
@@ -425,7 +434,11 @@ impl Cluster for FakeCluster {
                 )) {
                     return Err(not_found(pod));
                 }
-                let (client, daemon) = tokio::io::duplex(64 * 1024);
+                let (client, mut daemon) = tokio::io::duplex(64 * 1024);
+                if let Some(banner) = &inner.banner {
+                    // A fresh duplex has room: this write completes at once.
+                    let _ = daemon.write_all(banner).now_or_never();
+                }
                 inner.tunnels.push_back(daemon);
                 Ok(Box::new(client) as Box<dyn AsyncReadWrite>)
             });

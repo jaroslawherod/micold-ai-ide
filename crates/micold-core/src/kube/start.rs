@@ -1,16 +1,21 @@
 //! The start sequence of a Kubernetes daemon (feature 686, research K6, contract §2–§3). This
-//! milestone runs it through `Pull`; `Tunnel`, `Copy`, `Install` and `Connect` come later.
+//! milestone runs it through `Tunnel`; `Copy`, `Install` and `Connect` come later.
 
 use std::fmt;
 use std::future::Future;
 use std::time::Duration;
 
+use tokio::io::AsyncReadExt;
+
 use crate::kube::access::{AccessSecret, KeyGen};
 use crate::kube::classify::KubeFailure;
-use crate::kube::manifest::{self, PodStamp};
+use crate::kube::manifest::{self, PodStamp, SSH_PORT};
 use crate::kube::names::{is_ours, ResourceNames};
 use crate::kube::settings::KubeSettings;
 use crate::kube::{Cluster, Created, ObjectKind, ObjectView};
+
+/// What an SSH server's identification line starts with (RFC 4253 §4.2).
+const SSH_IDENT: &str = "SSH-2.0-";
 
 /// One phase of a start, shown as the row's activity while it runs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -187,7 +192,7 @@ pub async fn run_phase<T>(
         .unwrap_or(Err(KubeFailure::PhaseTimeout { phase }))
 }
 
-/// Start the daemon: every phase after `Config` up to `Pull`. A failure, or a drift to ask about,
+/// Start the daemon: every phase after `Config` up to `Tunnel`. A failure, or a drift to ask about,
 /// first undoes what this attempt created (FR-013).
 pub async fn start(
     request: &StartRequest<'_>,
@@ -232,6 +237,8 @@ async fn sequence(
     )
     .await?;
     run_phase(Pull, on_phase, await_pod(r, |s| s.running)).await?;
+    on_phase(Tunnel);
+    tunnel(r).await?;
     Ok(Vec::new())
 }
 
@@ -453,6 +460,50 @@ async fn await_pod(
             }
             Some(status) if done(&status) => return Ok(()),
             Some(_) => tokio::time::sleep(POLL).await,
+        }
+    }
+}
+
+/// The longest identification line read; a longer one is not an SSH server's (RFC 4253 §4.2).
+const BANNER_MAX: usize = 255;
+
+/// Open one port-forward to the pod's SSH port and read its identification line. Unlike the other
+/// phases, running out of the bound is an [`KubeFailure::ImageContract`], not a `PhaseTimeout`.
+async fn tunnel(r: &StartRequest<'_>) -> Result<(), KubeFailure> {
+    let (pod, ns) = (r.names.pod(), namespace(r));
+    let contract = |missing: String| KubeFailure::ImageContract {
+        image: r.image.to_string(),
+        missing,
+    };
+    let read = async {
+        let mut stream = r.cluster.port_forward(ns, &pod, SSH_PORT).await?;
+        let mut line = Vec::new();
+        let mut byte = [0u8; 1];
+        while line.len() < BANNER_MAX {
+            match stream.read(&mut byte).await {
+                Ok(1) if byte[0] == b'\n' => break,
+                Ok(1) => line.push(byte[0]),
+                _ => return Ok(None),
+            }
+        }
+        Ok::<_, KubeFailure>(Some(String::from_utf8_lossy(&line).trim_end().to_string()))
+    };
+    let line = tokio::time::timeout(StartPhase::Tunnel.bound(), read).await;
+    match line {
+        Ok(Err(failure)) => Err(failure),
+        Ok(Ok(Some(line))) if line.starts_with(SSH_IDENT) => Ok(()),
+        Ok(Ok(Some(line))) => Err(contract(format!(
+            "port {SSH_PORT} answered `{line}`, not an SSH server"
+        ))),
+        Ok(Ok(None)) | Err(_) => {
+            let status = r.cluster.pod_status(ns, &pod).await?;
+            Err(contract(match status {
+                Some(s) if !s.running => {
+                    let reason = s.waiting.map_or(s.phase, |(reason, _)| reason);
+                    format!("the container exited: {reason}")
+                }
+                _ => format!("no SSH server answered on port {SSH_PORT}"),
+            }))
         }
     }
 }
