@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-a1yb7j
 - **Started**: 2026-10-18
 - **Phase**: plan
-- **Next step**: plan unit: run speckit-plan on specs/972-overview-card-context-menu/spec.md
+- **Next step**: plan unit (continuing handover): plan review round 1, then tasks unit
 
 ## Pull requests
 
@@ -42,7 +42,12 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+Plan unit handed over at the 150k context cap. Done: `branch-start.sh` (REBASED 3 onto origin/main
+8ee45315), `speckit-plan` (no before/after_plan hooks): plan.md, research.md (R1–R10),
+data-model.md, contracts/ui.md, quickstart.md committed. Next: plan review round 1 per
+tasks/review.md with rubrics/plan.md (fresh `autopilot-reviewer`, default model), act on it per
+tasks/review-rounds.md, then set **Next step** to `tasks unit` and return DONE, PR none. No open
+findings. No PR.
 
 ## Open escalation
 
