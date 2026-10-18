@@ -93,6 +93,10 @@ impl fmt::Display for StartPhase {
 /// How often a phase that waits on the cluster asks again (research K6: a `GET` a second).
 pub const POLL: Duration = Duration::from_secs(1);
 
+/// How long a rollback waits for what it deleted to be gone, so the next start does not meet a
+/// terminating pod or claim of the same name (FR-013). Best effort: past it the rollback returns.
+pub const ROLLBACK_WAIT: Duration = Duration::from_secs(120);
+
 /// The phases a start runs, in order (data model "StartPlan").
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StartPlan(Vec<StartPhase>);
@@ -813,7 +817,9 @@ pub async fn connect_pod(
     }))
 }
 
-/// Undo what the attempt created, newest first, and the key it added to an adopted secret.
+/// Undo what the attempt created, newest first, and the key it added to an adopted secret, then
+/// wait (up to [`ROLLBACK_WAIT`]) until each deleted object is gone: a pod terminates, and its
+/// claim stays while it does.
 /// Best effort: a failure here must not hide the failure that caused the rollback.
 pub async fn rollback(r: &StartRequest<'_>, attempt: &Attempt) {
     for made in attempt.created.iter().rev() {
@@ -821,6 +827,17 @@ pub async fn rollback(r: &StartRequest<'_>, attempt: &Attempt) {
             .cluster
             .delete(namespace(r), made.kind, &made.name, &made.uid)
             .await;
+    }
+    let deadline = tokio::time::Instant::now() + ROLLBACK_WAIT;
+    for made in attempt.created.iter().rev() {
+        while tokio::time::Instant::now() < deadline
+            && matches!(
+                r.cluster.get(namespace(r), made.kind, &made.name).await,
+                Ok(Some(view)) if view.uid == made.uid
+            )
+        {
+            tokio::time::sleep(POLL).await;
+        }
     }
     if let Some(id) = &attempt.added_key {
         remove_key(r, id).await;

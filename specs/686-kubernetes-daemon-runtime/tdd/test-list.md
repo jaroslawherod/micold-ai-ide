@@ -195,7 +195,7 @@ observable result needs a real pod (A3) is hosted only in the real suite.
 
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U124 | `AccessSecret::parse` / `to_data` round-trip `ssh_host_ed25519_key`, `ssh_host_ed25519_key.pub` and `authorized_keys` (one line per client, comment `micold-client:<client id>`) | FR-024 | example | PENDING |  |
+| U124 | `AccessSecret::parse` / `to_data` round-trip `host_ed25519_key`, `host_ed25519_key.pub` and `authorized_keys` (one line per client, comment `micold-client:<client id>`) | FR-024 | example | PENDING |  |
 | U125 | `with_client` is idempotent and replaces a line with the same client id; `without_client` removes only that client's line | FR-015, FR-024 | example | PENDING |  |
 
 ### `crates/micold-core/src/kube/lifecycle.rs`

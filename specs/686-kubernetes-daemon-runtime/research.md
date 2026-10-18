@@ -89,7 +89,7 @@ re-read kubeconfig and re-run exec plugins); an in-process SSH client crate (a s
 ## K3. SSH access: per-daemon access secret, per-client keys, pinned host key (FR-008, FR-009)
 
 **Decision**: one secret per daemon, `<base>-ssh-access`, labelled ours (K5), holds the pod's host
-key pair (`ssh_host_ed25519_key`, `.pub`) and `authorized_keys`, one line per client allowed to log
+key pair (`host_ed25519_key`, `.pub`) and `authorized_keys`, one line per client allowed to log
 in, each tagged with a client id comment. The client that first starts the daemon generates the host
 key pair and its own key pair with the shared mechanism's key generation; a later client (another
 computer, FR-023 / 489 FR-021) adds its public key to `authorized_keys` by an update guarded by the

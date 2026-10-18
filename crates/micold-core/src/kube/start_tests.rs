@@ -461,6 +461,42 @@ async fn a_pod_never_scheduled_times_out_in_schedule_and_rolls_back_in_reverse()
 }
 
 #[tokio::test(start_paused = true)]
+async fn a_rollback_waits_until_a_terminating_pod_is_gone() {
+    let fake = cluster();
+    fake.progress(&names().pod(), vec![pending_pod()]);
+    fake.hold_on_delete(NS, ObjectKind::Pod, &names().pod());
+    let linger = Duration::from_secs(10);
+    let settings = settings();
+    let t0 = Instant::now();
+    let ((outcome, _), ()) = tokio::join!(run(&fake, &settings), async {
+        tokio::time::sleep(StartPhase::Schedule.bound() + linger).await;
+        fake.release(NS, ObjectKind::Pod, &names().pod());
+    });
+    assert!(matches!(failed(outcome), KubeFailure::PhaseTimeout { .. }));
+    assert!(
+        t0.elapsed() >= StartPhase::Schedule.bound() + linger,
+        "the start returned while its pod was still terminating"
+    );
+    assert!(fake.names(NS, ObjectKind::Pod).is_empty());
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_rollback_gives_up_waiting_at_its_bound() {
+    let fake = cluster();
+    fake.progress(&names().pod(), vec![pending_pod()]);
+    fake.hold_on_delete(NS, ObjectKind::Pod, &names().pod());
+    let t0 = Instant::now();
+    let (outcome, _) = run(&fake, &settings()).await;
+    assert!(matches!(failed(outcome), KubeFailure::PhaseTimeout { .. }));
+    let waited = t0.elapsed() - StartPhase::Schedule.bound();
+    assert!(waited >= ROLLBACK_WAIT, "{waited:?}");
+    assert!(
+        waited < ROLLBACK_WAIT + Duration::from_secs(5),
+        "{waited:?}"
+    );
+}
+
+#[tokio::test(start_paused = true)]
 async fn a_container_never_running_times_out_in_pull_at_its_fifteen_minutes() {
     let fake = cluster();
     let scheduled = PodStatusView {

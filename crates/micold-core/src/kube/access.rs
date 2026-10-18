@@ -4,9 +4,9 @@
 use std::collections::BTreeMap;
 
 /// The data key of the pod's ed25519 host key (private, OpenSSH format).
-pub const HOST_KEY: &str = "ssh_host_ed25519_key";
+pub const HOST_KEY: &str = "host_ed25519_key";
 /// The data key of the host key's public line.
-pub const HOST_KEY_PUB: &str = "ssh_host_ed25519_key.pub";
+pub const HOST_KEY_PUB: &str = "host_ed25519_key.pub";
 /// The data key of the `authorized_keys` file.
 pub const AUTHORIZED_KEYS: &str = "authorized_keys";
 /// The comment prefix of a client's line in `authorized_keys`.
@@ -129,6 +129,24 @@ mod tests {
             host_key,
             authorized: vec![],
         }
+    }
+
+    #[test]
+    fn the_secret_keys_are_the_file_names_the_basic_images_sshd_reads() {
+        // The secret is mounted at /run/micold/ssh, so its data keys are the file names.
+        let sshd = include_str!("../../../../packaging/basic/sshd_config");
+        let has = |line: String| sshd.lines().any(|l| l.trim() == line);
+        assert!(
+            has(format!("HostKey /run/micold/ssh/{HOST_KEY}")),
+            "sshd_config names a different host key file than {HOST_KEY}"
+        );
+        assert!(
+            has(format!(
+                "AuthorizedKeysFile /run/micold/ssh/{AUTHORIZED_KEYS}"
+            )),
+            "sshd_config names a different authorized keys file than {AUTHORIZED_KEYS}"
+        );
+        assert_eq!(HOST_KEY_PUB, format!("{HOST_KEY}.pub"));
     }
 
     #[test]
