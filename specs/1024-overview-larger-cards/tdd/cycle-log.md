@@ -38,7 +38,7 @@ failed before the implementation.
   `rows` and `Scrollable`, unchanged).
 - refactor: `cargo fmt`; test helpers `row_width` and `row_counts` shared by U2–U5. No production
   refactor needed (one expression changed).
-- commit: see `git log` for `feat(1024): cap the Overview grid at five columns`
+- commit: `a383c665`
 
 ## Notes and deviations
 
