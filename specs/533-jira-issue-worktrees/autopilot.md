@@ -22,6 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #894 | M3 | merged | 2516aa28bf7a14b886d23cd17c92cfdd76e16374 |
 | #903 | M4 | merged | 7e662c9164484c5183be2c0437e2b66dd410b915 |
 | #920 | M5 | merged | dbdd56da106e94b9ddf0069fb81db2b53731029e |
+| #1007 | M6 | open | |
 
 ## Milestones
 
@@ -32,7 +33,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 | T032–T033, T035–T053, T068–T069 | full | Start a worktree from a Jira issue (list, pick, notices); kept whole: core, adapter and dialog are one wired path (no half-wired UI) | #894 | merged |
 | M4 | T054–T058, T070 | full | Search Jira issues incl. beyond the loaded list | #903 | merged |
 | M5 | T059–T065 | full | GitHub / Jira source choice per project | #920 | merged |
-| M6 | T074, T076, T077, T078, T079 | full | Keep-or-Remove prompt when switching Jira off over a stored connection (B7 bug); shell-level Jira request tests (needs a `Capabilities` test seam) | | pending |
+| M6 | T074, T076, T077, T078, T079 | full | Keep-or-Remove prompt when switching Jira off over a stored connection (B7 bug); shell-level Jira request tests (needs a `Capabilities` test seam) | #1007 | open |
 
 ## Decisions
 
@@ -63,6 +64,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Tasks | 1 | bae8666f588552c1c7a2447bfe65696f43efeeae:c779f5c824f46d2e9d3649c1647476dc206ab227 | CLEAN (2 MINOR fixed; speckit-analyze 2 HIGH, 4 MEDIUM fixed before review) |
 | Code A (M5) | 1 | 49a404c7bb63f7867eb675cfe36caada0985a331:b6c38e8f20351df17ba252d088def630e00811a9 | 9 findings: lenient unknown issue_source value, clone, duplicated read-modify-write fixed; rest declined; visual-pass toast fixed (NotFound silent) |
 | Conformance B (M5, sonnet) | 1 | 49a404c7bb63f7867eb675cfe36caada0985a331:b6c38e8f20351df17ba252d088def630e00811a9 | CLEAN (2 MINOR fixed, prose only) |
+| Conformance B (M6, sonnet) | 1 | 6b43f04c466abeb9ce1da4c3e2ef8cfdaf9a63e1:d5c412caf13b818e50de4fa6113d688f1383d325 | CHANGES: 2 MAJOR (uncommitted test edit, cycle-log entry), 2 MINOR; all fixed |
 | Code A (M6) | 1 | 8e830d74ea771f5b9236fe9ed55680fcb9dfd894:d83f04d897c1e9d5f4a8af590ef2594330d9c64e | 8 findings: tautological token-dir test, deleted structural guard and prompt test that bypassed the shell fixed; ledger refreshed; rest declined |
 
 ## Declined review findings
