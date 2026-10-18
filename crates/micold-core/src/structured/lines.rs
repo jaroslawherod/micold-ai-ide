@@ -90,7 +90,11 @@ mod tests {
         }
         lines.extend(splitter.push(b"\n"));
         assert_eq!(lines.len(), 1, "a long line is never split (R4)");
-        assert_eq!(lines[0].len(), EIGHT_MIB, "a long line is never truncated (R4)");
+        assert_eq!(
+            lines[0].len(),
+            EIGHT_MIB,
+            "a long line is never truncated (R4)"
+        );
     }
 
     #[test]

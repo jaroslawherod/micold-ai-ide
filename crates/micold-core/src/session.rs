@@ -446,7 +446,11 @@ impl Session {
     /// A brand-new session of `kind` (feature 938, FR-002): the kind is fixed here for the
     /// session's whole life, as `provider` is. [`Session::start_new`] is this with
     /// [`SessionKind::Terminal`].
-    pub fn start_new_of_kind(location: SessionLocation, provider: AiCli, kind: SessionKind) -> Self {
+    pub fn start_new_of_kind(
+        location: SessionLocation,
+        provider: AiCli,
+        kind: SessionKind,
+    ) -> Self {
         Self {
             id: SessionId::new(),
             location,

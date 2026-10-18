@@ -2,8 +2,7 @@
 //! SC-002). Fixtures and how they were recorded: `tests/fixtures/stream-json/README.md`.
 
 use micold_core::structured::{
-    pair_tool_calls, parse_line, ContentBlock, Delta, LineSplitter, SequencedEvent,
-    StructuredEvent,
+    pair_tool_calls, parse_line, ContentBlock, Delta, LineSplitter, SequencedEvent, StructuredEvent,
 };
 
 const RECORDED: [&str; 5] = [
@@ -89,7 +88,11 @@ fn every_recorded_line_is_one_event_in_order_and_every_known_type_is_typed() {
         let lines = lines_of(name);
         let events = events_of(&lines);
         assert!(!lines.is_empty(), "{name} has lines");
-        assert_eq!(events.len(), lines.len(), "{name}: one event per line (FR-014)");
+        assert_eq!(
+            events.len(),
+            lines.len(),
+            "{name}: one event per line (FR-014)"
+        );
         for (line, event) in lines.iter().zip(&events) {
             assert_eq!(
                 raw_of(&event.event),
@@ -153,8 +156,14 @@ fn a_text_turn_starts_with_init_and_ends_with_a_successful_result() {
             ..
         } => {
             assert!(!is_error, "a plain answer is a success");
-            assert!(duration_ms.is_some(), "the result carries its duration (FR-011)");
-            assert!(total_cost_usd.is_some(), "the result carries its cost (FR-011)");
+            assert!(
+                duration_ms.is_some(),
+                "the result carries its duration (FR-011)"
+            );
+            assert!(
+                total_cost_usd.is_some(),
+                "the result carries its cost (FR-011)"
+            );
             assert!(usage.is_some(), "the result carries its usage (FR-011)");
         }
         _ => unreachable!(),
@@ -224,7 +233,10 @@ fn an_error_result_is_an_error() {
             is_error, subtype, ..
         } => {
             assert!(is_error, "the turn ended in an error result");
-            assert!(subtype.starts_with("error"), "its subtype says so: {subtype}");
+            assert!(
+                subtype.starts_with("error"),
+                "its subtype says so: {subtype}"
+            );
         }
         _ => unreachable!(),
     }
@@ -244,10 +256,17 @@ fn a_resumed_session_reports_the_same_session_id() {
 #[test]
 fn the_tolerance_fixture_keeps_every_line() {
     let lines = lines_of("tolerance");
-    assert_eq!(lines.len(), 9, "nine lines, the unterminated last one included");
+    assert_eq!(
+        lines.len(),
+        9,
+        "nine lines, the unterminated last one included"
+    );
     let events: Vec<StructuredEvent> = lines.iter().map(|l| parse_line(l)).collect();
 
-    assert!(matches!(events[0], StructuredEvent::Init { .. }), "a real init line");
+    assert!(
+        matches!(events[0], StructuredEvent::Init { .. }),
+        "a real init line"
+    );
     for (index, why) in [
         (1, "an unknown type (FR-012)"),
         (3, "an assistant line with no message (FR-012)"),

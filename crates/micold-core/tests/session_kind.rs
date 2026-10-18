@@ -91,7 +91,10 @@ fn the_default_kind_is_terminal() {
 fn the_kind_constructors_keep_the_kind_they_are_given() {
     for kind in [SessionKind::Terminal, SessionKind::Structured] {
         let fresh = Session::start_new_of_kind(SessionLocation::Default, AiCli::ClaudeCode, kind);
-        assert_eq!(fresh.kind, kind, "a new session has the kind it was created with");
+        assert_eq!(
+            fresh.kind, kind,
+            "a new session has the kind it was created with"
+        );
         assert_eq!(
             restored_of(kind).kind,
             kind,
@@ -199,7 +202,11 @@ fn a_record_without_a_kind_loads_as_terminal() {
 #[test]
 fn a_terminal_record_is_written_with_no_kind_key() {
     let (back, written) = round_trip(restored_of(SessionKind::Terminal));
-    assert_eq!(back.kind, SessionKind::Terminal, "a terminal session reloads terminal");
+    assert_eq!(
+        back.kind,
+        SessionKind::Terminal,
+        "a terminal session reloads terminal"
+    );
     assert!(
         !written.contains("\"kind\""),
         "a terminal session is written exactly as before the feature: {written}"
