@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #937
 - **Worktree branch**: claude/project-thread-rkhzho
 - **Started**: 2026-10-17
-- **Phase**: M6 PR
-- **Next step**: orchestrator opens the M6 PR (pr-title-937-M6.txt, pr-body-937-M6.md in the scratchpad), waits on CI, merges; then the close unit (T049–T050). Visual pass not run (no xdotool)
+- **Phase**: M7 (cut by close)
+- **Next step**: run M7 (T051–T052), then a new close unit (T049–T050, Status, close PR). Close unit 1 ran tdd-verify (PASS_WITH_GAPS, tdd/verification.md) and found the repository_marks hole as F1; speckit-converge not run separately (M2 review B was CHANGES and fixed, no clean B re-run), the F1 check was by reading the code against FR-006
 
 ## Pull requests
 
@@ -22,7 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #980 | M3: `* required` legend | merged | d22e7c18b3f076cace16af54f8ddfa539fc73a48 |
 | #1046 | M4: required error on submit in the dialogs | merged | a50adf7af2dba0be4fa366d6381aef69c45fb998 |
 | #1052 | M5: required error on save in Settings and the daemon form | merged | ac51bd570332a39bbbb8d2bf06e2578b450859e4 |
-| to-open | M6: required error on leaving a field (blur), selects included | to-open | — |
+| #1062 | M6: required error on leaving a field (blur), selects included | merged | 48604e4bf5ba6bf6765908ec1bca9ba0d26707e4 |
 
 ## Milestones
 
@@ -33,7 +33,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 | T023–T028 | full | `* required` legend once above the first field of every form with a required field | #980 | merged |
 | M4 | T029–T035 | full | Required error on submit in the dialogs; Create and Start runs enabled | #1046 | merged |
 | M5 | T036–T041 | full | Required error on save in Settings and the daemon form | #1052 | merged |
-| M6 | T042–T048 | full | Required error on leaving a field (blur), selects included | to-open | PR |
+| M6 | T042–T048 | full | Required error on leaving a field (blur), selects included | #1062 | merged |
+| M7 | T051–T052 | full | Settings reopens with no stale repository required error (close found, FR-006) | — | pending |
 
 ## Decisions
 
