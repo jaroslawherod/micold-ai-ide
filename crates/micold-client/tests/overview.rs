@@ -749,6 +749,15 @@ fn the_revealed_row_clears_on_the_next_sidebar_selection() {
     assert_eq!(state.sidebar.revealed, None);
 }
 
+/// The pressed key, not only the mapping: Escape with nothing floating closes the Overview.
+#[test]
+fn pressing_escape_closes_the_overview() {
+    let mut state = project_with(vec![]);
+    open_overview(&mut state);
+    state.update(Message::EscapePressed);
+    assert!(!state.overview.open);
+}
+
 #[test]
 fn escape_closes_the_overview_after_the_overlay_registry_and_the_settings_draft() {
     use micold_client::app::on_escape;
