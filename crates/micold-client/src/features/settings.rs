@@ -929,13 +929,16 @@ impl SettingsDraft {
         let plan_usage_warn_percent = self.plan_usage_warn()?;
 
         let mut profile = self.daemon.profile.clone();
-        if let Ok(image) = image_choice(
+        profile.image = image_choice(
             &profile.image,
             &self.daemon.image_reference,
             &self.daemon.image_path,
-        ) {
-            profile.image = image;
-        }
+        )
+        .map_err(|problem| FieldError {
+            field: FieldId::DaemonImage,
+            section: SettingsSection::Daemons,
+            message: problem.message(),
+        })?;
         profile.budget = self.budget()?;
         self.mapping()?;
         let jira = self.jira_action()?;
