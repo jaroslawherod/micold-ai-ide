@@ -474,6 +474,7 @@ pub fn sections<'a>(
     for (cli, name, on) in ai_cli_rows(view.profile) {
         container.push(
             Checkbox::new(name, on, roles)
+                .track_focus(FieldId::DaemonAiCli(cli), focused)
                 .on_toggle(move |checked| Message::Daemons(DaemonsMsg::AiCliToggled(cli, checked)))
                 .into(),
         );

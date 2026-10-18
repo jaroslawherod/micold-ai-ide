@@ -190,6 +190,8 @@ pub enum FieldId {
     DaemonImagePath,
     /// Settings → Daemons: one host credential's share opt-in in the form (feature 804).
     DaemonCredential(micold_core::sandbox::CredentialShare),
+    /// Settings → Daemons: one AI CLI's checkbox in the form (feature 806).
+    DaemonAiCli(micold_core::session::AiCli),
     /// Settings → Daemons: the form's keep-running-after-sign-out checkbox (feature 804).
     DaemonSurviveLogout,
     /// Settings → Daemons: the form's processor limit (feature 804).
