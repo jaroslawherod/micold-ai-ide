@@ -584,8 +584,15 @@ mod tests {
     /// race test only meets it on macOS.
     #[test]
     fn a_not_connected_error_is_read_as_the_daemon_going_away() {
-        let enotconn =
-            io::Error::from_raw_os_error(if cfg!(target_os = "macos") { 57 } else { 107 });
+        // ENOTCONN: 57 on macOS, 107 on Linux, WSAENOTCONN (10057) on Windows.
+        let raw = if cfg!(target_os = "macos") {
+            57
+        } else if cfg!(windows) {
+            10057
+        } else {
+            107
+        };
+        let enotconn = io::Error::from_raw_os_error(raw);
         assert_eq!(enotconn.kind(), io::ErrorKind::NotConnected);
         assert!(vanished_mid_handshake(&enotconn));
         let wrapped: io::Error = CodecError::Io(enotconn).into();
