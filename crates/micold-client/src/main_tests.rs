@@ -3437,6 +3437,7 @@ fn a_started_sandbox() -> micold_core::sandbox::lifecycle::Started {
         },
         unsatisfiable: Vec::new(),
         mounted: None,
+        legacy: false,
     }
 }
 

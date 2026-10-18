@@ -610,6 +610,7 @@ mod tests {
             capabilities: caps(),
             unsatisfiable: Vec::new(),
             mounted: None,
+            legacy: false,
         }
     }
 

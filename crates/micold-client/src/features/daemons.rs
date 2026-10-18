@@ -18,12 +18,12 @@ use micold_core::daemons::{
 };
 use micold_core::provision::{ProvisionEvent, Step};
 use micold_core::required::{RequiredMarks, Requirement};
-use micold_core::sandbox::image::{ImageSourceKind, ImageSourceProblem};
+use micold_core::sandbox::image::{ImageChoice, OwnImage};
 use micold_core::sandbox::runtime::RuntimeKind;
 use micold_core::sandbox::{CredentialShare, NetworkPosture, SandboxProfile};
 use micold_core::session::SessionId;
 
-use super::settings::{parse_budget, LimitField, ProfileTexts};
+use super::settings::{image_choice, parse_budget, LimitField, ProfileTexts};
 use super::window::FieldId;
 use super::Outcome;
 use crate::floating_surface;
@@ -64,6 +64,26 @@ pub enum DraftRuntime {
     Ssh,
 }
 
+/// The two entries of the image form (feature 806, FR-001).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ImageKind {
+    /// The pinned basic image, recommended.
+    #[default]
+    Basic,
+    /// The user's own image, which must run an SSH server.
+    Own,
+}
+
+impl ImageKind {
+    /// The entry `image` is shown under.
+    pub fn of(image: &ImageChoice) -> Self {
+        match image {
+            ImageChoice::Basic => Self::Basic,
+            ImageChoice::Own(_) => Self::Own,
+        }
+    }
+}
+
 /// The add/edit form's fields, as typed (the port is text so a bad one can be reported).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Draft {
@@ -79,8 +99,10 @@ pub struct Draft {
     pub port: String,
     /// Image, budget and the rest of a container's profile.
     pub profile: SandboxProfile,
-    /// The image archive path as typed (container runtime only; empty means none).
+    /// The image archive path as typed ("My own image" only; empty means none).
     pub image_path: String,
+    /// The image reference as typed ("My own image" only).
+    pub image_reference: String,
     /// The processor limit in cores as typed; empty means unset (rule RB-2).
     pub cpus: String,
     /// The memory limit in MiB as typed; empty means unset.
@@ -123,14 +145,12 @@ impl Draft {
                     FieldId::DaemonContainerName,
                     Requirement::text(true, &self.container_name),
                 ));
-                fields.push((
-                    FieldId::DaemonImage,
-                    Requirement::text(true, &self.profile.image.reference),
-                ));
-                if self.profile.image.kind == ImageSourceKind::ImportedFile {
+                // "My own image" needs a reference or an archive, not both (feature 806).
+                if ImageKind::of(&self.profile.image) == ImageKind::Own {
+                    let archive = !self.image_path.trim().is_empty();
                     fields.push((
-                        FieldId::DaemonImagePath,
-                        Requirement::text(true, &self.image_path),
+                        FieldId::DaemonImage,
+                        Requirement::text(!archive, &self.image_reference),
                     ));
                 }
             }
@@ -549,6 +569,7 @@ pub fn begin_add(state: &mut State) {
         port: String::new(),
         profile,
         image_path: texts.image_path,
+        image_reference: texts.image_reference,
         cpus: texts.cpus,
         memory_mib: texts.memory_mib,
         pids: texts.pids,
@@ -615,6 +636,7 @@ pub fn begin_edit<'s>(state: &'s mut State, model: &Model<'_>, id: DaemonId) -> 
         port,
         profile,
         image_path: texts.image_path,
+        image_reference: texts.image_reference,
         cpus: texts.cpus,
         memory_mib: texts.memory_mib,
         pids: texts.pids,
@@ -723,8 +745,17 @@ fn runtime_of(
         DraftRuntime::Container => {
             let port = container_port(draft, registry, taken_elsewhere, next_port)?;
             let mut profile = draft.profile.clone();
-            let path = draft.image_path.trim();
-            profile.image.path = (!path.is_empty()).then(|| PathBuf::from(path));
+            profile.image =
+                image_choice(&profile.image, &draft.image_reference, &draft.image_path).map_err(
+                    |problem| FormError {
+                        field: if draft.image_path.trim().is_empty() {
+                            "image"
+                        } else {
+                            "image_path"
+                        },
+                        message: problem.message(),
+                    },
+                )?;
             profile.budget = parse_budget(
                 &draft.cpus,
                 &draft.memory_mib,
@@ -740,17 +771,6 @@ fn runtime_of(
                 },
                 message,
             })?;
-            if let Some(problem) = profile.image.validate().into_iter().find(|p| {
-                matches!(
-                    p,
-                    ImageSourceProblem::MissingArchivePath | ImageSourceProblem::UnusedArchivePath
-                )
-            }) {
-                return Err(FormError {
-                    field: "image_path",
-                    message: problem.message(),
-                });
-            }
             Ok(DaemonRuntime::Container(
                 micold_core::daemons::ContainerSettings {
                     profile,
@@ -1029,7 +1049,7 @@ pub enum Msg {
     /// The container runtime (Docker or Podman) changed.
     ContainerRuntimeChosen(RuntimeKind),
     /// The image source changed.
-    ImageKindChosen(ImageSourceKind),
+    ImageKindChosen(ImageKind),
     /// The image archive path field changed.
     ImagePathEdited(String),
     /// A credential share was ticked or unticked.
@@ -1174,9 +1194,14 @@ pub fn update(state: &mut State, model: &mut Model<'_>, msg: Msg) -> Vec<Outcome
         Msg::RuntimeChosen(v) => edit(state, &|d| d.runtime = v),
         Msg::ContainerNameEdited(v) => edit(state, &|d| d.container_name = v.clone()),
         Msg::PortEdited(v) => edit(state, &|d| d.port = v.clone()),
-        Msg::ImageEdited(v) => edit(state, &|d| d.profile.image.reference = v.clone()),
+        Msg::ImageEdited(v) => edit(state, &|d| d.image_reference = v.clone()),
         Msg::ContainerRuntimeChosen(v) => edit(state, &|d| d.profile.runtime = v),
-        Msg::ImageKindChosen(v) => edit(state, &|d| d.profile.image.kind = v),
+        Msg::ImageKindChosen(v) => edit(state, &|d| {
+            d.profile.image = match v {
+                ImageKind::Basic => ImageChoice::Basic,
+                ImageKind::Own => ImageChoice::Own(OwnImage::Reference(String::new())),
+            }
+        }),
         Msg::ImagePathEdited(v) => edit(state, &|d| d.image_path = v.clone()),
         Msg::CredentialToggled(share, on) => edit(state, &|d| {
             if on {

@@ -47,6 +47,7 @@ fn view<'a>(
     ContainerView {
         profile,
         image_path: "",
+        image_reference: "",
         cpus: texts[0],
         memory_mib: texts[1],
         pids: texts[2],

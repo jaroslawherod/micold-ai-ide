@@ -145,7 +145,7 @@ fn invalid_port_and_image_name_their_field() {
         "port"
     );
     add_container(&mut state, "Three", "c3", "7003");
-    state.draft.as_mut().unwrap().profile.image.reference = "::bad ref::".into();
+    send_own_reference(&mut state, "::bad ref::");
     assert_eq!(
         daemons::save(&mut state, &mut w.model()).unwrap_err().field,
         "image"
@@ -323,7 +323,7 @@ fn an_ssh_daemon_without_auto_start_is_added_stopped_and_a_bad_host_names_its_fi
 // Feature 804, M1: the container settings of the Session service page live in the daemon form.
 
 use micold_core::daemons::DaemonRuntime;
-use micold_core::sandbox::image::ImageSourceKind;
+use micold_core::sandbox::image::{ImageChoice, OwnImage};
 use micold_core::sandbox::runtime::RuntimeKind;
 use micold_core::sandbox::{CredentialShare, NetworkPosture};
 
@@ -335,6 +335,13 @@ fn profile_of(
         DaemonRuntime::Container(c) => c.profile.clone(),
         other => panic!("not a container: {other:?}"),
     }
+}
+
+/// Choose "My own image" and type `reference` in its field.
+fn send_own_reference(state: &mut State, reference: &str) {
+    let draft = state.draft.as_mut().unwrap();
+    draft.profile.image = ImageChoice::Own(OwnImage::Reference(String::new()));
+    draft.image_reference = reference.to_string();
 }
 
 fn send(state: &mut State, w: &mut World, msg: daemons::Msg) -> Vec<Outcome> {
@@ -350,7 +357,7 @@ fn profile_fields_round_trip_through_save() {
     daemons::begin_edit(&mut state, &w.model(), boxed);
     for msg in [
         Msg::ContainerRuntimeChosen(RuntimeKind::Podman),
-        Msg::ImageKindChosen(ImageSourceKind::ImportedFile),
+        Msg::ImageKindChosen(daemons::ImageKind::Own),
         Msg::ImagePathEdited("/tmp/image.tar".into()),
         Msg::CredentialToggled(CredentialShare::GitConfig, true),
         Msg::NetworkChosen(NetworkPosture::NoOutbound),
@@ -365,10 +372,9 @@ fn profile_fields_round_trip_through_save() {
     daemons::save(&mut state, &mut w.model()).unwrap();
     let p = profile_of(&w, boxed);
     assert_eq!(p.runtime, RuntimeKind::Podman);
-    assert_eq!(p.image.kind, ImageSourceKind::ImportedFile);
     assert_eq!(
-        p.image.path.as_deref(),
-        Some(std::path::Path::new("/tmp/image.tar"))
+        p.image,
+        ImageChoice::Own(OwnImage::Archive("/tmp/image.tar".into()))
     );
     assert!(p.credentials.contains(&CredentialShare::GitConfig));
     assert_eq!(p.network, NetworkPosture::NoOutbound);
@@ -403,7 +409,7 @@ fn a_bad_limit_or_archive_names_its_field_and_changes_nothing() {
         (Msg::MemoryLimitEdited("1".into()), "memory"),
         (Msg::PidLimitEdited("x".into()), "pids"),
         (Msg::StorageLimitEdited("1".into()), "storage"),
-        (Msg::ImagePathEdited("/tmp/x.tar".into()), "image_path"),
+        (Msg::ImageKindChosen(daemons::ImageKind::Own), "image"),
     ] {
         daemons::begin_edit(&mut state, &w.model(), boxed);
         send(&mut state, &mut w, msg);
