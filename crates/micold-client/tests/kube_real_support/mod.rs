@@ -666,6 +666,7 @@ pub async fn work(connection: &mut DaemonConnection, suite: &Suite, seen: &mut S
             worktree_dir: "feature-x".into(),
             provider: AiCli::ClaudeCode,
             allow_additional_session: true,
+            kind: Default::default(),
         },
         3,
         seen,
