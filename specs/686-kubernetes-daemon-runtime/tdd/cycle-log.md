@@ -148,7 +148,7 @@ the core baseline still fails only the four root-user tests named above).
   (`kube::credentials::`, `kube::manifest::`, `kube::start::`); each asserts on the secrets,
   volumes, mounts and security contexts of the manifests the `FakeCluster` recorded. No red run
   was captured separately in this cloud unit (the tests and their code were added together);
-  recorded honestly here. refactor: none needed.
+  recorded honestly here. Waiver (review B F1): the behaviours are pure manifest/credential builders over the fake cluster; a late red would re-test reverted code, so the strength check is the milestone's mutation pass in close (T098). Review A's SSH-key mode fix: `GIT_SSH_COMMAND` copies the key to a 0600 temp file (the old assertion `-i /run/micold/creds/ssh/id` fails against the new command, the new one passes). refactor: none needed.
 - Decision: with nothing allowed the `Secrets` phase makes no create, replace or delete of a
   credential secret and reads no source file, but it does `get` each possible credential secret
   name to find one a withdrawal left behind (there is no list call), so A12 holds when the last
