@@ -161,7 +161,7 @@ settings, start it, and check it connects with the client's version (quickstart 
 
 ### Implementation
 
-- [ ] T049 [US1] Add `BASIC_IMAGE` to `crates/micold-core/src/sandbox/basic_image.rs`: the exact line printed in the job summary of the `basic-image.yml` run on `main` after M1 merged (read it with the GitHub MCP actions tools); `scripts/basic-image-hash.sh --check` prints `CURRENT`
+- [x] T049 [US1] Add `BASIC_IMAGE` to `crates/micold-core/src/sandbox/basic_image.rs`: the exact line printed in the job summary of the `basic-image.yml` run on `main` after M1 merged (read it with the GitHub MCP actions tools); `scripts/basic-image-hash.sh --check` prints `CURRENT`
 - [ ] T050 [US1] Add `ImageChoice`, `OwnImage` and `OwnImageDraft` (with validation) in `crates/micold-core/src/sandbox/image.rs`; replace `SandboxProfile.image: ImageSource` with `ImageChoice` in `crates/micold-core/src/sandbox/mod.rs` (serde reads old `image` through `ImageSource::into_choice`, added here in `sandbox/image.rs`, and writes `image_choice`); remove `DEFAULT_IMAGE` and `DEV_IMAGE_TAG` from every default (keep `DEFAULT_IMAGE_REPOSITORY` for `is_released_image` and the `release.yml` grep) (FR-003)
 - [ ] T051 [US1] Change `SandboxSpec` in `crates/micold-core/src/sandbox/mod.rs` and the create arguments in `crates/micold-core/src/sandbox/argv.rs` per data-model *SandboxSpec* (publish 2222, read-only `/run/micold/ssh` mount, `MICOLD_HOME`, no token mount for basic/own)
 - [ ] T052 [US1] Add `Adoption::Legacy`, drop the fingerprint replace and map `Stage` onto `Step` in `crates/micold-core/src/sandbox/lifecycle.rs`

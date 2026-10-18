@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #806
 - **Worktree branch**: claude/project-thread-uwrpqv
 - **Started**: 2026-10-17
-- **Phase**: M4
-- **Next step**: M4 pushed; orchestrator opens the PR from the scratchpad pr-title / pr-body.md, waits on CI and merges, then M5
+- **Phase**: M5
+- **Next step**: M5 in progress (handover 1): continue from *Handover*
 
 ## Pull requests
 
@@ -20,6 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #979 | M1 basic image | merged | 110b724e0371648d2de53c5f5c033f57acad16b2 |
 | #982 | M2 shared provisioning | merged (Windows job failed once on an unrelated timing test, micold-daemon history_stop_request ten_busy_sessions_are_all_saved_within_the_bound; passed on re-run) | 198a12312b8b801dce177e47998024902732f0ac |
 | #988 | M3 static Linux daemons (two CI fixes: SIGPIPE in remote-daemon-bundle.test.sh; zig crashed on the Windows ARM64 runner, so musl daemons are built once in the Linux `linux-daemons` job and downloaded by packaging jobs) | merged | 32798973fe5df793f5c85b6ed52a84e52230591d |
+| #995 | M4 AI CLI install step + registry-only relay | merged | abe058a2424ea0551edb2f6667ac732064434557 |
 
 ## Milestones
 
@@ -28,7 +29,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T009 | full | basic image published by `basic-image.yml` on merge (prints the `BASIC_IMAGE` pin) | #979 | merged |
 | M2 | T010–T025, T087 | full | shared `micold_core::provision` (contract); 489 remote daemons start through it, row shows shared steps — #686 can plan onto it from here | #982 | merged |
 | M3 | T026–T031 | full | static Linux musl daemons (x86_64, aarch64) in every package; `NoMatchingBuild` | #988 | merged |
-| M4 | T032–T041 | full | AI CLI install step + registry-only relay on app-owned targets; daemon offers only installed CLIs — #686 has the full contract | pending PR | pushed |
+| M4 | T032–T041 | full | AI CLI install step + registry-only relay on app-owned targets; daemon offers only installed CLIs — #686 has the full contract | #995 | merged |
 | M5 | T042–T070 | full | container daemons on the pinned basic image over SSH; two-entry image form; migration and legacy containers | — | pending |
 | M6 | T071–T078 | full | per-daemon AI CLI selection; install warnings in the row | — | pending |
 | M7 | T079–T086 | full | step bounds, cancel, rollback, concurrent starts; end-to-end suite in CI | — | pending |
@@ -91,7 +92,22 @@ Milestone notes:
 
 ## Handover
 
-None.
+M5 unit 1 (stopped at ~150k context after reading code; only T049 is edited, uncommitted work is committed with this ledger). Branch was reset to origin/main (abe058a2); `branch-start.sh` refuses here (gh GraphQL unauthenticated), so use `git fetch origin main && git checkout -B claude/project-thread-uwrpqv origin/main` only if the branch is not yet ahead of main with M5 commits.
+
+**Done**: T049 `BASIC_IMAGE` added to `crates/micold-core/src/sandbox/basic_image.rs`: `ghcr.io/jaroslawherod/micold-basic:722a7d9ef0d6aadb@sha256:bea51dd1e190fe1ab4c34129c5784eb3e6f2f65ac9b0ac63b6fff1c06d608366` (digest read from ghcr.io registry for the tag that `basic-image.yml` run 39078607729 published on main at 110b724e; `scripts/basic-image-hash.sh --check` prints CURRENT). The `ci.yml` pin check (T055) is still to add. Tick T049 in tasks.md.
+
+**Next**: T042–T048, T050–T070 in dependency order: image.rs (`ImageChoice`, `OwnImage`, `OwnImageDraft`, `ImageSource::into_choice`) → `SandboxProfile.image: ImageChoice` → `SandboxSpec`/argv → lifecycle `Adoption::Legacy` → migration (daemons.rs, settings.rs) → client (daemon.rs `Dial::ContainerSsh`, shell/sandbox.rs, container_fields.rs, features/daemons.rs, ui/settings/daemons.rs) → real-runtime suites, mise.toml, ci.yml, docs, visual pass.
+
+**Design notes found while reading (saves re-reading)**:
+- ~30 files use `ImageSource`/`profile.image` (list: `grep -rn 'ImageSource\|profile\.image\|\.image\.' crates`): core `sandbox/{argv,cli,runtime,lifecycle,mod,parse}.rs`, `settings.rs:851`, `daemons.rs:276,659`, client `features/{daemons,settings}.rs`, `shell/{startup:278,daemon_sync:875,persist:374}.rs`, `ui/settings/container_fields.rs`, many tests under `crates/*/tests/` (`sandbox_*`, `settings_retired_image_namespace`, `protocol_auth`, `daemons_*`).
+- Chosen serde design: `SandboxProfile` derives `Serialize` (field `image: ImageChoice` renamed `image_choice`) and deserialises through a wire struct that accepts old `image` (`ImageSource`) and `image_choice`; `image_choice` wins. A `#[serde(skip)] moved_off_released: bool` on the profile carries the "released image" fact to `ContainerSettings`' deserialiser / `migrated_entry`, which turn it into `migration: Some(MovedOffReleasedImage)` and reset it. `ImageChoice` JSON: `{"kind":"basic"}` / `{"kind":"own","reference":..}` / `{"kind":"own","archive":..}`; own with neither → Basic. `ImageSource::into_choice` rules are the table in contracts/daemon-settings.md (released repo via `is_released_image` → Basic + moved; other registry ref → Own(Reference); imported_file with path → Own(Archive); local_build → Own(Reference)). Keep `repair_retired_namespace` and its unit tests; T057's test asserts via a loaded settings file.
+- `acquire_image` (`sandbox/cli.rs:169`, `runtime.rs:255`, `lifecycle.rs acquire`) takes `&ImageSource` today: change to `&ImageChoice`; Basic → pull `BASIC_IMAGE`; `Own(Reference)` → inspect-then-pull (a local `micold-basic:dev` must work; `LocalBuild` no longer exists); `Own(Archive)` → `load -i`. Keep the 15-minute acquire bound for M7, not here.
+- `adopt(existing, expected_image, expected_fingerprint, strict)` (`lifecycle.rs:217`) → drop the fingerprint args and `StaleReason::StaleBuild`'s production; add `Adoption::Legacy(id)` for a *running* container whose image repository `is_released_image` (stopped → `Replace`). `Started` needs a `legacy: bool` (or the adoption) so the client picks `Dial::Container`. `bring_up` caller: `shell/sandbox.rs:383`.
+- `argv::create` (`sandbox/argv.rs:99`): publish `127.0.0.1:{port}:2222`; drop token `-v` (`mount_args` line ~224) and `MICOLD_IMAGE_REFERENCE` stays (use `profile.image.reference()`); add `-e MICOLD_HOME=<container home>`; add `--group-add 0` for the Docker dialect (entrypoint needs gid 0 to append /etc/passwd; podman keep-id needs none); mount **three single files** read-only: `<keys>/host_ed25519` → `/run/micold/ssh/host_ed25519_key`, `host_ed25519.pub` → `/run/micold/ssh/host_ed25519_key.pub`, `authorized_keys` → `/run/micold/ssh/authorized_keys` (sshd_config in the image names `host_ed25519_key`; the task text says `host_ed25519` — the file names on the host are those of `DaemonKeys`). Replace `MountSet.secret: SecretMount` with an `SshMount`; `CONTAINER_TOKEN_PATH`/`host_token_path` stay for the legacy path (`shell/sandbox.rs:282-291` still writes a token only for legacy).
+- Client flow today: `shell/sandbox.rs::start` (sync, blocking, bring-up) → actors dial (`daemon.rs actor_specs` line ~216 builds `Dial::Container{port,token_path}`). `Dial::ContainerSsh` is built in `actor_specs` for non-legacy container entries: needs `PinnedReach{host:"127.0.0.1", port:c.port, user, key:keys.client_key(), known_hosts:keys.known_hosts()}`, `Ownership::AppOwned{ai_clis: AiCliSelection::all(), table: AiCliTable::pinned(), state_dir:"/var/lib/micold-ai-ide", egress}`, `StepBounds::container()`, and runs like `ssh_attempt` (`daemon.rs:774`) with `provisioning_sink`. Keys dir = `<state_dir>/ssh` per daemon (data-model says `<daemon state dir>/ssh`; pick per-daemon dir by container name). `DaemonKeys::ensure(dir, platform, runner)` is async and must run before `create` (the files are mounted): do it in the bring-up task before `start`. `known_hosts` via `DaemonKeys::write_known_hosts(port)`.
+- OPEN question for the next unit: the SSH login name. The entrypoint appends `micold:x:<uid>` only when no passwd line has that uid; the node base image has `node` at uid 1000, so on a host uid 1000 the login name is `node`, else `micold`. Either read the name with `<runtime> exec` or make `PinnedReach.user` robust; changing `packaging/basic/` changes the content hash and needs a new publish (avoid). `provision/mod.rs` tests use user "dev".
+- `Dial::Container` keeps the legacy TCP+token path for `Adoption::Legacy`; the connection hook for `Dial` is `daemon.rs:489`, and `tests/per_daemon_actors.rs:93`, `tests/daemons_feature.rs:839` match on it.
+- Disk 20 GB free at start: wipe `target-shared/debug` before the gate. `SCRATCHPAD` env var is unset in the shell: export it from the prompt.
 
 ## Open escalation
 

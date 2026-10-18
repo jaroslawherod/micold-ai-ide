@@ -8,8 +8,7 @@
 //!
 //! [`BASIC_IMAGE_CONTENT_HASH`] is the hash of the tree the client expects; `scripts/basic-image-hash.sh
 //! --check` compares it with `packaging/basic/` (`CURRENT` or `DRIFT <pinned> <tree>`). The digest
-//! pin the client pulls by is added once the publish workflow has run on `main` (tasks T049), since
-//! no digest exists before then. See `specs/806-container-daemon-ssh-provisioning/contracts/basic-image.md`.
+//! pin the client pulls by is [`BASIC_IMAGE`]. See `specs/806-container-daemon-ssh-provisioning/contracts/basic-image.md`.
 
 use super::image::{ImageRef, DEFAULT_IMAGE_REPOSITORY, RETIRED_IMAGE_REPOSITORY};
 
@@ -22,6 +21,15 @@ pub const BASIC_IMAGE_REPOSITORY: &str = "ghcr.io/jaroslawherod/micold-basic";
 /// Change it in the same commit as any file under `packaging/basic/`;
 /// `scripts/tests/basic-image-hash.test.sh` fails while it disagrees with the tree.
 pub const BASIC_IMAGE_CONTENT_HASH: &str = "722a7d9ef0d6aadb";
+
+/// The basic image the client starts a new container daemon from: the tag the publish workflow
+/// pushed for [`BASIC_IMAGE_CONTENT_HASH`], pinned by the digest of its multi-architecture index
+/// (the line `basic-image.yml` printed for the run on `main` at `110b724e`). Always carries a
+/// digest, so what a container runs cannot change under the tag (FR-002).
+///
+/// `scripts/basic-image-hash.sh --check` and CI's pin check (`docker manifest inspect` of this
+/// reference) keep it honest.
+pub const BASIC_IMAGE: &str = "ghcr.io/jaroslawherod/micold-basic:722a7d9ef0d6aadb@sha256:bea51dd1e190fe1ab4c34129c5784eb3e6f2f65ac9b0ac63b6fff1c06d608366";
 
 /// The tag a local build of `packaging/basic/` carries (`docker build -t micold-basic:dev`), and the
 /// one the real-runtime suite starts from by default.
