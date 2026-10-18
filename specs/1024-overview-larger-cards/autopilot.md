@@ -9,20 +9,21 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1024
 - **Worktree branch**: claude/project-thread-iq9j8q
 - **Started**: 2026-10-18
-- **Phase**: implement M1
-- **Next step**: M1 T013 full gate, then PR
+- **Phase**: M1 PR open
+- **Next step**: orchestrator opens the M1 PR, waits on CI and merges; then close the spec
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1033 | Design: spec, plan, tasks | merged | 384f526b502ebf324670262862084f45c3531947 |
+| (orchestrator opens) | M1: five-column cap (T001–T013); gate green at 8046c5f6 | to open | — |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T013 | full | Overview shows at most five cards per row, exactly five from 1464 px of grid, wider cards; narrow panes reflow; user guide Layout | — | in progress |
+| M1 | T001–T013 | full | Overview shows at most five cards per row, exactly five from 1464 px of grid, wider cards; narrow panes reflow; user guide Layout | (orchestrator opens) | PR to open |
 
 ## Decisions
 
