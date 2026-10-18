@@ -156,7 +156,7 @@ decisions below settle the design questions the spec leaves to planning.
 ## R11. Summary texts are computed in render-free code
 
 - **Decision**: `daemon_sections::summary(&Draft, Section) -> Option<String>` and
-  `daemon_sections::marked(&Draft, Section) -> bool`, tested from `tests/daemon_sections.rs`. The
+  `daemon_sections::marked(&Draft, Section) -> bool`, tested from `tests/features_daemon_sections.rs`. The
   view passes them straight to the builder. Exact texts: [contracts/ui.md](contracts/ui.md#section-summaries).
 - **Rationale**: Principle I's GUI exception covers glue only; the summary is a decision per value.
 - **Alternatives rejected**: building summary strings in `ui/settings/daemons.rs` — untestable from

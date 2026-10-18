@@ -94,6 +94,13 @@ fn settings_showing_in(
             micold_client::features::daemons::Msg::EditOpened(id),
             Vec::new(),
         );
+        // Connection opens first (890); the image note is in the Container section.
+        let _ = state.update_daemons(
+            micold_client::features::daemons::Msg::SectionToggled(
+                micold_client::features::daemons::Section::Container,
+            ),
+            Vec::new(),
+        );
     }
     state.window.window_size = (1280, 2400);
     state

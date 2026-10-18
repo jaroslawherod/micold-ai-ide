@@ -10,11 +10,11 @@ Run in the worktree (CI's order): `scripts/gate.sh` (or `mise run gate`). The fe
 |---|---|---|
 | M1 | `crates/micold-client/src/ui/material/accordion_section.rs` (unit tests) | summary shown closed only, ellipsized in a narrow width, absent while open; marker closed only; a section without either has today's header height; toggling and focus stops unchanged with both set; both themes |
 | M1 | `crates/micold-client/tests/showcase_completeness.rs` | the showcase poses the section closed with a summary, open, closed with the marker |
-| M2 | `crates/micold-client/tests/daemon_sections.rs` (new) | `Section::of` per kind (FR-002); every `FormError::field` and required `FieldId` maps to its section; titles (FR-003) |
+| M2 | `crates/micold-client/tests/features_daemon_sections.rs` (new) | `Section::of` per kind (FR-002); every `FormError::field` and required `FieldId` maps to its section; titles (FR-003) |
 | M2 | `crates/micold-client/tests/daemons_feature.rs` | first section open on add, edit and kind change; toggle touches neither draft nor registry; a refused save and a left-empty required field each open their section, in every kind (FR-004, FR-005) |
 | M2 | `crates/micold-client/tests/daemons_section_geometry.rs` | each kind paints its section titles in order with only `Connection`'s body painted; no `group` heading painted; no overflow |
 | M2 | `crates/micold-client/tests/gates/daemon_form_fits.rs` (new) | the Kubernetes form with default states fits 800 logical px tall at the canonical width (SC-002) |
-| M3 | `crates/micold-client/tests/daemon_sections.rs` | every summary row and fallback of the contract, the marker per section (FR-014) |
+| M3 | `crates/micold-client/tests/features_daemon_sections.rs` | every summary row and fallback of the contract, the marker per section (FR-014) |
 | M3 | `crates/micold-client/tests/daemons_section_geometry.rs` | one field gap and one section gap across the four kinds with every section open (SC-003); group labels and checkboxes share the text fields' left edge (FR-008); the context select sits above the *Context* field (FR-009) |
 | M3 | `crates/micold-client/src/ui/material/field_group.rs` (unit tests), `tests/showcase_completeness.rs` | `FieldGroup` label/note/children order and left edge, both themes; listed in the showcase |
 
