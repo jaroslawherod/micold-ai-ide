@@ -391,6 +391,35 @@ fn keys_mount(state_dir: &std::path::Path) -> SecretMount {
 /// The key directory's name under a daemon's state directory.
 pub use micold_core::provision::keys::KEYS_DIR;
 
+/// Create the daemon's SSH keys and pin its host key for the published port, before the container
+/// that mounts them is created (feature 806, FR-006). A process that chose no `ssh` runner (a
+/// test) has none to make them with, and its container is not provisioned either.
+fn prepare_keys(state_dir: &std::path::Path, port: u16) -> Result<(), Failure> {
+    let Some(host) = micold_client::daemon::ssh_host() else {
+        return Ok(());
+    };
+    let dir = state_dir.join(KEYS_DIR);
+    let keys = tokio::runtime::Handle::current()
+        .block_on(micold_core::provision::keys::DaemonKeys::ensure(
+            &dir,
+            micold_core::ssh::ClientPlatform::current(),
+            &*host,
+        ))
+        .map_err(|f| {
+            preparation_failed(format!(
+                "could not create the container's SSH keys in {}: {}",
+                dir.display(),
+                f.output
+            ))
+        })?;
+    keys.write_known_hosts(port).map_err(|e| {
+        preparation_failed(format!(
+            "could not pin the container's host key in {}: {e}",
+            dir.display()
+        ))
+    })
+}
+
 /// The mount set this client creates its container from. No side effects: [`start`] prepares the
 /// host paths it names, and [`reread`] only reads what a running container shares through it.
 fn mount_set(profile: &SandboxProfile, projects: &[PathBuf], facts: &HostFacts) -> MountSet {
@@ -771,6 +800,7 @@ impl BringUp {
                 cancelled,
                 launched: AtomicBool::new(false),
             };
+            prepare_keys(&facts.state_dir, plan.port)?;
             let outcome = start(
                 &plan.profile,
                 &plan.projects,

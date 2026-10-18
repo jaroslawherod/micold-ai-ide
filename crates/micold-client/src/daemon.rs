@@ -25,7 +25,7 @@ use micold_core::protocol::codec::{CodecError, Frame};
 use micold_core::protocol::keepalive::{self, Keepalive, KeepaliveAction};
 use micold_core::protocol::messages::{ClientMsg, DaemonMsg};
 use micold_core::provision::ai_cli::AiCliTable;
-use micold_core::sandbox::AiCliSelection;
+use micold_core::sandbox::{AiCliSelection, NetworkPosture};
 use micold_core::provision::keys::DaemonKeys;
 use micold_core::provision::{
     run as ssh_run, CancelToken, Egress, EventSink, Ownership, ProvisionTarget, StepBounds,
@@ -180,6 +180,8 @@ pub enum Dial {
         container_name: String,
         /// The daemon's key directory on the host.
         keys_dir: PathBuf,
+        /// Whether the container may connect out: with none, installers go through the relay.
+        network: micold_core::sandbox::NetworkPosture,
     },
 }
 
@@ -250,6 +252,7 @@ pub fn actor_specs(
                     runtime: c.profile.runtime,
                     container_name: c.container_name.clone(),
                     keys_dir: entry.keys_dir(state_dir, legacy_default)?,
+                    network: c.profile.network,
                 },
                 DaemonRuntime::Ssh(s) => Dial::Ssh {
                     target: s.target.clone(),
@@ -518,6 +521,7 @@ async fn connect_and_pump(
                 runtime,
                 container_name,
                 keys_dir,
+                network,
             },
             _,
         ) => {
@@ -527,6 +531,7 @@ async fn connect_and_pump(
                 runtime: *runtime,
                 container_name,
                 keys_dir,
+                network: *network,
             };
             match container_attempt(SSH_HOST.get().map(|h| &**h), &target, &sink).await {
                 Ok(c) => Ok(c),
@@ -875,6 +880,7 @@ struct ContainerReach<'a> {
     runtime: micold_core::sandbox::runtime::RuntimeKind,
     container_name: &'a str,
     keys_dir: &'a Path,
+    network: micold_core::sandbox::NetworkPosture,
 }
 
 /// The sequence's target for a container: pinned loopback reach with the daemon's own keys, the
@@ -891,8 +897,13 @@ fn container_target(login: String, reach: &ContainerReach<'_>, keys: &DaemonKeys
         }),
         owned: Ownership::AppOwned {
             ai_clis: AiCliSelection::all(),
-            egress: Egress::Relay {
-                allow: table.allow(),
+            // A container that may connect out installs directly; one that may not goes through a
+            // relay that allows only the package registries.
+            egress: match reach.network {
+                NetworkPosture::NoOutbound => Egress::Relay {
+                    allow: table.allow(),
+                },
+                NetworkPosture::Outbound => Egress::Direct,
             },
             table,
             state_dir: PathBuf::from(CONTAINER_STATE_DIR),
@@ -1115,6 +1126,7 @@ mod tests {
             runtime: Default::default(),
             container_name: "box-ctr",
             keys_dir: &keys.dir,
+            network: Default::default(),
         };
         let target = container_target("node".into(), &reach, &keys);
         let Reach::Pinned(pinned) = &target.reach else {
@@ -1131,6 +1143,17 @@ mod tests {
             Ownership::AppOwned { egress: Egress::Relay { allow }, .. } if !allow.is_empty()
         ));
         assert_eq!(target.bounds, StepBounds::container());
+        let open = ContainerReach {
+            network: micold_core::sandbox::NetworkPosture::Outbound,
+            ..reach
+        };
+        assert!(matches!(
+            container_target("node".into(), &open, &keys).owned,
+            Ownership::AppOwned {
+                egress: Egress::Direct,
+                ..
+            }
+        ));
     }
 
     fn quiet() -> micold_core::provision::EventSink {

@@ -243,7 +243,7 @@ impl ResourceBudget {
 /// embedded resolver forwards them from the host side — names resolve, connections to them do not.
 /// That is a small metadata channel, and it is documented rather than claimed away: the posture is
 /// "no outbound connections", not "no outbound traffic of any kind".
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NetworkPosture {
     /// The default. Outbound connections fail; the control channel is unaffected.
