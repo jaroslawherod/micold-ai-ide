@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-ag6ana
 - **Started**: 2026-10-18
 - **Phase**: implement M1
-- **Next step**: M1 verify — scoped gate + review A r2, review B, visual pass, then full gate
+- **Next step**: M1 PR — full gate green; visual pass, push, PR
 
 ## Pull requests
 
@@ -55,6 +55,8 @@ R6) to stay near 10 tasks. M4 is 10 tasks; its serde field is a persistence-form
 | Plan review | 1 | 492e6e945eaee1a4aadbe9442ad1423220268194:32e91cce3fcb38094295f0fa9ffdcd4c201aecb4 | CLEAN (1 MINOR: tree state renamed `ZoomState`, fixed prose only) |
 | Tasks review | 1 | de0b3a34548aa9cfd42aed76365f2eab957ca1a1:a2c8ebd18334b6968d29ad0003a6e495dfeffbb5 | CLEAN (3 MINOR: M1 Satisfies, T012/T013 order, guide [P]; fixed prose only) |
 | M1 review A (code-review high) | 1 | 43fe79e5d9dd39a93cefe98ee80f754afe264105:cfbf874fbc35d2b5ecbe356f3992e6fcc0c869c1 | CHANGES: 2 MAJOR fixed (chord under a card menu now ignored; release reaches a gone drawer's children), 1 declined, 5 MINOR not fixed |
+| M1 review A (code-review high) | 2 | ed7739855c19f2a74e84e6499240565858f777fc:89c9bc412a899e37005bfa718a1d0324bdda0745 | CLEAN (9 findings, none BLOCKER/MAJOR on triage: dialogs/switcher are modal and not grid-anchored, ResizeHandle has no touch drag, key repeat shared with the Overview chord; not fixed) |
+| M1 review B (conformance, sonnet) | 1 | ed7739855c19f2a74e84e6499240565858f777fc:89c9bc412a899e37005bfa718a1d0324bdda0745 | CLEAN (1 MINOR: card-menu guard recorded in data-model + user guide, prose only) |
 
 ## Declined review findings
 

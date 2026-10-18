@@ -6,7 +6,7 @@
 
 | Field / fn | Type | Rule |
 |---|---|---|
-| `full_screen` (new) | `bool` | set by `Msg::FullScreenToggled` only while `open`, Settings closed, no `activating`; cleared when the Overview opens (`Msg::Toggled` from closed) |
+| `full_screen` (new) | `bool` | set by `Msg::FullScreenToggled` only while `open`, Settings closed, no `activating`, no `card_menu` (its panel hangs at fixed window pixels; review A M1); cleared when the Overview opens (`Msg::Toggled` from closed) |
 | `full_screen()` (new) | `fn(&self) -> bool` | `open && full_screen`; the only reader (R1) |
 
 Transitions: closed → open: `full_screen = false`. Open, toggle: `full_screen = !full_screen`.
