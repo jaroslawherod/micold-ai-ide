@@ -125,8 +125,16 @@ pub enum KubeFailure {
 }
 
 impl From<crate::kube::ApiFailure> for KubeFailure {
-    /// An answer the sequences have no closer reason for (the classifiers come later).
+    /// A call that got no answer is [`KubeFailure::Unreachable`] without context and server yet
+    /// (see [`KubeFailure::at`]); any other answer is `Api`, until a classifier names it closer.
     fn from(failure: crate::kube::ApiFailure) -> Self {
+        if failure.code == 0 && failure.reason == "Unreachable" {
+            return KubeFailure::Unreachable {
+                context: String::new(),
+                server: String::new(),
+                error: failure.message,
+            };
+        }
         KubeFailure::Api {
             status: failure.code,
             message: failure.message,
@@ -156,11 +164,6 @@ impl KubeFailure {
         resource: &str,
     ) -> Self {
         match failure.code {
-            0 => KubeFailure::Unreachable {
-                context: target.context.to_string(),
-                server: target.server.to_string(),
-                error: failure.message.clone(),
-            },
             403 => KubeFailure::Forbidden {
                 verb: verb.to_string(),
                 resource: resource.to_string(),
@@ -169,7 +172,24 @@ impl KubeFailure {
             404 if failure.message.starts_with("namespaces \"") => KubeFailure::NamespaceMissing {
                 namespace: target.namespace.to_string(),
             },
-            _ => failure.clone().into(),
+            _ => KubeFailure::from(failure.clone()).at(target),
+        }
+    }
+
+    /// Name the context and server in an unreachable-cluster failure that has none yet (what a
+    /// call that got no answer converts to).
+    pub fn at(self, target: &CallTarget<'_>) -> Self {
+        match self {
+            KubeFailure::Unreachable {
+                context,
+                server,
+                error,
+            } if context.is_empty() && server.is_empty() => KubeFailure::Unreachable {
+                context: target.context.to_string(),
+                server: target.server.to_string(),
+                error,
+            },
+            other => other,
         }
     }
 
@@ -186,10 +206,7 @@ impl KubeFailure {
                     message: message.clone(),
                 });
             }
-            if matches!(
-                reason.as_str(),
-                "Error" | "Completed" | "OOMKilled" | "CrashLoopBackOff" | "StartError"
-            ) {
+            if matches!(reason.as_str(), "Error" | "Completed" | "StartError") {
                 return Some(KubeFailure::ImageContract {
                     image: image.to_string(),
                     missing: format!("the container exited: {reason}"),
@@ -197,8 +214,8 @@ impl KubeFailure {
             }
         }
         match &status.schedule_reason {
-            Some((reason, message)) if reason == "Unschedulable" => {
-                Some(if message.contains("unbound immediate PersistentVolumeClaims") {
+            Some((reason, message)) if reason == "Unschedulable" => Some(
+                if message.contains("unbound immediate PersistentVolumeClaims") {
                     KubeFailure::ClaimNotBound {
                         claim: claim.to_string(),
                         message: message.clone(),
@@ -207,8 +224,8 @@ impl KubeFailure {
                     KubeFailure::Unschedulable {
                         message: message.clone(),
                     }
-                })
-            }
+                },
+            ),
             _ => None,
         }
     }
@@ -577,7 +594,10 @@ mod tests {
             }
         );
         assert_eq!(
-            from(api(0, "connection refused")),
+            from(ApiFailure {
+                reason: "Unreachable".into(),
+                ..api(0, "connection refused")
+            }),
             KubeFailure::Unreachable {
                 context: "prod".into(),
                 server: "https://10.0.0.1:6443".into(),
@@ -663,14 +683,20 @@ mod tests {
         assert_eq!(
             KubeFailure::from_pvc(
                 "d-data",
-                &[event("Scheduled", "ok"), event("ProvisioningFailed", "no class")]
+                &[
+                    event("Scheduled", "ok"),
+                    event("ProvisioningFailed", "no class")
+                ]
             ),
             Some(KubeFailure::ClaimNotBound {
                 claim: "d-data".into(),
                 message: "no class".into()
             })
         );
-        assert_eq!(KubeFailure::from_pvc("d-data", &[event("Bound", "ok")]), None);
+        assert_eq!(
+            KubeFailure::from_pvc("d-data", &[event("Bound", "ok")]),
+            None
+        );
     }
 
     fn pod(phase: &str) -> PodStatusView {
@@ -695,7 +721,11 @@ mod tests {
         };
         let cases = [
             (None, true, Some("stopped: the pod was deleted")),
-            (Some(&terminating), true, Some("stopped: the pod was deleted")),
+            (
+                Some(&terminating),
+                true,
+                Some("stopped: the pod was deleted"),
+            ),
             (
                 Some(&evicted),
                 true,
@@ -712,11 +742,19 @@ mod tests {
                 Some("stopped: the pod's node n1 was lost"),
             ),
             (Some(&pod("Running")), true, None),
-            (Some(&pod("Pending")), false, Some("stopped: the pod's node n1 was lost")),
+            (
+                Some(&pod("Pending")),
+                false,
+                Some("stopped: the pod's node n1 was lost"),
+            ),
         ];
         for (status, node_exists, expected) in cases {
             let got = PodGone::classify(status, node_exists).map(|g| g.to_string());
-            assert_eq!(got.as_deref(), expected, "{status:?} node_exists={node_exists}");
+            assert_eq!(
+                got.as_deref(),
+                expected,
+                "{status:?} node_exists={node_exists}"
+            );
         }
         let unscheduled = PodStatusView {
             node: None,

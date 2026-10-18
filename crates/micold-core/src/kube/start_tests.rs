@@ -766,7 +766,28 @@ async fn a_claim_the_provisioner_gave_up_on_fails_not_bound_on_first_sight() {
             message: "storageclass \"fast\" not found".into(),
         }
     );
-    assert_eq!(phases.last(), Some(&StartPhase::Volume), "caught at the claim");
+    assert_eq!(
+        phases.last(),
+        Some(&StartPhase::Volume),
+        "caught at the claim"
+    );
     assert!(t0.elapsed() < Duration::from_secs(5));
     assert_rolled_back(&fake).await;
+}
+
+#[tokio::test(start_paused = true)]
+async fn an_old_event_of_an_adopted_claim_does_not_fail_the_start() {
+    let fake = cluster();
+    let n = names();
+    fake.insert(NS, ObjectKind::PersistentVolumeClaim, &n.pvc(), n.labels());
+    fake.set_events(
+        &n.pvc(),
+        vec![EventView {
+            reason: "ProvisioningFailed".into(),
+            message: "fixed since".into(),
+        }],
+    );
+    fake.progress(&n.pod(), vec![pending_pod()]);
+    let (outcome, _) = run(&fake, &settings()).await;
+    assert!(matches!(failed(outcome), KubeFailure::PhaseTimeout { .. }));
 }
