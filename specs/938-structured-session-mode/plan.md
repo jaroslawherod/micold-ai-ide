@@ -116,8 +116,12 @@ crates/micold-core/tests/
 crates/micold-daemon/src/
 ├── structured.rs              # NEW: StructuredSession — pipe spawn, reader/stderr threads,
 │                              #   writer, liveness/kill/teardown like PtySession
+├── supervisor.rs              # PtySession stays; strip_inherited_terminal_identity and
+│                              #   prefer_process_path generalised to an env-edit list (R3)
 ├── state.rs                   # Proc enum; start_session_gated branches on kind; history map;
 │                              #   user-message handling; refusals; supervision unchanged in shape
+│                              #   (supervision.rs, the restart policy, is reused untouched;
+│                              #   terminal.rs, the VT emulator, is not used by structured sessions)
 ├── server.rs                  # SessionUserMessage; refusals for Input/Resize/Scrollback/Interrupt;
 │                              #   stream_events task beside stream_view
 └── ops.rs                     # start_with_prompt: structured first prompt = first user message
@@ -134,11 +138,54 @@ crates/micold-client/src/
 ├── shell/daemon_sync.rs       # SessionCreate.kind; StructuredEvents → structured_log
 ├── ui/sidebar.rs              # row marker for structured sessions
 └── ui/terminal.rs             # structured session → read-only log pane
+crates/micold-client/tests/
+├── structured_start_menu.rs   # reducer: entries, chevron rule, kind on create (FR-022)
+├── structured_log.rs          # reducer: snapshot/live/omitted marker (FR-022a)
+└── gates/structured_row_marker_fits.rs  # geometry gate: the row marker stays inside its row
+scripts/capture-stream-json.sh # NEW: records fixtures from a real CLI (R11)
 docs/user-guide/worktrees-and-sessions.md   # structured section (FR-023)
 ```
 
 **Structure Decision**: the existing three-crate split. All parsing, bounding, turn gating and
 display text are in `micold-core::structured`, so the daemon and client only wire them.
+
+## Requirement Coverage
+
+Test layers: **core** = `micold-core` unit/fixture tests; **daemon** = `micold-daemon` integration
+tests against the stand-in CLI (R12); **client** = `micold-client` reducer tests; **gate** =
+geometry gate under `micold-client/tests/gates/`; **§B** = [quickstart.md](quickstart.md) Part B
+visual pass.
+
+| FR | Design | Test layer |
+|---|---|---|
+| FR-001 | R1; data-model `SessionKind` (default `Terminal`); `store.rs` serde default | core (default, legacy catalog record loads as terminal) |
+| FR-002 | R1 (constructor-only field, no setter) | core (`restored` keeps the kind; kind survives restart path) |
+| FR-003 | R1 `SessionKind::check`; R2 `structured_args`; wire `SessionCreate` | core (check per provider); daemon (`SessionCreate` refused, no record) |
+| FR-004 | data-model `SessionKind`; `store.rs` `StoredSession.kind` | core (store round-trip); daemon `structured_resume` (restored after daemon restart) |
+| FR-005 | R2; contracts/claude-stream-json.md *Launch* | core (provider args); daemon `structured_session` (argv record) |
+| FR-006 | R2, R3 (same `LaunchSpec`, env, cwd guard) | daemon `structured_session` (argv, cwd, env record) |
+| FR-006a | R2 *Permissions* | daemon `structured_session` (argv has no permission flag) |
+| FR-007 | R8 | daemon `structured_session` (stdin record: prompt once), `structured_resume` (not resent) |
+| FR-008 | R7; data-model `TurnState`, `UserMessageRefusal`; wire `SessionUserMessage` | core (`accept`, encoding); daemon `structured_session` (stdin record, refusals) |
+| FR-009 | R3; data-model *Lifecycle*; `Proc` enum in `state.rs` | daemon `structured_lifecycle` (stop, kill, restart, crash loop) |
+| FR-010 | R3 stderr thread | daemon `structured_lifecycle` (stderr directive absent from events, present in captured log) |
+| FR-011 | R9; data-model `StructuredEvent`, `ContentBlock` | core `structured_parse` (recorded fixtures) |
+| FR-012 | R9 (`Unrecognised { raw }`) | core `structured_parse` (tolerance fixture) |
+| FR-013 | R4, R9 (`Unreadable { text }`) | core (splitter, non-JSON line) |
+| FR-014 | R4, R9; R5 seq | core (line count = event count, order); daemon `structured_session` (bad line does not end the session) |
+| FR-015 | R9 (no `deny_unknown_fields`) | core `structured_parse` (tolerance fixture) |
+| FR-016 | R6; wire `StructuredEvents` | daemon `structured_history` (two viewers, order) |
+| FR-017 | R6 (snapshot + subscribe under one lock, seq skip) | daemon `structured_history` (late attach mid-stream: no gap, no duplicate) |
+| FR-018 | R5; data-model `EventHistory` | core (eviction by count and bytes, `omitted`); daemon `structured_history` (marker on late attach) |
+| FR-019 | R3 `Proc` enum; wire `SessionRequestRefused` | daemon `structured_lifecycle` (input, resize, scrollback, interrupt refused; shell served) |
+| FR-020 | wire `SessionSummary.kind` | core (summary serde); client (kind reaches the row model) |
+| FR-021 | R2 (`launch_args` resume) | daemon `structured_resume` (`--resume` on restart and restore; new session gets `--session-id`) |
+| FR-021a | R5 (history map outside `LiveSession`) | daemon `structured_history` (stop/start keeps), `structured_resume` (daemon restart: history starts at resume) |
+| FR-022 | R10; `features/session.rs`, `ui/sidebar.rs` | client `structured_start_menu`; gate `structured_row_marker_fits`; §B 1–3 |
+| FR-022a | R10; `log_line.rs`, `features/structured_log.rs`, `ui/terminal.rs` | core (`log_line` per event kind); client `structured_log`; §B 2, 5, 6 |
+| FR-023 | `docs/user-guide/worktrees-and-sessions.md` (M3) | M3 diff review (doc names kind, choice, Claude-only, later issues) |
+| FR-024 | R11; contracts/claude-stream-json.md *Fixtures* | core `structured_parse` |
+| FR-025 | R12 | daemon (all four `structured_*` suites run with the stand-in only) |
 
 ## Delivery
 
