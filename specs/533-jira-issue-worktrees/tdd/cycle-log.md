@@ -52,3 +52,7 @@ reducer, store and view changes. Full `mise run gate`: see the PR body.
 ## M6 (T074, T078)
 
 T078 red: with the prompt drawn only behind the switch (the shipped bug restored), `jira_keep_or_remove_is_drawn::the_question_is_drawn_after_the_switch_goes_off_and_save_is_pressed` failed (1 failed, 3 passed); green with the fix in `ui/settings/jira.rs`; then `main_tests::switching_jira_off_over_a_stored_connection_asks_and_each_answer_is_saved` drives Save, Keep and Remove through the shell. T074 red: with `jira_request`'s switch test forced false, 6 of 7 `jira_request_path` tests failed; green restored. Both mutants are in `verification.md`.
+
+## Close (T081, Finding 14)
+
+Process deviation, not repairable after the fact: M1-M3 and M5 have no recorded red (tests and code were committed together, or the red output was not kept), and the red of M4 and M6 is logged above but git history cannot corroborate its order. The final `tdd/verification.md` verdict stays FAIL on this finding alone. No decision from the user on it exists yet; it is stated in the close PR body for the user to accept or reject at merge.

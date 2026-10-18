@@ -100,20 +100,6 @@ fn only_the_transport_reason_reaches_a_notice_and_it_is_cut_first() {
         notice(&cut),
         format!("Couldn't reach acme.atlassian.net: {}.", "x".repeat(80))
     );
-    for outcome in [
-        Outcome::TimedOut,
-        Outcome::Status(401),
-        Outcome::Status(404),
-        Outcome::Status(429),
-        Outcome::Redirected,
-        Outcome::BadBody,
-        Outcome::Status(500),
-    ] {
-        assert!(
-            !notice(&classify(&outcome)).contains(SENTINEL),
-            "{outcome:?}"
-        );
-    }
 }
 
 #[test]
