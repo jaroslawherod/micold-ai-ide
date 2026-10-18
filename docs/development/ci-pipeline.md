@@ -193,6 +193,24 @@ Two properties are load-bearing, and both are asserted by
 Renaming the `ci complete` job breaks the merge gate for every pull request, and no pull request
 can fix it — the ruleset lives in repository settings, not in the repo.
 
+## Fail fast on lint
+
+`build + test` (all three legs), `package + smoke (windows-11-arm)`, `sandbox against a real runtime`
+and `remote daemon over a real sshd` list `fmt + clippy` in `needs:` (#957). A formatting or clippy
+failure now ends the run in about 2 minutes instead of the ~25 the heavy jobs took to report; a
+green run starts those jobs about 95 s later. `static Linux daemons` and `assertion freeze` stay
+parallel with lint: they are short and the daemons job feeds `test`, so gating it would serialise
+the two.
+
+- **Red lint still blocks.** A job that `needs: lint` is *skipped*, not failed, when lint fails.
+  `ci complete` reads lint's own result (`failure` is `BLOCKED`), so the required check goes red.
+- **The `if:` clauses keep their meaning.** They contain no status function, so each implies
+  `success()` of every need: lint skipped (docs-only) skips these jobs, as `docs_only` already did.
+- **The matrix is gated whole.** `needs:` is per job, not per leg, so the Linux leg waits too. It
+  is not the critical path (macOS and Windows are), so green wall-clock is unchanged in practice.
+- Why not cancel siblings on first failure: it needs a token with `actions: write`, and a cancelled
+  run reports `cancelled`, which is less legible than a red lint.
+
 ## The user-guide gate
 
 Constitution Principle VII says a user-facing feature is not done until its documentation exists,

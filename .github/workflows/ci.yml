@@ -168,7 +168,11 @@ jobs:
   # failure still reports the others — the point of the matrix is seeing *which* platforms differ.
   test:
     name: build + test (${{ matrix.os }})
-    needs: [classify, linux-daemons]
+    # Fail fast (#957): wait on `lint` (fmt + clippy, ~95 s) so a red lint ends the run in about 2 min
+    # instead of ~25. A `needs` job is skipped, not failed, when lint fails; `ci-complete` reads
+    # lint's own `failure` and goes red. The `if:` keeps its meaning: it has no status function, so
+    # it implies success() of every need; docs_only skips lint and these jobs together.
+    needs: [classify, lint, linux-daemons]
     if: needs.classify.outputs.docs_only != 'true'
     strategy:
       fail-fast: false
@@ -502,7 +506,8 @@ jobs:
   # no ARM64 Windows leg, hence a job of its own; it is gated by `ci-complete` like every other.
   windows-arm64-package:
     name: package + smoke (windows-11-arm)
-    needs: [classify, linux-daemons]
+    # Waits on `lint` (#957), see the `test` job.
+    needs: [classify, lint, linux-daemons]
     # Pull requests run it only when a path declared `micold-packaging` changed (or the `full-ci`
     # label forces `packaging=true`); main pushes and the nightly schedule always run it. A skipped
     # job satisfies `ci-complete`. An unset `packaging` output (classify failed) is not 'true' but
@@ -549,7 +554,8 @@ jobs:
   # `pathmap`, which the cross-platform job covers directly.
   sandbox-runtime:
     name: sandbox against a real runtime (linux)
-    needs: classify
+    # Waits on `lint` (#957), see the `test` job.
+    needs: [classify, lint]
     # Pull requests run it only when a path declared `micold-daemon-runtime` changed (or the
     # `full-ci` label forces `daemon_runtime=true`); main pushes and the nightly schedule always run
     # it. A skipped job satisfies `ci-complete`. An unset output (classify failed) is not 'true',
@@ -661,7 +667,8 @@ jobs:
   # `test` job on all three.
   ssh-remote:
     name: remote daemon over a real sshd (linux)
-    needs: classify
+    # Waits on `lint` (#957), see the `test` job.
+    needs: [classify, lint]
     # Pull requests run it only when a path declared `micold-daemon-runtime` changed (or the
     # `full-ci` label forces `daemon_runtime=true`); main pushes and the nightly schedule always run
     # it. A skipped job satisfies `ci-complete`. An unset output (classify failed) is not 'true',
