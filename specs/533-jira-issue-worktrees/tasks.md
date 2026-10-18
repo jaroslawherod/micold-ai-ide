@@ -270,7 +270,7 @@ The feature is not done until the HIGH findings (T071-T074) are cleared. Finding
 - [x] T076 Findings 6, 8 (port part of 9 done in the close unit): replace the exact-line source scans with behavior where T074 covers them, review and record the `layout_snapshot.txt` diff, and use a bound-then-closed port instead of `:1`/`:9`; prove with `mise run gate`.
 - [x] T077 Finding 10 and mutation: run the three proposed deliberate mutants from `verification.md` (restore each, re-run the suite) and record the results there.
 - [x] T078 [US2] Bug found by the close unit visual pass (B7, `visual/close.md`, US2 AS5): turning the Jira switch off over a stored connection and pressing Save does nothing, because `on_settings_saved` (`crates/micold-client/src/shell/persist.rs`) raises the Keep-or-Remove prompt but `view()` in `crates/micold-client/src/ui/settings/jira.rs` draws it only when `draft.jira.enabled`. Write the failing test first (reducer/view: switch off + stored connection + save shows the prompt), then draw the prompt while it is pending; prove with `mise run test`.
-- [ ] T079 [US2] Re-run quickstart B7 (two windows, switch off, Keep and Remove; propagation within 1 s, SC-006) and record it in `visual/close.md`; then tick T066.
+- [x] T079 (prompt PASS; SC-006 timing NOT MET, recorded in visual/close.md) [US2] Re-run quickstart B7 (two windows, switch off, Keep and Remove; propagation within 1 s, SC-006) and record it in `visual/close.md`; then tick T066.
 
 ## Milestones (appended by the close unit)
 

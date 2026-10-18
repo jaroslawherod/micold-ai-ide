@@ -93,6 +93,8 @@ None.
 
 ## Follow-ups not done
 
+- SC-006: another window drops the Jira picker 3.3-3.7 s after the click, not within 1 s (visual/close.md, T079). Daemon echo is at 0.13 s; cause unknown, check whether any setting shows it.
+
 - Main took PROTOCOL_VERSION 41 and 42 (feature 776) before M1 merged: M1 is now 42 -> 43, then main took 43 and 44: M1 is now 44 -> 45; spec artifacts updated.
 - Main then took 43 (feature 552) too: M1 is now 44 -> 45.
 
