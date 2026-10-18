@@ -19,6 +19,8 @@ use super::HostPort;
 /// The longest request head accepted, and how long a client may take to send it.
 const HEAD_LIMIT: usize = 8 * 1024;
 const HEAD_TIMEOUT: Duration = Duration::from_secs(10);
+/// How long the relay waits to reach the destination.
+const UPSTREAM_TIMEOUT: Duration = Duration::from_secs(15);
 
 /// A running relay. Dropping it stops the listener and every connection it carries.
 pub struct Relay {
@@ -37,7 +39,11 @@ impl Relay {
             loop {
                 tokio::select! {
                     accepted = listener.accept() => {
-                        let Ok((stream, _)) = accepted else { continue };
+                        let Ok((stream, _)) = accepted else {
+                            // E.g. out of file descriptors: do not spin.
+                            tokio::time::sleep(Duration::from_millis(50)).await;
+                            continue;
+                        };
                         let allow = allow.clone();
                         connections.spawn(async move {
                             let _ = serve(stream, &allow).await;
@@ -116,7 +122,12 @@ async fn serve(mut client: TcpStream, allow: &[HostPort]) -> io::Result<()> {
     {
         return reply(&mut client, "403 Forbidden").await;
     }
-    let Ok(mut upstream) = TcpStream::connect((to.host.as_str(), to.port)).await else {
+    let connected = tokio::time::timeout(
+        UPSTREAM_TIMEOUT,
+        TcpStream::connect((to.host.as_str(), to.port)),
+    )
+    .await;
+    let Ok(Ok(mut upstream)) = connected else {
         return reply(&mut client, "502 Bad Gateway").await;
     };
     client

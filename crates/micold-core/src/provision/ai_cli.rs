@@ -143,10 +143,12 @@ fn ai_clis_dir(state: &Path) -> String {
 /// The marker a check prints per installed CLI.
 const HAVE: &str = "MICOLD_HAVE_CLI";
 
-/// The check script: prints `MICOLD_HAVE_CLI <cli>` for each of `rows` already installed.
+/// The check script: prints `MICOLD_HAVE_CLI <cli>` for each of `rows` already installed, and
+/// rewrites `offered.json` for them (so a start that installs nothing still leaves the file true
+/// to the current selection; no download is involved).
 pub fn check_script(rows: &[&AiCliRow], state: &Path) -> String {
     let dir = ai_clis_dir(state);
-    let mut script = String::new();
+    let mut script = format!("mkdir -p {} || exit 1\n", quote(&dir));
     for row in rows {
         script.push_str(&format!(
             "test -d {} && echo \"{HAVE} {:?}\"\n",
@@ -154,7 +156,7 @@ pub fn check_script(rows: &[&AiCliRow], state: &Path) -> String {
             row.cli
         ));
     }
-    script.push_str("true\n");
+    script.push_str(&offered_writer(rows, &dir));
     script
 }
 
@@ -173,6 +175,26 @@ fn cli_named(name: &str) -> Option<AiCli> {
 
 /// The text printed when the target has no npm.
 pub const NO_NPM: &str = "the image has no npm (Node.js), which this AI CLI's installer needs";
+
+/// The script lines that write `offered.json` (selected ∩ installed) atomically.
+fn offered_writer(selected: &[&AiCliRow], dir: &str) -> String {
+    let mut s = String::new();
+    let file = quote(&format!("{dir}/offered.json"));
+    let tmp = quote(&format!("{dir}/offered.json.part"));
+    s.push_str("{ printf '{\"version\":1,\"clis\":['; sep=\n");
+    for row in selected {
+        let bin = format!("{dir}/{}/bin", row.dir_name());
+        s.push_str(&format!(
+            "  if [ -d {q} ]; then printf '%s{{\"cli\":\"{cli:?}\",\"bin\":\"%s\"}}' \"$sep\" {q}; sep=,; fi\n",
+            q = quote(&bin),
+            cli = row.cli
+        ));
+    }
+    s.push_str(&format!(
+        "  printf ']}}\\n'; }} > {tmp} && mv {tmp} {file}\n"
+    ));
+    s
+}
 
 /// The install script for `missing`, over the `selected` rows. `proxy` points npm at the relay's
 /// remote end (`Egress::Relay`). Runs on stdin of `sh -s`, under `flock` where there is one, and
@@ -206,27 +228,14 @@ pub fn install_script(
              elif [ \"$have_npm\" = 0 ]; then echo {no_npm}; echo \"MICOLD_INSTALL {cli} failed\"\n\
              else\n\
              \x20 rm -rf {part}\n\
-             \x20 if npm install -g --prefix {part} {spec} 2>&1 && mv {part} {dest}; then echo \"MICOLD_INSTALL {cli} ok\"\n\
+             \x20 if npm install -g --prefix {part} {spec} </dev/null 2>&1 && mv {part} {dest}; then echo \"MICOLD_INSTALL {cli} ok\"\n\
              \x20 else rm -rf {part}; echo \"MICOLD_INSTALL {cli} failed\"; fi\n\
              fi\n",
             no_npm = quote(NO_NPM),
             spec = quote(&row.spec()),
         ));
     }
-    let file = quote(&format!("{dir}/offered.json"));
-    let tmp = quote(&format!("{dir}/offered.json.part"));
-    s.push_str(&format!("{{ printf '{{\"version\":1,\"clis\":['; sep=\n"));
-    for row in selected {
-        let bin = format!("{dir}/{}/bin", row.dir_name());
-        s.push_str(&format!(
-            "  if [ -d {q} ]; then printf '%s{{\"cli\":\"{cli:?}\",\"bin\":\"%s\"}}' \"$sep\" {q}; sep=,; fi\n",
-            q = quote(&bin),
-            cli = row.cli
-        ));
-    }
-    s.push_str(&format!(
-        "  printf ']}}\\n'; }} > {tmp} && mv {tmp} {file}\n"
-    ));
+    s.push_str(&offered_writer(selected, &dir));
     s
 }
 
@@ -453,6 +462,10 @@ mod tests {
         let rows = all(&t);
         let c = check_script(&rows[..2], state());
         assert!(c.contains("test -d '/var/lib/micold-ai-ide/ai-clis/ClaudeCode@2.1.247'"));
+        assert!(
+            c.contains("mv '/var/lib/micold-ai-ide/ai-clis/offered.json.part'"),
+            "a start that installs nothing still refreshes offered.json"
+        );
         assert_eq!(
             parse_installed("MICOLD_HAVE_CLI Pi\nnoise\nMICOLD_HAVE_CLI Nope\n"),
             BTreeSet::from([AiCli::Pi])
