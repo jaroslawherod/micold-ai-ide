@@ -174,7 +174,7 @@ CLI.
   `SessionSummary.kind` round-trips both kinds and defaults to `Terminal` when absent;
   `DaemonMsg::StructuredEvents { session, omitted, events, live }` round-trips with one event of
   every `StructuredEvent` variant.
-- [ ] T013 [P] [US1] Write the stand-in CLI in `crates/micold-daemon/tests/support/structured.rs`
+- [x] T013 [P] [US1] Write the stand-in CLI in `crates/micold-daemon/tests/support/structured.rs`
   (R12), compiled the way `support/history.rs`'s `fake_cli` is and registered in
   `crates/micold-daemon/tests/support/mod.rs`: it writes its argv to `argv-record`, its cwd to
   `cwd-record` and the variables `TERM`, `PATH` and every `MICOLD_*` to `env-record` in its cwd;
