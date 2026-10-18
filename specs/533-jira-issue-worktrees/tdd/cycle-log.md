@@ -48,3 +48,7 @@ Tests (`store_issue_source.rs`, five new cases in `jira_source_state.rs`, the co
 `Outcome::IssueSourceChosen`, so the red run was a compile failure of both test targets; no output
 was kept. Green: the same two targets (5 and 19 tests) and `layout_snapshot` (60) after the
 reducer, store and view changes. Full `mise run gate`: see the PR body.
+
+## M6 (T074, T078)
+
+T078 red: with the prompt drawn only behind the switch (the shipped bug restored), `jira_keep_or_remove_is_drawn::the_question_is_drawn_after_the_switch_goes_off_and_save_is_pressed` failed (1 failed, 3 passed); green with the fix in `ui/settings/jira.rs`; then `main_tests::switching_jira_off_over_a_stored_connection_asks_and_each_answer_is_saved` drives Save, Keep and Remove through the shell. T074 red: with `jira_request`'s switch test forced false, 6 of 7 `jira_request_path` tests failed; green restored. Both mutants are in `verification.md`.
