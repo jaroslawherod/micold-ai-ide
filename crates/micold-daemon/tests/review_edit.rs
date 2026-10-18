@@ -26,13 +26,14 @@ use micold_core::protocol::codec::Frame;
 use micold_core::protocol::messages::{
     ClientMsg, DaemonMsg, ErrorKind, OperationResult, ReviewEditOp,
 };
-use micold_core::review::comment::{CommentId, CommentState, ReviewComment};
+use micold_core::review::comment::{CommentId, CommentState, Outcome, Reporter, ReviewComment};
 use micold_core::review::store::ReviewFile;
 use micold_core::review::Side;
 use micold_core::settings::JsonFileSettingsStore;
 use micold_core::store::{JsonFileStore, ProjectStore};
 use micold_core::workspace::Workspace;
 use micold_daemon::catalog::Catalog;
+use micold_daemon::review::Reviews;
 use micold_daemon::state::DaemonState;
 
 /// How long a test waits for a frame it expects.
@@ -543,11 +544,11 @@ async fn request(client: &mut Client, req: u64, msg: ClientMsg) -> (DaemonMsg, V
     (answer, seen)
 }
 
-/// Feature 946 T008 (placeholder): `Mark` and `Reanchor` are refused and store nothing until their
-/// milestones (T040 retires the `Mark` assertion, T063 the `Reanchor` one).
+/// Feature 946 T008 (placeholder): `Reanchor` is refused and stores nothing until its milestone
+/// (T063 retires the assertion).
 #[tokio::test]
-async fn mark_and_reanchor_are_refused_and_store_nothing_in_this_build() {
-    use micold_core::review::comment::{Move, Outcome};
+async fn reanchor_is_refused_and_stores_nothing_in_this_build() {
+    use micold_core::review::comment::Move;
     use micold_core::review::LineRange;
 
     let f = Fixture::new();
@@ -559,23 +560,147 @@ async fn mark_and_reanchor_are_refused_and_store_nothing_in_this_build() {
     attach(&mut a, &f.project()).await;
 
     let line = LineRange::new(2, 2).unwrap();
-    let ops = [
-        ReviewEditOp::Mark {
-            id: sent.id,
-            outcome: Outcome::Answered,
-            note: "kept".into(),
-        },
-        ReviewEditOp::Reanchor {
-            moves: vec![Move::new(sent.id, line, LineRange::new(5, 5).unwrap()).unwrap()],
-        },
+    let op = ReviewEditOp::Reanchor {
+        moves: vec![Move::new(sent.id, line, LineRange::new(5, 5).unwrap()).unwrap()],
+    };
+    let (result, seen) = edit(&mut a, 1, &f.project(), "feat", op).await;
+    let (kind, _) = result.expect_err("refused in this build");
+    assert_eq!(kind, ErrorKind::Refused);
+    assert!(seen.is_empty(), "nothing is pushed");
+    assert_eq!(f.on_disk(), before, "nothing is stored");
+}
+
+fn mark(id: CommentId, outcome: Outcome, note: &str) -> ReviewEditOp {
+    ReviewEditOp::Mark {
+        id,
+        outcome,
+        note: note.into(),
+    }
+}
+
+/// Feature 946 W14, US1 s6, FR-006: marking a Sent comment by hand is refused with the kind that
+/// says why and stores nothing; accepted, it is on disk before the answer and reaches every window.
+#[tokio::test]
+async fn w14_a_refused_mark_stores_and_pushes_nothing() {
+    let f = Fixture::new();
+    let sent = stored(1, CommentState::Sent { at: 1_790_000_100 });
+    let draft = stored(2, CommentState::Draft);
+    seed(&f, vec![sent.clone(), draft.clone()]);
+    let before = f.on_disk();
+    let state = f.service();
+    let mut a = connect(&state).await;
+    attach(&mut a, &f.project()).await;
+
+    let over = "é".repeat(20_001);
+    let cases = [
+        (
+            mark(stored(7, CommentState::Draft).id, Outcome::Applied, ""),
+            ErrorKind::NotFound,
+        ),
+        (mark(draft.id, Outcome::Applied, ""), ErrorKind::Refused),
+        (
+            mark(sent.id, Outcome::Answered, "  \n "),
+            ErrorKind::InvalidInput,
+        ),
+        (
+            mark(sent.id, Outcome::Answered, &over),
+            ErrorKind::InvalidInput,
+        ),
     ];
-    for (req, op) in (1..).zip(ops) {
+    for (req, (op, expected)) in (1..).zip(cases) {
         let (result, seen) = edit(&mut a, req, &f.project(), "feat", op).await;
-        let (kind, _) = result.expect_err("refused in this build");
-        assert_eq!(kind, ErrorKind::Refused);
+        let (kind, message) = result.expect_err("refused");
+        assert_eq!(kind, expected, "{message}");
         assert!(seen.is_empty(), "nothing is pushed");
         assert_eq!(f.on_disk(), before, "nothing is stored");
     }
+}
+
+#[tokio::test]
+async fn w14_a_comment_of_a_held_open_send_is_busy_and_a_reported_one_refused() {
+    use micold_core::review::prompt::EntryKind;
+
+    let f = Fixture::new();
+    let sent = stored(1, CommentState::Sent { at: 1_790_000_100 });
+    let draft = stored(2, CommentState::Draft);
+    seed(&f, vec![sent.clone(), draft.clone()]);
+    let catalog = Catalog::load(
+        Box::new(f.files()),
+        Box::new(JsonFileSettingsStore::at(
+            f.store.path().join("settings.json"),
+        )),
+    );
+    let mut reviews = Reviews::default();
+    reviews
+        .begin_send(&catalog, &f.project(), "feat", EntryKind::Worktree, &[])
+        .expect("the send opens and is held");
+    let held = reviews
+        .apply_edit(
+            &catalog,
+            &f.project(),
+            "feat",
+            mark(draft.id, Outcome::Applied, ""),
+            1,
+        )
+        .expect_err("a comment of the open send");
+    assert_eq!(held.kind, ErrorKind::Busy);
+
+    let mut reviews = Reviews::default();
+    reviews
+        .apply_edit(
+            &catalog,
+            &f.project(),
+            "feat",
+            mark(sent.id, Outcome::Applied, ""),
+            1,
+        )
+        .expect("a Sent comment is marked");
+    let again = reviews
+        .apply_edit(
+            &catalog,
+            &f.project(),
+            "feat",
+            mark(sent.id, Outcome::Answered, "no"),
+            2,
+        )
+        .expect_err("already reported");
+    assert_eq!(again.kind, ErrorKind::Refused);
+}
+
+#[tokio::test]
+async fn w14_a_mark_is_on_disk_before_the_answer_and_reaches_every_window() {
+    let f = Fixture::new();
+    let sent = stored(1, CommentState::Sent { at: 1_790_000_100 });
+    seed(&f, vec![sent.clone()]);
+    let state = f.service();
+    let mut a = connect(&state).await;
+    attach(&mut a, &f.project()).await;
+    let mut b = connect(&state).await;
+
+    let (result, _) = edit(
+        &mut a,
+        1,
+        &f.project(),
+        "feat",
+        mark(sent.id, Outcome::Answered, " \r\n kept it\r\n "),
+    )
+    .await;
+    result.expect("a Sent comment can be marked");
+    let on_disk = f.on_disk().entries["feat"][0].clone();
+    let CommentState::Reported { sent_at, report } = &on_disk.state else {
+        panic!("reported on disk: {:?}", on_disk.state);
+    };
+    assert_eq!(*sent_at, 1_790_000_100);
+    assert_eq!(report.outcome(), Outcome::Answered);
+    assert_eq!(report.reply(), "kept it");
+    assert_eq!(report.by(), Reporter::User);
+    assert_eq!(report.first_at(), report.last_at());
+    let seen = next_pushed(&mut b).await;
+    assert_eq!(
+        (seen.worktree_dir.as_str(), seen.comments),
+        ("feat", vec![on_disk]),
+        "the other window is pushed the marked comment"
+    );
 }
 
 #[tokio::test]
