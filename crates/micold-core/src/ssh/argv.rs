@@ -276,10 +276,12 @@ pub fn probe_script(build: &str) -> String {
 }
 
 /// The copy: the artefact bytes arrive on stdin and land atomically in the build's directory.
+/// The partial file is the copying shell's own (`.part.$$`): two clients copying the same build
+/// at once (686 FR-023) each rename a whole file, and neither moves the other's away.
 pub fn copy(reach: &Reach, platform: ClientPlatform, timeout: u32, build: &str) -> SshCommand {
     let dir = remote_dir(build);
     let remote = format!(
-        "sh -c 'umask 077; mkdir -p \"{dir}\" && cat > \"{dir}/.part\" && chmod 700 \"{dir}/.part\" && mv \"{dir}/.part\" \"{dir}/micold-daemon\"'"
+        "sh -c 'umask 077; p=\"{dir}/.part.$$\"; mkdir -p \"{dir}\" && cat > \"$p\" && chmod 700 \"$p\" && mv \"$p\" \"{dir}/micold-daemon\" || {{ rm -f \"$p\"; exit 1; }}'"
     );
     command(reach, platform, timeout, &remote, None)
 }

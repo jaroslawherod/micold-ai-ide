@@ -9,7 +9,6 @@ mod kube_real_support;
 use std::time::{Duration, Instant};
 
 use kube_real_support::*;
-use micold_core::provision::ProvisionEvent;
 use micold_core::session::AiCli;
 
 const NAME: &str = "Failing box";
@@ -97,28 +96,22 @@ async fn kube_real_an_unschedulable_pod_is_reported() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn kube_real_an_install_from_an_unreachable_source_is_a_warning() {
-    let test = "kube_real_an_install_from_an_unreachable_source_is_a_warning";
+async fn kube_real_an_install_from_an_unreachable_source_fails_naming_the_cli() {
+    // US6.5, FR-012: the start fails naming the CLI and its install error, and rolls back.
+    let test = "kube_real_an_install_from_an_unreachable_source_fails_naming_the_cli";
     let Some(suite) = suite_or_skip(test) else {
         return;
     };
     let ns = Namespace::create("kt-inst");
     suite.registry.set_available(false);
-    let events = Events::default();
-    let started = start(
+    let reason = fails(
         &client(),
-        NAME,
         &settings(&ns.0, &[AiCli::ClaudeCode]),
-        &events,
+        Duration::from_secs(15 * 60),
     )
     .await;
     suite.registry.set_available(true);
-    let _started = started.expect("an install failure does not fail the start");
-    let failed = events
-        .0
-        .lock()
-        .unwrap()
-        .iter()
-        .any(|(_, e)| matches!(e, ProvisionEvent::InstallDone { ok: false, .. }));
-    assert!(failed, "the install failure was reported");
+    assert!(reason.contains("Claude Code"), "{reason}");
+    assert!(reason.contains("not installed"), "{reason}");
+    nothing_left(&ns.0);
 }
