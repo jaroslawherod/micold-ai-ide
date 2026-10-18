@@ -126,3 +126,28 @@ Append only. Newest last.
 - Test fixes: `SessionRestart` restarts a stopped session (stop first); a crash respawn needs the
   supervision sweep the test drives (`supervise_exited_sessions`), as `structured_lifecycle.rs` does.
 
+## Cycle 9 (U13, M4): resume — test-after against M1/M2 code, mutant-checked
+
+- red: none observed. `scripts/build-lock.sh cargo test -p micold-daemon --test structured_resume`
+  -> `test result: ok. 4 passed` at the first run that drove the session the way a client does
+  (the run before it failed `the events never completed: []` only because the test started the
+  session with `DaemonState::start_session`, which does not announce the start to viewers; the
+  case now sends `SessionStart`). T029 predicted the daemon-restart cases red until T030, but
+  M1's `StoredSession::into_session` (`micold-core/src/store.rs`) already passes the kind into
+  `Session::restored_of_kind`, and M2's start path already gives a structured start the terminal
+  `LaunchSpec` (its `mode` from the caller). Recorded as test-after.
+- deliberate mutants (each restored, then the file re-run green):
+  - `into_session` passing `SessionKind::Terminal` -> `a_daemon_restart_keeps_the_kind_and_resumes_the_conversation`
+    FAILED `assertion `left == right` failed: the kind is restored`;
+  - `spawn_structured` forcing `LaunchMode::Fresh` -> `stop_start_and_restart_resume_the_same_conversation`
+    FAILED `start: [..., "--session-id", "<id>"]`;
+  - the gone-conversation check gated on `SessionKind::Terminal` ->
+    `a_resume_whose_conversation_is_gone_fails_as_a_terminal_sessions_does` FAILED
+    `left: ("started", Running)`.
+- green (T030): no source change; the `Session::restored` calls in `state.rs` are the adoption and
+  discovery of conversations found on disk, which are terminal by definition. 10 runs of the file:
+  `ok. 4 passed` each.
+- Test fix: the daemon-restart case waits until the stand-in read the first prompt before the first
+  daemon stops it; without that the stop could kill it before it recorded its start (7 of 8 runs
+  failed `never started 2 times`).
+
