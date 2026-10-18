@@ -15,7 +15,7 @@ use futures_util::{SinkExt, StreamExt};
 use micold_core::protocol::codec::Frame;
 use micold_core::protocol::messages::{ClientMsg, DaemonMsg, OperationResult, WireLifecycle};
 use micold_core::session::{AiCli, KindRefusal, SessionId, SessionKind, SessionLocation};
-use micold_core::structured::StructuredEvent;
+use micold_core::structured::{StructuredEvent, UserMessageRefusal};
 use micold_core::terminal::LaunchMode;
 use micold_daemon::state::DaemonState;
 use tracing_subscriber::fmt::MakeWriter;
@@ -468,6 +468,265 @@ async fn two_structured_sessions_each_deliver_only_their_own_events() {
         assert_eq!(events_of(&got), expected, "{name}: only its own events");
         let _ = client;
     }
+    for id in ids {
+        state.stop_session(id);
+    }
+}
+
+// --- M3 (T024): the first prompt and user messages (FR-007, FR-008, US1 scenarios 4–5) ---
+
+/// `SessionUserMessage` `req` for `id` with `text`.
+fn user_message(req: u64, id: SessionId, text: &str) -> ClientMsg {
+    ClientMsg::SessionUserMessage {
+        req,
+        session: id,
+        text: text.into(),
+    }
+}
+
+/// Send `text` to `id` and return the answer.
+async fn send_text(client: &mut Client, req: u64, id: SessionId, text: &str) -> DaemonMsg {
+    client
+        .send(Frame::Control(user_message(req, id, text)))
+        .await
+        .expect("sent");
+    answer(client, req).await
+}
+
+fn assert_ok(answer: &DaemonMsg, what: &str) {
+    assert!(
+        matches!(answer, DaemonMsg::OperationOk { .. }),
+        "{what}: not accepted: {answer:?}"
+    );
+}
+
+fn assert_refused(answer: &DaemonMsg, why: UserMessageRefusal, what: &str) {
+    match answer {
+        DaemonMsg::OperationError { message, .. } => {
+            assert_eq!(message, &why.to_string(), "{what}: the refusal sentence")
+        }
+        other => panic!("{what}: not refused: {other:?}"),
+    }
+}
+
+/// The texts of the user messages the stand-in read in `dir`, one per stdin line.
+fn delivered(dir: &Path) -> Vec<String> {
+    record(dir, "stdin-record")
+        .lines()
+        .map(|line| {
+            let value: serde_json::Value = serde_json::from_str(line).expect("a JSON line");
+            value["message"]["content"][0]["text"]
+                .as_str()
+                .expect("a text block")
+                .to_owned()
+        })
+        .collect()
+}
+
+/// `await-stdin`, then `text-turn.jsonl` with a pause of `pause_ms` before its result.
+fn answering_turn(pause_ms: u64) -> String {
+    let lines = structured::fixture_lines("text-turn.jsonl");
+    let result_at = lines
+        .iter()
+        .position(|l| l.contains("\"type\":\"result\""))
+        .expect("the fixture ends its turn with a result");
+    let mut script = vec!["await-stdin".to_owned()];
+    script.extend(lines[..result_at].iter().cloned());
+    script.push(format!("pause {pause_ms}"));
+    script.extend(lines[result_at..].iter().cloned());
+    script.join("\n") + "\n"
+}
+
+fn is_result(r: &structured::Received) -> bool {
+    matches!(r.event.event, StructuredEvent::Result { .. })
+}
+
+/// Wait, within 10 s, until the stand-in has started `n` times in `dir`.
+async fn started_times(dir: &Path, n: usize) {
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    while structured::starts(dir) < n {
+        assert!(std::time::Instant::now() < deadline, "never started {n} times");
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+}
+
+/// US1 scenario 4, FR-007: a first prompt is the first stdin line, and a stop/start and a
+/// `SessionRestart` do not send it again.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_first_prompt_is_delivered_once_in_the_sessions_life() {
+    fake_stream_cli();
+    let project = tempfile::tempdir().unwrap();
+    let session = structured_session(SessionLocation::Default);
+    let id = session.id;
+    let state = service(project.path(), vec![session]);
+    stream_script(project.path(), &answering_turn(0));
+    let prompt = "first \"prompt\"\nzażółć";
+    let (_, typed) = micold_daemon::ops::start_with_prompt(
+        &state,
+        id,
+        project.path(),
+        AiCli::ClaudeCode,
+        LaunchMode::Fresh,
+        micold_core::occupancy::Additional::Yes,
+        Some(micold_daemon::ops::FirstPrompt {
+            text: prompt,
+            asked: tokio::time::Instant::now(),
+            require_bracketed: false,
+        }),
+    )
+    .await;
+    assert!(typed.is_ok(), "the prompt was delivered: {typed:?}");
+    assert_eq!(delivered(project.path()), [prompt]);
+
+    state.stop_session(id);
+    state.start_session(id, LaunchMode::Fresh).expect("starts again");
+    started_times(project.path(), 2).await;
+    state.stop_session(id);
+    let mut client = connect(&state).await;
+    client
+        .send(Frame::Control(ClientMsg::SessionRestart {
+            session: id,
+            allow_additional_session: true,
+        }))
+        .await
+        .expect("sent");
+    started_times(project.path(), 3).await;
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    assert_eq!(delivered(project.path()), [prompt], "never sent again");
+    state.stop_session(id);
+}
+
+/// US1 scenario 5, FR-008: a message is one stdin line with its text unchanged, answered
+/// `OperationOk`; the response reaches two viewers; the text is never logged.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_user_message_is_one_line_and_its_answer_reaches_every_viewer() {
+    daemon_log();
+    let project = tempfile::tempdir().unwrap();
+    let (state, id) = started(project.path(), &answering_turn(0));
+    let mut first = viewer(&state, project.path(), id).await;
+    let mut second = viewer(&state, project.path(), id).await;
+    let text = "two lines\n\"quoted\" — zażółć 🦀 m3-secret-marker";
+    assert_ok(&send_text(&mut first, 1, id, text).await, "the message");
+    assert_eq!(delivered(project.path()), [text]);
+    let expected = fixture_events("text-turn.jsonl");
+    for client in [&mut first, &mut second] {
+        let got = events_until(client, id, complete(expected.len())).await;
+        assert_eq!(events_of(&got), expected, "the answer reached the viewer");
+    }
+    assert!(
+        !log_text().contains("m3-secret-marker"),
+        "the text of a message is never logged"
+    );
+    state.stop_session(id);
+}
+
+/// FR-008: blank, mid-turn and back-to-back messages are refused with their sentence; after the
+/// result a message is accepted again; a stopped session and a terminal session refuse.
+#[tokio::test(flavor = "multi_thread")]
+async fn messages_are_refused_while_blank_mid_turn_stopped_or_to_a_terminal() {
+    let project = tempfile::tempdir().unwrap();
+    fake_stream_cli();
+    let session = structured_session(SessionLocation::Default);
+    let terminal = ai_session();
+    let (id, terminal_id) = (session.id, terminal.id);
+    let state = service(project.path(), vec![session, terminal]);
+    stream_script(
+        project.path(),
+        &(answering_turn(1500) + "await-stdin\n" + &replay("text-turn.jsonl")),
+    );
+    state.start_session(id, LaunchMode::Fresh).expect("starts");
+    let mut client = viewer(&state, project.path(), id).await;
+
+    for (req, blank) in [(1, ""), (2, "  \n\t")] {
+        let got = send_text(&mut client, req, id, blank).await;
+        assert_refused(&got, UserMessageRefusal::Blank, "a blank message");
+    }
+    // Back to back: the second arrives before the first's result.
+    client.send(Frame::Control(user_message(3, id, "one"))).await.unwrap();
+    client.send(Frame::Control(user_message(4, id, "two"))).await.unwrap();
+    assert_ok(&answer(&mut client, 3).await, "the first of two");
+    let got = answer(&mut client, 4).await;
+    assert_refused(&got, UserMessageRefusal::TurnInProgress, "the second of two");
+    let got = send_text(&mut client, 5, id, "before the result").await;
+    assert_refused(&got, UserMessageRefusal::TurnInProgress, "mid-turn");
+
+    events_until(&mut client, id, |got| got.iter().any(is_result)).await;
+    assert_ok(&send_text(&mut client, 6, id, "after").await, "after the result");
+    assert_eq!(delivered(project.path()), ["one", "after"]);
+
+    state.stop_session(id);
+    let got = send_text(&mut client, 7, id, "stopped").await;
+    assert_refused(&got, UserMessageRefusal::NotRunning, "a stopped session");
+    let got = send_text(&mut client, 8, terminal_id, "terminal").await;
+    assert_refused(&got, UserMessageRefusal::NotStructured, "a terminal session");
+}
+
+/// Edge case, FR-014: the CLI ends mid-turn: a `TurnEndedWithoutResult` note, and once restarted
+/// the next message is accepted.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_exit_mid_turn_ends_the_turn_with_a_note() {
+    let project = tempfile::tempdir().unwrap();
+    let (state, id) = started(project.path(), "await-stdin\nexit 1\n");
+    let mut client = viewer(&state, project.path(), id).await;
+    assert_ok(&send_text(&mut client, 1, id, "crash").await, "the message");
+    events_until(&mut client, id, |got| {
+        got.iter()
+            .any(|r| r.event.event == StructuredEvent::TurnEndedWithoutResult)
+    })
+    .await;
+    // Supervision restarts the crash; the test drives its sweep, as the daemon's timer does.
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    while structured::starts(project.path()) < 2 {
+        state.supervise_exited_sessions();
+        assert!(std::time::Instant::now() < deadline, "the crash was never restarted");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    let mut req = 2;
+    loop {
+        // The respawn is registered a moment after the stand-in records its start.
+        let got = send_text(&mut client, req, id, "again").await;
+        if matches!(got, DaemonMsg::OperationOk { .. }) {
+            break;
+        }
+        assert_refused(&got, UserMessageRefusal::NotRunning, "before the respawn");
+        assert!(std::time::Instant::now() < deadline, "never accepted again");
+        req += 1;
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    state.stop_session(id);
+}
+
+/// Principle II: a message to one of two running structured sessions reaches only that one.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_message_reaches_only_its_own_session() {
+    fake_stream_cli();
+    let project = tempfile::tempdir().unwrap();
+    mcp::init_repo(project.path());
+    let one = mcp::add_worktree(project.path(), "one");
+    let two = mcp::add_worktree(project.path(), "two");
+    let sessions = vec![
+        structured_session(SessionLocation::Worktree("one".into())),
+        structured_session(SessionLocation::Worktree("two".into())),
+    ];
+    let ids: Vec<SessionId> = sessions.iter().map(|s| s.id).collect();
+    let state = service(project.path(), sessions);
+    for (id, dir) in [(ids[0], &one), (ids[1], &two)] {
+        stream_script(dir, &answering_turn(0));
+        state
+            .start_session_gated(id, LaunchMode::Fresh, micold_core::occupancy::Additional::Yes)
+            .expect("starts");
+        started_times(dir, 1).await;
+    }
+    let mut client = connect(&state).await;
+    assert_ok(&send_text(&mut client, 1, ids[0], "for one").await, "the message");
+    assert_eq!(delivered(&one), ["for one"]);
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    assert!(
+        !two.join("stdin-record").exists()
+            || std::fs::read_to_string(two.join("stdin-record")).unwrap().is_empty(),
+        "the other session read nothing"
+    );
     for id in ids {
         state.stop_session(id);
     }

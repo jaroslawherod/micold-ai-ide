@@ -28,6 +28,7 @@ use micold_core::protocol::messages::{
     WireLifecycle, WorktreeSnapshot, WorktreeStatus,
 };
 use micold_core::provider::{ActivitySource, ConversationIdentity, ToolServerSupport};
+use micold_core::structured::{TurnState, UserMessageRefusal};
 use micold_core::session::{
     AiCli, Session, SessionId, SessionKind, SessionLabel, SessionLifecycle, SessionLocation,
     ShellInstanceId, TerminalMode, RESTART_STABLE_AFTER,
@@ -5727,6 +5728,56 @@ impl DaemonState {
         Self::take_carried(&mut inner.carried, id, seeded);
         drop(inner);
         old
+    }
+
+    /// How `session` runs its CLI, from its record; `None` for no such session (feature 938).
+    pub fn session_kind(&self, session: SessionId) -> Option<SessionKind> {
+        Self::kind_of(&self.lock(), session)
+    }
+
+    fn kind_of(inner: &Inner, session: SessionId) -> Option<SessionKind> {
+        inner
+            .catalog
+            .workspace()
+            .find_session(session)
+            .map(|(_, s)| s.kind)
+    }
+
+    /// Deliver `text` to structured session `session`'s CLI as one user message (feature 938,
+    /// FR-008, research R7). The turn is checked and opened under the state lock, so of two
+    /// simultaneous messages the first wins; the write happens off it. Never logs the text.
+    pub fn send_user_message(
+        &self,
+        session: SessionId,
+        text: &str,
+    ) -> Result<(), crate::structured::UserMessageUndelivered> {
+        use crate::structured::UserMessageUndelivered::{Refused, WriteFailed};
+        let child = {
+            let inner = self.lock();
+            let primary = inner
+                .sessions
+                .get(&session)
+                .and_then(|live| live.procs.get(&SessionProcess::Primary));
+            match primary {
+                Some(Proc::Structured(child)) => {
+                    child.accept_user_message(text).map_err(Refused)?;
+                    Arc::clone(child)
+                }
+                Some(Proc::Pty { .. }) => return Err(Refused(UserMessageRefusal::NotStructured)),
+                None => {
+                    if Self::kind_of(&inner, session) == Some(SessionKind::Terminal) {
+                        return Err(Refused(UserMessageRefusal::NotStructured));
+                    }
+                    // Not running: `Blank` still comes first, as for a running session.
+                    let refusal = TurnState::Idle
+                        .accept(text, false)
+                        .err()
+                        .unwrap_or(UserMessageRefusal::NotRunning);
+                    return Err(Refused(refusal));
+                }
+            }
+        };
+        child.write_user_message(text).map_err(WriteFailed)
     }
 
     /// The session's primary process PTY, whichever process is attached (feature 034: the first

@@ -97,3 +97,32 @@ Append only. Newest last.
   passed`.
 - Test fix: the tolerance case's second `events_until` waited for `expected.len()` *new* events
   after the first call had taken all but one; it now waits for the one left (the partial line).
+
+## Cycle 7 (U10, U11, M3): turn and user message — RED, GREEN
+
+- red (T022, T023): `cargo test -p micold-core --lib structured::` -> the five `turn::tests` FAIL
+  (`accept` was a stub returning `Ok`, `on_exit` `None`) and the three `user_message::tests` FAIL
+  (empty sentence, empty line); `structured_wire.rs` does not compile: no
+  `ClientMsg::SessionUserMessage`.
+- green (T025, T026): `TurnState::{accept, on_event, on_exit}`, `UserMessageRefusal` sentences,
+  `encode_user_message` through typed structs (a `json!` map sorts its keys, the contract's order
+  is `type` first); `SessionUserMessage`; `PROTOCOL_VERSION` 52 -> 53 and the schema_hash pin.
+  `cargo test -p micold-core --all-targets -- structured schema` -> all pass.
+
+## Cycle 8 (U12, M3): daemon user messages and first prompt — RED, GREEN
+
+- red (T024): the new `structured_session.rs` cases do not compile before T027 (no
+  `SessionUserMessage` arm, no `ops` structured branch). Evidence of the right reason taken by
+  mutation after green: with the `start_with_prompt` structured branch disabled the first-prompt
+  case fails `Err(AsksTrust(ClaudeCode))` (the PTY path's trust wait), and with the end-of-file
+  note suppressed the exit case fails `the events never completed: []`.
+- green (T027, T028): the turn lives in `StructuredSession` (one per process, so a new live entry
+  and every respawn start `Idle`); the stdout reader closes it on a `result` and, at end-of-file,
+  appends `TurnEndedWithoutResult` after the process's last line. `DaemonState::send_user_message`
+  accepts under the state lock and writes off it; the server answers from `spawn_blocking`;
+  `start_with_prompt` sends a structured prompt right after the spawn. `cargo test -p
+  micold-daemon --test structured_session --test structured_lifecycle` -> `ok. 13 passed`, `ok. 4
+  passed`.
+- Test fixes: `SessionRestart` restarts a stopped session (stop first); a crash respawn needs the
+  supervision sweep the test drives (`supervise_exited_sessions`), as `structured_lifecycle.rs` does.
+
