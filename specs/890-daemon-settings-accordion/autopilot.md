@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-rwlog8
 - **Started**: 2026-10-18
 - **Phase**: M2
-- **Next step**: M2 handover: T015 visual pass, review A (scoped gate in its shadow), review B, full gate (scripts/gate.sh), PR files
+- **Next step**: M2: full gate (scripts/gate.sh), push, PR files
 
 ## Pull requests
 
@@ -53,6 +53,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review A M1 (code-review high) | 1 | — (run on f8a8cb27) | 7 unranked findings: 3 fixed (two-line header fit now asserted; empty summary drawn as none, U8; narrow test finds summary by text), 4 declined |
 | Review B M1 (conformance, sonnet) | 1 | 0f60a67f0434ccd3637739a1679e21c9a10fb5a8:e79bfd617bd71c89b048059deb323c4dcef46cfe | CLEAN; 3 MINOR — F2, F3 fixed prose only (cycle-log note, research R4); F1 Verify not runnable in its sandbox (unit ran both: 13 + 41 passed) |
 | Visual pass M1 (quickstart B1) | 1 | — | PASS, both themes, 150px narrow; visual-pass/m1/ |
+| Review A M2 (code-review high, headless) | 1 | be7183037bd8e32b5f7cf0ba45918bbf1f2b3f23:d53128e282e961dc1276cca8a18b84ebcca69cc8 | 2 MAJOR + 5 MINOR: both MAJOR fixed with tests first (a click on an error-held section is not recorded; `allowed` refusal maps to Credentials and is shown there); MINOR same-kind re-choice no longer clears the flips (fixed); 4 MINOR declined |
+| Review B M2 (conformance, sonnet) | 1 | be7183037bd8e32b5f7cf0ba45918bbf1f2b3f23:d53128e282e961dc1276cca8a18b84ebcca69cc8 | CLEAN; 2 MINOR: F1 fixed (T009 red measured on origin/main: Cancel bottom 1851 > 800; cycle-log), F2 its scratch worktree, outside the repo |
+| Visual pass M2 (quickstart B2–B3) | 1 | — | PASS light; dark Container + Resources error; Tab walk and dark Host/SSH/Kubernetes not judged; visual-pass/m2/ |
 
 ## Declined review findings
 
@@ -63,26 +66,16 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 - Review A M1: title position differs between headers with and without a summary — declined, the two-line header is the design (research R4).
 - Review A M1: `Mounted::painted_text` duplicates `tests/support/layout.rs::painted_text` — declined, in-crate tests cannot reach `tests/support` (`material` is `pub(crate)`; same reason `test_support.rs` exists).
+- Review A M2 (MINOR): `section_open` calls `required_fields()` once per section per view — declined, six small calls per render, no measured cost.
+- Review A M2 (MINOR): hand-written field→section table beside `FormError` strings — declined for this PR; `daemon_sections` tests pin every field name the form reads (T006).
+- Review A M2 (MINOR): duplicated accordion push blocks in `form`/`kube_sections` — declined, each kind's controls differ; the list order comes from `Section::of`.
+- Review A M2 (MINOR): context-list failure caution sits below *Context* — declined, B found it conforming (contract §Section bodies); doc-comment wording left as is.
 - Review A M1: required pose also carries the summary — declined, matches how M3 sections pose both; FR-015 asks for "closed with the marker".
 - Review A M1: marker hidden while open — declined, FR-012 and research R5 (the open field shows its own marker).
 
 ## Handover
 
-M2 (T006–T014 done and ticked; code, tests, docs written, uncommitted until this commit): branch
-`claude/project-thread-rwlog8` reset to origin/main c0507555 (no branch-start.sh needed).
-Done: `features/daemon_sections.rs` (Section::of/title/holding_error/holding), `State::section_open`
-rewrite + `flipped_sections` cleared on `RuntimeChosen`, `container_fields::accordion` + six
-container sections, `ui/settings/daemons.rs` `form` + `kube_sections` + `auto_start`, tests
-(`daemon_sections.rs`, `daemons_feature.rs`, `daemons_section_geometry.rs`, `gates/daemon_form_fits.rs`),
-user guide. Green: `cargo test -p micold-client --test daemon_sections --test daemons_feature
---test daemons_section_geometry --test layout_snapshot` (with CARGO_INCREMENTAL=0 etc).
-Next: (1) T015 visual pass, both themes, into `visual-pass/m2/`; (2) tdd cycle-log entry for M2
-(T009 red evidence not measured on main; say so); (3) scoped gate + review A (`code-review` high on
-origin/main...HEAD) then review B (conformance, sonnet, via `claude -p`); (4) `scripts/gate.sh`;
-(5) push `--force-with-lease=claude/project-thread-rwlog8:`, write pr-title.txt / pr-body.md in the
-scratchpad (title "#890: Group daemon settings sections in an accordion (new material component) —
-M2 every daemon kind's form in sections"). Other tests not yet run beyond the four binaries
-(a full gate will show any other test that opened the Container section by default).
+None.
 
 ## Open escalation
 

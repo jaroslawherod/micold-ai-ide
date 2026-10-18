@@ -660,6 +660,9 @@ fn kube_sections<'a>(
             );
         }
     }
+    if let Some(message) = error_of(state, "allowed") {
+        credentials.push(caution(message, roles));
+    }
 
     let errors = [
         error_of(state, "cpu_request"),

@@ -411,11 +411,19 @@ impl State {
         let runtime = draft.runtime;
         let first = Section::of(runtime).first() == Some(&section);
         let by_user = first != self.flipped_sections.contains(&section);
-        by_user
-            || self
-                .form_error
-                .as_ref()
-                .is_some_and(|e| Section::holding_error(runtime, e.field) == Some(section))
+        by_user || self.held_open(section)
+    }
+
+    /// Whether an error or a missing required field holds `section` open (FR-004): a click does
+    /// not close it, and is not recorded.
+    fn held_open(&self, section: Section) -> bool {
+        let Some(draft) = &self.draft else {
+            return false;
+        };
+        let runtime = draft.runtime;
+        self.form_error
+            .as_ref()
+            .is_some_and(|e| Section::holding_error(runtime, e.field) == Some(section))
             || draft.required_fields().into_iter().any(|(id, req)| {
                 Section::holding(runtime, id) == Some(section)
                     && draft.required.state(id, req) == FieldRequirement::Missing
@@ -1868,14 +1876,17 @@ fn reduce(state: &mut State, model: &mut Model<'_>, msg: Msg) -> Vec<Outcome> {
             state.form_error = None;
         }
         Msg::SectionToggled(section) => {
-            if !state.flipped_sections.remove(&section) {
+            if !state.held_open(section) && !state.flipped_sections.remove(&section) {
                 state.flipped_sections.insert(section);
             }
         }
         Msg::NameEdited(v) => edit(state, &|d| d.name = v.clone()),
         Msg::RuntimeChosen(v) => {
+            let changed = state.draft.as_ref().is_some_and(|d| d.runtime != v);
             edit(state, &|d| d.runtime = v);
-            state.flipped_sections.clear();
+            if changed {
+                state.flipped_sections.clear();
+            }
             if v == DraftRuntime::Kubernetes {
                 return vec![Outcome::KubeContextsRequested];
             }
