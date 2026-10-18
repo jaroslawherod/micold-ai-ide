@@ -262,6 +262,14 @@ fn daemon_connections(app: &App) -> Subscription<Message> {
         &states,
         &app.placement.state_dir,
         app.core.settings.legacy_default_daemon,
+        // The sandbox boot creates the container of the one daemon its plan describes; every other
+        // container daemon's actor creates its own (BUG-868).
+        app.sandbox_boot.as_ref().and_then(|_| {
+            crate::shell::sandbox::BootPlan::sandbox_daemon(
+                registry,
+                app.core.settings.legacy_default_daemon,
+            )
+        }),
         app.core.daemon_list.drift_answers(),
     )
 }

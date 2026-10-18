@@ -208,6 +208,9 @@ fn boot() -> (App, Task<Message>) {
     ));
     // The zone a container daemon started over SSH is told (the container's own `-e TZ` reaches
     // only the daemon the entrypoint starts).
+    micold_client::daemon::install_container_starter(std::sync::Arc::new(
+        crate::shell::sandbox::DaemonContainers,
+    ));
     micold_client::daemon::install_time_zone(crate::shell::time_zone::host());
     // What Kubernetes daemons are started with (feature 686).
     micold_client::daemon::install_kube(micold_client::daemon::KubeEnv::new(
@@ -306,6 +309,7 @@ fn boot() -> (App, Task<Message>) {
     // Kept for the whole run, not consumed by boot: a restart needs the same three inputs and has
     // no way to re-derive them (R9). `None` for the host placement, which is what makes "restart
     // the sandbox" unreachable when there is no sandbox.
+    crate::shell::sandbox::share_projects(&projects_for_sandbox);
     let boot_plan = (placement == PlacementKind::LocalSandbox).then(|| {
         let (container_name, port) = crate::shell::sandbox::BootPlan::identity_of(
             &core.settings.daemons,

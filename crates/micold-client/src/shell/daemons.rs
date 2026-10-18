@@ -515,6 +515,7 @@ mod tests {
             links.states(),
             Path::new("/nonexistent"),
             None,
+            None,
             &Default::default(),
         );
     }

@@ -1178,6 +1178,39 @@ fn a_picked_port_survives_a_restart() {
     );
 }
 
+/// BUG-868: a container daemon added through the form is dialled with an actor that creates its
+/// container first, in the daemon's own state directory; the daemon the sandbox boot owns is not.
+#[test]
+fn a_container_daemon_added_in_the_form_creates_its_own_container() {
+    use micold_client::daemon::{actor_specs_answered, Dial};
+    let mut w = World::new();
+    let mut state = State::default();
+    add_container(&mut state, "Three", "c3", "");
+    daemons::save(&mut state, &mut w.model()).unwrap();
+    let added = w.registry.entries().last().unwrap().id;
+    let links = micold_client::links::DaemonLinks::at_launch(&w.registry);
+    let base = std::path::Path::new("/state");
+    let setup = |boot_owner| {
+        actor_specs_answered(
+            &w.registry,
+            links.states(),
+            base,
+            None,
+            boot_owner,
+            &Default::default(),
+        )
+        .into_iter()
+        .find_map(|s| match s.dial {
+            Dial::ContainerSsh { bring_up, .. } if s.key.id == added => Some(bring_up),
+            _ => None,
+        })
+        .expect("the added container daemon is dialled over SSH")
+    };
+    let own = setup(None).expect("the actor creates the container");
+    assert_eq!(own.state_dir, base.join("daemons").join("c3"));
+    assert!(setup(Some(added)).is_none(), "the boot's daemon is left to the boot");
+}
+
 /// FR-004: the question counts the daemon's running sessions, one and none included.
 #[test]
 fn the_running_daemon_question_counts_its_sessions() {
