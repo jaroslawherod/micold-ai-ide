@@ -89,7 +89,19 @@ split along s6 (M3) is the only scenario split with a deliverable on each side.
 
 ## Handover
 
-None.
+M5 code is committed (82e86893, not pushed, no PR yet). Done: T057–T066 ticked (core `anchor.rs` locate/Located/is_outdated and
+`EntryReview::reanchor`; daemon `Reviews::apply_edit` Reanchor (returns `Option<DaemonMsg>`), `review::relocate`, W16 in
+`review_send`; client `Anchor`/`anchors`/`judge_anchors`/`reanchor_effect`, panel rows/jump on shown lines; user guide
+"How comments follow their code"). Targeted tests green: micold-core review::, daemon review_edit + review_send, client
+features_changes. T067 (and T034, T046) visual passes not runnable (no xdotool): left unticked with the note.
+Next, in order: (1) `rm -rf target-shared/debug` (disk 8 GB free), then `CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=0
+CARGO_PROFILE_TEST_DEBUG=0 scripts/gate.sh` detached; (2) review A (`code-review` skill, high) on origin/main...HEAD while it
+builds, review B (conformance, sonnet) via `claude -p --agent autopilot-reviewer`; record rounds in *Review rounds*;
+(3) fix findings, full gate once on the final tree; (4) push with
+`git push -u origin claude/project-thread-jjniz9 --force-with-lease=claude/project-thread-jjniz9:`, write the PR title/body to
+the scratchpad pr-title.md / pr-body.md (title "#946: Diff view: inline review comments batched and sent to the agent (M5)",
+body per tasks/pr.md, ends `Refs #946`, says the visual pass could not run here). Known loose end to weigh in review: if the
+W15 write in `review_send` fails the prompt names the old range (only logged).
 
 ## Open escalation
 
