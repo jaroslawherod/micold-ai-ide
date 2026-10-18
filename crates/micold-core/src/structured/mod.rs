@@ -8,8 +8,12 @@ mod event;
 mod history;
 mod lines;
 mod parse;
+mod turn;
+mod user_message;
 
 pub use event::{ContentBlock, Delta, SequencedEvent, StructuredEvent, Usage};
 pub use history::{EventHistory, MAX_BYTES, MAX_EVENTS};
 pub use lines::LineSplitter;
 pub use parse::{pair_tool_calls, parse_line};
+pub use turn::TurnState;
+pub use user_message::{UserMessageRefusal, encode_user_message};

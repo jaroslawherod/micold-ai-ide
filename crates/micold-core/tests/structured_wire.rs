@@ -189,3 +189,18 @@ fn structured_events_round_trip_with_every_event_variant() {
         }
     }
 }
+
+#[test]
+fn a_session_user_message_round_trips_with_its_text_unchanged() {
+    for text in ["hello", "two\nlines \"quoted\"", "zażółć 🦀"] {
+        let msg = ClientMsg::SessionUserMessage {
+            req: 41,
+            session: sid(),
+            text: text.into(),
+        };
+        let ClientMsg::SessionUserMessage { text: back, .. } = json_roundtrip(&msg) else {
+            panic!("not a SessionUserMessage");
+        };
+        assert_eq!(back, text);
+    }
+}
