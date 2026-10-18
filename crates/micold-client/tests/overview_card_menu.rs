@@ -15,7 +15,7 @@ use micold_client::features::worktree::Msg as WorktreeMsg;
 use micold_client::features::Outcome;
 use micold_client::icons::Icon;
 use micold_client::ui::location_menu_items;
-use micold_client::ui::overview::{card_menu_items, cards};
+use micold_client::ui::overview::{card_menu_items, cards, is_targeted};
 use micold_core::project::{Availability, Project};
 use micold_core::pull_request::{CheckStatus, PrState, PullRequestStatus, ReviewState};
 use micold_core::session::{AiCli, Session, SessionLifecycle, SessionLocation};
@@ -477,5 +477,42 @@ fn the_menu_stays_when_its_target_changes_state_or_the_cards_reorder() {
         state.overview.card_menu.map(|menu| menu.location),
         Some(wt("feat-a")),
         "the menu follows its location, not a grid index (Edge: target changes, cards reorder)"
+    );
+}
+
+/// T016b (FR-006, Edge: cards reorder): the view's predicate is true only for the open menu's
+/// target, and still true for it after the cards reorder; no menu, no target.
+#[test]
+fn only_the_open_menus_target_is_marked_and_it_follows_a_reorder() {
+    let mut state = menu_open_on_feat_a(MenuOrigin::Pointer);
+    let place = |state: &State| cards(state).iter().position(|m| m.location == wt("feat-a"));
+    let before = place(&state);
+    state
+        .worktree
+        .worktrees
+        .insert(0, worktree("feat-b", WorktreeStatus::Valid, false));
+    assert!(is_targeted(&state, &wt("feat-a")));
+    assert!(!is_targeted(&state, &wt("feat-b")));
+    let mut session = add_session(&mut state, wt("feat-a"));
+    session.lifecycle = SessionLifecycle::Running;
+    state
+        .workspace
+        .sessions
+        .get_mut(&project_path())
+        .expect("sessions")
+        .retain(|s| s.id != session.id);
+    state
+        .workspace
+        .sessions
+        .get_mut(&project_path())
+        .expect("sessions")
+        .push(session);
+    tick(&mut state);
+    assert!(is_targeted(&state, &wt("feat-a")), "still the target");
+    assert_ne!(place(&state), before, "fixture: the cards reordered");
+    state.update(Message::Overview(Msg::CardMenuDismissed));
+    assert!(
+        !is_targeted(&state, &wt("feat-a")),
+        "the mark goes with the menu"
     );
 }

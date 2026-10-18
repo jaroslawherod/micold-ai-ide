@@ -343,6 +343,7 @@ pub const COMPONENTS: &[Entry] = &[
             "orphan",
             "with progress",
             "without progress",
+            "targeted",
         ],
         live: &[],
         interactive: false,

@@ -165,30 +165,30 @@ card: the card keeps its mark; press Escape: the menu closes, the mark goes, the
 
 ### Tests for US2 (write first)
 
-- [ ] T014 [P] [US2] Pixel tests in src/ui/material/overview_card.rs beside
+- [x] T014 [P] [US2] Pixel tests in src/ui/material/overview_card.rs beside
   `the_focused_card_draws_the_focus_ring`: a `.targeted(true)` card draws a 2dp `primary` outline
   at its edge and the `state::SELECTED` layer over its fill; an untargeted card does not; the
   targeted render differs from the focused one (ring `secondary`, inset) and the hovered one
   (layer only, no outline) (FR-006); a targeted card does not publish `on_press` on Enter or Space
   (R6, FR-013). Fail (builder missing)
-- [ ] T015 [P] [US2] src/ui/material/composition_contrast.rs: `primary` against each card
+- [x] T015 [P] [US2] src/ui/material/composition_contrast.rs: `primary` against each card
   palette fill (`overview_card::palette` for every `CardState`) at ≥ 3:1 (non-text) in light and
   dark (FR-006)
-- [ ] T016 [P] [US2] tests/showcase_completeness.rs: the showcase lists a targeted `OverviewCard`.
+- [x] T016 [P] [US2] tests/showcase_completeness.rs: the showcase lists a targeted `OverviewCard`.
   Fails
-- [ ] T016b [US2] tests/overview_card_menu.rs: `ui::overview::is_targeted(state, &location)` (the
+- [x] T016b [US2] tests/overview_card_menu.rs: `ui::overview::is_targeted(state, &location)` (the
   view's predicate) is true only for the open menu's target, and still true for it after the cards
   reorder (Edge: cards reorder). Fails. Shares the file with T004/T005/T023: sequential
 
 ### Implementation for US2
 
-- [ ] T017 [US2] `OverviewCard::targeted(bool)` in src/ui/material/overview_card.rs: outline and
+- [x] T017 [US2] `OverviewCard::targeted(bool)` in src/ui/material/overview_card.rs: outline and
   layer per R7; drops the card's Enter/Space claims while targeted; T014 and T015 pass
-- [ ] T018 [US2] src/ui/overview.rs `is_targeted` and the view's `.targeted(is_targeted(..))`;
+- [x] T018 [US2] src/ui/overview.rs `is_targeted` and the view's `.targeted(is_targeted(..))`;
   the Overview container wrapped in a `ContextArea` whose secondary press sends
   `CardMenuDismissed` (empty-space right-click, R3); the targeted card in the `OverviewCard`
   showcase section under src/showcase/sections/; T016 and T016b pass (glue: quickstart §B B2, B6, B17)
-- [ ] T019 [US2] docs/user-guide/overview.md *Acting on a card*: the target mark, and that a click
+- [x] T019 [US2] docs/user-guide/overview.md *Acting on a card*: the target mark, and that a click
   outside the menu closes it without activating what it lands on
 
 **Checkpoint**: both P1 stories work.

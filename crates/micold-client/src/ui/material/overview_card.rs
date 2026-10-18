@@ -18,7 +18,7 @@ use iced::{keyboard, Alignment, Element, Length};
 use micold_core::hook_activity::CurrentActivity;
 use micold_core::overview::{CardModel, CardState, LocationType};
 use micold_core::task_progress::{Progress, Ratio};
-use micold_core::tokens::{spacing, Rgb, Roles};
+use micold_core::tokens::{spacing, state, Rgb, Roles};
 use std::marker::PhantomData;
 use std::rc::Rc;
 
@@ -157,12 +157,16 @@ pub struct OverviewCard<'a, M> {
     roles: Roles,
     on_press: Option<M>,
     on_secondary_press: Option<PressAt<'a, M>>,
+    targeted: bool,
     id: Option<iced::advanced::widget::Id>,
     _marker: PhantomData<&'a M>,
 }
 
 /// The card's corner radius, shared by its fill and its focus ring.
 const RADIUS: f32 = 12.0;
+
+/// The target outline's width (feature 972, R7).
+pub const TARGET_WIDTH: f32 = 2.0;
 
 impl<'a, M: 'a> OverviewCard<'a, M> {
     /// The card of `model`, themed by `roles`.
@@ -172,6 +176,7 @@ impl<'a, M: 'a> OverviewCard<'a, M> {
             roles,
             on_press: None,
             on_secondary_press: None,
+            targeted: false,
             id: None,
             _marker: PhantomData,
         }
@@ -189,6 +194,15 @@ impl<'a, M: 'a> OverviewCard<'a, M> {
     /// publishing [`Self::on_press`] only.
     pub fn on_secondary_press(mut self, f: impl Fn((u16, u16)) -> M + 'a) -> Self {
         self.on_secondary_press = Some(Rc::new(f));
+        self
+    }
+
+    /// Mark the card as the target of its open context menu (feature 972, FR-006, research R7): a
+    /// 2dp `primary` outline and the *selected* state layer over the fill, which neither hover (a
+    /// layer alone) nor the focus ring (`secondary`, inset) draws. While targeted, Enter and Space
+    /// belong to the menu, so the card drops its claims on them (FR-013).
+    pub fn targeted(mut self, targeted: bool) -> Self {
+        self.targeted = targeted;
         self
     }
 
@@ -260,15 +274,21 @@ impl<'a, M: Clone + 'a> From<OverviewCard<'a, M>> for Element<'a, M> {
                 None => body.push(line),
             };
         }
+        let targeted = card.targeted;
         let face = container(body)
             .width(Length::Fill)
             .height(Length::Fixed(HEIGHT))
             .padding(spacing::MD)
             .style(move |_| container::Style {
-                background: Some(iced::Background::Color(style::color(p.fill))),
+                background: Some(iced::Background::Color(if targeted {
+                    style::state_layer(style::color(p.fill), style::color(p.text), state::SELECTED)
+                } else {
+                    style::color(p.fill)
+                })),
                 border: iced::Border {
                     radius: RADIUS.into(),
-                    ..iced::Border::default()
+                    color: style::color(roles.primary),
+                    width: if targeted { TARGET_WIDTH } else { 0.0 },
                 },
                 ..container::Style::default()
             });
@@ -292,14 +312,16 @@ impl<'a, M: Clone + 'a> From<OverviewCard<'a, M>> for Element<'a, M> {
         if let Some(id) = card.id {
             focusable = focusable.id(id);
         }
-        let focusable = focusable
-            .key(keyboard::key::Named::Enter, message.clone())
-            .key(keyboard::key::Named::Space, message)
-            .indicator(Indicator {
-                outline: roles.secondary,
-                layer: p.text,
-                radius: RADIUS,
-            });
+        if !targeted {
+            focusable = focusable
+                .key(keyboard::key::Named::Enter, message.clone())
+                .key(keyboard::key::Named::Space, message);
+        }
+        let focusable = focusable.indicator(Indicator {
+            outline: roles.secondary,
+            layer: p.text,
+            radius: RADIUS,
+        });
         // The ripple is the card's only state layer while it runs (feature 971, D1); the context
         // area outside it takes only the secondary press, which the ripple ignores (feature 972).
         menu(
@@ -510,6 +532,14 @@ mod tests {
         }
     }
 
+    fn mounted_targeted(targeted: bool) -> Mounted<'static> {
+        Mounted::new(
+            OverviewCard::<String>::new(&model(CardState::Idle, "feat-a"), roles())
+                .on_press("open".to_string())
+                .targeted(targeted),
+        )
+    }
+
     fn mounted(pressable: bool) -> Mounted<'static> {
         let card = OverviewCard::<String>::new(&model(CardState::Idle, "feat-a"), roles());
         Mounted::new(if pressable {
@@ -623,6 +653,101 @@ mod tests {
             "the focused card's edge {:?} is no nearer the ring colour than at rest {:?}",
             &focused[i..i + 3],
             &rest[i..i + 3]
+        );
+    }
+
+    /// Feature 972, FR-006 (R7): a targeted card draws a 2dp `primary` outline at its edge and the
+    /// selected layer over its fill; an untargeted one draws neither; and it differs from the
+    /// focused card (a `secondary` ring) and from the card at rest by more than a layer.
+    #[test]
+    fn the_targeted_card_draws_a_primary_outline_and_the_selected_layer() {
+        let r = roles();
+        let backdrop = style::color(r.surface);
+        let outline = style::color(r.primary);
+        let apart = |p: &[u8]| -> f32 {
+            [outline.r, outline.g, outline.b]
+                .iter()
+                .zip(p)
+                .map(|(want, got)| (want * 255.0 - f32::from(*got)).abs())
+                .sum()
+        };
+        let (rest, width) = mounted_targeted(false).drawn(backdrop);
+        let (targeted, _) = mounted_targeted(true).drawn(backdrop);
+        let mut focused_card = mounted_targeted(false);
+        focused_card.focus_next();
+        let (focused, _) = focused_card.drawn(backdrop);
+        let px = |x: u32, y: u32| ((y * width + x) * 4) as usize;
+        // Mid-top edge, both rows of the 2dp outline.
+        for row in [0, 1] {
+            let i = px(width / 2, row);
+            assert!(
+                apart(&targeted[i..i + 3]) < 12.0,
+                "row {row} of the edge {:?} is not the primary outline",
+                &targeted[i..i + 3]
+            );
+            assert!(
+                apart(&rest[i..i + 3]) > 60.0,
+                "an untargeted card draws an outline"
+            );
+        }
+        // Inside the padding, left of the text: only the selected layer changes the fill.
+        let inside = px(5, 80);
+        assert_ne!(
+            targeted[inside..inside + 3],
+            rest[inside..inside + 3],
+            "no selected layer over the fill"
+        );
+        assert_ne!(
+            targeted, focused,
+            "the target mark must differ from the focus ring"
+        );
+        assert_ne!(focused[inside..inside + 3], targeted[inside..inside + 3]);
+    }
+
+    /// Feature 972, FR-013 (R6): while targeted the card drops its Enter and Space claims, so the
+    /// menu owns them; the click still reaches `on_press`.
+    #[test]
+    fn a_targeted_card_does_not_publish_on_enter_or_space() {
+        let mut card = mounted_targeted(true);
+        card.focus_next();
+        let cursor = iced::advanced::mouse::Cursor::Unavailable;
+        for key in [Named::Enter, Named::Space] {
+            assert!(card.send(named_key(key), cursor).is_empty(), "{key:?}");
+        }
+        let mut open = mounted_targeted(false);
+        open.focus_next();
+        assert_eq!(open.send(named_key(Named::Enter), cursor), ["open"]);
+    }
+
+    /// Feature 972, FR-008 (R3): an area around the cards publishes on a right-press in empty space
+    /// and stays silent over a card, whose own area has answered and captured the press.
+    #[test]
+    fn a_right_press_over_a_card_does_not_also_reach_the_pane_around_it() {
+        use iced::advanced::mouse::{Button, Cursor, Event as Mouse};
+        let pane = || {
+            ContextArea::new(
+                iced::widget::container(
+                    OverviewCard::<String>::new(&model(CardState::Idle, "feat-a"), roles())
+                        .on_press("open".to_string())
+                        .on_secondary_press(|(x, y)| format!("menu at {x},{y}")),
+                )
+                .height(Length::Fixed(HEIGHT * 2.0)),
+            )
+            .on_secondary_press(|_| "dismiss".to_string())
+        };
+        let right = |at: iced::Point| {
+            let mut pane = Mounted::new(pane());
+            pane.hover(at);
+            pane.send(
+                iced::Event::Mouse(Mouse::ButtonPressed(Button::Right)),
+                Cursor::Available(at),
+            )
+        };
+        assert_eq!(right(iced::Point::new(40.0, 30.0)), ["menu at 40,30"]);
+        assert_eq!(
+            right(iced::Point::new(40.0, HEIGHT * 2.0 - 10.0)),
+            ["dismiss"],
+            "empty space dismisses"
         );
     }
 

@@ -174,6 +174,11 @@ impl<'a, M: 'a> Widget<M, iced::Theme, iced::Renderer> for ContextArea<'a, M> {
         let Some(build) = &self.on_secondary_press else {
             return;
         };
+        // A nested area answers first and captures: this one is "behind" it and stays silent, or an
+        // Overview pane would dismiss the menu a card's own area has just opened (feature 972).
+        if shell.is_event_captured() {
+            return;
+        }
         let Some(point) = reported_press(event, mouse::Button::Right, over) else {
             return;
         };
