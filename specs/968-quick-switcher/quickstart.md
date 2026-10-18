@@ -48,3 +48,19 @@ current one.
 On each: Cmd+Shift+P (macOS) / Ctrl+Shift+P (Windows) with a terminal focused opens the switcher
 and sends nothing to the shell (run `cat -v`, expect no output); no system action fires; B2–B4
 behave as on Linux. On a non-US layout (e.g. German, French), the P key position opens it.
+
+### §C result (2026-10-18)
+
+Not run by hand: the autopilot's cloud container is Linux only, with no macOS, Windows or non-US
+layout available. Evidence instead: the chord is a logical `Ctrl+Shift+P` / `Cmd+Shift+P` pair
+(`Modifiers::COMMAND`) pinned by `tests/keymap.rs` and the terminal-pane chord test, which run on
+every CI platform (CI builds and tests Linux, macOS and Windows). The terminal-sends-nothing check
+(`cat -v`) and the non-US layout check remain for a human at a real machine.
+
+### §B result (2026-10-18)
+
+B1–B10 and B12 recorded in `visual-pass/visual-pass.md` (M1 and M3 passes). B3 ran reduced (no
+`helper-b` fixture). B11 was not run by hand: a second window on the same project is read-only, so
+no session could be started from it. The rule is covered by
+`a_session_created_while_open_appears_and_keeps_query_and_highlight`
+(`crates/micold-client/tests/quick_switch.rs`), which creates a session while the switcher is open.

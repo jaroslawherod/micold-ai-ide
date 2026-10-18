@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #968
 - **Worktree branch**: claude/project-thread-ftdy5c
 - **Started**: 2026-10-18
-- **Phase**: M3 PR
-- **Next step**: M3 — orchestrator opens the PR from the pushed branch, waits on CI and merges; then close (T032–T034)
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -20,6 +20,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1036 | design (spec, plan, tasks) | merged | c687792e717f3312881d09e87ed8e6f1ea374022 |
 | #1057 | M1 | merged | 7dded4dabfe494a9aa98b069d0cec860beee2dd2 |
 | #1061 | M2 | merged | 3b62b1ff34734a4cf0f6c8382e21b5b637090650 |
+| #1071 | M3 | merged | 3d7d3d64cac6e4ae0f9e3854d1d38082d7ecacac |
+| close | T032–T034, test strength | open (this PR) | |
 
 ## Milestones
 
@@ -27,7 +29,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T020 | full | Chord opens the switcher over the active project's locations; filter, choose = row click, close | #1057 | merged |
 | M2 | T021–T026 | full | Sessions listed under their locations, found by name, kept by a location match | #1061 | merged |
-| M3 | T027–T031 | light | Other known projects listed (unavailable badged, unselectable); complete user-guide bullet | pending | in review |
+| M3 | T027–T031 | light | Other known projects listed (unavailable badged, unselectable); complete user-guide bullet | #1071 | merged |
 
 ## Decisions
 
@@ -42,6 +44,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D7 | tasks | speckit-analyze C1/C2: Overview-close and empty-state choice sat in glue | plan D5, data-model, contracts/ui.md U3/U5: `update` returns `Choice { step, terminal_had_focus, close_overview_first }`, `list` returns `Empty`; Tab listed as a close | agent-resolved | speckit-analyze report (tasks unit) |
 
 ## Review rounds
+
+(close: converge found NONE unbuilt; tdd-verify FAIL, T035–T037, T039–T041 fixed with mutant proofs, T038 declined; diff review sonnet CLEAN, 3 MINOR docs fixed, prose only)
 
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
@@ -80,4 +84,4 @@ None. (D4 confirmed by the user, 2026-10-18.)
 
 ## Follow-ups not done
 
-None.
+- T038 (tdd/verification.md finding 3): scroll-follow and focus-on-open in `shell/quick_switch.rs` have no test; needs moving the Task decision into the reducer layer. T042 partial (bare assertions remain). B11 two-window not run by hand (read-only second window); covered by a reducer test. §C not run (no macOS/Windows here).

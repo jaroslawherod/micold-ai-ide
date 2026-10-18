@@ -16,3 +16,21 @@
 | T027, T028 → T029 | `candidates` lists the other projects after the active project's entries (switcher order, unavailable included and not selectable, counts and `unavailable` in `context`, active project and other projects' sessions absent, welcome screen lists all); choosing an available project returns `Step::Project` and closes, an unavailable one stays open; the highlight skips it; applying switches, restores the project's session, session count unchanged | red shown after the fact (M3 review B F1): with the project entries and the `Project` arm of `resolve` removed, `cargo test -p micold-client --test quick_switch`: `test result: FAILED. 36 passed; 9 failed` (all 9 project tests); the unavailable-project choice test passes trivially | `cargo test -p micold-client --test quick_switch`: `45 passed; 0 failed` |
 | T030 | Showcase pose has an unavailable project row | covered by `showcase_completeness` (pose exists) | `showcase_completeness`: `40 passed` |
 | T031 | User-guide bullet completed (projects, unavailable, active project only) | docs only | `mise run test-scripts` inside the gate |
+
+## Test-after behaviours and their mutation proofs (close unit, 2026-10-18)
+
+M2 (T021 to T025), M3 (T027 to T029), T011, D2 and the scroll-follow fix were written test-after
+(`tdd/verification.md`). Their tests were strengthened in the close unit; each new test was proven
+red by a one-line mutant, restored after:
+
+| Test | Mutant that turns it red |
+| --- | --- |
+| `a_query_change_re_seats_the_highlight_on_the_first_match` (T035) | drop `open.highlighted = None;` in `Msg::QueryChanged` |
+| `enter_up_and_down_in_the_dialog_choose_and_move`, `clicking_the_second_row_chooses_that_row` (T036) | swap Up/Down `Direction`; `keys.get(at)` to `keys.get(at + 1)` |
+| `the_dialog_marks_the_current_row_and_disables_an_unavailable_project`, `the_dialog_says_why_it_is_empty` (T037) | drop `row.disabled()`; `current = None`; swap "Nothing to switch to" for "No matches" |
+| `an_unfocused_pane_publishes_nothing_for_the_switcher_chord` (T039) | `if self.focused` made `if true` |
+
+Not done: T038 (scroll-follow and focus-on-open in `shell/quick_switch.rs` return an opaque `Task`
+in the binary; testing them means moving production code, which a code-free close unit does not
+do). Those two mutants still survive; the scroll-follow was checked in the M3 visual pass
+(`visual-pass/b5-scroll-follows.png`). T042 is partial: bare assertions remain in untouched tests.

@@ -348,12 +348,12 @@ completion (T026, T031) ship with the behaviour they describe (Principle VII).
 
 No code. These are the close unit's (milestones.md rule 4).
 
-- [ ] T032 Run quickstart §B B1–B12 with the `visual-pass` skill and record the evidence in
+- [x] T032 Run quickstart §B B1–B12 with the `visual-pass` skill and record the evidence in
   `specs/968-quick-switcher/visual-pass/`
-- [ ] T033 Record quickstart §C (macOS, Windows, a non-US layout) in
+- [x] T033 Record quickstart §C (macOS, Windows, a non-US layout) in
   `specs/968-quick-switcher/quickstart.md`, or note it as not run with the CI evidence of the three
   platforms
-- [ ] T034 `speckit-converge` against spec.md, and tick the tasks it confirms
+- [x] T034 `speckit-converge` against spec.md, and tick the tasks it confirms
 
 ---
 
@@ -472,3 +472,53 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
   plan.md D3 and data-model.md name; `Step::Project` is #803's)
 
 Polish T032–T034 changes no code: the close unit does it in the close PR.
+
+---
+
+## Phase 8: TDD remediation
+
+From `tdd/verification.md` (verdict FAIL at `3d7d3d64`). T035 to T037 were required to clear it (T038 was declined, see below): a deliberate mutant survives inside a DONE behavior (T035) and four acceptance
+scenarios have no test through the dialog (T036, T037, T038). Run each command through the shared
+build lock without `mise`; the mutant checks are manual (apply the one-line change, expect red,
+restore with `git checkout -- <file>`).
+
+- [x] T035 [US1] Finding 1: in `crates/micold-client/tests/quick_switch.rs` (near
+  `typing_reseats_the_highlight_and_moving_stops_at_the_ends`, line 272) highlight a later entry,
+  then type a query that still lists it but not first, and assert the first match is highlighted
+  (FR-005). Proof: removing `open.highlighted = None;` at `features/quick_switch.rs:193` turns the
+  test red; `scripts/build-lock.sh cargo test -p micold-client --test quick_switch` green after
+  restore
+- [x] T036 [US1] Finding 2: drive the built dialog (`press_in_dialog`, `tests/quick_switch.rs:530`)
+  with Enter, Up, Down and a click on the second row, and assert the messages
+  (`Chosen(key)` for that row, `Moved(Previous)` for Up, `Moved(Next)` for Down). Proof: swapping
+  `Direction::Prev`/`Next` at `ui/quick_switcher.rs:109` and `keys.get(at + 1)` at `:125` each turn it red
+- [x] T037 [US3] Finding 2: test `view_of` (`ui/quick_switcher.rs:73`): an unavailable project row
+  is disabled and its context line says `Project · ... unavailable`; the current row is `current`;
+  an empty list says `Nothing to switch to`, a non-matching query says `No matches`. Proof: the
+  `row.disabled()`, `current = Some(at)` and message mutants each turn it red
+- [ ] T038 (declined in the close unit: testing the Task decision means moving production code out of the binary; recorded in tdd/cycle-log.md) [US1] Finding 3: replace the source-text scan in
+  `tests/picker_highlight_into_view.rs:572-585` as the only evidence for the quick-switcher with a
+  test that Up/Down and a query change return the scroll task and that opening returns the focus
+  task (move the decision out of `shell/quick_switch.rs` into the reducer layer if the binary half
+  cannot be tested). Proof: `follows = false` and replacing the focus task with `Task::none()` each
+  turn a test red
+- [x] T039 [US1] Finding 4: add the unfocused case beside
+  `the_switcher_chord_is_published_as_a_toggle_and_captured` in `ui/material/terminal_pane.rs`
+  (about line 2340): an unfocused pane publishes nothing for the chord. Proof: `if self.focused` at
+  `terminal_pane.rs:1743` made `if true` turns it red; `scripts/build-lock.sh cargo test -p micold-client --lib terminal_pane`
+- [x] T040 Finding 5: replace `two_states_are_independent` (`tests/quick_switch.rs:367`) with a
+  check that means FR-015, or delete it; fold `opening_filtering_and_closing_start_and_stop_no_session`
+  (`:502`) into a choose-path test that asserts the running-session count after a session choice.
+  Proof: `scripts/build-lock.sh cargo test -p micold-client --test quick_switch`
+- [x] T041 Finding 6 and 8: make the chord-in-the-field test (`tests/quick_switch.rs:605`) assert
+  one named outcome rather than the `mapped || Ignored` disjunction; time the 500-entry case through
+  `candidates` and `list` as well as `filter`, with a generous bound or a counted-work assertion
+  (`micold-core/src/quick_switch.rs:441`). Proof: both test targets green three times in a row
+- [x] T042 (partial: bare assertions remain in untouched tests) Finding 7 and 9: add the rule-stating message to the bare assertions in
+  `tests/quick_switch.rs` (lines 44-57, 60-78, 143-168, 199-213, 615-720, 850-1030) and extract one
+  `project(...)` and one foreign-session factory into `tests/support/sidebar_fixture.rs`. Proof:
+  `scripts/build-lock.sh cargo test -p micold-client --test quick_switch` green, and
+  `grep -c 'assert' crates/micold-client/tests/quick_switch.rs` messages added
+- [x] T043 Record in `tdd/cycle-log.md` that M2 (T021 to T025), M3 (T027 to T029), T011, D2 and the
+  scroll-follow fix were written test-after, with the mutation proofs, and run the visual-pass
+  items T032 to T034. Proof: `specs/968-quick-switcher/tdd/cycle-log.md` has the rows
