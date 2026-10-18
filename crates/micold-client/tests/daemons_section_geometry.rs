@@ -382,7 +382,7 @@ fn a_reconnecting_ssh_row_paints_its_badge_reason_and_actions_without_overflow()
 /// file fields, the volume note) and a Kubernetes row paint their labels without overflow.
 #[test]
 fn the_kubernetes_form_and_row_paint_their_fields_without_overflow() {
-    use micold_client::features::daemons::{AllowedKind};
+    use micold_client::features::daemons::AllowedKind;
     use micold_client::kube::live::ContextEntry;
     let (mut state, _) = with_daemons();
     let kube = state
@@ -429,7 +429,8 @@ fn the_kubernetes_form_and_row_paint_their_fields_without_overflow() {
         assert!(has(&form, label), "{label}: {form:?}");
     }
     assert!(
-        form.iter().any(|t| t.contains("Applies only to a new volume")),
+        form.iter()
+            .any(|t| t.contains("Applies only to a new volume")),
         "{form:?}"
     );
     assert_no_text_overflows(&state, "the Kubernetes form with refused files");
@@ -439,7 +440,9 @@ fn the_kubernetes_form_and_row_paint_their_fields_without_overflow() {
     ))));
     let failed = painted_tall(&state);
     assert!(
-        failed.iter().any(|t| t.contains("no kubeconfig found; looked in")),
+        failed
+            .iter()
+            .any(|t| t.contains("no kubeconfig found; looked in")),
         "{failed:?}"
     );
     assert_no_text_overflows(&state, "the Kubernetes form without a kubeconfig");

@@ -77,7 +77,11 @@ pub const SHARED_SSH_IMAGE_AVAILABLE: bool = false;
 /// The runtimes the form's "Runs in" choice offers for `draft`: Kubernetes only once the shared
 /// mechanism exists, or while editing a Kubernetes daemon (FR-024).
 pub fn runtime_choices(draft: &Draft) -> Vec<DraftRuntime> {
-    let mut choices = vec![DraftRuntime::Container, DraftRuntime::Host, DraftRuntime::Ssh];
+    let mut choices = vec![
+        DraftRuntime::Container,
+        DraftRuntime::Host,
+        DraftRuntime::Ssh,
+    ];
     if SHARED_SSH_IMAGE_AVAILABLE || draft.editing.is_some() && draft.kube_edited {
         choices.push(DraftRuntime::Kubernetes);
     }

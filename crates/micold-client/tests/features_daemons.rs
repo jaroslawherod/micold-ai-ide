@@ -221,7 +221,10 @@ mod kubernetes {
         send(&mut state, &mut w, Msg::ContextsListed(Ok(listed)));
         send(&mut state, &mut w, Msg::ContextChosen("staging".into()));
         let kube = &state.draft.as_ref().unwrap().kube;
-        assert_eq!((kube.context.as_str(), kube.namespace.as_str()), ("staging", "dev"));
+        assert_eq!(
+            (kube.context.as_str(), kube.namespace.as_str()),
+            ("staging", "dev")
+        );
         send(&mut state, &mut w, Msg::NamespaceEdited(String::new()));
         send(&mut state, &mut w, Msg::ContextChosen("staging".into()));
         assert_eq!(state.draft.as_ref().unwrap().kube.namespace, "apps");
@@ -232,7 +235,11 @@ mod kubernetes {
         let (mut w, id) = world();
         let mut state = open(&mut w, id);
         let message = "no kubeconfig found; looked in /home/u/.kube/config".to_string();
-        send(&mut state, &mut w, Msg::ContextsListed(Err(message.clone())));
+        send(
+            &mut state,
+            &mut w,
+            Msg::ContextsListed(Err(message.clone())),
+        );
         assert_eq!(state.contexts, ContextList::Failed(message));
     }
 
@@ -242,14 +249,24 @@ mod kubernetes {
         let mut state = State::default();
         state.default_providers = vec![AiCli::Pi, AiCli::Copilot];
         send(&mut state, &mut w, Msg::AddOpened);
-        send(&mut state, &mut w, Msg::RuntimeChosen(DraftRuntime::Kubernetes));
+        send(
+            &mut state,
+            &mut w,
+            Msg::RuntimeChosen(DraftRuntime::Kubernetes),
+        );
         let kube = &state.draft.as_ref().unwrap().kube;
         assert_eq!(
             kube.providers.iter().copied().collect::<Vec<_>>(),
             vec![AiCli::Copilot, AiCli::Pi]
         );
         send(&mut state, &mut w, Msg::ProviderToggled(AiCli::Pi, false));
-        assert!(!state.draft.as_ref().unwrap().kube.providers.contains(&AiCli::Pi));
+        assert!(!state
+            .draft
+            .as_ref()
+            .unwrap()
+            .kube
+            .providers
+            .contains(&AiCli::Pi));
     }
 
     #[test]
@@ -263,7 +280,11 @@ mod kubernetes {
         assert_eq!(VOLUME_NOTICE, "Applies only to a new volume, after Remove");
         let mut fresh = State::default();
         send(&mut fresh, &mut w, Msg::AddOpened);
-        send(&mut fresh, &mut w, Msg::RuntimeChosen(DraftRuntime::Kubernetes));
+        send(
+            &mut fresh,
+            &mut w,
+            Msg::RuntimeChosen(DraftRuntime::Kubernetes),
+        );
         assert_eq!(fresh.draft.as_ref().unwrap().volume_notice(), None);
     }
 
@@ -286,7 +307,11 @@ mod kubernetes {
     fn an_empty_image_saves_as_the_default_and_a_typed_one_is_kept() {
         let (mut w, id) = world();
         let mut state = open(&mut w, id);
-        send(&mut state, &mut w, Msg::KubeImageEdited("ghcr.io/me/ssh:1.2".into()));
+        send(
+            &mut state,
+            &mut w,
+            Msg::KubeImageEdited("ghcr.io/me/ssh:1.2".into()),
+        );
         send(&mut state, &mut w, Msg::Saved);
         assert!(state.form_error.is_none());
         assert_eq!(
@@ -306,7 +331,11 @@ mod kubernetes {
         let view = daemons::views(&state, &w.model());
         let row = view.rows.iter().find(|r| r.id == id).unwrap();
         assert_eq!(row.runtime_label, "Kubernetes");
-        assert!(row.endpoint.starts_with("prod / dev / "), "{}", row.endpoint);
+        assert!(
+            row.endpoint.starts_with("prod / dev / "),
+            "{}",
+            row.endpoint
+        );
     }
 
     // T130: the container form's limits keep their behaviour; the Kubernetes form's four fields
@@ -334,7 +363,11 @@ mod kubernetes {
         send(&mut state, &mut w, Msg::CpuRequestEdited("0.5".into()));
         send(&mut state, &mut w, Msg::KubeCpuLimitEdited("2".into()));
         send(&mut state, &mut w, Msg::MemoryRequestEdited("1024".into()));
-        send(&mut state, &mut w, Msg::KubeMemoryLimitEdited("4096".into()));
+        send(
+            &mut state,
+            &mut w,
+            Msg::KubeMemoryLimitEdited("4096".into()),
+        );
         send(&mut state, &mut w, Msg::Saved);
         assert!(state.form_error.is_none(), "{:?}", state.form_error);
         let r = stored(&w, id).resources;
@@ -353,7 +386,11 @@ mod kubernetes {
         send(&mut state, &mut w, Msg::Saved);
         assert_eq!(state.form_error.as_ref().unwrap().field, "cpu_request");
         send(&mut state, &mut w, Msg::CpuRequestEdited(String::new()));
-        send(&mut state, &mut w, Msg::KubeMemoryLimitEdited("1024".into()));
+        send(
+            &mut state,
+            &mut w,
+            Msg::KubeMemoryLimitEdited("1024".into()),
+        );
         send(&mut state, &mut w, Msg::MemoryRequestEdited("2048".into()));
         send(&mut state, &mut w, Msg::Saved);
         assert_eq!(state.form_error.as_ref().unwrap().field, "memory_request");
@@ -374,7 +411,11 @@ mod kubernetes {
         let (mut w, _) = world();
         let mut state = State::default();
         send(&mut state, &mut w, Msg::AddOpened);
-        send(&mut state, &mut w, Msg::RuntimeChosen(DraftRuntime::Kubernetes));
+        send(
+            &mut state,
+            &mut w,
+            Msg::RuntimeChosen(DraftRuntime::Kubernetes),
+        );
         assert!(state.draft.as_ref().unwrap().kube.allowed.is_empty());
     }
 
@@ -382,7 +423,11 @@ mod kubernetes {
     fn ticked_credentials_are_saved_and_unticked_ones_withdrawn() {
         let (mut w, id) = world();
         let mut state = open(&mut w, id);
-        send(&mut state, &mut w, Msg::AllowedToggled(AllowedKind::GitConfig, true));
+        send(
+            &mut state,
+            &mut w,
+            Msg::AllowedToggled(AllowedKind::GitConfig, true),
+        );
         send(
             &mut state,
             &mut w,
@@ -401,7 +446,11 @@ mod kubernetes {
             .kube
             .allowed
             .contains(&AllowedKind::GitConfig));
-        send(&mut state, &mut w, Msg::AllowedToggled(AllowedKind::GitConfig, false));
+        send(
+            &mut state,
+            &mut w,
+            Msg::AllowedToggled(AllowedKind::GitConfig, false),
+        );
         send(&mut state, &mut w, Msg::Saved);
         assert_eq!(stored(&w, id).allowed.len(), 1);
     }
@@ -410,14 +459,30 @@ mod kubernetes {
     fn an_ssh_key_and_registry_auth_require_a_file() {
         let (mut w, id) = world();
         let mut state = open(&mut w, id);
-        send(&mut state, &mut w, Msg::AllowedToggled(AllowedKind::GitSshKey, true));
+        send(
+            &mut state,
+            &mut w,
+            Msg::AllowedToggled(AllowedKind::GitSshKey, true),
+        );
         send(&mut state, &mut w, Msg::Saved);
         assert_eq!(state.form_error.as_ref().unwrap().field, "ssh_key_file");
-        send(&mut state, &mut w, Msg::KubeSshKeyEdited("/home/u/.ssh/id_ed25519".into()));
-        send(&mut state, &mut w, Msg::AllowedToggled(AllowedKind::RegistryPull, true));
+        send(
+            &mut state,
+            &mut w,
+            Msg::KubeSshKeyEdited("/home/u/.ssh/id_ed25519".into()),
+        );
+        send(
+            &mut state,
+            &mut w,
+            Msg::AllowedToggled(AllowedKind::RegistryPull, true),
+        );
         send(&mut state, &mut w, Msg::Saved);
         assert_eq!(state.form_error.as_ref().unwrap().field, "pull_file");
-        send(&mut state, &mut w, Msg::PullFileEdited("/home/u/.docker/config.json".into()));
+        send(
+            &mut state,
+            &mut w,
+            Msg::PullFileEdited("/home/u/.docker/config.json".into()),
+        );
         send(&mut state, &mut w, Msg::Saved);
         assert!(state.form_error.is_none(), "{:?}", state.form_error);
         let allowed = stored(&w, id).allowed;
