@@ -65,6 +65,7 @@ US1 split along acceptance scenario 4 (FR-010 sidebar ring) into M1/M2: one mile
 | Review A M2 (code-review high, headless) | 1 | 18d14e8fd29c699459bc7387d9d4c84af422d0fb:025714b3e366e8d011828262937d3442cb12b550 | CLEAN: 3 MINOR (declined) |
 | Review A M3 (code-review high, headless) | 1 | 20cc549b4c94aa5d14ed040724232845d092b355:380ceef79760b7f896b15b683276bdd0924aa959 | CLEAN: 1 MINOR (fixed) |
 | Review B M3 (conformance, sonnet, headless) | 1 | 20cc549b4c94aa5d14ed040724232845d092b355:380ceef79760b7f896b15b683276bdd0924aa959 | CHANGES: MAJOR no cycle-log rows for T024–T029 (fixed, rows added); 1 MINOR (fixed). Rows are evidence text only, no re-review |
+| Review close (docs, sonnet, headless) | 1 | 9e08aca1a3415f1d43ef36dc89e5b12249b076a3:2663532ba2b3d6df734aa8b92175f27f2639f8ba | CLEAN: 2 MINOR (fixed, prose only) |
 | Review B M2 (conformance, sonnet, headless) | 1 | 18d14e8fd29c699459bc7387d9d4c84af422d0fb:025714b3e366e8d011828262937d3442cb12b550 | CLEAN: 2 MINOR (1 fixed in the ledger, 1 declined) |
 
 ## Declined review findings

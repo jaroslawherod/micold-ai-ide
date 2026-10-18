@@ -5,7 +5,7 @@
 ## Test-first evidence
 
 - **M1** has red runs for most behaviours (`cycle-log.md`: stub failures for `step`, `update`, `apply_navigation`); the `row_index`/reveal behaviour (T009/T012) was test-after, shown red by a hand mutation.
-- **M1–M3 red runs were not captured** for several rows (M2 `shown`/`keyboard_focus`, session chords T024/T026, `session_step` T025): the tests did not compile or were written in the same step as the code. The cycle log marks each as a deviation, with the reason compiling-failure or the arm a stub would have hit.
+- **M1–M3 red runs were not captured** for several rows (M2 `shown`/`keyboard_focus`; M3's session chords T024/T026 and `session_step` T025, whose rows sit under the M2 heading in `cycle-log.md`): the tests did not compile or were written in the same step as the code. The cycle log marks each as a deviation, with the reason compiling-failure or the arm a stub would have hit.
 - **M4** is test-after (T030/T033, T031→T034): labels were seen red through the docs test only.
 - Git history cannot show test-first: every milestone landed as one commit holding code and tests. The cycle log is the only evidence.
 
