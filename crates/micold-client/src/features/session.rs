@@ -921,7 +921,12 @@ pub struct SessionMenu {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SessionContextMenu;
 
-floating_surface!(SessionContextMenu, id: SurfaceId::new("session_menu"), layer: ContextMenu, cancelled_by: Message::Session(Msg::MenuDismissed));
+impl SessionContextMenu {
+    /// This surface's identity, named by the Overview card menu it displaces (feature 972, R2).
+    pub const ID: SurfaceId = SurfaceId::new("session_menu");
+}
+
+floating_surface!(SessionContextMenu, id: Self::ID, layer: ContextMenu, cancelled_by: Message::Session(Msg::MenuDismissed));
 
 impl Registered for SessionContextMenu {
     fn open_in(state: &crate::app::State) -> Option<Self> {
@@ -1217,11 +1222,16 @@ pub fn close_requested(
 ///
 /// Same session closes; a different one replaces it (only ever one open) — mirrors
 /// `worktree::menu_toggled` — and re-anchors at its own press point (018 BUG-008).
-pub fn menu_toggled(state: &mut crate::app::State, id: SessionId, anchor: (u16, u16)) {
+pub fn menu_toggled(
+    state: &mut crate::app::State,
+    id: SessionId,
+    anchor: (u16, u16),
+) -> Vec<crate::features::Outcome> {
     state.session.menu_open = match &state.session.menu_open {
         Some(open) if open.id == id => None,
         _ => Some(SessionMenu { id, anchor }),
     };
+    crate::features::surface_opened(state.session.menu_open.is_some(), SessionContextMenu::ID)
 }
 
 /// The session context menu was dismissed.
@@ -1997,7 +2007,7 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
         Msg::ShellInstanceExited(session_id, shell_id) => {
             shell_instance_exited(state, session_id, shell_id)
         }
-        Msg::MenuToggled(id, anchor) => menu_toggled(state, id, anchor),
+        Msg::MenuToggled(id, anchor) => return menu_toggled(state, id, anchor),
         Msg::MenuDismissed => menu_dismissed(state),
         Msg::RemoveRequested(id) => remove_requested(state, id),
         Msg::RemoveCancelled => remove_cancelled(state),
@@ -2037,7 +2047,17 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
         Msg::StartMenuOpened {
             location,
             unavailable_default,
-        } => return start_menu_toggled(state, location, unavailable_default),
+        } => {
+            let notice = start_menu_toggled(state, location, unavailable_default);
+            // Reported here rather than by the toggle, whose return is the notice alone: an
+            // opening list displaces the Overview's card menu (feature 972, R2).
+            let mut outcomes = crate::features::surface_opened(
+                state.session.start_menu.is_some(),
+                SessionStartMenu::ID,
+            );
+            outcomes.extend(notice);
+            return outcomes;
+        }
         Msg::StartMenuAnchored(anchor) => start_menu_anchored(state, anchor),
         Msg::StartMenuDismissed => start_menu_dismissed(state),
         Msg::FilesDropped {
@@ -2568,7 +2588,12 @@ pub fn start_menu_dismissed(state: &mut crate::app::State) {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SessionStartMenu;
 
-floating_surface!(SessionStartMenu, id: SurfaceId::new("session_start_menu"), layer: ContextMenu, cancelled_by: Message::Session(Msg::StartMenuDismissed));
+impl SessionStartMenu {
+    /// This surface's identity, named by the Overview card menu it displaces (feature 972, R2).
+    pub const ID: SurfaceId = SurfaceId::new("session_start_menu");
+}
+
+floating_surface!(SessionStartMenu, id: Self::ID, layer: ContextMenu, cancelled_by: Message::Session(Msg::StartMenuDismissed));
 
 impl Registered for SessionStartMenu {
     fn open_in(state: &crate::app::State) -> Option<Self> {

@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-a1yb7j
 - **Started**: 2026-10-18
 - **Phase**: implement
-- **Next step**: milestone M1, continue at T006 (see Handover)
+- **Next step**: milestone M1, compile WIP, then T010 (see Handover)
 
 ## Pull requests
 
@@ -51,30 +51,31 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M1 unit 1 handed over at 160k context. Branch `claude/project-thread-a1yb7j` (no PR yet; do not run
-`branch-start.sh` to reset: the commit below is unmerged M1 work, it rebases onto main).
-
-- Done: T001–T003 (ticked). `Icon::Open` (`login`, U+EA77) + docs/user-guide/icons.md row;
-  `ui::location_menu_items(state, &SessionLocation)` extracted, the worktree row menu calls it.
-- T004 + T005 tests written in `crates/micold-client/tests/overview_card_menu.rs` (one file, both
-  parts) and committed **red** (types missing; evidence in tdd/cycle-log.md). Not ticked: they
-  tick with T009/T010 green. It uses `ui::overview::{card_menu_items, cards}`,
-  `features::overview::{update, CardMenu, MenuOrigin, Msg, OverviewCardMenu, State}`,
-  `features::Outcome`; `CardMenu` must derive `Debug, Clone, PartialEq` (compared with `assert_eq!`).
-- Next: T006 (displacement/registry/registration tests), T007, T008, then T009–T013.
-- Findings for T009: `session::menu_toggled` and `start_menu_toggled` report no
-  `SurfaceOpened`, so for R2's "session menu / start menu displace the card menu" they must return
-  `surface_opened(.., ID)` (give `SessionContextMenu` an `ID` const) and the registry gains
-  `displaces: OverviewCardMenu` on them; `tests/popover_displacement.rs` uses `State::default()`,
-  but a card menu survives `settle_card_menu` only with the Overview open and its target listed
-  (a project with a Default card): give the pair test a base state with a project and
-  `overview.open = true`, and add `overview_card_menu` to DISPLACES and the opener. The
-  displacement table changes for five rows (project/worktree/run_group/session/session_start
-  each gain `overview_card_menu`).
-- `Msg::ProjectSwitched` must also clear `card_menu`/`focus_return` (test expects it; the
-  Overview stays open on a switch). `GridScrolled`: app.rs `Message::Overview` arm calls
-  `dismiss_on_scroll_beneath()`. settle at the outermost epilogue beside `agent_confirm::release`.
-- Running tests: a foreground Bash may wait 250 s; start cargo detached and `hold.sh`.
+M1 unit 2 handed over at 150k context. Branch `claude/project-thread-a1yb7j` (no PR yet; do not run
+`branch-start.sh` to reset: the commits are unmerged M1 work). The last commit is **WIP, not yet
+compiled**: build it first (`cargo test -p micold-client --test overview_card_menu --test
+popover_displacement --test overlay_registry --test overlay_registration --test layout_snapshot
+--lib --no-run`, detached) and fix what it reports.
+- Done before: T001–T003 (ticked); T004/T005 tests red in `tests/overview_card_menu.rs`.
+- This unit, tests written (red evidence in tdd/cycle-log.md), not ticked:
+  T006 (`popover_displacement.rs`: `overview_card_menu` row + five rows gaining it, `base()` state
+  with a project and the Overview open, opener; `overlay_registration.rs`: POPOVERS row + band /
+  cancel test; `overlay_registry.rs`: escape + scroll_beneath test), T007 (`overview_card.rs`
+  secondary-press test, `card_grid.rs` wheel test, `cards<M>` fixture made generic), T008
+  (`gates/context_menu_anchor.rs::the_card_menu_stays_inside_the_window_at_its_edges`, uses the
+  new `ui::menu_panel_size` re-export).
+- T009 implemented (uncompiled): `features/overview.rs` `MenuOrigin`, `CardMenu`, `State::{card_menu,
+  focus_return}`, `Msg::{CardMenuOpened, CardMenuDismissed, CardMenuEntryChosen, GridScrolled}`,
+  `OverviewCardMenu` surface + `Registered`; registry displacement lists; `SessionContextMenu::ID`,
+  `SessionStartMenu::ID`; `session::menu_toggled` returns `surface_opened`; the `StartMenuOpened`
+  arm prepends `SurfaceOpened(SessionStartMenu::ID)` to the notice; app.rs Overview arm calls
+  `dismiss_on_scroll_beneath()` after `GridScrolled`.
+- Next: compile + T004 reducer/T006 green → tick T006, T009; then T010 (`ui::overview::card_menu_items`
+  + `settle_card_menu`, called in app.rs epilogue before `agent_confirm::release` inside
+  `update_depth == 0`), T011 (`OverviewCard::on_secondary_press` via `cdk::context_area::ContextArea`,
+  `CardGrid::on_scroll` via `Scrollable::on_scroll`), T012 wiring (ui/overview.rs view, ui/mod.rs
+  `view_with` push `card_menu` surface beside `session_menu`, main.rs `overview_message`
+  `CardMenuEntryChosen(inner)` → reducer then `update_inner(app, *inner)`), T013 docs; then verify.md.
 
 ## Open escalation
 

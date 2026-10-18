@@ -801,3 +801,22 @@ fn a_cleanup_offer(confirming: Option<Vec<u8>>) -> micold_client::features::runs
         confirming,
     }
 }
+
+#[test]
+fn escape_and_a_scroll_beneath_reach_the_overview_card_menu() {
+    // Feature 972, FR-007 and FR-012: the card menu is registered, so the shared triggers reach it
+    // as the topmost surface and close it through its own dismissal.
+    use micold_client::features::overview::{CardMenu, MenuOrigin, Msg as OverviewMsg};
+    let mut state = State::default();
+    state.overview.card_menu = Some(CardMenu {
+        location: micold_core::session::SessionLocation::Default,
+        anchor: (120, 340),
+        origin: MenuOrigin::Pointer,
+        highlighted: None,
+    });
+    let dismissed = Message::Overview(OverviewMsg::CardMenuDismissed);
+    assert_eq!(registry::escape(&state), Some(dismissed.clone()));
+    assert_eq!(registry::scroll_beneath(&state), vec![dismissed]);
+    state.update(Message::EscapePressed);
+    assert_eq!(state.overview.card_menu, None, "Escape closed it");
+}

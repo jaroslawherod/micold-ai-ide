@@ -109,6 +109,15 @@ const POPOVERS: &[(&str, &str, fn(&mut State))] = &[
             anchor: (4, 2),
         })
     }),
+    // Feature 972: the Overview card's right-click menu, a context menu like the row menus (R2).
+    ("overview.card_menu", "overview_card_menu", |s| {
+        s.overview.card_menu = Some(micold_client::features::overview::CardMenu {
+            location: SessionLocation::Default,
+            anchor: (120, 340),
+            origin: micold_client::features::overview::MenuOrigin::Pointer,
+            highlighted: None,
+        })
+    }),
 ];
 
 /// Popover-*shaped* fields that are actually a dialog's own state, with the dialog each opens.
@@ -343,5 +352,26 @@ fn the_guard_is_actually_looking_at_something() {
          feature 026's `session_start_menu`. A shorter list is a guard that has stopped covering \
          them; growing it is what adding a popover looks like, and the number moves in the same \
          diff as the entry."
+    );
+}
+
+#[test]
+fn the_overview_card_menu_registers_as_a_context_menu_cancelled_by_its_dismissal() {
+    // Feature 972, R2: registering is how the card menu gets Escape, scroll-beneath and
+    // displacement without dismissal code of its own, so its band and cancellation are the contract.
+    use micold_client::features::overview::Msg as OverviewMsg;
+    let (_, _, open) = POPOVERS
+        .iter()
+        .find(|(_, id, _)| *id == "overview_card_menu")
+        .expect("the card menu is in the list");
+    let state = opened(*open);
+    let surface = registry::topmost(&state).expect("the card menu is open");
+    assert_eq!(surface.id().as_str(), "overview_card_menu");
+    assert_eq!(surface.layer(), micold_core::overlay::Layer::ContextMenu);
+    assert_eq!(
+        surface.cancel(),
+        Some(&micold_client::app::Message::Overview(
+            OverviewMsg::CardMenuDismissed
+        ))
     );
 }

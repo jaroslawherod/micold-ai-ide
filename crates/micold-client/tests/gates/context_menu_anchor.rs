@@ -497,3 +497,32 @@ fn the_project_menu_opens_at_the_row_it_was_opened_from() {
     );
     assert_menu_opens_at(two, point, "a switcher project row's context menu");
 }
+
+/// Feature 972, FR-001 (Edge: window edge, small window): the card menu's panel, clamped as the
+/// view clamps it, stays inside the window for a press at the right edge, the bottom edge and the
+/// corner, in an ordinary window and at the minimum window size.
+#[test]
+fn the_card_menu_stays_inside_the_window_at_its_edges() {
+    use micold_client::features::project::clamp_menu_anchor;
+    use micold_client::ui::menu_panel_size;
+    use micold_client::ui::overview::card_menu_items;
+    let min = micold_client::app::MIN_WINDOW_SIZE;
+    for size in [iced::Size::new(1280.0, 800.0), min] {
+        let state = with_worktrees(Vec::new(), WORKTREE_COUNT, size);
+        let window = (size.width as u16, size.height as u16);
+        let location = SessionLocation::Worktree(state.worktree.worktrees[0].dir_name.clone());
+        let panel = menu_panel_size(card_menu_items(&state, &location).len());
+        assert!(panel.1 > menu_panel_size(1).1, "the fixture has a real menu");
+        for anchor in [
+            (window.0 - 1, 100),
+            (100, window.1 - 1),
+            (window.0 - 1, window.1 - 1),
+        ] {
+            let (x, y) = clamp_menu_anchor(anchor, panel, window);
+            assert!(
+                x + panel.0 <= window.0 && y + panel.1 <= window.1,
+                "{window:?}: a press at {anchor:?} put the {panel:?} panel at ({x}, {y}), past the edge"
+            );
+        }
+    }
+}

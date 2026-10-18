@@ -44,6 +44,8 @@ pub use focus::{
 /// label alone — and the module itself stays `pub(crate)` so a call site cannot reach past it into
 /// the widget's styling.
 pub use material::chip_label;
+/// The menu panel's size for an entry count, which a context menu is clamped with (feature 972).
+pub use material::menu_panel_size;
 pub use material::ripple_pulse;
 pub use material::target_offset_delta;
 pub use material::PrMark;
