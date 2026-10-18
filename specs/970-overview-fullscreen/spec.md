@@ -75,7 +75,8 @@ own margins.
    stays, and the Overview spans the window's full width.
 2. **Given** full-screen mode, **When** the user looks at the cards, **Then** they follow feature
    1024's grid rules for the new width (up to five per row, equal shares of the row, fewer per row
-   only when the width calls for it), so each card is at least as wide as in the normal layout.
+   only when the width calls for it), so each row spans the wider Overview; a card may be narrower
+   than in the normal layout when the new width adds a column.
 3. **Given** full-screen mode, **When** the user looks at the top bar, **Then** the Overview button,
    its attention badge and the project selector are where they are in the normal layout and work
    as they do there.
