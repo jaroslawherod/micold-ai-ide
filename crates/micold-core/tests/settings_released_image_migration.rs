@@ -5,7 +5,7 @@
 use micold_core::daemons::{DaemonRuntime, MigrationNotice};
 use micold_core::sandbox::image::{ImageChoice, OwnImage};
 use micold_core::sandbox::runtime::RuntimeKind;
-use micold_core::sandbox::{MilliCpus, NetworkPosture};
+use micold_core::sandbox::{AiCliSelection, MilliCpus, NetworkPosture};
 use micold_core::settings::{JsonFileSettingsStore, Settings, SettingsStore};
 
 /// A v4 document with one `sandbox` block holding `image_fields` besides the unchanged settings.
@@ -168,4 +168,36 @@ fn the_written_file_has_image_choice_and_the_notice_and_never_image() {
     store.save(&plain).unwrap();
     let written = std::fs::read_to_string(&path).unwrap();
     assert!(!written.contains("migration"), "{written}");
+}
+
+/// The `ai_clis` rows of the read-rules table (D3, FR-010): absent reads as every CLI, a stored
+/// selection (empty included) is kept, and the file writes it back.
+fn with_ai_clis(clis: &str) -> String {
+    document(&format!(r#", "ai_clis": {clis}"#))
+}
+
+#[test]
+fn a_profile_stored_without_ai_clis_reads_as_every_cli() {
+    let profile = load(&document("")).daemon.sandbox;
+    assert_eq!(profile.ai_clis, AiCliSelection::all());
+}
+
+#[test]
+fn a_stored_selection_is_kept_and_an_empty_one_stays_empty() {
+    let one = load(&with_ai_clis(r#"["ClaudeCode"]"#)).daemon.sandbox;
+    assert_eq!(one.ai_clis, AiCliSelection::new_daemon());
+    let none = load(&with_ai_clis("[]")).daemon.sandbox;
+    assert!(none.ai_clis.0.is_empty());
+}
+
+#[test]
+fn the_selection_is_written_back_empty_included() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("settings.json");
+    std::fs::write(&path, with_ai_clis("[]")).unwrap();
+    let store = JsonFileSettingsStore::at(path.clone());
+    let loaded = store.load().settings;
+    store.save(&loaded).unwrap();
+    let again = store.load().settings;
+    assert!(again.daemon.sandbox.ai_clis.0.is_empty());
 }

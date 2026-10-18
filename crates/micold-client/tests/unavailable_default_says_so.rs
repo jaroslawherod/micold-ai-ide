@@ -557,3 +557,56 @@ fn a_press_with_no_answer_in_use_says_only_that_the_cli_would_not_be_found() {
         "the sentence names the CLI and the way out, and no cause: {text}"
     );
 }
+
+/// What a container daemon offers: the CLIs selected for it that installed (feature 806, FR-012).
+fn offered_by_daemon(selected: &[AiCli], failed: &[AiCli]) -> Vec<AiCli> {
+    AiCli::ALL
+        .into_iter()
+        .filter(|cli| selected.contains(cli) && !failed.contains(cli))
+        .collect()
+}
+
+/// Feature 806 (D4, US1 #2, US5 #1): a stored default that was deselected on a daemon, or whose
+/// install failed there, is absent from that daemon's offer. The press starts nothing,
+/// substitutes nothing, keeps the stored default, and says that CLI would not be found by a
+/// session on that daemon.
+#[test]
+fn a_default_deselected_or_failed_to_install_on_the_daemon_says_it_is_not_available() {
+    for (what, selected, failed) in [
+        ("deselected", vec![AiCli::ClaudeCode], vec![]),
+        (
+            "its install failed",
+            vec![AiCli::ClaudeCode, AiCli::Codex],
+            vec![AiCli::Codex],
+        ),
+    ] {
+        let offered = offered_by_daemon(&selected, &failed);
+        assert_eq!(offered, [AiCli::ClaudeCode], "{what}: Codex is not offered");
+        let mut state = state_with(AiCli::Codex, &offered);
+
+        let intent = state
+            .session
+            .start_intent(PressTarget::Primary, Path::new(ROW));
+        assert_eq!(
+            intent,
+            StartIntent::OfferChoice {
+                providers: vec![AiCli::ClaudeCode],
+                unavailable_default: Some(AiCli::Codex),
+            },
+            "{what}: nothing starts and nothing is substituted"
+        );
+
+        open(&mut state, Some(AiCli::Codex));
+
+        assert_eq!(
+            said(&state),
+            (Some(start_refusal_unknown(AiCli::Codex)), 0),
+            "{what}"
+        );
+        assert_eq!(
+            state.session.default_ai_cli,
+            AiCli::Codex,
+            "{what}: the stored default is as the user left it"
+        );
+    }
+}

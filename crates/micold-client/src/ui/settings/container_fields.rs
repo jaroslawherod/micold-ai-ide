@@ -27,6 +27,7 @@ use micold_core::required::FieldRequirement;
 use micold_core::sandbox::placement::PlacementKind;
 use micold_core::sandbox::runtime::{LimitSupport, RuntimeCapabilities, RuntimeKind};
 use micold_core::sandbox::{CredentialShare, NetworkPosture, SandboxProfile};
+use micold_core::session::AiCli;
 use micold_core::tokens::{spacing, Roles};
 
 const RUNTIMES: &[Named<RuntimeKind>] = &[
@@ -47,6 +48,26 @@ const IMAGE_SOURCES: &[Named<ImageKind>] = &[
 
 /// The note under "My own image" (FR-002).
 const OWN_IMAGE_NOTE: &str = "Your image must run an SSH server; see the user guide.";
+
+/// The note under the AI CLI checkboxes (FR-010): a change reaches the container at its next start,
+/// where the selection is installed and offered.
+pub const AI_CLI_NOTE: &str = "Changes apply at the next start. Only the AI tools ticked here are \
+     installed in the container and offered for sessions; with none ticked, none is offered.";
+
+/// One checkbox per AI CLI the app supports, in the order the menus offer them, with the name a
+/// menu uses and whether this daemon's profile has it selected.
+pub fn ai_cli_rows(profile: &SandboxProfile) -> Vec<(AiCli, &'static str, bool)> {
+    AiCli::ALL
+        .into_iter()
+        .map(|cli| {
+            (
+                cli,
+                cli.provider().display_name(),
+                profile.ai_clis.0.contains(&cli),
+            )
+        })
+        .collect()
+}
 
 /// What the fields read: one daemon's profile, the typed texts beside it and the machine facts.
 #[derive(Debug, Clone, Copy)]
@@ -449,6 +470,17 @@ pub fn sections<'a>(
         container.push(archive.into());
     }
 
+    container.push(note("AI tools in this daemon", roles));
+    for (cli, name, on) in ai_cli_rows(view.profile) {
+        container.push(
+            Checkbox::new(name, on, roles)
+                .track_focus(FieldId::DaemonAiCli(cli), focused)
+                .on_toggle(move |checked| Message::Daemons(DaemonsMsg::AiCliToggled(cli, checked)))
+                .into(),
+        );
+    }
+    container.push(note(AI_CLI_NOTE, roles));
+
     let mut credentials: Vec<Element<'a, Message>> = vec![note(
         "The container starts with none of your credentials. Share only what the agent needs.",
         roles,
@@ -681,6 +713,23 @@ mod tests {
         let mut ids: Vec<_> = controls.iter().map(|c| format!("{:?}", c.field)).collect();
         ids.dedup();
         assert_eq!(ids.len(), 4);
+    }
+
+    /// FR-010: one checkbox per AI CLI the app supports, ticked as the profile has them, and the
+    /// note that a change applies at the next start.
+    #[test]
+    fn the_form_has_one_checkbox_per_ai_cli_ticked_as_selected() {
+        let profile = SandboxProfile {
+            ai_clis: micold_core::sandbox::AiCliSelection::new_daemon(),
+            ..SandboxProfile::default()
+        };
+        let rows = ai_cli_rows(&profile);
+        let clis: Vec<AiCli> = rows.iter().map(|r| r.0).collect();
+        assert_eq!(clis, AiCli::ALL);
+        let ticked: Vec<AiCli> = rows.iter().filter(|r| r.2).map(|r| r.0).collect();
+        assert_eq!(ticked, [AiCli::ClaudeCode]);
+        assert!(rows.iter().all(|r| !r.1.is_empty()));
+        assert!(AI_CLI_NOTE.starts_with("Changes apply at the next start"));
     }
 
     /// Both choices, the way the tests below range over them.

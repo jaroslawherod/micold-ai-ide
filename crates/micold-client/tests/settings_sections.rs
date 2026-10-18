@@ -128,6 +128,11 @@ const CHOSEN_ELSEWHERE: &[(&str, &str, &str)] = &[
         "src/ui/settings/container_fields.rs",
         "DaemonsMsg::SurviveLogoutToggled",
     ),
+    (
+        "daemon.sandbox.ai_clis",
+        "src/ui/settings/container_fields.rs",
+        "DaemonsMsg::AiCliToggled",
+    ),
 ];
 
 fn client_dir() -> PathBuf {

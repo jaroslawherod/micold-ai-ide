@@ -408,6 +408,7 @@ fn set_changed(target: &mut Settings, saved: &Settings, baseline: Option<&Settin
                         moved_off_released: _,
                         credentials: _,
                         survive_logout: _,
+                        ai_clis: _,
                     },
             },
         default_ai_cli: _,
@@ -459,6 +460,7 @@ fn set_changed(target: &mut Settings, saved: &Settings, baseline: Option<&Settin
     set!(daemon.sandbox.network);
     set!(daemon.sandbox.credentials);
     set!(daemon.sandbox.survive_logout);
+    set!(daemon.sandbox.ai_clis);
     set!(default_ai_cli);
     set!(pi_activity_component);
     set!(save_terminal_history);

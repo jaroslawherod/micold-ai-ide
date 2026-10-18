@@ -168,6 +168,8 @@ pub enum ProvisionEvent {
         /// Whether it installed.
         ok: bool,
     },
+    /// One AI CLI's install failed: the start goes on, and the row keeps this (FR-012).
+    Warned(ProvisionWarning),
 }
 
 /// Receives the sequence's events.
@@ -523,10 +525,9 @@ where
     Fut: std::future::Future<Output = std::io::Result<relay::Relay>>,
 {
     let step = Step::InstallAiClis;
+    // An empty selection still runs the check: it rewrites `offered.json` to offer nothing, so a
+    // daemon whose selection was emptied after an install stops offering the old file's CLIs.
     let rows = selected_rows(table, selected);
-    if rows.is_empty() {
-        return Ok(Vec::new());
-    }
     let bound = target.bounds.install;
     guard(step, Some(bound), cancel, async {
         // What is already there? Nothing missing: no step, no download (invariant 1).
@@ -581,13 +582,15 @@ where
             let ok = found.is_some_and(|r| r.ok);
             sink(ProvisionEvent::InstallDone { cli: row.cli, ok });
             if !ok {
-                warnings.push(ProvisionWarning {
+                let warning = ProvisionWarning {
                     cli: row.cli,
                     output: found.map_or_else(
                         || "the installer reported no result".to_string(),
                         |r| r.output.clone(),
                     ),
-                });
+                };
+                sink(ProvisionEvent::Warned(warning.clone()));
+                warnings.push(warning);
             }
         }
         Ok(warnings)
@@ -797,7 +800,7 @@ mod tests {
         }
     }
 
-    /// An app-owned target with nothing selected: the install step has nothing to do.
+    /// An app-owned target with nothing selected: the install step installs nothing.
     fn owned_target(bounds: StepBounds) -> ProvisionTarget {
         owned_with(bounds, AiCliSelection(Default::default()), Egress::Direct)
     }
@@ -883,6 +886,7 @@ mod tests {
         let mut fake = Fake::default()
             .say("reach", ok(""))
             .say("probe", ok(PROBE_HAVE))
+            .say("install", ok(""))
             .say("last", ok(""));
         *fake.bridge.get_mut().unwrap() = Some(refusing_bridge());
         let (result, events) = run_with(
@@ -899,7 +903,11 @@ mod tests {
             [Step::Reach, Step::Probe, Step::Start, Step::VersionCheck]
         );
         assert_eq!(fake.count("copy"), 0, "invariant 1");
-        assert_eq!(fake.kinds(), ["reach", "probe", "last", "bridge"]);
+        assert_eq!(
+            fake.kinds(),
+            ["reach", "probe", "install", "last", "bridge"],
+            "an empty selection still runs the offered.json check"
+        );
     }
 
     #[tokio::test]
@@ -912,6 +920,7 @@ mod tests {
         .say("probe", ok(PROBE_ABSENT))
         .say("copy", ok(""))
         .say("probe", ok(PROBE_HAVE))
+        .say("install", ok(""))
         .say("last", ok(""));
         *fake.bridge.get_mut().unwrap() = Some(refusing_bridge());
         let (result, events) = run_with(
@@ -971,6 +980,7 @@ mod tests {
             )
             .say("reach", ok(""))
             .say("probe", ok(PROBE_HAVE))
+            .say("install", ok(""))
             .say("last", ok(""));
         // Not up twice, then up: the start gets as far as the bridge, which is not scripted.
         let (result, _) = run_with(
@@ -1105,6 +1115,7 @@ mod tests {
         let mut fake = Fake::default()
             .say("reach", ok(""))
             .say("probe", ok(PROBE_HAVE))
+            .say("install", ok(""))
             .say("last", ok(""));
         let (near, far) = tokio::io::duplex(64);
         drop(far);
@@ -1284,6 +1295,24 @@ mod tests {
             fake.kinds(),
             ["reach", "probe", "have_clis", "last", "bridge"]
         );
+    }
+
+    /// A selection emptied after an install must not keep the old `offered.json`: the check still
+    /// runs and rewrites it to offer nothing, with no step entered and no download.
+    #[tokio::test]
+    async fn an_empty_selection_rewrites_offered_json_to_offer_nothing() {
+        let mut fake = through_copy(Fake::default())
+            .say("install", ok(""))
+            .say("last", ok(""));
+        *fake.bridge.get_mut().unwrap() = Some(refusing_bridge());
+        let target = owned_target(StepBounds::container());
+        let (result, events) = run_with(&fake, &target, &CancelToken::new()).await;
+        assert!(result.unwrap().warnings.is_empty());
+        assert!(!entered(&events).contains(&Step::InstallAiClis));
+        let (_, script) = fake.first("install");
+        assert!(script.contains("{\"version\":1,\"clis\":["), "{script}");
+        assert!(script.contains("offered.json"), "{script}");
+        assert!(!script.contains("flock"), "no install ran: {script}");
     }
 
     #[tokio::test]

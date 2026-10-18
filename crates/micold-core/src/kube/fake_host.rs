@@ -37,12 +37,14 @@ impl Host {
         }));
         self
     }
-    /// The reach, probe and `last` answers of a pod that has the build.
+    /// The reach, probe, AI CLI check and `last` answers of a pod that has the build and an empty
+    /// selection (which still checks, to rewrite `offered.json`).
     pub fn with_build() -> Self {
-        Self::default()
-            .say("", 0, "")
-            .say(PROBE_HAVE, 0, "")
-            .say("", 0, "")
+        Self::with_probe().say("", 0, "").say("", 0, "")
+    }
+    /// The reach and probe answers of a pod that has the build; the caller scripts the rest.
+    pub fn with_probe() -> Self {
+        Self::default().say("", 0, "").say(PROBE_HAVE, 0, "")
     }
     /// A `run` after the scripted ones never answers (a stuck installer).
     pub fn then_hang(self) -> Self {

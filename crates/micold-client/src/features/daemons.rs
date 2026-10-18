@@ -356,6 +356,8 @@ pub struct ViewModel {
 pub struct StartProgress {
     step: Option<Step>,
     percent: Option<u8>,
+    /// The installer's latest output line, while the AI CLIs install.
+    line: Option<String>,
 }
 
 impl StartProgress {
@@ -364,18 +366,25 @@ impl StartProgress {
             ProvisionEvent::Entered(step) => {
                 self.step = Some(step);
                 self.percent = None;
+                self.line = None;
             }
             ProvisionEvent::CopyPercent(p) => self.percent = Some(p),
-            ProvisionEvent::InstallLine(_) | ProvisionEvent::InstallDone { .. } => {}
+            ProvisionEvent::InstallLine(line) => {
+                if !line.trim().is_empty() {
+                    self.line = Some(line);
+                }
+            }
+            ProvisionEvent::InstallDone { .. } | ProvisionEvent::Warned(_) => {}
         }
     }
 
     /// The row's line: the step's label, then the percent while there is one.
     fn text(&self) -> Option<String> {
         let label = self.step?.label();
-        Some(match self.percent {
-            Some(p) => format!("{label} ({p}%)"),
-            None => label.to_string(),
+        Some(match (self.percent, &self.line) {
+            (Some(p), _) => format!("{label} ({p}%)"),
+            (None, Some(line)) => format!("{label}: {}", line.trim()),
+            (None, None) => label.to_string(),
         })
     }
 }
@@ -404,6 +413,9 @@ pub struct State {
     /// The start step an SSH daemon is in and, while it copies its build, the percent (features
     /// 489 and 806). Per daemon: one daemon's start never touches another's (FR-022).
     provisioning: BTreeMap<DaemonId, StartProgress>,
+    /// The AI CLIs whose install failed at each daemon's last start; they outlive the start so the
+    /// connected row keeps saying so, and the next start clears them (feature 806, FR-012).
+    install_warnings: BTreeMap<DaemonId, Vec<String>>,
     /// The repository path typed under each remote daemon (feature 489, FR-012).
     pub repositories: BTreeMap<DaemonId, String>,
     /// The sentence under the repository field the last refused add was about.
@@ -613,9 +625,14 @@ pub fn views(state: &State, model: &Model<'_>) -> ViewModel {
             replace_offered: replace_offered(model, entry.id)
                 && !state.replacing.contains(&entry.id),
             replacing: state.replacing.contains(&entry.id),
+            install_warnings: state
+                .install_warnings
+                .get(&entry.id)
+                .cloned()
+                .unwrap_or_default(),
             stopped_reason: model.links.stopped_reason(entry.id).map(str::to_string),
             activity: match (&entry.runtime, state.provisioning.get(&entry.id)) {
-                (DaemonRuntime::Ssh(_), Some(progress))
+                (DaemonRuntime::Ssh(_) | DaemonRuntime::Container(_), Some(progress))
                     if model.links.state(entry.id) == Some(&DaemonState::Starting) =>
                 {
                     progress.text()
@@ -735,6 +752,7 @@ pub fn start(state: &mut State, model: &mut Model<'_>, id: DaemonId) -> Option<S
     state.runtime_missing.remove(&id);
     state.applies_on_next_start.remove(&id);
     state.drift_answers.remove(&id);
+    state.install_warnings.remove(&id);
     daemon_event(state, model.links, id, DaemonEvent::Start)
 }
 
@@ -762,7 +780,12 @@ pub fn stop(state: &mut State, model: &mut Model<'_>, id: DaemonId) -> Option<St
 
 /// Open the form for a new daemon.
 pub fn begin_add(state: &mut State) {
-    let profile = SandboxProfile::default();
+    // A new daemon offers Claude Code only (FR-010); `SandboxProfile::default()` is the
+    // all-CLI reading of an older stored file.
+    let profile = SandboxProfile {
+        ai_clis: micold_core::sandbox::AiCliSelection::new_daemon(),
+        ..SandboxProfile::default()
+    };
     let texts = ProfileTexts::of(&profile);
     state.flipped_sections.clear();
     state.draft = Some(Draft {
@@ -1232,6 +1255,7 @@ pub fn confirm(state: &mut State, model: &mut Model<'_>) -> Vec<Outcome> {
                 state.draft = None;
             }
             state.diagnostics.remove(&id);
+            state.install_warnings.remove(&id);
             state.versions.remove(&id);
             state.runtime_missing.remove(&id);
             state.ended.extend(sessions.iter().copied());
@@ -1541,6 +1565,7 @@ fn forget(state: &mut State, model: &mut Model<'_>, id: DaemonId) -> Vec<Outcome
         state.draft = None;
     }
     state.diagnostics.remove(&id);
+    state.install_warnings.remove(&id);
     state.versions.remove(&id);
     state.runtime_missing.remove(&id);
     state.applies_on_next_start.remove(&id);
@@ -1623,6 +1648,8 @@ pub enum Msg {
     StorageLimitEdited(String),
     /// The keep-running-after-sign-out box changed.
     SurviveLogoutToggled(bool),
+    /// An AI CLI ticked or unticked in the container form (FR-010).
+    AiCliToggled(micold_core::session::AiCli, bool),
     /// The SSH host field changed.
     SshHostEdited(String),
     /// The configured hosts were read for the picker.
@@ -1879,6 +1906,13 @@ fn reduce(state: &mut State, model: &mut Model<'_>, msg: Msg) -> Vec<Outcome> {
         Msg::PidLimitEdited(v) => edit(state, &|d| d.pids = v.clone()),
         Msg::StorageLimitEdited(v) => edit(state, &|d| d.storage_mib = v.clone()),
         Msg::SurviveLogoutToggled(v) => edit(state, &|d| d.profile.survive_logout = v),
+        Msg::AiCliToggled(cli, on) => edit(state, &|d| {
+            if on {
+                d.profile.ai_clis.0.insert(cli);
+            } else {
+                d.profile.ai_clis.0.remove(&cli);
+            }
+        }),
         Msg::SshHostEdited(v) => edit(state, &|d| d.ssh_host = v.clone()),
         Msg::SshHostsLoaded(hosts) => state.ssh_hosts = hosts,
         Msg::OfferReported(id, offer) => model.links.set_offer(id, offer),
@@ -1921,12 +1955,30 @@ fn reduce(state: &mut State, model: &mut Model<'_>, msg: Msg) -> Vec<Outcome> {
         // A late event of a start that already ended must not outlive it.
         Msg::Provisioning(id, event) => {
             if model.links.state(id) == Some(&DaemonState::Starting) {
-                if let ProvisionEvent::InstallLine(line) = &event {
-                    state
-                        .diagnostics
-                        .entry(id)
-                        .or_default()
-                        .push_log(line.clone());
+                match &event {
+                    // A new attempt re-runs the install of a CLI that failed: say it once.
+                    ProvisionEvent::Entered(Step::Acquire) => {
+                        state.install_warnings.remove(&id);
+                    }
+                    ProvisionEvent::InstallLine(line) => {
+                        state
+                            .diagnostics
+                            .entry(id)
+                            .or_default()
+                            .push_log(line.clone());
+                    }
+                    // Named in the row and in the recent errors, with the installer's output
+                    // (US5 #1); the daemon still connects.
+                    ProvisionEvent::Warned(warning) => {
+                        let text = warning.text();
+                        state
+                            .diagnostics
+                            .entry(id)
+                            .or_default()
+                            .record_error(text.clone());
+                        state.install_warnings.entry(id).or_default().push(text);
+                    }
+                    _ => {}
                 }
                 state.provisioning.entry(id).or_default().apply(event);
             }

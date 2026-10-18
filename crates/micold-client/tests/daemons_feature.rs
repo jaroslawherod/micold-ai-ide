@@ -1271,3 +1271,159 @@ fn a_start_retires_the_migration_notice_only_on_the_basic_image() {
         "once"
     );
 }
+
+/// FR-010, US1 #2: a new container daemon has only Claude Code ticked, the selection is edited per
+/// daemon, and an emptied selection saves.
+mod ai_cli_selection {
+    use super::*;
+    use daemons::Msg;
+    use micold_core::sandbox::AiCliSelection;
+    use micold_core::session::AiCli;
+
+    #[test]
+    fn a_newly_added_daemon_has_only_claude_code_ticked() {
+        let mut state = State::default();
+        daemons::begin_add(&mut state);
+        assert_eq!(
+            state.draft.as_ref().unwrap().profile.ai_clis,
+            AiCliSelection::new_daemon()
+        );
+    }
+
+    #[test]
+    fn ticking_unticking_and_emptying_the_selection_save_per_daemon() {
+        let mut w = World::new();
+        let mut state = State::default();
+        let boxed = w.boxed;
+        daemons::begin_edit(&mut state, &w.model(), boxed);
+        send(&mut state, &mut w, Msg::AiCliToggled(AiCli::Codex, true));
+        send(&mut state, &mut w, Msg::AiCliToggled(AiCli::Codex, false));
+        for cli in AiCli::ALL {
+            send(&mut state, &mut w, Msg::AiCliToggled(cli, false));
+        }
+        daemons::save(&mut state, &mut w.model()).unwrap();
+        assert!(
+            profile_of(&w, boxed).ai_clis.0.is_empty(),
+            "an empty selection saves"
+        );
+        daemons::begin_edit(&mut state, &w.model(), boxed);
+        send(&mut state, &mut w, Msg::AiCliToggled(AiCli::Pi, true));
+        daemons::save(&mut state, &mut w.model()).unwrap();
+        assert_eq!(
+            profile_of(&w, boxed).ai_clis.0.iter().collect::<Vec<_>>(),
+            [&AiCli::Pi]
+        );
+    }
+
+    #[test]
+    fn a_change_on_a_running_daemon_goes_through_the_restart_confirmation() {
+        let mut w = World::new();
+        let mut state = State::default();
+        let boxed = w.boxed;
+        let before = profile_of(&w, boxed).ai_clis;
+        daemons::start(&mut state, &mut w.model(), boxed);
+        daemons::begin_edit(&mut state, &w.model(), boxed);
+        send(&mut state, &mut w, Msg::AiCliToggled(AiCli::Pi, false));
+        send(&mut state, &mut w, Msg::AiCliToggled(AiCli::Codex, false));
+        let out = send(&mut state, &mut w, Msg::Saved);
+        assert!(out.is_empty());
+        assert!(state.prompt().is_some(), "asks before applying");
+        assert_eq!(profile_of(&w, boxed).ai_clis, before, "not applied yet");
+        send(&mut state, &mut w, Msg::RemovalConfirmed);
+        assert_ne!(profile_of(&w, boxed).ai_clis, before);
+    }
+}
+
+/// US5 #1, FR-012: an AI CLI whose install fails is listed in the row and in the recent errors,
+/// naming the CLI with the installer's output, and the row keeps it once the daemon connects.
+mod install_warnings {
+    use super::*;
+    use daemons::Msg;
+    use micold_core::provision::ProvisionWarning;
+    use micold_core::session::AiCli;
+
+    fn row(
+        state: &State,
+        w: &mut World,
+        id: micold_core::daemons::DaemonId,
+    ) -> micold_core::daemons::DaemonView {
+        let vm = daemons::views(state, &w.model());
+        vm.rows.into_iter().find(|r| r.id == id).unwrap()
+    }
+
+    fn provisioning(
+        state: &mut State,
+        w: &mut World,
+        id: micold_core::daemons::DaemonId,
+        e: ProvisionEvent,
+    ) {
+        send(state, w, Msg::Provisioning(id, e));
+    }
+
+    #[test]
+    fn install_lines_show_in_the_row_while_the_clis_install() {
+        let mut w = World::new();
+        let mut state = State::default();
+        let id = w.boxed;
+        daemons::start(&mut state, &mut w.model(), id);
+        provisioning(
+            &mut state,
+            &mut w,
+            id,
+            ProvisionEvent::Entered(Step::InstallAiClis),
+        );
+        provisioning(
+            &mut state,
+            &mut w,
+            id,
+            ProvisionEvent::InstallLine("added 3 packages".into()),
+        );
+        let activity = row(&state, &mut w, id).activity.unwrap();
+        assert!(activity.contains("installing the AI CLIs"), "{activity}");
+        assert!(activity.contains("added 3 packages"), "{activity}");
+    }
+
+    #[test]
+    fn a_failed_install_is_listed_in_the_row_and_the_errors_and_survives_connecting() {
+        let mut w = World::new();
+        let mut state = State::default();
+        let id = w.boxed;
+        daemons::start(&mut state, &mut w.model(), id);
+        let warning = ProvisionWarning {
+            cli: AiCli::Codex,
+            output: "npm ERR! 404 not found".into(),
+        };
+        provisioning(
+            &mut state,
+            &mut w,
+            id,
+            ProvisionEvent::Warned(warning.clone()),
+        );
+        daemons::daemon_event(&mut state, &mut w.links, id, DaemonEvent::Connected);
+        let shown = row(&state, &mut w, id);
+        assert_eq!(shown.state, DaemonState::Connected);
+        assert_eq!(shown.install_warnings, [warning.text()]);
+        assert!(shown.install_warnings[0].contains("npm ERR! 404 not found"));
+        let errors = daemons::details(&state, id).errors;
+        assert!(
+            errors.iter().any(|e| e.reason == warning.text()),
+            "recent errors name the CLI and the output: {errors:?}"
+        );
+    }
+
+    #[test]
+    fn the_next_start_clears_the_warnings() {
+        let mut w = World::new();
+        let mut state = State::default();
+        let id = w.boxed;
+        daemons::start(&mut state, &mut w.model(), id);
+        let warning = ProvisionWarning {
+            cli: AiCli::Pi,
+            output: String::new(),
+        };
+        provisioning(&mut state, &mut w, id, ProvisionEvent::Warned(warning));
+        daemons::daemon_event(&mut state, &mut w.links, id, DaemonEvent::Stop);
+        daemons::start(&mut state, &mut w.model(), id);
+        assert!(row(&state, &mut w, id).install_warnings.is_empty());
+    }
+}

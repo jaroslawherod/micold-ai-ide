@@ -48,11 +48,19 @@ use runtime::RuntimeKind;
 #[serde(transparent)]
 pub struct MilliCpus(pub u32);
 
-/// The AI CLIs a daemon offers (feature 806, FR-010). Its profile field and serde default come
-/// with the per-daemon selection; today only the provisioning sequence reads it.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+/// The AI CLIs a daemon offers (feature 806, FR-010): the profile's `ai_clis`. A profile stored
+/// without it (every container daemon from before the upgrade) reads as [`Self::all`] (D3); an
+/// empty selection is a valid choice and is stored as such.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct AiCliSelection(pub BTreeSet<crate::session::AiCli>);
+
+impl Default for AiCliSelection {
+    /// What a stored profile without the field means: every supported AI CLI.
+    fn default() -> Self {
+        Self::all()
+    }
+}
 
 impl AiCliSelection {
     /// What a new daemon offers: Claude Code.
@@ -331,6 +339,10 @@ pub struct SandboxProfile {
     /// manages it only on Linux (FR-014a/b, research R6).
     #[serde(default)]
     pub survive_logout: bool,
+    /// The AI CLIs this daemon offers once they are installed (FR-010). A new daemon starts with
+    /// [`AiCliSelection::new_daemon`]; one stored without the field reads as every CLI (D3).
+    #[serde(default)]
+    pub ai_clis: AiCliSelection,
     /// Set on read when the stored image was the released daemon image that the migration moved
     /// to [`ImageChoice::Basic`] (FR-016). Never written: whoever owns the profile turns it into a
     /// stored `MigrationNotice` and clears it ([`Self::take_moved_off_released`]).
@@ -363,6 +375,8 @@ struct RawProfile {
     credentials: BTreeSet<CredentialShare>,
     #[serde(default)]
     survive_logout: bool,
+    #[serde(default)]
+    ai_clis: AiCliSelection,
 }
 
 impl From<RawProfile> for SandboxProfile {
@@ -379,6 +393,7 @@ impl From<RawProfile> for SandboxProfile {
             network: raw.network,
             credentials: raw.credentials,
             survive_logout: raw.survive_logout,
+            ai_clis: raw.ai_clis,
             moved_off_released,
         }
     }
@@ -1073,6 +1088,19 @@ impl MissingCredential {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_profile_without_ai_clis_has_every_cli_and_an_empty_selection_round_trips() {
+        let profile: SandboxProfile = serde_json::from_str("{}").unwrap();
+        assert_eq!(profile.ai_clis, AiCliSelection::all());
+        let none = SandboxProfile {
+            ai_clis: AiCliSelection(BTreeSet::new()),
+            ..SandboxProfile::default()
+        };
+        let text = serde_json::to_string(&none).unwrap();
+        let back: SandboxProfile = serde_json::from_str(&text).unwrap();
+        assert!(back.ai_clis.0.is_empty());
+    }
 
     #[test]
     fn a_default_profile_shares_no_credentials() {

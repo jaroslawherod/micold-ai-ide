@@ -249,6 +249,9 @@ fn daemon_row<'a>(
     if let Some(sentence) = state_note(&view) {
         body = body.push(caution(sentence, roles));
     }
+    for warning in &view.install_warnings {
+        body = body.push(caution(warning.clone(), roles));
+    }
     if let Some(sentence) = &view.notice {
         body = body.push(note(sentence.clone(), roles));
     }

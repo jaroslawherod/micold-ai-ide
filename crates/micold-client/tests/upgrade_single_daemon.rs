@@ -211,5 +211,12 @@ fn a_daemon_added_after_the_upgrade_starts_at_defaults_not_a_copy() {
     let DaemonRuntime::Container(second) = &registry.entries()[1].runtime else {
         panic!("container daemon");
     };
-    assert_eq!(second.profile, SandboxProfile::default());
+    // Defaults, but a new daemon has only Claude Code selected (FR-010); the migrated one has all.
+    assert_eq!(
+        second.profile,
+        SandboxProfile {
+            ai_clis: micold_core::sandbox::AiCliSelection::new_daemon(),
+            ..SandboxProfile::default()
+        }
+    );
 }

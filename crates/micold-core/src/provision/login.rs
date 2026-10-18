@@ -57,8 +57,26 @@ fn has_exited(reason: &str) -> bool {
     reason.contains("is not running") || reason.contains("container state improper")
 }
 
+/// Whether the container is running but its image has no passwd entry for the uid it runs as:
+/// `id -un` answers `cannot find name for user ID 1000`, which no further asking will change
+/// (without this the wait runs its whole bound, minutes, before failing).
+fn has_no_user(reason: &str) -> bool {
+    reason
+        .to_ascii_lowercase()
+        .contains("cannot find name for user id")
+}
+
+/// The row's sentence for [`has_no_user`].
+fn no_user_reason(reason: &str) -> String {
+    format!(
+        "it is running, but its image has no user for the uid it runs as ({reason}); give the \
+         image a passwd entry for that uid, or use the basic image"
+    )
+}
+
 /// The login name, asking again every second while the container is not up yet, for at most
-/// `bound`; at once when the container has exited. The last reason is the error.
+/// `bound`; at once when the container has exited or its image has no user for its uid. The last
+/// reason is the error.
 pub async fn wait_for_login(
     runner: &dyn SshRunner,
     runtime_program: &str,
@@ -69,6 +87,7 @@ pub async fn wait_for_login(
     loop {
         match ask_login(runner, runtime_program, container).await {
             Ok(name) => return Ok(name),
+            Err(reason) if has_no_user(&reason) => return Err(no_user_reason(&reason)),
             Err(reason) if started.elapsed() >= bound || has_exited(&reason) => return Err(reason),
             Err(_) => tokio::time::sleep(RETRY_PAUSE).await,
         }
@@ -171,6 +190,22 @@ mod tests {
             .await
             .unwrap_err();
         assert!(err.contains("is not running"));
+    }
+
+    #[tokio::test]
+    async fn an_image_with_no_user_for_the_uid_fails_at_once_naming_why() {
+        let runner = Script::new(vec![(
+            Some(1),
+            "",
+            "id: cannot find name for user ID 1000\n",
+        )]);
+        let started = Instant::now();
+        let err = wait_for_login(&runner, "docker", "c1", Duration::from_secs(600))
+            .await
+            .unwrap_err();
+        assert!(started.elapsed() < Duration::from_secs(5), "no retry pause");
+        assert!(err.contains("no user for the uid"), "{err}");
+        assert!(err.contains("cannot find name for user ID 1000"), "{err}");
     }
 
     #[tokio::test]
