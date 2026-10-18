@@ -53,7 +53,8 @@ RUN chgrp 0 /etc/passwd /etc/group \
 # Kubernetes (feature 686) fixes the uid at 10001 and mounts the root filesystem read-only, so the
 # entrypoint cannot append a passwd entry there; sshd then dies on "No user exists for uid". The
 # image carries that one entry, home `/data/home` (the pod's HOME, the daemon's volume). Any other
-# uid still gets its entry from the entrypoint.
+# uid gets its entry from the entrypoint, which then replaces this one: the client logs in as
+# `micold`, so the name must resolve to the uid the container runs as.
 RUN echo 'micold:x:10001:0:micold:/data/home:/bin/sh' >> /etc/passwd
 
 COPY sshd_config /etc/micold/sshd_config

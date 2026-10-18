@@ -20,7 +20,7 @@ or the daemon and any `npm install` in the `Containerfile`; the real-runtime tes
 `sandbox_real_basic_image_has_no_daemon_or_cli` checks the built image.
 
 The image already holds a passwd entry for uid 10001 (home `/data/home`), the uid the Kubernetes pod runs as with a read-only root filesystem (feature 686), where nothing can be appended at run time.
-`entrypoint.sh` adds a passwd entry for any other run-time uid (home `$MICOLD_HOME`), starts the last
+`entrypoint.sh` gives the login name `micold` to any other run-time uid (home `$MICOLD_HOME`), replacing that entry, starts the last
 provisioned daemon build (`$HOME/.micold/remote/last`) in the background when there is one, and runs
 sshd as its main process. When the runtime stops the container it first stops every daemon (so they
 save their terminal history), then sshd.
