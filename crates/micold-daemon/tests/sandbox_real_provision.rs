@@ -52,6 +52,10 @@ const NO_SSH_CONTAINER: &str = "micold-provision-nossh-probe";
 const NO_SSH_NETWORK: &str = "micold-provision-nossh-probe-net";
 const NO_SSH_PORT: u16 = 17764;
 
+const MIGRATED_CONTAINER: &str = "micold-provision-migrated-probe";
+const MIGRATED_NETWORK: &str = "micold-provision-migrated-probe-net";
+const MIGRATED_PORT: u16 = 17765;
+
 /// The slowest a start that finds everything in place may take (SC-003, US1 #4).
 const WARM_START: Duration = Duration::from_secs(15);
 
@@ -102,7 +106,7 @@ async fn connected_with_client_version(port: u16) -> (Provisioned, Vec<Step>, Du
     let started = Instant::now();
     let (container, outcome, steps) = provision_outcome(port, StepBounds::container()).await;
     let elapsed = started.elapsed();
-    let mut provisioned = outcome.unwrap_or_else(|f| {
+    let provisioned = outcome.unwrap_or_else(|f| {
         panic!(
             "provisioning {container} failed at {:?}: {:?}\n{}",
             f.step, f.cause, f.output
@@ -116,8 +120,6 @@ async fn connected_with_client_version(port: u16) -> (Provisioned, Vec<Step>, Du
         client_build(),
         "the daemon in {container} must be the build this client carries (SC-001)"
     );
-    // The connection is not needed past the handshake; dropping it lets the bridge exit.
-    provisioned.warnings.clear();
     (provisioned, steps, elapsed)
 }
 
@@ -308,22 +310,81 @@ async fn sandbox_real_provision_own_image_without_ssh_fails_in_reach() {
     );
 }
 
-/// T067, US3 #3: a reference that does not exist fails to pull, and the runtime's output names it.
+/// T067, US3 #3: a reference that does not exist fails to pull through the client's own runtime
+/// driver, and the error names the image with the runtime's output.
 #[test]
 fn sandbox_real_provision_a_nonexistent_image_reference_names_itself() {
+    use micold_core::sandbox::exec::SystemRunner;
+    use micold_core::sandbox::image::{ImageChoice, OwnImage};
+    use micold_core::sandbox::runtime::{ContainerRuntime, RuntimeError};
+
     let reference = "micold-nonexistent.invalid/probe:0";
-    let out = runtime_cmd(sandbox_real_support::dialect().program)
-        .args(["pull", reference])
-        .output()
-        .expect("run the runtime");
-    assert!(!out.status.success(), "pulling {reference} must fail");
-    let text = format!(
-        "{}{}",
-        String::from_utf8_lossy(&out.stdout),
-        String::from_utf8_lossy(&out.stderr)
+    let runtime = micold_core::sandbox::cli::CliRuntime::new(
+        sandbox_real_support::runtime_kind(),
+        SystemRunner,
     );
+    let choice = ImageChoice::Own(OwnImage::Reference(reference.to_string()));
+    let error = runtime
+        .acquire_image(&choice, &mut |_| {})
+        .expect_err("pulling a nonexistent reference must fail");
+    let named = match &error {
+        RuntimeError::ImageNotFound { reference: r } => r.clone(),
+        RuntimeError::ImagePullFailed {
+            reference: r,
+            detail,
+        } => format!("{r} {detail}"),
+        other => panic!("expected the pull to fail naming the image, got {other:?}"),
+    };
     assert!(
-        text.contains("micold-nonexistent.invalid"),
-        "the runtime's output must name the image so the row can: {text}"
+        named.contains("micold-nonexistent.invalid"),
+        "the error must name the image so the row can: {error:?}"
     );
+}
+
+/// T059, US4 #1: settings naming a released-image reference read as the basic image with the
+/// notice set; the container started from that choice connects with the client's version, and
+/// clearing the notice (what a successful start does) leaves none.
+#[tokio::test]
+async fn sandbox_real_provision_a_released_image_setting_starts_on_the_basic_image() {
+    use micold_core::daemons::{DaemonRuntime, MigrationNotice};
+    use micold_core::sandbox::image::ImageChoice;
+    use micold_core::settings::{JsonFileSettingsStore, SettingsStore};
+
+    let d = dirs("migrated");
+    let path = d.data.join("settings.json");
+    std::fs::write(
+        &path,
+        r#"{ "settings_version": 4, "daemon": { "placement": "local_sandbox", "sandbox": {
+            "runtime": "docker", "network": "outbound", "survive_logout": false, "credentials": [],
+            "budget": { "cpus_milli": 2000, "memory_bytes": 4294967296, "pids": 512, "storage_bytes": null },
+            "image": { "kind": "registry", "path": null,
+                       "reference": "ghcr.io/jaroslawherod/micold-daemon:0.9.0" } } } }"#,
+    )
+    .unwrap();
+    let settings = JsonFileSettingsStore::at(path).load().settings;
+    assert_eq!(settings.daemon.sandbox.image, ImageChoice::Basic);
+    let entry = settings
+        .daemons
+        .iter()
+        .find(|e| matches!(&e.runtime, DaemonRuntime::Container(_)))
+        .expect("the migrated container daemon");
+    let id = entry.id;
+    let DaemonRuntime::Container(c) = &entry.runtime else {
+        unreachable!()
+    };
+    assert_eq!(c.migration, Some(MigrationNotice::MovedOffReleasedImage));
+
+    let _sandbox = start_sandbox(&spec(
+        &d,
+        MIGRATED_CONTAINER,
+        MIGRATED_NETWORK,
+        MIGRATED_PORT,
+    ));
+    drop(connected_with_client_version(MIGRATED_PORT).await);
+    let mut registry = micold_core::daemons::DaemonRegistry::new(settings.daemons.clone(), 2);
+    assert!(registry.clear_migration(id), "a start clears the notice");
+    assert!(registry.entries().iter().all(|e| match &e.runtime {
+        DaemonRuntime::Container(c) => c.migration.is_none(),
+        _ => true,
+    }));
 }

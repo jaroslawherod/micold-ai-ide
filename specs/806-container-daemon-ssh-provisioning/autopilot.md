@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-uwrpqv
 - **Started**: 2026-10-17
 - **Phase**: M5c
-- **Next step**: M5c part 2 (*Handover*)
+- **Next step**: push M5c (gate green), orchestrator opens the PR
 
 ## Pull requests
 
@@ -80,6 +80,8 @@ Milestone notes:
 | Tasks | 2 | ae7101c78be879b2cde37d5455ed29eb6fd93300:2d525fd2157f2c7e851c1e8dd343a38d30d37344 | CLEAN (1 MINOR fixed: checklist item ticked after reviewer confirmed 0 markers, FR-002/FR-010 resolved) |
 | M1 review A (code-review high) | 1 | HEAD 687b8f8d | 10 findings: F1–F5, F8, F9 fixed; F6, F7, F10 declined (see Declined review findings) |
 | M1 review B (conformance, sonnet) | 1 | 4de41d6b382fa4417634887ea9108075302f1c02:d99547189d32d7da84a573ed1e106fc02ad026e7 | CLEAN, 4 MINOR (F2, F3 fixed, prose only; F1 declined; F4 covered by the gate) |
+| M5c review A (code-review high) | 1 | 7e4573e8c7115d81ab1304374e86f7d297622b16:c0850e4685b784cc72b8b989fab3015053b0dbfe | CHANGES: 3 MAJOR, 3 MINOR (F2, F3 fixed: US4 #1 settings case and a CliRuntime pull-failure case added to `sandbox_real_provision.rs`; F6 fixed; F1 declined; F4, F5 declined) |
+| M5c review B (conformance, sonnet) | 1 | 7e4573e8c7115d81ab1304374e86f7d297622b16:c0850e4685b784cc72b8b989fab3015053b0dbfe | CHANGES: 3 MAJOR, 1 MINOR (F1 cycle-log row added; F2 fixed as A F2; F3 declined; F4 declined) |
 
 ## Declined review findings
 
@@ -94,11 +96,13 @@ Milestone notes:
 | M1 | Review B r1 | F1 (MINOR) `hash` job fails on DRIFT | Intended: the workflow publishes under the tree's hash, so `BASIC_IMAGE_CONTENT_HASH` must match it in the same change; the later "pin PR" is the digest pin `BASIC_IMAGE` (T049) |
 | M4 | Review A r1 | F4 (MINOR) relay bind failure should be reported as the io error | contracts/provisioning.md *Failure causes* and T034 define `PostureBlocksDownload` for a relay that cannot be opened; the cause text covers it |
 | M4 | Review B r1 | F2 (MINOR) `standin_table` has no automated test | No suite uses it before M5/M7 (the container suites); packing and installing both variants was run by hand and is recorded in the cycle-log; a test now would be a container-free test of test support |
+| M5c | Review A r1 | F1 (MAJOR) T045 lacks tests for pinned reach, relay/direct, bounds, `CreateContainer`, legacy dial | Those are asserted by the M5 part 1–2 tests (`container_attempt` target tests T053/T054, `Adoption::Legacy` dial tests T058/T062, listed in the cycle-log); T045 adds only the missing `Entered(Acquire)`, which has its test. `CreateContainer` is emitted by the lifecycle, not this task |
+| M5c | Review B r1 | F3 (MAJOR) `strict_fingerprint` removal is outside the tasks | In scope by the unit brief and ledger follow-up 6 (dead field, nothing reads it) |
+| M5c | Review A/B r1 | F4 (MINOR) T063 test sits in `argv.rs`, not `sandbox/mod.rs`; stray closure edit | The `argv` builder lives in `argv.rs`, so its test belongs there; the closure edit is a clippy fix on the same lines. F5 (MINOR): the container-section test is a smoke test, the fields are covered by the geometry gate and T064 tests |
 
 ## Handover
 
-M5c part 1, uncommitted work committed on the branch (no PR yet; the gate has NOT run, reviews not run). Previous PR #1018 merged as 6dbe317600b3c8430dd392b5a94293c85e6fbf2f. **Done** (tasks ticked): T045 (the actor now emits `Entered(Step::Acquire)` before waiting for the container, so the row says "getting the image" = follow-up 7; test `a_container_start_announces_getting_the_image_before_it_waits`; the shell `prepare_keys` fake-host test of the old task text is superseded, the keys are made by `container_attempt` and `DaemonKeys::ensure` is tested in core), T046 (`tests/gates/container_section_fits.rs`, registered in `layout_snapshot.rs`), T063 (`argv.rs` test for both image choices), T064 + T066 (tests in `container_fields.rs`, restart confirmation for Own in `daemons_feature.rs`), T068 (the two-entry Select was already in; the archive "picker" stays the existing text field, there is no file dialog in the client), follow-up 6 (`strict_fingerprint` removed from `Placement`, `ActorSpec`, `actor_specs*`, `connections`). `cargo check --workspace --all-targets` was clean.
-**Next step (fresh unit, M5c part 2)**: (1) the real-runtime suites T048, T059, T067 in a new `crates/micold-daemon/tests/sandbox_real_provision.rs` (feature `sandbox-real-runtime`; compile only here: `cargo test -p micold-daemon --features sandbox-real-runtime --no-run`; helpers in `tests/sandbox_real_support/mod.rs`: `start_sandbox`, `provision_and_connect`, `provision_then_restart`, `purge`, `cli_out`, `standin_table`; copy the shape of `sandbox_real_idle.rs`); (2) T070 visual pass (visual-pass skill, see memory cloud-visual-pass: ICED_BACKEND=tiny-skia on Xvfb, python ctypes XTest, no xdotool) saved under `specs/806-container-daemon-ssh-provisioning/visual/`; (3) tick T048/T059/T067/T070, run `scripts/gate.sh` detached, review A (code-review high, `origin/main...HEAD`) and review B (conformance), merge origin/main right before the final gate, write `$SCRATCHPAD/pr-title` and `pr-body.md` (title starts "#806: Container daemon: configurable resources, Dockerfile or image source; build from current daemon binary by default" plus the M5c suffix pr.md requires), push `--force-with-lease`. Disk was ~14 GB free: wipe `target-shared/debug` before the gate.
+None.
 
 ## Open escalation
 
