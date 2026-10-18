@@ -5,8 +5,9 @@ Code pointers are as of `origin/main` at plan time.
 ## R1. Where the kind lives and how it is fixed
 
 - **Decision**: `micold_core::session::SessionKind { #[default] Terminal, Structured }`, a field
-  `Session.kind` set only by the constructors (`start_new`, `restored` gain a `kind` argument, as
-  `provider` did in feature 026). `SessionKind::check(provider) -> Result<(), KindRefusal>` refuses
+  `Session.kind` set only by the constructors: new `start_new_of_kind` and `restored_of_kind`,
+  to which `start_new` and `restored` delegate with `Terminal` (about 300 existing callers, mostly
+  tests, stay untouched, SC-004). `SessionKind::check(provider) -> Result<(), KindRefusal>` refuses
   structured for any provider whose `structured_args()` is `None` (FR-003).
 - **Rationale**: `provider` already proves the pattern ("set at construction, no setter", session.rs
   `Session.provider` doc). FR-002 then holds by shape.
@@ -169,7 +170,9 @@ Code pointers are as of `origin/main` at plan time.
 
 ## R13. Protocol version
 
-- **Decision**: bump `PROTOCOL_VERSION` 51 → 52; new fields `#[serde(default)]`. An older client is
+- **Decision**: bump `PROTOCOL_VERSION` once per milestone that changes the wire (M2 → 52, M3,
+  M6; tasks.md *Milestones*), since each milestone merges separately and `tests/schema_hash.rs`
+  ties every wire edit to a bump; new fields `#[serde(default)]`. An older client is
   refused by the existing handshake (spec edge case).
 - **Alternatives**: no bump with defaulted fields only — rejected, an old client would silently
   drop `StructuredEvents` and show an empty pane for a structured session.

@@ -224,6 +224,39 @@ check each refusal.
 
 ---
 
+### User Story 6 - Choose the structured kind and see its events (Priority: P3)
+
+A user picks "Claude Code (structured)" from the start-session chevron of a worktree; the session
+starts in structured mode, its row says so, and its pane shows a plain read-only log, one line per
+event, until #939 brings the transcript view. The user guide explains the kind.
+
+**Why this priority**: The daemon side (US1–US5) is what the rest of the epic builds on; making the
+kind selectable is what lets a user try it, and it must not ship before the daemon side is whole.
+
+**Independent Test**: In the client's reducer tests, the start menu offers the structured entry
+only with Claude Code and the chevron shows with Claude Code alone; picking the entry creates a
+structured session; the log model turns event messages into one line each, with the omitted
+marker first when events were omitted. The visual pass (quickstart Part B) confirms the row
+marker and the pane.
+
+**Acceptance Scenarios**:
+
+1. **Given** a worktree where Claude Code is available, **When** the user opens the start-session
+   chevron, **Then** its list offers "Claude Code (structured)" right after "Claude Code", even
+   when Claude Code is the only CLI; **Given** Claude Code is not supported there, **Then** the
+   entry is absent.
+2. **Given** the user picks "Claude Code (structured)", **When** the session starts, **Then** it is
+   a structured session and is marked as structured wherever sessions are listed; the plain
+   start-session press and every other way of starting a session create a terminal session.
+3. **Given** a structured session's pane, **When** events arrive, **Then** it shows one line per
+   event in order, including unrecognised events, unreadable lines and the omitted-events marker,
+   read-only, with no input.
+4. **Given** the change that makes the kind selectable, **When** a user reads the user guide,
+   **Then** it describes the structured kind, how to choose it, that it is Claude Code only, and
+   what it does not yet do, naming each later issue of the epic.
+
+---
+
 ### Edge Cases
 
 - The CLI is not installed or cannot start: the session reports the same failure a terminal session
@@ -312,6 +345,8 @@ check each refusal.
 - **FR-014**: No line the CLI writes MAY end the session or stop the stream, and the parser MUST
   NOT discard any line: each becomes exactly one event. Events MUST keep the order in which the CLI
   wrote them. (Eviction from the bounded history, FR-018, is the only way an event leaves it.)
+  Besides the CLI's lines, the daemon adds its own notes as events: a turn that ended without a
+  result (edge cases), and, on the wire only, a stand-in for an event too large for one message.
 - **FR-015**: Extra fields on a known event type MUST NOT prevent it from being recognised.
 
 **Carrying events to clients**

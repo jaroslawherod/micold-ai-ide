@@ -1,6 +1,8 @@
-# Contract: client ↔ daemon additions (protocol 52)
+# Contract: client ↔ daemon additions (protocol 52 and on)
 
-`PROTOCOL_VERSION` 51 → 52. Every new field is `#[serde(default)]`. Control messages stay JSON.
+`PROTOCOL_VERSION` is bumped by one in each milestone that changes the wire, because each
+milestone merges to `main` on its own: M2 (`kind` fields, `StructuredEvents`; 51 → 52 if `main` is
+still at 51), M3 (`SessionUserMessage`), M6 (`SessionRequestRefused`). Every new field is `#[serde(default)]`. Control messages stay JSON.
 
 ## Changed
 
@@ -29,7 +31,7 @@ StructuredEvents { session: SessionId, omitted: u64, events: Vec<SequencedEvent>
   the first `live: false` after a `live: true` or on first view), then each new event as
   `live: true` with one event. Seqs strictly increase; no seq is sent twice to one view (FR-017).
 - A message's encoded size stays under `MAX_FRAME_LENGTH / 2`; an event that alone exceeds it is
-  sent with its text replaced by a size notice (logged by the daemon).
+  sent alone as `OversizedOnWire { original_bytes }` under its own `seq` (logged by the daemon).
 
 ```text
 SessionRequestRefused { session: SessionId, request: RefusedRequest, reason: String }
