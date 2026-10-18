@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-xelisc
 - **Started**: 2026-10-17
 - **Phase**: implement
-- **Next step**: M3: final gate after review fixes, push, PR files in scratchpad; then M4a
+- **Next step**: M3 PR (files in scratchpad) opened by orchestrator; then M4a
 
 ## Pull requests
 
@@ -30,7 +30,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1b | T019, T117, T118, T021, T025, T119, T120, T027, T121 | full | Pod, PVC, access secret, pod stamp/drift, start through Pull with bounds + rollback over FakeCluster | #983 | merged |
 | M1c | T122, T023, T123, T124, T125, T028, T029, T126, T127 | full | Tunnel phase (SSH identification line), LiveCluster, relay, key files | #989 | merged |
 | M2 | T079, T072, T056, T073, T081, T075, T059, T076, T128 | full | Core Stop/Remove/forget-locally; failure + pod-gone classifiers; preflight | — | merged (#992) |
-| M3 | T063, T064, T065, T067, T068, T069, T102 | full | Allowed credentials as secrets, daemon_env, security contexts (core) | — | implemented (T063–T102 ticked); gate + reviews next |
+| M3 | T063, T064, T065, T067, T068, T069, T102 | full | Allowed credentials as secrets, daemon_env, security contexts (core) | — | gated + reviewed; pushed, PR pending |
 | M4a | T024, T130, T066, T031, T131, T070, T032 | full | Kubernetes form via Edit (Add entry hidden), shared resources fields, credentials list | — | planned |
 | M4b | T083, T084, T080, T132, T085, T086, T082, T133, T129 | full | Placement fields, Stop/Remove/Forget locally/Logs from the row, Start → Unavailable | — | planned |
 | M5 | T134, T022, T074, T135, T030, T077, T136 | full | (#806) Copy + Connect over SSH through the relay; failures at client level | — | blocked on #806 |
