@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-cl0lw3
 - **Started**: 2026-10-18
 - **Phase**: M1
-- **Next step**: M1 — make the red tests green (T006, T009, T010), then verify.md
+- **Next step**: M1 — verify.md (gate + review A high, review B), then PR
 
 ## Pull requests
 
@@ -64,21 +64,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M1 unit 1 handed over at 155k context. Done: T001–T005, T007, T008 (ticked). Script, test, five
-recorded fixtures + README, `tolerance.jsonl`, `.gitattributes` line; tests for T004/T005/T007/T008
-written and red against stubs (evidence: `tdd/cycle-log.md` cycle 2). Stubs to replace:
-`crates/micold-core/src/session.rs` (`SessionKind::is_terminal` returns `true`, `check` always `Ok`,
-`KindRefusal` Display empty, `start_new_of_kind`/`restored_of_kind` ignore `kind` — invert: make
-`start_new`/`restored` delegate to them), `store.rs` (add `StoredSession.kind` with
-`#[serde(default, skip_serializing_if = "SessionKind::is_terminal")]`, set it in `from_session`,
-pass it to `restored_of_kind` in `into_session`), `provider.rs` (`structured_args` returns `None` in
-all six impls; Claude gets the argv), `structured/lines.rs` (`push`/`finish`), `structured/parse.rs`
-(`parse_line` per R9, `pair_tool_calls`). `event.rs` types are final (externally tagged: postcard).
-Next: T006, T009, T010 green; mutant-check the tests that passed against stubs (cycle-log list);
-append cycle 3 to `tdd/cycle-log.md`, set U2–U5 DONE in `tdd/test-list.md`; check the workspace
-builds (other `Session { .. }` literals?); then verify.md (scoped gate + review A high, review B,
-full gate `scripts/gate.sh`, PR files in the scratchpad, `PR: to-open`). Baseline: 4 root-only reds
-in micold-core (cycle-log *Baseline*).
+None.
 
 ## Open escalation
 

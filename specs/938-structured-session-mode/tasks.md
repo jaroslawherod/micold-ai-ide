@@ -86,7 +86,7 @@ FR-022, FR-022a and FR-023.
   `AiCliProvider::structured_args()` is `Some(["-p", "--input-format", "stream-json",
   "--output-format", "stream-json", "--verbose", "--include-partial-messages"])` for Claude Code
   and `None` for every other provider.
-- [ ] T006 Make T004 and T005 pass: add `SessionKind { #[default] Terminal, Structured }` with
+- [X] T006 Make T004 and T005 pass: add `SessionKind { #[default] Terminal, Structured }` with
   `is_terminal`, `check` and `KindRefusal` in `crates/micold-core/src/session.rs`; add
   `Session::start_new_of_kind` and `Session::restored_of_kind`, and make `start_new` and
   `restored` delegate to them with `SessionKind::Terminal`, so their ~300 existing callers stay
@@ -133,10 +133,10 @@ loses nothing.
 
 ### Implementation for User Story 2 (parser)
 
-- [ ] T009 [US2] Make T007 pass: `crates/micold-core/src/structured/lines.rs` (`LineSplitter::push(&[u8]) ->
+- [X] T009 [US2] Make T007 pass: `crates/micold-core/src/structured/lines.rs` (`LineSplitter::push(&[u8]) ->
   Vec<String>`, `finish() -> Option<String>`), with `crates/micold-core/src/structured/mod.rs`
   and `pub mod structured;` in `crates/micold-core/src/lib.rs`.
-- [ ] T010 [US2] Make T008 pass: `crates/micold-core/src/structured/event.rs`
+- [X] T010 [US2] Make T008 pass: `crates/micold-core/src/structured/event.rs`
   (`StructuredEvent::{Init, Assistant, User, Result, StreamDelta, Unrecognised, Unreadable,
   TurnEndedWithoutResult, OversizedOnWire}`, `ContentBlock::{Text, Thinking, ToolUse, ToolResult,
   Other}`, `Usage`, `Delta`, `SequencedEvent { seq: u64, event }`, all `Serialize +

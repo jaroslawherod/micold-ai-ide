@@ -8,15 +8,41 @@ pub struct LineSplitter {
 
 impl LineSplitter {
     /// Add `bytes`; return every line they complete.
+    ///
+    /// A line is never split or truncated however long it is; one trailing `\r` is removed
+    /// (CRLF); bytes that are not UTF-8 are decoded lossily rather than dropped (FR-014).
     pub fn push(&mut self, bytes: &[u8]) -> Vec<String> {
+        // Only the new bytes can hold a newline the buffer did not already have.
+        let searched_from = self.buf.len();
         self.buf.extend_from_slice(bytes);
-        Vec::new()
+        let Some(last_newline) = self.buf[searched_from..]
+            .iter()
+            .rposition(|&b| b == b'\n')
+            .map(|at| searched_from + at)
+        else {
+            return Vec::new();
+        };
+        let rest = self.buf.split_off(last_newline + 1);
+        let complete = std::mem::replace(&mut self.buf, rest);
+        complete[..last_newline]
+            .split(|&b| b == b'\n')
+            .map(decode_line)
+            .collect()
     }
 
-    /// The trailing line with no newline, at end of input.
+    /// The trailing line with no newline, at end of input; `None` when nothing is left.
     pub fn finish(&mut self) -> Option<String> {
-        None
+        if self.buf.is_empty() {
+            return None;
+        }
+        Some(decode_line(&std::mem::take(&mut self.buf)))
     }
+}
+
+/// One line's bytes without its `\n`, less one trailing `\r`, as text.
+fn decode_line(line: &[u8]) -> String {
+    let line = line.strip_suffix(b"\r").unwrap_or(line);
+    String::from_utf8_lossy(line).into_owned()
 }
 
 #[cfg(test)]

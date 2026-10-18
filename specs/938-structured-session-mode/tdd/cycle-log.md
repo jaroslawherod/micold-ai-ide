@@ -35,3 +35,27 @@ Append only. Newest last.
   `the_constructors_without_a_kind_make_terminal_sessions`, `a_session_has_no_kind_setter`,
   `every_cli_can_run_a_terminal_session`, `a_record_without_a_kind_loads_as_terminal`,
   `a_terminal_record_is_written_with_no_kind_key`, `the_catalog_schema_version_is_unchanged`.
+
+## Cycle 3 (U2–U5): stubs replaced — GREEN
+
+- green (T006): `SessionKind::is_terminal`/`check` (via `structured_args().is_some()`),
+  `KindRefusal` sentence, `start_new`/`restored` delegate to the `_of_kind` constructors with
+  `Terminal`, `StoredSession.kind` (`default`, `skip_serializing_if = "SessionKind::is_terminal"`),
+  Claude's `structured_args` argv.
+- green (T009): `LineSplitter::push` scans only the new bytes for `\n`, splits off the complete
+  part, strips one `\r`, decodes lossily; `finish` yields the rest or `None`.
+- green (T010): `parse_line` per R9 (`Value` first, typed shapes with `serde(default)` only on
+  `Option`s, mismatch → `Unrecognised`), `block_of`/`delta_of` with `Other` fallbacks,
+  `pair_tool_calls` by id; two extra unit tests in `parse.rs` (unpaired call; block-list
+  `ToolResult` as JSON text, string user content as one `Text`).
+- run: `cargo test -p micold-core --test structured_parse --test session_kind` -> `10 passed`,
+  `7 passed`; `--lib -- structured:: structured_args_tests` -> `10 passed`;
+  `scripts/tests/capture-stream-json.test.sh` -> `7 cases, 0 failed`
+- mutant check of the tests that passed against stubs: dropping `skip_serializing_if` fails
+  `a_terminal_record_is_written_with_no_kind_key`; dropping `serde(default)` fails
+  `a_record_without_a_kind_loads_as_terminal`; `start_new` delegating with `Structured` fails
+  `the_constructors_without_a_kind_make_terminal_sessions`; `finish` without its empty check fails
+  `finish_yields_nothing_when_the_buffer_is_empty`. The other three (`the_default_kind_is_terminal`,
+  `a_session_has_no_kind_setter`, `every_cli_can_run_a_terminal_session`,
+  `the_catalog_schema_version_is_unchanged`) guard properties the stubs already had by
+  construction.

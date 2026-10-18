@@ -95,12 +95,20 @@ pub enum SessionKind {
 impl SessionKind {
     /// Whether this is the default kind.
     pub fn is_terminal(&self) -> bool {
-        true
+        matches!(self, Self::Terminal)
     }
 
-    /// Whether `provider` can run a session of this kind.
-    pub fn check(self, _provider: AiCli) -> Result<(), KindRefusal> {
-        Ok(())
+    /// Whether `provider` can run a session of this kind (FR-003): every CLI runs a terminal
+    /// session; only a CLI with [`AiCliProvider::structured_args`] runs a structured one.
+    ///
+    /// [`AiCliProvider::structured_args`]: crate::provider::AiCliProvider::structured_args
+    pub fn check(self, provider: AiCli) -> Result<(), KindRefusal> {
+        use crate::provider::AiCliProvider as _;
+        match self {
+            Self::Terminal => Ok(()),
+            Self::Structured if provider.provider().structured_args().is_some() => Ok(()),
+            Self::Structured => Err(KindRefusal::NotSupported(provider)),
+        }
     }
 }
 
@@ -113,7 +121,14 @@ pub enum KindRefusal {
 
 impl fmt::Display for KindRefusal {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("")
+        use crate::provider::AiCliProvider as _;
+        match self {
+            Self::NotSupported(provider) => write!(
+                f,
+                "{} has no structured mode: only Claude Code sessions can be structured",
+                provider.provider().display_name()
+            ),
+        }
     }
 }
 
@@ -419,29 +434,19 @@ pub struct Session {
 }
 
 impl Session {
-    /// A brand-new session of `kind`.
-    pub fn start_new_of_kind(location: SessionLocation, provider: AiCli, _kind: SessionKind) -> Self {
-        Self::start_new(location, provider)
-    }
-
-    /// A persisted session of `kind`.
-    pub fn restored_of_kind(
-        id: SessionId,
-        location: SessionLocation,
-        label: SessionLabel,
-        mode: TerminalMode,
-        provider: AiCli,
-        _kind: SessionKind,
-    ) -> Self {
-        Self::restored(id, location, label, mode, provider)
-    }
-
     /// A brand-new session at `location`, starting immediately (FR-010). Always starts
     /// attached to the AI CLI (feature 010 FR-010 — today's only behavior for a fresh session).
     ///
     /// `provider` is the resolved default-or-override the caller already decided (feature 026,
     /// FR-004); it is fixed for the session's whole life from here.
     pub fn start_new(location: SessionLocation, provider: AiCli) -> Self {
+        Self::start_new_of_kind(location, provider, SessionKind::Terminal)
+    }
+
+    /// A brand-new session of `kind` (feature 938, FR-002): the kind is fixed here for the
+    /// session's whole life, as `provider` is. [`Session::start_new`] is this with
+    /// [`SessionKind::Terminal`].
+    pub fn start_new_of_kind(location: SessionLocation, provider: AiCli, kind: SessionKind) -> Self {
         Self {
             id: SessionId::new(),
             location,
@@ -462,7 +467,7 @@ impl Session {
             origin: None,
             origin_rejected: false,
             agents: Vec::new(),
-            kind: SessionKind::Terminal,
+            kind,
         }
     }
 
@@ -479,6 +484,19 @@ impl Session {
         label: SessionLabel,
         mode: TerminalMode,
         provider: AiCli,
+    ) -> Self {
+        Self::restored_of_kind(id, location, label, mode, provider, SessionKind::Terminal)
+    }
+
+    /// A persisted session of `kind` (feature 938, FR-004): the kind comes back from the store
+    /// with the session. [`Session::restored`] is this with [`SessionKind::Terminal`].
+    pub fn restored_of_kind(
+        id: SessionId,
+        location: SessionLocation,
+        label: SessionLabel,
+        mode: TerminalMode,
+        provider: AiCli,
+        kind: SessionKind,
     ) -> Self {
         Self {
             id,
@@ -500,7 +518,7 @@ impl Session {
             origin: None,
             origin_rejected: false,
             agents: Vec::new(),
-            kind: SessionKind::Terminal,
+            kind,
         }
     }
 
