@@ -12,7 +12,7 @@
 //! So the mechanism is a declaration — `FloatingSurface::displaces`, applied by
 //! `overlay::registry::displace` — and this file is the independent statement of what it should
 //! say. [`DISPLACES`] is written from the behaviour, not read out of the registry, and
-//! [`the_whole_displacement_relation`] drives all seventy-two ordered pairs through `State::update`.
+//! [`the_whole_displacement_relation`] drives every ordered pair through `State::update`.
 //! A table read back out of the code under test would only ever catch the two halves disagreeing,
 //! never both being wrong.
 //!
@@ -26,6 +26,7 @@
 
 use micold_client::app::{Message, State};
 use micold_client::features::help::Msg as HelpMsg;
+use micold_client::features::overview::{MenuOrigin, Msg as OverviewMsg};
 use micold_client::features::project::Msg as ProjectMsg;
 use micold_client::features::runs::Msg as RunsMsg;
 use micold_client::features::session::Msg as SessionMsg;
@@ -79,15 +80,34 @@ const DISPLACES: &[(&str, &[&str])] = &[
             "sidebar_filter",
             "worktree_menu",
             "run_group_menu",
+            "overview_card_menu",
         ],
     ),
     // The two context menus replace each other. A panel popover open elsewhere in the window is
     // unaffected by a right-click in the sidebar.
-    ("worktree_menu", &["project_menu", "run_group_menu"]),
+    (
+        "worktree_menu",
+        &["project_menu", "run_group_menu", "overview_card_menu"],
+    ),
     // Feature 483's run group row menu is a third row menu and replaces the other two.
-    ("run_group_menu", &["project_menu", "worktree_menu"]),
-    // None of these has ever closed anything, and this is the first test to say so.
-    ("session_menu", &[]),
+    (
+        "run_group_menu",
+        &["project_menu", "worktree_menu", "overview_card_menu"],
+    ),
+    // Feature 972's card menu acts on a location as the row menus do, so it and the four row menus
+    // plus the start menu replace each other: one context menu at a time (R2, FR-014).
+    (
+        "overview_card_menu",
+        &[
+            "project_menu",
+            "worktree_menu",
+            "run_group_menu",
+            "session_menu",
+            "session_start_menu",
+        ],
+    ),
+    // The session menu closed nothing until feature 972: it closes the card menu, and nothing else.
+    ("session_menu", &["overview_card_menu"]),
     ("terminal_context_menu", &[]),
     // Feature 012's terminal-tab menu, which arrived on `main` mid-feature. It replaces itself on a
     // second right-click and touches nothing else — including the pane's own context menu, which is
@@ -97,7 +117,8 @@ const DISPLACES: &[(&str, &[&str])] = &[
     // closes nothing either, and unlike the three above that is a *primary* press making that
     // claim: the surface it hangs from is a button, so anything already open has had a click-away
     // through its own backdrop before this list is ever asked for.
-    ("session_start_menu", &[]),
+    // Feature 972: it closes the Overview's card menu, and nothing else.
+    ("session_start_menu", &["overview_card_menu"]),
 ];
 
 /// The message that opens each popover, by the id it registers under.
@@ -127,6 +148,11 @@ fn opener(id: &str) -> Message {
             location: SessionLocation::Default,
             unavailable_default: None,
         }),
+        "overview_card_menu" => Message::Overview(OverviewMsg::CardMenuOpened {
+            location: SessionLocation::Default,
+            anchor: (40, 40),
+            origin: MenuOrigin::Pointer,
+        }),
         other => panic!("no opener for `{other}`"),
     }
 }
@@ -137,6 +163,23 @@ fn open_popovers(state: &State) -> Vec<&'static str> {
         .iter()
         .map(|open| open.id().as_str())
         .collect()
+}
+
+/// The window every pair starts from: a project open on the Overview, so the card menu can open on
+/// its project root's card and survives the update epilogue (feature 972, R8). The other popovers
+/// open here exactly as they do in an empty window.
+fn base() -> State {
+    let mut st = State::default();
+    let path = PathBuf::from("/repo");
+    st.workspace.projects.push(micold_core::project::Project {
+        path: path.clone(),
+        display_name: "repo".to_string(),
+        is_git_repo: true,
+        availability: micold_core::project::Availability::Available,
+    });
+    st.workspace.active = Some(path);
+    st.overview.open = true;
+    st
 }
 
 fn ids() -> Vec<&'static str> {
@@ -150,7 +193,7 @@ fn the_whole_displacement_relation() {
             if other == *opened {
                 continue;
             }
-            let mut st = State::default();
+            let mut st = base();
 
             st.update(opener(other));
             assert_eq!(
@@ -208,7 +251,7 @@ fn every_popover_is_in_the_table() {
     // ...and each opener really does open the one surface it names, so a row that is present but
     // pointed at the wrong message cannot pass the pairs above by accident.
     for id in ids() {
-        let mut st = State::default();
+        let mut st = base();
         st.update(opener(id));
         assert_eq!(open_popovers(&st), vec![id]);
     }

@@ -1,11 +1,16 @@
 //! The worktree Overview (feature 813): a main-pane grid with one card per sidebar location,
 //! each showing its type, branch, session counts and card state (research R1, R4).
 //!
-//! Only the open flag lives here. The cards compose the sidebar, sessions, agent requests and
+//! Only the open flag, the card menu (feature 972) and what was read live here. The cards compose the sidebar, sessions, agent requests and
 //! pull request readings, so they are built in [`crate::ui::overview::cards`], not by this module
 //! (a feature module names no other feature).
 
+use crate::app::Message;
+use crate::floating_surface;
+use crate::overlay::registry::Registered;
+use crate::overlay::SurfaceId;
 use micold_core::overview::Activation;
+use micold_core::session::SessionLocation;
 use micold_core::task_progress::FileProgress;
 use micold_core::tokens::motion::duration;
 use std::collections::BTreeMap;
@@ -52,6 +57,11 @@ pub struct State {
     /// The activation accepted and waiting out [`OVERVIEW_ACTIVATION_DELAY`] (feature 971, D3).
     /// While set, further activations, closing and toggling are ignored: the first one stands.
     pub activating: Option<Activation>,
+    /// The card menu, when one is open: at most one (feature 972, FR-014).
+    pub card_menu: Option<CardMenu>,
+    /// The card the keyboard goes back to once a keyboard-opened menu closed or ran an entry
+    /// (feature 972, FR-011); drained by the root.
+    pub focus_return: Option<SessionLocation>,
 }
 
 impl State {
@@ -70,6 +80,47 @@ impl State {
     pub fn due(&mut self) -> Option<Activation> {
         let pending = self.activating.take();
         pending.filter(|_| self.open)
+    }
+}
+
+/// Which gesture opened a card menu (feature 972).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MenuOrigin {
+    /// A secondary click on the card.
+    Pointer,
+    /// Menu or Shift+F10 on the focused card: the first entry starts highlighted and focus
+    /// returns to the card when the menu closes (FR-009, FR-011).
+    Keyboard,
+}
+
+/// An open card menu (feature 972, data-model).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CardMenu {
+    /// The target: identity, not a grid index, so the menu follows its card through a reorder.
+    pub location: SessionLocation,
+    /// The panel's top-left in window pixels, before the render-time clamp.
+    pub anchor: (u16, u16),
+    /// The gesture that opened it.
+    pub origin: MenuOrigin,
+    /// The keyboard-highlighted entry; `None` until Up/Down for a pointer-opened menu.
+    pub highlighted: Option<usize>,
+}
+
+/// The card menu, as a floating surface (feature 972, R2): registering it is how Escape, a scroll
+/// beneath it and the row menus' displacement reach it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct OverviewCardMenu;
+
+impl OverviewCardMenu {
+    /// This surface's identity, named by the surfaces it displaces and that displace it.
+    pub const ID: SurfaceId = SurfaceId::new("overview_card_menu");
+}
+
+floating_surface!(OverviewCardMenu, id: Self::ID, layer: ContextMenu, cancelled_by: Message::Overview(Msg::CardMenuDismissed));
+
+impl Registered for OverviewCardMenu {
+    fn open_in(state: &crate::app::State) -> Option<Self> {
+        state.overview.card_menu.as_ref().map(|_| OverviewCardMenu)
     }
 }
 
@@ -114,6 +165,23 @@ pub enum Msg {
     },
     /// The window moved to another project: what was read describes the old one.
     ProjectSwitched,
+    /// A card's menu opens at `anchor`, replacing any open one (feature 972, US2.4).
+    CardMenuOpened {
+        /// The card's location.
+        location: SessionLocation,
+        /// Where the panel hangs, in window pixels.
+        anchor: (u16, u16),
+        /// The gesture that opened it.
+        origin: MenuOrigin,
+    },
+    /// The card menu closes without running anything: Escape, an outside click, displacement or
+    /// a scroll beneath it.
+    CardMenuDismissed,
+    /// An entry was chosen: the menu closes, then the root dispatches the inner message, the row
+    /// menu's own (research R4).
+    CardMenuEntryChosen(Box<Message>),
+    /// The card grid scrolled: the root closes what floats over it (FR-012).
+    GridScrolled,
 }
 
 impl Msg {
@@ -159,7 +227,31 @@ pub fn update(state: &mut State, msg: Msg) -> Vec<crate::features::Outcome> {
             state.activating = None;
             state.progress.clear();
             state.titles.clear();
+            state.card_menu = None;
+            state.focus_return = None;
         }
+        Msg::CardMenuOpened {
+            location,
+            anchor,
+            origin,
+        } => {
+            state.card_menu = Some(CardMenu {
+                location,
+                anchor,
+                origin,
+                highlighted: (origin == MenuOrigin::Keyboard).then_some(0),
+            });
+            return vec![crate::features::Outcome::SurfaceOpened(OverviewCardMenu::ID)];
+        }
+        Msg::CardMenuDismissed | Msg::CardMenuEntryChosen(_) => {
+            if let Some(menu) = state.card_menu.take() {
+                if menu.origin == MenuOrigin::Keyboard {
+                    state.focus_return = Some(menu.location);
+                }
+            }
+        }
+        // The root answers it with the shared scroll-beneath rule; nothing of the Overview's own.
+        Msg::GridScrolled => {}
         Msg::Toggled {
             settings_open: true,
         } => {}

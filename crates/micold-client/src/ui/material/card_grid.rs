@@ -113,7 +113,7 @@ mod tests {
     const GAP: f32 = 16.0;
     const EPS: f32 = 0.01;
 
-    fn cards(n: usize) -> Vec<OverviewCard<'static, ()>> {
+    fn cards<M: 'static>(n: usize) -> Vec<OverviewCard<'static, M>> {
         (0..n)
             .map(|i| {
                 OverviewCard::new(
@@ -212,6 +212,29 @@ mod tests {
             }
             assert!(!leaves(&node).is_empty());
         }
+    }
+
+    /// Feature 972, FR-012: with `on_scroll`, a wheel scroll over the grid publishes its message,
+    /// so the root can close a card menu the grid scrolled beneath.
+    #[test]
+    fn a_wheel_scroll_over_the_grid_publishes_on_scroll() {
+        use crate::ui::material::test_support::Mounted;
+        use iced::advanced::mouse::{Cursor, Event as Mouse, ScrollDelta};
+        let mut grid = Mounted::new(
+            CardGrid::new(cards::<String>(30), roles()).on_scroll("scrolled".to_string()),
+        );
+        let at = iced::Point::new(100.0, 100.0);
+        grid.hover(at);
+        let published = grid.send(
+            iced::Event::Mouse(Mouse::WheelScrolled {
+                delta: ScrollDelta::Lines { x: 0.0, y: -3.0 },
+            }),
+            Cursor::Available(at),
+        );
+        assert!(
+            published.iter().any(|m| m == "scrolled"),
+            "a wheel scroll publishes on_scroll: {published:?}"
+        );
     }
 
     /// U4 (813): 30 cards in a 400 px viewport scroll: the content is taller than the grid. Feature 1024

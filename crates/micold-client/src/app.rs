@@ -991,8 +991,13 @@ impl State {
                     .read_project()
                     .is_some_and(|project| self.workspace.active.as_deref() != Some(project)) => {}
             Message::Overview(msg) => {
+                // The grid scrolling beneath a card menu closes it by the shared rule (972 FR-012).
+                let scrolled = matches!(msg, crate::features::overview::Msg::GridScrolled);
                 let outcomes = crate::features::overview::update(&mut self.overview, msg);
                 drain(outcomes, |outcome| interpret(self, outcome));
+                if scrolled {
+                    self.dismiss_on_scroll_beneath();
+                }
             }
             Message::Runs(msg) => {
                 let outcomes = crate::features::runs::routed(self, msg);

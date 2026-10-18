@@ -282,6 +282,17 @@ register! {
         displaces:
             crate::features::project::ProjectContextMenu,
             crate::features::worktree::WorktreeContextMenu,
+            crate::features::overview::OverviewCardMenu,
+    },
+    // Feature 972: the Overview card's menu acts on a location as the row menus do, so it and they
+    // (with the start menu) replace each other — one context menu at a time (R2, FR-014).
+    crate::features::overview::OverviewCardMenu {
+        displaces:
+            crate::features::project::ProjectContextMenu,
+            crate::features::worktree::WorktreeContextMenu,
+            crate::features::runs::GroupContextMenu,
+            crate::features::session::SessionContextMenu,
+            crate::features::session::SessionStartMenu,
     },
     crate::features::project::ConfirmForgetProjectDialog => crate::ui::confirm_forget::dialog,
     // The switcher is deliberately absent: this menu is opened by right-clicking a row *inside*
@@ -294,6 +305,7 @@ register! {
             crate::features::sidebar::SidebarFilterPanel,
             crate::features::worktree::WorktreeContextMenu,
             crate::features::runs::GroupContextMenu,
+            crate::features::overview::OverviewCardMenu,
     },
     crate::features::project::ProjectSelectorDialog => crate::ui::project_selector::dialog,
     crate::features::project::ProjectSwitcher {
@@ -307,8 +319,12 @@ register! {
     crate::features::session::ConfirmLinkOpenDialog => crate::ui::confirm_link_open::dialog,
     crate::features::session::ConfirmAdditionalSessionDialog => crate::ui::confirm_additional_session::dialog,
     crate::features::session::ConfirmSessionRemoveDialog => crate::ui::confirm_session_remove::dialog,
-    crate::features::session::SessionContextMenu,
-    crate::features::session::SessionStartMenu,
+    crate::features::session::SessionContextMenu {
+        displaces: crate::features::overview::OverviewCardMenu,
+    },
+    crate::features::session::SessionStartMenu {
+        displaces: crate::features::overview::OverviewCardMenu,
+    },
     crate::features::session::TerminalContextMenu,
     crate::features::session::ShellInstanceMenu,
     // Settings is deliberately absent as of feature 027: it is a full-surface view reached from
@@ -332,6 +348,7 @@ register! {
         displaces:
             crate::features::project::ProjectContextMenu,
             crate::features::runs::GroupContextMenu,
+            crate::features::overview::OverviewCardMenu,
     },
     crate::features::worktree::RenameWorktreeDialog => crate::ui::worktree_rename::dialog,
     crate::features::worktree_form::AddWorktreeDialog => crate::ui::worktree_form::dialog,

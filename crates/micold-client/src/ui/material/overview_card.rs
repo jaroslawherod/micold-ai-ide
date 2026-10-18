@@ -531,6 +531,42 @@ mod tests {
         assert_eq!(released, ["open"]);
     }
 
+    /// Feature 972, FR-001: a secondary press over a card with `on_secondary_press` publishes the
+    /// menu message at the window-pixel press point; FR-013: a primary press still publishes only
+    /// `on_press`; without the builder a secondary press publishes nothing.
+    #[test]
+    fn a_secondary_press_publishes_the_menu_message_at_the_press_point() {
+        use iced::advanced::mouse::{Button, Cursor, Event as Mouse};
+        use iced::Point;
+        let right = |card: &mut Mounted<'_>, at: Point| {
+            card.hover(at);
+            card.send(
+                iced::Event::Mouse(Mouse::ButtonPressed(Button::Right)),
+                Cursor::Available(at),
+            )
+        };
+        let menu = || {
+            OverviewCard::<String>::new(&model(CardState::Idle, "feat-a"), roles())
+                .on_press("open".to_string())
+                .on_secondary_press(|(x, y)| format!("menu at {x},{y}"))
+        };
+        let at = Point::new(40.0, 30.0);
+
+        let mut card = Mounted::new(menu());
+        assert_eq!(right(&mut card, at), ["menu at 40,30"]);
+
+        let mut card = Mounted::new(menu());
+        card.press(at);
+        let released = card.send(
+            iced::Event::Mouse(Mouse::ButtonReleased(Button::Left)),
+            Cursor::Available(at),
+        );
+        assert_eq!(released, ["open"], "a primary click keeps its 813 behaviour");
+
+        let mut plain = mounted(true);
+        assert!(right(&mut plain, at).is_empty(), "no builder, no menu");
+    }
+
     /// FR-022: keyboard focus draws the ring in `secondary` along the card's edge; at rest there is
     /// none.
     #[test]
