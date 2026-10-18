@@ -937,12 +937,18 @@ where
                     spawn_session_start(state, session, LaunchMode::Resume, additional, None);
                 }
             }
-            // Feature 938 (FR-008): the write to the CLI's stdin may block on a full pipe, so it
-            // runs off the connection loop. The text is never logged.
+            // Feature 938 (FR-008): the turn is opened here, in arrival order, so of two messages
+            // the first wins; the write to the CLI's stdin may block on a full pipe, so it runs
+            // off the connection loop. The text is never logged.
             ClientMsg::SessionUserMessage { req, session, text } => {
+                use crate::structured::UserMessageUndelivered::{Refused, WriteFailed};
                 let state = Arc::clone(state);
+                let accepted = state.accept_user_message(session, &text);
                 tokio::task::spawn_blocking(move || {
-                    let answer = match state.send_user_message(session, &text) {
+                    let sent = accepted
+                        .map_err(Refused)
+                        .and_then(|child| child.write_user_message(&text).map_err(WriteFailed));
+                    let answer = match sent {
                         Ok(()) => DaemonMsg::OperationOk {
                             req,
                             result: OperationResult::Ack,
@@ -950,12 +956,8 @@ where
                         Err(why) => DaemonMsg::OperationError {
                             req,
                             kind: match why {
-                                crate::structured::UserMessageUndelivered::Refused(_) => {
-                                    ErrorKind::Refused
-                                }
-                                crate::structured::UserMessageUndelivered::WriteFailed(_) => {
-                                    ErrorKind::IoFailed
-                                }
+                                Refused(_) => ErrorKind::Refused,
+                                WriteFailed(_) => ErrorKind::IoFailed,
                             },
                             message: why.to_string(),
                             detail: None,

@@ -62,6 +62,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 review A (code-review high) | 1 | 6ff1da44088f251211d8c2ac4981f0dbf7e7529d:3f735466dce7f7ee16e1f6f946425617725d6029 | 10 findings: 3 fixed (F1 structured teardown under the state lock, F5 child left running when a reader fails to start, F6 reader counted done on unwind), 7 declined |
 | M2 review B (conformance, sonnet) | 1 | 6ff1da44088f251211d8c2ac4981f0dbf7e7529d:3f735466dce7f7ee16e1f6f946425617725d6029 | CHANGES: 1 MAJOR declined (T032), 2 MINOR (F3 test-list fixed; F2 declined, T032) |
 | M2 review A (code-review high, sonnet) | 2 | 826ed0589dfaa8c7d6ce31d4a56ced5687973387:93b677536b14171260bd556c4c255b3ea4aee2cc | CLEAN (5 MINOR, not fixed: worktree retry count ignores structured kills, `end_removed` on async callers, doc wording, detached reader on spawn failure, test-wide lint allow) |
+| M3 review A (code-review high) | 1 | a88fe9259fe8470c367121d7f982506069cbe4be:2c9fe052b0e42a603aa745424724d5a5fdbe8410 | 9 findings: 2 fixed (F1 per-message spawn_blocking reordered turns — accept now on the connection loop, write off it; F2 turn guard held across `on_event` at EOF), 7 declined |
 
 ## Declined review findings
 
@@ -80,6 +81,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | A F7 | Windows `claude.cmd` not resolved by `Command` | recorded under *Follow-ups not done* (not this milestone) |
 | M2 | A F8 | crash restart of a structured session uses `--resume` | same as a terminal session's restart (FR-009 parity); resume is M4 |
 | M2 | A F9, F10 | old readers may push after a timed-out teardown; `ReadersDone` could be a channel | MINOR; the teardown shape copies `PtySession`'s |
+| M3 | A 1 | F3 unbounded stdin write holds the turn | a stalled CLI is ended by teardown, which kills first and breaks the pipe; the reset to `Idle` only follows a failed write, when nothing was delivered |
+| M3 | A 1 | F4 unknown session gets NotRunning | the refusal set is fixed by the contract (FR-008); MINOR |
+| M3 | A 1 | F5 blank first prompt refused for structured | FR-008 refuses blank messages and the refusal reaches the caller; runs.rs already rejects a blank run prompt upstream |
+| M3 | A 1 | F6 mixed poison idioms | taste; MINOR |
+| M3 | A 1 | F7 `unwrap_or_default` in encode | serializing `&str` fields cannot fail; MINOR |
+| M3 | A 1 | F8 sleeps in negative-delivery tests | an absence check needs a time bound; margins match the M2 tests; MINOR |
+| M3 | A 1 | F9 user text in a `Debug` ClientMsg | `SessionInput` carries typed terminal bytes the same way; the daemon never logs a `ClientMsg` with `?` |
 
 ## Handover
 
