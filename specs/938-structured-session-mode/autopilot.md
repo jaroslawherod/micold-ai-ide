@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-cl0lw3
 - **Started**: 2026-10-18
 - **Phase**: clarify
-- **Next step**: clarify unit — resolve the three [NEEDS CLARIFICATION] markers in spec.md
+- **Next step**: clarify unit — apply the user's answers to the two open questions (Open escalation), then run the next clarify round
 
 ## Pull requests
 
@@ -26,6 +26,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
+| 1 | clarify | Permission behaviour of a structured session before #942 | Same permission configuration as a terminal session, no override; approvals the CLI would need are refused and show as events (FR-006a) | agent | crates/micold-core/src/provider.rs ToolServerSupport; spec FR-006 |
 
 ## Review rounds
 
@@ -45,7 +46,15 @@ None.
 
 ## Open escalation
 
-None.
+Clarify round 1, category 1 (product/scope decision the repo does not settle):
+
+1. How does the user choose the structured kind, and what does a structured session's pane show before #939?
+   - (Recommended) A: a per-session choice in the new-session flow (beside the existing AI CLI chevron), Claude Code only; the pane shows a plain read-only line-per-event log until #939. Evidence: docs/user-guide/worktrees-and-sessions.md "Starting, switching, and closing sessions" already picks the AI CLI per session from a chevron; issue #938 says "Selectable per session".
+   - B: no UI control yet; only an experimental setting, same plain log.
+   - C: daemon and wire only; no client control or display (tests and the agent tool server create structured sessions).
+2. Does a structured session's event history survive a daemon restart?
+   - (Recommended) A: daemon memory only; after a restart the resumed session shows events from the resume on; earlier history is #939's (it reads the CLI's own transcript on disk). Evidence: keeps #938 to the foundation; the CLI's transcript is already a local record (Principle IV).
+   - B: persist each event history to disk under the existing "Save terminal history" setting and replay it after a restart. Evidence: docs/user-guide/settings.md#terminal saves terminal scrollback across service restarts (default on), so B is parity.
 
 ## Follow-ups not done
 

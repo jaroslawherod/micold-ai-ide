@@ -62,6 +62,15 @@ beyond what the clarifications below settle; every richer view belongs to a late
 
 ## Clarifications
 
+### Session 2026-10-18
+
+- Q: With which permission behaviour does a structured session run until #942 brings permission
+  prompts? → A: The same permission configuration a terminal session of that location uses (FR-006
+  already requires the same launch rules, and the daemon launches Claude with the user's own
+  configuration plus only the tool-server binding, no permission override); a tool use that would
+  need the user's approval is refused by the CLI and that refusal reaches clients as events.
+  _(agent-resolved: crates/micold-core/src/provider.rs#ToolServerSupport, spec.md#FR-006)_
+
 ### Open
 
 - [NEEDS CLARIFICATION: How does the user choose the structured kind for a session, and what does
@@ -71,11 +80,6 @@ beyond what the clarifications below settle; every richer view belongs to a late
   control yet — the kind is reachable only through a setting marked experimental, same plain log;
   (C) daemon and wire only — no client control or display in this feature, structured sessions are
   created by tests and the agent tool server only. Recommended: A.]
-- [NEEDS CLARIFICATION: With which permission behaviour does a structured session run until #942
-  brings permission prompts? Options: (A) the same permission configuration a terminal session of
-  that location uses; any tool use that would have needed the user's approval is refused by the CLI
-  and that refusal shows as events; (B) every tool allowed without asking; (C) read-only tools only.
-  Recommended: A.]
 - [NEEDS CLARIFICATION: Does the event history survive a daemon restart? Options: (A) the daemon
   keeps it for its own lifetime only; after a restart a resumed session continues the conversation
   and shows events from the resume on, and earlier history is #939's concern (it can read the CLI's
@@ -283,6 +287,10 @@ check each refusal.
 - **FR-006**: A structured session MUST start in the same working directory, with the same
   environment, identity handle and launch rules (new conversation or resume) as a terminal session
   of the same location, differing only in how input and output are exchanged.
+- **FR-006a**: A structured session MUST run with the same permission configuration as a terminal
+  session of the same location and MUST NOT add any permission override; a tool use that would need
+  the user's approval is refused by the CLI, and that refusal reaches clients as ordinary events
+  (asking the user is #942).
 - **FR-007**: The daemon MUST deliver the session's first prompt, when it has one, as the first
   user message, exactly once in the session's life (never again on a restart or resume).
 - **FR-008**: The daemon MUST accept a user message for a structured session from a client and
