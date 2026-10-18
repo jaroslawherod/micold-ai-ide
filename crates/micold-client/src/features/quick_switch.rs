@@ -6,9 +6,12 @@ use micold_core::navigation::Dir;
 use micold_core::quick_switch::{self, Candidate, EntryKey, Ranked};
 use micold_core::typeahead::Query;
 
-use crate::app::State as Root;
+use crate::app::{Message, State as Root};
 use crate::features::navigation::{self, location_node, Step};
 use crate::features::sidebar::RowRef;
+use crate::floating_surface;
+use crate::overlay::registry::Registered;
+use crate::overlay::SurfaceId;
 
 /// What an entry stands for, for its icon and its context line.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -60,6 +63,22 @@ pub enum Msg {
     Chosen(EntryKey),
     /// Escape, a click outside, or the chord again.
     Dismissed,
+}
+
+/// The palette as a floating surface: a dialog open exactly while its state is (contracts/ui.md U6).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct QuickSwitcherDialog;
+
+floating_surface!(QuickSwitcherDialog, id: SurfaceId::new("quick_switcher"), layer: Dialog, cancelled_by: Message::QuickSwitch(Msg::Dismissed));
+
+impl Registered for QuickSwitcherDialog {
+    fn open_in(state: &Root) -> Option<Self> {
+        state
+            .quick_switch
+            .open
+            .is_some()
+            .then_some(QuickSwitcherDialog)
+    }
 }
 
 /// What choosing an entry asks the shell to do (contracts/ui.md U3): the step to apply with

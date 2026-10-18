@@ -1016,7 +1016,6 @@ fn the_switcher_chord_labels_name_both_platform_forms() {
 }
 
 #[test]
-#[ignore = "red until T020 (user guide pages)"]
 fn the_user_guide_lists_the_switcher_chord_in_both_forms() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/user-guide");
     let (linux, mac) = switcher_chord_labels();

@@ -8,13 +8,20 @@ use iced::Task;
 use micold_client::app::Message;
 use micold_client::features::overview;
 use micold_client::features::quick_switch::Msg;
+use micold_client::ui::quick_switcher::QUICK_SWITCHER_FIELD_ID;
 
 use crate::App;
 
-/// Apply a switcher message, then the choice it resolved to, if any.
+/// Apply a switcher message, then the choice it resolved to, if any. Opening puts the keyboard on
+/// the search field (research R8), as the Overview's opening does on its first card.
 pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
+    let was_open = app.core.quick_switch.open.is_some();
     let Some(choice) = micold_client::features::quick_switch::update(&mut app.core, msg) else {
-        return Task::none();
+        return if !was_open && app.core.quick_switch.open.is_some() {
+            iced::widget::operation::focus(QUICK_SWITCHER_FIELD_ID.clone())
+        } else {
+            Task::none()
+        };
     };
     let close = choice
         .close_overview_first

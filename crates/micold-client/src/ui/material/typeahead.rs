@@ -47,6 +47,7 @@ pub struct Typeahead<'a, M> {
     on_move: Option<Box<dyn Fn(Direction) -> M + 'a>>,
     on_focus: Option<M>,
     on_dismiss: Option<M>,
+    id: Option<iced::widget::Id>,
 }
 
 impl<'a, M: Clone + 'a> Typeahead<'a, M> {
@@ -79,10 +80,17 @@ impl<'a, M: Clone + 'a> Typeahead<'a, M> {
             on_move: None,
             on_focus: None,
             on_dismiss: None,
+            id: None,
         }
     }
 
     field_text_builders!(label_supporting);
+
+    /// Name the search field, so an operation can focus it by id.
+    pub fn id(mut self, id: iced::widget::Id) -> Self {
+        self.id = Some(id);
+        self
+    }
 
     /// Text shown when the field is empty.
     pub fn placeholder(mut self, placeholder: impl Into<String>) -> Self {
@@ -157,6 +165,7 @@ impl<'a, M: Clone + 'a> From<Typeahead<'a, M>> for Element<'a, M> {
             on_move,
             on_focus,
             on_dismiss,
+            id,
         } = t;
 
         let highlighted_enabled = highlighted
@@ -198,6 +207,9 @@ impl<'a, M: Clone + 'a> From<Typeahead<'a, M>> for Element<'a, M> {
         // Nothing here has to say whether the label rests or floats: `TextField` derives that from
         // its own value, which for the type-ahead *is* the query — so a picker with an empty search
         // box rests its label exactly as an empty input does, and one being typed into floats it.
+        if let Some(id) = id {
+            input = input.id(id);
+        }
         if !query.is_empty() {
             input = input.trailing_action(Icon::Close, cleared);
         }

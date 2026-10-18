@@ -45,6 +45,7 @@ pub struct TextField<'a, M> {
     active: bool,
     on_focus_change: Option<Box<dyn Fn(bool) -> M + 'a>>,
     secure: bool,
+    id: Option<iced::widget::Id>,
 }
 
 impl<'a, M: Clone + 'a> TextField<'a, M> {
@@ -62,7 +63,14 @@ impl<'a, M: Clone + 'a> TextField<'a, M> {
             active: false,
             on_focus_change: None,
             secure: false,
+            id: None,
         }
+    }
+
+    /// Name the input, so an operation can focus it by id.
+    pub fn id(mut self, id: iced::widget::Id) -> Self {
+        self.id = Some(id);
+        self
     }
 
     /// An icon inside the field's leading edge, saying what the field is for — Material's leading
@@ -157,6 +165,9 @@ impl<'a, M: Clone + 'a> From<TextField<'a, M>> for Element<'a, M> {
             .secure(f.secure)
             .style(style::field_input(f.roles));
 
+        if let Some(id) = f.id {
+            widget = widget.id(id);
+        }
         if let Some(on_input) = f.on_input {
             widget = widget.on_input(on_input);
         }

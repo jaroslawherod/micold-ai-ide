@@ -30,6 +30,7 @@ pub(crate) mod material;
 pub mod overview;
 pub mod panes;
 mod picker_scroll;
+pub mod quick_switcher;
 /// The reference scene's ripple, for the frame probe (feature 018, FR-039b).
 ///
 /// Named individually rather than by opening the module, which stays `pub(crate)`. The binary
@@ -1225,7 +1226,7 @@ fn app_chord_listener() -> Subscription<Message> {
 }
 
 /// The message for an app chord — [`crate::features::overview::Msg::Toggled`] for the Overview
-/// chord, `features::navigation::Msg::Pressed` for a navigation chord — and nothing for any other
+/// chord, [`crate::features::quick_switch::Msg::Toggled`] for the switcher's, `features::navigation::Msg::Pressed` for a navigation chord — and nothing for any other
 /// key. A named function, not a closure, for the same `TypeId` reason as [`escape_message`].
 fn app_chord(event: iced::keyboard::Event) -> Option<Message> {
     use crate::ui::material::terminal_pane::{to_keymap_key, to_keymap_mods, to_keymap_physical};
@@ -1248,6 +1249,13 @@ fn app_chord(event: iced::keyboard::Event) -> Option<Message> {
         return Some(Message::Overview(crate::features::overview::Msg::Toggled {
             settings_open: false,
         }));
+    }
+    if crate::keymap::is_switcher_chord(&input) {
+        return Some(Message::QuickSwitch(
+            crate::features::quick_switch::Msg::Toggled {
+                terminal_had_focus: false,
+            },
+        ));
     }
     crate::keymap::nav_chord(&input)
         .map(|action| Message::Navigation(crate::features::navigation::Msg::Pressed(action)))

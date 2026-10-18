@@ -43,6 +43,50 @@ fn kinds(roles: Roles) -> Vec<(&'static str, SurfaceKind)> {
     ]
 }
 
+/// The quick-switcher dialog (feature 968), posed with a query that emphasises its match, a
+/// location row with tags and the current location's row; `nothing_matches` poses the empty list.
+fn quick_switcher_pose(roles: Roles, nothing_matches: bool) -> Element<'static, Message> {
+    use crate::ui::quick_switcher::{context_line, surface, View};
+    use micold_core::quick_switch::EntryKey;
+    use micold_core::session::SessionLocation;
+    let (query, rows, keys) = if nothing_matches {
+        ("zzz", Vec::new(), Vec::new())
+    } else {
+        (
+            "log",
+            vec![
+                material::TypeaheadRow::new("Login page", std::iter::once(0..3).collect()).details(
+                    context_line(
+                        crate::features::quick_switch::Kind::Location,
+                        "feat · PROJ-12",
+                    ),
+                    Vec::new(),
+                ),
+                material::TypeaheadRow::new("Default", vec![]).details(
+                    context_line(crate::features::quick_switch::Kind::Location, ""),
+                    Vec::new(),
+                ),
+            ],
+            vec![
+                EntryKey::Location(SessionLocation::Worktree("feat-login".into())),
+                EntryKey::Location(SessionLocation::Default),
+            ],
+        )
+    };
+    surface(
+        View {
+            query,
+            highlighted: (!rows.is_empty()).then_some(0),
+            current: (!rows.is_empty()).then_some(1),
+            rows,
+            keys,
+            empty_message: "No matches",
+        },
+        roles,
+    )
+    .map(|_| Message::NoOp)
+}
+
 /// The Run in parallel dialog (feature 483), posed with three runs on mixed providers and the names
 /// they will get, and again with a validation error. Held in statics: the element borrows it.
 fn parallel_dialog_pose(error: bool) -> &'static crate::features::runs::ParallelDialog {
@@ -615,6 +659,16 @@ pub fn tree_view<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, M
                 "Run in parallel dialog, invalid",
                 crate::ui::parallel_dialog::modal(parallel_dialog_pose(true), roles, None)
                     .map(|_| Message::NoOp),
+                roles,
+            ),
+            posed(
+                "Quick-switcher dialog",
+                quick_switcher_pose(roles, false),
+                roles,
+            ),
+            posed(
+                "Quick-switcher dialog, nothing matches",
+                quick_switcher_pose(roles, true),
                 roles,
             ),
             posed(

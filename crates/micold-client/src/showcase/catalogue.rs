@@ -744,6 +744,8 @@ pub const COMPONENTS: &[Entry] = &[
             "run group, collapsed",
             "Run in parallel dialog",
             "Run in parallel dialog, invalid",
+            "Quick-switcher dialog",
+            "Quick-switcher dialog, nothing matches",
             "Dismiss group dialog",
             "Cleanup offer",
             "Cleanup offer, second confirmation",
