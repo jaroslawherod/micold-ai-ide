@@ -257,6 +257,7 @@ mod tests {
     #[test]
     fn a_placed_comment_always_sits_on_its_quoted_lines() {
         let (base, quote) = file();
+        let mut placed = 0;
         for offset in 0..=base.len() {
             for size in 0..4 {
                 for insert in [true, false] {
@@ -270,6 +271,7 @@ mod tests {
                     let side = lines(&edited);
                     match locate(&quote, range(10, 12), &side) {
                         Located::Same(found) | Located::Moved(found) => {
+                            placed += 1;
                             let on: Vec<&str> = (found.start()..=found.end())
                                 .map(|n| side.line(n).unwrap())
                                 .collect();
@@ -280,6 +282,10 @@ mod tests {
                 }
             }
         }
+        assert!(
+            placed > 0,
+            "no edit placed the comment: the property was never checked"
+        );
     }
 
     /// SC-006: 200 comments against a 5,000-line file stay inside the send path's budget.

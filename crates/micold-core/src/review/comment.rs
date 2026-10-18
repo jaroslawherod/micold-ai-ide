@@ -1452,12 +1452,22 @@ mod tests {
         let range = |a, b| LineRange::new(a, b).expect("valid");
         let mut review = EntryReview::default();
         review
-            .add(draft(4, 5, &["p", "q"], "two lines"), id(1), NOW)
+            .add(draft(4, 4, &["p"], "one line"), id(1), NOW)
             .expect("valid");
-        let wrong = Move::new(id(1), range(4, 4), range(9, 9)).expect("same-size pair");
-        assert_eq!(review.reanchor(&[wrong]), 0, "from is not the range");
-        let ok = Move::new(id(1), range(4, 5), range(9, 10)).expect("move");
-        assert_eq!(review.reanchor(&[ok]), 1);
+        // A stored range two lines long over a one-line quote, so `from` matches the range and
+        // only the size guard can refuse.
+        let mut stored = review.comments().to_vec();
+        stored[0].range = range(4, 5);
+        let mut review = EntryReview::from_comments(stored);
+        let wrong = Move::new(id(1), range(4, 5), range(9, 10)).expect("same-size pair");
+        assert_eq!(
+            review.reanchor(&[wrong]),
+            0,
+            "to is not as long as the quote"
+        );
+        assert_eq!(review.comments()[0].range, range(4, 5));
+        let ok = Move::new(id(1), range(4, 4), range(9, 9)).expect("move");
+        assert_eq!(review.reanchor(&[ok]), 0, "from is not the stored range");
     }
 
     #[test]
