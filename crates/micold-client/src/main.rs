@@ -348,13 +348,14 @@ fn compose_scene(app: &mut App) -> Task<Message> {
         let creating = app
             .pending_ops
             .values()
-            .any(|op| matches!(op, PendingOp::CreateSession));
+            .any(|op| matches!(op, PendingOp::CreateSession { .. }));
         // Guarded, unlike the other two: a session create is not idempotent, and an unguarded one
         // here would start a fresh session on every frame.
         if !creating && app.active_outbox().is_some() {
             steps.push(Task::done(Message::Session(SessionMsg::StartRequested {
                 location: SessionLocation::Default,
                 provider: app.core.session.provider_for_start(None),
+                automatic: true,
             })));
         }
     }
@@ -876,8 +877,12 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             cursor,
             result,
         }) => shell::issues::on_issue_descriptions_loaded(app, seq, cursor, result),
-        Message::Session(SessionMsg::StartRequested { location, provider }) => {
-            shell::daemon_sync::on_session_start_requested(app, location, provider)
+        Message::Session(SessionMsg::StartRequested {
+            location,
+            provider,
+            automatic,
+        }) => {
+            shell::daemon_sync::on_session_start_requested(app, location, provider, automatic)
         }
         // A row's start list is opening: refresh that row's answer first (feature 026, T014a;
         // feature 033, contract C1 A3). It is asked about the directory a session started from

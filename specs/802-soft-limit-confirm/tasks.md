@@ -10,29 +10,29 @@ description: "Task list for 802 soft session limit confirmation"
 
 ## Phase 1: Setup
 
-- [ ] T001 Read `crates/micold-client/src/main_tests.rs` (`a_refused_session_create_shows_the_refusal_text_and_changes_nothing`, ~1426) and `crates/micold-client/src/shell/daemon_sync.rs` (`on_session_start_requested` ~2516, `PendingOp` ~84, matches at ~232, ~1237, ~1735) to pick the test harness and the reducer-decision seam (no file change).
+- [X] T001 Read `crates/micold-client/src/main_tests.rs` (`a_refused_session_create_shows_the_refusal_text_and_changes_nothing`, ~1426) and `crates/micold-client/src/shell/daemon_sync.rs` (`on_session_start_requested` ~2516, `PendingOp` ~84, matches at ~232, ~1237, ~1735) to pick the test harness and the reducer-decision seam (no file change).
 
 ## Phase 2: Foundational
 
-- [ ] T002 Add `additional_provider: Option<AiCli>` to `SessionState` in `crates/micold-client/src/features/session.rs`, cleared with `additional_target` on confirm, cancel and `clear_for_dialog`; `additional_requested` keeps the provider; `additional_request()` uses it (`None` uses `provider_for_start(None)`). Test first in `crates/micold-client/tests/additional_session_provider.rs`: requested keeps the provider; decline clears target and provider.
-- [ ] T003 Change `PendingOp::CreateSession` to `{ location: SessionLocation, provider: AiCli, additional: bool, automatic: bool }` in `crates/micold-client/src/shell/daemon_sync.rs` and update the matches (~232, ~1237, ~1735) and `crates/micold-client/src/main.rs` (~351); add `automatic: bool` to `SessionMsg::StartRequested` in `crates/micold-client/src/features/session.rs`, set by the startup auto-start in `main.rs` (~355) and handled at `main.rs` ~873. Behaviour unchanged; existing tests stay green.
+- [X] T002 Add `additional_provider: Option<AiCli>` to `SessionState` in `crates/micold-client/src/features/session.rs`, cleared with `additional_target` on confirm, cancel and `clear_for_dialog`; `additional_requested` keeps the provider; `additional_request()` uses it (`None` uses `provider_for_start(None)`). Test first in `crates/micold-client/tests/additional_session_provider.rs`: requested keeps the provider; decline clears target and provider.
+- [X] T003 Change `PendingOp::CreateSession` to `{ location: SessionLocation, provider: AiCli, additional: bool, automatic: bool }` in `crates/micold-client/src/shell/daemon_sync.rs` and update the matches (~232, ~1237, ~1735) and `crates/micold-client/src/main.rs` (~351); add `automatic: bool` to `SessionMsg::StartRequested` in `crates/micold-client/src/features/session.rs`, set by the startup auto-start in `main.rs` (~355) and handled at `main.rs` ~873. Behaviour unchanged; existing tests stay green.
 
 ## Phase 3: User Story 1 - Creating where one exists asks, it does not refuse (P1) MVP
 
 **Independent test**: a start request for an occupied location opens the confirmation and sends nothing; a stale `Refused` reply opens it.
 
-- [ ] T004 [US1] Tests first, failing, in `crates/micold-client/src/main_tests.rs`: (a) start for an occupied location opens the confirmation and sends no `SessionCreate`; (b) `Refused` with a session-id `detail` and `additional == false` opens it, no error notice; (c) other `Refused` replies and an `automatic` refusal still `notify_error`; (d) confirm sends exactly one `SessionCreate { allow_additional_session: true }` with the chosen CLI; cancel sends nothing and the catalog is unchanged; (e) blocked start and row entry still open it (regression); (f) with several sessions the dialog names the main one. Rewrite `a_refused_session_create_shows_the_refusal_text_and_changes_nothing` to the new behaviour.
-- [ ] T005 [P] [US1] Test first in `crates/micold-client/tests/confirm_additional_session_generic.rs`: the dialog draws generic text ("already has a session") when the catalog lacks the occupant.
-- [ ] T006 [US1] Pre-check: put the open-or-send decision in a reducer function in `crates/micold-client/src/features/session.rs` (`State::start_offered(location)` false opens the confirmation with the chosen provider); make `on_session_start_requested` in `crates/micold-client/src/shell/daemon_sync.rs` a thin dispatcher over it.
-- [ ] T007 [US1] Refusal fallback: in the `PendingOp::CreateSession` error arm of `crates/micold-client/src/shell/daemon_sync.rs` recognise `ErrorKind::Refused` with a session-id `detail` (typed fields, not message text) for `additional == false && !automatic` and open the confirmation with the stored location and provider; otherwise `notify_error`.
-- [ ] T008 [P] [US1] Generic text when the occupant is absent from the catalog in `crates/micold-client/src/ui/confirm_additional_session.rs`.
-- [ ] T009 [US1] User guide: person is asked to confirm a second session, in `docs/user-guide/worktrees-and-sessions.md`.
+- [X] T004 [US1] Tests first, failing, in `crates/micold-client/src/main_tests.rs`: (a) start for an occupied location opens the confirmation and sends no `SessionCreate`; (b) `Refused` with a session-id `detail` and `additional == false` opens it, no error notice; (c) other `Refused` replies and an `automatic` refusal still `notify_error`; (d) confirm sends exactly one `SessionCreate { allow_additional_session: true }` with the chosen CLI; cancel sends nothing and the catalog is unchanged; (e) blocked start and row entry still open it (regression); (f) with several sessions the dialog names the main one. Rewrite `a_refused_session_create_shows_the_refusal_text_and_changes_nothing` to the new behaviour.
+- [X] T005 [P] [US1] Test first in `crates/micold-client/tests/confirm_additional_session_generic.rs`: the dialog draws generic text ("already has a session") when the catalog lacks the occupant.
+- [X] T006 [US1] Pre-check: put the open-or-send decision in a reducer function in `crates/micold-client/src/features/session.rs` (`State::start_offered(location)` false opens the confirmation with the chosen provider); make `on_session_start_requested` in `crates/micold-client/src/shell/daemon_sync.rs` a thin dispatcher over it.
+- [X] T007 [US1] Refusal fallback: in the `PendingOp::CreateSession` error arm of `crates/micold-client/src/shell/daemon_sync.rs` recognise `ErrorKind::Refused` with a session-id `detail` (typed fields, not message text) for `additional == false && !automatic` and open the confirmation with the stored location and provider; otherwise `notify_error`.
+- [X] T008 [P] [US1] Generic text when the occupant is absent from the catalog in `crates/micold-client/src/ui/confirm_additional_session.rs`.
+- [X] T009 [US1] User guide: person is asked to confirm a second session, in `docs/user-guide/worktrees-and-sessions.md`.
 
 ## Phase 4: User Story 2 - Both sessions run in parallel after confirming (P1)
 
 **Independent test**: after confirm, two un-archived sessions, original still main (776 behaviour, regression).
 
-- [ ] T010 [US2] Regression test in `crates/micold-client/src/main_tests.rs` (or `crates/micold-client/tests/`): after the confirmed flagged create, the catalog lists both sessions with the original main and the new one selected; stopping or deleting one leaves the other. Passes with T006-T007; if it fails, fix in `crates/micold-client/src/shell/daemon_sync.rs`.
+- [X] T010 [US2] Regression test in `crates/micold-client/src/main_tests.rs` (or `crates/micold-client/tests/`): after the confirmed flagged create, the catalog lists both sessions with the original main and the new one selected; stopping or deleting one leaves the other. Passes with T006-T007; if it fails, fix in `crates/micold-client/src/shell/daemon_sync.rs`.
 
 ## Phase 5: User Story 3 - Agent create has a documented rule (P2)
 

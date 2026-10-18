@@ -195,6 +195,7 @@ fn pressing_start_with_the_default_installed_still_starts_it_in_one_interaction(
             Message::Session(SessionMsg::StartRequested {
                 location: SessionLocation::Default,
                 provider: AiCli::Copilot,
+                automatic: false,
             })
         )),
         "one press, the stored default, started (SC-001). Published: {published:?}"
@@ -352,6 +353,7 @@ fn the_default_row_starts_a_default_its_own_directory_provides() {
             Message::Session(SessionMsg::StartRequested {
                 location: SessionLocation::Default,
                 provider: AiCli::Pi,
+                automatic: false,
             })
         )),
         "the row's own directory provides Pi, so one press starts it. Published: {published:?}"

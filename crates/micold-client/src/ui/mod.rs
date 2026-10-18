@@ -7,7 +7,7 @@ pub mod cdk;
 /// The Changes view (feature 482): shown in place of the terminal pane while open.
 pub(crate) mod changes;
 pub mod compare;
-pub(crate) mod confirm_additional_session;
+pub mod confirm_additional_session;
 pub(crate) mod confirm_agent_request;
 pub mod confirm_daemon_removal;
 pub(crate) mod confirm_delete;
@@ -999,6 +999,7 @@ pub(crate) fn session_start_menu_items(
             CliEntryAvailability::Available => material::MenuItem::labeled(
                 cli.to_string(),
                 Message::Session(SessionMsg::StartRequested {
+                    automatic: false,
                     location: location.clone(),
                     provider: cli,
                 }),
