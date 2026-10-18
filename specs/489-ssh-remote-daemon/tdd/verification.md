@@ -23,6 +23,14 @@ deliberate mutant inside the finished reconnect behavior survived (`daemons.rs:5
 
 The audit was independent: the auditor did not write these tests and re-read each file cited.
 
+## Close-unit update
+
+Findings 2 and the FR-019 second-sentence gap were closed by M9 (T085-T087, PR #1051): the epoch
+mutant at the `(_, Reconnect)` arm now fails `an_explicit_reconnect_after_giving_up_starts_again`, and
+`a_session_the_restarted_daemon_lacks_shows_lost_to_daemon_on_its_row` covers the restart case.
+Finding 3 was closed by T090 (rows I30-I80, O4-O8 in `tdd/test-list.md`). Findings 4, 5 and 6: see
+"Remediation results" at the end.
+
 ## Test-first evidence
 
 The test list holds 15 rows (M1 and M5). It says milestones M2 to M8 "add their rows when their units

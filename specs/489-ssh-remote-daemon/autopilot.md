@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #489
 - **Worktree branch**: feat/489_run-the-session-daemon-on-a-remote-host-over-ssh
 - **Started**: 2026-10-12
-- **Phase**: M9 done, PR open; new close unit next
-- **Next step**: new close unit after M9 merges
+- **Phase**: close, in progress (Phase 10 T089-T090 done, T091-T095 open)
+- **Next step**: finish T091-T095, review diff, gate, close PR
 
 ## Pull requests
 
@@ -25,7 +25,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1020 | M6 | merged | 753a392a489d6d246a18e0e48e6e16928fbf9112 |
 | #1026 | M7 | merged | 1d73b72fca6198e80ad2d4be2c0cf85cadbaf6f9 |
 | #1029 | M8 | merged | 1800df279b79d4dcbfab1a413ced53e497f5fa90 |
-| #1051 | M9 | open | — |
+| #1051 | M9 | merged | 51ae5b657 |
 
 ## Milestones
 
@@ -92,7 +92,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None. M9 implemented: `note_lost_sessions` (catalog_sync.rs) feeds `settings.lost_sessions`; the row label path calls `session_lost_label`. Review A (high): fixed unbound/Default location, closed-session pruning, partial welcome; lifecycle staying Running in other views accepted as known limit (cycle-log). Review B: cycle-log entry added. Task list Phase 10 (T089-T095, TDD remediation) was an uncommitted leftover in the worktree, saved out of this PR; the close unit should re-add it from tdd/verification.md.
+Close unit 1 (context low, blocked by shared build lock): converge by autopilot-reviewer CLEAN (no unbuilt behaviour). Phase 10 (T089-T095) re-added to tasks.md; T089, T090 done (verification.md Close-unit update, test-list rows). Open: T091/T092 mutants and T093 (dead `_subscription` at crates/micold-client/src/shell/daemons.rs:513) were given to autopilot-worker a2233705bf66a9dcc, which may still be editing: check `git status` for stray production edits (mutants must be restored with git checkout) before continuing. Then T094 `mise run test-ssh`, T095 verification.md final, spec Status `Closed <date> - shipped in PRs ...`, diff review, full gate, close PR, ledger done.
 
 ## Open escalation
 

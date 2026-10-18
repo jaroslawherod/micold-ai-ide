@@ -154,7 +154,7 @@ pub fn wrap_value(value: &mut Value, daemon: DaemonId) {
         Value::Array(items) => items.iter_mut().for_each(|v| wrap_value(v, daemon)),
         Value::Object(map) => {
             for (key, v) in map.iter_mut() {
-                if PATH_KEYS.contains(&key.as_str()) {
+                if PATH_KEYS.contains(&key.as_str()) && key != "cwd" {
                     wrap_path(v, daemon);
                 } else {
                     wrap_value(v, daemon);
