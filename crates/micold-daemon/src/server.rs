@@ -937,6 +937,33 @@ where
                     spawn_session_start(state, session, LaunchMode::Resume, additional, None);
                 }
             }
+            // Feature 938 (FR-008): the write to the CLI's stdin may block on a full pipe, so it
+            // runs off the connection loop. The text is never logged.
+            ClientMsg::SessionUserMessage { req, session, text } => {
+                let state = Arc::clone(state);
+                tokio::task::spawn_blocking(move || {
+                    let answer = match state.send_user_message(session, &text) {
+                        Ok(()) => DaemonMsg::OperationOk {
+                            req,
+                            result: OperationResult::Ack,
+                        },
+                        Err(why) => DaemonMsg::OperationError {
+                            req,
+                            kind: match why {
+                                crate::structured::UserMessageUndelivered::Refused(_) => {
+                                    ErrorKind::Refused
+                                }
+                                crate::structured::UserMessageUndelivered::WriteFailed(_) => {
+                                    ErrorKind::IoFailed
+                                }
+                            },
+                            message: why.to_string(),
+                            detail: None,
+                        },
+                    };
+                    state.send(id, answer);
+                });
+            }
             ClientMsg::ScrollbackRequest {
                 session,
                 req,

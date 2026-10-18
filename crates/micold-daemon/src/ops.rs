@@ -19,7 +19,7 @@ use micold_core::git::GitCli;
 use micold_core::mcp::submission::encode_submission;
 use micold_core::naming::DerivedNames;
 use micold_core::project::{validate_rename, RenameError};
-use micold_core::session::{AiCli, SessionId};
+use micold_core::session::{AiCli, SessionId, SessionKind};
 use micold_core::terminal::LaunchMode;
 use micold_core::worktree::{
     create_worktree as git_create_worktree, preflight, remove_worktree, remove_worktree_dir,
@@ -598,6 +598,8 @@ pub enum FirstPromptUndelivered {
     NotReady(AiCli, std::time::Duration),
     /// Typing it failed.
     Typing(Undelivered),
+    /// A structured session refused it or could not be written to (feature 938, R8).
+    Message(crate::structured::UserMessageUndelivered),
 }
 
 impl FirstPromptUndelivered {
@@ -618,6 +620,7 @@ impl FirstPromptUndelivered {
                 bound.as_secs()
             ),
             Self::Typing(why) => why.message(session),
+            Self::Message(why) => why.to_string(),
         }
     }
 }
@@ -653,7 +656,9 @@ pub async fn create_session_with_prompt(
 }
 
 /// Start `session` (a fresh one, or an existing one resumed) and type `prompt` as its next input
-/// once its CLI is ready (see [`create_session_with_prompt`]).
+/// once its CLI is ready (see [`create_session_with_prompt`]). A structured session gets it as its
+/// first user message right after the spawn (feature 938, R8). Only a caller with a new prompt
+/// passes one: supervision respawns, `SessionStart` and `SessionRestart` pass `None` (FR-007).
 pub async fn start_with_prompt(
     state: &Arc<DaemonState>,
     session: SessionId,
@@ -673,6 +678,19 @@ pub async fn start_with_prompt(
     };
     if !started {
         return (session, Err(FirstPromptUndelivered::NotStarted));
+    }
+    // Stream-json input is read from the start: no trust or readiness wait (feature 938, R8).
+    if state.session_kind(session) == Some(SessionKind::Structured) {
+        let st = Arc::clone(state);
+        let text = prompt.text.to_owned();
+        let sent = tokio::task::spawn_blocking(move || st.send_user_message(session, &text))
+            .await
+            .unwrap_or_else(|e| {
+                Err(crate::structured::UserMessageUndelivered::WriteFailed(
+                    io::Error::other(e),
+                ))
+            });
+        return (session, sent.map_err(FirstPromptUndelivered::Message));
     }
     let st = Arc::clone(state);
     let place = cwd.to_path_buf();

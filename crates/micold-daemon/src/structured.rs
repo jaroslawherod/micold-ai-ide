@@ -8,7 +8,7 @@
 //! [`structured_args`]: micold_core::provider::AiCliProvider::structured_args
 
 use std::ffi::OsString;
-use std::io::{self, BufRead, Read};
+use std::io::{self, BufRead, Read, Write};
 use std::process::{ChildStdin, Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -17,7 +17,8 @@ use std::time::Duration;
 
 use micold_core::session::{KindRefusal, SessionId};
 use micold_core::structured::{
-    parse_line, EventHistory, LineSplitter, SequencedEvent, StructuredEvent,
+    encode_user_message, parse_line, EventHistory, LineSplitter, SequencedEvent, StructuredEvent,
+    TurnState, UserMessageRefusal,
 };
 use micold_core::terminal::{launch_args, LaunchSpec};
 use tokio::sync::broadcast;
@@ -70,14 +71,35 @@ impl EventStream {
     }
 }
 
+/// Why a user message did not reach a structured session's CLI (FR-008). Its text is never in it.
+#[derive(Debug)]
+pub enum UserMessageUndelivered {
+    /// Refused before anything was written.
+    Refused(UserMessageRefusal),
+    /// Accepted, and writing it to the CLI's stdin failed.
+    WriteFailed(io::Error),
+}
+
+impl std::fmt::Display for UserMessageUndelivered {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Refused(why) => why.fmt(f),
+            Self::WriteFailed(err) => write!(f, "The message could not be sent to the CLI: {err}"),
+        }
+    }
+}
+
 /// One daemon-hosted structured session: the CLI's child process with piped stdin, stdout and
 /// stderr. Stdout is read line by line into events, stderr into the daemon's log (FR-010).
 pub struct StructuredSession {
     id: SessionId,
     process: SupervisedChild,
-    /// The CLI's stdin, for the user messages a later milestone writes. Behind a mutex so a write
+    /// The CLI's stdin, which user messages are written to (FR-008). Behind a mutex so a write
     /// takes `&self`; `None` once teardown closed it.
     stdin: Mutex<Option<ChildStdin>>,
+    /// This process's turn (research R7): a new process starts `Idle`, so a restart resets it.
+    /// Shared with the stdout reader, which ends the turn on a `result` and at end-of-file.
+    turn: Arc<Mutex<TurnState>>,
     /// The stdout and stderr reader threads, joined by [`Self::teardown`].
     readers: Mutex<Vec<JoinHandle<()>>>,
     /// Set when both readers have seen end-of-file.
@@ -104,7 +126,8 @@ impl StructuredSession {
     /// then `extra_args` (the activity wiring and, last, the tool server), in `spec.cwd` with
     /// `spec.env` over the daemon's environment cleaned as a terminal session's is (R3). Each line
     /// the CLI writes to stdout reaches `on_event` as one event, in order, and a trailing partial
-    /// line at end-of-file as one more (FR-014).
+    /// line at end-of-file as one more (FR-014). A `result` ends the turn; at end-of-file a turn
+    /// still in progress ends with a `TurnEndedWithoutResult` note, after the last line (R7).
     ///
     /// Refused if `spec.cwd` does not exist (FR-006c), and for a CLI with no structured mode
     /// (FR-003).
@@ -152,11 +175,13 @@ impl StructuredSession {
         };
 
         let output_ended = Arc::new(ReadersDone(2.into()));
+        let turn = Arc::new(Mutex::new(TurnState::Idle));
+        let reader_turn = Arc::clone(&turn);
         let readers = [
             spawn_reader(
                 format!("stream-out-{id}"),
                 Arc::clone(&output_ended),
-                move || read_events(stdout, on_event),
+                move || read_events(stdout, &reader_turn, on_event),
             ),
             spawn_reader(
                 format!("stream-err-{id}"),
@@ -176,6 +201,7 @@ impl StructuredSession {
             id,
             process,
             stdin: Mutex::new(stdin),
+            turn,
             readers: Mutex::new(readers),
             output_ended,
             torn_down: AtomicBool::new(false),
@@ -210,6 +236,28 @@ impl StructuredSession {
     /// Whether both readers have seen end-of-file.
     pub fn output_ended(&self) -> bool {
         self.output_ended.all()
+    }
+
+    /// Accept `text` as the next user message, opening a turn, or say why not (FR-008). The
+    /// daemon calls it under its state lock, so of two simultaneous messages the first wins; the
+    /// write is [`Self::write_user_message`], off the lock.
+    pub fn accept_user_message(&self, text: &str) -> Result<(), UserMessageRefusal> {
+        let running = self.is_alive() && !self.output_ended();
+        lock(&self.turn).accept(text, running)
+    }
+
+    /// Write an accepted `text` to the CLI as one stream-json user message. On a failed write
+    /// nothing was delivered, so the turn it opened is closed again.
+    pub fn write_user_message(&self, text: &str) -> io::Result<()> {
+        let line = encode_user_message(text);
+        let written = match lock(&self.stdin).as_mut() {
+            Some(stdin) => stdin.write_all(line.as_bytes()).and_then(|()| stdin.flush()),
+            None => Err(io::Error::from(io::ErrorKind::BrokenPipe)),
+        };
+        if written.is_err() {
+            *lock(&self.turn) = TurnState::Idle;
+        }
+        written
     }
 
     /// End the session: kill its process tree, close its stdin, wait up to `wait` for both readers'
@@ -272,9 +320,30 @@ impl Drop for CountsDone {
     }
 }
 
+/// A mutex's guard, poison or not: the guarded state stays sound across a panic.
+fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+    mutex.lock().unwrap_or_else(|e| e.into_inner())
+}
+
 /// Read `stdout` to its end, one event per line in order, the trailing partial line last (R4,
-/// FR-014). No line, however unreadable, stops the reading.
-fn read_events(mut stdout: impl Read, mut on_event: impl FnMut(StructuredEvent)) {
+/// FR-014), each followed by `turn` (R7). No line, however unreadable, stops the reading. At the
+/// end, a turn still in progress ends with its note, the last event of this process.
+fn read_events(
+    stdout: impl Read,
+    turn: &Mutex<TurnState>,
+    mut on_event: impl FnMut(StructuredEvent),
+) {
+    read_lines(stdout, |event| {
+        lock(turn).on_event(&event);
+        on_event(event);
+    });
+    if let Some(note) = lock(turn).on_exit() {
+        on_event(note);
+    }
+}
+
+/// Read `stdout` to its end, one event per line in order, the trailing partial line last.
+fn read_lines(mut stdout: impl Read, mut on_event: impl FnMut(StructuredEvent)) {
     let mut splitter = LineSplitter::default();
     let mut buf = vec![0u8; 64 * 1024];
     loop {
@@ -308,7 +377,7 @@ mod tests {
 
     fn events_of(bytes: &[u8]) -> Vec<StructuredEvent> {
         let mut got = Vec::new();
-        read_events(bytes, |event| got.push(event));
+        read_lines(bytes, |event| got.push(event));
         got
     }
 

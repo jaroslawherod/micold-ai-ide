@@ -264,7 +264,7 @@ and `cargo test -p micold-core structured::turn`.
 
 ### Tests for User Story 1 (scenarios 4–5) ⚠️
 
-- [ ] T022 [P] [US1] Write failing unit tests in `crates/micold-core/src/structured/turn.rs` and
+- [x] T022 [P] [US1] Write failing unit tests in `crates/micold-core/src/structured/turn.rs` and
   `crates/micold-core/src/structured/user_message.rs` (R7): `accept(text, running, turn)` refuses
   `""`, `"  \n\t"` with `Blank`, a stopped session with `NotRunning`, `InTurn` with
   `TurnInProgress`, and otherwise moves `Idle → InTurn`; a `Result` event moves `InTurn → Idle`;
@@ -273,9 +273,9 @@ and `cargo test -p micold-core structured::turn`.
   sentence; `encode_user_message(text)` is exactly
   `{"type":"user","message":{"role":"user","content":[{"type":"text","text":<text>}]}}` + `\n`, and
   decoding it back yields the original text for multi-line, quoted and non-ASCII input.
-- [ ] T023 [P] [US1] Write a failing round-trip test in `crates/micold-core/tests/structured_wire.rs`
+- [x] T023 [P] [US1] Write a failing round-trip test in `crates/micold-core/tests/structured_wire.rs`
   for `ClientMsg::SessionUserMessage { req, session, text }`.
-- [ ] T024 [US1] Add failing cases to `crates/micold-daemon/tests/structured_session.rs`: a
+- [x] T024 [US1] Add failing cases to `crates/micold-daemon/tests/structured_session.rs`: a
   structured session created with a first prompt writes it as the first `stdin-record` line, and
   after stop/start and `SessionRestart` the record still holds it once (FR-007, US1 scenario 4); a
   `SessionUserMessage` with multi-line, quoted, non-ASCII text is written as one line that decodes
@@ -290,18 +290,18 @@ and `cargo test -p micold-core structured::turn`.
 
 ### Implementation for User Story 1 (scenarios 4–5)
 
-- [ ] T025 [US1] Make T022 pass: `crates/micold-core/src/structured/turn.rs` and
+- [x] T025 [US1] Make T022 pass: `crates/micold-core/src/structured/turn.rs` and
   `crates/micold-core/src/structured/user_message.rs`.
-- [ ] T026 [US1] Make T023 pass: `ClientMsg::SessionUserMessage` in
+- [x] T026 [US1] Make T023 pass: `ClientMsg::SessionUserMessage` in
   `crates/micold-core/src/protocol/messages.rs`; bump `PROTOCOL_VERSION` by one in
   `crates/micold-core/src/protocol/version.rs` with its doc line.
-- [ ] T027 [US1] Make T024 pass in `crates/micold-daemon/src/state.rs` and
+- [x] T027 [US1] Make T024 pass in `crates/micold-daemon/src/state.rs` and
   `crates/micold-daemon/src/server.rs`: a `TurnState` per live structured session (new live entry
   starts `Idle`); `SessionUserMessage` runs `accept` under the state lock and writes the encoded
   line to `ChildStdin` off the lock, replying `OperationOk`/`OperationError`; the reader callback
   sets `Idle` on `Result`; process exit or restart applies `on_exit` and appends its event to the
   history; never log the text.
-- [ ] T028 [US1] Make the first-prompt case of T024 pass (T027 and T028 together make T024 pass) in `crates/micold-daemon/src/ops.rs`:
+- [x] T028 [US1] Make the first-prompt case of T024 pass (T027 and T028 together make T024 pass) in `crates/micold-daemon/src/ops.rs`:
   `start_with_prompt` delivers a structured session's prompt through the same accept-and-write
   path right after the spawn (no readiness wait, R8); supervision respawns, `SessionStart` and
   `SessionRestart` pass no prompt.
