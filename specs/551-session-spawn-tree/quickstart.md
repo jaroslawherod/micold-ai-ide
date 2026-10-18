@@ -8,7 +8,7 @@ Prerequisites: `mise trust`; a project with a worktree; the `:dev` daemon (`mise
    protocol and MCP shape tests.
 2. `cargo test -p micold-daemon --test mcp_create_session --test catalog_adoption --test session_origin_removal` via
    `mise run test`: origin rows, restart survival, removed origin.
-3. `cargo test -p micold-client --test sidebar_tree --test layout_snapshot`.
+3. `cargo test -p micold-client --test sidebar_tree --test sidebar_spawn_tree --test layout_snapshot`.
 4. `mise run gate` before push.
 
 ## Part B: visual pass (`visual-pass` skill)
@@ -30,3 +30,22 @@ Prerequisites: `mise trust`; a project with a worktree; the `:dev` daemon (`mise
    nested (restart survival of a live child is the daemon test `catalog_adoption`).
 8. A provider without a native signal (Copilot, Pi): sessions listed as before; the user guide
    table names the gap.
+
+## Results (recorded at close, 2026-10-18)
+
+Part A: the commands above ran green in each milestone's gate (`mise run gate`).
+
+Part B, screenshots in `visual/` from the M2 and M4 `visual-pass` runs:
+
+| Step | Result | Evidence |
+|---|---|---|
+| 1 | PASS: two seeded children nested under A with the child marker, A unmarked | `visual/c1.png` |
+| 2 | PASS: grandchild nests at depth 3 | `visual/c-grand.png` |
+| 3 | PASS: A reads "claude, 2 agents", children hidden | `visual/c-fold.png` |
+| 4 | PASS: tree and fold survive a restart | `visual/c-fold-restart.png` |
+| 5 | PARTIAL: the screenshot shows the children top-level with the "origin pending" marker (the seeded origin never appeared); "origin removed" is proven by tests only (`session_origin_removal.rs`, `sidebar_spawn_tree.rs`), not recorded visually | `visual/c-orphan.png` |
+| 6 | By test (not recorded visually): an app-started session has no origin, so no marker | covered by `a_child_row_acts_like_a_top_level_row` and layout gates |
+| 7 | PASS: same under the Default entry | `visual/c-default.png` |
+| 8 | PASS by test: `provider_origin_docs` checks the user-guide table names the gap | `provider_origin_docs.rs` |
+
+Cosmetic note: a folded row shows a folder icon where the twisty was.
