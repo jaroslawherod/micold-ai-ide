@@ -294,6 +294,20 @@ pub fn unread_mark<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a,
             .selected_label_role(TypeRole::SidebarSessionCurrent)
             .into()
     };
+    // A session that started agents, folded: their count, and the mark when one needs the user
+    // (feature 551, FR-011).
+    let folded_row = |attention: bool| -> Element<'a, Message> {
+        let row = material::TreeItem::new(1, samples::LABEL, roles.on_surface)
+            .annotation("claude", roles.on_surface_variant)
+            .expandable(false, Message::NoOp)
+            .folded_summary(3, attention)
+            .on_press(Message::NoOp);
+        material::TreeView::new(vec![row], roles)
+            .density(micold_core::tokens::density::DENSE)
+            .label_role(TypeRole::SidebarName)
+            .selected_label_role(TypeRole::SidebarSessionCurrent)
+            .into()
+    };
     // The switcher's button as the app bar builds it. A count of zero is the button as it was.
     let switcher_button = |unread: usize| -> Element<'a, Message> {
         material::Button::text(samples::LABEL, roles)
@@ -333,6 +347,12 @@ pub fn unread_mark<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a,
                 roles,
             ),
             posed("a worktree row with none", location_row(0, false), roles),
+            posed("a folded origin with three agents", folded_row(false), roles),
+            posed(
+                "a folded origin with a child needing attention",
+                folded_row(true),
+                roles,
+            ),
             posed(
                 "the switcher's button with an unread count",
                 switcher_button(3),

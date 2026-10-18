@@ -795,15 +795,19 @@ fn build_items(
             let main = node.main_session();
             for row in node.session_rows() {
                 items.push(with_keyboard_focus(
-                    session_tree_item(
-                        depth + 1 + row.depth.min(MAX_NESTING) as u16,
-                        row.session,
-                        state.session.active,
+                    with_fold(
+                        session_tree_item(
+                            depth + 1 + row.depth.min(MAX_NESTING) as u16,
+                            row.session,
+                            state.session.active,
+                            in_view,
+                            Some(row.session.id) != main && !row.place.is_child(),
+                            row.place,
+                            state.session_start_block_text(row.session.id),
+                            r,
+                        ),
+                        &row,
                         in_view,
-                        Some(row.session.id) != main && !row.place.is_child(),
-                        row.place,
-                        state.session_start_block_text(row.session.id),
-                        r,
                     ),
                     keyboard.is_some_and(|k| k.is_session_row(row.session.id)),
                 ));
@@ -919,6 +923,27 @@ fn indicator_marks(state: &PrState) -> (PrMark, Option<CheckMark>) {
         PrState::Draft { checks: c } => (PrMark::Draft, checks(c)),
         PrState::Merged => (PrMark::Merged, None),
         PrState::Closed => (PrMark::Closed, None),
+    }
+}
+
+/// The twisty of a session that started others, and the summary of the children it has folded away
+/// (feature 551, FR-011): their count, and the mark when one of them needs the user.
+fn with_fold(
+    item: TreeItem<'static, Message>,
+    row: &crate::features::sidebar::SessionRow<'_>,
+    in_view: Option<micold_core::session::SessionId>,
+) -> TreeItem<'static, Message> {
+    let Some(fold) = &row.fold else {
+        return item;
+    };
+    let item = item.expandable(
+        !fold.folded,
+        Message::Sidebar(SidebarMsg::ToggleOrigin(row.session.id)),
+    );
+    if fold.folded {
+        item.folded_summary(fold.children, fold.needs_attention(in_view))
+    } else {
+        item
     }
 }
 
@@ -1095,15 +1120,19 @@ fn build_default_item(
         let main = node.main_session();
         for row in node.session_rows() {
             items.push(with_keyboard_focus(
-                session_tree_item(
-                    1 + row.depth.min(MAX_NESTING) as u16,
-                    row.session,
-                    state.session.active,
+                with_fold(
+                    session_tree_item(
+                        1 + row.depth.min(MAX_NESTING) as u16,
+                        row.session,
+                        state.session.active,
+                        in_view,
+                        Some(row.session.id) != main && !row.place.is_child(),
+                        row.place,
+                        state.session_start_block_text(row.session.id),
+                        r,
+                    ),
+                    &row,
                     in_view,
-                    Some(row.session.id) != main && !row.place.is_child(),
-                    row.place,
-                    state.session_start_block_text(row.session.id),
-                    r,
                 ),
                 keyboard.is_some_and(|k| k.is_session_row(row.session.id)),
             ));

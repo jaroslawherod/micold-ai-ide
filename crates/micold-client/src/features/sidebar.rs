@@ -75,6 +75,10 @@ pub struct State {
     pub default_expanded: bool,
     /// Which worktree rows are expanded to reveal their sessions (FR-003). By `dir_name`.
     pub expanded: BTreeSet<String>,
+    /// The origins whose children the user folded away (feature 551, FR-011). Stored as folded,
+    /// so an origin never folded is expanded (FR-017). Mirrored in `Settings.folded_origins`,
+    /// which the shell writes after every toggle and reads at boot. Never pruned (FR-017).
+    pub folded: BTreeSet<SessionId>,
     /// Whether a reveal is waiting to scroll its row into view (feature 024, FR-008).
     ///
     /// A flag, not a target. The offset cannot be computed when the reveal is armed: the incoming
@@ -320,6 +324,8 @@ pub struct DefaultNode {
     pub expanded: bool,
     /// Sessions with `SessionLocation::Default` for the active project.
     pub sessions: Vec<Session>,
+    /// The origins folded in the sidebar (feature 551, FR-011): their descendants are not listed.
+    pub folded: BTreeSet<SessionId>,
 }
 
 /// One worktree row in the sidebar tree, joined with its (expanded) sessions (FR-002/003).
@@ -347,6 +353,8 @@ pub struct WorktreeNode {
     pub shown_for_current_session: bool,
     /// The name of the daemon this worktree runs on, or [`NO_DAEMON_LABEL`] (feature 491, FR-005).
     pub daemon: String,
+    /// The origins folded in the sidebar (feature 551, FR-011): their descendants are not listed.
+    pub folded: BTreeSet<SessionId>,
 }
 
 impl WorktreeNode {
@@ -374,7 +382,7 @@ impl WorktreeNode {
     /// The sessions in the order the expander lists them: the main one first, then the helpers,
     /// each followed by the sessions it started (feature 551).
     pub fn listed_sessions(&self) -> Vec<&Session> {
-        session_rows(&self.sessions, self.main_session())
+        session_rows(&self.sessions, self.main_session(), &self.folded)
             .into_iter()
             .map(|row| row.session)
             .collect()
@@ -383,7 +391,7 @@ impl WorktreeNode {
     /// [`listed_sessions`](Self::listed_sessions) with each session's depth below the location and
     /// its place in the tree (feature 551, FR-003, FR-004, FR-016).
     pub fn session_rows(&self) -> Vec<SessionRow<'_>> {
-        session_rows(&self.sessions, self.main_session())
+        session_rows(&self.sessions, self.main_session(), &self.folded)
     }
 
     /// The worktree's state for its row's state icon (feature 905, FR-001, FR-004): taken from
@@ -412,7 +420,7 @@ impl DefaultNode {
     /// The sessions in the order the expander lists them: the main one first, each followed by the
     /// sessions it started (feature 551).
     pub fn listed_sessions(&self) -> Vec<&Session> {
-        session_rows(&self.sessions, self.main_session())
+        session_rows(&self.sessions, self.main_session(), &self.folded)
             .into_iter()
             .map(|row| row.session)
             .collect()
@@ -420,7 +428,7 @@ impl DefaultNode {
 
     /// [`listed_sessions`](Self::listed_sessions) with depth and place (feature 551).
     pub fn session_rows(&self) -> Vec<SessionRow<'_>> {
-        session_rows(&self.sessions, self.main_session())
+        session_rows(&self.sessions, self.main_session(), &self.folded)
     }
 
     /// The project root's state for the Default row's state icon, by the worktree rows' rules
@@ -432,32 +440,80 @@ impl DefaultNode {
 
 /// One session row of a location: the session, its depth below the location's own sessions
 /// (0 = listed directly) and its place in the origin tree (feature 551).
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct SessionRow<'a> {
     pub session: &'a Session,
     pub depth: usize,
     pub place: micold_core::origin::TreePlace,
+    /// Set on a session that has children (feature 551, FR-011).
+    pub fold: Option<Fold<'a>>,
+}
+
+/// What a session with children shows of them: whether they are folded away, how many are its
+/// direct children and, while folded, every descendant that is hidden (feature 551, FR-011).
+#[derive(Debug, Clone)]
+pub struct Fold<'a> {
+    pub folded: bool,
+    /// Direct children, folded or not.
+    pub children: usize,
+    hidden: Vec<&'a Session>,
+}
+
+impl Fold<'_> {
+    /// Whether a hidden descendant needs the user (FR-011): unread by the rule the location rows
+    /// count with. Always `false` while expanded: the child shows its own mark.
+    pub fn needs_attention(&self, in_view: Option<SessionId>) -> bool {
+        self.hidden
+            .iter()
+            .any(|s| micold_core::attention::counts_as_unread(s, in_view))
+    }
 }
 
 /// `sessions` as the origin tree, the one `main` first among the roots, the rest in their order,
 /// children after the session that started them (feature 551).
-fn session_rows(sessions: &[Session], main: Option<SessionId>) -> Vec<SessionRow<'_>> {
+fn session_rows<'a>(
+    sessions: &'a [Session],
+    main: Option<SessionId>,
+    folded: &BTreeSet<SessionId>,
+) -> Vec<SessionRow<'a>> {
     let (first, rest): (Vec<&Session>, Vec<&Session>) =
         sessions.iter().partition(|s| Some(s.id) == main);
     let ordered: Vec<&Session> = first.into_iter().chain(rest).collect();
     let input: Vec<_> = ordered.iter().map(|s| (s.id, s.origin)).collect();
-    micold_core::origin::SessionTree::build(&input)
-        .rows
-        .into_iter()
-        .filter_map(|row| {
-            let session = ordered.iter().find(|s| s.id == row.id)?;
-            Some(SessionRow {
+    let rows = micold_core::origin::SessionTree::build(&input).rows;
+    let session_of = |id| ordered.iter().find(|s| s.id == id).copied();
+    let mut out = Vec::new();
+    let mut at = 0;
+    while at < rows.len() {
+        let row = &rows[at];
+        // Depth first: a row's descendants are the rows after it that sit deeper.
+        let end = rows[at + 1..]
+            .iter()
+            .position(|r| r.depth <= row.depth)
+            .map_or(rows.len(), |p| at + 1 + p);
+        let below = &rows[at + 1..end];
+        let children = below.iter().filter(|r| r.depth == row.depth + 1).count();
+        let is_folded = children > 0 && folded.contains(&row.id);
+        let fold = (children > 0).then(|| Fold {
+            folded: is_folded,
+            children,
+            hidden: if is_folded {
+                below.iter().filter_map(|r| session_of(r.id)).collect()
+            } else {
+                Vec::new()
+            },
+        });
+        at = if is_folded { end } else { at + 1 };
+        if let Some(session) = session_of(row.id) {
+            out.push(SessionRow {
                 session,
                 depth: row.depth,
                 place: row.place,
-            })
-        })
-        .collect()
+                fold,
+            });
+        }
+    }
+    out
 }
 
 impl SidebarEntry {
@@ -1379,6 +1435,7 @@ impl crate::app::State {
                 daemon: self.daemon_row_label(&worktree.dir_name),
                 worktree: worktree.clone(),
                 shown_for_current_session: false,
+                folded: self.sidebar.folded.clone(),
             })
             .collect()
     }
@@ -1426,6 +1483,7 @@ impl crate::app::State {
             daemon: self.daemon_row_label(&worktree.dir_name),
             worktree: worktree.clone(),
             shown_for_current_session: true,
+            folded: self.sidebar.folded.clone(),
         };
         // Inserted where it would have sat unfiltered rather than appended: the exemption changes
         // which rows are listed, never their order (FR-012a). `worktrees` is the order the panel
@@ -1461,6 +1519,7 @@ impl crate::app::State {
             display_name: "Default",
             expanded: self.location_open(&SessionLocation::Default),
             sessions: default_sessions,
+            folded: self.sidebar.folded.clone(),
         })];
         entries.extend(
             self.filtered_worktree_tree()
@@ -1623,6 +1682,9 @@ pub enum Msg {
     RunInParallelRequested,
     /// The row a navigation chord focused lost the keyboard (feature 803, contracts/ui.md U4).
     KeyboardRowLeft,
+    /// Fold or expand the children of an origin (feature 551, FR-011). The shell persists the
+    /// set after it (FR-017).
+    ToggleOrigin(SessionId),
 }
 
 /// **Review changes** was chosen for `entry` (feature 482, V1): the root opens the Changes view.
@@ -1651,6 +1713,11 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
         Msg::ReviewChangesRequested(entry) => return review_changes(entry),
         Msg::RunInParallelRequested => return run_in_parallel(),
         Msg::KeyboardRowLeft => state.keyboard_row_left(),
+        Msg::ToggleOrigin(id) => {
+            if !state.sidebar.folded.remove(&id) {
+                state.sidebar.folded.insert(id);
+            }
+        }
     }
     Vec::new()
 }

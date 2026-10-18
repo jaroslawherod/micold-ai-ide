@@ -183,6 +183,26 @@ pub fn notify_catalog_recovery(status: LoadStatus, preserved: Option<&Path>, cor
 }
 
 pub fn persist_settings(store: Option<&(dyn SettingsStore + Send + Sync)>, core: &mut State) {
+    let theme = core.settings.theme_pref;
+    write_setting(store, core, &mut |settings| settings.theme = theme);
+}
+
+/// Write the folded origins after a toggle (feature 551, FR-017). Changes only that field.
+pub fn persist_folded_origins(
+    store: Option<&(dyn SettingsStore + Send + Sync)>,
+    core: &mut State,
+) {
+    let folded = core.sidebar.folded.clone();
+    write_setting(store, core, &mut |settings| {
+        settings.folded_origins = folded.clone()
+    });
+}
+
+fn write_setting(
+    store: Option<&(dyn SettingsStore + Send + Sync)>,
+    core: &mut State,
+    change: &mut dyn FnMut(&mut Settings),
+) {
     if let Some(store) = store {
         // Preserve the persisted scrollback limit (feature 006) and environment-include settings
         // (feature 011) when saving a theme change — this function only ever changes `theme`.
@@ -192,8 +212,7 @@ pub fn persist_settings(store: Option<&(dyn SettingsStore + Send + Sync)>, core:
         // from. A separate load hands back defaults when the file cannot be read, and the spread
         // then preserves those — writing a default `daemon` block over the user's whole sandbox
         // profile on a click that says "theme".
-        let theme = core.settings.theme_pref;
-        let write = store.update_reporting(&mut |settings| settings.theme = theme);
+        let write = store.update_reporting(change);
         crate::log_line(&write.log_line("client"));
         if let Err(err) = write.result {
             core.notify_error(format!("Couldn't save your settings: {err}"));
@@ -399,6 +418,8 @@ fn set_changed(target: &mut Settings, saved: &Settings, baseline: Option<&Settin
         notification_kinds: _,
         long_task_threshold_secs: _,
         diff_layout: _,
+        // Written by its own toggle in the sidebar, never by a save of the form (feature 551).
+        folded_origins: _,
         // The registry is not in the form; the daemon block is mirrored into it below.
         daemons: _,
         next_daemon_id: _,

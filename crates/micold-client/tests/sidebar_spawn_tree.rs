@@ -114,3 +114,96 @@ fn every_session_is_listed_once_and_the_row_count_is_unchanged() {
     assert_eq!(node.listed_sessions().len(), node.sessions.len());
     assert!(node.has_expander());
 }
+
+// Folding (M4, US4, FR-011, FR-017).
+
+use micold_client::features::sidebar::{update, Msg};
+
+fn toggle(state: &mut State, id: SessionId) {
+    update(state, Msg::ToggleOrigin(id));
+}
+
+fn listed(state: &State) -> Vec<SessionId> {
+    node(state).listed_sessions().iter().map(|s| s.id).collect()
+}
+
+fn fold_of(state: &State, id: SessionId) -> Option<(bool, usize)> {
+    node(state)
+        .session_rows()
+        .iter()
+        .find(|r| r.session.id == id)
+        .and_then(|r| r.fold.as_ref().map(|f| (f.folded, f.children)))
+}
+
+#[test]
+fn an_origin_never_folded_is_expanded_and_toggling_folds_then_expands() {
+    let mut user = session(&wt(), None);
+    user.main = true;
+    let child = session(&wt(), known(&user));
+    let (u, c) = (user.id, child.id);
+    let mut state = state_with(vec![user, child]);
+    assert_eq!(listed(&state), vec![u, c]);
+    assert_eq!(fold_of(&state, u), Some((false, 1)));
+    toggle(&mut state, u);
+    assert_eq!(listed(&state), vec![u], "the child is hidden");
+    assert_eq!(fold_of(&state, u), Some((true, 1)));
+    toggle(&mut state, u);
+    assert_eq!(listed(&state), vec![u, c]);
+}
+
+#[test]
+fn a_folded_origin_counts_direct_children_and_hides_every_descendant() {
+    let mut user = session(&wt(), None);
+    user.main = true;
+    let a = session(&wt(), known(&user));
+    let grandchild = session(&wt(), known(&a));
+    let b = session(&wt(), known(&user));
+    let (u, ga) = (user.id, a.id);
+    let mut state = state_with(vec![user, a, grandchild, b]);
+    toggle(&mut state, u);
+    assert_eq!(listed(&state), vec![u]);
+    assert_eq!(fold_of(&state, u), Some((true, 2)), "direct children only");
+    // Folding an inner origin hides only its own subtree.
+    toggle(&mut state, u);
+    toggle(&mut state, ga);
+    assert_eq!(listed(&state).len(), 3);
+    assert_eq!(fold_of(&state, ga), Some((true, 1)));
+}
+
+#[test]
+fn a_folded_origin_shows_that_a_hidden_descendant_needs_attention() {
+    let mut user = session(&wt(), None);
+    user.main = true;
+    let child = session(&wt(), known(&user));
+    let mut grandchild = session(&wt(), known(&child));
+    grandchild.unread = true;
+    let (u, g) = (user.id, grandchild.id);
+    let mut state = state_with(vec![user, child, grandchild]);
+    let attention = |state: &State, in_view| {
+        let n = node(state);
+        let rows = n.session_rows();
+        let row = rows.iter().find(|r| r.session.id == u).unwrap();
+        row.fold.as_ref().unwrap().needs_attention(in_view)
+    };
+    assert!(!attention(&state, None), "expanded: the child shows its own mark");
+    toggle(&mut state, u);
+    assert!(attention(&state, None), "rolled up over descendants");
+    assert!(!attention(&state, Some(g)), "a descendant in view is read");
+}
+
+#[test]
+fn a_fold_restored_at_boot_survives_the_snapshot_without_pruning() {
+    let mut user = session(&wt(), None);
+    user.main = true;
+    let child = session(&wt(), known(&user));
+    let u = user.id;
+    // Boot: the fold is read from the settings before any session is known.
+    let mut state = state_with(vec![]);
+    state.sidebar.folded.insert(u);
+    state.sidebar.folded.insert(SessionId::new());
+    // The first snapshot arrives with the sessions.
+    let arrived = state_with(vec![user, child]);
+    state.workspace = arrived.workspace;
+    assert_eq!(listed(&state), vec![u], "still folded as the user left it");
+    assert_eq!(state.sidebar.folded.len(), 2, "no pruning");
+}

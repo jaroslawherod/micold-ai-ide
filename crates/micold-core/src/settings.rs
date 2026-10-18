@@ -13,11 +13,11 @@ use crate::jira::JiraConnection;
 use crate::mcp::policy::CrossSessionAccess;
 use crate::sandbox::placement::PlacementKind;
 use crate::sandbox::{BudgetViolation, SandboxProfile};
-use crate::session::AiCli;
+use crate::session::{AiCli, SessionId};
 use crate::store::LoadStatus;
 use crate::theme::ThemePreference;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::io;
 use std::path::{Path, PathBuf};
 
@@ -295,6 +295,12 @@ pub struct Settings {
     /// The plan-usage warning threshold, a whole percent from 50 to 100 (feature 490, FR-005).
     #[serde(default = "default_warn_percent")]
     pub plan_usage_warn_percent: u8,
+    /// The sessions whose children the user folded away in the sidebar (feature 551, FR-011,
+    /// FR-017). Stored as *folded*, so an origin never folded is expanded with no extra rule. Never
+    /// pruned: a boot sees an empty or partial list before the first daemon snapshot, and pruning
+    /// then would erase a fold the user left. Client-owned: the daemon never reads it.
+    #[serde(default)]
+    pub folded_origins: BTreeSet<SessionId>,
 }
 
 /// Reads the stored cross-session option. A value this build does not know (a mistyped hand edit,
@@ -356,6 +362,7 @@ impl Default for Settings {
             diff_layout: DiffLayout::default(),
             plan_usage_enabled: default_plan_usage_enabled(),
             plan_usage_warn_percent: crate::plan_usage::WarnPercent::DEFAULT,
+            folded_origins: BTreeSet::new(),
         }
     }
 }
@@ -772,6 +779,8 @@ struct StoredSettings {
     /// 300 is clamped rather than failing the whole document.
     #[serde(default = "default_plan_usage_warn_percent")]
     plan_usage_warn_percent: u64,
+    #[serde(default)]
+    folded_origins: BTreeSet<SessionId>,
 }
 
 /// The mapping's entries that parse, in order; an entry with an unknown `type` token is skipped
@@ -818,6 +827,7 @@ impl StoredSettings {
             diff_layout: settings.diff_layout,
             plan_usage_enabled: settings.plan_usage_enabled,
             plan_usage_warn_percent: u64::from(settings.plan_usage_warn_percent),
+            folded_origins: settings.folded_origins.clone(),
         }
     }
 
@@ -870,6 +880,7 @@ impl StoredSettings {
             diff_layout: self.diff_layout,
             plan_usage_enabled: self.plan_usage_enabled,
             plan_usage_warn_percent: clamp_plan_usage_warn_percent(self.plan_usage_warn_percent),
+            folded_origins: self.folded_origins,
         }
     }
 }

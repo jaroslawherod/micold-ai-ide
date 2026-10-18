@@ -34,6 +34,21 @@ enum RowUnread {
     Count(NonZeroUsize),
 }
 
+/// The count and attention of the children a folded row hides (feature 551, FR-011).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FoldedSummary {
+    pub count: usize,
+    pub attention: bool,
+}
+
+impl FoldedSummary {
+    /// The words appended to the row's annotation: `3 agents`, `1 agent`.
+    pub fn words(self) -> String {
+        let noun = if self.count == 1 { "agent" } else { "agents" };
+        format!("{} {noun}", self.count)
+    }
+}
+
 /// One row in a [`tree_view`]. Generic over the message type so it is reusable across features.
 pub struct TreeItem<'a, M> {
     /// Nesting depth (0 = top level); drives leading indentation.
@@ -97,6 +112,9 @@ pub struct TreeItem<'a, M> {
     /// the annotation. Text rather than a glyph, so the marker needs no legend and the row keeps
     /// its height.
     pub child: bool,
+    /// What a folded row shows of its hidden children (feature 551, FR-011): how many direct
+    /// children it has and whether one of its descendants needs attention.
+    pub folded: Option<FoldedSummary>,
     /// Whether the row is unread (feature 039, FR-018): the [`UnreadMark`](super::UnreadMark) at
     /// the trailing edge, before any trailing action, and the label in the view's emphasised role
     /// ([`TreeView::selected_label_role`]). The badge slot is not touched, and the row keeps its
@@ -140,6 +158,7 @@ impl<'a, M> TreeItem<'a, M> {
             badge: None,
             annotation: None,
             child: false,
+            folded: None,
             unread: RowUnread::Read,
             state_icon: None,
             keyboard_focus: None,
@@ -193,6 +212,13 @@ impl<'a, M> TreeItem<'a, M> {
     /// [`TreeItem::annotation`] for why this is not a tag chip.
     pub fn annotation(mut self, text: impl Into<String>, tint: Rgb) -> Self {
         self.annotation = Some((text.into(), tint));
+        self
+    }
+
+    /// Summarise the children a folded row hides (feature 551, FR-011): `count` of them in the
+    /// annotation, and the unread mark when `attention`. The row keeps its one line.
+    pub fn folded_summary(mut self, count: usize, attention: bool) -> Self {
+        self.folded = Some(FoldedSummary { count, attention });
         self
     }
 
@@ -479,6 +505,11 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
                 (true, None) => Some(("agent".to_string(), item.tint)),
                 (false, annotation) => annotation,
             };
+            let annotation = match (item.folded, annotation) {
+                (Some(f), Some((text, tint))) => Some((format!("{text}, {}", f.words()), tint)),
+                (Some(f), None) => Some((f.words(), item.tint)),
+                (None, annotation) => annotation,
+            };
             if let Some((text, tint)) = annotation {
                 if item.child {
                     // A child's marker ("agent, origin pending, claude") is long enough to take the
@@ -497,6 +528,11 @@ impl<'a, M: Clone + 'a> From<TreeView<'a, M>> for Element<'a, M> {
             // A location row's count (feature 575) takes the same slot, in the row's label role
             // and the theme's text colour, never worded: the tooltip carries the words (FR-005).
             match item.unread {
+                // A folded row that hides a child needing the user wears the bare mark, but its
+                // label stays as it was: the origin itself is not unread (feature 551, FR-011).
+                RowUnread::Read if item.folded.is_some_and(|f| f.attention) => {
+                    line = line.push(super::UnreadMark::new(r))
+                }
                 RowUnread::Read => {}
                 RowUnread::Unread => line = line.push(super::UnreadMark::new(r)),
                 RowUnread::Count(n) => {

@@ -26,9 +26,9 @@ and layout gates (`crates/micold-client/tests/`). The rendered pass is quickstar
 | A7 | A child whose origin was deleted stays visible top-level marked "origin removed", once | US2-3, FR-008, FR-018 | example | DONE | M1 |
 | A8 | A session from a provider with no signal is top-level and nothing is nested by guesswork | US3-1, FR-002, SC-003 | example | GREEN | M3 |
 | A9 | The user guide lists every provider with its reporting status | US3-2, FR-014, SC-005 | example | GREEN | M3 |
-| A10 | Collapsing an origin hides its children and shows their count | US4-1, FR-011 | example | PENDING | |
-| A11 | A collapsed origin shows that a hidden child needs attention | US4-2, FR-011 | example | PENDING | |
-| A12 | A fold persists across restart and a never-folded origin is expanded | US4-3, FR-017 | example | PENDING | |
+| A10 | Collapsing an origin hides its children and shows their count | US4-1, FR-011 | example | GREEN | M4 |
+| A11 | A collapsed origin shows that a hidden child needs attention | US4-2, FR-011 | example | GREEN | M4 |
+| A12 | A fold persists across restart and a never-folded origin is expanded | US4-3, FR-017 | example | GREEN | M4 |
 
 ## Inner loop: unit behaviors
 
@@ -65,7 +65,7 @@ and layout gates (`crates/micold-client/tests/`). The rendered pass is quickstar
 | --- | --- | --- | --- | --- | --- |
 | U13 | `worktree_tree` and the Default group nest from `SessionTree`; orphans are top-level with pending/removed annotation; a pending child nests when its origin appears | FR-003, FR-004, FR-005, FR-016 | example | PENDING | |
 | U14 | Child rows, orphans included, carry the child marker; user-started top-level rows do not | FR-007, SC-004 | approval | PENDING | |
-| U19 | `ToggleOrigin` folds and expands; folded origin shows count and descendant attention rollup; fold survives a snapshot after restart without pruning | FR-011, FR-017 | example | PENDING | |
+| U19 | `ToggleOrigin` folds and expands; folded origin shows count and descendant attention rollup; fold survives a snapshot after restart without pruning | FR-011, FR-017 | example | GREEN | M4 |
 
 ### `crates/micold-core/src/provider.rs`, `settings.rs`
 
@@ -74,7 +74,7 @@ and layout gates (`crates/micold-client/tests/`). The rendered pass is quickstar
 | U15 | Default `reported_origin` is `None`; each confirmed fixture yields its parent and the same fixture without the field yields `None`; name/path/time never yields one | FR-001, FR-002 | example | GREEN | M3 |
 | U16 | Discovery records a reported origin once, keeps an unknown one pending, clears a rejected one once and never re-records it | FR-001, FR-010, FR-016 | example | GREEN | M3 |
 | U17 | The provider table lists every `AiCli` variant | FR-014, SC-005 | example | GREEN | M3 |
-| U18 | `folded_origins` round-trips, absent loads empty, `settings_version` unchanged | FR-017 | example | PENDING | |
+| U18 | `folded_origins` round-trips, absent loads empty, `settings_version` unchanged | FR-017 | example | GREEN | M4 |
 
 ## Invariants and edge cases still to place
 

@@ -767,3 +767,28 @@ fn turning_history_saving_off_survives_a_save_and_load() {
 
     assert!(!store.load().settings.save_terminal_history);
 }
+
+/// Feature 551 (T032, U18, A12): the folded origins round-trip, an older file loads none, and the
+/// field is additive, so the version stays where it was.
+#[test]
+fn folded_origins_round_trip_and_an_older_file_loads_none() {
+    use micold_core::session::SessionId;
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("settings.json");
+    std::fs::write(&path, r#"{"settings_version":4,"scrollback_lines":10000}"#).unwrap();
+    let store = JsonFileSettingsStore::at(path.clone());
+    assert!(store.load().settings.folded_origins.is_empty());
+
+    let (a, b) = (SessionId::new(), SessionId::new());
+    let folded = Settings {
+        folded_origins: [a, b].into_iter().collect(),
+        ..Settings::default()
+    };
+    store.save(&folded).unwrap();
+    let back = JsonFileSettingsStore::at(path.clone()).load().settings;
+    assert_eq!(back.folded_origins, folded.folded_origins);
+
+    let value: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    assert_eq!(value["settings_version"], 4);
+}

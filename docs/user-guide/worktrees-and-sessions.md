@@ -1234,6 +1234,15 @@ started by an agent nests one level further down. The same tree is shown under a
   and reads `agent, origin removed, ...`. It is never dropped.
 - **No manual reparenting.** The nesting follows what the agent reported; you cannot drag a session
   under another.
+- **Folding.** A session with children has an arrow before its name. Press it to fold the children
+  away; every session below it is hidden, however deep. A folded session shows how many sessions it
+  started directly, for example `claude, 3 agents`, and a dot at the end of the row when any hidden
+  session below it needs your attention (the unread rule of the location rows). Press the arrow
+  again to expand them. A session you never folded is expanded.
+- **Folds are remembered.** Which sessions you folded is saved in the settings file
+  (`folded_origins`) and is still folded after you restart the app. A fold is kept even while the
+  session is not listed, for example before the first list arrives after a start, so it is never
+  lost by a slow start.
 - **Which providers.** Only a provider that reports which session started a session shows the tree.
   The table below says which do; a session of any other provider is listed as an ordinary session.
 

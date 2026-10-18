@@ -37,3 +37,10 @@ Append only.
 - Tests written with the code in one pass (U15 in `provider_origin.rs`, U16 in `catalog_adoption.rs` and `provider_origin_discovery.rs`, U17 in `provider_origin_docs.rs`); no per-behaviour red output captured, as in M1 and M2.
 - Green: `cargo test -p micold-core --test provider_origin --test provider_origin_docs`, `-p micold-daemon --test catalog_adoption --test provider_origin_discovery`.
 - Codex and OpenCode readers run on synthetic fixtures built from the providers' schema or source (marked as such); Claude Code stays a documented gap.
+
+## M4 (2026-10-18)
+
+- Tests written with the code in one pass (U18 in `settings_roundtrip.rs`, U19 in `sidebar_spawn_tree.rs`); the settings test failed to compile before `folded_origins` existed. No per-behaviour red output captured, as in M1 to M3.
+- Green: `cargo test -p micold-core --test settings_roundtrip`, `-p micold-client --test sidebar_spawn_tree --test features_sidebar`.
+- U19's tests live in `sidebar_spawn_tree.rs` (the file M4's Verify runs), not `sidebar_tree.rs` as T033 first said.
+- Fold toggling is a sidebar `Msg::ToggleOrigin`; the shell writes `Settings.folded_origins` after it (`persist_folded_origins`) and `startup.rs` reads it back. The set is never pruned.
