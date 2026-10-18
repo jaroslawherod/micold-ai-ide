@@ -290,6 +290,27 @@ pub fn copy(reach: &Reach, platform: ClientPlatform, timeout: u32, build: &str) 
 /// into.
 pub const CONTAINER_DATA_HOME: &str = "/var/lib";
 
+/// The helper's `status`: prints the remote daemon's `RemoteStatus` as one JSON line.
+pub fn status(reach: &Reach, platform: ClientPlatform, timeout: u32, build: &str) -> SshCommand {
+    helper(reach, platform, timeout, build, "status")
+}
+
+/// The helper's `stop`: ends the remote daemon only when its status proves it has no sessions.
+pub fn stop(reach: &Reach, platform: ClientPlatform, timeout: u32, build: &str) -> SshCommand {
+    helper(reach, platform, timeout, build, "stop")
+}
+
+fn helper(
+    reach: &Reach,
+    platform: ClientPlatform,
+    timeout: u32,
+    build: &str,
+    sub: &str,
+) -> SshCommand {
+    let remote = format!("\"{}/micold-daemon\" remote {sub}", remote_dir(build));
+    command(reach, platform, timeout, &remote, None)
+}
+
 /// The bridge: the remote daemon binary's relay, whose stdin/stdout carry the protocol.
 pub fn bridge(reach: &Reach, platform: ClientPlatform, timeout: u32, build: &str) -> SshCommand {
     bridge_with_env(reach, platform, timeout, build, &[])
