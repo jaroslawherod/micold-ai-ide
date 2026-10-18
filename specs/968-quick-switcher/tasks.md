@@ -144,7 +144,7 @@ name, Enter; the terminal shows its session and its sidebar row is selected.
   *Entry*: "location: its tag labels (`naming::Tag`), e.g. `feat · PROJ-12 · missing`"); `current`
   is set on the current location only (`current_session_location()` or `sidebar.nav_stop`); every
   location entry is `selectable`; with no active project the list has no location entries
-- [ ] T010 [P] [US1] Write the failing reducer tests in `crates/micold-client/tests/quick_switch.rs`
+- [ ] T010 [US1] Write the failing reducer tests in `crates/micold-client/tests/quick_switch.rs`
   (contracts/ui.md U1, U3 location rows, U4): `Toggled` opens with `query == ""`, `highlighted` =
   the first entry, `terminal_had_focus` from the message and `keyboard_row_before` =
   `sidebar.keyboard_row`; it does nothing while Settings is open (`settings_draft.is_some()`) or
@@ -163,7 +163,7 @@ name, Enter; the terminal shows its session and its sidebar row is selected.
   no entries, and Enter (`Chosen` of no highlight) then changes nothing (FR-014); SC-001 for
   locations: in a project of 50 locations, for each location some query of at most 4 characters of
   its name leaves it within the first 3 selectable entries (at most 2 `Moved(Next)`)
-- [ ] T011 [P] [US1] Write the failing apply tests in `crates/micold-client/tests/quick_switch.rs`
+- [ ] T011 [US1] Write the failing apply tests in `crates/micold-client/tests/quick_switch.rs`
   driving the switcher through `apply_navigation` / `finish_navigation` as
   `tests/navigation_apply.rs` does (reuse its helpers; move them to `tests/support/` when both need
   them): choosing a location with a session makes it `session.active`, selects its row, arms the
@@ -271,7 +271,7 @@ sub-row is selected under an opened row.
   location's name, `parent` = the location's index, `current` only on `session.active`; a session
   closed in the sidebar is absent (US2-4); the session of a collapsed (unopened) location row is
   still listed
-- [ ] T023 [P] [US2] Write the failing choose tests in `crates/micold-client/tests/quick_switch.rs`:
+- [ ] T023 [US2] Write the failing choose tests in `crates/micold-client/tests/quick_switch.rs`:
   `Chosen(Session(id))` closes and returns `Step::Session(id)`; applied, it makes `id`
   `session.active`, opens its location's row and selects its sub-row with the reveal armed
   (US2-2, SC-004); typing a location's name then `Moved(Next)` twice highlights its second session
@@ -312,7 +312,7 @@ chosen.
   an unavailable one, `selectable == available`; the active project is not a project entry
   (US3-4); no location or session of another project is listed (US3-5, D4); on the welcome screen
   the list is every known project; with no known project and no active one the list is empty
-- [ ] T028 [P] [US3] Write the failing reducer and apply tests in
+- [ ] T028 [US3] Write the failing reducer and apply tests in
   `crates/micold-client/tests/quick_switch.rs`: `Chosen(Project(p))` for an available project
   closes and returns `Step::Project(p)`; applied, `p` is active, its current session is restored
   and the previous project's sessions keep running (count unchanged, US3-2, SC-005); for an
@@ -365,7 +365,8 @@ No code. These are the close unit's (milestones.md rule 4).
 - **Setup (Phase 1)**: none.
 - **Foundational (Phase 2)**: after Setup; blocks every story. T003 before T004; T005 before T006.
 - **US1 (Phase 3)**: after Foundational. T009–T012 before T013–T019; T013 before T014; T014
-  before T015–T017; T018 after T017; T020 last (closes T005's docs test).
+  before T015–T017; T016 before T015 (its registry line names `ui::quick_switcher::dialog`);
+  T018 after T017; T020 last (closes T005's docs test).
 - **US2 (Phase 4)**: after US1 (extends `filter`, `candidates`, `update` and the doc bullet).
 - **US3 (Phase 5)**: after US2 (the project entries follow the sessions; T030 extends the showcase
   sample, T031 the bullet).
@@ -382,8 +383,9 @@ No code. These are the close unit's (milestones.md rule 4).
 
 - T001 ∥ T002 (core vs client files).
 - T003 ∥ T005 ∥ T007 ∥ T008 (core, keymap, `features/navigation.rs`, `shell/navigation.rs`).
-- T009 ∥ T012 (`tests/quick_switch.rs` vs `tests/overlay_registry.rs`); T010 and T011 share
-  `tests/quick_switch.rs`, so write them in sequence or in separate `mod` blocks.
+- T009 ∥ T012 (`tests/quick_switch.rs` vs `tests/overlay_registry.rs` and the routing files);
+  T010 and T011 share `tests/quick_switch.rs` with T009, so they follow it in sequence.
+- T022 and T023 share `tests/quick_switch.rs`; so do T027 and T028: each pair runs in sequence.
 - T021 ∥ T022 (core vs client tests).
 
 ---
