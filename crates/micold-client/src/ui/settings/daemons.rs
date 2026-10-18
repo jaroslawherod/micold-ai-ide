@@ -523,10 +523,10 @@ fn kube_form<'a>(
         "Nothing reaches the pod unless it is ticked here.",
         roles,
     ));
-    for kind in AllowedKind::all() {
+    for (place, kind) in AllowedKind::all().into_iter().enumerate() {
         fields = fields.push(
             Checkbox::new(kind.label(), kube.allowed.contains(&kind), roles)
-                .track_focus(FieldId::DaemonKubeAllowed(kind), focused)
+                .track_focus(FieldId::DaemonKubeAllowed(place as u8), focused)
                 .on_toggle(move |on| Message::Daemons(DaemonsMsg::AllowedToggled(kind, on))),
         );
         let file = match kind {
