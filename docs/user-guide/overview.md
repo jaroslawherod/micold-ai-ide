@@ -155,7 +155,7 @@ too, or to the first card if that one is gone. With no card focused the keys do 
 
 ## Keyboard
 
-Opening the Overview puts the keyboard on its first card. **Tab** and **Shift+Tab** move to the next and previous card; the arrow keys do the same (**Right** and **Down** forward, **Left** and **Up** back). The focused card shows a ring. **Menu** or **Shift+F10** opens its menu (see *Acting on a card*). **Escape** closes the Overview, after any dialog or unsaved Settings draft that Escape would close first. **Ctrl+Shift+F** (**Cmd+Shift+F** on macOS) enters and leaves [full screen](#full-screen) while the Overview is open. While a terminal has the keyboard, the arrow keys and Escape go to the terminal.
+Opening the Overview puts the keyboard on its first card. **Tab** and **Shift+Tab** move to the next and previous card; the arrow keys do the same (**Right** and **Down** forward, **Left** and **Up** back). The focused card shows a ring. **Menu** or **Shift+F10** opens its menu (see *Acting on a card*). **Escape** closes the Overview, after any dialog or unsaved Settings draft that Escape would close first. **Ctrl+Shift+F** (**Cmd+Shift+F** on macOS) enters and leaves [full screen](#full-screen) while the Overview is open. While a terminal has the keyboard, the arrow keys, Escape and the full-screen shortcut go to the terminal.
 
 ## The five states, worst first
 

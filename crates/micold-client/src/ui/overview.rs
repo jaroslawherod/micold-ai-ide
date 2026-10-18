@@ -597,5 +597,4 @@ mod tests {
         assert_eq!(full_screen_icon(false), Icon::FullScreen);
         assert_eq!(full_screen_icon(true), Icon::FullScreenExit);
     }
-
 }

@@ -317,7 +317,10 @@ fn overview_chord_label_names_the_platform_chord() {
 fn is_overview_full_screen_chord_is_primary_shift_f_only() {
     use micold_client::keymap::is_overview_full_screen_chord;
     for c in ['f', 'F'] {
-        assert!(is_overview_full_screen_chord(&Key::Char(c), primary_shift()));
+        assert!(is_overview_full_screen_chord(
+            &Key::Char(c),
+            primary_shift()
+        ));
     }
     let shift_only = Mods {
         shift: true,
