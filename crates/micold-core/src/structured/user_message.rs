@@ -56,7 +56,10 @@ pub fn encode_user_message(text: &str) -> String {
         r#type: "user",
         message: Message {
             role: "user",
-            content: [Text { r#type: "text", text }],
+            content: [Text {
+                r#type: "text",
+                text,
+            }],
         },
     };
     // Serializing plain strings into JSON cannot fail.
@@ -95,7 +98,11 @@ mod tests {
 
     #[test]
     fn multi_line_quoted_and_non_ascii_text_decodes_back_unchanged() {
-        for text in ["two\nlines\r\nand a tab\t", "say \"hi\" \\ back", "zażółć 🦀 日本"] {
+        for text in [
+            "two\nlines\r\nand a tab\t",
+            "say \"hi\" \\ back",
+            "zażółć 🦀 日本",
+        ] {
             let line = encode_user_message(text);
             assert!(line.ends_with('\n'));
             assert_eq!(line.matches('\n').count(), 1, "one line: {line:?}");
