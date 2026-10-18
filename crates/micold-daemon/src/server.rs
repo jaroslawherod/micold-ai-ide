@@ -294,6 +294,7 @@ pub async fn run() -> io::Result<()> {
             {
                 tracing::error!(error = %e, path = %endpoint.lock_path.display(), "could not record daemon pid");
             }
+            crate::runtime_status::spawn(Arc::clone(&state), endpoint.clone());
             serve_interprocess(state, *bound).await
         }
     }

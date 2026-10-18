@@ -1,4 +1,4 @@
-//! The remote helper: `micold-daemon remote bridge | prune` (feature 489, contracts/ssh-transport.md).
+//! The remote helper: `micold-daemon remote bridge | status | stop | prune` (feature 489, contracts/ssh-transport.md).
 //!
 //! The client runs these over `ssh` on the host this daemon lives on. `bridge` is the whole
 //! transport: it connects the `ssh` child's stdin and stdout to the daemon's own local endpoint,
@@ -13,6 +13,7 @@ use std::time::{Duration, Instant};
 
 use micold_core::connect::{dial, SPAWN_TIMEOUT};
 use micold_core::endpoint::Endpoint;
+use micold_core::ssh::status::{RemoteStatus, EXIT_SESSIONS_RUNNING, EXIT_UNKNOWN};
 use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
 
 /// How long a spawned daemon is given before another is spawned, as `connect_or_spawn`.
@@ -48,10 +49,83 @@ pub fn main(args: &[OsString]) -> i32 {
                 }
             }
         }
+        "status" => run_status(),
+        "stop" => run_stop(),
         _ => {
-            eprintln!("usage: micold-daemon remote bridge | prune --keep <n>");
+            eprintln!("usage: micold-daemon remote bridge | status | stop | prune --keep <n>");
             2
         }
+    }
+}
+
+/// How long `stop` waits for the endpoint to stop accepting.
+const STOP_TIMEOUT: Duration = Duration::from_secs(8);
+/// `stop` exit code: the daemon was told to end but still accepts.
+const EXIT_STOP_TIMEOUT: i32 = 5;
+
+/// What `stop` does for a daemon whose status reads `status`.
+#[derive(Debug, PartialEq, Eq)]
+pub enum StopDecision {
+    /// No session runs: end the process with this pid.
+    End(u32),
+    /// `running` sessions run: end nothing.
+    Sessions(u32),
+    /// Nothing proves there are none: end nothing.
+    Unknown,
+}
+
+/// The one rule that ends a daemon: its status proves zero running sessions.
+pub fn decide_stop(status: Option<&RemoteStatus>) -> StopDecision {
+    match status {
+        Some(s) if s.running_sessions == 0 => StopDecision::End(s.pid),
+        Some(s) => StopDecision::Sessions(s.running_sessions),
+        None => StopDecision::Unknown,
+    }
+}
+
+fn run_status() -> i32 {
+    let Ok(endpoint) = micold_core::endpoint::resolve_pinned() else {
+        return EXIT_UNKNOWN;
+    };
+    match crate::runtime_status::read(&endpoint) {
+        Some(status) => {
+            println!("{}", status.to_json());
+            0
+        }
+        None => EXIT_UNKNOWN,
+    }
+}
+
+fn run_stop() -> i32 {
+    let Ok(endpoint) = micold_core::endpoint::resolve_pinned() else {
+        return EXIT_UNKNOWN;
+    };
+    let status = crate::runtime_status::read(&endpoint);
+    match decide_stop(status.as_ref()) {
+        StopDecision::Sessions(running) => {
+            eprintln!("micold-daemon remote stop: {running} session(s) are running; not stopped");
+            EXIT_SESSIONS_RUNNING
+        }
+        StopDecision::Unknown => {
+            eprintln!("micold-daemon remote stop: the daemon's sessions are not known; not stopped");
+            EXIT_UNKNOWN
+        }
+        StopDecision::End(_) => match micold_core::spawn::stop_running_daemon(&endpoint) {
+            Ok(_) => {
+                let deadline = Instant::now() + STOP_TIMEOUT;
+                while micold_core::spawn::running_daemon_pid(&endpoint).is_some() {
+                    if Instant::now() >= deadline {
+                        return EXIT_STOP_TIMEOUT;
+                    }
+                    std::thread::sleep(Duration::from_millis(50));
+                }
+                0
+            }
+            Err(e) => {
+                eprintln!("micold-daemon remote stop: {e}");
+                1
+            }
+        },
     }
 }
 
@@ -249,6 +323,24 @@ mod tests {
             .unwrap_err();
         assert_eq!(err.kind(), io::ErrorKind::TimedOut);
         assert!(err.to_string().contains("d.sock"));
+    }
+
+    fn status(running: u32) -> RemoteStatus {
+        crate::runtime_status::snapshot(
+            &Endpoint {
+                socket_path: "s".into(),
+                lock_path: "l".into(),
+            },
+            running,
+        )
+    }
+
+    #[test]
+    fn only_a_status_proving_no_sessions_ends_the_daemon() {
+        let idle = status(0);
+        assert_eq!(decide_stop(Some(&idle)), StopDecision::End(idle.pid));
+        assert_eq!(decide_stop(Some(&status(3))), StopDecision::Sessions(3));
+        assert_eq!(decide_stop(None), StopDecision::Unknown);
     }
 
     #[test]

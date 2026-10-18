@@ -4041,6 +4041,12 @@ impl DaemonState {
         }
     }
 
+    /// How many sessions are live on this daemon right now: what `status.json` reports, and so
+    /// what decides whether a mismatched remote daemon may be replaced (feature 489, FR-011).
+    pub fn live_session_count(&self) -> usize {
+        self.lock().sessions.len()
+    }
+
     /// Phase two of the idle unwind: drop the live session table, returning how many were dropped.
     ///
     /// Dropping is the teardown. Each [`LiveSession`] owns its `PtySession`, whose `Drop`
