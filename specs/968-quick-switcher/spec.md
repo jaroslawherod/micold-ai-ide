@@ -41,8 +41,8 @@ are those of `specs/803-keyboard-navigation/spec.md#terms`. In addition:
   _(agent-resolved: spec.md#user-story-3 scenario 3, FR-006, FR-008)_
 - Q: Are the locations and sessions of the other known projects listed too, or only those of the
   active project? → A: Only the active project's; another project is listed as one project entry,
-  and its locations and sessions are listed once it is active. _(default, pending user
-  confirmation — option A recommended)_
+  and its locations and sessions are listed once it is active. _(decided by user, 2026-10-18,
+  option A)_
 - Q: Where does a session that stays only because its location's name matches rank? → A: Right
   after its location, in session order, with its location's rank. _(agent-resolved:
   spec.md#user-story-2 scenario 3, "typing a worktree's name and then moving down reaches its

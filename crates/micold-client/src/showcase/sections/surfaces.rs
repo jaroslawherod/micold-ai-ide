@@ -70,11 +70,18 @@ fn quick_switcher_pose(roles: Roles, nothing_matches: bool) -> Element<'static, 
                     context_line(crate::features::quick_switch::Kind::Location, ""),
                     Vec::new(),
                 ),
+                material::TypeaheadRow::new("Archive", vec![])
+                    .details(
+                        context_line(crate::features::quick_switch::Kind::Project, "unavailable"),
+                        Vec::new(),
+                    )
+                    .disabled(),
             ],
             vec![
                 EntryKey::Location(SessionLocation::Worktree("feat-login".into())),
                 EntryKey::Session(micold_core::session::SessionId(uuid::Uuid::from_u128(1))),
                 EntryKey::Location(SessionLocation::Default),
+                EntryKey::Project("/archive".into()),
             ],
         )
     };

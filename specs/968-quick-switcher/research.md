@@ -3,7 +3,7 @@
 **Feature**: 968 | **Plan**: [plan.md](./plan.md) | **Spec**: [spec.md](./spec.md)
 
 No `NEEDS CLARIFICATION` remained after clarify. Ledger decision D4 (only the active project's
-locations and sessions are entries, option A) is a default pending the user's confirmation. R4 keeps
+locations and sessions are entries, option A) was decided by the user on 2026-10-18. R4 keeps
 every "which entries exist" rule in one builder function, so flipping to option B (all projects) is
 a change to that function, its tests and the spec's FR-003/FR-004, and nothing else.
 

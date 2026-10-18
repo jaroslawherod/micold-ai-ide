@@ -13,7 +13,7 @@ Filtering is in-order character matching ranked prefix / run / scattered, decide
 module `quick_switch` that reuses the type-ahead's folding and tier functions. Choosing resolves the
 entry to the #803 `navigation::Step` and applies it through `apply_navigation` /
 `finish_navigation`, so the result and the keyboard placement are exactly a row click's (or the
-#803 chord's). Ledger D4 (active project only) is provisional: every "which entries exist" rule is
+#803 chord's). Ledger D4 (active project only, decided by the user) holds: every "which entries exist" rule is
 in one builder, `features/quick_switch.rs::candidates`, so option B is a change there.
 
 ## Technical Context

@@ -19,14 +19,14 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1036 | design (spec, plan, tasks) | merged | c687792e717f3312881d09e87ed8e6f1ea374022 |
 | #1057 | M1 | merged | 7dded4dabfe494a9aa98b069d0cec860beee2dd2 |
-| pending | M2 | branch pushed, orchestrator opens the PR | — |
+| #1061 | M2 | merged | 3b62b1ff34734a4cf0f6c8382e21b5b637090650 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T020 | full | Chord opens the switcher over the active project's locations; filter, choose = row click, close | #1057 | merged |
-| M2 | T021–T026 | full | Sessions listed under their locations, found by name, kept by a location match | pending | in review |
+| M2 | T021–T026 | full | Sessions listed under their locations, found by name, kept by a location match | #1061 | merged |
 | M3 | T027–T031 | light | Other known projects listed (unavailable badged, unselectable); complete user-guide bullet | — | planned |
 
 ## Decisions
@@ -36,7 +36,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D1 | spec | Which chord opens the quick-switcher? | Ctrl/Cmd+Shift+P | agent-resolved | spec.md#assumptions; docs/user-guide/terminal-panes.md#keyboard-shortcuts |
 | D2 | clarify | Are worktrees hidden by the tag filter listed? | No; #803 Location order (after the filter) | agent-resolved | specs/803-keyboard-navigation/spec.md#terms |
 | D3 | clarify | Unavailable projects: listed despite #803 Project order excluding them? | Listed in the switcher's order, badged, not selectable | agent-resolved | spec.md US3 scenario 3, FR-006, FR-008 |
-| D4 | clarify | List other projects' locations and sessions? | No, active project only (option A) | default, pending user confirmation | may flip to B (all projects): then US3-5, FR-003, FR-004 change; spec.md#clarifications |
+| D4 | clarify | List other projects' locations and sessions? | No, active project only (option A) | _(decided by user, 2026-10-18)_ | user chose option A via decision card; spec.md#clarifications |
 | D5 | clarify | Rank of a session kept by its location's match; highlight past unavailable projects | After its location, location's rank; first selectable entry | agent-resolved | spec.md US2-3, FR-007 |
 | D6 | tasks | Split US1 (20 tasks) further? | No: chord, dialog, list and choose are one observable loop (milestones rules 1, 6); sessions and projects are M2, M3 | agent-resolved | tasks.md M1 Note |
 | D7 | tasks | speckit-analyze C1/C2: Overview-close and empty-state choice sat in glue | plan D5, data-model, contracts/ui.md U3/U5: `update` returns `Choice { step, terminal_had_focus, close_overview_first }`, `list` returns `Empty`; Tab listed as a close | agent-resolved | speckit-analyze report (tasks unit) |
@@ -72,7 +72,7 @@ None.
 
 ## Open escalation
 
-None. (Q1 answered provisionally as D4; user confirmation pending.)
+None. (D4 confirmed by the user, 2026-10-18.)
 
 ## Follow-ups not done
 

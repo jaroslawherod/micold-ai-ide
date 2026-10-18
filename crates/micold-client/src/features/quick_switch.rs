@@ -147,8 +147,8 @@ fn highlighted_key(list: &List) -> Option<EntryKey> {
     Some(list.entries[list.ranked[at].index].candidate.key.clone())
 }
 
-/// The step choosing `key` resolves to, from a fresh list; `None` for a key not listed and for the
-/// kinds that are not listed yet (projects).
+/// The step choosing `key` resolves to, from a fresh list; `None` for a key not listed and for an
+/// unavailable project.
 fn resolve(state: &Root, key: &EntryKey) -> Option<Step> {
     let listed = candidates(state);
     if !listed
@@ -164,7 +164,7 @@ fn resolve(state: &Root, key: &EntryKey) -> Option<Step> {
         ),
         // A click on the session's sub-row: `Selected` opens its location's row and reveals it.
         EntryKey::Session(id) => Some(Step::Session(*id)),
-        EntryKey::Project(_) => None,
+        EntryKey::Project(path) => Some(Step::Project(path.clone())),
     }
 }
 
@@ -241,7 +241,8 @@ fn close(state: &mut Root) {
 
 /// The palette's entries in FR-004 order (data-model.md *Entry*): the active project's locations
 /// in `navigation::location_order`, each followed by its open sessions in the order a chord steps
-/// through them, collapsed rows included. Other projects (M3) are not listed yet.
+/// through them, collapsed rows included; then the other known projects in the project switcher's
+/// order, unavailable ones included but not selectable (D4: no other project's locations).
 pub fn candidates(state: &Root) -> Vec<Entry> {
     let nodes = navigation::location_nodes(state);
     let current = state
@@ -283,5 +284,31 @@ pub fn candidates(state: &Root) -> Vec<Entry> {
             current: state.session.active == Some(session.id),
         }));
     }
+    entries.extend(
+        state
+            .switcher_entries()
+            .into_iter()
+            .filter(|project| !project.is_active)
+            .map(|project| {
+                let mut context = format!(
+                    "{} running · {} unread",
+                    project.running_count, project.unread_count
+                );
+                if !project.available {
+                    context.push_str(" · unavailable");
+                }
+                Entry {
+                    candidate: Candidate {
+                        key: EntryKey::Project(project.path),
+                        name: project.label,
+                        parent: None,
+                        selectable: project.available,
+                    },
+                    kind: Kind::Project,
+                    context,
+                    current: false,
+                }
+            }),
+    );
     entries
 }
