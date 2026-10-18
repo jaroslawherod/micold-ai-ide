@@ -86,7 +86,7 @@ specs/938-structured-session-mode/
 ├── quickstart.md
 ├── contracts/
 │   ├── claude-stream-json.md     # what the app reads from / writes to the CLI
-│   └── wire.md                   # client ↔ daemon protocol additions (protocol 52)
+│   └── wire.md                   # client ↔ daemon protocol additions (protocol 52 and on)
 └── tasks.md                      # next unit
 ```
 
@@ -99,7 +99,7 @@ crates/micold-core/src/
 ├── provider.rs                # + AiCliProvider::structured_args() — Some only for Claude Code
 ├── protocol/messages.rs       # + SessionSummary.kind, SessionCreate.kind, SessionUserMessage,
 │                              #   DaemonMsg::StructuredEvents, SessionRequestRefused
-├── protocol/version.rs        # PROTOCOL_VERSION 51 → 52
+├── protocol/version.rs        # PROTOCOL_VERSION +1 per wire-changing milestone (R13)
 └── structured/                # NEW, render-free
     ├── mod.rs
     ├── event.rs               # StructuredEvent, ContentBlock, SequencedEvent
@@ -182,21 +182,18 @@ visual pass.
 | FR-020 | wire `SessionSummary.kind` | core (summary serde); client (kind reaches the row model) |
 | FR-021 | R2 (`launch_args` resume) | daemon `structured_resume` (`--resume` on restart and restore; new session gets `--session-id`) |
 | FR-021a | R5 (history map outside `LiveSession`) | daemon `structured_history` (stop/start keeps), `structured_resume` (daemon restart: history starts at resume) |
-| FR-022 | R10; `features/session.rs`, `ui/sidebar.rs` | client `structured_start_menu`; gate `structured_row_marker_fits`; §B 1–3 |
+| FR-022 | R10; `features/session.rs`, `ui/sidebar.rs` (US6) | client `structured_start_menu`; gate `structured_row_marker_fits`; §B 1–3 |
 | FR-022a | R10; `log_line.rs`, `features/structured_log.rs`, `ui/terminal.rs` | core (`log_line` per event kind); client `structured_log`; §B 2, 5, 6 |
-| FR-023 | `docs/user-guide/worktrees-and-sessions.md` (M3) | M3 diff review (doc names kind, choice, Claude-only, later issues) |
+| FR-023 | `docs/user-guide/worktrees-and-sessions.md` (M7) | M7 diff review (doc names kind, choice, Claude-only, later issues) |
 | FR-024 | R11; contracts/claude-stream-json.md *Fixtures* | core `structured_parse` |
 | FR-025 | R12 | daemon (all four `structured_*` suites run with the stand-in only) |
 
 ## Delivery
 
-Proposed milestones (the tasks unit decides):
-
-1. **M1 core**: `structured/` module, fixtures, `SessionKind`, store field, provider args. No
-   user-visible change.
-2. **M2 daemon + wire**: pipe session, kind-aware start/stop/kill/restart/supervision, history and
-   streaming, user messages, refusals, resume, protocol 52. Not yet selectable in the UI.
-3. **M3 client + docs**: chevron entry, row marker, log pane, user guide (FR-022, FR-022a, FR-023).
+Seven milestones, cut in [tasks.md](tasks.md) *Milestones*: M1 parser and fixtures (with the
+session kind), M2 daemon spawn and streaming, M3 first prompt and user messages, M4 resume, M5
+late and multiple viewers, M6 lifecycle parity and refusals, M7 client selection, log pane and
+user guide. The kind is unreachable from the UI until M7.
 
 ## Complexity Tracking
 

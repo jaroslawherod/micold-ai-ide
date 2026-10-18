@@ -7,8 +7,9 @@
 | `Terminal` (default) | today's PTY session |
 | `Structured` | pipes + stream-json; Claude Code only |
 
-- `Session.kind`: set by `Session::start_new(location, provider, kind)` and
-  `Session::restored(…, kind)`; no setter (FR-002).
+- `Session.kind`: set by `Session::start_new_of_kind(location, provider, kind)` and
+  `Session::restored_of_kind(…, kind)`; `start_new` and `restored` keep their signatures and
+  delegate with `Terminal`, so existing callers are untouched (SC-004); no setter (FR-002).
 - `StoredSession.kind`: `#[serde(default, skip_serializing_if = "SessionKind::is_terminal")]`;
   absent → `Terminal` (FR-001, FR-004). No `schema_version` bump.
 - `SessionSummary.kind`, `SessionCreate.kind`: `#[serde(default)]` (FR-020).
@@ -30,6 +31,7 @@ One per line read (FR-014), plus daemon notes.
 | `Unrecognised` | `raw: String` (the whole line) | valid JSON, unknown type or shape mismatch (FR-012) |
 | `Unreadable` | `text: String` | not JSON, or a partial last line (FR-013) |
 | `TurnEndedWithoutResult` | — | daemon note: process ended mid-turn |
+| `OversizedOnWire` | `original_bytes: u64` | wire only: stands in, under its own `seq`, for an event whose encoding exceeds `MAX_FRAME_LENGTH / 2` (R6); history keeps the event whole |
 
 `raw` is the original line on every CLI-sourced variant, so nothing is lost when the model is
 narrower than the CLI (FR-011, FR-015). Typed fields are `Option` where the CLI may omit them.
