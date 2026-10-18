@@ -155,7 +155,9 @@ async fn ssh_real_mismatch_replace_is_offered_with_no_sessions_and_then_connects
             return;
         }
     };
-    let refused = stale_daemon::dialer(&host, stale, OLDER).connect(None).await;
+    let refused = stale_daemon::dialer(&host, stale, OLDER)
+        .connect(None)
+        .await;
     let stale_guard = stale_daemon::cleanup_guard();
     let stale_pid = stale_guard.0.expect("the stale daemon runs on the host");
     let Ok(Connected::Refused(RefusalReason::BuildMismatch {
@@ -190,7 +192,11 @@ async fn ssh_real_mismatch_replace_is_offered_with_no_sessions_and_then_connects
         "the replacement connects: {:?}",
         connected.map(|_| ())
     );
-    assert_ne!(fresh.0, Some(stale_pid), "this build's daemon took its place");
+    assert_ne!(
+        fresh.0,
+        Some(stale_pid),
+        "this build's daemon took its place"
+    );
 }
 
 /// T076, FR-011: a daemon with a running session is never offered a replacement and is not ended.

@@ -203,12 +203,8 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
 /// it arrives the offer is `Unknown`, which promises nothing.
 pub fn ask_offer(app: &mut App, id: DaemonId) -> Task<Message> {
     use micold_core::daemons::DaemonRuntime;
-    let Some(DaemonRuntime::Ssh(ssh)) = app
-        .core
-        .settings
-        .daemons
-        .get(id)
-        .map(|e| e.runtime.clone())
+    let Some(DaemonRuntime::Ssh(ssh)) =
+        app.core.settings.daemons.get(id).map(|e| e.runtime.clone())
     else {
         return Task::none();
     };
