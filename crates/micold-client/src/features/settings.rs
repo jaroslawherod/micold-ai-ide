@@ -577,6 +577,35 @@ pub struct FieldError {
     pub message: String,
 }
 
+/// Why a save was refused: a required field is empty, or a field holds a value the form rejects.
+///
+/// Emptiness is its own case (feature 937, FR-010): the field reads "This field is required" from
+/// [`SettingsDraft::required`], not from a message, so the page can show every empty required field
+/// at once.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Refusal {
+    /// At least one required field is empty; none of them has a message of its own.
+    Missing,
+    /// A field that is not empty holds a value the form rejects.
+    Field(FieldError),
+}
+
+impl Refusal {
+    /// The field error, or `None` for [`Refusal::Missing`].
+    pub fn into_field(self) -> Option<FieldError> {
+        match self {
+            Self::Field(error) => Some(error),
+            Self::Missing => None,
+        }
+    }
+}
+
+impl From<FieldError> for Refusal {
+    fn from(error: FieldError) -> Self {
+        Self::Field(error)
+    }
+}
+
 /// The draft, parsed and in range — what a save applies.
 ///
 /// A separate type from [`Settings`] because it is not one: the daemon half is assembled from a
@@ -922,12 +951,41 @@ impl SettingsDraft {
         self.error = Some(error);
     }
 
+    /// Validate for a save. A refusal marks the attempt, so every empty required field reads
+    /// "required" at once (feature 937, FR-006), and shows the section holding the first thing
+    /// wrong: the field error's section, else the first section with an empty required field.
+    /// Nothing is saved on a refusal.
+    pub fn validated_for_save(&mut self) -> Option<ValidSettings> {
+        match self.validate() {
+            Ok(valid) => Some(valid),
+            Err(refusal) => {
+                self.required.attempt();
+                match refusal {
+                    Refusal::Field(error) => self.report(error),
+                    Refusal::Missing => {
+                        self.error = None;
+                        if let Some(section) = SettingsSection::ALL.iter().copied().find(|s| {
+                            self.required_fields(*s)
+                                .iter()
+                                .any(|(_, r)| r.required && r.empty)
+                        }) {
+                            self.section = section;
+                        }
+                    }
+                }
+                None
+            }
+        }
+    }
+
     /// Parse and range-check every section together.
     ///
     /// Total: it reports, and never panics, for anything that can be typed. The order the fields
     /// are checked in is the rail's order, so a form with two bad values reports the first one a
     /// user reading top to bottom would reach.
-    pub fn validate(&self) -> Result<ValidSettings, FieldError> {
+    pub fn validate(&self) -> Result<ValidSettings, Refusal> {
+        // An empty required field is `None` here, not an error: the page shows every one of them at
+        // once, so a check that finds one goes on to the next (feature 937, FR-010).
         let scrollback_lines = self.scrollback()?;
         let env_include_timeout_secs = self.timeout()?;
         let long_task_threshold_secs = self.long_task_threshold()?;
@@ -945,8 +1003,27 @@ impl SettingsDraft {
             message: problem.message(),
         })?;
         profile.budget = self.budget()?;
-        self.mapping()?;
+        let mapping_complete = self.mapping()?;
         let jira = self.jira_action()?;
+
+        let (
+            Some(scrollback_lines),
+            Some(env_include_timeout_secs),
+            Some(long_task_threshold_secs),
+            Some(plan_usage_warn_percent),
+            true,
+            Some(jira),
+        ) = (
+            scrollback_lines,
+            env_include_timeout_secs,
+            long_task_threshold_secs,
+            plan_usage_warn_percent,
+            mapping_complete,
+            jira,
+        )
+        else {
+            return Err(Refusal::Missing);
+        };
 
         Ok(ValidSettings {
             theme: self.appearance.theme,
@@ -1045,25 +1122,27 @@ impl SettingsDraft {
     }
 
     /// The connection form, checked last because its section is last in the rail (FR-006).
-    fn jira_action(&self) -> Result<micold_core::jira::ConnectionAction, FieldError> {
+    ///
+    /// `Ok(None)` when a field the connection needs is empty: it reads "required", not an error.
+    fn jira_action(&self) -> Result<Option<micold_core::jira::ConnectionAction>, FieldError> {
         use micold_core::jira::{
             ApiToken, ConnectionAction, FieldProblem, JiraConnection, JiraField,
         };
         let j = &self.jira;
         let Some(project) = j.project.clone() else {
-            return Ok(ConnectionAction::Keep);
+            return Ok(Some(ConnectionAction::Keep));
         };
         // A removal wins over the switch: answering **Remove** to the question arrives with the
         // switch already off.
         if j.remove_requested {
-            return Ok(if j.connection.is_some() {
+            return Ok(Some(if j.connection.is_some() {
                 ConnectionAction::Remove { project }
             } else {
                 ConnectionAction::Keep
-            });
+            }));
         }
         if !j.enabled || !j.has_input() {
-            return Ok(ConnectionAction::Keep);
+            return Ok(Some(ConnectionAction::Keep));
         }
         let refuse = |problem: FieldProblem| FieldError {
             field: match problem.field {
@@ -1075,21 +1154,43 @@ impl SettingsDraft {
             section: SettingsSection::Jira,
             message: problem.reason.to_owned(),
         };
-        let connection = JiraConnection::parse(&j.site, &j.project_key, &j.email)
-            .map_err(|problems| refuse(problems[0]))?;
+        let empty = |field: JiraField| {
+            let text = match field {
+                JiraField::Site => &j.site,
+                JiraField::ProjectKey => &j.project_key,
+                JiraField::Email => &j.email,
+                JiraField::Token => j.token.as_str(),
+            };
+            text.trim().is_empty()
+        };
+        let connection = match JiraConnection::parse(&j.site, &j.project_key, &j.email) {
+            Ok(connection) => Some(connection),
+            // An empty field is "required"; a field that is filled in but wrong keeps its message.
+            Err(problems) => match problems.iter().find(|p| !empty(p.field)) {
+                Some(problem) => return Err(refuse(*problem)),
+                None => None,
+            },
+        };
         let token = if j.token.as_str().trim().is_empty() && j.token_stored {
-            None
+            Some(None)
         } else {
-            Some(ApiToken::parse(j.token.as_str()).map_err(refuse)?)
+            match ApiToken::parse(j.token.as_str()) {
+                Ok(token) => Some(Some(token)),
+                Err(problem) if empty(problem.field) => None,
+                Err(problem) => return Err(refuse(problem)),
+            }
+        };
+        let (Some(connection), Some(token)) = (connection, token) else {
+            return Ok(None);
         };
         if token.is_none() && j.connection.as_ref() == Some(&connection) {
-            return Ok(ConnectionAction::Keep);
+            return Ok(Some(ConnectionAction::Keep));
         }
-        Ok(ConnectionAction::Save {
+        Ok(Some(ConnectionAction::Save {
             project,
             connection,
             token,
-        })
+        }))
     }
 
     /// Whether saving now must first ask the Keep-or-Remove question: the switch goes off over a
@@ -1109,22 +1210,40 @@ impl SettingsDraft {
     }
 
     /// The label-to-type mapping, checked last because its section is last in the rail (FR-019).
-    fn mapping(&self) -> Result<(), FieldError> {
-        validate_mapping(&self.github.entries).map_err(|error| FieldError {
-            field: FieldId::IssueMappingLabel(error.index),
-            section: SettingsSection::GithubIssues,
-            message: match error.kind {
-                MappingErrorKind::Blank => "Enter a label, or remove this entry.".to_string(),
-                // Named by the label it repeats: the rows carry no numbers to point at.
-                MappingErrorKind::Duplicate { of } => format!(
-                    "“{}” is already mapped above.",
-                    self.github.entries[of].label.trim()
-                ),
-            },
-        })
+    ///
+    /// `Ok(false)` when a label is empty: that entry's field reads "required", not an error.
+    /// A repeated label is still reported, from the entries that are filled in.
+    fn mapping(&self) -> Result<bool, FieldError> {
+        let filled: Vec<(usize, &LabelTypeEntry)> = self
+            .github
+            .entries
+            .iter()
+            .enumerate()
+            .filter(|(_, entry)| !entry.label.trim().is_empty())
+            .collect();
+        let complete = filled.len() == self.github.entries.len();
+        let entries: Vec<LabelTypeEntry> = filled.iter().map(|(_, e)| (*e).clone()).collect();
+        validate_mapping(&entries)
+            .map(|()| complete)
+            .map_err(|error| {
+                let index = filled[error.index].0;
+                FieldError {
+                    field: FieldId::IssueMappingLabel(index),
+                    section: SettingsSection::GithubIssues,
+                    message: match error.kind {
+                        MappingErrorKind::Blank => {
+                            "Enter a label, or remove this entry.".to_string()
+                        }
+                        // Named by the label it repeats: the rows carry no numbers to point at.
+                        MappingErrorKind::Duplicate { of } => {
+                            format!("“{}” is already mapped above.", filled[of].1.label.trim())
+                        }
+                    },
+                }
+            })
     }
 
-    fn scrollback(&self) -> Result<usize, FieldError> {
+    fn scrollback(&self) -> Result<Option<usize>, FieldError> {
         let min = micold_core::settings::MIN_SCROLLBACK_LINES;
         let max = micold_core::settings::MAX_SCROLLBACK_LINES;
         let reject = |message: String| FieldError {
@@ -1132,8 +1251,11 @@ impl SettingsDraft {
             section: SettingsSection::Terminal,
             message,
         };
+        if self.terminal.scrollback_lines.trim().is_empty() {
+            return Ok(None);
+        }
         match self.terminal.scrollback_lines.trim().parse::<usize>() {
-            Ok(n) if (min..=max).contains(&n) => Ok(n),
+            Ok(n) if (min..=max).contains(&n) => Ok(Some(n)),
             Ok(_) => Err(reject(format!("Enter a number between {min} and {max}."))),
             Err(_) => Err(reject("Enter a whole number of lines.".to_string())),
         }
@@ -1164,7 +1286,7 @@ impl SettingsDraft {
         })
     }
 
-    fn timeout(&self) -> Result<u64, FieldError> {
+    fn timeout(&self) -> Result<Option<u64>, FieldError> {
         let min = micold_core::settings::MIN_ENV_INCLUDE_TIMEOUT_SECS;
         let max = micold_core::settings::MAX_ENV_INCLUDE_TIMEOUT_SECS;
         let reject = |message: String| FieldError {
@@ -1172,8 +1294,11 @@ impl SettingsDraft {
             section: SettingsSection::Environment,
             message,
         };
+        if self.environment.timeout_secs.trim().is_empty() {
+            return Ok(None);
+        }
         match self.environment.timeout_secs.trim().parse::<u64>() {
-            Ok(t) if (min..=max).contains(&t) => Ok(t),
+            Ok(t) if (min..=max).contains(&t) => Ok(Some(t)),
             Ok(_) => Err(reject(format!(
                 "Enter a timeout between {min} and {max} seconds."
             ))),
@@ -1182,7 +1307,7 @@ impl SettingsDraft {
     }
 
     /// The long-task threshold as typed, parsed and range-checked (feature 613, S6, FR-026).
-    fn long_task_threshold(&self) -> Result<u64, FieldError> {
+    fn long_task_threshold(&self) -> Result<Option<u64>, FieldError> {
         let min = micold_core::settings::MIN_LONG_TASK_THRESHOLD_SECS;
         let max = micold_core::settings::MAX_LONG_TASK_THRESHOLD_SECS;
         let reject = |message: String| FieldError {
@@ -1190,13 +1315,16 @@ impl SettingsDraft {
             section: SettingsSection::Environment,
             message,
         };
+        if self.environment.long_task_threshold_secs.trim().is_empty() {
+            return Ok(None);
+        }
         match self
             .environment
             .long_task_threshold_secs
             .trim()
             .parse::<u64>()
         {
-            Ok(t) if (min..=max).contains(&t) => Ok(t),
+            Ok(t) if (min..=max).contains(&t) => Ok(Some(t)),
             Ok(_) => Err(reject(format!(
                 "Enter a threshold between {min} and {max} seconds."
             ))),
@@ -1206,9 +1334,12 @@ impl SettingsDraft {
 
     /// The plan-usage threshold as typed, refused outside 50–100 with a message naming the range
     /// (feature 490, FR-005).
-    fn plan_usage_warn(&self) -> Result<u8, FieldError> {
+    fn plan_usage_warn(&self) -> Result<Option<u8>, FieldError> {
+        if self.environment.plan_usage_warn_percent.trim().is_empty() {
+            return Ok(None);
+        }
         micold_core::plan_usage::WarnPercent::parse(&self.environment.plan_usage_warn_percent)
-            .map(micold_core::plan_usage::WarnPercent::get)
+            .map(|percent| Some(micold_core::plan_usage::WarnPercent::get(percent)))
             .map_err(|message| FieldError {
                 field: FieldId::SettingsPlanUsageWarn,
                 section: SettingsSection::Environment,

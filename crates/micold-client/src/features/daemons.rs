@@ -1124,6 +1124,45 @@ fn started_state(entry_auto_start: bool, runtime: &DaemonRuntime) -> DaemonState
 /// Save the open form: an add, an edit, or (for a running daemon's runtime settings) a request for
 /// the counted confirmation. A refusal names the field and changes nothing.
 pub fn save(state: &mut State, model: &mut Model<'_>) -> Result<Vec<Outcome>, FormError> {
+    let Some(open) = state.draft.as_mut() else {
+        return Ok(Vec::new());
+    };
+    // A save is the submit attempt (feature 937, FR-006): every empty required field reads
+    // "required" at once, and nothing is saved while one is empty. A value that is filled in but
+    // wrong keeps its own error (FR-010).
+    open.required.attempt();
+    let missing: Vec<FieldId> = open
+        .required_fields()
+        .into_iter()
+        .filter(|(_, r)| r.required && r.empty)
+        .map(|(id, _)| id)
+        .collect();
+    match save_checked(state, model, missing.is_empty()) {
+        Err(error) if missing.iter().any(|id| field_name(*id) == error.field) => Ok(Vec::new()),
+        result => result,
+    }
+}
+
+/// The name [`FormError::field`] gives the field `id`, for the fields that can be required.
+fn field_name(id: FieldId) -> &'static str {
+    match id {
+        FieldId::DaemonName => "name",
+        FieldId::DaemonSshHost => "host",
+        FieldId::DaemonKubeContext => "context",
+        FieldId::DaemonKubeNamespace => "namespace",
+        FieldId::DaemonContainerName => "container_name",
+        FieldId::DaemonImage => "image",
+        _ => "",
+    }
+}
+
+/// [`save`] after the required fields are accounted for: validates the draft, and writes it only
+/// when `commit` (no required field is empty).
+fn save_checked(
+    state: &mut State,
+    model: &mut Model<'_>,
+    commit: bool,
+) -> Result<Vec<Outcome>, FormError> {
     let Some(draft) = state.draft.clone() else {
         return Ok(Vec::new());
     };
@@ -1159,6 +1198,9 @@ pub fn save(state: &mut State, model: &mut Model<'_>) -> Result<Vec<Outcome>, Fo
     };
     let probed = check(&literal_identity).and_then(|_| check(&resolved_identity));
     let (id, probe) = probed.map_err(|e| form_error(model.registry, &draft, e))?;
+    if !commit {
+        return Ok(Vec::new());
+    }
 
     match draft.editing {
         None => {
@@ -1774,6 +1816,13 @@ pub enum Msg {
 /// the host, so nothing is guessed while it cannot answer.
 pub fn add_repository(state: &mut State, model: &Model<'_>, id: DaemonId) -> Vec<Outcome> {
     let typed = state.repositories.get(&id).cloned().unwrap_or_default();
+    // An empty path is the required error on the field, not a sentence under it (feature 937,
+    // FR-006): this daemon's step alone is marked.
+    if typed.trim().is_empty() {
+        state.repository_marks.leave(FieldId::DaemonRepository(id));
+        state.repository_error = None;
+        return Vec::new();
+    }
     let located = micold_core::ssh::RemoteLocation::new(id, &typed);
     let outcome = match located {
         Err(e) => Err(e.to_string()),

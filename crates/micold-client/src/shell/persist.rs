@@ -589,16 +589,11 @@ pub fn on_settings_saved(app: &mut App) -> Task<Message> {
 ///
 /// Split out of [`on_settings_saved`] so that an invalid form is rejected in one place.
 fn validated_draft(app: &mut App) -> Option<ValidSettings> {
-    let draft = app.core.settings.settings_draft.clone()?;
-    match draft.validate() {
-        Ok(valid) => Some(valid),
-        Err(error) => {
-            if let Some(d) = app.core.settings.settings_draft.as_mut() {
-                d.report(error);
-            }
-            None
-        }
-    }
+    app.core
+        .settings
+        .settings_draft
+        .as_mut()?
+        .validated_for_save()
 }
 
 /// Write the settings and apply everything in them that this process holds a copy of.

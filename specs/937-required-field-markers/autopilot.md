@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #937
 - **Worktree branch**: claude/project-thread-rkhzho
 - **Started**: 2026-10-17
-- **Phase**: M4 PR
-- **Next step**: orchestrator opens the M4 PR (pr-title-937-M4.txt, pr-body-937-M4.md in the scratchpad), waits on CI, merges; then M5. Visual pass not run (no xdotool)
+- **Phase**: M5 gate
+- **Next step**: M5: full gate, review A and B, then push and write the PR title/body to the scratchpad (gh unusable)
 
 ## Pull requests
 
@@ -20,7 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #963 | M1: required fields marked in the dialogs | merged | 70f5872667fb6e8e9126555f2573ce86e0a7bf80 |
 | #974 | M2: required fields marked in Settings and the daemon form | merged | e1462f4fae303fa4b29aa8261a7764c0164889b0 |
 | #980 | M3: `* required` legend | merged | d22e7c18b3f076cace16af54f8ddfa539fc73a48 |
-| to-open | M4: required error on submit in the dialogs | to-open | — |
+| #1046 | M4: required error on submit in the dialogs | merged | a50adf7af2dba0be4fa366d6381aef69c45fb998 |
 
 ## Milestones
 
@@ -29,8 +29,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T015 | full | Required fields marked (`*`) in the add-worktree, run-in-parallel and rename dialogs | #963 | merged |
 | M2 | T016–T022 | full | Required fields marked in Settings sections and the daemon form | #974 | merged |
 | M3 | T023–T028 | full | `* required` legend once above the first field of every form with a required field | #980 | merged |
-| M4 | T029–T035 | full | Required error on submit in the dialogs; Create and Start runs enabled | to-open | PR |
-| M5 | T036–T041 | full | Required error on save in Settings and the daemon form | — | pending |
+| M4 | T029–T035 | full | Required error on submit in the dialogs; Create and Start runs enabled | #1046 | merged |
+| M5 | T036–T041 | full | Required error on save in Settings and the daemon form | to-open | gate |
 | M6 | T042–T048 | full | Required error on leaving a field (blur), selects included | — | pending |
 
 ## Decisions

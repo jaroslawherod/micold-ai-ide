@@ -14,6 +14,8 @@ Editing is one form across all the sections except Daemons, which saves its own 
 **Save** applies every section at once. If a value is rejected, Settings jumps to the section
 holding it and marks the field — press **Cancel**, or Esc, to leave without saving anything.
 
+Press **Save** with a required field empty and every empty one reads "This field is required" at once, across all the sections, and nothing is saved; Settings jumps to the first section holding one. A value that is filled in but wrong keeps its own message.
+
 A page or form with a field marked `*` shows a `* required` line above its first field; Appearance,
 which has none, shows no such line. Fields marked `*` must be filled before Settings accepts the form: **Scrollback lines** in
 Terminal; **Long-task threshold**, **Warn at** and the script timeout in Environment; each **Label**
