@@ -9,9 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #533
 - **Worktree branch**: feat/533_create-worktrees-from-jira-issues
 - **Started**: 2026-10-12
-- **Phase**: close (review and gate for the close PR)
-- **Next step**: close unit: answer the SC-006 escalation, then T066, T067, tdd-verify check, Status Closed, close PR
-- **CI**: #1007 docs check red (user guide); fixed in settings.md, attempt 1
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -68,6 +67,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Conformance B (M5, sonnet) | 1 | 49a404c7bb63f7867eb675cfe36caada0985a331:b6c38e8f20351df17ba252d088def630e00811a9 | CLEAN (2 MINOR fixed, prose only) |
 | Conformance B (M6, sonnet) | 1 | 6b43f04c466abeb9ce1da4c3e2ef8cfdaf9a63e1:d5c412caf13b818e50de4fa6113d688f1383d325 | CHANGES: 2 MAJOR (uncommitted test edit, cycle-log entry), 2 MINOR; all fixed |
 | Code A (M6) | 1 | 8e830d74ea771f5b9236fe9ed55680fcb9dfd894:d83f04d897c1e9d5f4a8af590ef2594330d9c64e | 8 findings: tautological token-dir test, deleted structural guard and prompt test that bypassed the shell fixed; ledger refreshed; rest declined |
+| Close diff (sonnet) | 1 | 324258fb8ab9b58e7103880158ce36c99fcf2d96:1d155ece72b76b071adafb9963a46699122e6f1a | CLEAN (3 MINOR: header fixed; deleted single-file pin accepted; T081 decision stated in PR) |
 
 ## Declined review findings
 
