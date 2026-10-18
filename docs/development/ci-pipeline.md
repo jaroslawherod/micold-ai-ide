@@ -315,17 +315,20 @@ daemon test step is the largest part (median 614 s, 406-629 s), then core tests 
 `cargo build --workspace` (~110 s). Runs whose post-cache step took 120-250 s saved a new cache
 (a miss on the exact key); the rest saved nothing.
 
-**What changed**: the rust-cache step now reports `cache-hit` in the run summary, so the hit rate
-can be counted from runs. Nothing else is changed yet. The variance sits in the test steps, not
-in the cache restore, which points at real-time antivirus scanning of freshly built binaries and
-at disk speed. The two candidates are Defender exclusions for the workspace and cargo homes
-(a security-posture change, so it needs a maintainer's decision) and a Dev Drive for
-`CARGO_TARGET_DIR` (it moves `target/`, which the packaging scripts address by path). sccache would
-add a second cache beside rust-cache and does not touch the test steps.
+**What changed**: a Windows-only step in the `test` job creates a 30 GB dynamic VHDX formatted as
+a Dev Drive (ReFS, Defender in performance mode) and points `CARGO_TARGET_DIR` at it for that job,
+and rust-cache's `workspaces` input follows the target directory there. The rust-cache step also
+reports `cache-hit` in the run summary, so the hit rate can be counted. The packaging steps keep
+addressing `target/remote-daemon` in the workspace; nothing else moves, and the ARM64 job is
+untouched. If the image cannot make a Dev Drive the step warns and the leg builds in `target` as
+before; the run summary says which happened. No Defender exclusions were added, and sccache was
+not adopted (a second cache beside rust-cache that does not touch the test steps).
 
 **After**: not yet measured. It needs 10 runs with the change; take them from the pull request's CI
 runs plus runs on `main` after the merge, with the same query (job durations of `build + test
-(windows-latest)`), and add the median, min, max and spread here.
+(windows-latest)`), and add the median, min, max and spread here. Also check from the rust-cache log that it restored and
+saved the Dev Drive path; if it did not, the cache hit rate has regressed and `workspaces` needs a
+relative form.
 
 ## Reading a run
 

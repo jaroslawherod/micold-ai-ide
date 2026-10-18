@@ -178,8 +178,38 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+      # Issue 958: Windows `build + test` ran 1093-1839 s between runs, the daemon test step
+      # (406-654 s) the largest and most variable part. A Dev Drive (ReFS in performance mode:
+      # asynchronous scanning of the build output, cheaper metadata operations) is Microsoft's
+      # remedy for many small files and freshly built executables. Only the target directory moves;
+      # the packaging steps address `target/remote-daemon` in the workspace and are unchanged.
+      # Best effort: if the image cannot make a Dev Drive the leg builds in `target` as before.
+      - name: Create a Dev Drive for the target directory (Windows)
+        if: runner.os == 'Windows'
+        id: devdrive
+        shell: pwsh
+        run: |
+          try {
+            $vhd = Join-Path $env:RUNNER_TEMP 'devdrive.vhdx'
+            $vol = New-VHD -Path $vhd -SizeBytes 30GB -Dynamic |
+              Mount-VHD -Passthru | Initialize-Disk -PartitionStyle GPT -PassThru |
+              New-Partition -AssignDriveLetter -UseMaximumSize |
+              Format-Volume -DevDrive -FileSystem ReFS -Confirm:$false -Force
+            $target = "$($vol.DriveLetter):/target"
+            New-Item -ItemType Directory -Force -Path $target | Out-Null
+            "CARGO_TARGET_DIR=$target" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+            "target=$target" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+            "Dev Drive at $target" | Tee-Object -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          } catch {
+            Write-Output "::warning::No Dev Drive, building in the workspace: $_"
+            "Dev Drive: none ($_)" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          }
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         id: rust-cache
+        with:
+          # The cache follows the target directory onto the Dev Drive (an absolute path resolves
+          # as is); on every other leg, and on Windows without a Dev Drive, it is `target`.
+          workspaces: ${{ steps.devdrive.outputs.target && format('. -> {0}', steps.devdrive.outputs.target) || '.' }}
       # Issue 958: record the cache outcome per run, so the Windows hit rate can be read off the
       # run summary (docs/development/ci-pipeline.md, "The Windows build cache").
       - name: Report rust-cache hit (Windows)
