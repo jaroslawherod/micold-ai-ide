@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-cl0lw3
 - **Started**: 2026-10-18
 - **Phase**: M2
-- **Next step**: M2 — implement T011–T021 (see Handover)
+- **Next step**: M2 — T014, T015, then T018–T021 (see Handover)
 
 ## Pull requests
 
@@ -73,12 +73,21 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M2 unit 1 hit the 150k cap while surveying (skill texts + daemon code); no code written. Branch
-reset to origin/main (613faba7). Next: implement T011–T021 from the start (TDD per test-list.md;
-append rows U6 history, U7 wire, U8 structured_session, U9 structured_lifecycle; M1 batched red
-tests against stubs, cycle-log Cycle 2, an accepted precedent). Read neither skill text again
-beyond what is needed — `speckit-implement`'s before-hook is `speckit-tdd-run`, `after` is optional.
-Survey findings, to save the next unit the reads:
+M2 unit 2 (context cap). Done and committed: T011, T016 (`structured/history.rs`, `EventHistory`,
+`MAX_EVENTS`/`MAX_BYTES`, `StructuredEvent::text_len`), T012, T017 (`structured_wire.rs`; `kind`
+on `SessionCreate`/`SessionSummary`, serde-default; `DaemonMsg::StructuredEvents`; protocol 52;
+`StructuredEvent`/`SequencedEvent` now `Eq`; every literal got `kind: Default::default()`; the
+daemon's `SessionCreate` arm binds `kind` but does not use it yet), T013
+(`crates/micold-daemon/tests/support/structured.rs`: `fake_stream_cli()`, `fixture`, `RECORDED`,
+`stream_script`, `record`, `fixture_lines`; script lines `replay <file>`, `pause`, `await-stdin`,
+`stderr`, `exit`, else a literal stdout line; smoke-tested by hand). Deviation: like
+`support/history.rs` it is included with `#[path = "support/structured.rs"] mod structured;`, not
+from `support/mod.rs` (that is the framer support). Cycle log: Cycle 4. Test list: U6, U7.
+Next: T014, T015 (red; add U8, U9 rows; see `tests/history_restart_in_run.rs` for
+`service`/`connect_as`/`start_session_gated` usage), then T018–T021 per the survey below.
+Gate note: `cargo test` as root fails 3 core permission tests; `scripts/gate.sh` re-runs them as
+a normal user. Build detached with `$SCRATCHPAD/m2/bg.sh <log> "<cmd>"` + `hold.sh <log>`.
+Survey findings (unit 1), to save the next unit the reads:
 - `portable_pty` 0.9 has `impl Child for std::process::Child` (and `ExitStatus: From<std>`), so
   `supervisor::Supervised` (child + `platform::ProcessTree`, `exit_status`/`terminate`/`reaped`)
   can be made `pub(crate)` and reused as-is by `structured.rs` with a `Box<dyn Child>` of the
@@ -87,7 +96,7 @@ Survey findings, to save the next unit the reads:
 - Env hygiene to generalise (T018): `supervisor.rs:212 prefer_process_path` (windows) and `:231
   strip_inherited_terminal_identity`, both on `CommandBuilder`; `ensure_cwd_exists` :115.
 - `state.rs:379 struct Proc { pty, framer }` → enum; ~28 `.pty`/`.framer` uses (grep
-  `\.pty\|\.framer\|new_proc` in state.rs). Least churn: `Proc::pty() -> Option<&Arc<PtySession>>`,
+  `\.pty\|\.framer\|new_proc` in state.rs). Least churn: `Proc::pty() -> Option<&Arc<PtySession>>`,
   `framer()`, `is_alive()`, `exit_outcome()`, `kill()`; collections of `Arc<PtySession>`
   (`remove_session` :4624, `session_ptys`, `covered_live_terminals`) filter_map the pty — a
   structured child is torn down by its `Drop` when the `LiveSession` drops off-lock.
@@ -101,9 +110,7 @@ Survey findings, to save the next unit the reads:
   `Arc<PtySession>` to notice a restart) → `stream_view` :2602; frames go through
   `state.frame_sender(id)` as `Frame<DaemonMsg>`; `SessionCreate` arm :981; `SessionKill` :1216.
 - catalog.rs: `create_session` :654, `supervise_session_exit` :1540, `session_summary` :1913.
-- protocol: `SessionCreate` messages.rs:636, `SessionSummary` :1263, `PROTOCOL_VERSION` = 51 at
-  version.rs:181 (→ 52, one doc line).
-- Disk: 20 GB free at start; gate with `CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0`.
+(Line numbers are pre-M2; the M2 edits so far shifted server.rs by +1 near :981.)
 
 ## Open escalation
 
