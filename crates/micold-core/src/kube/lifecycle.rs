@@ -28,26 +28,52 @@ pub struct Leftovers {
     pub secrets: Vec<String>,
 }
 
-/// Delete `name` if it exists and is ours, by the UID read now. Whether something was deleted; a
-/// `404` at any step counts as done.
+/// Delete `name` if it exists and is ours, by the UID read now. The UID deleted, if anything was;
+/// a `404` at any step counts as done.
 async fn delete_ours(
     cluster: &dyn Cluster,
     namespace: &str,
     names: &ResourceNames,
     kind: ObjectKind,
     name: &str,
-) -> Result<bool, KubeFailure> {
+) -> Result<Option<String>, KubeFailure> {
     let Some(view) = cluster.get(namespace, kind, name).await? else {
-        return Ok(false);
+        return Ok(None);
     };
     if !is_ours(&view.labels, names.key()) {
-        return Ok(false);
+        return Ok(None);
     }
     match cluster.delete(namespace, kind, name, &view.uid).await {
-        Ok(()) => Ok(true),
-        Err(failure) if failure.code == 404 => Ok(false),
+        Ok(()) => Ok(Some(view.uid)),
+        Err(failure) if failure.code == 404 => Ok(None),
         Err(failure) => Err(failure.into()),
     }
+}
+
+/// Wait until the pod of `uid` is gone (a pod of the same name with another UID is a new one),
+/// else `StopTimeout`.
+async fn wait_gone(
+    cluster: &dyn Cluster,
+    namespace: &str,
+    pod: &str,
+    uid: &str,
+) -> Result<(), KubeFailure> {
+    let gone = async {
+        while let Some(view) = cluster.get(namespace, ObjectKind::Pod, pod).await? {
+            if view.uid != uid {
+                break;
+            }
+            tokio::time::sleep(POLL).await;
+        }
+        Ok::<_, KubeFailure>(())
+    };
+    tokio::time::timeout(STOP_WAIT, gone)
+        .await
+        .unwrap_or_else(|_| {
+            Err(KubeFailure::StopTimeout {
+                pod: pod.to_string(),
+            })
+        })
 }
 
 /// Stop: delete the pod and wait until it is gone; the claim and the secrets stay.
@@ -57,29 +83,21 @@ pub async fn stop(
     names: &ResourceNames,
 ) -> Result<(), KubeFailure> {
     let pod = names.pod();
-    if !delete_ours(cluster, namespace, names, ObjectKind::Pod, &pod).await? {
-        return Ok(());
+    match delete_ours(cluster, namespace, names, ObjectKind::Pod, &pod).await? {
+        Some(uid) => wait_gone(cluster, namespace, &pod, &uid).await,
+        None => Ok(()),
     }
-    let gone = async {
-        while cluster.get(namespace, ObjectKind::Pod, &pod).await?.is_some() {
-            tokio::time::sleep(POLL).await;
-        }
-        Ok::<_, KubeFailure>(())
-    };
-    tokio::time::timeout(STOP_WAIT, gone)
-        .await
-        .unwrap_or(Err(KubeFailure::StopTimeout { pod }))
 }
 
-/// Remove: delete the pod, every secret the daemon can own (the access secret included) and the
-/// claim last, ours only. `allowed` names the credential secrets.
+/// Remove: delete the pod and wait for it, every secret the daemon can own (the access secret
+/// included) and the claim last, ours only. `allowed` names the credential secrets.
 pub async fn remove(
     cluster: &dyn Cluster,
     namespace: &str,
     names: &ResourceNames,
     allowed: &BTreeSet<KubeCredential>,
 ) -> Result<(), KubeFailure> {
-    delete_ours(cluster, namespace, names, ObjectKind::Pod, &names.pod()).await?;
+    stop(cluster, namespace, names).await?;
     for secret in names.all_secrets(allowed) {
         delete_ours(cluster, namespace, names, ObjectKind::Secret, &secret).await?;
     }
@@ -217,7 +235,10 @@ mod tests {
             .into_iter()
             .filter(|c| c.starts_with("delete"))
             .collect();
-        assert_eq!(deletes.first().unwrap(), &format!("delete Pod {}", names().pod()));
+        assert_eq!(
+            deletes.first().unwrap(),
+            &format!("delete Pod {}", names().pod())
+        );
         assert_eq!(
             deletes.last().unwrap(),
             &format!("delete PersistentVolumeClaim {}", names().pvc()),

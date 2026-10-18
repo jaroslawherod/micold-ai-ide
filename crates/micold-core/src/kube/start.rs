@@ -8,7 +8,7 @@ use std::time::Duration;
 use tokio::io::AsyncReadExt;
 
 use crate::kube::access::{AccessSecret, KeyGen};
-use crate::kube::classify::KubeFailure;
+use crate::kube::classify::{CallTarget, KubeFailure};
 use crate::kube::manifest::{self, PodStamp, SSH_PORT};
 use crate::kube::names::{is_ours, ResourceNames};
 use crate::kube::settings::KubeSettings;
@@ -204,21 +204,6 @@ pub fn config_failed(
     StartOutcome::Failed(failure)
 }
 
-/// A call that never got an answer is an unreachable cluster, named with its context and server.
-fn reachable(r: &StartRequest<'_>, failure: KubeFailure) -> KubeFailure {
-    match failure {
-        KubeFailure::Api {
-            status: 0,
-            message,
-        } => KubeFailure::Unreachable {
-            context: r.settings.context.0.clone(),
-            server: r.server.to_string(),
-            error: message,
-        },
-        other => other,
-    }
-}
-
 /// Start the daemon: every phase after `Config` up to `Tunnel`. A failure, or a drift to ask about,
 /// first undoes what this attempt created (FR-013).
 pub async fn start(
@@ -238,7 +223,11 @@ pub async fn start(
         }
         Err(failure) => {
             rollback(request, &attempt).await;
-            StartOutcome::Failed(reachable(request, failure))
+            StartOutcome::Failed(failure.at(&CallTarget {
+                context: &request.settings.context.0,
+                server: request.server,
+                namespace: namespace(request),
+            }))
         }
     }
 }
@@ -260,10 +249,10 @@ async fn sequence(
     run_phase(
         Schedule,
         on_phase,
-        await_pod(r, |s| s.scheduled == Some(true) || s.running),
+        await_pod(r, attempt, |s| s.scheduled == Some(true) || s.running),
     )
     .await?;
-    run_phase(Pull, on_phase, await_pod(r, |s| s.running)).await?;
+    run_phase(Pull, on_phase, await_pod(r, attempt, |s| s.running)).await?;
     on_phase(Tunnel);
     tunnel(r).await?;
     Ok(Vec::new())
@@ -282,7 +271,11 @@ async fn preflight(r: &StartRequest<'_>) -> Result<(), KubeFailure> {
         });
     }
     for (verb, resource) in manifest::access_reviews() {
-        if !r.cluster.access_review(namespace(r), verb, resource).await? {
+        if !r
+            .cluster
+            .access_review(namespace(r), verb, resource)
+            .await?
+        {
             return Err(KubeFailure::Forbidden {
                 verb: verb.to_string(),
                 resource: resource.to_string(),
@@ -497,6 +490,7 @@ async fn delete_and_wait(
 /// cluster shows (FR-012).
 async fn await_pod(
     r: &StartRequest<'_>,
+    attempt: &Attempt,
     done: impl Fn(&crate::kube::PodStatusView) -> bool,
 ) -> Result<(), KubeFailure> {
     let pod = r.names.pod();
@@ -514,7 +508,14 @@ async fn await_pod(
                 if let Some(failure) = KubeFailure::from_pod(&status, r.image, &r.names.pvc()) {
                     return Err(failure);
                 }
-                check_claim(r).await?;
+                // Only a claim this attempt created: an older claim's events may be stale.
+                if attempt
+                    .created
+                    .iter()
+                    .any(|c| c.kind == ObjectKind::PersistentVolumeClaim)
+                {
+                    check_claim(r).await?;
+                }
                 tokio::time::sleep(POLL).await;
             }
         }

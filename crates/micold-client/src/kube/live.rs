@@ -26,7 +26,7 @@ use micold_core::kube::{
 use micold_core::ssh::argv::ClientPlatform;
 
 /// How long Stop gives a pod to end (contract §5).
-pub const DELETE_GRACE_SECS: u32 = 10;
+pub const DELETE_GRACE_SECS: u32 = micold_core::kube::lifecycle::POD_GRACE.as_secs() as u32;
 
 /// How long the login shell may take to print its `PATH`.
 const LOGIN_SHELL_TIMEOUT: Duration = Duration::from_secs(5);

@@ -28,7 +28,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1a | T106–T116, T143, T020, T026 | full | Revision-2 core types (settings with image/AI CLIs/DaemonResources, names, failures, Cluster.replace), kubeconfig; revision-1 listener auth, Transport::Tunnel, daemon_image reverted | #978 | merged |
 | M1b | T019, T117, T118, T021, T025, T119, T120, T027, T121 | full | Pod, PVC, access secret, pod stamp/drift, start through Pull with bounds + rollback over FakeCluster | #983 | merged |
 | M1c | T122, T023, T123, T124, T125, T028, T029, T126, T127 | full | Tunnel phase (SSH identification line), LiveCluster, relay, key files | #989 | merged |
-| M2 | T079, T072, T056, T073, T081, T075, T059, T076, T128 | full | Core Stop/Remove/forget-locally; failure + pod-gone classifiers; preflight | — | implemented (T079–T128 ticked), scoped gate + reviews pending |
+| M2 | T079, T072, T056, T073, T081, T075, T059, T076, T128 | full | Core Stop/Remove/forget-locally; failure + pod-gone classifiers; preflight | — | implemented (T079–T128 ticked), review A fixed (stale claim events, UID wait, Remove waits, one unreachable classifier); gate + review B pending |
 | M3 | T063, T064, T065, T067, T068, T069, T102 | full | Allowed credentials as secrets, daemon_env, security contexts (core) | — | planned |
 | M4a | T024, T130, T066, T031, T131, T070, T032 | full | Kubernetes form via Edit (Add entry hidden), shared resources fields, credentials list | — | planned |
 | M4b | T083, T084, T080, T132, T085, T086, T082, T133, T129 | full | Placement fields, Stop/Remove/Forget locally/Logs from the row, Start → Unavailable | — | planned |
@@ -81,6 +81,7 @@ stash@{0} survivors (all used by M1a–M2, stash dropped 2026-10-18; backed up i
 
 ## Declined review findings
 
+| M2 | A (code-review high) | not-ours objects skipped silently by Stop/Remove; namespace 404 matched by message; PodGone for Failed/Succeeded pods; 403 mapped only in preflight | contract §2/§4/§5 say ours only and list exactly these rows; ApiFailure carries no details.kind; see Follow-ups |
 - speckit-analyze D13 (start failure maps to `Unreachable`): already the 491/489 rule, stated in data-model.md state machine delta; no change.
 - speckit-analyze D10 (owner decisions pending): no task change; phases 3b/3c are the separable parts.
 - speckit-analyze D1 alternative (kind smoke test in M1): declined; pure `to_api_failure`/`delete_params` table tests in M1 instead, real cluster in M8.
@@ -107,6 +108,8 @@ None.
 None. Clarify round 1 questions remain with the owner as decision cards (spec uses recommended defaults).
 
 ## Follow-ups not done
+
+- M2 review A (declined/deferred): a 403 or namespace 404 from a create/delete after a green preflight surfaces as `Api` (preflight covers the normal case; `KubeFailure::from_status` is available to the client adapter); `PodGone::classify` and `lifecycle::*` are wired by M4b/M8; Failed/Succeeded non-evicted pods are not in contract §4.
 
 - M1b review A F3: a create in flight when a phase bound fires is not in `Attempt.created`, so rollback misses it (an object with both labels, adopted by the next Start). M2's Remove covers it; consider a name-based sweep of the daemon's three fixed names on a `PhaseTimeout` rollback.
 - The access-secret directory variable is assumed to be `MICOLD_SSH_DIR` (`manifest::ACCESS_DIR_ENV`); #806's image must read it, or the constant changes.
