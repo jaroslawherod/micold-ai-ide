@@ -59,3 +59,18 @@ Append only. Newest last.
   `a_session_has_no_kind_setter`, `every_cli_can_run_a_terminal_session`,
   `the_catalog_schema_version_is_unchanged`) guard properties the stubs already had by
   construction.
+
+## Cycle 4 (U6, U7, M2): history and wire delta — RED then GREEN
+
+- red: `EventHistory::append` stubbed (seq always 0, no eviction); wire `kind` fields without
+  `serde(default)`. `cargo test -p micold-core --lib -- structured::history` -> `FAILED. 0 passed;
+  6 failed`; `--test structured_wire` -> `FAILED. 1 passed; 2 failed` (`missing field kind`). The
+  `StructuredEvents` round-trip passed against the stub (the variant is plain derive; its guard is
+  the round-trip itself).
+- green (T016, T017): bounded `append`, `StructuredEvent::text_len`; `#[serde(default)]` on both
+  `kind` fields; `DaemonMsg::StructuredEvents`; `PROTOCOL_VERSION` 51 -> 52 (schema_hash pin
+  follows). `StructuredEvent`/`SequencedEvent` are `Eq` (the one float comes from JSON, no NaN) so
+  `DaemonMsg` keeps its `Eq`. Workspace `cargo check --all-targets` clean: no exhaustive match
+  broke.
+- run: `cargo test -p micold-core --all-targets --no-fail-fast` -> all pass but the three
+  root-only permission tests the gate re-runs as a normal user.

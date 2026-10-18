@@ -5,9 +5,11 @@
 //! tool calls with their results. The daemon owns the process and the history; the client draws.
 
 mod event;
+mod history;
 mod lines;
 mod parse;
 
 pub use event::{ContentBlock, Delta, SequencedEvent, StructuredEvent, Usage};
+pub use history::{EventHistory, MAX_BYTES, MAX_EVENTS};
 pub use lines::LineSplitter;
 pub use parse::{pair_tool_calls, parse_line};

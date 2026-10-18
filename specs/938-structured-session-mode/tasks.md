@@ -163,13 +163,13 @@ CLI.
 
 ### Tests for User Story 1 (scenarios 1–3) ⚠️
 
-- [ ] T011 [P] [US1] Write failing unit tests in `crates/micold-core/src/structured/history.rs`
+- [x] T011 [P] [US1] Write failing unit tests in `crates/micold-core/src/structured/history.rs`
   for `EventHistory` (R5): `append` assigns `seq` from 0, strictly increasing; with bounds
   `with_bounds(max_events, max_bytes)` the oldest events are popped while "`events.len() >
   MAX_EVENTS || bytes > MAX_BYTES`" and `omitted` counts them; `snapshot()` returns `(omitted,
   events)`; `bytes` tracks the retained line text; the defaults are `MAX_EVENTS = 5_000` and
   `MAX_BYTES = 64 MiB`.
-- [ ] T012 [P] [US1] Write failing round-trip tests in `crates/micold-core/tests/structured_wire.rs`:
+- [x] T012 [P] [US1] Write failing round-trip tests in `crates/micold-core/tests/structured_wire.rs`:
   `ClientMsg::SessionCreate` JSON without `kind` decodes with `SessionKind::Terminal`;
   `SessionSummary.kind` round-trips both kinds and defaults to `Terminal` when absent;
   `DaemonMsg::StructuredEvents { session, omitted, events, live }` round-trips with one event of
@@ -214,8 +214,8 @@ CLI.
 
 ### Implementation for User Story 1 (scenarios 1–3)
 
-- [ ] T016 [US1] Make T011 pass: `crates/micold-core/src/structured/history.rs`.
-- [ ] T017 [US1] Make T012 pass in `crates/micold-core/src/protocol/messages.rs`:
+- [x] T016 [US1] Make T011 pass: `crates/micold-core/src/structured/history.rs`.
+- [x] T017 [US1] Make T012 pass in `crates/micold-core/src/protocol/messages.rs`:
   `SessionCreate.kind`, `SessionSummary.kind` (both `#[serde(default)]`),
   `DaemonMsg::StructuredEvents`; bump `PROTOCOL_VERSION` in
   `crates/micold-core/src/protocol/version.rs` by one (51 → 52 if `main` is still at 51) with a

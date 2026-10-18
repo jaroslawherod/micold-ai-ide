@@ -83,6 +83,7 @@ async fn create_session(
             project: repo.to_path_buf(),
             worktree_dir: dir.into(),
             provider: AiCli::ClaudeCode,
+            kind: Default::default(),
             allow_additional_session: true,
         },
         req + 1,
