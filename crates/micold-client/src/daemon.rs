@@ -171,7 +171,7 @@ pub enum Dial {
 /// A Kubernetes daemon's settings as part of an actor's identity: `KubeSettings` is not `Hash`, so
 /// its serialised form is hashed.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KubeDial(pub KubeSettings);
+pub struct KubeDial(pub Box<KubeSettings>);
 
 impl std::hash::Hash for KubeDial {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
@@ -250,7 +250,7 @@ pub fn actor_specs(
                 },
                 DaemonRuntime::Kubernetes(k) => Dial::Kubernetes {
                     name: entry.name.as_str().to_string(),
-                    settings: KubeDial(k.clone()),
+                    settings: KubeDial(Box::new(k.clone())),
                 },
                 _ => return None,
             };
@@ -943,7 +943,7 @@ pub async fn kube_attempt(
         StartOutcome::Ready(started) => started,
         StartOutcome::Drift { fields } => {
             return Err(format!(
-                "the pod runs with other settings ({}): stop it, or start it again to recreate it",
+                "the pod runs with other settings ({}): stop it, then start it again",
                 fields.join(", ")
             ))
         }
