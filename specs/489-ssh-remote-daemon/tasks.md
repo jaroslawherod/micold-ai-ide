@@ -136,15 +136,15 @@ rootless `sshd` and are off by default (`mise run test-ssh`).
 
 ### Scenario 2: follow the way out, replace (M7)
 
-- [ ] T073 [P] [US5] Test `RemoteStatus` parsing (unknown fields ignored, unknown `status_version` is `Unknown`) in `core/ssh/status.rs`
-- [ ] T074 [P] [US5] Test the status writer and `remote status | stop` (stop refuses unless zero sessions proven) in `daemon/src/runtime_status.rs` and `daemon/src/remote.rs`
-- [ ] T075 [P] [US5] Test `ReplaceOffer` states driving the Replace action in `client/features/daemons.rs`
-- [ ] T076 [US5] Extend `daemon/tests/ssh_real_mismatch.rs`: replace offered with no sessions and then connects, withheld with sessions
-- [ ] T077 [US5] Implement `RemoteStatus` in `core/ssh/status.rs`
-- [ ] T078 [US5] Write `status.json` from the daemon in `daemon/src/runtime_status.rs`
-- [ ] T079 [US5] Implement `remote status | stop` in `daemon/src/remote.rs`
-- [ ] T080 [US5] Feed `ReplaceOffer::{Available, Blocked}` from `RemoteStatus` and wire the Replace action in `client/shell/daemons.rs`, `client/features/daemons.rs` and `client/ui/settings/daemons.rs`
-- [ ] T081 [US5] Document replacing a daemon in `docs/user-guide/remote-daemons.md`
+- [x] T073 [P] [US5] Test `RemoteStatus` parsing (unknown fields ignored, unknown `status_version` is `Unknown`) in `core/ssh/status.rs`
+- [x] T074 [P] [US5] Test the status writer and `remote status | stop` (stop refuses unless zero sessions proven) in `daemon/src/runtime_status.rs` and `daemon/src/remote.rs`
+- [x] T075 [P] [US5] Test `ReplaceOffer` states driving the Replace action in `client/features/daemons.rs`
+- [x] T076 [US5] Extend `daemon/tests/ssh_real_mismatch.rs`: replace offered with no sessions and then connects, withheld with sessions
+- [x] T077 [US5] Implement `RemoteStatus` in `core/ssh/status.rs`
+- [x] T078 [US5] Write `status.json` from the daemon in `daemon/src/runtime_status.rs`
+- [x] T079 [US5] Implement `remote status | stop` in `daemon/src/remote.rs`
+- [x] T080 [US5] Feed `ReplaceOffer::{Available, Blocked}` from `RemoteStatus` and wire the Replace action in `client/shell/daemons.rs`, `client/features/daemons.rs` and `client/ui/settings/daemons.rs`
+- [x] T081 [US5] Document replacing a daemon in `docs/user-guide/remote-daemons.md`
 
 ## Phase 8: Polish and cross-cutting
 
