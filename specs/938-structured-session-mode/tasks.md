@@ -402,6 +402,9 @@ M2 (T015).
 beside the terminal histories through 041's store and schedule, and restored after a daemon
 restart; off, nothing is written (FR-021a–FR-021c, SC-007; research R14).
 
+Task IDs T049–T056 were allocated after T048 so the merged T001–T048 keep their numbers; the
+phase sits before US6 because the UI milestone ships last.
+
 **Independent Test**: `cargo test -p micold-core --test terminal_history_store`, `cargo test -p micold-core --lib structured::` and
 `cargo test -p micold-daemon --test structured_saved_history`.
 
@@ -444,8 +447,14 @@ restart; off, nothing is written (FR-021a–FR-021c, SC-007; research R14).
   `.events` file at once and the in-memory history a viewer then gets is unchanged; turning it on
   again saves the running history (scenario 4); removing the session deletes its `.events` file
   (scenario 5); a damaged `.events` file gives an empty history, one warning naming the session and
-  the reason, and is replaced after the next save (scenario 6, FR-021c); a terminal session writes
-  no `.events` file and a structured one no `.history` file.
+  the reason, and is replaced after the next save (scenario 6, FR-021c); an `<id>.events` file of a
+  session not in the catalog, and its left-over `.<id>.events.tmp`, are deleted when the daemon starts
+  (scenario 7, FR-021b), and with saving off at start every `.events` file is deleted; a removal or `save_terminal_history: Some(false)` racing a save leaves no
+  `.events` file (scenario 8); turning saving on writes the whole in-memory history at the next save
+  (scenario 9); one saver pass writes the `.events` file of a running session after a new event and
+  none for a session with no new event since its last save (count = `next_seq`; the one-minute
+  bound itself is 041's `SaveSchedule`, already tested); a terminal session writes no `.events`
+  file and a structured one no `.history` file.
 - [ ] T055 [US7] Make T054 pass: in `crates/micold-daemon/src/state.rs` one call that creates an
   `event_streams` entry by loading off the state lock and inserting if still absent, used by the
   structured spawn and the view path, with `forget`, `sweep` and the setting change reaching the
@@ -525,10 +534,12 @@ structured_log --test layout_snapshot`, then quickstart §B.
   prompt input and interrupt, #942 permission prompts, #943 slash commands and switching kinds,
   #944 usage and subagents); and that, while **Save terminal history** is on, the log is kept
   across a restart of the background service.
-- [ ] T056 [US6] Extend **Save terminal history**'s note in
-  `crates/micold-client/src/ui/settings/terminal.rs` and its entry in `docs/user-guide/settings.md`
-  to say it also keeps structured sessions' events on disk and that turning it off deletes them
-  (FR-023); update any test that asserts the note's text.
+- [ ] T056 [US6] Test first: in `crates/micold-client/tests/features_settings.rs` assert that
+  **Save terminal history**'s note names structured sessions' events (fails on today's text); then
+  make it pass by moving the note's literal in `crates/micold-client/src/ui/settings/terminal.rs`
+  into a `pub const` the test reads and extending it, and extend the setting's entry in
+  `docs/user-guide/settings.md`: it also keeps structured sessions' events on disk, and turning it
+  off deletes them (FR-023).
 
 **Checkpoint**: M8 — the structured kind is user-selectable and documented.
 
