@@ -35,7 +35,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M4 | T032–T041 | full | AI CLI install step + registry-only relay on app-owned targets; daemon offers only installed CLIs — #686 has the full contract | #995 | merged |
 | M5 | T042–T044, T049–T054, T057, T060, T061 | full | container daemons on the pinned basic image over SSH (`Dial::ContainerSsh`), two-entry image form, migration read-repair, legacy adoption; shipped as a subset (orchestrator limit on parts) | (opened by the orchestrator) | gate green at c43d8040 |
 | M5b | T045, T046, T048, T056, T058, T059, T062–T064, T066–T070 (T047, T055, T065 done in #998) | full | the rest of M5: notices and gated legacy restart, tests, real-runtime suites on the basic image, CI pin check, user guide, visual pass | — | pending (new milestone) |
-| M6 | T071–T074, T076, T077 (T075, T078 open, see Follow-ups) | full | per-daemon AI CLI selection; install warnings in the row | (opened by the orchestrator) | gate pending |
+| M6 | T071–T074, T076, T077 (T075, T078 open, see Follow-ups) | full | per-daemon AI CLI selection; install warnings in the row | (opened by the orchestrator) | gate green at 88af2fbe |
 | M7 | T079–T086 | full | step bounds, cancel, rollback, concurrent starts; end-to-end suite in CI | — | pending |
 
 Milestone notes:
