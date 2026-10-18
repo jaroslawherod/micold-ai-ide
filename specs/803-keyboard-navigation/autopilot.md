@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #803
 - **Worktree branch**: claude/project-thread-ah7xxz
 - **Started**: 2026-10-17
-- **Phase**: milestone M2 (implemented, gate and reviews)
-- **Next step**: gate, reviews A and B, push M2; the orchestrator opens the PR from the scratchpad title/body
+- **Phase**: milestone M2 (pushed, awaiting PR)
+- **Next step**: orchestrator opens the M2 PR from the scratchpad title/body, waits on CI, merges; then M3 (T024–T029)
 
 ## Pull requests
 
@@ -18,7 +18,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #949 | design: spec, plan, tasks | merged | c410a749a8c6a417aa91f9011fd2a16fe2e340a8 |
 | #967 | M1 | merged | c5e61c3ea91a464695dcf9fb42b53121fac37490 |
-| M2 | M2 | to open (title/body in the scratchpad) | — |
+| — | M2 | orchestrator opens it (title/body in the scratchpad) | — |
 
 ## Milestones
 
@@ -57,11 +57,15 @@ US1 split along acceptance scenario 4 (FR-010 sidebar ring) into M1/M2: one mile
 | Review tasks | 2 | ea280ce8681586436fafe3903453010ab4c577a5:e48aa579382d1917198e8b478d11eabc68785ce3 | CLEAN (sonnet, scoped) |
 | Review A M1 (code-review high) | 1 | 6c2da2fa240fc273d8be5a262d19b689ee24be3c:b69d9a7f1c50957529a7b62c4656082b219a8d59 | CLEAN: 1 MINOR (declined) |
 | Review B M1 (conformance, sonnet) | 1 | 6c2da2fa240fc273d8be5a262d19b689ee24be3c:b69d9a7f1c50957529a7b62c4656082b219a8d59 | CLEAN (headless, Read-only on prepared diff files; Verify from the unit's runs) |
+| Review A M2 (code-review high, headless) | 1 | 18d14e8fd29c699459bc7387d9d4c84af422d0fb:025714b3e366e8d011828262937d3442cb12b550 | CLEAN: 3 MINOR (declined) |
+| Review B M2 (conformance, sonnet, headless) | 1 | 18d14e8fd29c699459bc7387d9d4c84af422d0fb:025714b3e366e8d011828262937d3442cb12b550 | CLEAN: 2 MINOR (1 fixed in the ledger, 1 declined) |
 
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| M2 | A F1-F3 | alias placement, unused `terminal_had_focus`, duplicated row builders | MINOR; code frozen once the full gate ran. `terminal_had_focus` stays: T018's specified signature. |
+| M2 | B F2 | no diff-path test for a disabled wrapper given focus | MINOR; the mounted-wrapper path is covered by the ring test and `focused && enabled` is one expression. |
 | M1 | A | MINOR: `SidebarMsg::KeyboardRowLeft` has no production sender | T012 requires it; M2 T019 sends it from the focus ring's `on_change` |
 
 ## Handover
@@ -76,5 +80,6 @@ None.
 
 - User-configurable key bindings (spec Out of Scope).
 - Quick-switcher palette / direct jumps (FR-014, D5): follow-up issue.
+- Visual pass M2: showcase ring checked on Xvfb (`visual-pass/m2.md`); quickstart B1/B7 live run left to T038 (no xdotool here).
 - Visual pass skipped for M1 (M2 does it): nothing drawn changes (the keyboard-row ring is M2); the stop only moves the reveal scroll.
 - Spec reviews ran as headless `claude -p` sessions (no Agent tool in this unit's environment); fresh context, same prompt parts.
