@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain
+- [x] No [NEEDS CLARIFICATION] markers remain
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
@@ -31,6 +31,5 @@
 
 ## Notes
 
-- Two [NEEDS CLARIFICATION] markers remain for the clarify unit: whether other projects' locations
-  and sessions are listed (User Story 3, scenario 5), and whether tag-filter-hidden worktrees are
-  listed (Edge Cases, *Tag filter*).
+- Both [NEEDS CLARIFICATION] markers were resolved in the clarify unit (spec.md *Clarifications*);
+  the cross-project answer is a default pending user confirmation.
