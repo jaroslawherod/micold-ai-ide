@@ -238,17 +238,17 @@ fn every_dialog_is_in_the_list() {
     //
     // Nine, then eight. Settings was the largest of the original nine and is no longer a dialog at
     // all — it is a view (FR-026), so it neither floats nor takes Escape. Feature 804 removed the
-    // placement question the view used to ask (`confirm_placement`). Thirteen with the Changes view's discard confirmation (feature 482). Fourteen with Run in parallel (feature 483). Fifteen with Dismiss group's question (feature 483). Sixteen with Pick this one's question (feature 483). Eighteen with the cleanup offer and its second confirmation (feature 483). Eighteen again with the additional-session confirmation (feature 776) replacing `confirm_placement`.
+    // placement question the view used to ask (`confirm_placement`). Thirteen with the Changes view's discard confirmation (feature 482). Fourteen with Run in parallel (feature 483). Fifteen with Dismiss group's question (feature 483). Sixteen with Pick this one's question (feature 483). Eighteen with the cleanup offer and its second confirmation (feature 483). Eighteen again with the additional-session confirmation (feature 776) replacing `confirm_placement`. Nineteen with the full-reply dialog (feature 946).
     assert_eq!(
         dialogs().len(),
-        18,
+        19,
         "the dialog list has drifted. Add the new dialog here, or the twenty-two states this file \
          is meant to cover are no longer twenty-two"
     );
     assert_eq!(
         every_state().len(),
-        38,
-        "eighteen dialogs plus nothing open, each with the filter panel open and closed"
+        40,
+        "nineteen dialogs plus nothing open, each with the filter panel open and closed"
     );
 
     let registered_dialogs = registry::probes()

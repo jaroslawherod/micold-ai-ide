@@ -195,7 +195,8 @@ fn every_popover_is_in_the_table() {
     // Eighteen with `run_cleanup_offer` and its `run_cleanup_second_confirm` (feature 483).
     // Twenty with `confirm_daemon_removal` and `bind_daemon` (feature 491).
     // Twenty with `confirm_additional_session` (feature 776) replacing `confirm_placement` (feature 804).
-    const DIALOGS: usize = 20;
+    // Twenty-one with `review_full_reply`, the dialog that shows a whole reply (feature 946).
+    const DIALOGS: usize = 21;
     assert_eq!(
         micold_client::overlay::registry::probes().len(),
         DIALOGS + DISPLACES.len(),
