@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-xelisc
 - **Started**: 2026-10-17
 - **Phase**: implement
-- **Next step**: M8 implemented (T057–T062, T101 ticked); full gate, reviews A and B, then PR files in the scratchpad (pr-title/pr-body-686-M8); orchestrator opens the PR and merges. Then M9.
+- **Next step**: M8 pushed, gate green (scripts/gate.sh); PR files in the scratchpad (pr-title/pr-body-686-M8); orchestrator opens the PR, waits for CI and merges. Then M9.
 
 ## Pull requests
 
@@ -42,7 +42,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M5 | T134, T022, T074, T135, T030, T077, T136 | full | (#806) Copy + Connect over SSH through the relay; failures at client level | — | merged (#1011) |
 | M6 | T138, T139, T141, T142, T033, T140 | full | (#806) AI CLI install, drift prompt, Add entry, user guide 🎯 MVP | — | merged (#1015) |
 | M7 | T047–T055, T100 | full | (#806) Clone + worktrees in the pod (RepoClone) | — | merged (#1025) |
-| M8 | T057, T058, T060, T061, T062, T101 | full | (#806) Reconnect; pod gone → stopped with reason | — | in progress |
+| M8 | T057, T058, T060, T061, T062, T101 | full | (#806) Reconnect; pod gone → stopped with reason | — | implemented, gate green, PR pending |
 | M9 | T088–T096, T105 | full | (#806) kube_real_* suite, `mise run test-kube`, CI job kube-cluster | — | blocked on #806 |
 Cut notes (revision 2): tasks.md "Revision 2 task map" lists kept/changed/removed T001–T105; new tasks T106–T143 (T137 unused; T143 is M1a's persistence test rework). Order: everything independent of #806 first (M1a–M4b, all `docs-not-needed`: Kubernetes cannot be added before M6), then the #806-blocked milestones (M5–M9). US1 split along the #806 boundary: connect (M5) before CLI install + Add entry (M6), so the Add entry appears only when US1.1 works (no half-wired UI). User-guide tasks T046/T071/T078/T087 folded into T033 (M6), since the guide page appears with the Add entry. Polish T097–T098: close unit.
 stash@{0} survivors (all used by M1a–M2, stash dropped 2026-10-18; backed up in /mnt/project-files/backups/686-m1-wip.bundle): keep `kubeconfig.rs` (T020/T026), `lifecycle.rs` (T079/T081), `manifest.rs` (T019, after the SSH image/env/port 2222/access-secret mount changes), `start_tests.rs` (T021, drop the `Image` phase and the volume-size refusal; `Tunnel` = identification line), `Quantity::{to_k8s, parse_k8s}`, `ResourceNames::all_secrets`, `ObjectKind::noun`, `KubeFailure::StopTimeout` + `From<ApiFailure>`, `FakeCluster::hold_on_delete`. Discard `StartPlan::for_image`. Design revision part 4: plan fixed by tasks unit — data-model StartPlan and contract §3 item 1 say `Tunnel` reads the identification line from one `Cluster::port_forward` stream; the client relay is first used in M5.
@@ -88,6 +88,7 @@ stash@{0} survivors (all used by M1a–M2, stash dropped 2026-10-18; backed up i
 
 ## Review rounds
 
+| M8 A (high) + B (conformance, sonnet) | 1 | bd0a53ac82b90645dfb29ada1a4a95627d8d01f6:ff3ee14e375588e36d83ca9a706c3d133da6dcca | A: CLEAN, 3 MINOR (F2 comment added, F3 catalog removal added, F1 pump-level test declined). B: CHANGES, F1 MAJOR declined (below), F2/F3 MINOR noted |
 | M7 B (conformance, sonnet, scoped to the F1/F2 fix) | 2 | 07ebdb8d7f5012cdb1b0b07b80e4cb2c0a1af0e2:62a795e9d0795da82cbf322e0b064d9ac38321d1 CLEAN — 1 MINOR (refusal order: not-connected now precedes no-remote; both send nothing) |
 | M4b review A (code-review high) | 1 | e6a9bc19:3ef301a4 | CLEAN — 2 MINOR declined/follow-up |
 | M4b review B (conformance, sonnet) | 1 | 13e04614:826e419b | CLEAN — Verify green |
@@ -120,6 +121,7 @@ stash@{0} survivors (all used by M1a–M2, stash dropped 2026-10-18; backed up i
 
 ## Declined review findings
 
+- M8 review B F1 MAJOR (no test shows sessions with output since the drop): declined; keeping sessions and their output is the pod daemon's 489 behaviour (FR-010), and the scripted fake host has no sessions. M8 proves the client side: same pod re-dialled, nothing recreated, sessions labelled `disconnected`/`lost to daemon`. The sessions-with-output proof is `kube_real_reconnect` (M9, T088–T096). Review A F1/B F2 (no `connect_and_pump` test): declined; the pump is not callable without the iced channel, so its routing is covered through `kube_reconnect` and the state tests.
 - M6 review A F2 MINOR (Cancel shown for the whole Starting state, token only read from the install phase): declined; `start()` phases are bounded and Cancel is noticed at the next phase; threading a token into every wait is out of scope.
 - M6 review B F1 BLOCKER (client tests did not compile): the tree was mid-edit by a worker while B ran; both client suites green afterwards. B F2 MINOR fixed (an edit clears the drift answer).
 
