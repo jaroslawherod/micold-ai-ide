@@ -10,20 +10,20 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #968
 - **Worktree branch**: claude/project-thread-ftdy5c
 - **Started**: 2026-10-18
-- **Phase**: design PR
-- **Next step**: orchestrator opens the design PR (branch pushed), waits on CI and merges; then milestone M1
+- **Phase**: M1 implement
+- **Next step**: M1 — implement T001–T020, verify, PR
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| pending | design (spec, plan, tasks) | branch pushed, PR to open | — |
+| #1036 | design (spec, plan, tasks) | merged | c687792e717f3312881d09e87ed8e6f1ea374022 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T020 | full | Chord opens the switcher over the active project's locations; filter, choose = row click, close | — | planned |
+| M1 | T001–T020 | full | Chord opens the switcher over the active project's locations; filter, choose = row click, close | — | in progress |
 | M2 | T021–T026 | full | Sessions listed under their locations, found by name, kept by a location match | — | planned |
 | M3 | T027–T031 | light | Other known projects listed (unavailable badged, unselectable); complete user-guide bullet | — | planned |
 
@@ -55,7 +55,16 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+Unit 1 of M1 handed over at 153k context (branch reset to origin/main c687792e; design PR #1036
+merged). Done: T001, T003, T004 (core `quick_switch.rs`, `typeahead.rs` `Folded`/`literal`/
+`subsequence` now `pub(crate)`), red/green in `tdd/cycle-log.md`. Next: T002, T005–T020 (client),
+then verify.md (scoped gate + review A high, review B, visual pass, full gate `scripts/gate.sh`),
+then pr.md. Notes for the next unit: `shell/` lives in the binary (`crate::App`), so apply tests
+use `State::apply_navigation`/`finish_navigation` as `tests/navigation_apply.rs` does; tag labels
+for `context`: reuse `ui/sidebar.rs::tag_chip`'s text (Type→`as_str`, Issue→key,
+Status→`label()`) — extract one `Tag` label helper rather than copying. No `tdd/test-list.md`:
+recent features (803, 806) log cycles against tasks.md test tasks in `tdd/cycle-log.md`. No open
+findings, no PR.
 
 ## Open escalation
 

@@ -37,7 +37,7 @@ choose path for a non-active entry, the T031 doc bullet and FR-003/FR-004 change
 
 **Purpose**: the new modules exist and are registered, so tests can name them.
 
-- [ ] T001 Create `crates/micold-core/src/quick_switch.rs` with the types of data-model.md *Core*:
+- [X] T001 Create `crates/micold-core/src/quick_switch.rs` with the types of data-model.md *Core*:
   `pub enum EntryKey { Location(SessionLocation), Session(SessionId), Project(PathBuf) }`,
   `pub struct Candidate { pub key: EntryKey, pub name: String, pub parent: Option<usize>, pub
   selectable: bool }` ("`parent` always points earlier in the list"; "`selectable` `false` only
@@ -67,7 +67,7 @@ choose path for a non-active entry, the T031 doc bullet and FR-003/FR-004 change
 **Purpose**: the matching rules in core, the chord, and the two shared readers the switcher reuses
 from #803. Nothing here is observable alone; it ships inside M1.
 
-- [ ] T003 [P] Write the failing unit tests for `filter`, `reseat` and `step` in
+- [X] T003 [P] Write the failing unit tests for `filter`, `reseat` and `step` in
   `crates/micold-core/src/quick_switch.rs` (`#[cfg(test)]`, plan *Test strategy* core row): an
   empty query keeps every candidate in order with rank `Prefix` and no spans; `logpg` keeps
   `Login page` and drops names without l, o, g, p, g in order; `Prefix` before `Run` before
@@ -78,7 +78,7 @@ from #803. Nothing here is observable alone; it ships inside M1.
   when none is selectable or the list is empty; `step` moves to the next selectable below/above,
   skips an unselectable candidate, and stays at the first/last selectable; 500 candidates, 10
   successive queries, each `filter` under 100 ms (SC-003)
-- [ ] T004 Make `Folded`, `literal` and `subsequence` `pub(crate)` in
+- [X] T004 Make `Folded`, `literal` and `subsequence` `pub(crate)` in
   `crates/micold-core/src/typeahead.rs` (taking the folded name, research R2) without changing
   their behaviour, so the existing `typeahead.rs` tests stay green; then implement `pub fn
   filter(candidates: &[Candidate], query: &Query) -> Vec<Ranked>`, `pub fn reseat(candidates:

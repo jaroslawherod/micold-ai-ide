@@ -60,6 +60,7 @@ pub mod protocol;
 pub mod provider;
 pub mod provision;
 pub mod pull_request;
+pub mod quick_switch;
 pub mod required;
 pub mod review;
 pub mod runs;
