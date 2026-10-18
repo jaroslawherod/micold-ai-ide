@@ -435,9 +435,10 @@ structured_log --test layout_snapshot`, then quickstart §B.
   `start_menu_entries`), `crates/micold-client/src/ui/sidebar.rs` (the plain press and the chevron
   pick) and `crates/micold-client/src/main.rs` (its constructions and the handler); find them all
   with `LSP findReferences` on `StartRequested`. Existing tests that build `StartRequested`
-  (`tests/session_start_press.rs`, `tests/session_default_no_worktree.rs`, `tests/app_state.rs`,
-  `src/main_tests.rs`) get `kind: SessionKind::Terminal` added mechanically and must keep passing
-  (SC-004).
+  (`tests/session_start_press.rs`, `tests/session_default_no_worktree.rs`, `tests/app_state.rs`)
+  get `kind: SessionKind::Terminal` added mechanically and must keep passing (SC-004); the
+  `start_menu_entries` assertions in `src/main_tests.rs` and `tests/directory_availability.rs` are
+  updated for the new "Claude Code (structured)" entry.
 - [ ] T043 [US6] Make T039 pass: new render-free `crates/micold-client/src/features/structured_log.rs`
   (registered in `features/mod.rs`) and routing of `StructuredEvents` to it in
   `crates/micold-client/src/shell/daemon_sync.rs`.
@@ -541,8 +542,8 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
   the terminal session's arguments, cwd and environment, stream every fixture line as a typed
   event, in order, live; stderr goes to the log only; non-Claude structured requests are refused.
 - **Satisfies**: US1 acceptance scenarios 1–3; US2 scenario 5; US5 scenarios 1, 2, 3, 5, 6;
-  FR-003, FR-005, FR-006, FR-006a, FR-009, FR-010, FR-014 (CLI lines), FR-016, FR-017 (single attach), FR-020,
-  FR-025; SC-001, SC-002, SC-004, SC-006
+  FR-003, FR-005, FR-006, FR-006a, FR-009, FR-010, FR-014 (CLI lines), FR-016,
+  FR-017 (single attach), FR-020, FR-025; SC-001, SC-002, SC-004, SC-006
 - **Verify**: `cargo test -p micold-daemon --test structured_session --test structured_lifecycle`
 - **Depends on**: M1
 - **Tier**: full
@@ -573,7 +574,8 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Tasks**: T031–T032
 - **Deliverable**: a client viewing a structured session late gets its bounded history then live
   events with no gap or duplicate, told when events were omitted, in frames under the wire limit.
-- **Satisfies**: US4 acceptance scenarios 1–3; FR-014 (oversized stand-in), FR-016, FR-017 (late attach), FR-018; SC-005
+- **Satisfies**: US4 acceptance scenarios 1–3; FR-014 (oversized stand-in), FR-016,
+  FR-017 (late attach), FR-018; SC-005
 - **Verify**: `cargo test -p micold-daemon --test structured_history`
 - **Depends on**: M2
 - **Tier**: full
