@@ -5752,32 +5752,38 @@ impl DaemonState {
         text: &str,
     ) -> Result<(), crate::structured::UserMessageUndelivered> {
         use crate::structured::UserMessageUndelivered::{Refused, WriteFailed};
-        let child = {
-            let inner = self.lock();
-            let primary = inner
-                .sessions
-                .get(&session)
-                .and_then(|live| live.procs.get(&SessionProcess::Primary));
-            match primary {
-                Some(Proc::Structured(child)) => {
-                    child.accept_user_message(text).map_err(Refused)?;
-                    Arc::clone(child)
-                }
-                Some(Proc::Pty { .. }) => return Err(Refused(UserMessageRefusal::NotStructured)),
-                None => {
-                    if Self::kind_of(&inner, session) == Some(SessionKind::Terminal) {
-                        return Err(Refused(UserMessageRefusal::NotStructured));
-                    }
-                    // Not running: `Blank` still comes first, as for a running session.
-                    let refusal = TurnState::Idle
-                        .accept(text, false)
-                        .err()
-                        .unwrap_or(UserMessageRefusal::NotRunning);
-                    return Err(Refused(refusal));
-                }
-            }
-        };
+        let child = self.accept_user_message(session, text).map_err(Refused)?;
         child.write_user_message(text).map_err(WriteFailed)
+    }
+
+    /// The first half of [`Self::send_user_message`]: check `text` against `session`'s turn and
+    /// open it, under the state lock, returning the process to write it to. It never blocks, so a
+    /// connection calls it in arrival order and only the write runs off the connection loop.
+    pub fn accept_user_message(
+        &self,
+        session: SessionId,
+        text: &str,
+    ) -> Result<Arc<crate::structured::StructuredSession>, UserMessageRefusal> {
+        let inner = self.lock();
+        let primary = inner
+            .sessions
+            .get(&session)
+            .and_then(|live| live.procs.get(&SessionProcess::Primary));
+        match primary {
+            Some(Proc::Structured(child)) => {
+                child.accept_user_message(text)?;
+                Ok(Arc::clone(child))
+            }
+            Some(Proc::Pty { .. }) => Err(UserMessageRefusal::NotStructured),
+            None if Self::kind_of(&inner, session) == Some(SessionKind::Terminal) => {
+                Err(UserMessageRefusal::NotStructured)
+            }
+            // Not running: `Blank` still comes first, as for a running session.
+            None => Err(TurnState::Idle
+                .accept(text, false)
+                .err()
+                .unwrap_or(UserMessageRefusal::NotRunning)),
+        }
     }
 
     /// The session's primary process PTY, whichever process is attached (feature 034: the first

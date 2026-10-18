@@ -339,7 +339,9 @@ fn read_events(
         lock(turn).on_event(&event);
         on_event(event);
     });
-    if let Some(note) = lock(turn).on_exit() {
+    // The turn's lock is released before `on_event`, which takes the history's.
+    let note = lock(turn).on_exit();
+    if let Some(note) = note {
         on_event(note);
     }
 }
