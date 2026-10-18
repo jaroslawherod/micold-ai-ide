@@ -5805,6 +5805,23 @@ impl DaemonState {
         }
     }
 
+    /// Whether a terminal-only request (input, resize, scrollback, interrupt) addressed to
+    /// `process` of `session` lands on a structured session's AI process (feature 938, FR-019). A
+    /// `None` process is the attached one. The session's shell instances are terminals and answer
+    /// `false`, as does a session that is not structured.
+    pub fn refuses_terminal_request(
+        &self,
+        session: SessionId,
+        process: Option<SessionProcess>,
+    ) -> bool {
+        let inner = self.lock();
+        let target = process
+            .or_else(|| inner.sessions.get(&session).map(|live| live.attached))
+            .unwrap_or(SessionProcess::Primary);
+        target == SessionProcess::Primary
+            && Self::kind_of(&inner, session) == Some(SessionKind::Structured)
+    }
+
     /// The session's primary process PTY, whichever process is attached (feature 034: the first
     /// prompt is for the AI CLI, never a shell the user attached meanwhile).
     pub fn primary_pty(&self, session: SessionId) -> Option<Arc<PtySession>> {

@@ -303,7 +303,9 @@ async fn terminal_only_requests_to_a_structured_primary_are_refused_to_the_sende
             RefusedRequest::Interrupt
         ]
     );
-    assert!(got.iter().all(|(_, session, why)| *session == id && !why.is_empty()));
+    assert!(got
+        .iter()
+        .all(|(_, session, why)| *session == id && !why.is_empty()));
     let others = frames_within(&mut bystander, Duration::from_millis(500)).await;
     assert!(refusals(&others).is_empty(), "only the sender is told");
 }
@@ -334,7 +336,7 @@ async fn the_same_requests_to_its_shell_instance_are_served() {
         ClientMsg::SessionInput {
             session: id,
             serial: 0,
-            bytes: format!("touch '{}'\n", marker.display()).into_bytes(),
+            bytes: format!(": > '{}'\n", marker.display()).into_bytes(),
             process: shell,
         },
         ClientMsg::SessionResize {
@@ -378,7 +380,10 @@ async fn the_same_requests_to_its_shell_instance_are_served() {
     );
     let deadline = Instant::now() + Duration::from_secs(10);
     while !marker.exists() {
-        assert!(Instant::now() < deadline, "the shell never ran the typed command");
+        assert!(
+            Instant::now() < deadline,
+            "the shell never ran the typed command"
+        );
         tokio::time::sleep(Duration::from_millis(50)).await;
     }
 }

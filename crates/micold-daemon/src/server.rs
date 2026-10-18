@@ -19,7 +19,7 @@ use micold_core::protocol::codec::{DaemonCodec, Frame};
 use micold_core::protocol::handshake;
 use micold_core::protocol::messages::{
     BranchContainment, ClientIdentity, ClientMsg, DaemonMsg, ErrorKind, LogSink, MergedBranchQuery,
-    OperationResult, SessionProcess, TerminalRef, WindowView,
+    OperationResult, RefusedRequest, SessionProcess, TerminalRef, WindowView,
 };
 use micold_core::terminal::LaunchMode;
 use micold_core::worktree::{
@@ -899,7 +899,11 @@ where
                 serial,
                 bytes,
                 process,
-            } => state.session_input_to(session, serial, &bytes, process),
+            } => {
+                if !refuse_terminal_request(state, id, session, process, RefusedRequest::Input) {
+                    state.session_input_to(session, serial, &bytes, process);
+                }
+            }
             ClientMsg::SessionStart {
                 session,
                 allow_additional_session,
@@ -973,7 +977,9 @@ where
             } => {
                 // Advisory, never an error (protocol.md §6): serve whatever the session's shared
                 // framer can from its retained history, resolved against a per-response palette.
-                if let (Some(pty), Some(framer)) =
+                // A structured session's AI process has no terminal: refused (feature 938).
+                if refuse_terminal_request(state, id, session, None, RefusedRequest::Scrollback) {
+                } else if let (Some(pty), Some(framer)) =
                     (state.live_session(session), state.session_framer(session))
                 {
                     let responses: Vec<DaemonMsg> = {
@@ -1221,7 +1227,11 @@ where
                 cols,
                 rows,
                 process,
-            } => state.resize_terminal(session, process, cols, rows),
+            } => {
+                if !refuse_terminal_request(state, id, session, process, RefusedRequest::Resize) {
+                    state.resize_terminal(session, process, cols, rows);
+                }
+            }
             // Feature 484: exactly the named terminals stream to this client, replacing the last
             // set. The first is the project's foreground session; it is also the attached process
             // of its session, so an input without a `process` keeps landing where it always did.
@@ -1264,7 +1274,8 @@ where
             }
             ClientMsg::SessionInterrupt { session } => {
                 // Ctrl-C to the attached process — 0x03 to the PTY, never a real signal (§7).
-                if let Some(pty) = state.live_session(session) {
+                if refuse_terminal_request(state, id, session, None, RefusedRequest::Interrupt) {
+                } else if let Some(pty) = state.live_session(session) {
                     if let Err(err) = pty.write_input(&[0x03]) {
                         tracing::warn!(session = %session.0, %err, "interrupt write failed");
                     }
@@ -2533,6 +2544,32 @@ fn spawn_session_start(
             task_state.broadcast_catalog();
         }
     });
+}
+
+/// Whether a terminal-only `request` to `process` of `session` is refused because it addresses a
+/// structured session's AI process, which has no terminal (feature 938, FR-019). When it is, the
+/// connection `client` is told why and nothing else is.
+fn refuse_terminal_request(
+    state: &DaemonState,
+    client: u64,
+    session: micold_core::session::SessionId,
+    process: Option<SessionProcess>,
+    request: RefusedRequest,
+) -> bool {
+    let refused = state.refuses_terminal_request(session, process);
+    if refused {
+        state.send(
+            client,
+            DaemonMsg::SessionRequestRefused {
+                session,
+                request,
+                reason: "a structured session has no terminal: this request applies to terminal \
+                         sessions and shell instances only"
+                    .into(),
+            },
+        );
+    }
+    refused
 }
 
 /// Whether a `SessionStart`/`SessionRestart` is dropped because another session of the location
