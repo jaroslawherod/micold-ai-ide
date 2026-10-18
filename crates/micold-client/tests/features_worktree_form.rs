@@ -15,14 +15,18 @@ use micold_core::naming::ConventionalType;
 use micold_core::session::AiCli;
 
 #[test]
-fn a_fresh_form_is_editing_a_new_branch_and_cannot_be_submitted() {
+fn a_fresh_form_is_editing_a_new_branch_and_creates_nothing_yet() {
     let form = WorktreeForm::default();
 
     assert_eq!(form.status, WorktreeFormStatus::Editing);
     assert_eq!(form.source, BranchSource::New);
     assert!(
-        !form.can_submit(),
+        form.preview().is_err(),
         "an empty form has no name, so there is nothing to create"
+    );
+    assert!(
+        form.can_press(),
+        "Create stays pressable: pressing it marks the empty required fields (FR-012)"
     );
 }
 
@@ -35,7 +39,7 @@ fn a_typed_name_makes_the_form_submittable() {
     form.name = "add-a-thing".into();
 
     assert!(
-        form.can_submit(),
+        form.can_press(),
         "a type and a name are what a create needs"
     );
 }
@@ -61,12 +65,12 @@ fn a_create_in_flight_cannot_be_submitted_again() {
         ..WorktreeForm::default()
     };
     form.name = "add-a-thing".into();
-    assert!(form.can_submit(), "precondition: this form is submittable");
+    assert!(form.can_press(), "precondition: this form is submittable");
 
     form.status = WorktreeFormStatus::Creating;
 
     assert!(
-        !form.can_submit(),
+        !form.can_press(),
         "a create already in flight must refuse a second submit, or one click could make two worktrees"
     );
 }

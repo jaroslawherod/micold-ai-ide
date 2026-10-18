@@ -35,7 +35,7 @@ FR-022, FR-022a and FR-023.
 
 **Purpose**: the recorded CLI output every parser and daemon test replays (FR-024, R11).
 
-- [ ] T001 [P] Write `scripts/capture-stream-json.sh <name> "<prompt>" [--resume <id>]`: in a fresh
+- [X] T001 [P] Write `scripts/capture-stream-json.sh <name> "<prompt>" [--resume <id>]`: in a fresh
   scratch git repo it runs `claude -p --input-format stream-json --output-format stream-json
   --verbose --include-partial-messages` with `--session-id <new uuid>` (or `--resume <id>`), writes
   the prompt to stdin as one line `{"type":"user","message":{"role":"user","content":[{"type":"text","text":<prompt>}]}}`,
@@ -44,7 +44,7 @@ FR-022, FR-022a and FR-023.
   placeholders (`<SESSION_ID>`, `<HOME>`, `<CWD>`, `<ACCOUNT>`) with `sed`. Add
   `scripts/tests/capture-stream-json.test.sh` that runs the scrub step (factored as a function the
   test can source) on a canned line and asserts each placeholder replaces its secret.
-- [ ] T002 Record with T001 and the logged-in `claude` (2.1.302 in the dev container) the five
+- [X] T002 Record with T001 and the logged-in `claude` (2.1.302 in the dev container) the five
   fixtures FR-024 requires: `text-turn` (plain answer), `tool-turn` (a prompt that makes the CLI
   call `Read` or `Bash` once), `partial-deltas` (a longer answer, so `stream_event` deltas appear),
   `error-result` (a turn that ends in an error `result`, e.g. `--max-turns 1` with a prompt that
@@ -54,7 +54,7 @@ FR-022, FR-022a and FR-023.
   fixture's prompt and flags, that the files are scrubbed stdout, and that `tolerance.jsonl` (T003)
   is synthetic. No logged-in CLI available:
   escalate (R11 risk); never substitute hand-written files for these five.
-- [ ] T003 [P] Write the synthetic
+- [X] T003 [P] Write the synthetic
   `crates/micold-core/tests/fixtures/stream-json/tolerance.jsonl` (SC-002; T002's README names it
   synthetic): in order, a real `system`/`init` line, a line of unknown `type`
   (`"type":"future_event"`), an `assistant` line carrying an extra unknown field at top level and
@@ -71,7 +71,7 @@ FR-022, FR-022a and FR-023.
 
 **⚠️ CRITICAL**: no user-story phase starts before this phase is done.
 
-- [ ] T004 [P] Write failing tests in `crates/micold-core/tests/session_kind.rs`:
+- [X] T004 [P] Write failing tests in `crates/micold-core/tests/session_kind.rs`:
   `SessionKind::default()` is `Terminal`; `Session::start_new_of_kind(location, provider, kind)` and
   `Session::restored_of_kind(…, kind)` keep the kind they are given, `Session::start_new` and
   `Session::restored` (signatures unchanged) give `Terminal`, and `Session` has no kind setter;
@@ -82,11 +82,11 @@ FR-022, FR-022a and FR-023.
   serialises with no `kind` key ("`#[serde(default, skip_serializing_if =
   "SessionKind::is_terminal")]`"), and a `Structured` record round-trips; the catalog's
   `schema_version` is unchanged.
-- [ ] T005 [P] Write a failing test in the test module of `crates/micold-core/src/provider.rs`:
+- [X] T005 [P] Write a failing test in the test module of `crates/micold-core/src/provider.rs`:
   `AiCliProvider::structured_args()` is `Some(["-p", "--input-format", "stream-json",
   "--output-format", "stream-json", "--verbose", "--include-partial-messages"])` for Claude Code
   and `None` for every other provider.
-- [ ] T006 Make T004 and T005 pass: add `SessionKind { #[default] Terminal, Structured }` with
+- [X] T006 Make T004 and T005 pass: add `SessionKind { #[default] Terminal, Structured }` with
   `is_terminal`, `check` and `KindRefusal` in `crates/micold-core/src/session.rs`; add
   `Session::start_new_of_kind` and `Session::restored_of_kind`, and make `start_new` and
   `restored` delegate to them with `SessionKind::Terminal`, so their ~300 existing callers stay
@@ -109,15 +109,16 @@ loses nothing.
 
 ### Tests for User Story 2 (parser) ⚠️
 
-- [ ] T007 [P] [US2] Write failing unit tests in `crates/micold-core/src/structured/lines.rs` for
+- [X] T007 [P] [US2] Write failing unit tests in `crates/micold-core/src/structured/lines.rs` for
   `LineSplitter` (R4): a line split across two `push` chunks comes out whole; one trailing `\r` is
   removed and a second is kept; an 8 MiB line comes out whole and unsplit; `finish()` yields a
   trailing partial line and nothing when the buffer is empty; invalid UTF-8 is decoded lossily
   rather than failing; an empty line between two lines is yielded as an empty line.
-- [ ] T008 [P] [US2] Write failing tests in `crates/micold-core/tests/structured_parse.rs` (SC-001,
+- [X] T008 [P] [US2] Write failing tests in `crates/micold-core/tests/structured_parse.rs` (SC-001,
   SC-002): for each of the five recorded fixtures, splitting the file with `LineSplitter` and
   parsing each line with `parse_line` gives exactly one event per line, in order, with no
-  `Unrecognised` or `Unreadable` among them; `text-turn` starts with `Init` (non-empty
+  `Unreadable` among them and no `Unrecognised` for a line of a known type (the CLI also writes
+  `active_goal`, `rate_limit_event`, other `system` subtypes: those are `Unrecognised`, SC-001); `text-turn` starts with `Init` (non-empty
   `session_id`, `model`, `cwd`) and ends with `Result { is_error: false, .. }` carrying
   `duration_ms`, `total_cost_usd` and `usage`; `tool-turn` has an `Assistant` `ToolUse` (`id`,
   `name`, `input`) and `pair_tool_calls` pairs every `ToolUse` with a `User` `ToolResult` of the
@@ -132,10 +133,10 @@ loses nothing.
 
 ### Implementation for User Story 2 (parser)
 
-- [ ] T009 [US2] Make T007 pass: `crates/micold-core/src/structured/lines.rs` (`LineSplitter::push(&[u8]) ->
+- [X] T009 [US2] Make T007 pass: `crates/micold-core/src/structured/lines.rs` (`LineSplitter::push(&[u8]) ->
   Vec<String>`, `finish() -> Option<String>`), with `crates/micold-core/src/structured/mod.rs`
   and `pub mod structured;` in `crates/micold-core/src/lib.rs`.
-- [ ] T010 [US2] Make T008 pass: `crates/micold-core/src/structured/event.rs`
+- [X] T010 [US2] Make T008 pass: `crates/micold-core/src/structured/event.rs`
   (`StructuredEvent::{Init, Assistant, User, Result, StreamDelta, Unrecognised, Unreadable,
   TurnEndedWithoutResult, OversizedOnWire}`, `ContentBlock::{Text, Thinking, ToolUse, ToolResult,
   Other}`, `Usage`, `Delta`, `SequencedEvent { seq: u64, event }`, all `Serialize +

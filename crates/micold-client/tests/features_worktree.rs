@@ -246,7 +246,6 @@ fn a_worktree_rename_draft_requires_its_name() {
         let draft = WorktreeRenameDraft {
             dir_name: "feat-one".into(),
             text: text.into(),
-            error: None,
             required: Default::default(),
         };
         let fields = draft.required_fields();

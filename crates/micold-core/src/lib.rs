@@ -71,6 +71,7 @@ pub mod settings;
 pub mod spawn;
 pub mod ssh;
 pub mod store;
+pub mod structured;
 pub mod task_progress;
 pub mod terminal;
 pub mod terminal_history;

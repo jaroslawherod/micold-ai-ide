@@ -11,7 +11,7 @@
 
 use crate::icons::Icon;
 use crate::ui::material::keyboard_focus::{Indicator, TakesTheKeyboard};
-use crate::ui::material::{style, Ellipsized, Glyph, ProgressBar, Text, Tooltip, TypeRole};
+use crate::ui::material::{style, Ellipsized, Glyph, ProgressBar, Ripple, Text, Tooltip, TypeRole};
 use iced::widget::{button, column, container, row};
 use iced::{keyboard, Alignment, Element, Length};
 use micold_core::hook_activity::CurrentActivity;
@@ -270,15 +270,16 @@ impl<'a, M: Clone + 'a> From<OverviewCard<'a, M>> for Element<'a, M> {
         if let Some(id) = card.id {
             focusable = focusable.id(id);
         }
-        focusable
+        let focusable = focusable
             .key(keyboard::key::Named::Enter, message.clone())
             .key(keyboard::key::Named::Space, message)
             .indicator(Indicator {
                 outline: roles.secondary,
                 layer: p.text,
                 radius: RADIUS,
-            })
-            .into()
+            });
+        // Outermost, so the ripple is the card's only state layer while it runs (feature 971, D1).
+        Ripple::new(focusable, p.text, RADIUS).into()
     }
 }
 
@@ -556,5 +557,185 @@ mod tests {
             &focused[i..i + 3],
             &rest[i..i + 3]
         );
+    }
+
+    // ---- Feature 971: the pointer ripple (FR-001, FR-003, FR-004, FR-005, FR-006) ----
+
+    use crate::ui::cdk::ripple::Ripple as RippleState;
+    use iced::{mouse, Point};
+    use micold_core::tokens::motion::duration;
+    use std::time::Duration;
+
+    /// The ripple's own timings: one advance is one frame at them.
+    const EXPAND: Duration = Duration::from_millis(duration::MEDIUM_2);
+    const FADE: Duration = Duration::from_millis(duration::SHORT_4);
+
+    fn activatable(model: &CardModel) -> Mounted<'static> {
+        Mounted::new(
+            OverviewCard::<String>::new(model, tokens::roles(ColorScheme::Light))
+                .on_press("pressed".to_string()),
+        )
+    }
+
+    fn ripple<'m>(m: &'m Mounted<'_>) -> &'m RippleState {
+        m.tree.state.downcast_ref::<RippleState>()
+    }
+
+    fn settle(m: &mut Mounted<'_>) {
+        let state = m.tree.state.downcast_mut::<RippleState>();
+        for _ in 0..120 {
+            state.advance(EXPAND, FADE);
+        }
+    }
+
+    /// T003 (FR-001, SC-001): a press at each corner and the centre starts a ripple at that
+    /// point, in every state.
+    #[test]
+    fn a_press_ripples_from_the_press_point_in_every_state() {
+        for state in CardState::ALL {
+            let b = activatable(&model(state, "feat-a")).node.bounds();
+            let spots = [
+                (0.5, 0.5),
+                (b.width - 0.5, 0.5),
+                (0.5, b.height - 0.5),
+                (b.width - 0.5, b.height - 0.5),
+                (b.width / 2.0, b.height / 2.0),
+            ];
+            for (x, y) in spots {
+                let mut m = activatable(&model(state, "feat-a"));
+                m.press(Point::new(x, y));
+                let origin = ripple(&m).origin().expect("the press started a ripple");
+                assert!(
+                    (origin.x - x).abs() <= 1.0 && (origin.y - y).abs() <= 1.0,
+                    "{state:?}: pressed ({x}, {y}), rippled from {origin:?}"
+                );
+            }
+        }
+    }
+
+    /// T003 (US1-4, FR-003): mid-ripple the pixel at the press point has moved from the fill
+    /// toward the state's content colour, and no further than it.
+    #[test]
+    fn the_ripple_is_drawn_in_the_states_content_colour() {
+        let roles = tokens::roles(ColorScheme::Light);
+        for state in CardState::ALL {
+            let p = palette(state, &roles);
+            let mut m = activatable(&model(state, "feat-a"));
+            let at = Point::new(20.0, 100.0);
+            m.press(at);
+            m.tree
+                .state
+                .downcast_mut::<RippleState>()
+                .advance(EXPAND, FADE);
+            let (pixels, width) = m.drawn(iced::Color::BLACK);
+            let i = ((at.y as u32 * width + at.x as u32) * 4) as usize;
+            let got = [pixels[i], pixels[i + 1], pixels[i + 2]];
+            let (fill, text) = (
+                [p.fill.r, p.fill.g, p.fill.b],
+                [p.text.r, p.text.g, p.text.b],
+            );
+            let mut moved = false;
+            for c in 0..3 {
+                let (lo, hi) = (fill[c].min(text[c]), fill[c].max(text[c]));
+                assert!(
+                    u16::from(got[c]) + 2 >= u16::from(lo)
+                        && u16::from(got[c]) <= u16::from(hi) + 2,
+                    "{state:?}: channel {c} is {} outside {lo}..{hi}",
+                    got[c]
+                );
+                moved |= got[c].abs_diff(fill[c]) > 2;
+            }
+            assert!(
+                moved,
+                "{state:?}: the ripple left the fill unchanged: {got:?}"
+            );
+        }
+    }
+
+    /// T004 (FR-006): a plain card holds no ripple state and publishes nothing.
+    #[test]
+    fn a_plain_card_does_not_ripple() {
+        let mut plain = Mounted::new(OverviewCard::<String>::new(
+            &model(CardState::Idle, "feat-a"),
+            tokens::roles(ColorScheme::Light),
+        ));
+        assert_ne!(
+            plain.tree.tag,
+            iced::advanced::widget::tree::Tag::of::<RippleState>()
+        );
+        assert!(plain.press(Point::new(20.0, 20.0)).is_empty());
+    }
+
+    /// T004: a secondary-button press starts no ripple.
+    #[test]
+    fn a_secondary_press_starts_no_ripple() {
+        let mut m = activatable(&model(CardState::Idle, "feat-a"));
+        m.send(
+            iced::Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Right)),
+            mouse::Cursor::Available(Point::new(20.0, 20.0)),
+        );
+        assert!(ripple(&m).is_idle());
+    }
+
+    /// T004 (FR-004, US1-6, US1-5, SC-004): once the ripple fades the pointer-pressed card shows
+    /// its plain fill (no focus layer) and the ripple is idle, so nothing animates.
+    #[test]
+    fn after_the_fade_a_pointer_press_leaves_no_layer() {
+        let roles = tokens::roles(ColorScheme::Light);
+        let p = palette(CardState::Working, &roles);
+        let mut m = activatable(&model(CardState::Working, "feat-a"));
+        let at = Point::new(20.0, 100.0);
+        m.press(at);
+        assert!(!ripple(&m).is_idle());
+        settle(&mut m);
+        assert!(ripple(&m).is_idle());
+        let (pixels, width) = m.drawn(iced::Color::BLACK);
+        let i = ((at.y as u32 * width + at.x as u32) * 4) as usize;
+        let got = [pixels[i], pixels[i + 1], pixels[i + 2]];
+        for (c, want) in [p.fill.r, p.fill.g, p.fill.b].into_iter().enumerate() {
+            assert!(got[c].abs_diff(want) <= 1, "channel {c}: {got:?} vs fill");
+        }
+    }
+
+    /// T006 (FR-005): two cards ripple independently; a second press restarts from the new point.
+    #[test]
+    fn cards_ripple_independently_and_a_second_press_restarts() {
+        let mut a = activatable(&model(CardState::Working, "a"));
+        let b = activatable(&model(CardState::Working, "b"));
+        a.press(Point::new(10.0, 10.0));
+        a.tree
+            .state
+            .downcast_mut::<RippleState>()
+            .advance(EXPAND, FADE);
+        assert!(ripple(&b).is_idle(), "pressing A rippled B");
+        let mid = ripple(&a).expansion();
+        a.press(Point::new(100.0, 100.0));
+        assert_eq!(ripple(&a).origin(), Some(Point::new(100.0, 100.0)));
+        assert!(ripple(&a).expansion() < mid);
+    }
+
+    /// T006 (edge): press, drag off the card, release: the card is not activated while its
+    /// ripple fades.
+    #[test]
+    fn a_press_dragged_off_does_not_activate() {
+        let mut m = activatable(&model(CardState::Working, "a"));
+        m.press(Point::new(20.0, 20.0));
+        let outside = Point::new(20.0, 700.0);
+        m.hover(outside);
+        let released = m.send(
+            iced::Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+            mouse::Cursor::Available(outside),
+        );
+        assert!(released.is_empty());
+        assert!(!ripple(&m).is_idle(), "the ripple still fades");
+    }
+
+    /// T006 (edge): a press in a rounded corner, outside the rounded shape, ripples from the press
+    /// point.
+    #[test]
+    fn a_press_in_a_rounded_corner_ripples_from_the_press_point() {
+        let mut m = activatable(&model(CardState::Working, "a"));
+        m.press(Point::new(0.5, 0.5));
+        assert_eq!(ripple(&m).origin(), Some(Point::new(0.5, 0.5)));
     }
 }

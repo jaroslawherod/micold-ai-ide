@@ -20,6 +20,11 @@
 # printed with: they are recordings, and `split_response` is tested on the bytes `gh` wrote.
 crates/micold-core/tests/fixtures/gh/pr_*.txt -text
 
+# The recorded `claude` stream-json fixtures (feature 938) are the CLI's stdout byte for byte, and
+# the synthetic `tolerance.jsonl` carries one `\r\n` line on purpose: the line splitter is tested on
+# the bytes as written.
+crates/micold-core/tests/fixtures/stream-json/*.jsonl -text
+
 # The documentation set (feature 023).
 #
 # `micold-docs` marks paths whose contents cannot affect what is built, linted, packaged or

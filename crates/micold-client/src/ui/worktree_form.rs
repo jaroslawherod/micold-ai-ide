@@ -126,7 +126,7 @@ pub fn modal<'a>(
     // Why a selected branch can't be used (FR-012). Feature 021 moved the refusal to the point of
     // choice — a blocked branch is a disabled row and can no longer become the selection — so this
     // is now unreachable through the picker. Kept as the invariant's last line of defence, for the
-    // same reason `can_submit()`'s guard is (contract §5): it costs one comparison, and its absence
+    // same reason `can_press()`'s guard is (contract §5): it costs one comparison, and its absence
     // would let a blocked branch pass silently if any future path ever set `selected_branch`.
     if let Some(candidate) = &form.selected_branch {
         if form.source == BranchSource::Existing {
@@ -146,6 +146,7 @@ pub fn modal<'a>(
     // Validation / create error (FR-008, FR-017).
     let message = form
         .error
+        .filter(|_| form.source == BranchSource::Existing)
         .map(|e| e.to_string())
         .or_else(|| error.map(str::to_string));
     if let Some(message) = message {
@@ -228,9 +229,16 @@ fn naming_inputs<'a>(
         .track_focus(FieldId::AddWorktreeTicket, focused)
         .on_input(|a0| Message::WorktreeForm(FormMsg::TicketChanged(a0)));
 
+    // A name that cannot be made into a branch is the Name field's own error, shown instead of the
+    // required message (FR-010).
     let name = TextField::new("", &form.name, r)
         .label("Name")
         .required(state(FieldId::AddWorktreeName))
+        .error(
+            form.error
+                .filter(|_| form.source != BranchSource::Existing)
+                .map(|e| e.to_string()),
+        )
         .supporting("e.g. login page")
         .track_focus(FieldId::AddWorktreeName, focused)
         .on_input(|a0| Message::WorktreeForm(FormMsg::NameChanged(a0)))
@@ -647,8 +655,10 @@ fn default_actions<'a>(form: &WorktreeForm, r: Roles) -> Element<'a, Message> {
     row![
         // No press message when the form cannot be submitted — the button renders disabled from
         // having nowhere to send, rather than from a flag that could disagree with one.
+        // Empty required fields do not disable it: pressing it is the submit attempt that marks
+        // them (feature 937, FR-012).
         Button::filled("Create", r).on_press_maybe(
-            form.can_submit()
+            form.can_press()
                 .then_some(Message::WorktreeForm(FormMsg::Submitted))
         ),
         Button::outlined("Cancel", r).on_press(Message::WorktreeForm(FormMsg::Cancelled)),

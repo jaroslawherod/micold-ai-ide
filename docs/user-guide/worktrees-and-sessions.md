@@ -445,7 +445,9 @@ project, so it is the same after a restart. With no daemon registered the select
 
 **Required fields.** The dialog shows a `* required` line above its first field. Fields marked `*` must be filled before the worktree can be created: **Type**
 and **Name** for a new branch or a GitHub issue, **Branch** when you work from an existing one.
-Ticket and the session's fields are optional and carry no mark.
+Ticket and the session's fields are optional and carry no mark. **Create** is always available: press it
+with a required field empty and every empty required field shows "This field is required" at once, and nothing is created.
+Typing into a field clears its message.
 
 ### Creating a new branch
 

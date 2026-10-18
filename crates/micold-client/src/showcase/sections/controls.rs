@@ -394,10 +394,30 @@ pub fn form_field<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, 
                     .required(FieldRequirement::Required),
                 roles,
             ),
-            posed("required select", required_select(None, roles), roles),
+            posed(
+                "required select",
+                required_select(None, FieldRequirement::Required, roles),
+                roles,
+            ),
             posed(
                 "required select, filled",
-                required_select(samples::CHOICES.first().copied(), roles),
+                required_select(
+                    samples::CHOICES.first().copied(),
+                    FieldRequirement::Required,
+                    roles,
+                ),
+                roles,
+            ),
+            // The required error (feature 937, contract C6, FR-011): the same two fields, empty
+            // and left or submitted, so the error state and its message can be checked here.
+            posed(
+                "required, missing",
+                control().label("Name").required(FieldRequirement::Missing),
+                roles,
+            ),
+            posed(
+                "required select, missing",
+                required_select(None, FieldRequirement::Missing, roles),
                 roles,
             ),
             // The four state layers (BUG-002, FR-035, SC-012). Posed rather than driven, and here
@@ -419,11 +439,15 @@ pub fn form_field<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Element<'a, 
 }
 
 /// A required `Select`, empty or with `choice` picked, for the required-field poses above.
-fn required_select<'a>(choice: Option<&'static str>, roles: Roles) -> Element<'a, Message> {
+fn required_select<'a>(
+    choice: Option<&'static str>,
+    required: FieldRequirement,
+    roles: Roles,
+) -> Element<'a, Message> {
     material::Select::new(samples::CHOICES, choice, |_: &str| Message::NoOp, roles)
         .placeholder("Choose a theme…")
         .label("Theme")
-        .required(FieldRequirement::Required)
+        .required(required)
         .into()
 }
 

@@ -82,6 +82,54 @@ impl AiCli {
     ];
 }
 
+/// How a session runs its AI CLI (feature 938, data-model *SessionKind*).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum SessionKind {
+    /// Today's session: the CLI in a pseudo-terminal.
+    #[default]
+    Terminal,
+    /// The CLI over pipes, speaking stream-json; Claude Code only.
+    Structured,
+}
+
+impl SessionKind {
+    /// Whether this is the default kind.
+    pub fn is_terminal(&self) -> bool {
+        matches!(self, Self::Terminal)
+    }
+
+    /// Whether `provider` can run a session of this kind (FR-003): every CLI runs a terminal
+    /// session; only a CLI with [`AiCliProvider::structured_args`] runs a structured one.
+    ///
+    /// [`AiCliProvider::structured_args`]: crate::provider::AiCliProvider::structured_args
+    pub fn check(self, provider: AiCli) -> Result<(), KindRefusal> {
+        match self {
+            Self::Terminal => Ok(()),
+            Self::Structured if provider.provider().structured_args().is_some() => Ok(()),
+            Self::Structured => Err(KindRefusal::NotSupported(provider)),
+        }
+    }
+}
+
+/// Why a session of a kind cannot be created.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum KindRefusal {
+    /// The CLI has no structured mode.
+    NotSupported(AiCli),
+}
+
+impl fmt::Display for KindRefusal {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::NotSupported(provider) => write!(
+                f,
+                "{} has no structured mode: only Claude Code sessions can be structured",
+                provider.provider().display_name()
+            ),
+        }
+    }
+}
+
 /// The sidebar label for a session — read from the AI CLI's own records, never user-entered
 /// (FR-011a).
 ///
@@ -379,6 +427,8 @@ pub struct Session {
     /// persisted, bounded, and never read from a name. A `Running` run is `Stopped` once the
     /// session exits or the daemon restarts.
     pub agents: Vec<crate::agent_run::AgentRun>,
+    /// Terminal or structured (feature 938).
+    pub kind: SessionKind,
 }
 
 impl Session {
@@ -388,6 +438,17 @@ impl Session {
     /// `provider` is the resolved default-or-override the caller already decided (feature 026,
     /// FR-004); it is fixed for the session's whole life from here.
     pub fn start_new(location: SessionLocation, provider: AiCli) -> Self {
+        Self::start_new_of_kind(location, provider, SessionKind::Terminal)
+    }
+
+    /// A brand-new session of `kind` (feature 938, FR-002): the kind is fixed here for the
+    /// session's whole life, as `provider` is. [`Session::start_new`] is this with
+    /// [`SessionKind::Terminal`].
+    pub fn start_new_of_kind(
+        location: SessionLocation,
+        provider: AiCli,
+        kind: SessionKind,
+    ) -> Self {
         Self {
             id: SessionId::new(),
             location,
@@ -408,6 +469,7 @@ impl Session {
             origin: None,
             origin_rejected: false,
             agents: Vec::new(),
+            kind,
         }
     }
 
@@ -424,6 +486,19 @@ impl Session {
         label: SessionLabel,
         mode: TerminalMode,
         provider: AiCli,
+    ) -> Self {
+        Self::restored_of_kind(id, location, label, mode, provider, SessionKind::Terminal)
+    }
+
+    /// A persisted session of `kind` (feature 938, FR-004): the kind comes back from the store
+    /// with the session. [`Session::restored`] is this with [`SessionKind::Terminal`].
+    pub fn restored_of_kind(
+        id: SessionId,
+        location: SessionLocation,
+        label: SessionLabel,
+        mode: TerminalMode,
+        provider: AiCli,
+        kind: SessionKind,
     ) -> Self {
         Self {
             id,
@@ -445,6 +520,7 @@ impl Session {
             origin: None,
             origin_rejected: false,
             agents: Vec::new(),
+            kind,
         }
     }
 

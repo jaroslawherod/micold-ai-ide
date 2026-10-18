@@ -9,10 +9,12 @@ use micold_client::features::runs::{
     compare_rows, open_diff, status_text, update, Effect, Invalid, Msg, Opening, RunCounts, State,
     SummaryRead, GROUP_MENU_ITEMS,
 };
+use micold_client::features::window::FieldId;
 use micold_client::features::Outcome;
 use micold_core::naming::{ConventionalType, NamingError};
 use micold_core::protocol::messages::ActivitySignal;
 use micold_core::protocol::messages::ClientMsg;
+use micold_core::required::FieldRequirement;
 use micold_core::runs::{
     GroupId, NewGroup, Run, RunGroup, RunStatus, DEFAULT_RUNS, MAX_RUNS, MIN_RUNS,
 };
@@ -175,22 +177,80 @@ fn validate_reports_the_first_failing_rule_in_the_documented_order() {
         Err(Invalid::ProviderNotOffered(AiCli::Pi)), "validate reports the first failing rule in the documented order (checking dialog(&state).validate())");
 }
 
+/// How `field` reads on the open dialog (feature 937).
+fn reads(state: &State, field: FieldId) -> FieldRequirement {
+    let d = dialog(state);
+    d.required.state_in(&d.required_fields(), field)
+}
+
 #[test]
-fn a_refused_confirm_keeps_the_dialog_and_says_why() {
+fn a_refused_confirm_keeps_the_dialog_and_marks_every_empty_required_field() {
     let mut state = opened();
+    for field in [FieldId::RunPrompt, FieldId::RunType, FieldId::RunName] {
+        assert_eq!(reads(&state, field), FieldRequirement::Required);
+    }
     let effect = update(&mut state, Msg::Confirmed);
+    assert_eq!(effect, Effect::None, "nothing is started");
+    for field in [FieldId::RunPrompt, FieldId::RunType, FieldId::RunName] {
+        assert_eq!(
+            reads(&state, field),
+            FieldRequirement::Missing,
+            "{field:?}: every empty required field reads Missing after one confirm, not only the first"
+        );
+    }
     assert_eq!(
-        effect,
-        Effect::None,
-        "a refused confirm keeps the dialog and says why (checking effect)"
+        reads(&state, FieldId::RunBaseBranch),
+        FieldRequirement::Required,
+        "the base branch holds a value"
     );
-    assert!(
-        dialog(&state).error.is_some(),
-        "a refused confirm keeps the dialog and says why (checking dialog(&state).error.is_some())"
+    assert_eq!(dialog(&state).error, None, "emptiness is not a form line");
+    assert_eq!(dialog(&state).name_error, None);
+}
+
+#[test]
+fn an_empty_base_branch_is_marked_with_the_rest_on_one_confirm() {
+    let mut state = opened();
+    update(&mut state, Msg::BaseBranchChanged(String::new()));
+    update(&mut state, Msg::Confirmed);
+    for field in [
+        FieldId::RunPrompt,
+        FieldId::RunType,
+        FieldId::RunName,
+        FieldId::RunBaseBranch,
+    ] {
+        assert_eq!(reads(&state, field), FieldRequirement::Missing, "{field:?}");
+    }
+}
+
+#[test]
+fn typing_clears_one_required_error_and_leaves_the_others() {
+    let mut state = opened();
+    update(&mut state, Msg::Confirmed);
+    update(&mut state, Msg::PromptChanged("go".into()));
+    assert_eq!(
+        reads(&state, FieldId::RunPrompt),
+        FieldRequirement::Required
     );
+    assert_eq!(reads(&state, FieldId::RunName), FieldRequirement::Missing);
+}
+
+#[test]
+fn a_name_with_no_letters_is_the_names_own_error_and_the_form_keeps_its_own_lines() {
+    let mut state = filled();
+    update(&mut state, Msg::NameChanged("!!!".into()));
+    assert_eq!(
+        dialog(&state).name_error.as_deref(),
+        Some(NamingError::EmptyNameAfterSlug.to_string().as_str())
+    );
+    assert_eq!(dialog(&state).error, None);
+    assert_eq!(reads(&state, FieldId::RunName), FieldRequirement::Required);
+    assert_eq!(update(&mut state, Msg::Confirmed), Effect::None);
+    update(&mut state, Msg::ProviderChanged(0, AiCli::Pi));
     assert_eq!(
         dialog(&state).error.as_deref(),
-        Some(Invalid::EmptyPrompt.to_string().as_str()), "a refused confirm keeps the dialog and says why (checking dialog(&state).error.as_deref())");
+        Some(Invalid::ProviderNotOffered(AiCli::Pi).to_string().as_str()),
+        "the provider refusal stays a form line"
+    );
 }
 
 #[test]

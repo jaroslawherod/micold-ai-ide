@@ -5,9 +5,16 @@
 //! pull request readings, so they are built in [`crate::ui::overview::cards`], not by this module
 //! (a feature module names no other feature).
 
+use micold_core::overview::Activation;
 use micold_core::task_progress::FileProgress;
+use micold_core::tokens::motion::duration;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
+
+/// How long the Overview stays up after a card is activated: the ripple's expand time, so the
+/// ripple on the activated card is seen before the view closes (feature 971, FR-007).
+pub const OVERVIEW_ACTIVATION_DELAY: Duration = Duration::from_millis(duration::MEDIUM_2);
 
 /// What the Overview knows of a ticket's issue title (research R8).
 #[derive(Clone, Default, PartialEq, Eq)]
@@ -42,6 +49,28 @@ pub struct State {
     pub progress: BTreeMap<String, FileProgress>,
     /// The issue title per numeric ticket (R8). Cleared on a project switch.
     pub titles: BTreeMap<u64, TitleLookup>,
+    /// The activation accepted and waiting out [`OVERVIEW_ACTIVATION_DELAY`] (feature 971, D3).
+    /// While set, further activations, closing and toggling are ignored: the first one stands.
+    pub activating: Option<Activation>,
+}
+
+impl State {
+    /// A card was activated: accept it when the Overview is open and no activation is pending.
+    /// Returns whether it was accepted, i.e. whether the caller must start the delay timer.
+    pub fn request(&mut self, activation: Activation) -> bool {
+        if !self.open || self.activating.is_some() {
+            return false;
+        }
+        self.activating = Some(activation);
+        true
+    }
+
+    /// The delay is over: take the pending activation, once. None when the Overview was left some
+    /// other way meanwhile (the activation then has nothing to follow).
+    pub fn due(&mut self) -> Option<Activation> {
+        let pending = self.activating.take();
+        pending.filter(|_| self.open)
+    }
 }
 
 /// What happens to the Overview.
@@ -58,6 +87,11 @@ pub enum Msg {
     /// A card was activated by pointer, Enter or Space: leave the Overview. Following the
     /// activation (select, start menu, reveal) is the root's business (research R12).
     CardActivated(micold_core::overview::Activation),
+    /// A card was pressed, by pointer, Enter or Space: the root accepts it with
+    /// [`State::request`] and starts the delay; the Overview stays up meanwhile (feature 971).
+    ActivationRequested(micold_core::overview::Activation),
+    /// [`OVERVIEW_ACTIVATION_DELAY`] has passed since an accepted activation.
+    ActivationDue,
     /// A worktree's files were read (research R9).
     ProgressRead {
         /// The project the read was started in; dropped when it is no longer the active one.
@@ -97,7 +131,13 @@ impl Msg {
 /// Apply a message to the Overview's state.
 /// An activation that sends the user to a row asks the root to reveal it; nothing else asks.
 pub fn update(state: &mut State, msg: Msg) -> Vec<crate::features::Outcome> {
-    use micold_core::overview::Activation;
+    // While an activation waits out its delay the first one stands (feature 971, FR-007).
+    if state.activating.is_some() {
+        match msg {
+            Msg::Closed | Msg::Toggled { .. } | Msg::ActivationRequested(_) => return Vec::new(),
+            _ => {}
+        }
+    }
     if let Msg::CardActivated(Activation::OfferStart(at) | Activation::RevealOnly(at)) = &msg {
         state.open = false;
         return vec![crate::features::Outcome::LocationRevealed(at.clone())];
@@ -114,7 +154,9 @@ pub fn update(state: &mut State, msg: Msg) -> Vec<crate::features::Outcome> {
         Msg::TitleRead { number, result, .. } => {
             state.titles.insert(number, result);
         }
+        Msg::ActivationRequested(_) | Msg::ActivationDue => {}
         Msg::ProjectSwitched => {
+            state.activating = None;
             state.progress.clear();
             state.titles.clear();
         }
@@ -199,4 +241,109 @@ pub fn badge(cards: &[micold_core::overview::CardModel]) -> Option<Badge> {
         count: attention.count,
         label: format!("{} {words}", attention.count),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use micold_core::session::SessionLocation;
+
+    fn activation(name: &str) -> Activation {
+        Activation::OfferStart(SessionLocation::Worktree(name.into()))
+    }
+
+    fn open() -> State {
+        State {
+            open: true,
+            ..State::default()
+        }
+    }
+
+    /// T002: the delay is the ripple's expand token, so the two cannot drift (FR-007).
+    #[test]
+    fn the_delay_is_the_ripples_expand_time() {
+        assert_eq!(OVERVIEW_ACTIVATION_DELAY, Duration::from_millis(300));
+        assert_eq!(duration::MEDIUM_2, 300);
+    }
+
+    /// T007: an open Overview with nothing pending accepts and stores the activation.
+    #[test]
+    fn request_accepts_when_open_and_idle() {
+        let mut state = open();
+        assert!(state.request(activation("a")));
+        assert_eq!(state.activating, Some(activation("a")));
+        assert!(state.open, "the Overview stays up while the ripple plays");
+    }
+
+    /// T007: a closed Overview accepts nothing.
+    #[test]
+    fn request_is_refused_when_closed() {
+        let mut state = State::default();
+        assert!(!state.request(activation("a")));
+        assert_eq!(state.activating, None);
+    }
+
+    /// T007: while one is pending, a second request, Closed and Toggled are ignored; the first
+    /// activation's target stands (US3-3).
+    #[test]
+    fn a_pending_activation_ignores_further_input() {
+        let mut state = open();
+        assert!(state.request(activation("a")));
+        assert!(!state.request(activation("b")));
+        update(&mut state, Msg::ActivationRequested(activation("b")));
+        update(&mut state, Msg::Closed);
+        update(
+            &mut state,
+            Msg::Toggled {
+                settings_open: false,
+            },
+        );
+        assert!(
+            state.open,
+            "neither Escape nor the shortcut closes it early"
+        );
+        assert_eq!(state.activating, Some(activation("a")));
+    }
+
+    /// T007: a project switch clears the pending activation.
+    #[test]
+    fn a_project_switch_clears_the_pending_activation() {
+        let mut state = open();
+        state.request(activation("a"));
+        update(&mut state, Msg::ProjectSwitched);
+        assert_eq!(state.activating, None);
+        assert_eq!(state.due(), None);
+    }
+
+    /// T007: `due` takes the activation once, and the follow-up's own `Closed` is not ignored.
+    #[test]
+    fn due_takes_the_activation_once() {
+        let mut state = open();
+        state.request(activation("a"));
+        assert_eq!(state.due(), Some(activation("a")));
+        assert_eq!(state.due(), None);
+        update(&mut state, Msg::Closed);
+        assert!(!state.open);
+    }
+
+    /// A view that took the main area over inside the delay closed the Overview: nothing follows.
+    #[test]
+    fn due_is_empty_when_the_overview_was_left_meanwhile() {
+        let mut state = open();
+        state.request(activation("a"));
+        state.open = false;
+        assert_eq!(state.due(), None);
+        assert_eq!(state.activating, None);
+    }
+
+    /// T007: `CardActivated` after `due` closes as before (outcome unchanged, FR-008).
+    #[test]
+    fn the_activation_after_the_delay_closes_as_before() {
+        let mut state = open();
+        state.request(activation("a"));
+        let a = state.due().expect("pending");
+        let outcomes = update(&mut state, Msg::CardActivated(a));
+        assert!(!state.open);
+        assert_eq!(outcomes.len(), 1, "an OfferStart still reveals its row");
+    }
 }

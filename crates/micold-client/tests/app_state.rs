@@ -79,7 +79,7 @@ fn form_edits_build_a_derived_preview() {
 }
 
 #[test]
-fn submitting_an_invalid_form_records_the_error() {
+fn submitting_an_empty_form_marks_the_fields_and_records_no_form_error() {
     let mut state = State::default();
     state.update(Message::WorktreeForm(
         micold_client::features::worktree_form::Msg::Opened,
@@ -88,7 +88,12 @@ fn submitting_an_invalid_form_records_the_error() {
     state.update(Message::WorktreeForm(
         micold_client::features::worktree_form::Msg::Submitted,
     ));
-    assert!(state.worktree_form.form.as_ref().unwrap().error.is_some());
+    let form = state.worktree_form.form.as_ref().unwrap();
+    assert!(form.preview().is_err(), "nothing can be created");
+    assert!(
+        form.error.is_none(),
+        "emptiness is the fields' required error, not a form line (feature 937)"
+    );
 }
 
 #[test]
@@ -1374,7 +1379,7 @@ fn the_preview_follows_the_active_source() {
 /// Feature 016 let such a branch be *selected* and refused it at the point of creating, because
 /// `pick_list` could not disable an individual row. The type-ahead can, so FR-012a moved the
 /// refusal to the point of choosing: the press is ignored outright. The old assertion
-/// (`!can_submit()` after selecting a blocked branch) still passes, but now only because nothing
+/// (`!can_press()` after selecting a blocked branch) still passes, but now only because nothing
 /// was selected at all — a vacuous pass. This asserts what actually holds.
 #[test]
 fn a_blocked_candidate_cannot_even_become_the_selection() {
@@ -1390,7 +1395,6 @@ fn a_blocked_candidate_cannot_even_become_the_selection() {
         form(&state).selected_branch.is_none(),
         "a branch that is checked out elsewhere must not be choosable at all (FR-012a)"
     );
-    assert!(!form(&state).can_submit());
 
     state.update(Message::WorktreeForm(
         micold_client::features::worktree_form::Msg::BranchSelected(candidate("feat/free")),
@@ -1399,7 +1403,7 @@ fn a_blocked_candidate_cannot_even_become_the_selection() {
         form(&state).selected_branch.as_ref().unwrap().name,
         "feat/free"
     );
-    assert!(form(&state).can_submit());
+    assert!(form(&state).can_press());
 }
 
 /// …and the guard at the point of action stays, unreachable through the picker but still the
@@ -1412,7 +1416,7 @@ fn the_submit_guard_still_refuses_a_blocked_selection_if_one_ever_reached_it() {
         selected_branch: Some(blocked_candidate("main")),
         ..WorktreeForm::default()
     };
-    assert!(!form.can_submit());
+    assert!(!form.can_press());
 }
 
 #[test]
@@ -1433,22 +1437,22 @@ fn the_listed_candidates_are_stored_for_the_picker() {
 #[test]
 fn submission_is_blocked_while_a_prompt_is_open_or_a_create_is_running() {
     let mut state = form_state();
-    assert!(form(&state).can_submit());
+    assert!(form(&state).can_press());
 
     state.update(Message::WorktreeForm(
         micold_client::features::worktree_form::Msg::ConflictDetected(local_conflict()),
     ));
-    assert!(!form(&state).can_submit());
+    assert!(!form(&state).can_press());
 
     state.update(Message::WorktreeForm(
         micold_client::features::worktree_form::Msg::ResolutionCancelled,
     ));
-    assert!(form(&state).can_submit());
+    assert!(form(&state).can_press());
 
     state.update(Message::WorktreeForm(
         micold_client::features::worktree_form::Msg::CreateStarted(CreateMode::NewBranch),
     ));
-    assert!(!form(&state).can_submit());
+    assert!(!form(&state).can_press());
 }
 
 /// Spec Edge Cases — with the name on two remotes, the app must not resolve the choice itself.
@@ -2464,4 +2468,103 @@ fn review_changes_opens_the_changes_view_of_that_entry() {
         Some(Effect::ReadList { entry: e, .. }) if e == entry
     ));
     assert_eq!(state.take_changes_effect(), None, "taken once");
+}
+
+// --- the required errors on submit (feature 937, FR-005–FR-007, FR-010, FR-012) ------------------
+
+fn opened_form() -> State {
+    let mut state = State::default();
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::Opened,
+    ));
+    state
+}
+
+fn submit(state: &mut State) {
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::Submitted,
+    ));
+}
+
+fn requirement(state: &State, field: FieldId) -> micold_core::required::FieldRequirement {
+    let form = form(state);
+    form.required.state_in(&form.required_fields(), field)
+}
+
+#[test]
+fn create_is_pressable_with_every_required_field_empty() {
+    let state = opened_form();
+    assert!(
+        form(&state).can_press(),
+        "an empty required field does not disable Create (FR-012)"
+    );
+}
+
+#[test]
+fn one_submit_marks_every_empty_required_field_and_creates_nothing() {
+    use micold_core::required::FieldRequirement::{Missing, Required};
+    let mut state = opened_form();
+    assert_eq!(requirement(&state, FieldId::AddWorktreeType), Required);
+    assert_eq!(requirement(&state, FieldId::AddWorktreeName), Required);
+
+    submit(&mut state);
+
+    assert_eq!(requirement(&state, FieldId::AddWorktreeType), Missing);
+    assert_eq!(
+        requirement(&state, FieldId::AddWorktreeName),
+        Missing,
+        "both empty fields read Missing after one submit, not only the first"
+    );
+    assert_eq!(
+        form(&state).error,
+        None,
+        "emptiness is the fields' error, not a form line"
+    );
+    assert!(form(&state).preview().is_err(), "nothing can be created");
+    assert_eq!(form(&state).status, WorktreeFormStatus::Editing);
+}
+
+#[test]
+fn typing_clears_the_required_error_and_keeps_the_text() {
+    use micold_core::required::FieldRequirement::{Missing, Required};
+    let mut state = opened_form();
+    submit(&mut state);
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::NameChanged("login".to_string()),
+    ));
+    assert_eq!(requirement(&state, FieldId::AddWorktreeName), Required);
+    assert_eq!(form(&state).name, "login");
+    assert_eq!(requirement(&state, FieldId::AddWorktreeType), Missing);
+}
+
+#[test]
+fn a_name_with_no_letters_is_the_names_own_error_not_the_required_message() {
+    use micold_core::naming::NamingError;
+    use micold_core::required::FieldRequirement::Required;
+    let mut state = opened_form();
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::TypeSelected(ConventionalType::Feat),
+    ));
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::NameChanged("!!!".to_string()),
+    ));
+    submit(&mut state);
+    assert_eq!(
+        form(&state).error,
+        Some(NamingError::EmptyNameAfterSlug),
+        "today's message stays, shown on the Name field"
+    );
+    assert_eq!(requirement(&state, FieldId::AddWorktreeName), Required);
+}
+
+#[test]
+fn submitting_an_existing_branch_form_with_no_branch_marks_the_branch() {
+    use micold_core::required::FieldRequirement::Missing;
+    let mut state = opened_form();
+    state.update(Message::WorktreeForm(
+        micold_client::features::worktree_form::Msg::SourceChanged(BranchSource::Existing),
+    ));
+    submit(&mut state);
+    assert_eq!(requirement(&state, FieldId::AddWorktreeBranch), Missing);
+    assert_eq!(form(&state).error, None);
 }

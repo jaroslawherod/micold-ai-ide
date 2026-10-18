@@ -389,3 +389,13 @@ fn re_pressing_restarts_from_the_new_point() {
     );
     assert_eq!(r.strength(), 1.0, "re-pressing returns to full strength");
 }
+
+/// Feature 971 (FR-003, SC-004): the Overview card's ripple takes the same expand and fade tokens
+/// as every other pressable, and the close delay is the expand time, so they cannot drift.
+#[test]
+fn the_overview_delay_is_the_ripples_expand_time() {
+    assert_eq!(
+        micold_client::features::overview::OVERVIEW_ACTIVATION_DELAY,
+        EXPAND
+    );
+}

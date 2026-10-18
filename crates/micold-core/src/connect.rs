@@ -165,6 +165,9 @@ fn vanished_mid_handshake(e: &io::Error) -> bool {
             | io::ErrorKind::ConnectionAborted
             | io::ErrorKind::BrokenPipe
             | io::ErrorKind::UnexpectedEof
+            // macOS reports a peer that already closed as ENOTCONN (os error 57) where Linux says
+            // ECONNRESET/EPIPE: the same departing daemon, so the same remedy.
+            | io::ErrorKind::NotConnected
     )
 }
 
@@ -574,6 +577,26 @@ mod tests {
                  failure to put in front of the user"
             );
         }
+    }
+
+    /// macOS answers a handshake on a socket the departing daemon already closed with ENOTCONN
+    /// (os error 57), which Rust maps to `NotConnected`; Linux never does. Pinned here because the
+    /// race test only meets it on macOS.
+    #[test]
+    fn a_not_connected_error_is_read_as_the_daemon_going_away() {
+        // ENOTCONN: 57 on macOS, 107 on Linux, WSAENOTCONN (10057) on Windows.
+        let raw = if cfg!(target_os = "macos") {
+            57
+        } else if cfg!(windows) {
+            10057
+        } else {
+            107
+        };
+        let enotconn = io::Error::from_raw_os_error(raw);
+        assert_eq!(enotconn.kind(), io::ErrorKind::NotConnected);
+        assert!(vanished_mid_handshake(&enotconn));
+        let wrapped: io::Error = CodecError::Io(enotconn).into();
+        assert!(vanished_mid_handshake(&wrapped));
     }
 
     /// The other direction, so the conversion above cannot be "call everything a disconnect".
