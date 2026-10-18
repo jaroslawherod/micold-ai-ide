@@ -127,7 +127,7 @@ summary, an open one (summary hidden), and one with a required field still empty
 **Acceptance Scenarios**:
 
 1. **Given** a section given a summary, **When** it is closed, **Then** the summary shows on one line
-   under or beside the title, cut with an ellipsis if too long; **When** it is open, **Then** the
+   under the title, cut with an ellipsis if too long; **When** it is open, **Then** the
    summary is not shown.
 2. **Given** a section without a summary, **When** shown, **Then** it looks exactly as today.
 3. **Given** a section holding a required field that is still empty, **When** it is closed, **Then**
@@ -187,8 +187,8 @@ summary, an open one (summary hidden), and one with a required field still empty
 **Unified look**
 
 - **FR-006**: Within a section, consecutive controls MUST be separated by one shared vertical gap,
-  the same in every section and every kind; consecutive sections MUST be separated by one shared
-  gap.
+  the same in every section and every kind; consecutive sections, and *Runs in* (or its caution) and the first section, MUST be separated
+  by one shared gap.
 - **FR-007**: An explanation that concerns one field MUST be that field's own supporting text. An
   explanation that concerns the whole section MUST be the first line of the section's body, in one
   shared muted style. No free-floating explanation line between two fields. Cautions and warnings stay directly
@@ -200,7 +200,8 @@ summary, an open one (summary hidden), and one with a required field still empty
   here.") goes directly under that group label.
 - **FR-009**: The Kubernetes contexts found in the kubeconfig MUST be offered in a select placed
   above the *Context* text field, shown only when contexts were found, following the SSH form's host
-  select over its *Host* field; choosing one fills the *Context* field, which stays for typing. It
+  select over its *Host* field; choosing one fills the *Context* field, which stays for typing (and an empty *Namespace*, as
+  today). It
   replaces today's one button per context. No new combined select-and-type component is added.
 - **FR-010**: The plain muted group labels the daemon forms use today as section headings MUST be
   gone from the daemon forms; every heading in them is a section header.
@@ -225,7 +226,8 @@ summary, an open one (summary hidden), and one with a required field still empty
 
 - **FR-016**: The work MUST ship as separate milestones, each its own pull request: (1) the shared
   section's summary and marker (US3's component part), (2) every kind's form split into the FR-002
-  sections (US1), (3) the unified look and the summaries in the daemon forms (US2, FR-014).
+  sections (US1), (3) the unified look and the summaries in the daemon forms (US2, plus US3's form part,
+  FR-014).
 - **FR-017**: The user guide pages that describe a daemon's form MUST name the sections as FR-002
   does.
 
@@ -242,7 +244,8 @@ summary, an open one (summary hidden), and one with a required field still empty
 
 - **SC-001**: For every daemon kind, 100% of its settings other than name and *Runs in* sit inside a
   titled section; no daemon form shows a plain group label as a heading.
-- **SC-002**: With default section states, a Kubernetes daemon form fits its section list and actions
+- **SC-002**: With default section states, no contexts found and no error shown, a Kubernetes
+  add-daemon form at the canonical Settings width fits its section list and actions
   in one window height of 800 logical pixels, where today it needs several.
 - **SC-003**: The gap between consecutive fields and the gap between sections each take a single
   value across all four kinds (geometry checks).

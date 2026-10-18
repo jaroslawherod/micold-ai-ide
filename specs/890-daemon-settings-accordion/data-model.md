@@ -93,7 +93,7 @@ Builders: `.summary(impl Into<String>)`, `.summary_maybe(Option<String>)`, `.req
 |---|---|---|---|
 | `label` | `String` | required | `TypeRole::Label`, muted |
 | `note` | `Option<String>` | `None` | `TypeRole::Caption`, muted, directly under the label |
-| `children` | `Vec<Element>` | empty | one column at the label's left edge, `FIELD_GAP` apart |
+| `children` | `Vec<Element>` | empty | one column at the label's left edge, `spacing::SM` apart (the value of `FIELD_GAP`; the component does not import `ui/settings`) |
 
 Builder: `FieldGroup::new(label, roles).note(text).push(child).extend(children).into()`.
 

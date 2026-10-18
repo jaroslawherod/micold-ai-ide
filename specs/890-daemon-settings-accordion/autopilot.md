@@ -9,18 +9,22 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #890
 - **Worktree branch**: claude/project-thread-rwlog8
 - **Started**: 2026-10-18
-- **Phase**: tasks
-- **Next step**: tasks unit
+- **Phase**: design PR
+- **Next step**: orchestrator opens the design PR and merges it; then milestone M1 (T001–T005)
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
+| (pending) | Design: spec, plan, tasks | to open (orchestrator, via GitHub MCP) | — |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
+| M1 | T001–T005 | full | Showcase `AccordionSection` shows summary (closed), open, required marker | — | pending |
+| M2 | T006–T015 | full | Every daemon kind's form in FR-002 sections, Connection open, errors open their section; user guide | — | pending |
+| M3 | T016–T028 | full | One field/section gap, FieldGroup labels, context select, section summaries and markers; user guide | — | pending |
 
 ## Decisions
 
@@ -31,6 +35,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D3 | clarify | Does a required error shown on leaving an empty field (937 FR-006) force its section open? | Yes; any shown required error counts under FR-004 | agent-resolved | specs/937-required-field-markers/spec.md FR-006; crates/micold-core/src/required.rs FieldRequirement::Missing |
 | D4 | clarify | Kubernetes "Image" section renamed "Container"? | No; container section also picks the runtime, keeps 804's name | agent-resolved | specs/804-session-service-in-daemons/spec.md FR-012 |
 | D5 | clarify | Exact summary text per section | Fixed in the plan's UI contract | agent-resolved | spec.md FR-014 |
+| D6 | tasks | Milestone order and size: milestones.md rule 1 (M1 = P1) and rule 3 (split >10 tasks) vs FR-016's three PRs | FR-016 order kept (M1 component, M2 US1, M3 US2 + summaries); M2 (10) and M3 (13 tasks) not split — user asked for three PRs, and a split of M3 has no separate observable deliverable | agent-resolved | spec.md FR-016; research.md R10 |
+| D7 | tasks | speckit-analyze F1–F9 | Fixed F1 (FieldGroup uses spacing::SM, not ui/settings::FIELD_GAP; data-model), F2 (SC-002 + T009 pin form state), F3+F7 (T008 header test + Tab focus), F4 (FR-006 Runs-in gap), F5 (FR-016 wording), F6 (FR-009 namespace), F9 (summary under title); F8 no change (glue exception) | agent-resolved | speckit-analyze report |
 
 ## Review rounds
 
@@ -41,8 +47,12 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Clarify | 1 | spec.md Clarifications 2026-10-18 | 3 Q, all agent-resolved (D3–D5); FR-004 + edge case changed |
 | Clarify | 2 | — | no critical ambiguities |
 | Plan | 1 | 6a71819950f543013db8bf4fd875133e7b90b673:7d34cc6b80783b6daaee02c86a179f7f5f8d7174 | CLEAN, no findings |
+| Tasks (analyze) | 1 | — | 0 CRITICAL/HIGH; 2 MEDIUM, 7 LOW — fixed per D7 |
+| Tasks | 1 | ba794e2c48f587ac992b44fca4cfd51218aef620:939f376280476c9b308aca897e3933cf3dad7586 | CLEAN; 1 MINOR (M1 not the P1 story) — declined, see Declined |
 
 ## Declined review findings
+
+- Tasks r1 F1 (MINOR, M1 is not the P1 story): FR-016 and the user's ask fix the three-PR order (component, sections, look); M1 has an observable showcase deliverable. Ledger D6.
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
