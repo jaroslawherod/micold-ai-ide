@@ -10,20 +10,21 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-xelisc
 - **Started**: 2026-10-17
 - **Phase**: implement
-- **Next step**: open the M1a PR from the scratchpad title/body (pr-title-686-M1a.txt, pr-body-686-M1a.md); then M1b
+- **Next step**: open the M1b PR from the scratchpad files (pr-title-686-M1b.txt, pr-body-686-M1b.md); then M1c
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #965 | design | merged | 0d36906050f9ad7fedde4b06fa0ee0ca31d231c9 |
+| #978 | M1a | merged | 0b482e1d265b286a31482b1184499377bec88ab5 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1a | T106–T116, T143, T020, T026 | full | Revision-2 core types (settings with image/AI CLIs/DaemonResources, names, failures, Cluster.replace), kubeconfig; revision-1 listener auth, Transport::Tunnel, daemon_image reverted | — | verified, gate green at 8885a829, PR files written |
-| M1b | T019, T117, T118, T021, T025, T119, T120, T027, T121 | full | Pod, PVC, access secret, pod stamp/drift, start through Pull with bounds + rollback over FakeCluster | — | planned |
+| M1a | T106–T116, T143, T020, T026 | full | Revision-2 core types (settings with image/AI CLIs/DaemonResources, names, failures, Cluster.replace), kubeconfig; revision-1 listener auth, Transport::Tunnel, daemon_image reverted | #978 | merged |
+| M1b | T019, T117, T118, T021, T025, T119, T120, T027, T121 | full | Pod, PVC, access secret, pod stamp/drift, start through Pull with bounds + rollback over FakeCluster | — | verified, gate green, PR files written |
 | M1c | T122, T023, T123, T124, T125, T028, T029, T126, T127 | full | Tunnel phase (SSH identification line), LiveCluster, relay, key files | — | planned |
 | M2 | T079, T072, T056, T073, T081, T075, T059, T076, T128 | full | Core Stop/Remove/forget-locally; failure + pod-gone classifiers; preflight | — | planned |
 | M3 | T063, T064, T065, T067, T068, T069, T102 | full | Allowed credentials as secrets, daemon_env, security contexts (core) | — | planned |
@@ -70,6 +71,8 @@ stash@{0} survivors ("686 M1a red WIP"; never drop it; backed up in /mnt/project
 | Tasks rev 2 | 2 (scoped, sonnet) | fa5553fcabfc99c580d0b9f2dc1af7c74f0c6834:618e287a0ec8c9de70dc33c69b725c7aa98fdd5f | CLEAN — 1 MINOR fixed, prose only (Parallel Examples names T143 with the M1a tests) |
 | M1a review A (code-review high) | 1 | d16c6458b8b7e5664f8db0f01d4324dee0807460:139d6af21c0c8c63b2f7d7e1c12c826d51b0f45b | CLEAN — 3 MINOR: F3 fixed (`DaemonResources` `#[serde(default)]` on the struct, test); F1/F2 declined (pre-existing) |
 | M1a review B (conformance, sonnet) | 1 | fbe3dfd0f7a04a22ec882b7cd8b052c14be5b2b1:44c055bedeac1dfe9ace9aea5d22e17d56d17e35 | CLEAN — 1 MINOR fixed (client Cargo.toml `[features]` moved off the showcase comment) |
+| M1b review A (code-review high) | 1 | 64880871548a615f665134c536fac38ddf6845f1:0b482e1d265b286a31482b1184499377bec88ab5 | 10 findings, none BLOCKER: F1/F2 fixed (a terminating claim or secret is waited out, a vanished object re-created; tests), F5 fixed (rollback removes a key only when this attempt gave the client its first line; test), F8 fixed (one `update_access` loop for add and remove); F3, F4, F6, F7, F9, F10 declined (below) |
+| M1b review B (conformance, sonnet) | 1 | 64880871548a615f665134c536fac38ddf6845f1:0b482e1d265b286a31482b1184499377bec88ab5 | CLEAN — Verify 73 passed; 3 MINOR: F2 counts fixed, F3 (`MICOLD_SSH_DIR` assumed) in Follow-ups, F1 (start tests written with the sequence) accepted and recorded in the cycle log |
 
 ## Declined review findings
 
@@ -81,6 +84,12 @@ stash@{0} survivors ("686 M1a red WIP"; never drop it; backed up in /mnt/project
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
 | M1a | A (code-review high) | F1/F2 MINOR: `is_startable()` true for Kubernetes; `set_single_daemon` rewrites a Kubernetes entry's runtime | both lines unchanged from origin/main; no Kubernetes entry can be added before M6 (Add entry hidden); the dial/start path lands in M1c/M5 |
+| M1b | A (code-review high) | F3: a create in flight when a phase bound fires is not in `Attempt.created` | client-side cancellation of one request; the object carries both labels, so the next Start adopts it and Remove (M2) deletes it; noted in Follow-ups |
+| M1b | A | F4: `await_pod` has no ErrImagePull/Unschedulable/Failed detection | tasks.md defers the classifiers to M2 (T075/T076) |
+| M1b | A | F6: foreign `authorized_keys` lines are dropped on write | the access secret is Micold's (labels, created by it); only `micold-client:` lines are meaningful to it |
+| M1b | A | F7: access secret mode 0440 root-owned, no `fsGroup` | the pod security context (`fsGroup`, UID) is T064 (M3); T019 fixes `defaultMode` 0440 |
+| M1b | A | F9: `PodStamp` as a string re-parsed; a missing stamp reads as all differing | the contract fixes the annotation as canonical JSON text; a pod without a stamp cannot be told apart from a changed one |
+| M1b | A | F10: `KeyGen::generate` is synchronous in an async start | only the fake exists; #806 owns the live one and can wrap it in `spawn_blocking` |
 
 ## Handover
 
@@ -92,4 +101,5 @@ None. Clarify round 1 questions remain with the owner as decision cards (spec us
 
 ## Follow-ups not done
 
-None yet.
+- M1b review A F3: a create in flight when a phase bound fires is not in `Attempt.created`, so rollback misses it (an object with both labels, adopted by the next Start). M2's Remove covers it; consider a name-based sweep of the daemon's three fixed names on a `PhaseTimeout` rollback.
+- The access-secret directory variable is assumed to be `MICOLD_SSH_DIR` (`manifest::ACCESS_DIR_ENV`); #806's image must read it, or the constant changes.

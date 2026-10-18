@@ -72,6 +72,7 @@ fn slug_within(name: &str, max: usize) -> String {
 /// The names of one daemon's objects.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ResourceNames {
+    name: String,
     base: String,
     key: DaemonKey,
 }
@@ -85,7 +86,16 @@ impl ResourceNames {
             slug_within(name, NAME_SLUG_MAX),
             key.as_str()
         );
-        Self { base, key }
+        Self {
+            name: name.to_string(),
+            base,
+            key,
+        }
+    }
+
+    /// The daemon's name, as the user gave it.
+    pub fn daemon_name(&self) -> &str {
+        &self.name
     }
 
     /// The daemon's key.

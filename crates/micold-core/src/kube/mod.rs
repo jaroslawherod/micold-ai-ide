@@ -1,11 +1,13 @@
 //! The Kubernetes daemon runtime (feature 686): pure rules and the `Cluster` port. No `kube` crate
 //! here; the live adapter is `micold-client::kube::live`.
 
+pub mod access;
 pub mod classify;
 pub mod credentials;
 #[cfg(any(test, feature = "kube-fake"))]
 pub mod fake;
 pub mod kubeconfig;
+pub mod manifest;
 pub mod names;
 pub mod settings;
 pub mod start;
@@ -102,6 +104,10 @@ pub struct ObjectView {
     pub deleting: bool,
     /// The claim's requested storage, for a `PersistentVolumeClaim`.
     pub storage: Option<String>,
+    /// Its annotations, for the pod's settings stamp.
+    pub annotations: BTreeMap<String, String>,
+    /// A secret's data as text (the adapter decodes `data`; a create may send `stringData`).
+    pub data: BTreeMap<String, String>,
 }
 
 /// A pod's status, reduced to what start, reconnect and the classifiers read.

@@ -121,3 +121,16 @@ the core baseline still fails only the four root-user tests named above).
 - T116 (revert, no new behaviour): `protocol/auth.rs`, `daemon/server.rs` and `connect.rs` restored
   to `origin/main`; `git diff origin/main -- <the three>` is empty; feature 027's token tests are
   covered by the gate.
+- U35–U41, U122, U123, U124, U125 (T019/T117/T118/T025/T119/T120; `kube/manifest.rs`,
+  `kube/access.rs`, `FakeKeyGen`). red: tests over `todo!()` stubs, 17 failed with `not yet
+  implemented`. green: `pod`, `pvc`, `secret`, `PodStamp::of`, `drift`, `AccessSecret::{parse,
+  to_data, with_client, without_client}`; the `ResourceNames` keeps the daemon's name,
+  `ObjectView` gains `annotations` and `data` (secrets travel as `stringData`, which the live
+  adapter decodes on read). The access-dir variable is `MICOLD_SSH_DIR` (assumed; the shared
+  image contract names only the directory). kube:: 73 passed after both entries (access 5, manifest 11, start 17). refactor: none needed.
+- U49–U57, U126–U128 (T021/T027/T121; `kube/start.rs`, `start_tests.rs`). Tests and sequence were
+  written together, no separate red run: the sequence has no meaningful stub (the first run of
+  the suite was the first compile). Covers plan and bounds, exact timeout, create/adopt/Conflict,
+  deleting pod waited out, key race and idempotence, drift Ask/Recreate/Keep, rollback in reverse
+  with the added key, adopted objects kept; preflight reviews, classifiers and `Tunnel` are
+  M2/M1c. green: see above. refactor: none needed.

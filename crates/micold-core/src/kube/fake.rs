@@ -103,6 +103,8 @@ impl FakeCluster {
             labels,
             deleting: false,
             storage: None,
+            annotations: BTreeMap::new(),
+            data: BTreeMap::new(),
         };
         inner.objects.insert(
             (namespace.into(), kind, name.into()),
@@ -218,7 +220,11 @@ fn now<'a, T: Send + 'a>(result: Result<T, ApiFailure>) -> ClusterFuture<'a, T> 
 }
 
 fn labels_of(manifest: &serde_json::Value) -> BTreeMap<String, String> {
-    manifest["metadata"]["labels"]
+    strings_of(&manifest["metadata"]["labels"])
+}
+
+fn strings_of(object: &serde_json::Value) -> BTreeMap<String, String> {
+    object
         .as_object()
         .map(|m| {
             m.iter()
@@ -255,6 +261,8 @@ impl Cluster for FakeCluster {
                     storage: manifest["spec"]["resources"]["requests"]["storage"]
                         .as_str()
                         .map(str::to_string),
+                    annotations: strings_of(&manifest["metadata"]["annotations"]),
+                    data: strings_of(&manifest["stringData"]),
                 };
                 inner.objects.insert(key, (view, manifest));
                 Created::Created { uid }
@@ -292,6 +300,8 @@ impl Cluster for FakeCluster {
                 if let Some((view, stored)) = inner.objects.get_mut(&key) {
                     view.resource_version = version;
                     view.labels = labels_of(&manifest);
+                    view.annotations = strings_of(&manifest["metadata"]["annotations"]);
+                    view.data = strings_of(&manifest["stringData"]);
                     *stored = manifest;
                 }
                 Ok(())
@@ -430,6 +440,22 @@ impl Cluster for FakeCluster {
             lines[from..].join("\n")
         });
         now(result)
+    }
+}
+
+/// Key generation that returns fixed pairs: the n-th call yields pair n, so tests can predict it.
+#[derive(Default)]
+pub struct FakeKeyGen {
+    next: std::sync::atomic::AtomicU64,
+}
+
+impl crate::kube::access::KeyGen for FakeKeyGen {
+    fn generate(&self, comment: &str) -> crate::kube::access::KeyPair {
+        let n = self.next.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        crate::kube::access::KeyPair {
+            private_openssh: format!("-----BEGIN FAKE KEY {n}-----"),
+            public_line: format!("ssh-ed25519 AAAAfake{n} {comment}"),
+        }
     }
 }
 

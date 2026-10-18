@@ -1,7 +1,16 @@
-//! The start sequence of a Kubernetes daemon (feature 686, research K6, contract §3).
+//! The start sequence of a Kubernetes daemon (feature 686, research K6, contract §2–§3). This
+//! milestone runs it through `Pull`; `Tunnel`, `Copy`, `Install` and `Connect` come later.
 
 use std::fmt;
+use std::future::Future;
 use std::time::Duration;
+
+use crate::kube::access::{AccessSecret, KeyGen};
+use crate::kube::classify::KubeFailure;
+use crate::kube::manifest::{self, PodStamp};
+use crate::kube::names::{is_ours, ResourceNames};
+use crate::kube::settings::KubeSettings;
+use crate::kube::{Cluster, Created, ObjectKind, ObjectView};
 
 /// One phase of a start, shown as the row's activity while it runs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -10,11 +19,9 @@ pub enum StartPhase {
     Config,
     /// Check the namespace and permissions.
     Preflight,
-    /// Build and push the image.
-    Image,
     /// Create or adopt the volume claim.
     Volume,
-    /// Write the allowed credentials' secrets.
+    /// Create or adopt the access secret and add this client's key.
     Secrets,
     /// Create or adopt the pod.
     Pod,
@@ -24,14 +31,19 @@ pub enum StartPhase {
     Pull,
     /// Open the port-forward tunnel.
     Tunnel,
+    /// Copy the daemon into the volume and start it.
+    Copy,
+    /// Install the AI CLIs.
+    Install,
+    /// Connect to the daemon.
+    Connect,
 }
 
 impl StartPhase {
     /// How long the phase may take before the start fails (FR-012).
     pub fn bound(self) -> Duration {
         match self {
-            StartPhase::Image => Duration::from_secs(30 * 60),
-            StartPhase::Pull => Duration::from_secs(15 * 60),
+            StartPhase::Pull | StartPhase::Install => Duration::from_secs(15 * 60),
             _ => Duration::from_secs(120),
         }
     }
@@ -41,13 +53,15 @@ impl StartPhase {
         match self {
             StartPhase::Config => "reading the kubeconfig",
             StartPhase::Preflight => "checking the namespace",
-            StartPhase::Image => "building the image",
             StartPhase::Volume => "preparing the volume",
             StartPhase::Secrets => "writing the secrets",
             StartPhase::Pod => "creating the pod",
             StartPhase::Schedule => "scheduling the pod",
             StartPhase::Pull => "pulling the image",
             StartPhase::Tunnel => "opening the tunnel",
+            StartPhase::Copy => "copying the daemon",
+            StartPhase::Install => "installing the AI CLIs",
+            StartPhase::Connect => "connecting to the daemon",
         }
     }
 }
@@ -57,3 +71,418 @@ impl fmt::Display for StartPhase {
         f.write_str(self.activity())
     }
 }
+
+/// How often a phase that waits on the cluster asks again (research K6: a `GET` a second).
+pub const POLL: Duration = Duration::from_secs(1);
+
+/// The phases a start runs, in order (data model "StartPlan").
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StartPlan(Vec<StartPhase>);
+
+impl StartPlan {
+    /// The fixed plan of a Kubernetes daemon.
+    pub fn kube() -> Self {
+        use StartPhase::*;
+        Self(vec![
+            Config, Preflight, Volume, Secrets, Pod, Schedule, Pull, Tunnel, Copy, Install, Connect,
+        ])
+    }
+
+    /// The phases.
+    pub fn phases(&self) -> &[StartPhase] {
+        &self.0
+    }
+}
+
+/// An object this start attempt created, to delete if the attempt fails (FR-013).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CreatedResource {
+    /// Its kind.
+    pub kind: ObjectKind,
+    /// Its name.
+    pub name: String,
+    /// Its UID, the delete precondition.
+    pub uid: String,
+}
+
+/// What one start attempt created or added, for rollback. Adopted objects are never in it.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Attempt {
+    /// The objects, in creation order.
+    pub created: Vec<CreatedResource>,
+    /// The client whose key this attempt added to an adopted access secret.
+    pub added_key: Option<String>,
+}
+
+/// What to do when the adopted pod runs with other settings (FR-005).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DriftChoice {
+    /// Not asked yet: end the start with [`StartOutcome::Drift`].
+    Ask,
+    /// Delete the pod as Stop does and create a new one.
+    Recreate,
+    /// Continue with the pod as it is.
+    Keep,
+}
+
+/// This client's SSH identity for the daemon (its private half stays on the client).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ClientKey {
+    /// The client's id, the key's comment in `authorized_keys`.
+    pub id: String,
+    /// `ssh-ed25519 <base64>`.
+    pub public_key: String,
+}
+
+/// Everything one start needs.
+pub struct StartRequest<'a> {
+    /// The cluster.
+    pub cluster: &'a dyn Cluster,
+    /// Key generation, for the host key.
+    pub keys: &'a dyn KeyGen,
+    /// The daemon's settings.
+    pub settings: &'a KubeSettings,
+    /// The daemon's object names.
+    pub names: &'a ResourceNames,
+    /// The image the pod runs: the setting, or the default.
+    pub image: &'a str,
+    /// This client's key.
+    pub client: &'a ClientKey,
+    /// What to do about a drifted pod.
+    pub drift: DriftChoice,
+}
+
+/// A start that reached a running container.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Started {
+    /// The pod's name.
+    pub pod: String,
+    /// What this start created (empty when it adopted everything).
+    pub attempt: Attempt,
+}
+
+/// How a start ended.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum StartOutcome {
+    /// The pod runs.
+    Ready(Started),
+    /// The pod runs with other settings: ask the user; this attempt was rolled back.
+    Drift {
+        /// The settings that differ, in form order.
+        fields: Vec<&'static str>,
+    },
+    /// The start failed; this attempt was rolled back.
+    Failed(KubeFailure),
+}
+
+/// Run one phase: report it as the activity, then fail `PhaseTimeout` at its bound.
+pub async fn run_phase<T>(
+    phase: StartPhase,
+    on_phase: &mut (dyn FnMut(StartPhase) + Send),
+    work: impl Future<Output = Result<T, KubeFailure>>,
+) -> Result<T, KubeFailure> {
+    on_phase(phase);
+    tokio::time::timeout(phase.bound(), work)
+        .await
+        .unwrap_or(Err(KubeFailure::PhaseTimeout { phase }))
+}
+
+/// Start the daemon: every phase after `Config` up to `Pull`. A failure, or a drift to ask about,
+/// first undoes what this attempt created (FR-013).
+pub async fn start(
+    request: &StartRequest<'_>,
+    on_phase: &mut (dyn FnMut(StartPhase) + Send),
+) -> StartOutcome {
+    let mut attempt = Attempt::default();
+    let outcome = sequence(request, on_phase, &mut attempt).await;
+    match outcome {
+        Ok(fields) if fields.is_empty() => StartOutcome::Ready(Started {
+            pod: request.names.pod(),
+            attempt,
+        }),
+        Ok(fields) => {
+            rollback(request, &attempt).await;
+            StartOutcome::Drift { fields }
+        }
+        Err(failure) => {
+            rollback(request, &attempt).await;
+            StartOutcome::Failed(failure)
+        }
+    }
+}
+
+/// The phases in order; the settings that drifted when the user is to be asked, else empty.
+async fn sequence(
+    r: &StartRequest<'_>,
+    on_phase: &mut (dyn FnMut(StartPhase) + Send),
+    attempt: &mut Attempt,
+) -> Result<Vec<&'static str>, KubeFailure> {
+    use StartPhase::*;
+    run_phase(Preflight, on_phase, preflight(r)).await?;
+    run_phase(Volume, on_phase, volume(r, attempt)).await?;
+    run_phase(Secrets, on_phase, access_secret(r, attempt)).await?;
+    let drifted = run_phase(Pod, on_phase, pod(r, attempt)).await?;
+    if !drifted.is_empty() {
+        return Ok(drifted);
+    }
+    run_phase(
+        Schedule,
+        on_phase,
+        await_pod(r, |s| s.scheduled == Some(true) || s.running),
+    )
+    .await?;
+    run_phase(Pull, on_phase, await_pod(r, |s| s.running)).await?;
+    Ok(Vec::new())
+}
+
+fn namespace<'a>(r: &'a StartRequest<'_>) -> &'a str {
+    &r.settings.namespace.0
+}
+
+async fn preflight(r: &StartRequest<'_>) -> Result<(), KubeFailure> {
+    if r.cluster.namespace_exists(namespace(r)).await? {
+        return Ok(());
+    }
+    Err(KubeFailure::NamespaceMissing {
+        namespace: namespace(r).to_string(),
+    })
+}
+
+/// How an object of the daemon's name came to be there.
+enum Ensured {
+    Created,
+    Adopted(ObjectView),
+}
+
+/// Create `manifest`, or adopt the object of that name when it is ours (contract §2).
+async fn ensure(
+    r: &StartRequest<'_>,
+    kind: ObjectKind,
+    manifest: serde_json::Value,
+    attempt: &mut Attempt,
+) -> Result<Ensured, KubeFailure> {
+    let name = manifest["metadata"]["name"]
+        .as_str()
+        .unwrap_or_default()
+        .to_string();
+    let ns = namespace(r);
+    loop {
+        if let Created::Created { uid } = r.cluster.create(ns, kind, manifest.clone()).await? {
+            attempt.created.push(CreatedResource { kind, name, uid });
+            return Ok(Ensured::Created);
+        }
+        match r.cluster.get(ns, kind, &name).await? {
+            // Gone between the create and the read: create again.
+            None => {}
+            Some(view) => {
+                require_ours(r, kind, &name, &view)?;
+                if !view.deleting {
+                    return Ok(Ensured::Adopted(view));
+                }
+                // Being deleted: wait it out (within the phase's bound), then create (contract §2).
+                tokio::time::sleep(POLL).await;
+            }
+        }
+    }
+}
+
+fn require_ours(
+    r: &StartRequest<'_>,
+    kind: ObjectKind,
+    name: &str,
+    view: &ObjectView,
+) -> Result<(), KubeFailure> {
+    if is_ours(&view.labels, r.names.key()) {
+        return Ok(());
+    }
+    Err(KubeFailure::Conflict {
+        kind: kind.noun().to_string(),
+        name: name.to_string(),
+        namespace: namespace(r).to_string(),
+    })
+}
+
+async fn volume(r: &StartRequest<'_>, attempt: &mut Attempt) -> Result<(), KubeFailure> {
+    let claim = manifest::pvc(r.settings, r.names);
+    ensure(r, ObjectKind::PersistentVolumeClaim, claim, attempt).await?;
+    Ok(())
+}
+
+/// The access secret, created with a generated host key, or this client's key added to it.
+async fn access_secret(r: &StartRequest<'_>, attempt: &mut Attempt) -> Result<(), KubeFailure> {
+    let name = r.names.access_secret();
+    let view = match r
+        .cluster
+        .get(namespace(r), ObjectKind::Secret, &name)
+        .await?
+    {
+        Some(view) => {
+            require_ours(r, ObjectKind::Secret, &name, &view)?;
+            view
+        }
+        None => {
+            let fresh = fresh_secret(r)
+                .with_client(&r.client.id, &r.client.public_key)
+                .0;
+            let manifest = manifest::secret(r.names, &name, &fresh.to_data());
+            match ensure(r, ObjectKind::Secret, manifest, attempt).await? {
+                Ensured::Created => return Ok(()),
+                Ensured::Adopted(view) => view,
+            }
+        }
+    };
+    let id = &r.client.id;
+    let had = AccessSecret::parse(&view.data)
+        .is_some_and(|s| s.authorized.iter().any(|k| &k.client_id == id));
+    let wrote = update_access(r, view, |current| {
+        let (updated, changed) = current
+            .clone()
+            .unwrap_or_else(|| fresh_secret(r))
+            .with_client(id, &r.client.public_key);
+        (changed || current.is_none()).then_some(updated)
+    })
+    .await?;
+    // Rollback removes the client's line only when this attempt gave it one.
+    if wrote && !had {
+        attempt.added_key = Some(id.clone());
+    }
+    Ok(())
+}
+
+/// Write the access secret as `change` makes it from the content read (`None` when unreadable);
+/// `change` returns `None` when nothing needs writing. The write is guarded by the
+/// `resourceVersion` read; on `409` the secret is read again and `change` applied to the new
+/// content, so another client's key survives (FR-023). Whether it wrote.
+async fn update_access(
+    r: &StartRequest<'_>,
+    mut view: ObjectView,
+    change: impl Fn(Option<AccessSecret>) -> Option<AccessSecret>,
+) -> Result<bool, KubeFailure> {
+    let name = r.names.access_secret();
+    for _ in 0..KEY_WRITE_TRIES {
+        let Some(updated) = change(AccessSecret::parse(&view.data)) else {
+            return Ok(false);
+        };
+        let manifest = manifest::secret(r.names, &name, &updated.to_data());
+        let version = &view.resource_version;
+        let write = r
+            .cluster
+            .replace(namespace(r), ObjectKind::Secret, &name, version, manifest);
+        match write.await {
+            Ok(()) => return Ok(true),
+            Err(failure) if failure.code == 409 => {
+                view = r
+                    .cluster
+                    .get(namespace(r), ObjectKind::Secret, &name)
+                    .await?
+                    .ok_or_else(|| KubeFailure::from(failure))?;
+            }
+            Err(failure) => return Err(failure.into()),
+        }
+    }
+    Err(KubeFailure::Api {
+        status: 409,
+        message: format!("secret {name} kept changing; this client's key could not be written"),
+    })
+}
+
+/// How often a key write retries after a conflicting write by another client.
+const KEY_WRITE_TRIES: usize = 8;
+
+fn fresh_secret(r: &StartRequest<'_>) -> AccessSecret {
+    AccessSecret {
+        host_key: r
+            .keys
+            .generate(&format!("micold-host-{}", r.names.daemon_name())),
+        authorized: Vec::new(),
+    }
+}
+
+/// Create or adopt the pod; the drifted settings when the user is to be asked.
+async fn pod(
+    r: &StartRequest<'_>,
+    attempt: &mut Attempt,
+) -> Result<Vec<&'static str>, KubeFailure> {
+    let stamp = PodStamp::of(r.settings, r.image);
+    loop {
+        let manifest = manifest::pod(r.settings, r.names, r.image, &stamp);
+        let view = match ensure(r, ObjectKind::Pod, manifest, attempt).await? {
+            Ensured::Created => return Ok(Vec::new()),
+            Ensured::Adopted(view) => view,
+        };
+        let on_pod = view.annotations.get(manifest::POD_STAMP_ANNOTATION);
+        let fields = manifest::drift(on_pod.map_or("", String::as_str), &stamp);
+        match r.drift {
+            _ if fields.is_empty() => return Ok(Vec::new()),
+            DriftChoice::Keep => return Ok(Vec::new()),
+            DriftChoice::Ask => return Ok(fields),
+            DriftChoice::Recreate => {
+                delete_and_wait(r, ObjectKind::Pod, &r.names.pod(), &view.uid).await?
+            }
+        }
+    }
+}
+
+/// Delete by name and UID and wait until the object is gone (as Stop does).
+async fn delete_and_wait(
+    r: &StartRequest<'_>,
+    kind: ObjectKind,
+    name: &str,
+    uid: &str,
+) -> Result<(), KubeFailure> {
+    r.cluster.delete(namespace(r), kind, name, uid).await?;
+    while r.cluster.get(namespace(r), kind, name).await?.is_some() {
+        tokio::time::sleep(POLL).await;
+    }
+    Ok(())
+}
+
+/// Poll the pod's status until `done` accepts it.
+async fn await_pod(
+    r: &StartRequest<'_>,
+    done: impl Fn(&crate::kube::PodStatusView) -> bool,
+) -> Result<(), KubeFailure> {
+    let pod = r.names.pod();
+    loop {
+        match r.cluster.pod_status(namespace(r), &pod).await? {
+            None => {
+                return Err(KubeFailure::Api {
+                    status: 404,
+                    message: format!("pod {pod} is gone"),
+                })
+            }
+            Some(status) if done(&status) => return Ok(()),
+            Some(_) => tokio::time::sleep(POLL).await,
+        }
+    }
+}
+
+/// Undo what the attempt created, newest first, and the key it added to an adopted secret.
+/// Best effort: a failure here must not hide the failure that caused the rollback.
+async fn rollback(r: &StartRequest<'_>, attempt: &Attempt) {
+    for made in attempt.created.iter().rev() {
+        let _ = r
+            .cluster
+            .delete(namespace(r), made.kind, &made.name, &made.uid)
+            .await;
+    }
+    if let Some(id) = &attempt.added_key {
+        remove_key(r, id).await;
+    }
+}
+
+async fn remove_key(r: &StartRequest<'_>, id: &str) {
+    let name = r.names.access_secret();
+    if let Ok(Some(view)) = r.cluster.get(namespace(r), ObjectKind::Secret, &name).await {
+        let _ = update_access(r, view, |current| {
+            current
+                .filter(|s| s.authorized.iter().any(|k| k.client_id == id))
+                .map(|s| s.without_client(id))
+        })
+        .await;
+    }
+}
+
+#[cfg(test)]
+#[path = "start_tests.rs"]
+mod tests;
