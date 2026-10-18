@@ -31,7 +31,7 @@ written, by this feature (R2).
 | Owner | State | Rule |
 |---|---|---|
 | `NavigationDrawer` | `presence: Progress` (new), 1 shown / 0 retracted | `new(target)` at build; eases on `SLIDE` (400 ms) `EMPHASIZED`; retarget reverses from the current value; `.instant(true)` snaps with `restart_at`; at ≤ `CLOSED` all children parked |
-| `CardGrid` | `Reflow` (new): `full_screen_seen: bool`, `ends: Option<(f32, f32)>` (start, end widths), `started: Instant` | flip of `Zoom::full_screen` → `ends = (W, W ± freed)`; flip during a zoom keeps `ends` (reversal); zoom ends when `W` within 0.5 px of an end, `W` outside `ends`, or `SLIDE + 100 ms` elapsed |
+| `CardGrid` | `ZoomState` (new): `full_screen_seen: bool`, `ends: Option<(f32, f32)>` (start, end widths), `started: Instant` | flip of `Zoom::full_screen` → `ends = (W, W ± freed)`; flip during a zoom keeps `ends` (reversal); zoom ends when `W` within 0.5 px of an end, `W` outside `ends`, or `SLIDE + 100 ms` elapsed |
 
 Derived per layout during a zoom (R5): `f = clamp((W − start)/(end − start), 0, 1)`;
 `w = lerp(w_rest(start), w_rest(end), f)`; card `i` at ribbon offset `i·(w + gap)` on rows of length

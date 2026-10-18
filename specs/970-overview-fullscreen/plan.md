@@ -86,7 +86,7 @@ under `instant`. Events and draw go to no child while parked. `ui/mod.rs` passes
 ### D3 — Grid zoom (R5, R6) — `ui/material/card_grid.rs`
 
 `Zoom { full_screen: bool, freed: f32 }`, `.zoom(z)`, `.on_reflow(f)`, `.scroll_id(id)`. The grid
-inside the `Scrollable` becomes a custom widget (`Reflow` tree state) that lays out by the rest rule
+inside the `Scrollable` becomes a custom widget (new `ZoomState` tree state) that lays out by the rest rule
 at rest and on the ribbon during a zoom, drawing a row-crossing card twice under clip, and routing
 events to the larger piece. Pure helpers, tested without a renderer: `zoom_fraction`, `ribbon(count,
 w, gap, width, card_height) -> Vec<Piece>`. `ui/overview.rs` computes `freed` from `state.sidebar`
