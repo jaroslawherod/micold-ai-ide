@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-rwlog8
 - **Started**: 2026-10-18
 - **Phase**: plan
-- **Next step**: plan unit (clarify done: 2 rounds, round 2 no critical ambiguities)
+- **Next step**: plan unit (continue handover: plan review round 1)
 
 ## Pull requests
 
@@ -48,7 +48,12 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+Plan unit, over context cap after writing the plan. Done: branch rebased onto origin/main and
+force-pushed; `speckit-plan` run — plan.md, research.md (R1–R11), data-model.md, contracts/ui.md
+(section summaries per D5), quickstart.md written and committed. No `.specify/extensions.yml` hooks.
+Next: plan review round 1 (fresh `autopilot-reviewer`, session model, rubrics/plan.md) per
+tasks/review.md; act on findings per review-rounds.md; then set Next step to `tasks unit` and
+return DONE, PR none. No review round run yet; no open findings; no PR.
 
 ## Open escalation
 
