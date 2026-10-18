@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain
+- [x] No [NEEDS CLARIFICATION] markers remain
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
@@ -31,5 +31,5 @@
 
 ## Notes
 
-- Two [NEEDS CLARIFICATION] markers left for the clarify unit: FR-001 (how the mode is entered and
+- Clarify (2026-10-18) resolved the two markers left by the spec unit: FR-001 (how the mode is entered and
   whether it is remembered) and FR-008 (source of the reduced-motion preference; the app has none).
