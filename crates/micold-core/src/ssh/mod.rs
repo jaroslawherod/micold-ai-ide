@@ -8,6 +8,7 @@
 pub mod argv;
 pub mod classify;
 pub mod config_hosts;
+pub mod mismatch;
 pub mod provision;
 pub mod reconnect;
 pub mod remote_path;
@@ -18,6 +19,7 @@ pub mod target;
 pub use argv::{ClientPlatform, SshCommand};
 pub use classify::{ReasonContext, SshFailure};
 pub use config_hosts::{EffectiveSsh, SshIdentity};
+pub use mismatch::{MismatchExplanation, ReplaceOffer, Side, WayOut};
 pub use provision::{Artefacts, ProvisionProgress, SshHost, SshOutput, SshRunner};
 pub use reconnect::Backoff;
 pub use remote_path::{RemoteLocation, RemotePathError};

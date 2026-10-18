@@ -1391,7 +1391,7 @@ impl DaemonState {
     pub fn expectation(&self) -> micold_core::protocol::handshake::Expectation {
         micold_core::protocol::handshake::Expectation {
             token: self.auth_token.get().cloned(),
-            build: format!("micold-daemon {}", env!("CARGO_PKG_VERSION")),
+            build: crate::server::daemon_build(),
             image: image_reference(),
         }
     }

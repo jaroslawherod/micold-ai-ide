@@ -85,6 +85,24 @@ any. A step that runs too long reads `<step> failed: did not finish within <time
 
 Host key and permission problems need your action; the daemon is not retried until you start it.
 
+## When the versions differ
+
+The daemon on the host keeps running after you update Micold, so the two can end up as different
+versions. When they do, the row shows **Version mismatch** and says so in one sentence that names
+both versions, which side is older, and what to do, for example `daemon dev version mismatch:
+client 0.5.3, daemon 0.5.2 (daemon is older)`. This is checked on every connection, in either
+direction.
+
+- **The daemon is newer than the app:** `Update this app.` Micold never offers to replace a newer
+  daemon, because that would downgrade the host.
+- **The daemon is older than the app:** end the daemon on the host yourself (stop the `micold-daemon`
+  process there), then choose **Reconnect**; Micold copies the matching build and starts it. Micold
+  never ends the daemon's running sessions on its own to resolve a mismatch.
+
+No session starts on a mismatched daemon: trying to start one is refused with the same sentence, and
+sessions already running on the host are left alone. Your local daemon and your other remote daemons
+are not affected.
+
 ## Managing a remote daemon
 
 From its row you can **Start**, **Stop**, **Reconnect**, **Edit** and **Remove** a remote daemon, and

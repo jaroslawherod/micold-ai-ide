@@ -597,6 +597,7 @@ pub fn views(state: &State, model: &Model<'_>) -> ViewModel {
             },
             stop_blocked: model.legacy_container == Some(entry.id)
                 && model.sessions.get(&entry.id).is_some_and(|s| !s.is_empty()),
+            explanation: crate::links::remote_mismatch_text(entry, model.links.state(entry.id)),
             activity: match (&entry.runtime, state.provisioning.get(&entry.id)) {
                 (DaemonRuntime::Ssh(_), Some(progress))
                     if model.links.state(entry.id) == Some(&DaemonState::Starting) =>

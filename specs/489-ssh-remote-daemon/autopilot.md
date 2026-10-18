@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #489
 - **Worktree branch**: feat/489_run-the-session-daemon-on-a-remote-host-over-ssh
 - **Started**: 2026-10-12
-- **Phase**: M5 PR open
-- **Next step**: merge M5, then M6
+- **Phase**: M6 PR open (#1020)
+- **Next step**: CI and merge #1020, then M7
 
 ## Pull requests
 
@@ -21,7 +21,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #883 | M2 | merged | ce4dbafccc49cfe6ad011d64b556c1ac5c9e9214 |
 | #895 | M3 | merged | 8a04f4206330fa7552531e4694e2244b186d345f |
 | #918 | M4 | merged | 402b31f667bec7632cfe284acd65c59549085fc8 |
-| #964 | M5 | open | — |
+| #964 | M5 | merged | b81b808f88183a8562cdb5a70faf3ef9e850cf83 |
+| #1020 | M6 | open | — |
 
 ## Milestones
 
@@ -31,8 +32,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T028–T038 | full | Remote projects, worktrees and sessions | #883 | done |
 | M3 | T039–T050 | full | Reconnect after a network drop | #895 | done |
 | M4 | T051–T055 | full | Local work unaffected, concurrent clients | #918 | done |
-| M5 | T056–T065 | full | Host picker, failure reasons, daemon management | #964 | in review |
-| M6 | T066–T072 | full | Version mismatch explained | — | pending |
+| M5 | T056–T065 | full | Host picker, failure reasons, daemon management | #964 | done |
+| M6 | T066–T072 | full | Version mismatch explained | #1020 | in review |
 | M7 | T073–T081 | full | Replace a mismatched daemon with no sessions | — | pending |
 | M8 | T082–T084 | full | Remote daemon artefact for macOS and Windows | — | pending |
 
@@ -66,6 +67,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Conformance B M3 | 1 | a6a3a59724167f056348879bfc89da0d364ddddc:009e6393a452cac9a09765bfc662b80b107e19cc | CLEAN (test-ssh and test-core green), 2 MINOR noted |
 | Code A M4 | 1 | dfcc707c664f16e2b5a44168300e3ab0c7bfbbc6:2a8db33bcecb8469fb979f349f204f66893325ed | CLEAN, 3 MINOR (cut-test comment fixed, prose only; weak negative asserts F1/F3 noted) |
 | Conformance B M4 | 1 | dfcc707c664f16e2b5a44168300e3ab0c7bfbbc6:2a8db33bcecb8469fb979f349f204f66893325ed | CLEAN, 3 MINOR (Verify not observed by B for build lock; full gate runs the ssh tests) |
+| Code A M6 | 1 | 3119bf6c93fa134055b4b5817033d5d9c36e995f:0123d9179934298a9280fc744ba0338b87ee3aff | CLEAN, 3 MINOR noted (Unknown wording until M7; version ordering kept; private --target-dir by R10) |
+| Conformance B M6 | 1 | b5ca53f73272b78ba456f49db756803c35baf049:ba1847571e81b78fd1454575256be759d946ea59 | CLEAN (test-ssh incl. ssh_real_mismatch and test-core green), 1 MINOR noted |
 
 ## Declined review findings
 
@@ -80,7 +83,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None. PR #964 was refused a merge again (main moved): second rebase onto origin/main, conflicts in the ssh argv, daemons feature/shell/settings UI, two client test files, the remote-daemons user guide and the real-ssh test support resolved keeping both sides; the provisioning test of spec 806 now gives its second SSH daemon its own port (FR-016 refuses a repeat). Full `mise run gate` green, force-pushed. Orchestrator: wait on CI and merge.
+None.
 
 ## Open escalation
 

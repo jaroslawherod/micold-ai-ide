@@ -21,6 +21,7 @@ use micold_core::daemons::{
 };
 use micold_core::protocol::messages::RefusalReason;
 use micold_core::session::SessionLifecycle;
+use micold_core::ssh::{MismatchExplanation, ReplaceOffer};
 
 use crate::daemon::Outbox;
 
@@ -153,11 +154,31 @@ pub fn route(links: &DaemonLinks, registry: &DaemonRegistry, binding: Binding) -
     };
     if links.outbox(id).is_some() {
         Route::To(id)
+    } else if let Some(explanation) = remote_mismatch_text(entry, links.state(id)) {
+        // A mismatched remote daemon refuses with the explanation the state shows (FR-011).
+        Route::Unavailable {
+            message: explanation,
+        }
     } else {
         Route::Unavailable {
             message: format!("daemon {} unavailable", entry.name.as_str()),
         }
     }
+}
+
+/// The explanation of a remote (SSH) daemon in `VersionMismatch`: both versions, which side is
+/// older and the way out (feature 489, FR-011). `None` for any other daemon or state. Whether the
+/// daemon has running sessions is not known here, so the offer is [`ReplaceOffer::Unknown`].
+pub fn remote_mismatch_text(entry: &DaemonEntry, state: Option<&DaemonState>) -> Option<String> {
+    let (DaemonRuntime::Ssh(ssh), Some(DaemonState::VersionMismatch { client, daemon })) =
+        (&entry.runtime, state)
+    else {
+        return None;
+    };
+    Some(
+        MismatchExplanation::new(client, daemon, ReplaceOffer::Unknown)
+            .text(entry.name.as_str(), &ssh.target.describe()),
+    )
 }
 
 fn no_daemon() -> Route {
@@ -285,9 +306,10 @@ pub fn unavailable_label(
     let name = entry.name.as_str();
     match links.state(id) {
         Some(DaemonState::Connected) => facts.paths_mapped.then(|| PATHS_MAPPED.to_string()),
-        Some(DaemonState::VersionMismatch { client, daemon }) => {
-            Some(mismatch_message(name, client, daemon))
-        }
+        Some(DaemonState::VersionMismatch { client, daemon }) => Some(
+            remote_mismatch_text(entry, links.state(id))
+                .unwrap_or_else(|| mismatch_message(name, client, daemon)),
+        ),
         _ if facts.runtime_missing && matches!(entry.runtime, DaemonRuntime::Container(_)) => {
             Some(RUNTIME_NOT_FOUND.to_string())
         }

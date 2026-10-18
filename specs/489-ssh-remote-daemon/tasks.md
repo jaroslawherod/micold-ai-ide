@@ -126,13 +126,13 @@ rootless `sshd` and are off by default (`mise run test-ssh`).
 
 ### Scenarios 1 and 3: explain, refuse sessions (M6)
 
-- [ ] T066 [P] [US5] Test `MismatchExplanation` for both directions and the `WayOut` function in `core/ssh/mismatch.rs`
-- [ ] T067 [P] [US5] Test that no session starts on a mismatched daemon and the state text names both versions, in `client/features/daemons.rs`
-- [ ] T068 [US5] Add the stale-daemon fixture `daemon/tests/ssh_real_support/stale_daemon.rs` and the `MICOLD_FIXTURE_VERSION_SUFFIX` read in `crates/micold-core/build.rs` (honoured only under `ssh-real-runtime`, `rerun-if-env-changed`), with a test that a default build ignores the variable
-- [ ] T069 [US5] Write `daemon/tests/ssh_real_mismatch.rs` part 1: both directions, explanation text, session start refused, running sessions untouched
-- [ ] T070 [US5] Implement `MismatchExplanation`, `Side`, `WayOut` and `ReplaceOffer` (M6 always `Unknown`) in `core/ssh/mismatch.rs`
-- [ ] T071 [US5] Show the explanation and refuse session start in `client/features/daemons.rs` and `client/ui/settings/daemons.rs`
-- [ ] T072 [US5] Document version mismatch in `docs/user-guide/remote-daemons.md`
+- [x] T066 [P] [US5] Test `MismatchExplanation` for both directions and the `WayOut` function in `core/ssh/mismatch.rs`
+- [x] T067 [P] [US5] Test that no session starts on a mismatched daemon and the state text names both versions, in `client/features/daemons.rs`
+- [x] T068 [US5] Add the stale-daemon fixture `daemon/tests/ssh_real_support/stale_daemon.rs` and the `MICOLD_FIXTURE_VERSION_SUFFIX` read in `crates/micold-core/build.rs` (honoured only under `ssh-real-runtime`, `rerun-if-env-changed`), with a test that a default build ignores the variable
+- [x] T069 [US5] Write `daemon/tests/ssh_real_mismatch.rs` part 1: both directions, explanation text, session start refused, running sessions untouched
+- [x] T070 [US5] Implement `MismatchExplanation`, `Side`, `WayOut` and `ReplaceOffer` (M6 always `Unknown`) in `core/ssh/mismatch.rs`
+- [x] T071 [US5] Show the explanation and refuse session start in `client/features/daemons.rs` and `client/ui/settings/daemons.rs`
+- [x] T072 [US5] Document version mismatch in `docs/user-guide/remote-daemons.md`
 
 ### Scenario 2: follow the way out, replace (M7)
 

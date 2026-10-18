@@ -735,6 +735,9 @@ pub struct DaemonView {
     /// Stopping (and so restarting) it is not offered yet: a container still on the released image
     /// is replaced only when no session is running in it (FR-017).
     pub stop_blocked: bool,
+    /// For a remote daemon in `VersionMismatch`: both versions, which side is older and the way out
+    /// (feature 489, FR-011). `None` for every other row.
+    pub explanation: Option<String>,
 }
 
 /// What a running released-image container's row says (FR-017).

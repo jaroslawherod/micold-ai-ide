@@ -8,7 +8,8 @@
 #
 # push:     comment on the merged pull request that carries the commit, mentioning its author.
 #           No merged PR (a direct push): fall through to the tracking issue.
-# schedule: open the tracking issue, or comment on it when one is already open.
+# schedule: open the tracking issue, or comment on it when one is already open, mentioning the
+#           author of the commit the run tested.
 #
 # Env: EVENT (push|schedule), REPO (owner/name), SHA, RUN_URL.
 # Tested by scripts/tests/ci-notify-failure.test.sh. Auto-revert is deliberately not done here.
@@ -40,10 +41,9 @@ if [ "$EVENT" = push ]; then
     gh pr comment "$number" --repo "$REPO" --body "$(mention "$author"): CI went red on \`main\` after this merged (commit $SHA). The macOS and Windows daemon suites run only after the merge, so a platform break shows up here. Run: $RUN_URL"
     exit 0
   fi
-  who="$(mention "$(gh api "repos/$REPO/commits/$SHA" --jq '.author.login // empty' || true)")"
-else
-  who="the last committer to \`main\`"
 fi
+# The commit's author: a direct push's, or the head of `main` the nightly run tested (#959).
+who="$(mention "$(gh api "repos/$REPO/commits/$SHA" --jq '.author.login // empty' || true)")"
 
 body="CI is red on \`main\` ($EVENT, commit $SHA). Notifying $who. Run: $RUN_URL"
 existing="$(gh issue list --repo "$REPO" --state open --search "\"$TITLE\" in:title" \

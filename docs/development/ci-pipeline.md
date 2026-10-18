@@ -17,11 +17,11 @@ shapes:
 | Job | Code-affecting | Documentation-only |
 |-----|----------------|--------------------|
 | `classify change` | runs | runs |
-| `fmt + clippy` | runs | **skipped** |
-| `build + test (ubuntu-latest)` | runs | **skipped** |
+| `fmt + clippy` | runs; skipped on a [proven main push](#main-pushes-that-repeat-the-pull-request-run) | **skipped** |
+| `build + test (ubuntu-latest)` | runs; no leg on a proven main push | **skipped** |
 | `build + test (macos-latest)` | runs; the full daemon suite only on main pushes, nightly and `full-ci` ([why](#platform-daemon-suites-run-after-the-merge)) | **skipped** |
 | `build + test (windows-latest)` | runs; the full daemon suite only on main pushes, nightly and `full-ci` | **skipped** |
-| `assertion freeze (advisory)` | runs | **skipped** |
+| `assertion freeze (advisory)` | runs; skipped on a proven main push | **skipped** |
 | `sandbox against a real runtime (linux)` | runs on main pushes and nightly; on a pull request only with [daemon-runtime paths](#path-gated-jobs) or `full-ci` | **skipped** |
 | `remote daemon over a real sshd (linux)` | runs on main pushes and nightly; on a pull request only with [daemon-runtime paths](#path-gated-jobs) or `full-ci` | **skipped** |
 | `package + smoke (windows-11-arm)` | runs on main pushes and nightly; on a pull request only with [packaging paths](#path-gated-jobs) or `full-ci` | **skipped** |
@@ -203,6 +203,47 @@ job alone; no other job holds them. It does not run on pull requests. Auto-rever
 merge queue (the ruleset would then run the full suite on the queued commit before it lands) is the
 stronger alternative; it is a repository setting, outside this change.
 
+## Main pushes that repeat the pull request run
+
+A merged pull request already ran the pipeline on the tree that lands on `main`, so a push to
+`main` re-running all of it (about 25 minutes, twice as many runner-minutes as needed) proves
+nothing new. When the push is **PR-proven** (#959) it skips what the pull request run covered and
+keeps what pull requests may skip:
+
+| Job on a proven push | |
+|---|---|
+| `fmt + clippy`, `assertion freeze` | **skipped** (lint and the shell suites ran on the PR) |
+| `build + test (ubuntu-latest)` | **skipped** (its `cargo test --workspace` ran on the PR) |
+| `build + test (macos-latest)`, `(windows-latest)` | run, with the full daemon suites |
+| `static Linux daemons` | runs (the macOS, Windows and ARM64 packaging steps need its artifact) |
+| `package + smoke (windows-11-arm)`, sandbox, sshd | run |
+| `docs check` | runs (cheap, and deliberately unconditional) |
+
+**Detecting it.** `classify change` runs `scripts/pr-proven.sh` on a push (cases in
+`scripts/tests/pr-proven.test.sh`) and exposes `pr_proven`. It is `true` only when exactly one
+**merged** pull request into `main` carries the pushed commit (`GET commits/{sha}/pulls`) **and**
+that pull request's head commit has the same git tree as the pushed commit. Everything else is
+`false` and keeps the full pipeline: a direct push, several pull requests, a tree mismatch (a
+rebase-merge of a branch that was behind `main` produces a tree no run tested), an API error. The
+nightly schedule and pull requests are never proven, so the nightly still runs everything.
+
+**The assumption.** The pull request's run was green on its head tree. That holds because the
+branch ruleset requires `ci complete` and requires branches to be **up to date** before merging;
+with it off, trees would differ more often and the script would just fall back to the full run, but
+a PR run that was red and merged anyway (admin bypass) would be taken as proven. A merged pull
+request that skipped jobs by path (docs-only, no packaging paths) skipped them on the push too:
+`classify` still reads the push's own diff, so the path gates behave as before.
+
+**How the skipped jobs keep `ci complete` honest.** `fmt + clippy` is skipped, not failed, so the
+heavy jobs that `needs: lint` use an explicit condition (`!cancelled()`, `classify` succeeded,
+`lint` is not `failure`, `static Linux daemons` succeeded, then the path gates) instead of the
+implicit `success()`, which would skip them with lint. On a pull request a failed lint still skips
+them. The `test` matrix takes its legs from the `test_os` output of `classify change`. `ci
+complete` and its name are unchanged and treat skipped as satisfied.
+
+**Notification.** The nightly run's tracking issue now mentions the author of the commit it tested,
+as a direct push's does.
+
 ## The merge gate
 
 The default branch requires exactly one status check: **`ci complete`**. It summarises the run
@@ -237,8 +278,10 @@ the two.
 
 - **Red lint still blocks.** A job that `needs: lint` is *skipped*, not failed, when lint fails.
   `ci complete` reads lint's own result (`failure` is `BLOCKED`), so the required check goes red.
-- **The `if:` clauses keep their meaning.** They contain no status function, so each implies
-  `success()` of every need: lint skipped (docs-only) skips these jobs, as `docs_only` already did.
+- **The `if:` clauses keep their meaning.** Lint skipped on a docs-only run skips these jobs, as
+  `docs_only` already did. Lint skipped on a [proven main push](#main-pushes-that-repeat-the-pull-request-run)
+  must not, so `test`, the ARM64 package, sandbox and sshd spell their conditions out (lint is not
+  `failure`) rather than rely on `success()`.
 - **The matrix is gated whole.** `needs:` is per job, not per leg, so the Linux leg waits too. It
   is not the critical path (macOS and Windows are), so green wall-clock is unchanged in practice.
 - Why not cancel siblings on first failure: it needs a token with `actions: write`, and a cancelled
