@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #937
 - **Worktree branch**: claude/project-thread-rkhzho
 - **Started**: 2026-10-17
-- **Phase**: M5 gate
-- **Next step**: M5: full gate, review A and B, then push and write the PR title/body to the scratchpad (gh unusable)
+- **Phase**: M5 PR
+- **Next step**: orchestrator opens the M5 PR (pr-title-937-M5.txt, pr-body-937-M5.md in the scratchpad), waits on CI, merges; then M6. Visual pass not run (no xdotool)
 
 ## Pull requests
 
@@ -21,6 +21,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #974 | M2: required fields marked in Settings and the daemon form | merged | e1462f4fae303fa4b29aa8261a7764c0164889b0 |
 | #980 | M3: `* required` legend | merged | d22e7c18b3f076cace16af54f8ddfa539fc73a48 |
 | #1046 | M4: required error on submit in the dialogs | merged | a50adf7af2dba0be4fa366d6381aef69c45fb998 |
+| to-open | M5: required error on save in Settings and the daemon form | to-open | — |
 
 ## Milestones
 
@@ -30,7 +31,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T016–T022 | full | Required fields marked in Settings sections and the daemon form | #974 | merged |
 | M3 | T023–T028 | full | `* required` legend once above the first field of every form with a required field | #980 | merged |
 | M4 | T029–T035 | full | Required error on submit in the dialogs; Create and Start runs enabled | #1046 | merged |
-| M5 | T036–T041 | full | Required error on save in Settings and the daemon form | to-open | gate |
+| M5 | T036–T041 | full | Required error on save in Settings and the daemon form | to-open | PR |
 | M6 | T042–T048 | full | Required error on leaving a field (blur), selects included | — | pending |
 
 ## Decisions
@@ -55,6 +56,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 review A (high) | 1 | 26c2e091b37dab4dc21ee68b849e468078d105aa:e1462f4fae303fa4b29aa8261a7764c0164889b0 | CLEAN after fixes: F4 `calls_the_legend` now matches `RequiredLegend::` (fixed); F1–F3, F5, F6–F9 declined (see below); the code-review skill ran in a fork |
 | M3 review B (conformance, sonnet) | 1 | 0d717b7bc8c847303c4c83e4771b1a4dfdac218d:e1462f4fae303fa4b29aa8261a7764c0164889b0 | CLEAN (3 MINOR: muted role not asserted; no Appearance-has-no-legend test; showcase legend is its own catalogue entry because `showcase_completeness` requires one per component, not a pose on the Required field entry); Verify ok (required_legend 3, required_call_sites 6, layout_snapshot 63, showcase_completeness 39) |
 
+
+(M5 rows) | M5 review A (high) | 1 | 9e7daa95:324cf159 | fixed: add_repository clears only its own error, docs wrap; declined: field_name string table (tests cover each runtime), no-op fallback (tests assert required_fields mirrors validate), dead Blank arm (match must be exhaustive), Jira whitespace (pre-existing semantics) |
+(M5 rows) | M5 review B (conformance, sonnet) | 1 | 4a15019a:b596a5f4 | CLEAN (2 MINOR: red not observed separately, noted in cycle-log; T040 needs no UI edit, noted) |
 
 ## Declined review findings
 
