@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1024
 - **Worktree branch**: claude/project-thread-iq9j8q
 - **Started**: 2026-10-18
-- **Phase**: clarify done
-- **Next step**: plan unit (clarify CLEAN: 2 rounds; round 1 agent-resolved both markers, round 2 found no critical ambiguities)
+- **Phase**: plan done
+- **Next step**: tasks unit
 
 ## Pull requests
 
@@ -35,6 +35,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | Spec | 1 | ad3ae2b289c1c952308d426584a1f3b8589063bd:8ee4531564743d6032729cd056a73f655abfb1a0 | CHANGES: 1 MAJOR, 2 MINOR (all fixed) |
 | Spec | 2 | 42de4d6686a2c4fbf4edd34a2fac84019f53f76e:9fd139b98e5f41fd86197ed391d3122b7f68fe6b | CLEAN |
+| Plan | 1 | e45c58b4b1535563f0e6bedadc7591b9a695a39b:6c3e08958c02ee674bc1558fc34574eb1171dc3a | CLEAN: 2 MINOR (fixed, prose only) |
 
 ## Declined review findings
 
