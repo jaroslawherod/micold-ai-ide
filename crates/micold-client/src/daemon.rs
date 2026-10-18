@@ -1572,7 +1572,7 @@ pub async fn kube_attempt(
             key: keys.private_key(),
             known_hosts: keys.known_hosts(),
         },
-        &settings.providers,
+        settings,
     );
     let opts = ProvisionOptions {
         platform: ClientPlatform::current(),

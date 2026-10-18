@@ -1070,7 +1070,13 @@ mod connect {
         let request = start_request(&fake, &s, &names, &keys, &c1, DriftChoice::Ask, &no_files);
         let mut ignore = |_: StartPhase| {};
         let started = ready(start(&request, &mut ignore).await);
-        let target = pod_target(reach(), &clis.iter().copied().collect());
+        let target = pod_target(
+            reach(),
+            &KubeSettings {
+                providers: clis.iter().copied().collect(),
+                ..s.clone()
+            },
+        );
         let cancel = CancelToken::new();
         let c = ConnectRequest {
             host,
@@ -1159,8 +1165,8 @@ mod connect {
         let commands = host.commands.lock().unwrap().clone();
         let bridge = commands.last().unwrap().last().unwrap();
         assert!(
-            bridge.starts_with("env MICOLD_IDLE_STOP='off' "),
-            "{bridge}"
+            bridge.starts_with("env MICOLD_IDLE_STOP='off' MICOLD_REPOS_ROOT='/data/repos' "),
+            "the daemon keeps its clones on the volume: {bridge}"
         );
         assert_eq!(
             commands.len(),

@@ -1,7 +1,6 @@
 //! The start sequence of a Kubernetes daemon (feature 686, research K6, contract §2–§3). This
 //! milestone runs it through `Tunnel`; `Copy`, `Install` and `Connect` come later.
 
-use std::collections::BTreeSet;
 use std::fmt;
 use std::future::Future;
 use std::path::Path;
@@ -22,7 +21,6 @@ use crate::provision::{
     Provisioned, Step, StepBounds,
 };
 use crate::sandbox::AiCliSelection;
-use crate::session::AiCli;
 use crate::ssh::argv::{PinnedReach, Reach};
 use crate::ssh::provision::{ProvisionOptions, SshHost};
 use crate::ssh::{ReasonContext, SshFailure};
@@ -654,21 +652,15 @@ async fn tunnel(r: &StartRequest<'_>) -> Result<(), KubeFailure> {
 /// the start installs. The root filesystem is read-only.
 pub const STATE_DIR: &str = "/data/home/.local/share/micold-ai-ide";
 
-/// The daemon's environment: it outlives the client (FR-010), so its idle stop is off.
-pub fn daemon_env() -> Vec<(String, String)> {
-    vec![(
-        crate::spawn::IDLE_STOP_ENV.to_string(),
-        crate::spawn::IDLE_STOP_OFF.to_string(),
-    )]
-}
-
 /// The shared sequence's target for the pod: SSH through the relay's loopback port, AI CLIs
-/// installing the daemon's `providers`, the 120 s step bounds and the 15 minute install.
-pub fn pod_target(reach: PinnedReach, providers: &BTreeSet<AiCli>) -> ProvisionTarget {
+/// installing the daemon's `providers`, the 120 s step bounds and the 15 minute install. The
+/// daemon runs with [`super::credentials::daemon_env`] for its `allowed` credentials: its idle
+/// stop off (FR-010), its clone root, and what the credentials need.
+pub fn pod_target(reach: PinnedReach, settings: &KubeSettings) -> ProvisionTarget {
     ProvisionTarget {
         reach: Reach::Pinned(reach),
         owned: crate::provision::Ownership::AppOwned {
-            ai_clis: AiCliSelection(providers.clone()),
+            ai_clis: AiCliSelection(settings.providers.clone()),
             table: AiCliTable::pinned(),
             state_dir: STATE_DIR.into(),
             egress: Egress::Direct,
@@ -677,7 +669,9 @@ pub fn pod_target(reach: PinnedReach, providers: &BTreeSet<AiCli>) -> ProvisionT
             install: StartPhase::Install.bound(),
             ..StepBounds::container()
         },
-        env: daemon_env(),
+        env: super::credentials::daemon_env(&settings.allowed)
+            .into_iter()
+            .collect(),
     }
 }
 
