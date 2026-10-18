@@ -136,6 +136,10 @@ the 776 error, no confirmation opens in any window. With the flag: created.
   created and the existing session is untouched.
 - **Daemon disconnected while the confirmation is open.** Confirming reports the usual connection
   error and creates nothing.
+- **Occupant not yet in the window's catalog** (stale window): the confirmation says the location
+  already has a session, without naming it (generic text); it still opens.
+- **Startup auto-start refused as occupied**: neither a person's request nor an agent's; it keeps
+  the error notice and opens no dialog (research R7).
 - **Default (project root) location**: behaves as a named worktree.
 - **Platforms**: the confirmation is a window dialog, identical on every desktop platform.
 
