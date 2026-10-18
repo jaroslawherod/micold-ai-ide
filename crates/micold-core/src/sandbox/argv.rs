@@ -245,9 +245,12 @@ fn mount_args(mounts: &MountSet) -> Vec<OsString> {
         args.push("-v".into());
         args.push(
             format!(
-                "{}:{}:ro",
+                "{}:{}/{}:ro",
                 mounts.secret.host.join(host).display(),
-                mounts.secret.container.join(container).display()
+                // A container path is POSIX on every host: `Path::join` would put a `\` in it on
+                // Windows.
+                mounts.secret.container.display(),
+                container
             )
             .into(),
         );
@@ -697,7 +700,7 @@ mod tests {
                 ] {
                     assert!(
                         args.iter()
-                            .any(|a| a.contains(&format!("/{host}:")) && a.ends_with(container)),
+                            .any(|a| a.contains(&format!("{host}:")) && a.ends_with(container)),
                         "{kind} mounts {host}: {args:?}"
                     );
                 }
