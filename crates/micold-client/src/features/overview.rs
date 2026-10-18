@@ -241,7 +241,9 @@ pub fn update(state: &mut State, msg: Msg) -> Vec<crate::features::Outcome> {
                 origin,
                 highlighted: (origin == MenuOrigin::Keyboard).then_some(0),
             });
-            return vec![crate::features::Outcome::SurfaceOpened(OverviewCardMenu::ID)];
+            return vec![crate::features::Outcome::SurfaceOpened(
+                OverviewCardMenu::ID,
+            )];
         }
         Msg::CardMenuDismissed | Msg::CardMenuEntryChosen(_) => {
             if let Some(menu) = state.card_menu.take() {

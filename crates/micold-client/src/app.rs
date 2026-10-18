@@ -1056,6 +1056,7 @@ impl State {
         }
         self.agent_confirm.update_depth -= 1;
         if self.agent_confirm.update_depth == 0 {
+            crate::ui::overview::settle_card_menu(self);
             crate::features::agent_confirm::release(self);
         }
     }

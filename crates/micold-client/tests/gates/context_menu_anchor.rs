@@ -512,7 +512,10 @@ fn the_card_menu_stays_inside_the_window_at_its_edges() {
         let window = (size.width as u16, size.height as u16);
         let location = SessionLocation::Worktree(state.worktree.worktrees[0].dir_name.clone());
         let panel = menu_panel_size(card_menu_items(&state, &location).len());
-        assert!(panel.1 > menu_panel_size(1).1, "the fixture has a real menu");
+        assert!(
+            panel.1 > menu_panel_size(1).1,
+            "the fixture has a real menu"
+        );
         for anchor in [
             (window.0 - 1, 100),
             (100, window.1 - 1),

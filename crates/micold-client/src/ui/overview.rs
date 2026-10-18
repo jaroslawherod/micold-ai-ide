@@ -4,8 +4,10 @@
 //! feature's own business; so it lives here beside the view rather than in `features::overview`.
 
 use crate::app::{Message, State};
+use crate::features::overview::Msg;
 use crate::features::sidebar::{RunRow, SidebarEntry, WorktreeNode};
-use crate::ui::material::{CardGrid, OverviewCard};
+use crate::icons::Icon;
+use crate::ui::material::{CardGrid, MenuItem, OverviewCard};
 use iced::widget::container;
 use iced::{Element, Length};
 use micold_core::location_state::location_state;
@@ -47,6 +49,67 @@ pub fn view<'a>(state: &State, scheme: ColorScheme) -> Element<'a, Message> {
         .width(Length::Fill)
         .height(Length::Fill)
         .into()
+}
+
+/// The card menu of `location` (feature 972, FR-002): *Open* first, then exactly that location's
+/// row-menu entries, each message wrapped in [`Msg::CardMenuEntryChosen`] so the root closes the
+/// menu before running it. Built per render from held state, as the row menus are (SC-003).
+pub fn card_menu_items(state: &State, location: &SessionLocation) -> Vec<MenuItem<Message>> {
+    let chosen = |inner: Message| Message::Overview(Msg::CardMenuEntryChosen(Box::new(inner)));
+    let open = cards(state)
+        .into_iter()
+        .find(|model| &model.location == location)
+        .map(|model| chosen(Message::Overview(Msg::CardActivated(model.activation))));
+    std::iter::once(with_message(MenuItem::new(Icon::Open, "Open", ()), open))
+        .chain(
+            crate::ui::location_menu_items(state, location)
+                .into_iter()
+                .map(|mut item| {
+                    let message = item.message.take().map(chosen);
+                    with_message(item, message)
+                }),
+        )
+        .collect()
+}
+
+/// `item` with `message` in place of its own. Its right-press menu, if any, is dropped: a card-menu
+/// entry has none.
+fn with_message<A, B>(item: MenuItem<A>, message: Option<B>) -> MenuItem<B> {
+    MenuItem {
+        icon: item.icon,
+        reserve_icon: item.reserve_icon,
+        icon_tint: item.icon_tint,
+        label: item.label,
+        message,
+        trailing_text: item.trailing_text,
+        trailing_mark: item.trailing_mark,
+        trailing_icon: item.trailing_icon,
+        trailing_tooltip: item.trailing_tooltip,
+        on_context: None,
+    }
+}
+
+/// Close a card menu whose Overview closed or whose target is no longer listed (research R8,
+/// FR-012), and drop a focus return with no Overview to return to. Called once per outermost
+/// update, so every way a location disappears or the Overview closes is covered in one place.
+pub fn settle_card_menu(state: &mut State) {
+    if !state.overview.open {
+        state.overview.card_menu = None;
+        state.overview.focus_return = None;
+        return;
+    }
+    let Some(target) = state
+        .overview
+        .card_menu
+        .as_ref()
+        .map(|m| m.location.clone())
+    else {
+        return;
+    };
+    if !cards(state).iter().any(|model| model.location == target) {
+        state.overview.card_menu = None;
+        state.overview.focus_return = None;
+    }
 }
 
 /// The cards for the active project: one per sidebar entry (a group contributes its runs'

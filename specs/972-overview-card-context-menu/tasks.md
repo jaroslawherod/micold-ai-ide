@@ -76,7 +76,7 @@ the rename dialog opens over the Overview, and after renaming the card shows the
 
 ### Tests for US1 (write first)
 
-- [ ] T004 [US1] New tests/overview_card_menu.rs, reducer part (data-model `Msg` table):
+- [X] T004 [US1] New tests/overview_card_menu.rs, reducer part (data-model `Msg` table):
   `CardMenuOpened { location, anchor, origin: Pointer }` sets `card_menu` with that `location`,
   `anchor`, `origin` and `highlighted == None`, and the outcome is
   `SurfaceOpened(OverviewCardMenu::ID)`; with `origin: Keyboard` it sets `highlighted == Some(0)`;
@@ -87,7 +87,7 @@ the rename dialog opens over the Overview, and after renaming the card shows the
   `overview.open == true` and opens its dialog; *Review changes* (`ChangesRequested`) and a session
   select (`MainAreaTaken`) close the Overview (FR-005); `CardActivated(activation)` as *Open*'s
   inner message closes it as a primary click does (FR-003). Fails (types missing)
-- [ ] T005 [US1] tests/overview_card_menu.rs, composition part: `ui::overview::card_menu_items(state,
+- [X] T005 [US1] tests/overview_card_menu.rs, composition part: `ui::overview::card_menu_items(state,
   &location)` is *Open* (`Icon::Open`) followed by items whose labels and icons equal
   `ui::location_menu_items(state, &location)`, in order, for Default, a plain worktree, an included
   worktree, a worktree with a pull request, one with a session, one with no daemon, and an orphan /
@@ -98,25 +98,25 @@ the rename dialog opens over the Overview, and after renaming the card shows the
   project switch) or the target is no longer in `ui::overview::cards(state)`, and keeps it when the
   target's state changed or the cards reordered (FR-012, Edge cases). Fails (functions missing).
   Same file as T004: after it, not in parallel
-- [ ] T006 [P] [US1] tests/popover_displacement.rs: the ordered pairs `OverviewCardMenu` ↔
+- [X] T006 [P] [US1] tests/popover_displacement.rs: the ordered pairs `OverviewCardMenu` ↔
   `ProjectContextMenu`, `WorktreeContextMenu`, `GroupContextMenu`, `SessionContextMenu`,
   `SessionStartMenu` both ways (R2, FR-014); tests/overlay_registry.rs: Escape reaches the card
   menu as topmost and `scroll_beneath` dismisses it; tests/overlay_registration.rs: the surface is
   registered with layer `ContextMenu` and `cancelled_by` `Message::Overview(Msg::CardMenuDismissed)`.
   Fail (surface missing)
-- [ ] T007 [P] [US1] Tests in src/ui/material/overview_card.rs: with
+- [X] T007 [P] [US1] Tests in src/ui/material/overview_card.rs: with
   `.on_secondary_press(f)` a secondary press over the card publishes `f(point)` with the
   window-pixel press point; a primary press still publishes `on_press` only (FR-013); without the
   builder a secondary press publishes nothing. Tests in src/ui/material/card_grid.rs: with
   `.on_scroll(m)` a wheel scroll over the grid publishes `m`. Fail (builders missing)
-- [ ] T008 [P] [US1] tests/gates/context_menu_anchor.rs (run by the `layout_snapshot` target): the card menu's panel
+- [X] T008 [P] [US1] tests/gates/context_menu_anchor.rs (run by the `layout_snapshot` target): the card menu's panel
   (`menu_panel_size(card_menu_items(..).len())`) clamped with `clamp_menu_anchor` stays inside the
   window for anchors at the right and bottom edges and at the minimum window size (FR-001, Edge:
   window edge, small window); fails until `card_menu_items` exists
 
 ### Implementation for US1
 
-- [ ] T009 [US1] src/features/overview.rs: `MenuOrigin { Pointer, Keyboard }`, `CardMenu
+- [X] T009 [US1] src/features/overview.rs: `MenuOrigin { Pointer, Keyboard }`, `CardMenu
   { location: SessionLocation, anchor: (u16, u16), origin: MenuOrigin, highlighted: Option<usize> }`,
   `State::{card_menu: Option<CardMenu>, focus_return: Option<SessionLocation>}`, `Msg::{CardMenuOpened
   { location, anchor, origin }, CardMenuDismissed, CardMenuEntryChosen(Box<Message>), GridScrolled}`
@@ -127,12 +127,12 @@ the rename dialog opens over the Overview, and after renaming the card shows the
   as `ProjectContextMenu` in src/features/project.rs; register it with R2's displacement lists in
   src/overlay/registry.rs; src/app.rs routes `GridScrolled` to `dismiss_on_scroll_beneath()`;
   T004 (reducer parts) and T006 pass
-- [ ] T010 [US1] src/ui/overview.rs: `card_menu_items(state, &SessionLocation) ->
+- [X] T010 [US1] src/ui/overview.rs: `card_menu_items(state, &SessionLocation) ->
   Vec<material::MenuItem<Message>>` (*Open* + `location_menu_items`, each message wrapped in
   `CardMenuEntryChosen`) and `settle_card_menu(&mut app::State)` (R8); src/app.rs calls
   `settle_card_menu` at the outermost-update epilogue beside `agent_confirm::release`; T005 and
   T008 pass
-- [ ] T011 [US1] src/ui/material/overview_card.rs `OverviewCard::on_secondary_press(impl Fn((u16,
+- [X] T011 [US1] src/ui/material/overview_card.rs `OverviewCard::on_secondary_press(impl Fn((u16,
   u16)) -> M)` wrapping the card in `cdk::context_area::ContextArea`; src/ui/material/card_grid.rs
   `CardGrid::on_scroll(M)` on its scrollable; T007 passes
 - [ ] T012 [US1] Wiring (glue, quickstart §B B1, B3–B9, B14–B16, B19): src/ui/overview.rs view passes
