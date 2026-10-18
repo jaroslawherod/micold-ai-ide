@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-jjniz9
 - **Started**: 2026-10-17
 - **Phase**: milestone M3
-- **Next step**: full gate green, then push and PR (pr-title.md/pr-body.md in the scratchpad)
+- **Next step**: M3 PR: orchestrator opens it from the scratchpad pr-title.md/pr-body.md, waits on CI, merges; then M4 (pr-title.md/pr-body.md in the scratchpad)
 
 ## Pull requests
 
@@ -27,7 +27,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T018 | full | Send review types the documented batch with C-references; review file v2, protocol 49 | #969 | merged |
 | M2 | T019–T034 | full | report_review_comment; cards show Applied/Answered and replies in every window, after restart | #981 | merged |
-| M3 | T035–T046 | full | Mark a Sent comment by hand; read a full reply | | in progress |
+| M3 | T035–T046 | full | Mark a Sent comment by hand; read a full reply | (to open) | PR ready |
 | M4 | T047–T056 | full | Review panel: rows, counts, jump, draft edit/delete, panel buttons | | planned |
 | M5 | T057–T067 | full | Comments follow their code; next batch names new lines | | planned |
 
