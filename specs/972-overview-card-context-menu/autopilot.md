@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-a1yb7j
 - **Started**: 2026-10-18
 - **Phase**: implement
-- **Next step**: milestone M1, compile WIP, then T010 (see Handover)
+- **Next step**: M1 PR: orchestrator opens it, runs reviews A (code-review high) and B (conformance), then CI and merge; then M2
 
 ## Pull requests
 
@@ -22,7 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T013 | full | Right-click a card: *Open* + row-menu entries, run as the row menu does; registry dismissal | — | in progress |
+| M1 | T001–T013 | full | Right-click a card: *Open* + row-menu entries, run as the row menu does; registry dismissal | pending (branch pushed) | implemented, gate green |
 | M2 | T014–T019 (T016b) | light | Target mark on the card; empty-space right-click dismisses | — | pending |
 | M3 | T020–T028 | full | Menu key / Shift+F10 open, arrow/Enter navigation, focus return | — | pending |
 
@@ -51,31 +51,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M1 unit 2 handed over at 150k context. Branch `claude/project-thread-a1yb7j` (no PR yet; do not run
-`branch-start.sh` to reset: the commits are unmerged M1 work). The last commit is **WIP, not yet
-compiled**: build it first (`cargo test -p micold-client --test overview_card_menu --test
-popover_displacement --test overlay_registry --test overlay_registration --test layout_snapshot
---lib --no-run`, detached) and fix what it reports.
-- Done before: T001–T003 (ticked); T004/T005 tests red in `tests/overview_card_menu.rs`.
-- This unit, tests written (red evidence in tdd/cycle-log.md), not ticked:
-  T006 (`popover_displacement.rs`: `overview_card_menu` row + five rows gaining it, `base()` state
-  with a project and the Overview open, opener; `overlay_registration.rs`: POPOVERS row + band /
-  cancel test; `overlay_registry.rs`: escape + scroll_beneath test), T007 (`overview_card.rs`
-  secondary-press test, `card_grid.rs` wheel test, `cards<M>` fixture made generic), T008
-  (`gates/context_menu_anchor.rs::the_card_menu_stays_inside_the_window_at_its_edges`, uses the
-  new `ui::menu_panel_size` re-export).
-- T009 implemented (uncompiled): `features/overview.rs` `MenuOrigin`, `CardMenu`, `State::{card_menu,
-  focus_return}`, `Msg::{CardMenuOpened, CardMenuDismissed, CardMenuEntryChosen, GridScrolled}`,
-  `OverviewCardMenu` surface + `Registered`; registry displacement lists; `SessionContextMenu::ID`,
-  `SessionStartMenu::ID`; `session::menu_toggled` returns `surface_opened`; the `StartMenuOpened`
-  arm prepends `SurfaceOpened(SessionStartMenu::ID)` to the notice; app.rs Overview arm calls
-  `dismiss_on_scroll_beneath()` after `GridScrolled`.
-- Next: compile + T004 reducer/T006 green → tick T006, T009; then T010 (`ui::overview::card_menu_items`
-  + `settle_card_menu`, called in app.rs epilogue before `agent_confirm::release` inside
-  `update_depth == 0`), T011 (`OverviewCard::on_secondary_press` via `cdk::context_area::ContextArea`,
-  `CardGrid::on_scroll` via `Scrollable::on_scroll`), T012 wiring (ui/overview.rs view, ui/mod.rs
-  `view_with` push `card_menu` surface beside `session_menu`, main.rs `overview_message`
-  `CardMenuEntryChosen(inner)` → reducer then `update_inner(app, *inner)`), T013 docs; then verify.md.
+None.
 
 ## Open escalation
 
@@ -83,4 +59,4 @@ None.
 
 ## Follow-ups not done
 
-None.
+- M1 reviews A and B and the visual pass (quickstart §B B1, B3–B9, B14–B16, B19) not run by unit 3: no subagent tool in its environment. Full gate (`scripts/gate.sh`) green at 7c0df56f.
