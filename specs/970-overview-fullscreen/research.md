@@ -131,8 +131,8 @@ how the mode is built. Paths are relative to `crates/micold-client/src/` unless 
   1168 px threshold, above both ends (372.7 and 338 px).
 - **Consequence for Story 1 #2**: when the zoom raises the column count, a card can be narrower in
   full screen than in the normal layout (the 372.7 → 338 px case above). The scenario's
-  requirement, feature 1024's rules at the new width, holds (FR-004); its "so each card is at least
-  as wide" clause is explanatory and false in that case. SC-001 (row width) holds in every case.
+  requirement, feature 1024's rules at the new width, holds (FR-004); the spec's scenario now says a
+  card may be narrower when a column is added. SC-001 (row width) holds in every case.
 - **Ends of a zoom**: the grid leaves zoom mode when `W` reaches an end width (within 0.5 px), or
   when `W` leaves the range between them (a window resize mid-zoom), or `SLIDE` plus 100 ms after the
   flip, whichever is first; then the rest rule applies again. A grid built fresh (Overview opened,
