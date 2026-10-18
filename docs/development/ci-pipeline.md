@@ -315,20 +315,21 @@ daemon test step is the largest part (median 614 s, 406-629 s), then core tests 
 `cargo build --workspace` (~110 s). Runs whose post-cache step took 120-250 s saved a new cache
 (a miss on the exact key); the rest saved nothing.
 
-**What changed**: a Windows-only step in the `test` job creates a 30 GB dynamic VHDX formatted as
-a Dev Drive (ReFS, Defender in performance mode) and points `CARGO_TARGET_DIR` at it for that job,
-and rust-cache's `workspaces` input follows the target directory there. The rust-cache step also
-reports `cache-hit` in the run summary, so the hit rate can be counted. The packaging steps keep
-addressing `target/remote-daemon` in the workspace; nothing else moves, and the ARM64 job is
-untouched. If the image cannot make a Dev Drive the step warns and the leg builds in `target` as
-before; the run summary says which happened. No Defender exclusions were added, and sccache was
-not adopted (a second cache beside rust-cache that does not touch the test steps).
+**What changed**: a Windows-only step in the `test` job creates a 30 GB dynamic VHDX, formats it as
+a Dev Drive (ReFS, Defender in performance mode) and mounts it at the workspace's `target` folder,
+before rust-cache runs so the restore lands on it. Because the path is unchanged, `CARGO_TARGET_DIR`,
+rust-cache, `target/remote-daemon` and the installer scripts need no change (an absolute
+`CARGO_TARGET_DIR` such as `E:/target` was rejected: rust-cache joins it onto the workspace path and
+`windows-installer.sh` treats only `/`-prefixed paths as absolute). The rust-cache step also reports
+`cache-hit` in the run summary. If the image cannot make a Dev Drive the step warns and the leg
+builds in a plain `target`; the run summary says which happened. The ARM64 job is untouched. No
+Defender exclusions were added, and sccache was not adopted (a second cache beside rust-cache that
+does not touch the test steps).
 
 **After**: not yet measured. It needs 10 runs with the change; take them from the pull request's CI
 runs plus runs on `main` after the merge, with the same query (job durations of `build + test
-(windows-latest)`), and add the median, min, max and spread here. Also check from the rust-cache log that it restored and
-saved the Dev Drive path; if it did not, the cache hit rate has regressed and `workspaces` needs a
-relative form.
+(windows-latest)`), and add the median, min, max and spread here. Also check from the rust-cache log that it restored and saved `target`; if the hit rate has
+regressed, the mount is the first suspect.
 
 ## Reading a run
 
