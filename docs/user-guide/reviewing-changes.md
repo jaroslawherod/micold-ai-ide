@@ -301,6 +301,25 @@ restarts.
 A session started without the app's tool server cannot report: its comments stay Sent, and the
 review message asks it to answer each comment by its reference in its reply instead.
 
+### Marking a comment by hand
+
+A Sent comment the session never reports on stays Sent. Its card offers two actions:
+
+- **Mark applied** records the comment as Applied at once.
+- **Answer…** opens a note under the card. Write why the comment was not applied, or what you did
+  instead, and **Save**: the comment becomes Answered with your note as its reply. **Save** stays
+  off while the note is blank, and a note is at most 20,000 characters.
+
+A comment you mark is shown like one the session reported. If the session reports on it later, its
+report replaces your mark, as a later report replaces an earlier one. A Draft, Applied or Answered
+comment has neither action. Cancel closes the note without marking anything.
+
+### Reading a whole reply
+
+A reply longer than 4,000 characters shows its start with **Show all** under it. Press **Show all**
+to read the whole reply in a dialog, scrolling if it is long; **Close** (or Esc) returns to the
+diff. The dialog closes by itself when its comment is cleared or discarded.
+
 ### Clearing and discarding
 
 Two buttons in the view's header tidy the list once a round of feedback is done:

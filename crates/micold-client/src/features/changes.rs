@@ -15,7 +15,7 @@ use micold_core::pull_request::{
 };
 use micold_core::review::base::{Base, BaseUnavailable, ReviewScope, Toggles};
 use micold_core::review::changes::{ChangeKind, ChangeList, ChangedFile};
-use micold_core::review::comment::{CommentId, CommentState, ReviewComment, Status};
+use micold_core::review::comment::{CommentId, CommentState, Outcome, ReviewComment, Status};
 use micold_core::review::diff::{parse_unified, FileDiff, LoadedDiff, Spans};
 use micold_core::review::pr_diff::PrDiff;
 use micold_core::review::reply::{self, CARD_CHARS};
@@ -200,6 +200,9 @@ pub struct OpenView {
     pub outdated: BTreeSet<CommentId>,
     /// **Discard drafts…** was pressed: its confirmation is open (S3).
     pub confirm_discard: bool,
+    /// The comment whose whole reply is open in its dialog (feature 946, FR-006); cleared when
+    /// that comment leaves the entry.
+    pub reply_open: Option<CommentId>,
     /// The entry's branch, as the shell last told it; `None` for the Default entry and a
     /// detached HEAD (feature 775).
     pub branch: Option<String>,
@@ -235,6 +238,8 @@ pub enum ComposerTarget {
     New(Pick),
     /// A new text for this pending comment.
     Edit(CommentId),
+    /// The note of marking this Sent comment answered by hand (feature 946, FR-006).
+    Answer(CommentId),
 }
 
 /// The open composer (data-model § Client).
@@ -369,6 +374,14 @@ pub enum Msg {
     EditComment(CommentId),
     /// Delete on a pending comment's card.
     DeleteComment(CommentId),
+    /// **Mark applied** on a Sent comment's card (feature 946, FR-006).
+    MarkApplied(CommentId),
+    /// **Answer…** on a Sent comment's card: open the composer for the note.
+    AnswerComment(CommentId),
+    /// **Show all** under a shortened reply: open the whole reply.
+    ShowReply(CommentId),
+    /// The full-reply dialog's Close, or its dismissal.
+    ReplyClosed,
     /// An entry's comments, as the service pushed them.
     ReviewChanged {
         /// The project.
@@ -540,6 +553,7 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
                 slot_heights: BTreeMap::new(),
                 outdated: BTreeSet::new(),
                 confirm_discard: false,
+                reply_open: None,
                 branch: None,
                 pull_requests: PrList::Absent,
                 source: Source::Changes,
@@ -910,6 +924,52 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
             }
             Effect::None
         }
+        Msg::MarkApplied(id) => {
+            let Some(view) = state.open.as_ref() else {
+                return Effect::None;
+            };
+            if !is_markable(state, view, id) {
+                return Effect::None;
+            }
+            review_edit(
+                view,
+                ReviewEditOp::Mark {
+                    id,
+                    outcome: Outcome::Applied,
+                    note: String::new(),
+                },
+            )
+        }
+        Msg::AnswerComment(id) => {
+            let markable = state
+                .open
+                .as_ref()
+                .is_some_and(|view| is_markable(state, view, id));
+            if let Some(view) = state.open.as_mut().filter(|_| markable) {
+                view.composer = Some(Composer {
+                    target: ComposerTarget::Answer(id),
+                    text: String::new(),
+                });
+            }
+            Effect::None
+        }
+        Msg::ShowReply(id) => {
+            let known = state.open.as_ref().is_some_and(|view| {
+                review_of(state, view)
+                    .and_then(|r| r.comments.iter().find(|c| c.id == id))
+                    .is_some_and(|c| full_reply(c).is_some())
+            });
+            if let Some(view) = state.open.as_mut().filter(|_| known) {
+                view.reply_open = Some(id);
+            }
+            Effect::None
+        }
+        Msg::ReplyClosed => {
+            if let Some(view) = state.open.as_mut() {
+                view.reply_open = None;
+            }
+            Effect::None
+        }
         Msg::DeleteComment(id) => {
             let Some(view) = state.open.as_ref() else {
                 return Effect::None;
@@ -932,6 +992,17 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
             if let Some(view) = state.open.as_mut() {
                 if view.project == project && entry_dir(&view.entry) == worktree_dir {
                     close_edit_unless(view, |id| comments.iter().any(|c| c.id == id));
+                    close_answer_unless(view, |id| {
+                        comments
+                            .iter()
+                            .any(|c| c.id == id && c.state.status() == Status::Sent)
+                    });
+                    if view
+                        .reply_open
+                        .is_some_and(|id| !comments.iter().any(|c| c.id == id))
+                    {
+                        view.reply_open = None;
+                    }
                 }
             }
             state
@@ -955,6 +1026,49 @@ fn close_edit_unless(view: &mut OpenView, kept: impl Fn(CommentId) -> bool) {
             view.composer = None;
         }
     }
+}
+
+/// Close an answer composer whose comment fails `kept` (gone, or reported meanwhile), so Save
+/// never marks a comment that can no longer be marked.
+fn close_answer_unless(view: &mut OpenView, kept: impl Fn(CommentId) -> bool) {
+    if let Some(Composer {
+        target: ComposerTarget::Answer(id),
+        ..
+    }) = view.composer
+    {
+        if !kept(id) {
+            view.composer = None;
+        }
+    }
+}
+
+/// Whether `id` is a Sent comment of the open view's entry: the only kind marked by hand.
+fn is_markable(state: &State, view: &OpenView, id: CommentId) -> bool {
+    review_of(state, view)
+        .and_then(|r| r.comments.iter().find(|c| c.id == id))
+        .is_some_and(|c| c.state.status() == Status::Sent)
+}
+
+/// A reported comment's whole reply, made displayable; `None` without one.
+fn full_reply(comment: &ReviewComment) -> Option<String> {
+    match &comment.state {
+        CommentState::Reported { report, .. } if !report.reply().is_empty() => {
+            Some(reply::display(report.reply()))
+        }
+        _ => None,
+    }
+}
+
+/// The text of the full-reply dialog, while it is open (FR-006): the whole reply of the comment
+/// **Show all** was pressed on.
+pub fn reply_dialog(state: &State) -> Option<String> {
+    let view = state.open.as_ref()?;
+    let id = view.reply_open?;
+    let comment = review_of(state, view)?
+        .comments
+        .iter()
+        .find(|c| c.id == id)?;
+    full_reply(comment)
 }
 
 /// An edit of the open view's entry.
@@ -1006,6 +1120,11 @@ fn composer_saved(state: &mut State) -> Effect {
     let placed = composer_placed(view);
     let edit = match composer.target {
         ComposerTarget::Edit(id) => ReviewEditOp::SetText { id, text },
+        ComposerTarget::Answer(id) => ReviewEditOp::Mark {
+            id,
+            outcome: Outcome::Answered,
+            note: text,
+        },
         ComposerTarget::New(_) => {
             // Unplaced: its lines are gone and nothing is picked yet.
             let Some(pick) = placed else {
@@ -1103,6 +1222,31 @@ impl crate::overlay::FloatingSurface for ConfirmDiscardPendingDialog {
 impl crate::overlay::registry::Registered for ConfirmDiscardPendingDialog {
     fn open_in(state: &crate::app::State) -> Option<Self> {
         discard_prompt(&state.changes).map(|_| ConfirmDiscardPendingDialog)
+    }
+}
+
+/// The full-reply dialog (feature 946, FR-006), as a floating surface.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FullReplyDialog;
+
+impl crate::overlay::FloatingSurface for FullReplyDialog {
+    fn id(&self) -> crate::overlay::SurfaceId {
+        crate::overlay::SurfaceId::new("review_full_reply")
+    }
+
+    fn layer(&self) -> micold_core::overlay::Layer {
+        micold_core::overlay::Layer::Dialog
+    }
+
+    fn dismissal(&self) -> crate::overlay::DismissalRules {
+        crate::overlay::DismissalRules::for_layer(micold_core::overlay::Layer::Dialog)
+            .cancelled_by(crate::app::Message::Changes(Msg::ReplyClosed))
+    }
+}
+
+impl crate::overlay::registry::Registered for FullReplyDialog {
+    fn open_in(state: &crate::app::State) -> Option<Self> {
+        reply_dialog(&state.changes).map(|_| FullReplyDialog)
     }
 }
 
@@ -1243,6 +1387,8 @@ pub struct CardModel {
     pub reply: Option<(String, bool)>,
     /// Edit and Delete are offered.
     pub editable: bool,
+    /// **Mark applied** and **Answer…** are offered: the comment is Sent (feature 946, FR-006).
+    pub markable: bool,
 }
 
 /// The card of `comment` while the entry's `sending` flag is as given.
@@ -1260,6 +1406,7 @@ pub fn card_model(comment: &ReviewComment, sending: bool) -> CardModel {
         in_send: draft && sending,
         reply,
         editable: draft && !sending,
+        markable: status == Status::Sent,
     }
 }
 

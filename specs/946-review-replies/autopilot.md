@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #946
 - **Worktree branch**: claude/project-thread-jjniz9
 - **Started**: 2026-10-17
-- **Phase**: milestone M2
-- **Next step**: M2 PR: orchestrator opens it from the scratchpad pr-title.md/pr-body.md, waits on CI, merges; then M3
+- **Phase**: milestone M3
+- **Next step**: M3 gate and reviews, then PR (pr-title.md/pr-body.md in the scratchpad)
 
 ## Pull requests
 
@@ -19,14 +19,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #950 | design (spec, plan, tasks) | merged (rebase) | 1a621e02d4181bd2120a6febb9d121397ce27872 |
 | #969 | M1 | merged (rebase); `remote daemon over a real sshd` failed once in ssh_real_concurrent (timing, unrelated), passed on re-run | e12d7c2c4849b3e6b2b6a283c8f0224e9b63fe05 |
+| #981 | M2 | merged (rebase); `build + test (windows-latest)` failed once in history_stop_request::ten_busy_sessions_are_all_saved_within_the_bound (timing, unrelated), passed on one re-run | 0b2a7018c3675b303aa3051a6174f29ad28f0f5a |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T018 | full | Send review types the documented batch with C-references; review file v2, protocol 49 | #969 | merged |
-| M2 | T019–T034 | full | report_review_comment; cards show Applied/Answered and replies in every window, after restart | | planned |
-| M3 | T035–T046 | full | Mark a Sent comment by hand; read a full reply | | planned |
+| M2 | T019–T034 | full | report_review_comment; cards show Applied/Answered and replies in every window, after restart | #981 | merged |
+| M3 | T035–T046 | full | Mark a Sent comment by hand; read a full reply | | in progress |
 | M4 | T047–T056 | full | Review panel: rows, counts, jump, draft edit/delete, panel buttons | | planned |
 | M5 | T057–T067 | full | Comments follow their code; next batch names new lines | | planned |
 
@@ -86,4 +87,5 @@ None.
 ## Follow-ups not done
 
 - M2 T034: visual pass of quickstart §B steps 4–6, 10 not run (cloud container: no xdotool/Xvfb driver). Run it on a machine with a display before or at the close unit.
+- M3 T046: visual pass of quickstart §B step 7 and the full-reply dialog not run (same reason); fold into the same display run.
 

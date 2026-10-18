@@ -3,8 +3,8 @@
 //!
 //! The comment's text, its state (Draft / Sent, or the Applied / Answered tag of a reported one,
 //! feature 946), an Outdated tag when the lines it quotes changed, the agent's reply under the
-//! text with "Show all" when it was shortened, and Edit / Delete for a draft comment that is not
-//! in a send.
+//! text with "Show all" when it was shortened (pressable when `.on_show_reply` is set), Edit /
+//! Delete for a draft comment that is not in a send, and Mark applied / Answer… for a Sent one.
 //!
 //! Builder form: `ReviewCommentCard::new(&text, CardState::Draft, roles).outdated(false)
 //! .reply(&reply, shortened).on_edit(Msg::Edit(id)).on_delete(Msg::Delete(id)).into()`.
@@ -42,6 +42,10 @@ pub const APPLIED: &str = "Applied";
 pub const ANSWERED: &str = "Answered";
 /// The affordance under a shortened reply.
 pub const SHOW_ALL: &str = "Show all";
+/// The Sent card's action that marks the comment applied by hand (feature 946).
+pub const MARK_APPLIED: &str = "Mark applied";
+/// The Sent card's action that opens the composer for an answer by hand (feature 946).
+pub const ANSWER: &str = "Answer…";
 /// The tag of a comment whose quoted lines changed.
 pub const OUTDATED: &str = "Outdated";
 
@@ -56,10 +60,14 @@ pub struct Parts {
     pub reply: bool,
     /// "Show all" is drawn under the reply: it was shortened.
     pub show_all: bool,
+    /// "Show all" is a button: the card was given what it sends.
+    pub show_all_pressable: bool,
     /// The Outdated tag.
     pub outdated: bool,
     /// Edit and Delete.
     pub actions: bool,
+    /// Mark applied and Answer…, on a Sent card.
+    pub mark_actions: bool,
 }
 
 /// One comment's card.
@@ -71,6 +79,9 @@ pub struct ReviewCommentCard<'a, M> {
     reply: Option<(Cow<'a, str>, bool)>,
     on_edit: Option<M>,
     on_delete: Option<M>,
+    on_mark_applied: Option<M>,
+    on_answer: Option<M>,
+    on_show_reply: Option<M>,
 }
 
 impl<'a, M: Clone + 'a> ReviewCommentCard<'a, M> {
@@ -84,6 +95,9 @@ impl<'a, M: Clone + 'a> ReviewCommentCard<'a, M> {
             reply: None,
             on_edit: None,
             on_delete: None,
+            on_mark_applied: None,
+            on_answer: None,
+            on_show_reply: None,
         }
     }
 
@@ -113,6 +127,24 @@ impl<'a, M: Clone + 'a> ReviewCommentCard<'a, M> {
         self
     }
 
+    /// The message **Mark applied** sends; shown only on a Sent comment, with `on_answer`.
+    pub fn on_mark_applied(mut self, message: M) -> Self {
+        self.on_mark_applied = Some(message);
+        self
+    }
+
+    /// The message **Answer…** sends; shown only on a Sent comment.
+    pub fn on_answer(mut self, message: M) -> Self {
+        self.on_answer = Some(message);
+        self
+    }
+
+    /// The message "Show all" sends; it is a button only under a shortened reply.
+    pub fn on_show_reply(mut self, message: M) -> Self {
+        self.on_show_reply = Some(message);
+        self
+    }
+
     /// What the card shows besides its text.
     fn parts(&self) -> Parts {
         Parts {
@@ -125,9 +157,13 @@ impl<'a, M: Clone + 'a> ReviewCommentCard<'a, M> {
             tag: matches!(self.state, CardState::Applied | CardState::Answered),
             reply: self.reply.is_some(),
             show_all: self.reply.as_ref().is_some_and(|(_, shortened)| *shortened),
+            show_all_pressable: self.on_show_reply.is_some()
+                && self.reply.as_ref().is_some_and(|(_, shortened)| *shortened),
             outdated: self.outdated,
             actions: self.state == CardState::Draft
                 && (self.on_edit.is_some() || self.on_delete.is_some()),
+            mark_actions: self.state == CardState::Sent
+                && (self.on_mark_applied.is_some() || self.on_answer.is_some()),
         }
     }
 }
@@ -154,11 +190,22 @@ impl<'a, M: Clone + 'a> From<ReviewCommentCard<'a, M>> for Element<'a, M> {
                 head = head.push(Button::text("Delete", r).on_press(message));
             }
         }
+        if parts.mark_actions {
+            if let Some(message) = card.on_mark_applied {
+                head = head.push(Button::text(MARK_APPLIED, r).on_press(message));
+            }
+            if let Some(message) = card.on_answer {
+                head = head.push(Button::text(ANSWER, r).on_press(message));
+            }
+        }
         let mut body = column![head, Text::new(card.text, TypeRole::Body, r)].spacing(spacing::XS);
         if let Some((reply, shortened)) = card.reply {
             body = body.push(Text::new(reply, TypeRole::Body, r).muted());
             if shortened {
-                body = body.push(Text::new(SHOW_ALL, TypeRole::Label, r).muted());
+                body = body.push(match card.on_show_reply {
+                    Some(message) => Element::from(Button::text(SHOW_ALL, r).on_press(message)),
+                    None => Text::new(SHOW_ALL, TypeRole::Label, r).muted().into(),
+                });
             }
         }
         container(body)
@@ -292,5 +339,53 @@ mod tests {
         let narrow = height(&long, 240.0);
         assert!(wide > 0.0, "the card has a body");
         assert!(narrow > wide, "narrow {narrow} against wide {wide}");
+    }
+
+    #[test]
+    fn a_sent_card_draws_two_mark_actions_and_no_other_state_does() {
+        let sent = card(CardState::Sent)
+            .on_mark_applied(())
+            .on_answer(())
+            .parts();
+        assert!(sent.mark_actions, "Mark applied and Answer… on a Sent card");
+        assert!(!sent.actions, "Edit and Delete stay a draft's");
+        for state in [
+            CardState::Draft,
+            CardState::InSend,
+            CardState::Applied,
+            CardState::Answered,
+        ] {
+            let parts = card(state).on_mark_applied(()).on_answer(()).parts();
+            assert!(!parts.mark_actions, "{state:?} offers no mark");
+        }
+        assert!(
+            !card(CardState::Sent).parts().mark_actions,
+            "without handlers"
+        );
+        let plain = laid_out(ReviewCommentCard::new("rename", CardState::Sent, LIGHT));
+        let marked = laid_out(
+            ReviewCommentCard::new("rename", CardState::Sent, LIGHT)
+                .on_mark_applied(())
+                .on_answer(()),
+        );
+        assert!(marked >= plain, "the actions sit in the head row");
+    }
+
+    #[test]
+    fn show_all_is_pressable_only_with_a_handler() {
+        let cut = card(CardState::Answered).reply("not needed", true);
+        assert!(!cut.parts().show_all_pressable);
+        let pressable = card(CardState::Answered)
+            .reply("not needed", true)
+            .on_show_reply(());
+        let parts = pressable.parts();
+        assert!(parts.show_all && parts.show_all_pressable);
+        let whole = card(CardState::Answered)
+            .reply("not needed", false)
+            .on_show_reply(());
+        assert!(
+            !whole.parts().show_all_pressable,
+            "nothing to show when whole"
+        );
     }
 }
