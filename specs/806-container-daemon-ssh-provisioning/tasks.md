@@ -396,8 +396,7 @@ Phase 12 (T088–T089) changes no code and is left to the close unit.
 
 ## Phase 13: TDD remediation (from `tdd/verification.md`, verdict FAIL at 018b6d2c)
 
-**T090 and T094 were done in the close PR; T091-T093 and T095-T099 are left to follow-up issues (ledger, *Follow-ups not done*), because they need a container runtime, egress or a larger test refactor than a close PR carries.** Originally: These are the blocking findings (1-4). T094-T099
-are not blocking. Do not tick a box without the command shown passing.
+**T090 and T094 were done in the close PR.** T091–T093 and T095–T099 are left to follow-up issues (ledger, *Follow-ups not done*): they need a container runtime, egress or a larger test refactor than a close PR carries. The verdict stays FAIL until they are cleared. Do not tick a box without the command shown passing.
 
 - [x] T090 [US5] Finding 1: add a test in `crates/micold-core/src/provision/mod.rs` (beside `reach_retries_only_while_the_server_is_not_up_then_gives_no_ssh_server`, line 972) that a reach failure reading `Connection reset by peer` with no `kex_exchange_identification` is retried; prove it by deleting `"Connection reset"` from `not_up_yet` (line 257): `cargo test -p micold-core --lib provision::tests` must fail, then pass restored
 - [ ] T091 Finding 2: for each TEST_AFTER row of `tdd/verification.md` (M2 T027/T029/T032/T034/T035/T036/T042-T061, M6 T071/T072/T074, and all of M7 T079-T085), record a red in `tdd/cycle-log.md`: revert the production change the test covers (or apply a one-line mutant), run the single test with the `--exact` command from `.specify/memory/tdd-profile.md`, paste the command and the failing line, restore, and re-run green; add the missing M7 section. Done when `grep -c 'M7' specs/806-container-daemon-ssh-provisioning/tdd/cycle-log.md` is above 0 and every row names a red command

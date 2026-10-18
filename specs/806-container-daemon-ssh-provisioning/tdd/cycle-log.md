@@ -68,7 +68,8 @@ with the code in the same milestone and reviewed (A r1/r2, B r1/r2 in the ledger
 
 | Task | Behaviour | Red evidence | Green |
 |---|---|---|---|
-| T079, T083 | every step has a bound and times out with `TimedOut`; every runtime command is bounded | none claimed | `cargo test -p micold-core --lib provision::` |
-| T080, T084 | cancel stops a start in any step and rolls back what the attempt created; a daemon found running is never rolled back | none claimed | `cargo test -p micold-core --lib provision::attempt`; `cargo test -p micold-client sandbox` |
-| T081, T085 | two concurrent starts of one container name end with one container (`NameInUse` re-adopts the winner) | none claimed | `cargo test -p micold-core --lib sandbox::lifecycle` |
+| T079, T083 | `AttemptLedger`/`rollback`: removes a container created in this attempt, stops a daemon the attempt started, never touches an adopted container or a daemon found running | none claimed | `cargo test -p micold-core --lib provision::attempt` |
+| T080, T084 | `acquire_image` times out at its bound and a cancel kills the runtime child; `bring_up` records into the ledger; a create that fails on a name conflict re-adopts the winner once | none claimed | `cargo test -p micold-core --lib sandbox::` |
+| T081, T085 | `InFlight::cancel()` sets the `CancelToken`, the start ends `stopped` with rollback; a failed start rolls back and shows `unreachable` with the reason | none claimed | `cargo test -p micold-client sandbox` |
+| (step bounds) | every `provision::run` step has a bound (`StepBounds`) and ends `TimedOut`; a cancel in any step ends `Cancelled` | none claimed | `cargo test -p micold-core --lib provision::tests` |
 | T082 | end-to-end real-runtime cases for stop-during-install and concurrent starts | n/a: need a container runtime; run by CI's sandbox job; verification findings 3 and 4 say they are weak | `cargo test -p micold-daemon --test sandbox_real_provision --no-run` |
