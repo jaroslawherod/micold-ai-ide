@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-rwlog8
 - **Started**: 2026-10-18
 - **Phase**: M2
-- **Next step**: M2: full gate (scripts/gate.sh), push, PR files
+- **Next step**: M2 PR opened by the orchestrator (title and body in the scratchpad); wait for CI, merge, then M3
 
 ## Pull requests
 
@@ -24,7 +24,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T005 | full | Showcase `AccordionSection` shows summary (closed), open, required marker | #1068 | merged |
-| M2 | T006–T015 | full | Every daemon kind's form in FR-002 sections, Connection open, errors open their section; user guide | — | pending |
+| M2 | T006–T015 | full | Every daemon kind's form in FR-002 sections, Connection open, errors open their section; user guide | (orchestrator opens) | in review |
 | M3 | T016–T028 | full | One field/section gap, FieldGroup labels, context select, section summaries and markers; user guide | — | pending |
 
 ## Decisions
