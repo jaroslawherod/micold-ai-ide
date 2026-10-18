@@ -60,5 +60,22 @@ check "a path with regex metacharacters is matched literally" \
   "$(printf '%s\n' '{"cwd":"/tmp/capture.Ab12Cd/repo","other":"/tmp/captureXAb12Cd/repo"}' \
        | scrub_stream_json "$SID" "/tmp/capture.Ab12Cd/repo" "$HOME_DIR")"
 
+delta() { printf '{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"%s"}}}' "$1"; }
+joined_input() { jq -rs '[.[] | .event.delta.partial_json // empty] | join("")'; }
+
+split_run="$(delta '{\"file_path\": \"/tmp/capture.Ab'; echo; delta '12Cd/repo/notes.txt\", \"id\": \"0b6f2c1e-4a7d'; echo; delta '-4c55-9f1e-2d3c4b5a6978\"}'; echo)"
+check "a path and the session uuid cut across input_json_delta chunks are scrubbed" \
+  '{"file_path": "<CWD>/notes.txt", "id": "<SESSION_ID>"}' \
+  "$(printf '%s\n' "$split_run" | scrub_split_deltas "$SID" "$CWD" "$HOME_DIR" | joined_input)"
+
+check "a scrubbed run keeps one line per chunk" \
+  3 \
+  "$(printf '%s\n' "$split_run" | scrub_split_deltas "$SID" "$CWD" "$HOME_DIR" | wc -l | tr -d ' ')"
+
+unchanged="$(delta '{\"x\": 1}'; echo; echo '{"type":"result","n":1.50}')"
+check "lines with no split secret pass through byte for byte" \
+  "$unchanged" \
+  "$(printf '%s\n' "$unchanged" | scrub_split_deltas "$SID" "$CWD" "$HOME_DIR")"
+
 echo "$cases cases, $failures failed"
 [ "$failures" -eq 0 ]

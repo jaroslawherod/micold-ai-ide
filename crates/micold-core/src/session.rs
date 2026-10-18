@@ -103,7 +103,6 @@ impl SessionKind {
     ///
     /// [`AiCliProvider::structured_args`]: crate::provider::AiCliProvider::structured_args
     pub fn check(self, provider: AiCli) -> Result<(), KindRefusal> {
-        use crate::provider::AiCliProvider as _;
         match self {
             Self::Terminal => Ok(()),
             Self::Structured if provider.provider().structured_args().is_some() => Ok(()),
@@ -121,7 +120,6 @@ pub enum KindRefusal {
 
 impl fmt::Display for KindRefusal {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use crate::provider::AiCliProvider as _;
         match self {
             Self::NotSupported(provider) => write!(
                 f,

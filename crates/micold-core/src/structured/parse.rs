@@ -23,8 +23,8 @@ pub fn parse_line(line: &str) -> StructuredEvent {
 }
 
 /// The typed event of a JSON line, or `None` when its type is unknown or its shape does not fit.
-fn typed(value: Value, raw: &str) -> Option<StructuredEvent> {
-    let raw = raw.to_string();
+fn typed(value: Value, line: &str) -> Option<StructuredEvent> {
+    let raw = || line.to_string();
     match (value["type"].as_str()?, value["subtype"].as_str()) {
         ("system", Some("init")) => {
             let init: InitLine = serde_json::from_value(value).ok()?;
@@ -32,8 +32,8 @@ fn typed(value: Value, raw: &str) -> Option<StructuredEvent> {
                 session_id: init.session_id,
                 model: init.model,
                 cwd: init.cwd,
-                tools: init.tools,
-                raw,
+                tools: init.tools.into_iter().flatten().map(tool_name).collect(),
+                raw: raw(),
             })
         }
         ("assistant", _) => {
@@ -42,7 +42,7 @@ fn typed(value: Value, raw: &str) -> Option<StructuredEvent> {
                 message_id: line.message.id,
                 blocks: line.message.content.into_blocks(),
                 parent_tool_use_id: line.parent_tool_use_id,
-                raw,
+                raw: raw(),
             })
         }
         ("user", _) => {
@@ -50,7 +50,7 @@ fn typed(value: Value, raw: &str) -> Option<StructuredEvent> {
             Some(StructuredEvent::User {
                 blocks: line.message.content.into_blocks(),
                 parent_tool_use_id: line.parent_tool_use_id,
-                raw,
+                raw: raw(),
             })
         }
         ("result", _) => {
@@ -64,7 +64,7 @@ fn typed(value: Value, raw: &str) -> Option<StructuredEvent> {
                 usage: line.usage,
                 result: line.result,
                 session_id: line.session_id,
-                raw,
+                raw: raw(),
             })
         }
         ("stream_event", _) => {
@@ -74,7 +74,7 @@ fn typed(value: Value, raw: &str) -> Option<StructuredEvent> {
                 index: line.event.index,
                 delta: line.event.delta.map(delta_of),
                 parent_tool_use_id: line.parent_tool_use_id,
-                raw,
+                raw: raw(),
             })
         }
         _ => None,
@@ -88,8 +88,17 @@ struct InitLine {
     model: Option<String>,
     #[serde(default)]
     cwd: Option<String>,
+    /// Any JSON, so an unexpected entry or a `null` list costs the tools, not the init.
     #[serde(default)]
-    tools: Vec<String>,
+    tools: Option<Vec<Value>>,
+}
+
+/// A tool's name, or the JSON text of an entry that is not a string.
+fn tool_name(tool: Value) -> String {
+    match tool {
+        Value::String(name) => name,
+        other => other.to_string(),
+    }
 }
 
 #[derive(Deserialize)]
@@ -134,7 +143,8 @@ fn block_of(block: Value) -> ContentBlock {
             (Some(id), Some(name)) => Some(ContentBlock::ToolUse {
                 id,
                 name,
-                input: block.get("input").map(Value::to_string).unwrap_or_default(),
+                // Always JSON text: `null` when the CLI sent no input.
+                input: block.get("input").unwrap_or(&Value::Null).to_string(),
             }),
             _ => None,
         },
@@ -294,6 +304,32 @@ mod tests {
             matches!(parse_line(line), StructuredEvent::User { blocks, .. }
                 if blocks == vec![ContentBlock::Text { text: "plain".to_string() }]),
             "a user message given as a string is one text block"
+        );
+    }
+
+    #[test]
+    fn odd_tools_and_a_missing_tool_input_do_not_cost_the_event() {
+        let init = parse_line(
+            r#"{"type":"system","subtype":"init","session_id":"s","tools":["Read",{"mcp":"x"}]}"#,
+        );
+        assert!(
+            matches!(&init, StructuredEvent::Init { tools, .. }
+                if tools == &vec!["Read".to_string(), r#"{"mcp":"x"}"#.to_string()]),
+            "a tool entry that is not a name is kept as JSON text: {init:?}"
+        );
+        let no_list =
+            parse_line(r#"{"type":"system","subtype":"init","session_id":"s","tools":null}"#);
+        assert!(
+            matches!(&no_list, StructuredEvent::Init { tools, .. } if tools.is_empty()),
+            "a null tool list still gives the init its session id: {no_list:?}"
+        );
+        let call = parse_line(
+            r#"{"type":"assistant","message":{"content":[{"type":"tool_use","id":"a","name":"Now"}]}}"#,
+        );
+        assert!(
+            matches!(&call, StructuredEvent::Assistant { blocks, .. }
+                if matches!(blocks.as_slice(), [ContentBlock::ToolUse { input, .. }] if input == "null")),
+            "a call without input has the JSON text `null`: {call:?}"
         );
     }
 }
