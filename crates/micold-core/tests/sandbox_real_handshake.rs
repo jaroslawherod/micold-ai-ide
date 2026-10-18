@@ -206,7 +206,7 @@ fn sandbox_real_ssh_refuses_a_key_the_container_does_not_authorise() {
     );
 }
 
-/// The daemon writes its catalogue where the **host** can read it. That is what lets the client
+/// The container writes its state where the **host** can read it. That is what lets the client
 /// build the mount set before the sandbox exists, and it is why state is a bind mount rather than a
 /// runtime-managed volume.
 #[test]
@@ -215,9 +215,24 @@ fn sandbox_real_state_is_written_where_the_host_can_read_it() {
 
     let state: PathBuf = sandbox._dir.path().join("state");
     assert!(state.is_dir(), "the state directory must exist on the host");
-    // What is asserted is that the directory the container was given is the host's, and is
-    // writable by the host user.
-    let probe = state.join(".host-readable");
-    std::fs::write(&probe, "ok").expect("the host can write where the daemon writes");
-    std::fs::remove_file(&probe).ok();
+    // A file written by the container's own user at the image's state path is visible to the host:
+    // the bind mount is the host's directory, not a runtime-managed volume.
+    let out = Command::new("docker")
+        .args([
+            "exec",
+            &sandbox.container,
+            "sh",
+            "-c",
+            "echo ok > /var/lib/micold-ai-ide/.host-readable",
+        ])
+        .output()
+        .expect("docker exec");
+    assert!(
+        out.status.success(),
+        "the container cannot write its state directory: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let seen = std::fs::read_to_string(state.join(".host-readable"))
+        .expect("the host reads what the container wrote");
+    assert_eq!(seen.trim(), "ok");
 }

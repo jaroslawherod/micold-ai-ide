@@ -143,9 +143,9 @@ async fn sandbox_real_idle_daemon_stops_and_the_next_connection_starts_it() {
     let (status, restarts) = status_of(IDLE_CONTAINER);
     assert_eq!(
         (status.as_str(), restarts.as_str()),
-        ("running", "1"),
-        "the container stays up (sshd is its process) and the only restart is the one this test \
-         issued"
+        ("running", "0"),
+        "the container stays up (sshd is its process) and the runtime restarted nothing: its \
+         restart count covers restart-policy restarts, not the `docker restart` this test issued"
     );
 
     // Not stuck: the next client gets a daemon.
