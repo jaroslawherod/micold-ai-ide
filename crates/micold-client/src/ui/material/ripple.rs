@@ -140,13 +140,14 @@ fn ripple_opacity(resumes: f32, strength: f32) -> f32 {
     resumes + (state::PRESSED - resumes) * strength.clamp(0.0, 1.0)
 }
 
-/// Whether `event` is the press of Enter or Space.
+/// Whether `event` is a fresh press (not an auto-repeat) of Enter or Space.
 fn is_activation_key(event: &Event) -> bool {
     use iced::keyboard::{key::Named, Event::KeyPressed, Key};
     matches!(
         event,
         Event::Keyboard(KeyPressed {
             key: Key::Named(Named::Enter | Named::Space),
+            repeat: false,
             ..
         })
     )
@@ -191,9 +192,10 @@ impl<'a, M> Ripple<'a, M> {
     /// Also ripple, from the element's centre, when the child captures Enter or Space (feature
     /// 971, D2). Off by default, so every other wrapped control is unchanged.
     ///
-    /// The ripple only observes: it starts when the child consumed the key (a focused control that
-    /// answers it), so an unfocused one never ripples, and it never starts one while another runs,
-    /// so auto-repeat does not restart it (FR-005).
+    /// The ripple only observes: it starts when something in the child captured the key (meant for
+    /// a single activatable control, such as a card, whose focus layer captures only when it holds
+    /// the focus), so an unfocused one never ripples. Auto-repeat never starts one, and none starts
+    /// while another runs (FR-005).
     #[must_use]
     pub fn centred_on_keys(mut self) -> Self {
         self.centred_on_keys = true;
@@ -787,5 +789,25 @@ mod tests {
         other.focus_next();
         other.send(named_key(Named::Escape), cursor);
         assert!(state_of(&other).is_idle());
+    }
+
+    /// T017 (FR-005): a key event flagged as auto-repeat never starts a ripple.
+    #[test]
+    fn an_auto_repeat_event_starts_nothing() {
+        let mut m = keyed(true);
+        m.focus_next();
+        let repeat = Event::Keyboard(iced::keyboard::Event::KeyPressed {
+            key: iced::keyboard::Key::Named(Named::Enter),
+            modified_key: iced::keyboard::Key::Named(Named::Enter),
+            physical_key: iced::keyboard::key::Physical::Unidentified(
+                iced::keyboard::key::NativeCode::Unidentified,
+            ),
+            location: iced::keyboard::Location::Standard,
+            modifiers: iced::keyboard::Modifiers::empty(),
+            text: None,
+            repeat: true,
+        });
+        m.send(repeat, mouse::Cursor::Unavailable);
+        assert!(state_of(&m).is_idle());
     }
 }

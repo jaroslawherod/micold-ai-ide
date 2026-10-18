@@ -70,3 +70,8 @@ None.
 
 - Gate: `scripts/gate.sh` green (GATE_EXIT=0) on the code tree. Visual pass (quickstart §B 1, 3, 4 pointer) run by hand in the showcase on Xvfb with tiny-skia: ripple grows from the press point, stays in the rounded card, fades to the plain fill; evidence `visual-pass-m1.png` (left to right: 0.25 s, 1.25 s, after release).
 - No separate red-first log was kept: tests and code were written together in one pass.
+
+## M2 notes
+
+- Review A (code-review high): 7 findings. Fixed: auto-repeat (`repeat: true`) never starts a ripple; doc says the builder suits a single activatable control. Declined: redraw chaining after a key (same mechanism as the pointer path: the published message redraws); Ctrl/Alt modifiers (consistent with keyboard_focus message_for); Enter mid-click dropped (FR-005, D2: no restart while running); ripple/close-delay coupling (M1 test ties the delay to MEDIUM_2); fixture duplication (MINOR); T021 open (this step).
+- No separate red-first log was kept (tests and code written together, as in M1).
