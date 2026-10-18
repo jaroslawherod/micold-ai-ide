@@ -455,11 +455,9 @@ fn kube_form<'a>(
                 } else {
                     Button::outlined(entry.name.clone(), roles)
                 };
-                fields = fields.push(
-                    button.on_press(Message::Daemons(DaemonsMsg::ContextChosen(
-                        entry.name.clone(),
-                    ))),
-                );
+                fields = fields.push(button.on_press(Message::Daemons(DaemonsMsg::ContextChosen(
+                    entry.name.clone(),
+                ))));
             }
         }
         ContextList::NotLoaded => {}
@@ -493,8 +491,12 @@ fn kube_form<'a>(
         .push(note("AI CLIs installed in the pod when it starts", roles));
     for cli in micold_core::session::AiCli::ALL {
         fields = fields.push(
-            Checkbox::new(cli.provider().display_name(), kube.providers.contains(&cli), roles)
-                .on_toggle(move |on| Message::Daemons(DaemonsMsg::ProviderToggled(cli, on))),
+            Checkbox::new(
+                cli.provider().display_name(),
+                kube.providers.contains(&cli),
+                roles,
+            )
+            .on_toggle(move |on| Message::Daemons(DaemonsMsg::ProviderToggled(cli, on))),
         );
     }
     fields = fields.push(group("Resources", roles));
@@ -504,8 +506,13 @@ fn kube_form<'a>(
         error_of(state, "memory_request"),
         error_of(state, "memory_limit"),
     ];
-    for (control, error) in container_fields::kube_resources(kube).into_iter().zip(errors) {
-        fields = fields.push(container_fields::limit_field(control, error, focused, roles));
+    for (control, error) in container_fields::kube_resources(kube)
+        .into_iter()
+        .zip(errors)
+    {
+        fields = fields.push(container_fields::limit_field(
+            control, error, focused, roles,
+        ));
     }
     if let Some(notice) = draft.volume_notice() {
         let size = kube.volume_size_text();

@@ -133,9 +133,7 @@ impl KubeDraft {
         for credential in &settings.allowed {
             match credential {
                 KubeCredential::GitConfig => draft.allowed.insert(AllowedKind::GitConfig),
-                KubeCredential::GitCredentials => {
-                    draft.allowed.insert(AllowedKind::GitCredentials)
-                }
+                KubeCredential::GitCredentials => draft.allowed.insert(AllowedKind::GitCredentials),
                 KubeCredential::GitSshKey { key } => {
                     draft.ssh_key_file = key.display().to_string();
                     draft.allowed.insert(AllowedKind::GitSshKey)
