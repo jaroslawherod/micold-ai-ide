@@ -28,7 +28,7 @@ shared-ssh-image §1). Annotation `micold.dev/pod-settings` = the `PodStamp` (da
 holds only what the image's SSH server needs (`HOME=/data/home`, `TMPDIR=/tmp`, the access-secret
 mount path); the daemon's environment is passed by the shared start step (shared-ssh-image §3).
 
-**Access secret** data keys: `ssh_host_ed25519_key`, `ssh_host_ed25519_key.pub`, `authorized_keys`
+**Access secret** data keys: `host_ed25519_key`, `host_ed25519_key.pub`, `authorized_keys`
 (one line per client, comment `micold-client:<client id>`). Mounted read-only at `/run/micold/ssh`.
 Updated only by `replace` with the `resourceVersion` read in the same step; on `409`, re-read and
 re-apply (FR-023).
