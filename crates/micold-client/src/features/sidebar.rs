@@ -325,7 +325,7 @@ pub struct DefaultNode {
     /// Sessions with `SessionLocation::Default` for the active project.
     pub sessions: Vec<Session>,
     /// The origins folded in the sidebar (feature 551, FR-011): their descendants are not listed.
-    pub folded: BTreeSet<SessionId>,
+    pub folded: std::sync::Arc<BTreeSet<SessionId>>,
 }
 
 /// One worktree row in the sidebar tree, joined with its (expanded) sessions (FR-002/003).
@@ -354,7 +354,7 @@ pub struct WorktreeNode {
     /// The name of the daemon this worktree runs on, or [`NO_DAEMON_LABEL`] (feature 491, FR-005).
     pub daemon: String,
     /// The origins folded in the sidebar (feature 551, FR-011): their descendants are not listed.
-    pub folded: BTreeSet<SessionId>,
+    pub folded: std::sync::Arc<BTreeSet<SessionId>>,
 }
 
 impl WorktreeNode {
@@ -399,6 +399,13 @@ impl WorktreeNode {
     pub fn state(&self) -> LocationState {
         location_state(&self.sessions)
     }
+
+    /// [`listed_sessions`](Self::listed_sessions) with the folds ignored: the order a chord steps
+    /// through, so a session under a folded origin stays reachable and a current session that is
+    /// hidden still has a place in it (feature 551).
+    pub fn unfolded_sessions(&self) -> Vec<&Session> {
+        unfolded_sessions(&self.sessions, self.main_session())
+    }
 }
 
 impl DefaultNode {
@@ -436,6 +443,20 @@ impl DefaultNode {
     pub fn state(&self) -> LocationState {
         location_state(&self.sessions)
     }
+
+    /// [`listed_sessions`](Self::listed_sessions) with the folds ignored: the order a chord steps
+    /// through, so a session under a folded origin stays reachable and a current session that is
+    /// hidden still has a place in it (feature 551).
+    pub fn unfolded_sessions(&self) -> Vec<&Session> {
+        unfolded_sessions(&self.sessions, self.main_session())
+    }
+}
+
+fn unfolded_sessions(sessions: &[Session], main: Option<SessionId>) -> Vec<&Session> {
+    session_rows(sessions, main, &BTreeSet::new())
+        .into_iter()
+        .map(|row| row.session)
+        .collect()
 }
 
 /// One session row of a location: the session, its depth below the location's own sessions
@@ -481,7 +502,9 @@ fn session_rows<'a>(
     let ordered: Vec<&Session> = first.into_iter().chain(rest).collect();
     let input: Vec<_> = ordered.iter().map(|s| (s.id, s.origin)).collect();
     let rows = micold_core::origin::SessionTree::build(&input).rows;
-    let session_of = |id| ordered.iter().find(|s| s.id == id).copied();
+    let by_id: std::collections::HashMap<SessionId, &Session> =
+        ordered.iter().map(|s| (s.id, *s)).collect();
+    let session_of = |id| by_id.get(&id).copied();
     let mut out = Vec::new();
     let mut at = 0;
     while at < rows.len() {
@@ -1435,7 +1458,7 @@ impl crate::app::State {
                 daemon: self.daemon_row_label(&worktree.dir_name),
                 worktree: worktree.clone(),
                 shown_for_current_session: false,
-                folded: self.sidebar.folded.clone(),
+                folded: std::sync::Arc::new(self.sidebar.folded.clone()),
             })
             .collect()
     }
@@ -1483,7 +1506,7 @@ impl crate::app::State {
             daemon: self.daemon_row_label(&worktree.dir_name),
             worktree: worktree.clone(),
             shown_for_current_session: true,
-            folded: self.sidebar.folded.clone(),
+            folded: std::sync::Arc::new(self.sidebar.folded.clone()),
         };
         // Inserted where it would have sat unfiltered rather than appended: the exemption changes
         // which rows are listed, never their order (FR-012a). `worktrees` is the order the panel
@@ -1519,7 +1542,7 @@ impl crate::app::State {
             display_name: "Default",
             expanded: self.location_open(&SessionLocation::Default),
             sessions: default_sessions,
-            folded: self.sidebar.folded.clone(),
+            folded: std::sync::Arc::new(self.sidebar.folded.clone()),
         })];
         entries.extend(
             self.filtered_worktree_tree()

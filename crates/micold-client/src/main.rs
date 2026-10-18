@@ -806,9 +806,9 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
             shell::changes::run_pending(app)
         }
         // Feature 551, FR-017: a fold is written to the settings file as it is made.
-        Message::Sidebar(msg @ SidebarMsg::ToggleOrigin(_)) => {
+        Message::Sidebar(msg @ SidebarMsg::ToggleOrigin(origin)) => {
             app.core.update(Message::Sidebar(msg));
-            shell::persist::persist_folded_origins(app.caps.settings(), &mut app.core);
+            shell::persist::persist_folded_origins(app.caps.settings(), &mut app.core, origin);
             Task::none()
         }
         // Feature 483: Run in parallel / the dialog's messages leave a request in `runs.pending`.

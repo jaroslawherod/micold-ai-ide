@@ -125,14 +125,14 @@ fn session_step(state: &State, dir: micold_core::navigation::Dir) -> Step {
         .into_iter()
         .find_map(|entry| match entry {
             SidebarEntry::Default(node) if location == SessionLocation::Default => {
-                Some(ids(node.listed_sessions()))
+                Some(ids(node.unfolded_sessions()))
             }
             SidebarEntry::Worktree(node) if node.location() == location => {
-                Some(ids(node.listed_sessions()))
+                Some(ids(node.unfolded_sessions()))
             }
             SidebarEntry::Group(group) => group.runs.iter().find_map(|run| match &run.row {
                 RunRow::Worktree(node) if node.location() == location => {
-                    Some(ids(node.listed_sessions()))
+                    Some(ids(node.unfolded_sessions()))
                 }
                 _ => None,
             }),
