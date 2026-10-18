@@ -210,16 +210,16 @@ in the list and open in Edit; the Add form's runtime list omits Kubernetes (FR-0
 
 ### Tests (write first, must fail)
 
-- [ ] T024 [P] [US5] [U95] [U96] [U134] [U135] Reducer tests in `client-tests/features_daemons.rs`: the Add form's runtime choices omit Kubernetes in a build without the mechanism; a Kubernetes daemon opened in Edit shows the context picker filled from the merged kubeconfig, or "no kubeconfig found; looked in <paths>"; fields namespace, image (empty = the default SSH image), AI CLI checkboxes defaulting to the providers enabled in Settings; editing the volume size of a daemon started before shows "Applies only to a new volume, after Remove"; Save refuses an invalid field naming it; the row shows "Kubernetes" and the endpoint.
-- [ ] T130 [P] [US5] [U97] [U99] Resources-field tests in `client-tests/features_daemons.rs`: the container form's limits fields behave as before the extraction (characterization, written first); the Kubernetes form's four resource fields are edited on their own, a request above its limit refused naming the request field.
-- [ ] T066 [P] [US3] [U104] Reducer tests in `client-tests/features_daemons.rs`: the allowed-credentials checkbox list, nothing checked by default, SSH key and registry auth requiring a file.
+- [x] T024 [P] [US5] [U95] [U96] [U134] [U135] Reducer tests in `client-tests/features_daemons.rs`: the Add form's runtime choices omit Kubernetes in a build without the mechanism; a Kubernetes daemon opened in Edit shows the context picker filled from the merged kubeconfig, or "no kubeconfig found; looked in <paths>"; fields namespace, image (empty = the default SSH image), AI CLI checkboxes defaulting to the providers enabled in Settings; editing the volume size of a daemon started before shows "Applies only to a new volume, after Remove"; Save refuses an invalid field naming it; the row shows "Kubernetes" and the endpoint.
+- [x] T130 [P] [US5] [U97] [U99] Resources-field tests in `client-tests/features_daemons.rs`: the container form's limits fields behave as before the extraction (characterization, written first); the Kubernetes form's four resource fields are edited on their own, a request above its limit refused naming the request field.
+- [x] T066 [P] [US3] [U104] Reducer tests in `client-tests/features_daemons.rs`: the allowed-credentials checkbox list, nothing checked by default, SSH key and registry auth requiring a file.
 
 ### Implementation
 
-- [ ] T031 [US5] [U95] [U96] [U134] [U135] Kubernetes `Draft`/`Msg` (context, namespace, image, AI CLIs, volume notice) and runtime choices in `client/features/daemons.rs`; kubeconfig context listing off the UI thread in `client/shell/daemons.rs`.
-- [ ] T131 [US5] [U97] [U99] Extract the limits fields from `sections` in `client/ui/settings/container_fields.rs` into functions in that file, drawn by the container form and the Kubernetes form (one copy; #806 inherits them, contract shared-ssh-image §5); the four resource `Draft` fields in `client/features/daemons.rs`.
-- [ ] T070 [US3] [U104] Allowed-credentials list with file pickers in `client/features/daemons.rs` and `client/ui/settings/daemons.rs`.
-- [ ] T032 [US5] [U96] Kubernetes form glue in `client/ui/settings/daemons.rs`; extend `client-tests/daemons_section_geometry.rs` to the Kubernetes form.
+- [x] T031 [US5] [U95] [U96] [U134] [U135] Kubernetes `Draft`/`Msg` (context, namespace, image, AI CLIs, volume notice) and runtime choices in `client/features/daemons.rs`; kubeconfig context listing off the UI thread in `client/shell/daemons.rs`.
+- [x] T131 [US5] [U97] [U99] Extract the limits fields from `sections` in `client/ui/settings/container_fields.rs` into functions in that file, drawn by the container form and the Kubernetes form (one copy; #806 inherits them, contract shared-ssh-image §5); the four resource `Draft` fields in `client/features/daemons.rs`.
+- [x] T070 [US3] [U104] Allowed-credentials list with file pickers in `client/features/daemons.rs` and `client/ui/settings/daemons.rs`.
+- [x] T032 [US5] [U96] Kubernetes form glue in `client/ui/settings/daemons.rs`; extend `client-tests/daemons_section_geometry.rs` to the Kubernetes form.
 
 ---
 

@@ -377,3 +377,70 @@ fn a_reconnecting_ssh_row_paints_its_badge_reason_and_actions_without_overflow()
     assert!(!has(&rows, "Stop trying"), "{rows:?}");
     assert_no_text_overflows(&state, "an SSH row after stopping the attempts");
 }
+
+/// Feature 686, T032: the Kubernetes form (context list, resources, allowed credentials with their
+/// file fields, the volume note) and a Kubernetes row paint their labels without overflow.
+#[test]
+fn the_kubernetes_form_and_row_paint_their_fields_without_overflow() {
+    use micold_client::features::daemons::{AllowedKind};
+    use micold_client::kube::live::ContextEntry;
+    let (mut state, _) = with_daemons();
+    let kube = state
+        .settings
+        .daemons
+        .add(
+            "Cluster",
+            DaemonRuntime::Kubernetes(micold_core::kube::settings::KubeSettings::new(
+                "a-rather-long-context-name.eu-west-1.eks.example.com",
+                "team-namespace",
+                &[micold_core::session::AiCli::ClaudeCode],
+            )),
+            false,
+        )
+        .unwrap();
+    state.settings.links = DaemonLinks::at_launch(&state.settings.daemons);
+    let rows = painted(&state);
+    assert!(has(&rows, "Kubernetes"), "{rows:?}");
+    assert_no_text_overflows(&state, "a Kubernetes row");
+
+    state.update(Message::Daemons(DaemonsMsg::EditOpened(kube)));
+    state.update(Message::Daemons(DaemonsMsg::ContextsListed(Ok(vec![
+        ContextEntry {
+            name: "staging".into(),
+            namespace: Some("apps".into()),
+        },
+    ]))));
+    for kind in [AllowedKind::GitSshKey, AllowedKind::RegistryPull] {
+        state.update(Message::Daemons(DaemonsMsg::AllowedToggled(kind, true)));
+    }
+    state.update(Message::Daemons(DaemonsMsg::Saved));
+    let form = painted_tall(&state);
+    for label in [
+        "Kubernetes",
+        "Namespace",
+        "Image",
+        "CPU request",
+        "Memory limit",
+        "Allowed credentials",
+        "SSH key file",
+        "Registry credentials file",
+        "staging",
+    ] {
+        assert!(has(&form, label), "{label}: {form:?}");
+    }
+    assert!(
+        form.iter().any(|t| t.contains("Applies only to a new volume")),
+        "{form:?}"
+    );
+    assert_no_text_overflows(&state, "the Kubernetes form with refused files");
+
+    state.update(Message::Daemons(DaemonsMsg::ContextsListed(Err(
+        "no kubeconfig found; looked in /home/someone/.kube/config".into(),
+    ))));
+    let failed = painted_tall(&state);
+    assert!(
+        failed.iter().any(|t| t.contains("no kubeconfig found; looked in")),
+        "{failed:?}"
+    );
+    assert_no_text_overflows(&state, "the Kubernetes form without a kubeconfig");
+}

@@ -793,6 +793,12 @@ impl State {
             taken_elsewhere,
             next_port: &micold_core::daemons::os_free_loopback_port,
         };
+        // The provider Settings enables by default; there is no per-provider switch yet (FR-018).
+        self.daemon_list.default_providers = vec![self
+            .settings
+            .settings_draft
+            .as_ref()
+            .map_or_else(Default::default, |d| d.environment.default_ai_cli)];
         crate::features::daemons::update(&mut self.daemon_list, &mut model, msg)
     }
 
@@ -1213,6 +1219,7 @@ pub fn interpret(
         Outcome::ClipboardWrite(_) | Outcome::OpenLink(_) | Outcome::Insert { .. } => {}
         // The shell's: it persists the registry and the binding (`App::apply_daemon_outcome`).
         Outcome::DaemonRegistryChanged(_)
+        | Outcome::KubeContextsRequested
         | Outcome::DaemonBound { .. }
         | Outcome::RemoteRepositoryRequested { .. } => {}
         // Sessions of a removed daemon are gone from the window; those of an edited one are

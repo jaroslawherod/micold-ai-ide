@@ -13,8 +13,10 @@
 
 use crate::app::Message;
 use crate::features::daemons::{
-    DaemonDetails, Draft, DraftRuntime, FormError, Msg as DaemonsMsg, State, ViewModel,
+    runtime_choices, DaemonDetails, Draft, DraftRuntime, FormError, Msg as DaemonsMsg, State,
+    ViewModel,
 };
+use crate::features::daemons_kube::{AllowedKind, ContextList};
 use crate::features::settings::DaemonDraft;
 use crate::features::window::FieldId;
 use crate::ui::focus::TrackFocus;
@@ -31,7 +33,14 @@ const RUNTIMES: &[Named<DraftRuntime>] = &[
     Named(DraftRuntime::Container, "Container"),
     Named(DraftRuntime::Host, "Host"),
     Named(DraftRuntime::Ssh, "Remote over SSH"),
+    Named(DraftRuntime::Kubernetes, "Kubernetes"),
 ];
+
+/// The runtimes offered for `draft`: [`RUNTIMES`] without what this build cannot run (FR-024).
+fn offered(draft: &Draft) -> &'static [Named<DraftRuntime>] {
+    let n = runtime_choices(draft).len();
+    &RUNTIMES[..n]
+}
 
 /// The section's explanation when no daemon is configured.
 pub const EMPTY_TITLE: &str = "No daemons are set up";
@@ -293,7 +302,7 @@ fn form<'a>(
             .error(error_of(state, "name"))
             .on_input(|v| Message::Daemons(DaemonsMsg::NameEdited(v))),
         Select::new(
-            RUNTIMES,
+            offered(draft),
             Some(Named(draft.runtime, name_of(RUNTIMES, draft.runtime))),
             |chosen: Named<DraftRuntime>| Message::Daemons(DaemonsMsg::RuntimeChosen(chosen.0)),
             roles,
@@ -358,6 +367,9 @@ fn form<'a>(
             fields = fields.push(control);
         }
     }
+    if draft.runtime == DraftRuntime::Kubernetes {
+        fields = kube_form(fields, draft, state, &marker, focused, roles);
+    }
     if draft.runtime == DraftRuntime::Host {
         // A host daemon keeps no container profile: the groups stay out rather than take edits
         // that would be dropped, and the one thing that applies to it is said (FR-014d).
@@ -419,6 +431,126 @@ fn form<'a>(
             .spacing(spacing::SM),
         );
     fields.into()
+}
+
+/// The Kubernetes fields: context, namespace, image, AI CLIs, resources and allowed credentials
+/// (feature 686, M4a). Placement, volume size and the rest follow in M4b.
+fn kube_form<'a>(
+    mut fields: iced::widget::Column<'a, Message>,
+    draft: &'a Draft,
+    state: &State,
+    marker: &dyn Fn(FieldId) -> micold_core::required::FieldRequirement,
+    focused: Option<FieldId>,
+    roles: Roles,
+) -> iced::widget::Column<'a, Message> {
+    let kube = &draft.kube;
+    fields = fields.push(group("Kubernetes", roles));
+    match &state.contexts {
+        ContextList::Failed(why) => fields = fields.push(caution(why.clone(), roles)),
+        ContextList::Found(list) => {
+            fields = fields.push(note("Contexts in your kubeconfig", roles));
+            for entry in list {
+                let button = if entry.name == kube.context {
+                    Button::filled(entry.name.clone(), roles)
+                } else {
+                    Button::outlined(entry.name.clone(), roles)
+                };
+                fields = fields.push(
+                    button.on_press(Message::Daemons(DaemonsMsg::ContextChosen(
+                        entry.name.clone(),
+                    ))),
+                );
+            }
+        }
+        ContextList::NotLoaded => {}
+    }
+    fields = fields
+        .push(
+            TextField::new("", &kube.context, roles)
+                .label("Context")
+                .supporting("A context from your kubeconfig; cluster credentials stay there")
+                .required(marker(FieldId::DaemonKubeContext))
+                .track_focus(FieldId::DaemonKubeContext, focused)
+                .error(error_of(state, "context"))
+                .on_input(|v| Message::Daemons(DaemonsMsg::ContextChosen(v))),
+        )
+        .push(
+            TextField::new("", &kube.namespace, roles)
+                .label("Namespace")
+                .required(marker(FieldId::DaemonKubeNamespace))
+                .track_focus(FieldId::DaemonKubeNamespace, focused)
+                .error(error_of(state, "namespace"))
+                .on_input(|v| Message::Daemons(DaemonsMsg::NamespaceEdited(v))),
+        )
+        .push(
+            TextField::new("", &kube.image, roles)
+                .label("Image")
+                .supporting("Empty uses the default SSH image")
+                .track_focus(FieldId::DaemonKubeImage, focused)
+                .error(error_of(state, "image"))
+                .on_input(|v| Message::Daemons(DaemonsMsg::KubeImageEdited(v))),
+        )
+        .push(note("AI CLIs installed in the pod when it starts", roles));
+    for cli in micold_core::session::AiCli::ALL {
+        fields = fields.push(
+            Checkbox::new(cli.provider().display_name(), kube.providers.contains(&cli), roles)
+                .on_toggle(move |on| Message::Daemons(DaemonsMsg::ProviderToggled(cli, on))),
+        );
+    }
+    fields = fields.push(group("Resources", roles));
+    let errors = [
+        error_of(state, "cpu_request"),
+        error_of(state, "cpu_limit"),
+        error_of(state, "memory_request"),
+        error_of(state, "memory_limit"),
+    ];
+    for (control, error) in container_fields::kube_resources(kube).into_iter().zip(errors) {
+        fields = fields.push(container_fields::limit_field(control, error, focused, roles));
+    }
+    if let Some(notice) = draft.volume_notice() {
+        let size = kube.volume_size_text();
+        fields = fields.push(note(format!("Volume size {size}. {notice}"), roles));
+    }
+    fields = fields.push(group("Allowed credentials", roles)).push(note(
+        "Nothing reaches the pod unless it is ticked here.",
+        roles,
+    ));
+    for kind in AllowedKind::all() {
+        fields = fields.push(
+            Checkbox::new(kind.label(), kube.allowed.contains(&kind), roles)
+                .on_toggle(move |on| Message::Daemons(DaemonsMsg::AllowedToggled(kind, on))),
+        );
+        let file = match kind {
+            AllowedKind::GitSshKey => Some((
+                "SSH key file",
+                &kube.ssh_key_file,
+                FieldId::DaemonKubeSshKeyFile,
+                "ssh_key_file",
+            )),
+            AllowedKind::RegistryPull => Some((
+                "Registry credentials file",
+                &kube.pull_file,
+                FieldId::DaemonKubePullFile,
+                "pull_file",
+            )),
+            _ => None,
+        };
+        if let Some((label, value, id, name)) = file.filter(|_| kube.allowed.contains(&kind)) {
+            let on_input: fn(String) -> Message = if kind == AllowedKind::GitSshKey {
+                |v| Message::Daemons(DaemonsMsg::KubeSshKeyEdited(v))
+            } else {
+                |v| Message::Daemons(DaemonsMsg::PullFileEdited(v))
+            };
+            fields = fields.push(
+                TextField::new("", value, roles)
+                    .label(label)
+                    .track_focus(id, focused)
+                    .error(error_of(state, name))
+                    .on_input(on_input),
+            );
+        }
+    }
+    fields
 }
 
 /// The empty state: what a daemon is, and the way to add one.
