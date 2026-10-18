@@ -376,7 +376,11 @@ pub fn review_comment<'a>(
             ),
             posed(
                 "full reply dialog",
-                crate::ui::changes::reply_dialog_surface(format!("{LONG_REPLY} frame."), roles),
+                crate::ui::changes::reply_dialog_surface(
+                    format!("{LONG_REPLY} frame."),
+                    Message::NoOp,
+                    roles,
+                ),
                 roles,
             ),
         ],
