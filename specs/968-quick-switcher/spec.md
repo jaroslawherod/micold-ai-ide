@@ -25,6 +25,21 @@ are those of `specs/803-keyboard-navigation/spec.md#terms`. In addition:
 - **Highlighted entry**: the one entry that Enter chooses.
 - **Switcher chord**: the key combination of FR-001.
 
+## Clarifications
+
+### Session 2026-10-18
+
+- Q: Are worktrees the sidebar's tag filter hides listed in the quick-switcher? → A: No. Entries
+  follow the #803 **Location order**, which is taken after the tag filter: hidden worktrees are not
+  listed (the current location, which the sidebar keeps shown under any filter, is). Choosing never
+  changes the filter. _(agent-resolved: specs/803-keyboard-navigation/spec.md#terms, FR-004 here
+  uses that term)_
+- Q: #803's **Project order** leaves out unavailable projects, yet User Story 3 lists them with
+  their badge; which holds? → A: Unavailable projects are listed, in their place in the project
+  switcher's order, with the **unavailable** badge, and are not selectable (Up/Down skip them).
+  FR-004 and US3 now say "the project switcher's order" instead of **Project order**.
+  _(agent-resolved: spec.md#user-story-3 scenario 3, FR-006, FR-008)_
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Jump to a location of the active project (Priority: P1)
@@ -112,7 +127,8 @@ unavailable project is listed but cannot be chosen.
 **Acceptance Scenarios**:
 
 1. **Given** the quick-switcher is open with an empty query, **When** the user looks at it, **Then**
-   after the active project's entries it lists the other known projects in project order, each
+   after the active project's entries it lists the other known projects in the project switcher's
+   order (unavailable ones included), each
    showing its name and the running and unread counts the project switcher shows for it.
 2. **Given** a project entry is highlighted, **When** the user presses Enter, **Then** that project
    becomes active exactly as if it had been picked in the project switcher: the sessions of the
@@ -154,9 +170,9 @@ its Linux/Windows and macOS forms.
 - **Empty query**: lists everything in the order of FR-004; Enter chooses the first entry.
 - **Missing or invalid worktree**: listed with its `missing` or `invalid` tag, like any location;
   choosing it does exactly what clicking it does (error shown, no session started).
-- **Tag filter**: [NEEDS CLARIFICATION: are worktrees the sidebar's tag filter hides listed in the
-  quick-switcher (and does choosing one show it in the sidebar), or skipped as the #803 chords skip
-  them?].
+- **Tag filter**: worktrees the sidebar's tag filter hides are not listed, as the #803 chords skip
+  them; the current location, which the sidebar keeps shown under any filter, is listed. The
+  quick-switcher never changes the filter.
 - **Lists changing while open (Principle II)**: a session or worktree created, renamed, closed or
   removed while the quick-switcher is open, in the background, by another window or by an
   assistant, appears in or leaves the list without closing it. The highlight stays on the same entry
@@ -201,8 +217,9 @@ its Linux/Windows and macOS forms.
   open sessions of each of those locations; and the known projects other than the active one. A
   closed session MUST NOT be listed.
 - **FR-004**: With an empty query, entries MUST be listed in this order: each location of the active
-  project in location order, each followed by its open sessions in session order; then the other
-  known projects in project order.
+  project in location order (so after the sidebar's tag filter), each followed by its open sessions
+  in session order; then the other known projects in the project switcher's order, unavailable
+  ones included.
 - **FR-005**: A non-empty query MUST keep exactly the entries whose name contains the query's
   characters in order, ignoring case (a location's sessions also stay when the location's name
   matches). Remaining entries MUST be ranked: a name that starts with the query first, then a name
