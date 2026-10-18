@@ -460,7 +460,14 @@ pub fn classify(kind: RuntimeKind, out: &CommandOutput) -> RuntimeError {
     if dialect.not_running_phrases.iter().any(|p| has(p)) {
         return RuntimeError::NotRunning { kind };
     }
-    if has("pull rate limit") || has("toomanyrequests") || has("unauthorized") {
+    // A registry whose name does not resolve (or cannot be dialled) is a pull that failed, not an
+    // unknown error: the row names the image and shows the runtime's line.
+    if has("pull rate limit")
+        || has("toomanyrequests")
+        || has("unauthorized")
+        || has("no such host")
+        || has("temporary failure in name resolution")
+    {
         return RuntimeError::ImagePullFailed {
             reference: String::new(),
             detail: first_line(&out.stderr),
@@ -654,6 +661,21 @@ mod tests {
             let remedy = e.remedy();
             assert!(remedy.contains("Settings → Daemons"), "{remedy:?}");
             assert!(!remedy.contains("Session service"), "{remedy:?}");
+        }
+    }
+
+    #[test]
+    fn an_unresolvable_registry_is_a_pull_failure() {
+        let out = CommandOutput {
+            code: Some(1),
+            stdout: String::new(),
+            stderr: "Error response from daemon: Get \"https://x.invalid/v2/\": dial tcp: lookup x.invalid on 127.0.0.53:53: no such host\n".into(),
+        };
+        match classify(RuntimeKind::Docker, &out) {
+            RuntimeError::ImagePullFailed { detail, .. } => {
+                assert!(detail.contains("no such host"))
+            }
+            other => panic!("expected ImagePullFailed, got {other:?}"),
         }
     }
 

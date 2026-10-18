@@ -704,6 +704,9 @@ fn reason_context(port: u16) -> ReasonContext {
     }
 }
 
+/// How long the harness asks a started container for its login name.
+const LOGIN_BOUND: Duration = Duration::from_secs(60);
+
 /// One provisioning run against the container on `port` with the step bounds given, returning
 /// the container's name, the outcome, and the steps entered in order (the row's "what it is doing").
 pub async fn provision_outcome(
@@ -732,10 +735,21 @@ pub async fn provision_outcome(
         &host,
         dialect().program,
         &container,
-        bounds.acquire + bounds.create_container,
+        // Short: an image with no passwd line for the container's uid (alpine, run as the host's
+        // uid) never answers `id -un`, and the whole acquire+create bound is a quarter of an hour.
+        LOGIN_BOUND.min(bounds.acquire + bounds.create_container),
     )
     .await
-    .unwrap_or_else(|reason| panic!("the container {container} did not start: {reason}"));
+    .unwrap_or_else(|reason| {
+        // An exited container is a failed start; anything else is an image that cannot name its
+        // user, and the step under test (Reach) fails on its own with the placeholder.
+        assert!(
+            !reason.contains("is not running"),
+            "the container {container} did not start: {reason}"
+        );
+        eprintln!("the container {container} did not name its login ({reason}); using micold");
+        "micold".to_string()
+    });
     let platform = ClientPlatform::current();
     let target = ProvisionTarget {
         reach: Reach::Pinned(PinnedReach {

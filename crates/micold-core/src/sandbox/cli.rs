@@ -88,6 +88,26 @@ impl<R: CommandRunner> CliRuntime<R> {
     }
 }
 
+/// A pull failure the classifier left without the image's name gets it (US3 #3: the error names
+/// the image).
+fn name_the_image(error: RuntimeError, reference: &str) -> RuntimeError {
+    match error {
+        RuntimeError::ImageNotFound { reference: r } if r.is_empty() => {
+            RuntimeError::ImageNotFound {
+                reference: reference.to_string(),
+            }
+        }
+        RuntimeError::ImagePullFailed {
+            reference: r,
+            detail,
+        } if r.is_empty() => RuntimeError::ImagePullFailed {
+            reference: reference.to_string(),
+            detail,
+        },
+        other => other,
+    }
+}
+
 /// Which storage drivers can enforce `--storage-opt size=` (research R5).
 ///
 /// This *is* the probe: the driver is read from the runtime rather than inferred from its version,
@@ -199,7 +219,8 @@ impl<R: CommandRunner> ContainerRuntime for CliRuntime<R> {
                 self.finish(
                     self.runner
                         .run_streaming(&self.program(), &args, &mut on_line),
-                )?;
+                )
+                .map_err(|e| name_the_image(e, reference))?;
             }
             ImageChoice::Own(OwnImage::Archive(path)) => {
                 let args: Vec<OsString> = vec![

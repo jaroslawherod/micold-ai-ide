@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-uwrpqv
 - **Started**: 2026-10-17
 - **Phase**: M5c
-- **Next step**: push M5c (gate green), orchestrator opens the PR
+- **Next step**: push the red-CI fix for PR #1027 (sandbox job), orchestrator re-checks CI
 
 ## Pull requests
 
@@ -99,6 +99,11 @@ Milestone notes:
 | M5c | Review A r1 | F1 (MAJOR) T045 lacks tests for pinned reach, relay/direct, bounds, `CreateContainer`, legacy dial | Those are asserted by the M5 part 1–2 tests (`container_attempt` target tests T053/T054, `Adoption::Legacy` dial tests T058/T062, listed in the cycle-log); T045 adds only the missing `Entered(Acquire)`, which has its test. `CreateContainer` is emitted by the lifecycle, not this task |
 | M5c | Review B r1 | F3 (MAJOR) `strict_fingerprint` removal is outside the tasks | In scope by the unit brief and ledger follow-up 6 (dead field, nothing reads it) |
 | M5c | Review A/B r1 | F4 (MINOR) T063 test sits in `argv.rs`, not `sandbox/mod.rs`; stray closure edit | The `argv` builder lives in `argv.rs`, so its test belongs there; the closure edit is a clippy fix on the same lines. F5 (MINOR): the container-section test is a smoke test, the fields are covered by the geometry gate and T064 tests |
+
+### Red CI on #1027 (sandbox job, real runtime)
+
+- `sandbox_real_provision_a_nonexistent_image_reference_names_itself`: an unresolvable registry (`no such host`) came back as `Unknown`. `classify` now reads it as `ImagePullFailed`, and `CliRuntime::acquire_image` fills in the image reference the classifier leaves empty (US3 #3). Unit test on that stderr.
+- `..._own_image_without_ssh_fails_in_reach`: alpine has no passwd line for the host uid, so `id -un` never answered and the login wait ran its whole acquire+create bound (~15 min) until `sleep 600` ended and the container exited. `wait_for_login` now returns at once when the runtime says the container is not running; the harness asks for 60 s at most and falls back to `micold` (the Reach step under test fails on its own).
 
 ## Handover
 
