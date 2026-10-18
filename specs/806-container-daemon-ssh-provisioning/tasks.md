@@ -167,7 +167,7 @@ settings, start it, and check it connects with the client's version (quickstart 
 - [x] T052 [US1] Add `Adoption::Legacy`, drop the fingerprint replace and map `Stage` onto `Step` in `crates/micold-core/src/sandbox/lifecycle.rs`
 - [x] T053 [US1] Add `Dial::ContainerSsh { reach, target }` calling `provision::run` in `crates/micold-client/src/daemon.rs`; keep `Dial::Container` for `Adoption::Legacy` only
 - [x] T054 [US1] In `crates/micold-client/src/shell/sandbox.rs` `start`: `DaemonKeys::ensure`, write `known_hosts` for the stored port, bring the container up, provision; until M6 the target's `ai_clis` is `AiCliSelection::all()`, so container daemons keep every CLI they had; the table is `AiCliTable::pinned()`
-- [ ] T055 [US1] `mise.toml`: `image` builds `micold-basic:dev` from `packaging/basic/` (no daemon build), `test-sandbox` checks for `micold-basic:dev`; `.github/workflows/ci.yml` `sandbox-runtime` runs the suites against it and adds the pin check `docker manifest inspect "$(grep -o 'ghcr.io/jaroslawherod/micold-basic:[^"]*' crates/micold-core/src/sandbox/basic_image.rs)"`
+- [x] T055 [US1] `mise.toml`: `image` builds `micold-basic:dev` from `packaging/basic/` (no daemon build), `test-sandbox` checks for `micold-basic:dev`; `.github/workflows/ci.yml` `sandbox-runtime` runs the suites against it and adds the pin check `docker manifest inspect "$(grep -o 'ghcr.io/jaroslawherod/micold-basic:[^"]*' crates/micold-core/src/sandbox/basic_image.rs)"`
 
 **Checkpoint**: US1 #1, #3, #4 hold; container daemons connect on the basic image.
 
