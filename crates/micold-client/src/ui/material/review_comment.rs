@@ -68,6 +68,8 @@ pub struct Parts {
     pub actions: bool,
     /// Mark applied and Answer…, on a Sent card.
     pub mark_actions: bool,
+    /// The card is the one the review panel jumped to: drawn with the highlighted outline.
+    pub highlighted: bool,
 }
 
 /// One comment's card.
@@ -76,6 +78,7 @@ pub struct ReviewCommentCard<'a, M> {
     state: CardState,
     roles: Roles,
     outdated: bool,
+    highlighted: bool,
     reply: Option<(Cow<'a, str>, bool)>,
     on_edit: Option<M>,
     on_delete: Option<M>,
@@ -92,6 +95,7 @@ impl<'a, M: Clone + 'a> ReviewCommentCard<'a, M> {
             state,
             roles,
             outdated: false,
+            highlighted: false,
             reply: None,
             on_edit: None,
             on_delete: None,
@@ -104,6 +108,12 @@ impl<'a, M: Clone + 'a> ReviewCommentCard<'a, M> {
     /// Show the Outdated tag.
     pub fn outdated(mut self, outdated: bool) -> Self {
         self.outdated = outdated;
+        self
+    }
+
+    /// Draw the highlighted outline: the review panel jumped to this card.
+    pub fn highlighted(mut self, highlighted: bool) -> Self {
+        self.highlighted = highlighted;
         self
     }
 
@@ -164,6 +174,7 @@ impl<'a, M: Clone + 'a> ReviewCommentCard<'a, M> {
                 && (self.on_edit.is_some() || self.on_delete.is_some()),
             mark_actions: self.state == CardState::Sent
                 && (self.on_mark_applied.is_some() || self.on_answer.is_some()),
+            highlighted: self.highlighted,
         }
     }
 }
@@ -216,8 +227,12 @@ impl<'a, M: Clone + 'a> From<ReviewCommentCard<'a, M>> for Element<'a, M> {
                     r.surface_container_low,
                 ))),
                 border: Border {
-                    color: style::color(r.outline_variant),
-                    width: 1.0,
+                    color: style::color(if parts.highlighted {
+                        r.primary
+                    } else {
+                        r.outline_variant
+                    }),
+                    width: if parts.highlighted { 2.0 } else { 1.0 },
                     radius: 8.0.into(),
                 },
                 ..container::Style::default()
@@ -369,6 +384,18 @@ mod tests {
                 .on_answer(()),
         );
         assert!(marked >= plain, "the actions sit in the head row");
+    }
+
+    #[test]
+    fn a_highlighted_card_draws_the_outline_and_keeps_the_plain_card_size() {
+        assert!(!card(CardState::Draft).parts().highlighted);
+        assert!(card(CardState::Draft).highlighted(true).parts().highlighted);
+        assert!(!card(CardState::Draft).highlighted(false).parts().highlighted);
+        let plain = laid_out(ReviewCommentCard::new("rename", CardState::Sent, LIGHT));
+        let marked = laid_out(ReviewCommentCard::new("rename", CardState::Sent, LIGHT).highlighted(true));
+        let off = laid_out(ReviewCommentCard::new("rename", CardState::Sent, LIGHT).highlighted(false));
+        assert_eq!(off, plain, "false matches the plain card");
+        assert_eq!(marked, plain, "the outline takes no room");
     }
 
     #[test]
