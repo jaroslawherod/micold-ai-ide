@@ -11,7 +11,8 @@
 //! must not end in `*`. Source text rather than pixels, as `field_focus_call_sites.rs` argues: the
 //! property is one of the call site. The legend gets the same check (C5, SC-003, SC-006): no file
 //! outside `ui/material/` spells `* required`, and every form that has a required field calls
-//! `RequiredLegend`. The error message gets its check in a later milestone of the feature.
+//! `RequiredLegend`. The error message gets the same check (C5, SC-006): no file outside `ui/material/` spells
+//! `This field is required`.
 
 #[path = "support/source_scan.rs"]
 mod source_scan;
@@ -148,6 +149,40 @@ fn every_form_with_a_required_field_calls_the_legend() {
          FR-004, SC-003):\n{}",
         missing.join("\n")
     );
+}
+
+/// Whether `source` writes the required message as a string literal, comments aside.
+fn spells_the_message(source: &str) -> bool {
+    strip_comments_keep_lines(source).contains("\"This field is required\"")
+}
+
+/// The rendering modules and the feature modules, where a form could write its own message.
+#[test]
+fn no_form_spells_the_required_message() {
+    let features = rs_files(&src_dir().join("features"))
+        .into_iter()
+        .map(|path| {
+            let src = std::fs::read_to_string(&path).expect("read source");
+            (path.display().to_string(), src)
+        });
+    let offenders: Vec<String> = rendering_files()
+        .into_iter()
+        .chain(features)
+        .filter(|(_, src)| spells_the_message(src))
+        .map(|(name, _)| name)
+        .collect();
+    assert!(
+        offenders.is_empty(),
+        "these files write the required message themselves; declare the field required and let \
+         the shared field draw it (feature 937, FR-008, SC-006):\n{}",
+        offenders.join("\n")
+    );
+    assert!(spells_the_message(
+        r#"Text::new("This field is required", r)"#
+    ));
+    assert!(!spells_the_message(
+        "// \"This field is required\" is the library's"
+    ));
 }
 
 #[test]

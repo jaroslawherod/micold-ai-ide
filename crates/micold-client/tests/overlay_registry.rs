@@ -103,6 +103,7 @@ fn dialogs() -> Vec<Dialog> {
                     offered: Vec::new(),
                     default_cli: micold_core::session::AiCli::ClaudeCode,
                     error: None,
+                    name_error: None,
                 })
             },
         },

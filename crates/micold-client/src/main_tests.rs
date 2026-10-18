@@ -7672,7 +7672,6 @@ mod issue_source {
         pick_row(&mut rig.app, 7);
         let f = form(&rig.app);
         assert_eq!(f.type_, None, "no type carries over from earlier input");
-        assert!(!f.can_submit(), "submitting needs a type again");
         assert!(f.preview().is_err(), "the preview reports the missing type");
     }
 

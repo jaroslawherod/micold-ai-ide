@@ -49,7 +49,7 @@ use crate::features::window::FieldId;
 use crate::floating_surface;
 use crate::overlay::registry::Registered;
 use crate::overlay::SurfaceId;
-use micold_core::project::{canonicalize_best_effort, FolderEntry, RenameError};
+use micold_core::project::{canonicalize_best_effort, FolderEntry};
 use micold_core::required::{RequiredMarks, Requirement};
 use micold_core::selector::Selector;
 use std::path::PathBuf;
@@ -140,8 +140,6 @@ pub struct RenameDraft {
     pub path: PathBuf,
     /// The current editable text in the dialog.
     pub text: String,
-    /// The last validation error, if the user tried to confirm an invalid name (FR-020).
-    pub error: Option<RenameError>,
     /// Whether the user left the name field or attempted a confirm (feature 937).
     pub required: RequiredMarks<FieldId>,
 }
@@ -315,19 +313,15 @@ pub fn rename_started(state: &mut crate::app::State, path: PathBuf) {
             required: Default::default(),
             path,
             text: name,
-            error: None,
         });
     }
 }
 
-/// The rename field was edited.
-///
-/// Clearing the error matters: a stale message beside a name the user has since corrected is the
-/// dialog arguing with them after they fixed it.
+/// The rename field was edited. The required error clears with the text, as it is drawn from it
+/// (feature 937, FR-007).
 pub fn rename_text_changed(state: &mut crate::app::State, text: String) {
     if let Some(draft) = &mut state.project.rename_draft {
         draft.text = text;
-        draft.error = None;
     }
 }
 
@@ -346,9 +340,11 @@ pub fn rename_confirmed(state: &mut crate::app::State) {
     };
     match state.workspace.rename(&path, &text) {
         Ok(()) => state.project.rename_draft = None,
-        Err(error) => {
+        // A blank name is the only refusal, and it is the name field's required error: the field
+        // reads `Missing` from the attempt, with no separate line (feature 937, FR-005, R4).
+        Err(_) => {
             if let Some(draft) = &mut state.project.rename_draft {
-                draft.error = Some(error);
+                draft.required.leave(FieldId::RenameProjectName);
             }
         }
     }

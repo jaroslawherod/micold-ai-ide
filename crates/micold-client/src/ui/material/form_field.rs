@@ -285,7 +285,12 @@ impl<'a, M: 'a> FormField<'a, M> {
 impl<'a, M: 'a> From<FormField<'a, M>> for Element<'a, M> {
     fn from(f: FormField<'a, M>) -> Self {
         let r = f.roles;
-        let invalid = f.text.error.is_some();
+        // A required field left or submitted empty is drawn invalid with the required message in
+        // the supporting slot, unless the field has an error of its own, which wins (feature 937,
+        // FR-005, FR-010). Filling the field turns `Missing` back into `Required` in the same
+        // update, and only these two things change (FR-007).
+        let missing = f.text.required == FieldRequirement::Missing;
+        let invalid = f.text.error.is_some() || missing;
 
         // Every slot is emitted whether or not it is filled — see the module docs. `Space::new()`
         // and not a zero-sized one: iced drops a child whose size hint `is_void()`, which is true
@@ -354,11 +359,15 @@ impl<'a, M: 'a> From<FormField<'a, M>> for Element<'a, M> {
         // than joining it: a field showing a problem should not also be showing the hint the
         // problem replaces.
         let beneath = beneath(
-            f.text.error.or(f.text.supporting).map(|message| {
-                Text::new(message, TypeRole::Caption, r)
-                    .tint(style::field_support(r, invalid))
-                    .into()
-            }),
+            f.text
+                .error
+                .or(missing.then(|| micold_core::required::MESSAGE.to_string()))
+                .or(f.text.supporting)
+                .map(|message| {
+                    Text::new(message, TypeRole::Caption, r)
+                        .tint(style::field_support(r, invalid))
+                        .into()
+                }),
             spacing::XS,
         );
 

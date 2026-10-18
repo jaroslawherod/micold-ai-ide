@@ -364,7 +364,6 @@ fn states_opening_each_surface() -> Vec<micold_client::app::State> {
                 required: Default::default(),
                 dir_name: "wt".to_string(),
                 text: String::new(),
-                error: None,
             }),
             ..Default::default()
         },
@@ -379,7 +378,6 @@ fn states_opening_each_surface() -> Vec<micold_client::app::State> {
                 required: Default::default(),
                 path: PathBuf::from("/tmp"),
                 text: String::new(),
-                error: None,
             }),
             selector: Some(Selector::open_at(PathBuf::from("/tmp"))),
             forget_target: Some(PathBuf::from("/p")),

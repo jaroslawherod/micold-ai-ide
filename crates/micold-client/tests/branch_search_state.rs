@@ -416,12 +416,12 @@ fn the_submit_guard_still_refuses_a_blocked_selection() {
         ..WorktreeForm::default()
     };
     assert!(
-        !form.can_submit(),
+        !form.can_press(),
         "the last line of defence must still hold"
     );
 
     form.selected_branch = Some(candidate("feat/free"));
-    assert!(form.can_submit());
+    assert!(form.can_press());
 }
 
 // --- T017: the happy path is unchanged --------------------------------------------------------
@@ -440,7 +440,7 @@ fn picking_an_available_branch_from_the_results_behaves_as_it_always_did() {
 
     let f = form(&state);
     assert_eq!(f.selected_branch.as_ref().unwrap().name, "feat/login");
-    assert!(f.can_submit(), "an available branch is submittable");
+    assert!(f.can_press(), "an available branch is submittable");
 
     let derived = f.preview().expect("a selected branch previews");
     assert_eq!(derived.branch, "feat/login");
@@ -492,7 +492,7 @@ fn a_no_match_query_leaves_an_existing_selection_alone() {
     assert!(f.branch_matches.is_empty());
     assert_eq!(f.selected_branch.as_ref().unwrap().name, "feat/login");
     assert!(
-        f.can_submit(),
+        f.can_press(),
         "the form is still submittable on the branch already chosen"
     );
 }

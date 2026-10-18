@@ -91,21 +91,6 @@ fn a_switcher_row_reports_availability_and_activity_separately() {
     );
 }
 
-#[test]
-fn a_rename_draft_starts_without_an_error() {
-    let draft = RenameDraft {
-        path: PathBuf::from("/p/one"),
-        text: "one".into(),
-        error: None,
-        required: Default::default(),
-    };
-
-    assert!(
-        draft.error.is_none(),
-        "the dialog opens clean; an error appears only after a rejected confirm (FR-020)"
-    );
-}
-
 /// The rename dialog's one field is required, and empty exactly when `validate_rename` refuses the
 /// value (feature 937, R4, R5).
 #[test]
@@ -115,7 +100,6 @@ fn a_rename_draft_requires_its_name() {
         let draft = RenameDraft {
             path: PathBuf::from("/p/one"),
             text: text.into(),
-            error: None,
             required: Default::default(),
         };
         let fields = draft.required_fields();

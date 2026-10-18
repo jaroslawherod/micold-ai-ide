@@ -702,20 +702,20 @@ fn issue_source_previews_as_new() {
     );
     let as_issue = form(&state).clone();
     assert!(
-        !as_issue.can_submit(),
+        as_issue.preview().is_err(),
         "with no type chosen the issue source refuses as the new-branch one does"
     );
 
     let mut as_new = as_issue.clone();
     as_new.source = BranchSource::New;
     assert_eq!(as_issue.preview(), as_new.preview());
-    assert_eq!(as_issue.can_submit(), as_new.can_submit());
+    assert_eq!(as_issue.can_press(), as_new.can_press());
 
     send(&mut state, Msg::TypeSelected(ConventionalType::Fix));
     let as_issue = form(&state).clone();
     let mut as_new = as_issue.clone();
     as_new.source = BranchSource::New;
-    assert!(as_issue.can_submit());
+    assert!(as_issue.can_press());
     assert_eq!(as_issue.preview(), as_new.preview());
     assert_eq!(
         as_issue.preview().map(|d| d.branch),
@@ -774,7 +774,7 @@ fn the_pick_sets_or_clears_the_type_no_mapped_label_clears_it() {
         "no mapped label clears the type; nothing carries over (AS3, FR-014)"
     );
     assert!(
-        !form(&state).can_submit(),
+        form(&state).preview().is_err(),
         "with the type cleared the form asks for one, as it does today"
     );
 }

@@ -158,7 +158,9 @@ fn worktree_rename_seeds_edits_and_applies() {
 }
 
 #[test]
-fn worktree_rename_empty_keeps_prior_name_with_error() {
+fn worktree_rename_empty_keeps_prior_name_and_marks_the_field_missing() {
+    use micold_client::features::window::FieldId;
+    use micold_core::required::FieldRequirement::{Missing, Required};
     let mut state = state_with_active();
     state.update(Message::Worktree(WorktreeMsg::RenameStarted(
         "feat-x".to_string(),
@@ -166,17 +168,48 @@ fn worktree_rename_empty_keeps_prior_name_with_error() {
     state.update(Message::Worktree(WorktreeMsg::RenameTextChanged(
         "   ".to_string(),
     )));
+    let reads = |state: &State| {
+        let draft = state.worktree.rename_draft.as_ref().unwrap();
+        draft
+            .required
+            .state_in(&draft.required_fields(), FieldId::RenameWorktreeName)
+    };
+    assert_eq!(reads(&state), Required, "no error before the confirm");
     state.update(Message::Worktree(WorktreeMsg::RenameConfirmed));
-    // Stays open with an error; no override applied → still the derived name.
+    // Stays open, the name field reads Missing; no override applied → still the derived name.
     assert_eq!(open_dialog(&state), Some("rename_worktree"));
-    assert!(state
-        .worktree
-        .rename_draft
-        .as_ref()
-        .unwrap()
-        .error
-        .is_some());
+    assert_eq!(reads(&state), Missing);
     assert_eq!(state.worktree_display_name("feat-x"), "X");
+    state.update(Message::Worktree(WorktreeMsg::RenameTextChanged(
+        "Y".to_string(),
+    )));
+    assert_eq!(reads(&state), Required, "typing clears the error (FR-007)");
+}
+
+#[test]
+fn project_rename_empty_keeps_the_name_and_marks_the_field_missing() {
+    use micold_client::features::window::FieldId;
+    use micold_core::required::FieldRequirement::{Missing, Required};
+    let mut state = state_with_active();
+    state.update(Message::Project(ProjectMsg::RenameStarted(
+        std::path::PathBuf::from("/repo"),
+    )));
+    state.update(Message::Project(ProjectMsg::RenameTextChanged(
+        String::new(),
+    )));
+    let reads = |state: &State| {
+        let draft = state.project.rename_draft.as_ref().unwrap();
+        draft
+            .required
+            .state_in(&draft.required_fields(), FieldId::RenameProjectName)
+    };
+    assert_eq!(reads(&state), Required, "no error before the confirm");
+    state.update(Message::Project(ProjectMsg::RenameConfirmed));
+    assert_eq!(open_dialog(&state), Some("rename_project"));
+    assert_eq!(reads(&state), Missing);
+    assert_eq!(state.workspace.projects[0].display_name, "repo");
+    state.update(Message::Project(ProjectMsg::RenameTextChanged("x".into())));
+    assert_eq!(reads(&state), Required, "typing clears the error (FR-007)");
 }
 
 #[test]

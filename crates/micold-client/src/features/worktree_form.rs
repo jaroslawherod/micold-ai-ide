@@ -940,12 +940,16 @@ impl WorktreeForm {
         self.stage.map(|s| s.label(&self.mode))
     }
 
-    /// Whether the form can be submitted right now.
+    /// Whether pressing Create is a submit attempt right now (feature 937, FR-012).
+    ///
+    /// An empty required field does not disable the button: pressing it shows the required errors
+    /// and submits nothing ([`submitted`]). What disables it is a create in flight, a prompt, or a
+    /// blocked branch.
     ///
     /// A blocked candidate is deliberately still *selectable* (research R8 — `pick_list` has no
     /// per-item disabling, and forking a list widget is what the Component-reuse gate rejects),
     /// so the refusal happens here, at the point of action (FR-012).
-    pub fn can_submit(&self) -> bool {
+    pub fn can_press(&self) -> bool {
         if self.status != WorktreeFormStatus::Editing || self.resolution.is_prompting() {
             return false;
         }
@@ -954,7 +958,7 @@ impl WorktreeForm {
                 return false;
             }
         }
-        self.preview().is_ok()
+        true
     }
 
     /// The mode implied by picking a candidate outright, when no prompt is needed
@@ -1200,8 +1204,16 @@ pub fn name_changed(state: &mut crate::app::State, text: String) {
 /// double-submit.
 pub fn submitted(state: &mut crate::app::State) {
     while_editing(state, |form| {
+        // Every required field that is empty reads `Missing` at once, not the first one only
+        // (feature 937, FR-006). Emptiness is then the fields' own error; the form keeps the
+        // refusals that are not about emptiness, such as a name with no letters or digits (FR-010).
+        form.required.attempt();
+        let empty = form
+            .required_fields()
+            .iter()
+            .any(|(_, r)| r.required && r.empty);
         if let Err(error) = form.preview() {
-            form.error = Some(error);
+            form.error = (!empty).then_some(error);
         }
     });
 }

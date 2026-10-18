@@ -51,7 +51,15 @@ fn parallel_dialog_pose(error: bool) -> &'static crate::features::runs::Parallel
     static VALID: OnceLock<crate::features::runs::ParallelDialog> = OnceLock::new();
     static INVALID: OnceLock<crate::features::runs::ParallelDialog> = OnceLock::new();
     let make = |error: bool| crate::features::runs::ParallelDialog {
-        required: Default::default(),
+        // The error pose is the dialog after a confirm with the prompt and name empty: both read
+        // `Missing` (feature 937).
+        required: {
+            let mut marks = micold_core::required::RequiredMarks::default();
+            if error {
+                marks.attempt();
+            }
+            marks
+        },
         project: std::path::PathBuf::from("/p"),
         naming: micold_core::naming::WorktreeNaming {
             type_: Some(ConventionalType::Feat),
@@ -72,7 +80,8 @@ fn parallel_dialog_pose(error: bool) -> &'static crate::features::runs::Parallel
         runs: vec![AiCli::ClaudeCode, AiCli::Copilot, AiCli::Pi],
         offered: AiCli::ALL.to_vec(),
         default_cli: AiCli::ClaudeCode,
-        error: error.then(|| "Enter a prompt".to_string()),
+        error: None,
+        name_error: None,
     };
     if error {
         INVALID.get_or_init(|| make(true))

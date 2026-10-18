@@ -718,3 +718,85 @@ fn a_field_without_a_label_gets_no_marker() {
     let bare: Element<'_, Message> = FormField::new(input(), r).into();
     assert_eq!(bounds(required, 400.0), bounds(bare, 400.0));
 }
+
+// ---------------------------------------------------------------------------------------------
+// The required error (feature 937, contract C1, FR-005, FR-007, FR-010)
+// ---------------------------------------------------------------------------------------------
+
+fn named(requirement: FieldRequirement) -> FormField<'static, Message> {
+    FormField::new(input(), roles())
+        .label("Name")
+        .required(requirement)
+}
+
+/// `Missing` is drawn as the field's error state with the required message beneath it: it lays out
+/// as the same field given that message as its error, and unlike `Required` it adds the row.
+#[test]
+fn a_missing_field_shows_the_required_message_as_its_error() {
+    let missing = bounds(named(FieldRequirement::Missing).into(), 400.0);
+    let as_error = bounds(
+        named(FieldRequirement::Required)
+            .error(Some(micold_core::required::MESSAGE))
+            .into(),
+        400.0,
+    );
+    assert_eq!(missing, as_error);
+    assert_ne!(
+        missing,
+        bounds(named(FieldRequirement::Required).into(), 400.0)
+    );
+}
+
+/// The required message replaces the supporting text rather than joining it.
+#[test]
+fn the_required_message_replaces_the_supporting_text() {
+    let missing = bounds(
+        named(FieldRequirement::Missing)
+            .supporting("e.g. login page")
+            .into(),
+        400.0,
+    );
+    let message = bounds(
+        named(FieldRequirement::Required)
+            .error(Some(micold_core::required::MESSAGE))
+            .into(),
+        400.0,
+    );
+    assert_eq!(missing, message);
+}
+
+/// A field's own error wins over the required message (FR-010).
+#[test]
+fn a_fields_own_error_wins_over_the_required_message() {
+    let own = "Enter a name (letters or digits)";
+    let missing = bounds(
+        named(FieldRequirement::Missing).error(Some(own)).into(),
+        400.0,
+    );
+    let required = bounds(
+        named(FieldRequirement::Required).error(Some(own)).into(),
+        400.0,
+    );
+    assert_eq!(missing, required);
+}
+
+/// `Required` draws no error (C1, FR-005) and going from `Missing` to `Required` changes only the
+/// error state and the supporting text: the shape of the widget tree, which carries the control's
+/// focus and cursor, is the same (FR-007).
+#[test]
+fn clearing_the_error_keeps_the_widget_state() {
+    let shape = |requirement| tree_shape(&named(requirement).supporting("hint").into());
+    assert_eq!(
+        shape(FieldRequirement::Missing),
+        shape(FieldRequirement::Required)
+    );
+    let hint = bounds(
+        named(FieldRequirement::Required).supporting("hint").into(),
+        400.0,
+    );
+    let plain = bounds(named(FieldRequirement::Required).into(), 400.0);
+    assert_ne!(
+        hint, plain,
+        "Required keeps the supporting text, and no error"
+    );
+}

@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #937
 - **Worktree branch**: claude/project-thread-rkhzho
 - **Started**: 2026-10-17
-- **Phase**: M3 PR
-- **Next step**: orchestrator opens the M3 PR (title/body in the scratchpad: pr-title-937-M3.txt, pr-body-937-M3.md), waits on CI, merges; then M4. Visual pass not run (no xdotool). D2/D3 = A, confirmed by jaro 2026-10-17
+- **Phase**: M4 implement
+- **Next step**: M4 tests, reviews, gate, PR files (pr-title-937-M4.txt, pr-body-937-M4.md in the scratchpad); orchestrator opens the PR
 
 ## Pull requests
 
@@ -19,7 +19,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #948 | Design: spec, clarify, plan, tasks | merged | 7f95bbc7a71151ff44315b9f93939fe9bb115872 |
 | #963 | M1: required fields marked in the dialogs | merged | 70f5872667fb6e8e9126555f2573ce86e0a7bf80 |
 | #974 | M2: required fields marked in Settings and the daemon form | merged | e1462f4fae303fa4b29aa8261a7764c0164889b0 |
-| to-open | M3: `* required` legend | to-open | — |
+| #980 | M3: `* required` legend | merged | d22e7c18b3f076cace16af54f8ddfa539fc73a48 |
+| to-open | M4: required error on submit in the dialogs | to-open | — |
 
 ## Milestones
 
@@ -27,8 +28,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T015 | full | Required fields marked (`*`) in the add-worktree, run-in-parallel and rename dialogs | #963 | merged |
 | M2 | T016–T022 | full | Required fields marked in Settings sections and the daemon form | #974 | merged |
-| M3 | T023–T028 | full | `* required` legend once above the first field of every form with a required field | to-open | PR |
-| M4 | T029–T035 | full | Required error on submit in the dialogs; Create and Start runs enabled | — | pending |
+| M3 | T023–T028 | full | `* required` legend once above the first field of every form with a required field | #980 | merged |
+| M4 | T029–T035 | full | Required error on submit in the dialogs; Create and Start runs enabled | to-open | in progress |
 | M5 | T036–T041 | full | Required error on save in Settings and the daemon form | — | pending |
 | M6 | T042–T048 | full | Required error on leaving a field (blur), selects included | — | pending |
 
