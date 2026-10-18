@@ -30,7 +30,7 @@ observable result needs a real pod (A3) is hosted only in the real suite.
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
 | A1  | Starting an added Kubernetes daemon with the default image creates one pod in its namespace, copies the daemon in, installs the selected AI CLIs, and the row reaches `connected` with endpoint `<context> / <namespace> / <pod>` (M6) | US1.1, FR-001, FR-003, FR-004 | example | PENDING | `kube_daemon_start` (FakeCluster); real: `kube_real_endtoend` |
-| A2  | Creating a worktree bound to a connected Kubernetes daemon clones the project's remote into its volume and shows the worktree with the daemon's name and in-pod path | US1.2, FR-007 | example | PENDING | `features_daemons` (fake daemon); real: `kube_real_endtoend` |
+| A2  | Creating a worktree bound to a connected Kubernetes daemon clones the project's remote into its volume and shows the worktree with the daemon's name and in-pod path | US1.2, FR-007 | example | DONE | `features_daemons` (fake daemon); real: `kube_real_endtoend` |
 | A3  | A session started in that worktree runs in the pod, takes typed input and shows its output | US1.3 | example | PENDING | `kube_real_endtoend` (real cluster only) |
 | A4  | Starting the daemon again while its pod exists adopts that pod and creates none | US1.4, FR-003, FR-023 | example | PENDING | `kube_daemon_start`; core half (M1b): `core/kube/start.rs` |
 | A5  | A connected Kubernetes daemon has no Service or Ingress in its namespace | US1.5, FR-006, SC-006 | example | PENDING | `kube_daemon_start`; real: `kube_real_endtoend`; core half (M1b): `core/kube/start.rs` |
@@ -239,13 +239,13 @@ observable result needs a real pod (A3) is hosted only in the real suite.
 
 | id  | behavior | traces | kind | state | test |
 | --- | --- | --- | --- | --- | --- |
-| U79 | The clone remote is `origin`, else the only remote; none is `NoRemote`; several without `origin` is `Ambiguous(names)` | FR-007, Edge: project without a remote | example | PENDING | |
-| U80 | The clone target is `/data/repos/<slug>-<hash8(url)>`, the same for the same URL | FR-007 | example | PENDING | |
-| U81 | Git stderr classifies as `AuthRequired { remote }`, `DiskFull`, `Unreachable { remote }` or `Other`, each with its contract §6 text | FR-007, Edge: remote needs a credential, Edge: volume full | example | PENDING | |
-| U82 | `RepoClone`, `RepoCloned`, `RepoCloneFailed` round-trip and `PROTOCOL_VERSION` is 51 | FR-007, FR-017 | example | PENDING | |
-| U83 | The daemon clones into a `.partial-` directory and renames it on success; an existing destination is fetched | FR-007 | example | PENDING | |
-| U84 | An auth failure leaves no directory behind | FR-007, Edge: remote needs a credential | example | PENDING | |
-| U85 | A destination outside `MICOLD_REPOS_ROOT` is refused | FR-007, FR-020 | example | PENDING | |
+| U79 | The clone remote is `origin`, else the only remote; none is `NoRemote`; several without `origin` is `Ambiguous(names)` | FR-007, Edge: project without a remote | example | DONE | |
+| U80 | The clone target is `/data/repos/<slug>-<hash8(url)>`, the same for the same URL | FR-007 | example | DONE | |
+| U81 | Git stderr classifies as `AuthRequired { remote }`, `DiskFull`, `Unreachable { remote }` or `Other`, each with its contract §6 text | FR-007, Edge: remote needs a credential, Edge: volume full | example | DONE | |
+| U82 | `RepoClone`, `RepoCloned`, `RepoCloneFailed` round-trip and `PROTOCOL_VERSION` is 51 | FR-007, FR-017 | example | DONE | |
+| U83 | The daemon clones into a `.partial-` directory and renames it on success; an existing destination is fetched | FR-007 | example | DONE | |
+| U84 | An auth failure leaves no directory behind | FR-007, Edge: remote needs a credential | example | DONE | |
+| U85 | A destination outside `MICOLD_REPOS_ROOT` is refused | FR-007, FR-020 | example | DONE | |
 
 ### `crates/micold-client/src/kube/live.rs` (`image.rs` rows: revision 2, removed)
 
@@ -277,9 +277,9 @@ observable result needs a real pod (A3) is hosted only in the real suite.
 | U97 | The container form's limits fields behave as before the extraction into `container_fields.rs` | FR-005 (K1) | characterization | PENDING |  |
 | U98 | ~~Image source defaults to Build with the enabled providers; Build without a registry is refused naming "Registry"~~ (revision 2: removed) | FR-004 | example | REMOVED |  |
 | U99 | The four resource fields are edited on their own; a request above its limit is refused naming the request field | FR-005 | example | PENDING | |
-| U100 | A worktree of a project with no remote bound to a Kubernetes daemon is refused with the reason and sends nothing | FR-007 | example | PENDING | |
-| U101 | A project with a remote sends `RepoClone` before `WorktreeCreate`, showing "Cloning <repo>" | FR-007 | example | PENDING | |
-| U102 | The bound worktree's identity is `micold-remote://<daemon-id>/data/repos/…` | FR-007 | example | PENDING | |
+| U100 | A worktree of a project with no remote bound to a Kubernetes daemon is refused with the reason and sends nothing | FR-007 | example | DONE | |
+| U101 | A project with a remote sends `RepoClone` before `WorktreeCreate`, showing "Cloning <repo>" | FR-007 | example | DONE | |
+| U102 | The bound worktree's identity is `micold-remote://<daemon-id>/data/repos/…` | FR-007 | example | DONE | |
 | U103 | A `stopped` row shows its reason | FR-011 | example | PENDING | |
 | U104 | The allowed-credentials list starts with nothing checked; SSH key and registry auth need a file | FR-008 | example | PENDING | |
 | U105 | Stop with running sessions confirms naming how many end | FR-014 | example | PENDING | |

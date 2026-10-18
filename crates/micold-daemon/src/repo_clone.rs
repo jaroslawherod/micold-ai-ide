@@ -112,12 +112,22 @@ pub fn ensure_clone(root: Option<&Path>, url: &str, dest: &str) -> Result<(), Cl
         .unwrap_or(0);
     let partial = parent.join(format!(".partial-{name}-{}-{nonce:x}", std::process::id()));
     let cloned = git(None, &["clone", "--", url, &partial.to_string_lossy()]);
+    settle(cloned, &partial, &dest)
+}
+
+/// Move a finished clone into place, or remove the partial directory: a failure leaves nothing
+/// half-cloned.
+fn settle(
+    cloned: Result<(), CloneFailureWire>,
+    partial: &Path,
+    dest: &Path,
+) -> Result<(), CloneFailureWire> {
     let outcome = cloned.and_then(|()| {
-        std::fs::rename(&partial, &dest)
+        std::fs::rename(partial, dest)
             .map_err(|e| refuse(format!("could not move the clone into place: {e}")))
     });
     if outcome.is_err() {
-        let _ = std::fs::remove_dir_all(&partial);
+        let _ = std::fs::remove_dir_all(partial);
     }
     outcome
 }
@@ -264,12 +274,30 @@ mod tests {
             "relative/x",
         ] {
             let err = ensure_clone(Some(&root), "u", dest).unwrap_err();
-            assert!(matches!(err, CloneFailureWire::Other(_)), "{dest}: {err:?}");
+            assert!(
+                matches!(&err, CloneFailureWire::Other(t) if t.contains("is outside")),
+                "{dest}: {err:?}"
+            );
         }
         assert!(matches!(
             ensure_clone(None, "u", "/data/repos/x"),
             Err(CloneFailureWire::Other(t)) if t.contains(ROOT_ENV)
         ));
         assert!(!root.exists());
+    }
+
+    #[test]
+    fn a_failed_clone_removes_its_partial_directory_and_a_good_one_moves_into_place() {
+        let base = tempfile::tempdir().unwrap();
+        let (partial, dest) = (base.path().join(".partial-x"), base.path().join("x"));
+        std::fs::create_dir_all(&partial).unwrap();
+        std::fs::write(partial.join("f"), "f").unwrap();
+        let failed = settle(Err(refuse("boom")), &partial, &dest);
+        assert!(failed.is_err());
+        assert!(!partial.exists() && !dest.exists());
+        std::fs::create_dir_all(&partial).unwrap();
+        std::fs::write(partial.join("f"), "f").unwrap();
+        settle(Ok(()), &partial, &dest).unwrap();
+        assert!(!partial.exists() && dest.join("f").is_file());
     }
 }

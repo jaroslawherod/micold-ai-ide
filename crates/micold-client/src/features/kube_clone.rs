@@ -9,8 +9,10 @@ use std::path::PathBuf;
 use micold_core::daemons::DaemonId;
 use micold_core::git::GitRemote;
 use micold_core::kube::clone::{remote_for, CloneFailure, CloneTarget};
-use micold_core::protocol::messages::{ClientMsg, DaemonMsg};
+use micold_core::naming::DerivedNames;
+use micold_core::protocol::messages::{ClientMsg, DaemonMsg, SessionDefinition};
 use micold_core::ssh::remote_path::RemoteLocation;
+use micold_core::worktree::CreateMode;
 
 /// A clone to ask a Kubernetes daemon for, ahead of a worktree create.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -81,5 +83,105 @@ impl ClonePlan {
             }
             _ => None,
         }
+    }
+}
+
+/// What the shell sends or shows next, in this order.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Output {
+    /// Register the clone as a project of the daemon.
+    ProjectAdd {
+        /// The clone's identity.
+        path: PathBuf,
+    },
+    /// Create the worktree in the clone.
+    WorktreeCreate {
+        /// The clone's identity.
+        project: PathBuf,
+        /// The new branch's name.
+        branch: String,
+        /// The worktree's directory name.
+        dir_name: String,
+        /// How to obtain the branch.
+        mode: CreateMode,
+        /// The session to start with it.
+        session: Option<SessionDefinition>,
+    },
+    /// End the create with this text; nothing more is sent.
+    Failed(String),
+}
+
+/// A worktree create waiting for its clone in a Kubernetes daemon's pod: the sequencing of
+/// clone, then project, then worktree.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Pending {
+    /// The clone asked for.
+    pub plan: ClonePlan,
+    /// The daemon's name, for the failure text.
+    pub daemon_name: String,
+    names: DerivedNames,
+    mode: CreateMode,
+    session: Option<SessionDefinition>,
+}
+
+impl Pending {
+    /// Start a create: the plan for `project_name`'s remote, or the text that refuses it (nothing
+    /// is sent). `already_cloning` is true while the same clone is in flight on this daemon.
+    #[allow(clippy::too_many_arguments)]
+    pub fn begin(
+        project_name: &str,
+        daemon: DaemonId,
+        daemon_name: &str,
+        remotes: &[GitRemote],
+        already_cloning: impl Fn(&str) -> bool,
+        names: DerivedNames,
+        mode: CreateMode,
+        session: Option<SessionDefinition>,
+    ) -> Result<Self, String> {
+        let plan = plan(project_name, daemon, remotes)?;
+        if already_cloning(&plan.dest) {
+            return Err(format!("{daemon_name} is already cloning {}.", plan.url));
+        }
+        Ok(Self {
+            plan,
+            daemon_name: daemon_name.to_string(),
+            names,
+            mode,
+            session,
+        })
+    }
+
+    /// What to send, then, for `reply` (`None` for a message about anything else). `connected` is
+    /// whether the daemon is still reachable to receive the create.
+    pub fn on_reply(&self, connected: bool, reply: &DaemonMsg) -> Option<Vec<Output>> {
+        Some(match self.plan.on_reply(&self.daemon_name, reply)? {
+            Step::Failed(text) => vec![Output::Failed(text)],
+            Step::Create { .. } if !connected => {
+                vec![Output::Failed(format!(
+                    "{} disconnected after cloning.",
+                    self.daemon_name
+                ))]
+            }
+            Step::Create { project } => vec![
+                Output::ProjectAdd {
+                    path: project.clone(),
+                },
+                Output::WorktreeCreate {
+                    project,
+                    branch: self.names.branch.clone(),
+                    dir_name: self.names.dir_name.clone(),
+                    mode: self.mode.clone(),
+                    session: self.session.clone(),
+                },
+            ],
+        })
+    }
+
+    /// The text that ends the create when the daemon's connection drops mid-clone.
+    pub fn on_disconnect(&self) -> String {
+        format!(
+            "{} disconnected while cloning {}.",
+            self.daemon_name, self.plan.url
+        )
     }
 }
