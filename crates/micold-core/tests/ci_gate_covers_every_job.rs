@@ -171,3 +171,24 @@ fn every_exemption_names_a_real_job() {
         );
     }
 }
+
+#[test]
+fn the_gate_reads_the_result_of_every_job_it_needs() {
+    // Being in `needs:` only orders the jobs; the gate step must also read each result. A job it
+    // skips reading can fail while the jobs that need it are skipped, and a skip reads as satisfied.
+    let source = workflow();
+    let gate_header = format!("  {GATE_ID}:");
+    let body = source
+        .split_once(&gate_header)
+        .unwrap_or_else(|| panic!("no `{GATE_ID}:` job in ci.yml"))
+        .1;
+    let unread: Vec<String> = gate_needs(&source)
+        .into_iter()
+        .filter(|id| !body.contains(&format!("needs.{id}.result")))
+        .collect();
+    assert!(
+        unread.is_empty(),
+        "`{GATE_ID}` needs these jobs but never reads their result, so their failure would not \
+         block a merge: {unread:?}"
+    );
+}
