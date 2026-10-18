@@ -210,10 +210,14 @@ pub fn routed(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
 /// Apply a message to the Overview's state.
 /// An activation that sends the user to a row asks the root to reveal it; nothing else asks.
 pub fn update(state: &mut State, msg: Msg) -> Vec<crate::features::Outcome> {
-    // While an activation waits out its delay the first one stands (feature 971, FR-007).
+    // While an activation waits out its delay the first one stands (feature 971, FR-007): no
+    // card menu opens over a card that is about to take the window away (feature 972).
     if state.activating.is_some() {
         match msg {
-            Msg::Closed | Msg::Toggled { .. } | Msg::ActivationRequested(_) => return Vec::new(),
+            Msg::Closed
+            | Msg::Toggled { .. }
+            | Msg::ActivationRequested(_)
+            | Msg::CardMenuOpened { .. } => return Vec::new(),
             _ => {}
         }
     }
@@ -408,6 +412,23 @@ mod tests {
             "neither Escape nor the shortcut closes it early"
         );
         assert_eq!(state.activating, Some(activation("a")));
+    }
+
+    /// Feature 972 with 971: no card menu opens while an activation waits out its delay.
+    #[test]
+    fn a_pending_activation_opens_no_card_menu() {
+        let mut state = open();
+        assert!(state.request(activation("a")));
+        let outcomes = update(
+            &mut state,
+            Msg::CardMenuOpened {
+                location: SessionLocation::Worktree("b".into()),
+                anchor: (10, 10),
+                origin: MenuOrigin::Pointer,
+            },
+        );
+        assert!(outcomes.is_empty());
+        assert_eq!(state.card_menu, None);
     }
 
     /// T007: a project switch clears the pending activation.
