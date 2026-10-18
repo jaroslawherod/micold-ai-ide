@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #533
 - **Worktree branch**: feat/533_create-worktrees-from-jira-issues
 - **Started**: 2026-10-12
-- **Phase**: milestone M6 (implemented, in review)
-- **Next step**: finish M6 gate, Review B, PR; then a new close unit (T066, T067, T079 tick, Status Closed)
+- **Phase**: close (escalated on SC-006)
+- **Next step**: close unit: answer the SC-006 escalation, then T066, T067, tdd-verify check, Status Closed, close PR
 - **CI**: #1007 docs check red (user guide); fixed in settings.md, attempt 1
 
 ## Pull requests
@@ -23,7 +23,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #894 | M3 | merged | 2516aa28bf7a14b886d23cd17c92cfdd76e16374 |
 | #903 | M4 | merged | 7e662c9164484c5183be2c0437e2b66dd410b915 |
 | #920 | M5 | merged | dbdd56da106e94b9ddf0069fb81db2b53731029e |
-| #1007 | M6 | open | |
+| #1007 | M6 | merged | 632d37d55a42f5fe3d2f51c0a5eeec9ff2e2025d |
 
 ## Milestones
 
@@ -34,7 +34,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 | T032–T033, T035–T053, T068–T069 | full | Start a worktree from a Jira issue (list, pick, notices); kept whole: core, adapter and dialog are one wired path (no half-wired UI) | #894 | merged |
 | M4 | T054–T058, T070 | full | Search Jira issues incl. beyond the loaded list | #903 | merged |
 | M5 | T059–T065 | full | GitHub / Jira source choice per project | #920 | merged |
-| M6 | T074, T076, T077, T078, T079 | full | Keep-or-Remove prompt when switching Jira off over a stored connection (B7 bug); shell-level Jira request tests (needs a `Capabilities` test seam) | #1007 | open |
+| M6 | T074, T076, T077, T078, T079 | full | Keep-or-Remove prompt when switching Jira off over a stored connection (B7 bug); shell-level Jira request tests (needs a `Capabilities` test seam) | #1007 | merged |
 
 ## Decisions
 
@@ -87,7 +87,7 @@ None.
 
 ## Open escalation
 
-None.
+SC-006 not met (other window drops the Jira picker 3.3-3.7 s after the click; daemon write at 0.13 s; cause unknown). Chase the lag (new milestone) or accept as a recorded deviation? Recommendation: accept, record in spec/close PR, open a follow-up issue. Evidence: Keep arm without pointer motion showed no change through 2.64 s while a pointer wiggle changed A at 3.27 s, which points at redraw/frame-callback of an unfocused window in headless sway, not at settings propagation; the 3 s figure also equals keepalive PING_INTERVAL. Unproven.
 
 ## M2 review notes
 
