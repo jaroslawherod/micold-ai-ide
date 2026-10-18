@@ -80,7 +80,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M6 (T066-T072) implemented and ticked on a branch reset to origin/main after M5 merged: `core/ssh/mismatch.rs`, fixture suffix in `build.rs` + `PACKAGE_VERSION`, `links::remote_mismatch_text` used by route, worktree label and the Daemons row (`DaemonView.explanation`), `ssh_real_stale` fixture and `ssh_real_mismatch.rs` (both directions green under test-ssh), user-guide section. Next: scoped gate with review A, review B, full gate, PR.
+M6 (T066-T072) is implemented, ticked and committed (0123d9179). Done: scoped gate (only failure was the unrelated flaky `pr_list_read_a_second_ask_shares_the_read_under_way`, green alone); Review A round 1 CLEAN (3 MINOR: Unknown offer wording is by design until M7; version ordering duplicates links::version_order, accepted because mismatch.rs handles build strings and pre-release; private --target-dir for the stale build is the research R10 decision). Snapshot 3119bf6c93fa134055b4b5817033d5d9c36e995f:0123d9179934298a9280fc744ba0338b87ee3aff. test-ssh ran green incl. ssh_real_mismatch (2 tests).
+In flight when handed over: full `mise run gate` (started detached, log in the old scratchpad `fg.log`; rerun it if no green result is found) and Review B (sonnet, autopilot-reviewer, round 1; its result may be lost: dispatch it again if so).
+Next: read B's result (fix BLOCKER/MAJOR), full green `mise run gate` on the final tree, record Review rounds (Code A M6 CLEAN, Conformance B M6), rebase onto origin/main right before the final push, push, open PR "feat(489): explain a version mismatch of a remote daemon (#489)" per tasks/pr.md, record the PR number, return DONE.
 
 ## Open escalation
 
