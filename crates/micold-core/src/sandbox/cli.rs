@@ -13,7 +13,7 @@ use std::time::Duration;
 
 use super::argv;
 use super::dialect::Dialect;
-use super::exec::{CommandOutput, CommandRunner, StreamEvent};
+use super::exec::{CommandOutput, CommandRunner, RunLimits, StreamEvent};
 use super::image::{ImageChoice, OwnImage};
 use super::parse::{self, ContainerFacts, ImageFacts};
 use super::runtime::{
@@ -26,12 +26,46 @@ use super::SandboxSpec;
 pub struct CliRuntime<R: CommandRunner> {
     kind: RuntimeKind,
     runner: R,
+    /// What may end an image acquisition early (feature 806, FR-019).
+    acquire: RunLimits,
 }
 
 impl<R: CommandRunner> CliRuntime<R> {
     /// A runtime of `kind`, driven through `runner`.
     pub fn new(kind: RuntimeKind, runner: R) -> Self {
-        Self { kind, runner }
+        Self {
+            kind,
+            runner,
+            acquire: RunLimits::default(),
+        }
+    }
+
+    /// End an image acquisition after `bound`, or when `cancel` is cancelled: the runtime process
+    /// is killed and the acquisition fails (FR-019, FR-023).
+    #[must_use]
+    pub fn limiting_acquire(
+        mut self,
+        bound: Duration,
+        cancel: crate::provision::CancelToken,
+    ) -> Self {
+        self.acquire = RunLimits {
+            deadline: Some(bound),
+            cancel: Some(cancel),
+        };
+        self
+    }
+
+    /// A timeout while getting the image, naming the image and the bound.
+    fn bounded_acquire(&self, error: RuntimeError, reference: &str) -> RuntimeError {
+        match (error, self.acquire.deadline) {
+            (RuntimeError::Timeout { .. }, Some(bound)) => RuntimeError::Timeout {
+                operation: format!(
+                    "Getting the image `{reference}` (limit {} minutes)",
+                    bound.as_secs().div_ceil(60)
+                ),
+            },
+            (other, _) => other,
+        }
     }
 
     fn dialect(&self) -> Dialect {
@@ -59,6 +93,10 @@ impl<R: CommandRunner> CliRuntime<R> {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
                 Err(RuntimeError::NotInstalled { kind: self.kind })
             }
+            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => Err(RuntimeError::Cancelled),
+            Err(e) if e.kind() == std::io::ErrorKind::TimedOut => Err(RuntimeError::Timeout {
+                operation: format!("The {} command", self.kind),
+            }),
             Err(e) => Err(RuntimeError::Unknown {
                 stderr: e.to_string(),
             }),
@@ -216,11 +254,13 @@ impl<R: CommandRunner> ContainerRuntime for CliRuntime<R> {
                         StreamEvent::Quiet { elapsed } => still_working("Downloading", elapsed),
                     })
                 };
-                self.finish(
-                    self.runner
-                        .run_streaming(&self.program(), &args, &mut on_line),
-                )
-                .map_err(|e| name_the_image(e, reference))?;
+                self.finish(self.runner.run_limited(
+                    &self.program(),
+                    &args,
+                    &self.acquire,
+                    &mut on_line,
+                ))
+                .map_err(|e| self.bounded_acquire(name_the_image(e, reference), reference))?;
             }
             ImageChoice::Own(OwnImage::Archive(path)) => {
                 let args: Vec<OsString> = vec![
@@ -247,10 +287,13 @@ impl<R: CommandRunner> ContainerRuntime for CliRuntime<R> {
                         StreamEvent::Quiet { elapsed } => still_working("Importing", elapsed),
                     })
                 };
-                self.finish(
-                    self.runner
-                        .run_streaming(&self.program(), &args, &mut on_line),
-                )?;
+                self.finish(self.runner.run_limited(
+                    &self.program(),
+                    &args,
+                    &self.acquire,
+                    &mut on_line,
+                ))
+                .map_err(|e| self.bounded_acquire(e, reference))?;
                 // The archive names no reference the container could be created from, so what it
                 // loaded is tagged with the fixed one `ImageChoice::reference` returns.
                 if loaded.is_empty() {
@@ -379,4 +422,55 @@ pub fn program_of(kind: RuntimeKind) -> &'static OsStr {
 /// so the meaning is visible at the call site rather than as a bare match on an enum.
 pub fn needs_explicit_uid(mapping: IdentityMapping) -> bool {
     matches!(mapping, IdentityMapping::ExplicitUidGid)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::provision::CancelToken;
+    use crate::sandbox::runtime::RuntimeKind;
+    use std::io;
+
+    /// Answers `image inspect` with "no such image", then ends every limited run as `ended`.
+    struct EndsEarly {
+        ended: io::ErrorKind,
+    }
+
+    impl CommandRunner for EndsEarly {
+        fn run(&self, _: &OsStr, _: &[OsString]) -> io::Result<CommandOutput> {
+            Ok(CommandOutput::err(1, "Error: No such image: x"))
+        }
+
+        fn run_limited(
+            &self,
+            _: &OsStr,
+            _: &[OsString],
+            limits: &RunLimits,
+            _: &mut dyn FnMut(StreamEvent<'_>),
+        ) -> io::Result<CommandOutput> {
+            assert_eq!(limits.deadline, Some(Duration::from_secs(15 * 60)));
+            Err(io::Error::new(self.ended, "ended early"))
+        }
+    }
+
+    fn acquire(ended: io::ErrorKind) -> RuntimeError {
+        CliRuntime::new(RuntimeKind::Docker, EndsEarly { ended })
+            .limiting_acquire(Duration::from_secs(15 * 60), CancelToken::new())
+            .acquire_image(&ImageChoice::Basic, &mut |_| {})
+            .expect_err("the pull ended early")
+    }
+
+    #[test]
+    fn a_pull_past_its_bound_fails_naming_the_image_and_the_limit() {
+        let error = acquire(io::ErrorKind::TimedOut);
+        let reason = error.reason();
+        assert!(matches!(error, RuntimeError::Timeout { .. }), "{error:?}");
+        assert!(reason.contains("15 minutes"), "{reason}");
+        assert!(reason.contains(ImageChoice::Basic.reference()), "{reason}");
+    }
+
+    #[test]
+    fn a_cancelled_pull_fails_cancelled() {
+        assert_eq!(acquire(io::ErrorKind::Interrupted), RuntimeError::Cancelled);
+    }
 }

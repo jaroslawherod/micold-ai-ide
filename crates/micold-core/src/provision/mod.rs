@@ -18,7 +18,7 @@ use std::time::Duration;
 use tokio::time::Instant;
 
 pub use ai_cli::AiCliTable;
-pub use attempt::CancelToken;
+pub use attempt::{rollback, AttemptLedger, CancelToken};
 pub use failure::{FailureCause, ProvisionFailure, ProvisionWarning, Step};
 pub use keys::DaemonKeys;
 

@@ -455,8 +455,27 @@ pub fn start_sandbox(spec: &SandboxSpec<'_>) -> Sandbox {
 /// [`start_sandbox`] from `image` instead of the basic image, running `command` in it when it is not
 /// empty: the image form's "own image" entry (806 US3) and a container of a released image (US4).
 pub fn start_sandbox_from(spec: &SandboxSpec<'_>, image: &str, command: &[&str]) -> Sandbox {
+    start_sandbox_on(spec, image, command, &[])
+}
+
+/// [`start_sandbox`] on a `NoOutbound` network (the dialect's no-masquerade bridge option, as
+/// `argv::network_create` passes it): no outbound NAT, inbound publishing intact.
+pub fn start_no_outbound_sandbox(spec: &SandboxSpec<'_>) -> Sandbox {
+    start_sandbox_on(spec, &image(), &[], &["-o", dialect().no_masquerade_opt])
+}
+
+/// [`start_sandbox_from`] with `network_opts` added to the network's `create`.
+fn start_sandbox_on(
+    spec: &SandboxSpec<'_>,
+    image: &str,
+    command: &[&str],
+    network_opts: &[&str],
+) -> Sandbox {
     purge(spec.container, spec.network);
-    cli(&["network", "create", "--driver", "bridge", spec.network]);
+    let mut create = vec!["network", "create", "--driver", "bridge"];
+    create.extend_from_slice(network_opts);
+    create.push(spec.network);
+    cli(&create);
 
     let state = spec.data_home.join("micold-ai-ide");
     std::fs::create_dir_all(&state).unwrap();
@@ -709,15 +728,8 @@ const LOGIN_BOUND: Duration = Duration::from_secs(60);
 
 /// One provisioning run against the container on `port` with the step bounds given, returning
 /// the container's name, the outcome, and the steps entered in order (the row's "what it is doing").
-pub async fn provision_outcome(
-    port: u16,
-    bounds: StepBounds,
-) -> (
-    String,
-    Result<provision::Provisioned, provision::ProvisionFailure>,
-    Vec<provision::Step>,
-) {
-    provision_outcome_with(port, bounds, AiCliSelection::all(), &[]).await
+pub async fn provision_outcome(port: u16, bounds: StepBounds) -> ProvisionRan {
+    ProvisionRun::new(bounds).run(port).await
 }
 
 /// [`provision_outcome`] with the daemon's AI CLI selection and the CLIs whose stand-in install
@@ -727,99 +739,192 @@ pub async fn provision_outcome_with(
     bounds: StepBounds,
     ai_clis: AiCliSelection,
     failing: &[AiCli],
-) -> (
+) -> ProvisionRan {
+    ProvisionRun {
+        ai_clis,
+        failing: failing.to_vec(),
+        ..ProvisionRun::new(bounds)
+    }
+    .run(port)
+    .await
+}
+
+/// What a provisioning run returns: the container's name, the outcome, the steps entered in order.
+pub type ProvisionRan = (
     String,
     Result<provision::Provisioned, provision::ProvisionFailure>,
     Vec<provision::Step>,
-) {
-    let (container, client_key, known_hosts, state, script) = {
-        let started = STARTED.lock().unwrap();
-        let s = started
-            .get(&port)
-            .unwrap_or_else(|| panic!("no sandbox was started on port {port}"));
-        (
-            s.container.clone(),
-            s.keys.client_key(),
-            s.keys.known_hosts(),
-            s.state.clone(),
-            s.standin_script.clone(),
-        )
-    };
-    let host = ssh_host();
-    let login = provision::login::wait_for_login(
-        &host,
-        dialect().program,
-        &container,
-        // Short: an image with no passwd line for the container's uid (alpine, run as the host's
-        // uid) never answers `id -un`, and the whole acquire+create bound is a quarter of an hour.
-        LOGIN_BOUND.min(bounds.acquire + bounds.create_container),
-    )
-    .await
-    .unwrap_or_else(|reason| {
-        // An exited container is a failed start; anything else is an image that cannot name its
-        // user, and the step under test (Reach) fails on its own with the placeholder.
-        assert!(
-            !reason.contains("is not running"),
-            "the container {container} did not start: {reason}"
-        );
-        eprintln!("the container {container} did not name its login ({reason}); using micold");
-        "micold".to_string()
-    });
-    let platform = ClientPlatform::current();
-    let target = ProvisionTarget {
-        reach: Reach::Pinned(PinnedReach {
-            host: "127.0.0.1".to_string(),
-            port,
-            user: login,
-            key: client_key,
-            known_hosts,
-        }),
-        owned: Ownership::AppOwned {
-            ai_clis,
-            table: standin_table(&state, failing, script.as_deref()),
-            state_dir: PathBuf::from(CONTAINER_STATE),
+);
+
+/// The failure of a run that must have failed (`Provisioned` has no `Debug`, so `expect_err` cannot).
+pub fn failed(
+    outcome: Result<provision::Provisioned, provision::ProvisionFailure>,
+    why: &str,
+) -> provision::ProvisionFailure {
+    match outcome {
+        Err(failure) => failure,
+        Ok(_) => panic!("{why}"),
+    }
+}
+
+/// One provisioning run's knobs; [`ProvisionRun::new`] is the plain run of [`provision_outcome`].
+pub struct ProvisionRun {
+    pub bounds: StepBounds,
+    pub ai_clis: AiCliSelection,
+    /// The CLIs whose stand-in install fails.
+    pub failing: Vec<AiCli>,
+    /// How the installers reach the network.
+    pub egress: Egress,
+    /// Installs the slow stand-in, whose install outlives any test (a stop can land in it).
+    pub slow_install: bool,
+    /// The token the run is given.
+    pub cancel: CancelToken,
+    /// Cancel `cancel` as soon as this step is entered.
+    pub cancel_on: Option<provision::Step>,
+}
+
+impl ProvisionRun {
+    pub fn new(bounds: StepBounds) -> Self {
+        Self {
+            bounds,
+            ai_clis: AiCliSelection::all(),
+            failing: Vec::new(),
             egress: Egress::Direct,
-        },
-        bounds,
-        // As the client's container target: the image's data home rides the bridge command.
-        env: vec![(
-            "XDG_DATA_HOME".to_string(),
-            micold_core::ssh::argv::CONTAINER_DATA_HOME.to_string(),
-        )],
-    };
-    let opts = ProvisionOptions {
-        platform,
-        client_arch: std::env::consts::ARCH.to_string(),
-        timeout_secs: 30,
-        build_id: current_build_id(),
-        client_build: "micold-ai-ide/sandbox-real".to_string(),
-    };
-    let steps = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
-    let seen = steps.clone();
-    let sink: EventSink = std::sync::Arc::new(move |event| {
-        if let provision::ProvisionEvent::Entered(step) = event {
-            seen.lock().unwrap().push(step);
+            slow_install: false,
+            cancel: CancelToken::new(),
+            cancel_on: None,
         }
-    });
-    let outcome = provision::run(&host, &target, &opts, &CancelToken::new(), &sink).await;
-    let steps = steps.lock().unwrap().clone();
-    (container, outcome, steps)
+    }
+
+    /// Run provisioning against the container [`start_sandbox`] started on `port`.
+    pub async fn run(self, port: u16) -> ProvisionRan {
+        let Self {
+            bounds,
+            ai_clis,
+            failing,
+            egress,
+            slow_install,
+            cancel,
+            cancel_on,
+        } = self;
+        let (container, client_key, known_hosts, state, script) = {
+            let started = STARTED.lock().unwrap();
+            let s = started
+                .get(&port)
+                .unwrap_or_else(|| panic!("no sandbox was started on port {port}"));
+            (
+                s.container.clone(),
+                s.keys.client_key(),
+                s.keys.known_hosts(),
+                s.state.clone(),
+                s.standin_script.clone(),
+            )
+        };
+        let host = ssh_host();
+        let login = provision::login::wait_for_login(
+            &host,
+            dialect().program,
+            &container,
+            // Short: an image with no passwd line for the container's uid (alpine, run as the host's
+            // uid) never answers `id -un`, and the whole acquire+create bound is a quarter of an hour.
+            LOGIN_BOUND.min(bounds.acquire + bounds.create_container),
+        )
+        .await
+        .unwrap_or_else(|reason| {
+            // An exited container is a failed start; anything else is an image that cannot name its
+            // user, and the step under test (Reach) fails on its own with the placeholder.
+            assert!(
+                !reason.contains("is not running"),
+                "the container {container} did not start: {reason}"
+            );
+            eprintln!("the container {container} did not name its login ({reason}); using micold");
+            "micold".to_string()
+        });
+        let variant = move |cli| match (slow_install, failing.contains(&cli)) {
+            (true, _) => "slow",
+            (false, true) => "failing",
+            (false, false) => "good",
+        };
+        let target = ProvisionTarget {
+            reach: Reach::Pinned(PinnedReach {
+                host: "127.0.0.1".to_string(),
+                port,
+                user: login,
+                key: client_key,
+                known_hosts,
+            }),
+            owned: Ownership::AppOwned {
+                ai_clis,
+                table: standin_table_of(&state, variant, script.as_deref()),
+                state_dir: PathBuf::from(CONTAINER_STATE),
+                egress,
+            },
+            bounds,
+            // As the client's container target: the image's data home rides the bridge command.
+            env: vec![(
+                "XDG_DATA_HOME".to_string(),
+                micold_core::ssh::argv::CONTAINER_DATA_HOME.to_string(),
+            )],
+        };
+        let opts = ProvisionOptions {
+            platform: ClientPlatform::current(),
+            client_arch: std::env::consts::ARCH.to_string(),
+            timeout_secs: 30,
+            build_id: current_build_id(),
+            client_build: "micold-ai-ide/sandbox-real".to_string(),
+        };
+        let steps = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let seen = steps.clone();
+        let token = cancel.clone();
+        let sink: EventSink = std::sync::Arc::new(move |event| {
+            if let provision::ProvisionEvent::Entered(step) = event {
+                if cancel_on == Some(step) {
+                    token.cancel();
+                }
+                seen.lock().unwrap().push(step);
+            }
+        });
+        let outcome = provision::run(&host, &target, &opts, &cancel, &sink).await;
+        let steps = steps.lock().unwrap().clone();
+        (container, outcome, steps)
+    }
 }
 
 /// Whether a daemon process (not a bridge, whose command line ends in `remote bridge`) is running
 /// in `container`.
 pub fn daemon_running(container: &str) -> bool {
+    daemon_count(container) > 0
+}
+
+/// How many daemon processes run in `container` (a bridge is not one; see [`daemon_running`]).
+pub fn daemon_count(container: &str) -> usize {
     runtime_cmd(dialect().program)
         .args([
             "exec",
             container,
             "pgrep",
-            "-f",
+            "-fc",
             "/remote/.*/micold-daemon$",
         ])
         .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
+        .ok()
+        .and_then(|o| String::from_utf8_lossy(&o.stdout).trim().parse().ok())
+        .unwrap_or(0)
+}
+
+/// How many containers (running or not) the runtime lists under exactly `name`.
+pub fn containers_named(name: &str) -> usize {
+    cli_out(&[
+        "ps",
+        "-a",
+        "--filter",
+        &format!("name=^{name}$"),
+        "--format",
+        "{{.Names}}",
+    ])
+    .lines()
+    .filter(|l| !l.trim().is_empty())
+    .count()
 }
 
 /// Provision the container's daemon (which records it for the entrypoint), disconnect, and restart
@@ -954,23 +1059,43 @@ pub fn standin_table(
     failing: &[micold_core::session::AiCli],
     script: Option<&str>,
 ) -> AiCliTable {
+    standin_table_of(
+        state,
+        |cli| {
+            if failing.contains(&cli) {
+                "failing"
+            } else {
+                "good"
+            }
+        },
+        script,
+    )
+}
+
+/// [`standin_table`] choosing each CLI's stand-in variant (`standin-cli/<variant>`) by `variant`.
+fn standin_table_of(
+    state: &Path,
+    variant: impl Fn(micold_core::session::AiCli) -> &'static str,
+    script: Option<&str>,
+) -> AiCliTable {
     let dir = state.join("standin");
     let in_container = |tarball: PathBuf| {
         PathBuf::from(CONTAINER_STATE)
             .join("standin")
             .join(tarball.file_name().expect("tarball name"))
     };
-    let good = in_container(pack_standin("good", &dir, script));
-    let bad = in_container(pack_standin("failing", &dir, None));
+    // Packed once per variant, only the ones used; the good one carries the suite's script.
+    let mut packed: BTreeMap<&str, PathBuf> = BTreeMap::new();
     AiCliTable::from_tarballs(micold_core::session::AiCli::ALL.into_iter().map(|cli| {
-        (
-            cli,
-            if failing.contains(&cli) {
-                bad.clone()
-            } else {
-                good.clone()
-            },
-        )
+        let name = variant(cli);
+        let tarball = packed.entry(name).or_insert_with(|| {
+            in_container(pack_standin(
+                name,
+                &dir,
+                (name == "good").then_some(script).flatten(),
+            ))
+        });
+        (cli, tarball.clone())
     }))
 }
 

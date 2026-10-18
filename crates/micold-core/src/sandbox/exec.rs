@@ -81,6 +81,18 @@ pub enum StreamEvent<'a> {
     Quiet { elapsed: Duration },
 }
 
+/// What may end a streaming run early: a deadline, and a cancel (feature 806, FR-019).
+///
+/// The run kills its child and fails with `io::ErrorKind::TimedOut` or `Interrupted`, which
+/// [`CliRuntime`](super::cli::CliRuntime) turns into the matching [`RuntimeError`](super::runtime::RuntimeError).
+#[derive(Debug, Clone, Default)]
+pub struct RunLimits {
+    /// The longest the process may run.
+    pub deadline: Option<Duration>,
+    /// Cancelling it kills the process.
+    pub cancel: Option<crate::provision::CancelToken>,
+}
+
 /// Runs one container-runtime invocation. The only impure operation in the sandbox layer.
 ///
 /// Implementors must not interpret the arguments: classification of what an invocation *meant*
@@ -112,6 +124,22 @@ pub trait CommandRunner: Send + Sync {
         }
         Ok(out)
     }
+
+    /// [`Self::run_streaming`] that `limits` can end early. The default only honours a cancel that
+    /// came before the run (a fake's canned output is already complete); [`SystemRunner`] kills the
+    /// process.
+    fn run_limited(
+        &self,
+        program: &OsStr,
+        args: &[OsString],
+        limits: &RunLimits,
+        on_event: &mut dyn FnMut(StreamEvent<'_>),
+    ) -> io::Result<CommandOutput> {
+        if limits.cancel.as_ref().is_some_and(|c| c.is_cancelled()) {
+            return Err(io::Error::new(io::ErrorKind::Interrupted, "cancelled"));
+        }
+        self.run_streaming(program, args, on_event)
+    }
 }
 
 /// Spawns the runtime for real.
@@ -134,6 +162,16 @@ impl CommandRunner for SystemRunner {
         &self,
         program: &OsStr,
         args: &[OsString],
+        on_event: &mut dyn FnMut(StreamEvent<'_>),
+    ) -> io::Result<CommandOutput> {
+        self.run_limited(program, args, &RunLimits::default(), on_event)
+    }
+
+    fn run_limited(
+        &self,
+        program: &OsStr,
+        args: &[OsString],
+        limits: &RunLimits,
         on_event: &mut dyn FnMut(StreamEvent<'_>),
     ) -> io::Result<CommandOutput> {
         use std::io::{BufRead, BufReader, Read};
@@ -179,7 +217,23 @@ impl CommandRunner for SystemRunner {
         drop(tx);
 
         let (mut stdout, mut stderr) = (String::new(), String::new());
+        let mut ended_early = None;
         loop {
+            // Checked every line and every tick, so a cancel or the deadline is noticed within
+            // `QUIET_TICK` even from a process that prints nothing.
+            if ended_early.is_none() {
+                let cause = if limits.cancel.as_ref().is_some_and(|c| c.is_cancelled()) {
+                    Some((io::ErrorKind::Interrupted, "cancelled"))
+                } else if limits.deadline.is_some_and(|d| started.elapsed() >= d) {
+                    Some((io::ErrorKind::TimedOut, "ran past its time limit"))
+                } else {
+                    None
+                };
+                if let Some(cause) = cause {
+                    let _ = child.kill();
+                    ended_early = Some(cause);
+                }
+            }
             match rx.recv_timeout(QUIET_TICK) {
                 Ok((is_stderr, line)) => {
                     on_event(StreamEvent::Line(line.trim_end()));
@@ -196,6 +250,9 @@ impl CommandRunner for SystemRunner {
         }
 
         let status = child.wait()?;
+        if let Some((kind, why)) = ended_early {
+            return Err(io::Error::new(kind, why));
+        }
         Ok(CommandOutput {
             code: status.code(),
             stdout,
@@ -307,6 +364,16 @@ impl<R: CommandRunner + ?Sized> CommandRunner for &R {
         on_event: &mut dyn FnMut(StreamEvent<'_>),
     ) -> io::Result<CommandOutput> {
         (**self).run_streaming(program, args, on_event)
+    }
+
+    fn run_limited(
+        &self,
+        program: &OsStr,
+        args: &[OsString],
+        limits: &RunLimits,
+        on_event: &mut dyn FnMut(StreamEvent<'_>),
+    ) -> io::Result<CommandOutput> {
+        (**self).run_limited(program, args, limits, on_event)
     }
 }
 
@@ -437,5 +504,71 @@ mod tests {
             .run(OsStr::new("micold-no-such-runtime-binary"), &[])
             .expect_err("a missing program cannot succeed");
         assert_eq!(err.kind(), io::ErrorKind::NotFound);
+    }
+
+    /// A process that outlives its limits, as a `sh` script (every Linux and macOS runner has one).
+    #[cfg(unix)]
+    fn long_sleep() -> (OsString, Vec<OsString>) {
+        (
+            OsString::from("sh"),
+            vec!["-c".into(), "exec sleep 30".into()],
+        )
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_run_past_its_deadline_is_killed_and_fails_timed_out() {
+        let (program, args) = long_sleep();
+        let limits = RunLimits {
+            deadline: Some(Duration::from_millis(300)),
+            cancel: None,
+        };
+        let started = std::time::Instant::now();
+        let err = SystemRunner
+            .run_limited(&program, &args, &limits, &mut |_| {})
+            .expect_err("a 30 s sleep cannot finish in 300 ms");
+        assert_eq!(err.kind(), io::ErrorKind::TimedOut);
+        assert!(
+            started.elapsed() < Duration::from_secs(10),
+            "the child was waited out, not killed"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_cancel_kills_the_child_of_a_run() {
+        let (program, args) = long_sleep();
+        let token = crate::provision::CancelToken::new();
+        let limits = RunLimits {
+            deadline: None,
+            cancel: Some(token.clone()),
+        };
+        let canceller = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(300));
+            token.cancel();
+        });
+        let started = std::time::Instant::now();
+        let err = SystemRunner
+            .run_limited(&program, &args, &limits, &mut |_| {})
+            .expect_err("cancelled");
+        canceller.join().unwrap();
+        assert_eq!(err.kind(), io::ErrorKind::Interrupted);
+        assert!(started.elapsed() < Duration::from_secs(10));
+    }
+
+    #[test]
+    fn a_run_cancelled_before_it_starts_never_spawns() {
+        let token = crate::provision::CancelToken::new();
+        token.cancel();
+        let limits = RunLimits {
+            deadline: None,
+            cancel: Some(token),
+        };
+        let runner = RecordingRunner::new();
+        let err = runner
+            .run_limited(OsStr::new("docker"), &[], &limits, &mut |_| {})
+            .expect_err("cancelled");
+        assert_eq!(err.kind(), io::ErrorKind::Interrupted);
+        assert!(runner.calls().is_empty());
     }
 }

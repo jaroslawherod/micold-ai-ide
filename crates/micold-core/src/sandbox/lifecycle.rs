@@ -21,6 +21,7 @@ use super::runtime::{
     ContainerId, ContainerRuntime, Progress, RuntimeCapabilities, RuntimeError, UnsatisfiableLimit,
 };
 use super::{MountSet, SandboxProfile, SandboxSpec};
+use crate::provision::{AttemptLedger, CancelToken};
 
 /// Where the sandbox is in coming up (data-model §7).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -266,7 +267,46 @@ where
     R: ContainerRuntime,
     F: FnOnce(&RuntimeCapabilities) -> SandboxSpec,
 {
+    bring_up_attempt(
+        runtime,
+        profile,
+        mounts,
+        spec_for,
+        &CancelToken::new(),
+        &mut AttemptLedger::new(),
+        observe,
+    )
+}
+
+/// [`bring_up`] as one cancellable attempt (feature 806, FR-019, FR-020, FR-023): `cancel` is
+/// checked between steps, and `ledger` records the container this attempt creates so the caller can
+/// [`rollback`](crate::provision::rollback) a failure or a cancel.
+///
+/// A `create` that loses a name race to another client's `create` looks the winner up and adopts
+/// it, once (R12): one container, never a second attempt beside it.
+pub fn bring_up_attempt<R, F>(
+    runtime: &R,
+    profile: &SandboxProfile,
+    mounts: &MountSet,
+    spec_for: F,
+    cancel: &CancelToken,
+    ledger: &mut AttemptLedger,
+    observe: &mut dyn FnMut(SandboxState),
+) -> Result<Started, Failure>
+where
+    R: ContainerRuntime,
+    F: FnOnce(&RuntimeCapabilities) -> SandboxSpec,
+{
+    let stopped = |stage| {
+        cancel.is_cancelled().then_some(Failure {
+            stage,
+            error: RuntimeError::Cancelled,
+        })
+    };
     observe(SandboxState::Probing);
+    if let Some(failure) = stopped(Stage::Probing) {
+        return Err(failure);
+    }
     let capabilities = runtime.probe().map_err(|error| Failure {
         stage: Stage::Probing,
         error,
@@ -275,6 +315,9 @@ where
     let unsatisfiable = super::runtime::reconcile(profile, &capabilities);
 
     acquire(runtime, &profile.image, observe)?;
+    if let Some(failure) = stopped(Stage::Acquiring) {
+        return Err(failure);
+    }
 
     observe(SandboxState::Starting);
     let spec = spec_for(&capabilities);
@@ -296,14 +339,14 @@ where
     // Read before the decision is consumed, and only for the two branches that keep a container
     // somebody else created: what *it* mounts is what a sandboxed session's paths can reach, and
     // this client's own mount set describes the container it would have made instead (C16c).
-    let mounted = match &decision {
+    let mut mounted = match &decision {
         Adoption::Attach(_) | Adoption::Start(_) | Adoption::Legacy(_) => {
             existing.as_ref().map(|f| f.mount_destinations.clone())
         }
         Adoption::Create | Adoption::Replace { .. } => None,
     };
 
-    let legacy = matches!(decision, Adoption::Legacy(_));
+    let mut legacy = matches!(decision, Adoption::Legacy(_));
     let id = match decision {
         Adoption::Attach(id) | Adoption::Legacy(id) => id,
         Adoption::Start(id) => {
@@ -313,7 +356,20 @@ where
             })?;
             id
         }
-        Adoption::Create => create_and_start(runtime, &spec)?,
+        Adoption::Create => {
+            match create_and_start(runtime, &spec, profile.image.reference(), ledger)? {
+                Created::Ours(id) => id,
+                Created::Won {
+                    id,
+                    facts,
+                    legacy: won_legacy,
+                } => {
+                    mounted = Some(facts.mount_destinations);
+                    legacy = won_legacy;
+                    id
+                }
+            }
+        }
         Adoption::Replace { id, .. } => {
             // Replace, never accumulate beside: a second container under another name would leave
             // the first holding the control port and the state directory.
@@ -321,7 +377,18 @@ where
                 stage: Stage::Creating,
                 error,
             })?;
-            create_and_start(runtime, &spec)?
+            match create_and_start(runtime, &spec, profile.image.reference(), ledger)? {
+                Created::Ours(id) => id,
+                Created::Won {
+                    id,
+                    facts,
+                    legacy: won_legacy,
+                } => {
+                    mounted = Some(facts.mount_destinations);
+                    legacy = won_legacy;
+                    id
+                }
+            }
         }
     };
 
@@ -335,19 +402,96 @@ where
     })
 }
 
+/// How a `create` ended.
+enum Created {
+    /// This attempt made the container (it is in the ledger).
+    Ours(ContainerId),
+    /// Another client made it first; this attempt attached to it.
+    Won {
+        id: ContainerId,
+        facts: ContainerFacts,
+        legacy: bool,
+    },
+}
+
 fn create_and_start<R: ContainerRuntime>(
     runtime: &R,
     spec: &SandboxSpec,
-) -> Result<ContainerId, Failure> {
-    let id = runtime.create(spec).map_err(|error| Failure {
-        stage: Stage::Creating,
-        error,
-    })?;
+    expected_image: &str,
+    ledger: &mut AttemptLedger,
+) -> Result<Created, Failure> {
+    let id = match runtime.create(spec) {
+        Ok(id) => id,
+        Err(RuntimeError::NameInUse { .. }) => return adopt_winner(runtime, spec, expected_image),
+        Err(error) => {
+            // A `create` stopped or timed out half way may have made the container without ever
+            // reporting an id: it is rolled back by name. Any other refusal made nothing.
+            if matches!(
+                error,
+                RuntimeError::Cancelled | RuntimeError::Timeout { .. }
+            ) {
+                ledger.record_created(ContainerId(spec.name.clone()));
+            }
+            return Err(Failure {
+                stage: Stage::Creating,
+                error,
+            });
+        }
+    };
+    ledger.record_created(id.clone());
     runtime.start(&id).map_err(|error| Failure {
         stage: Stage::Starting,
         error,
     })?;
-    Ok(id)
+    Ok(Created::Ours(id))
+}
+
+/// Another client created the container between our `find` and our `create`. Look it up again and
+/// use it as it is — started if it was only created — and do not try a second time (FR-023).
+fn adopt_winner<R: ContainerRuntime>(
+    runtime: &R,
+    spec: &SandboxSpec,
+    expected_image: &str,
+) -> Result<Created, Failure> {
+    let fail = |stage, error| Failure { stage, error };
+    let facts = runtime
+        .find(&spec.name)
+        .map_err(|e| fail(Stage::Creating, e))?
+        .ok_or_else(|| {
+            fail(
+                Stage::Creating,
+                RuntimeError::NameInUse {
+                    name: spec.name.clone(),
+                },
+            )
+        })?;
+    match adopt(Some(&facts), expected_image) {
+        Adoption::Attach(id) => Ok(Created::Won {
+            id,
+            facts,
+            legacy: false,
+        }),
+        Adoption::Legacy(id) => Ok(Created::Won {
+            id,
+            facts,
+            legacy: true,
+        }),
+        Adoption::Start(id) => {
+            runtime.start(&id).map_err(|e| fail(Stage::Starting, e))?;
+            Ok(Created::Won {
+                id,
+                facts,
+                legacy: false,
+            })
+        }
+        // The winner is not what we would have made: replacing it would end what it is running.
+        Adoption::Create | Adoption::Replace { .. } => Err(fail(
+            Stage::Creating,
+            RuntimeError::NameInUse {
+                name: spec.name.clone(),
+            },
+        )),
+    }
 }
 
 fn acquire<R: ContainerRuntime>(
@@ -769,9 +913,32 @@ mod mounted_tests {
     /// A runtime that answers every call, with whatever `find` should report already there.
     struct Fake {
         existing: Option<ContainerFacts>,
+        /// What a rival client created: `find` reports it once `create` has been called.
+        winner: Option<ContainerFacts>,
+        /// What `create` answers instead of success.
+        create_error: Option<RuntimeError>,
+        calls: std::sync::Mutex<Vec<&'static str>>,
     }
 
     impl Fake {
+        fn seen(existing: Option<ContainerFacts>) -> Self {
+            Self {
+                existing,
+                winner: None,
+                create_error: None,
+                calls: std::sync::Mutex::default(),
+            }
+        }
+
+        fn called(&self, verb: &'static str) -> usize {
+            self.calls
+                .lock()
+                .unwrap()
+                .iter()
+                .filter(|c| **c == verb)
+                .count()
+        }
+
         fn caps() -> RuntimeCapabilities {
             RuntimeCapabilities {
                 kind: RuntimeKind::Docker,
@@ -810,9 +977,14 @@ mod mounted_tests {
             })
         }
         fn create(&self, _spec: &SandboxSpec) -> Result<ContainerId, RuntimeError> {
-            Ok(ContainerId("created".to_string()))
+            self.calls.lock().unwrap().push("create");
+            match &self.create_error {
+                Some(error) => Err(error.clone()),
+                None => Ok(ContainerId("created".to_string())),
+            }
         }
         fn start(&self, _id: &ContainerId) -> Result<(), RuntimeError> {
+            self.calls.lock().unwrap().push("start");
             Ok(())
         }
         fn stop(&self, _id: &ContainerId) -> Result<(), RuntimeError> {
@@ -827,6 +999,9 @@ mod mounted_tests {
             })
         }
         fn find(&self, _name: &str) -> Result<Option<ContainerFacts>, RuntimeError> {
+            if self.called("create") > 0 && self.winner.is_some() {
+                return Ok(self.winner.clone());
+            }
             Ok(self.existing.clone())
         }
         fn logs(&self, _id: &ContainerId, _lines: usize) -> Result<Vec<String>, RuntimeError> {
@@ -860,7 +1035,7 @@ mod mounted_tests {
         }
     }
 
-    fn run(existing: Option<ContainerFacts>) -> Started {
+    fn profile_mounts_spec() -> (SandboxProfile, MountSet, SandboxSpec) {
         let profile = SandboxProfile::default();
         let mounts = mounts();
         let spec = SandboxSpec {
@@ -875,8 +1050,119 @@ mod mounted_tests {
             time_zone: None,
             home: PathBuf::from("/home/u"),
         };
-        bring_up(&Fake { existing }, &profile, &mounts, |_| spec, &mut |_| {})
-            .expect("the fake answers every call")
+        (profile, mounts, spec)
+    }
+
+    fn run(existing: Option<ContainerFacts>) -> Started {
+        let (profile, mounts, spec) = profile_mounts_spec();
+        bring_up(
+            &Fake::seen(existing),
+            &profile,
+            &mounts,
+            |_| spec,
+            &mut |_| {},
+        )
+        .expect("the fake answers every call")
+    }
+
+    /// One cancellable attempt against `fake`.
+    fn attempt(fake: &Fake, cancel: &CancelToken) -> (Result<Started, Failure>, AttemptLedger) {
+        let (profile, mounts, spec) = profile_mounts_spec();
+        let mut ledger = AttemptLedger::new();
+        let result = bring_up_attempt(
+            fake,
+            &profile,
+            &mounts,
+            |_| spec,
+            cancel,
+            &mut ledger,
+            &mut |_| {},
+        );
+        (result, ledger)
+    }
+
+    fn basic() -> String {
+        SandboxProfile::default().image.reference().to_string()
+    }
+
+    #[test]
+    fn a_container_made_by_the_attempt_is_recorded_in_its_ledger() {
+        let (result, ledger) = attempt(&Fake::seen(None), &CancelToken::new());
+        assert_eq!(result.unwrap().id, ContainerId("created".into()));
+        assert_eq!(
+            ledger.created_container,
+            Some(ContainerId("created".into()))
+        );
+    }
+
+    #[test]
+    fn an_adopted_container_is_not_in_the_ledger() {
+        let fake = Fake::seen(Some(existing(&basic(), true)));
+        let (result, ledger) = attempt(&fake, &CancelToken::new());
+        result.unwrap();
+        assert!(ledger.is_empty());
+        assert_eq!(fake.called("create"), 0);
+    }
+
+    #[test]
+    fn a_create_that_loses_a_name_race_adopts_the_winner_once() {
+        let mut fake = Fake::seen(None);
+        fake.create_error = Some(RuntimeError::NameInUse {
+            name: "micold-sandbox".into(),
+        });
+        fake.winner = Some(existing(&basic(), true));
+        let (result, ledger) = attempt(&fake, &CancelToken::new());
+        let started = result.expect("the winner is attached to");
+        assert_eq!(started.id, ContainerId("9f2b1c4d7e8a".into()));
+        assert_eq!(fake.called("create"), 1, "no second create");
+        assert!(ledger.is_empty(), "the winner is not ours to roll back");
+        assert_eq!(started.mounted.as_deref().map(<[String]>::len), Some(2));
+    }
+
+    #[test]
+    fn a_name_conflict_with_no_container_to_adopt_fails_without_retrying() {
+        let mut fake = Fake::seen(None);
+        fake.create_error = Some(RuntimeError::NameInUse {
+            name: "micold-sandbox".into(),
+        });
+        let (result, ledger) = attempt(&fake, &CancelToken::new());
+        assert!(matches!(
+            result.unwrap_err().error,
+            RuntimeError::NameInUse { .. }
+        ));
+        assert_eq!(fake.called("create"), 1);
+        assert!(ledger.is_empty());
+    }
+
+    #[test]
+    fn a_cancelled_attempt_creates_nothing() {
+        let cancel = CancelToken::new();
+        cancel.cancel();
+        let fake = Fake::seen(None);
+        let (result, ledger) = attempt(&fake, &cancel);
+        assert_eq!(result.unwrap_err().error, RuntimeError::Cancelled);
+        assert_eq!(fake.called("create"), 0);
+        assert!(ledger.is_empty());
+    }
+
+    #[test]
+    fn a_create_stopped_half_way_is_recorded_by_name_for_rollback() {
+        let mut fake = Fake::seen(None);
+        fake.create_error = Some(RuntimeError::Cancelled);
+        let (result, ledger) = attempt(&fake, &CancelToken::new());
+        assert!(result.is_err());
+        assert_eq!(
+            ledger.created_container,
+            Some(ContainerId("micold-sandbox".into()))
+        );
+    }
+
+    #[test]
+    fn a_create_the_runtime_refused_made_nothing_to_roll_back() {
+        let mut fake = Fake::seen(None);
+        fake.create_error = Some(RuntimeError::PortUnavailable { port: 7727 });
+        let (_, ledger) = attempt(&fake, &CancelToken::new());
+        assert!(ledger.is_empty());
     }
 
     /// U58: a container this bring-up made shares exactly this mount set, so there is nothing to

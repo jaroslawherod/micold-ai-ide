@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #806
 - **Worktree branch**: claude/project-thread-uwrpqv
 - **Started**: 2026-10-17
-- **Phase**: M6
-- **Next step**: M6 continues from *Handover*
+- **Phase**: M7
+- **Next step**: M7 continues from *Handover*
 
 ## Pull requests
 
@@ -23,6 +23,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #995 | M4 AI CLI install step + registry-only relay | merged | abe058a2424ea0551edb2f6667ac732064434557 |
 | #1018 | M5b part 1 (image pin, bridge env, notices, migration) | merged | 6dbe317600b3c8430dd392b5a94293c85e6fbf2f |
 | #1027 | M5c (real-runtime provision suite, form tests, row text) | merged | dc2d379365c2379b201dca8d3a6fadd40f39c632 |
+| #1043 | M6 per-daemon AI CLI selection, install warnings | merged | f0ca1c0d133038f1e710a4a616cbbfbf994f4ace |
 | #998 | M5 subset (container daemons over SSH on the basic image; pulled in T047, T055, T065) | merged | d526eaca82b43d60d5f2eb85926259f0fefc45e4 |
 
 ## Milestones
@@ -36,7 +37,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M5 | T042–T044, T049–T054, T057, T060, T061 | full | container daemons on the pinned basic image over SSH (`Dial::ContainerSsh`), two-entry image form, migration read-repair, legacy adoption; shipped as a subset (orchestrator limit on parts) | (opened by the orchestrator) | gate green at c43d8040 |
 | M5b | T045, T046, T048, T056, T058, T059, T062–T064, T066–T070 (T047, T055, T065 done in #998) | full | the rest of M5: notices and gated legacy restart, tests, real-runtime suites on the basic image, CI pin check, user guide, visual pass | — | pending (new milestone) |
 | M6 | T071–T074, T076, T077 (T075, T078 open, see Follow-ups) | full | per-daemon AI CLI selection; install warnings in the row | (opened by the orchestrator) | gate green at 88af2fbe |
-| M7 | T079–T086 | full | step bounds, cancel, rollback, concurrent starts; end-to-end suite in CI | — | pending |
+| M7 | T079–T086 (+ M6b folded in: T075 NoOutbound cases, T078 visual pass) | full | step bounds, cancel, rollback, concurrent starts; end-to-end suite in CI | — | implemented, unreviewed, gate not run |
 
 Milestone notes:
 - M1 is the basic image, not the P1 story (milestones rule 1): US1 needs `BASIC_IMAGE` pinned to a digest that only exists after `basic-image.yml` runs on `main`, so the image must merge first. The shared provisioning follows as M2 because #686 waits on it (unit scope).
@@ -113,8 +114,9 @@ Milestone notes:
 
 ## Handover
 
-M6 shipped as a gated subset (unit 2). **Done**: T071–T074, T076, T077; the install warnings (`ProvisionEvent::Warned` from the install step; the row lists them via `DaemonView.install_warnings`, recent errors name the CLI with the output, the next attempt clears them; install lines show in the activity text; container rows now show start activity); the user guide section (T078 docs); the empty-selection and fail-fast-login follow-ups (`wait_for_login` fails at once when `id -un` says `cannot find name for user ID`, with a reason naming the image); T075 partly (failing install, deselect, empty selection; compile-checked only).
-**Open (new milestone M6b)**: T075 `NoOutbound` real-runtime cases (relay install completes; forced relay failure names `PostureBlocksDownload` within its bound); T078 visual pass for quickstart §B 1 and 5 with evidence under `visual/` (README rows for the AI CLI section and an install warning are still NOT-CHECKABLE).
+M7 unit 1 (context ~150k). **Done, uncommitted before this commit, clippy `--workspace --all-targets -D warnings` clean, unit tests green** (`cargo test -p micold-core --lib -- provision::attempt sandbox::`, `-p micold-client --bins -- shell::sandbox`): T079–T086 ticked. `AttemptLedger{created_container, started_daemon: Option<ContainerId>}` + `rollback` (attempt.rs); `RunLimits`/`CommandRunner::run_limited` (SystemRunner kills the child on deadline/cancel), `CliRuntime::limiting_acquire` (15 min, `Timeout` naming image and limit, `Cancelled`), new `RuntimeError::{Cancelled, NameInUse}`; `lifecycle::bring_up_attempt` (cancel between steps, ledger, re-adopt a create name-race winner once; `bring_up` wraps it); client `start_attempt`, `InFlight` holds a `CancelToken`, rollback on failure or cancel; docs (ci-pipeline.md, user guide "How long each step may take"). CI already runs `sandbox_real_*` of micold-daemon (both T086 jobs); no workflow change needed. A worker added real-runtime tests (compile-checked, clippy clean): NoOutbound relay install; forced relay failure (asserts failure on InstallAiClis within bound, NOT the exact `PostureBlocksDownload`: `install_step_with` is private; expose it or add a relay-starter seam to assert the cause); stop during a long install; two concurrent starts; FR-022 failing provision beside a connected daemon. Its `roll_back_cancelled_start()` helper is `rm -f`, near-tautological: swap for `rollback(ledger, runtime)`.
+**Gaps to close or log as follow-ups**: (1) `started_daemon` is not recorded anywhere yet: the SSH attempt (`container_attempt`, daemon.rs) still uses `CancelToken::new()` and does not stop the container whose daemon it started; wire it (record on `Entered(Step::Start)`, cancel from the shell's `InFlight`) or log it. (2) Visual pass worker (quickstart §B 1 and 5, evidence `visual/`, README rows) was still running at handover: check `git status` under specs/.../visual/ and README rows; if empty, rerun per the cloud-visual-pass memory.
+**Next**: finish gaps, `scripts/autopilot/review-snapshot.sh`, review A (code-review high) and review B (conformance, sonnet, via `claude -p --agent autopilot-reviewer`), merge origin/main, `scripts/gate.sh` detached (wipe target-shared/debug if <15 GB), write $SCRATCHPAD/pr-title ("#806: Container daemon: … — M7 …") and pr-body.md, push `git push --force-with-lease=claude/project-thread-uwrpqv: -u origin HEAD`.
 
 ## Open escalation
 

@@ -10,8 +10,10 @@ mod sandbox_real_support;
 
 use std::time::Duration;
 
+use micold_core::provision::{FailureCause, Step, StepBounds};
+
 use sandbox_real_support::{
-    open_session, start_container_daemons, Terminal, FAKE_ECHO, FAKE_READY,
+    failed, open_session, start_container_daemons, ProvisionRun, Terminal, FAKE_ECHO, FAKE_READY,
 };
 
 #[tokio::test]
@@ -28,6 +30,54 @@ async fn sandbox_real_multi_daemon_container_session_produces_output_and_accepts
     term.converse(
         "hello-container",
         &format!("{FAKE_ECHO}hello-container"),
+        Duration::from_secs(20),
+    )
+    .await;
+}
+
+/// FR-022: one daemon whose provisioning fails (its install outlives a short bound) does not
+/// disturb another that stays connected: the second keeps answering input while the first fails.
+#[tokio::test]
+async fn sandbox_real_multi_daemon_container_a_failing_provision_leaves_the_other_responsive() {
+    let dir = tempfile::tempdir().unwrap();
+    let daemons = start_container_daemons(dir.path(), "md-provision", 17780, 2);
+    let (steady, failing) = (&daemons[0], &daemons[1]);
+
+    let (mut conn, serial) = steady.connect().await;
+    let screen = open_session(&mut conn, &steady.project, steady.session, &steady.log).await;
+    let mut term = Terminal::new(
+        &mut conn,
+        steady.session,
+        screen,
+        &steady.container,
+        &steady.log,
+        serial,
+    );
+    term.wait_for(FAKE_READY, Duration::from_secs(20)).await;
+
+    let bounds = StepBounds {
+        install: Duration::from_secs(5),
+        ..StepBounds::container()
+    };
+    let failing_run = ProvisionRun {
+        slow_install: true,
+        ..ProvisionRun::new(bounds)
+    }
+    .run(failing.port);
+    let expect = format!("{FAKE_ECHO}still-here");
+    let responsive = term.converse("still-here", &expect, Duration::from_secs(20));
+    let ((_, outcome, _), ()) = tokio::join!(failing_run, responsive);
+
+    let failure = failed(outcome, "the slow install outlives its bound");
+    assert_eq!(failure.step, Step::InstallAiClis);
+    assert!(
+        matches!(failure.cause, FailureCause::TimedOut { .. }),
+        "{:?}",
+        failure.cause
+    );
+    term.converse(
+        "after-failure",
+        &format!("{FAKE_ECHO}after-failure"),
         Duration::from_secs(20),
     )
     .await;
