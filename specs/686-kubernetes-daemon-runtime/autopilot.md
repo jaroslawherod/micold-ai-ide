@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-xelisc
 - **Started**: 2026-10-17
 - **Phase**: implement
-- **Next step**: M7 pushed, gate green (scripts/gate.sh); PR files in the scratchpad (pr-title/pr-body-686-M7); orchestrator opens the PR, waits for CI and merges. Then M8.
+- **Next step**: M8 implemented (T057–T062, T101 ticked); full gate, reviews A and B, then PR files in the scratchpad (pr-title/pr-body-686-M8); orchestrator opens the PR and merges. Then M9.
 
 ## Pull requests
 
@@ -26,6 +26,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1005 | M4b | merged | 21ad41546a8228d56012eac2ae359387b0981700 |
 | #1011 | M5 | merged | c7d0dbf8393d4686551c81f404bad4028978e1f7 |
 | #1015 | M6 | merged | 9639f49ae112f0c73155642adb9dc4a1dfa34bf6 |
+| #1025 | M7 | merged | d6d74c272bd4bcc76d081ec171e2e63a00c448f1 |
 
 ## Milestones
 
@@ -39,9 +40,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M4a | T024, T130, T066, T031, T131, T070, T032 | full | Kubernetes form via Edit (Add entry hidden), shared resources fields, credentials list | — | merged (#1000) |
 | M4b | T083, T084, T080, T132, T085, T086, T082, T133, T129 | full | Placement fields, Stop/Remove/Forget locally/Logs from the row, Start → Unavailable | — | merged (#1005) |
 | M5 | T134, T022, T074, T135, T030, T077, T136 | full | (#806) Copy + Connect over SSH through the relay; failures at client level | — | merged (#1011) |
-| M6 | T138, T139, T141, T142, T033, T140 | full | (#806) AI CLI install, drift prompt, Add entry, user guide 🎯 MVP | — | implemented, gate green, PR pending |
-| M7 | T047–T055, T100 | full | (#806) Clone + worktrees in the pod (RepoClone) | — | in progress |
-| M8 | T057, T058, T060, T061, T062, T101 | full | (#806) Reconnect; pod gone → stopped with reason | — | blocked on #806 |
+| M6 | T138, T139, T141, T142, T033, T140 | full | (#806) AI CLI install, drift prompt, Add entry, user guide 🎯 MVP | — | merged (#1015) |
+| M7 | T047–T055, T100 | full | (#806) Clone + worktrees in the pod (RepoClone) | — | merged (#1025) |
+| M8 | T057, T058, T060, T061, T062, T101 | full | (#806) Reconnect; pod gone → stopped with reason | — | in progress |
 | M9 | T088–T096, T105 | full | (#806) kube_real_* suite, `mise run test-kube`, CI job kube-cluster | — | blocked on #806 |
 Cut notes (revision 2): tasks.md "Revision 2 task map" lists kept/changed/removed T001–T105; new tasks T106–T143 (T137 unused; T143 is M1a's persistence test rework). Order: everything independent of #806 first (M1a–M4b, all `docs-not-needed`: Kubernetes cannot be added before M6), then the #806-blocked milestones (M5–M9). US1 split along the #806 boundary: connect (M5) before CLI install + Add entry (M6), so the Add entry appears only when US1.1 works (no half-wired UI). User-guide tasks T046/T071/T078/T087 folded into T033 (M6), since the guide page appears with the Add entry. Polish T097–T098: close unit.
 stash@{0} survivors (all used by M1a–M2, stash dropped 2026-10-18; backed up in /mnt/project-files/backups/686-m1-wip.bundle): keep `kubeconfig.rs` (T020/T026), `lifecycle.rs` (T079/T081), `manifest.rs` (T019, after the SSH image/env/port 2222/access-secret mount changes), `start_tests.rs` (T021, drop the `Image` phase and the volume-size refusal; `Tunnel` = identification line), `Quantity::{to_k8s, parse_k8s}`, `ResourceNames::all_secrets`, `ObjectKind::noun`, `KubeFailure::StopTimeout` + `From<ApiFailure>`, `FakeCluster::hold_on_delete`. Discard `StartPlan::for_image`. Design revision part 4: plan fixed by tasks unit — data-model StartPlan and contract §3 item 1 say `Tunnel` reads the identification line from one `Cluster::port_forward` stream; the client relay is first used in M5.
@@ -61,6 +62,10 @@ stash@{0} survivors (all used by M1a–M2, stash dropped 2026-10-18; backed up i
 | 9 | implement M1a | FR-004 image source | owner (verbatim): "use basic image with ssh where you can copy daemon and install ai cli" — replaces decision 1: no build/push/registry; the pod runs a basic image with sshd, the client copies the daemon binary in over SSH and installs the AI CLIs (with decision 8). Changes the start sequence (no `Image` phase; a copy/install step) and likely the manifests. Design revision pending before more implementation | owner | owner instruction 2026-10-17T21:34Z |
 | 10 | implement M1a | Same mechanism for the local sandbox container? | owner (verbatim): "should use same mechanism for local \"sandbox\" container". Orchestrator default: #686 builds the sshd-image + copy-daemon-over-SSH + install-CLIs mechanism as a shared part both runtimes can use; moving the local sandbox container runtime onto it is #806's scope (commented there) | owner + orchestrator default | owner instruction 2026-10-17T21:35Z |
 | 11 | design rev 2 | Who builds the shared sshd image + copy-daemon + install-CLIs mechanism? | #806's separate run builds it; #686 consumes it (contracts/shared-ssh-image.md, to write) and orders milestones: work independent of it first (core types done, kubeconfig, manifests + pod/PVC/secret lifecycle, port-forward tunnel, stop/remove, failure reasons, Settings form), copy-daemon + install-CLIs last, marked "blocked on #806" | owner via coordinator | coordinator message 2026-10-17 |
+
+## Decisions (M8)
+
+- #806 status (orchestrator, 2026-10-18): #806 is open; M5 to M7 needed nothing from its pending work (M5b notices, M6 per-daemon CLI selection, M7 step bounds and rollback), and neither does M8. Drift checked and fixed in tasks.md before the tests: (1) the 489 label is `lost to daemon <name>` (`links::session_lost_label` already maps `Stopped` to it), not "lost to its daemon"; (2) the `Cluster` port has no node look-up, so a lost node is the pod's phase `Unknown` (`PodGone::classify(status, true)`); (3) `DaemonState::Stopped` stays a unit variant, the reason lives in `Link.stopped_reason` (`DaemonStates::stopped_reason`, `DaemonView.stopped_reason`); (4) the actor's look-up is `daemon::kube_reconnect`, used by `connect_and_pump` when `life.established` (a lost link, or Reconnect on an unreachable daemon that had connected: `resumed`); a 5xx or timeout is `ConnectFailed`, so the state stays `Reconnecting` with the 489 back-off; (5) the scripted pod host answers one connect, so each re-dial in the tests uses a fresh client on the shared cluster.
 
 ## Decisions (M7)
 

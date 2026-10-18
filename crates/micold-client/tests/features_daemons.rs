@@ -148,7 +148,7 @@ mod kubernetes {
     };
     use micold_client::features::Outcome;
     use micold_client::kube::live::ContextEntry;
-    use micold_core::daemons::{DaemonId, DaemonRuntime};
+    use micold_core::daemons::{DaemonEvent, DaemonId, DaemonRuntime, DaemonState};
     use micold_core::kube::credentials::KubeCredential;
     use micold_core::kube::start::DriftChoice;
     use micold_core::session::AiCli;
@@ -340,6 +340,26 @@ mod kubernetes {
             "{}",
             row.endpoint
         );
+    }
+
+    // T057 (U103): a daemon whose pod is gone shows `stopped` with the reason; Start clears it.
+    #[test]
+    fn a_stopped_row_shows_the_reason_the_pod_is_gone() {
+        let (mut w, id) = world();
+        let reason = "stopped: the pod was deleted";
+        let shown = |w: &mut World| {
+            let view = daemons::views(&State::default(), &w.model());
+            view.rows.iter().find(|r| r.id == id).unwrap().clone()
+        };
+        dial(&mut w, id);
+        assert_eq!(shown(&mut w).stopped_reason, None);
+        w.links.apply(id, DaemonEvent::Lost("eof".into()));
+        w.links.apply(id, DaemonEvent::Gone(reason.into()));
+        let row = shown(&mut w);
+        assert_eq!(row.state, DaemonState::Stopped);
+        assert_eq!(row.stopped_reason.as_deref(), Some(reason));
+        w.links.apply(id, DaemonEvent::Start);
+        assert_eq!(shown(&mut w).stopped_reason, None);
     }
 
     // T130: the container form's limits keep their behaviour; the Kubernetes form's four fields
