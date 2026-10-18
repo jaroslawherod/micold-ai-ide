@@ -54,6 +54,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
+| Code A M7 | 1 | d9ec4f3e9bc44ee807c7b070bf7f6c32ae5d9b12:55c96c94641f28ee936411be8ae6ba6e25cb52e1 | CLEAN, 2 MINOR accepted |
+| Conformance B M7 | 1 | same | CHANGES: cycle-log missing, fixed (docs/log only) |
 | Spec | 1 | ba77a079ad4169573eddc31e57ce119656d81c5f:13165b3a9e4938a42528aae5df288475aa63ddae | CHANGES: 4 MAJOR (reconnecting state, timeout value, backoff cap, session state while disconnected), all fixed |
 | Spec | 2 | 0c21e1c00af41296ea2daf2c724c93e197d42c98:13165b3a9e4938a42528aae5df288475aa63ddae | CHANGES: 1 MAJOR (canonicalize_best_effort is a lexical walk, not verbatim: now a required change), 3 MINOR; fixed |
 | Plan | 3 | dfcf4d63a3a9a5e42df4dfb44d48c741b07de2e9:e022a929bab01046ada386829ee3f6fa1e62e347 | CLEAN (1 MINOR fixed) |
@@ -71,6 +73,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Conformance B M6 | 1 | b5ca53f73272b78ba456f49db756803c35baf049:ba1847571e81b78fd1454575256be759d946ea59 | CLEAN (test-ssh incl. ssh_real_mismatch and test-core green), 1 MINOR noted |
 
 ## Declined review findings
+
+- M7 review A/B MINOR (200 ms status tick race, repeated warn on write failure): accepted, documented in docs and cycle-log; B BLOCKER (no cycle-log M7) fixed with admitted deviation plus mutation proof.
 
 - M2 A F2 (log in through_json fallback): declined; the fallback is documented and a wrap failure is not reachable for serde-derived messages.
 - B F2 (assert user@host:port in ssh_real test): declined; the stand-in test drives `provision::connect`, not the view; the rendering is asserted in `daemons_feature.rs` (T020).
