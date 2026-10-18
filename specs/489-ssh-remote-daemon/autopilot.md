@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #489
 - **Worktree branch**: feat/489_run-the-session-daemon-on-a-remote-host-over-ssh
 - **Started**: 2026-10-12
-- **Phase**: M8 PR open (#1029)
-- **Next step**: CI and merge #1029, then close
+- **Phase**: close found unbuilt behaviour; M9 pending
+- **Next step**: run M9, then a new close unit
 
 ## Pull requests
 
@@ -24,7 +24,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #964 | M5 | merged | b81b808f88183a8562cdb5a70faf3ef9e850cf83 |
 | #1020 | M6 | merged | 753a392a489d6d246a18e0e48e6e16928fbf9112 |
 | #1026 | M7 | merged | 1d73b72fca6198e80ad2d4be2c0cf85cadbaf6f9 |
-| #1029 | M8 | open | — |
+| #1029 | M8 | merged | 1800df279b79d4dcbfab1a413ced53e497f5fa90 |
 
 ## Milestones
 
@@ -37,7 +37,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M5 | T056–T065 | full | Host picker, failure reasons, daemon management | #964 | done |
 | M6 | T066–T072 | full | Version mismatch explained | #1020 | done |
 | M7 | T073–T081 | full | Replace a mismatched daemon with no sessions | #1026 | done |
-| M8 | T082–T084 | full | Remote daemon artefact for macOS and Windows | #1029 | in review |
+| M8 | T082–T084 | full | Remote daemon artefact for macOS and Windows | #1029 | done |
+| M9 | T085–T088 | full | Session lost across a daemon restart shows `lost to daemon`; Reconnect epoch pinned | — | pending |
 
 ## Decisions
 
@@ -90,7 +91,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M8 done: T082/T083 already delivered by feature 806 (test and scripts pass), T084 doc clarified. Docs gate (mise run test-scripts) green. Next: orchestrator waits on CI and merges the M8 PR, then close.
+Close unit: branch reset to origin/main (27 behind). The uncommitted reconnect.rs edit was a leftover hand mutant (MAX_DELAY cap removed) of a mutation script still running in this worktree; killed, restored, not a finding. speckit-converge found FR-019 second sentence unbuilt (`session_lost_label` absent_from_catalog has no production caller); tdd-verify (tdd/verification.md, FAIL) found a surviving mutant (`daemons.rs` Reconnect arm epoch) and process gaps (no red runs, test list covers M1/M5 only; accepted, cannot be redone). Both cut into M9 (T085-T088). Not pushed. Next: M9 unit, then a new close unit; at the final PR also close issue #687, and note flaky test issue #973.
 
 ## Open escalation
 
