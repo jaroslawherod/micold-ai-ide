@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #946
 - **Worktree branch**: claude/project-thread-jjniz9
 - **Started**: 2026-10-17
-- **Phase**: milestone M4
-- **Next step**: wait for CI on the M4 PR and merge; then M5
+- **Phase**: milestone M5
+- **Next step**: M5 gate, reviews, PR; wait for CI and merge; then close
 
 ## Pull requests
 
@@ -21,6 +21,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #969 | M1 | merged (rebase); `remote daemon over a real sshd` failed once in ssh_real_concurrent (timing, unrelated), passed on re-run | e12d7c2c4849b3e6b2b6a283c8f0224e9b63fe05 |
 | #981 | M2 | merged (rebase); `build + test (windows-latest)` failed once in history_stop_request::ten_busy_sessions_are_all_saved_within_the_bound (timing, unrelated), passed on one re-run | 0b2a7018c3675b303aa3051a6174f29ad28f0f5a |
 | #986 | M3 | merged (rebase) | 7760297461597a165b3d0d03d93843cc7f62438e |
+| #993 | M4 | merged (rebase); `build + test (windows-latest)` failed once in history_stop_request (timing, same flake as #981), passed on one re-run | e47c5539f3f7549d1643b63e7b35bf738bbb525f |
 
 ## Milestones
 
@@ -29,8 +30,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T018 | full | Send review types the documented batch with C-references; review file v2, protocol 49 | #969 | merged |
 | M2 | T019–T034 | full | report_review_comment; cards show Applied/Answered and replies in every window, after restart | #981 | merged |
 | M3 | T035–T046 | full | Mark a Sent comment by hand; read a full reply | #986 | merged |
-| M4 | T047–T056 | full | Review panel: rows, counts, jump, draft edit/delete, panel buttons | PR open | gate green, in review |
-| M5 | T057–T067 | full | Comments follow their code; next batch names new lines | | planned |
+| M4 | T047–T056 | full | Review panel: rows, counts, jump, draft edit/delete, panel buttons | #993 | merged |
+| M5 | T057–T067 | full | Comments follow their code; next batch names new lines | | in progress (T057–T066 done; T067 visual pass not runnable here) |
 
 Polish T068–T070 changes no code: left to the close unit. M1 has 18 tasks (over ~10): Foundational
 (statuses, store v2, the one-edit wire delta 48 → 49) has no deliverable of its own and US2 is

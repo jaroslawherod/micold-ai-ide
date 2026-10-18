@@ -1067,15 +1067,19 @@ fn the_list_counts_each_files_pending_comments() {
 /// is not in the current diff goes to the "Not in the current diff" group.
 #[test]
 fn comments_not_in_the_diff_are_grouped_apart() {
-    let mut state = showing(commentable());
-    let on_new = comment("b.rs", Side::New, 1, 2, CommentState::Draft);
+    // New lines 1–2 and old lines 1–4 are rows; new line 4 is not.
+    let mut state = showing(LoadedDiff {
+        diff: parse_unified(b"@@ -1,4 +1,2 @@\n a\n-b\n-c\n-x\n+B\n"),
+        ..commentable()
+    });
+    let on_new = quoting("b.rs", Side::New, 1, &["a", "B"]);
     let on_old = comment("b.rs", Side::Old, 4, 4, CommentState::Draft);
-    let gone = comment("b.rs", Side::New, 40, 40, CommentState::Draft);
+    let outside = quoting("b.rs", Side::New, 4, &["d"]);
     let other_file = comment("a.rs", Side::New, 2, 2, CommentState::Draft);
     push(
         &mut state,
         "feat-a",
-        vec![on_new.clone(), on_old.clone(), gone.clone(), other_file],
+        vec![on_new.clone(), on_old.clone(), outside.clone(), other_file],
     );
     let placed = file_comments(&state);
     assert_eq!(placed.under(Side::New, 2), vec![&on_new]);
@@ -1084,7 +1088,7 @@ fn comments_not_in_the_diff_are_grouped_apart() {
         placed.under(Side::New, 1).is_empty(),
         "under the last line only"
     );
-    assert_eq!(placed.not_in_diff, vec![&gone]);
+    assert_eq!(placed.not_in_diff, vec![&outside]);
 }
 
 #[test]
@@ -1286,7 +1290,42 @@ fn refresh(state: &mut State, paths: &[&str], diff: LoadedDiff) {
 }
 
 fn outdated(state: &State) -> BTreeSet<CommentId> {
-    state.open.as_ref().unwrap().outdated.clone()
+    let anchors = &state.open.as_ref().unwrap().anchors;
+    anchors
+        .iter()
+        .filter(|(_, anchor)| anchor.outdated)
+        .map(|(id, _)| *id)
+        .collect()
+}
+
+/// Where the card of `id` is drawn.
+fn shown(state: &State, id: CommentId) -> LineRange {
+    state.open.as_ref().unwrap().anchors[&id].shown
+}
+
+/// A refresh of `showing(..)` like [`refresh`], returning the effect the diff answer asks for.
+fn refresh_effect(state: &mut State, diff: LoadedDiff) -> Effect {
+    let effect = changes::update(state, Msg::Changed);
+    let effect = answer_list(state, effect, &["a.rs", "b.rs"]);
+    let Effect::ReadDiff { seq, .. } = effect else {
+        panic!("a diff read, got {effect:?}");
+    };
+    changes::update(
+        state,
+        Msg::DiffRead {
+            seq,
+            result: Ok(diff),
+        },
+    )
+}
+
+/// `commentable()` with `above` lines added above it.
+fn pushed_down(above: usize) -> LoadedDiff {
+    let text = format!("{}a\nB\nc\nd\n", "t\n".repeat(above));
+    LoadedDiff {
+        new: SideLines::from_bytes(text.as_bytes()),
+        ..commentable()
+    }
 }
 
 /// R1, FR-010. A change re-reads the list, then the open diff.
@@ -1365,8 +1404,8 @@ fn a_refresh_keeps_a_pick_whose_lines_remain() {
     );
 }
 
-/// US4 s2, FR-013, R14. A comment whose lines no longer hold its quote is outdated, and its id
-/// goes with the send.
+/// US4 s2, FR-013, R14. A comment whose lines no longer hold its quote is outdated; the send names
+/// removed-side ids only.
 #[test]
 fn a_comment_whose_quote_no_longer_matches_is_outdated_and_sent_as_such() {
     let mut state = showing(commentable());
@@ -1387,7 +1426,11 @@ fn a_comment_whose_quote_no_longer_matches_is_outdated_and_sent_as_such() {
     let Effect::ReviewSend { outdated: sent, .. } = effect else {
         panic!("a send, got {effect:?}");
     };
-    assert_eq!(sent, vec![changed.id], "the send names it (FR-013)");
+    assert_eq!(
+        sent,
+        Vec::<CommentId>::new(),
+        "the service judges current-side comments itself (W16)"
+    );
 }
 
 /// US4 s2. An edit on disk makes a shown comment outdated on the next refresh.
@@ -1984,7 +2027,8 @@ fn panel_rows_are_ordered_and_describe_their_comments() {
     let labels: Vec<_> = rows.iter().map(|r| r.lines.as_str()).collect();
     assert_eq!(
         labels,
-        ["Line 9", "Line 1", "Lines 2–4", "Old line 2", "Line 7"]
+        ["Line 9", "Line 1", "Lines 2–4", "Old line 2", "Line 4"],
+        "`done`'s code is not in the file: shown at its last place within the 4 lines (FR-021)"
     );
     assert_eq!(rows[0].text, "about a.rs:9");
     assert_eq!(rows[1].status, Status::Sent);
@@ -2212,4 +2256,129 @@ fn a_reason_clears_with_the_toggle_and_an_abandoned_jump_does_not_scroll() {
         },
     );
     assert_eq!(effect, Effect::None);
+}
+
+/// US4 s1, FR-020. Lines added above move the card with its code, not outdated, and one `Reanchor`
+/// names the move.
+#[test]
+fn a_comment_follows_its_code_down_and_one_reanchor_names_the_move() {
+    let mut state = showing(commentable());
+    let about_b = quoting("b.rs", Side::New, 2, &["B"]);
+    push(&mut state, "feat-a", vec![about_b.clone()]);
+    let effect = refresh_effect(&mut state, pushed_down(5));
+    assert_eq!(shown(&state, about_b.id), LineRange::new(7, 7).unwrap());
+    assert!(outdated(&state).is_empty());
+    let Effect::ReviewEdit {
+        edit: ReviewEditOp::Reanchor { moves },
+        ..
+    } = effect
+    else {
+        panic!("a reanchor, got {effect:?}");
+    };
+    assert_eq!(moves.len(), 1);
+    assert_eq!(
+        (moves[0].id(), moves[0].from(), moves[0].to()),
+        (about_b.id, about_b.range, LineRange::new(7, 7).unwrap())
+    );
+}
+
+/// US4 s2. Lines removed above move it up.
+#[test]
+fn lines_removed_above_move_the_card_up() {
+    let mut state = showing(pushed_down(3));
+    let about_b = quoting("b.rs", Side::New, 5, &["B"]);
+    push(&mut state, "feat-a", vec![about_b.clone()]);
+    refresh_effect(&mut state, commentable());
+    assert_eq!(shown(&state, about_b.id), LineRange::new(2, 2).unwrap());
+}
+
+/// US4 s3, s7, FR-021, FR-024. Gone code is outdated at its last place within the file, except for
+/// an Applied or Answered comment, which is shown there without the mark.
+#[test]
+fn gone_code_is_outdated_only_for_draft_and_sent_comments() {
+    let mut state = showing(commentable());
+    let draft = quoting("b.rs", Side::New, 3, &["c", "x"]);
+    let sent = ReviewComment {
+        state: CommentState::Sent { at: 5 },
+        ..quoting("b.rs", Side::New, 2, &["gone"])
+    };
+    let applied = reported(
+        ReviewComment {
+            state: CommentState::Sent { at: 5 },
+            ..quoting("b.rs", Side::New, 9, &["gone", "too"])
+        },
+        Outcome::Applied,
+        "done",
+    );
+    push(
+        &mut state,
+        "feat-a",
+        vec![draft.clone(), sent.clone(), applied.clone()],
+    );
+    assert_eq!(outdated(&state), BTreeSet::from([draft.id, sent.id]));
+    assert_eq!(shown(&state, draft.id), LineRange::new(3, 4).unwrap());
+    assert_eq!(
+        shown(&state, applied.id),
+        LineRange::new(4, 4).unwrap(),
+        "9..=10 clamped into the 4-line file"
+    );
+    let effect = refresh_effect(&mut state, commentable());
+    assert!(
+        matches!(effect, Effect::None),
+        "nothing moved: no reanchor, got {effect:?}"
+    );
+}
+
+/// US4 s6. Restored code is found again and loses the mark.
+#[test]
+fn restored_code_loses_the_outdated_mark() {
+    let mut state = showing(commentable());
+    let lost = quoting("b.rs", Side::New, 2, &["B"]);
+    push(&mut state, "feat-a", vec![lost.clone()]);
+    let edited = LoadedDiff {
+        new: SideLines::from_bytes(b"a\nBee\nc\nd\n"),
+        ..commentable()
+    };
+    refresh_effect(&mut state, edited);
+    assert_eq!(outdated(&state), BTreeSet::from([lost.id]));
+    refresh_effect(&mut state, pushed_down(2));
+    assert!(outdated(&state).is_empty());
+    assert_eq!(shown(&state, lost.id), LineRange::new(4, 4).unwrap());
+}
+
+/// Research R3. A `Reanchor` is sent only when the new side is the working tree.
+#[test]
+fn reanchor_is_sent_only_for_the_working_tree() {
+    let about_b = quoting("b.rs", Side::New, 2, &["B"]);
+    let mut state = showing(commentable());
+    push(&mut state, "feat-a", vec![about_b.clone()]);
+    state.open.as_mut().unwrap().toggles.uncommitted = false;
+    let effect = refresh_effect(&mut state, pushed_down(5));
+    assert!(
+        matches!(effect, Effect::None),
+        "the new side is HEAD: {effect:?}"
+    );
+    assert_eq!(
+        shown(&state, about_b.id),
+        LineRange::new(7, 7).unwrap(),
+        "still drawn at the code"
+    );
+}
+
+/// US4 s1. The panel row and the jump name the lines the card is drawn on.
+#[test]
+fn the_panel_row_and_the_jump_use_the_shown_lines() {
+    let mut state = showing(commentable());
+    let about_b = quoting("b.rs", Side::New, 2, &["B"]);
+    push(&mut state, "feat-a", vec![about_b.clone()]);
+    refresh_effect(&mut state, pushed_down(5));
+    let rows = changes::panel_rows(&state);
+    assert_eq!(rows[0].lines, "Line 7");
+    assert_eq!(
+        changes::jump_target(&state, about_b.id),
+        Some(Jump::Shown {
+            path: path("b.rs"),
+            line: 7
+        })
+    );
 }

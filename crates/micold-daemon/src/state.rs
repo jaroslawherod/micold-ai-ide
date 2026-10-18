@@ -2144,7 +2144,9 @@ impl DaemonState {
             op,
             micold_core::unix_time::unix_secs(),
         )?;
-        Self::broadcast_locked(inner, vec![msg]);
+        if let Some(msg) = msg {
+            Self::broadcast_locked(inner, vec![msg]);
+        }
         Ok(())
     }
 
@@ -2226,14 +2228,53 @@ impl DaemonState {
         } else {
             EntryKind::Worktree
         };
+        // W16: find where each Draft's code is now, reading files off the state lock.
+        let drafts = {
+            let mut inner = self.lock();
+            Self::check_entry_locked(&inner, project, worktree_dir)?;
+            let inner = &mut *inner;
+            inner.reviews.drafts(&inner.catalog, project, worktree_dir)
+        };
+        let root = crate::catalog::location_of(worktree_dir).cwd(project);
+        let located_drafts = drafts.clone();
+        let relocated =
+            tokio::task::spawn_blocking(move || crate::review::relocate(&root, &located_drafts))
+                .await
+                .unwrap_or_default();
+        // The client's verdict stands for removed-side comments only.
+        let mut judged = relocated.outdated;
+        judged.extend(
+            drafts
+                .iter()
+                .filter(|c| c.side == micold_core::review::Side::Old && outdated.contains(&c.id))
+                .map(|c| c.id),
+        );
         let (snapshot, candidates) = {
             let mut inner = self.lock();
             Self::check_entry_locked(&inner, project, worktree_dir)?;
             let inner = &mut *inner;
+            if !relocated.moves.is_empty() {
+                let moved = inner.reviews.apply_edit(
+                    &inner.catalog,
+                    project,
+                    worktree_dir,
+                    micold_core::protocol::messages::ReviewEditOp::Reanchor {
+                        moves: relocated.moves,
+                    },
+                    micold_core::unix_time::unix_secs(),
+                );
+                match moved {
+                    Ok(Some(msg)) => Self::broadcast_locked(inner, vec![msg]),
+                    Ok(None) => {}
+                    Err(refusal) => {
+                        tracing::warn!(entry = worktree_dir, %refusal.message, "moved comments not written");
+                    }
+                }
+            }
             let (snapshot, msg) =
                 inner
                     .reviews
-                    .begin_send(&inner.catalog, project, worktree_dir, kind, outdated)?;
+                    .begin_send(&inner.catalog, project, worktree_dir, kind, &judged)?;
             Self::broadcast_locked(inner, vec![msg]);
             let candidates = Self::running_sessions_locked(inner, project, worktree_dir);
             (snapshot, candidates)
