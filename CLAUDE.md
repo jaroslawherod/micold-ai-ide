@@ -82,6 +82,11 @@ once via `mise trust` (mise refuses untrusted configs by default).
 
 ## Navigate Rust with the `LSP` tool before `grep`
 
+**Use `LSP` by default for every Rust symbol question — it is the first tool, not a fallback.** It is
+a deferred tool: load it once with `ToolSearch("select:LSP")`. If it crashes (`rust-analyzer ...
+crashed with exit code 1`), the rustup toolchain is missing the component: run
+`rustup component add rust-analyzer`, then use `LSP` again. Only fall back to `grep -n` after that.
+
 The `rust-analyzer-lsp` plugin (`.claude/settings.json`) backs the `LSP` tool. For a Rust symbol it
 answers in one call what `grep -n` plus several `Read`s answer in many, and it knows types and
 trait impls, which text search does not. `filePath`, `line` and `character` are 1-based; find the
