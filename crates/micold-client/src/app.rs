@@ -167,6 +167,10 @@ pub enum Message {
     /// `features::navigation::update` and applied by [`State::apply_navigation`] in the binary,
     /// which dispatches the follow-ups. See [`crate::features::navigation::Msg`].
     Navigation(crate::features::navigation::Msg),
+    /// The quick switcher (feature 968): handled by `features::quick_switch::update` in the
+    /// binary, which applies a choice through the navigation apply path. See
+    /// [`crate::features::quick_switch::Msg`].
+    QuickSwitch(crate::features::quick_switch::Msg),
     /// The OS window gained (`true`) or lost (`false`) input focus. Handled by the binary,
     /// which gates the terminal/OS-theme poll subscriptions on it so a backgrounded window
     /// doesn't keep burning CPU on ticks nothing is looking at (idle-CPU fix).
@@ -337,6 +341,8 @@ pub struct State {
     pub runs: crate::features::runs::State,
     /// What the worktree Overview holds (feature 813) -- see [`crate::features::overview::State`].
     pub overview: crate::features::overview::State,
+    /// What the quick switcher holds (feature 968) -- see [`crate::features::quick_switch::State`].
+    pub quick_switch: crate::features::quick_switch::State,
     /// What the notifications feature remembers — see
     /// [`crate::features::notifications::State`].
     ///
@@ -1032,6 +1038,7 @@ impl State {
             // The binary resolves and applies a navigation press, dispatching its follow-ups
             // through its own `update` (feature 803, contracts/ui.md U3).
             | Message::Navigation(_)
+            | Message::QuickSwitch(_)
             // Focus is the rendering stack's, and moving it is a widget operation — see
             // [`Message::FocusMoved`].
             | Message::FocusMoved { .. } => {}
