@@ -646,37 +646,33 @@ fn the_sharing_badge_follows_the_stored_daemons_and_the_open_form() {
     assert!(!daemons::views(&state, &w.model()).shares_credentials);
 }
 
-/// FR-012, FR-014, FR-015: a form opens with Container only; a toggle flips one section and touches
-/// neither the draft nor the saved settings; a section holding the refused field is open.
+/// Feature 890 FR-004, FR-005: a form opens with `Connection` only; a toggle flips one section and
+/// touches neither the draft nor the saved settings; a section holding the refused field is open.
 #[test]
 fn sections_open_by_toggle_and_by_error_without_touching_the_draft() {
     use daemons::Section;
     let mut w = World::new();
     let mut state = State::default();
     add_container(&mut state, "Sec", "sec-ctr", "7050");
-    let open = |s: &State| Section::ALL.map(|x| s.section_open(x));
-    assert_eq!(open(&state), [true, false, false, false, false]);
+    let open = |s: &State| -> Vec<bool> {
+        Section::of(DraftRuntime::Container)
+            .iter()
+            .map(|x| s.section_open(*x))
+            .collect()
+    };
+    assert_eq!(open(&state), vec![true, false, false, false, false, false]);
 
     let draft = state.draft.clone();
     let saved = w.registry.clone();
-    send(
-        &mut state,
-        &mut w,
-        daemons::Msg::SectionToggled(Section::Network),
-    );
-    assert_eq!(open(&state), [true, false, true, false, false]);
-    send(
-        &mut state,
-        &mut w,
-        daemons::Msg::SectionToggled(Section::Container),
-    );
-    assert_eq!(open(&state), [false, false, true, false, false]);
-    send(
-        &mut state,
-        &mut w,
-        daemons::Msg::SectionToggled(Section::Network),
-    );
-    assert_eq!(open(&state), [false; 5]);
+    let toggle = |state: &mut State, w: &mut World, s| {
+        send(state, w, daemons::Msg::SectionToggled(s));
+    };
+    toggle(&mut state, &mut w, Section::Network);
+    assert_eq!(open(&state), vec![true, false, false, true, false, false]);
+    toggle(&mut state, &mut w, Section::Connection);
+    assert_eq!(open(&state), vec![false, false, false, true, false, false]);
+    toggle(&mut state, &mut w, Section::Network);
+    assert_eq!(open(&state), vec![false; 6]);
     assert_eq!(state.draft, draft, "toggling must not edit the draft");
     assert_eq!(w.registry, saved, "toggling must not touch saved settings");
 
@@ -685,13 +681,142 @@ fn sections_open_by_toggle_and_by_error_without_touching_the_draft() {
     assert_eq!(state.form_error.as_ref().map(|e| e.field), Some("cpus"));
     assert_eq!(
         open(&state),
-        [false, false, false, true, false],
+        vec![false, false, false, false, true, false],
         "the section holding the error is open"
     );
+}
 
-    send(&mut state, &mut w, daemons::Msg::DraftDiscarded);
-    send(&mut state, &mut w, daemons::Msg::AddOpened);
-    assert_eq!(open(&state), [true, false, false, false, false]);
+/// FR-004, US1 AS2: every kind opens on its first section only, for an add and for an edit; a
+/// change of kind drops what the user had flipped.
+#[test]
+fn every_kind_opens_on_connection_only_and_a_kind_change_resets() {
+    use daemons::Section;
+    let only_connection = |state: &State, runtime| {
+        Section::of(runtime)
+            .iter()
+            .map(|s| (*s, state.section_open(*s)))
+            .all(|(s, open)| open == (s == Section::Connection))
+    };
+    let mut w = World::new();
+    let mut state = State::default();
+    for runtime in [
+        DraftRuntime::Container,
+        DraftRuntime::Kubernetes,
+        DraftRuntime::Ssh,
+        DraftRuntime::Host,
+    ] {
+        daemons::begin_add(&mut state);
+        send(&mut state, &mut w, daemons::Msg::RuntimeChosen(runtime));
+        assert!(only_connection(&state, runtime), "{runtime:?} add");
+    }
+    // Stored daemons of each kind, opened for edit.
+    add_container(&mut state, "C", "c-ctr", "7051");
+    daemons::save(&mut state, &mut w.model()).unwrap();
+    fill_ssh(&mut state, "S", false);
+    daemons::save(&mut state, &mut w.model()).unwrap();
+    daemons::begin_add(&mut state);
+    state.draft.as_mut().unwrap().name = "K".into();
+    send(
+        &mut state,
+        &mut w,
+        daemons::Msg::RuntimeChosen(DraftRuntime::Kubernetes),
+    );
+    let kube = &mut state.draft.as_mut().unwrap().kube;
+    kube.context = "ctx".into();
+    kube.namespace = "ns".into();
+    daemons::save(&mut state, &mut w.model()).unwrap();
+    for entry in w.registry.entries().to_vec() {
+        daemons::begin_edit(&mut state, &w.model(), entry.id);
+        let runtime = state.draft.as_ref().unwrap().runtime;
+        assert!(only_connection(&state, runtime), "{runtime:?} edit");
+    }
+    // Flip a section, then change the kind: the new kind starts from its default.
+    daemons::begin_add(&mut state);
+    send(
+        &mut state,
+        &mut w,
+        daemons::Msg::SectionToggled(Section::Sessions),
+    );
+    send(
+        &mut state,
+        &mut w,
+        daemons::Msg::RuntimeChosen(DraftRuntime::Host),
+    );
+    assert!(only_connection(&state, DraftRuntime::Host));
+}
+
+/// FR-004, US1 AS4: a refused field in a closed section of any kind opens that section, and the
+/// section falls back to the user's choice once the error is gone.
+#[test]
+fn a_refused_field_opens_its_section_in_every_kind() {
+    use daemons::{FormError, Section};
+    let mut w = World::new();
+    let mut state = State::default();
+    let cases = [
+        (DraftRuntime::Container, "cpus", Section::Resources),
+        (DraftRuntime::Kubernetes, "cpu_limit", Section::Resources),
+        (
+            DraftRuntime::Kubernetes,
+            "node_selector",
+            Section::Placement,
+        ),
+        (DraftRuntime::Ssh, "host", Section::Connection),
+    ];
+    for (runtime, field, section) in cases {
+        daemons::begin_add(&mut state);
+        send(&mut state, &mut w, daemons::Msg::RuntimeChosen(runtime));
+        // The user closes Connection, so only the error can open a section there.
+        if section == Section::Connection {
+            send(
+                &mut state,
+                &mut w,
+                daemons::Msg::SectionToggled(Section::Connection),
+            );
+        }
+        assert!(!state.section_open(section));
+        state.form_error = Some(FormError {
+            field,
+            message: "refused".into(),
+        });
+        for other in Section::of(runtime) {
+            assert_eq!(
+                state.section_open(*other),
+                *other == section || *other == Section::Connection,
+                "{runtime:?} {field} {other:?}"
+            );
+        }
+        state.form_error = None;
+        assert!(!state.section_open(section), "{field}: falls back");
+    }
+}
+
+/// FR-004, clarification D3: a required field left empty keeps `Connection` open after the user
+/// closed it; filling it lets the user's choice stand.
+#[test]
+fn a_required_field_left_empty_keeps_connection_open() {
+    use daemons::Section;
+    let mut w = World::new();
+    let mut state = State::default();
+    for runtime in [
+        DraftRuntime::Container,
+        DraftRuntime::Kubernetes,
+        DraftRuntime::Ssh,
+    ] {
+        daemons::begin_add(&mut state);
+        send(&mut state, &mut w, daemons::Msg::RuntimeChosen(runtime));
+        send(
+            &mut state,
+            &mut w,
+            daemons::Msg::SectionToggled(Section::Connection),
+        );
+        assert!(!state.section_open(Section::Connection), "{runtime:?}");
+        // A refused save marks every empty required field missing at once.
+        send(&mut state, &mut w, daemons::Msg::Saved);
+        assert!(
+            state.section_open(Section::Connection),
+            "{runtime:?}: the empty required field opens its section"
+        );
+    }
 }
 
 // Feature 805: a container daemon saved with an empty port gets a free one, kept from then on.
@@ -992,7 +1117,7 @@ fn the_running_daemon_question_counts_its_sessions() {
     }
 }
 
-/// FR-014: every refused field of the Container and Limits sections opens its section, so the
+/// FR-004: every refused field of the Container and Resources sections opens its section, so the
 /// error is never hidden in a closed one.
 #[test]
 fn every_section_field_error_opens_its_section() {
@@ -1000,20 +1125,14 @@ fn every_section_field_error_opens_its_section() {
     for (field, section) in [
         ("image", Section::Container),
         ("image_path", Section::Container),
-        ("cpus", Section::Limits),
-        ("memory", Section::Limits),
-        ("pids", Section::Limits),
-        ("storage", Section::Limits),
+        ("cpus", Section::Resources),
+        ("memory", Section::Resources),
+        ("pids", Section::Resources),
+        ("storage", Section::Resources),
     ] {
         let mut w = World::new();
         let mut state = State::default();
         add_container(&mut state, "Sec", "sec-ctr", "7050");
-        // Close the Container section, so only the error can open one.
-        send(
-            &mut state,
-            &mut w,
-            daemons::Msg::SectionToggled(Section::Container),
-        );
         assert!(
             !state.section_open(section),
             "{field}: closed to begin with"
@@ -1022,8 +1141,10 @@ fn every_section_field_error_opens_its_section() {
             field,
             message: "refused".into(),
         });
-        for other in Section::ALL {
-            assert_eq!(state.section_open(other), other == section, "{field}");
+        let _ = &mut w;
+        for other in Section::of(DraftRuntime::Container) {
+            let expected = *other == section || *other == Section::Connection;
+            assert_eq!(state.section_open(*other), expected, "{field}");
         }
     }
 }
