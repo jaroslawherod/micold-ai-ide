@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #968
 - **Worktree branch**: claude/project-thread-ftdy5c
 - **Started**: 2026-10-18
-- **Phase**: M1 implement
-- **Next step**: M1 — implement T001–T020, verify, PR
+- **Phase**: M1 verify
+- **Next step**: M1 — verify (scoped gate, review A, review B, visual pass, full gate), PR
 
 ## Pull requests
 
@@ -47,24 +47,21 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review plan | 1 | 96ee1ce3727ec57086e810a9cf02650703d31bd7:f745f268a3ce6dae0a47b8157e100bb4ce069394 | CLEAN, no findings |
 | Review tasks | 1 | e5bd85269a8ad9d34b6748a7abc64f4fcc86a62a:8af03b922fe8dbea230e8f5930cb7cdc4f6d81e1 | CHANGES: 1 MAJOR ([P] on shared test file), 1 MINOR (T016 before T015), both fixed |
 | Review tasks | 2 | 2d709358b85fc04a2ea24af63fdf9e8e53f684ca:5a006c9ebfbf54f70f5c50de2febf64543ca50db | CLEAN (sonnet, scoped) |
+| Review A M1 (code-review high) | 1 | 249338d7d4d91aafb452af9b3c8b561cb88dc7ef:316d1b6b5767670852fe8e37bf4296598a2695b4 | 1 MAJOR (candidates rebuilt the sidebar per location) fixed; 5 MINOR: 2 fixed (clones, doc width), 3 declined |
+| Review A M1 (sonnet, scoped) | 2 | 0d0c5ba3498562676ea8c6a61eacf9ff7f5c3c19:51ebbf93e8f5d60473867be8e60ad3cb9aa8253e | running |
+| Review B M1 (conformance, sonnet) | 1 | 0d0c5ba3498562676ea8c6a61eacf9ff7f5c3c19:51ebbf93e8f5d60473867be8e60ad3cb9aa8253e | running |
 
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| M1 | A | MINOR: user-guide row says "location, session or project" while M1 lists locations | the row text is fixed by contracts/keys.md K4 / T020; M2 (sessions) and M3 (projects) make it true before the feature closes. |
+| M1 | A | MINOR: stored highlight key not written back when its entry leaves, so it can return | `list()` already shows the first entry while the key is absent, which FR-013 asks; the return-on-reappear case is outside FR-013 and needs a write in a pure read path. |
+| M1 | A | MINOR: `terminal_had_focus` taken from the publisher, not `terminal_focused()` at open | mirrors the #803 Overview chord's existing split; latent only, no failing case. |
 
 ## Handover
 
-Unit 1 of M1 handed over at 153k context (branch reset to origin/main c687792e; design PR #1036
-merged). Done: T001, T003, T004 (core `quick_switch.rs`, `typeahead.rs` `Folded`/`literal`/
-`subsequence` now `pub(crate)`), red/green in `tdd/cycle-log.md`. Next: T002, T005–T020 (client),
-then verify.md (scoped gate + review A high, review B, visual pass, full gate `scripts/gate.sh`),
-then pr.md. Notes for the next unit: `shell/` lives in the binary (`crate::App`), so apply tests
-use `State::apply_navigation`/`finish_navigation` as `tests/navigation_apply.rs` does; tag labels
-for `context`: reuse `ui/sidebar.rs::tag_chip`'s text (Type→`as_str`, Issue→key,
-Status→`label()`) — extract one `Tag` label helper rather than copying. No `tdd/test-list.md`:
-recent features (803, 806) log cycles against tasks.md test tasks in `tdd/cycle-log.md`. No open
-findings, no PR.
+None.
 
 ## Open escalation
 
