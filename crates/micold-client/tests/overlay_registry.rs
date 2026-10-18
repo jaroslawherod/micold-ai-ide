@@ -596,18 +596,29 @@ fn the_keyboard_subscription_names_no_surface() {
     // The open card menu's keys (feature 972, FR-010) are exempt too: they name a step in a list
     // (`Msg::CardMenuMoved`, `Msg::CardMenuActivated`), not a surface a key dismisses; Escape stays
     // `Message::EscapePressed`.
-    let named: Vec<&str> = body
+    // So is the Overview's full-screen chord (feature 970, R7): a toggle the reducer gates itself.
+    // Whitespace is dropped first, so a message rustfmt splits over lines still reads as one name.
+    let named: Vec<String> = body
         .match_indices("Message::")
-        .map(|(at, _)| body[at..].split_whitespace().next().unwrap_or_default())
+        .map(|(at, _)| {
+            body[at..]
+                .chars()
+                .filter(|c| !c.is_whitespace())
+                .take(80)
+                .collect::<String>()
+        })
         .filter(|m| {
             !m.starts_with("Message::EscapePressed")
                 && !m.starts_with("Message::FocusMoved")
                 && !m.starts_with("Message::Overview(crate::features::overview::Msg::Toggled")
+                && !m.starts_with(
+                    "Message::Overview(crate::features::overview::Msg::FullScreenToggled",
+                )
                 && !m.starts_with("Message::Navigation(")
                 && !m.starts_with("Message::QuickSwitch(")
                 // `card_menu_key`'s one return, `Some(Message::Overview(msg))`; the `Msg::` names it
                 // may carry are pinned below.
-                && *m != "Message::Overview(msg))"
+                && !m.starts_with("Message::Overview(msg))")
         })
         .collect();
     let card_menu_msgs: Vec<&str> = body

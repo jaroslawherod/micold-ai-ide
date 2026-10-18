@@ -62,13 +62,37 @@ fn full_screen_toggles_only_while_open() {
     assert!(!state.full_screen(), "again: it leaves");
 
     update(&mut state, full_screen_toggled(true));
-    assert!(!state.full_screen(), "Settings open: the toggle does nothing");
+    assert!(
+        !state.full_screen(),
+        "Settings open: the toggle does nothing"
+    );
 
     assert!(state.request(Activation::RevealOnly(SessionLocation::Default)));
     update(&mut state, full_screen_toggled(false));
     assert!(
         !state.full_screen(),
         "an activation pending: the first one stands"
+    );
+}
+
+/// A card menu hangs at fixed window pixels: the grid must not move beneath it.
+#[test]
+fn full_screen_does_not_toggle_under_a_card_menu() {
+    let mut state = State::default();
+    update(&mut state, toggled(false));
+    update(
+        &mut state,
+        Msg::CardMenuOpened {
+            location: SessionLocation::Default,
+            anchor: (10, 10),
+            origin: micold_client::features::overview::MenuOrigin::Pointer,
+        },
+    );
+    assert!(state.card_menu.is_some(), "the menu is open");
+    update(&mut state, full_screen_toggled(false));
+    assert!(
+        !state.full_screen(),
+        "the menu open: the toggle does nothing"
     );
 }
 

@@ -225,6 +225,27 @@ where
         // is delivered through that layout, until the next one.
         let rail_showing = track.rail_showing;
         if track.gone {
+            // A release still reaches every child, with no cursor: a drag or press begun before
+            // the drawer left must end, or the resize handle comes back still dragging.
+            if let Event::Mouse(mouse::Event::ButtonReleased(_)) = event {
+                let mut children = self.parts_mut();
+                for ((child, child_tree), child_layout) in children
+                    .iter_mut()
+                    .zip(&mut tree.children)
+                    .zip(layout.children())
+                {
+                    child.as_widget_mut().update(
+                        child_tree,
+                        event,
+                        child_layout,
+                        mouse::Cursor::Unavailable,
+                        renderer,
+                        clipboard,
+                        shell,
+                        viewport,
+                    );
+                }
+            }
             return;
         }
 
@@ -850,6 +871,95 @@ mod tests {
         }
     }
 
+    /// One event through a sidebar with a working resize handle, then the layout after it.
+    fn send(
+        tree: &mut Tree,
+        node: &mut layout::Node,
+        retracted: bool,
+        event: &Event,
+        cursor: mouse::Cursor,
+    ) -> Vec<f32> {
+        let sidebar = || -> Element<'_, f32> {
+            NavigationDrawer::new(
+                Space::new().width(PANEL_WIDTH).height(100.0),
+                Space::new().width(RAIL_WIDTH).height(100.0),
+            )
+            .open(true)
+            .handle(
+                crate::ui::material::ResizeHandle::new(crate::ui::material::test_support::roles())
+                    .on_resize(|x| x),
+            )
+            .retracted(retracted)
+            .into()
+        };
+        let renderer = crate::ui::material::test_support::renderer();
+        let limits = layout::Limits::new(Size::ZERO, Size::new(1000.0, 100.0));
+        let mut drawer = sidebar();
+        tree.diff(drawer.as_widget());
+        let mut messages = Vec::new();
+        let mut shell = Shell::new(&mut messages);
+        drawer.as_widget_mut().update(
+            tree,
+            event,
+            Layout::new(node),
+            cursor,
+            &renderer,
+            &mut iced::advanced::clipboard::Null,
+            &mut shell,
+            &Rectangle::new(iced::Point::ORIGIN, Size::new(1000.0, 100.0)),
+        );
+        *node = drawer.as_widget_mut().layout(tree, &renderer, &limits);
+        messages
+    }
+
+    /// A drag on the resize handle that outlives the retraction ends at the release, so the drawer
+    /// does not come back still following the pointer.
+    #[test]
+    fn a_release_while_retracted_ends_a_drag_begun_before() {
+        let mut tree = Tree::empty();
+        let mut node = layout::Node::new(Size::ZERO);
+        let none = mouse::Cursor::Unavailable;
+        let tick = Event::Mouse(mouse::Event::CursorLeft);
+        send(&mut tree, &mut node, false, &tick, none);
+        let handle = Layout::new(&node)
+            .children()
+            .nth(2)
+            .expect("the handle")
+            .bounds();
+        let on_handle = mouse::Cursor::Available(handle.center());
+        let press = Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left));
+        send(&mut tree, &mut node, false, &press, on_handle);
+        let start = std::time::Instant::now();
+        for at in (0..=SETTLED_BY).step_by(16) {
+            let redraw = Event::Window(iced::window::Event::RedrawRequested(
+                start + Duration::from_millis(at),
+            ));
+            send(&mut tree, &mut node, true, &redraw, none);
+        }
+        assert_eq!(node.size().width, 0.0, "the drawer is gone");
+        let release = Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left));
+        send(&mut tree, &mut node, true, &release, none);
+        for at in (SETTLED_BY..=2 * SETTLED_BY).step_by(16) {
+            let redraw = Event::Window(iced::window::Event::RedrawRequested(
+                start + Duration::from_millis(at),
+            ));
+            send(&mut tree, &mut node, false, &redraw, none);
+        }
+        let position = iced::Point::new(200.0, 50.0);
+        let moved = Event::Mouse(mouse::Event::CursorMoved { position });
+        let resized = send(
+            &mut tree,
+            &mut node,
+            false,
+            &moved,
+            mouse::Cursor::Available(position),
+        );
+        assert!(
+            resized.is_empty(),
+            "the drag ended at the release: {resized:?}"
+        );
+    }
+
     #[test]
     fn a_retracted_drawer_settles_at_zero_width_with_every_child_parked() {
         for open in [true, false] {
@@ -871,7 +981,10 @@ mod tests {
         for open in [true, false] {
             let harness = Harness::new(open, true);
             assert_eq!(harness.width(), 0.0, "open {open}: the first layout");
-            assert!(harness.every_child_parked(), "open {open}: nothing on screen");
+            assert!(
+                harness.every_child_parked(),
+                "open {open}: nothing on screen"
+            );
         }
     }
 

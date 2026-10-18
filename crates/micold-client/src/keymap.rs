@@ -408,7 +408,8 @@ pub fn overview_chord_label() -> &'static str {
 
 /// Whether the press is the Overview's full-screen chord (feature 970, FR-001, research R7; macOS
 /// `Cmd+Shift+F`, else `Ctrl+Shift+F`). Not in the terminal's reserved tier: the app hears it only
-/// while the terminal is unfocused, which the open Overview always is.
+/// while no terminal has the keyboard, which opening the Overview ensures (it moves the keyboard to
+/// the first card, research R13).
 pub fn is_overview_full_screen_chord(key: &Key, mods: Mods) -> bool {
     is_primary_shift_chord(key, mods, 'f')
 }

@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-ag6ana
 - **Started**: 2026-10-18
 - **Phase**: implement M1
-- **Next step**: M1 verify (T001–T017 done; scoped gate + review A next)
+- **Next step**: M1 verify — scoped gate + review A r2, review B, visual pass, then full gate
 
 ## Pull requests
 
@@ -54,27 +54,17 @@ R6) to stay near 10 tasks. M4 is 10 tasks; its serde field is a persistence-form
 | Spec review | 2 | 89236166dc9f65c1c4ccda6390048046cc91bcdd:7dded4dabfe494a9aa98b069d0cec860beee2dd2 | CLEAN (2 MINOR, fixed prose only) |
 | Plan review | 1 | 492e6e945eaee1a4aadbe9442ad1423220268194:32e91cce3fcb38094295f0fa9ffdcd4c201aecb4 | CLEAN (1 MINOR: tree state renamed `ZoomState`, fixed prose only) |
 | Tasks review | 1 | de0b3a34548aa9cfd42aed76365f2eab957ca1a1:a2c8ebd18334b6968d29ad0003a6e495dfeffbb5 | CLEAN (3 MINOR: M1 Satisfies, T012/T013 order, guide [P]; fixed prose only) |
+| M1 review A (code-review high) | 1 | 43fe79e5d9dd39a93cefe98ee80f754afe264105:cfbf874fbc35d2b5ecbe356f3992e6fcc0c869c1 | CHANGES: 2 MAJOR fixed (chord under a card menu now ignored; release reaches a gone drawer's children), 1 declined, 5 MINOR not fixed |
 
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| M1 | A r1 | Full-screen chord not heard while a terminal has the keyboard | By design (R7: not in the terminal's reserved tier, so terminals keep Ctrl+Shift+F); opening the Overview moves the keyboard to the first card (R13). Keymap comment and user-guide sentence corrected (prose only) |
 
 ## Handover
 
-M1 unit 2 handed over at the 150k cap after implement. Done: T001–T017 all ticked, committed
-(`feat(970): full-screen mode...`); red/green recorded in `tdd/test-list.md` + `tdd/cycle-log.md`;
-scoped tests green (`cargo test -p micold-client -- navigation_drawer overview keymap icons
-app_chord full_screen sidebar showcase the_gallery every_`, exit 0). Not yet run: fmt/clippy.
-Next: verify.md step 1 — scoped gate (`scripts/autopilot/scoped-gate.sh`, detached + hold.sh) with
-review A (`code-review` high on `origin/main...HEAD`, headless `claude -p`), then review B
-(conformance, sonnet) + visual pass (showcase NavigationDrawer "retracted"/"retracting" poses;
-client quickstart §B 1–2, 4–5), full gate (`scripts/gate.sh`), push
-`--force-with-lease=claude/project-thread-ag6ana:`, PR title/body files in the scratchpad (no gh).
-Notes for review: drawer retraction = `Track.presence` (emphasized `Progress`) applied on top of
-`layout_shown`; `gone` (retracted and presence <= CLOSED) parks all children and makes update /
-mouse_interaction / draw / operate / overlay reach none; draw clips to the drawer while presence < 1.
-Header row in `ui/overview.rs::header`; `a_card_press_requests_its_activation` now presses at y 120.
+None.
 
 ## Open escalation
 

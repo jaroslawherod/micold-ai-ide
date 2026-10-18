@@ -321,7 +321,8 @@ pub fn update(state: &mut State, msg: Msg) -> Vec<crate::features::Outcome> {
             }
         }
         Msg::FullScreenToggled { settings_open } => {
-            if state.open && !settings_open {
+            // Not under an open card menu: the grid would move beneath it.
+            if state.open && !settings_open && state.card_menu.is_none() {
                 state.full_screen = !state.full_screen;
             }
         }
