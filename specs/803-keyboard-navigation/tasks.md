@@ -157,8 +157,8 @@ both files.
 
 **Purpose**: evidence only; no code (done by the close unit).
 
-- [ ] T038 Run quickstart §B B1–B12 through the `visual-pass` skill and record screenshots for B1, B3 and B7 in `specs/803-keyboard-navigation/visual-pass/`
-- [ ] T039 Record the quickstart §C platform-parity status (macOS, Windows: B1, B3, B6, B10, no system action) in `specs/803-keyboard-navigation/quickstart.md`, or note it as not run with the reason
+- [x] T038 Run quickstart §B B1–B12 through the `visual-pass` skill and record screenshots for B1, B3 and B7 in `specs/803-keyboard-navigation/visual-pass/`
+- [x] T039 Record the quickstart §C platform-parity status (macOS, Windows: B1, B3, B6, B10, no system action) in `specs/803-keyboard-navigation/quickstart.md`, or note it as not run with the reason
 
 ---
 
