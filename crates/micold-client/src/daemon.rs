@@ -1217,8 +1217,13 @@ async fn container_attempt(
         build_id: current_build_id(),
         client_build: CLIENT_BUILD.to_string(),
     };
+    // Dropping this future is the cancel (the actor is aborted); the token is for the steps' own
+    // guards and is never shared.
     let cancel = CancelToken::new();
     let (runtime, name) = (reach.runtime, reach.container_name.to_string());
+    // A daemon found running was not started by this attempt: it is never stopped (FR-020).
+    let roll_back = roll_back
+        && !micold_core::provision::login::daemon_running(host, runtime.program(), &name).await;
     let mut undo = StartRollback::new(roll_back.then(|| {
         Box::new(move |ledger: AttemptLedger| {
             let _ =

@@ -380,10 +380,10 @@ pub fn start_attempt<R: CommandRunner>(
     }
 
     // The image comes within its bound or the start fails naming it; a cancel kills the pull.
-    let runtime = CliRuntime::new(profile.runtime, runner).limiting_acquire(
-        micold_core::provision::StepBounds::container().acquire,
-        cancel.clone(),
-    );
+    let bounds = micold_core::provision::StepBounds::container();
+    let runtime = CliRuntime::new(profile.runtime, runner)
+        .limiting_acquire(bounds.acquire, cancel.clone())
+        .limiting_commands(bounds.create_container, cancel.clone());
     let build_spec = |_caps: &RuntimeCapabilities| SandboxSpec {
         name: container_name.to_string(),
         profile: profile.clone(),

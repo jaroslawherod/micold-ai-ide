@@ -28,6 +28,8 @@ pub struct CliRuntime<R: CommandRunner> {
     runner: R,
     /// What may end an image acquisition early (feature 806, FR-019).
     acquire: RunLimits,
+    /// What may end every other runtime command early (FR-019).
+    commands: RunLimits,
 }
 
 impl<R: CommandRunner> CliRuntime<R> {
@@ -37,7 +39,23 @@ impl<R: CommandRunner> CliRuntime<R> {
             kind,
             runner,
             acquire: RunLimits::default(),
+            commands: RunLimits::default(),
         }
+    }
+
+    /// End any runtime command other than the image pull after `bound`, or when `cancel` is
+    /// cancelled, so a hung `create` or `start` cannot hang the start (FR-019).
+    #[must_use]
+    pub fn limiting_commands(
+        mut self,
+        bound: Duration,
+        cancel: crate::provision::CancelToken,
+    ) -> Self {
+        self.commands = RunLimits {
+            deadline: Some(bound),
+            cancel: Some(cancel),
+        };
+        self
     }
 
     /// End an image acquisition after `bound`, or when `cancel` is cancelled: the runtime process
@@ -80,7 +98,13 @@ impl<R: CommandRunner> CliRuntime<R> {
     /// looked up on `PATH`, so "no such file" is not an unknown failure, it is the answer.
     fn run(&self, args: &[&str]) -> Result<CommandOutput, RuntimeError> {
         let owned: Vec<OsString> = args.iter().map(OsString::from).collect();
-        self.finish(self.runner.run(&self.program(), &owned))
+        if self.commands.deadline.is_none() && self.commands.cancel.is_none() {
+            return self.finish(self.runner.run(&self.program(), &owned));
+        }
+        self.finish(
+            self.runner
+                .run_limited(&self.program(), &owned, &self.commands, &mut |_| {}),
+        )
     }
 
     fn finish(
@@ -472,5 +496,20 @@ mod tests {
     #[test]
     fn a_cancelled_pull_fails_cancelled() {
         assert_eq!(acquire(io::ErrorKind::Interrupted), RuntimeError::Cancelled);
+    }
+
+    #[test]
+    fn a_hung_command_other_than_the_pull_is_ended_by_the_command_limit() {
+        let runtime = CliRuntime::new(
+            RuntimeKind::Docker,
+            EndsEarly {
+                ended: io::ErrorKind::TimedOut,
+            },
+        )
+        .limiting_commands(Duration::from_secs(15 * 60), CancelToken::new());
+        let error = runtime
+            .stop(&ContainerId("c1".into()))
+            .expect_err("the stop timed out");
+        assert!(matches!(error, RuntimeError::Timeout { .. }), "{error:?}");
     }
 }

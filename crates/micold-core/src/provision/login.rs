@@ -50,6 +50,38 @@ pub async fn ask_login(
     }
 }
 
+/// Whether a daemon process already runs in the container (a bridge's command line ends in
+/// `remote bridge`, so it is not counted). Anything this cannot tell — no `pgrep`, a failed `exec` —
+/// answers `true`: a start that may have found a daemon running must not stop it on failure.
+pub async fn daemon_running(
+    runner: &dyn SshRunner,
+    runtime_program: &str,
+    container: &str,
+) -> bool {
+    let cmd = SshCommand {
+        program: runtime_program.to_string(),
+        args: [
+            "exec",
+            container,
+            "pgrep",
+            "-fc",
+            "/remote/.*/micold-daemon$",
+        ]
+        .iter()
+        .map(|s| s.to_string())
+        .collect(),
+        env: vec![("LC_ALL".into(), "C".into())],
+    };
+    match runner.run(cmd, Vec::new(), Some(ASK_BOUND), None).await {
+        // `pgrep -c` prints the count, and exits 1 when it is zero.
+        Ok(out) => String::from_utf8_lossy(&out.stdout)
+            .trim()
+            .parse::<u32>()
+            .map_or(true, |count| count > 0),
+        Err(_) => true,
+    }
+}
+
 /// Whether the runtime says the container has exited, which no further asking will change.
 /// Docker: `container … is not running`; podman: `container state improper`.
 fn has_exited(reason: &str) -> bool {
@@ -138,6 +170,18 @@ mod tests {
         }
         fn open(&self, _cmd: SshCommand) -> std::io::Result<SshStdio> {
             Err(std::io::Error::other("not used"))
+        }
+    }
+
+    #[tokio::test]
+    async fn a_running_daemon_is_told_from_none_and_from_not_knowing() {
+        for (out, want) in [
+            ((Some(1), "0\n", ""), false),
+            ((Some(0), "1\n", ""), true),
+            ((Some(126), "", "exec: pgrep: not found"), true),
+        ] {
+            let runner = Script::new(vec![out]);
+            assert_eq!(daemon_running(&runner, "docker", "c1").await, want);
         }
     }
 

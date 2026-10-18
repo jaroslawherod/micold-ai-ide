@@ -87,6 +87,7 @@ Milestone notes:
 | M5c review B (conformance, sonnet) | 1 | 7e4573e8c7115d81ab1304374e86f7d297622b16:c0850e4685b784cc72b8b989fab3015053b0dbfe | CHANGES: 3 MAJOR, 1 MINOR (F1 cycle-log row added; F2 fixed as A F2; F3 declined; F4 declined) |
 | M6 review A (reviewer agent) | 1 | fa4cd4b9de1fd016af7218f9e0fe3ab73fbbb121:fd94d65f8ca3be327a3179413bfae126f0a57192 | CHANGES: 2 MAJOR, 1 MINOR (F1 `Warned` lossy: the sink retries a full channel for it; F2 duplicates: cleared on `Entered(Acquire)`; F3 declined, see below) |
 | M6 review B (conformance, sonnet) | 1 | fa4cd4b9de1fd016af7218f9e0fe3ab73fbbb121:fd94d65f8ca3be327a3179413bfae126f0a57192 | CHANGES: 3 BLOCKER, 2 MAJOR, 1 MINOR (F1 tasks ticked; F2 `NoOutbound` real-runtime cases and F3 visual pass deferred, in Follow-ups; F4 test now drives selected/failed sets; F5 cycle-log M6 section added; F6 declined) |
+- M7 A r1 (e831de79:e5cf3805): CHANGES (1 BLOCKER, 2 MAJOR, 2 MINOR). B r1 (same snapshot): CHANGES (3 MAJOR, 2 MINOR). Fixed: daemon found running is never rolled back (`login::daemon_running` pre-check), every runtime command bounded (`limiting_commands`), unused token documented. Round 2 (scoped, sonnet) follows.
 
 ## Declined review findings
 
@@ -112,6 +113,8 @@ Milestone notes:
 
 - M6 review A F3 (MINOR): the stale-`offered.json`-then-empty case is covered by `an_empty_selection_rewrites_offered_json_to_offer_nothing` and by the CI case `sandbox_real_provision_deselecting_a_cli_stops_it_being_offered_after_restart`; no change.
 - M6 review B F6 (MINOR): the fail-fast login and the "is not ready" wording are the ledger follow-up the orchestrator assigned to this milestone (see Handover); no task added.
+- M7 A F3 / B F5 (create timeout rolls back by name, could remove a name-race winner): declined, needs a name race and the loser's `create` dying at once; no attempt-unique label exists to tell the container apart; the winner's next start re-adopts or recreates.
+- M7 B F2/F3, A F4/F5 (real-runtime stop and race tests drive `provision::run`, not the client's `container_attempt`/`bring_up_attempt`): declined for this PR, T082 and FR-020/023 are met by the suites plus unit tests of the client path (`StartRollback`, lifecycle rollback and name-race tests); logged as a follow-up.
 
 ## Handover
 
@@ -133,3 +136,5 @@ None.
 - Red CI #998, part 8 (history/mcp suites): `sandbox_real_history` (6) and `sandbox_real_mcp` failed on the basic image. Causes: (1) a daemon the client starts over SSH does not inherit the container's `-e` env (`MICOLD_IMAGE_REFERENCE`, `TZ`), so the history suite now provisions then restarts the container (shared `provision_then_restart` in `sandbox_real_support`, as `sandbox_real_idle` does) so the entrypoint's daemon runs with it; (2) `docker stop` signals only PID 1 (sshd, `exec`'d), so the daemon was killed unsaved: `packaging/basic/entrypoint.sh` now runs sshd as a child and on SIGTERM/SIGINT stops every daemon (up to 10 s, the runtime's default stop grace) then sshd (contract + README updated; simulated with stub scripts, the real image is verified by CI); (3) `sandbox_real_mcp` compared `<runtime> port` output to the host port; it names the container port 2222. Follow-up (product): a bridge-started daemon lacks the container env (`MICOLD_IMAGE_REFERENCE`, `TZ`); only an entrypoint-started one has it. `cargo test --no-run`/clippy with `sandbox-real-runtime` clean; suites not run here.
 - Part 8: `BASIC_IMAGE_CONTENT_HASH` moved to the new tree hash (the entrypoint changed); `BASIC_IMAGE` (tag + digest) still names the last published image until `basic-image.yml` publishes this tree on `main` (T049 re-pins it).
 - **M6b (new milestone)**: T075's `NoOutbound` cases and T078's visual pass (see Handover). The visual pass needs a display; the cloud container has no xdotool.
+
+- M7: a real-runtime test that drives the client's own start path (`bring_up_attempt` with a cancel, two racing `bring_up_attempt`s, `container_attempt` dropped after `Entered(Start)`) and asserts no container or daemon is left; needs the harness to build a `SandboxProfile`/mount set.
