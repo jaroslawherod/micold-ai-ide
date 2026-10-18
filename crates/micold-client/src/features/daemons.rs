@@ -540,6 +540,7 @@ pub fn views(state: &State, model: &Model<'_>) -> ViewModel {
                 .cloned()
                 .unwrap_or(DaemonState::Stopped),
             bound: bound_to(model, entry.id),
+            explanation: crate::links::remote_mismatch_text(entry, model.links.state(entry.id)),
             activity: match (&entry.runtime, state.provisioning.get(&entry.id)) {
                 (DaemonRuntime::Ssh(_), Some(progress))
                     if model.links.state(entry.id) == Some(&DaemonState::Starting) =>

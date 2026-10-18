@@ -9,6 +9,7 @@
 pub mod proxy;
 pub mod remote;
 pub mod sshd;
+pub mod stale_daemon;
 
 pub use sshd::Sshd;
 

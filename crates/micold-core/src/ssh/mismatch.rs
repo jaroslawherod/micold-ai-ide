@@ -73,9 +73,12 @@ pub fn way_out(older: Side, offer: ReplaceOffer) -> WayOut {
     }
 }
 
-/// The version a handshake string names: `micold-ai-ide/0.5.3` is `0.5.3`, a bare number is itself.
+/// The version a handshake string names: `micold-ai-ide/0.5.3` and `micold-daemon 0.5.3` are
+/// `0.5.3`, a bare number is itself.
 pub fn version_of(text: &str) -> &str {
-    text.rsplit('/').next().unwrap_or(text)
+    text.rsplit(|c: char| c == '/' || c.is_whitespace())
+        .next()
+        .unwrap_or(text)
 }
 
 /// A dotted number and whether it carries a pre-release suffix (`0.5.3-old`).
@@ -161,6 +164,7 @@ mod tests {
     #[test]
     fn handshake_build_strings_are_read_by_their_version() {
         assert_eq!(version_of("micold-ai-ide/0.5.3"), "0.5.3");
+        assert_eq!(version_of("micold-daemon 0.5.3"), "0.5.3");
         assert_eq!(version_of("11"), "11");
         assert_eq!(
             older_side("micold-ai-ide/0.5.3", "micold-ai-ide/0.5.2"),
