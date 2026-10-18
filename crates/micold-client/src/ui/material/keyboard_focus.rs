@@ -67,7 +67,7 @@ pub(super) struct Indicator {
 pub(super) struct TakesTheKeyboard<'a, M> {
     content: Element<'a, M>,
     /// The keys this control answers while focused, and what each sends.
-    keys: Vec<(keyboard::key::Named, M)>,
+    keys: Vec<(keyboard::key::Named, Option<keyboard::Modifiers>, M)>,
     enabled: bool,
     indicator: Option<Indicator>,
     /// What the application says about this control's focus — see [`Focus::supplied`].
@@ -109,7 +109,19 @@ impl<'a, M: Clone + 'a> TakesTheKeyboard<'a, M> {
     /// design decision — Space is the checkbox's and Enter is deliberately not — and one that a
     /// test should be able to read off the value rather than infer by pressing everything.
     pub fn key(mut self, key: keyboard::key::Named, message: M) -> Self {
-        self.keys.push((key, message));
+        self.keys.push((key, None, message));
+        self
+    }
+
+    /// A key together with exactly these modifiers (Shift+F10, feature 972, R5): the same key with
+    /// any other modifier set, or none, does not match. Data like [`Self::key`].
+    pub fn chord(
+        mut self,
+        key: keyboard::key::Named,
+        modifiers: keyboard::Modifiers,
+        message: M,
+    ) -> Self {
+        self.keys.push((key, Some(modifiers), message));
         self
     }
 
@@ -141,14 +153,16 @@ impl<'a, M: Clone + 'a> TakesTheKeyboard<'a, M> {
     }
 
     /// The message `key` sends, if this control claims it.
-    fn message_for(&self, key: &keyboard::Key) -> Option<M> {
+    fn message_for(&self, key: &keyboard::Key, held: keyboard::Modifiers) -> Option<M> {
         let keyboard::Key::Named(named) = key else {
             return None;
         };
         self.keys
             .iter()
-            .find(|(claimed, _)| claimed == named)
-            .map(|(_, message)| message.clone())
+            .find(|(claimed, modifiers, _)| {
+                claimed == named && modifiers.is_none_or(|exact| exact == held)
+            })
+            .map(|(_, _, message)| message.clone())
     }
 }
 
@@ -440,8 +454,8 @@ impl<'a, M: Clone + 'a> Widget<M, iced::Theme, iced::Renderer> for TakesTheKeybo
         // terminal's, not one this control answers, so it neither re-sends the press nor shows the
         // ring beside the terminal's own (FR-022a, BUG-016).
         if before && !shell.is_event_captured() {
-            if let Event::Keyboard(keyboard::Event::KeyPressed { key, .. }) = event {
-                if let Some(message) = self.message_for(key) {
+            if let Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, .. }) = event {
+                if let Some(message) = self.message_for(key, *modifiers) {
                     // Keyboard use, so from here the focus is shown — whatever put it here.
                     tree.state.downcast_mut::<Focus>().visible = true;
                     shell.publish(message);
@@ -651,5 +665,38 @@ mod tests {
             rest,
             "Tab landed on a disabled wrapper"
         );
+    }
+
+    /// Feature 972, R5, FR-009 (T020): a chord publishes on exactly its modifiers; a key claim
+    /// (the Menu key) publishes whatever is held; unfocused, nothing publishes.
+    #[test]
+    fn a_chord_publishes_on_its_modifiers_only_and_a_key_on_any() {
+        use super::super::test_support::{key_with, named_key};
+        use iced::keyboard::{key::Named, Modifiers};
+        let cursor = mouse::Cursor::Unavailable;
+        let control = || {
+            Mounted::new(
+                TakesTheKeyboard::new(container(text("a card")).padding(8), true)
+                    .chord(Named::F10, Modifiers::SHIFT, "menu".to_string())
+                    .key(Named::ContextMenu, "menu".to_string()),
+            )
+        };
+        let mut m = control();
+        assert!(m
+            .send(key_with(Named::F10, Modifiers::SHIFT), cursor)
+            .is_empty());
+        m.focus_next();
+        assert_eq!(
+            m.send(key_with(Named::F10, Modifiers::SHIFT), cursor),
+            ["menu"]
+        );
+        assert!(m.send(named_key(Named::F10), cursor).is_empty());
+        assert!(m
+            .send(
+                key_with(Named::F10, Modifiers::SHIFT | Modifiers::CTRL),
+                cursor
+            )
+            .is_empty());
+        assert_eq!(m.send(named_key(Named::ContextMenu), cursor), ["menu"]);
     }
 }

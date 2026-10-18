@@ -23,10 +23,10 @@ use crate::ui::cdk::overlay::{Anchor, Surface};
 use crate::ui::material::glyph::icon;
 use crate::ui::material::style;
 use crate::ui::material::{menu_panel, IconButton, Text, TypeRole};
-use iced::widget::{button, column, opaque, row, Space};
+use iced::widget::{button, column, container, opaque, row, Space};
 use iced::{Alignment, Element, Length};
 use micold_core::overlay::Layer;
-use micold_core::tokens::{anatomy, density, motion::duration, shape, spacing, Rgb, Roles};
+use micold_core::tokens::{anatomy, density, motion::duration, shape, spacing, state, Rgb, Roles};
 
 /// What a right-press on a menu item becomes: a message built from the press point, in window
 /// pixels.
@@ -183,11 +183,22 @@ pub fn menu_panel_size(items: usize) -> (u16, u16) {
 /// Measuring the column directly is the difference between asserting §7.5's figure and asserting
 /// arithmetic about it. Same reason `terminal_pane::scrollbar_metrics` is reachable from tests.
 pub(super) fn item_column<'a, M: Clone + 'a>(items: Vec<MenuItem<M>>, r: Roles) -> Element<'a, M> {
+    highlighted_column(items, r, None)
+}
+
+/// [`item_column`] with item `highlighted` drawing the keyboard focus: §5's focus state layer in
+/// the `Indicator` colours `TakesTheKeyboard` uses, and the ring inside the item's own box (feature
+/// 972, FR-010). The item keeps its box, so the panel's size is the same with or without it.
+fn highlighted_column<'a, M: Clone + 'a>(
+    items: Vec<MenuItem<M>>,
+    r: Roles,
+    highlighted: Option<usize>,
+) -> Element<'a, M> {
     // No `spacing`: §7.5 gives an item a height and a divider, and gives the gap between two items
     // nothing, because there is none. The 4dp that used to sit here read as a loose panel while
     // items were 36dp and became 20dp of dead space per five items once they were 48.
     let mut list = column![].width(Length::Fill);
-    for item in items {
+    for (index, item) in items.into_iter().enumerate() {
         // `height(Fill)` is what makes `align_y` mean what it says here. A `Row` centres its
         // children against *each other*, inside the cross size the flex computes from them, and
         // that band is then laid against the top of the node `button` stretched to 48dp — so the
@@ -285,9 +296,35 @@ pub(super) fn item_column<'a, M: Clone + 'a>(items: Vec<MenuItem<M>>, r: Roles) 
         // `picker::row_element` carries the full account of (016 BUG-002, FR-035). Same shape here,
         // same answer, so the two kinds of inert row cannot diverge.
         let entry = if inert { opaque(entry) } else { entry };
-        list = list.push(entry);
+        list = list.push(if highlighted == Some(index) {
+            focus_marked(entry, r)
+        } else {
+            entry
+        });
     }
     list.into()
+}
+
+/// `entry` with the keyboard-focus indicator drawn behind it: the focus state layer in the item's
+/// content colour and the ring in `secondary`, as `TakesTheKeyboard` draws on a focused control.
+/// Behind, because the entry's button and ripple are transparent at rest.
+fn focus_marked<'a, M: 'a>(entry: Element<'a, M>, r: Roles) -> Element<'a, M> {
+    let (layer, ring) = (style::color(r.on_surface), style::color(r.secondary));
+    container(entry)
+        .width(Length::Fill)
+        .style(move |_| container::Style {
+            background: Some(iced::Background::Color(iced::Color {
+                a: state::FOCUS,
+                ..layer
+            })),
+            border: iced::Border {
+                color: ring,
+                width: state::FOCUS_RING_WIDTH,
+                radius: 0.0.into(),
+            },
+            ..container::Style::default()
+        })
+        .into()
 }
 
 /// The menu trigger: an icon button (emitting `on_toggle`) placed in the toolbar. Builder form
@@ -335,6 +372,7 @@ pub struct MenuOverlay<'a, M> {
     anchor: Option<iced::Point>,
     hung_from: Option<iced::Point>,
     on_scroll: Option<M>,
+    highlighted: Option<usize>,
     lifetime: std::marker::PhantomData<&'a ()>,
 }
 
@@ -350,8 +388,16 @@ impl<'a, M: Clone + 'a> MenuOverlay<'a, M> {
             anchor: None,
             hung_from: None,
             on_scroll: None,
+            highlighted: None,
             lifetime: std::marker::PhantomData,
         }
+    }
+
+    /// Draw the keyboard focus on item `index` (feature 972, FR-010): the focus state layer and
+    /// ring. The panel keeps its size, so [`menu_panel_size`] stays exact.
+    pub fn highlighted(mut self, index: Option<usize>) -> Self {
+        self.highlighted = index;
+        self
     }
 
     /// Hang the popover's top-left corner from `point` (window coordinates) — the bottom-left
@@ -400,6 +446,7 @@ impl<'a, M: Clone + 'a> From<MenuOverlay<'a, M>> for Surface<'a, M> {
             anchor,
             hung_from,
             on_scroll,
+            highlighted,
             ..
         } = m;
 
@@ -410,7 +457,7 @@ impl<'a, M: Clone + 'a> From<MenuOverlay<'a, M>> for Surface<'a, M> {
         // that fits is exactly as tall as before and `menu_panel_size` stays exact for the menus
         // it estimates — the select's list is the precedent (`picker.rs`). Without it a long
         // project catalog ran the switcher off the bottom of the window, "Add project…" with it.
-        let mut items = super::Scrollable::new(item_column(items, r), r)
+        let mut items = super::Scrollable::new(highlighted_column(items, r, highlighted), r)
             .width(Length::Fill)
             .height(Length::Shrink);
         if let Some(message) = on_scroll {
@@ -689,5 +736,52 @@ mod tests {
             (end - (ROOM.width - anatomy::menu::ITEM_PADDING)).abs() < TOLERANCE,
             "the mark ends at {end}dp, not at the item's trailing inset"
         );
+    }
+
+    fn three_items() -> Vec<MenuItem<String>> {
+        ["Open", "Rename", "Delete"]
+            .into_iter()
+            .map(|label| MenuItem::labeled(label, label.to_string()))
+            .collect()
+    }
+
+    /// Feature 972, FR-010 (T022): the highlighted item draws the focus layer and ring and the
+    /// others draw what they did; the column keeps its size and `menu_panel_size` stays exact.
+    #[test]
+    fn the_highlighted_item_draws_the_focus_state_and_the_others_do_not() {
+        let item = density::MENU_ITEM_BASE as usize;
+        let rows = |highlighted: Option<usize>| {
+            let (pixels, width) =
+                test_support::Mounted::new(highlighted_column(three_items(), roles(), highlighted))
+                    .drawn(style::color(roles().surface));
+            let band = width as usize * 4 * item;
+            assert_eq!(pixels.len(), band * 3, "three items, {item}dp each");
+            pixels.chunks(band).map(<[u8]>::to_vec).collect::<Vec<_>>()
+        };
+        let rest = rows(None);
+        for marked in 0..3 {
+            let shown = rows(Some(marked));
+            for (index, band) in shown.iter().enumerate() {
+                assert_eq!(
+                    band != &rest[index],
+                    index == marked,
+                    "highlight on item {marked}: item {index} drawn differently = {}",
+                    index != marked
+                );
+            }
+        }
+        for highlighted in [None, Some(1)] {
+            let size = test_support::size_of(
+                highlighted_column(three_items(), roles(), highlighted),
+                ROOM,
+            );
+            let (_, panel) = menu_panel_size(3);
+            let padding = anatomy::menu::VERTICAL_PADDING * 2.0;
+            assert!(
+                (size.height + padding - f32::from(panel)).abs() < TOLERANCE,
+                "{highlighted:?}: items {}dp high, menu_panel_size says {panel}dp",
+                size.height
+            );
+        }
     }
 }

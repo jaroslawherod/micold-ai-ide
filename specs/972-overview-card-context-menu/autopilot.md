@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #972
 - **Worktree branch**: claude/project-thread-a1yb7j
 - **Started**: 2026-10-18
-- **Phase**: implement
-- **Next step**: M2 pushed, orchestrator opens the PR from the scratchpad title/body and merges; then M3
+- **Phase**: implement (M3)
+- **Next step**: M3 pushed, orchestrator opens the PR from the scratchpad title/body and merges; then close
 
 ## Pull requests
 
@@ -18,14 +18,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1034 | Design: spec, plan, research, contracts, tasks | merged | 1fae1becb8fa64097695f169ad7243ec5d1f1dae |
 | #1042 | M1: card context menu (T001–T013) | merged | 71bf8848af5fc1ca0f5fc8e8e167778b753da43a |
+| #1069 | M2: target mark and empty-space dismissal (T014–T019) | merged | 5863754859bf82cc31ac35619300da5320477909 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T013 | full | Right-click a card: *Open* + row-menu entries, run as the row menu does; registry dismissal | #1042 | merged |
-| M2 | T014–T019 (T016b) | light | Target mark on the card; empty-space right-click dismisses | — | implemented, gate green, reviewed; PR pending |
-| M3 | T020–T028 | full | Menu key / Shift+F10 open, arrow/Enter navigation, focus return | — | pending |
+| M2 | T014–T019 (T016b) | light | Target mark on the card; empty-space right-click dismisses | #1069 | merged |
+| M3 | T020–T028 | full | Menu key / Shift+F10 open, arrow/Enter navigation, focus return | — | implemented, gate green, reviewed; PR pending |
 
 ## Decisions
 
@@ -52,9 +53,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 | A M2 | 2 (sonnet, scoped) | eb9775a35a45ad52edb2d21e5d354433eb53256:3f3e428ebfb4d5e1530be90a06820fa2783aec13 | CLEAN |
 | Visual pass M2 | 1 | — | not run to completion: showcase scroll under Xvfb/tiny-skia would not reach the OverviewCard section; the outline and layer are covered by pixel tests (T014); B2, B6, B17 left for a human or CI |
 | B M2 (conformance, sonnet) | 1 | 04ef833dcb2e901f6ca01478ff005826cab0ab4c:71bf8848af5fc1ca0f5fc8e8e167778b753da43a | CHANGES: F1 MAJOR (cycle-log rows missing) fixed; F2 MINOR declined, F3 MINOR fixed |
+| A M3 (reviewer, high) | 1 | 2ee9c1a3bcdb9da9850575f23b9d18c2653e62de:5863754859bf82cc31ac35619300da5320477909 | CHANGES: F1 MAJOR declined (see below), F2 MINOR not fixed |
+| B M3 (conformance, sonnet) | 1 | 2ee9c1a3bcdb9da9850575f23b9d18c2653e62de:5863754859bf82cc31ac35619300da5320477909 | CHANGES: F1 MAJOR (visual pass B10–B13, B18 not yet recorded) fixed by the M3 visual pass; F2 MAJOR (red evidence) fixed by mutation runs recorded in the cycle log; F3 MINOR declined |
+| Visual pass M3 | 1 | — | B10, B11, B13, B18 PASS; B12 FAIL (focus lost when the deleted card outlived its dialog) fixed with `focus_landed` in `card_focus_return`, re-run PASS; ripple not capturable under software rendering |
 
 ## Declined review findings
 
+- A M3 F1 / B M3 F3 (a `focus_return` survives the Overview closing and steals focus on reopen): `settle_card_menu` runs after every outermost update and clears `focus_return` when the Overview is not open (`the_menu_closes_when_the_overview_closes` asserts it); the drain in `main.rs` runs after that. A M3 F2 (extract the dialog-wait decision for a unit test): glue, covered by the visual pass.
 - A M2 F3 (reorder fixture convoluted), B M2 F2 (targeted vs hovered render): the harness draws with `Cursor::Unavailable`, so a hovered render cannot be expressed; hover is covered by the 971 ripple tests. A F3 is taste.
 
 | Milestone | Review | Finding | Why declined |

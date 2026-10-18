@@ -128,9 +128,16 @@ space in the Overview closes it too, and right-clicking another card closes the 
 that card's. The menu also closes when its location goes away or the
 Overview closes.
 
+From the keyboard, press the **Menu** key or **Shift+F10** on a focused card to open the same menu
+inside the card, with **Open** highlighted. **Down** and **Up** move through the entries (from the
+last back to the first, and the reverse), and **Enter** or **Space** runs the highlighted one. The
+same keys work on a menu opened with the pointer. **Escape** closes the menu and puts the keyboard
+back on its card; after an entry that leaves the Overview open, the keyboard returns to the card
+too, or to the first card if that one is gone. With no card focused the keys do nothing.
+
 ## Keyboard
 
-Opening the Overview puts the keyboard on its first card. **Tab** and **Shift+Tab** move to the next and previous card; the arrow keys do the same (**Right** and **Down** forward, **Left** and **Up** back). The focused card shows a ring. **Escape** closes the Overview, after any dialog or unsaved Settings draft that Escape would close first. While a terminal has the keyboard, the arrow keys and Escape go to the terminal.
+Opening the Overview puts the keyboard on its first card. **Tab** and **Shift+Tab** move to the next and previous card; the arrow keys do the same (**Right** and **Down** forward, **Left** and **Up** back). The focused card shows a ring. **Menu** or **Shift+F10** opens its menu (see *Acting on a card*). **Escape** closes the Overview, after any dialog or unsaved Settings draft that Escape would close first. While a terminal has the keyboard, the arrow keys and Escape go to the terminal.
 
 ## The five states, worst first
 

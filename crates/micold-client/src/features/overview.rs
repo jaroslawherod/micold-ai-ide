@@ -62,6 +62,10 @@ pub struct State {
     /// The card the keyboard goes back to once a keyboard-opened menu closed or ran an entry
     /// (feature 972, FR-011); drained by the root.
     pub focus_return: Option<SessionLocation>,
+    /// The card the keyboard was just handed back to. While it is still listed nothing happens;
+    /// if it goes (a delete that finishes after its dialog closed) the keyboard moves to the
+    /// first card instead of being lost. Cleared by any other focus move (feature 972, FR-011).
+    pub focus_landed: Option<SessionLocation>,
 }
 
 impl State {
@@ -174,6 +178,21 @@ pub enum Msg {
         /// The gesture that opened it.
         origin: MenuOrigin,
     },
+    /// Menu or Shift+F10 on a focused card: the root measures the card, then opens its menu from
+    /// the keyboard (feature 972, FR-009). Changes no state of its own.
+    CardMenuRequested(SessionLocation),
+    /// Up or Down in the open card menu: the highlight steps by one and wraps (FR-010). `items`
+    /// is the menu's entry count, known to the root and not to the key listener, which sends 0 and
+    /// has the root fill it in; with 0 the highlight does not move.
+    CardMenuMoved {
+        /// Down was pressed (else Up).
+        forward: bool,
+        /// How many entries the menu holds.
+        items: usize,
+    },
+    /// Enter or Space in the open card menu: the root runs the highlighted entry (FR-010). Changes
+    /// no state of its own: the entry's own message closes the menu.
+    CardMenuActivated,
     /// The card menu closes without running anything: Escape, an outside click, displacement or
     /// a scroll beneath it.
     CardMenuDismissed,
@@ -244,12 +263,14 @@ pub fn update(state: &mut State, msg: Msg) -> Vec<crate::features::Outcome> {
             state.titles.clear();
             state.card_menu = None;
             state.focus_return = None;
+            state.focus_landed = None;
         }
         Msg::CardMenuOpened {
             location,
             anchor,
             origin,
         } => {
+            state.focus_landed = None;
             state.card_menu = Some(CardMenu {
                 location,
                 anchor,
@@ -269,6 +290,18 @@ pub fn update(state: &mut State, msg: Msg) -> Vec<crate::features::Outcome> {
         }
         // The root answers it with the shared scroll-beneath rule; nothing of the Overview's own.
         Msg::GridScrolled => {}
+        // The root answers these two with the measured card and the highlighted entry.
+        Msg::CardMenuRequested(_) | Msg::CardMenuActivated => {}
+        Msg::CardMenuMoved { forward, items } => {
+            if let Some(menu) = state.card_menu.as_mut().filter(|_| items > 0) {
+                menu.highlighted = Some(match (menu.highlighted, forward) {
+                    (None, true) => 0,
+                    (None, false) => items - 1,
+                    (Some(at), true) => (at + 1) % items,
+                    (Some(at), false) => (at + items - 1) % items,
+                });
+            }
+        }
         Msg::Toggled {
             settings_open: true,
         } => {}

@@ -234,6 +234,11 @@ impl<'a> Mounted<'a> {
 
     /// One event, with no settling, returning whatever was published.
     pub fn send(&mut self, event: Event, cursor: mouse::Cursor) -> Vec<String> {
+        self.send_captured(event, cursor).0
+    }
+
+    /// [`Self::send`], and whether the element captured the event, so no later handler sees it.
+    pub fn send_captured(&mut self, event: Event, cursor: mouse::Cursor) -> (Vec<String>, bool) {
         let mut messages = Vec::new();
         let mut shell = iced::advanced::Shell::new(&mut messages);
         self.element.as_widget_mut().update(
@@ -246,7 +251,8 @@ impl<'a> Mounted<'a> {
             &mut shell,
             &Rectangle::with_size(WINDOW),
         );
-        messages
+        let captured = shell.is_event_captured();
+        (messages, captured)
     }
 
     /// Run `operation` against the element to the end of its chain, the way the runtime does,
@@ -381,6 +387,11 @@ pub struct Painted {
 
 /// A press of the named key, with no modifiers and no text.
 pub fn named_key(named: iced::keyboard::key::Named) -> Event {
+    key_with(named, iced::keyboard::Modifiers::empty())
+}
+
+/// A press of the named key with `modifiers` held, and no text.
+pub fn key_with(named: iced::keyboard::key::Named, modifiers: iced::keyboard::Modifiers) -> Event {
     Event::Keyboard(iced::keyboard::Event::KeyPressed {
         key: iced::keyboard::Key::Named(named),
         modified_key: iced::keyboard::Key::Named(named),
@@ -388,7 +399,7 @@ pub fn named_key(named: iced::keyboard::key::Named) -> Event {
             iced::keyboard::key::NativeCode::Unidentified,
         ),
         location: iced::keyboard::Location::Standard,
-        modifiers: iced::keyboard::Modifiers::empty(),
+        modifiers,
         text: None,
         repeat: false,
     })

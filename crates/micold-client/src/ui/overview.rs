@@ -22,36 +22,39 @@ use micold_core::task_progress::{self, Progress, Source};
 use micold_core::theme::ColorScheme;
 use micold_core::tokens::{self, spacing};
 
-/// The first card's widget id: the keyboard goes here when the Overview opens (research R13).
-pub static FIRST_CARD_ID: std::sync::LazyLock<iced::advanced::widget::Id> =
-    std::sync::LazyLock::new(|| iced::advanced::widget::Id::new("overview-first-card"));
+/// A card's widget id, stable per location: the keyboard goes to the first card's when the Overview
+/// opens (research R13) and back to the target's when a card menu closes (feature 972, FR-011).
+pub fn card_id(location: &SessionLocation) -> iced::advanced::widget::Id {
+    iced::advanced::widget::Id::from(match location {
+        SessionLocation::Default => "overview-card-default".to_string(),
+        SessionLocation::Worktree(dir) => format!("overview-card-{dir}"),
+    })
+}
 
 /// The Overview: a grid with one card per location of the active project.
 pub fn view<'a>(state: &State, scheme: ColorScheme) -> Element<'a, Message> {
     let r = tokens::roles(scheme);
+    let menu_open = state.overview.card_menu.is_some();
     let cards = cards(state)
         .iter()
-        .enumerate()
-        .map(|(index, model)| {
+        .map(|model| {
             let location = model.location.clone();
-            let card = OverviewCard::new(model, r)
+            let menu_at = location.clone();
+            OverviewCard::new(model, r)
+                .id(card_id(&location))
                 .targeted(is_targeted(state, &location))
+                .menu_open(menu_open)
                 .on_press(Message::Overview(Msg::ActivationRequested(
                     model.activation.clone(),
                 )))
+                .on_menu_key(Message::Overview(Msg::CardMenuRequested(menu_at)))
                 .on_secondary_press(move |anchor| {
                     Message::Overview(Msg::CardMenuOpened {
                         location: location.clone(),
                         anchor,
                         origin: MenuOrigin::Pointer,
                     })
-                });
-            // The first card is named so opening the Overview can put the keyboard on it (R13).
-            if index == 0 {
-                card.id(FIRST_CARD_ID.clone())
-            } else {
-                card
-            }
+                })
         })
         .collect();
     // The grid scrolls itself; an outer scrollable would give it unbounded height.
@@ -75,6 +78,36 @@ pub fn is_targeted(state: &State, location: &SessionLocation) -> bool {
         .card_menu
         .as_ref()
         .is_some_and(|menu| &menu.location == location)
+}
+
+/// The message of the card menu's highlighted entry (feature 972, FR-010): already wrapped in
+/// [`Msg::CardMenuEntryChosen`], as the entry's click publishes it. None with no menu, no
+/// highlight, an index past the current list (the list changed under the highlight) or an entry
+/// that is shown and not pressable.
+pub fn card_menu_entry(state: &State) -> Option<Message> {
+    let menu = state.overview.card_menu.as_ref()?;
+    card_menu_items(state, &menu.location)
+        .into_iter()
+        .nth(menu.highlighted?)?
+        .message
+}
+
+/// Where a keyboard-opened menu hangs: just inside `bounds`, the focused card's, by
+/// [`spacing::MD`] from its top-left (FR-009). Window pixels, as the pointer's anchor is.
+pub fn keyboard_anchor(bounds: iced::Rectangle) -> (u16, u16) {
+    let px = |v: f32| v.round().clamp(0.0, f32::from(u16::MAX)) as u16;
+    (px(bounds.x + spacing::MD), px(bounds.y + spacing::MD))
+}
+
+/// The card the keyboard goes back to after a keyboard-opened menu (FR-011): `target` while its card
+/// is listed, else the first card; None with no cards.
+pub fn focus_return_target(state: &State, target: &SessionLocation) -> Option<SessionLocation> {
+    let cards = cards(state);
+    cards
+        .iter()
+        .find(|model| &model.location == target)
+        .or(cards.first())
+        .map(|model| model.location.clone())
 }
 
 /// The card menu of `location` (feature 972, FR-002): *Open* first, then exactly that location's
@@ -122,6 +155,7 @@ pub fn settle_card_menu(state: &mut State) {
     if !state.overview.open {
         state.overview.card_menu = None;
         state.overview.focus_return = None;
+        state.overview.focus_landed = None;
         return;
     }
     let Some(target) = state

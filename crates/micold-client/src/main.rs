@@ -505,6 +505,12 @@ fn update(app: &mut App, message: Message) -> Task<Message> {
         None => task,
     };
 
+    // Feature 972 (FR-011): a keyboard-opened card menu closed, so the keyboard goes back to its card.
+    let task = match card_focus_return(app) {
+        Some(focus) => Task::batch([task, focus]),
+        None => task,
+    };
+
     // Hand a closing overlay's snapshot to the renderer so its exit has something to draw (US1).
     // The transition itself belongs to `material::Modal`, which reports back with
     // `OverlayTransitionFinished` once it is over; the snapshot is released there.
@@ -652,6 +658,39 @@ fn tab_reveal_scroll(app: &mut App) -> Option<Task<Message>> {
     ))
 }
 
+/// Move the keyboard back to the card a keyboard-opened menu came from (feature 972, FR-011): its
+/// own card while still listed, else the first. Waits while a dialog the entry opened is up, so the
+/// keyboard is not pulled from it; drained on any message like [`tab_reveal_scroll`], which is how
+/// it sees that dialog close.
+fn card_focus_return(app: &mut App) -> Option<Task<Message>> {
+    use micold_client::ui::overview::{card_id, focus_return_target};
+    if !app.core.overview.open || micold_client::overlay::registry::open_dialog(&app.core).is_some()
+    {
+        return None;
+    }
+    // The card it came back to has since gone: the first card takes the keyboard.
+    if let Some(landed) = app.core.overview.focus_landed.clone() {
+        let target = focus_return_target(&app.core, &landed)?;
+        if target != landed {
+            app.core.overview.focus_landed = None;
+            return Some(iced::widget::operation::focus(card_id(&target)));
+        }
+    }
+    let location = app.core.overview.focus_return.take()?;
+    let target = focus_return_target(&app.core, &location)?;
+    app.core.overview.focus_landed = Some(target.clone());
+    Some(iced::widget::operation::focus(card_id(&target)))
+}
+
+/// Focus the Overview's first card, as it opens (research R13); nothing with no cards.
+fn first_card_focus(app: &App) -> Task<Message> {
+    use micold_client::ui::overview::{card_id, cards};
+    match cards(&app.core).first() {
+        Some(first) => iced::widget::operation::focus(card_id(&first.location)),
+        None => Task::none(),
+    }
+}
+
 /// The Overview's messages, and what they ask of the window (feature 813, R12, R13).
 fn overview_message(app: &mut App, msg: micold_client::features::overview::Msg) -> Task<Message> {
     use micold_client::features::overview::Msg;
@@ -678,6 +717,38 @@ fn overview_message(app: &mut App, msg: micold_client::features::overview::Msg) 
         },
         other => other,
     };
+    // Feature 972 (FR-009, FR-010): the keyboard's way into the card menu and through it.
+    let msg = match msg {
+        Msg::CardMenuRequested(location) => {
+            if !app.core.overview.open || app.core.overview.activating.is_some() {
+                return Task::none();
+            }
+            // The focused control is the card the key reached: its bounds place the menu in it.
+            return micold_client::ui::focused_bounds_task().then(move |bounds| match bounds {
+                Some(bounds) => Task::done(Message::Overview(Msg::CardMenuOpened {
+                    location: location.clone(),
+                    anchor: micold_client::ui::overview::keyboard_anchor(bounds),
+                    origin: micold_client::features::overview::MenuOrigin::Keyboard,
+                })),
+                None => Task::none(),
+            });
+        }
+        Msg::CardMenuMoved { forward, .. } => {
+            let items = app.core.overview.card_menu.as_ref().map_or(0, |menu| {
+                micold_client::ui::overview::card_menu_items(&app.core, &menu.location).len()
+            });
+            app.core
+                .update(Message::Overview(Msg::CardMenuMoved { forward, items }));
+            return Task::none();
+        }
+        Msg::CardMenuActivated => {
+            return match micold_client::ui::overview::card_menu_entry(&app.core) {
+                Some(entry) => update_inner(app, entry),
+                None => Task::none(),
+            };
+        }
+        other => other,
+    };
     // A card-menu entry: the reducer closes the menu, then the entry runs as the row menu's own
     // pick does (feature 972, FR-003, FR-004, research R4), so its failures and dialogs are the
     // row menu's.
@@ -690,7 +761,7 @@ fn overview_message(app: &mut App, msg: micold_client::features::overview::Msg) 
         app.core.update(Message::Overview(msg));
         return if !was_open && app.core.overview.open {
             Task::batch([
-                iced::widget::operation::focus(micold_client::ui::overview::FIRST_CARD_ID.clone()),
+                first_card_focus(app),
                 shell::issues::on_overview_opened(app),
             ])
         } else {
@@ -784,6 +855,7 @@ fn update_inner(app: &mut App, message: Message) -> Task<Message> {
         // operations never look at a scrollable. Chained rather than batched, because the scroll
         // has to read the focus the move just set.
         Message::FocusMoved { forward } => {
+            app.core.overview.focus_landed = None;
             let moved = if forward {
                 iced::widget::operation::focus_next()
             } else {

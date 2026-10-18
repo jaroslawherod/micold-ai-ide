@@ -943,6 +943,8 @@ pub const COMPONENTS: &[Entry] = &[
 application, so in this page it opens away from the trigger",
             "the project switcher's list: the same panel, with an active row, a running count, \
 unread counts and an unavailable row",
+            "an item keyboard-highlighted (the card menu's Up and Down): the focus state layer and \
+ring on one entry, the panel the same size",
         ],
         live: &["hover and press its items", "Escape dismisses it"],
         interactive: true,

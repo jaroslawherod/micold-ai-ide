@@ -41,6 +41,8 @@ pub enum Floating {
     /// A start list with a disabled item: the same `material::MenuOverlay`, carrying an item
     /// with no message, a red icon and a tooltip for its reason (037 contract W7, BUG-753).
     MenuWithDisabledItem,
+    /// The overflow menu with its second item keyboard-highlighted (feature 972, FR-010).
+    MenuHighlighted,
 }
 
 /// Everything a developer can ask the showcase to do.

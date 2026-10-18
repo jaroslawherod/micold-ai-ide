@@ -645,6 +645,7 @@ pub fn view_with<'a>(
                 roles,
             )
             .anchor(iced::Point::new(x as f32, y as f32))
+            .highlighted(menu.highlighted)
             .into()
         });
 
@@ -1219,8 +1220,13 @@ pub fn subscription(state: &State) -> Subscription<Message> {
         subs.push(app_chord_listener());
     }
     // Feature 813 (FR-014, R13): arrow keys move between the cards while the Overview is open.
+    // Feature 972 (FR-010): with a card menu open the same keys drive the menu instead.
     if state.overview.open {
-        subs.push(overview_arrow_listener());
+        subs.push(if state.overview.card_menu.is_some() {
+            card_menu_key_listener()
+        } else {
+            overview_arrow_listener()
+        });
     }
     Subscription::batch(subs)
 }
@@ -1237,6 +1243,39 @@ fn overview_arrow(event: iced::keyboard::Event) -> Option<Message> {
         return None;
     };
     crate::ui::overview::arrow_focus(&key).map(|forward| Message::FocusMoved { forward })
+}
+
+/// Up, Down, Enter and Space, heard while a card menu is open. Only keys no widget took, so a
+/// focused card (which drops its own claims while a menu is open) leaves Enter and Space to it.
+fn card_menu_key_listener() -> Subscription<Message> {
+    iced::keyboard::listen().filter_map(card_menu_key)
+}
+
+/// The card menu's message for a key: Down and Up move the highlight, Enter and Space run it. The
+/// entry count is the root's to supply (`items: 0` here). A named function for the same `TypeId`
+/// reason as [`escape_message`].
+fn card_menu_key(event: iced::keyboard::Event) -> Option<Message> {
+    use crate::features::overview::Msg;
+    use iced::keyboard::{key::Named, Key};
+    let iced::keyboard::Event::KeyPressed { key, modifiers, .. } = event else {
+        return None;
+    };
+    if !modifiers.is_empty() {
+        return None;
+    }
+    let msg = match key {
+        Key::Named(Named::ArrowDown) => Msg::CardMenuMoved {
+            forward: true,
+            items: 0,
+        },
+        Key::Named(Named::ArrowUp) => Msg::CardMenuMoved {
+            forward: false,
+            items: 0,
+        },
+        Key::Named(Named::Enter | Named::Space) => Msg::CardMenuActivated,
+        _ => return None,
+    };
+    Some(Message::Overview(msg))
 }
 
 /// The app's chords (the Overview's, feature 813; navigation's, feature 803), heard while the

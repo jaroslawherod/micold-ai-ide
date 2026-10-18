@@ -157,7 +157,9 @@ pub struct OverviewCard<'a, M> {
     roles: Roles,
     on_press: Option<M>,
     on_secondary_press: Option<PressAt<'a, M>>,
+    on_menu_key: Option<M>,
     targeted: bool,
+    menu_open: bool,
     id: Option<iced::advanced::widget::Id>,
     _marker: PhantomData<&'a M>,
 }
@@ -176,7 +178,9 @@ impl<'a, M: 'a> OverviewCard<'a, M> {
             roles,
             on_press: None,
             on_secondary_press: None,
+            on_menu_key: None,
             targeted: false,
+            menu_open: false,
             id: None,
             _marker: PhantomData,
         }
@@ -197,12 +201,29 @@ impl<'a, M: 'a> OverviewCard<'a, M> {
         self
     }
 
+    /// Publish `message` on the Menu key and on Shift+F10 while the card holds the keyboard: the
+    /// card's context menu opens from the keyboard (feature 972, FR-009). The event is captured, so
+    /// no handler beneath the card, a terminal included, sees it. Dropped while the card is
+    /// targeted, like Enter and Space.
+    pub fn on_menu_key(mut self, message: M) -> Self {
+        self.on_menu_key = Some(message);
+        self
+    }
+
     /// Mark the card as the target of its open context menu (feature 972, FR-006, research R7): a
     /// 2dp `primary` outline and the *selected* state layer over the fill, which neither hover (a
     /// layer alone) nor the focus ring (`secondary`, inset) draws. While targeted, Enter and Space
     /// belong to the menu, so the card drops its claims on them (FR-013).
     pub fn targeted(mut self, targeted: bool) -> Self {
         self.targeted = targeted;
+        self
+    }
+
+    /// Say a card menu is open, on this card or another: no card claims Enter, Space or the menu
+    /// keys then, so they reach the menu's own listener (feature 972, FR-013). Without it a focused
+    /// card other than the target would activate on the Enter meant for the menu.
+    pub fn menu_open(mut self, open: bool) -> Self {
+        self.menu_open = open;
         self
     }
 
@@ -312,10 +333,15 @@ impl<'a, M: Clone + 'a> From<OverviewCard<'a, M>> for Element<'a, M> {
         if let Some(id) = card.id {
             focusable = focusable.id(id);
         }
-        if !targeted {
+        if !targeted && !card.menu_open {
             focusable = focusable
                 .key(keyboard::key::Named::Enter, message.clone())
                 .key(keyboard::key::Named::Space, message);
+            if let Some(menu) = card.on_menu_key {
+                focusable = focusable
+                    .key(keyboard::key::Named::ContextMenu, menu.clone())
+                    .chord(keyboard::key::Named::F10, keyboard::Modifiers::SHIFT, menu);
+            }
         }
         let focusable = focusable.indicator(Indicator {
             outline: roles.secondary,
@@ -717,6 +743,75 @@ mod tests {
         let mut open = mounted_targeted(false);
         open.focus_next();
         assert_eq!(open.send(named_key(Named::Enter), cursor), ["open"]);
+    }
+
+    /// Feature 972, FR-009 (T021): the Menu key and Shift+F10 on the focused card publish the menu
+    /// message and are captured; F10 alone does nothing; unfocused, nothing; a targeted card drops
+    /// the claim. Neither key starts a ripple (feature 971).
+    #[test]
+    fn the_menu_key_and_shift_f10_on_the_focused_card_publish_the_menu_message() {
+        use super::super::test_support::key_with;
+        use iced::keyboard::Modifiers;
+        let cursor = iced::advanced::mouse::Cursor::Unavailable;
+        let card = |targeted| {
+            Mounted::new(
+                OverviewCard::<String>::new(&model(CardState::Idle, "feat-a"), roles())
+                    .on_press("open".to_string())
+                    .on_menu_key("menu".to_string())
+                    .targeted(targeted),
+            )
+        };
+        let menu_keys = [
+            key_with(Named::ContextMenu, Modifiers::empty()),
+            key_with(Named::F10, Modifiers::SHIFT),
+        ];
+        let mut unfocused = card(false);
+        for key in &menu_keys {
+            assert_eq!(
+                unfocused.send_captured(key.clone(), cursor),
+                (vec![], false)
+            );
+        }
+        let mut focused = card(false);
+        focused.focus_next();
+        for key in &menu_keys {
+            assert_eq!(
+                focused.send_captured(key.clone(), cursor),
+                (vec!["menu".to_string()], true),
+                "{key:?}"
+            );
+        }
+        assert_eq!(
+            focused.send_captured(named_key(Named::F10), cursor),
+            (vec![], false)
+        );
+        assert!(ripple(&focused).is_idle(), "a menu key must not ripple");
+        let mut targeted = card(true);
+        targeted.focus_next();
+        for key in &menu_keys {
+            assert_eq!(targeted.send_captured(key.clone(), cursor), (vec![], false));
+        }
+    }
+
+    /// Feature 972, FR-013: while a menu is open on another card, this one claims no key either.
+    #[test]
+    fn a_card_drops_its_keys_while_any_menu_is_open() {
+        use super::super::test_support::key_with;
+        let cursor = iced::advanced::mouse::Cursor::Unavailable;
+        let mut card = Mounted::new(
+            OverviewCard::<String>::new(&model(CardState::Idle, "feat-a"), roles())
+                .on_press("open".to_string())
+                .on_menu_key("menu".to_string())
+                .menu_open(true),
+        );
+        card.focus_next();
+        for key in [
+            named_key(Named::Enter),
+            named_key(Named::Space),
+            key_with(Named::ContextMenu, iced::keyboard::Modifiers::empty()),
+        ] {
+            assert_eq!(card.send_captured(key, cursor), (vec![], false));
+        }
     }
 
     /// Feature 972, FR-008 (R3): an area around the cards publishes on a right-press in empty space
