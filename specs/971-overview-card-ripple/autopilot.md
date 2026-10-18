@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #971
 - **Worktree branch**: claude/project-thread-kqz6b6
 - **Started**: 2026-10-18
-- **Phase**: clarify
-- **Next step**: clarify unit continues with the user's answer to the US3 escalation, applies it to spec.md (US3 scenario 1, FR-007, SC-005, Out of Scope), then runs the next clarify round
+- **Phase**: clarify done
+- **Next step**: plan unit
 
 ## Pull requests
 
@@ -27,6 +27,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
 | 1 | clarify | When does each ripple start (press/release)? | Pointer: on button down, activation on release; keyboard: on the activating key press | agent | ripple.rs ButtonPressed; keyboard_focus.rs KeyPressed |
+| 2 | clarify | US3: how does the ripple stay visible when activation closes the Overview? | Overview stays up 300 ms (ripple expand time), then closes and navigates | user | decision card 2026-10-18T17:38Z |
+| 3 | clarify | Input during the 300 ms delay? | Ignored; first activation stands | agent | FR-008; 813 FR-013 |
 
 ## Review rounds
 
@@ -45,11 +47,7 @@ None.
 
 ## Open escalation
 
-Clarify round 1, User Story 3: feature 813 FR-013 closes the Overview on activation, so the
-ripple that confirms it is lost. Options: (A, Recommended) delay the close by the ripple's expand
-time (300 ms, `duration::MEDIUM_2`, ripple.rs `EXPAND`) so pointer and keyboard ripples both show;
-(B) close at once as today (ripple seen only while the pointer is held; keyboard ripple never seen);
-(C) stop closing the Overview on activation (changes 813 FR-013). Asked by the orchestrator.
+None.
 
 ## Follow-ups not done
 
