@@ -599,15 +599,7 @@ impl BootPlan {
         registry: &micold_core::daemons::DaemonRegistry,
         legacy_default: Option<micold_core::daemons::DaemonId>,
     ) -> Option<micold_core::daemons::DaemonId> {
-        use micold_core::daemons::DaemonRuntime;
-        let is_container = |entry: &&micold_core::daemons::DaemonEntry| {
-            matches!(entry.runtime, DaemonRuntime::Container(_))
-        };
-        legacy_default
-            .and_then(|id| registry.get(id))
-            .filter(is_container)
-            .or_else(|| registry.entries().iter().find(is_container))
-            .map(|entry| entry.id)
+        micold_client::features::daemons::sandbox_daemon(registry, legacy_default)
     }
 
     /// The container name and control port a plan brings up: those of [`Self::sandbox_daemon`],
@@ -958,6 +950,8 @@ pub fn stop(plan: &BootPlan) -> iced::Task<micold_client::app::Message> {
 /// session arms that surrounded them.
 pub fn update(app: &mut crate::App, msg: SandboxMsg) -> Task<Message> {
     let task = apply(app, msg);
+    // The Daemons rows read the legacy container from the settings (FR-017).
+    app.core.settings.legacy_container = app.sandbox.legacy.then(|| app.sandbox_daemon());
     // The rows' "container runtime not found" text reads this (feature 491, T028).
     let was_missing = app.core.settings.runtime_missing;
     app.core.settings.runtime_missing = matches!(
@@ -995,7 +989,23 @@ fn apply(app: &mut crate::App, msg: SandboxMsg) -> Task<Message> {
         }
         Msg::Started(ready) => {
             let (started, locations) = *ready;
+            let adopted_legacy = started.legacy;
             app.sandbox.started(started, locations);
+            // The first start on the basic image retires the migration notice (FR-016).
+            if !adopted_legacy {
+                let daemon = app.sandbox_daemon();
+                let basic = matches!(
+                    app.core.settings.daemons.get(daemon).map(|e| &e.runtime),
+                    Some(micold_core::daemons::DaemonRuntime::Container(c))
+                        if c.profile.image == micold_core::sandbox::image::ImageChoice::Basic
+                );
+                if basic && app.core.settings.daemons.clear_migration(daemon) {
+                    let registry = app.core.settings.daemons.clone();
+                    app.apply_daemon_outcome(
+                        &micold_client::features::Outcome::DaemonRegistryChanged(registry),
+                    );
+                }
+            }
             iced::Task::none()
         }
         // Another window replaced the container (FR-036c, BUG-574): adopt it, and measure it

@@ -111,6 +111,16 @@ fn bound_line(view: &DaemonView) -> String {
     format!("Worktrees: {}", names.join(", "))
 }
 
+/// Stop, which a container still on the released image offers only with no session running (FR-017).
+fn stop_button<'a>(view: &DaemonView, roles: Roles) -> Button<'a, Message> {
+    let stop = Button::text("Stop", roles);
+    if view.stop_blocked {
+        stop
+    } else {
+        stop.on_press(Message::Daemons(DaemonsMsg::Stopped(view.id)))
+    }
+}
+
 fn actions<'a>(view: &DaemonView, open: bool, kube: bool, roles: Roles) -> Element<'a, Message> {
     let id = view.id;
     let mut buttons = row![].spacing(spacing::XS);
@@ -130,23 +140,17 @@ fn actions<'a>(view: &DaemonView, open: bool, kube: bool, roles: Roles) -> Eleme
                 Button::text("Reconnect", roles)
                     .on_press(Message::Daemons(DaemonsMsg::Reconnected(id))),
             );
-            buttons = buttons.push(
-                Button::text("Stop", roles).on_press(Message::Daemons(DaemonsMsg::Stopped(id))),
-            );
+            buttons = buttons.push(stop_button(view, roles));
         }
         DaemonState::Unreachable { .. } | DaemonState::VersionMismatch { .. } => {
             buttons = buttons.push(
                 Button::text("Reconnect", roles)
                     .on_press(Message::Daemons(DaemonsMsg::Reconnected(id))),
             );
-            buttons = buttons.push(
-                Button::text("Stop", roles).on_press(Message::Daemons(DaemonsMsg::Stopped(id))),
-            );
+            buttons = buttons.push(stop_button(view, roles));
         }
         DaemonState::Starting | DaemonState::Connected => {
-            buttons = buttons.push(
-                Button::text("Stop", roles).on_press(Message::Daemons(DaemonsMsg::Stopped(id))),
-            );
+            buttons = buttons.push(stop_button(view, roles));
         }
     }
     if kube {
@@ -228,6 +232,9 @@ fn daemon_row<'a>(
     }
     if let Some(sentence) = state_note(&view) {
         body = body.push(caution(sentence, roles));
+    }
+    if let Some(sentence) = &view.notice {
+        body = body.push(note(sentence.clone(), roles));
     }
     if view.runtime_label == micold_core::daemons::SSH_RUNTIME_LABEL {
         body = body.push(repository_step(&view, state, focused, roles));
