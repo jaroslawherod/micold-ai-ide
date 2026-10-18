@@ -257,12 +257,22 @@ pub async fn viewer(
     client
 }
 
-/// The `StructuredEvents` of `id` that `client` receives until `done` holds for them, within 15 s.
-pub async fn events_until(
+/// One `StructuredEvents` message as a viewing client received it.
+#[derive(Debug, Clone)]
+pub struct Message {
+    pub omitted: u64,
+    pub events: Vec<micold_core::structured::SequencedEvent>,
+    pub live: bool,
+    pub at: Instant,
+}
+
+/// The `StructuredEvents` messages of `id` that `client` receives until `done` holds for them,
+/// within 15 s.
+pub async fn messages_until(
     client: &mut crate::conn::Client,
     id: micold_core::session::SessionId,
-    done: impl Fn(&[Received]) -> bool,
-) -> Vec<Received> {
+    done: impl Fn(&[Message]) -> bool,
+) -> Vec<Message> {
     use futures_util::StreamExt;
     use micold_core::protocol::codec::Frame;
     use micold_core::protocol::messages::DaemonMsg;
@@ -279,13 +289,12 @@ pub async fn events_until(
                 live,
             })))) => {
                 assert_eq!(session, id, "only the viewed session's events");
-                let at = Instant::now();
-                got.extend(events.into_iter().map(|event| Received {
-                    event,
-                    live,
+                got.push(Message {
                     omitted,
-                    at,
-                }));
+                    events,
+                    live,
+                    at: Instant::now(),
+                });
             }
             Ok(Some(Ok(_))) | Err(_) => {}
             Ok(Some(Err(e))) => panic!("codec error: {e:?}"),
@@ -293,6 +302,30 @@ pub async fn events_until(
         }
     }
     got
+}
+
+/// Every event of `messages`, each with the flags of the message that carried it.
+pub fn received(messages: &[Message]) -> Vec<Received> {
+    messages
+        .iter()
+        .flat_map(|m| {
+            m.events.iter().map(|event| Received {
+                event: event.clone(),
+                live: m.live,
+                omitted: m.omitted,
+                at: m.at,
+            })
+        })
+        .collect()
+}
+
+/// The `StructuredEvents` of `id` that `client` receives until `done` holds for them, within 15 s.
+pub async fn events_until(
+    client: &mut crate::conn::Client,
+    id: micold_core::session::SessionId,
+    done: impl Fn(&[Received]) -> bool,
+) -> Vec<Received> {
+    received(&messages_until(client, id, |messages| done(&received(messages))).await)
 }
 
 /// The events the parser makes of the fixture `name`, in order.

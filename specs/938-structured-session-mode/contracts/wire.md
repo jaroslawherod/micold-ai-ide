@@ -27,9 +27,14 @@ StructuredEvents { session: SessionId, omitted: u64, events: Vec<SequencedEvent>
 ```
 
 - Sent to a client that views the session's `Primary` (`SetViewedTerminals`). First the history:
-  one or more `live: false` messages (the first carries `omitted`; a client starts a fresh log on
-  the first `live: false` after a `live: true` or on first view), then each new event as
-  `live: true` with one event. Seqs strictly increase; no seq is sent twice to one view (FR-017).
+  one or more `live: false` messages (the first carries `omitted`, the rest `0`), then each new
+  event as `live: true` with one event. Seqs strictly increase within a log; no seq is sent twice
+  to one log (FR-017).
+- A viewer that falls behind the live channel is sent a fresh, whole snapshot, never a gap (R6).
+  So a client starts a fresh log on every `live: false` message except one that continues the
+  history in progress: the previous message was `live: false` and this one's first `seq` is one
+  more than the last it holds. An empty `live: false` message (an empty history) is a fresh, empty
+  log.
 - A message's encoded size stays under `MAX_FRAME_LENGTH / 2`; an event that alone exceeds it is
   sent alone as `OversizedOnWire { original_bytes }` under its own `seq` (logged by the daemon).
 

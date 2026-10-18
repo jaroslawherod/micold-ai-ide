@@ -354,7 +354,7 @@ marker, and frames that stay under the wire limit (FR-016, FR-017, FR-018; SC-00
 
 **Independent Test**: `cargo test -p micold-daemon --test structured_history`.
 
-- [ ] T031 [US4] Write failing tests in `crates/micold-daemon/tests/structured_history.rs`: for N
+- [X] T031 [US4] Write failing tests in `crates/micold-daemon/tests/structured_history.rs`: for N
   in {0, 1, 7, the bound}, a client viewing after N events receives exactly those N events in
   `live: false` messages, then live events, with `seq` contiguous and none repeated (SC-005, US4
   scenario 1); two viewing clients both receive each new event (US4 scenario 2); with the history
@@ -365,7 +365,7 @@ marker, and frames that stay under the wire limit (FR-016, FR-017, FR-018; SC-00
   encoding exceeds `MAX_FRAME_LENGTH / 2` is sent alone as `OversizedOnWire { original_bytes }`
   with its `seq`, and the daemon logs it; a history larger than `MAX_FRAME_LENGTH / 2` arrives in
   several `live: false` messages; deleting the session drops its history.
-- [ ] T032 [US4] Make T031 pass in `crates/micold-daemon/src/server.rs` and
+- [X] T032 [US4] Make T031 pass in `crates/micold-daemon/src/server.rs` and
   `crates/micold-daemon/src/state.rs`: chunk `live: false` messages under `MAX_FRAME_LENGTH / 2`,
   replace an oversize event by `OversizedOnWire` and `tracing::warn!` it, re-snapshot on
   `RecvError::Lagged`, drop the history map entry on session delete, and add the test-only bounds

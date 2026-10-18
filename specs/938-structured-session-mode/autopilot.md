@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #938
 - **Worktree branch**: claude/project-thread-cl0lw3
 - **Started**: 2026-10-18
-- **Phase**: M4
-- **Next step**: M4 PR to open (title/body in the session scratchpad), then CI and merge
+- **Phase**: M5
+- **Next step**: M5 verify (T031–T032 implemented, green), then reviews, gate, PR
 
 ## Pull requests
 
@@ -21,6 +21,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1056 | M2 daemon runs a structured session, streams events | merged (rebase) | 4793cbab05478fe50b1434ab61a1c99c717701e5 |
 | #1064 | M3 first prompt and user messages | merged (rebase) | 1fab9ea568ba3d8e00c60cb14c16f3277120fecf |
 | #1070 | design revision: event history saved under Save terminal history (M7) | merged (rebase) | bd88174731b916d4fe47de2f16f4865dc197a3eb |
+| #1072 | M4 resume | merged (rebase) | 768812fbee80229c924968341b79cf1c553fd63a |
 
 ## Milestones
 
@@ -29,8 +30,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T010 | full | parser types every recorded fixture line; kind persisted | #1044 | merged |
 | M2 | T011–T021 | full | daemon runs a structured session and streams events; lifecycle parity | #1056 | merged |
 | M3 | T022–T028 | full | first prompt and user messages | #1064 | merged |
-| M4 | T029–T030 | full | resume | — | in progress |
-| M5 | T031–T032 | full | late and multiple viewers | — | planned |
+| M4 | T029–T030 | full | resume | #1072 | merged |
+| M5 | T031–T032 | full | late and multiple viewers | — | in progress |
 | M6 | T033–T036 | full | terminal-only requests refused | — | planned |
 | M7 | T049–T055 | full | event history saved under Save terminal history, restored after a daemon restart | — | planned |
 | M8 | T037–T047, T056 | full | chevron entry, row marker, log pane, user guide, setting note | — | planned |
@@ -50,6 +51,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | 9 | M1 | `structured_args` "default `None`" vs `AiCliProvider`'s rule "No method has a default" (feature 026 FR-021) | trait method without a default, implemented in all six impls | agent | provider.rs trait doc |
 | 10 | M1 | Fixtures keep `\r\n` byte for byte under `* text=auto eol=lf` | `.gitattributes`: `crates/micold-core/tests/fixtures/stream-json/*.jsonl -text` | agent | tolerance.jsonl CRLF line |
 | 11 | M4 | T030 predicted a code change (restore drops the kind) | None needed: M1's `StoredSession::into_session` already restores the kind and M2's start path shares the terminal `LaunchSpec`; T029's tests are test-after, each pinned by a deliberate mutant (cycle-log 9) | agent | store.rs into_session; tests/structured_resume.rs |
+| 12 | M5 | A lag re-snapshot can follow a `live: false` message, so wire.md's "fresh log after a `live: true`" rule misses it | Every lag re-sends a whole snapshot; a client starts a fresh log on each `live: false` message except a continuation (previous `live: false`, first seq one past its last); contracts/wire.md amended | agent | research R6; tests/structured_history.rs lag case |
 
 ## Review rounds
 

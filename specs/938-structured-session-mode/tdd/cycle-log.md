@@ -160,3 +160,32 @@ Append only. Newest last.
   `a_daemon_restart_keeps_the_kind_and_resumes_the_conversation` FAILED with
   `left: ["the first prompt", "after the resume"]`. Restored: `ok. 4 passed`.
 
+
+## Cycle 10 (U14, M5): late and multiple viewers — RED, GREEN
+
+- test: `crates/micold-daemon/tests/structured_history.rs` (7 tests), with `support/structured.rs`
+  gaining `messages_until`/`received` (message boundaries; `events_until` now flattens them) and a
+  no-op `DaemonState::set_event_stream_bounds` stub so the file compiles.
+- red: `scripts/build-lock.sh cargo test -p micold-daemon --test structured_history` ->
+  `test result: FAILED. 2 passed; 5 failed`:
+  - `a_viewer_after_eviction_is_told_how_many_events_were_omitted`: `the first message says two were evicted` `left: 0 right: 2`;
+  - `a_lagging_viewer_gets_a_fresh_snapshot_and_never_a_gap`: `a fresh snapshot after the lag: [`;
+  - `an_oversized_event_is_sent_alone_as_a_stand_in_and_logged`: `seq 1 is sent alone` `left: 3 right: 1`;
+  - `a_large_history_arrives_in_several_messages_under_the_limit`: `several messages: 1`;
+  - `deleting_the_session_drops_its_history`: `the history is gone`.
+  `a_late_viewer_gets_exactly_the_history_then_live_events` and
+  `two_viewers_both_receive_each_new_event` passed at once: M2's single-snapshot path already
+  gives both (test-after). Deliberate mutants, each restored: history messages sent `live: true`
+  -> the late-viewer case FAILED `N = 1: history first`; live events sent `live: false` -> the
+  two-viewer case FAILED `left: [(0, false), (1, false), (2, false)]`.
+- green (T032): `StreamBounds` and `EventStream::with_bounds` (`structured.rs`), applied by
+  `spawn_structured` from `DaemonState::set_event_stream_bounds`; `history_messages` cuts the
+  snapshot under `MESSAGE_LIMIT` (`MAX_FRAME_LENGTH / 2`, 256 bytes kept for the envelope) and
+  `on_wire` replaces an event too large for a message by `OversizedOnWire { original_bytes }`
+  under its seq, `tracing::warn!`ed; `stream_events` re-snapshots on `RecvError::Lagged`;
+  `remove_live_by_ids` drops the `event_streams` entry. `ok. 7 passed`; the lag case 20 of 20
+  runs; `structured_session`, `structured_lifecycle`, `structured_resume` `ok` (13, 4, 4).
+- contract: wire.md's client rule refined: a re-snapshot after a lag may follow a `live: false`
+  message, so a client starts a fresh log on every `live: false` message except a continuation
+  of the history in progress (first seq one past the last held).
+- refactor: none beyond `events_until` built on `messages_until`.

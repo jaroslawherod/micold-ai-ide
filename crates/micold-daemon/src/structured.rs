@@ -29,6 +29,25 @@ use crate::supervisor::{apply_env_hygiene, ensure_cwd_exists, Supervised, Superv
 /// How many live events a viewer may fall behind before its receiver lags (R6).
 const LIVE_CAPACITY: usize = 1024;
 
+/// The bounds of an [`EventStream`]: its history's event count and line text (R5), and how many
+/// live events a viewer may fall behind before its receiver lags (R6). Lowered only by tests.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StreamBounds {
+    pub max_events: usize,
+    pub max_bytes: usize,
+    pub live_capacity: usize,
+}
+
+impl Default for StreamBounds {
+    fn default() -> Self {
+        Self {
+            max_events: micold_core::structured::MAX_EVENTS,
+            max_bytes: micold_core::structured::MAX_BYTES,
+            live_capacity: LIVE_CAPACITY,
+        }
+    }
+}
+
 /// A structured session's events: the bounded history every viewer starts from, and the channel
 /// each new event is broadcast on (R6, FR-016, FR-017). Kept by the daemon apart from the process,
 /// so the events written before an exit are still there after it (FR-009).
@@ -39,14 +58,22 @@ pub struct EventStream {
 
 impl Default for EventStream {
     fn default() -> Self {
-        Self {
-            history: Mutex::new(EventHistory::new()),
-            live: broadcast::channel(LIVE_CAPACITY).0,
-        }
+        Self::with_bounds(StreamBounds::default())
     }
 }
 
 impl EventStream {
+    /// An empty stream under `bounds`.
+    pub fn with_bounds(bounds: StreamBounds) -> Self {
+        Self {
+            history: Mutex::new(EventHistory::with_bounds(
+                bounds.max_events,
+                bounds.max_bytes,
+            )),
+            live: broadcast::channel(bounds.live_capacity).0,
+        }
+    }
+
     /// Append `event` to the history and broadcast it, under the history lock, so a viewer that
     /// [`Self::subscribe`]s sees each event exactly once: in its snapshot or on its receiver.
     pub fn push(&self, event: StructuredEvent) {
@@ -373,6 +400,92 @@ fn log_stderr(id: SessionId, stderr: impl Read) {
         let Ok(line) = line else { break };
         tracing::warn!(session = %id.0, "claude stderr: {line}");
     }
+}
+
+/// The most one `StructuredEvents` message's encoding may take (contracts/wire.md, R6): half the
+/// frame limit, so a message never comes near it.
+pub const MESSAGE_LIMIT: usize = micold_core::protocol::envelope::MAX_FRAME_LENGTH / 2;
+
+/// Room left in each message for everything but its events: the variant and field names, the
+/// session id, `omitted`, `live` and the brackets take about 120 bytes of JSON.
+const MESSAGE_OVERHEAD: usize = 256;
+
+/// The JSON length of `event`, as the wire encodes control messages, counted without a buffer.
+fn encoded_len(event: &SequencedEvent) -> usize {
+    struct Count(usize);
+    impl Write for Count {
+        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+            self.0 += buf.len();
+            Ok(buf.len())
+        }
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+    let mut count = Count(0);
+    // Serializing an event cannot fail: every field is a string, number, bool or JSON value.
+    let _ = serde_json::to_writer(&mut count, event);
+    count.0
+}
+
+/// `event` as `session`'s viewers are sent it, with its encoded length plus the comma that
+/// separates it from the next: itself, or, when it alone would not fit in a message, an
+/// `OversizedOnWire` stand-in under its `seq`, logged (R6, FR-014). The history keeps it whole.
+fn on_wire_sized(session: SessionId, event: SequencedEvent) -> (SequencedEvent, usize) {
+    let bytes = encoded_len(&event) + 1;
+    if bytes <= MESSAGE_LIMIT - MESSAGE_OVERHEAD {
+        return (event, bytes);
+    }
+    tracing::warn!(
+        session = %session.0,
+        seq = event.seq,
+        bytes,
+        "a structured event too large for one message is sent as OversizedOnWire"
+    );
+    let stand_in = SequencedEvent {
+        seq: event.seq,
+        event: StructuredEvent::OversizedOnWire {
+            original_bytes: bytes as u64 - 1,
+        },
+    };
+    let bytes = encoded_len(&stand_in) + 1;
+    (stand_in, bytes)
+}
+
+/// A live event of `session` as its viewers are sent it: see [`on_wire_sized`].
+pub fn on_wire(session: SessionId, event: SequencedEvent) -> SequencedEvent {
+    on_wire_sized(session, event).0
+}
+
+/// `session`'s history cut into the events of consecutive messages, each under
+/// [`MESSAGE_LIMIT`], in order; a stand-in for an oversized event in a message of its own (R6).
+/// An empty history is one empty message, so a viewer is always sent where its log starts.
+pub fn history_messages(
+    session: SessionId,
+    history: Vec<SequencedEvent>,
+) -> Vec<Vec<SequencedEvent>> {
+    let mut messages = Vec::new();
+    let mut current = Vec::new();
+    let mut size = 0;
+    for event in history {
+        let (event, bytes) = on_wire_sized(session, event);
+        // Only the daemon makes a stand-in: no CLI line parses to one.
+        let oversized = matches!(event.event, StructuredEvent::OversizedOnWire { .. });
+        if !current.is_empty() && (oversized || size + bytes > MESSAGE_LIMIT - MESSAGE_OVERHEAD) {
+            messages.push(std::mem::take(&mut current));
+            size = 0;
+        }
+        current.push(event);
+        size += bytes;
+        if oversized {
+            messages.push(std::mem::take(&mut current));
+            size = 0;
+        }
+    }
+    if !current.is_empty() || messages.is_empty() {
+        messages.push(current);
+    }
+    messages
 }
 
 #[cfg(test)]

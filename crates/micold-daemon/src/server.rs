@@ -2648,46 +2648,51 @@ fn sync_terminal_streams(
     }
 }
 
-/// Stream one structured session's events to one client (feature 938, R6): the history as one
-/// `live: false` message carrying `omitted`, then each later event as its own `live: true` message.
-/// The snapshot and the subscription are taken together, so no event is sent twice or missed; an
-/// event already in the snapshot is skipped all the same. Ends when the client's channel closes or
-/// the task is aborted.
+/// Stream one structured session's events to one client (feature 938, R6): the history as
+/// `live: false` messages under the size limit, the first carrying `omitted`, then each later event
+/// as its own `live: true` message. The snapshot and the subscription are taken together, so no
+/// event is sent twice or missed; an event already in the snapshot is skipped all the same. A
+/// viewer that falls behind is sent a fresh snapshot, from which it starts its log again, never a
+/// gap. Ends when the client's channel closes or the task is aborted.
 async fn stream_events(
     session: micold_core::session::SessionId,
     events: std::sync::Arc<crate::structured::EventStream>,
     tx: tokio::sync::mpsc::UnboundedSender<Frame<DaemonMsg>>,
 ) {
-    let (omitted, history, mut live) = events.subscribe();
-    let mut last = history.last().map(|e| e.seq);
-    let snapshot = DaemonMsg::StructuredEvents {
-        session,
-        omitted,
-        events: history,
-        live: false,
-    };
-    if tx.send(Frame::Control(snapshot)).is_err() {
-        return;
-    }
-    loop {
-        let event = match live.recv().await {
-            Ok(event) => event,
-            // A viewer that fell behind loses the events it missed; T032 resends them.
-            Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
-            Err(tokio::sync::broadcast::error::RecvError::Closed) => return,
-        };
-        if last.is_some_and(|seq| event.seq <= seq) {
-            continue;
-        }
-        last = Some(event.seq);
-        let message = DaemonMsg::StructuredEvents {
+    let send = |omitted, events, live| {
+        tx.send(Frame::Control(DaemonMsg::StructuredEvents {
             session,
-            omitted: 0,
-            events: vec![event],
-            live: true,
-        };
-        if tx.send(Frame::Control(message)).is_err() {
-            return;
+            omitted,
+            events,
+            live,
+        }))
+        .is_ok()
+    };
+    loop {
+        let (omitted, history, mut live) = events.subscribe();
+        let mut last = history.last().map(|e| e.seq);
+        let messages = crate::structured::history_messages(session, history);
+        for (i, events) in messages.into_iter().enumerate() {
+            if !send(if i == 0 { omitted } else { 0 }, events, false) {
+                return;
+            }
+        }
+        loop {
+            let event = match live.recv().await {
+                Ok(event) => event,
+                Err(tokio::sync::broadcast::error::RecvError::Lagged(missed)) => {
+                    tracing::debug!(session = %session.0, missed, "a structured viewer lagged; resending its snapshot");
+                    break;
+                }
+                Err(tokio::sync::broadcast::error::RecvError::Closed) => return,
+            };
+            if last.is_some_and(|seq| event.seq <= seq) {
+                continue;
+            }
+            last = Some(event.seq);
+            if !send(0, vec![crate::structured::on_wire(session, event)], true) {
+                return;
+            }
         }
     }
 }
