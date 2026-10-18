@@ -150,7 +150,7 @@ start; rows jump, edit and delete drafts; Send review, Clear sent and Discard dr
 - [x] T053 [US3] Render the panel as the Changes view's third pane, right of the diff, in `crates/micold-client/src/ui/changes.rs`: rows through `VirtualRows`, group headers by file, status counts, the empty state, the "Review (n)" toolbar toggle, Send review / Clear sent / Discard drafts in the panel header, the hidden-reason message, and the focused card drawn `.highlighted(true)` (glue, research R8)
 - [x] T054 [P] [US3] Add `ReviewPanelRow` poses (each status, with and without reply, selected) and a highlighted card pose to `crates/micold-client/src/showcase/sections/review.rs` and `crates/micold-client/src/showcase/catalogue.rs`
 - [x] T055 [P] [US3] Add "The review panel" to `docs/user-guide/reviewing-changes.md`: what a row shows, counts, jumping and why a jump can be refused, editing and deleting drafts from it, the panel's buttons, collapsing it (FR-028)
-- [x] T056 [US3] Visual pass of quickstart §B steps 1–3 and 9, light and dark; evidence under `specs/946-review-replies/visual-pass/`
+- [ ] T056 [US3] Visual pass of quickstart §B steps 1–3 and 9, light and dark; evidence under `specs/946-review-replies/visual-pass/` — **not run in M4**: the cloud container has no xdotool/Xvfb driver (see `visual-pass/m4.md`); follow-up for a run with a display
 
 **Checkpoint (M4)**: one place shows the whole review and its state.
 
@@ -183,9 +183,9 @@ Draft or Sent comment outdated; the next batch names the new lines.
 
 No code: left to the close unit (milestones.md rule 4).
 
-- [ ] T068 Run quickstart §B steps 1–10 end to end, light and dark, and record the results and screenshots of steps 2, 5, 8 and 9 under `specs/946-review-replies/visual-pass/`
-- [ ] T069 Record quickstart §C (macOS and Windows): the P1 golden test passing on all three CI platforms (SC-003) and, where a machine is available, steps 4, 5 and 10; note in `specs/946-review-replies/quickstart.md` what was run where
-- [ ] T070 Check `docs/user-guide/reviewing-changes.md` and `docs/user-guide/agent-tools.md` against FR-028's list and the batch example against contracts/batch-format.md byte for byte; fix wording only
+- [ ] T068 Run quickstart §B steps 1–10 end to end, light and dark, and record the results and screenshots of steps 2, 5, 8 and 9 under `specs/946-review-replies/visual-pass/` — **not run**: needs a display (no xdotool/Xvfb in the cloud container); with T034, T046, T056, T067 a follow-up
+- [x] T069 Record quickstart §C (macOS and Windows): the P1 golden test passing on all three CI platforms (SC-003) and, where a machine is available, steps 4, 5 and 10; note in `specs/946-review-replies/quickstart.md` what was run where — recorded in quickstart §C: the golden test ran green on all three CI platforms; steps 4, 5, 10 on macOS/Windows hardware not run
+- [x] T070 Check `docs/user-guide/reviewing-changes.md` and `docs/user-guide/agent-tools.md` against FR-028's list and the batch example against contracts/batch-format.md byte for byte; fix wording only — checked: the batch example in the guide equals the contract's byte for byte; FR-028's topics are all covered; no wording change needed
 
 ---
 

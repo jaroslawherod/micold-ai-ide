@@ -435,4 +435,19 @@ Name this.";
         let batch = build(EntryKind::Worktree, &[one(1, "a.rs", Side::New, 1, 1)], &[]);
         assert!(batch.ends_with("text 1"), "{batch:?}");
     }
+
+    #[test]
+    fn files_are_in_bytewise_path_order() {
+        let comments = [
+            comment(1, "b", Side::New, 1, 1, &["x"], "in b", 1),
+            comment(2, "B", Side::New, 1, 1, &["x"], "in B", 1),
+            comment(3, "a/z", Side::New, 1, 1, &["x"], "in a/z", 1),
+        ];
+        let prompt = build(EntryKind::Worktree, &comments, &[]);
+        let at = |needle: &str| prompt.find(needle).expect(needle);
+        assert!(
+            at(": B, line") < at(": a/z, line") && at(": a/z, line") < at(": b, line"),
+            "{prompt}"
+        );
+    }
 }

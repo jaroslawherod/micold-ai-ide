@@ -51,3 +51,13 @@ Screenshots of steps 2, 5, 8 and 9, light and dark, go in `visual-pass/`.
 
 On each: steps 4, 5 and 10 of §B; the batch bytes equal Linux's (copy from the terminal and diff,
 or run the P1 golden test there in CI, SC-003).
+
+### Record (close, 2026-10-18)
+
+- **CI**: the P1 golden test (SC-003) passed on ubuntu, macOS and Windows in the CI of the five
+  merged pull requests (#969, #981, #986, #993, #997); each passed after at most one re-run of an
+  unrelated timing flake (see the ledger).
+- **Not run**: steps 4, 5 and 10 on a macOS or Windows machine; no such machine was available.
+- **Not run**: §B itself (T034, T046, T056, T067, T068). The cloud container that ran every
+  milestone has no display driver (xdotool, Xvfb). `visual-pass/m4.md` says what stands in for it.
+  Run §B steps 1–10 in both schemes on a machine with a display before release.

@@ -1,4 +1,4 @@
-# TDD cycle log: 946 (M1, M2)
+# TDD cycle log: 946 (M1–M5)
 
 The feature has no `tdd/test-list.md` (as 482 and 837): tasks.md's test tasks are the list, and each
 row names the task pair it covers.
@@ -27,3 +27,11 @@ row names the task pair it covers.
 | T038, T042 (M3) | `.on_mark_applied`/`.on_answer` draw two actions on a Sent card only; `.on_show_reply` makes "Show all" pressable only when shortened | `cargo test -p micold-client --lib review_comment`: E0599 no `on_mark_applied`/`on_show_reply`, no `Parts::mark_actions` (7 errors) | 8 passed |
 | T047, T050 (M4) | `ReviewPanelRow` draws lines label, text, status tag, reply start, selected and not-in-diff marks; Edit/Delete only when handlers are given; `ReviewCommentCard::highlighted` outlines the card | not red-first: tests and implementation written together (40a532e1) | `review_panel_row` and `review_comment` lib tests passed |
 | T049, T052 (M4) | `panel_rows` order/labels/status/reply, not-in-diff mark, `status_counts`, empty state, toolbar toggle, `PanelRowSelected` → `Jump::Shown` + `ScrollDiff` (rows above kept), `Jump::Hidden(Why)`, edit/delete/reply reuse, push changes rows, 200 comments < 100 ms | not red-first: tests and implementation written in one pass; `features_changes` 72 passed. Red shown afterwards by mutation is not recorded; the jump offset assertion (80 px) and the order assertion pin the behaviour | `features_changes` 72 passed |
+
+## M5 (T057–T066): no red recorded
+
+The close-unit audit (verification F1) found that M5's four behaviours (re-anchoring, the
+prompt's moved range, the `Reanchor` edit, the client refresh) went in with their tests in one
+commit and no red was recorded; red was not shown for them afterwards either. Mutation testing in
+the audit killed the mutants of the anchoring logic except those listed in verification.md.
+Accepted as a process gap; the tests were strengthened in the close PR where mutants survived.

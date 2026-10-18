@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-17
 
-**Status**: Draft
+**Status**: Closed 2026-10-18 — shipped in PRs #950, #969, #981, #986, #993, #997
 
 **Input**: GitHub issue #946 "Diff view: inline review comments batched and sent to the agent".
 "Let the user leave feedback on the diff (the Changes view, and later the structured-session
