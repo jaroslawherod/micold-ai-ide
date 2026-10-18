@@ -145,6 +145,8 @@ pub struct StartRequest<'a> {
     pub cluster: &'a dyn Cluster,
     /// Key generation, for the host key.
     pub keys: &'a dyn KeyGen,
+    /// The API server URL, for an unreachable-cluster failure.
+    pub server: &'a str,
     /// The daemon's settings.
     pub settings: &'a KubeSettings,
     /// The daemon's object names.
@@ -192,6 +194,31 @@ pub async fn run_phase<T>(
         .unwrap_or(Err(KubeFailure::PhaseTimeout { phase }))
 }
 
+/// A start that failed in `Config`, before there was a cluster to call: the phase is reported and
+/// nothing was created, so nothing is rolled back.
+pub fn config_failed(
+    failure: KubeFailure,
+    on_phase: &mut (dyn FnMut(StartPhase) + Send),
+) -> StartOutcome {
+    on_phase(StartPhase::Config);
+    StartOutcome::Failed(failure)
+}
+
+/// A call that never got an answer is an unreachable cluster, named with its context and server.
+fn reachable(r: &StartRequest<'_>, failure: KubeFailure) -> KubeFailure {
+    match failure {
+        KubeFailure::Api {
+            status: 0,
+            message,
+        } => KubeFailure::Unreachable {
+            context: r.settings.context.0.clone(),
+            server: r.server.to_string(),
+            error: message,
+        },
+        other => other,
+    }
+}
+
 /// Start the daemon: every phase after `Config` up to `Tunnel`. A failure, or a drift to ask about,
 /// first undoes what this attempt created (FR-013).
 pub async fn start(
@@ -211,7 +238,7 @@ pub async fn start(
         }
         Err(failure) => {
             rollback(request, &attempt).await;
-            StartOutcome::Failed(failure)
+            StartOutcome::Failed(reachable(request, failure))
         }
     }
 }
@@ -246,13 +273,24 @@ fn namespace<'a>(r: &'a StartRequest<'_>) -> &'a str {
     &r.settings.namespace.0
 }
 
+/// The namespace exists and the user may do everything the start does, checked before anything is
+/// created (US4.1).
 async fn preflight(r: &StartRequest<'_>) -> Result<(), KubeFailure> {
-    if r.cluster.namespace_exists(namespace(r)).await? {
-        return Ok(());
+    if !r.cluster.namespace_exists(namespace(r)).await? {
+        return Err(KubeFailure::NamespaceMissing {
+            namespace: namespace(r).to_string(),
+        });
     }
-    Err(KubeFailure::NamespaceMissing {
-        namespace: namespace(r).to_string(),
-    })
+    for (verb, resource) in manifest::access_reviews() {
+        if !r.cluster.access_review(namespace(r), verb, resource).await? {
+            return Err(KubeFailure::Forbidden {
+                verb: verb.to_string(),
+                resource: resource.to_string(),
+                namespace: namespace(r).to_string(),
+            });
+        }
+    }
+    Ok(())
 }
 
 /// How an object of the daemon's name came to be there.
@@ -311,8 +349,19 @@ fn require_ours(
 
 async fn volume(r: &StartRequest<'_>, attempt: &mut Attempt) -> Result<(), KubeFailure> {
     let claim = manifest::pvc(r.settings, r.names);
-    ensure(r, ObjectKind::PersistentVolumeClaim, claim, attempt).await?;
+    if let Ensured::Created = ensure(r, ObjectKind::PersistentVolumeClaim, claim, attempt).await? {
+        // A provisioner that binds at once and fails shows it now; one that waits for the pod
+        // shows it while the pod is awaited.
+        check_claim(r).await?;
+    }
     Ok(())
+}
+
+/// Fail `ClaimNotBound` when the claim's events show the provisioner gave up.
+async fn check_claim(r: &StartRequest<'_>) -> Result<(), KubeFailure> {
+    let claim = r.names.pvc();
+    let events = r.cluster.events(namespace(r), &claim).await?;
+    KubeFailure::from_pvc(&claim, &events).map_or(Ok(()), Err)
 }
 
 /// The access secret, created with a generated host key, or this client's key added to it.
@@ -444,7 +493,8 @@ async fn delete_and_wait(
     Ok(())
 }
 
-/// Poll the pod's status until `done` accepts it.
+/// Poll the pod's status until `done` accepts it, failing on first sight of a failure the
+/// cluster shows (FR-012).
 async fn await_pod(
     r: &StartRequest<'_>,
     done: impl Fn(&crate::kube::PodStatusView) -> bool,
@@ -459,7 +509,14 @@ async fn await_pod(
                 })
             }
             Some(status) if done(&status) => return Ok(()),
-            Some(_) => tokio::time::sleep(POLL).await,
+            Some(status) => {
+                // A failure the cluster already shows is reported now, not at the phase bound.
+                if let Some(failure) = KubeFailure::from_pod(&status, r.image, &r.names.pvc()) {
+                    return Err(failure);
+                }
+                check_claim(r).await?;
+                tokio::time::sleep(POLL).await;
+            }
         }
     }
 }

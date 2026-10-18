@@ -1,10 +1,11 @@
 //! Why a Kubernetes daemon could not start or keep running, in the user's words (feature 686,
-//! contract §6). The classifiers that build these from cluster answers arrive with M2, M4 and M6.
+//! contract §6), and the classifiers that build them from cluster answers (M2).
 
 use std::fmt;
 use std::path::PathBuf;
 
 use crate::kube::start::StartPhase;
+use crate::kube::{ApiFailure, EventView, PodStatusView};
 
 /// A Kubernetes daemon failure. `Display` is the text the row and the recent errors show.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -129,6 +130,146 @@ impl From<crate::kube::ApiFailure> for KubeFailure {
         KubeFailure::Api {
             status: failure.code,
             message: failure.message,
+        }
+    }
+}
+
+/// Where a call went, for the failure that names it.
+#[derive(Debug, Clone, Copy)]
+pub struct CallTarget<'a> {
+    /// The kube context.
+    pub context: &'a str,
+    /// The API server URL.
+    pub server: &'a str,
+    /// The namespace.
+    pub namespace: &'a str,
+}
+
+impl KubeFailure {
+    /// Classify a failed call (`verb` on `resource`): `403` is a denial naming both, a `404` for
+    /// the namespace is a missing namespace, an unanswered call is an unreachable cluster, and
+    /// anything else is the cluster's own answer.
+    pub fn from_status(
+        failure: &ApiFailure,
+        target: &CallTarget<'_>,
+        verb: &str,
+        resource: &str,
+    ) -> Self {
+        match failure.code {
+            0 => KubeFailure::Unreachable {
+                context: target.context.to_string(),
+                server: target.server.to_string(),
+                error: failure.message.clone(),
+            },
+            403 => KubeFailure::Forbidden {
+                verb: verb.to_string(),
+                resource: resource.to_string(),
+                namespace: target.namespace.to_string(),
+            },
+            404 if failure.message.starts_with("namespaces \"") => KubeFailure::NamespaceMissing {
+                namespace: target.namespace.to_string(),
+            },
+            _ => failure.clone().into(),
+        }
+    }
+
+    /// The failure a pod's status shows on first sight, if any: an image that cannot be pulled, a
+    /// pod no node can run, a claim the scheduler found unbound, a container that ended.
+    pub fn from_pod(status: &PodStatusView, image: &str, claim: &str) -> Option<Self> {
+        if let Some((reason, message)) = &status.waiting {
+            if matches!(
+                reason.as_str(),
+                "ErrImagePull" | "ImagePullBackOff" | "InvalidImageName"
+            ) {
+                return Some(KubeFailure::ImagePull {
+                    image: image.to_string(),
+                    message: message.clone(),
+                });
+            }
+            if matches!(
+                reason.as_str(),
+                "Error" | "Completed" | "OOMKilled" | "CrashLoopBackOff" | "StartError"
+            ) {
+                return Some(KubeFailure::ImageContract {
+                    image: image.to_string(),
+                    missing: format!("the container exited: {reason}"),
+                });
+            }
+        }
+        match &status.schedule_reason {
+            Some((reason, message)) if reason == "Unschedulable" => {
+                Some(if message.contains("unbound immediate PersistentVolumeClaims") {
+                    KubeFailure::ClaimNotBound {
+                        claim: claim.to_string(),
+                        message: message.clone(),
+                    }
+                } else {
+                    KubeFailure::Unschedulable {
+                        message: message.clone(),
+                    }
+                })
+            }
+            _ => None,
+        }
+    }
+
+    /// The failure a claim's events show: the provisioner gave up.
+    pub fn from_pvc(claim: &str, events: &[EventView]) -> Option<Self> {
+        events
+            .iter()
+            .rev()
+            .find(|e| e.reason == "ProvisioningFailed")
+            .map(|e| KubeFailure::ClaimNotBound {
+                claim: claim.to_string(),
+                message: e.message.clone(),
+            })
+    }
+}
+
+/// Why the daemon's pod is no longer there (contract §4). The daemon shows `stopped` with it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PodGone {
+    /// Deleted, or being deleted.
+    Deleted,
+    /// Evicted by the kubelet.
+    Evicted {
+        /// The kubelet's message.
+        message: String,
+    },
+    /// The node it ran on is lost.
+    NodeLost {
+        /// The node.
+        node: String,
+    },
+}
+
+impl PodGone {
+    /// Read a lookup of the pod: `None` for a pod that was not found, `node_exists` for whether
+    /// its node is still known. `None` back means the pod is there.
+    pub fn classify(pod: Option<&PodStatusView>, node_exists: bool) -> Option<Self> {
+        let Some(pod) = pod.filter(|p| !p.deleting) else {
+            return Some(PodGone::Deleted);
+        };
+        if let Some((reason, message)) = &pod.reason {
+            if reason == "Evicted" {
+                return Some(PodGone::Evicted {
+                    message: message.clone(),
+                });
+            }
+        }
+        let node_lost = pod.node.is_some() && !node_exists;
+        (pod.phase == "Unknown" || node_lost).then(|| PodGone::NodeLost {
+            node: pod.node.clone().unwrap_or_default(),
+        })
+    }
+}
+
+impl fmt::Display for PodGone {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            PodGone::Deleted => f.write_str("stopped: the pod was deleted"),
+            PodGone::Evicted { message } => write!(f, "stopped: the pod was evicted: {message}"),
+            PodGone::NodeLost { node } => write!(f, "stopped: the pod's node {node} was lost"),
         }
     }
 }
@@ -402,5 +543,185 @@ mod tests {
                 message: "spec.containers: Required value".into(),
             }
         );
+    }
+
+    const TARGET: CallTarget<'static> = CallTarget {
+        context: "prod",
+        server: "https://10.0.0.1:6443",
+        namespace: "dev",
+    };
+
+    fn api(code: u16, message: &str) -> ApiFailure {
+        ApiFailure {
+            code,
+            reason: "X".into(),
+            message: message.into(),
+        }
+    }
+
+    #[test]
+    fn a_status_is_classified_by_its_code() {
+        let from = |f: ApiFailure| KubeFailure::from_status(&f, &TARGET, "create", "pods");
+        assert_eq!(
+            from(api(403, "pods is forbidden")),
+            KubeFailure::Forbidden {
+                verb: "create".into(),
+                resource: "pods".into(),
+                namespace: "dev".into(),
+            }
+        );
+        assert_eq!(
+            from(api(404, "namespaces \"dev\" not found")),
+            KubeFailure::NamespaceMissing {
+                namespace: "dev".into()
+            }
+        );
+        assert_eq!(
+            from(api(0, "connection refused")),
+            KubeFailure::Unreachable {
+                context: "prod".into(),
+                server: "https://10.0.0.1:6443".into(),
+                error: "connection refused".into(),
+            }
+        );
+        assert_eq!(
+            from(api(404, "pods \"x\" not found")),
+            KubeFailure::Api {
+                status: 404,
+                message: "pods \"x\" not found".into()
+            }
+        );
+    }
+
+    fn waiting(reason: &str, message: &str) -> PodStatusView {
+        PodStatusView {
+            phase: "Pending".into(),
+            waiting: Some((reason.into(), message.into())),
+            ..PodStatusView::default()
+        }
+    }
+
+    #[test]
+    fn a_pod_that_cannot_pull_its_image_fails_on_first_sight() {
+        for reason in ["ErrImagePull", "ImagePullBackOff", "InvalidImageName"] {
+            assert_eq!(
+                KubeFailure::from_pod(&waiting(reason, "not found"), "x:1", "d-data"),
+                Some(KubeFailure::ImagePull {
+                    image: "x:1".into(),
+                    message: "not found".into()
+                }),
+                "{reason}"
+            );
+        }
+        assert_eq!(
+            KubeFailure::from_pod(&waiting("ContainerCreating", ""), "x:1", "d-data"),
+            None
+        );
+    }
+
+    #[test]
+    fn a_pod_no_node_can_run_is_unschedulable_and_an_unbound_claim_is_named() {
+        let pending = |message: &str| PodStatusView {
+            phase: "Pending".into(),
+            scheduled: Some(false),
+            schedule_reason: Some(("Unschedulable".into(), message.into())),
+            ..PodStatusView::default()
+        };
+        assert_eq!(
+            KubeFailure::from_pod(&pending("0/3 nodes are available"), "x:1", "d-data"),
+            Some(KubeFailure::Unschedulable {
+                message: "0/3 nodes are available".into()
+            })
+        );
+        let unbound = "0/3 nodes: pod has unbound immediate PersistentVolumeClaims";
+        assert_eq!(
+            KubeFailure::from_pod(&pending(unbound), "x:1", "d-data"),
+            Some(KubeFailure::ClaimNotBound {
+                claim: "d-data".into(),
+                message: unbound.into()
+            })
+        );
+    }
+
+    #[test]
+    fn a_container_that_ended_does_not_meet_the_image_contract() {
+        assert_eq!(
+            KubeFailure::from_pod(&waiting("Error", "exit 1"), "x:1", "d-data"),
+            Some(KubeFailure::ImageContract {
+                image: "x:1".into(),
+                missing: "the container exited: Error".into()
+            })
+        );
+    }
+
+    #[test]
+    fn a_provisioning_failure_event_leaves_the_claim_not_bound() {
+        let event = |reason: &str, message: &str| EventView {
+            reason: reason.into(),
+            message: message.into(),
+        };
+        assert_eq!(
+            KubeFailure::from_pvc(
+                "d-data",
+                &[event("Scheduled", "ok"), event("ProvisioningFailed", "no class")]
+            ),
+            Some(KubeFailure::ClaimNotBound {
+                claim: "d-data".into(),
+                message: "no class".into()
+            })
+        );
+        assert_eq!(KubeFailure::from_pvc("d-data", &[event("Bound", "ok")]), None);
+    }
+
+    fn pod(phase: &str) -> PodStatusView {
+        PodStatusView {
+            phase: phase.into(),
+            running: phase == "Running",
+            node: Some("n1".into()),
+            ..PodStatusView::default()
+        }
+    }
+
+    #[test]
+    fn a_pod_that_is_gone_says_why() {
+        let evicted = PodStatusView {
+            phase: "Failed".into(),
+            reason: Some(("Evicted".into(), "node was low on memory".into())),
+            ..pod("Failed")
+        };
+        let terminating = PodStatusView {
+            deleting: true,
+            ..pod("Running")
+        };
+        let cases = [
+            (None, true, Some("stopped: the pod was deleted")),
+            (Some(&terminating), true, Some("stopped: the pod was deleted")),
+            (
+                Some(&evicted),
+                true,
+                Some("stopped: the pod was evicted: node was low on memory"),
+            ),
+            (
+                Some(&pod("Unknown")),
+                true,
+                Some("stopped: the pod's node n1 was lost"),
+            ),
+            (
+                Some(&pod("Running")),
+                false,
+                Some("stopped: the pod's node n1 was lost"),
+            ),
+            (Some(&pod("Running")), true, None),
+            (Some(&pod("Pending")), false, Some("stopped: the pod's node n1 was lost")),
+        ];
+        for (status, node_exists, expected) in cases {
+            let got = PodGone::classify(status, node_exists).map(|g| g.to_string());
+            assert_eq!(got.as_deref(), expected, "{status:?} node_exists={node_exists}");
+        }
+        let unscheduled = PodStatusView {
+            node: None,
+            ..pod("Pending")
+        };
+        assert_eq!(PodGone::classify(Some(&unscheduled), false), None);
     }
 }

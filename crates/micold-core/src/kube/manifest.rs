@@ -144,6 +144,18 @@ fn container(settings: &KubeSettings, image: &str) -> Value {
     out
 }
 
+/// The access reviews the start asks before it creates anything (contract §3): verb and resource.
+pub fn access_reviews() -> [(&'static str, &'static str); 6] {
+    [
+        ("create", "pods"),
+        ("create", "persistentvolumeclaims"),
+        ("create", "secrets"),
+        ("update", "secrets"),
+        ("create", "pods/portforward"),
+        ("delete", "pods"),
+    ]
+}
+
 /// The pod that runs `image` for the daemon `names`.
 pub fn pod(settings: &KubeSettings, names: &ResourceNames, image: &str, stamp: &PodStamp) -> Value {
     let mut spec = json!({

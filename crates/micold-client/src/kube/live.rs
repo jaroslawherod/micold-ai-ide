@@ -220,6 +220,9 @@ pub fn pod_status_of(pod: &serde_json::Value) -> PodStatusView {
         schedule_reason: scheduled.filter(|c| c["status"] != "True").and_then(pair),
         waiting: pair(&state["waiting"]).or_else(|| pair(&state["terminated"])),
         running: !state["running"].is_null(),
+        deleting: !pod["metadata"]["deletionTimestamp"].is_null(),
+        reason: pair(status),
+        node: pod["spec"]["nodeName"].as_str().map(str::to_string),
     }
 }
 

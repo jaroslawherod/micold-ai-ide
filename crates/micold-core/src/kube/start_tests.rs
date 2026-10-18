@@ -11,7 +11,7 @@ use crate::kube::access::AccessSecret;
 use crate::kube::fake::{running, FakeCluster, FakeKeyGen};
 use crate::kube::manifest::POD_STAMP_ANNOTATION;
 use crate::kube::ApiFailure;
-use crate::kube::PodStatusView;
+use crate::kube::{EventView, PodStatusView};
 
 const NS: &str = "dev";
 const IMAGE: &str = "ghcr.io/acme/micold-ssh:1";
@@ -51,6 +51,7 @@ async fn run_with(
     let request = StartRequest {
         cluster: fake,
         keys: &keys,
+        server: "https://10.0.0.1:6443",
         settings,
         names: &names,
         image: IMAGE,
@@ -609,5 +610,163 @@ async fn a_refused_port_forward_is_the_clusters_answer_not_an_image_fault() {
         failed(outcome),
         KubeFailure::Forbidden { .. } | KubeFailure::Api { .. }
     ));
+    assert_rolled_back(&fake).await;
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_denied_access_review_fails_forbidden_before_anything_is_created() {
+    for (verb, resource) in manifest::access_reviews() {
+        let fake = cluster();
+        fake.deny(verb, resource);
+        let (outcome, phases) = run(&fake, &settings()).await;
+        assert_eq!(
+            failed(outcome),
+            KubeFailure::Forbidden {
+                verb: verb.into(),
+                resource: resource.into(),
+                namespace: NS.into(),
+            },
+            "{verb} {resource}"
+        );
+        assert_eq!(phases.last(), Some(&StartPhase::Preflight));
+        assert!(!fake.calls().iter().any(|c| c.starts_with("create")));
+        assert_rolled_back(&fake).await;
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_start_asks_the_six_reviews_of_the_contract() {
+    let fake = cluster();
+    run(&fake, &settings()).await;
+    let reviews: Vec<String> = fake
+        .calls()
+        .into_iter()
+        .filter(|c| c.starts_with("review"))
+        .collect();
+    assert_eq!(
+        reviews,
+        [
+            "review create pods",
+            "review create persistentvolumeclaims",
+            "review create secrets",
+            "review update secrets",
+            "review create pods/portforward",
+            "review delete pods",
+        ]
+    );
+}
+
+#[test]
+fn a_config_failure_is_reported_in_the_config_phase_and_creates_nothing() {
+    let looked_in = vec![std::path::PathBuf::from("/home/u/.kube/config")];
+    let failures = [
+        KubeFailure::NoKubeconfig {
+            looked_in: looked_in.clone(),
+        },
+        KubeFailure::ContextMissing {
+            context: "kind-dev".into(),
+            looked_in,
+        },
+        KubeFailure::ExecPlugin {
+            command: "aws".into(),
+            error: "not found".into(),
+            search_path: Vec::new(),
+        },
+    ];
+    for failure in failures {
+        let mut seen = Vec::new();
+        let outcome = config_failed(failure.clone(), &mut |p| seen.push(p));
+        assert_eq!(failed(outcome), failure);
+        assert_eq!(seen, [StartPhase::Config]);
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_call_that_gets_no_answer_fails_unreachable_naming_context_and_server() {
+    let fake = cluster();
+    fake.fail_next(
+        "namespace",
+        ApiFailure {
+            code: 0,
+            reason: "Unreachable".into(),
+            message: "connection refused".into(),
+        },
+    );
+    let (outcome, _) = run(&fake, &settings()).await;
+    assert_eq!(
+        failed(outcome),
+        KubeFailure::Unreachable {
+            context: "kind-dev".into(),
+            server: "https://10.0.0.1:6443".into(),
+            error: "connection refused".into(),
+        }
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn an_image_that_cannot_be_pulled_fails_on_first_sight_not_at_the_bound() {
+    let fake = cluster();
+    let status = PodStatusView {
+        waiting: Some(("ErrImagePull".into(), "manifest unknown".into())),
+        scheduled: Some(true),
+        ..pending_pod()
+    };
+    fake.progress(&names().pod(), vec![status]);
+    let t0 = Instant::now();
+    let (outcome, _) = run(&fake, &settings()).await;
+    assert_eq!(
+        failed(outcome),
+        KubeFailure::ImagePull {
+            image: IMAGE.into(),
+            message: "manifest unknown".into(),
+        }
+    );
+    assert!(t0.elapsed() < Duration::from_secs(5), "first sight");
+    assert_rolled_back(&fake).await;
+}
+
+#[tokio::test(start_paused = true)]
+async fn an_unschedulable_pod_fails_with_the_schedulers_reason_on_first_sight() {
+    let fake = cluster();
+    let status = PodStatusView {
+        scheduled: Some(false),
+        schedule_reason: Some(("Unschedulable".into(), "0/3 nodes are available".into())),
+        ..pending_pod()
+    };
+    fake.progress(&names().pod(), vec![status]);
+    let t0 = Instant::now();
+    let (outcome, _) = run(&fake, &settings()).await;
+    assert_eq!(
+        failed(outcome),
+        KubeFailure::Unschedulable {
+            message: "0/3 nodes are available".into()
+        }
+    );
+    assert!(t0.elapsed() < Duration::from_secs(5), "first sight");
+    assert_rolled_back(&fake).await;
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_claim_the_provisioner_gave_up_on_fails_not_bound_on_first_sight() {
+    let fake = cluster();
+    fake.progress(&names().pod(), vec![pending_pod()]);
+    fake.set_events(
+        &names().pvc(),
+        vec![EventView {
+            reason: "ProvisioningFailed".into(),
+            message: "storageclass \"fast\" not found".into(),
+        }],
+    );
+    let t0 = Instant::now();
+    let (outcome, phases) = run(&fake, &settings()).await;
+    assert_eq!(
+        failed(outcome),
+        KubeFailure::ClaimNotBound {
+            claim: names().pvc(),
+            message: "storageclass \"fast\" not found".into(),
+        }
+    );
+    assert_eq!(phases.last(), Some(&StartPhase::Volume), "caught at the claim");
+    assert!(t0.elapsed() < Duration::from_secs(5));
     assert_rolled_back(&fake).await;
 }
