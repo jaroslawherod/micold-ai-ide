@@ -34,7 +34,8 @@ use micold_core::protocol::messages::{
     WireLifecycle, WorktreeSnapshot, WorktreeStatus,
 };
 use micold_core::session::{
-    AiCli, Session, SessionId, SessionLabel, SessionLifecycle, SessionLocation, TerminalMode,
+    AiCli, KindRefusal, Session, SessionId, SessionKind, SessionLabel, SessionLifecycle,
+    SessionLocation, TerminalMode,
 };
 
 use crate::supervision::{supervise_exit, ExitOutcome, SupervisionAction};
@@ -77,6 +78,9 @@ pub enum CreateSessionError {
     /// The location already has a session; the catalog is unchanged. Carries the location so the
     /// refusal can be worded for the worktree or the project root.
     Occupied(ExistingSession, SessionLocation),
+    /// The provider cannot run a session of the requested kind (feature 938, FR-003); the catalog
+    /// is unchanged.
+    Kind(KindRefusal),
     /// The catalog could not be written.
     Io(io::Error),
 }
@@ -85,6 +89,7 @@ impl std::fmt::Display for CreateSessionError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Occupied(existing, location) => f.write_str(&refusal_text(existing, location)),
+            Self::Kind(refusal) => std::fmt::Display::fmt(refusal, f),
             Self::Io(e) => std::fmt::Display::fmt(e, f),
         }
     }
@@ -658,6 +663,26 @@ impl Catalog {
         provider: AiCli,
         additional: Additional,
     ) -> Result<SessionId, CreateSessionError> {
+        self.create_session_of_kind(
+            project,
+            worktree_dir,
+            provider,
+            SessionKind::Terminal,
+            additional,
+        )
+    }
+
+    /// [`Self::create_session`] of a session of `kind`, refused before anything is written when
+    /// `provider` cannot run it (feature 938, FR-003).
+    pub fn create_session_of_kind(
+        &mut self,
+        project: &Path,
+        worktree_dir: &str,
+        provider: AiCli,
+        kind: SessionKind,
+        additional: Additional,
+    ) -> Result<SessionId, CreateSessionError> {
+        kind.check(provider).map_err(CreateSessionError::Kind)?;
         let location = location_of(worktree_dir);
         // An explicit request (FR-015) skips the check and adds a session beside the existing one.
         if !additional.is_yes() {
@@ -667,7 +692,7 @@ impl Catalog {
         }
         // The client already resolved default-or-override and put the answer on the wire (T030),
         // so nothing here re-decides it.
-        let mut session = Session::start_new(location, provider);
+        let mut session = Session::start_new_of_kind(location, provider, kind);
         let id = session.id;
         let list = self
             .workspace
@@ -1922,7 +1947,7 @@ fn session_summary(session: &Session, removed: &HashSet<SessionId>) -> SessionSu
         // happens to collide across two providers' stores must not be able to change which CLI a
         // known session runs (data-model invariant 3).
         provider: session.provider,
-        kind: Default::default(),
+        kind: session.kind,
         lifecycle: wire_lifecycle(session.lifecycle.clone()),
         activity: ActivitySignal::Unknown,
         input_serial: 0,

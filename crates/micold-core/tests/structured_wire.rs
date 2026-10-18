@@ -4,9 +4,7 @@
 
 use micold_core::protocol::messages::{ClientMsg, DaemonMsg, SessionSummary};
 use micold_core::session::{AiCli, SessionId, SessionKind};
-use micold_core::structured::{
-    ContentBlock, Delta, SequencedEvent, StructuredEvent, Usage,
-};
+use micold_core::structured::{ContentBlock, Delta, SequencedEvent, StructuredEvent, Usage};
 use uuid::Uuid;
 
 fn sid() -> SessionId {
@@ -32,7 +30,10 @@ fn without(mut value: serde_json::Value, path: &[&str], key: &str) -> serde_json
     for step in path {
         at = at.get_mut(*step).expect("path exists");
     }
-    at.as_object_mut().expect("object").remove(key).expect("key present");
+    at.as_object_mut()
+        .expect("object")
+        .remove(key)
+        .expect("key present");
     value
 }
 
@@ -47,7 +48,11 @@ fn a_session_create_without_a_kind_decodes_as_a_terminal_session() {
         kind: SessionKind::Structured,
     };
     json_roundtrip(&msg);
-    let old = without(serde_json::to_value(&msg).unwrap(), &["SessionCreate"], "kind");
+    let old = without(
+        serde_json::to_value(&msg).unwrap(),
+        &["SessionCreate"],
+        "kind",
+    );
     let back: ClientMsg = serde_json::from_value(old).expect("an older frame decodes");
     let ClientMsg::SessionCreate { kind, .. } = back else {
         panic!("not a SessionCreate: {back:?}");
@@ -78,7 +83,11 @@ fn a_session_summary_carries_its_kind_and_defaults_to_terminal() {
         let summary = summary(kind);
         assert_eq!(json_roundtrip(&summary).kind, kind);
     }
-    let old = without(serde_json::to_value(summary(SessionKind::Structured)).unwrap(), &[], "kind");
+    let old = without(
+        serde_json::to_value(summary(SessionKind::Structured)).unwrap(),
+        &[],
+        "kind",
+    );
     let back: SessionSummary = serde_json::from_value(old).expect("an older frame decodes");
     assert_eq!(back.kind, SessionKind::Terminal);
 }

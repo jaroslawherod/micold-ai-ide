@@ -989,10 +989,11 @@ where
                 // The catalog write stays on the loop: it is a small atomic file write, and it is
                 // what mints the id every later message refers to. Only the spawn — the slow half
                 // — is deferred (BUG-009, T125).
-                match state.create_session(
+                match state.create_session_of_kind(
                     &project,
                     &worktree_dir,
                     provider,
+                    kind,
                     allow_additional_session.into(),
                 ) {
                     Ok(session) => {
@@ -1026,6 +1027,16 @@ where
                                 detail: Some(existing.id.0.to_string()),
                             },
                         ),
+                    // Feature 938, FR-003: a kind the CLI cannot run is refused, nothing written.
+                    Err(crate::catalog::CreateSessionError::Kind(refusal)) => state.send(
+                        id,
+                        DaemonMsg::OperationError {
+                            req,
+                            kind: ErrorKind::Refused,
+                            message: refusal.to_string(),
+                            detail: None,
+                        },
+                    ),
                     Err(crate::catalog::CreateSessionError::Io(e)) => state.send(
                         id,
                         DaemonMsg::OperationError {
@@ -2548,11 +2559,12 @@ fn restart_view(
 /// The most terminals one client may view at once (feature 484: the 6-pane cap).
 const MAX_VIEWED: usize = 6;
 
-/// A client's running terminal streams, each with the PTY it streams (to notice a restart).
+/// A client's running terminal streams, each with the PTY it streams (to notice a restart), or
+/// `None` for a structured session's event stream, which a restart continues (feature 938).
 type TerminalStreams = HashMap<
     TerminalRef,
     (
-        std::sync::Arc<crate::supervisor::PtySession>,
+        Option<std::sync::Arc<crate::supervisor::PtySession>>,
         tokio::task::JoinHandle<()>,
     ),
 >;
@@ -2568,9 +2580,11 @@ fn sync_terminal_streams(
 ) {
     streams.retain(|t, (pty, handle)| {
         // A restart replaces the terminal's PTY: the stream of the old one would stay silent.
-        let current = state
-            .terminal(*t)
-            .is_some_and(|(live, _)| std::sync::Arc::ptr_eq(&live, pty));
+        let current = pty.as_ref().is_none_or(|pty| {
+            state
+                .terminal(*t)
+                .is_some_and(|(live, _)| std::sync::Arc::ptr_eq(&live, pty))
+        });
         let keep = wanted.contains(t) && !handle.is_finished() && current;
         if !keep {
             handle.abort();
@@ -2584,6 +2598,15 @@ fn sync_terminal_streams(
         if streams.contains_key(t) {
             continue;
         }
+        // A structured session's primary is its events, not a screen (feature 938, R6).
+        if let Some(events) = state
+            .event_stream(t.session)
+            .filter(|_| t.process == SessionProcess::Primary)
+        {
+            let handle = tokio::spawn(stream_events(t.session, events, tx.clone()));
+            streams.insert(*t, (None, handle));
+            continue;
+        }
         if let Some((pty, framer)) = state.terminal(*t) {
             let handle = tokio::spawn(stream_view(
                 t.process,
@@ -2591,7 +2614,51 @@ fn sync_terminal_streams(
                 framer,
                 tx.clone(),
             ));
-            streams.insert(*t, (pty, handle));
+            streams.insert(*t, (Some(pty), handle));
+        }
+    }
+}
+
+/// Stream one structured session's events to one client (feature 938, R6): the history as one
+/// `live: false` message carrying `omitted`, then each later event as its own `live: true` message.
+/// The snapshot and the subscription are taken together, so no event is sent twice or missed; an
+/// event already in the snapshot is skipped all the same. Ends when the client's channel closes or
+/// the task is aborted.
+async fn stream_events(
+    session: micold_core::session::SessionId,
+    events: std::sync::Arc<crate::structured::EventStream>,
+    tx: tokio::sync::mpsc::UnboundedSender<Frame<DaemonMsg>>,
+) {
+    let (omitted, history, mut live) = events.subscribe();
+    let mut last = history.last().map(|e| e.seq);
+    let snapshot = DaemonMsg::StructuredEvents {
+        session,
+        omitted,
+        events: history,
+        live: false,
+    };
+    if tx.send(Frame::Control(snapshot)).is_err() {
+        return;
+    }
+    loop {
+        let event = match live.recv().await {
+            Ok(event) => event,
+            // A viewer that fell behind loses the events it missed; T032 resends them.
+            Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
+            Err(tokio::sync::broadcast::error::RecvError::Closed) => return,
+        };
+        if last.is_some_and(|seq| event.seq <= seq) {
+            continue;
+        }
+        last = Some(event.seq);
+        let message = DaemonMsg::StructuredEvents {
+            session,
+            omitted: 0,
+            events: vec![event],
+            live: true,
+        };
+        if tx.send(Frame::Control(message)).is_err() {
+            return;
         }
     }
 }

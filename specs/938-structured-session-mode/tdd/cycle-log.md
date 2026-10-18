@@ -86,3 +86,14 @@ Append only. Newest last.
   still take the PTY path; they guard T020 against drifting from it.
 - The stand-in also records `pid-record` and one `starts-record` line per start (kill and
   crash-loop counts).
+
+## Cycle 6 (U8, U9, M2): daemon wiring — GREEN
+
+- green (T020, T021): `Proc::{Pty, Structured}`; `start_session_gated` branches on `SpawnPlan.kind`
+  behind the same gates; `DaemonState.event_streams` (one `EventStream` per session, kept across
+  restarts and exits); `Catalog::create_session_of_kind` refuses with `CreateSessionError::Kind`
+  before writing; the server streams a structured `Primary` with `stream_events`. `cargo test -p
+  micold-daemon --test structured_session --test structured_lifecycle` -> `ok. 8 passed` and `ok. 4
+  passed`.
+- Test fix: the tolerance case's second `events_until` waited for `expected.len()` *new* events
+  after the first call had taken all but one; it now waits for the one left (the partial line).

@@ -29,8 +29,8 @@ use micold_core::protocol::messages::{
 };
 use micold_core::provider::{ActivitySource, ConversationIdentity, ToolServerSupport};
 use micold_core::session::{
-    AiCli, Session, SessionId, SessionLabel, SessionLifecycle, SessionLocation, ShellInstanceId,
-    TerminalMode, RESTART_STABLE_AFTER,
+    AiCli, Session, SessionId, SessionKind, SessionLabel, SessionLifecycle, SessionLocation,
+    ShellInstanceId, TerminalMode, RESTART_STABLE_AFTER,
 };
 use micold_core::terminal::{LaunchMode, LaunchSpec};
 use micold_core::worktree::{self, Worktree};
@@ -44,6 +44,7 @@ use crate::catalog::Catalog;
 use crate::framer::Framer;
 use crate::history::{self, Seed};
 use crate::idle::Presence;
+use crate::structured::StructuredSession;
 use crate::supervision::{ExitOutcome, SupervisionAction};
 use crate::supervisor::{PtySession, TEARDOWN_WAIT};
 use crate::terminal::TerminalColors;
@@ -182,6 +183,9 @@ struct Inner {
     /// the text"; it is that the two failures are different failures. This one spends no restart
     /// budget (`attempts: 0`) and is cleared by a start rather than by a survival.
     start_failures: HashMap<SessionId, String>,
+    /// Each structured session's events (feature 938, R6): the history and the live channel, kept
+    /// apart from the process so a restart continues it and an exit keeps it (FR-009).
+    event_streams: HashMap<SessionId, Arc<crate::structured::EventStream>>,
     /// The final activity signal of a session whose process has exited, kept until it runs again
     /// (`010` BUG-018).
     ///
@@ -371,14 +375,71 @@ fn holds_failure(cell: &EnvIncludeCell) -> bool {
     cell.get().is_some_and(ResolvedEnv::failed)
 }
 
-/// One live process of a session: its PTY and its framer. The [`PtySession`] is behind an `Arc` so
-/// a caller can clone it and write to the PTY *after* dropping the state lock — PTY writes must never
-/// block the shared lock (module invariant). The framer is per-process and session-lived so its
+/// One live process of a session.
+///
+/// A terminal process is its PTY and its framer. The [`PtySession`] is behind an `Arc` so a caller
+/// can clone it and write to the PTY *after* dropping the state lock — PTY writes must never block
+/// the shared lock (module invariant). The framer is per-process and session-lived so its
 /// `scrolled_off` watermark (and every line's absolute `LineId`) is stable across reattach, and
 /// scrollback-by-range resolves against the same eviction state the stream produced.
-struct Proc {
-    pty: Arc<PtySession>,
-    framer: Arc<Mutex<Framer>>,
+///
+/// A structured session's primary (feature 938) has neither: every terminal-only operation finds
+/// no PTY in it and does nothing. Its lifecycle — liveness, exit outcome, kill — is a PTY's.
+#[derive(Clone)]
+enum Proc {
+    Pty {
+        pty: Arc<PtySession>,
+        framer: Arc<Mutex<Framer>>,
+    },
+    Structured(Arc<crate::structured::StructuredSession>),
+}
+
+impl Proc {
+    /// The PTY of a terminal process; `None` for a structured one.
+    fn pty(&self) -> Option<&Arc<PtySession>> {
+        match self {
+            Self::Pty { pty, .. } => Some(pty),
+            Self::Structured(_) => None,
+        }
+    }
+
+    /// The PTY and framer of a terminal process, cloned; `None` for a structured one.
+    fn terminal(&self) -> Option<(Arc<PtySession>, Arc<Mutex<Framer>>)> {
+        match self {
+            Self::Pty { pty, framer } => Some((Arc::clone(pty), Arc::clone(framer))),
+            Self::Structured(_) => None,
+        }
+    }
+
+    fn is_alive(&self) -> bool {
+        match self {
+            Self::Pty { pty, .. } => pty.is_alive(),
+            Self::Structured(child) => child.is_alive(),
+        }
+    }
+
+    fn exit_outcome(&self) -> Option<ExitOutcome> {
+        match self {
+            Self::Pty { pty, .. } => pty.exit_outcome(),
+            Self::Structured(child) => child.exit_outcome(),
+        }
+    }
+
+    fn kill(&self) -> io::Result<()> {
+        match self {
+            Self::Pty { pty, .. } => pty.kill(),
+            Self::Structured(child) => child.kill(),
+        }
+    }
+
+    /// Whether `self` and `other` are the same process, not merely alike.
+    fn same(&self, other: &Proc) -> bool {
+        match (self, other) {
+            (Self::Pty { pty: a, .. }, Self::Pty { pty: b, .. }) => Arc::ptr_eq(a, b),
+            (Self::Structured(a), Self::Structured(b)) => Arc::ptr_eq(a, b),
+            _ => false,
+        }
+    }
 }
 
 /// A running session's processes (feature 011): a `Primary` (its AI CLI or mode-selected primary
@@ -540,7 +601,7 @@ pub(crate) fn place(image: &str) -> Place<'_> {
 }
 
 fn new_proc(pty: Arc<PtySession>, id: SessionId) -> Proc {
-    Proc {
+    Proc::Pty {
         pty,
         framer: Arc::new(Mutex::new(Framer::new(id))),
     }
@@ -593,6 +654,8 @@ struct SpawnPlan {
     /// Which AI CLI this session runs (feature 026, FR-007) — read from the record, never chosen
     /// here.
     provider: AiCli,
+    /// How the AI CLI runs: in a terminal or as a structured session (feature 938).
+    kind: SessionKind,
     /// Whether the record is one the daemon has already judged resumable — a conversation was
     /// found for it at startup (FR-008). Gates the "the CLI no longer has this conversation" check
     /// in [`DaemonState::start_session`], which must not fire for a session that never had one.
@@ -680,6 +743,7 @@ impl DaemonState {
                 announced_dead_shells: std::collections::HashSet::new(),
                 worktrees: HashMap::new(),
                 start_failures: HashMap::new(),
+                event_streams: HashMap::new(),
                 ended: HashMap::new(),
                 env_include_cache: HashMap::new(),
                 worktree_gates: HashMap::new(),
@@ -1591,7 +1655,7 @@ impl DaemonState {
                     .procs
                     .iter()
                     .filter_map(|(p, proc)| match p {
-                        SessionProcess::Shell(id) if proc.pty.is_alive() => Some(*id),
+                        SessionProcess::Shell(id) if proc.is_alive() => Some(*id),
                         _ => None,
                     })
                     .collect();
@@ -2549,7 +2613,7 @@ impl DaemonState {
                     && live
                         .procs
                         .get(&SessionProcess::Primary)
-                        .is_some_and(|p| p.pty.is_alive())
+                        .is_some_and(|p| p.is_alive())
                     && workspace.find_session(**id).is_some_and(|(path, session)| {
                         path == project
                             && session.mode == TerminalMode::AiCli
@@ -2837,11 +2901,11 @@ impl DaemonState {
     fn end_processes(&self, session: SessionId, live: Option<LiveSession>, covered: bool) {
         let Some(live) = live else { return };
         for proc in live.procs.values() {
-            let _ = proc.pty.kill();
+            let _ = proc.kill();
         }
         if covered {
-            if let Some(primary) = live.procs.get(&SessionProcess::Primary) {
-                self.carry_history(session, &primary.pty);
+            if let Some(primary) = live.procs.get(&SessionProcess::Primary).and_then(Proc::pty) {
+                self.carry_history(session, primary);
             }
         }
         drop(live);
@@ -2907,7 +2971,8 @@ impl DaemonState {
 
     /// Create a new durable session in `project` at `worktree_dir` (empty = project root), returning
     /// the daemon-assigned id. Persists the catalog under the lock; the caller then `start_session`s
-    /// it and broadcasts the updated catalog.
+    /// it and broadcasts the updated catalog. A terminal session: [`Self::create_session_of_kind`]
+    /// with [`SessionKind::Terminal`].
     pub fn create_session(
         &self,
         project: &Path,
@@ -2915,9 +2980,32 @@ impl DaemonState {
         provider: AiCli,
         additional: micold_core::occupancy::Additional,
     ) -> Result<SessionId, crate::catalog::CreateSessionError> {
-        self.lock()
-            .catalog
-            .create_session(project, worktree_dir, provider, additional)
+        self.create_session_of_kind(
+            project,
+            worktree_dir,
+            provider,
+            SessionKind::Terminal,
+            additional,
+        )
+    }
+
+    /// [`Self::create_session`] of a session of `kind`, refused before anything is written when
+    /// `provider` cannot run it (feature 938, FR-003).
+    pub fn create_session_of_kind(
+        &self,
+        project: &Path,
+        worktree_dir: &str,
+        provider: AiCli,
+        kind: SessionKind,
+        additional: micold_core::occupancy::Additional,
+    ) -> Result<SessionId, crate::catalog::CreateSessionError> {
+        self.lock().catalog.create_session_of_kind(
+            project,
+            worktree_dir,
+            provider,
+            kind,
+            additional,
+        )
     }
 
     /// Whether the entry `worktree_dir` (empty = project root) of `project` has an un-archived
@@ -3792,7 +3880,7 @@ impl DaemonState {
         let mut removed = Vec::new();
         for id in ids {
             if let Some(live) = inner.sessions.remove(&id) {
-                removed.extend(live.procs.values().map(|p| Arc::clone(&p.pty)));
+                removed.extend(live.procs.values().filter_map(Proc::pty).cloned());
             }
             // Every caller here is an archive/forget path — the session is not coming back, so its
             // recorded size goes with it (FR-020a). A mere stop/kill does *not* come through here,
@@ -4144,7 +4232,7 @@ impl DaemonState {
         launch: LaunchMode,
         additional: micold_core::occupancy::Additional,
     ) -> io::Result<()> {
-        if self.live_session(id).is_some() {
+        if self.lock().sessions.contains_key(&id) {
             return Ok(()); // already running — Start is idempotent
         }
         if let Some(refusal) = self.start_refusal(id, additional) {
@@ -4168,6 +4256,7 @@ impl DaemonState {
                             cwd: s.location.cwd(project),
                             mode: s.mode,
                             provider: s.provider,
+                            kind: s.kind,
                             resumable: matches!(
                                 s.lifecycle,
                                 SessionLifecycle::InterruptedResumable
@@ -4296,8 +4385,6 @@ impl DaemonState {
         let mut seeded = None;
         let spawned = match plan.mode {
             TerminalMode::AiCli => {
-                let (seed, from) = self.start_seed(id);
-                seeded = from;
                 let mut spec = LaunchSpec {
                     cwd: plan.cwd.clone(),
                     session_id: id.0,
@@ -4312,15 +4399,23 @@ impl DaemonState {
                 let mut extra = self.activity_launch_for(id, &mut spec);
                 // Last of all, so no positional argument can follow it (contracts/binding.md §4).
                 extra.extend(self.tool_server_launch_for(id, &spec, false));
-                PtySession::spawn_ai_cli(
-                    id,
-                    &spec,
-                    plan.scrollback,
-                    size,
-                    &extra,
-                    &self.terminal_colors,
-                    seed,
-                )
+                match plan.kind {
+                    SessionKind::Terminal => {
+                        let (seed, from) = self.start_seed(id);
+                        seeded = from;
+                        PtySession::spawn_ai_cli(
+                            id,
+                            &spec,
+                            plan.scrollback,
+                            size,
+                            &extra,
+                            &self.terminal_colors,
+                            seed,
+                        )
+                        .map(|pty| new_proc(Arc::new(pty), id))
+                    }
+                    SessionKind::Structured => self.spawn_structured(id, &spec, &extra),
+                }
             }
             TerminalMode::Regular => PtySession::spawn_shell(
                 id,
@@ -4329,7 +4424,8 @@ impl DaemonState {
                 plan.scrollback,
                 size,
                 &self.terminal_colors,
-            ),
+            )
+            .map(|pty| new_proc(Arc::new(pty), id)),
         };
         // A refused spawn is recorded like the refusals above (`010` BUG-001, FR-012). Returned
         // bare, it left the record in the state it was created in, so the catalog broadcast that
@@ -4358,7 +4454,7 @@ impl DaemonState {
             inner.start_failures.remove(&id);
             Self::take_carried(&mut inner.carried, id, seeded.as_ref());
         }
-        self.register_session(session);
+        self.register_proc(id, session);
         // The durable record has to learn that the process exists (FR-006d, BUG-011). Nothing else
         // will tell it: the live registry above is a separate map, and `overlay_live_summaries`
         // projects activity/title/input-serial onto the wire snapshot but not `lifecycle`. Without
@@ -4385,8 +4481,34 @@ impl DaemonState {
     pub fn register_session(&self, session: PtySession) -> Arc<PtySession> {
         let pty = Arc::new(session);
         let id = pty.id();
+        self.register_proc(id, new_proc(Arc::clone(&pty), id));
+        pty
+    }
+
+    /// Spawn `id`'s structured session, its events appended to and broadcast from `id`'s event
+    /// stream (feature 938, R6). The stream is the session's for its life, so a restart continues
+    /// it and an exit leaves it to be viewed (FR-009).
+    fn spawn_structured(
+        &self,
+        id: SessionId,
+        spec: &LaunchSpec,
+        extra: &[OsString],
+    ) -> io::Result<Proc> {
+        let stream = Arc::clone(self.lock().event_streams.entry(id).or_default());
+        StructuredSession::spawn(id, spec, extra, move |event| stream.push(event))
+            .map(|child| Proc::Structured(Arc::new(child)))
+    }
+
+    /// `id`'s structured event stream, if it has ever run as a structured session (feature 938).
+    pub fn event_stream(&self, id: SessionId) -> Option<Arc<crate::structured::EventStream>> {
+        self.lock().event_streams.get(&id).cloned()
+    }
+
+    /// Adopt a freshly-spawned process into the live registry as `id`'s `Primary` (attached by
+    /// default), starting its input log at serial `0`.
+    fn register_proc(&self, id: SessionId, proc: Proc) {
         let mut procs = HashMap::new();
-        procs.insert(SessionProcess::Primary, new_proc(Arc::clone(&pty), id));
+        procs.insert(SessionProcess::Primary, proc);
         let mut inner = self.lock();
         inner.sessions.insert(
             id,
@@ -4409,7 +4531,6 @@ impl DaemonState {
         // shadowed anyway — but only for as long as this entry lives. Dropping it here is what
         // stops the next stop-then-start from re-showing the *old* run's ending (BUG-018).
         inner.ended.remove(&id);
-        pty
     }
 
     /// After a start, learn which conversation a provider that mints its own ids (Codex, OpenCode)
@@ -4633,8 +4754,10 @@ impl DaemonState {
         if let Some(receiver) = self.hooks.get() {
             receiver.forget(session);
         }
+        // A structured process is no PTY to hand back: it ends as the entry drops here, off the
+        // lock (its `Drop` kills its tree).
         removed
-            .map(|s| s.procs.values().map(|p| Arc::clone(&p.pty)).collect())
+            .map(|s| s.procs.values().filter_map(Proc::pty).cloned().collect())
             .unwrap_or_default()
     }
 
@@ -4667,8 +4790,7 @@ impl DaemonState {
         // Each with whether its primary is a covered terminal, whose history is carried (R4).
         let mut to_drop: Vec<(SessionId, bool)> = Vec::new();
         // Each with the dead process the policy was applied to.
-        let mut to_respawn: Vec<(SessionId, PathBuf, TerminalMode, AiCli, Arc<PtySession>)> =
-            Vec::new();
+        let mut to_respawn: Vec<(SessionId, PathBuf, TerminalMode, AiCli, Proc)> = Vec::new();
         // The Session error notices of this tick's give-ups, sent off the lock (feature 613, C13).
         let mut notices: Vec<(ClientId, DaemonMsg)> = Vec::new();
         // Phase 0: the gate of every session whose primary has exited, tried off the state lock.
@@ -4680,7 +4802,7 @@ impl DaemonState {
                 .filter(|(_, live)| {
                     live.procs
                         .get(&SessionProcess::Primary)
-                        .is_some_and(|proc| !proc.pty.is_alive())
+                        .is_some_and(|proc| !proc.is_alive())
                 })
                 .map(|(id, _)| *id)
                 .collect();
@@ -4698,23 +4820,22 @@ impl DaemonState {
             // Partition live primaries into those that have exited and those still alive. The alive
             // set is captured *before* this tick's respawns, so a process respawned this tick is not
             // in it; each carries the reading of its last respawn, for the survivor check below.
-            let mut exited: Vec<(SessionId, ExitOutcome, Arc<PtySession>)> = Vec::new();
+            let mut exited: Vec<(SessionId, ExitOutcome, Proc)> = Vec::new();
             let mut alive: Vec<(SessionId, Option<micold_core::clock::Uptime>)> = Vec::new();
             for (id, live) in &inner.sessions {
                 let Some(proc) = live.procs.get(&SessionProcess::Primary) else {
                     continue;
                 };
-                if proc.pty.is_alive() {
+                if proc.is_alive() {
                     alive.push((*id, live.respawned_at));
                 } else if gates.contains_key(id) {
                     // A reaped-but-unclassifiable exit is treated as a crash so supervision still
                     // runs rather than the session lingering as a dead-but-alive entry.
                     exited.push((
                         *id,
-                        proc.pty
-                            .exit_outcome()
+                        proc.exit_outcome()
                             .unwrap_or_else(|| ExitOutcome::crashed("exit status not observed")),
-                        Arc::clone(&proc.pty),
+                        proc.clone(),
                     ));
                 }
                 // Else its gate is not held: a stop or a start of it is in flight, or it exited
@@ -4766,7 +4887,7 @@ impl DaemonState {
             for (id, live) in &inner.sessions {
                 for (key, proc) in &live.procs {
                     if let SessionProcess::Shell(instance) = key {
-                        if !proc.pty.is_alive()
+                        if !proc.is_alive()
                             && !inner.announced_dead_shells.contains(&(*id, *instance))
                         {
                             newly_dead.push((*id, *instance));
@@ -5110,7 +5231,7 @@ impl DaemonState {
                 .filter(|(_, session)| session.mode == TerminalMode::AiCli)
                 .and_then(|(project, session)| {
                     let proc = live.procs.get(&SessionProcess::Primary)?;
-                    let title = proc.pty.signals().title()?;
+                    let title = proc.pty()?.signals().title()?;
                     if crate::activity::is_console_default_title(&title) {
                         return None;
                     }
@@ -5126,7 +5247,7 @@ impl DaemonState {
             // `a_copilot_session_is_watched_by_its_event_log…`).
             // A spinner glyph seen since the last drain is positive `Working` evidence.
             if let Some(proc) = live.procs.get(&live.attached) {
-                if proc.pty.signals().take_spinner() {
+                if proc.pty().is_some_and(|pty| pty.signals().take_spinner()) {
                     let before = live.activity.signal().clone();
                     live.activity.apply(ActivityEvent::SpinnerObserved);
                     if live.activity.signal() != &before {
@@ -5274,7 +5395,8 @@ impl DaemonState {
             .filter_map(|(id, live)| {
                 live.procs
                     .get(&SessionProcess::Primary)
-                    .map(|proc| (*id, Arc::clone(&proc.pty)))
+                    .and_then(Proc::pty)
+                    .map(|pty| (*id, Arc::clone(pty)))
             })
             .collect()
     }
@@ -5477,7 +5599,7 @@ impl DaemonState {
         provider: AiCli,
         scrollback: usize,
         now: micold_core::clock::Uptime,
-        dead: &Arc<PtySession>,
+        dead: &Proc,
     ) {
         if !self.is_primary(id, dead) {
             return;
@@ -5488,10 +5610,6 @@ impl DaemonState {
         let mut seeded = None;
         let spawned = match mode {
             TerminalMode::AiCli => {
-                // The dead process's history first, whole, then the seed from it (R4).
-                self.carry_history(id, dead);
-                let (seed, from) = self.start_seed(id);
-                seeded = from;
                 let mut spec = LaunchSpec {
                     env: self.ai_cli_env_for(&cwd, provider),
                     cwd,
@@ -5501,15 +5619,26 @@ impl DaemonState {
                 };
                 let mut extra = self.activity_launch_for(id, &mut spec);
                 extra.extend(self.tool_server_launch_for(id, &spec, true));
-                PtySession::spawn_ai_cli(
-                    id,
-                    &spec,
-                    scrollback,
-                    size,
-                    &extra,
-                    &self.terminal_colors,
-                    seed,
-                )
+                match dead {
+                    Proc::Pty { pty, .. } => {
+                        // The dead process's history first, whole, then the seed from it (R4).
+                        self.carry_history(id, pty);
+                        let (seed, from) = self.start_seed(id);
+                        seeded = from;
+                        PtySession::spawn_ai_cli(
+                            id,
+                            &spec,
+                            scrollback,
+                            size,
+                            &extra,
+                            &self.terminal_colors,
+                            seed,
+                        )
+                        .map(|pty| new_proc(Arc::new(pty), id))
+                    }
+                    // Its events are kept in its stream, which the new process continues.
+                    Proc::Structured(_) => self.spawn_structured(id, &spec, &extra),
+                }
             }
             TerminalMode::Regular => PtySession::spawn_shell(
                 id,
@@ -5518,7 +5647,8 @@ impl DaemonState {
                 scrollback,
                 size,
                 &self.terminal_colors,
-            ),
+            )
+            .map(|pty| new_proc(Arc::new(pty), id)),
         };
         match spawned {
             Ok(session) => {
@@ -5539,13 +5669,13 @@ impl DaemonState {
         }
     }
 
-    /// Whether `pty` is `id`'s primary process right now.
-    fn is_primary(&self, id: SessionId, pty: &Arc<PtySession>) -> bool {
+    /// Whether `process` is `id`'s primary process right now.
+    fn is_primary(&self, id: SessionId, process: &Proc) -> bool {
         self.lock()
             .sessions
             .get(&id)
             .and_then(|live| live.procs.get(&SessionProcess::Primary))
-            .is_some_and(|proc| Arc::ptr_eq(&proc.pty, pty))
+            .is_some_and(|proc| proc.same(process))
     }
 
     /// Replace a session's `Primary` process `dead` with `session`, returning the displaced [`Proc`]
@@ -5555,27 +5685,24 @@ impl DaemonState {
     fn swap_primary(
         &self,
         id: SessionId,
-        session: PtySession,
+        session: Proc,
         respawned_at: micold_core::clock::Uptime,
-        dead: &Arc<PtySession>,
+        dead: &Proc,
         seeded: Option<&Arc<micold_core::terminal_history::HistorySnapshot>>,
     ) -> Option<Proc> {
-        let pty = Arc::new(session);
         let mut inner = self.lock();
         let live = inner.sessions.get_mut(&id).filter(|live| {
             live.procs
                 .get(&SessionProcess::Primary)
-                .is_some_and(|proc| Arc::ptr_eq(&proc.pty, dead))
+                .is_some_and(|proc| proc.same(dead))
         });
         let Some(live) = live else {
             drop(inner);
-            // `pty` drops here, now that the lock is released: its Drop kills + joins off-lock.
+            // `session` drops here, now that the lock is released: its Drop kills + joins off-lock.
             return None;
         };
         live.respawned_at = Some(respawned_at);
-        let old = live
-            .procs
-            .insert(SessionProcess::Primary, new_proc(pty, id));
+        let old = live.procs.insert(SessionProcess::Primary, session);
         // Swapped in, so the history it was seeded with is taken; a swap that found no session
         // leaves it for the next start (R4).
         Self::take_carried(&mut inner.carried, id, seeded);
@@ -5590,7 +5717,8 @@ impl DaemonState {
         let live = inner.sessions.get(&session)?;
         live.procs
             .get(&SessionProcess::Primary)
-            .map(|p| Arc::clone(&p.pty))
+            .and_then(Proc::pty)
+            .cloned()
     }
 
     /// The session's primary process framer, whichever process is attached (feature 034, FR-012:
@@ -5600,14 +5728,15 @@ impl DaemonState {
         let live = inner.sessions.get(&session)?;
         live.procs
             .get(&SessionProcess::Primary)
-            .map(|p| Arc::clone(&p.framer))
+            .and_then(Proc::terminal)
+            .map(|(_, framer)| framer)
     }
 
     /// The *attached* process's PTY handle, if the daemon is hosting the session.
     pub fn live_session(&self, session: SessionId) -> Option<Arc<PtySession>> {
         let inner = self.lock();
         let live = inner.sessions.get(&session)?;
-        live.procs.get(&live.attached).map(|p| Arc::clone(&p.pty))
+        live.procs.get(&live.attached).and_then(Proc::pty).cloned()
     }
 
     /// Every one of a session's process PTY handles (for a resize that must reach all of them, not
@@ -5616,7 +5745,7 @@ impl DaemonState {
         self.lock()
             .sessions
             .get(&session)
-            .map(|l| l.procs.values().map(|p| Arc::clone(&p.pty)).collect())
+            .map(|l| l.procs.values().filter_map(Proc::pty).cloned().collect())
             .unwrap_or_default()
     }
 
@@ -5682,8 +5811,12 @@ impl DaemonState {
     /// One terminal's `(pty, framer)`, if the daemon hosts it (feature 484).
     pub fn terminal(&self, t: TerminalRef) -> Option<(Arc<PtySession>, Arc<Mutex<Framer>>)> {
         let inner = self.lock();
-        let p = inner.sessions.get(&t.session)?.procs.get(&t.process)?;
-        Some((Arc::clone(&p.pty), Arc::clone(&p.framer)))
+        inner
+            .sessions
+            .get(&t.session)?
+            .procs
+            .get(&t.process)?
+            .terminal()
     }
 
     /// The process currently attached for `session`, if it is live.
@@ -5697,7 +5830,8 @@ impl DaemonState {
         let live = inner.sessions.get(&session)?;
         live.procs
             .get(&live.attached)
-            .map(|p| Arc::clone(&p.framer))
+            .and_then(Proc::terminal)
+            .map(|(_, framer)| framer)
     }
 
     /// Attach `process` (make it the streamed + driven one). Returns the new attached process's
@@ -5713,8 +5847,7 @@ impl DaemonState {
             return None;
         }
         live.attached = process;
-        let p = live.procs.get(&process)?;
-        Some((Arc::clone(&p.pty), Arc::clone(&p.framer)))
+        live.procs.get(&process)?.terminal()
     }
 
     /// Open (spawn) a shell instance for a session (feature 011). Idempotent — an already-open
@@ -5831,7 +5964,7 @@ impl DaemonState {
                 live.attached = SessionProcess::Primary;
                 live.procs
                     .get(&SessionProcess::Primary)
-                    .map(|p| (Arc::clone(&p.pty), Arc::clone(&p.framer)))
+                    .and_then(Proc::terminal)
             } else {
                 None
             };
@@ -5960,7 +6093,8 @@ impl DaemonState {
                 let target = process.unwrap_or(live.attached);
                 live.procs
                     .get(&target)
-                    .map(|p| (outcome, expected, Arc::clone(&p.pty)))
+                    .and_then(Proc::pty)
+                    .map(|pty| (outcome, expected, Arc::clone(pty)))
             })
         };
 
