@@ -952,6 +952,8 @@ pub fn on_diagnostics_requested(app: &mut App) -> Task<Message> {
 /// every session in the container, which is not a price to pay for a side effect of registering a
 /// project.
 fn adopt_mount_set(app: &mut App, catalog: &micold_core::protocol::messages::CatalogSnapshot) {
+    let shared: Vec<std::path::PathBuf> = catalog.projects.iter().map(|p| p.path.clone()).collect();
+    crate::shell::sandbox::share_projects(&shared);
     let Some(plan) = app.sandbox_boot.as_mut() else {
         return;
     };

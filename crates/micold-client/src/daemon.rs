@@ -202,6 +202,10 @@ pub enum Dial {
         survive_logout: bool,
         /// The AI CLIs this daemon offers once installed (FR-010).
         ai_clis: AiCliSelection,
+        /// Set when this actor creates the container before dialling it: a daemon added in
+        /// Settings has no other bring-up (BUG-868). `None` for the daemon the application's own
+        /// sandbox boot brings up.
+        bring_up: Option<ContainerBringUp>,
     },
     /// Start a pod in a cluster and bridge to it (feature 686). One try per start, like
     /// [`Dial::Ssh`].
@@ -236,6 +240,59 @@ impl std::hash::Hash for KubeDial {
         serde_json::to_string(&self.0)
             .unwrap_or_default()
             .hash(state);
+    }
+}
+
+/// What creating a container daemon's container needs, as part of an actor's identity.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ContainerBringUp {
+    /// The daemon's state directory on the host, which the container mounts.
+    pub state_dir: PathBuf,
+    /// What the container may reach and run. `SandboxProfile` is not `Hash`, so its serialised
+    /// form is hashed.
+    pub profile: Box<micold_core::sandbox::SandboxProfile>,
+}
+
+impl std::hash::Hash for ContainerBringUp {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.state_dir.hash(state);
+        serde_json::to_string(&self.profile)
+            .unwrap_or_default()
+            .hash(state);
+    }
+}
+
+/// Creates a container daemon's container; the shell implements it (this module runs no container
+/// runtime itself, `tests/no_concrete_implementations.rs`).
+pub trait ContainerStarter: Send + Sync {
+    /// Bring the container up, adopting one that already runs, blocking until it is up. `entered`
+    /// is told the start step each stage belongs to. A cancelled or failed bring-up removes what it
+    /// created; the ledger of a successful one is returned for the attempt's own rollback.
+    fn bring_up(
+        &self,
+        container_name: &str,
+        port: u16,
+        setup: &ContainerBringUp,
+        cancel: &CancelToken,
+        entered: &dyn Fn(Step),
+    ) -> Result<AttemptLedger, String>;
+}
+
+static CONTAINER_STARTER: std::sync::OnceLock<std::sync::Arc<dyn ContainerStarter>> =
+    std::sync::OnceLock::new();
+
+/// Install what creates the containers of container daemons the application's own sandbox boot
+/// does not bring up. The first call wins.
+pub fn install_container_starter(starter: std::sync::Arc<dyn ContainerStarter>) {
+    let _ = CONTAINER_STARTER.set(starter);
+}
+
+/// Cancels a bring-up when the attempt that waits on it is dropped (an actor aborted by a cancel).
+struct CancelOnDrop(CancelToken);
+
+impl Drop for CancelOnDrop {
+    fn drop(&mut self) {
+        self.0.cancel();
     }
 }
 
@@ -298,17 +355,21 @@ pub fn actor_specs(
         states,
         state_dir,
         legacy_default,
+        None,
         &BTreeMap::new(),
     )
 }
 
 /// [`actor_specs`] with the answers the user gave to the drift prompts (feature 686): a Kubernetes
-/// daemon in `drift` is dialled with that choice, the others with `Ask`.
+/// daemon in `drift` is dialled with that choice, the others with `Ask`. `boot_owner` is the
+/// container daemon the application's own sandbox boot creates the container of; every other
+/// container daemon's actor creates its own.
 pub fn actor_specs_answered(
     registry: &DaemonRegistry,
     states: &DaemonStates,
     state_dir: &Path,
     legacy_default: Option<DaemonId>,
+    boot_owner: Option<DaemonId>,
     drift: &BTreeMap<DaemonId, DriftChoice>,
 ) -> Vec<ActorSpec> {
     let keys = actor_keys(registry);
@@ -341,6 +402,16 @@ pub fn actor_specs_answered(
                     image: c.profile.image.reference().to_string(),
                     survive_logout: c.profile.survive_logout,
                     ai_clis: c.profile.ai_clis.clone(),
+                    bring_up: (boot_owner != Some(entry.id))
+                        .then(|| {
+                            entry
+                                .state_dir(state_dir, legacy_default)
+                                .map(|state_dir| ContainerBringUp {
+                                    state_dir,
+                                    profile: Box::new(c.profile.clone()),
+                                })
+                        })
+                        .flatten(),
                 },
                 DaemonRuntime::Ssh(s) => Dial::Ssh {
                     target: s.target.clone(),
@@ -374,10 +445,18 @@ pub fn connections(
     states: &DaemonStates,
     state_dir: &Path,
     legacy_default: Option<DaemonId>,
+    boot_owner: Option<DaemonId>,
     drift: &BTreeMap<DaemonId, DriftChoice>,
 ) -> Subscription<Message> {
     Subscription::batch(
-        actor_specs_answered(registry, states, state_dir, legacy_default, drift)
+        actor_specs_answered(
+            registry,
+            states,
+            state_dir,
+            legacy_default,
+            boot_owner,
+            drift,
+        )
             .into_iter()
             .map(|spec| Subscription::run_with(spec, |spec| actor(spec.clone()))),
     )
@@ -616,11 +695,13 @@ async fn connect_and_pump(
                 image,
                 survive_logout,
                 ai_clis,
+                bring_up,
             },
             _,
         ) => {
             let sink = provisioning_sink(id, output);
             let target = ContainerReach {
+                bring_up: bring_up.as_ref(),
                 port: *port,
                 runtime: *runtime,
                 container_name,
@@ -1089,6 +1170,8 @@ async fn ssh_attempt(
 
 /// What one container bring-up needs beyond the shared sequence.
 struct ContainerReach<'a> {
+    /// Set when this attempt creates the container first.
+    bring_up: Option<&'a ContainerBringUp>,
     port: u16,
     runtime: micold_core::sandbox::runtime::RuntimeKind,
     container_name: &'a str,
@@ -1164,6 +1247,34 @@ fn container_target(
 /// The state directory inside a container (the basic image's contract).
 const CONTAINER_STATE_DIR: &str = "/var/lib/micold-ai-ide";
 
+/// Create the container of a daemon this actor owns, or adopt the one that runs, off the async
+/// worker. Dropping the future cancels the bring-up.
+async fn create_container(
+    reach: &ContainerReach<'_>,
+    setup: &ContainerBringUp,
+    sink: &EventSink,
+) -> Result<AttemptLedger, String> {
+    let Some(starter) = CONTAINER_STARTER.get().cloned() else {
+        // A process that installed none (a test) leaves the container to whoever made it.
+        return Ok(AttemptLedger::new());
+    };
+    let cancel = CancelToken::new();
+    let _cancels = CancelOnDrop(cancel.clone());
+    let (name, port, setup, sink) = (
+        reach.container_name.to_string(),
+        reach.port,
+        setup.clone(),
+        sink.clone(),
+    );
+    tokio::task::spawn_blocking(move || {
+        starter.bring_up(&name, port, &setup, &cancel, &|step| {
+            sink(ProvisionEvent::Entered(step));
+        })
+    })
+    .await
+    .map_err(|e| format!("the container start stopped: {e}"))?
+}
+
 /// One bring-up of a container daemon through the shared provisioning sequence: wait for the
 /// container, ask it its login name, pin its host key, then provision, bridge and handshake.
 ///
@@ -1183,6 +1294,18 @@ async fn container_attempt(
     // The wait below is the runtime pulling the image and creating the container, which can take
     // minutes: say so in the row instead of leaving it on a bare "starting" (feature 806).
     sink(ProvisionEvent::Entered(Step::Acquire));
+    let (runtime, name) = (reach.runtime, reach.container_name.to_string());
+    let mut undo = StartRollback::new(roll_back.then(|| {
+        Box::new(move |ledger: AttemptLedger| {
+            let _ =
+                micold_core::provision::rollback(&ledger, &CliRuntime::new(runtime, SystemRunner));
+        }) as Box<dyn FnOnce(AttemptLedger) + Send>
+    }));
+    // A daemon added in Settings has no other bring-up: without this the wait below is for a
+    // container nobody creates (BUG-868). What it creates is removed again if the attempt fails.
+    if let Some(setup) = reach.bring_up {
+        undo.adopt(create_container(reach, setup, sink).await?);
+    }
     let login = micold_core::provision::login::wait_for_login(
         host,
         reach.runtime.program(),
@@ -1220,16 +1343,12 @@ async fn container_attempt(
     // Dropping this future is the cancel (the actor is aborted); the token is for the steps' own
     // guards and is never shared.
     let cancel = CancelToken::new();
-    let (runtime, name) = (reach.runtime, reach.container_name.to_string());
     // A daemon found running was not started by this attempt: it is never stopped (FR-020).
-    let roll_back = roll_back
-        && !micold_core::provision::login::daemon_running(host, runtime.program(), &name).await;
-    let mut undo = StartRollback::new(roll_back.then(|| {
-        Box::new(move |ledger: AttemptLedger| {
-            let _ =
-                micold_core::provision::rollback(&ledger, &CliRuntime::new(runtime, SystemRunner));
-        }) as Box<dyn FnOnce(AttemptLedger) + Send>
-    }));
+    if roll_back
+        && micold_core::provision::login::daemon_running(host, runtime.program(), &name).await
+    {
+        undo.keep_what_was_not_created();
+    }
     let recording = undo.recording_sink(sink, &name);
     let result = ssh_run(
         host,
@@ -1283,6 +1402,30 @@ impl StartRollback {
             }
             inner(event);
         })
+    }
+
+    /// What the attempt created before it was recorded here.
+    fn adopt(&self, created: AttemptLedger) {
+        if let Some(id) = created.created_container {
+            self.ledger
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .record_created(id);
+        }
+    }
+
+    /// A daemon found running is left alone, but a container this attempt created is still removed
+    /// should the attempt fail.
+    fn keep_what_was_not_created(&mut self) {
+        let created = self
+            .ledger
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .created_container
+            .is_some();
+        if !created {
+            self.undo = None;
+        }
     }
 
     /// The attempt connected: nothing to undo.
@@ -1728,7 +1871,7 @@ mod tests {
         let dir = std::path::Path::new("/nonexistent");
         let asked = actor_specs(&registry, &states, dir, None);
         let answer = std::collections::BTreeMap::from([(id, DriftChoice::Recreate)]);
-        let answered = super::actor_specs_answered(&registry, &states, dir, None, &answer);
+        let answered = super::actor_specs_answered(&registry, &states, dir, None, None, &answer);
         assert_ne!(asked[0], answered[0]);
         assert!(
             matches!(&asked[0].dial, Dial::Kubernetes { drift, .. } if drift.0 == DriftChoice::Ask)
@@ -1816,6 +1959,7 @@ mod tests {
             dir: PathBuf::from("/state/ssh"),
         };
         let reach = ContainerReach {
+            bring_up: None,
             port: 7001,
             runtime: Default::default(),
             container_name: "box-ctr",
@@ -1920,6 +2064,7 @@ mod tests {
             std::sync::Arc::new(move |e| seen.lock().unwrap().push(e));
         let dir = tempfile::tempdir().unwrap();
         let reach = ContainerReach {
+            bring_up: None,
             port: 7001,
             runtime: micold_core::sandbox::runtime::RuntimeKind::Docker,
             container_name: "box-ctr",

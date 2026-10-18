@@ -692,6 +692,66 @@ impl InFlight {
     }
 }
 
+/// The projects the containers of daemons added in Settings share, kept in step with the catalog
+/// the sandbox boot follows (BUG-868).
+static EXTRA_PROJECTS: std::sync::Mutex<Vec<PathBuf>> = std::sync::Mutex::new(Vec::new());
+
+/// Replace the projects a container daemon's container is created sharing.
+pub fn share_projects(projects: &[PathBuf]) {
+    *EXTRA_PROJECTS.lock().unwrap_or_else(|e| e.into_inner()) = projects.to_vec();
+}
+
+/// Creates the container of a container daemon added in Settings, the way the boot does for the
+/// sandbox daemon (BUG-868).
+pub struct DaemonContainers;
+
+impl micold_client::daemon::ContainerStarter for DaemonContainers {
+    fn bring_up(
+        &self,
+        container_name: &str,
+        port: u16,
+        setup: &micold_client::daemon::ContainerBringUp,
+        cancel: &CancelToken,
+        entered: &dyn Fn(micold_core::provision::Step),
+    ) -> Result<AttemptLedger, String> {
+        use micold_core::provision::Step;
+        prepare_keys(&setup.state_dir, port).map_err(|f| f.reason())?;
+        let facts = HostFacts::gather(setup.state_dir.clone());
+        let projects = EXTRA_PROJECTS
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
+        let runner = Cancellable {
+            runner: SystemRunner,
+            cancelled: cancel.clone(),
+        };
+        let mut ledger = AttemptLedger::new();
+        let outcome = start_attempt(
+            &setup.profile,
+            &projects,
+            &facts,
+            container_name,
+            port,
+            &runner,
+            cancel,
+            &mut ledger,
+            &mut |state| match state {
+                SandboxState::Acquiring(_) => entered(Step::Acquire),
+                SandboxState::Starting => entered(Step::CreateContainer),
+                _ => {}
+            },
+        );
+        if outcome.is_err() || cancel.is_cancelled() {
+            runner.roll_back(&ledger, setup.profile.runtime);
+        }
+        match outcome {
+            Ok(_) if cancel.is_cancelled() => Err("the start was cancelled".to_string()),
+            Ok(_) => Ok(ledger),
+            Err(failure) => Err(failure.reason()),
+        }
+    }
+}
+
 /// The runner a bring-up drives the runtime through, which refuses every command once the bring-up
 /// is cancelled (#369). What the attempt created is in its [`AttemptLedger`], not here.
 struct Cancellable<R> {

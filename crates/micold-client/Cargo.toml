@@ -21,6 +21,9 @@ path = "src/lib.rs"
 # Feature 686: opts in to the `kube_real_*` tests against a real cluster (CI job kube-cluster).
 kube-real-runtime = []
 
+# Bug 868: opts in to the `sandbox_real_*` tests of container daemons added in the form.
+sandbox-real-runtime = []
+
 # The GUI binary. Name preserved as `micold-ai-ide` (installed launcher entry, deb package).
 [[bin]]
 name = "micold-ai-ide"
