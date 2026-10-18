@@ -11,7 +11,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-ftdy5c
 - **Started**: 2026-10-18
 - **Phase**: tasks
-- **Next step**: tasks unit
+- **Next step**: tasks unit — speckit-analyze, tasks review, checklists, design PR
 
 ## Pull requests
 
@@ -22,6 +22,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
+| M1 | T001–T020 | full | Chord opens the switcher over the active project's locations; filter, choose = row click, close | — | planned |
+| M2 | T021–T026 | full | Sessions listed under their locations, found by name, kept by a location match | — | planned |
+| M3 | T027–T031 | light | Other known projects listed (unavailable badged, unselectable); complete user-guide bullet | — | planned |
 
 ## Decisions
 
