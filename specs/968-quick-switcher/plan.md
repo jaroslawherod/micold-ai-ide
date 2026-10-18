@@ -55,7 +55,7 @@ edits
 | V. Rust + iced | PASS | iced only; `Option<Open>` makes a closed switcher with a query unrepresentable; closed enums `EntryKey`, `Rank`, `Kind`; highlight held by key. |
 | VI. Cross-Platform | PASS | `is_primary_shift` with the platform primary; physical-key match; CI on three platforms; quickstart §C. |
 | VII. Documentation | PASS | `terminal-panes.md` row and `worktrees-and-sessions.md` bullet in the same PR; a test ties them to `switcher_chord_labels`. |
-| VIII. Components | PASS | Composes the shared `material::dialog`, `Typeahead` and `picker::Row` (its `details` line and `disabled`); no new widget, no fork. |
+| VIII. Components | PASS | Composes the shared `Surface` (`SurfaceKind::Dialog`) with `material::dialog::fields`, `Typeahead` and `picker::Row` (its `details` line and `disabled`); no new widget, no fork. |
 
 Post-design re-check: unchanged, all PASS.
 

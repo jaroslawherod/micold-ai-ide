@@ -63,7 +63,9 @@ session are unchanged (FR-009); the terminal takes the keyboard back by derivati
   Dialog, cancelled_by: Message::QuickSwitch(Msg::Dismissed))`, `Registered::open_in` reads
   `state.quick_switch.open.is_some()`; listed in `overlay/registry.rs`'s `REGISTERED` with
   `crate::ui::quick_switcher::dialog`.
-- `ui/quick_switcher.rs::dialog(&State) -> Element`: `material::dialog` holding a
+- `ui/quick_switcher.rs::dialog(&State) -> Element`: `Surface::new(material::dialog::fields(column![typeahead]),
+  SurfaceKind::Dialog, roles)` (dialog.rs exposes free functions `fields`/`actions`/`body`/`confirm`,
+  not a type; no `actions` row, the switcher has no buttons), the column holding a
   `material::Typeahead::new(query, rows, QueryChanged, roles).open(true).highlighted(i)
   .selected(current).empty_message(..).on_move(Moved).on_pick(Chosen(key of row))
   .on_dismiss(Dismissed)`. Each row: `picker::Row::new(name, spans).details(context_line)` with
