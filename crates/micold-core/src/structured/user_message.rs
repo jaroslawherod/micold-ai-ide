@@ -3,6 +3,8 @@
 
 use std::fmt;
 
+use serde::Serialize;
+
 /// Why a user message was not delivered (data-model *UserMessageRefusal*).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UserMessageRefusal {
@@ -18,15 +20,49 @@ pub enum UserMessageRefusal {
 
 impl fmt::Display for UserMessageRefusal {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("")
+        f.write_str(match self {
+            Self::Blank => "The message is empty: write something to send",
+            Self::NotRunning => "The session is not running: start it to send a message",
+            Self::TurnInProgress => {
+                "Claude Code is still answering the previous message: send this one when it is done"
+            }
+            Self::NotStructured => {
+                "This is a terminal session: type into its terminal to send it a message"
+            }
+        })
     }
 }
 
 /// The stream-json line that delivers `text` as one user message, newline included. The text goes
 /// through `serde_json` escaping, so lines, quotes and non-ASCII text arrive unchanged.
 pub fn encode_user_message(text: &str) -> String {
-    let _ = text;
-    String::new()
+    // Typed rather than `json!`, so the keys keep the contract's order (a `serde_json::Map` sorts).
+    #[derive(Serialize)]
+    struct Line<'a> {
+        r#type: &'static str,
+        message: Message<'a>,
+    }
+    #[derive(Serialize)]
+    struct Message<'a> {
+        role: &'static str,
+        content: [Text<'a>; 1],
+    }
+    #[derive(Serialize)]
+    struct Text<'a> {
+        r#type: &'static str,
+        text: &'a str,
+    }
+    let line = Line {
+        r#type: "user",
+        message: Message {
+            role: "user",
+            content: [Text { r#type: "text", text }],
+        },
+    };
+    // Serializing plain strings into JSON cannot fail.
+    let mut line = serde_json::to_string(&line).unwrap_or_default();
+    line.push('\n');
+    line
 }
 
 #[cfg(test)]

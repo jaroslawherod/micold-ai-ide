@@ -20,19 +20,30 @@ pub enum TurnState {
 impl TurnState {
     /// Accept `text` as the next user message, opening a turn, or say why not (FR-008).
     pub fn accept(&mut self, text: &str, running: bool) -> Result<(), UserMessageRefusal> {
-        let _ = (text, running);
+        if text.trim().is_empty() {
+            return Err(UserMessageRefusal::Blank);
+        }
+        if !running {
+            return Err(UserMessageRefusal::NotRunning);
+        }
+        if *self == Self::InTurn {
+            return Err(UserMessageRefusal::TurnInProgress);
+        }
+        *self = Self::InTurn;
         Ok(())
     }
 
     /// Follow an event the CLI wrote: a `result` ends the turn.
     pub fn on_event(&mut self, event: &StructuredEvent) {
-        let _ = event;
+        if matches!(event, StructuredEvent::Result { .. }) {
+            *self = Self::Idle;
+        }
     }
 
     /// The process ended or is restarting: the turn is over. Returns the note to append to the
     /// history when a turn was in progress (FR-014's daemon note).
     pub fn on_exit(&mut self) -> Option<StructuredEvent> {
-        None
+        (std::mem::take(self) == Self::InTurn).then_some(StructuredEvent::TurnEndedWithoutResult)
     }
 }
 
