@@ -116,7 +116,7 @@ impl Match {
 /// received would be subtly wrong for exactly the names that are hardest to notice. Folding
 /// per-character and keeping the original offsets alongside means every range this module returns
 /// indexes the name the caller passed in.
-struct Folded {
+pub(crate) struct Folded {
     chars: Vec<char>,
     /// `offsets[i]` is where character `i` starts; the final entry is the name's length, so
     /// `offsets[i..j]` describes a byte range without a special case at the end.
@@ -124,7 +124,7 @@ struct Folded {
 }
 
 impl Folded {
-    fn new(name: &str) -> Self {
+    pub(crate) fn new(name: &str) -> Self {
         let mut chars = Vec::with_capacity(name.len());
         let mut offsets = Vec::with_capacity(name.len() + 1);
         for (at, c) in name.char_indices() {
@@ -189,7 +189,7 @@ const MIN_APPROXIMATE_CHARS: usize = 3;
 const UNRESTRICTED_SINGLE_EDIT_CHARS: usize = 5;
 
 /// Tier 1 — the name contains the query verbatim, at its leftmost occurrence.
-fn literal(name: &Folded, query: &[char]) -> Option<Match> {
+pub(crate) fn literal(name: &Folded, query: &[char]) -> Option<Match> {
     if query.len() > name.len() {
         return None;
     }
@@ -212,7 +212,7 @@ fn literal(name: &Folded, query: &[char]) -> Option<Match> {
 /// usually possible, and if the choice among them were left to chance the same search would
 /// emphasise different characters on different runs — which makes "you can see why each result is
 /// here" (SC-005) unverifiable.
-fn subsequence(name: &Folded, query: &[char]) -> Option<Match> {
+pub(crate) fn subsequence(name: &Folded, query: &[char]) -> Option<Match> {
     let mut spans = Vec::with_capacity(query.len());
     let mut next = 0usize;
     for &wanted in query {
