@@ -313,6 +313,18 @@ pub enum Tag {
     Status(WorktreeStatus),
 }
 
+impl Tag {
+    /// The text a chip or a list row shows for this tag: the type's name, the issue key, or the
+    /// status word (empty for `Valid`, which is never constructed as a tag).
+    pub fn label(&self) -> String {
+        match self {
+            Self::Type(t) => t.as_str().to_string(),
+            Self::Issue(key) => key.clone(),
+            Self::Status(status) => status.label().unwrap_or_default().to_string(),
+        }
+    }
+}
+
 /// The boundary between a ticket and the descriptive name in a directory name (BUG-003).
 ///
 /// [`slugify`] maps every non-alphanumeric character to `-`, so a derived name can never contain

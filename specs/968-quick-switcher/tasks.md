@@ -135,7 +135,7 @@ name, Enter; the terminal shows its session and its sidebar row is selected.
 
 ### Tests for User Story 1 (MANDATORY — Constitution Principle I) ⚠️
 
-- [ ] T009 [P] [US1] Write the failing `candidates` tests (location entries) in
+- [X] T009 [P] [US1] Write the failing `candidates` tests (location entries) in
   `crates/micold-client/tests/quick_switch.rs`: in `navigation::location_order` (Default first,
   then the worktrees as drawn); a worktree the tag filter hides is absent but the current location
   under the filter is listed; a collapsed run group's worktrees follow `location_order`; a missing
@@ -144,7 +144,7 @@ name, Enter; the terminal shows its session and its sidebar row is selected.
   *Entry*: "location: its tag labels (`naming::Tag`), e.g. `feat · PROJ-12 · missing`"); `current`
   is set on the current location only (`current_session_location()` or `sidebar.nav_stop`); every
   location entry is `selectable`; with no active project the list has no location entries
-- [ ] T010 [US1] Write the failing reducer tests in `crates/micold-client/tests/quick_switch.rs`
+- [X] T010 [US1] Write the failing reducer tests in `crates/micold-client/tests/quick_switch.rs`
   (contracts/ui.md U1, U3 location rows, U4): `Toggled` opens with `query == ""`, `highlighted` =
   the first entry, `terminal_had_focus` from the message and `keyboard_row_before` =
   `sidebar.keyboard_row`; it does nothing while Settings is open (`settings_draft.is_some()`) or
@@ -163,7 +163,7 @@ name, Enter; the terminal shows its session and its sidebar row is selected.
   no entries, and Enter (`Chosen` of no highlight) then changes nothing (FR-014); SC-001 for
   locations: in a project of 50 locations, for each location some query of at most 4 characters of
   its name leaves it within the first 3 selectable entries (at most 2 `Moved(Next)`)
-- [ ] T011 [US1] Write the failing apply tests in `crates/micold-client/tests/quick_switch.rs`
+- [X] T011 [US1] Write the failing apply tests in `crates/micold-client/tests/quick_switch.rs`
   driving the switcher through `apply_navigation` / `finish_navigation` as
   `tests/navigation_apply.rs` does (reuse its helpers; move them to `tests/support/` when both need
   them): choosing a location with a session makes it `session.active`, selects its row, arms the
@@ -188,12 +188,12 @@ name, Enter; the terminal shows its session and its sidebar row is selected.
 
 ### Implementation for User Story 1
 
-- [ ] T013 [US1] Implement `pub fn candidates(state: &State) -> Vec<Entry>` in
+- [X] T013 [US1] Implement `pub fn candidates(state: &State) -> Vec<Entry>` in
   `crates/micold-client/src/features/quick_switch.rs` for location entries (data-model.md
   `candidates` step 1 without its sessions): one entry per `navigation::location_order(state)` via
   `navigation::location_node`, `parent: None`, `selectable: true`, `context` from the tag labels,
   `current` as T009 states; until T009 passes
-- [ ] T014 [US1] Implement `pub fn update(state: &mut State, msg: Msg) -> Option<Choice>` in
+- [X] T014 [US1] Implement `pub fn update(state: &mut State, msg: Msg) -> Option<Choice>` in
   `crates/micold-client/src/features/quick_switch.rs` returning `Option<Choice>` (`pub struct
   Choice { pub step: Step, pub terminal_had_focus: bool, pub close_overview_first: bool }`,
   `close_overview_first` true only for a `Stop` with the Overview open) with the U1 gate, U2

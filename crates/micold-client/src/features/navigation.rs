@@ -129,7 +129,7 @@ fn session_step(state: &State, dir: micold_core::navigation::Dir) -> Step {
 }
 
 /// The session a click on `location`'s row would select (FR-018), if it has one.
-fn main_session_at(state: &State, location: &SessionLocation) -> Option<SessionId> {
+pub(crate) fn main_session_at(state: &State, location: &SessionLocation) -> Option<SessionId> {
     location_node(state, location)?.main_session()
 }
 
@@ -143,7 +143,6 @@ pub(crate) enum LocationNode {
 
 impl LocationNode {
     /// The name the row shows.
-    #[allow(dead_code)] // read by the switcher's candidates (T009)
     pub(crate) fn name(&self) -> &str {
         match self {
             Self::Default(node) => node.display_name,
@@ -152,7 +151,6 @@ impl LocationNode {
     }
 
     /// The row's tags; the project root has none.
-    #[allow(dead_code)] // read by the switcher's candidates (T009)
     pub(crate) fn tags(&self) -> &[micold_core::naming::Tag] {
         match self {
             Self::Default(_) => &[],

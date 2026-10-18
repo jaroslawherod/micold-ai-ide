@@ -415,13 +415,13 @@ fn filter_bar(state: &State, r: Roles) -> Element<'static, Message> {
 /// Rendered as a dimmed tonal chip (see [`style::chip`]); status tags use the `error` accent.
 fn tag_chip(tag: &Tag, r: Roles) -> (String, Rgb) {
     match tag {
-        Tag::Type(t) => (t.as_str().to_string(), r.tag_fill(*t)),
-        Tag::Issue(key) => (key.clone(), r.issue_tag().0),
+        Tag::Type(t) => (tag.label(), r.tag_fill(*t)),
+        Tag::Issue(_) => (tag.label(), r.issue_tag().0),
         // `unwrap_or_default` covers `Valid`, which `label()` answers with `None` rather than the
         // `""` this arm used to spell out (feature 029, §4.2). A `Tag::Status(Valid)` is not
         // constructed — `worktree_tags` only emits the tag for an unhealthy worktree — so this is
         // a total match on a case that does not arise, not a blank chip anyone can see.
-        Tag::Status(status) => (status.label().unwrap_or_default().to_string(), r.error),
+        Tag::Status(_) => (tag.label(), r.error),
     }
 }
 

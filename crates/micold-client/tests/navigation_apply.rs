@@ -1,27 +1,12 @@
 //! Applying a resolved navigation press (feature 803, contracts/ui.md U3).
 
-use micold_client::app::{Message, State};
+use micold_client::app::Message;
 use micold_client::features::navigation::Step;
 use micold_client::features::session::Msg as SessionMsg;
 use micold_client::features::sidebar::RowRef;
-use micold_core::session::{SessionId, SessionLocation};
 
 mod support;
-use support::sidebar_fixture::{deliver, listed, session_at, state_with_active, worktree};
-
-/// Default with the current session, `feat-a` with one, `feat-b` empty; the terminal focused.
-fn arranged() -> (State, SessionId, SessionId) {
-    let mut state = state_with_active();
-    deliver(&mut state, vec![listed("feat-a"), listed("feat-b")]);
-    let default = session_at(&mut state, SessionLocation::Default);
-    let a = session_at(&mut state, worktree("feat-a"));
-    state.session.active = Some(default);
-    (state, default, a)
-}
-
-fn session_count(state: &State) -> usize {
-    state.workspace.sessions.values().map(Vec::len).sum()
-}
+use support::sidebar_fixture::{arranged, press, session_count, worktree};
 
 #[test]
 fn a_session_step_selects_it_as_a_click_does_and_arms_the_reveal() {
@@ -85,14 +70,6 @@ fn the_selected_follow_up_closes_the_overview() {
         "a location chord closes the Overview (FR-012)"
     );
     assert_eq!(state.session.active, Some(a));
-}
-
-/// Run a press the way the binary does: apply, dispatch the follow-ups, then finish.
-fn press(state: &mut State, step: Step, terminal_had_focus: bool) {
-    for message in state.apply_navigation(step.clone(), terminal_had_focus) {
-        state.update(message);
-    }
-    state.finish_navigation(&step, terminal_had_focus);
 }
 
 #[test]

@@ -91,6 +91,14 @@ const ALLOWED_CROSS_FEATURE_NAMES: &[(&str, &str, &str)] = &[
          second one that says the same thing (feature 968, data-model.md *Client*)",
     ),
     (
+        "quick_switch",
+        "navigation",
+        "location_order, location_node, main_session_at, Step — the palette lists the locations in \
+         the order navigation steps through them and resolves a choice to navigation's own `Step`, \
+         so the two share one order and one apply path instead of keeping two (feature 968, \
+         research R4, R5)",
+    ),
+    (
         "navigation",
         "sidebar",
         "SidebarEntry, RunRow — a location press steps through the rows the sidebar draws, in its \

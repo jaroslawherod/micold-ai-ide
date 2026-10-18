@@ -90,3 +90,31 @@ pub fn run_group(id: u128, name: &str, dirs: &[&str]) -> RunGroup {
     })
     .expect("valid group")
 }
+
+/// Default with the current session, `feat-a` with one, `feat-b` empty (navigation and quick
+/// switcher apply tests, features 803 and 968).
+pub fn arranged() -> (State, SessionId, SessionId) {
+    let mut state = state_with_active();
+    deliver(&mut state, vec![listed("feat-a"), listed("feat-b")]);
+    let default = session_at(&mut state, SessionLocation::Default);
+    let a = session_at(&mut state, worktree("feat-a"));
+    state.session.active = Some(default);
+    (state, default, a)
+}
+
+/// How many sessions are running across every project.
+pub fn session_count(state: &State) -> usize {
+    state.workspace.sessions.values().map(Vec::len).sum()
+}
+
+/// Run a resolved step the way the binary does: apply, dispatch the follow-ups, then finish.
+pub fn press(
+    state: &mut State,
+    step: micold_client::features::navigation::Step,
+    terminal_had_focus: bool,
+) {
+    for message in state.apply_navigation(step.clone(), terminal_had_focus) {
+        state.update(message);
+    }
+    state.finish_navigation(&step, terminal_had_focus);
+}
