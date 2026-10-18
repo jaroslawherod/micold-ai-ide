@@ -25,6 +25,7 @@ pub mod ops;
 pub mod platform;
 pub mod progress;
 pub mod remote;
+pub mod repo_clone;
 pub mod review;
 pub mod runs;
 pub mod server;

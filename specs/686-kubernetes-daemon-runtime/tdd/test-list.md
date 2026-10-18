@@ -242,7 +242,7 @@ observable result needs a real pod (A3) is hosted only in the real suite.
 | U79 | The clone remote is `origin`, else the only remote; none is `NoRemote`; several without `origin` is `Ambiguous(names)` | FR-007, Edge: project without a remote | example | PENDING | |
 | U80 | The clone target is `/data/repos/<slug>-<hash8(url)>`, the same for the same URL | FR-007 | example | PENDING | |
 | U81 | Git stderr classifies as `AuthRequired { remote }`, `DiskFull`, `Unreachable { remote }` or `Other`, each with its contract §6 text | FR-007, Edge: remote needs a credential, Edge: volume full | example | PENDING | |
-| U82 | `RepoClone`, `RepoCloned`, `RepoCloneFailed` round-trip and `PROTOCOL_VERSION` is 49 | FR-007, FR-017 | example | PENDING | |
+| U82 | `RepoClone`, `RepoCloned`, `RepoCloneFailed` round-trip and `PROTOCOL_VERSION` is 51 | FR-007, FR-017 | example | PENDING | |
 | U83 | The daemon clones into a `.partial-` directory and renames it on success; an existing destination is fetched | FR-007 | example | PENDING | |
 | U84 | An auth failure leaves no directory behind | FR-007, Edge: remote needs a credential | example | PENDING | |
 | U85 | A destination outside `MICOLD_REPOS_ROOT` is refused | FR-007, FR-020 | example | PENDING | |

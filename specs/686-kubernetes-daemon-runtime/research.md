@@ -226,7 +226,7 @@ Failures are classified (`AuthRequired { remote }`, `DiskFull`, `Unreachable { r
 `Other`). The clone is then a remote project on that daemon with 489's identity
 `micold-remote://<daemon-id>/data/repos/…` (489 R5), and the worktree is created in it with the
 existing `WorktreeCreate` op; rows show the daemon name and in-pod path (story 1.2).
-`PROTOCOL_VERSION` 48 → 49 for the new request.
+`PROTOCOL_VERSION` 50 → 51 for the new request (`main` was at 50 when M7 ran).
 
 **Why**: the remote is the only source the pod can reach without the client streaming the repository;
 489's identity scheme already makes a non-local project safe for every path-keyed map.
