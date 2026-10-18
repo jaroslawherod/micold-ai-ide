@@ -24,15 +24,12 @@ pub const BASIC_IMAGE_CONTENT_HASH: &str = "6009b58e0dd70464";
 
 /// The basic image the client starts a new container daemon from: the tag the publish workflow
 /// pushed for [`BASIC_IMAGE_CONTENT_HASH`], pinned by the digest of its multi-architecture index
-/// (the line `basic-image.yml` printed for the run on `main` at `110b724e`). Always carries a
+/// (the image `basic-image.yml` published for the run on `main` at `d526eaca`). Always carries a
 /// digest, so what a container runs cannot change under the tag (FR-002).
 ///
 /// `scripts/basic-image-hash.sh --check` and CI's pin check (`docker manifest inspect` of this
 /// reference) keep it honest.
-///
-/// Its tag and digest are the last published image; they move to [`BASIC_IMAGE_CONTENT_HASH`] when
-/// `basic-image.yml` has published this tree on `main` (T049).
-pub const BASIC_IMAGE: &str = "ghcr.io/jaroslawherod/micold-basic:722a7d9ef0d6aadb@sha256:bea51dd1e190fe1ab4c34129c5784eb3e6f2f65ac9b0ac63b6fff1c06d608366";
+pub const BASIC_IMAGE: &str = "ghcr.io/jaroslawherod/micold-basic:6009b58e0dd70464@sha256:ab15041b7e70f400c8de089b75537c7d5a93f9eac9625311916b82b750f437aa";
 
 /// The tag a local build of `packaging/basic/` carries (`docker build -t micold-basic:dev`), and the
 /// one the real-runtime suite starts from by default.

@@ -91,6 +91,15 @@ pub fn ssh_host() -> Option<std::sync::Arc<dyn SshHost>> {
     SSH_HOST.get().cloned()
 }
 
+/// The host's IANA time zone, which a container daemon the bridge starts is told as `TZ`.
+static HOST_TIME_ZONE: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
+
+/// Install the host's time zone (the shell reads it; this module reads no host files). The first
+/// call wins.
+pub fn install_time_zone(zone: Option<String>) {
+    let _ = HOST_TIME_ZONE.set(zone);
+}
+
 /// How many messages may queue in each direction before backpressure. Input is small and rare
 /// relative to grid frames; a few hundred slots is ample without unbounded growth.
 const CHANNEL_CAPACITY: usize = 256;
@@ -183,6 +192,11 @@ pub enum Dial {
         keys_dir: PathBuf,
         /// Whether the container may connect out: with none, installers go through the relay.
         network: micold_core::sandbox::NetworkPosture,
+        /// The image reference the container was created from, which the daemon reports in a
+        /// refusal (`MICOLD_IMAGE_REFERENCE`).
+        image: String,
+        /// Whether the daemon is kept running with nobody connected (`MICOLD_IDLE_STOP=off`).
+        survive_logout: bool,
     },
     /// Start a pod in a cluster and bridge to it (feature 686). One try per start, like
     /// [`Dial::Ssh`].
@@ -277,6 +291,8 @@ pub fn actor_specs(
                     container_name: c.container_name.clone(),
                     keys_dir: entry.keys_dir(state_dir, legacy_default)?,
                     network: c.profile.network,
+                    image: c.profile.image.reference().to_string(),
+                    survive_logout: c.profile.survive_logout,
                 },
                 DaemonRuntime::Ssh(s) => Dial::Ssh {
                     target: s.target.clone(),
@@ -555,6 +571,8 @@ async fn connect_and_pump(
                 container_name,
                 keys_dir,
                 network,
+                image,
+                survive_logout,
             },
             _,
         ) => {
@@ -565,6 +583,9 @@ async fn connect_and_pump(
                 container_name,
                 keys_dir,
                 network: *network,
+                image,
+                survive_logout: *survive_logout,
+                time_zone: HOST_TIME_ZONE.get().and_then(|z| z.as_deref()),
             };
             match container_attempt(SSH_HOST.get().map(|h| &**h), &target, &sink).await {
                 Ok(c) => Ok(c),
@@ -944,6 +965,36 @@ struct ContainerReach<'a> {
     container_name: &'a str,
     keys_dir: &'a Path,
     network: micold_core::sandbox::NetworkPosture,
+    image: &'a str,
+    survive_logout: bool,
+    time_zone: Option<&'a str>,
+}
+
+/// The environment of a daemon the bridge starts in a container. sshd builds a session's
+/// environment afresh, so the container's own `-e` values (set at `create`, which only the daemon
+/// the entrypoint starts inherits) ride the remote command: the image's data home, the image
+/// reference a refusal names, the host's time zone and the keep-running opt-in.
+fn container_env(reach: &ContainerReach<'_>) -> Vec<(String, String)> {
+    let mut env = vec![(
+        "XDG_DATA_HOME".to_string(),
+        micold_core::ssh::argv::CONTAINER_DATA_HOME.to_string(),
+    )];
+    if !reach.image.is_empty() {
+        env.push((
+            "MICOLD_IMAGE_REFERENCE".to_string(),
+            reach.image.to_string(),
+        ));
+    }
+    if let Some(zone) = reach.time_zone {
+        env.push(("TZ".to_string(), zone.to_string()));
+    }
+    if let Some(value) = micold_core::sandbox::argv::idle_stop_value(reach.survive_logout) {
+        env.push((
+            micold_core::spawn::IDLE_STOP_ENV.to_string(),
+            value.to_string(),
+        ));
+    }
+    env
 }
 
 /// The sequence's target for a container: pinned loopback reach with the daemon's own keys, the
@@ -975,11 +1026,7 @@ fn container_target(
             table,
             state_dir: PathBuf::from(CONTAINER_STATE_DIR),
         },
-        // sshd builds the session's environment afresh: the image's data home rides the command.
-        env: vec![(
-            "XDG_DATA_HOME".to_string(),
-            micold_core::ssh::argv::CONTAINER_DATA_HOME.to_string(),
-        )],
+        env: container_env(reach),
         bounds: StepBounds::container(),
     }
 }
@@ -1357,6 +1404,9 @@ mod tests {
             container_name: "box-ctr",
             keys_dir: &keys.dir,
             network: Default::default(),
+            image: "ghcr.io/o/img:1",
+            survive_logout: true,
+            time_zone: Some("Europe/Berlin"),
         };
         let target = container_target("node".into(), &reach, &keys);
         let Reach::Pinned(pinned) = &target.reach else {
@@ -1375,10 +1425,28 @@ mod tests {
         assert_eq!(target.bounds, StepBounds::container());
         // sshd builds a session's environment afresh, so the daemon is told the image's data home,
         // where provisioning wrote the catalogue and the AI CLIs.
-        assert_eq!(
-            target.env,
-            vec![("XDG_DATA_HOME".to_string(), "/var/lib".to_string())]
-        );
+        // The container's other `-e` values ride along too, so this daemon matches the entrypoint's.
+        let get = |k: &str| {
+            target
+                .env
+                .iter()
+                .find(|(n, _)| n == k)
+                .map(|(_, v)| v.as_str())
+        };
+        assert_eq!(get("XDG_DATA_HOME"), Some("/var/lib"));
+        assert_eq!(get("MICOLD_IMAGE_REFERENCE"), Some("ghcr.io/o/img:1"));
+        assert_eq!(get("MICOLD_IDLE_STOP"), Some("off"));
+        assert_eq!(get("TZ"), Some("Europe/Berlin"));
+        let quiet_reach = ContainerReach {
+            survive_logout: false,
+            image: "",
+            time_zone: None,
+            ..reach
+        };
+        let plain = container_target("node".into(), &quiet_reach, &keys).env;
+        assert!(plain
+            .iter()
+            .all(|(n, _)| n != "MICOLD_IDLE_STOP" && n != "MICOLD_IMAGE_REFERENCE" && n != "TZ"));
         let open = ContainerReach {
             network: micold_core::sandbox::NetworkPosture::Outbound,
             ..reach
