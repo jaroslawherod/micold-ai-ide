@@ -24,9 +24,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Decisions
 
-- Clarify (2026-10-18): round 1 agent-resolved 2 questions (grid scroll closes the menu, FR-012; focus after a keyboard-run entry, FR-011); round 2 found no critical ambiguities. CLEAN.
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
+| 1 | clarify | Open card menu when the grid scrolls beneath it? | Closes, no entry runs (FR-012) | agent | specs/017-material-component-architecture/spec.md#FR-009 |
+| 2 | clarify | Focus after an entry runs from a keyboard-opened menu? | Target card if still listed, else first card (FR-011) | agent | spec FR-011; specs/813-worktree-overview/spec.md#FR-014 |
 
 ## Review rounds
 
