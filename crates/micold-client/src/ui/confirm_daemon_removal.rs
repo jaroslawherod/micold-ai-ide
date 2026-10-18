@@ -28,7 +28,10 @@ pub fn modal<'a>(prompt: &'a RemovalPrompt, scheme: ColorScheme) -> Element<'a, 
             prompt.confirm_label,
             Message::Daemons(DaemonsMsg::RemovalConfirmed),
         ),
-        ("Cancel", Message::Daemons(DaemonsMsg::RemovalCancelled)),
+        (
+            prompt.decline_label,
+            Message::Daemons(DaemonsMsg::RemovalCancelled),
+        ),
         460.0,
     )
 }

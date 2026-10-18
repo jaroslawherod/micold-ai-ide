@@ -234,6 +234,9 @@ pub enum Msg {
     /// A bring-up that makes exactly one try (an SSH daemon) failed, with the reason in the user's
     /// words (feature 489): unreachable at once, not retried until the user starts it again.
     StartFailed(String),
+    /// A Kubernetes start found its pod running with other settings and stopped to ask: the fields
+    /// that differ (feature 686). The actor has ended; the answer restarts it.
+    KubeDrift(Vec<String>),
     /// A start step began or the copy advanced (features 489 and 806).
     Provisioning(micold_core::provision::ProvisionEvent),
     /// A daemon answered and refused the handshake, with a human-facing reason — a stale `:dev`

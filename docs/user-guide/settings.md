@@ -487,7 +487,8 @@ together](sandboxed-daemon.md#running-a-host-daemon-and-container-daemons-togeth
 also run on another computer: see [Running the session service on another
 computer over SSH](remote-daemons.md). Choose **Remote over SSH** in the form and pick a host from
 your SSH configuration, or enter host, user, port and key file; a second daemon for the same host,
-user and port is refused, naming the existing one.
+user and port is refused, naming the existing one. A daemon can also run in a cluster: see
+[Running the session service in a Kubernetes cluster](kubernetes-daemons.md).
 
 Each container daemon keeps its own settings, and they are kept if you switch it to the host and
 back. A change to a running daemon asks before it restarts it.

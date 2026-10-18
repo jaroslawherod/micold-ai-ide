@@ -1265,6 +1265,7 @@ pub fn interpret(
         Outcome::DaemonRegistryChanged(_)
         | Outcome::KubeContextsRequested
         | Outcome::KubeStopRequested { .. }
+        | Outcome::KubeStartCancelRequested { .. }
         | Outcome::KubeRemoveRequested { .. }
         | Outcome::KubeKeysDelete { .. }
         | Outcome::KubeLogsRequested { .. }
