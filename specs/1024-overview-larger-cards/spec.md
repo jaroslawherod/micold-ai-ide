@@ -22,6 +22,20 @@ flow:feature. Builds on feature 813 (`specs/813-worktree-overview`).
   (and changes when the window is resized or the sidebar is resized or collapsed).
 - **Minimum card width**: the narrowest a card is ever drawn (280 px today, feature 813).
 
+## Clarifications
+
+### Session 2026-10-18
+
+- Q: Does "larger" mean only wider (each card takes a fifth of the row), or also taller with more
+  room for its content (a second summary line, larger text)? → A: Wider only; card height, text
+  size and the one-line task summary stay as in feature 813, and the extra width shows more of each
+  line before the ellipsis. _(agent-resolved: specs/813-worktree-overview/spec.md#Terms (task
+  summary is one line); this spec#Out of scope and FR-010 (card content unchanged))_
+- Q: On a pane too narrow for five cards, reflow to fewer columns or keep five per row and scroll
+  sideways? → A: Reflow to as many columns as fit at the minimum card width, down to one; never
+  scroll sideways. _(agent-resolved: specs/813-worktree-overview/spec.md#Edge Cases (Narrow
+  window))_
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Five cards per row on a wide pane (Priority: P1)
@@ -72,9 +86,9 @@ shows more of its text.
 1. **Given** a main pane wide enough for six or more cards at the minimum card width (for example
    2400 px), **When** the user opens the Overview, **Then** each card is larger than today's card in
    the same pane; between the five-card and the six-card threshold today's grid already shows five
-   per row, so there the cards are as wide as today's
-   [NEEDS CLARIFICATION: Does "larger" mean only wider (each card takes a fifth of the row), or also
-   taller with more room for its content (for example a second summary line or larger text)?].
+   per row, so there the cards are as wide as today's. "Larger" means wider: the card keeps feature
+   813's height, text size and one-line task summary, and the extra width shows more of each line
+   before the ellipsis.
 2. **Given** cards of every card state, **When** the user looks at a row, **Then** every card in the
    grid has the same height, as today, so no row is ragged.
 3. **Given** a card with a long name, branch or task summary, **When** it is shown, **Then** text
@@ -98,9 +112,9 @@ stays reachable by scrolling.
 **Acceptance Scenarios**:
 
 1. **Given** a main pane too narrow for five cards at the minimum card width, **When** the user
-   opens the Overview, **Then** the grid shows as many cards per row as fit, down to one
-   [NEEDS CLARIFICATION: On a pane too narrow for five cards, should the grid reflow to fewer
-   columns (feature 813's behaviour, recommended) or keep five per row and scroll sideways?].
+   opens the Overview, **Then** the grid reflows to as many cards per row as fit at the minimum card
+   width, down to one, as feature 813's grid does; it never keeps five per row and scrolls
+   sideways.
 2. **Given** any pane width at or above the minimum card width, **When** the user opens the
    Overview, **Then** no card is drawn narrower than the minimum card width and no card overlaps
    another.
@@ -141,14 +155,14 @@ stays reachable by scrolling.
 - **FR-002**: When the main pane is wide enough for five cards at the minimum card width (including
   the gaps between them), every full row MUST hold exactly five cards.
 - **FR-003**: When the main pane is too narrow for five cards at the minimum card width, the grid
-  MUST show as many cards per row as fit at the minimum card width, never fewer than one (see the
-  clarification under User Story 3).
+  MUST reflow to as many cards per row as fit at the minimum card width, never fewer than one; the
+  grid MUST NOT scroll sideways.
 - **FR-004**: Cards in the grid MUST all have the same width, which is the main pane width shared
   equally by the columns of a full row less the gaps; the cards of a last, partial row and of a
   grid with fewer cards than columns MUST keep that width and sit at the start of the row.
 - **FR-005**: Cards MUST be larger than feature 813's cards in the same pane wherever the pane is
-  wide enough for more than five of them at the minimum card width (see the clarification under User
-  Story 2 for whether that includes height).
+  wide enough for more than five of them at the minimum card width. Larger means wider only: card
+  height, text size and the one-line task summary stay as in feature 813.
 - **FR-006**: Every card in the grid MUST keep one common height, the same for every card state and
   every content.
 - **FR-007**: A card's text MUST NOT overlap other card parts or other cards at any card width the
@@ -194,7 +208,7 @@ stays reachable by scrolling.
 
 - The minimum card width stays at feature 813's 280 px; the gap between cards is unchanged.
 - "5 per row" is a maximum: below the five-card threshold the grid keeps feature 813's reflow to
-  fewer columns (pending the clarification under User Story 3).
+  fewer columns.
 - No user setting for the number of columns is added; five is fixed.
 - Only the Overview's grid changes; other views and the sidebar are untouched.
 - The cards of a partial last row align to the start (left), as feature 813's grid does today.

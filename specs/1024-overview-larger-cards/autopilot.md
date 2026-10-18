@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1024
 - **Worktree branch**: claude/project-thread-iq9j8q
 - **Started**: 2026-10-18
-- **Phase**: spec
-- **Next step**: clarify unit: resolve the two [NEEDS CLARIFICATION] markers in spec.md (US2 "larger" includes height?; US3 narrow-pane reflow vs sideways scroll)
+- **Phase**: clarify done
+- **Next step**: plan unit (clarify CLEAN: 2 rounds; round 1 agent-resolved both markers, round 2 found no critical ambiguities)
 
 ## Pull requests
 
@@ -26,6 +26,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
+| 1 | clarify | "Larger": wider only, or also taller? | Wider only; height, text size, one-line summary as 813 | agent | specs/813-worktree-overview/spec.md#Terms; spec.md FR-010, Out of scope |
+| 2 | clarify | Narrow pane: reflow or sideways scroll? | Reflow down to one column, never sideways | agent | specs/813-worktree-overview/spec.md#Edge Cases (Narrow window) |
 
 ## Review rounds
 
