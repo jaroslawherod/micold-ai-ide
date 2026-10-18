@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-a1yb7j
 - **Started**: 2026-10-18
 - **Phase**: plan
-- **Next step**: plan unit (continuing handover): plan review round 1, then tasks unit
+- **Next step**: tasks unit
 
 ## Pull requests
 
@@ -34,6 +34,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
 | Spec | 1 | df9363fdbdc355faf73bcb348d3b00d3d5979cbd:8ee4531564743d6032729cd056a73f655abfb1a0 | CLEAN: 3 MINOR (F1, F2 fixed, prose/edge cases; F3 left: keyboard nav already stated for both open paths in US3.4) |
+| Plan | 1 | ddc1f4f2a559acde12172eb355263991ae37114a:fe5fce887724a3fa7f184edd604ecb3f472b830a | CLEAN |
 
 ## Declined review findings
 
@@ -42,12 +43,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-Plan unit handed over at the 150k context cap. Done: `branch-start.sh` (REBASED 3 onto origin/main
-8ee45315), `speckit-plan` (no before/after_plan hooks): plan.md, research.md (R1–R10),
-data-model.md, contracts/ui.md, quickstart.md committed. Next: plan review round 1 per
-tasks/review.md with rubrics/plan.md (fresh `autopilot-reviewer`, default model), act on it per
-tasks/review-rounds.md, then set **Next step** to `tasks unit` and return DONE, PR none. No open
-findings. No PR.
+None.
 
 ## Open escalation
 
