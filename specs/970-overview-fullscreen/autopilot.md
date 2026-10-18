@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #970
 - **Worktree branch**: claude/project-thread-ag6ana
 - **Started**: 2026-10-18
-- **Phase**: tasks
-- **Next step**: tasks unit
+- **Phase**: tasks (design PR)
+- **Next step**: tasks review, then gate and design PR
 
 ## Pull requests
 
@@ -21,6 +21,18 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
+| M1 | T001–T017 | full | Full screen hides the sidebar and gives it back (US1 + US4) | — | pending |
+| M2 | T018–T026 | full | The cards zoom with the sidebar (US2 #1–4) | — | pending |
+| M3 | T027–T031 | full | The zoom keeps your place (US2 #5) | — | pending |
+| M4 | T032–T041 | full | Reduce motion (US3) | — | pending |
+
+Polish T042–T043 (visual pass, final gate) changes no code: close unit. M1 keeps US1 whole at 15
+tasks (+ US4's 2): toggle, drawer retraction and exits are one state change, and no split along a
+scenario leaves a deliverable without half-wired UI (a header button with no retraction); estimated
+diff under 800 lines. US4 rides in M1: it has no code of its own (structural from D1/D2), so alone
+it would be a tests-only milestone with nothing new to observe. US2 split along scenario 5 (anchor,
+R6) to stay near 10 tasks. M4 is 10 tasks; its serde field is a persistence-format change, hence
+`full`.
 
 ## Decisions
 
@@ -30,6 +42,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | 2 | clarify r1 | FR-008: source of reduced motion? | New *Reduce motion* setting, off by default, this zoom only; OS preference not read | user (2026-10-18) | decision card |
 | 3 | clarify r2 | Shortcut while the Overview is closed? | Does nothing | agent | spec.md#Assumptions |
 | 4 | clarify r2 | Reduce motion before Save / on Cancel? | Save applies, Cancel discards | agent | docs/user-guide/settings.md |
+| 5 | tasks | Where do the header-text and mode-state tests live? | `ui/overview.rs` in-crate (toolbar's `overview_tooltip` pattern) and `tests/features_overview.rs`; plan's test-location lines fixed to match (no behaviour change) | agent | crates/micold-client/src/ui/toolbar.rs:215 |
 
 ## Review rounds
 

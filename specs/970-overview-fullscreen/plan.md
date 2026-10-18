@@ -29,7 +29,7 @@ the chord Ctrl/Cmd+Shift+F (R7). User guide: Overview, Settings and shortcut pag
 **Storage**: `reduce_motion` in the local settings file (`micold_core::settings::Settings`, written by
 `shell/persist.rs`); the mode itself is not stored
 
-**Testing**: `features::overview` state tests (`cargo test -p micold-client`), in-crate geometry
+**Testing**: `features::overview` state tests (`tests/features_overview.rs`, `cargo test -p micold-client`), in-crate geometry
 gates in `navigation_drawer.rs` and `card_grid.rs`, settings draft and persistence tests,
 `tests/settings_sections.rs`, `tests/icons.rs`, `tests/overview.rs`, showcase completeness; visual
 pass (quickstart §B). Gate: `mise run gate` (here `scripts/gate.sh`)
@@ -127,7 +127,7 @@ Appearance. Shortcut table in `terminal-panes.md` and list in `worktrees-and-ses
 | 009 | D2 (no write) | state test: no sidebar field changes across enter/leave; drawer shows `open` as given |
 | 010 | D1, R8 | state test: `Closed`, `CardActivated`, `MainAreaTaken` → `full_screen()` false; visual §B 5 |
 | 011 | D1, D2 | state test: Settings open ignores toggle, mode kept; drawer built retracted at width 0; `ProjectSwitched` keeps mode |
-| 012 | D5 | `tests/overview.rs`: tooltip/label text holds chord label; `Button` focus (existing) ; visual §B 2 |
+| 012 | D5 | `ui/overview.rs` in-crate test (the pattern of `overview_tooltip` in `ui/toolbar.rs`): tooltip/label text holds chord label; `Button` focus (existing) ; visual §B 2 |
 | 013 | D6 | docs diff review |
 | 014 | D5 | chord predicate test for both modifier sets; label test |
 
@@ -144,7 +144,7 @@ Appearance. Shortcut table in `terminal-panes.md` and list in `worktrees-and-ses
 
 | Layer | Where | What | FR / SC |
 |---|---|---|---|
-| Unit (render-free) | `features/overview.rs` tests | toggle rules, clears on open, exits, Settings, activation, project switch, sidebar untouched | 001, 009–011, SC-004/005 |
+| Unit (render-free) | `tests/features_overview.rs`, app-level `tests/overview.rs` | toggle rules, clears on open, exits, Settings, activation, project switch, sidebar untouched | 001, 009–011, SC-004/005 |
 | Unit | `keymap.rs` tests | chord on Ctrl+Shift+F / Cmd+Shift+F only; label | 001, 014 |
 | Unit (core) | `micold-core` settings tests | `reduce_motion` default false, old file loads, round trip | 008 |
 | Client | `features/settings.rs` tests, `tests/settings_sections.rs` | draft seed, toggle, Save applies, Cancel discards, page lists the control | 008 |
