@@ -23,6 +23,7 @@ use crate::features::overview::{self, Msg as OverviewMsg, Tone};
 use crate::features::project::Msg as ProjectMsg;
 use crate::features::settings::Msg as SettingsMsg;
 use crate::icons::Icon;
+use crate::ui::cdk::context_area::ContextArea;
 use crate::ui::material::{
     unread_total_tooltip, Button, MenuItem, MenuTrigger, Toolbar, Tooltip, TypeRole, UnreadMark,
     UsageIndicator,
@@ -101,6 +102,10 @@ pub fn view<'a>(state: &State, scheme: ColorScheme) -> Element<'a, Message> {
             bar = bar.action(usage);
         }
     }
+    // Where the panel hangs from: the trigger's own bottom-left corner, reported on the press
+    // ahead of the toggle (BUG-1023).
+    let switcher = ContextArea::new(switcher)
+        .on_primary_bounds(|corner| Message::Project(ProjectMsg::SwitcherAnchored(corner)));
     bar.action(switcher)
         .action(overview_button(state, r))
         .action(menu)

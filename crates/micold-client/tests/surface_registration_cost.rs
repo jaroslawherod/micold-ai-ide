@@ -385,6 +385,8 @@ fn states_opening_each_surface() -> Vec<micold_client::app::State> {
             forget_target: Some(PathBuf::from("/p")),
             // Not a surface: the known-projects list's last offset (BUG-005).
             list_scroll_offset: 0,
+            // Not a surface: where the switcher hangs from (BUG-1023).
+            switcher_anchor: None,
         },
         worktree_form: worktree_form::State {
             form: Some(Default::default()),

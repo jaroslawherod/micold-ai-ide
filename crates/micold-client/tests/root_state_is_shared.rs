@@ -135,6 +135,12 @@ const COMPONENT_LOCAL: &[(&str, &str)] = &[
          `app::State`, so a resize that moves nothing closes no popover (002 BUG-005)",
     ),
     (
+        "project.switcher_anchor",
+        "tests/switcher_anchor.rs::the_panel_opens_where_the_trigger_reported — the corner is \
+         recorded on the trigger's press and read back by the panel on the release, a message \
+         later, so it outlives the button that reported it (BUG-1023)",
+    ),
+    (
         "session.additional_target",
         "tests/features_session.rs::the_confirmation_survives_a_refusal_arriving_first — the \
          location being confirmed outlives the dialog widget and a refusal arriving first must \

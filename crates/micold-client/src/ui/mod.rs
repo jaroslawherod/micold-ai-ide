@@ -508,6 +508,16 @@ pub fn view_with<'a>(
         roles,
     )
     .open(state.project.switcher_open)
+    // Hung from the trigger that opened it, not the window's trailing edge, and slid back in so the
+    // panel cannot run off the window (BUG-1023).
+    .hung_from(state.project.switcher_anchor.map(|anchor| {
+        let (x, y) = crate::features::project::clamp_menu_anchor(
+            anchor,
+            material::menu_panel_size(1),
+            state.window.window_size,
+        );
+        iced::Point::new(x as f32, y as f32)
+    }))
     // A long catalog scrolls inside the panel (002 FR-011a); a row's context menu does not follow
     // its row, so it closes instead.
     .on_scroll(Message::Project(ProjectMsg::MenuDismissed))

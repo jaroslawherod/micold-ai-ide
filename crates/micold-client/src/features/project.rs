@@ -75,6 +75,10 @@ pub struct State {
     /// Whether the top-bar project switcher panel is open. Mutually exclusive with
     /// `help.help_menu_open`.
     pub switcher_open: bool,
+    /// Where the switcher panel's top-left corner goes, in window pixels: the bottom-left corner of
+    /// the top-bar trigger last pressed to open it (BUG-1023). `None` until a press has reported
+    /// one, and then the panel keeps its default trailing-edge position. Transient — not persisted.
+    pub switcher_anchor: Option<(u16, u16)>,
     /// The in-progress rename; its presence *is* the rename dialog being shown (T037).
     pub rename_draft: Option<RenameDraft>,
     /// The folder-browser state; its presence *is* the project-selector dialog being shown (T037).
@@ -260,6 +264,11 @@ impl Registered for ConfirmForgetProjectDialog {
 #[must_use = "what an opening popover displaces is the registry's business, not the caller's"]
 pub fn switcher_toggled(state: &mut crate::app::State) -> Vec<crate::features::Outcome> {
     state.project.switcher_open = !state.project.switcher_open;
+    if !state.project.switcher_open {
+        // The corner belongs to the press that opened it; a later open without one falls back to
+        // the default position rather than a stale one (BUG-1023).
+        state.project.switcher_anchor = None;
+    }
     crate::features::surface_opened(state.project.switcher_open, ProjectSwitcher::ID)
 }
 
@@ -517,6 +526,9 @@ pub enum Msg {
     /// Toggle the top-bar project switcher panel (feature 008, FR-004). Mutually exclusive
     /// with the overflow menu.
     SwitcherToggled,
+    /// The switcher trigger was pressed; its bottom-left corner in window pixels is where the panel
+    /// hangs from (BUG-1023). Published on the press, ahead of `SwitcherToggled` on the release.
+    SwitcherAnchored((u16, u16)),
     /// The body's known-projects list reported its offset, in whole pixels (002 FR-011a, BUG-005).
     /// When the offset moved, the ground moved under whatever floats over it, so the transient
     /// popovers close — as they do when the sidebar scrolls (017 FR-009).
@@ -533,6 +545,7 @@ pub enum Msg {
 pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::Outcome> {
     match msg {
         Msg::SwitcherToggled => return switcher_toggled(state),
+        Msg::SwitcherAnchored(anchor) => state.project.switcher_anchor = Some(anchor),
         Msg::MenuToggled(path, anchor) => return menu_toggled(state, path, anchor),
         Msg::ForgetConfirmed => return forget_confirmed(state),
         Msg::OpenRefused(message) => return open_refused(state, message),
