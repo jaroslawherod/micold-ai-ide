@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #890
 - **Worktree branch**: claude/project-thread-rwlog8
 - **Started**: 2026-10-18
-- **Phase**: plan
-- **Next step**: plan unit (continue handover: plan review round 1)
+- **Phase**: tasks
+- **Next step**: tasks unit
 
 ## Pull requests
 
@@ -40,6 +40,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Spec | 2 (scoped, sonnet) | afc2d2d26e2837ad5c3c52dad8b0e4c936921f78:8e6bc4dbb04b88be60c3e57a63faaf2d358cc75b | CLEAN (F1–F4 fixed) |
 | Clarify | 1 | spec.md Clarifications 2026-10-18 | 3 Q, all agent-resolved (D3–D5); FR-004 + edge case changed |
 | Clarify | 2 | — | no critical ambiguities |
+| Plan | 1 | 6a71819950f543013db8bf4fd875133e7b90b673:7d34cc6b80783b6daaee02c86a179f7f5f8d7174 | CLEAN, no findings |
 
 ## Declined review findings
 
@@ -48,12 +49,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-Plan unit, over context cap after writing the plan. Done: branch rebased onto origin/main and
-force-pushed; `speckit-plan` run — plan.md, research.md (R1–R11), data-model.md, contracts/ui.md
-(section summaries per D5), quickstart.md written and committed. No `.specify/extensions.yml` hooks.
-Next: plan review round 1 (fresh `autopilot-reviewer`, session model, rubrics/plan.md) per
-tasks/review.md; act on findings per review-rounds.md; then set Next step to `tasks unit` and
-return DONE, PR none. No review round run yet; no open findings; no PR.
+None.
 
 ## Open escalation
 
