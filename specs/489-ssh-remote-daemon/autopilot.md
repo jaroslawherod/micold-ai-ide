@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #489
 - **Worktree branch**: feat/489_run-the-session-daemon-on-a-remote-host-over-ssh
 - **Started**: 2026-10-12
-- **Phase**: M7 PR open (#1026)
-- **Next step**: CI and merge #1026, then M8
+- **Phase**: M8 implemented, PR pending
+- **Next step**: open M8 PR
 
 ## Pull requests
 
@@ -23,7 +23,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #918 | M4 | merged | 402b31f667bec7632cfe284acd65c59549085fc8 |
 | #964 | M5 | merged | b81b808f88183a8562cdb5a70faf3ef9e850cf83 |
 | #1020 | M6 | merged | 753a392a489d6d246a18e0e48e6e16928fbf9112 |
-| #1026 | M7 | open | — |
+| #1026 | M7 | merged | 1d73b72fca6198e80ad2d4be2c0cf85cadbaf6f9 |
 
 ## Milestones
 
@@ -35,8 +35,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M4 | T051–T055 | full | Local work unaffected, concurrent clients | #918 | done |
 | M5 | T056–T065 | full | Host picker, failure reasons, daemon management | #964 | done |
 | M6 | T066–T072 | full | Version mismatch explained | #1020 | done |
-| M7 | T073–T081 | full | Replace a mismatched daemon with no sessions | #1026 | in review |
-| M8 | T082–T084 | full | Remote daemon artefact for macOS and Windows | — | pending |
+| M7 | T073–T081 | full | Replace a mismatched daemon with no sessions | #1026 | done |
+| M8 | T082–T084 | full | Remote daemon artefact for macOS and Windows | — | in progress |
 
 ## Decisions
 
@@ -72,6 +72,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Conformance B M4 | 1 | dfcc707c664f16e2b5a44168300e3ab0c7bfbbc6:2a8db33bcecb8469fb979f349f204f66893325ed | CLEAN, 3 MINOR (Verify not observed by B for build lock; full gate runs the ssh tests) |
 | Code A M6 | 1 | 3119bf6c93fa134055b4b5817033d5d9c36e995f:0123d9179934298a9280fc744ba0338b87ee3aff | CLEAN, 3 MINOR noted (Unknown wording until M7; version ordering kept; private --target-dir by R10) |
 | Conformance B M6 | 1 | b5ca53f73272b78ba456f49db756803c35baf049:ba1847571e81b78fd1454575256be759d946ea59 | CLEAN (test-ssh incl. ssh_real_mismatch and test-core green), 1 MINOR noted |
+| Conformance B M8 | 1 | 6bc38bb023d246b69cb6de78b73f8f59806a492b:1d73b72fca6198e80ad2d4be2c0cf85cadbaf6f9 | CLEAN, 1 MINOR fixed (prose only). Review A not run: docs/ledger diff only, no code; artefact delivered earlier by feature 806 |
 
 ## Declined review findings
 
@@ -88,7 +89,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M7 done: PR #1026 rebased onto origin/main (one conflict in features/daemons.rs, both sides kept), full gate green. Next: orchestrator waits on CI and merges.
+M8 done: T082/T083 already delivered by feature 806 (test and scripts pass), T084 doc clarified. Docs gate (mise run test-scripts) green. Next: orchestrator waits on CI and merges the M8 PR, then close.
 
 ## Open escalation
 

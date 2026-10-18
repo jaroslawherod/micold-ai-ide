@@ -148,9 +148,9 @@ rootless `sshd` and are off by default (`mise run test-ssh`).
 
 ## Phase 8: Polish and cross-cutting
 
-- [ ] T082 Test that the macOS bundle (`scripts/macos-bundle.sh`) and Windows installer (`scripts/windows-installer.sh`) ship the Linux remote-daemon artefact in `scripts/tests/remote-daemon-bundle.test.sh`
-- [ ] T083 Build the Linux (musl) remote-daemon artefact with `scripts/remote-daemon-bundle.sh` and include it from `scripts/macos-bundle.sh`, `scripts/windows-installer.sh`, `.github/workflows/ci.yml` and `.github/workflows/release.yml`
-- [ ] T084 Document per-platform requirements (`ssh.exe`, agent service, supported remote OS) in `docs/user-guide/remote-daemons.md`
+- [x] T082 Test that the macOS bundle (`scripts/macos-bundle.sh`) and Windows installer (`scripts/windows-installer.sh`) ship the Linux remote-daemon artefact in `scripts/tests/remote-daemon-bundle.test.sh`
+- [x] T083 Build the Linux (musl) remote-daemon artefact with `scripts/remote-daemon-bundle.sh` and include it from `scripts/macos-bundle.sh`, `scripts/windows-installer.sh`, `.github/workflows/ci.yml` and `.github/workflows/release.yml`
+- [x] T084 Document per-platform requirements (`ssh.exe`, agent service, supported remote OS) in `docs/user-guide/remote-daemons.md`
 
 ## Dependencies and order
 
