@@ -2713,6 +2713,16 @@ fn switching_jira_off_over_a_stored_connection_asks_and_each_answer_is_saved() {
             },
         );
         let _ = update_inner(&mut app, Message::Settings(SettingsMsg::Opened));
+        // The test workspace lists no project, so the page is pointed at the one holding the
+        // connection, as `on_settings_opened` does for the open project.
+        let connections = app.core.settings.jira_connections.clone();
+        app.core
+            .settings
+            .settings_draft
+            .as_mut()
+            .expect("open")
+            .jira
+            .follow(Some(PathBuf::from("/work/app")), &connections, true);
         let _ = update_inner(
             &mut app,
             Message::Settings(SettingsMsg::JiraEnabledToggled(false)),
