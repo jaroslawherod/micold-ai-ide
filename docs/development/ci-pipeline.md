@@ -289,6 +289,30 @@ so the cost is paid once. The checks, their order and their timeouts are unchang
 to take well under 5 minutes; if a run shows it creeping up, compare the timestamps between the
 `==` lines in the log with the numbers above.
 
+## The Windows build cache
+
+Issue 958. The Windows leg of `build + test` is the slowest and the least predictable job of a
+code-affecting run, so it sets the run's wall clock.
+
+**Before** (the Windows `build + test` job over the last 10 successful code-affecting CI runs on
+`main`, 2026-10-17 to 2026-10-18, from the Actions jobs API): median 1600 s, min 1093 s, max
+1839 s, mean 1503 s, standard deviation 241 s. The rust-cache restore step takes 36-77 s. The
+daemon test step is the largest part (median 614 s, 406-629 s), then core tests (~160 s) and
+`cargo build --workspace` (~110 s). Runs whose post-cache step took 120-250 s saved a new cache
+(a miss on the exact key); the rest saved nothing.
+
+**What changed**: the rust-cache step now reports `cache-hit` in the run summary, so the hit rate
+can be counted from runs. Nothing else is changed yet. The variance sits in the test steps, not
+in the cache restore, which points at real-time antivirus scanning of freshly built binaries and
+at disk speed. The two candidates are Defender exclusions for the workspace and cargo homes
+(a security-posture change, so it needs a maintainer's decision) and a Dev Drive for
+`CARGO_TARGET_DIR` (it moves `target/`, which the packaging scripts address by path). sccache would
+add a second cache beside rust-cache and does not touch the test steps.
+
+**After**: not yet measured. It needs 10 runs with the change; take them from the pull request's CI
+runs plus runs on `main` after the merge, with the same query (job durations of `build + test
+(windows-latest)`), and add the median, min, max and spread here.
+
 ## Reading a run
 
 The `classify change` job writes its verdict to the run summary, so the top of any run says which
