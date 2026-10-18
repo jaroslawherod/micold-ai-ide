@@ -2577,6 +2577,7 @@ dependencies = [
  "dark-light",
  "directories",
  "embed-resource",
+ "futures-util",
  "iana-time-zone",
  "iced",
  "iced_renderer",

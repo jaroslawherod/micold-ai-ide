@@ -88,6 +88,8 @@ wayland-protocols = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
+# Feature 686: the `kube_real_*` tests speak the daemon protocol over the relay.
+futures-util = { workspace = true }
 # Feature 686: `kube::fake::FakeCluster` for the Kubernetes daemon tests.
 micold-core = { workspace = true, features = ["kube-fake"] }
 # Feature 019's text-overflow gate only. See the workspace manifest for why these are needed.

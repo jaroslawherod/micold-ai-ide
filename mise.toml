@@ -146,6 +146,16 @@ run = """
   ssh_real_ --no-fail-fast -- --test-threads=1
 """
 
+[tasks.test-kube]
+description = "Run the real-cluster Kubernetes daemon tests on a throwaway kind cluster (feature 686): needs docker, kind and kubectl [build-locked]"
+run = """
+# `kube_real_` is matched against **test names**; one test at a time, because each starts its own
+# daemon in the one cluster `micold-kube-test`. The tests are off by default (cargo feature
+# `kube-real-runtime`) and skip with a printed reason when docker, kind or kubectl is absent; this
+# task refuses instead. The cluster is deleted afterwards unless MICOLD_KUBE_TEST_KEEP=1.
+CARGO_WRAP={{config_root}}/scripts/build-lock.sh {{config_root}}/scripts/test-kube.sh
+"""
+
 [tasks.build]
 description = "Build the release GUI binary [build-locked]"
 run = "{{config_root}}/scripts/build-lock.sh cargo build --release -p micold-client"
