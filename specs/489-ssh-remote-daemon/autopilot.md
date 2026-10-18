@@ -83,7 +83,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M7 (T073-T081) implemented, NOT yet ticked/gated/reviewed/PR'd. Branch reset to origin/main (M6 #1020 merged, 753a392a489d6d246a18e0e48e6e16928fbf9112); update PR table row #1020 to merged with that SHA and M6 status done.
+Done (committed in WIP commits): core/ssh/status.rs (RemoteStatus, offer_of, fetch_offer, stop_if_idle + tests, T073/T077), argv::status/stop; daemon runtime_status.rs (200 ms poll writer, spawned in server.rs, DaemonState::live_session_count; T078), remote.rs status|stop + decide_stop (T074/T079); client: DaemonLinks offers (links.rs, remote_mismatch), Msg::OfferReported/ReplaceRequested/Replaced, Outcome::RemoteReplaceRequested, DaemonView.replace_offered/replacing, "Replace daemon" button, shell ask_offer (connection.rs) + replace task (shell/daemons.rs), daemon.rs remote_offer/replace_remote (T080); tests crates/micold-client/tests/ssh_replace_offer.rs (T075, passing); ssh_real_mismatch.rs two new replace tests + Dialer::offer/replace (T076, written, `mise run test-ssh` was started in background and its result NOT seen: rerun it and fix).
+Next: (1) run `mise run test-ssh`, fix; (2) T081 docs/user-guide/remote-daemons.md section on replacing a daemon; update the M6 "Unknown wording" text if any doc says replacement unavailable; (3) tick T073-T081 in tasks.md, cycle-log if the TDD hook needs; (4) scoped gate, review A (code-review high) + review B (conformance, sonnet) per tasks/verify.md, full `mise run gate`, PR per tasks/pr.md ("feat(489): replace a mismatched remote daemon with no sessions (#489)").
+Known design notes: status writer polls (a session started <200 ms before a stop could be missed; accepted); "with sessions" real test uses a matching-version daemon since a refused client cannot start sessions on a mismatched one; newer daemon never offered replace (WayOut::ReplaceDaemon only).
 
 ## Open escalation
 

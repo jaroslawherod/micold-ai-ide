@@ -738,6 +738,11 @@ pub struct DaemonView {
     /// For a remote daemon in `VersionMismatch`: both versions, which side is older and the way out
     /// (feature 489, FR-011). `None` for every other row.
     pub explanation: Option<String>,
+    /// The daemon is mismatched, older, and proved to have no running session: the row offers to
+    /// replace it (feature 489, FR-011).
+    pub replace_offered: bool,
+    /// A replacement of it is under way.
+    pub replacing: bool,
 }
 
 /// What a running released-image container's row says (FR-017).

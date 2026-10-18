@@ -990,6 +990,42 @@ fn provisioning_sink(id: DaemonId, output: &mpsc::Sender<Message>) -> EventSink 
 /// One bring-up of an SSH daemon through the shared provisioning sequence: provision, bridge and
 /// handshake, with a failure already in the user's words (FR-008, FR-018). `None` is a process
 /// that installed no runner.
+/// What an attempt on `target` needs. The connect watchdog: no attempt hangs the client. The
+/// user's `ConnectTimeout` replaces the default when their SSH configuration sets one (FR-009).
+async fn ssh_options(host: &dyn SshHost, target: &SshTarget) -> ProvisionOptions {
+    let platform = ClientPlatform::current();
+    let timeout_secs = micold_core::ssh::config_hosts::resolve(host, target, platform)
+        .await
+        .map_or(DEFAULT_CONNECT_TIMEOUT_SECS, |e| e.timeout_secs());
+    ProvisionOptions {
+        platform,
+        client_arch: std::env::consts::ARCH.to_string(),
+        timeout_secs,
+        build_id: current_build_id(),
+        client_build: CLIENT_BUILD.to_string(),
+    }
+}
+
+/// What the mismatched daemon on `target` says of its sessions (feature 489, FR-011). Anything but
+/// a clear answer is `Unknown`.
+pub async fn remote_offer(target: SshTarget) -> micold_core::ssh::ReplaceOffer {
+    let Some(host) = ssh_host() else {
+        return micold_core::ssh::ReplaceOffer::Unknown;
+    };
+    let opts = ssh_options(&*host, &target).await;
+    micold_core::ssh::status::fetch_offer(&*host, &target, &opts).await
+}
+
+/// End the mismatched daemon on `target` when it has no running session; the caller reconnects,
+/// which starts this build's daemon in its place. `Err` says why it was left running.
+pub async fn replace_remote(target: SshTarget) -> Result<(), micold_core::ssh::ReplaceOffer> {
+    let Some(host) = ssh_host() else {
+        return Err(micold_core::ssh::ReplaceOffer::Unknown);
+    };
+    let opts = ssh_options(&*host, &target).await;
+    micold_core::ssh::status::stop_if_idle(&*host, &target, &opts).await
+}
+
 async fn ssh_attempt(
     host: Option<&dyn SshHost>,
     target: &SshTarget,
@@ -999,18 +1035,8 @@ async fn ssh_attempt(
         return Err("this build cannot run `ssh`".to_string());
     };
     let platform = ClientPlatform::current();
-    // The connect watchdog: no attempt hangs the client. The user's `ConnectTimeout` replaces the
-    // default when their SSH configuration sets one (FR-009).
-    let timeout_secs = micold_core::ssh::config_hosts::resolve(host, target, platform)
-        .await
-        .map_or(DEFAULT_CONNECT_TIMEOUT_SECS, |e| e.timeout_secs());
-    let opts = ProvisionOptions {
-        platform,
-        client_arch: std::env::consts::ARCH.to_string(),
-        timeout_secs,
-        build_id: current_build_id(),
-        client_build: CLIENT_BUILD.to_string(),
-    };
+    let opts = ssh_options(host, target).await;
+    let timeout_secs = opts.timeout_secs;
     let provisioned = ssh_run(
         host,
         &ProvisionTarget::user_host(

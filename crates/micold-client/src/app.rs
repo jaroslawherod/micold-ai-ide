@@ -1272,6 +1272,7 @@ pub fn interpret(
         | Outcome::KubeKeysDelete { .. }
         | Outcome::KubeLogsRequested { .. }
         | Outcome::DaemonBound { .. }
+        | Outcome::RemoteReplaceRequested { .. }
         | Outcome::RemoteRepositoryRequested { .. } => {}
         // Sessions of a removed daemon are gone from the window; those of an edited one are
         // stopped by the shell and stay, so the catalog's next report reconciles them. Nothing is

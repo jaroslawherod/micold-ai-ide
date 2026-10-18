@@ -146,6 +146,12 @@ fn actions<'a>(view: &DaemonView, open: bool, kube: bool, roles: Roles) -> Eleme
             buttons = buttons.push(stop_button(view, roles));
         }
         DaemonState::Unreachable { .. } | DaemonState::VersionMismatch { .. } => {
+            if view.replace_offered {
+                buttons = buttons.push(
+                    Button::text("Replace daemon", roles)
+                        .on_press(Message::Daemons(DaemonsMsg::ReplaceRequested(id))),
+                );
+            }
             buttons = buttons.push(
                 Button::text("Reconnect", roles)
                     .on_press(Message::Daemons(DaemonsMsg::Reconnected(id))),
