@@ -485,9 +485,11 @@ pub fn start_control_id(location: &SessionLocation) -> iced::advanced::widget::I
 fn start_press(state: &State, location: SessionLocation) -> Message {
     let dir = state.location_dir(&location).unwrap_or_default();
     match state.session.start_intent(PressTarget::Primary, &dir) {
-        StartIntent::Start(provider) => {
-            Message::Session(SessionMsg::StartRequested { location, provider })
-        }
+        StartIntent::Start(provider) => Message::Session(SessionMsg::StartRequested {
+            location,
+            provider,
+            automatic: false,
+        }),
         StartIntent::OfferChoice {
             unavailable_default,
             ..
@@ -500,6 +502,7 @@ fn start_press(state: &State, location: SessionLocation) -> Message {
         // nothing. The stored default goes to the daemon, whose report names the CLI to install
         // (FR-010) — in this state that report is the only thing that can tell the user anything.
         StartIntent::NothingAvailable => Message::Session(SessionMsg::StartRequested {
+            automatic: false,
             location,
             provider: state.session.provider_for_start(None),
         }),

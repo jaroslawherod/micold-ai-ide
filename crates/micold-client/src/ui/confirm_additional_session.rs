@@ -11,13 +11,26 @@ use micold_core::session::SessionLocation;
 use micold_core::theme::ColorScheme;
 use micold_core::tokens::{self};
 
+/// The dialog's text: `place` names the worktree (or the project root) and `existing` its session,
+/// when this window's catalog knows it. A refusal can open the dialog before the catalog has heard
+/// of the occupant (feature 802, FR-001), and then the text says so without naming a session.
+pub fn body_text(place: &str, existing: Option<&str>) -> String {
+    match existing {
+        Some(name) => format!(
+            "{place} already has the session \u{201c}{name}\u{201d}. The new session is a helper: \
+             it runs beside it and the existing one stays the main session."
+        ),
+        None => format!(
+            "{place} already has a session. The new session is a helper: it runs beside it and \
+             the existing one stays the main session."
+        ),
+    }
+}
+
 /// The dialog body: `place` names the worktree (or the project root) and `existing` its session.
-pub fn modal<'a>(place: &str, existing: &str, scheme: ColorScheme) -> Element<'a, Message> {
+pub fn modal<'a>(place: &str, existing: Option<&str>, scheme: ColorScheme) -> Element<'a, Message> {
     let r = tokens::roles(scheme);
-    let body = format!(
-        "{place} already has the session \u{201c}{existing}\u{201d}. The new session is a helper: \
-         it runs beside it and the existing one stays the main session."
-    );
+    let body = body_text(place, existing);
     let fields = column![
         Text::new("Start another session?", TypeRole::Headline, r),
         Text::new(body, TypeRole::Body, r).muted(),
@@ -48,8 +61,7 @@ fn blocked_modal<'a>(text: &str, scheme: ColorScheme) -> Element<'a, Message> {
     )
 }
 
-/// This dialog's body from the state that opened it; `None` when the location holds no session
-/// any more, so nothing is drawn rather than a dialog naming nothing.
+/// This dialog's body from the state that opened it; `None` when nothing opened it.
 pub fn dialog<'a>(
     state: &'a State,
     scheme: ColorScheme,
@@ -60,8 +72,9 @@ pub fn dialog<'a>(
         return Some(blocked_modal(&text, scheme));
     }
     let location = state.session.additional_target.as_ref()?;
-    let main = micold_core::occupancy::main_session(state.active_sessions(), location)?;
-    let (_, session) = state.workspace.find_session(main)?;
+    let existing = micold_core::occupancy::main_session(state.active_sessions(), location)
+        .and_then(|main| state.workspace.find_session(main))
+        .map(|(_, session)| session.label.display());
     let place = match location {
         SessionLocation::Default => "The project root".to_string(),
         SessionLocation::Worktree(dir) => {
@@ -71,5 +84,5 @@ pub fn dialog<'a>(
             )
         }
     };
-    Some(modal(&place, session.label.display(), scheme))
+    Some(modal(&place, existing, scheme))
 }

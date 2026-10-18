@@ -138,6 +138,10 @@ pub struct State {
     /// (feature 776, FR-016). Its presence *is* the confirm dialog being shown, as
     /// [`Self::remove_target`]'s is.
     pub additional_target: Option<SessionLocation>,
+    /// The CLI the confirmed additional session will run (feature 802, FR-001): the one the start
+    /// that opened the confirmation chose. `None` means the default, as a confirmation opened from
+    /// the row's menu uses. Set and cleared with [`Self::additional_target`].
+    pub additional_provider: Option<AiCli>,
     /// A stopped session whose start another live session of its worktree blocks, awaiting the
     /// user's confirmation to run both (feature 776, FR-013, FR-016). Its presence *is* the
     /// confirm dialog being shown.
@@ -1018,12 +1022,12 @@ floating_surface!(ConfirmAdditionalSessionDialog, id: SurfaceId::new("confirm_ad
 
 impl Registered for ConfirmAdditionalSessionDialog {
     fn open_in(state: &crate::app::State) -> Option<Self> {
-        // Open only while the location still holds a session: the dialog names it.
+        // Open while a target is set, named or not (feature 802, FR-001): a refusal can open it
+        // before this window's catalog lists the occupant.
         state
             .session
             .additional_target
             .as_ref()
-            .filter(|location| !state.start_offered(location))
             .map(|_| ConfirmAdditionalSessionDialog)
             .or_else(|| {
                 // Or a blocked start, while its blocker is still live.
@@ -1264,13 +1268,26 @@ pub fn additional_requested(state: &mut crate::app::State, location: SessionLoca
     if state.start_offered(&location) {
         return;
     }
+    additional_opened(state, location, None);
+}
+
+/// Open the confirmation for `location` with the CLI the person chose (feature 802, FR-001). Unlike
+/// [`additional_requested`] it does not judge the catalog: the daemon's refusal is proof enough
+/// that the location is occupied, even when this window's catalog has not heard of the occupant.
+pub fn additional_opened(
+    state: &mut crate::app::State,
+    location: SessionLocation,
+    provider: Option<AiCli>,
+) {
     state.clear_for_dialog();
     state.session.additional_target = Some(location);
+    state.session.additional_provider = provider;
 }
 
 /// The additional-session confirmation was dismissed: nothing changes (FR-016).
 pub fn additional_cancelled(state: &mut crate::app::State) {
     state.session.additional_target = None;
+    state.session.additional_provider = None;
     state.session.blocked_start = None;
 }
 
@@ -1278,6 +1295,7 @@ pub fn additional_cancelled(state: &mut crate::app::State) {
 /// [`crate::app::State::additional_request`] by the binary, which reads it before this runs.
 pub fn additional_confirmed(state: &mut crate::app::State) {
     state.session.additional_target = None;
+    state.session.additional_provider = None;
     state.session.blocked_start = None;
 }
 
@@ -1596,6 +1614,9 @@ pub enum Msg {
         /// applied the override or the default before this message was built, so the binary's
         /// handler copies the answer onto the wire and decides nothing.
         provider: AiCli,
+        /// The start-up auto-start rather than a person's press (feature 802, FR-004): its
+        /// refusal stays a notice, never the confirmation.
+        automatic: bool,
     },
     /// Open the "start a session on…" list for a location (feature 026, FR-004). The binary
     /// first re-asks for that location's directory's answer — one of the named events of feature
@@ -1658,6 +1679,13 @@ pub enum Msg {
     // ---- Feature 776: helper sessions and the main session ----
     /// "Start another session..." was chosen on an occupied location; opens the confirmation.
     AdditionalRequested(SessionLocation),
+    /// A person's start at `location` met an occupied location, or the service refused it as
+    /// occupied (feature 802, FR-001, FR-004): opens the confirmation, keeping the CLI chosen
+    /// (`None`: the default). Unlike `AdditionalRequested` it does not judge the catalog.
+    AdditionalOpened {
+        location: SessionLocation,
+        provider: Option<AiCli>,
+    },
     /// The confirmation was accepted. The binary sends `SessionCreate` with
     /// `allow_additional_session: true`.
     AdditionalConfirmed,
@@ -1974,6 +2002,9 @@ pub fn update(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::O
         Msg::RemoveRequested(id) => remove_requested(state, id),
         Msg::RemoveCancelled => remove_cancelled(state),
         Msg::AdditionalRequested(location) => additional_requested(state, location),
+        Msg::AdditionalOpened { location, provider } => {
+            additional_opened(state, location, provider)
+        }
         Msg::AdditionalConfirmed => additional_confirmed(state),
         Msg::AdditionalCancelled => additional_cancelled(state),
         Msg::StartBlocked(id) => start_blocked(state, id),
@@ -2368,7 +2399,11 @@ impl crate::app::State {
     /// (feature 776, FR-016): the default CLI, as a start with no override uses.
     pub fn additional_request(&self) -> Option<(SessionLocation, AiCli)> {
         let location = self.session.additional_target.clone()?;
-        Some((location, self.session.provider_for_start(None)))
+        let provider = self
+            .session
+            .additional_provider
+            .unwrap_or_else(|| self.session.provider_for_start(None));
+        Some((location, provider))
     }
 
     /// Whether `id` is a helper: an un-archived session of a location whose main is another

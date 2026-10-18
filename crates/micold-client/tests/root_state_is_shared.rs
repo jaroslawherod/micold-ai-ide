@@ -147,6 +147,12 @@ const COMPONENT_LOCAL: &[(&str, &str)] = &[
          not clear it, so it is asserted on `app::State` (feature 776, FR-016)",
     ),
     (
+        "session.additional_provider",
+        "tests/additional_session_provider.rs::a_start_that_opens_the_confirmation_keeps_its_cli — \
+         the CLI the person chose outlives the dialog widget and is read when they confirm, so it \
+         is asserted on `app::State` (feature 802, FR-001)",
+    ),
+    (
         "session.menu_link",
         "tests/features_session_links.rs::choosing_open_link_opens_the_captured_link_and_closes_\
          the_menu — the link is captured on the right press and acted on when an item is chosen, \

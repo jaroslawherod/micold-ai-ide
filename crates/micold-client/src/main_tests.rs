@@ -1420,49 +1420,284 @@ fn pending_create_req(app: &App) -> u64 {
         .0
 }
 
-/// Feature 776, FR-002/FR-003 (US1 s1): a refused second session shows the service's refusal, which
-/// names the existing session, as a notice; the window's session list is unchanged.
-#[test]
-fn a_refused_session_create_shows_the_refusal_text_and_changes_nothing() {
-    let (mut app, _rx) = connected_app();
+// --- Feature 802 (M1): a person's start at an occupied location asks, it does not refuse --------
+
+const OCCUPANT_ID: &str = "00000000-0000-0000-0000-000000000001";
+
+fn occupied_loc() -> micold_core::session::SessionLocation {
+    micold_core::session::SessionLocation::Worktree("feat-x".into())
+}
+
+/// A connected app on `/repo/demo` whose catalog holds `sessions` (all at `feat-x`), the first main.
+fn app_with_sessions_at_feat_x(
+    count: usize,
+) -> (App, SentRx, Vec<micold_core::session::SessionId>) {
+    use micold_core::session::Session;
+    let (mut app, rx) = connected_app();
     let project = PathBuf::from("/repo/demo");
     app.core.workspace.active = Some(project.clone());
-    let before = app.core.workspace.sessions.clone();
-    let _ = shell::daemon_sync::on_session_start_requested(
-        &mut app,
-        micold_core::session::SessionLocation::Worktree("feat-x".into()),
-        micold_core::session::AiCli::ClaudeCode,
-    );
-    let req = *app
-        .pending_ops
-        .iter()
-        .find(|(_, op)| matches!(op, PendingOp::CreateSession))
-        .expect("the start requested a create")
-        .0;
-    let text = "this worktree already has a main session: \"Fix login\" \
-                (00000000-0000-0000-0000-000000000001); start_session on \
-                00000000-0000-0000-0000-000000000001 brings it back";
+    let sessions: Vec<Session> = (0..count)
+        .map(|i| {
+            let mut s = Session::start_new(occupied_loc(), AiCli::ClaudeCode);
+            s.main = i == 0;
+            s
+        })
+        .collect();
+    let ids = sessions.iter().map(|s| s.id).collect();
+    app.core.workspace.sessions.insert(project, sessions);
+    (app, rx, ids)
+}
 
+fn creates(rx: &mut SentRx) -> Vec<(CreateTarget, bool)> {
+    sent_matching(rx, |m| match m {
+        ClientMsg::SessionCreate {
+            provider,
+            allow_additional_session,
+            ..
+        } => Some(((provider,), allow_additional_session)),
+        _ => None,
+    })
+}
+
+type CreateTarget = (AiCli,);
+
+fn start(app: &mut App, provider: AiCli, automatic: bool) {
+    let _ =
+        shell::daemon_sync::on_session_start_requested(app, occupied_loc(), provider, automatic);
+}
+
+fn pending_create(app: &App) -> u64 {
+    *app.pending_ops
+        .iter()
+        .find(|(_, op)| matches!(op, PendingOp::CreateSession { .. }))
+        .expect("a create is pending")
+        .0
+}
+
+fn refuse(app: &mut App, req: u64, detail: Option<&str>) {
     let _ = shell::daemon_sync::on_daemon_event(
-        &mut app,
+        app,
         micold_core::daemons::DaemonId(1),
         DaemonMsg::OperationError {
             req,
             kind: micold_core::protocol::messages::ErrorKind::Refused,
-            message: text.into(),
-            detail: Some("00000000-0000-0000-0000-000000000001".into()),
+            message: "this worktree already has a main session".into(),
+            detail: detail.map(str::to_owned),
         },
     );
+}
 
-    let said = app
-        .core
+fn visible_notice(app: &App) -> Option<String> {
+    app.core
         .notifications
         .queue
         .visible()
         .map(|n| n.message.clone())
-        .unwrap_or_default();
-    assert_eq!(said, text, "the refusal is shown as the service worded it");
-    assert_eq!(app.core.workspace.sessions, before, "no session was added");
+}
+
+/// US1 s1, FR-001, FR-007: a start for an occupied location opens the confirmation and sends nothing.
+#[test]
+fn a_start_for_an_occupied_location_opens_the_confirmation_and_sends_no_create() {
+    let (mut app, mut rx, _) = app_with_sessions_at_feat_x(1);
+    let before = app.core.workspace.sessions.clone();
+    start(&mut app, AiCli::Copilot, false);
+    assert_eq!(
+        app.core.additional_request().map(|(location, _)| location),
+        Some(occupied_loc())
+    );
+    assert!(
+        creates(&mut rx).is_empty(),
+        "nothing is created before the user confirms"
+    );
+    assert!(app.pending_ops.is_empty());
+    assert_eq!(visible_notice(&app), None);
+    assert_eq!(app.core.workspace.sessions, before);
+}
+
+/// FR-004: a stale start the daemon refused as occupied opens the confirmation, with no notice.
+#[test]
+fn a_refusal_naming_the_occupant_opens_the_confirmation_not_an_error() {
+    let (mut app, mut rx, _) = app_with_sessions_at_feat_x(0);
+    start(&mut app, AiCli::Pi, false);
+    assert_eq!(creates(&mut rx), vec![((AiCli::Pi,), false)]);
+    let req = pending_create(&app);
+    refuse(&mut app, req, Some(OCCUPANT_ID));
+    assert_eq!(
+        app.core.additional_request().map(|(location, _)| location),
+        Some(occupied_loc())
+    );
+    assert_eq!(
+        app.core.additional_request(),
+        Some((occupied_loc(), AiCli::Pi))
+    );
+    assert_eq!(visible_notice(&app), None, "no error shows");
+}
+
+/// FR-004: a refusal that lands after the person switched project must not reopen the
+/// confirmation, whose confirm would create in the then-active project.
+#[test]
+fn a_refusal_after_a_project_switch_stays_a_notice() {
+    let (mut app, mut rx, _) = app_with_sessions_at_feat_x(0);
+    start(&mut app, AiCli::Pi, false);
+    let _ = creates(&mut rx);
+    let req = pending_create(&app);
+    app.core.workspace.active = Some(std::path::PathBuf::from("/repo/other"));
+    refuse(&mut app, req, Some(OCCUPANT_ID));
+    assert_eq!(app.core.additional_request(), None);
+    assert!(visible_notice(&app).is_some());
+}
+
+/// FR-004: any other refusal, and an automatic start's, still shows the service's text.
+#[test]
+fn other_refusals_and_an_automatic_refusal_stay_notices() {
+    let (mut app, mut rx, _) = app_with_sessions_at_feat_x(0);
+    start(&mut app, AiCli::ClaudeCode, false);
+    let _ = creates(&mut rx);
+    let req = pending_create(&app);
+    refuse(&mut app, req, None);
+    assert_eq!(app.core.additional_request(), None);
+    assert!(
+        visible_notice(&app).is_some(),
+        "a refusal without an occupant is shown"
+    );
+
+    let (mut app, mut rx, _) = app_with_sessions_at_feat_x(0);
+    start(&mut app, AiCli::ClaudeCode, true);
+    let _ = creates(&mut rx);
+    let req = pending_create(&app);
+    refuse(&mut app, req, Some(OCCUPANT_ID));
+    assert_eq!(app.core.additional_request(), None);
+    assert!(
+        visible_notice(&app).is_some(),
+        "an automatic refusal is shown"
+    );
+}
+
+/// US1 s2, FR-002: confirming sends exactly one flagged create with the chosen CLI.
+#[test]
+fn confirming_sends_one_flagged_create_with_the_chosen_cli() {
+    let (mut app, mut rx, _) = app_with_sessions_at_feat_x(1);
+    start(&mut app, AiCli::Copilot, false);
+    let _ = shell::daemon_sync::on_additional_session_confirmed(&mut app);
+    assert_eq!(creates(&mut rx), vec![((AiCli::Copilot,), true)]);
+    assert_eq!(app.core.additional_request(), None);
+}
+
+/// US1 s3, FR-003: cancelling sends nothing, changes nothing and shows no error.
+#[test]
+fn cancelling_creates_nothing_and_leaves_the_catalog() {
+    let (mut app, mut rx, _) = app_with_sessions_at_feat_x(1);
+    let before = app.core.workspace.sessions.clone();
+    start(&mut app, AiCli::Copilot, false);
+    app.core
+        .update(Message::Session(SessionMsg::AdditionalCancelled));
+    assert!(creates(&mut rx).is_empty());
+    assert_eq!(app.core.workspace.sessions, before);
+    assert_eq!(app.core.additional_request(), None);
+    assert_eq!(visible_notice(&app), None);
+}
+
+/// US1 s4 and the row entry, regression: both still open the same confirmation.
+#[test]
+fn the_blocked_start_and_the_row_entry_still_open_the_confirmation() {
+    let (mut app, _rx, ids) = app_with_sessions_at_feat_x(2);
+    app.core
+        .update(Message::Session(SessionMsg::AdditionalRequested(
+            occupied_loc(),
+        )));
+    assert_eq!(
+        app.core.additional_request().map(|(location, _)| location),
+        Some(occupied_loc())
+    );
+    app.core
+        .update(Message::Session(SessionMsg::AdditionalCancelled));
+
+    let sessions = app
+        .core
+        .workspace
+        .sessions
+        .get_mut(Path::new("/repo/demo"))
+        .unwrap();
+    sessions[0].lifecycle = micold_core::session::SessionLifecycle::Running;
+    sessions[1].lifecycle = micold_core::session::SessionLifecycle::Idle;
+    app.core
+        .update(Message::Session(SessionMsg::StartBlocked(ids[1])));
+    assert_eq!(app.core.session.blocked_start, Some(ids[1]));
+}
+
+/// FR-004: with several sessions the confirmation names the main one.
+#[test]
+fn with_several_sessions_the_confirmation_names_the_main_one() {
+    let (mut app, _rx, ids) = app_with_sessions_at_feat_x(3);
+    start(&mut app, AiCli::ClaudeCode, false);
+    assert_eq!(
+        micold_core::occupancy::main_session(
+            app.core.active_sessions(),
+            &app.core.additional_request().unwrap().0
+        ),
+        Some(ids[0])
+    );
+}
+
+/// US2 s1-s2 (T010): after the confirmed create the catalog lists both sessions, the original still
+/// main and the new one selected; deleting either leaves the other.
+#[test]
+fn after_confirming_both_sessions_are_listed_and_deleting_one_leaves_the_other() {
+    use micold_core::protocol::messages::OperationResult;
+    let (mut app, mut rx, ids) = app_with_sessions_at_feat_x(1);
+    start(&mut app, AiCli::ClaudeCode, false);
+    let _ = shell::daemon_sync::on_additional_session_confirmed(&mut app);
+    let _ = creates(&mut rx);
+    let req = pending_create(&app);
+
+    let mut helper = micold_core::session::Session::start_new(occupied_loc(), AiCli::ClaudeCode);
+    helper.main = false;
+    let helper_id = helper.id;
+    app.core
+        .workspace
+        .sessions
+        .get_mut(Path::new("/repo/demo"))
+        .unwrap()
+        .push(helper);
+    let _ = shell::daemon_sync::on_daemon_event(
+        &mut app,
+        micold_core::daemons::DaemonId(1),
+        DaemonMsg::OperationOk {
+            req,
+            result: OperationResult::SessionCreated { session: helper_id },
+        },
+    );
+
+    let listed = app
+        .core
+        .workspace
+        .sessions
+        .get(Path::new("/repo/demo"))
+        .unwrap();
+    assert_eq!(listed.len(), 2);
+    assert!(
+        listed.iter().find(|s| s.id == ids[0]).unwrap().main,
+        "the original stays main"
+    );
+    assert_eq!(
+        app.core.session.active,
+        Some(helper_id),
+        "the new session is selected"
+    );
+
+    app.core
+        .workspace
+        .sessions
+        .get_mut(Path::new("/repo/demo"))
+        .unwrap()
+        .retain(|s| s.id != helper_id);
+    let left = app
+        .core
+        .workspace
+        .sessions
+        .get(Path::new("/repo/demo"))
+        .unwrap();
+    assert_eq!(left.iter().map(|s| s.id).collect::<Vec<_>>(), vec![ids[0]]);
 }
 
 /// `013` BUG-001, A1: with a create in flight, neither Escape nor the scrim closes the form.
@@ -6879,7 +7114,7 @@ mod issue_source {
         let mut rig = issue_rig(Some(FAKE_GH), FakeIssueSource::new());
         send(&mut rig.app, FormMsg::Opened);
         let (req, _) = remote_lists_sent(&mut rig.rx)[0];
-        rig.app.core.workspace.active = Some(PathBuf::from("/repo/other"));
+        rig.app.core.workspace.active = Some(std::path::PathBuf::from("/repo/other"));
         answer_remotes(&mut rig.app, req, github_remote());
         assert_eq!(
             form(&rig.app).github,
