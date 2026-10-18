@@ -99,7 +99,9 @@ it calls `quick_switch::update`; when it returns a `Step` it runs the same seque
 `finish_navigation`) with the recorded `terminal_had_focus`; a `Stop` with the Overview open first
 dispatches the Overview's close. That shared sequence is factored out of `shell/navigation.rs` into
 one `apply_step(app, step, terminal_had_focus)` both call. On open it returns
-`operation::focus(QUICK_SWITCHER_FIELD_ID)`. No branch of its own.
+`operation::focus(QUICK_SWITCHER_FIELD_ID)`. No branch of its own: `update` returns a `Choice`
+(step, recorded `terminal_had_focus`, `close_overview_first`), so whether the Overview closes first
+is decided and tested in `features/quick_switch.rs`.
 
 ### D6 — View — R6
 
@@ -146,7 +148,7 @@ a session row and an unavailable project.
 | Core unit | `typeahead.rs` existing tests | still green after the tier functions become shared | — |
 | Client keys | `micold-client/tests/keymap.rs` | K5 | 001, 002, 016, 017, SC-002, SC-006 |
 | Client state | `micold-client/tests/quick_switch.rs` (new) | `candidates`: filter-hidden worktree absent but current kept, collapsed group, closed session absent, other project's locations absent (D4), active project not a project entry, unavailable unselectable, welcome screen, names/tags/counts/current marks; U1 gate per surface and Settings; U3 per key incl. gone and unavailable (stays open); U4 restores `keyboard_row`; list change keeps query and highlight; apply through `apply_navigation` gives `session.active`, `keyboard_row`, reveal armed, both focus cases; session count unchanged (SC-005); two `State`s independent | 003–015, SC-004, SC-005 |
-| Client state | `tests/navigation.rs` | still green after `location_node` refactor | — |
+| Client state | `tests/navigation.rs`, `tests/navigation_apply.rs` | still green after the `location_node` and `apply_step` refactors | — |
 | Registry | `tests/overlay_registry.rs` | `QuickSwitcherDialog` identity, Dialog layer, cancellation = `Dismissed`; Escape and outside click reach it | 009 |
 | Showcase | `tests/showcase_completeness.rs` | quick-switcher variant listed | VIII |
 | Visual pass | quickstart §B (visual-pass skill) | B1–B12 | all |

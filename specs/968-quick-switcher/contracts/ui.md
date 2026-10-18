@@ -34,10 +34,11 @@ switcher or clearing the query (FR-013).
 | `Project(p)`, unavailable | nothing; stays open | — |
 | `Session(id)` | close | `Step::Session(id)` |
 | `Location(l)` with a main session | close | `Step::Session(main)` |
-| `Location(l)` without | close; closes the Overview if open | `Step::Stop(l)` |
+| `Location(l)` without | close; closes the Overview if open (`close_overview_first`) | `Step::Stop(l)` |
 | `Project(p)`, available | close | `Step::Project(p)` |
 
-`terminal_had_focus` is the one recorded at open (FR-010). No step starts, stops or closes a
+`update` returns `Choice { step, terminal_had_focus, close_overview_first }`; the shell only
+executes it. `terminal_had_focus` is the one recorded at open (FR-010). No step starts, stops or closes a
 session (FR-011, SC-005).
 
 ## U4 — Closing without a choice
@@ -54,6 +55,7 @@ session are unchanged (FR-009); the terminal takes the keyboard back by derivati
 | Down / Up | `Moved(Next / Previous)`: `quick_switch::step`, stops at the ends, skips unavailable projects |
 | Enter | `Chosen(highlighted)` when the highlighted row is enabled; else nothing (FR-014) |
 | Escape | `Dismissed` |
+| Tab | `Dismissed` (the type-ahead's `Dismiss` intent) |
 | switcher chord | `Toggled` (closes) |
 | #803 chords | nothing (their gate reads `registry::topmost`) |
 

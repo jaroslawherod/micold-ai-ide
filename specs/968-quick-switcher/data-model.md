@@ -39,7 +39,7 @@ struct Ranked { index: usize, rank: Rank, spans: Vec<Range<usize>> }
 
 | Function | Rule | FR |
 |---|---|---|
-| `filter(&[Candidate], &Query) -> Vec<Ranked>` | empty query: every candidate in order, rank `Prefix`, no spans. Else keep in-order matches, sort stably by rank, then insert each matched location's unmatched sessions right after it with its rank | 004, 005 |
+| `filter(&[Candidate], &typeahead::Query) -> Vec<Ranked>` | empty query: every candidate in order, rank `Prefix`, no spans. Else keep in-order matches, sort stably by rank, then insert each matched location's unmatched sessions right after it with its rank | 004, 005 |
 | `reseat(&[Candidate], &[Ranked], Option<&EntryKey>) -> Option<usize>` | the key's position when listed and selectable; else the first selectable; `None` when none | 005, 013 |
 | `step(&[Candidate], &[Ranked], usize, Dir) -> usize` | next selectable above/below; stays at the first/last selectable | 007 |
 
@@ -80,6 +80,9 @@ struct Open {
 }
 ```
 
+`list(&State) -> List` is what the view and `update` read: `entries`, `ranked`, `highlighted:
+Option<usize>`, `empty: Option<Empty>` with `Empty { NoMatches, NothingToSwitchTo }` (FR-014).
+
 `Option<Open>` makes "a query or highlight with the switcher closed" unrepresentable (Principle V).
 
 ### `Msg`
@@ -89,7 +92,7 @@ struct Open {
 | `Toggled { terminal_had_focus }` | both chord paths (contracts/keys.md K3) | open (gate U1) or close without choice |
 | `QueryChanged(String)` | the field | set query; highlight → first selectable of the new list |
 | `Moved(Dir)` | the type-ahead's `on_move` | `step` |
-| `Chosen(EntryKey)` | Enter (highlighted) or a click | resolve to a `Step` (U3); close when it resolves |
+| `Chosen(EntryKey)` | Enter (highlighted) or a click | resolve to a `Choice` (U3): the `Step`, the recorded `terminal_had_focus`, `close_overview_first` (a `Stop` with the Overview open); close when it resolves |
 | `Dismissed` | Escape, scrim click, Tab (registry cancellation) | close without choice |
 
 ### State transitions

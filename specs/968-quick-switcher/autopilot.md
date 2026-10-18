@@ -35,6 +35,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D3 | clarify | Unavailable projects: listed despite #803 Project order excluding them? | Listed in the switcher's order, badged, not selectable | agent-resolved | spec.md US3 scenario 3, FR-006, FR-008 |
 | D4 | clarify | List other projects' locations and sessions? | No, active project only (option A) | default, pending user confirmation | may flip to B (all projects): then US3-5, FR-003, FR-004 change; spec.md#clarifications |
 | D5 | clarify | Rank of a session kept by its location's match; highlight past unavailable projects | After its location, location's rank; first selectable entry | agent-resolved | spec.md US2-3, FR-007 |
+| D6 | tasks | Split US1 (20 tasks) further? | No: chord, dialog, list and choose are one observable loop (milestones rules 1, 6); sessions and projects are M2, M3 | agent-resolved | tasks.md M1 Note |
+| D7 | tasks | speckit-analyze C1/C2: Overview-close and empty-state choice sat in glue | plan D5, data-model, contracts/ui.md U3/U5: `update` returns `Choice { step, terminal_had_focus, close_overview_first }`, `list` returns `Empty`; Tab listed as a close | agent-resolved | speckit-analyze report (tasks unit) |
 
 ## Review rounds
 
