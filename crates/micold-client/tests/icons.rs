@@ -73,6 +73,7 @@ fn expected(icon: Icon) -> char {
         Icon::TypeOther => '\u{e2c7}',
         Icon::TypeIncluded => '\u{e157}',
         Icon::TypeOrphan => '\u{eb83}',
+        Icon::Open => '\u{ea77}',
     }
 }
 
@@ -112,8 +113,9 @@ fn all_covers_every_variant_without_duplicates() {
     // section icon (`dns`) removed with the section (feature 804), +3 for feature 905's worktree
     // state icon (`play_arrow`, `report`, `pause`), +10 for feature 813's Overview (`dashboard`), its
     // card states (`priority_high`, `visibility`, `check_circle`) and location types (`lightbulb`,
-    // `bug_report`, `build`, `folder`, `link`, `folder_off`).
-    assert_eq!(Icon::ALL.len(), 65, "curated set size");
+    // `bug_report`, `build`, `folder`, `link`, `folder_off`), +1 for feature 972's card menu *Open*
+    // entry (`login`).
+    assert_eq!(Icon::ALL.len(), 66, "curated set size");
 
     // No duplicate variants.
     for (i, &a) in Icon::ALL.iter().enumerate() {
