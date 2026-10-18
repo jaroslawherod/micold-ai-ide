@@ -56,5 +56,19 @@ says so. Green is `cargo test -p micold-core --lib provision ssh` (89 passed) an
 | T073, T078 row | install lines show in the row while installing; a failed CLI is listed in the row and recent errors with the installer output and survives connecting; the next attempt clears it | Written first; failed to compile on the missing `ProvisionEvent::Warned` and `DaemonView.install_warnings` | `daemons_feature install_warnings` |
 | T074 | a default deselected or failed on a daemon starts nothing, substitutes nothing, says unavailable | Passed when first run: the offer-choice path already handled an absent default; the test pins it for the daemon's offer | `unavailable_default_says_so` |
 | #1027 follow-up | an image with no user for the uid fails at once with a reason naming it | `an_image_with_no_user_for_the_uid_fails_at_once_naming_why` written first; it ran the 600 s bound (here: retried) before the guard | `cargo test -p micold-core login` |
-| T075 | failing install warns and connects; deselect and empty selection change `offered.json` | n/a: need a container runtime, absent here; compiled, run by CI's sandbox job. The `NoOutbound` cases are not written (follow-up) | `cargo test -p micold-daemon --test sandbox_real_provision --no-run` |
+| T075 | failing install warns and connects; deselect and empty selection change `offered.json` | n/a: need a container runtime, absent here; compiled, run by CI's sandbox job. The two `NoOutbound` cases (`..._no_outbound_...`, `sandbox_real_provision.rs:498,534`) were added in M7 (T075) | `cargo test -p micold-daemon --test sandbox_real_provision --no-run` |
+| T090 (close, tdd-verify finding 1) | a reach failure reading `Connection reset by peer` with no `kex_exchange_identification` is retried | red by mutation: `"Connection reset"` removed from `not_up_yet` → `a_plain_connection_reset_while_the_server_starts_is_retried` FAILED (reach called once); restored → green | `cargo test -p micold-core --lib provision::tests::a_plain` |
 
+## M7 — bounded, cancellable container starts with rollback (written after the fact)
+
+M7 was developed without a per-row log; `tdd/verification.md` (finding 2) records the gap. The rows below
+state what each behaviour's tests are and that **no test-first red is claimed**: the tests were written
+with the code in the same milestone and reviewed (A r1/r2, B r1/r2 in the ledger). Retroactive reds
+(reverting each production change) are left to follow-up T091.
+
+| Task | Behaviour | Red evidence | Green |
+|---|---|---|---|
+| T079, T083 | every step has a bound and times out with `TimedOut`; every runtime command is bounded | none claimed | `cargo test -p micold-core --lib provision::` |
+| T080, T084 | cancel stops a start in any step and rolls back what the attempt created; a daemon found running is never rolled back | none claimed | `cargo test -p micold-core --lib provision::attempt`; `cargo test -p micold-client sandbox` |
+| T081, T085 | two concurrent starts of one container name end with one container (`NameInUse` re-adopts the winner) | none claimed | `cargo test -p micold-core --lib sandbox::lifecycle` |
+| T082 | end-to-end real-runtime cases for stop-during-install and concurrent starts | n/a: need a container runtime; run by CI's sandbox job; verification findings 3 and 4 say they are weak | `cargo test -p micold-daemon --test sandbox_real_provision --no-run` |

@@ -1009,6 +1009,31 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_plain_connection_reset_while_the_server_starts_is_retried() {
+        let fake = Fake::default()
+            .say(
+                "reach",
+                bad("ssh: connect to host 127.0.0.1 port 40222: Connection reset by peer"),
+            )
+            .say("reach", ok(""))
+            .say("probe", ok(PROBE_HAVE))
+            .say("install", ok(""))
+            .say("last", ok(""));
+        let (result, _) = run_with(
+            &fake,
+            &owned_target(StepBounds::container()),
+            &CancelToken::new(),
+        )
+        .await;
+        assert_eq!(failure(result).step, Step::Start);
+        assert_eq!(
+            fake.count("reach"),
+            2,
+            "a reset with no kex line is retried"
+        );
+    }
+
+    #[tokio::test]
     async fn any_other_reach_failure_is_final_and_a_refused_key_is_auth_refused() {
         let fake = Fake::default().say(
             "reach",

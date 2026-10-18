@@ -104,4 +104,5 @@ follows describes the version you are reading it from (constitution, Principle V
   what a version mismatch looks like and how restart-and-resume behaves, why a service running
   directly on this computer does not survive a logout and what does, where the service logs, and **where the service runs** — the placement model (on this computer, in
   a container, or reserved for remote), why the container is reached over authenticated loopback TCP
-  rather than a socket, and who answers "is this a git repository?" once it is.
+  rather than a socket, and who answers "is this a git repository?" once it is. Also how a daemon behind SSH is provisioned (feature 806): the one start sequence, the basic
+  image, the AI CLI install and its relay.

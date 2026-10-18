@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-17
 
-**Status**: Draft
+**Status**: Closed 2026-10-18 — shipped in PRs #975, #979, #982, #988, #995, #998, #1018, #1027, #1043, #1053 and the close PR
 
 **Input**: User description: "Container daemon: configurable resources, Dockerfile or image source; build
 from current daemon binary by default (#806)", narrowed by the owner's decision of 2026-10-17: "daemon

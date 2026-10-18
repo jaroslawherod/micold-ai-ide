@@ -165,7 +165,7 @@ settings, start it, and check it connects with the client's version (quickstart 
 - [x] T050 [US1] Add `ImageChoice`, `OwnImage` and `OwnImageDraft` (with validation) in `crates/micold-core/src/sandbox/image.rs`; replace `SandboxProfile.image: ImageSource` with `ImageChoice` in `crates/micold-core/src/sandbox/mod.rs` (serde reads old `image` through `ImageSource::into_choice`, added here in `sandbox/image.rs`, and writes `image_choice`); remove `DEFAULT_IMAGE` and `DEV_IMAGE_TAG` from every default (keep `DEFAULT_IMAGE_REPOSITORY` for `is_released_image` and the `release.yml` grep) (FR-003)
 - [x] T051 [US1] Change `SandboxSpec` in `crates/micold-core/src/sandbox/mod.rs` and the create arguments in `crates/micold-core/src/sandbox/argv.rs` per data-model *SandboxSpec* (publish 2222, read-only `/run/micold/ssh` mount, `MICOLD_HOME`, no token mount for basic/own)
 - [x] T052 [US1] Add `Adoption::Legacy`, drop the fingerprint replace and map `Stage` onto `Step` in `crates/micold-core/src/sandbox/lifecycle.rs`
-- [x] T053 [US1] Add `Dial::ContainerSsh { reach, target }` calling `provision::run` in `crates/micold-client/src/daemon.rs`; keep `Dial::Container` for `Adoption::Legacy` only
+- [x] T053 [US1] Add `Dial::ContainerSsh` (flat fields: reach and target parts, not a `{ reach, target }` pair) calling `provision::run` in `crates/micold-client/src/daemon.rs`; keep `Dial::Container` for `Adoption::Legacy` only
 - [x] T054 [US1] In `crates/micold-client/src/shell/sandbox.rs` `start`: `DaemonKeys::ensure`, write `known_hosts` for the stored port, bring the container up, provision; until M6 the target's `ai_clis` is `AiCliSelection::all()`, so container daemons keep every CLI they had; the table is `AiCliTable::pinned()`
 - [x] T055 [US1] `mise.toml`: `image` builds `micold-basic:dev` from `packaging/basic/` (no daemon build), `test-sandbox` checks for `micold-basic:dev`; `.github/workflows/ci.yml` `sandbox-runtime` runs the suites against it and adds the pin check `docker manifest inspect "$(grep -o 'ghcr.io/jaroslawherod/micold-basic:[^"]*' crates/micold-core/src/sandbox/basic_image.rs)"`
 
@@ -292,8 +292,8 @@ same sequence). Its cross-runtime check:
 
 ## Phase 12: Polish
 
-- [ ] T088 Run quickstart Part A in full and §B step 8 (remote daemon: same labels, no install, no AI CLI section); record results in `specs/806-container-daemon-ssh-provisioning/quickstart.md`
-- [ ] T089 [P] Describe `micold_core::provision` and the basic image in the architecture doc under `docs/` that describes the sandbox and the remote runtime
+- [x] T088 Run quickstart Part A in full and §B step 8 (remote daemon: same labels, no install, no AI CLI section); record results in `specs/806-container-daemon-ssh-provisioning/quickstart.md`
+- [x] T089 [P] Describe `micold_core::provision` and the basic image in the architecture doc under `docs/` that describes the sandbox and the remote runtime
 
 ---
 
@@ -391,3 +391,21 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Tier**: full
 
 Phase 12 (T088–T089) changes no code and is left to the close unit.
+
+---
+
+## Phase 13: TDD remediation (from `tdd/verification.md`, verdict FAIL at 018b6d2c)
+
+**T090 and T094 were done in the close PR; T091-T093 and T095-T099 are left to follow-up issues (ledger, *Follow-ups not done*), because they need a container runtime, egress or a larger test refactor than a close PR carries.** Originally: These are the blocking findings (1-4). T094-T099
+are not blocking. Do not tick a box without the command shown passing.
+
+- [x] T090 [US5] Finding 1: add a test in `crates/micold-core/src/provision/mod.rs` (beside `reach_retries_only_while_the_server_is_not_up_then_gives_no_ssh_server`, line 972) that a reach failure reading `Connection reset by peer` with no `kex_exchange_identification` is retried; prove it by deleting `"Connection reset"` from `not_up_yet` (line 257): `cargo test -p micold-core --lib provision::tests` must fail, then pass restored
+- [ ] T091 Finding 2: for each TEST_AFTER row of `tdd/verification.md` (M2 T027/T029/T032/T034/T035/T036/T042-T061, M6 T071/T072/T074, and all of M7 T079-T085), record a red in `tdd/cycle-log.md`: revert the production change the test covers (or apply a one-line mutant), run the single test with the `--exact` command from `.specify/memory/tdd-profile.md`, paste the command and the failing line, restore, and re-run green; add the missing M7 section. Done when `grep -c 'M7' specs/806-container-daemon-ssh-provisioning/tdd/cycle-log.md` is above 0 and every row names a red command
+- [ ] T092 [US5] Finding 3: rewrite `sandbox_real_provision_stop_during_a_long_install_leaves_no_container_or_daemon` (`crates/micold-daemon/tests/sandbox_real_provision.rs:565`) to start through the client's own path (`container_attempt` / `bring_up_attempt` in `crates/micold-client/src/shell/sandbox.rs`) with the container absent, cancel during the install, and assert no container and no daemon remain, with no hand-seeded `AttemptLedger`; run `mise run image && cargo test -p micold-daemon --features sandbox-real-runtime --test sandbox_real_provision stop_during -- --test-threads=1`
+- [ ] T093 [US5] Finding 4: rewrite `sandbox_real_provision_two_concurrent_starts_give_one_container_and_one_daemon` (`sandbox_real_provision.rs:599`) so the container does not exist beforehand (no `start_sandbox`), two racing `bring_up_attempt`s run, and both end connected to one container and one daemon (assert `ok == 2`, or the loser is `Attach`ed); prove it fails with `NameInUse` re-adoption disabled in `crates/micold-core/src/sandbox/lifecycle.rs:425`; same cargo command with `two_concurrent`
+- [x] T094 Finding 5: correct `tdd/cycle-log.md` T075 row (the `NoOutbound` cases exist at `sandbox_real_provision.rs:498,534`) and update `tasks.md` T053 to the flat `Dial::ContainerSsh` fields; verify with `grep -n 'NoOutbound' specs/806-container-daemon-ssh-provisioning/tdd/cycle-log.md`
+- [ ] T095 Finding 6: restore the measured claims: make `sandbox_real_first_enable_is_under_five_minutes_and_never_goes_quiet` (`crates/micold-core/tests/sandbox_real_enable.rs:181`) include provisioning to a connected daemon (SC-002), or record in the spec why not; decide whether `sandbox_real_idle` still pins §5.17 and say so in its header; `mise run test-sandbox`
+- [ ] T096 Finding 7: run the real-runtime suites once where a runtime and egress exist (`mise run image && mise run test-sandbox`, plus `sandbox_real_basic_image`) and record the pass counts in `tdd/cycle-log.md`; if any fail, open a finding
+- [ ] T097 Finding 8: remove real waits from `provision::tests` (`mod.rs:996-1009,1041-1063,1083-1086`) and `attempt.rs:165` with `tokio::time::pause`/`advance`; `cargo test -p micold-core --lib provision::` stays green and its wall time drops
+- [ ] T098 Finding 9: split `mod.rs` tests at lines 971, 1011, 1065, 1092 into one behavior per test; `cargo test -p micold-core --lib provision::tests` shows the new names
+- [ ] T099 Findings 10-11: move the `SshRunner` fake used by `provision/mod.rs`, `keys.rs` and `login.rs` into one shared `Fake` type beside `ssh/provision.rs`, and list it under `helpers` in `.specify/memory/tdd-profile.md`; `mise run duplication` does not worsen
