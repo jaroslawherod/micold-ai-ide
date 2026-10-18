@@ -3,7 +3,7 @@
 //! remote served by `git daemon`.
 #![cfg(feature = "kube-real-runtime")]
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -17,7 +17,7 @@ pub const REGISTRY_PORT: u16 = 4873;
 pub const GIT_PORT: u16 = 9418;
 
 /// The stand-in `claude`: announces itself, then ticks, and echoes what is typed.
-pub const STAND_IN: &str = "#!/bin/sh\necho STAND-IN-AI-READY\ni=0\nwhile :; do i=$((i+1)); echo TICK-$i; if read -t 1 line; then echo ECHO-$line; fi; done\n";
+pub const STAND_IN: &str = "#!/bin/bash\necho STAND-IN-AI-READY\ni=0\nwhile :; do i=$((i+1)); echo TICK-$i; if read -t 1 line; then echo ECHO-$line; fi; done\n";
 
 /// The package source: a minimal npm registry for one package.
 pub struct Registry {
@@ -251,6 +251,3 @@ impl Drop for GitRemote {
         let _ = self.child.take();
     }
 }
-
-#[allow(dead_code)]
-fn unused(_: PathBuf) {}
