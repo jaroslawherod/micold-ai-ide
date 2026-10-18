@@ -1703,12 +1703,15 @@ Keystrokes stream straight to the CLI as you press them, exactly like a standalo
   are unavailable are skipped, and with only one available project nothing changes. All three
   levels wrap: past the last entry the next press goes to the first, and back.
 - **Quick-switcher**: **Ctrl+Shift+P** (Cmd+Shift+P on macOS) opens a search box over the list of
-  the active project's locations, also from a focused terminal; the app takes it and the terminal
-  never sees it. The tag filter applies, as it does to the sidebar. Type part of a name: the
-  letters must appear in that order, in any case, and names that start with what you typed come
-  first. Up and Down move the highlight, Enter or a click chooses; Escape, the same chord or a
-  click outside closes it. Choosing is a row click and never starts a session: a location with a
-  session shows it, an empty one is highlighted in the sidebar.
+  the active project's locations, each followed by its open sessions, also from a focused terminal;
+  the app takes it and the terminal never sees it. The tag filter applies, as it does to the
+  sidebar, and a session closed in the sidebar is not listed. Type part of a name: the letters
+  must appear in that order, in any case, and names that start with what you typed come first.
+  A session is found by its name; typing a location's name keeps its sessions listed right after
+  it, so Down reaches them. Up and Down move the highlight, Enter or a click chooses; Escape, the
+  same chord or a click outside closes it. Choosing is a row click and never starts a session: a
+  location with a session shows it, an empty one is highlighted in the sidebar, and a session is
+  shown with its row opened and selected in the sidebar.
 
 ### Links
 

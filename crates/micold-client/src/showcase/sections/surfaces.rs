@@ -44,7 +44,7 @@ fn kinds(roles: Roles) -> Vec<(&'static str, SurfaceKind)> {
 }
 
 /// The quick-switcher dialog (feature 968), posed with a query that emphasises its match, a
-/// location row with tags and the current location's row; `nothing_matches` poses the empty list.
+/// location row with tags, a session row below it and the current location's row; `nothing_matches` poses the empty list.
 fn quick_switcher_pose(roles: Roles, nothing_matches: bool) -> Element<'static, Message> {
     use crate::ui::quick_switcher::{context_line, surface, View};
     use micold_core::quick_switch::EntryKey;
@@ -62,6 +62,10 @@ fn quick_switcher_pose(roles: Roles, nothing_matches: bool) -> Element<'static, 
                     ),
                     Vec::new(),
                 ),
+                material::TypeaheadRow::new("Login flow", std::iter::once(0..3).collect()).details(
+                    context_line(crate::features::quick_switch::Kind::Session, "Login page"),
+                    Vec::new(),
+                ),
                 material::TypeaheadRow::new("Default", vec![]).details(
                     context_line(crate::features::quick_switch::Kind::Location, ""),
                     Vec::new(),
@@ -69,6 +73,7 @@ fn quick_switcher_pose(roles: Roles, nothing_matches: bool) -> Element<'static, 
             ],
             vec![
                 EntryKey::Location(SessionLocation::Worktree("feat-login".into())),
+                EntryKey::Session(micold_core::session::SessionId(uuid::Uuid::from_u128(1))),
                 EntryKey::Location(SessionLocation::Default),
             ],
         )
@@ -77,7 +82,7 @@ fn quick_switcher_pose(roles: Roles, nothing_matches: bool) -> Element<'static, 
         View {
             query,
             highlighted: (!rows.is_empty()).then_some(0),
-            current: (!rows.is_empty()).then_some(1),
+            current: (!rows.is_empty()).then_some(2),
             rows,
             keys,
             empty_message: "No matches",

@@ -19,12 +19,14 @@ use support::sidebar_fixture::{
     worktree,
 };
 
+/// The locations among `entries`, in order (sessions are skipped).
 fn keys(entries: &[Entry]) -> Vec<SessionLocation> {
     entries
         .iter()
-        .map(|e| match &e.candidate.key {
-            EntryKey::Location(l) => l.clone(),
-            other => panic!("only locations are listed for now, got {other:?}"),
+        .filter_map(|e| match &e.candidate.key {
+            EntryKey::Location(l) => Some(l.clone()),
+            EntryKey::Session(_) => None,
+            other => panic!("projects are not listed yet, got {other:?}"),
         })
         .collect()
 }
@@ -50,6 +52,8 @@ fn locations_come_in_location_order_every_one_selectable() {
     assert!(entries.iter().all(|e| e.candidate.selectable
         && e.candidate.parent.is_none()
         && e.kind == Kind::Location));
+    let sessions = candidates(&state_with_active());
+    assert!(sessions.iter().all(|e| e.kind == Kind::Location));
 }
 
 #[test]
@@ -85,7 +89,10 @@ fn a_hidden_worktree_is_absent_unless_it_is_the_current_location() {
     state.session.active = Some(id);
     let entries = candidates(&state);
     assert!(keys(&entries).contains(&worktree("fix-b")));
-    let current: Vec<_> = entries.iter().filter(|e| e.current).collect();
+    let current: Vec<_> = entries
+        .iter()
+        .filter(|e| e.current && e.kind == Kind::Location)
+        .collect();
     assert_eq!(
         current.len(),
         1,
@@ -102,7 +109,10 @@ fn a_navigation_stop_is_the_current_entry() {
     let mut state = three();
     state.sidebar.nav_stop = Some(worktree("feat-c"));
     let entries = candidates(&state);
-    let current: Vec<_> = entries.iter().filter(|e| e.current).collect();
+    let current: Vec<_> = entries
+        .iter()
+        .filter(|e| e.current && e.kind == Kind::Location)
+        .collect();
     assert_eq!(current.len(), 1);
     assert_eq!(
         current[0].candidate.key,
@@ -393,7 +403,7 @@ fn fifty_locations_are_each_reachable_in_a_short_query() {
         (0..50).map(|i| listed(&format!("feat-w{i:02}"))).collect(),
     );
     let entries = candidates(&state);
-    assert_eq!(entries.len(), 51);
+    assert_eq!(entries.len(), 51, "no sessions: locations only");
     open(&mut state);
     for entry in &entries {
         let name = &entry.candidate.name;
@@ -599,4 +609,206 @@ fn the_chord_pressed_in_the_field_still_reaches_the_toggle() {
         mapped || status == iced::event::Status::Ignored,
         "the field swallowed the chord: {messages:?}, {status:?}"
     );
+}
+
+// ---- sessions (M2: T022, T023) ----
+
+/// `Default` with its main session and one helper, `feat-a` with one session, `feat-b` with none.
+fn with_sessions() -> (State, SessionId, SessionId, SessionId) {
+    let mut state = state_with_active();
+    deliver(&mut state, vec![listed("feat-a"), listed("feat-b")]);
+    let main = session_at(&mut state, SessionLocation::Default);
+    let helper = session_at(&mut state, SessionLocation::Default);
+    let a = session_at(&mut state, worktree("feat-a"));
+    state.session.active = Some(main);
+    (state, main, helper, a)
+}
+
+use micold_core::session::SessionId;
+
+fn session_key(id: SessionId) -> EntryKey {
+    EntryKey::Session(id)
+}
+
+#[test]
+fn sessions_follow_their_location_in_session_order() {
+    let (state, main, helper, a) = with_sessions();
+    let entries = candidates(&state);
+    let order: Vec<(Kind, Option<usize>)> = entries
+        .iter()
+        .map(|e| (e.kind, e.candidate.parent))
+        .collect();
+    assert_eq!(
+        order,
+        vec![
+            (Kind::Location, None),
+            (Kind::Session, Some(0)),
+            (Kind::Session, Some(0)),
+            (Kind::Location, None),
+            (Kind::Session, Some(3)),
+            (Kind::Location, None),
+        ],
+        "Default, its two sessions, feat-a, its session, feat-b"
+    );
+    let ids: Vec<EntryKey> = entries
+        .iter()
+        .filter(|e| e.kind == Kind::Session)
+        .map(|e| e.candidate.key.clone())
+        .collect();
+    assert_eq!(
+        ids,
+        vec![session_key(main), session_key(helper), session_key(a)],
+        "the main session first, then its helper"
+    );
+}
+
+#[test]
+fn a_session_row_is_named_by_its_label_in_its_locations_name() {
+    let (state, _, _, _) = with_sessions();
+    let entries = candidates(&state);
+    for (at, entry) in entries.iter().enumerate() {
+        if entry.kind != Kind::Session {
+            continue;
+        }
+        let parent = &entries[entry.candidate.parent.expect("a session has a parent")];
+        assert_eq!(entry.context, parent.candidate.name, "row {at}");
+        assert_eq!(entry.candidate.name, "New session", "the sidebar's label");
+        assert!(entry.candidate.selectable);
+    }
+}
+
+#[test]
+fn only_the_active_session_is_current() {
+    let (mut state, main, helper, _) = with_sessions();
+    state.session.active = Some(helper);
+    let entries = candidates(&state);
+    let current: Vec<EntryKey> = entries
+        .iter()
+        .filter(|e| e.kind == Kind::Session && e.current)
+        .map(|e| e.candidate.key.clone())
+        .collect();
+    assert_eq!(current, vec![session_key(helper)]);
+    assert!(!entries
+        .iter()
+        .any(|e| e.candidate.key == session_key(main) && e.current));
+}
+
+#[test]
+fn a_closed_session_is_absent() {
+    let (mut state, _, helper, _) = with_sessions();
+    state
+        .workspace
+        .sessions
+        .get_mut(&std::path::PathBuf::from("/repo"))
+        .expect("sessions")
+        .retain(|s| s.id != helper);
+    assert!(!candidates(&state)
+        .iter()
+        .any(|e| e.candidate.key == session_key(helper)));
+}
+
+#[test]
+fn the_sessions_of_a_collapsed_location_are_still_listed() {
+    let (state, _, _, a) = with_sessions();
+    assert!(
+        !state.sidebar.expanded.contains("feat-a"),
+        "feat-a's row is not opened"
+    );
+    assert!(candidates(&state)
+        .iter()
+        .any(|e| e.candidate.key == session_key(a)));
+}
+
+/// Whether the sidebar draws the Default row's session sub-rows now.
+fn default_row_shows_sessions(state: &State) -> bool {
+    state.sidebar_entries().iter().any(|e| match e {
+        SidebarEntry::Default(node) => node.sessions_shown(),
+        _ => false,
+    })
+}
+
+#[test]
+fn choosing_a_session_selects_it_and_reveals_its_sub_row() {
+    let (mut state, _, helper, _) = with_sessions();
+    open(&mut state);
+    let choice = update(&mut state, Msg::Chosen(session_key(helper))).expect("resolves");
+    assert_eq!(choice.step, Step::Session(helper));
+    assert!(!choice.close_overview_first);
+    assert!(state.quick_switch.open.is_none());
+    press(&mut state, choice.step, choice.terminal_had_focus);
+    assert_eq!(state.session.active, Some(helper));
+    assert!(state.sidebar.pending_reveal_scroll, "scrolled into view");
+    assert!(default_row_shows_sessions(&state), "its row is opened");
+}
+
+#[test]
+fn choosing_a_session_without_terminal_focus_leaves_the_keyboard_on_its_sub_row() {
+    let (mut state, _, _, a) = with_sessions();
+    update(&mut state, toggled(false));
+    let choice = update(&mut state, Msg::Chosen(session_key(a))).expect("resolves");
+    press(&mut state, choice.step, choice.terminal_had_focus);
+    assert_eq!(state.session.active, Some(a));
+    assert_eq!(
+        state.sidebar.keyboard_row,
+        Some(micold_client::features::sidebar::RowRef::Session(a))
+    );
+}
+
+#[test]
+fn a_locations_name_then_down_reaches_its_second_session() {
+    let (mut state, _, helper, _) = with_sessions();
+    open(&mut state);
+    update(&mut state, Msg::QueryChanged("default".into()));
+    assert_eq!(
+        highlighted(&state),
+        Some(EntryKey::Location(SessionLocation::Default))
+    );
+    update(&mut state, Msg::Moved(Dir::Next));
+    update(&mut state, Msg::Moved(Dir::Next));
+    assert_eq!(highlighted(&state), Some(session_key(helper)));
+}
+
+#[test]
+fn a_session_created_while_open_appears_and_keeps_query_and_highlight() {
+    let (mut state, _, _, _) = with_sessions();
+    open(&mut state);
+    update(&mut state, Msg::QueryChanged("b".into()));
+    let before = highlighted(&state);
+    assert_eq!(before, Some(loc("feat-b")));
+    let made = session_at(&mut state, worktree("feat-b"));
+    assert!(list(&state)
+        .entries
+        .iter()
+        .any(|e| e.candidate.key == session_key(made)));
+    let kept: Vec<EntryKey> = list(&state)
+        .ranked
+        .iter()
+        .map(|r| list(&state).entries[r.index].candidate.key.clone())
+        .collect();
+    assert!(
+        kept.contains(&session_key(made)),
+        "feat-b matched: {kept:?}"
+    );
+    assert_eq!(
+        state.quick_switch.open.as_ref().map(|o| o.query.as_str()),
+        Some("b")
+    );
+    assert_eq!(highlighted(&state), before);
+}
+
+#[test]
+fn choosing_a_session_closed_meanwhile_changes_nothing() {
+    let (mut state, _, helper, _) = with_sessions();
+    open(&mut state);
+    update(&mut state, Msg::Moved(Dir::Next));
+    update(&mut state, Msg::Moved(Dir::Next));
+    assert_eq!(highlighted(&state), Some(session_key(helper)));
+    state
+        .workspace
+        .sessions
+        .get_mut(&std::path::PathBuf::from("/repo"))
+        .expect("sessions")
+        .retain(|s| s.id != helper);
+    assert!(update(&mut state, Msg::Chosen(session_key(helper))).is_none());
+    assert!(state.quick_switch.open.is_some(), "FR-013: nothing changes");
 }

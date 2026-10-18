@@ -148,7 +148,7 @@ fn highlighted_key(list: &List) -> Option<EntryKey> {
 }
 
 /// The step choosing `key` resolves to, from a fresh list; `None` for a key not listed and for the
-/// kinds that are not listed yet (sessions, projects).
+/// kinds that are not listed yet (projects).
 fn resolve(state: &Root, key: &EntryKey) -> Option<Step> {
     let listed = candidates(state);
     if !listed
@@ -162,7 +162,9 @@ fn resolve(state: &Root, key: &EntryKey) -> Option<Step> {
             navigation::main_session_at(state, location)
                 .map_or_else(|| Step::Stop(location.clone()), Step::Session),
         ),
-        EntryKey::Session(_) | EntryKey::Project(_) => None,
+        // A click on the session's sub-row: `Selected` opens its location's row and reveals it.
+        EntryKey::Session(id) => Some(Step::Session(*id)),
+        EntryKey::Project(_) => None,
     }
 }
 
@@ -238,7 +240,8 @@ fn close(state: &mut Root) {
 }
 
 /// The palette's entries in FR-004 order (data-model.md *Entry*): the active project's locations
-/// in `navigation::location_order`. Sessions (M2) and other projects (M3) are not listed yet.
+/// in `navigation::location_order`, each followed by its open sessions in the order a chord steps
+/// through them, collapsed rows included. Other projects (M3) are not listed yet.
 pub fn candidates(state: &Root) -> Vec<Entry> {
     let nodes = navigation::location_nodes(state);
     let current = state
@@ -247,26 +250,38 @@ pub fn candidates(state: &Root) -> Vec<Entry> {
         .clone()
         .filter(|stop| nodes.iter().any(|(at, _)| at == stop))
         .or_else(|| state.current_session_location());
-    nodes
-        .into_iter()
-        .map(|(location, node)| {
-            let context = node
-                .tags()
-                .iter()
-                .map(micold_core::naming::Tag::label)
-                .collect::<Vec<_>>()
-                .join(" · ");
-            Entry {
-                candidate: Candidate {
-                    key: EntryKey::Location(location.clone()),
-                    name: node.name().to_string(),
-                    parent: None,
-                    selectable: true,
-                },
-                kind: Kind::Location,
-                context,
-                current: current.as_ref() == Some(&location),
-            }
-        })
-        .collect()
+    let mut entries = Vec::new();
+    for (location, node) in nodes {
+        let name = node.name().to_string();
+        let context = node
+            .tags()
+            .iter()
+            .map(micold_core::naming::Tag::label)
+            .collect::<Vec<_>>()
+            .join(" · ");
+        let parent = entries.len();
+        entries.push(Entry {
+            candidate: Candidate {
+                key: EntryKey::Location(location.clone()),
+                name: name.clone(),
+                parent: None,
+                selectable: true,
+            },
+            kind: Kind::Location,
+            context,
+            current: current.as_ref() == Some(&location),
+        });
+        entries.extend(node.unfolded_sessions().into_iter().map(|session| Entry {
+            candidate: Candidate {
+                key: EntryKey::Session(session.id),
+                name: session.label.display().to_owned(),
+                parent: Some(parent),
+                selectable: true,
+            },
+            kind: Kind::Session,
+            context: name.clone(),
+            current: state.session.active == Some(session.id),
+        }));
+    }
+    entries
 }

@@ -259,19 +259,19 @@ sub-row is selected under an opened row.
 
 ### Tests for User Story 2 (MANDATORY — Constitution Principle I) ⚠️
 
-- [ ] T021 [P] [US2] Write the failing core tests in `crates/micold-core/src/quick_switch.rs`
+- [x] T021 [P] [US2] Write the failing core tests in `crates/micold-core/src/quick_switch.rs`
   (research R3, clarification D5): a location that matches pulls in its sessions that did not
   match, right after it, in input (session) order, with the location's rank and empty spans; a
   session that matched on its own name keeps its own rank and place and is not listed twice; a
   session whose location did not match stays only if it matched itself; with an empty query every
   session follows its location in input order
-- [ ] T022 [P] [US2] Write the failing `candidates` tests (session entries) in
+- [x] T022 [P] [US2] Write the failing `candidates` tests (session entries) in
   `crates/micold-client/tests/quick_switch.rs`: below each location its open sessions in session
   order (`unfolded_sessions()`, main first), named `session.label.display()`, `context` = the
   location's name, `parent` = the location's index, `current` only on `session.active`; a session
   closed in the sidebar is absent (US2-4); the session of a collapsed (unopened) location row is
   still listed
-- [ ] T023 [US2] Write the failing choose tests in `crates/micold-client/tests/quick_switch.rs`:
+- [x] T023 [US2] Write the failing choose tests in `crates/micold-client/tests/quick_switch.rs`:
   `Chosen(Session(id))` closes and returns `Step::Session(id)`; applied, it makes `id`
   `session.active`, opens its location's row and selects its sub-row with the reveal armed
   (US2-2, SC-004); typing a location's name then `Moved(Next)` twice highlights its second session
@@ -279,14 +279,14 @@ sub-row is selected under an opened row.
 
 ### Implementation for User Story 2
 
-- [ ] T024 [US2] Extend `filter` in `crates/micold-core/src/quick_switch.rs` with the
+- [x] T024 [US2] Extend `filter` in `crates/micold-core/src/quick_switch.rs` with the
   kept-by-location rule (data-model.md: "insert each matched location's unmatched sessions right
   after it with its rank") until T021 passes (`mise run test-core`)
-- [ ] T025 [US2] Add session entries to `candidates` in
+- [x] T025 [US2] Add session entries to `candidates` in
   `crates/micold-client/src/features/quick_switch.rs` (data-model.md `candidates` step 1), and the
   `Session` arm of U3 in `update`, until T022 and T023 pass; add a session row (`Session ·
   <location>`) to the showcase sample of T019 in `crates/micold-client/src/showcase/sections/`
-- [ ] T026 [US2] Update the **Quick-switcher** bullet in `docs/user-guide/worktrees-and-sessions.md`:
+- [x] T026 [US2] Update the **Quick-switcher** bullet in `docs/user-guide/worktrees-and-sessions.md`:
   each location is followed by its open sessions, a session is found by its name, a location's
   name keeps its sessions listed after it, closed sessions are not listed
 

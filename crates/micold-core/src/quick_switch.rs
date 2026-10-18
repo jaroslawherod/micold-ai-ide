@@ -8,6 +8,7 @@
 //! than copied; this module adds the prefix rank and drops the type-ahead's typo tier, which
 //! FR-005 does not allow.
 
+use std::collections::HashSet;
 use std::ops::Range;
 use std::path::PathBuf;
 
@@ -68,7 +69,8 @@ pub struct Ranked {
 ///
 /// An empty query keeps every candidate in order, rank `Prefix`, nothing emphasised (FR-004).
 /// Otherwise a candidate is kept exactly when its name contains the query's characters in order,
-/// ignoring case; there is no typo tier.
+/// ignoring case; there is no typo tier. A matched location also keeps its sessions that did not
+/// match, listed right after it with its rank.
 pub fn filter(candidates: &[Candidate], query: &Query) -> Vec<Ranked> {
     if query.is_empty() {
         return (0..candidates.len())
@@ -90,7 +92,38 @@ pub fn filter(candidates: &[Candidate], query: &Query) -> Vec<Ranked> {
         .collect();
     // `sort_by_key` is stable: within a rank the input (FR-004) order is kept.
     kept.sort_by_key(|ranked| ranked.rank);
-    kept
+    keep_sessions_of_matched_locations(candidates, kept)
+}
+
+/// Insert, right after each matched location, its sessions that did not match, in input order and
+/// with the location's rank and no emphasis (FR-005, clarification D5). A session that matched on
+/// its own name keeps its own rank and place and is not listed twice.
+fn keep_sessions_of_matched_locations(candidates: &[Candidate], kept: Vec<Ranked>) -> Vec<Ranked> {
+    let listed: HashSet<usize> = kept.iter().map(|r| r.index).collect();
+    let mut out = Vec::with_capacity(kept.len());
+    for ranked in kept {
+        let (index, rank) = (ranked.index, ranked.rank);
+        out.push(ranked);
+        if candidates[index].parent.is_some() {
+            continue;
+        }
+        out.extend(
+            candidates
+                .iter()
+                .enumerate()
+                .skip(index + 1)
+                // A location's sessions follow it directly in the input.
+                .take_while(|(_, c)| c.parent.is_some())
+                .filter(|(_, c)| c.parent == Some(index))
+                .filter(|(i, _)| !listed.contains(i))
+                .map(|(i, _)| Ranked {
+                    index: i,
+                    rank,
+                    spans: Vec::new(),
+                }),
+        );
+    }
+    out
 }
 
 /// One name's rank and emphasis against the folded query, from the type-ahead's tiers.
@@ -331,6 +364,76 @@ mod tests {
             step(&candidates, &ranked, 0, Dir::Previous),
             0,
             "Up stays at the first selectable entry"
+        );
+    }
+
+    fn session(id: u128, name: &str, parent: usize) -> Candidate {
+        Candidate {
+            key: EntryKey::Session(SessionId(uuid::Uuid::from_u128(id))),
+            name: name.to_owned(),
+            parent: Some(parent),
+            selectable: true,
+        }
+    }
+
+    /// `login` with sessions `s1`, `s2`; `billing` with `helper`; `logs` with `s3`.
+    fn with_sessions() -> Vec<Candidate> {
+        vec![
+            location("login"),
+            session(1, "s1", 0),
+            session(2, "s2", 0),
+            location("billing"),
+            session(3, "helper", 3),
+            location("logs"),
+            session(4, "s3", 5),
+        ]
+    }
+
+    #[test]
+    fn a_matching_location_pulls_in_its_unmatched_sessions_right_after_it() {
+        let candidates = with_sessions();
+        let ranked = filter(&candidates, &Query::new("log"));
+        assert_eq!(
+            names(&candidates, &ranked),
+            vec!["login", "s1", "s2", "logs", "s3"],
+            "each location's sessions follow it in session order"
+        );
+        assert_eq!(ranked[1].rank, Rank::Prefix, "with the location's rank");
+        assert!(ranked[1].spans.is_empty(), "and nothing emphasised");
+    }
+
+    #[test]
+    fn a_session_that_matched_keeps_its_own_rank_and_is_not_listed_twice() {
+        let candidates = with_sessions();
+        let ranked = filter(&candidates, &Query::new("s"));
+        // Prefix: s1, s2, s3; run: `logs`. `logs` matched, but its session `s3` matched first.
+        assert_eq!(
+            names(&candidates, &ranked),
+            vec!["s1", "s2", "s3", "logs"],
+            "matched sessions keep their own rank and place"
+        );
+        let count = ranked.iter().filter(|r| r.index == 6).count();
+        assert_eq!(count, 1, "s3 matched and its location matched: once");
+    }
+
+    #[test]
+    fn a_session_whose_location_did_not_match_stays_only_if_it_matched() {
+        let candidates = with_sessions();
+        let ranked = filter(&candidates, &Query::new("help"));
+        assert_eq!(
+            names(&candidates, &ranked),
+            vec!["helper"],
+            "the helper alone: `billing` did not match, so it is not pulled in"
+        );
+    }
+
+    #[test]
+    fn an_empty_query_lists_every_session_after_its_location_in_input_order() {
+        let candidates = with_sessions();
+        let ranked = filter(&candidates, &Query::new(""));
+        assert_eq!(
+            names(&candidates, &ranked),
+            vec!["login", "s1", "s2", "billing", "helper", "logs", "s3"]
         );
     }
 
