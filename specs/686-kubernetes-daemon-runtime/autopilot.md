@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-xelisc
 - **Started**: 2026-10-17
 - **Phase**: implement
-- **Next step**: M4a done, full gate green and pushed; the orchestrator opens the PR from the scratchpad files (pr-title-686-M4a.txt, pr-body-686-M4a.md), waits on CI and merges; then M4b
+- **Next step**: M4b in progress (unit 1): workers do T084/T085 widgets, T132/T133 Unavailable start; next the reducer (T083/T080/T082/T086 in features/daemons*.rs), then shell + UI wiring, review A/B, gate, PR files
 
 ## Pull requests
 
@@ -22,6 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #989 | M1c | merged | 499a59245c2e4edd8499f266b9efddc814081275 |
 | #992 | M2 | merged | 767530b33afc20e128d27d78852508d7416bffa2 |
 | #996 | M3 | merged | 8408b815f208a74217f877563e819cf6a543fcc2 |
+| #1000 | M4a | merged | 3ef301a489e845ccbfe2f0af813187b8244e7575 |
 
 ## Milestones
 
@@ -32,7 +33,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1c | T122, T023, T123, T124, T125, T028, T029, T126, T127 | full | Tunnel phase (SSH identification line), LiveCluster, relay, key files | #989 | merged |
 | M2 | T079, T072, T056, T073, T081, T075, T059, T076, T128 | full | Core Stop/Remove/forget-locally; failure + pod-gone classifiers; preflight | — | merged (#992) |
 | M3 | T063, T064, T065, T067, T068, T069, T102 | full | Allowed credentials as secrets, daemon_env, security contexts (core) | — | merged (#996) |
-| M4a | T024, T130, T066, T031, T131, T070, T032 | full | Kubernetes form via Edit (Add entry hidden), shared resources fields, credentials list | — | planned |
+| M4a | T024, T130, T066, T031, T131, T070, T032 | full | Kubernetes form via Edit (Add entry hidden), shared resources fields, credentials list | — | merged (#1000) |
 | M4b | T083, T084, T080, T132, T085, T086, T082, T133, T129 | full | Placement fields, Stop/Remove/Forget locally/Logs from the row, Start → Unavailable | — | planned |
 | M5 | T134, T022, T074, T135, T030, T077, T136 | full | (#806) Copy + Connect over SSH through the relay; failures at client level | — | blocked on #806 |
 | M6 | T138, T139, T141, T142, T033, T140 | full | (#806) AI CLI install, drift prompt, Add entry, user guide 🎯 MVP | — | blocked on #806 |

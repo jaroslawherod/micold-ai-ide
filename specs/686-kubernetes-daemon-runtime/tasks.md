@@ -227,18 +227,18 @@ in the list and open in Edit; the Add form's runtime list omits Kubernetes (FR-0
 
 ### Tests (write first, must fail)
 
-- [ ] T083 [P] [US5] [A19] [A20] [U107] [U108] Reducer tests in `client-tests/features_daemons.rs`: node selector, tolerations, volume size and storage class fields, each refused naming the field when invalid; editing a running daemon saves and shows "applies on next start" and sends nothing to the cluster (US5.2); Logs fetches the last 200 lines on demand.
-- [ ] T084 [P] [US5] [U109] [U110] Parse/format tests for the key/value list and toleration editors in `client/ui/material/key_value_list.rs` and `client/ui/material/toleration_list.rs`.
-- [ ] T080 [P] [US5] [A23] [U105] [U106] [U143] Confirmation reducer tests in `client-tests/features_daemons.rs`: Stop with running sessions "Stop <name>? <n> running session(s) will end. Worktrees on its volume are kept."; Remove names pod, volume with its worktrees, secrets and this computer's SSH key, plus 491's bound-worktree counts; cluster unreachable → contract §5 text naming what stays, the access secret and this computer's still-authorized key among it; nothing is deleted before confirmation; Remove and Forget locally delete this client's key files.
-- [ ] T132 [P] [US5] [U133] Actor test in `client-tests/kube_daemon_start.rs` over `FakeCluster`: Start of a Kubernetes daemon in a build without the mechanism fails at once with `Unavailable`, makes no cluster call, and the row shows `unreachable` with that reason.
+- [x] T083 [P] [US5] [A19] [A20] [U107] [U108] Reducer tests in `client-tests/features_daemons.rs`: node selector, tolerations, volume size and storage class fields, each refused naming the field when invalid; editing a running daemon saves and shows "applies on next start" and sends nothing to the cluster (US5.2); Logs fetches the last 200 lines on demand.
+- [x] T084 [P] [US5] [U109] [U110] Parse/format tests for the key/value list and toleration editors in `client/ui/material/key_value_list.rs` and `client/ui/material/toleration_list.rs`.
+- [x] T080 [P] [US5] [A23] [U105] [U106] [U143] Confirmation reducer tests in `client-tests/features_daemons.rs`: Stop with running sessions "Stop <name>? <n> running session(s) will end. Worktrees on its volume are kept."; Remove names pod, volume with its worktrees, secrets and this computer's SSH key, plus 491's bound-worktree counts; cluster unreachable → contract §5 text naming what stays, the access secret and this computer's still-authorized key among it; nothing is deleted before confirmation; Remove and Forget locally delete this client's key files.
+- [x] T132 [P] [US5] [U133] Actor test in `client-tests/kube_daemon_start.rs` over `FakeCluster`: Start of a Kubernetes daemon in a build without the mechanism fails at once with `Unavailable`, makes no cluster call, and the row shows `unreachable` with that reason.
 
 ### Implementation
 
-- [ ] T085 [US5] [U109] [U110] Key/value list and toleration editors with builder `.into()` APIs in `client/ui/material/key_value_list.rs` and `client/ui/material/toleration_list.rs`, registered in `client/ui/material/mod.rs`.
-- [ ] T086 [US5] [A19] [A20] [U107] [U108] Node selector, tolerations, volume size, storage class, "applies on next start" and Logs (pod log tail via `Cluster::logs`) in `client/features/daemons.rs`, `client/shell/daemons.rs` and `client/ui/settings/daemons.rs`; geometry gate.
-- [ ] T082 [US5] [A23] [U105] [U106] [U143] Wire Stop, Remove and Forget locally for Kubernetes daemons (`core/kube/lifecycle.rs` over `LiveCluster`, key files deleted through `client/kube/keys.rs`) in `client/daemon.rs`, `client/shell/daemons.rs` and `client/features/daemons.rs`; confirmation texts in `client/ui/confirm_daemon_removal.rs`; worktrees follow 491 FR-014.
-- [ ] T133 [US5] [U133] `Unavailable` start of a Kubernetes daemon in `client/daemon.rs` (the `Dial` match), until M5 replaces it.
-- [ ] T129 [US5] [A19] [A20] [A23] Acceptance (M4b): `features_daemons` green for A19, A20, A23.
+- [x] T085 [US5] [U109] [U110] Key/value list and toleration editors with builder `.into()` APIs in `client/ui/material/key_value_list.rs` and `client/ui/material/toleration_list.rs`, registered in `client/ui/material/mod.rs`.
+- [x] T086 [US5] [A19] [A20] [U107] [U108] Node selector, tolerations, volume size, storage class, "applies on next start" and Logs (pod log tail via `Cluster::logs`) in `client/features/daemons.rs`, `client/shell/daemons.rs` and `client/ui/settings/daemons.rs`; geometry gate.
+- [x] T082 [US5] [A23] [U105] [U106] [U143] Wire Stop, Remove and Forget locally for Kubernetes daemons (`core/kube/lifecycle.rs` over `LiveCluster`, key files deleted through `client/kube/keys.rs`) in `client/daemon.rs`, `client/shell/daemons.rs` and `client/features/daemons.rs`; confirmation texts in `client/ui/confirm_daemon_removal.rs`; worktrees follow 491 FR-014.
+- [x] T133 [US5] [U133] `Unavailable` start of a Kubernetes daemon in `client/daemon.rs` (the `Dial` match), until M5 replaces it.
+- [x] T129 [US5] [A19] [A20] [A23] Acceptance (M4b): `features_daemons` green for A19, A20, A23.
 
 ---
 

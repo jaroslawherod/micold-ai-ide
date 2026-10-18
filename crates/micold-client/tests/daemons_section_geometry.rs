@@ -424,6 +424,10 @@ fn the_kubernetes_form_and_row_paint_their_fields_without_overflow() {
         "Allowed credentials",
         "SSH key file",
         "Registry credentials file",
+        "Node selector",
+        "Tolerations",
+        "Volume size",
+        "Storage class",
         "staging",
     ] {
         assert!(has(&form, label), "{label}: {form:?}");
@@ -446,4 +450,45 @@ fn the_kubernetes_form_and_row_paint_their_fields_without_overflow() {
         "{failed:?}"
     );
     assert_no_text_overflows(&state, "the Kubernetes form without a kubeconfig");
+}
+
+/// Feature 686, T082: the placement fields refuse beside themselves, and a Kubernetes row paints
+/// its Logs and Forget locally actions, the pod log and the next-start note without overflow.
+#[test]
+fn the_kubernetes_placement_errors_and_row_actions_paint_without_overflow() {
+    let (mut state, _) = with_daemons();
+    let kube = state
+        .settings
+        .daemons
+        .add(
+            "Cluster",
+            DaemonRuntime::Kubernetes(micold_core::kube::settings::KubeSettings::new(
+                "ctx",
+                "ns",
+                &[],
+            )),
+            false,
+        )
+        .unwrap();
+    state.settings.links = DaemonLinks::at_launch(&state.settings.daemons);
+    let row = painted_tall(&state);
+    for label in ["Logs", "Forget locally", "Remove"] {
+        assert!(has(&row, label), "{label}: {row:?}");
+    }
+    state.update(Message::Daemons(DaemonsMsg::LogsFetched(
+        kube,
+        Ok("pod started\nsshd listening".into()),
+    )));
+    assert!(has(&painted_tall(&state), "sshd listening"));
+    assert_no_text_overflows(&state, "a Kubernetes row with its pod log");
+
+    state.update(Message::Daemons(DaemonsMsg::EditOpened(kube)));
+    state.update(Message::Daemons(DaemonsMsg::VolumeSizeEdited(
+        "lots".into(),
+    )));
+    state.update(Message::Daemons(DaemonsMsg::Saved));
+    let form = painted_tall(&state);
+    assert!(has(&form, "Volume size"), "{form:?}");
+    assert!(has(&form, "The volume must be at least 1 GiB."), "{form:?}");
+    assert_no_text_overflows(&state, "the Kubernetes form with a refused volume size");
 }

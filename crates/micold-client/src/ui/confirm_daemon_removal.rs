@@ -24,7 +24,10 @@ pub fn modal<'a>(prompt: &'a RemovalPrompt, scheme: ColorScheme) -> Element<'a, 
     material::dialog::confirm(
         r,
         fields,
-        ("Continue", Message::Daemons(DaemonsMsg::RemovalConfirmed)),
+        (
+            prompt.confirm_label,
+            Message::Daemons(DaemonsMsg::RemovalConfirmed),
+        ),
         ("Cancel", Message::Daemons(DaemonsMsg::RemovalCancelled)),
         460.0,
     )

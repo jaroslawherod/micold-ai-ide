@@ -1220,6 +1220,10 @@ pub fn interpret(
         // The shell's: it persists the registry and the binding (`App::apply_daemon_outcome`).
         Outcome::DaemonRegistryChanged(_)
         | Outcome::KubeContextsRequested
+        | Outcome::KubeStopRequested { .. }
+        | Outcome::KubeRemoveRequested { .. }
+        | Outcome::KubeKeysDelete { .. }
+        | Outcome::KubeLogsRequested { .. }
         | Outcome::DaemonBound { .. }
         | Outcome::RemoteRepositoryRequested { .. } => {}
         // Sessions of a removed daemon are gone from the window; those of an edited one are

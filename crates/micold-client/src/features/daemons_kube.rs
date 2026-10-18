@@ -2,21 +2,22 @@
 //! FR-018): the draft's typed fields, the allowed-credentials list and the kubeconfig context list.
 //!
 //! The reducer in [`super::daemons`] owns the messages; this holds what the fields mean and how
-//! they become [`KubeSettings`]. `base` keeps the settings the form does not edit yet (node
-//! selector, tolerations, volume size, storage class) so a save never drops them.
+//! they become [`KubeSettings`]. Node selector and tolerations are one row per line, the text the
+//! `KeyValueList` and `TolerationList` editors show (feature 686, M4b).
 
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 
 use micold_core::daemon_resources::DaemonResources;
 use micold_core::kube::credentials::KubeCredential;
-use micold_core::kube::settings::{KubeContextName, KubeSettings, Namespace};
+use micold_core::kube::settings::{KubeSettings, LabelKey, LabelValue, Quantity};
 use micold_core::sandbox::image::ImageRef;
 use micold_core::session::AiCli;
 
 use super::daemons::{invalid_field, FormError};
 use super::settings::{cores_text, parse_cores, parse_mib, LimitField, MAX_MIB};
 use crate::kube::live::ContextEntry;
+use crate::ui::material::{key_value_list, toleration_list};
 
 /// What the volume size field says while the daemon's volume may already exist (FR-005).
 pub const VOLUME_NOTICE: &str = "Applies only to a new volume, after Remove";
@@ -72,10 +73,52 @@ impl AllowedKind {
     }
 }
 
+/// A multi-line field's editor state beside the text it edits (feature 686, M4b): equal, cloned
+/// and shown by its text, so the draft stays comparable.
+#[derive(Default)]
+pub struct Editor(iced::widget::text_editor::Content);
+
+impl Editor {
+    /// An editor showing `text`.
+    pub fn new(text: &str) -> Self {
+        Self(iced::widget::text_editor::Content::with_text(text))
+    }
+
+    /// The content the widget draws and edits.
+    pub fn content(&self) -> &iced::widget::text_editor::Content {
+        &self.0
+    }
+
+    /// Apply an edit and return the text now shown.
+    pub fn perform(&mut self, action: iced::widget::text_editor::Action) -> String {
+        self.0.perform(action);
+        self.0.text()
+    }
+}
+
+impl Clone for Editor {
+    fn clone(&self) -> Self {
+        Self::new(&self.0.text())
+    }
+}
+
+impl PartialEq for Editor {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.text() == other.0.text()
+    }
+}
+
+impl Eq for Editor {}
+
+impl std::fmt::Debug for Editor {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Editor({:?})", self.0.text())
+    }
+}
+
 /// The Kubernetes fields of the form, as typed.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KubeDraft {
-    base: KubeSettings,
     /// The kube context.
     pub context: String,
     /// The namespace.
@@ -92,6 +135,18 @@ pub struct KubeDraft {
     pub memory_request: String,
     /// Memory limit in MiB; empty is unset.
     pub memory_limit: String,
+    /// The node selector, one `key=value` row per line.
+    pub node_selector: String,
+    /// The node selector's editor, kept to the text above.
+    pub node_selector_editor: Editor,
+    /// The tolerations, one row per line.
+    pub tolerations: String,
+    /// The tolerations' editor, kept to the text above.
+    pub tolerations_editor: Editor,
+    /// The volume size in Kubernetes form (`20Gi`).
+    pub volume_size: String,
+    /// The volume's storage class; empty is the cluster default.
+    pub storage_class: String,
     /// The credentials ticked.
     pub allowed: BTreeSet<AllowedKind>,
     /// The SSH key file, while the SSH key is ticked.
@@ -112,8 +167,15 @@ impl KubeDraft {
         let mib = |b: Option<micold_core::sandbox::Bytes>| {
             b.map(|b| b.as_mib().to_string()).unwrap_or_default()
         };
+        let node_selector = key_value_list::format(
+            &settings
+                .node_selector
+                .iter()
+                .map(|(k, v)| (k.0.clone(), v.0.clone()))
+                .collect::<Vec<_>>(),
+        );
+        let tolerations = toleration_list::format(&settings.tolerations);
         let mut draft = Self {
-            base: settings.clone(),
             context: settings.context.0.clone(),
             namespace: settings.namespace.0.clone(),
             image: settings
@@ -126,6 +188,12 @@ impl KubeDraft {
             cpu_limit: r.cpu_limit.map(cores_text).unwrap_or_default(),
             memory_request: mib(r.memory_request),
             memory_limit: mib(r.memory_limit),
+            node_selector: node_selector.clone(),
+            node_selector_editor: Editor::new(&node_selector),
+            tolerations: tolerations.clone(),
+            tolerations_editor: Editor::new(&tolerations),
+            volume_size: settings.volume_size.to_k8s(),
+            storage_class: settings.storage_class.clone().unwrap_or_default(),
             allowed: BTreeSet::new(),
             ssh_key_file: String::new(),
             pull_file: String::new(),
@@ -148,9 +216,21 @@ impl KubeDraft {
         draft
     }
 
-    /// The stored volume size as the form's note shows it.
+    /// The node selector text was replaced.
+    pub fn set_node_selector(&mut self, text: String) {
+        self.node_selector_editor = Editor::new(&text);
+        self.node_selector = text;
+    }
+
+    /// The tolerations text was replaced.
+    pub fn set_tolerations(&mut self, text: String) {
+        self.tolerations_editor = Editor::new(&text);
+        self.tolerations = text;
+    }
+
+    /// The volume size as the form's note shows it.
     pub fn volume_size_text(&self) -> String {
-        self.base.volume_size.to_k8s()
+        self.volume_size.clone()
     }
 
     /// The kubeconfig context `name` was chosen: it fills an empty namespace from the context's
@@ -182,15 +262,23 @@ impl KubeDraft {
 
     /// The settings the fields describe, or the first refused field.
     pub fn settings(&self) -> Result<KubeSettings, FormError> {
-        let mut s = self.base.clone();
-        s.context = KubeContextName(self.context.trim().to_string());
-        s.namespace = Namespace(self.namespace.trim().to_string());
+        let mut s = KubeSettings::new(self.context.trim(), self.namespace.trim(), &[]);
         s.image = match self.image.trim() {
             "" => None,
             text => Some(ImageRef::parse(text).map_err(|_| invalid_field("image"))?),
         };
         s.providers = self.providers.clone();
         s.resources = self.resources()?;
+        s.node_selector = key_value_list::parse(&self.node_selector)
+            .map_err(|e| row_error("node_selector", e))?
+            .into_iter()
+            .map(|(k, v)| (LabelKey(k), LabelValue(v)))
+            .collect();
+        s.tolerations =
+            toleration_list::parse(&self.tolerations).map_err(|e| row_error("tolerations", e))?;
+        s.volume_size =
+            Quantity::parse_k8s(self.volume_size.trim()).ok_or(invalid_field("volume_size"))?;
+        s.storage_class = Some(self.storage_class.trim().to_string()).filter(|c| !c.is_empty());
         s.allowed = self.credentials()?;
         s.validate().map_err(|e| match e {
             micold_core::daemons::RegistryError::InvalidField { field } => invalid_field(field),
@@ -247,4 +335,11 @@ impl KubeDraft {
         }
         Ok(out)
     }
+}
+
+/// A refused row of a list field: the field's sentence and the row.
+fn row_error(field: &'static str, row: key_value_list::RowError) -> FormError {
+    let mut error = invalid_field(field);
+    error.message = format!("{} {row}", error.message);
+    error
 }
