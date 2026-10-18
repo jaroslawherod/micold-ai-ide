@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-kqz6b6
 - **Started**: 2026-10-18
 - **Phase**: spec
-- **Next step**: dispatch review of spec.md round 1 (rubrics/spec.md), snapshot below; then clarify
+- **Next step**: clarify unit (one [NEEDS CLARIFICATION] in User Story 3)
 
 ## Pull requests
 
@@ -31,7 +31,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | Review | Round | Snapshot | Verdict |
 |---|---|---|---|
-| Spec review | 1 | ebfa4c4fb7e76f9ccdbb3f7d34edffd3f1217864:8ee4531564743d6032729cd056a73f655abfb1a0 | not run: spec unit had no Agent tool |
+| Spec review | 1 | ebfa4c4fb7e76f9ccdbb3f7d34edffd3f1217864:8ee4531564743d6032729cd056a73f655abfb1a0 | CLEAN (3 MINOR, fixed: keyboard-arrived focus, dropped option C, auto-repeat/state-change rule) |
 
 ## Declined review findings
 
@@ -40,11 +40,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-spec.md and checklists/requirements.md written (one NEEDS CLARIFICATION: US3, how the ripple
-stays visible when activation closes the Overview per 813 FR-013). Not done: the fresh-context spec
-review (task spec.md step 3) — the spec unit had no Agent tool. Next: the orchestrator (or a unit
-with Agent) dispatches the round-1 spec review against the snapshot in *Review rounds*, applies
-findings, then the clarify unit.
+None.
 
 ## Open escalation
 
