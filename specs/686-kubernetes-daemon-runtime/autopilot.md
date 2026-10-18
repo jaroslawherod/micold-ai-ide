@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-xelisc
 - **Started**: 2026-10-17
 - **Phase**: implement
-- **Next step**: M3 PR (files in scratchpad) opened by orchestrator; then M4a
+- **Next step**: M4a: implement T024,T130,T066,T031,T131,T070,T032 per Handover (no code written yet); then gate, reviews A/B, PR files
 
 ## Pull requests
 
@@ -21,6 +21,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #983 | M1b | merged | c256c2fe760e00e8aa3252babca54ebe4ee33d5f |
 | #989 | M1c | merged | 499a59245c2e4edd8499f266b9efddc814081275 |
 | #992 | M2 | merged | 767530b33afc20e128d27d78852508d7416bffa2 |
+| #996 | M3 | merged | 8408b815f208a74217f877563e819cf6a543fcc2 |
 
 ## Milestones
 
@@ -30,7 +31,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1b | T019, T117, T118, T021, T025, T119, T120, T027, T121 | full | Pod, PVC, access secret, pod stamp/drift, start through Pull with bounds + rollback over FakeCluster | #983 | merged |
 | M1c | T122, T023, T123, T124, T125, T028, T029, T126, T127 | full | Tunnel phase (SSH identification line), LiveCluster, relay, key files | #989 | merged |
 | M2 | T079, T072, T056, T073, T081, T075, T059, T076, T128 | full | Core Stop/Remove/forget-locally; failure + pod-gone classifiers; preflight | — | merged (#992) |
-| M3 | T063, T064, T065, T067, T068, T069, T102 | full | Allowed credentials as secrets, daemon_env, security contexts (core) | — | gated + reviewed; pushed, PR pending |
+| M3 | T063, T064, T065, T067, T068, T069, T102 | full | Allowed credentials as secrets, daemon_env, security contexts (core) | — | merged (#996) |
 | M4a | T024, T130, T066, T031, T131, T070, T032 | full | Kubernetes form via Edit (Add entry hidden), shared resources fields, credentials list | — | planned |
 | M4b | T083, T084, T080, T132, T085, T086, T082, T133, T129 | full | Placement fields, Stop/Remove/Forget locally/Logs from the row, Start → Unavailable | — | planned |
 | M5 | T134, T022, T074, T135, T030, T077, T136 | full | (#806) Copy + Connect over SSH through the relay; failures at client level | — | blocked on #806 |
@@ -108,7 +109,22 @@ stash@{0} survivors (all used by M1a–M2, stash dropped 2026-10-18; backed up i
 
 ## Handover
 
-None.
+M4a unit 1 read everything and wrote NO code (hit 150k on reading). Branch restarted from origin/main 8408b815. Design chosen (crate `crates/micold-client`; Windows runs these tests, so pod paths join with "/"):
+
+- `features/daemons.rs`: add `DraftRuntime::Kubernetes`; `Draft.kube: KubeDraft` (`base: KubeSettings` kept so unedited M4b fields survive a save; `context`, `namespace`, `image` text, `providers: BTreeSet<AiCli>`, four resource texts `cpu_request/cpu_limit/memory_request/memory_limit` (cores / MiB like the container form), `allowed: BTreeSet<AllowedKind>` {GitConfig, GitCredentials, GitSshKey, SignIn(AiCli), RegistryPull} + `ssh_key_file`, `pull_file` texts). `begin_edit` accepts `DaemonRuntime::Kubernetes`; `runtime_of` builds `KubeSettings` from `base` + fields (blank image = None; SSH key / registry with a blank file refused naming the field; request above limit refused by `KubeSettings::validate` -> `invalid_field("cpu_request"|"memory_request")` with a sentence). `required_fields`: Name, context, namespace for Kubernetes. `form_error`/`invalid_field` sentences for context, namespace, node_selector, volume_size, allowed.
+- Add form hides Kubernetes: `pub const SHARED_SSH_IMAGE_AVAILABLE: bool = false` (#806 flips it) and `pub fn runtime_choices(draft:&Draft)->Vec<DraftRuntime>` = Container, Host, Ssh, + Kubernetes only when the const is true or the draft already is Kubernetes (Edit). ui `RUNTIMES` slice replaced by this.
+- Context list: `State.contexts: ContextList {NotLoaded, Found(Vec<ContextEntry>), Failed(String)}` (`ContextEntry` is `crate::kube::live::ContextEntry`). `Msg::ContextsListed(Result<Vec<ContextEntry>,String>)`; new `Outcome::KubeContextsRequested` emitted on `RuntimeChosen(Kubernetes)` and on `EditOpened` of a Kubernetes daemon (add arms in app.rs ~1215 `Outcome` match and shell/daemons.rs, which spawns `tokio::task::spawn_blocking`: `candidates(env KUBECONFIG, home, platform)` -> `live::read_kubeconfigs` -> `live::list_contexts`; `KubeFailure::NoKubeconfig{looked_in}` Display gives "no kubeconfig found; looked in <paths>"). `Msg::ContextChosen(String)` (a chosen context with a namespace fills an empty namespace field).
+- Providers default: `Model` has no settings, so add `State.default_providers: Vec<AiCli>` (set by app.rs `update_daemons` from the enabled providers in Settings; find how settings enable providers: `grep -rn "provider" crates/micold-client/src/features/settings.rs`, `micold_core::provider`) and use it in `RuntimeChosen(Kubernetes)`/`begin_add`. Test: defaults equal those.
+- Volume notice (no volume field until M4b): `pub const VOLUME_NOTICE` ("Applies only to a new volume, after Remove") and `Draft::volume_notice() -> Option<&str>` = Some when `editing.is_some()` and Kubernetes; the form shows it as a note with the stored size.
+- Msgs: `ContextChosen`, `NamespaceEdited`, `KubeImageEdited`, `ProviderToggled(AiCli,bool)`, `CpuRequestEdited`, `KubeCpuLimitEdited`, `MemoryRequestEdited`, `KubeMemoryLimitEdited`, `AllowedToggled(AllowedKind,bool)`, `SshKeyFileEdited`, `PullFileEdited`. File "pickers": plain path text fields like `ssh_key_file` (no rfd/dialog in the crate).
+- `features/settings.rs`: make `parse_cores`/`parse_mib` `pub(crate)` for the resource texts (limit 1024 cores / MAX_MIB; MIN_MEMORY).
+- T131: in `ui/settings/container_fields.rs` extract the per-limit drawing (the loop at the end of `sections`, the `limits(view)` zip) into `pub fn limit_field(LimitControl, Option<String>, focused)`; `LimitControl` also built for Kubernetes by `kube_resources(&KubeDraft)` (4 controls; request fields use new `FieldId::DaemonCpuRequest/DaemonMemoryRequest`, limits reuse `DaemonCpuLimit/DaemonMemoryLimit`). One copy; the container form calls the same function (existing `limits()` test is the characterization).
+- New FieldIds in `features/window.rs`: `DaemonKubeContext`, `DaemonKubeNamespace`, `DaemonKubeImage`, `DaemonCpuRequest`, `DaemonMemoryRequest`, `DaemonKubeSshKeyFile`, `DaemonKubePullFile`; run field-focus registry tests (`cargo test -p micold-client --test field_focus_call_sites`) to see which enumerate FieldId.
+- UI (`ui/settings/daemons.rs` `form`): Kubernetes branch: `group("Kubernetes")`, context Select (or caution "no kubeconfig found; looked in ..."), namespace, image (supporting "Empty uses the default SSH image"), AI CLI checkboxes, `group("Resources")` via limit_field, `group("Allowed credentials")` checkbox list (nothing checked by default; SSH key + registry show their file field when ticked), volume note. The row already shows "Kubernetes" + endpoint via core `runtime_label`/`endpoint`.
+- Tests first (tdd): T024/T130/T066 in `tests/features_daemons.rs` (reducer level; fixture in `tests/support/daemons_fixture.rs`), T032 in `tests/daemons_section_geometry.rs` (follow `the_ssh_form_and_ssh_rows_paint...`: add a Kubernetes daemon to `state.settings.daemons`, `EditOpened`, assert painted labels and no overflow).
+- Verify: `cargo test -p micold-client --test features_daemons`; `--test daemons_section_geometry`; then `scripts/gate.sh`. Build env: CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0.
+- `TMPDIR` is unset: use the scratchpad dir for all scratch files (brief: /tmp/claude-0/-home-user-micold-ai-ide/ac6c827f-a6df-5990-8712-1f1dd6465a44/scratchpad/brief.txt).
+- PR files (orchestrator opens): scratchpad `pr-title-686-M4a.txt`, `pr-body-686-M4a.md` (title "#686: Support a Kubernetes session daemon runtime — M4a <short>", body ends "Refs #686").
 
 ## Open escalation
 
