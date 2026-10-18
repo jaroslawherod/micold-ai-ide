@@ -86,8 +86,14 @@ pub fn kubectl(args: &[&str], stdin: Option<&str>) -> Result<String, String> {
 }
 
 fn have(tool: &str) -> bool {
+    // `kubectl` has no `--version` flag: it rejects it and exits non-zero.
+    let args: &[&str] = if tool == "kubectl" {
+        &["version", "--client"]
+    } else {
+        &["--version"]
+    };
     Command::new(tool)
-        .arg("--version")
+        .args(args)
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .status()
@@ -110,9 +116,13 @@ static SUITE: OnceLock<Result<Suite, String>> = OnceLock::new();
 pub fn suite_or_skip(test: &str) -> Option<&'static Suite> {
     for tool in ["docker", "kind", "kubectl", "git", "tar"] {
         if !have(tool) {
-            eprintln!(
-                "SKIP {test}: `{tool}` is not installed (the suite needs docker, kind and kubectl)"
-            );
+            let why =
+                format!("`{tool}` is not installed (the suite needs docker, kind and kubectl)");
+            // `scripts/test-kube.sh` (CI's `kube-cluster`) sets this: there a skip would pass vacuously.
+            if std::env::var_os("MICOLD_KUBE_TEST_REQUIRED").is_some() {
+                panic!("{test}: {why}, and MICOLD_KUBE_TEST_REQUIRED is set");
+            }
+            eprintln!("SKIP {test}: {why}");
             return None;
         }
     }
