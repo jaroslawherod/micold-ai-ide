@@ -30,7 +30,7 @@ entrypoint and the remote scripts.
 
 **Primary Dependencies**: existing only — tokio (relay, cancellation), serde, iced (form, row).
 System tools already required: the OpenSSH client (`ssh`, `ssh-keygen`; 489), Docker/Podman (027).
-Build only: `cargo-zigbuild` + zig for the two `*-unknown-linux-musl` daemon builds in CI/release.
+Build only: `cargo-zigbuild` + zig for the two `*-unknown-linux-musl` daemon builds, run once on a Linux runner (`linux-daemons` job in `ci.yml`/`release.yml`); macOS and Windows jobs download the artifact because zig crashes on the Windows ARM64 runner.
 No new crate.
 
 **Storage**: `settings.json` (daemon entries, new keys `image_choice`, `ai_clis`, `migration`;
