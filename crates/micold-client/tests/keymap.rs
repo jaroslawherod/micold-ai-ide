@@ -627,13 +627,45 @@ const LOCATION_NEXT: NavAction = NavAction {
     dir: Dir::Next,
 };
 
-/// The location chords: their physical key, the logical keys a layout may give for it, and the
-/// action.
-fn location_chords() -> [(PhysicalKey, [char; 2], NavAction); 2] {
+const SESSION_PREVIOUS: NavAction = NavAction {
+    level: NavLevel::Session,
+    dir: Dir::Previous,
+};
+const SESSION_NEXT: NavAction = NavAction {
+    level: NavLevel::Session,
+    dir: Dir::Next,
+};
+
+/// The location and session chords: their physical key, the logical keys a layout may give for it,
+/// and the action.
+fn location_chords() -> [(PhysicalKey, [char; 2], NavAction); 4] {
     [
         (PhysicalKey::Comma, [',', '<'], LOCATION_PREVIOUS),
         (PhysicalKey::Period, ['.', '>'], LOCATION_NEXT),
+        (PhysicalKey::BracketLeft, ['[', '{'], SESSION_PREVIOUS),
+        (PhysicalKey::BracketRight, [']', '}'], SESSION_NEXT),
     ]
+}
+
+#[test]
+fn plain_ctrl_brackets_still_reach_the_terminal() {
+    // FR-008: without Shift the readline bytes (ESC and GS) are typed, not taken by the app.
+    let primary_only = Mods {
+        shift: false,
+        ..chord_mods()
+    };
+    for (c, byte) in [('[', 0x1b), (']', 0x1d)] {
+        let physical = if c == '[' {
+            PhysicalKey::BracketLeft
+        } else {
+            PhysicalKey::BracketRight
+        };
+        let out = encode(
+            &kp(Key::Char(c), physical, primary_only),
+            TermMode::default(),
+        );
+        assert_eq!(bytes(out), vec![byte], "Ctrl+{c} keeps its control byte");
+    }
 }
 
 #[test]
@@ -781,6 +813,14 @@ fn navigation_chord_labels_name_both_platform_forms() {
     assert_eq!(
         nav_chord_labels(LOCATION_NEXT),
         ("Ctrl+Shift+.".to_string(), "Cmd+Shift+.".to_string())
+    );
+    assert_eq!(
+        nav_chord_labels(SESSION_PREVIOUS),
+        ("Ctrl+Shift+[".to_string(), "Cmd+Shift+[".to_string())
+    );
+    assert_eq!(
+        nav_chord_labels(SESSION_NEXT),
+        ("Ctrl+Shift+]".to_string(), "Cmd+Shift+]".to_string())
     );
 }
 

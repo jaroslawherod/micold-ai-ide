@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #803
 - **Worktree branch**: claude/project-thread-ah7xxz
 - **Started**: 2026-10-17
-- **Phase**: milestone M2 (pushed, awaiting PR)
-- **Next step**: orchestrator opens the M2 PR from the scratchpad title/body, waits on CI, merges; then M3 (T024–T029)
+- **Phase**: milestone M3 (pushed, awaiting PR)
+- **Next step**: orchestrator opens the M3 PR from the scratchpad title/body, waits on CI, merges; then M4 (T030–T037)
 
 ## Pull requests
 
@@ -18,15 +18,16 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #949 | design: spec, plan, tasks | merged | c410a749a8c6a417aa91f9011fd2a16fe2e340a8 |
 | #967 | M1 | merged | c5e61c3ea91a464695dcf9fb42b53121fac37490 |
-| — | M2 | orchestrator opens it (title/body in the scratchpad) | — |
+| #984 | M2 | merged | 380ceef79760b7f896b15b683276bdd0924aa959 |
+| — | M3 | orchestrator opens it (title/body in the scratchpad) | — |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T016 | full | Location chords step through locations (both focus states, stop, 0 PTY bytes), docs rows | #967 | merged |
-| M2 | T017–T023 | full | Keyboard lands on the sidebar row with a focus ring (FR-010), showcase variant | pending PR | in review |
-| M3 | T024–T029 | light | Session chords cycle a location's sessions, docs rows | — | pending |
+| M2 | T017–T023 | full | Keyboard lands on the sidebar row with a focus ring (FR-010), showcase variant | #984 | merged |
+| M3 | T024–T029 | light | Session chords cycle a location's sessions, docs rows | pending PR | in review |
 | M4 | T030–T037 | full | Project chords; all six chords in the user guide | — | pending |
 
 US1 split along acceptance scenario 4 (FR-010 sidebar ring) into M1/M2: one milestone would exceed ~800 changed lines. Polish (T038–T039) changes no code: close unit.
@@ -58,6 +59,8 @@ US1 split along acceptance scenario 4 (FR-010 sidebar ring) into M1/M2: one mile
 | Review A M1 (code-review high) | 1 | 6c2da2fa240fc273d8be5a262d19b689ee24be3c:b69d9a7f1c50957529a7b62c4656082b219a8d59 | CLEAN: 1 MINOR (declined) |
 | Review B M1 (conformance, sonnet) | 1 | 6c2da2fa240fc273d8be5a262d19b689ee24be3c:b69d9a7f1c50957529a7b62c4656082b219a8d59 | CLEAN (headless, Read-only on prepared diff files; Verify from the unit's runs) |
 | Review A M2 (code-review high, headless) | 1 | 18d14e8fd29c699459bc7387d9d4c84af422d0fb:025714b3e366e8d011828262937d3442cb12b550 | CLEAN: 3 MINOR (declined) |
+| Review A M3 (code-review high, headless) | 1 | 20cc549b4c94aa5d14ed040724232845d092b355:380ceef79760b7f896b15b683276bdd0924aa959 | CLEAN: 1 MINOR (fixed) |
+| Review B M3 (conformance, sonnet, headless) | 1 | 20cc549b4c94aa5d14ed040724232845d092b355:380ceef79760b7f896b15b683276bdd0924aa959 | CHANGES: MAJOR no cycle-log rows for T024–T029 (fixed, rows added); 1 MINOR (fixed). Rows are evidence text only, no re-review |
 | Review B M2 (conformance, sonnet, headless) | 1 | 18d14e8fd29c699459bc7387d9d4c84af422d0fb:025714b3e366e8d011828262937d3442cb12b550 | CLEAN: 2 MINOR (1 fixed in the ledger, 1 declined) |
 
 ## Declined review findings

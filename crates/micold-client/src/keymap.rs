@@ -87,6 +87,8 @@ pub struct KeyInput {
 pub enum PhysicalKey {
     Comma,
     Period,
+    BracketLeft,
+    BracketRight,
     Other,
 }
 
@@ -110,7 +112,7 @@ pub struct NavAction {
 
 /// The navigation chords, the one place a chord is chosen (contracts/keys.md K1): each is its
 /// physical key with the platform primary modifier plus Shift.
-pub const NAV_CHORDS: [(NavAction, PhysicalKey); 2] = [
+pub const NAV_CHORDS: [(NavAction, PhysicalKey); 4] = [
     (
         NavAction {
             level: NavLevel::Location,
@@ -124,6 +126,20 @@ pub const NAV_CHORDS: [(NavAction, PhysicalKey); 2] = [
             dir: micold_core::navigation::Dir::Next,
         },
         PhysicalKey::Period,
+    ),
+    (
+        NavAction {
+            level: NavLevel::Session,
+            dir: micold_core::navigation::Dir::Previous,
+        },
+        PhysicalKey::BracketLeft,
+    ),
+    (
+        NavAction {
+            level: NavLevel::Session,
+            dir: micold_core::navigation::Dir::Next,
+        },
+        PhysicalKey::BracketRight,
     ),
 ];
 
@@ -141,6 +157,8 @@ fn physical_label(physical: PhysicalKey) -> &'static str {
     match physical {
         PhysicalKey::Comma => ",",
         PhysicalKey::Period => ".",
+        PhysicalKey::BracketLeft => "[",
+        PhysicalKey::BracketRight => "]",
         PhysicalKey::Other => "",
     }
 }
@@ -151,6 +169,8 @@ fn logical_physical(key: &Key) -> PhysicalKey {
     match key {
         Key::Char(',' | '<') => PhysicalKey::Comma,
         Key::Char('.' | '>') => PhysicalKey::Period,
+        Key::Char('[' | '{') => PhysicalKey::BracketLeft,
+        Key::Char(']' | '}') => PhysicalKey::BracketRight,
         _ => PhysicalKey::Other,
     }
 }

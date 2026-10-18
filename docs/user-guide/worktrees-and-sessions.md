@@ -1654,6 +1654,9 @@ Keystrokes stream straight to the CLI as you press them, exactly like a standalo
   session's terminal when a terminal had focus, otherwise on the sidebar row, which shows the focus
   ring (also on an empty location). The next press then steps on from that row; click the terminal
   to type in it again.
+  **Ctrl+Shift+[** and **Ctrl+Shift+]** (Cmd+Shift+[ and Cmd+Shift+] on macOS) do the same for the
+  sessions of the current location: the main session, then its helpers, wrapping at both ends. A
+  collapsed row opens to show the session. Plain Ctrl+[ and Ctrl+] still reach the terminal.
 
 ### Links
 
