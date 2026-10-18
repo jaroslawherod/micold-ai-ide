@@ -459,6 +459,15 @@ pub enum ClientMsg {
         /// New display name.
         display_name: String,
     },
+    /// Make sure `dest` holds a clone of `url` (feature 686, FR-007): clone it when absent, fetch
+    /// when present. `dest` must lie under the daemon's `MICOLD_REPOS_ROOT`. Answered by
+    /// [`DaemonMsg::RepoCloned`] or [`DaemonMsg::RepoCloneFailed`].
+    RepoClone {
+        /// The remote's URL.
+        url: String,
+        /// The absolute POSIX path of the clone on the daemon's host.
+        dest: String,
+    },
     /// Create a worktree under a project.
     WorktreeCreate {
         /// Correlation id.
@@ -841,9 +850,37 @@ pub enum ShellOpenFailure {
     Other(String),
 }
 
+/// Why a [`ClientMsg::RepoClone`] failed, as the daemon classified git's stderr (feature 686). The
+/// client words it (`kube::clone::CloneFailure`), since only it knows the remote's name and the
+/// daemon's.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CloneFailureWire {
+    /// The remote needs a credential the daemon does not have.
+    AuthRequired,
+    /// The volume is full.
+    DiskFull,
+    /// The remote could not be reached.
+    Unreachable,
+    /// Anything else, with git's own words (or the daemon's refusal).
+    Other(String),
+}
+
 /// A message from the daemon to a client.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum DaemonMsg {
+    // --- Repository clones (feature 686) ---
+    /// The clone at `dest` is in place and current.
+    RepoCloned {
+        /// The path the request named.
+        dest: String,
+    },
+    /// The clone at `dest` could not be made; nothing is left at `dest`.
+    RepoCloneFailed {
+        /// The path the request named.
+        dest: String,
+        /// Why.
+        failure: CloneFailureWire,
+    },
     // --- Connection ---
     /// Handshake accepted.
     Welcome {

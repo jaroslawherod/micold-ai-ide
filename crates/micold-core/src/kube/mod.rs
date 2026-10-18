@@ -3,6 +3,7 @@
 
 pub mod access;
 pub mod classify;
+pub mod clone;
 pub mod credentials;
 #[cfg(any(test, feature = "kube-fake"))]
 pub mod fake;

@@ -283,6 +283,7 @@ pub mod connection;
 pub mod daemons;
 pub mod daemons_kube;
 pub mod help;
+pub mod kube_clone;
 pub mod navigation;
 pub mod notifications;
 pub mod overview;

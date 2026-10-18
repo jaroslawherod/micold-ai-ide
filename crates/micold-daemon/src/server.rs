@@ -1743,6 +1743,33 @@ where
                     ),
                 }
             }
+            // Feature 686 (FR-007): the pod's clone of the project's remote. Spawned, like
+            // `WorktreeCreate`, so a long clone never silences this loop's `Ping` answers.
+            ClientMsg::RepoClone { url, dest } => {
+                let task_state = Arc::clone(state);
+                tokio::spawn(async move {
+                    let root = crate::repo_clone::root_from_env();
+                    let asked = dest.clone();
+                    let done = tokio::task::spawn_blocking(move || {
+                        crate::repo_clone::ensure_clone(root.as_deref(), &url, &dest)
+                    })
+                    .await;
+                    let reply = match done {
+                        Ok(Ok(())) => DaemonMsg::RepoCloned { dest: asked },
+                        Ok(Err(failure)) => DaemonMsg::RepoCloneFailed {
+                            dest: asked,
+                            failure,
+                        },
+                        Err(e) => DaemonMsg::RepoCloneFailed {
+                            dest: asked,
+                            failure: micold_core::protocol::messages::CloneFailureWire::Other(
+                                format!("the clone task failed: {e}"),
+                            ),
+                        },
+                    };
+                    task_state.send(id, reply);
+                });
+            }
             ClientMsg::RemoteList { req, project } => {
                 // Read-only and local: `git config`, never a network call (034 FR-002).
                 let Some((repo, true)) = state.project_repo(&project) else {

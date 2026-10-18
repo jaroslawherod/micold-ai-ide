@@ -489,6 +489,20 @@ pub fn on_disconnected(app: &mut App, daemon: DaemonId) -> Task<Message> {
 /// requests are still on a live connection (feature 491, FR-007) — then ask, once, whether the
 /// sandbox this daemon is the legacy default of is still alive.
 fn resolve_pending_of(app: &mut App, daemon: DaemonId) -> Task<Message> {
+    // A create waiting on its clone has no request to resolve: it ends here (feature 686).
+    let cloning: Vec<_> = app
+        .pending_clones
+        .keys()
+        .filter(|(d, _)| *d == daemon)
+        .cloned()
+        .collect();
+    for key in cloning {
+        if let Some(pending) = app.pending_clones.remove(&key) {
+            app.core.update(Message::WorktreeForm(FormMsg::CreateFailed(
+                pending.on_disconnect(),
+            )));
+        }
+    }
     let reqs: Vec<u64> = app
         .pending_daemon
         .iter()
@@ -1570,6 +1584,10 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
             }
             _ => {}
         },
+        // A Kubernetes daemon answered its clone request (feature 686).
+        reply @ (DaemonMsg::RepoCloned { .. } | DaemonMsg::RepoCloneFailed { .. }) => {
+            on_repo_clone_reply(app, daemon, &reply);
+        }
         // FR-024: a stage push names the step in flight. Peeked, not removed — the
         // operation is still running and its terminal reply still needs the pending op.
         DaemonMsg::OperationProgress { req, stage, detail } => {
@@ -3368,6 +3386,10 @@ pub fn send_worktree_create(
     names: micold_core::naming::DerivedNames,
     mode: CreateMode,
 ) {
+    if let Some(id) = kubernetes_choice(app) {
+        start_kubernetes_create(app, id, &project, names, mode);
+        return;
+    }
     app.core
         .update(Message::WorktreeForm(FormMsg::CreateStarted(mode.clone())));
     let (branch, dir_name) = (names.branch, names.dir_name);
@@ -3396,6 +3418,134 @@ pub fn send_worktree_create(
             session,
         },
     );
+}
+
+/// A worktree create that waits for its clone in a Kubernetes daemon's pod (feature 686).
+pub type PendingClone = micold_client::features::kube_clone::Pending;
+
+/// The form's chosen daemon, when it is a Kubernetes one.
+fn kubernetes_choice(app: &App) -> Option<DaemonId> {
+    let id = app.core.worktree_form.form.as_ref()?.daemon?;
+    let entry = app.core.settings.daemons.get(id)?;
+    matches!(
+        entry.runtime,
+        micold_core::daemons::DaemonRuntime::Kubernetes(_)
+    )
+    .then_some(id)
+}
+
+/// Create a worktree on Kubernetes daemon `id` (feature 686, FR-007): the pod holds no copy of the
+/// project, so ask it to clone the project's remote first; the worktree follows when the clone is
+/// in place ([`on_repo_clone_reply`]). A project with no usable remote is refused, nothing sent.
+fn start_kubernetes_create(
+    app: &mut App,
+    id: DaemonId,
+    project: &Path,
+    names: micold_core::naming::DerivedNames,
+    mode: CreateMode,
+) {
+    app.core
+        .update(Message::WorktreeForm(FormMsg::CreateStarted(mode.clone())));
+    let fail = |app: &mut App, text: String| {
+        app.core
+            .update(Message::WorktreeForm(FormMsg::CreateFailed(text)));
+    };
+    let remotes = app
+        .caps
+        .git()
+        .and_then(|git| git.remote_list(project).ok())
+        .map(|raw| micold_core::git::parse_remote_list(&raw))
+        .unwrap_or_default();
+    let project_name = project.file_name().map_or_else(
+        || "this project".to_string(),
+        |n| n.to_string_lossy().into_owned(),
+    );
+    let daemon_name = app
+        .core
+        .settings
+        .daemons
+        .get(id)
+        .map_or_else(String::new, |e| e.name.as_str().to_string());
+    let Some(outbox) = app.outbox_for(id) else {
+        return fail(
+            app,
+            format!("{daemon_name} is not connected. Start it in Settings, under Daemons."),
+        );
+    };
+    let session = app
+        .core
+        .worktree_form
+        .form
+        .as_ref()
+        .and_then(|f| f.session_definition());
+    let pending = match PendingClone::begin(
+        &project_name,
+        id,
+        &daemon_name,
+        &remotes,
+        |dest| app.pending_clones.contains_key(&(id, dest.to_string())),
+        names,
+        mode,
+        session,
+    ) {
+        Ok(pending) => pending,
+        Err(why) => return fail(app, why),
+    };
+    app.core.update(Message::WorktreeForm(FormMsg::CloneStarted(
+        pending.plan.activity.clone(),
+    )));
+    outbox.send(pending.plan.request());
+    app.pending_clones
+        .insert((id, pending.plan.dest.clone()), pending);
+}
+
+/// The daemon answered a clone request: create the worktree in the clone, or end the create.
+fn on_repo_clone_reply(app: &mut App, daemon: DaemonId, reply: &DaemonMsg) {
+    use micold_client::features::kube_clone::Output;
+    let (DaemonMsg::RepoCloned { dest } | DaemonMsg::RepoCloneFailed { dest, .. }) = reply else {
+        return;
+    };
+    let Some(pending) = app.pending_clones.remove(&(daemon, dest.clone())) else {
+        return;
+    };
+    let connected = app.outbox_for(daemon).is_some();
+    let binding = micold_core::daemons::Binding::Bound(daemon);
+    for output in pending.on_reply(connected, reply).unwrap_or_default() {
+        match output {
+            Output::ProjectAdd { path } => {
+                send_op_bound(app, binding, PendingOp::ProjectAdd, move |req| {
+                    ClientMsg::ProjectAdd { req, path }
+                });
+            }
+            Output::WorktreeCreate {
+                project,
+                branch,
+                dir_name,
+                mode,
+                session,
+            } => send_op_bound(
+                app,
+                binding,
+                PendingOp::WorktreeCreate {
+                    dir_name: dir_name.clone(),
+                    project: project.clone(),
+                    daemon: Some(daemon),
+                },
+                move |req| ClientMsg::WorktreeCreate {
+                    req,
+                    project,
+                    branch,
+                    dir_name,
+                    mode,
+                    session,
+                },
+            ),
+            Output::Failed(text) => {
+                app.core
+                    .update(Message::WorktreeForm(FormMsg::CreateFailed(text)));
+            }
+        }
+    }
 }
 
 /// The worktree-creation failure text shown in the form (feature 010, FR-006/SC-003): appends

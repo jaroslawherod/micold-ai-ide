@@ -403,6 +403,16 @@ would make an agent take action you never asked for. Instead each such session i
 This is the safety guarantee behind the whole restart story: **a service restart can never cause an
 agent to do anything without you asking.**
 
+## Cloning a repository: `RepoClone` (feature 686)
+
+`ClientMsg::RepoClone { url, dest }` (protocol 51) asks the daemon to make sure `dest` holds a clone
+of `url`: it clones into `.partial-<name>-<rand>` beside `dest` and renames on success, so a failure
+leaves nothing behind, and it fetches when `dest` already exists. The answer is
+`DaemonMsg::RepoCloned { dest }` or `DaemonMsg::RepoCloneFailed { dest, failure }` with the failure
+classified as authentication, a full disk, an unreachable remote or other. Git never prompts
+(`GIT_TERMINAL_PROMPT=0`). `dest` must lie under `MICOLD_REPOS_ROOT` (`/data/repos` in a Kubernetes
+pod; a daemon without it refuses every clone). Two requests for one `dest` run one after the other.
+
 ## Finding the logs and recent errors
 
 When something misbehaves, the overflow menu's **"Session service diagnostics"** asks the service two

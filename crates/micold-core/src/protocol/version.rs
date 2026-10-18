@@ -175,7 +175,10 @@
 ///
 /// And 49 → 50 for feature 813's worktree overview (contracts/wire.md W1): `hook_activity` on
 /// `SessionSummary`, serde-defaulted, so an older frame decodes to `None`.
-pub const PROTOCOL_VERSION: u32 = 50;
+///
+/// And 50 → 51 for feature 686's pod clones (contracts/kube-runtime.md §6): `ClientMsg::RepoClone`,
+/// `DaemonMsg::RepoCloned` and `DaemonMsg::RepoCloneFailed`. An older daemon cannot decode them.
+pub const PROTOCOL_VERSION: u32 = 51;
 
 // `build.rs` emits `pub const SCHEMA_HASH: [u8; 32] = [...];` into this file.
 include!(concat!(env!("OUT_DIR"), "/schema_hash.rs"));

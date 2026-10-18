@@ -286,7 +286,9 @@ fn the_build_fingerprint_is_a_separate_mechanism_from_the_schema_hash() {
 /// `CommentState::Reported` and `ReviewEditOp::{Mark, Reanchor}`.
 ///
 /// And 49 → 50 for feature 813's `hook_activity` on `SessionSummary` (contracts/wire.md W1).
-const FEATURE_026_PROTOCOL_VERSION: u32 = 50;
+///
+/// And 50 → 51 for feature 686's `RepoClone`, `RepoCloned` and `RepoCloneFailed` (M7).
+const FEATURE_026_PROTOCOL_VERSION: u32 = 51;
 
 #[test]
 fn the_wire_changes_for_this_feature_cost_exactly_one_version_bump() {

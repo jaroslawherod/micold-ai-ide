@@ -94,7 +94,7 @@ Re-checked after Phase 1: unchanged. Deviations: Complexity Tracking.
 | FR-004 | `KubeSettings.{image, providers}`; default image = #806's pinned reference; `Copy` and `Install` phases call #806's mechanism (**blocked on #806**) |
 | FR-005 | `KubeSettings.{resources, node_selector, tolerations, volume_size, storage_class}`; `resources` = shared `daemon_resources::DaemonResources` → `kube/manifest.rs` `resources.requests` / `.limits`; `PodStamp` annotation and `drift` → `StartOutcome::Drift` → the row's Recreate / Keep choice |
 | FR-006 | `Cluster::port_forward` behind `micold-client/src/kube/relay.rs` (loopback listener, one stream per connection); manifest test: no Service/Ingress/hostPort/containerPort; `kube_real_endtoend` lists Services/Ingresses = 0 |
-| FR-007 | `kube/clone.rs`; `ClientMsg::RepoClone` (protocol 49); `micold-daemon/src/repo_clone.rs`; remote-project identity via `ssh/remote_path.rs`; create-worktree flow in `features/` + `shell/workspace.rs` (K8; **blocked on #806**) |
+| FR-007 | `kube/clone.rs`; `ClientMsg::RepoClone` (protocol 51); `micold-daemon/src/repo_clone.rs`; remote-project identity via `ssh/remote_path.rs`; create-worktree flow in `features/` + `shell/workspace.rs` (K8; **blocked on #806**) |
 | FR-008, FR-009 | `kube/credentials.rs` (`KubeCredential` → secret + mount, `daemon_env`); `kube/access.rs` (`AccessSecret`, `KeyGen` port); `micold-client/src/kube/keys.rs` (owner-only key files, known_hosts with `HostKeyAlias`); `kube/manifest.rs` pod security context; `Secrets` phase deletes withdrawn ones (K3, K7) |
 | FR-010, FR-011 | 489 actor (`micold-client/src/daemon.rs`) gains `Dial::Kube` (relay, then 489's bridge); pod lookup before re-dial → `PodGone` → `DaemonEvent::Gone` → `Stopped` + `stopped_reason` (K10; **blocked on #806**) |
 | FR-012, FR-013 | `kube/start.rs` (`StartPhase`, bounds, `Attempt` rollback incl. an added key); `kube/classify.rs` (`KubeFailure`); install output to `DaemonDiagnostics::push_log`, Cancel via the actor (K6) |
@@ -136,7 +136,7 @@ crates/micold-core/src/
 │   └── fake.rs               # FakeCluster, FakeKeyGen (cfg(test) + feature for client tests)
 ├── daemon_resources.rs       # NEW, shared with #806 (moved from revision 1's daemon_image/)
 ├── daemons.rs                # DaemonRuntime::Kubernetes, DaemonEvent::{Gone, Drift}, DaemonView.stopped_reason
-└── protocol/{messages,version}.rs   # RepoClone; PROTOCOL_VERSION 49   (blocked on #806)
+└── protocol/{messages,version}.rs   # RepoClone; PROTOCOL_VERSION 51   (blocked on #806)
 crates/micold-daemon/src/
 ├── repo_clone.rs             # NEW: atomic clone/fetch under MICOLD_REPOS_ROOT  (blocked on #806)
 └── ops.rs                    # dispatch RepoClone
@@ -190,5 +190,5 @@ render-free client reducers in `features/`, `ui/` as glue. The daemon crate gain
 | Two new crates (`kube`, `k8s-openapi`) and their transitive hyper/tower/tungstenite stack in the client | exec plugins, kubeconfig merging and an in-process port-forward stream (FR-002, FR-006, FR-022) | `kubectl` is not a stated requirement and opens a loopback listener; a hand-written client re-implements auth plugins and the port-forward protocol (K0) |
 | A client loopback relay in front of the port-forward | 489's provisioning drives the user's `ssh`, which needs a TCP endpoint (K2) | `ProxyCommand` re-running the app re-reads kubeconfig and exec plugins; a second, in-process SSH stack |
 | `KeyGen` port with only a fake until #806 | builds and tests the access secret before #806 lands (K1, K3) | waiting for #806 for all secret logic, or a second copy of key generation (FR-024) |
-| `PROTOCOL_VERSION` 49 (`RepoClone`) | the pod must clone; no existing op does (K8) | a git bundle through the tunnel carries unpushed commits the spec drops and needs a bulk-transfer path |
+| `PROTOCOL_VERSION` 51 (`RepoClone`) | the pod must clone; no existing op does (K8) | a git bundle through the tunnel carries unpushed commits the spec drops and needs a bulk-transfer path |
 | Real-cluster suite Linux-only | kind needs Linux containers; macOS/Windows runners have none (K13) | parity is proven by platform-parameterised core tests on all three |
