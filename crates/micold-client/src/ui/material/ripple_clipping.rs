@@ -190,3 +190,104 @@ fn the_ripple_does_paint_inside_the_pill() {
          check that nothing escapes the shape would pass trivially"
     );
 }
+
+/// T005 (feature 971, FR-003, SC-003): the Overview card's shape, RADIUS 12, is clipped the same way.
+#[test]
+fn a_card_ripple_does_not_paint_outside_the_card() {
+    const W: u32 = 320;
+    const H: u32 = 172;
+    const R: f32 = 12.0;
+    use iced::advanced::widget::Tree;
+    use iced::advanced::{layout, mouse, renderer::Style, Layout, Renderer as _};
+
+    let roles = tokens::roles(micold_core::theme::ColorScheme::Dark);
+    let mut renderer = renderer();
+    let mut element: Element<'_, Message> = Ripple::new(
+        Surface::new(
+            iced::widget::Space::new(),
+            SurfaceKind::Chip(roles.primary),
+            roles,
+        )
+        .width(iced::Length::Fill)
+        .height(iced::Length::Fill),
+        roles.on_surface,
+        R,
+    )
+    .into();
+    let mut tree = Tree::new(&element);
+    let limits = layout::Limits::new(Size::ZERO, Size::new(W as f32, H as f32));
+    let node = element
+        .as_widget_mut()
+        .layout(&mut tree, &renderer, &limits);
+    {
+        let state = tree.state.downcast_mut::<crate::ui::cdk::ripple::Ripple>();
+        state.press(
+            Some(Point::new(W as f32 / 2.0, H as f32 / 2.0)),
+            node.bounds().size(),
+        );
+        for _ in 0..40 {
+            state.advance(
+                std::time::Duration::from_millis(200),
+                std::time::Duration::from_millis(200),
+            );
+            if state.expansion() >= 1.0 {
+                break;
+            }
+        }
+        assert!(state.radius() > R && state.strength() > 0.5);
+    }
+    let viewport = iced::Rectangle::with_size(Size::new(W as f32, H as f32));
+    renderer.reset(viewport);
+    element.as_widget().draw(
+        &tree,
+        &mut renderer,
+        &iced::Theme::Dark,
+        &Style::default(),
+        Layout::new(&node),
+        mouse::Cursor::Unavailable,
+        &viewport,
+    );
+    let pixels = renderer.screenshot(Size::new(W, H), 1.0, BACKDROP);
+    // The four corner squares outside the arc, with 2 px of clearance for antialiasing.
+    let outside = |x: u32, y: u32| {
+        let (px, py) = (x as f32 + 0.5, y as f32 + 0.5);
+        let cx = if px < R {
+            R
+        } else if px > W as f32 - R {
+            W as f32 - R
+        } else {
+            return false;
+        };
+        let cy = if py < R {
+            R
+        } else if py > H as f32 - R {
+            H as f32 - R
+        } else {
+            return false;
+        };
+        (px - cx).hypot(py - cy) > R + 2.0
+    };
+    let mut offenders = Vec::new();
+    let mut inside_lit = 0;
+    for y in 0..H {
+        for x in 0..W {
+            let i = ((y * W + x) * 4) as usize;
+            let lit = pixels[i] > 4 || pixels[i + 1] > 4 || pixels[i + 2] > 4;
+            if outside(x, y) && lit {
+                offenders.push((x, y));
+            }
+            if x > 20 && x < W - 20 && y > 20 && y < H - 20 && lit {
+                inside_lit += 1;
+            }
+        }
+    }
+    assert!(
+        offenders.is_empty(),
+        "painted outside the card: {:?}",
+        &offenders[..offenders.len().min(6)]
+    );
+    assert!(
+        inside_lit > 1000,
+        "the ripple barely drew ({inside_lit} px)"
+    );
+}
