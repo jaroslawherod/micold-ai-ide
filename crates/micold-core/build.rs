@@ -49,6 +49,27 @@ fn main() {
     fs::write(Path::new(&out_dir).join("schema_hash.rs"), literal).expect("write schema_hash.rs");
 
     emit_build_fingerprint(&Path::new(&manifest_dir).join("src"), Path::new(&out_dir));
+    emit_fixture_package_version();
+}
+
+/// Feature 489, research R10: a daemon built for the version-mismatch tests carries
+/// `<package version><suffix>` as its package version, so a real second `micold-daemon` can stand in
+/// for a daemon of another version.
+///
+/// Read **only** under the `ssh-real-runtime` feature: a release build never has it on, so the
+/// variable cannot reach `PACKAGE_VERSION`, whatever the environment says. A unit test in
+/// `protocol/version.rs` pins that a default build carries `CARGO_PKG_VERSION` untouched.
+fn emit_fixture_package_version() {
+    println!("cargo:rerun-if-env-changed=MICOLD_FIXTURE_VERSION_SUFFIX");
+    if env::var_os("CARGO_FEATURE_SSH_REAL_RUNTIME").is_none() {
+        return;
+    }
+    let suffix = env::var("MICOLD_FIXTURE_VERSION_SUFFIX").unwrap_or_default();
+    if suffix.is_empty() {
+        return;
+    }
+    let package = env::var("CARGO_PKG_VERSION").expect("CARGO_PKG_VERSION");
+    println!("cargo:rustc-env=MICOLD_FIXTURE_PACKAGE_VERSION={package}{suffix}");
 }
 
 /// Emit `BUILD_FINGERPRINT`: a hash over **this crate's whole source tree**.

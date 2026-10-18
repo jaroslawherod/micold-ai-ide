@@ -198,4 +198,47 @@ include!(concat!(env!("OUT_DIR"), "/build_fingerprint.rs"));
 /// is exactly the granularity FR-022a needs: detecting that the on-disk `.deb` shipped a newer
 /// daemon than the one still running, independent of whether the wire contract moved (FR-022a,
 /// BUG-002).
-pub const PACKAGE_VERSION: &str = env!("CARGO_PKG_VERSION");
+///
+/// Under the `ssh-real-runtime` feature only, `build.rs` may append `MICOLD_FIXTURE_VERSION_SUFFIX`
+/// to it, so the version-mismatch tests can build a daemon of another version (feature 489,
+/// research R10). In every other build the fixture variable is absent and this is the cargo version.
+pub const PACKAGE_VERSION: &str = match FIXTURE_PACKAGE_VERSION {
+    Some(fixture) => fixture,
+    None => env!("CARGO_PKG_VERSION"),
+};
+
+/// The fixture package version, read only where the feature is on: without it the constant is
+/// `None` whatever a stray `MICOLD_FIXTURE_PACKAGE_VERSION` in the build environment says.
+#[cfg(feature = "ssh-real-runtime")]
+const FIXTURE_PACKAGE_VERSION: Option<&str> = option_env!("MICOLD_FIXTURE_PACKAGE_VERSION");
+#[cfg(not(feature = "ssh-real-runtime"))]
+const FIXTURE_PACKAGE_VERSION: Option<&str> = None;
+
+#[cfg(test)]
+mod fixture_guard_tests {
+    use super::*;
+
+    /// Feature 489, T068, research R10: the stale-daemon suffix never reaches a default build, so a
+    /// release cannot report a made-up package version. Run with `MICOLD_FIXTURE_VERSION_SUFFIX=-x`
+    /// in the environment to see it ignored.
+    #[cfg(not(feature = "ssh-real-runtime"))]
+    #[test]
+    fn a_default_build_carries_the_cargo_package_version_whatever_the_fixture_variable() {
+        assert_eq!(PACKAGE_VERSION, env!("CARGO_PKG_VERSION"));
+    }
+
+    /// With the feature on and the suffix set, the version is the cargo version plus the suffix.
+    #[cfg(feature = "ssh-real-runtime")]
+    #[test]
+    fn a_fixture_build_appends_the_suffix_to_the_cargo_package_version() {
+        match option_env!("MICOLD_FIXTURE_VERSION_SUFFIX") {
+            Some(suffix) if !suffix.is_empty() => {
+                assert_eq!(
+                    PACKAGE_VERSION,
+                    format!("{}{suffix}", env!("CARGO_PKG_VERSION"))
+                );
+            }
+            _ => assert_eq!(PACKAGE_VERSION, env!("CARGO_PKG_VERSION")),
+        }
+    }
+}
