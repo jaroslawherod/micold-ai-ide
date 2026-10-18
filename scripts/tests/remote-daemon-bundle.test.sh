@@ -17,7 +17,7 @@ fail() {
 
 # expect_has <name> <haystack> <needle>
 expect_has() {
-  if printf '%s' "$2" | grep -qF -- "$3"; then ok "$1"; else fail "$1" "want \`$3\` in: ${2:0:200}"; fi
+  if grep -qF -- "$3" <<<"$2"; then ok "$1"; else fail "$1" "want \`$3\` in: ${2:0:200}"; fi
 }
 
 X86=micold-daemon-linux-x86_64
