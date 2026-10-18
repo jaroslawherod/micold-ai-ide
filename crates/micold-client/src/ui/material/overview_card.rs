@@ -563,7 +563,12 @@ mod tests {
 
     use crate::ui::cdk::ripple::Ripple as RippleState;
     use iced::{mouse, Point};
+    use micold_core::tokens::motion::duration;
     use std::time::Duration;
+
+    /// The ripple's own timings: one advance is one frame at them.
+    const EXPAND: Duration = Duration::from_millis(duration::MEDIUM_2);
+    const FADE: Duration = Duration::from_millis(duration::SHORT_4);
 
     fn activatable(model: &CardModel) -> Mounted<'static> {
         Mounted::new(
@@ -579,7 +584,7 @@ mod tests {
     fn settle(m: &mut Mounted<'_>) {
         let state = m.tree.state.downcast_mut::<RippleState>();
         for _ in 0..120 {
-            state.advance(Duration::from_millis(300), Duration::from_millis(200));
+            state.advance(EXPAND, FADE);
         }
     }
 
@@ -621,7 +626,7 @@ mod tests {
             m.tree
                 .state
                 .downcast_mut::<RippleState>()
-                .advance(Duration::from_millis(150), Duration::from_millis(200));
+                .advance(EXPAND, FADE);
             let (pixels, width) = m.drawn(iced::Color::BLACK);
             let i = ((at.y as u32 * width + at.x as u32) * 4) as usize;
             let got = [pixels[i], pixels[i + 1], pixels[i + 2]];
@@ -701,7 +706,7 @@ mod tests {
         a.tree
             .state
             .downcast_mut::<RippleState>()
-            .advance(Duration::from_millis(150), Duration::from_millis(200));
+            .advance(EXPAND, FADE);
         assert!(ripple(&b).is_idle(), "pressing A rippled B");
         let mid = ripple(&a).expansion();
         a.press(Point::new(100.0, 100.0));
