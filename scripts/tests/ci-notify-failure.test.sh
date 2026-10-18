@@ -62,15 +62,19 @@ if grep -q '^gh issue create ' "$work/log" && grep -q '@bob' "$work/log" \
 else fail "push with no merged PR" "$(cat "$work/log")"; fi
 
 reset
+echo carol >"$work/author"
 run schedule
-if grep -q '^gh issue create ' "$work/log" && ! grep -q 'pr comment' "$work/log"; then
-  pass "schedule, no open tracking issue: creates one"
+if grep -q '^gh issue create ' "$work/log" && grep -q '@carol' "$work/log" \
+  && ! grep -q 'pr comment' "$work/log"; then
+  pass "schedule, no open tracking issue: creates one mentioning the commit author"
 else fail "schedule, no open tracking issue" "$(cat "$work/log")"; fi
 
 reset
 echo 99 >"$work/issue"
+echo carol >"$work/author"
 run schedule
-if grep -q '^gh issue comment 99 ' "$work/log" && ! grep -q 'issue create' "$work/log"; then
+if grep -q '^gh issue comment 99 ' "$work/log" && grep -q '@carol' "$work/log" \
+  && ! grep -q 'issue create' "$work/log"; then
   pass "schedule, open tracking issue: comments on it instead of opening another"
 else fail "schedule, open tracking issue" "$(cat "$work/log")"; fi
 
