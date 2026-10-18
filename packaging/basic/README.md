@@ -21,7 +21,8 @@ or the daemon and any `npm install` in the `Containerfile`; the real-runtime tes
 
 `entrypoint.sh` adds a passwd entry for the run-time uid (home `$MICOLD_HOME`), starts the last
 provisioned daemon build (`$HOME/.micold/remote/last`) in the background when there is one, and runs
-sshd in the foreground.
+sshd as its main process. When the runtime stops the container it first stops every daemon (so they
+save their terminal history), then sshd.
 
 ## A user's own image
 

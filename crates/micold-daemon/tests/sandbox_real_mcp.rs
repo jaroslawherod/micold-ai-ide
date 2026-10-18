@@ -57,7 +57,9 @@ const NETWORK: &str = "micold-mcp-probe-net";
 /// Not 7727: a developer's own sandbox must neither be disturbed nor accidentally probed.
 const PORT: u16 = 17752;
 /// The control port inside the container, the only one `argv::create` publishes.
-const CONTROL_PORT: &str = "7727";
+/// The port the container's sshd listens on: the one `<runtime> port` names, whatever host port it is
+/// published on.
+const CONTROL_PORT: u16 = micold_core::sandbox::argv::CONTAINER_SSH_PORT;
 /// The service's data directory inside the container: the image sets `XDG_DATA_HOME=/var/lib`.
 const CONTAINER_DATA_DIR: &str = "/var/lib/micold-ai-ide";
 

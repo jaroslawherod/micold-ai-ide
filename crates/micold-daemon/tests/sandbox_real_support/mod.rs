@@ -741,6 +741,39 @@ pub async fn provision_and_connect(port: u16) -> (DaemonConnection, Welcome) {
     }
 }
 
+/// Whether a daemon process (not a bridge, whose command line ends in `remote bridge`) is running
+/// in `container`.
+pub fn daemon_running(container: &str) -> bool {
+    runtime_cmd(dialect().program)
+        .args([
+            "exec",
+            container,
+            "pgrep",
+            "-f",
+            "/remote/.*/micold-daemon$",
+        ])
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
+/// Provision the container's daemon (which records it for the entrypoint), disconnect, and restart
+/// the container so the entrypoint starts the daemon with the container's own environment.
+pub async fn provision_then_restart(container: &str, port: u16) {
+    {
+        let (_conn, _catalog) = wait_for_accept(port).await;
+    }
+    cli(&["restart", "-t", "1", container]);
+    let deadline = Instant::now() + Duration::from_secs(30);
+    while !daemon_running(container) {
+        assert!(
+            Instant::now() < deadline,
+            "the entrypoint did not start the provisioned daemon after the restart"
+        );
+        tokio::time::sleep(Duration::from_millis(250)).await;
+    }
+}
+
 /// Start `session`, view it, and wait for the shell to draw its prompt.
 ///
 /// Waiting is not politeness: input sent while the start is still in flight is *held* by the daemon

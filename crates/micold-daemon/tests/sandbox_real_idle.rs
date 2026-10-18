@@ -31,7 +31,8 @@ mod sandbox_real_support;
 use std::time::{Duration, Instant};
 
 use sandbox_real_support::{
-    cli, cli_out, dialect, runtime_cmd, seed, start_sandbox, wait_for_accept, SandboxSpec,
+    cli_out, daemon_running, provision_then_restart, seed, start_sandbox, wait_for_accept,
+    SandboxSpec,
 };
 
 const IDLE_CONTAINER: &str = "micold-idle-probe";
@@ -62,39 +63,6 @@ fn status_of(container: &str) -> (String, String) {
         parts.next().unwrap_or_default().to_string(),
         parts.next().unwrap_or_default().to_string(),
     )
-}
-
-/// Whether a daemon process (not a bridge, whose command line ends in `remote bridge`) is running
-/// in `container`.
-fn daemon_running(container: &str) -> bool {
-    runtime_cmd(dialect().program)
-        .args([
-            "exec",
-            container,
-            "pgrep",
-            "-f",
-            "/remote/.*/micold-daemon$",
-        ])
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
-}
-
-/// Provision the container's daemon (which records it for the entrypoint), disconnect, and restart
-/// the container so the entrypoint starts the daemon with the container's own environment.
-async fn provision_then_restart(container: &str, port: u16) {
-    {
-        let (_conn, _catalog) = wait_for_accept(port).await;
-    }
-    cli(&["restart", "-t", "1", container]);
-    let deadline = Instant::now() + Duration::from_secs(30);
-    while !daemon_running(container) {
-        assert!(
-            Instant::now() < deadline,
-            "the entrypoint did not start the provisioned daemon after the restart"
-        );
-        tokio::time::sleep(Duration::from_millis(250)).await;
-    }
 }
 
 /// T047, FR-019/FR-020, lifecycle contract §5.17.

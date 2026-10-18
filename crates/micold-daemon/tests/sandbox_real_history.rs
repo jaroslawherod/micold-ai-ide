@@ -28,8 +28,8 @@ use micold_core::store::ProjectStore;
 use micold_core::terminal_history::{HistoryStore, LoadOutcome};
 use micold_core::workspace::Workspace;
 use sandbox_real_support::{
-    cli, dialect, purge, start_sandbox, use_standin_script, wait_for_accept, Sandbox, SandboxSpec,
-    Screen,
+    cli, dialect, provision_then_restart, purge, start_sandbox, use_standin_script,
+    wait_for_accept, Sandbox, SandboxSpec, Screen,
 };
 
 const DAEMON_BIN: &str = env!("CARGO_BIN_EXE_micold-daemon");
@@ -174,7 +174,11 @@ impl World {
         sandbox
     }
 
+    /// Provision the container, restart it so the entrypoint starts the daemon with the container's
+    /// own environment (`MICOLD_IMAGE_REFERENCE`, `TZ`: a daemon the client starts over SSH does
+    /// not inherit them, which is not how a sandbox runs), and connect to that daemon.
     async fn connect_container(&self) -> (DaemonConnection, CatalogSnapshot) {
+        provision_then_restart(CONTAINER, PORT).await;
         wait_for_accept(PORT).await
     }
 }
