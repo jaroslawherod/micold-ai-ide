@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #972
 - **Worktree branch**: claude/project-thread-a1yb7j
 - **Started**: 2026-10-18
-- **Phase**: clarify
-- **Next step**: clarify unit: run speckit-clarify on specs/972-overview-card-context-menu/spec.md
+- **Phase**: plan
+- **Next step**: plan unit: run speckit-plan on specs/972-overview-card-context-menu/spec.md
 
 ## Pull requests
 
@@ -24,6 +24,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Decisions
 
+- Clarify (2026-10-18): round 1 agent-resolved 2 questions (grid scroll closes the menu, FR-012; focus after a keyboard-run entry, FR-011); round 2 found no critical ambiguities. CLEAN.
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
 

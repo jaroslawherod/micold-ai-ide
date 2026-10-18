@@ -29,6 +29,19 @@ considered: per-card overflow button only — discoverable but clutters every ca
   entry (copying, renaming, deleting, stop showing, opening a page in the browser, binding to a
   daemon) is an **in-place entry**: it acts, or opens a dialog, without leaving the Overview.
 
+## Clarifications
+
+### Session 2026-10-18
+
+- Q: What happens to an open card menu when the Overview's grid scrolls beneath it (wheel, trackpad,
+  scrollbar)? → A: The menu closes without running an entry, like every other non-modal floating
+  surface. _(agent-resolved: specs/017-material-component-architecture/spec.md#FR-009;
+  crates/micold-core/src/overlay.rs#dismisses)_
+- Q: Where does keyboard focus go after an entry runs from a keyboard-opened card menu and the
+  Overview stays open (an in-place entry, or its dialog closing)? → A: Back to the target card when
+  it is still listed; otherwise to the Overview's first card. _(agent-resolved:
+  specs/972-overview-card-context-menu/spec.md#FR-011; specs/813-worktree-overview/spec.md#FR-014)_
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Act on a location from its card with the pointer (Priority: P1)
@@ -138,6 +151,8 @@ second entry runs for that card.
   offered follow the row menu's rules for the location's current state the next time the menu opens.
 - **Cards reorder** while the menu is open (feature 813 orders cards by state): the target mark
   follows the target location, not a grid position.
+- **Grid scrolls** while a card menu is open (wheel, trackpad, scrollbar): the menu closes and no
+  entry runs (feature 017, FR-009).
 - **Overview closes** while a card menu is open (shortcut, top bar button, project switch): the menu
   closes with it, and no entry runs.
 - **Orphan / invalid card**: the menu offers *Open* (which reveals the location, as activation does)
@@ -189,9 +204,12 @@ second entry runs for that card.
 - **FR-010**: In an open card menu, Up and Down MUST move focus between entries (wrapping), and
   Enter or Space MUST run the focused entry.
 - **FR-011**: Closing a card menu without choosing an entry MUST return keyboard focus to the target
-  card when the menu was opened from the keyboard.
+  card when the menu was opened from the keyboard. After an entry chosen from a keyboard-opened menu
+  runs and the Overview stays open (an in-place entry, once any dialog it opened closes), keyboard
+  focus MUST return to the target card when it is still listed, and otherwise to the Overview's
+  first card.
 - **FR-012**: A card menu MUST close, without running an entry, when its target location stops being
-  listed or the Overview closes.
+  listed, the Overview's grid scrolls beneath it, or the Overview closes.
 - **FR-013**: The primary click, Enter and Space on a card MUST keep their feature 813 behaviour.
 - **FR-014**: At most one card menu (and no other context menu) MUST be open at a time.
 
