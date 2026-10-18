@@ -163,6 +163,14 @@ pub enum Outcome {
         /// Its name.
         name: String,
     },
+    /// Stop the start of this Kubernetes daemon that is under way (feature 686, FR-012): the shell
+    /// cancels it, and it ends `start cancelled`.
+    KubeStartCancelRequested {
+        /// The daemon.
+        daemon: micold_core::daemons::DaemonId,
+        /// Its name, which the start is registered under.
+        name: String,
+    },
     /// Delete every cluster object of this Kubernetes daemon (FR-015); the shell answers with
     /// `daemons::Msg::KubeRemoved`. The entry stays until it does.
     KubeRemoveRequested {

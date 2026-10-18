@@ -19,6 +19,7 @@ use micold_core::daemons::{
 use micold_core::kube::lifecycle::leftovers;
 use micold_core::kube::names::ResourceNames;
 use micold_core::kube::settings::KubeSettings;
+use micold_core::kube::start::DriftChoice;
 use micold_core::provision::{ProvisionEvent, Step};
 use micold_core::required::{RequiredMarks, Requirement};
 use micold_core::sandbox::image::{ImageChoice, OwnImage};
@@ -74,10 +75,12 @@ pub enum DraftRuntime {
     Kubernetes,
 }
 
-/// Whether this build has #806's shared SSH image mechanism, without which a Kubernetes daemon
-/// cannot start (FR-024). While it is `false` the Add form does not offer Kubernetes; a Kubernetes
-/// daemon already in the settings still opens in Edit. #806 flips it.
-pub const SHARED_SSH_IMAGE_AVAILABLE: bool = false;
+/// Whether this build has #806's shared SSH image mechanism (the pinned basic image and the
+/// provisioning sequence over it), without which a Kubernetes daemon cannot start (FR-024). While
+/// it is `false` the Add form does not offer Kubernetes; a Kubernetes daemon already in the
+/// settings still opens in Edit. It is `true` since the image is pinned
+/// ([`KubeSettings::pod_image`]).
+pub const SHARED_SSH_IMAGE_AVAILABLE: bool = true;
 
 /// The runtimes the form's "Runs in" choice offers for `draft`: Kubernetes only once the shared
 /// mechanism exists, or while editing a Kubernetes daemon (FR-024).
@@ -281,6 +284,8 @@ pub struct RemovalPrompt {
     pub text: String,
     /// What the confirm button says: the action it carries out (`Stop`, `Remove`, ...).
     pub confirm_label: &'static str,
+    /// What the other button says: `Cancel`, or for a drift the choice that keeps the pod.
+    pub decline_label: &'static str,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -292,6 +297,9 @@ enum Pending {
     RemoveKube(DaemonId),
     /// Forget a Kubernetes daemon on this computer only.
     ForgetLocally(DaemonId),
+    /// A Kubernetes start found its pod running with other settings: recreate it (confirm) or
+    /// keep it (decline).
+    Drift(DaemonId),
     Edit {
         id: DaemonId,
         name: String,
@@ -414,6 +422,8 @@ pub struct State {
     /// The targets already handed to `ssh -G`, so one that is slow or fails is asked once, not on
     /// every message.
     requested: BTreeSet<String>,
+    /// What the user answered to each daemon's drift prompt, until it is started again.
+    drift_answers: BTreeMap<DaemonId, DriftChoice>,
 }
 
 impl State {
@@ -467,6 +477,12 @@ impl State {
     /// The confirmation waiting for an answer.
     pub fn prompt(&self) -> Option<&RemovalPrompt> {
         self.pending.as_ref().map(|(_, prompt)| prompt)
+    }
+
+    /// The answers to the drift prompts: a Kubernetes daemon listed here is started with that
+    /// choice (`Ask` otherwise).
+    pub fn drift_answers(&self) -> &BTreeMap<DaemonId, DriftChoice> {
+        &self.drift_answers
     }
 
     /// Sessions that ended because their daemon was removed.
@@ -659,6 +675,7 @@ pub fn start(state: &mut State, model: &mut Model<'_>, id: DaemonId) -> Option<S
     }
     state.runtime_missing.remove(&id);
     state.applies_on_next_start.remove(&id);
+    state.drift_answers.remove(&id);
     daemon_event(state, model.links, id, DaemonEvent::Start)
 }
 
@@ -669,6 +686,7 @@ pub fn reconnect(state: &mut State, model: &mut Model<'_>, id: DaemonId) -> Opti
         return None;
     }
     state.runtime_missing.remove(&id);
+    state.drift_answers.remove(&id);
     daemon_event(state, model.links, id, DaemonEvent::Reconnect)
 }
 
@@ -679,6 +697,7 @@ pub fn give_up(state: &mut State, model: &mut Model<'_>, id: DaemonId) -> Option
 
 /// Stop `id`, and only `id`: it is neither dialled nor respawned until started.
 pub fn stop(state: &mut State, model: &mut Model<'_>, id: DaemonId) -> Option<StateChange> {
+    state.drift_answers.remove(&id);
     daemon_event(state, model.links, id, DaemonEvent::Stop)
 }
 
@@ -1008,6 +1027,7 @@ fn prompt_for(model: &Model<'_>, id: DaemonId, action: &str, effect: &str) -> Re
         running_sessions,
         text,
         confirm_label: "Continue",
+        decline_label: "Cancel",
     }
 }
 
@@ -1129,7 +1149,11 @@ pub fn confirm(state: &mut State, model: &mut Model<'_>) -> Vec<Outcome> {
     };
     let mut out = Vec::new();
     match pending {
-        Pending::StopKube(id) => return stop_kube(state, model, id),
+        Pending::StopKube(id) => {
+            state.drift_answers.remove(&id);
+            return stop_kube(state, model, id);
+        }
+        Pending::Drift(id) => return answer_drift(state, model, id, DriftChoice::Recreate),
         Pending::RemoveKube(id) => return remove_kube(model, id),
         Pending::ForgetLocally(id) => {
             out = end_sessions(model, id);
@@ -1216,7 +1240,77 @@ fn kube_prompt(
         running_sessions: model.sessions.get(&id).map_or(0, Vec::len),
         text,
         confirm_label,
+        decline_label: "Cancel",
     }
+}
+
+/// A Kubernetes start found the pod running with other settings (`fields`): ask whether to
+/// recreate it. The start waits for the answer.
+fn request_drift_answer(
+    state: &mut State,
+    model: &Model<'_>,
+    id: DaemonId,
+    fields: &[String],
+) -> Vec<Outcome> {
+    if model.links.state(id) != Some(&DaemonState::Starting) {
+        return Vec::new();
+    }
+    let Some((name, _)) = kube_of(model, id) else {
+        return Vec::new();
+    };
+    let sessions = model.sessions.get(&id).map_or(0, Vec::len);
+    let text = format!(
+        "The running pod differs from the settings ({}). Recreate it? Its {} will end; the volume \
+         is kept.",
+        fields.join(", "),
+        plural(sessions, "running session", "running sessions"),
+    );
+    let mut prompt = kube_prompt(model, id, name, text, "Recreate pod");
+    prompt.decline_label = "Keep running pod";
+    state.pending = Some((Pending::Drift(id), prompt));
+    Vec::new()
+}
+
+/// The user's answer to the drift prompt: the start goes on with `choice`, which restarts the
+/// daemon's actor. Recreating ends the sessions of the pod it replaces.
+fn answer_drift(
+    state: &mut State,
+    model: &Model<'_>,
+    id: DaemonId,
+    choice: DriftChoice,
+) -> Vec<Outcome> {
+    state.drift_answers.insert(id, choice);
+    let sessions = model.sessions.get(&id).cloned().unwrap_or_default();
+    if choice == DriftChoice::Recreate && !sessions.is_empty() {
+        vec![Outcome::DaemonSessionsEnded {
+            daemon: id,
+            sessions,
+        }]
+    } else {
+        Vec::new()
+    }
+}
+
+/// Cancel on a starting Kubernetes row: the shell stops the start under way, which then ends
+/// cancelled. With the drift prompt open nothing runs, so the start ends here.
+fn cancel_kube_start(state: &mut State, model: &mut Model<'_>, id: DaemonId) -> Vec<Outcome> {
+    let Some((name, _)) = kube_of(model, id) else {
+        return Vec::new();
+    };
+    if model.links.state(id) != Some(&DaemonState::Starting) {
+        return Vec::new();
+    }
+    if matches!(&state.pending, Some((Pending::Drift(d), _)) if *d == id) {
+        state.pending = None;
+        daemon_event(
+            state,
+            model.links,
+            id,
+            DaemonEvent::StartFailed("start cancelled".to_string()),
+        );
+        return Vec::new();
+    }
+    vec![Outcome::KubeStartCancelRequested { daemon: id, name }]
 }
 
 /// Stop `id`'s sessions and its link, returning the outcome that ends the sessions.
@@ -1504,6 +1598,10 @@ pub enum Msg {
     StorageClassEdited(String),
     /// The connect-at-launch box changed.
     AutoStartToggled(bool),
+    /// A Kubernetes start found its pod running with other settings (the fields that differ).
+    KubeDrift(DaemonId, Vec<String>),
+    /// Cancel the start of this Kubernetes daemon.
+    StartCancelled(DaemonId),
     /// Start this daemon, and only it.
     Started(DaemonId),
     /// Stop this daemon, and only it.
@@ -1771,7 +1869,17 @@ pub fn update(state: &mut State, model: &mut Model<'_>, msg: Msg) -> Vec<Outcome
                 .retain(|id| model.registry.get(*id).is_some());
             return out;
         }
-        Msg::RemovalCancelled => cancel(state),
+        Msg::RemovalCancelled => {
+            if let Some((Pending::Drift(id), _)) = &state.pending {
+                // Escape and the scrim keep the pod: the choice that destroys nothing.
+                let id = *id;
+                state.pending = None;
+                return answer_drift(state, model, id, DriftChoice::Keep);
+            }
+            cancel(state);
+        }
+        Msg::KubeDrift(id, fields) => return request_drift_answer(state, model, id, &fields),
+        Msg::StartCancelled(id) => return cancel_kube_start(state, model, id),
         Msg::DetailsToggled(id) => {
             if !state.details_shown.remove(&id) {
                 state.details_shown.insert(id);

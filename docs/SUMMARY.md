@@ -24,6 +24,7 @@
 - [Settings](user-guide/settings.md)
 - [Running the session service in a container](user-guide/sandboxed-daemon.md)
 - [Running the session service on another computer over SSH](user-guide/remote-daemons.md)
+- [Running the session service in a Kubernetes cluster](user-guide/kubernetes-daemons.md)
 
 # The session service
 

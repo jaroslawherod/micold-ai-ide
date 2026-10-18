@@ -75,6 +75,9 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
                 settings,
                 name,
             } => tasks.push(stop_kube(app, *daemon, settings, name)),
+            Outcome::KubeStartCancelRequested { name, .. } => {
+                micold_client::daemon::cancel_installed_kube_start(name);
+            }
             Outcome::KubeRemoveRequested {
                 daemon,
                 settings,
@@ -479,6 +482,7 @@ mod tests {
             Path::new("/nonexistent"),
             None,
             false,
+            &Default::default(),
         );
     }
 }
