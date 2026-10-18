@@ -979,6 +979,8 @@ fn provisioning_events_and_a_start_failure_belong_to_one_daemon() {
     fill_ssh(&mut state, "First", true);
     daemons::save(&mut state, &mut w.model()).unwrap();
     fill_ssh(&mut state, "Second", true);
+    // Another port: the same host, user and port is one daemon (FR-016).
+    state.draft.as_mut().unwrap().ssh_port = "2223".into();
     daemons::save(&mut state, &mut w.model()).unwrap();
     let (a, b) = (w.registry.entries()[2].id, w.registry.entries()[3].id);
 
