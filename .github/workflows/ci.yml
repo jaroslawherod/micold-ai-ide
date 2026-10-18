@@ -9,6 +9,13 @@ on:
     # see a label added afterwards. Removing the label is deliberately not a trigger -- the next
     # push reclassifies anyway, and a full run someone asked for costs nothing to keep.
     types: [opened, synchronize, reopened, labeled]
+  # Nightly (#952): the path-gated jobs (today the Windows ARM64 package) run on main whatever the
+  # day's merges touched, so a break that no pull request's paths exposed is caught within a day.
+  # A scheduled run has no base ref, so `classify` reports code-affecting and the whole pipeline
+  # runs; `ci complete` goes red with it, which is the visible failure. Scheduled workflows run on
+  # the default branch only.
+  schedule:
+    - cron: "17 3 * * *"
 
 # One live run per pull request. `labeled` fires once per label, so a PR opened with labels already
 # attached -- every Dependabot PR -- started a full pipeline per label for the same commit and queued
@@ -36,6 +43,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       docs_only: ${{ steps.verdict.outputs.docs_only }}
+      packaging: ${{ steps.verdict.outputs.packaging }}
       reason: ${{ steps.verdict.outputs.reason }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -69,6 +77,7 @@ jobs:
         if: always()
         env:
           DOCS_ONLY: ${{ steps.verdict.outputs.docs_only }}
+          PACKAGING: ${{ steps.verdict.outputs.packaging }}
           REASON: ${{ steps.verdict.outputs.reason }}
         run: |
           if [ "$DOCS_ONLY" = "true" ]; then
@@ -82,6 +91,8 @@ jobs:
             echo "$headline"
             echo
             echo "Reason: \`${REASON:-unavailable}\`"
+            echo
+            echo "Packaging paths touched: \`${PACKAGING:-unavailable}\`"
             if [ -s "$RUNNER_TEMP/offenders.txt" ]; then
               echo
               echo '<details><summary>Paths that made this code-affecting</summary>'
@@ -445,7 +456,13 @@ jobs:
   windows-arm64-package:
     name: package + smoke (windows-11-arm)
     needs: [classify, linux-daemons]
-    if: needs.classify.outputs.docs_only != 'true'
+    # Pull requests run it only when a path declared `micold-packaging` changed (or the `full-ci`
+    # label forces `packaging=true`); main pushes and the nightly schedule always run it. A skipped
+    # job satisfies `ci-complete`. An unset `packaging` output (classify failed) is not 'true' but
+    # then `docs_only` is unset too and `classify` itself is red, which blocks `ci-complete`.
+    if: >-
+      needs.classify.outputs.docs_only != 'true'
+      && (github.event_name != 'pull_request' || needs.classify.outputs.packaging == 'true')
     runs-on: windows-11-arm
     defaults:
       run:

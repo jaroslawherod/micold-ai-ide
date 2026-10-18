@@ -24,6 +24,7 @@ shapes:
 | `assertion freeze (advisory)` | runs | **skipped** |
 | `sandbox against a real runtime (linux)` | runs | **skipped** |
 | `remote daemon over a real sshd (linux)` | runs | **skipped** |
+| `package + smoke (windows-11-arm)` | runs on main pushes and nightly; on a pull request only with [packaging paths](#path-gated-jobs) or `full-ci` | **skipped** |
 | `docs check` | runs | **runs** |
 | `ci complete` | runs | runs |
 
@@ -129,6 +130,30 @@ Two rules govern it:
 2. **Every failure path lands on code-affecting.** A base ref that cannot be resolved, an unrelated
    history, a diff that fails — all fall back to running everything. There is no input for which
    "something went wrong" means "skip the build".
+
+## Path-gated jobs
+
+Beyond the docs-only verdict, `classify change` publishes a second boolean, `packaging`, true when
+**any** touched path is declared `micold-packaging` in `.gitattributes` (`packaging/**`, the two
+`scripts/windows-install*.sh`, the workspace `Cargo.toml` and `Cargo.lock`, `release.yml`). The
+`package + smoke (windows-11-arm)` job — about 21 minutes, the pipeline's critical path — runs when:
+
+- the event is a push to `main` or the nightly schedule (03:17 UTC), always; or
+- the event is a pull request and `packaging` is true. The `full-ci` label forces it true.
+
+A pull request that touches only Rust code does not wait on it. A skipped job satisfies
+`ci complete`, so the required check and its name are unchanged. A nightly failure is a red
+scheduled run on `main` (the scheduled run executes the whole pipeline, as it has no base ref to
+classify against); GitHub notifies the author of the schedule's last edit.
+
+Like `docs_only`, every failure path lands on `packaging=true`. `ci.yml` itself is not a packaging
+path: a step edit to the job is proven on the next `main` push or night. Add `full-ci` when you
+want it earlier.
+
+To gate another job the same way: declare an attribute in `.gitattributes`, emit one more boolean
+from `scripts/classify-change.sh` (the `packaging` block is the pattern), pin it in
+`scripts/tests/classify-change.test.sh`, expose it as a `classify` output, and put it in the
+job's `if:`.
 
 ## The merge gate
 
