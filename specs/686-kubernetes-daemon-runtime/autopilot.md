@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-xelisc
 - **Started**: 2026-10-17
 - **Phase**: implement
-- **Next step**: M4a: reviews done (CLEAN); full gate running on f29f6826; push when green; PR files are in the scratchpad; then return DONE
+- **Next step**: M4a done, full gate green and pushed; the orchestrator opens the PR from the scratchpad files (pr-title-686-M4a.txt, pr-body-686-M4a.md), waits on CI and merges; then M4b
 
 ## Pull requests
 
