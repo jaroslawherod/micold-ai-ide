@@ -81,7 +81,16 @@ use crate::{
 pub enum PendingOp {
     /// A `SessionCreate`; on success the daemon-assigned session is selected + viewed. Further
     /// variants (project/session-delete) are added as each mutation domain is migrated.
-    CreateSession,
+    CreateSession {
+        /// Where the session was asked for; the refusal fallback reopens the confirmation here.
+        location: SessionLocation,
+        /// The CLI the person chose, kept for the confirmation (feature 802, FR-001).
+        provider: micold_core::session::AiCli,
+        /// The create carried the user's confirmation, so a refusal of it is a plain error.
+        additional: bool,
+        /// The start-up auto-start: its refusal stays a notice (feature 802, FR-004).
+        automatic: bool,
+    },
     DeleteSession,
     /// A `WorktreeCreate`, carrying the project it was sent for. The project travels with the op
     /// rather than being read from `workspace.active` when the answer lands: the user may have
@@ -229,7 +238,7 @@ impl PendingOp {
     /// A short verb phrase for an error / unknown-outcome notification ("create the session …").
     pub fn describe(&self) -> String {
         match self {
-            PendingOp::CreateSession => "create the session".into(),
+            PendingOp::CreateSession { .. } => "create the session".into(),
             PendingOp::DeleteSession => "delete the session".into(),
             PendingOp::RunGroupCreate => "start the runs".into(),
             PendingOp::RunGroupDismiss => "dismiss the group".into(),
@@ -1247,7 +1256,7 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
                         ));
                 }
             }
-            Some(PendingOp::CreateSession) => {
+            Some(PendingOp::CreateSession { .. }) => {
                 if let OperationResult::SessionCreated { session } = result {
                     app.core
                         .update(Message::Session(SessionMsg::Selected(session)));
@@ -1616,9 +1625,9 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
         }
         DaemonMsg::OperationError {
             req,
+            kind,
             message,
             detail,
-            ..
         } => {
             match app.pending_ops.remove(&req) {
                 // A failed worktree create shows in the form (keeps it open to retry), not a
@@ -1742,10 +1751,31 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
                 }
                 // Feature 483 (C8): the refusal's own text, the view unchanged.
                 Some(PendingOp::RunGroupPick { .. }) => app.core.notify_error(message),
-                // Feature 776 (FR-002, FR-003): the service's refusal already names the existing
-                // session and how to bring it back; the catalog is unchanged, so the notice is
-                // the whole outcome.
-                Some(PendingOp::CreateSession) => app.core.notify_error(message),
+                // Feature 802 (FR-004): a person's unflagged create that the service refused as
+                // occupied (a refusal carrying the occupant's session id) was a stale start, so the
+                // confirmation opens instead. Typed fields decide, never the message text. Any other
+                // refusal, the auto-start's, and the refusal of an already-confirmed create stay the
+                // 776 notice: the service's text names the session, the catalog is unchanged.
+                Some(PendingOp::CreateSession {
+                    location,
+                    provider,
+                    additional,
+                    automatic,
+                }) => {
+                    let occupied = kind == micold_core::protocol::messages::ErrorKind::Refused
+                        && detail
+                            .as_deref()
+                            .is_some_and(|id| uuid::Uuid::parse_str(id).is_ok());
+                    if occupied && !additional && !automatic {
+                        micold_client::features::session::additional_opened(
+                            &mut app.core,
+                            location,
+                            Some(provider),
+                        );
+                    } else {
+                        app.core.notify_error(message);
+                    }
+                }
                 Some(op) => app
                     .core
                     .notify_error(format!("Couldn't {}: {message}", op.describe())),
@@ -2530,9 +2560,17 @@ pub fn on_session_start_requested(
     app: &mut App,
     location: SessionLocation,
     provider: micold_core::session::AiCli,
+    automatic: bool,
 ) -> Task<Message> {
     // Chosen from the override list, or pressed directly — either way the list is done.
     app.core.session.start_menu = None;
+    // Feature 802 (FR-001, FR-007): a person's start at a location this window sees occupied asks
+    // instead of sending a create the daemon would refuse. The auto-start's location is free.
+    if !automatic
+        && !micold_client::features::session::start_decided(&mut app.core, &location, provider)
+    {
+        return Task::none();
+    }
     // Correlated create: the daemon owns the id + catalog. The new session arrives via the
     // `CatalogChanged` push (reconciled into the core) and is selected + focused when the
     // `OperationOk { SessionCreated }` reply names its id.
@@ -2545,14 +2583,18 @@ pub fn on_session_start_requested(
         // default-vs-override resolution happened in `features/session.rs`, which a test
         // can link; this handler is in the GUI binary, which no integration test can, and a
         // branch that drifted in here would become the feature's untestable mirror.
-        send_op(app, PendingOp::CreateSession, |req| {
-            ClientMsg::SessionCreate {
-                req,
-                project,
-                worktree_dir,
-                provider,
-                allow_additional_session: false,
-            }
+        let op = PendingOp::CreateSession {
+            location,
+            provider,
+            additional: false,
+            automatic,
+        };
+        send_op(app, op, |req| ClientMsg::SessionCreate {
+            req,
+            project,
+            worktree_dir,
+            provider,
+            allow_additional_session: false,
         });
     }
     Task::none()
@@ -2597,7 +2639,13 @@ pub fn on_additional_session_confirmed(app: &mut App) -> Task<Message> {
         app.core.additional_request(),
         app.core.workspace.active.clone(),
     ) {
-        send_op(app, PendingOp::CreateSession, move |req| {
+        let op = PendingOp::CreateSession {
+            location: location.clone(),
+            provider,
+            additional: true,
+            automatic: false,
+        };
+        send_op(app, op, move |req| {
             additional_session_request(req, project, &location, provider)
         });
     }

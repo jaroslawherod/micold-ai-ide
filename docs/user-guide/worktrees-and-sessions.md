@@ -35,6 +35,10 @@ choose a folder.
   An assistant asks for another on purpose with `allow_additional_session: true` on
   `create_session`; the existing session is left as it is. A session you closed (archived) no
   longer counts, so the worktree can take a new one.
+  In the app you are asked rather than refused: starting a session where one already exists (even
+  from a start button that was drawn before the session appeared) opens a confirmation that names
+  the worktree and its session. **Start** creates the second session with the CLI you chose and
+  runs it beside the first; **Cancel** creates nothing and shows no error.
 - **Main and helper sessions.** The first session of a worktree is its **main session**, chosen
   when the worktree starts; any session added beside it on purpose is a **helper**. Which one is
   main is stored, so it stays the same across restarts until you change it: you can make a helper
