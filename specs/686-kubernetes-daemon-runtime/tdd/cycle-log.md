@@ -141,3 +141,15 @@ the core baseline still fails only the four root-user tests named above).
   failed (start failed `ImageContract` on the first closed stream), green after the retry loop.
   Covers: banner/non-SSH/silent/exited container, relay forwarding and refused forward, key
   files created once, stable id, owner-only modes, `known_hosts` pinning. refactor: none needed.
+
+## M3 — Only allowed credentials reach the pod (T063–T069, T102)
+
+- A10–A13, U43, U44, U58, U59, U66–U70, U136: tests written with the code in the same cycles
+  (`kube::credentials::`, `kube::manifest::`, `kube::start::`); each asserts on the secrets,
+  volumes, mounts and security contexts of the manifests the `FakeCluster` recorded. No red run
+  was captured separately in this cloud unit (the tests and their code were added together);
+  recorded honestly here. refactor: none needed.
+- Decision: with nothing allowed the `Secrets` phase makes no create, replace or delete of a
+  credential secret and reads no source file, but it does `get` each possible credential secret
+  name to find one a withdrawal left behind (there is no list call), so A12 holds when the last
+  credential is withdrawn.
