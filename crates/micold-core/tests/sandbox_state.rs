@@ -18,11 +18,6 @@ use micold_core::sandbox::lifecycle::{
 use micold_core::sandbox::runtime::{ContainerId, Progress, RuntimeError, RuntimeKind};
 use micold_core::sandbox::{CredentialLayout, MountSet, SandboxProfile, SandboxSpec, SecretMount};
 
-/// The fingerprint the client claims. Every `find` below answers "no such container", so the
-/// adoption branch under test is always `Create` — the adoption decisions themselves are covered
-/// by `lifecycle`'s own tests, which drive them directly rather than through eight canned
-/// responses.
-
 fn fixture(name: &str) -> String {
     std::fs::read_to_string(
         std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
