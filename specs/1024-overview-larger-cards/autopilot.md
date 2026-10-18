@@ -42,11 +42,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Spec | 2 | 42de4d6686a2c4fbf4edd34a2fac84019f53f76e:9fd139b98e5f41fd86197ed391d3122b7f68fe6b | CLEAN |
 | Plan | 1 | e45c58b4b1535563f0e6bedadc7591b9a695a39b:6c3e08958c02ee674bc1558fc34574eb1171dc3a | CLEAN: 2 MINOR (fixed, prose only) |
 | Tasks | 1 | b267855a5af0a7210aa2095640d6a8c9b29b6ab1:2f920b0d219ba52f0b54bcc54bb3385b679b2841 | CLEAN: 1 MINOR (checklist tick, fixed) |
+| M1 A (code-review high) | 1 | b58d5508739c2fa093140968d93349de9ac5322e:a383c665fa3b3b1fcd218274ee4bd82b8278b9fd | CLEAN: 8 MINOR (3 fixed: U7 row shape at 2400, U2 last row by y, cycle-log SHA; 2 are T012/T013 still open; 3 declined) |
 
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| M1 | A | MINOR: builder should store `n.max(1)` | `columns` is the one place the cap is read and already clamps; contracts/ui.md defines the rule there |
+| M1 | A | MINOR: tests hard-code 16/280 instead of `spacing::MD`/`MIN_WIDTH` | Deliberate: the fixture pins the spec's numbers (1464 px threshold), the 813 tests already do the same |
+| M1 | A | MINOR: user guide should name the 1464 px threshold | The guide describes window behaviour; grid width depends on the sidebar, so a px figure would mislead (plan D2) |
 
 ## Handover
 

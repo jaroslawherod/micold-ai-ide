@@ -223,7 +223,17 @@ mod tests {
             assert!(bottom > 400.0, "{width}: content ends at {bottom}");
             assert!(node.size().height <= 400.0, "{width}: {:?}", node.size());
             assert!(node.size().width <= width, "{width}: {:?}", node.size());
+            assert!(
+                boxes.iter().all(|b| b.x + b.width <= width + 0.01),
+                "{width}"
+            );
         }
+        let node = laid_out(grid(30), Size::new(2400.0, 400.0));
+        assert_eq!(
+            row_counts(&card_boxes(&node)),
+            vec![5; 6],
+            "30 cards at 2400 px"
+        );
     }
 
     /// The card width a full row of `n` columns gives in `width`, with the tests' 16 px gap.
@@ -270,8 +280,14 @@ mod tests {
             for b in &boxes {
                 assert!((b.width - w).abs() < 0.01, "{width}: {} != {w}", b.width);
             }
+            let last_y = boxes.iter().map(|b| b.y).fold(0.0, f32::max);
+            let last_x = boxes
+                .iter()
+                .filter(|b| (b.y - last_y).abs() < 0.01)
+                .map(|b| b.x)
+                .fold(f32::MAX, f32::min);
             assert!(
-                (boxes[10].x - boxes[0].x).abs() < 0.01,
+                (last_x - boxes[0].x).abs() < 0.01,
                 "{width}: last row not left-aligned"
             );
         }
