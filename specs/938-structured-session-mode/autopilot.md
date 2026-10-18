@@ -63,6 +63,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 review B (conformance, sonnet) | 1 | 6ff1da44088f251211d8c2ac4981f0dbf7e7529d:3f735466dce7f7ee16e1f6f946425617725d6029 | CHANGES: 1 MAJOR declined (T032), 2 MINOR (F3 test-list fixed; F2 declined, T032) |
 | M2 review A (code-review high, sonnet) | 2 | 826ed0589dfaa8c7d6ce31d4a56ced5687973387:93b677536b14171260bd556c4c255b3ea4aee2cc | CLEAN (5 MINOR, not fixed: worktree retry count ignores structured kills, `end_removed` on async callers, doc wording, detached reader on spawn failure, test-wide lint allow) |
 | M3 review A (code-review high) | 1 | a88fe9259fe8470c367121d7f982506069cbe4be:2c9fe052b0e42a603aa745424724d5a5fdbe8410 | 9 findings: 2 fixed (F1 per-message spawn_blocking reordered turns — accept now on the connection loop, write off it; F2 turn guard held across `on_event` at EOF), 7 declined |
+| M3 review A (code-review high, sonnet) | 2 | 83111196a2ccba7189d864995a4bc4576a907f2c:25ea31c8f8fcdbd6212cf65e8452d43a890b4b71 | CLEAN (3 MINOR, not fixed: `running` read before the turn lock at EOF, refusal answered via spawn_blocking, no dedicated order test — the refusal test covers it) |
 
 ## Declined review findings
 
@@ -91,20 +92,12 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M3 (T022–T028) is implemented, ticked and committed (b03c6091 red tests, core green, f9d7740e
-daemon green, then fmt). Branch reset on origin/main 4793cbab; not pushed. `cargo test -p
-micold-core --all-targets -- structured schema` and `cargo test -p micold-daemon --test
-structured_session --test structured_lifecycle` pass (13 + 4). No review, no gate yet.
-Code: `micold-core/src/structured/{turn,user_message}.rs`; `ClientMsg::SessionUserMessage`,
-protocol 53 (+ `tests/schema_hash.rs` pin); daemon: turn kept in `StructuredSession`
-(`accept_user_message`, `write_user_message`, note at stdout EOF in `read_events`),
-`DaemonState::{send_user_message, session_kind}` (state.rs, above `primary_pty`), server arm
-before `ScrollbackRequest`, `ops::start_with_prompt` structured branch +
-`FirstPromptUndelivered::Message`.
-Next: verify.md, then review.md (diff `4793cbab..HEAD`), gate.md (`scripts/gate.sh`), pr.md
-(title `#938: Structured session mode: run claude with stream-json next to the PTY mode — M3`,
-body ends `Refs #938`, return `PR: to-open`). Stray empty `/run.sh` was created by a mistyped
-redirect; a safety check blocked removing it; leave it to the user.
+M3 implemented and committed; review A done (round 1: 2 fixed in 25ea31c8, 7 declined; round 2
+CLEAN). Scoped gate as root fails only on root-only permission tests (`scripts/gate.sh` reruns
+them as a normal user); not a regression. Next: review B (prompt ready in the scratchpad
+`m3/review-b.prompt`, run with sonnet), then full `scripts/gate.sh`, push
+(`--force-with-lease=claude/project-thread-cl0lw3:`), pr-title/pr-body in the scratchpad, return
+`PR: to-open`. Not pushed yet.
 
 ## Open escalation
 
