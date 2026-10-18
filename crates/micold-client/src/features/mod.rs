@@ -296,6 +296,7 @@ pub mod attach;
 pub mod attention;
 pub mod changes;
 pub mod connection;
+pub mod daemon_sections;
 pub mod daemons;
 pub mod daemons_kube;
 pub mod help;

@@ -76,18 +76,19 @@ taken when the daemon starts, the start fails naming the port; free it or choose
 - **Image**: **Basic image (recommended)**, or **My own image** with a reference or an archive path.
 - **Shares, network and AI CLI sign-in**: what the container can see and reach, with the credential
   path it shares; see [What the container can see](#what-the-container-can-see).
-- **Limits**: CPU, memory, process count and writable storage. Leave a field empty for no limit;
-  an invalid value is refused and the field is named. See [Limits](#limits).
+- **Resources**: CPU, memory, process count and writable storage. Leave a field empty for no
+  limit; an invalid value is refused and the field is named. See [Resources](#limits).
 - **Survive logout**: keep the container running after you log out.
 
-The settings are grouped in five titled sections: **Container**, **Credentials**, **Network**,
-**Limits** and **Sessions**. Only **Container** is open when the form opens; press a section's
-header, or focus it and press Space or Enter, to open or close it. Closing a section keeps what you
-typed in it and saves it with the form. A section holding a field the form refused opens by itself
+Under **Name** and **Runs in**, the settings are grouped in six titled sections: **Connection**
+(container name, port, connect when the application starts), **Container**, **Credentials**,
+**Network**, **Resources** and **Sessions**. Only **Connection** is open when the form opens; press a
+section's header, or focus it and press Space or Enter, to open or close it. Closing a section keeps what you
+typed in it and saves it with the form. A section holding a field the form refused, or a required field left empty, opens by itself
 and stays open while the error stands, so an error is never hidden. Which sections are open is not
 saved.
 
-A host daemon shows only *Survive logout*, and an SSH daemon none of these: they have no container
+A host daemon shows the sections **Connection** and **Sessions**, and an SSH daemon only **Connection**; neither shows the others: they have no container
 here. The Daemons form is the only place these values are edited.
 
 **If you set these before**, nothing is lost: the values you had saved (runtime, shares, network,
@@ -141,7 +142,7 @@ applies to your setup.
 **The writable storage limit is the one most likely to be unavailable**, on either runtime but more
 often on Podman, since whether a size cap can be applied at all depends on the storage driver
 underneath. The application asks, and shows the field disabled with the runtime's own reason rather
-than accepting a number it knows will be ignored — see **Limits** below.
+than accepting a number it knows will be ignored — see **Resources** below.
 
 ### Adding a runtime
 
@@ -304,7 +305,8 @@ time in UTC. Set *Where sessions run* to *On this computer* and back to recreate
 
 ## Limits
 
-Settings → **Daemons** → the form's **Limits** caps what the sandbox may consume. A session that tries
+<!-- The section is named Resources in the form; the anchor stays #limits. -->
+Settings → **Daemons** → the form's **Resources** section caps what the sandbox may consume. A session that tries
 to use every core does not make your machine unusable, and one that forks without bound does not take
 your desktop with it.
 
@@ -472,7 +474,7 @@ and stops the daemon it started; your daemon's saved data stays.
 | The image is present remotely but the fetch failed | *`ghcr.io/…` could not be fetched: …* | Rate limit, sign-in, or a proxy. Import the image from a file instead — the sandbox does not need a registry. |
 | Something else holds the control port | *Port 7373 is already in use, so the sandbox has no control channel.* | Stop whatever holds it, or choose another port in **Settings → Daemons**. |
 | A project is on a path the runtime will not bind | *`/mnt/team-share/webapp` cannot be shared with the sandbox: …* | Move the project to a path the runtime can share, or unregister it. Network shares and FUSE mounts are the usual cause. |
-| The runtime rejected a resource limit | *The runtime refused the storage limit: …* | Clear that limit in **Settings → Daemons**, then retry. See [Limits](#limits) — the writable-storage cap is the one most often unavailable. |
+| The runtime rejected a resource limit | *The runtime refused the storage limit: …* | Clear that limit in **Settings → Daemons**, then retry. See [Resources](#limits) — the writable-storage cap is the one most often unavailable. |
 | The container was stopped or removed from outside | *The sandbox container `micold-sandbox` is no longer running.* | Usually nothing: the application brings it back up on its own (see [It comes back on its own](#it-comes-back-on-its-own-while-the-application-is-open)). If that fails three times, restart the sandbox. Sessions resume from where they were — their processes stopped with the container, but their history and layout did not. |
 | A step did not finish | *Pulling the image did not finish in time.* | Retry; if it persists, restart the runtime. |
 | Anything else | *The runtime reported: `<its first line of output>`* | Retry. The runtime's full output is in the diagnostics. |

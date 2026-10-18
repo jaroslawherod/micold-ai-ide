@@ -120,6 +120,8 @@ mod context_menu_anchor;
 // `support::layout` passes.
 #[path = "gates/container_section_fits.rs"]
 mod container_section_fits;
+#[path = "gates/daemon_form_fits.rs"]
+mod daemon_form_fits;
 
 // --- The tooltip-clears-its-row gate (029 BUG-001) ----------------------------------------------
 

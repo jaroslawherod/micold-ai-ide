@@ -21,7 +21,7 @@ use micold_core::kube::names::ResourceNames;
 use micold_core::kube::settings::KubeSettings;
 use micold_core::kube::start::DriftChoice;
 use micold_core::provision::{ProvisionEvent, Step};
-use micold_core::required::{RequiredMarks, Requirement};
+use micold_core::required::{FieldRequirement, RequiredMarks, Requirement};
 use micold_core::sandbox::image::{ImageChoice, OwnImage};
 use micold_core::sandbox::runtime::RuntimeKind;
 use micold_core::sandbox::{CredentialShare, NetworkPosture, SandboxProfile};
@@ -214,52 +214,7 @@ impl Draft {
     }
 }
 
-/// The five titled sections a container daemon's settings are grouped in (feature 804 M4, FR-012).
-/// View state only: which are open is never saved (FR-015).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Section {
-    /// Container runtime and image.
-    Container,
-    /// What the container may use of the user's credentials.
-    Credentials,
-    /// The network posture.
-    Network,
-    /// Processor, memory, process and storage limits.
-    Limits,
-    /// Survive-logout.
-    Sessions,
-}
-
-impl Section {
-    /// Every section, in the order the form lists them.
-    pub const ALL: [Section; 5] = [
-        Section::Container,
-        Section::Credentials,
-        Section::Network,
-        Section::Limits,
-        Section::Sessions,
-    ];
-
-    /// The header text.
-    pub fn title(self) -> &'static str {
-        match self {
-            Section::Container => "Container",
-            Section::Credentials => "Credentials",
-            Section::Network => "Network",
-            Section::Limits => "Limits",
-            Section::Sessions => "Sessions",
-        }
-    }
-
-    /// Whether `field` (a [`FormError::field`]) is one of this section's.
-    fn holds(self, field: &str) -> bool {
-        match self {
-            Section::Container => matches!(field, "image" | "image_path"),
-            Section::Limits => matches!(field, "cpus" | "memory" | "pids" | "storage"),
-            _ => false,
-        }
-    }
-}
+pub use super::daemon_sections::Section;
 
 /// A refused save: the field at fault and what to tell the user.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -446,15 +401,25 @@ pub struct State {
 }
 
 impl State {
-    /// Whether `section` is shown open: opened by the user, or holding the field the last refused
-    /// save was about, so an error is never hidden (FR-012, FR-014).
+    /// Whether `section` is shown open: the kind's first section until the user flips it, and
+    /// any section holding the field of a shown error, a refused save's or a required field left
+    /// empty, so an error is never hidden (feature 890, FR-004).
     pub fn section_open(&self, section: Section) -> bool {
-        let by_user = (section == Section::Container) != self.flipped_sections.contains(&section);
+        let Some(draft) = &self.draft else {
+            return false;
+        };
+        let runtime = draft.runtime;
+        let first = Section::of(runtime).first() == Some(&section);
+        let by_user = first != self.flipped_sections.contains(&section);
         by_user
             || self
                 .form_error
                 .as_ref()
-                .is_some_and(|e| section.holds(e.field))
+                .is_some_and(|e| Section::holding_error(runtime, e.field) == Some(section))
+            || draft.required_fields().into_iter().any(|(id, req)| {
+                Section::holding(runtime, id) == Some(section)
+                    && draft.required.state(id, req) == FieldRequirement::Missing
+            })
     }
 
     /// The repository step of remote daemon `id`: required, and empty exactly when the path is
@@ -1910,6 +1875,7 @@ fn reduce(state: &mut State, model: &mut Model<'_>, msg: Msg) -> Vec<Outcome> {
         Msg::NameEdited(v) => edit(state, &|d| d.name = v.clone()),
         Msg::RuntimeChosen(v) => {
             edit(state, &|d| d.runtime = v);
+            state.flipped_sections.clear();
             if v == DraftRuntime::Kubernetes {
                 return vec![Outcome::KubeContextsRequested];
             }

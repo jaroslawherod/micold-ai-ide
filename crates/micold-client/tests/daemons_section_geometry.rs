@@ -170,27 +170,35 @@ fn the_add_form_shows_a_refusal_beside_its_field() {
     assert_no_text_overflows(&state, "add form with a refusal");
 }
 
-/// Feature 804, US4 AS1 / SC-005: the container form paints its five titles, the Container
-/// section open and the other four closed (their bodies absent), each header with the chevron for
-/// its state; opening one by its header paints its body.
+/// Feature 890, US1 AS1-AS2 / FR-002: the container form paints its six titles, Connection open
+/// and the other five closed (their bodies absent), each header with the chevron for its state;
+/// opening one by its header paints its body.
 #[test]
-fn the_container_form_paints_five_titles_with_only_container_open() {
+fn the_container_form_paints_six_titles_with_only_connection_open() {
     use micold_client::features::daemons::Section;
     use micold_client::icons::Icon;
     let (mut state, _) = with_daemons();
     state.update(Message::Daemons(DaemonsMsg::AddOpened));
     let shown = painted_tall(&state);
-    for title in ["Container", "Credentials", "Network", "Limits", "Sessions"] {
+    for title in [
+        "Connection",
+        "Container",
+        "Credentials",
+        "Network",
+        "Resources",
+        "Sessions",
+    ] {
         assert!(
             shown.iter().any(|c| c == title),
             "title {title:?} missing: {shown:?}"
         );
     }
     assert!(
-        has(&shown, "Basic image (recommended)"),
-        "Container is open: {shown:?}"
+        has(&shown, "Container name") && has(&shown, "Connect when the application starts"),
+        "Connection is open: {shown:?}"
     );
     for closed_body in [
+        "Basic image (recommended)",
         "The container starts with none of your credentials",
         "Names still resolve either way",
         "What the sandbox may consume",
@@ -207,7 +215,7 @@ fn the_container_form_paints_five_titles_with_only_container_open() {
             .count()
     };
     assert_eq!(count(Icon::MoveUp, &shown), 1, "one open header");
-    assert_eq!(count(Icon::MoveDown, &shown), 4, "four closed headers");
+    assert_eq!(count(Icon::MoveDown, &shown), 5, "five closed headers");
 
     state.update(Message::Daemons(DaemonsMsg::SectionToggled(
         Section::Network,
@@ -418,14 +426,16 @@ fn the_kubernetes_form_and_row_paint_their_fields_without_overflow() {
         state.update(Message::Daemons(DaemonsMsg::AllowedToggled(kind, true)));
     }
     state.update(Message::Daemons(DaemonsMsg::Saved));
+    use micold_client::features::daemons::Section;
+    for section in [Section::Image, Section::Resources, Section::Placement] {
+        state.update(Message::Daemons(DaemonsMsg::SectionToggled(section)));
+    }
     let form = painted_tall(&state);
     for label in [
-        "Kubernetes",
         "Namespace",
         "Image",
         "CPU request",
         "Memory limit",
-        "Allowed credentials",
         "SSH key file",
         "Registry credentials file",
         "Node selector",
@@ -510,7 +520,7 @@ fn the_host_picker_and_the_error_rows_paint_without_overflow() {
         "build".into(),
         "a-rather-long-host-name.internal.example.com".into(),
     ])));
-    let form = painted(&state);
+    let form = painted_tall(&state);
     assert!(
         has(&form, "Host from your SSH configuration"),
         "the picker is drawn: {form:?}"
@@ -553,4 +563,93 @@ fn the_host_picker_and_the_error_rows_paint_without_overflow() {
         "the reason is on the row"
     );
     assert_no_text_overflows(&state, "a failed SSH row with its recent errors");
+}
+
+/// Painted strings of the add form for `runtime`, in a window tall enough for all of it.
+fn add_form(runtime: micold_client::features::daemons::DraftRuntime) -> (State, Vec<String>) {
+    let (mut state, _) = with_daemons();
+    state.update(Message::Daemons(DaemonsMsg::AddOpened));
+    state.update(Message::Daemons(DaemonsMsg::RuntimeChosen(runtime)));
+    let shown = painted_tall(&state);
+    (state, shown)
+}
+
+/// Feature 890, FR-001, FR-002, FR-010, SC-001: for every kind the add form paints *Name* and
+/// *Runs in*, the kind's section titles in order, only Connection's body, and the actions last;
+/// no group label is a heading, and every section title is painted exactly once.
+#[test]
+fn every_kind_paints_name_runs_in_its_sections_in_order_and_the_actions() {
+    use micold_client::features::daemons::{DraftRuntime, Section};
+    for runtime in [
+        DraftRuntime::Container,
+        DraftRuntime::Kubernetes,
+        DraftRuntime::Ssh,
+        DraftRuntime::Host,
+    ] {
+        let (state, shown) = add_form(runtime);
+        let form_start = shown
+            .iter()
+            .position(|c| c == "Add a daemon")
+            .expect("the form is painted");
+        let runs_in = form_start
+            + shown[form_start..]
+                .iter()
+                .position(|c| c == "Runs in")
+                .expect("Runs in is painted");
+        assert!(shown[form_start..runs_in].iter().any(|c| c == "Name*"));
+        // The select's own value ("Container") sits before its label; the sections follow it.
+        let position = |text: &str| {
+            let hits: Vec<usize> = shown
+                .iter()
+                .enumerate()
+                .skip(runs_in)
+                .filter(|(_, c)| c.as_str() == text)
+                .map(|(i, _)| i)
+                .collect();
+            assert!(!hits.is_empty(), "{runtime:?}: {text:?} in {shown:?}");
+            assert!(
+                hits.len() == 1 || text == "Cancel",
+                "{runtime:?}: {text:?} twice"
+            );
+            hits[0]
+        };
+        let mut last = runs_in;
+        for section in Section::of(runtime) {
+            let at = position(section.title());
+            assert!(at > last, "{runtime:?}: {} out of order", section.title());
+            last = at;
+        }
+        let save = position("Save daemon");
+        assert!(save > last && position("Cancel") > save, "{runtime:?}");
+        for heading in ["Kubernetes", "Allowed credentials", "Limits"] {
+            assert!(
+                !shown[runs_in..].iter().any(|c| c == heading),
+                "{runtime:?}: group heading {heading:?} drawn: {shown:?}"
+            );
+        }
+        assert_no_text_overflows(&state, &format!("{runtime:?} add form"));
+    }
+}
+
+/// SC-005, FR-004: the body of a closed Connection is not built, so a Tab from *Runs in* meets the
+/// next section header and none of its fields (the component's own focus stops are pinned in
+/// `accordion_section`'s tests).
+#[test]
+fn a_closed_connection_paints_none_of_its_fields() {
+    use micold_client::features::daemons::{DraftRuntime, Section};
+    for (runtime, field) in [
+        (DraftRuntime::Container, "Container name"),
+        (DraftRuntime::Kubernetes, "Namespace"),
+        (DraftRuntime::Ssh, "Key file"),
+        (DraftRuntime::Host, "Connect when the application starts"),
+    ] {
+        let (mut state, shown) = add_form(runtime);
+        assert!(has(&shown, field), "{runtime:?} open: {shown:?}");
+        state.update(Message::Daemons(DaemonsMsg::SectionToggled(
+            Section::Connection,
+        )));
+        let shown = painted_tall(&state);
+        assert!(!has(&shown, field), "{runtime:?} closed: {shown:?}");
+        assert!(has(&shown, "Connection"), "the header stays: {shown:?}");
+    }
 }

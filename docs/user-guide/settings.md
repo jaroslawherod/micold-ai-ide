@@ -34,7 +34,7 @@ marked too. Port, User and Key file are optional and carry no mark.
 | [Appearance](#appearance) | The theme |
 | [Terminal](#terminal) | The embedded terminal's scrollback limit, and whether its history is saved to disk |
 | [Environment](#environment) | Which AI CLI a session runs, whether Pi sessions report activity, whether AI sessions get the app's tools, and the script sourced before it starts |
-| [Daemons](#daemons) | The session services you have set up: add, edit, start, stop and remove them, and each container daemon's runtime, image, credentials and limits |
+| [Daemons](#daemons) | The session services you have set up: add, edit, start, stop and remove them, and each container daemon's runtime, image, credentials and resources |
 | [GitHub](#github) | Whether worktrees show their pull request, and which worktree type an issue's labels choose |
 | [Jira](#jira) | Whether Jira issues can start worktrees, and whether the open project is connected |
 
@@ -513,10 +513,10 @@ back. A change to a running daemon asks before it restarts it.
   unsaved or not-yet-started reference: a new image is used from the next time the service starts.
 - **Image file** — the archive to load, when the image comes from a file.
 
-#### Limits
+#### Resources
 
 Caps on what the sandbox may consume (CPU, memory, process count and writable storage); see
-[Limits](sandboxed-daemon.md#limits). Blank uses the runtime's own default.
+[Resources](sandboxed-daemon.md#limits). Blank uses the runtime's own default.
 
 #### Credentials
 

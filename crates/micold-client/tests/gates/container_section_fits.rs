@@ -13,8 +13,8 @@ use crate::support::layout as lay;
 use iced::Size;
 use micold_client::app::{State, MIN_WINDOW_SIZE};
 use micold_client::features::connection::ConnectionStatus;
-use micold_client::features::daemons::DraftRuntime;
 use micold_client::features::daemons::Msg as DaemonsMsg;
+use micold_client::features::daemons::{DraftRuntime, Section};
 use micold_client::features::settings::{SettingsDraft, SettingsSection};
 use micold_core::daemons::{ContainerSettings, DaemonRuntime};
 use micold_core::env_include::EnvIncludeOutcome;
@@ -59,6 +59,8 @@ fn settings_editing(image: ImageChoice) -> State {
         ..SettingsDraft::default()
     });
     let _ = state.update_daemons(DaemonsMsg::EditOpened(id), Vec::new());
+    // The form opens on Connection; these gates look at the Container section (feature 890).
+    let _ = state.update_daemons(DaemonsMsg::SectionToggled(Section::Container), Vec::new());
     state
 }
 

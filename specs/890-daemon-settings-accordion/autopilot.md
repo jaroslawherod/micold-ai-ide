@@ -9,21 +9,21 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #890
 - **Worktree branch**: claude/project-thread-rwlog8
 - **Started**: 2026-10-18
-- **Phase**: M1
-- **Next step**: orchestrator opens the M1 PR, waits on CI and merges; then milestone M2 (T006–T015)
+- **Phase**: M2
+- **Next step**: M2 handover: T015 visual pass, review A (scoped gate in its shadow), review B, full gate (scripts/gate.sh), PR files
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1063 | Design: spec, plan, tasks | merged (rebase) | ad4d1946127e6dc0c06e4add04416f2fc962db00 |
-| (pending) | M1: AccordionSection summary and required marker | to open (orchestrator, via GitHub MCP) | — |
+| #1068 | M1: AccordionSection summary and required marker | merged (rebase) | c0507555cf2611f462f7a55a590087b57730364f |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T005 | full | Showcase `AccordionSection` shows summary (closed), open, required marker | (pending, orchestrator) | PR to open |
+| M1 | T001–T005 | full | Showcase `AccordionSection` shows summary (closed), open, required marker | #1068 | merged |
 | M2 | T006–T015 | full | Every daemon kind's form in FR-002 sections, Connection open, errors open their section; user guide | — | pending |
 | M3 | T016–T028 | full | One field/section gap, FieldGroup labels, context select, section summaries and markers; user guide | — | pending |
 
@@ -68,7 +68,21 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M2 (T006–T014 done and ticked; code, tests, docs written, uncommitted until this commit): branch
+`claude/project-thread-rwlog8` reset to origin/main c0507555 (no branch-start.sh needed).
+Done: `features/daemon_sections.rs` (Section::of/title/holding_error/holding), `State::section_open`
+rewrite + `flipped_sections` cleared on `RuntimeChosen`, `container_fields::accordion` + six
+container sections, `ui/settings/daemons.rs` `form` + `kube_sections` + `auto_start`, tests
+(`daemon_sections.rs`, `daemons_feature.rs`, `daemons_section_geometry.rs`, `gates/daemon_form_fits.rs`),
+user guide. Green: `cargo test -p micold-client --test daemon_sections --test daemons_feature
+--test daemons_section_geometry --test layout_snapshot` (with CARGO_INCREMENTAL=0 etc).
+Next: (1) T015 visual pass, both themes, into `visual-pass/m2/`; (2) tdd cycle-log entry for M2
+(T009 red evidence not measured on main; say so); (3) scoped gate + review A (`code-review` high on
+origin/main...HEAD) then review B (conformance, sonnet, via `claude -p`); (4) `scripts/gate.sh`;
+(5) push `--force-with-lease=claude/project-thread-rwlog8:`, write pr-title.txt / pr-body.md in the
+scratchpad (title "#890: Group daemon settings sections in an accordion (new material component) —
+M2 every daemon kind's form in sections"). Other tests not yet run beyond the four binaries
+(a full gate will show any other test that opened the Container section by default).
 
 ## Open escalation
 

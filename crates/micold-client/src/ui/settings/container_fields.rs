@@ -398,11 +398,31 @@ pub fn survival_note<'a>(placement: PlacementKind, roles: Roles) -> Element<'a, 
     }
 }
 
-/// The five container sections, from the runtime to the survive-logout opt-in, each a titled
-/// [`AccordionSection`] open as `is_open` says (FR-012). `missing_cli` is the notice that the image
+/// One titled [`AccordionSection`] around `controls`, open as `is_open` says and toggled by its
+/// header (feature 890, FR-001, FR-004).
+pub fn accordion<'a>(
+    section: Section,
+    controls: Vec<Element<'a, Message>>,
+    is_open: bool,
+    roles: Roles,
+) -> Element<'a, Message> {
+    AccordionSection::new(
+        section.title(),
+        column(controls).spacing(spacing::SM),
+        roles,
+    )
+    .open(is_open)
+    .on_toggle(Message::Daemons(DaemonsMsg::SectionToggled(section)))
+    .into()
+}
+
+/// The six container sections, from the connection to the survive-logout opt-in, each a titled
+/// [`AccordionSection`] open as `is_open` says (FR-012). `connection` is the controls of the first
+/// one, which the form owns. `missing_cli` is the notice that the image
 /// running now lacks an AI CLI (FR-023b), attached to the reference field.
 pub fn sections<'a>(
     view: &ContainerView<'a>,
+    connection: Vec<Element<'a, Message>>,
     errors: FieldErrors,
     missing_cli: Option<String>,
     focused: Option<FieldId>,
@@ -543,23 +563,15 @@ pub fn sections<'a>(
         vec![survive.into(), survival_note(view.placement, roles)];
 
     [
+        (Section::Connection, connection),
         (Section::Container, container),
         (Section::Credentials, credentials),
         (Section::Network, net),
-        (Section::Limits, limit_fields),
+        (Section::Resources, limit_fields),
         (Section::Sessions, sessions),
     ]
     .into_iter()
-    .map(|(section, controls)| {
-        AccordionSection::new(
-            section.title(),
-            column(controls).spacing(spacing::SM),
-            roles,
-        )
-        .open(is_open(section))
-        .on_toggle(Message::Daemons(DaemonsMsg::SectionToggled(section)))
-        .into()
-    })
+    .map(|(section, controls)| accordion(section, controls, is_open(section), roles))
     .collect()
 }
 
@@ -770,6 +782,7 @@ mod tests {
             // One accordion per section; the container section is open.
             sections(
                 &view,
+                Vec::new(),
                 FieldErrors::default(),
                 None,
                 None,
@@ -778,8 +791,8 @@ mod tests {
             )
             .len()
         };
-        assert_eq!(count(&basic), 5);
-        assert_eq!(count(&own), 5);
+        assert_eq!(count(&basic), 6);
+        assert_eq!(count(&own), 6);
         assert_eq!(ImageKind::of(&basic.image), ImageKind::Basic);
         assert_eq!(ImageKind::of(&own.image), ImageKind::Own);
     }
