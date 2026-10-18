@@ -41,3 +41,25 @@ instead — with both filling, the summary would be cut at half the header.
   present. Neither had a red against a real change; they guard FR-013's "as today".
 - T003's `Space::Fill` wording is superseded by research R4's amended layout (see Refactor above);
   the task text stays as written.
+
+## M2 — every daemon kind's form in sections (T006–T013)
+
+Tests first (T006–T009), then `Section`, `State::section_open`, the container sections and the
+daemon form.
+
+**Red** — the new tests did not compile or failed against the old `Section` (`Limits`, Container
+first): `daemon_sections` (`Section::of`, `title`, `holding_error`, `holding`), `daemons_feature`
+(Connection-only default, `RuntimeChosen` reset, error opens its section, required-empty keeps
+Connection open, `SectionToggled` leaves draft and registry equal), `daemons_section_geometry`
+(titles in FR-002 order, only Connection's body, no group heading painted).
+
+**T009 red not measured**: T009 asks for the Kubernetes add form's height on `main` before T013 as red
+evidence. It was not recorded on `main`; the gate `daemon_form_fits` (Cancel's bottom ≤ 800 logical px)
+was written with the sections and went green with T013. Treat it as a characterisation of the new
+layout, not a proven red.
+
+**Green** — `cargo test -p micold-client --test daemon_sections --test daemons_feature --test
+daemons_section_geometry --test layout_snapshot`: all passed.
+
+**Refactor** — `Section`, `title` and `holds` moved out of `features/daemons.rs` into
+`features/daemon_sections.rs`, one table answering `of`, `holding_error` and `holding`.
