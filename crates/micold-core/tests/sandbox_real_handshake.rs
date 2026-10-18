@@ -73,6 +73,10 @@ impl Sandbox {
             &container,
             "--user",
             &uid_gid,
+            // As `argv::create` does for Docker: group 0 lets the entrypoint append the uid's
+            // passwd entry, without which `id -un` and sshd cannot resolve it.
+            "--group-add",
+            "0",
             "--restart",
             "no",
             "--network",
