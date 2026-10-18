@@ -229,7 +229,11 @@ fn an_in_place_entry_keeps_the_overview_open_and_opens_its_dialog() {
             state.overview.open,
             "{dialog}: an in-place entry leaves the Overview open (FR-005)"
         );
-        assert_eq!(open_dialog(&state), Some(dialog), "its dialog opens over it");
+        assert_eq!(
+            open_dialog(&state),
+            Some(dialog),
+            "its dialog opens over it"
+        );
     }
 }
 
@@ -250,7 +254,10 @@ fn a_navigating_entry_closes_the_overview() {
         select.clone(),
     ))));
     state.update(select);
-    assert!(!state.overview.open, "selecting a session takes the main area");
+    assert!(
+        !state.overview.open,
+        "selecting a session takes the main area"
+    );
 }
 
 #[test]
@@ -266,7 +273,10 @@ fn open_as_the_inner_message_closes_the_overview_as_a_primary_click_does() {
         open.clone(),
     ))));
     state.update(open);
-    assert!(!state.overview.open, "Open is the card's activation (FR-003)");
+    assert!(
+        !state.overview.open,
+        "Open is the card's activation (FR-003)"
+    );
     assert_eq!(state.overview.card_menu, None);
 }
 
@@ -342,7 +352,10 @@ fn the_card_menu_is_open_then_exactly_the_row_menu() {
     }
     // The fixture really reaches the conditional entries, so the equality above is not vacuous.
     for label in ["Stop showing", "Open pull request", "Rename", "Delete"] {
-        assert!(seen.contains(label), "no location offered `{label}`: {seen:?}");
+        assert!(
+            seen.contains(label),
+            "no location offered `{label}`: {seen:?}"
+        );
     }
 }
 
@@ -412,7 +425,10 @@ fn the_menu_closes_when_the_overview_closes() {
     for (name, close) in closers {
         let mut state = menu_open_on_feat_a(MenuOrigin::Keyboard);
         close(&mut state);
-        assert_eq!(state.overview.card_menu, None, "{name}: the menu closes (FR-012)");
+        assert_eq!(
+            state.overview.card_menu, None,
+            "{name}: the menu closes (FR-012)"
+        );
         assert_eq!(
             state.overview.focus_return, None,
             "{name}: nothing to return focus to"

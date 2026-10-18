@@ -347,9 +347,9 @@ fn the_guard_is_actually_looking_at_something() {
     );
     assert_eq!(
         POPOVERS.len(),
-        9,
-        "feature 021's seven FR-007 names, plus the terminal tab menu (`012` BUG-005, FR-010b) and \
-         feature 026's `session_start_menu`. A shorter list is a guard that has stopped covering \
+        10,
+        "feature 021's seven FR-007 names, plus the terminal tab menu (`012` BUG-005, FR-010b), \
+         feature 026's `session_start_menu` and feature 972's `overview_card_menu`. A shorter list is a guard that has stopped covering \
          them; growing it is what adding a popover looks like, and the number moves in the same \
          diff as the entry."
     );

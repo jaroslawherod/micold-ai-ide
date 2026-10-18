@@ -29,6 +29,7 @@ pub struct CardGrid<'a, M> {
     min_width: f32,
     spacing: f32,
     max_columns: usize,
+    on_scroll: Option<M>,
 }
 
 impl<'a, M: Clone + 'a> CardGrid<'a, M> {
@@ -40,6 +41,7 @@ impl<'a, M: Clone + 'a> CardGrid<'a, M> {
             min_width: MIN_WIDTH,
             spacing: spacing::MD,
             max_columns: MAX_COLUMNS,
+            on_scroll: None,
         }
     }
 
@@ -58,6 +60,13 @@ impl<'a, M: Clone + 'a> CardGrid<'a, M> {
     /// The most cards a row holds; `0` is treated as `1`. Defaults to [`MAX_COLUMNS`].
     pub fn max_columns(mut self, n: usize) -> Self {
         self.max_columns = n;
+        self
+    }
+
+    /// Publish `message` whenever the grid scrolls, so the root can close a card menu the grid
+    /// scrolled beneath (feature 972, FR-012).
+    pub fn on_scroll(mut self, message: M) -> Self {
+        self.on_scroll = Some(message);
         self
     }
 }
@@ -90,12 +99,15 @@ impl<'a, M: Clone + 'a> From<CardGrid<'a, M>> for Element<'a, M> {
             min_width,
             spacing,
             max_columns,
+            on_scroll,
         } = g;
         responsive(move |size| {
             let n = columns(size.width, min_width, spacing, max_columns);
-            Scrollable::new(rows(&cards, n, spacing), roles)
-                .height(Length::Fill)
-                .into()
+            let scrollable = Scrollable::new(rows(&cards, n, spacing), roles).height(Length::Fill);
+            match on_scroll.clone() {
+                Some(message) => scrollable.on_scroll(message).into(),
+                None => scrollable.into(),
+            }
         })
         .into()
     }

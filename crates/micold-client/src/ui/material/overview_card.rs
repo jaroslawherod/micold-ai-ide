@@ -10,6 +10,7 @@
 //! like a `Button` (research R13); without one it is informational and not focusable.
 
 use crate::icons::Icon;
+use crate::ui::cdk::context_area::ContextArea;
 use crate::ui::material::keyboard_focus::{Indicator, TakesTheKeyboard};
 use crate::ui::material::{style, Ellipsized, Glyph, ProgressBar, Ripple, Text, Tooltip, TypeRole};
 use iced::widget::{button, column, container, row};
@@ -19,6 +20,7 @@ use micold_core::overview::{CardModel, CardState, LocationType};
 use micold_core::task_progress::{Progress, Ratio};
 use micold_core::tokens::{spacing, Rgb, Roles};
 use std::marker::PhantomData;
+use std::rc::Rc;
 
 /// The card's one height: the same for every state and every content, so a grid row never ragged.
 pub const HEIGHT: f32 = 172.0;
@@ -151,6 +153,7 @@ pub struct OverviewCard<'a, M> {
     model: CardModel,
     roles: Roles,
     on_press: Option<M>,
+    on_secondary_press: Option<Rc<dyn Fn((u16, u16)) -> M + 'a>>,
     id: Option<iced::advanced::widget::Id>,
     _marker: PhantomData<&'a M>,
 }
@@ -165,6 +168,7 @@ impl<'a, M: 'a> OverviewCard<'a, M> {
             model: model.clone(),
             roles,
             on_press: None,
+            on_secondary_press: None,
             id: None,
             _marker: PhantomData,
         }
@@ -174,6 +178,14 @@ impl<'a, M: 'a> OverviewCard<'a, M> {
     /// card holds the keyboard.
     pub fn on_press(mut self, message: M) -> Self {
         self.on_press = Some(message);
+        self
+    }
+
+    /// Publish `f(point)` on a secondary press over the card, `point` being the press in window
+    /// pixels: the card's context menu opens there (feature 972, FR-001). The primary press keeps
+    /// publishing [`Self::on_press`] only.
+    pub fn on_secondary_press(mut self, f: impl Fn((u16, u16)) -> M + 'a) -> Self {
+        self.on_secondary_press = Some(Rc::new(f));
         self
     }
 
@@ -257,8 +269,15 @@ impl<'a, M: Clone + 'a> From<OverviewCard<'a, M>> for Element<'a, M> {
                 },
                 ..container::Style::default()
             });
+        let secondary = card.on_secondary_press;
+        let menu = move |content: Element<'a, M>| match secondary {
+            Some(f) => ContextArea::new(content)
+                .on_secondary_press(move |at| f(at))
+                .into(),
+            None => content,
+        };
         let Some(message) = card.on_press else {
-            return face.into();
+            return menu(face.into());
         };
         // The card is its own fill, so the button around it draws nothing.
         let pressable = button(face)
@@ -278,10 +297,9 @@ impl<'a, M: Clone + 'a> From<OverviewCard<'a, M>> for Element<'a, M> {
                 layer: p.text,
                 radius: RADIUS,
             });
-        // Outermost, so the ripple is the card's only state layer while it runs (feature 971, D1).
-        Ripple::new(focusable, p.text, RADIUS)
-            .centred_on_keys()
-            .into()
+        // The ripple is the card's only state layer while it runs (feature 971, D1); the context
+        // area outside it takes only the secondary press, which the ripple ignores (feature 972).
+        menu(Ripple::new(focusable, p.text, RADIUS).centred_on_keys().into())
     }
 }
 
@@ -561,7 +579,11 @@ mod tests {
             iced::Event::Mouse(Mouse::ButtonReleased(Button::Left)),
             Cursor::Available(at),
         );
-        assert_eq!(released, ["open"], "a primary click keeps its 813 behaviour");
+        assert_eq!(
+            released,
+            ["open"],
+            "a primary click keeps its 813 behaviour"
+        );
 
         let mut plain = mounted(true);
         assert!(right(&mut plain, at).is_empty(), "no builder, no menu");
