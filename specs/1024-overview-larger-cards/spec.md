@@ -21,6 +21,9 @@ flow:feature. Builds on feature 813 (`specs/813-worktree-overview`).
 - **Main pane width**: the width the Overview is given, which is the window width less the sidebar
   (and changes when the window is resized or the sidebar is resized or collapsed).
 - **Minimum card width**: the narrowest a card is ever drawn (280 px today, feature 813).
+- **Pixel widths in this spec** (thresholds, edge cases, success criteria) are measured on the
+  grid itself: the main pane width less the Overview's own padding around the grid. The rules are
+  stated in main pane width; a number like "1464 px" or "2400 px" is the width the grid gets.
 
 ## Clarifications
 
