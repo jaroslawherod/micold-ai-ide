@@ -12,7 +12,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-2lmupk
 - **Started**: 2026-10-17
 - **Phase**: milestones
-- **Next step**: M6 in progress (implementing). M5 visual pass for M5 (quickstart §B2–B4, ProgressBar/OverviewCard showcase) NOT run: no xdotool/Vulkan in the cloud container; see visual-pass-m5.md. Run it where a display exists.
+- **Next step**: M6 PR (orchestrator opens from scratchpad title/body), CI, merge; then close unit (T070–T071). M5 visual pass for M5 (quickstart §B2–B4, ProgressBar/OverviewCard showcase) NOT run: no xdotool/Vulkan in the cloud container; see visual-pass-m5.md. Run it where a display exists.
 
 ## Pull requests
 
@@ -34,7 +34,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 | T031–T039 | full | Ctrl/Cmd+Shift+O and attention badge | #936 | merged |
 | M4 | T040–T049 | full | Card activation and keyboard traversal | #951 | merged |
 | M5 | T050–T060 | full | Task summary and progress on cards | #976 | merged |
-| M6 | T061–T069 | full | Hook-fed agent activity (protocol 49) | — | pending |
+| M6 | T061–T069 | full | Hook-fed agent activity (protocol 50) | pending (title/body written) | PR to open |
 
 M1 holds 18 US1 tasks plus setup and foundational: kept whole because no smaller cut has an
 observable deliverable (the grid needs the rules, card, grid, view and button together); US1's PR
