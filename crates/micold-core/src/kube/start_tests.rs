@@ -1011,6 +1011,21 @@ mod connect {
     /// Start the pod, then connect to it over `host`: the outcome, the phases shown and the
     /// cluster.
     async fn connect(host: &Host) -> (ConnectOutcome, Vec<StartPhase>, FakeCluster) {
+        let (outcome, phases, fake, _) = connect_with(host, &[], None).await;
+        (outcome, phases, fake)
+    }
+
+    /// [`connect`] installing `clis`, cancelling after `cancel_after`; also the events seen.
+    async fn connect_with(
+        host: &Host,
+        clis: &[AiCli],
+        cancel_after: Option<Duration>,
+    ) -> (
+        ConnectOutcome,
+        Vec<StartPhase>,
+        FakeCluster,
+        Vec<crate::provision::ProvisionEvent>,
+    ) {
         let fake = cluster();
         let s = settings();
         let names = names();
@@ -1019,7 +1034,7 @@ mod connect {
         let request = start_request(&fake, &s, &names, &keys, &c1, DriftChoice::Ask, &no_files);
         let mut ignore = |_: StartPhase| {};
         let started = ready(start(&request, &mut ignore).await);
-        let target = pod_target(reach());
+        let target = pod_target(reach(), &clis.iter().copied().collect());
         let cancel = CancelToken::new();
         let c = ConnectRequest {
             host,
@@ -1030,10 +1045,27 @@ mod connect {
         let seen = Arc::new(Mutex::new(Vec::new()));
         let sink = seen.clone();
         let mut on_phase = move |p: StartPhase| sink.lock().unwrap().push(p);
-        let mut on_event = |_: &crate::provision::ProvisionEvent| {};
-        let outcome = connect_pod(&request, &started, &c, &mut on_phase, &mut on_event).await;
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let esink = events.clone();
+        let mut on_event =
+            move |e: &crate::provision::ProvisionEvent| esink.lock().unwrap().push(e.clone());
+        let canceller = async {
+            match cancel_after {
+                Some(after) => {
+                    tokio::time::sleep(after).await;
+                    cancel.cancel();
+                }
+                None => {}
+            }
+            pending::<()>().await
+        };
+        let outcome = tokio::select! {
+            o = connect_pod(&request, &started, &c, &mut on_phase, &mut on_event) => o,
+            () = canceller => unreachable!("waits for ever"),
+        };
         let phases = seen.lock().unwrap().clone();
-        (outcome, phases, fake)
+        let events = events.lock().unwrap().clone();
+        (outcome, phases, fake, events)
     }
 
     fn failure(outcome: ConnectOutcome) -> KubeFailure {
@@ -1107,5 +1139,111 @@ mod connect {
         assert!(matches!(outcome, ConnectOutcome::Ready(_)));
         assert_eq!(phases, [StartPhase::Copy, StartPhase::Connect]);
         assert_eq!(fake.names(NS, ObjectKind::Pod), [names().pod()]);
+    }
+
+    // --- the Install phase (T138) ---
+
+    const INSTALLED: &str = "added 1 package\nMICOLD_INSTALL ClaudeCode ok\n";
+
+    /// A pod with the build (reach, probe) whose check found the CLI missing.
+    fn missing_cli() -> Host {
+        Host::default()
+            .say("", 0, "")
+            .say(crate::kube::fake_host::PROBE_HAVE, 0, "")
+            .say("", 0, "")
+    }
+
+    /// The `last` run that follows the install.
+    fn then_last(host: Host) -> Host {
+        host.say("", 0, "")
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_selected_cli_is_installed_with_its_output_in_the_log_and_the_phase_shown() {
+        let host = then_last(missing_cli().say(INSTALLED, 0, "")).bridge(welcoming_bridge());
+        let (outcome, phases, _, events) = connect_with(&host, &[AiCli::ClaudeCode], None).await;
+        assert!(matches!(outcome, ConnectOutcome::Ready(_)));
+        assert_eq!(
+            phases,
+            [StartPhase::Copy, StartPhase::Install, StartPhase::Connect]
+        );
+        assert!(
+            events.contains(&crate::provision::ProvisionEvent::InstallLine(
+                "added 1 package".into()
+            ))
+        );
+        assert!(
+            events.contains(&crate::provision::ProvisionEvent::InstallDone {
+                cli: AiCli::ClaudeCode,
+                ok: true
+            })
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_cli_already_installed_is_not_installed_again() {
+        let host = Host::default()
+            .say("", 0, "")
+            .say(crate::kube::fake_host::PROBE_HAVE, 0, "")
+            .say("MICOLD_HAVE_CLI ClaudeCode\n", 0, "")
+            .say("", 0, "")
+            .bridge(welcoming_bridge());
+        let (outcome, phases, _, _) = connect_with(&host, &[AiCli::ClaudeCode], None).await;
+        assert!(matches!(outcome, ConnectOutcome::Ready(_)));
+        assert_eq!(phases, [StartPhase::Copy, StartPhase::Connect]);
+        assert_eq!(
+            host.commands.lock().unwrap().len(),
+            5,
+            "reach, probe, check, last, bridge: no install run"
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_failed_install_names_the_cli_and_rolls_the_attempt_back() {
+        // 806's sequence goes on to start the daemon; the failure is reported after it.
+        let host = then_last(missing_cli().say(
+            "npm ERR! network\nMICOLD_INSTALL ClaudeCode failed\n",
+            0,
+            "",
+        ))
+        .bridge(welcoming_bridge());
+        let (outcome, phases, fake, _) = connect_with(&host, &[AiCli::ClaudeCode], None).await;
+        let reason = match failure(outcome) {
+            KubeFailure::Provision { reason } => reason,
+            other => panic!("{other:?}"),
+        };
+        assert!(reason.contains("was not installed"), "{reason}");
+        assert!(reason.contains("Claude"), "{reason}");
+        assert!(reason.contains("npm ERR! network"), "{reason}");
+        assert_eq!(
+            phases,
+            [StartPhase::Copy, StartPhase::Install, StartPhase::Connect]
+        );
+        assert_rolled_back(&fake).await;
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn an_install_that_outlives_fifteen_minutes_is_a_phase_timeout() {
+        let host = missing_cli().then_hang();
+        let started = Instant::now();
+        let (outcome, _, fake, _) = connect_with(&host, &[AiCli::ClaudeCode], None).await;
+        assert_eq!(
+            failure(outcome),
+            KubeFailure::PhaseTimeout {
+                phase: StartPhase::Install
+            }
+        );
+        assert_eq!(started.elapsed(), Duration::from_secs(15 * 60));
+        assert_rolled_back(&fake).await;
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn cancelling_during_the_install_ends_the_start_cancelled_and_rolls_back() {
+        let host = missing_cli().then_hang();
+        let (outcome, phases, fake, _) =
+            connect_with(&host, &[AiCli::ClaudeCode], Some(Duration::from_secs(30))).await;
+        assert_eq!(failure(outcome), KubeFailure::Cancelled);
+        assert_eq!(phases.last(), Some(&StartPhase::Install));
+        assert_rolled_back(&fake).await;
     }
 }

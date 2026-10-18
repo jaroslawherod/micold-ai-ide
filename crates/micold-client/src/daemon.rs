@@ -1159,13 +1159,16 @@ pub async fn kube_attempt(
         micold_core::kube::start::rollback(&request, &started.attempt).await;
         return Err(reason);
     }
-    let target = pod_target(micold_core::ssh::argv::PinnedReach {
-        host: "127.0.0.1".to_string(),
-        port: relay.addr().port(),
-        user: POD_SSH_USER.to_string(),
-        key: keys.private_key(),
-        known_hosts: keys.known_hosts(),
-    });
+    let target = pod_target(
+        micold_core::ssh::argv::PinnedReach {
+            host: "127.0.0.1".to_string(),
+            port: relay.addr().port(),
+            user: POD_SSH_USER.to_string(),
+            key: keys.private_key(),
+            known_hosts: keys.known_hosts(),
+        },
+        &settings.providers,
+    );
     let opts = ProvisionOptions {
         platform: ClientPlatform::current(),
         client_arch: std::env::consts::ARCH.to_string(),
