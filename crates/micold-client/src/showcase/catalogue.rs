@@ -1063,6 +1063,20 @@ pub const MOTION: &[MotionEntry] = sections::motion::MOTION;
 /// they are exercised on the page without being posed on it.
 pub const EXEMPTIONS: &[Exemption] = &[
     Exemption {
+        module: "material/key_value_list.rs",
+        component: "KeyValueList",
+        reason: "a `TextArea` with the placeholder `key=value` and a row parser: it draws nothing \
+                 of its own, so the gallery's `TextArea` entry already poses every pixel it \
+                 has. A second entry would pose the same editor twice under two names.",
+    },
+    Exemption {
+        module: "material/toleration_list.rs",
+        component: "TolerationList",
+        reason: "a `TextArea` with the placeholder `its row format` and a row parser: it draws nothing \
+                 of its own, so the gallery's `TextArea` entry already poses every pixel it \
+                 has. A second entry would pose the same editor twice under two names.",
+    },
+    Exemption {
         module: "material/filled_field.rs",
         component: "FilledField",
         reason: "the filled box `FormField` renders — the container, the in-container label, the \
