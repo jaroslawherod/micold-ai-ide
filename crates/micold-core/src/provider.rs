@@ -374,6 +374,13 @@ pub trait AiCliProvider {
     /// would answer it.
     fn folder_trust(&self) -> FolderTrust;
 
+    /// The arguments that make a launch a structured session (feature 938, FR-005): the CLI reads
+    /// user messages as stream-json on stdin and writes its events as stream-json on stdout,
+    /// with partial-message deltas. `None` for a CLI that has no such mode, which is what refuses
+    /// a structured session of it (FR-003, `SessionKind::check`). Placed before the session-id
+    /// argument and the rest of [`Self::launch_args`] by the daemon (contracts/claude-stream-json.md).
+    fn structured_args(&self) -> Option<&'static [&'static str]>;
+
     // --- attaching existing sessions (feature 582) ---
 
     /// The working directories under which this provider's store may hold sessions of the project
@@ -835,6 +842,10 @@ impl AiCliProvider for ClaudeProvider {
         InputReadiness::OutputSettled
     }
 
+    fn structured_args(&self) -> Option<&'static [&'static str]> {
+        None
+    }
+
     fn folder_trust(&self) -> FolderTrust {
         FolderTrust::ClaudeProjects
     }
@@ -1192,6 +1203,10 @@ impl AiCliProvider for CopilotProvider {
     fn input_readiness(&self) -> InputReadiness {
         // Copilot writes nothing to its event log before the first user message (feature 026).
         InputReadiness::OutputSettled
+    }
+
+    fn structured_args(&self) -> Option<&'static [&'static str]> {
+        None
     }
 
     fn folder_trust(&self) -> FolderTrust {
@@ -1575,6 +1590,10 @@ impl AiCliProvider for PiProvider {
 
     fn input_readiness(&self) -> InputReadiness {
         InputReadiness::ExtensionEvent(PI_SESSION_START)
+    }
+
+    fn structured_args(&self) -> Option<&'static [&'static str]> {
+        None
     }
 
     fn folder_trust(&self) -> FolderTrust {
@@ -2002,6 +2021,10 @@ impl AiCliProvider for CodexProvider {
         InputReadiness::OutputSettled
     }
 
+    fn structured_args(&self) -> Option<&'static [&'static str]> {
+        None
+    }
+
     fn folder_trust(&self) -> FolderTrust {
         FolderTrust::CodexProjects
     }
@@ -2253,6 +2276,10 @@ impl AiCliProvider for OpenCodeProvider {
 
     fn input_readiness(&self) -> InputReadiness {
         InputReadiness::OutputSettled
+    }
+
+    fn structured_args(&self) -> Option<&'static [&'static str]> {
+        None
     }
 
     fn folder_trust(&self) -> FolderTrust {
@@ -2510,6 +2537,10 @@ impl AiCliProvider for FakeAiCliProvider {
         InputReadiness::OutputSettled
     }
 
+    fn structured_args(&self) -> Option<&'static [&'static str]> {
+        None
+    }
+
     fn folder_trust(&self) -> FolderTrust {
         FolderTrust::NeverAsks
     }
@@ -2521,5 +2552,35 @@ impl AiCliProvider for FakeAiCliProvider {
         _session_id: Uuid,
     ) -> ActivitySource {
         ActivitySource::None
+    }
+}
+
+#[cfg(test)]
+mod structured_args_tests {
+    use super::*;
+
+    /// Feature 938 T005 (FR-005, contracts/claude-stream-json.md): the argv that turns a Claude
+    /// Code launch into a structured one, and no such argv for any other CLI.
+    #[test]
+    fn only_claude_code_has_structured_args() {
+        for which in AiCli::ALL {
+            let expected: Option<&[&str]> = match which {
+                AiCli::ClaudeCode => Some(&[
+                    "-p",
+                    "--input-format",
+                    "stream-json",
+                    "--output-format",
+                    "stream-json",
+                    "--verbose",
+                    "--include-partial-messages",
+                ]),
+                AiCli::Copilot | AiCli::Pi | AiCli::Codex | AiCli::OpenCode => None,
+            };
+            assert_eq!(
+                which.provider().structured_args(),
+                expected,
+                "only Claude Code runs as a structured session (FR-003, FR-005)"
+            );
+        }
     }
 }

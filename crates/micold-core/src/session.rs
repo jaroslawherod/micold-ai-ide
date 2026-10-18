@@ -82,6 +82,41 @@ impl AiCli {
     ];
 }
 
+/// How a session runs its AI CLI (feature 938, data-model *SessionKind*).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum SessionKind {
+    /// Today's session: the CLI in a pseudo-terminal.
+    #[default]
+    Terminal,
+    /// The CLI over pipes, speaking stream-json; Claude Code only.
+    Structured,
+}
+
+impl SessionKind {
+    /// Whether this is the default kind.
+    pub fn is_terminal(&self) -> bool {
+        true
+    }
+
+    /// Whether `provider` can run a session of this kind.
+    pub fn check(self, _provider: AiCli) -> Result<(), KindRefusal> {
+        Ok(())
+    }
+}
+
+/// Why a session of a kind cannot be created.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum KindRefusal {
+    /// The CLI has no structured mode.
+    NotSupported(AiCli),
+}
+
+impl fmt::Display for KindRefusal {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("")
+    }
+}
+
 /// The sidebar label for a session — read from the AI CLI's own records, never user-entered
 /// (FR-011a).
 ///
@@ -379,9 +414,28 @@ pub struct Session {
     /// persisted, bounded, and never read from a name. A `Running` run is `Stopped` once the
     /// session exits or the daemon restarts.
     pub agents: Vec<crate::agent_run::AgentRun>,
+    /// Terminal or structured (feature 938).
+    pub kind: SessionKind,
 }
 
 impl Session {
+    /// A brand-new session of `kind`.
+    pub fn start_new_of_kind(location: SessionLocation, provider: AiCli, _kind: SessionKind) -> Self {
+        Self::start_new(location, provider)
+    }
+
+    /// A persisted session of `kind`.
+    pub fn restored_of_kind(
+        id: SessionId,
+        location: SessionLocation,
+        label: SessionLabel,
+        mode: TerminalMode,
+        provider: AiCli,
+        _kind: SessionKind,
+    ) -> Self {
+        Self::restored(id, location, label, mode, provider)
+    }
+
     /// A brand-new session at `location`, starting immediately (FR-010). Always starts
     /// attached to the AI CLI (feature 010 FR-010 — today's only behavior for a fresh session).
     ///
@@ -408,6 +462,7 @@ impl Session {
             origin: None,
             origin_rejected: false,
             agents: Vec::new(),
+            kind: SessionKind::Terminal,
         }
     }
 
@@ -445,6 +500,7 @@ impl Session {
             origin: None,
             origin_rejected: false,
             agents: Vec::new(),
+            kind: SessionKind::Terminal,
         }
     }
 
