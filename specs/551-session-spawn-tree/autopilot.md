@@ -28,7 +28,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T016, T025, T038 | full | Origin recorded by the daemon's `record_origin` (nothing sets it until M3), persisted, exposed on wire and MCP; spike T025 outcome recorded | #824 | merged |
 | M2 | T017–T024, T039 | full | Sidebar nests children with child/pending/removed markers | #916 | merged |
 | M3 | T026–T031, T040 | full | Provider readers for spike-confirmed providers, discovery, provider table | #962 | merged |
-| M4 | T032–T037, T041 | full | Fold, count, attention rollup, persisted fold | PR pending | gate+PR |
+| M4 | T032–T037, T041 | full | Fold, count, attention rollup, persisted fold | #1030 | open |
 
 ## Decisions
 
