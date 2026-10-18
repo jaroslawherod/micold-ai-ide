@@ -7,7 +7,10 @@ use micold_client::ui::confirm_additional_session::body_text;
 fn the_text_is_generic_when_the_occupant_is_unknown() {
     let text = body_text("The worktree \u{201c}feat-a\u{201d}", None);
     assert!(text.contains("already has a session"), "{text}");
-    assert!(!text.contains("session \u{201c}"), "no session is named: {text}");
+    assert!(
+        !text.contains("session \u{201c}"),
+        "no session is named: {text}"
+    );
 }
 
 #[test]

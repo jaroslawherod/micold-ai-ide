@@ -485,13 +485,11 @@ pub fn start_control_id(location: &SessionLocation) -> iced::advanced::widget::I
 fn start_press(state: &State, location: SessionLocation) -> Message {
     let dir = state.location_dir(&location).unwrap_or_default();
     match state.session.start_intent(PressTarget::Primary, &dir) {
-        StartIntent::Start(provider) => {
-            Message::Session(SessionMsg::StartRequested {
-                location,
-                provider,
-                automatic: false,
-            })
-        }
+        StartIntent::Start(provider) => Message::Session(SessionMsg::StartRequested {
+            location,
+            provider,
+            automatic: false,
+        }),
         StartIntent::OfferChoice {
             unavailable_default,
             ..

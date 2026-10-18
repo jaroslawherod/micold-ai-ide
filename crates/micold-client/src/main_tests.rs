@@ -1429,7 +1429,9 @@ fn occupied_loc() -> micold_core::session::SessionLocation {
 }
 
 /// A connected app on `/repo/demo` whose catalog holds `sessions` (all at `feat-x`), the first main.
-fn app_with_sessions_at_feat_x(count: usize) -> (App, SentRx, Vec<micold_core::session::SessionId>) {
+fn app_with_sessions_at_feat_x(
+    count: usize,
+) -> (App, SentRx, Vec<micold_core::session::SessionId>) {
     use micold_core::session::Session;
     let (mut app, rx) = connected_app();
     let project = PathBuf::from("/repo/demo");
@@ -1460,7 +1462,8 @@ fn creates(rx: &mut SentRx) -> Vec<(CreateTarget, bool)> {
 type CreateTarget = (AiCli,);
 
 fn start(app: &mut App, provider: AiCli, automatic: bool) {
-    let _ = shell::daemon_sync::on_session_start_requested(app, occupied_loc(), provider, automatic);
+    let _ =
+        shell::daemon_sync::on_session_start_requested(app, occupied_loc(), provider, automatic);
 }
 
 fn pending_create(app: &App) -> u64 {
@@ -1502,7 +1505,10 @@ fn a_start_for_an_occupied_location_opens_the_confirmation_and_sends_no_create()
         app.core.additional_request().map(|(location, _)| location),
         Some(occupied_loc())
     );
-    assert!(creates(&mut rx).is_empty(), "nothing is created before the user confirms");
+    assert!(
+        creates(&mut rx).is_empty(),
+        "nothing is created before the user confirms"
+    );
     assert!(app.pending_ops.is_empty());
     assert_eq!(visible_notice(&app), None);
     assert_eq!(app.core.workspace.sessions, before);
@@ -1520,8 +1526,25 @@ fn a_refusal_naming_the_occupant_opens_the_confirmation_not_an_error() {
         app.core.additional_request().map(|(location, _)| location),
         Some(occupied_loc())
     );
-    assert_eq!(app.core.additional_request(), Some((occupied_loc(), AiCli::Pi)));
+    assert_eq!(
+        app.core.additional_request(),
+        Some((occupied_loc(), AiCli::Pi))
+    );
     assert_eq!(visible_notice(&app), None, "no error shows");
+}
+
+/// FR-004: a refusal that lands after the person switched project must not reopen the
+/// confirmation, whose confirm would create in the then-active project.
+#[test]
+fn a_refusal_after_a_project_switch_stays_a_notice() {
+    let (mut app, mut rx, _) = app_with_sessions_at_feat_x(0);
+    start(&mut app, AiCli::Pi, false);
+    let _ = creates(&mut rx);
+    let req = pending_create(&app);
+    app.core.workspace.active = Some(std::path::PathBuf::from("/repo/other"));
+    refuse(&mut app, req, Some(OCCUPANT_ID));
+    assert_eq!(app.core.additional_request(), None);
+    assert!(visible_notice(&app).is_some());
 }
 
 /// FR-004: any other refusal, and an automatic start's, still shows the service's text.
@@ -1533,7 +1556,10 @@ fn other_refusals_and_an_automatic_refusal_stay_notices() {
     let req = pending_create(&app);
     refuse(&mut app, req, None);
     assert_eq!(app.core.additional_request(), None);
-    assert!(visible_notice(&app).is_some(), "a refusal without an occupant is shown");
+    assert!(
+        visible_notice(&app).is_some(),
+        "a refusal without an occupant is shown"
+    );
 
     let (mut app, mut rx, _) = app_with_sessions_at_feat_x(0);
     start(&mut app, AiCli::ClaudeCode, true);
@@ -1541,7 +1567,10 @@ fn other_refusals_and_an_automatic_refusal_stay_notices() {
     let req = pending_create(&app);
     refuse(&mut app, req, Some(OCCUPANT_ID));
     assert_eq!(app.core.additional_request(), None);
-    assert!(visible_notice(&app).is_some(), "an automatic refusal is shown");
+    assert!(
+        visible_notice(&app).is_some(),
+        "an automatic refusal is shown"
+    );
 }
 
 /// US1 s2, FR-002: confirming sends exactly one flagged create with the chosen CLI.
@@ -1572,17 +1601,27 @@ fn cancelling_creates_nothing_and_leaves_the_catalog() {
 #[test]
 fn the_blocked_start_and_the_row_entry_still_open_the_confirmation() {
     let (mut app, _rx, ids) = app_with_sessions_at_feat_x(2);
-    app.core.update(Message::Session(SessionMsg::AdditionalRequested(occupied_loc())));
+    app.core
+        .update(Message::Session(SessionMsg::AdditionalRequested(
+            occupied_loc(),
+        )));
     assert_eq!(
         app.core.additional_request().map(|(location, _)| location),
         Some(occupied_loc())
     );
-    app.core.update(Message::Session(SessionMsg::AdditionalCancelled));
+    app.core
+        .update(Message::Session(SessionMsg::AdditionalCancelled));
 
-    let sessions = app.core.workspace.sessions.get_mut(Path::new("/repo/demo")).unwrap();
+    let sessions = app
+        .core
+        .workspace
+        .sessions
+        .get_mut(Path::new("/repo/demo"))
+        .unwrap();
     sessions[0].lifecycle = micold_core::session::SessionLifecycle::Running;
     sessions[1].lifecycle = micold_core::session::SessionLifecycle::Idle;
-    app.core.update(Message::Session(SessionMsg::StartBlocked(ids[1])));
+    app.core
+        .update(Message::Session(SessionMsg::StartBlocked(ids[1])));
     assert_eq!(app.core.session.blocked_start, Some(ids[1]));
 }
 
@@ -1629,10 +1668,22 @@ fn after_confirming_both_sessions_are_listed_and_deleting_one_leaves_the_other()
         },
     );
 
-    let listed = app.core.workspace.sessions.get(Path::new("/repo/demo")).unwrap();
+    let listed = app
+        .core
+        .workspace
+        .sessions
+        .get(Path::new("/repo/demo"))
+        .unwrap();
     assert_eq!(listed.len(), 2);
-    assert!(listed.iter().find(|s| s.id == ids[0]).unwrap().main, "the original stays main");
-    assert_eq!(app.core.session.active, Some(helper_id), "the new session is selected");
+    assert!(
+        listed.iter().find(|s| s.id == ids[0]).unwrap().main,
+        "the original stays main"
+    );
+    assert_eq!(
+        app.core.session.active,
+        Some(helper_id),
+        "the new session is selected"
+    );
 
     app.core
         .workspace
@@ -1640,7 +1691,12 @@ fn after_confirming_both_sessions_are_listed_and_deleting_one_leaves_the_other()
         .get_mut(Path::new("/repo/demo"))
         .unwrap()
         .retain(|s| s.id != helper_id);
-    let left = app.core.workspace.sessions.get(Path::new("/repo/demo")).unwrap();
+    let left = app
+        .core
+        .workspace
+        .sessions
+        .get(Path::new("/repo/demo"))
+        .unwrap();
     assert_eq!(left.iter().map(|s| s.id).collect::<Vec<_>>(), vec![ids[0]]);
 }
 
@@ -7058,7 +7114,7 @@ mod issue_source {
         let mut rig = issue_rig(Some(FAKE_GH), FakeIssueSource::new());
         send(&mut rig.app, FormMsg::Opened);
         let (req, _) = remote_lists_sent(&mut rig.rx)[0];
-        rig.app.core.workspace.active = Some(PathBuf::from("/repo/other"));
+        rig.app.core.workspace.active = Some(std::path::PathBuf::from("/repo/other"));
         answer_remotes(&mut rig.app, req, github_remote());
         assert_eq!(
             form(&rig.app).github,
