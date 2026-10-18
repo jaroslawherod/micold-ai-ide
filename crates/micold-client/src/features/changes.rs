@@ -16,7 +16,10 @@ use micold_core::pull_request::{
 use micold_core::review::base::{Base, BaseUnavailable, ReviewScope, Toggles};
 use micold_core::review::changes::{ChangeKind, ChangeList, ChangedFile};
 use micold_core::review::comment::{CommentId, CommentState, Outcome, ReviewComment, Status};
-use micold_core::review::diff::{parse_unified, FileDiff, LoadedDiff, Spans};
+use micold_core::review::diff::{
+    parse_unified, side_by_side_rows, unified_rows, FileDiff, LoadedDiff, SideRow, Spans,
+    UnifiedRow,
+};
 use micold_core::review::pr_diff::PrDiff;
 use micold_core::review::reply::{self, CARD_CHARS};
 use micold_core::review::{LineRange, RelPath, Side};
@@ -203,6 +206,8 @@ pub struct OpenView {
     /// The comment whose whole reply is open in its dialog (feature 946, FR-006); cleared when
     /// that comment leaves the entry.
     pub reply_open: Option<CommentId>,
+    /// The review panel right of the diff (feature 946, FR-016 to FR-019).
+    pub panel: Panel,
     /// The entry's branch, as the shell last told it; `None` for the Default entry and a
     /// detached HEAD (feature 775).
     pub branch: Option<String>,
@@ -210,6 +215,263 @@ pub struct OpenView {
     pub pull_requests: PrList,
     /// What the diff shows: the entry's changes, or a pull request's (feature 775).
     pub source: Source,
+}
+
+/// The review panel's state (feature 946, FR-016 to FR-019).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Panel {
+    /// The panel is shown; open by default, closed by the toolbar's "Review (n)".
+    pub open: bool,
+    /// The comment a row jump went to: its card is drawn highlighted (FR-017).
+    pub focus: Option<CommentId>,
+    /// The row list's scroll offset, in pixels.
+    pub offset: u32,
+    /// The row list's viewport height, in pixels.
+    pub viewport: u32,
+    /// Why the last row press did not jump; cleared by the next press.
+    pub hidden: Option<Why>,
+    /// A jump waits for its file's diff to arrive, then scrolls to the focused comment.
+    pub to_show: bool,
+}
+
+impl Default for Panel {
+    fn default() -> Self {
+        Self {
+            open: true,
+            focus: None,
+            offset: 0,
+            viewport: 0,
+            hidden: None,
+            to_show: false,
+        }
+    }
+}
+
+/// Where pressing a panel row goes (FR-017).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Jump {
+    /// To `line` of `path`, which the diff lists.
+    Shown {
+        /// The file.
+        path: RelPath,
+        /// The comment's first line.
+        line: u32,
+    },
+    /// Nowhere: the comment's file is not in the diff, and why.
+    Hidden(Why),
+}
+
+/// Why a jump is refused.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Why {
+    /// The file is of a kind the toolbar's toggles hide.
+    KindToggledOff,
+    /// The file is not among the changes at all.
+    NotListed,
+}
+
+impl Why {
+    /// What the panel says.
+    pub fn message(self) -> &'static str {
+        match self {
+            Self::KindToggledOff => {
+                "That comment's file is hidden by the Committed or Uncommitted toggle. Turn the toggle back on to see it."
+            }
+            Self::NotListed => "That comment's file is not in the current diff.",
+        }
+    }
+}
+
+/// One row of the review panel (FR-016).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PanelRow {
+    /// The comment.
+    pub id: CommentId,
+    /// Its file.
+    pub path: RelPath,
+    /// Its side.
+    pub side: Side,
+    /// "Line 3" or "Lines 3–5"; "Old line…" on the removed side.
+    pub lines: String,
+    /// The start of its text.
+    pub text: String,
+    /// Its status.
+    pub status: Status,
+    /// The start of its reply, made displayable.
+    pub reply: Option<String>,
+    /// Its file is not in the current diff.
+    pub not_in_diff: bool,
+    /// It is the comment a jump went to.
+    pub selected: bool,
+    /// Edit and Delete are offered: a draft no send holds.
+    pub editable: bool,
+    /// It has a reply longer than the row shows, so **Show all** is offered.
+    pub has_full_reply: bool,
+}
+
+/// How many characters of a comment's text a panel row shows.
+pub const PANEL_TEXT_CHARS: usize = 200;
+
+/// The review panel's rows: by file path (bytewise), first line, side (current first), created.
+pub fn panel_rows(state: &State) -> Vec<PanelRow> {
+    let Some(view) = state.open.as_ref() else {
+        return Vec::new();
+    };
+    let Some(review) = review_of(state, view) else {
+        return Vec::new();
+    };
+    let listed = shown_list(view);
+    let mut comments: Vec<&ReviewComment> = review.comments.iter().collect();
+    comments.sort_by(|a, b| {
+        (
+            a.path.as_str().as_bytes(),
+            a.range.start(),
+            a.side,
+            a.created,
+        )
+            .cmp(&(
+                b.path.as_str().as_bytes(),
+                b.range.start(),
+                b.side,
+                b.created,
+            ))
+    });
+    comments
+        .into_iter()
+        .map(|c| {
+            let card = card_model(c, review.sending);
+            let (start, end) = (c.range.start(), c.range.end());
+            let noun = if start == end { "line" } else { "lines" };
+            let span = if start == end {
+                start.to_string()
+            } else {
+                format!("{start}–{end}")
+            };
+            let lines = match (c.side, start == end) {
+                (Side::New, true) => format!("Line {span}"),
+                (Side::New, false) => format!("Lines {span}"),
+                (Side::Old, _) => format!("Old {noun} {span}"),
+            };
+            PanelRow {
+                id: c.id,
+                path: c.path.clone(),
+                side: c.side,
+                lines,
+                text: reply::shortened(&c.text, PANEL_TEXT_CHARS).0,
+                status: card.status,
+                reply: card.reply.map(|(text, _)| text),
+                not_in_diff: listed.is_some_and(|l| l.files.iter().all(|f| f.path != c.path)),
+                selected: view.panel.focus == Some(c.id),
+                editable: card.editable,
+                has_full_reply: full_reply(c).is_some(),
+            }
+        })
+        .collect()
+}
+
+/// How many comments of the open entry have each status, in the order Draft, Sent, Applied,
+/// Answered; every status is listed, with zero where none has it.
+pub fn status_counts(state: &State) -> [(Status, usize); 4] {
+    let mut counts = [
+        (Status::Draft, 0),
+        (Status::Sent, 0),
+        (Status::Applied, 0),
+        (Status::Answered, 0),
+    ];
+    let review = state.open.as_ref().and_then(|view| review_of(state, view));
+    for comment in review.iter().flat_map(|r| &r.comments) {
+        let status = comment.state.status();
+        if let Some(slot) = counts.iter_mut().find(|(s, _)| *s == status) {
+            slot.1 += 1;
+        }
+    }
+    counts
+}
+
+/// What the panel says with no comment (US3 s5).
+pub const PANEL_EMPTY_TEXT: &str =
+    "No review comments yet. Click a line number in the diff to write one.";
+
+/// The toolbar toggle's label: "Review (n)", n being every comment of the entry.
+pub fn review_toolbar_label(state: &State) -> String {
+    let count = state
+        .open
+        .as_ref()
+        .and_then(|view| review_of(state, view))
+        .map_or(0, |r| r.comments.len());
+    format!("Review ({count})")
+}
+
+/// Where pressing the row of comment `id` goes; `None` for an unknown comment.
+pub fn jump_target(state: &State, id: CommentId) -> Option<Jump> {
+    let view = state.open.as_ref()?;
+    let comment = review_of(state, view)?
+        .comments
+        .iter()
+        .find(|c| c.id == id)?;
+    let listed = view.source == Source::Changes
+        && shown_list(view).is_some_and(|l| l.files.iter().any(|f| f.path == comment.path));
+    Some(if listed {
+        Jump::Shown {
+            path: comment.path.clone(),
+            line: comment.range.start(),
+        }
+    } else if view.source == Source::Changes
+        && (!view.toggles.committed || !view.toggles.uncommitted)
+    {
+        Jump::Hidden(Why::KindToggledOff)
+    } else {
+        Jump::Hidden(Why::NotListed)
+    })
+}
+
+/// The diff row index of `line` of `side` in the layout in force, for a jump.
+fn row_of_line(diff: &LoadedDiff, layout: DiffLayout, side: Side, line: u32) -> Option<usize> {
+    match layout {
+        DiffLayout::Unified => unified_rows(&diff.diff).iter().position(|row| match row {
+            UnifiedRow::Line(l) => match side {
+                Side::New => l.new == Some(line),
+                Side::Old => l.old == Some(line),
+            },
+            UnifiedRow::Header(_) => false,
+        }),
+        DiffLayout::SideBySide => side_by_side_rows(&diff.diff)
+            .iter()
+            .position(|row| match row {
+                SideRow::Pair { left, right } => match side {
+                    Side::New => right.is_some_and(|c| c.number == line),
+                    Side::Old => left.is_some_and(|c| c.number == line),
+                },
+                SideRow::Header(_) => false,
+            }),
+    }
+}
+
+/// The scroll offset that brings the focused comment's first line near the top of the diff, and
+/// takes the pending jump; `None` when there is nothing to scroll to yet.
+fn jump_offset(state: &mut State) -> Option<u32> {
+    let layout = state.layout;
+    let view = state.open.as_ref()?;
+    let focus = view.panel.focus?;
+    let comment = review_of(state, view)?
+        .comments
+        .iter()
+        .find(|c| c.id == focus)?;
+    if view.selected.as_ref() != Some(&comment.path) {
+        return None;
+    }
+    let Load::Ready(diff) = &view.diff else {
+        return None;
+    };
+    let row = row_of_line(diff, layout, comment.side, comment.range.start());
+    let offset = row.map_or(0.0, |r| {
+        r.saturating_sub(2) as f32 * crate::ui::material::DIFF_ROW_HEIGHT
+    });
+    if let Some(view) = state.open.as_mut() {
+        view.panel.to_show = false;
+        view.diff_offset = offset as u32;
+    }
+    Some(offset as u32)
 }
 
 /// A gutter selection: lines `anchor` to `head` (either order) of one side (C1).
@@ -437,6 +699,17 @@ pub enum Msg {
     DiscardConfirmed,
     /// The discard confirmation's Cancel, or its dismissal (S3).
     DiscardCancelled,
+    /// The toolbar's "Review (n)" toggle: close or reopen the panel (feature 946, FR-016).
+    PanelToggled,
+    /// The panel's row list scrolled.
+    PanelScrolled {
+        /// The offset, in pixels.
+        offset: u32,
+        /// The viewport height, in pixels.
+        viewport: u32,
+    },
+    /// A panel row was pressed: jump to its comment (FR-017).
+    PanelRowSelected(CommentId),
 }
 
 /// What the shell must do.
@@ -489,6 +762,11 @@ pub enum Effect {
         project: PathBuf,
         /// The pull request's number.
         number: u64,
+    },
+    /// Scroll the diff to this offset, in pixels (a panel jump).
+    ScrollDiff {
+        /// The offset.
+        offset: u32,
     },
     /// Tell the service the chosen layout (`SettingsSet { diff_layout }`, R12).
     SetLayout(DiffLayout),
@@ -554,6 +832,7 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
                 outdated: BTreeSet::new(),
                 confirm_discard: false,
                 reply_open: None,
+                panel: Panel::default(),
                 branch: None,
                 pull_requests: PrList::Absent,
                 source: Source::Changes,
@@ -770,7 +1049,49 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
                 }
             }
             judge_outdated(state);
+            let waiting = state.open.as_ref().is_some_and(|v| v.panel.to_show);
+            match waiting.then(|| jump_offset(state)).flatten() {
+                Some(offset) => Effect::ScrollDiff { offset },
+                None => Effect::None,
+            }
+        }
+        Msg::PanelToggled => {
+            if let Some(view) = state.open.as_mut() {
+                view.panel.open = !view.panel.open;
+            }
             Effect::None
+        }
+        Msg::PanelScrolled { offset, viewport } => {
+            if let Some(view) = state.open.as_mut() {
+                view.panel.offset = offset;
+                view.panel.viewport = viewport;
+            }
+            Effect::None
+        }
+        Msg::PanelRowSelected(id) => {
+            let Some(jump) = jump_target(state, id) else {
+                return Effect::None;
+            };
+            let Some(view) = state.open.as_mut() else {
+                return Effect::None;
+            };
+            let path = match jump {
+                Jump::Shown { path, .. } => path,
+                Jump::Hidden(why) => {
+                    view.panel.hidden = Some(why);
+                    view.panel.focus = None;
+                    view.panel.to_show = false;
+                    return Effect::None;
+                }
+            };
+            view.panel.hidden = None;
+            view.panel.focus = Some(id);
+            view.panel.to_show = true;
+            let effect = update(state, Msg::FileSelected(path));
+            match (effect, jump_offset(state)) {
+                (Effect::None, Some(offset)) => Effect::ScrollDiff { offset },
+                (effect, _) => effect,
+            }
         }
         Msg::ListScrolled { offset, viewport } => {
             if let Some(view) = state.open.as_mut() {

@@ -390,10 +390,17 @@ mod tests {
     fn a_highlighted_card_draws_the_outline_and_keeps_the_plain_card_size() {
         assert!(!card(CardState::Draft).parts().highlighted);
         assert!(card(CardState::Draft).highlighted(true).parts().highlighted);
-        assert!(!card(CardState::Draft).highlighted(false).parts().highlighted);
+        assert!(
+            !card(CardState::Draft)
+                .highlighted(false)
+                .parts()
+                .highlighted
+        );
         let plain = laid_out(ReviewCommentCard::new("rename", CardState::Sent, LIGHT));
-        let marked = laid_out(ReviewCommentCard::new("rename", CardState::Sent, LIGHT).highlighted(true));
-        let off = laid_out(ReviewCommentCard::new("rename", CardState::Sent, LIGHT).highlighted(false));
+        let marked =
+            laid_out(ReviewCommentCard::new("rename", CardState::Sent, LIGHT).highlighted(true));
+        let off =
+            laid_out(ReviewCommentCard::new("rename", CardState::Sent, LIGHT).highlighted(false));
         assert_eq!(off, plain, "false matches the plain card");
         assert_eq!(marked, plain, "the outline takes no room");
     }

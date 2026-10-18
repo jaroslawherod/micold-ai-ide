@@ -233,7 +233,10 @@ mod tests {
         let mut heights = Vec::new();
         for status in ALL {
             heights.push(height(row_of(status).into(), 360.0));
-            heights.push(height(row_of(status).reply("done").selected(true).into(), 360.0));
+            heights.push(height(
+                row_of(status).reply("done").selected(true).into(),
+                360.0,
+            ));
             heights.push(height(
                 row_of(status)
                     .reply(long.clone())

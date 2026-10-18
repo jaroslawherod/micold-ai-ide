@@ -1946,3 +1946,240 @@ fn show_all_opens_the_full_reply_and_closing_or_losing_the_comment_clears_it() {
         "no such comment"
     );
 }
+
+// --- Feature 946, M4: the review panel (FR-016 to FR-019, US3) ---
+
+use micold_client::features::changes::{
+    jump_target, panel_rows, review_toolbar_label, status_counts, Jump, Why, PANEL_EMPTY_TEXT,
+};
+
+fn panel(state: &State) -> &changes::Panel {
+    &state.open.as_ref().unwrap().panel
+}
+
+/// FR-016. Rows are ordered by file (bytewise), first line, side (current first), created, and
+/// carry their lines label, text start, status and reply start.
+#[test]
+fn panel_rows_are_ordered_and_describe_their_comments() {
+    let mut state = showing(commentable());
+    let mut a = comment("b.rs", Side::Old, 2, 2, CommentState::Draft);
+    a.created = 1;
+    let mut b = comment("b.rs", Side::New, 2, 4, CommentState::Draft);
+    b.created = 2;
+    let c = comment("a.rs", Side::New, 9, 9, CommentState::Draft);
+    let sent = comment("b.rs", Side::New, 1, 1, CommentState::Sent { at: 5 });
+    let done = reported(
+        comment("b.rs", Side::New, 7, 7, CommentState::Sent { at: 5 }),
+        Outcome::Answered,
+        "because",
+    );
+    push(
+        &mut state,
+        "feat-a",
+        vec![a.clone(), b.clone(), c.clone(), sent.clone(), done.clone()],
+    );
+    let rows = panel_rows(&state);
+    let ids: Vec<_> = rows.iter().map(|r| r.id).collect();
+    assert_eq!(ids, vec![c.id, sent.id, b.id, a.id, done.id]);
+    let labels: Vec<_> = rows.iter().map(|r| r.lines.as_str()).collect();
+    assert_eq!(
+        labels,
+        ["Line 9", "Line 1", "Lines 2–4", "Old line 2", "Line 7"]
+    );
+    assert_eq!(rows[0].text, "about a.rs:9");
+    assert_eq!(rows[1].status, Status::Sent);
+    assert_eq!(rows[4].status, Status::Answered);
+    assert_eq!(rows[4].reply.as_deref(), Some("because"));
+    assert!(rows[2].editable && !rows[1].editable && !rows[4].editable);
+    assert!(rows[4].has_full_reply && !rows[0].has_full_reply);
+}
+
+/// Edge "file gone". A row whose file is not listed is marked and keeps its status.
+#[test]
+fn a_row_of_a_file_not_in_the_diff_is_marked_and_keeps_its_status() {
+    let mut state = showing(commentable());
+    let gone = comment("gone.rs", Side::New, 1, 1, CommentState::Sent { at: 5 });
+    let here = comment("b.rs", Side::New, 2, 2, CommentState::Draft);
+    push(&mut state, "feat-a", vec![gone.clone(), here.clone()]);
+    let rows = panel_rows(&state);
+    let row = |id| rows.iter().find(|r| r.id == id).unwrap();
+    assert!(row(gone.id).not_in_diff);
+    assert_eq!(row(gone.id).status, Status::Sent);
+    assert!(!row(here.id).not_in_diff);
+}
+
+/// FR-016, US3 s5. Counts per status; no comments gives the empty state.
+#[test]
+fn status_counts_and_the_empty_state() {
+    let mut state = showing(commentable());
+    assert!(panel_rows(&state).is_empty());
+    assert!(PANEL_EMPTY_TEXT.contains("No review comments"));
+    assert_eq!(review_toolbar_label(&state), "Review (0)");
+    let sent = comment("b.rs", Side::New, 1, 1, CommentState::Sent { at: 5 });
+    let draft = comment("b.rs", Side::New, 2, 2, CommentState::Draft);
+    let draft2 = comment("b.rs", Side::New, 3, 3, CommentState::Draft);
+    let applied = reported(sent.clone(), Outcome::Applied, "done");
+    push(&mut state, "feat-a", vec![sent, draft, draft2, applied]);
+    assert_eq!(
+        status_counts(&state),
+        [
+            (Status::Draft, 2),
+            (Status::Sent, 1),
+            (Status::Applied, 1),
+            (Status::Answered, 0)
+        ]
+    );
+    assert_eq!(review_toolbar_label(&state), "Review (4)");
+}
+
+/// FR-016. The panel is open by default; the toolbar toggle closes and reopens it.
+#[test]
+fn the_toolbar_toggle_closes_and_reopens_the_panel() {
+    let mut state = showing(commentable());
+    assert!(panel(&state).open);
+    changes::update(&mut state, Msg::PanelToggled);
+    assert!(!panel(&state).open);
+    changes::update(&mut state, Msg::PanelToggled);
+    assert!(panel(&state).open);
+    changes::update(
+        &mut state,
+        Msg::PanelScrolled {
+            offset: 40,
+            viewport: 300,
+        },
+    );
+    assert_eq!((panel(&state).offset, panel(&state).viewport), (40, 300));
+}
+
+/// FR-017, US3 s2. Pressing a row selects its file, scrolls its lines into view and focuses it.
+#[test]
+fn pressing_a_row_selects_the_file_scrolls_and_focuses() {
+    let mut state = ready(&["a.rs", "b.rs"]);
+    let target = comment("b.rs", Side::New, 4, 4, CommentState::Draft);
+    push(&mut state, "feat-a", vec![target.clone()]);
+    assert_eq!(
+        jump_target(&state, target.id),
+        Some(Jump::Shown {
+            path: path("b.rs"),
+            line: 4
+        })
+    );
+    let effect = changes::update(&mut state, Msg::PanelRowSelected(target.id));
+    let Effect::ReadDiff {
+        seq, path: asked, ..
+    } = effect
+    else {
+        panic!("the file's diff is read first, got {effect:?}");
+    };
+    assert_eq!(asked, path("b.rs"));
+    assert_eq!(panel(&state).focus, Some(target.id));
+    let effect = changes::update(
+        &mut state,
+        Msg::DiffRead {
+            seq,
+            result: Ok(commentable()),
+        },
+    );
+    // Unified rows: header, a, -b, +B, c, -x, +d: line 4 is row 6; two rows above it stay.
+    assert_eq!(effect, Effect::ScrollDiff { offset: 4 * 20 });
+    assert_eq!(state.open.as_ref().unwrap().diff_offset, 80);
+    assert!(!panel(&state).to_show);
+    assert!(panel_rows(&state)[0].selected);
+    // With the file already shown, the press scrolls at once.
+    changes::update(
+        &mut state,
+        Msg::DiffScrolled {
+            offset: 0,
+            viewport: 100,
+        },
+    );
+    let effect = changes::update(&mut state, Msg::PanelRowSelected(target.id));
+    assert_eq!(effect, Effect::ScrollDiff { offset: 80 });
+}
+
+/// FR-017. A refused jump says why and moves nothing.
+#[test]
+fn a_hidden_comment_gives_a_reason_and_no_jump() {
+    let mut state = ready(&["a.rs", "b.rs"]);
+    let gone = comment("gone.rs", Side::New, 1, 1, CommentState::Draft);
+    push(&mut state, "feat-a", vec![gone.clone()]);
+    assert_eq!(
+        jump_target(&state, gone.id),
+        Some(Jump::Hidden(Why::NotListed))
+    );
+    assert_eq!(
+        changes::update(&mut state, Msg::PanelRowSelected(gone.id)),
+        Effect::None
+    );
+    assert_eq!(panel(&state).hidden, Some(Why::NotListed));
+    assert_eq!(panel(&state).focus, None);
+    assert!(state.open.as_ref().unwrap().selected.is_none());
+    changes::update(&mut state, Msg::CommittedToggled);
+    assert_eq!(
+        jump_target(&state, gone.id),
+        Some(Jump::Hidden(Why::KindToggledOff))
+    );
+    assert_ne!(Why::KindToggledOff.message(), Why::NotListed.message());
+}
+
+/// FR-018, US3 s4. Edit on a draft row opens the composer, Delete sends the delete; settled rows
+/// offer neither (the reducer ignores them too), and a row with a reply opens it.
+#[test]
+fn rows_edit_and_delete_drafts_and_open_replies() {
+    let mut state = showing(commentable());
+    let draft = comment("b.rs", Side::New, 2, 2, CommentState::Draft);
+    let sent = comment("b.rs", Side::New, 3, 3, CommentState::Sent { at: 5 });
+    let done = reported(
+        comment("b.rs", Side::New, 4, 4, CommentState::Sent { at: 5 }),
+        Outcome::Applied,
+        "fixed",
+    );
+    push(
+        &mut state,
+        "feat-a",
+        vec![draft.clone(), sent.clone(), done.clone()],
+    );
+    changes::update(&mut state, Msg::EditComment(draft.id));
+    let composer = state.open.as_ref().unwrap().composer.clone().unwrap();
+    assert_eq!(composer.text, draft.text);
+    changes::update(&mut state, Msg::ComposerCancelled);
+    changes::update(&mut state, Msg::EditComment(sent.id));
+    assert!(state.open.as_ref().unwrap().composer.is_none());
+    assert_eq!(
+        edit_of(changes::update(&mut state, Msg::DeleteComment(draft.id))),
+        Some(ReviewEditOp::Delete { id: draft.id })
+    );
+    changes::update(&mut state, Msg::ShowReply(done.id));
+    assert_eq!(state.open.as_ref().unwrap().reply_open, Some(done.id));
+}
+
+/// FR-019. The panel's buttons are the toolbar's, so they share its availability; a push from
+/// another window changes the rows.
+#[test]
+fn a_push_changes_the_rows_and_the_buttons_follow_the_toolbar() {
+    let mut state = showing(commentable());
+    assert!(!changes::send_action(&state).unwrap().enabled);
+    let draft = comment("b.rs", Side::New, 2, 2, CommentState::Draft);
+    push(&mut state, "feat-a", vec![draft.clone()]);
+    assert_eq!(panel_rows(&state).len(), 1);
+    assert!(changes::send_action(&state).unwrap().enabled);
+    assert!(changes::tidy_actions(&state).unwrap().discard_pending);
+    push(&mut state, "feat-a", vec![]);
+    assert!(panel_rows(&state).is_empty());
+}
+
+/// SC-006. Rows and counts for 200 comments take well under 100 ms.
+#[test]
+fn rows_and_counts_for_200_comments_stay_within_the_budget() {
+    let mut state = showing(commentable());
+    let many: Vec<_> = (1..=200)
+        .map(|n| comment("b.rs", Side::New, n, n, CommentState::Draft))
+        .collect();
+    push(&mut state, "feat-a", many);
+    let started = std::time::Instant::now();
+    let rows = panel_rows(&state);
+    let counts = status_counts(&state);
+    assert!(started.elapsed() < std::time::Duration::from_millis(100));
+    assert_eq!(rows.len(), 200);
+    assert_eq!(counts[0], (Status::Draft, 200));
+}

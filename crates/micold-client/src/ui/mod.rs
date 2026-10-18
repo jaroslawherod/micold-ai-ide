@@ -75,6 +75,7 @@ mod sidebar;
 // The sidebar list's scroll viewport, by name — the binary addresses `scroll_to` to it when a
 // reveal has a row to bring into view (feature 024). Re-exported like `ripple_pulse` above: the
 // binary needs this one name, not the module.
+pub use changes::DIFF_SCROLL_ID;
 pub use sidebar::{start_control_id, SIDEBAR_SCROLL_ID};
 // The application's theme — the only thing the styling layer exposes beyond the component
 // library (FR-002). Defined in `material`, not here: a feature module naming the styling layer is

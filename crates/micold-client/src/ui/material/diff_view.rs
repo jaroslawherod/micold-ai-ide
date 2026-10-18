@@ -250,6 +250,7 @@ pub struct DiffView<'a, M> {
     offset: u32,
     viewport: u32,
     on_scroll: Option<Box<dyn Fn(u32, u32) -> M + 'a>>,
+    scroll_id: Option<iced::advanced::widget::Id>,
     on_show_large: Option<M>,
     gutters: Gutters<'a, M>,
     slots: BTreeMap<Anchor, Vec<Element<'a, M>>>,
@@ -268,6 +269,7 @@ impl<'a, M: Clone + 'a> DiffView<'a, M> {
             offset: 0,
             viewport: 0,
             on_scroll: None,
+            scroll_id: None,
             on_show_large: None,
             gutters: Gutters::none(),
             slots: BTreeMap::new(),
@@ -320,6 +322,12 @@ impl<'a, M: Clone + 'a> DiffView<'a, M> {
     /// The viewport height last reported, in pixels; 0 assumes a full window.
     pub fn viewport(mut self, viewport: u32) -> Self {
         self.viewport = viewport;
+        self
+    }
+
+    /// Name the rows' scrollable, so a jump can scroll it.
+    pub fn scroll_id(mut self, id: iced::advanced::widget::Id) -> Self {
+        self.scroll_id = Some(id);
         self
     }
 
@@ -721,6 +729,9 @@ impl<'a, M: Clone + 'a> From<DiffView<'a, M>> for Element<'a, M> {
                 .extras(extras);
             if let Some(f) = view.on_scroll {
                 list = list.on_scroll(f);
+            }
+            if let Some(id) = view.scroll_id.clone() {
+                list = list.id(id);
             }
             list.into()
         };
