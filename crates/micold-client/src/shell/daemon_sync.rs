@@ -684,6 +684,7 @@ pub fn on_pod_gone(app: &mut App, daemon: DaemonId, reason: String) -> Task<Mess
         daemon.0
     ));
     daemon_event(app, daemon, DaemonEvent::Gone(reason));
+    app.daemon_catalogs.remove(&daemon);
     app.disconnected.insert(daemon);
     Task::none()
 }
