@@ -81,6 +81,12 @@ use micold_core::settings::{JsonFileSettingsStore, SettingsStore};
 use micold_core::store::{JsonFileStore, ProjectStore};
 use std::path::PathBuf;
 
+use micold_client::kube::live::LiveCluster;
+use micold_core::kube::classify::KubeFailure;
+use micold_core::kube::Cluster;
+use std::future::Future;
+use std::pin::Pin;
+
 use crate::shell::link_opener::{LinkOpener, SystemLinkOpener};
 use micold_client::features::attention::DesktopNotifier;
 
@@ -110,7 +116,20 @@ pub struct Capabilities {
     jira_source: Option<Arc<dyn JiraSource>>,
     /// Feature 039: the system's desktop notifications (research R4).
     notifier: Arc<dyn DesktopNotifier>,
+    /// Feature 686: connects to the cluster of a kubeconfig context (the live adapter).
+    #[expect(
+        dead_code,
+        reason = "the Kubernetes start (feature 686, M4b) is its first caller"
+    )]
+    kube_connector: KubeConnector,
 }
+
+/// Connects to the cluster of the named kubeconfig context.
+pub type KubeConnector = Arc<
+    dyn Fn(String) -> Pin<Box<dyn Future<Output = Result<Arc<dyn Cluster>, KubeFailure>> + Send>>
+        + Send
+        + Sync,
+>;
 
 /// Find `gh` on this machine: the include's `PATH`, this process's `PATH`, then the well-known
 /// install directories (contracts/github-issue-source.md §1).
@@ -194,6 +213,13 @@ impl Capabilities {
             notifier: Arc::from(crate::shell::desktop_notify::system(
                 crate::shell::desktop_notify::events(),
             )),
+            kube_connector: Arc::new(|context: String| {
+                Box::pin(async move {
+                    LiveCluster::connect(&context)
+                        .await
+                        .map(|live| Arc::new(live) as Arc<dyn Cluster>)
+                })
+            }),
         }
     }
 
@@ -362,6 +388,15 @@ impl Capabilities {
     /// calls it on a blocking task.
     pub fn notifier(&self) -> Arc<dyn DesktopNotifier> {
         Arc::clone(&self.notifier)
+    }
+
+    /// Connecting to a Kubernetes cluster by kubeconfig context (feature 686).
+    #[expect(
+        dead_code,
+        reason = "the Kubernetes start (feature 686, M4b) is its first caller"
+    )]
+    pub fn kube_connector(&self) -> KubeConnector {
+        Arc::clone(&self.kube_connector)
     }
 
     /// Sourcing the environment-include script.
