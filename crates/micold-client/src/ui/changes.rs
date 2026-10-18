@@ -85,6 +85,9 @@ pub fn view<'a>(
         )
         .active(view.panel.open),
     );
+    if !view.panel.open {
+        header = header.push(review_buttons(state, r));
+    }
     let header = header
         .push(
             Button::text("Close", r)
@@ -115,10 +118,9 @@ pub fn view<'a>(
     .into()
 }
 
-/// The review panel (feature 946, FR-016 to FR-019): its buttons, the counts per status, and a row
-/// per comment. `VirtualRows` has one row height, so the file path is in each row's label rather
-/// than in a group header.
-fn review_panel<'a>(state: &'a State, view: &'a OpenView, r: Roles) -> Element<'a, Message> {
+/// **Clear sent**, **Discard drafts…** and **Send review (n)**, each with the availability 482
+/// gave it (FR-019). In the panel's header while it is open, in the view's header otherwise.
+fn review_buttons<'a>(state: &'a State, r: Roles) -> iced::widget::Row<'a, Message> {
     let mut buttons = row![].spacing(spacing::SM).align_y(Alignment::Center);
     if let Some(tidy) = tidy_actions(&state.changes) {
         buttons = buttons
@@ -141,6 +143,14 @@ fn review_panel<'a>(state: &'a State, view: &'a OpenView, r: Roles) -> Element<'
                 .on_press_maybe(action.enabled.then_some(Message::Changes(Msg::SendPressed))),
         );
     }
+    buttons
+}
+
+/// The review panel (feature 946, FR-016 to FR-019): its buttons, the counts per status, and a row
+/// per comment. `VirtualRows` has one row height, so the file path is in each row's label rather
+/// than in a group header.
+fn review_panel<'a>(state: &'a State, view: &'a OpenView, r: Roles) -> Element<'a, Message> {
+    let buttons = review_buttons(state, r);
     let counts = status_counts(&state.changes)
         .iter()
         .filter(|(_, n)| *n > 0)

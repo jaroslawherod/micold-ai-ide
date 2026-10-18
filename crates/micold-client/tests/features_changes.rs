@@ -2183,3 +2183,33 @@ fn rows_and_counts_for_200_comments_stay_within_the_budget() {
     assert_eq!(rows.len(), 200);
     assert_eq!(counts[0], (Status::Draft, 200));
 }
+
+/// A refused jump's reason goes when the toggle is pressed; a jump to a file the user then leaves
+/// does not scroll when that file's diff arrives later.
+#[test]
+fn a_reason_clears_with_the_toggle_and_an_abandoned_jump_does_not_scroll() {
+    let mut state = ready(&["a.rs", "b.rs"]);
+    let gone = comment("gone.rs", Side::New, 1, 1, CommentState::Draft);
+    let target = comment("b.rs", Side::New, 2, 2, CommentState::Draft);
+    push(&mut state, "feat-a", vec![gone.clone(), target.clone()]);
+    changes::update(&mut state, Msg::PanelRowSelected(gone.id));
+    assert!(panel(&state).hidden.is_some());
+    changes::update(&mut state, Msg::UncommittedToggled);
+    assert_eq!(panel(&state).hidden, None);
+    changes::update(&mut state, Msg::UncommittedToggled);
+    let Effect::ReadDiff { seq, .. } =
+        changes::update(&mut state, Msg::PanelRowSelected(target.id))
+    else {
+        panic!("reads the diff");
+    };
+    // The user picks another file before the diff arrives.
+    let _ = changes::update(&mut state, Msg::FileSelected(path("a.rs")));
+    let effect = changes::update(
+        &mut state,
+        Msg::DiffRead {
+            seq,
+            result: Ok(commentable()),
+        },
+    );
+    assert_eq!(effect, Effect::None);
+}
