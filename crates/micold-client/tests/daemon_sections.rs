@@ -158,6 +158,6 @@ fn every_required_or_marked_control_has_its_section() {
     assert_eq!(Section::holding(Ssh, F::DaemonCpuLimit), None);
     assert_eq!(
         Section::holding(Host, F::DaemonSurviveLogout),
-        Some(Sessions).filter(|_| false)
+        false.then_some(Sessions)
     );
 }

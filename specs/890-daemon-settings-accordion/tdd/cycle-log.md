@@ -53,13 +53,24 @@ first): `daemon_sections` (`Section::of`, `title`, `holding_error`, `holding`), 
 Connection open, `SectionToggled` leaves draft and registry equal), `daemons_section_geometry`
 (titles in FR-002 order, only Connection's body, no group heading painted).
 
-**T009 red not measured**: T009 asks for the Kubernetes add form's height on `main` before T013 as red
-evidence. It was not recorded on `main`; the gate `daemon_form_fits` (Cancel's bottom ≤ 800 logical px)
-was written with the sections and went green with T013. Treat it as a characterisation of the new
-layout, not a proven red.
+**T009 red**: not taken before T013. Review B measured it afterwards on a throwaway `origin/main`
+worktree with the gate copied in: `the Kubernetes add form ends at 1851.0005, past 800`; green on the
+branch (`layout_snapshot` 70 passed).
 
 **Green** — `cargo test -p micold-client --test daemon_sections --test daemons_feature --test
 daemons_section_geometry --test layout_snapshot`: all passed.
 
 **Refactor** — `Section`, `title` and `holds` moved out of `features/daemons.rs` into
 `features/daemon_sections.rs`, one table answering `of`, `holding_error` and `holding`.
+
+### M2 review A fixes
+
+- **R1** (MAJOR): a click on a section an error holds open is not recorded. Red:
+  `a_click_on_a_section_an_error_holds_open_is_not_recorded` — `left: true right: false` (the stale
+  flip closed Resources once the error cleared). Green after `State::held_open` and the guard in
+  `SectionToggled`.
+- **R2** (MAJOR): `allowed` maps to Credentials and is shown under the credential checkboxes. Red:
+  `the_allowed_credentials_refusal_opens_credentials` failed. Green.
+- **R3** (MINOR): `choosing_the_same_kind_again_keeps_the_sections_the_user_opened`: red, then green
+  with `RuntimeChosen` clearing the flips only when the kind changes.
+- Scoped gate had failed clippy (`Some(x).filter(|_| false)` in `daemon_sections.rs`): now `false.then_some(..)`.

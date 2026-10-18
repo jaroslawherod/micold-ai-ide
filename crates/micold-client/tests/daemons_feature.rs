@@ -819,6 +819,81 @@ fn a_required_field_left_empty_keeps_connection_open() {
     }
 }
 
+/// Review A (M2): a click on a section an error holds open is not recorded, so the section is
+/// neither a dead header now nor snapped shut under the user's cursor once the error is gone.
+#[test]
+fn a_click_on_a_section_an_error_holds_open_is_not_recorded() {
+    use daemons::{FormError, Section};
+    let mut w = World::new();
+    let mut state = State::default();
+    daemons::begin_add(&mut state);
+    send(
+        &mut state,
+        &mut w,
+        daemons::Msg::RuntimeChosen(DraftRuntime::Kubernetes),
+    );
+    for (field, section) in [
+        ("cpu_limit", Section::Resources),
+        ("namespace", Section::Connection),
+    ] {
+        state.form_error = Some(FormError {
+            field,
+            message: "refused".into(),
+        });
+        send(&mut state, &mut w, daemons::Msg::SectionToggled(section));
+        assert!(state.section_open(section), "{field}: the click is refused");
+        let default_open = section == Section::Connection;
+        state.form_error = None;
+        assert_eq!(
+            state.section_open(section),
+            default_open,
+            "{field}: no stale flip"
+        );
+    }
+}
+
+/// Review A (M2): the Kubernetes "one key, one pull file" refusal names `allowed`; it opens
+/// Credentials, where it is shown.
+#[test]
+fn the_allowed_credentials_refusal_opens_credentials() {
+    use daemons::{FormError, Section};
+    let mut w = World::new();
+    let mut state = State::default();
+    daemons::begin_add(&mut state);
+    send(
+        &mut state,
+        &mut w,
+        daemons::Msg::RuntimeChosen(DraftRuntime::Kubernetes),
+    );
+    assert!(!state.section_open(Section::Credentials));
+    state.form_error = Some(FormError {
+        field: "allowed",
+        message: "refused".into(),
+    });
+    assert!(state.section_open(Section::Credentials));
+}
+
+/// Review A (M2): choosing the kind already chosen leaves the sections as the user set them.
+#[test]
+fn choosing_the_same_kind_again_keeps_the_sections_the_user_opened() {
+    use daemons::Section;
+    let mut w = World::new();
+    let mut state = State::default();
+    daemons::begin_add(&mut state);
+    send(
+        &mut state,
+        &mut w,
+        daemons::Msg::SectionToggled(Section::Resources),
+    );
+    assert!(state.section_open(Section::Resources));
+    send(
+        &mut state,
+        &mut w,
+        daemons::Msg::RuntimeChosen(DraftRuntime::Container),
+    );
+    assert!(state.section_open(Section::Resources));
+}
+
 // Feature 805: a container daemon saved with an empty port gets a free one, kept from then on.
 
 fn stored_port(w: &World, name: &str) -> u16 {

@@ -79,7 +79,7 @@ impl Section {
             (Container | Kubernetes, "cpus" | "memory" | "pids" | "storage") => Section::Resources,
             (Kubernetes, "context" | "namespace") => Section::Connection,
             (Kubernetes, "image") => Section::Image,
-            (Kubernetes, "ssh_key_file" | "pull_file") => Section::Credentials,
+            (Kubernetes, "allowed" | "ssh_key_file" | "pull_file") => Section::Credentials,
             (Kubernetes, "cpu_request" | "cpu_limit" | "memory_request" | "memory_limit") => {
                 Section::Resources
             }
