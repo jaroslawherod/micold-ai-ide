@@ -11,7 +11,7 @@ use std::path::Path;
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
-use futures_util::{SinkExt, StreamExt};
+use futures_util::SinkExt;
 use micold_core::protocol::codec::Frame;
 use micold_core::protocol::messages::{ClientMsg, DaemonMsg, OperationResult, WireLifecycle};
 use micold_core::session::{AiCli, KindRefusal, SessionId, SessionKind, SessionLocation};
@@ -28,7 +28,7 @@ mod history;
 mod mcp;
 #[path = "support/structured.rs"]
 mod structured;
-use conn::{connect, Client};
+use conn::{answer, connect, Client};
 use history::{ai_session, service};
 use structured::{
     events_of, events_until, fake_stream_cli, fixture, fixture_events, record, seqs_increase,
@@ -303,23 +303,6 @@ fn create(req: u64, project: &Path, provider: AiCli, kind: Option<SessionKind>) 
         allow_additional_session: true,
         kind: kind.unwrap_or_default(),
     }
-}
-
-/// The `OperationOk`/`OperationError` answering `req`.
-async fn answer(client: &mut Client, req: u64) -> DaemonMsg {
-    tokio::time::timeout(Duration::from_secs(20), async {
-        loop {
-            match client.next().await.expect("stream open").unwrap() {
-                Frame::Control(
-                    m @ (DaemonMsg::OperationError { req: r, .. }
-                    | DaemonMsg::OperationOk { req: r, .. }),
-                ) if r == req => return m,
-                _ => continue,
-            }
-        }
-    })
-    .await
-    .expect("the request is answered")
 }
 
 async fn created(client: &mut Client, req: u64) -> SessionId {

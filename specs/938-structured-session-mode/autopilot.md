@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-cl0lw3
 - **Started**: 2026-10-18
 - **Phase**: M4
-- **Next step**: M4 verify (tasks/verify.md step 1: scoped gate + review A), see Handover
+- **Next step**: M4 verify: review A round 2 (fix diff), full gate, PR
 
 ## Pull requests
 
@@ -72,6 +72,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Revision review spec | 1 | e0ff3114af0e20d59a968874d970b56ded98c2fa:1b32faee25fb96fda33a6c60adb7b7a6f022e6f6 | CHANGES: 2 MAJOR (F1 scenarios for FR-021b startup cleanup and FR-023 note; F2 concurrency edge cases — fixed), 2 MINOR (F3 Q-numbering fixed; F4 declined) |
 | Revision review plan | 1 | e0ff3114af0e20d59a968874d970b56ded98c2fa:1b32faee25fb96fda33a6c60adb7b7a6f022e6f6 | CLEAN (1 MINOR declined) |
 | Revision review tasks | 1 | e0ff3114af0e20d59a968874d970b56ded98c2fa:1b32faee25fb96fda33a6c60adb7b7a6f022e6f6 | CLEAN (3 MINOR fixed: T056 test first, T054 startup sweep/race/saver-pass cases, ID-gap note) |
+| M4 review A (code-review high) | 1 | 6a0863fabf5c27b5ea526eb41d05e07bf2d31892:6574ac82466bbcc1f1f37374b317511a52d9889a | 8 findings: 1 MAJOR fixed (F1 first-prompt-once check rested on a sleep — now ordered by a later user message, mutant-checked), 2 MINOR fixed (F4 seqs across the resume, F6 T030 text amended), 1 moot (F7 Handover reset), 4 declined |
+| M4 review B (conformance, sonnet) | 1 | 6a0863fabf5c27b5ea526eb41d05e07bf2d31892:6574ac82466bbcc1f1f37374b317511a52d9889a | CLEAN |
 | Revision review spec (sonnet) | 2 | 7497d055378edd3e6c97a8eea28e417fb1c95801:1b32faee25fb96fda33a6c60adb7b7a6f022e6f6 | CLEAN (1 MINOR fixed: FR-021b and scenario 7 cover purge at start with saving off) |
 
 ## Declined review findings
@@ -98,20 +100,16 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 | A 1 | F7 `unwrap_or_default` in encode | serializing `&str` fields cannot fail; MINOR |
 | M3 | A 1 | F8 sleeps in negative-delivery tests | an absence check needs a time bound; margins match the M2 tests; MINOR |
 | M3 | A 1 | F9 user text in a `Debug` ClientMsg | `SessionInput` carries typed terminal bytes the same way; the daemon never logs a `ClientMsg` with `?` |
+| M4 | A 1 | F2 `CLAUDE_CONFIG_DIR` temp dir never removed | a static is never dropped, so a `TempDir` there leaks the same; one small directory per test binary run, keyed by pid; MINOR |
+| M4 | A 1 | F3 `started_times(dir, 2)` relies on `clear_records` keeping `starts-record` | that is `clear_records`' documented contract; the case waits for the first run's start before the stop, so the count cannot come from the wrong process; MINOR |
+| M4 | A 1 | F5 gone-conversation case compares to the terminal result and calls `start_session` directly | US3 scenario 4 is parity with a terminal session; the terminal side is pinned by the message and the mutant shows the structured side differs when gated; MINOR |
+| M4 | A 1 | F8 stand-ins stopped only at each test's end | a failing case ends its test process's runtime and the daemon's process groups with it, as in the M2/M3 structured tests; MINOR |
 | Revision | spec 1 | F4 User Story 7 before User Story 6 | US6's number is referenced by merged tasks, plan and PRs; renumbering churns merged artifacts; tasks.md notes the order |
 | Revision | plan 1 | F1 `format.rs` split has no task | T052 already names `terminal_history/format.rs` and the pinned fixture test |
 
 ## Handover
 
-- **Done**: branch reset to origin/main (bd881747, PR #1070 recorded). M4 implement: T029 tests in
-  `crates/micold-daemon/tests/structured_resume.rs` (4 tests, 10/10 runs green), T030 needed no
-  source change (Decision 11, cycle-log 9, test-list U13); T029/T030 ticked. Commit 93547118.
-- **Next**: tasks/verify.md step 1 — scoped gate detached (`scripts/gate.sh` per cloud.md for the
-  full one) with review A (`/code-review high origin/main...HEAD`, run via
-  `$SCRATCHPAD/m3/run-review-a.sh`-style `claude -p`, prompt modelled on `$SCRATCHPAD/m3/review-a.prompt`
-  for M4), then review B (conformance, sonnet, `$SCRATCHPAD/m3/review-b.prompt` adapted to M4,
-  base bd881747), full gate, PR files (`pr-title.md`/`pr-body.md`, `PR: to-open`).
-- **Open findings**: none. No PR opened; branch not pushed.
+None.
 
 ## Open escalation
 

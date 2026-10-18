@@ -179,3 +179,20 @@ pub async fn connect_and_attach(state: &Arc<DaemonState>, project: &Path) -> Cli
         }
     }
 }
+
+/// The `OperationOk`/`OperationError` answering `req`, within 20 s.
+pub async fn answer(client: &mut Client, req: u64) -> DaemonMsg {
+    tokio::time::timeout(Duration::from_secs(20), async {
+        loop {
+            match client.next().await.expect("stream open").unwrap() {
+                Frame::Control(
+                    m @ (DaemonMsg::OperationError { req: r, .. }
+                    | DaemonMsg::OperationOk { req: r, .. }),
+                ) if r == req => return m,
+                _ => continue,
+            }
+        }
+    })
+    .await
+    .expect("the request is answered")
+}

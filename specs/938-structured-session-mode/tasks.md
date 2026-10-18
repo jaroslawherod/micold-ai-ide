@@ -338,6 +338,10 @@ FR-021, FR-021a).
   `crates/micold-daemon/src/state.rs` (and `crates/micold-daemon/src/catalog.rs` where the record is
   read), and the structured start path uses the same `launch_args(spec)` resume decision as the
   terminal one.
+  Amended at M4: no source change was needed (ledger Decision 11): M1's
+  `StoredSession::into_session` already passes the kind into `Session::restored_of_kind`, and M2's
+  structured start already takes the terminal `LaunchSpec`; T029's cases are test-after, each
+  pinned by a deliberate mutant (cycle-log 9).
 
 **Checkpoint**: M4 — structured sessions survive restarts.
 

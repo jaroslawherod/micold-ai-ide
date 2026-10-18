@@ -35,11 +35,11 @@ mod conn;
 mod history;
 #[path = "support/structured.rs"]
 mod structured;
-use conn::{connect, Client};
+use conn::{answer, connect, Client};
 use history::service;
 use structured::{
     clear_records, events_of, events_until, fake_stream_cli, fixture, fixture_events, record,
-    starts, stream_script, structured_session, viewer, Received,
+    seqs_increase, starts, stream_script, structured_session, viewer, Received,
 };
 
 /// The seven structured arguments, in order (FR-005).
@@ -166,6 +166,43 @@ async fn started_times(dir: &Path, n: usize) {
 
 async fn send(client: &mut Client, msg: ClientMsg) {
     client.send(Frame::Control(msg)).await.expect("sent");
+}
+
+/// A message sent to the resumed run of `id` after its start; the stand-in records it after any
+/// earlier stdin line, so what precedes it is everything the daemon wrote to this run.
+const AFTER_RESUME: &str = "after the resume";
+
+/// Send [`AFTER_RESUME`] to `id` as request `req` and return the user messages the stand-in has read
+/// in `dir` once it read that one: a first prompt written again on the resume comes before it.
+async fn delivered_through_resume(
+    client: &mut Client,
+    req: u64,
+    id: SessionId,
+    dir: &Path,
+) -> Vec<String> {
+    send(
+        client,
+        ClientMsg::SessionUserMessage {
+            req,
+            session: id,
+            text: AFTER_RESUME.into(),
+        },
+    )
+    .await;
+    let answered = answer(client, req).await;
+    assert!(
+        matches!(answered, DaemonMsg::OperationOk { .. }),
+        "the message was accepted: {answered:?}"
+    );
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    loop {
+        let got = delivered(dir);
+        if got.last().map(String::as_str) == Some(AFTER_RESUME) {
+            return got;
+        }
+        assert!(std::time::Instant::now() < deadline, "never read: {got:?}");
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
 }
 
 fn summary(state: &DaemonState, project: &Path, id: SessionId) -> SessionSummary {
@@ -318,6 +355,7 @@ async fn stop_start_and_restart_resume_the_same_conversation() {
         expected,
         "the earlier events, then the resumed run's"
     );
+    assert!(seqs_increase(&got), "one seq order across the resume");
 
     state.stop_session(id);
     send(
@@ -330,10 +368,9 @@ async fn stop_start_and_restart_resume_the_same_conversation() {
     .await;
     started_times(dir, 3).await;
     assert!(resumes(&argv(dir), id), "restart: {:?}", argv(dir));
-    tokio::time::sleep(Duration::from_millis(300)).await;
     assert_eq!(
-        delivered(dir),
-        [PROMPT],
+        delivered_through_resume(&mut client, 1, id, dir).await,
+        [PROMPT, AFTER_RESUME],
         "the first prompt is never sent again"
     );
     state.stop_session(id);
@@ -402,9 +439,9 @@ async fn a_daemon_restart_keeps_the_kind_and_resumes_the_conversation() {
     let resumed = fixture_events("resume-init.jsonl");
     let got = events_until(&mut watching, id, |got| got.len() >= resumed.len()).await;
     assert_eq!(events_of(&got), resumed, "the history starts at the resume");
-    tokio::time::sleep(Duration::from_millis(300)).await;
-    assert!(
-        delivered(dir).is_empty(),
+    assert_eq!(
+        delivered_through_resume(&mut client, 1, id, dir).await,
+        [AFTER_RESUME],
         "the first prompt is not sent again"
     );
     restarted.stop_session(id);
