@@ -3,6 +3,7 @@
 //! of the stand-in of `support/structured.rs` and compares what it observes.
 //!
 //! The cases share this process's `PATH`, and one of them empties it: they run one at a time.
+// unix-only: the stand-in CLI is a POSIX shell script, and kill is checked with `ps`.
 #![cfg(unix)]
 
 use std::path::Path;
