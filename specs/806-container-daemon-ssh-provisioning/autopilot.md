@@ -58,6 +58,7 @@ Milestone notes:
 - M3 review A round 1 (`b353fa8c1c76:198a12312b8b`): CHANGES; F1 MAJOR (`zig` not on PATH after `pip install ziglang`) fixed: the script accepts `python3 -m ziglang`; F2 MINOR (python3 on Windows) fixed. Round 2 (sonnet, scoped): CLEAN.
 - M3 review B round 1 (`snapB`, sonnet): CHANGES; F1 MAJOR (no M3 cycle-log rows) fixed; F2, F3 MINOR fixed. Round 2 (sonnet, scoped): CLEAN, 1 MINOR (the T029 red claim, corrected to "none recorded"). Verify green.
 - M4 review A round 1 (`8df8fcd612e8:8646b077dd62`): CHANGES; F1 MAJOR (offered.json not refreshed when nothing is missing) fixed: the check script rewrites it; F2 MAJOR (`-R` without `ExitOnForwardFailure`) fixed; F3, F5 MINOR fixed (`</dev/null` for npm; relay upstream connect timeout, accept-error backoff); F4 declined below. Fixes verified by `provision::` and `ssh::` tests.
+- M4 review B round 1 (`snapB`, sonnet): CHANGES; F1 MAJOR (no red evidence for M4 behaviours) fixed: reds recorded by mutation in the cycle-log; F2 MINOR declined (below). Verify green (`provision::` 59, `state::` 4). Round 2 (sonnet, scoped) below.
 
 - M2 review B (sonnet, `fb2179e9334e:2bd42e9facfa`): CHANGES; F1 MAJOR (no M2 cycle log) fixed; F2 MINOR (Windows twin of cancel test) declined: module is Unix-only like its siblings. Verify green. Docs-only fix: no re-run.
 
@@ -86,6 +87,7 @@ Milestone notes:
 | M1 | Review A r1 | F10 `is_released_image` has no caller | By design: M5 (T046+) calls it; the function is local and parse-based |
 | M1 | Review B r1 | F1 (MINOR) `hash` job fails on DRIFT | Intended: the workflow publishes under the tree's hash, so `BASIC_IMAGE_CONTENT_HASH` must match it in the same change; the later "pin PR" is the digest pin `BASIC_IMAGE` (T049) |
 | M4 | Review A r1 | F4 (MINOR) relay bind failure should be reported as the io error | contracts/provisioning.md *Failure causes* and T034 define `PostureBlocksDownload` for a relay that cannot be opened; the cause text covers it |
+| M4 | Review B r1 | F2 (MINOR) `standin_table` has no automated test | No suite uses it before M5/M7 (the container suites); packing and installing both variants was run by hand and is recorded in the cycle-log; a test now would be a container-free test of test support |
 
 ## Handover
 
