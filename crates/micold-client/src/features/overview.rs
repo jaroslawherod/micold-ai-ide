@@ -196,6 +196,17 @@ impl Msg {
     }
 }
 
+/// The root's entry: the Overview's own [`update`], and for [`Msg::GridScrolled`] the shared
+/// scroll-beneath rule, which closes a card menu the grid scrolled beneath (feature 972, FR-012).
+pub fn routed(state: &mut crate::app::State, msg: Msg) -> Vec<crate::features::Outcome> {
+    let scrolled = matches!(msg, Msg::GridScrolled);
+    let outcomes = update(&mut state.overview, msg);
+    if scrolled {
+        state.dismiss_on_scroll_beneath();
+    }
+    outcomes
+}
+
 /// Apply a message to the Overview's state.
 /// An activation that sends the user to a row asks the root to reveal it; nothing else asks.
 pub fn update(state: &mut State, msg: Msg) -> Vec<crate::features::Outcome> {
