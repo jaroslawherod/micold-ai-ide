@@ -169,6 +169,11 @@ fn civil_from_days(days: i64) -> (i32, u8, u8) {
 
 #[cfg(unix)]
 fn host_offset(secs: i64) -> Option<i32> {
+    // musl 1.2 made `time_t` 64-bit and the libc crate deprecated the alias for it
+    // (rust-lang/libc#1848), so musl takes the `i64` directly; `libc::localtime_r` is the same call.
+    #[cfg(target_env = "musl")]
+    let t: i64 = secs;
+    #[cfg(not(target_env = "musl"))]
     let t = libc::time_t::try_from(secs).ok()?;
     let mut tm = std::mem::MaybeUninit::<libc::tm>::uninit();
     // SAFETY: both pointers are valid for the call; `localtime_r` writes only through `tm`.
