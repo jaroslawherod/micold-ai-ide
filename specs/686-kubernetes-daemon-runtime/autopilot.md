@@ -181,3 +181,7 @@ None. (The anchor-timing flake seen in earlier gate runs did not recur; gate8 gr
 - Not covered by the real suite, flagged for the orchestrator: T092's "remote needing the allowed git credential clones" and "withdrawal deletes the secret" (need an authenticated git server and allowed-credential fixtures; the unit tests A10–A12 over `FakeCluster` cover them) and the SC-002 600 s run (set `MICOLD_KUBE_AWAY_SECS=600`).
 - Not runnable here (no docker/kind/kubectl): the suite compiles (`cargo test -p micold-client --features kube-real-runtime --no-run`) and each test prints `SKIP <name>: <reason>` and passes. CI's `kube-cluster` log is the first real run; expect fixes (image/npm config, RBAC verbs, step names in the timing).
 - M9 review A F1 (dash `read -t`), F2 (namespaces rule needs a ClusterRole), F3 (pkill pattern): fixed. Review B F3: fixed (T088 text, harness comment). Review B F1 MAJOR (T092 credential withdrawal / authenticated clone): declined as a cut, not a miss: T092's text now marks both as deferred; the orchestrator should decide whether a follow-up task is wanted. F2 MINOR (one daemon build asserted): noted, not asserted.
+
+## M9 CI fix 1
+
+- Root cause of the pod's `Error` exit: no passwd entry for uid 10001 under a read-only root (entrypoint could not append one); now baked into `packaging/basic/Containerfile`. Insufficient cpu: request defaulted to the 2000m limit; the suite now requests 100m. Failed starts print pod description, logs and events. Details in `tdd/cycle-log.md`. Awaiting CI.

@@ -444,6 +444,9 @@ pub fn client() -> Client {
 pub fn settings(namespace: &str, clis: &[micold_core::session::AiCli]) -> KubeSettings {
     let mut s = KubeSettings::new(CONTEXT, namespace, clis);
     s.image = Some(micold_core::sandbox::image::ImageRef::parse(TEST_IMAGE).unwrap());
+    // With only a limit set, Kubernetes requests the limit (2 CPUs by default), which a 2-vCPU
+    // runner's single node cannot place a second pod beside.
+    s.resources.cpu_request = Some(micold_core::sandbox::MilliCpus(100));
     s
 }
 
@@ -492,10 +495,44 @@ pub async fn start(
         &events.sink(),
     )
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(|e| {
+        diagnose(&settings.namespace.0);
+        e.to_string()
+    })?;
     match connected {
         Connected::Ready(connection, welcome) => Ok((connection, welcome, relay)),
         Connected::Refused(reason) => Err(format!("the daemon refused the handshake: {reason:?}")),
+    }
+}
+
+/// Print what the cluster knows about the pods of `namespace`, so a failed start shows the
+/// container's own error in the log.
+pub fn diagnose(namespace: &str) {
+    for args in [
+        vec!["-n", namespace, "describe", "pods"],
+        vec![
+            "-n",
+            namespace,
+            "logs",
+            "--previous",
+            "--all-containers",
+            "--tail=80",
+            "--selector=app.kubernetes.io/managed-by",
+        ],
+        vec![
+            "-n",
+            namespace,
+            "logs",
+            "--all-containers",
+            "--tail=80",
+            "--selector=app.kubernetes.io/managed-by",
+        ],
+        vec!["-n", namespace, "get", "events"],
+    ] {
+        match kubectl(&args, None) {
+            Ok(out) => eprintln!("--- kubectl {} ---\n{out}", args.join(" ")),
+            Err(e) => eprintln!("--- kubectl {} failed: {e}", args.join(" ")),
+        }
     }
 }
 
