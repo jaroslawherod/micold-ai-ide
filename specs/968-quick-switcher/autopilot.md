@@ -44,6 +44,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | Review spec | 1 | 06e0b7cb93e4b1df3ad203f637ff3bcdfeb41cb2:8ee4531564743d6032729cd056a73f655abfb1a0 | CLEAN: 3 MINOR, fixed, prose only |
 | Review plan | 1 | 96ee1ce3727ec57086e810a9cf02650703d31bd7:f745f268a3ce6dae0a47b8157e100bb4ce069394 | CLEAN, no findings |
+| Review tasks | 1 | e5bd85269a8ad9d34b6748a7abc64f4fcc86a62a:8af03b922fe8dbea230e8f5930cb7cdc4f6d81e1 | CHANGES: 1 MAJOR ([P] on shared test file), 1 MINOR (T016 before T015), both fixed |
 
 ## Declined review findings
 
