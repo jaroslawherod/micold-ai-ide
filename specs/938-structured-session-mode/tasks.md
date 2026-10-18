@@ -382,18 +382,18 @@ M2 (T015).
 
 **Independent Test**: `cargo test -p micold-daemon --test structured_lifecycle`.
 
-- [ ] T033 [P] [US5] Write a failing round-trip test in
+- [x] T033 [P] [US5] Write a failing round-trip test in
   `crates/micold-core/tests/structured_wire.rs` for `DaemonMsg::SessionRequestRefused { session,
   request, reason }` with each `RefusedRequest` (`Input`, `Resize`, `Scrollback`, `Interrupt`).
-- [ ] T034 [US5] Add failing tests to `crates/micold-daemon/tests/structured_lifecycle.rs`:
+- [x] T034 [US5] Add failing tests to `crates/micold-daemon/tests/structured_lifecycle.rs`:
   `SessionInput`, `SessionResize`, `ScrollbackRequest` and `SessionInterrupt` addressed to the
   structured session's primary each produce one `SessionRequestRefused` with a reason to the
   sending client only, and the same requests to one of its shell instances are served (US5
   scenario 4, FR-019).
-- [ ] T035 [US5] Make T033 pass: `DaemonMsg::SessionRequestRefused` and `RefusedRequest` in
+- [x] T035 [US5] Make T033 pass: `DaemonMsg::SessionRequestRefused` and `RefusedRequest` in
   `crates/micold-core/src/protocol/messages.rs`; bump `PROTOCOL_VERSION` by one in
   `crates/micold-core/src/protocol/version.rs` with its doc line.
-- [ ] T036 [US5] Make T034 pass in `crates/micold-daemon/src/server.rs`: send
+- [x] T036 [US5] Make T034 pass in `crates/micold-daemon/src/server.rs`: send
   `SessionRequestRefused` where a terminal-only request targets `Proc::Structured`.
 
 **Checkpoint**: M6 — the daemon side of the feature is complete.

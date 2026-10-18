@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #938
 - **Worktree branch**: claude/project-thread-cl0lw3
 - **Started**: 2026-10-18
-- **Phase**: M5
-- **Next step**: M5 PR to open (reviews done, gate green); then M6
+- **Phase**: M6
+- **Next step**: M6 gate (scripts/gate.sh, log in scratchpad) and reviews; then PR to open
 
 ## Pull requests
 
@@ -22,6 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1064 | M3 first prompt and user messages | merged (rebase) | 1fab9ea568ba3d8e00c60cb14c16f3277120fecf |
 | #1070 | design revision: event history saved under Save terminal history (M7) | merged (rebase) | bd88174731b916d4fe47de2f16f4865dc197a3eb |
 | #1072 | M4 resume | merged (rebase) | 768812fbee80229c924968341b79cf1c553fd63a |
+| #1076 | M5 late and multiple viewers | merged (rebase) | 73e57588cecef1a680173b80ba4922d404028571 |
 
 ## Milestones
 
@@ -31,8 +32,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T011–T021 | full | daemon runs a structured session and streams events; lifecycle parity | #1056 | merged |
 | M3 | T022–T028 | full | first prompt and user messages | #1064 | merged |
 | M4 | T029–T030 | full | resume | #1072 | merged |
-| M5 | T031–T032 | full | late and multiple viewers | to open | reviews done, gate green |
-| M6 | T033–T036 | full | terminal-only requests refused | — | planned |
+| M5 | T031–T032 | full | late and multiple viewers | #1076 | merged |
+| M6 | T033–T036 | full | terminal-only requests refused | — | implemented, gate and reviews next |
 | M7 | T049–T055 | full | event history saved under Save terminal history, restored after a daemon restart | — | planned |
 | M8 | T037–T047, T056 | full | chevron entry, row marker, log pane, user guide, setting note | — | planned |
 
