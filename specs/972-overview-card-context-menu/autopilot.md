@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-a1yb7j
 - **Started**: 2026-10-18
 - **Phase**: implement
-- **Next step**: M2: full gate, visual pass, push, PR title/body to scratchpad; then M3
+- **Next step**: M2 pushed, orchestrator opens the PR from the scratchpad title/body and merges; then M3
 
 ## Pull requests
 
@@ -24,7 +24,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T013 | full | Right-click a card: *Open* + row-menu entries, run as the row menu does; registry dismissal | #1042 | merged |
-| M2 | T014–T019 (T016b) | light | Target mark on the card; empty-space right-click dismisses | — | implemented, reviewed; full gate and visual pass pending |
+| M2 | T014–T019 (T016b) | light | Target mark on the card; empty-space right-click dismisses | — | implemented, gate green, reviewed; PR pending |
 | M3 | T020–T028 | full | Menu key / Shift+F10 open, arrow/Enter navigation, focus return | — | pending |
 
 ## Decisions
@@ -49,6 +49,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Visual pass M1 | 1 | c81d74a8449b3e036a2e8ffe80aa60e5168c827e:5dbd5098f5e91b3d5aae7afdbb0508cf50921e8c | B1, B3–B9, B16 PASS; B14, B19 PARTIAL (fixture: no session / seeded unbound daemon); B15 not run (no second window); record in visual-pass.md |
 | Rebase M1 onto main 1927ab5c (sonnet, conflict resolutions) | 1 | 5531061f2042f54caf19e95871eb69221b0e4d96:faed02ae760714e5641773993f2d836b81f2fe7e | CLEAN: 2 MINOR not fixed (module doc line length, pre-existing; CardMenuEntryChosen during activation unreachable and due() filters on open) |
 | A M2 (reviewer, high) | 1 | 04ef833dcb2e901f6ca01478ff005826cab0ab4c:71bf8848af5fc1ca0f5fc8e8e167778b753da43a | CHANGES: F1 BLOCKER (outer `ContextArea` also dismissed the card's fresh menu) fixed in `ContextArea::update` (skips when captured) + widget test; F2 MAJOR (no test of pane dismissal) fixed by same test; F3 MINOR declined |
+| A M2 | 2 (sonnet, scoped) | eb9775a35a45ad52edb2d21e5d354433eb53256:3f3e428ebfb4d5e1530be90a06820fa2783aec13 | CLEAN |
+| Visual pass M2 | 1 | — | not run to completion: showcase scroll under Xvfb/tiny-skia would not reach the OverviewCard section; the outline and layer are covered by pixel tests (T014); B2, B6, B17 left for a human or CI |
 | B M2 (conformance, sonnet) | 1 | 04ef833dcb2e901f6ca01478ff005826cab0ab4c:71bf8848af5fc1ca0f5fc8e8e167778b753da43a | CHANGES: F1 MAJOR (cycle-log rows missing) fixed; F2 MINOR declined, F3 MINOR fixed |
 
 ## Declined review findings
