@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #968
 - **Worktree branch**: claude/project-thread-ftdy5c
 - **Started**: 2026-10-18
-- **Phase**: M1 verify
-- **Next step**: M1 — verify (scoped gate, review A, review B, visual pass, full gate), PR
+- **Phase**: M1 PR
+- **Next step**: M1 — orchestrator opens the PR from the pushed branch, waits on CI and merges; then M2
 
 ## Pull requests
 
@@ -23,7 +23,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T020 | full | Chord opens the switcher over the active project's locations; filter, choose = row click, close | — | in progress |
+| M1 | T001–T020 | full | Chord opens the switcher over the active project's locations; filter, choose = row click, close | pending | in review |
 | M2 | T021–T026 | full | Sessions listed under their locations, found by name, kept by a location match | — | planned |
 | M3 | T027–T031 | light | Other known projects listed (unavailable badged, unselectable); complete user-guide bullet | — | planned |
 
@@ -48,8 +48,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review tasks | 1 | e5bd85269a8ad9d34b6748a7abc64f4fcc86a62a:8af03b922fe8dbea230e8f5930cb7cdc4f6d81e1 | CHANGES: 1 MAJOR ([P] on shared test file), 1 MINOR (T016 before T015), both fixed |
 | Review tasks | 2 | 2d709358b85fc04a2ea24af63fdf9e8e53f684ca:5a006c9ebfbf54f70f5c50de2febf64543ca50db | CLEAN (sonnet, scoped) |
 | Review A M1 (code-review high) | 1 | 249338d7d4d91aafb452af9b3c8b561cb88dc7ef:316d1b6b5767670852fe8e37bf4296598a2695b4 | 1 MAJOR (candidates rebuilt the sidebar per location) fixed; 5 MINOR: 2 fixed (clones, doc width), 3 declined |
-| Review A M1 (sonnet, scoped) | 2 | 0d0c5ba3498562676ea8c6a61eacf9ff7f5c3c19:51ebbf93e8f5d60473867be8e60ad3cb9aa8253e | running |
-| Review B M1 (conformance, sonnet) | 1 | 0d0c5ba3498562676ea8c6a61eacf9ff7f5c3c19:51ebbf93e8f5d60473867be8e60ad3cb9aa8253e | running |
+| Review A M1 (sonnet, scoped) | 2 | 0d0c5ba3498562676ea8c6a61eacf9ff7f5c3c19:51ebbf93e8f5d60473867be8e60ad3cb9aa8253e | CLEAN: 1 MINOR (doc line still long) fixed, prose only |
+| Review B M1 (conformance, sonnet) | 1 | 0d0c5ba3498562676ea8c6a61eacf9ff7f5c3c19:51ebbf93e8f5d60473867be8e60ad3cb9aa8253e | CLEAN, no findings |
+| Visual pass M1 (quickstart §B B1, B2, B4, B7–B10) | 1 | — | 2 defects (results list outside the dialog card; long name wrapped) fixed in 18a5cf51, re-checked; evidence specs/968-quick-switcher/visual-pass/ |
 
 ## Declined review findings
 
