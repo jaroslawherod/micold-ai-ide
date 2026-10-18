@@ -10,8 +10,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #968
 - **Worktree branch**: claude/project-thread-ftdy5c
 - **Started**: 2026-10-18
-- **Phase**: clarify
-- **Next step**: clarify unit continued with the user's answer to Q1 (other projects' locations and sessions): record it _(decided by user)_ in spec.md, apply it to US3 scenario 5 and FR-003/FR-004, then run the next round
+- **Phase**: plan
+- **Next step**: plan unit (clarify CLEAN after 2 rounds; D4 is a provisional default awaiting the user)
 
 ## Pull requests
 
@@ -30,6 +30,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D1 | spec | Which chord opens the quick-switcher? | Ctrl/Cmd+Shift+P | agent-resolved | spec.md#assumptions; docs/user-guide/terminal-panes.md#keyboard-shortcuts |
 | D2 | clarify | Are worktrees hidden by the tag filter listed? | No; #803 Location order (after the filter) | agent-resolved | specs/803-keyboard-navigation/spec.md#terms |
 | D3 | clarify | Unavailable projects: listed despite #803 Project order excluding them? | Listed in the switcher's order, badged, not selectable | agent-resolved | spec.md US3 scenario 3, FR-006, FR-008 |
+| D4 | clarify | List other projects' locations and sessions? | No, active project only (option A) | default, pending user confirmation | may flip to B (all projects): then US3-5, FR-003, FR-004 change; spec.md#clarifications |
+| D5 | clarify | Rank of a session kept by its location's match; highlight past unavailable projects | After its location, location's rank; first selectable entry | agent-resolved | spec.md US2-3, FR-007 |
 
 ## Review rounds
 
@@ -48,9 +50,7 @@ None.
 
 ## Open escalation
 
-- Clarify round 1, Q1 (category: product scope): are the locations and sessions of the other known
-  projects listed in the quick-switcher, or only the active project's? Recommended: active project
-  only (FR-003/FR-004 as drafted; a project entry is one Enter away).
+None. (Q1 answered provisionally as D4; user confirmation pending.)
 
 ## Follow-ups not done
 

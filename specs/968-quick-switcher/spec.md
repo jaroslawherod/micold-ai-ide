@@ -39,6 +39,17 @@ are those of `specs/803-keyboard-navigation/spec.md#terms`. In addition:
   switcher's order, with the **unavailable** badge, and are not selectable (Up/Down skip them).
   FR-004 and US3 now say "the project switcher's order" instead of **Project order**.
   _(agent-resolved: spec.md#user-story-3 scenario 3, FR-006, FR-008)_
+- Q: Are the locations and sessions of the other known projects listed too, or only those of the
+  active project? → A: Only the active project's; another project is listed as one project entry,
+  and its locations and sessions are listed once it is active. _(default, pending user
+  confirmation — option A recommended)_
+- Q: Where does a session that stays only because its location's name matches rank? → A: Right
+  after its location, in session order, with its location's rank. _(agent-resolved:
+  spec.md#user-story-2 scenario 3, "typing a worktree's name and then moving down reaches its
+  helpers")_
+- Q: Which entry is highlighted when the first remaining one is an unavailable project? → A: The
+  first selectable entry; with none, nothing is highlighted and Enter does nothing.
+  _(agent-resolved: spec.md FR-007, User Story 3 scenario 3)_
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -139,9 +150,8 @@ unavailable project is listed but cannot be chosen.
    project is not offered as a project entry to switch to (its locations and sessions are listed
    above).
 5. **Given** a session or location of a project that is not active, **When** the quick-switcher
-   lists entries, **Then** [NEEDS CLARIFICATION: are the locations and sessions of the other known
-   projects listed too (choosing one switches project, then selects it), or only those of the
-   active project?].
+   lists entries, **Then** it is not listed: only the active project's locations and sessions are
+   entries, and another project appears only as its project entry.
 
 ---
 
@@ -167,7 +177,8 @@ its Linux/Windows and macOS forms.
 - **Empty lists**: no project open (welcome screen): the quick-switcher lists the known projects
   only. No known project: it opens and says there is nothing to switch to. A query that matches
   nothing: it shows "No matches", and Enter does nothing and keeps it open.
-- **Empty query**: lists everything in the order of FR-004; Enter chooses the first entry.
+- **Empty query**: lists everything in the order of FR-004; Enter chooses the first selectable
+  entry.
 - **Missing or invalid worktree**: listed with its `missing` or `invalid` tag, like any location;
   choosing it does exactly what clicking it does (error shown, no session started).
 - **Tag filter**: worktrees the sidebar's tag filter hides are not listed, as the #803 chords skip
@@ -215,7 +226,7 @@ its Linux/Windows and macOS forms.
   an existing app chord (Ctrl/Cmd+Shift+E, T, D, H, W, C, V, O, Arrows, [ ] , . PageUp PageDown).
 - **FR-003**: The quick-switcher MUST list, as entries: the locations of the active project; the
   open sessions of each of those locations; and the known projects other than the active one. A
-  closed session MUST NOT be listed.
+  closed session MUST NOT be listed, nor a location or session of a project that is not active.
 - **FR-004**: With an empty query, entries MUST be listed in this order: each location of the active
   project in location order (so after the sidebar's tag filter), each followed by its open sessions
   in session order; then the other known projects in the project switcher's order, unavailable
@@ -224,7 +235,9 @@ its Linux/Windows and macOS forms.
   characters in order, ignoring case (a location's sessions also stay when the location's name
   matches). Remaining entries MUST be ranked: a name that starts with the query first, then a name
   that contains it as one run of characters, then the other matches; within a rank, the FR-004
-  order. The first remaining entry MUST be highlighted after each change to the query.
+  order; a session kept only because its location matches is listed right after its location, in
+  session order, with the location's rank. The first remaining selectable entry MUST be highlighted
+  after each change to the query; with none, nothing is highlighted.
 - **FR-006**: Each entry MUST show its kind (project, location or session), the name the sidebar or
   project switcher shows for it, and, for a session, its location's name; a location also shows its
   tags; a project its running and unread counts and its **unavailable** badge. The current location
