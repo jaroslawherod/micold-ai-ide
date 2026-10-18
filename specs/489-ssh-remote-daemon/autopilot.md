@@ -25,6 +25,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1020 | M6 | merged | 753a392a489d6d246a18e0e48e6e16928fbf9112 |
 | #1026 | M7 | merged | 1d73b72fca6198e80ad2d4be2c0cf85cadbaf6f9 |
 | #1029 | M8 | merged | 1800df279b79d4dcbfab1a413ced53e497f5fa90 |
+| #1051 | M9 | open | — |
 
 ## Milestones
 
@@ -38,7 +39,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M6 | T066–T072 | full | Version mismatch explained | #1020 | done |
 | M7 | T073–T081 | full | Replace a mismatched daemon with no sessions | #1026 | done |
 | M8 | T082–T084 | full | Remote daemon artefact for macOS and Windows | #1029 | done |
-| M9 | T085–T088 | full | Session lost across a daemon restart shows `lost to daemon`; Reconnect epoch pinned | PR pending | done |
+| M9 | T085–T088 | full | Session lost across a daemon restart shows `lost to daemon`; Reconnect epoch pinned | #1051 | done |
 
 ## Decisions
 
