@@ -36,6 +36,22 @@ flow:feature. Builds on feature 813 (`specs/813-worktree-overview`) and feature 
 - **Reduced motion**: a preference that asks the app to avoid animated movement; when it is on,
   transitions happen in one step.
 
+## Clarifications
+
+### Session 2026-10-18
+
+- Q: How is full-screen mode entered (FR-001)? → A: A toggle button in the Overview's header plus a
+  keyboard shortcut; off each time the Overview opens, not remembered. _(decided by user)_
+- Q: Where does the reduced-motion preference come from (FR-008)? → A: A new app setting *Reduce
+  motion* in Settings, off by default, applied to this zoom; the OS preference is not read.
+  _(decided by user)_
+- Q: What does the full-screen shortcut do while the Overview is closed? → A: Nothing; the mode
+  exists only while the Overview is open. _(agent-resolved:
+  specs/970-overview-fullscreen/spec.md#Assumptions)_
+- Q: Does a change to *Reduce motion* apply before Save, and does Cancel revert it? → A: It follows
+  Settings' one-form rule: Save applies it, Cancel or Esc discards it. _(agent-resolved:
+  docs/user-guide/settings.md, opening section)_
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Give the Overview the whole window (Priority: P1)
@@ -179,7 +195,7 @@ non-default width, repeat: the sidebar is back expanded at that width.
 - **Several windows**: if the app ever has more than one window open, each window's Overview has its own
   mode; entering it in one window does not change another window's layout.
 - **Platforms** (Principle VI): the shortcut uses Ctrl on Linux and Windows and Cmd on macOS, as
-  the Overview shortcut does; the reduced-motion source per platform follows FR-008; the top bar
+  the Overview shortcut does; the *Reduce motion* setting (FR-008) is the same on every platform; the top bar
   is the same as in the normal layout on every platform.
 - **The sidebar's own toggle**: while full-screen, the sidebar's hide / show buttons are not on
   screen; a keyboard route to the sidebar's hide / show, if any, does not bring the sidebar into
@@ -191,11 +207,9 @@ non-default width, repeat: the sidebar is back expanded at that width.
 ### Functional Requirements
 
 - **FR-001**: While the Overview is open, the user MUST be able to enter and leave full-screen mode
-  [NEEDS CLARIFICATION: how is full-screen mode entered — (a) a toggle control on the Overview
-  (button in the Overview's header, plus a keyboard shortcut), off by default, the Overview
-  opening in the normal layout each time; (b) the same toggle, but the choice is remembered so the
-  Overview reopens in the mode last used; or (c) no toggle: the Overview always opens full-screen
-  and closing it is leaving the mode?].
+  with a toggle button in the Overview's header and a keyboard shortcut. The mode is off each time
+  the Overview opens: the Overview always opens in the normal layout, and the choice is not
+  remembered after the Overview closes or across restarts.
 - **FR-002**: In full-screen mode the sidebar, including its collapsed strip and its resize handle,
   MUST NOT be on screen, and the Overview MUST span the window's full width below the top bar.
 - **FR-003**: The top bar MUST stay visible and working in full-screen mode, including the Overview
@@ -212,10 +226,10 @@ non-default width, repeat: the sidebar is back expanded at that width.
   current point.
 - **FR-008**: With reduced motion on, entering and leaving full-screen mode MUST change the layout
   in one step, reaching the same end state as the animated route. The reduced-motion preference
-  comes from [NEEDS CLARIFICATION: the app has no reduced-motion setting today (features 007, 030,
-  971 note this) — (a) a new app setting *Reduce motion* in Settings, off by default; (b) the
-  operating system's reduced-motion preference where the platform exposes one; or (c) both, the
-  app setting overriding the system?].
+  comes from a new app setting *Reduce motion* in Settings, off by default, saved like the other
+  settings (Save applies it, Cancel discards it). It governs this feature's zoom only; the app's
+  other animations are unchanged by it. The operating system's reduced-motion preference is not
+  read.
 - **FR-009**: Leaving full-screen mode, by any route, MUST return the sidebar to the sidebar state
   and width it had when the mode was entered; the mode MUST NOT change the user's sidebar state.
 - **FR-010**: Activating a card, pressing Escape once, or closing the Overview with its button or
@@ -224,11 +238,12 @@ non-default width, repeat: the sidebar is back expanded at that width.
   action's destination.
 - **FR-011**: Opening Settings and closing it again while in full-screen mode MUST show the
   Overview again in full-screen mode, without a zoom; switching project MUST keep the mode.
-- **FR-012**: The control that enters or leaves full-screen mode (if FR-001 provides one) MUST be
+- **FR-012**: The Overview header's full-screen toggle (FR-001) MUST be
   reachable by keyboard, MUST show whether the mode is on, and MUST carry a tooltip or accessible
   label naming its action and any shortcut for the user's platform.
 - **FR-013**: The user guide's Overview page MUST describe full-screen mode, how to enter and leave
-  it, that the sidebar returns as it was, and how reduced motion affects it; any new shortcut MUST
+  it, that the sidebar returns as it was, and how the *Reduce motion* setting affects it; the
+  Settings page MUST describe *Reduce motion*; any new shortcut MUST
   be listed where the guide lists shortcuts.
 - **FR-014**: The mode MUST behave the same on Linux, macOS and Windows, with the platform's
   modifier in any shortcut (Ctrl on Linux and Windows, Cmd on macOS), as listed under Edge Cases,
@@ -237,7 +252,8 @@ non-default width, repeat: the sidebar is back expanded at that width.
 ### Key Entities
 
 - **Full-screen mode**: on or off, belonging to the open Overview. Carries the sidebar state and
-  width to restore on leaving (FR-009). Whether it outlives the Overview depends on FR-001.
+  width to restore on leaving (FR-009). It does not outlive the open Overview (FR-001).
+- **Reduce motion setting**: on or off, off by default, saved with the app's settings (FR-008).
 - **Transition**: the zoom in progress, if any: its direction and how far along it is, so it can
   reverse from its current point (FR-007) or finish in one step (FR-008).
 
@@ -257,7 +273,7 @@ non-default width, repeat: the sidebar is back expanded at that width.
   widths, the sidebar always returns in the state and width it had before (20 of 20).
 - **SC-005**: Entering full-screen mode takes one action from the open Overview; leaving the
   Overview by card, Escape, button or shortcut takes no extra action to restore the sidebar.
-- **SC-006**: The control for full-screen mode (if FR-001 provides one) can be reached and operated
+- **SC-006**: The Overview header's full-screen toggle can be reached and operated
   with the keyboard alone, its tooltip names its action and shortcut for the platform, and the user
   guide's Overview page describes the mode (FR-012, FR-013).
 
@@ -268,7 +284,9 @@ non-default width, repeat: the sidebar is back expanded at that width.
 - A full-screen mode for any view other than the Overview.
 - Changes to the sidebar itself (its controls, width, collapse behaviour).
 - Changes to the Overview's grid rules or card content (features 813, 1024).
-- Any settings beyond what FR-001 and FR-008 settle.
+- Any settings beyond *Reduce motion* (FR-008).
+- Applying *Reduce motion* to the app's other animations, and reading the operating system's
+  reduced-motion preference.
 
 ## Assumptions
 
