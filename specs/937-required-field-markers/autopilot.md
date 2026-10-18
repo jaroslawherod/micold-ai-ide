@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #937
 - **Worktree branch**: claude/project-thread-rkhzho
 - **Started**: 2026-10-17
-- **Phase**: M4 implement
-- **Next step**: M4 tests, reviews, gate, PR files (pr-title-937-M4.txt, pr-body-937-M4.md in the scratchpad); orchestrator opens the PR
+- **Phase**: M4 PR
+- **Next step**: orchestrator opens the M4 PR (pr-title-937-M4.txt, pr-body-937-M4.md in the scratchpad), waits on CI, merges; then M5. Visual pass not run (no xdotool)
 
 ## Pull requests
 
@@ -29,7 +29,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T015 | full | Required fields marked (`*`) in the add-worktree, run-in-parallel and rename dialogs | #963 | merged |
 | M2 | T016–T022 | full | Required fields marked in Settings sections and the daemon form | #974 | merged |
 | M3 | T023–T028 | full | `* required` legend once above the first field of every form with a required field | #980 | merged |
-| M4 | T029–T035 | full | Required error on submit in the dialogs; Create and Start runs enabled | to-open | in progress |
+| M4 | T029–T035 | full | Required error on submit in the dialogs; Create and Start runs enabled | to-open | PR |
 | M5 | T036–T041 | full | Required error on save in Settings and the daemon form | — | pending |
 | M6 | T042–T048 | full | Required error on leaving a field (blur), selects included | — | pending |
 
@@ -84,3 +84,5 @@ None.
 - jaro 2026-10-17: "currently it works in way that you click submit and first field that fails validation is marked but should be all at once". The spec already says so (edge case *Several required fields empty at once*). M4 and M5 tests must cover two or more empty required fields all reading `Missing` after one submit/save, including Settings and the daemon form. M2's `required_fields` lists every field with its own `empty`, so no field hides behind the first.
 - M3: the add-worktree dialog gained 32px (legend line + SM), which the panel-placement gate measures; kept it under the app bar with DETAIL_ROWS_SHOWN 5→3 and the issue-search failure + Retry on one row. Environment-page kind-row click test now clicks the visible part of the last row. Open for M4/M5: several empty required fields all Missing after one submit/save (above).
 - M2: the T016/T017 tests were written after the code; review B F1 (MAJOR) asked for the red phase. Fixed: observed by stubbing the lists, 10 of 14 tests failed, recorded in tdd/cycle-log.md row 8.
+
+- M4 review A (code-review high): 8 findings, none held up. Declined: whitespace-only base branch / rename name is `Missing` (`Requirement::text` trims), non-name `preview()` errors only arise with Type and Name filled so they belong to Name, `revalidate` runs after every edit message; MINOR duplication of `validate` rules not extracted. Review B: F1 cycle-log entry added (red not observed, stated), F2 test placement noted in tasks.md.
