@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1002
 - **Worktree branch**: claude/project-thread-2cdrmk
 - **Started**: 2026-10-19
-- **Phase**: milestones
-- **Next step**: open and merge the M6 PR, then the close unit (T055 visual pass and T056 live quickstart Part C with a real PAT; `speckit-tdd-verify`).
+- **Phase**: close
+- **Next step**: the close unit (T055 visual pass and T056 live quickstart Part C with a real PAT; `speckit-converge`, `speckit-tdd-verify`).
 
 ## Pull requests
 
@@ -21,6 +21,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1099 | M2 | merged | abb25cf8907de6acef23805b2334f679f0060af7 |
 | #1107 | M3 | merged | 5c0ba07dfc32194eec443241efee61836931b4cb |
 | #1113 | M5 | merged | 38a9ce97b751560df8c8feaddf1271cbceba0cc2 |
+| #1132 | M6 | merged | 0b267cf632915083624acd3d8b44e7c4cfe3f66f |
 
 ## Milestones
 
@@ -31,7 +32,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 | T023–T029 | full | In-container helper + in-memory per-repo file (FR-006/007/015) | #1107 | merged (5c0ba07d) |
 | M4 | T030–T038 | full | Protocol delivery, Schedule, revocation with FakeSource (FR-008–010, 012) | — | merged (on main by 03e1fb38) |
 | M5 | T039–T049 | full | [source] Pasted-PAT source + client wiring (FR-005, FR-008–010); the GitHub App M5 is abandoned (bundle backups/1002-m5-github-app.bundle) | #1113 | merged (38a9ce97) |
-| M6 | T050–T055 | full | Status rows (FR-013, SC-005); FR-011's guidance text is in M5, T051/T053 withdrawn | — | implemented (T050, T052, T054); T055 is the close unit's |
+| M6 | T050–T055 | full | Status rows (FR-013, SC-005); FR-011's guidance text is in M5, T051/T053 withdrawn | #1132 | merged (0b267cf6); T055 is the close unit's |
 
 ## Decisions
 
