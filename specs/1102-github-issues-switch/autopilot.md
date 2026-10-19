@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1102
 - **Worktree branch**: feat/1102_allow-the-github-issues-integration-to-be-disabled
 - **Started**: 2026-10-19
-- **Phase**: M2 PR open
-- **Next step**: orchestrator merges M2 PR; then M3
+- **Phase**: M3 PR open
+- **Next step**: orchestrator merges M3 PR; then close
 
 ## Pull requests
 
@@ -18,7 +18,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1111 | Design | merged | 33cd837f45cc6412d3aa888a4cb6d2f221b969ef |
 | #1112 | M1 | merged | 4fd3e6e4ce9c7a58ebea3d3cfa88113d9aa1aa75 |
-| #1114 | M2 | open | |
+| #1114 | M2 | merged | 8ca8d75141adfc72ea5ed1f678d46885bcfaa35f |
+| #M3PR | M3 | open | |
 
 ## Milestones
 
@@ -26,7 +27,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T016 | full | Switch, wire and form gate: off hides GitHub issues in newly opened forms | #1112 | in review |
 | M2 | T017–T021 | full | Open forms follow the switch live | #1114 | in review |
-| M3 | T022–T025 | full | MCP create_worktree refuses github_issue while off | #… | pending |
+| M3 | T022–T025 | full | MCP create_worktree refuses github_issue while off | #M3PR | in review |
 
 ## Decisions
 
@@ -45,12 +46,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review B (M1) | 1 | same | CLEAN |
 | Code review A (M2) | 1 | HEAD | fixed 1 (stale-load test); declined 4 |
 | Review B (M2) | 1 | 8121ae5e0baec97411dd9a6a8e52c326205da2a0:4b9b4517273e3b247db11ce22655bbd934b0e9ce | CLEAN (2 MINOR test-depth, accepted) |
+| Code review A (M3) | 1 | 98686e2e35d1ce1bedec8d99a88c02f6544c862e:0933096c966a48b46b9198e33a51a8e43ee056b8 | declined 6 (MINOR/taste) |
+| Review B (M3) | 1 | same | CLEAN |
 | Tasks review | 1 | 9ee5e15dc9b0aae22c6d661908c19341be7a4078:72004d40f6ad887da122bbd09c2195ca2a84601f | CLEAN (2 MINOR fixed; analyze MEDIUMs C1,C2,I1 fixed) |
 
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| M3 | A | tool-description sentence placement; settings_wire cost; check order after policy; hard-coded message duplicates form notice; daemon.md placement; test lacks remote ordering | sentence text fixed by contract wire.md; check order and message per contract; daemon.md has no MCP section; accessor cheap, no blocking needed |
 | M1 | A | MCP create_worktree still reads issue; open forms do not follow switch live | M3 and M2 scope |
 | M1 | A | Optimistic core.settings on save, no rollback | Same pattern as Jira; daemon push reconciles |
 | M1 | A | Hand Default on settings State | Intentional; documented deviation |
