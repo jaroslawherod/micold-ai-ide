@@ -10685,6 +10685,34 @@ mod pr_status {
         assert!(nothing_was_reported(&rig.app));
     }
 
+    // US3 scenario 2, FR-009, SC-004: a branch created in the worktree after the view opened is in
+    // the branch set the next status trigger asks for.
+    #[test]
+    fn pr_list_refresh_branch_set_includes_a_branch_created_after_the_view_opened() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut rig = rig(
+            Some(FAKE_GH),
+            FakePullRequestSource::new()
+                .with_list_answer(vec![pr_on(1, "A")])
+                .with_list_answer(vec![pr_on(2, "B"), pr_on(1, "A")]),
+        );
+        worktrees_with_history(&mut rig.app, &tmp, &[("a", &["A"])]);
+        ask_branch_set(&mut rig, "a", Some("A"));
+        assert_eq!(asked_sets(&rig), vec![set(&["A"])]);
+        let _ = sent(&mut rig);
+
+        git_at(&tmp.path().join("a"), 90_000, &["switch", "-q", "-c", "B"]);
+        rig.app.core.worktree.worktrees[0].branch = Some("B".into());
+        tick(&mut rig);
+        let (req, _) = list_pending(&rig.app).expect("the trigger asked for the list");
+        answer_remotes(&mut rig.app, req, github_remote());
+        assert_eq!(asked_sets(&rig), vec![set(&["A"]), set(&["A", "B"])]);
+        assert!(matches!(
+            view_list(&rig.app),
+            PrList::Ready { prs, .. } if prs.iter().map(|p| p.number).collect::<Vec<_>>() == [2, 1]
+        ));
+    }
+
     // US1 scenario 4, FR-014: two worktrees of one project each ask only their own set.
     #[test]
     fn pr_list_branch_set_two_worktrees_each_ask_only_their_own() {

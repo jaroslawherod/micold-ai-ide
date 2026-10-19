@@ -56,21 +56,21 @@ description: "Task list for feature 1003: Review changes reaches every pull requ
 
 **Goal**: previous/next and a header naming the shown pull request; every listed pull request's own diff is reachable. **Independent test**: `features_pr_changes.rs`, quickstart §B step 3.
 
-- [ ] T022 [P] [US2] Write failing reducer tests in `crates/micold-client/tests/features_pr_changes.rs`: three listed PRs with distinct diffs, `SourceChosen(Some(2nd))` then `SourceChosen(Some(3rd))` each read and show that PR's own files (SC-002, US2 scenarios 1, 2); `adjacent(prs, number, step)` in list order, `None` at each end and for an unlisted number; `PullRequestStepped(Next|Previous)` selects the adjacent PR through the `SourceChosen` path, does nothing at an end or while the working tree is shown (FR-006, SC-003); `pr_header` gives number, title, state mark, check mark and base line of the shown PR, `None` for the working tree (FR-007); three fast choices whose diffs answer out of order show only the last one's diff under its header (FR-016); a `Failed` or `TooLarge` diff keeps the header and stepping works; choosing the working tree from a shown PR makes `pr_header` `None` and stepping a no-op (US2 scenario 5); `Next` repeated from the first of 30 entries reaches the last (edge case: more PRs than fit)
-- [ ] T023 [US2] Implement `Step::{Previous, Next}`, `Msg::PullRequestStepped(Step)`, `pub fn adjacent`, `PrHeader` and `pub fn pr_header` in `crates/micold-client/src/features/changes.rs`, until T022 passes
-- [ ] T024 [P] [US2] Add `Icon::ChevronLeft` and `Icon::ChevronRight` glyphs in `crates/micold-client/src/icons.rs`, covered by the existing every-glyph checks in `crates/micold-client/tests/icons.rs` (extend their list first, so they fail)
-- [ ] T025 [US2] `crates/micold-client/src/ui/changes.rs`: header above the diff while a PR is shown: `PullRequestIndicator` (state + checks), `#number title`, the base line, and previous/next `IconButton`s, each disabled when `adjacent(..)` is `None` (contracts/changes-view.md § Header)
-- [ ] T026 [US2] User guide: the header and previous/next in `docs/user-guide/reviewing-changes.md` § Pull requests
-- [ ] T027 [US2] Visual pass (quickstart §B steps 3, 4); record evidence in `specs/1003-review-worktree-prs/`
+- [x] T022 [P] [US2] Write failing reducer tests in `crates/micold-client/tests/features_pr_changes.rs`: three listed PRs with distinct diffs, `SourceChosen(Some(2nd))` then `SourceChosen(Some(3rd))` each read and show that PR's own files (SC-002, US2 scenarios 1, 2); `adjacent(prs, number, step)` in list order, `None` at each end and for an unlisted number; `PullRequestStepped(Next|Previous)` selects the adjacent PR through the `SourceChosen` path, does nothing at an end or while the working tree is shown (FR-006, SC-003); `pr_header` gives number, title, state mark, check mark and base line of the shown PR, `None` for the working tree (FR-007); three fast choices whose diffs answer out of order show only the last one's diff under its header (FR-016); a `Failed` or `TooLarge` diff keeps the header and stepping works; choosing the working tree from a shown PR makes `pr_header` `None` and stepping a no-op (US2 scenario 5); `Next` repeated from the first of 30 entries reaches the last (edge case: more PRs than fit)
+- [x] T023 [US2] Implement `Step::{Previous, Next}`, `Msg::PullRequestStepped(Step)`, `pub fn adjacent`, `PrHeader` and `pub fn pr_header` in `crates/micold-client/src/features/changes.rs`, until T022 passes
+- [x] T024 [P] [US2] Add `Icon::ChevronLeft` and `Icon::ChevronRight` glyphs in `crates/micold-client/src/icons.rs`, covered by the existing every-glyph checks in `crates/micold-client/tests/icons.rs` (extend their list first, so they fail)
+- [x] T025 [US2] `crates/micold-client/src/ui/changes.rs`: header above the diff while a PR is shown: `PullRequestIndicator` (state + checks), `#number title`, the base line, and previous/next `IconButton`s, each disabled when `adjacent(..)` is `None` (contracts/changes-view.md § Header)
+- [x] T026 [US2] User guide: the header and previous/next in `docs/user-guide/reviewing-changes.md` § Pull requests
+- [ ] T027 [US2] Visual pass (quickstart §B steps 3, 4); record evidence in `specs/1003-review-worktree-prs/`. **Moved out of M3 to the close unit, beside T014, T021 and T037**: no `gh` auth and no `xdotool` in the milestone container (`visual-pass.md`)
 
 ## Phase 5: User Story 3 - Selection holds and the list stays current (P2)
 
 **Goal**: across refreshes the selection stays and new or changed pull requests show. Built by 775 (`remembered`, triggers), M1 (the set is recomputed per read) and M2 (the header reads the current list); these tasks pin it. **Independent test**: `features_pr_changes.rs`, `pr_list_refresh_branch_set_*`, quickstart §B step 4.
 
-- [ ] T028 [P] [US3] Write reducer tests in `crates/micold-client/tests/features_pr_changes.rs`: with the second of three selected, a refresh adding a PR at the top keeps the second selected and shown (US3 scenario 1, FR-008); a refresh changing the selected PR's state and checks updates its row and `pr_header` and issues no new diff read (US3 scenario 3); the selected PR leaving the list returns to the working tree (US3 scenario 4)
-- [ ] T029 [P] [US3] Write a shell test `pr_list_refresh_branch_set_*` in `crates/micold-client/src/main_tests.rs`: a branch created in the worktree after the view opened (new `FakeGit` reflog text) is in the `list_branches` call of the next status trigger (US3 scenario 2, FR-009, SC-004)
-- [ ] T030 [US3] Fix in `crates/micold-client/src/features/changes.rs` or `crates/micold-client/src/shell/pr_status.rs` whatever T028–T029 expose; if they pass at once, record in the PR body that M1 and this milestone's T023 already delivered the behaviour
-- [ ] T031 [US3] User guide: a pull request opened from a new branch of the worktree appears at the next refresh and the shown one stays, in `docs/user-guide/reviewing-changes.md` ("Keeping up with changes")
+- [x] T028 [P] [US3] Write reducer tests in `crates/micold-client/tests/features_pr_changes.rs`: with the second of three selected, a refresh adding a PR at the top keeps the second selected and shown (US3 scenario 1, FR-008); a refresh changing the selected PR's state and checks updates its row and `pr_header` and issues no new diff read (US3 scenario 3); the selected PR leaving the list returns to the working tree (US3 scenario 4)
+- [x] T029 [P] [US3] Write a shell test `pr_list_refresh_branch_set_*` in `crates/micold-client/src/main_tests.rs`: a branch created in the worktree after the view opened (new `FakeGit` reflog text) is in the `list_branches` call of the next status trigger (US3 scenario 2, FR-009, SC-004)
+- [x] T030 [US3] Fix in `crates/micold-client/src/features/changes.rs` or `crates/micold-client/src/shell/pr_status.rs` whatever T028–T029 expose; if they pass at once, record in the PR body that M1 and this milestone's T023 already delivered the behaviour
+- [x] T031 [US3] User guide: a pull request opened from a new branch of the worktree appears at the next refresh and the shown one stays, in `docs/user-guide/reviewing-changes.md` ("Keeping up with changes")
 
 ## Phase 6: User Story 4 - A clear empty state (P2)
 
@@ -126,7 +126,7 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 
 ### M2 — Check status on every entry
 
-- **Tasks**: T015–T020 (T021 moved to the close unit)
+- **Tasks**: T015–T020 (T021 moved to the close unit) · **M2 PR**: #1097
 - **Deliverable**: every listed pull request, merged and closed included, shows its last commit's check mark (passing, failing, pending, or none) with the same marks the sidebar uses, from one shared mapping
 - **Satisfies**: US1 acceptance scenario 3; FR-003
 - **Verify**: `scripts/build-lock.sh cargo test -p micold-core --test pull_request_list`; `scripts/build-lock.sh cargo test -p micold-client --lib -- pull_request_row`; `scripts/build-lock.sh cargo test -p micold-client --test features_pr_changes`; quickstart §B step 2 (check marks) in the close unit (T021)
@@ -135,10 +135,10 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 
 ### M3 — Previous/next and a header naming the shown pull request
 
-- **Tasks**: T022–T031
+- **Tasks**: T022–T031 (T027 moved to the close unit)
 - **Deliverable**: while a pull request is shown, a header names it with its state and checks, previous/next step through the list (disabled at the ends), only the last choice's diff is ever shown, and the selection and header hold across refreshes, including a pull request from a branch created after the view opened
 - **Satisfies**: US2 acceptance scenarios 1–5; US3 acceptance scenarios 1–4; FR-005, FR-006, FR-007, FR-008, FR-009, FR-016; SC-002, SC-003, SC-004
-- **Verify**: `scripts/build-lock.sh cargo test -p micold-client --test features_pr_changes --test icons`; `scripts/build-lock.sh cargo test -p micold-client pr_list_refresh_branch_set`; quickstart §B steps 3, 4
+- **Verify**: `scripts/build-lock.sh cargo test -p micold-client --test features_pr_changes --test icons`; `scripts/build-lock.sh cargo test -p micold-client pr_list_refresh_branch_set`; quickstart §B steps 3, 4 in the close unit (T027)
 - **Depends on**: M2
 - **Tier**: full
 

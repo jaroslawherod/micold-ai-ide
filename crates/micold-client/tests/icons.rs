@@ -74,6 +74,8 @@ fn expected(icon: Icon) -> char {
         Icon::TypeIncluded => '\u{e157}',
         Icon::TypeOrphan => '\u{eb83}',
         Icon::Open => '\u{ea77}',
+        Icon::ChevronLeft => '\u{e5cb}',
+        Icon::ChevronRight => '\u{e5cc}',
     }
 }
 
@@ -114,8 +116,9 @@ fn all_covers_every_variant_without_duplicates() {
     // state icon (`play_arrow`, `report`, `pause`), +10 for feature 813's Overview (`dashboard`), its
     // card states (`priority_high`, `visibility`, `check_circle`) and location types (`lightbulb`,
     // `bug_report`, `build`, `folder`, `link`, `folder_off`), +1 for feature 972's card menu *Open*
-    // entry (`login`).
-    assert_eq!(Icon::ALL.len(), 66, "curated set size");
+    // entry (`login`), +2 for feature 1003's pull request header's previous/next (`chevron_left`,
+    // `chevron_right`).
+    assert_eq!(Icon::ALL.len(), 68, "curated set size");
 
     // No duplicate variants.
     for (i, &a) in Icon::ALL.iter().enumerate() {

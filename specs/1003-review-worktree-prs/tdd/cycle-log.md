@@ -18,3 +18,7 @@ No `tdd/test-list.md`: tasks.md's test-first order is the list (ledger *Handover
 | T016 | green | `cargo test -p micold-core --test pull_request_list --test pull_request_is_never_stored` | 17 + 3 passed |
 | T017 | red | not run apart: `check_mark` and `PullRequestRow::checks` did not exist when their tests were written | does not compile |
 | T018 | green | `cargo test -p micold-client --test features_pr_changes`; `cargo test -p micold-client --lib -- check_mark pull_request_row` | 28 passed; 2 passed |
+| T022 | red | not run apart: `adjacent`, `pr_header`, `Step` and `Msg::PullRequestStepped` did not exist when the tests were written | does not compile |
+| T023 | green | `cargo test -p micold-client --test features_pr_changes --test icons --test icons_font` (with T024) | all passed |
+| T028 | green at once | reducer tests of the refresh (new entry, state change, entry leaving) passed against M1/T023 | passed |
+| T029 | green at once | `cargo test -p micold-client pr_list_refresh_branch_set`: M1's per-read branch set already includes a branch created later | 1 passed; T030 needs no fix |
