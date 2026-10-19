@@ -1106,7 +1106,7 @@ pub fn opened(state: &mut crate::app::State) {
         .as_ref()
         .and_then(|project| state.workspace.issue_sources.get(project))
         .copied();
-    state.worktree_form.form = Some(WorktreeForm {
+    let mut form = WorktreeForm {
         jira,
         github_issues_off: !state.settings.github_issues_enabled,
         remembered_provider,
@@ -1116,7 +1116,10 @@ pub fn opened(state: &mut crate::app::State) {
         session_cli,
         session_choices,
         ..WorktreeForm::default()
-    });
+    };
+    // Before the remotes answer, a switched-off GitHub must not leave Jira unchosen.
+    form.resolve_provider();
+    state.worktree_form.form = Some(form);
     state.worktree_form.worktree_error = None;
 }
 

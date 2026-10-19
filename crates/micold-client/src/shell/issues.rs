@@ -679,6 +679,11 @@ pub fn on_overview_opened(app: &mut App) -> Task<Message> {
             }));
         }
     }
+    // Feature 1102: with the switch off no title is read, and none is recorded as unavailable, so
+    // turning it back on reads them on the next open.
+    if !app.core.settings.github_issues_enabled {
+        return Task::none();
+    }
     let binding = app.active_binding();
     let routed = matches!(
         app.route(binding),
