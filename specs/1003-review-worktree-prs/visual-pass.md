@@ -2,7 +2,7 @@
 
 ## M1 (T014: quickstart §B steps 1, 2, 6, without the check marks)
 
-**Not run at a display in M1; carried to the close unit (quickstart §B in full).** Steps 1, 2 and 6
+**Not run at a display in M1. T014 is unticked and moved to the close unit, beside T037 (quickstart §B in full).** Steps 1, 2 and 6
 need `gh` signed in to a GitHub repository whose worktree has pull requests from several branches.
 The M1 unit ran in a container with `gh` unauthenticated and no `xdotool`, so neither the client nor
 GitHub could be driven.

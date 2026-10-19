@@ -40,7 +40,7 @@ description: "Task list for feature 1003: Review changes reaches every pull requ
 - [X] T011 [US1] Implement in `crates/micold-client/src/features/changes.rs`: `Effect::ReadPullRequests { seq, project, entry, current }`, `request_pull_requests` reading for every worktree entry while enabled (also with `current: None`), `base_line` from `head_branch`, and the `Effect::ReadPullRequests` match in `crates/micold-client/src/shell/changes.rs` takes the new fields (passing `current` as the single branch, or no read when `None`, until T012), so the client builds after this task; until T009 passes
 - [X] T012 [US1] Wire the read until T010 passes: `crates/micold-client/src/shell/changes.rs` passes `entry` and `current` and exposes `local` to `crates/micold-client/src/shell/pr_status.rs`, whose `on_list_remotes` runs `worktree_branches::read_branch_set` with the shared local `Git` on the list read's blocking thread, then `list_branches` (still the one place that calls `(tooling.pull_requests)(gh)`); no local git gives `[current]`
 - [X] T013 [US1] User guide: in `docs/user-guide/reviewing-changes.md` § Pull requests, which pull requests are listed (every branch created in the worktree plus its current branch, never the default branch, merged-and-deleted branches included, branches only checked out there excluded)
-- [X] T014 [US1] Visual pass (quickstart §B steps 1, 2, 6, without the check marks) via the `visual-pass` skill; record evidence in `specs/1003-review-worktree-prs/`
+- [ ] T014 [US1] Visual pass (quickstart §B steps 1, 2, 6, without the check marks) via the `visual-pass` skill; record evidence in `specs/1003-review-worktree-prs/`. **Moved out of M1 to the close unit, beside T037**: it needs `gh` signed in to a GitHub repository, which M1's unit did not have (`visual-pass.md`)
 
 ### Check status on every entry (US1 scenario 3; milestone M2)
 
@@ -86,7 +86,7 @@ description: "Task list for feature 1003: Review changes reaches every pull requ
 
 No code changes remain after T036: recording quickstart Part A and Part B results in `quickstart.md` and ticking tasks is the close unit's work, in the close PR.
 
-- [ ] T037 Record the quickstart Part A and Part B results in `specs/1003-review-worktree-prs/quickstart.md`
+- [ ] T037 (with T014, moved here from M1) Record the quickstart Part A and Part B results in `specs/1003-review-worktree-prs/quickstart.md`
 
 ## Dependencies & Execution Order
 
@@ -117,10 +117,10 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 
 ### M1 — Every pull request of the worktree is listed 🎯 MVP
 
-- **Tasks**: T001–T014
+- **Tasks**: T001–T013 (T014 moved to the close unit)
 - **Deliverable**: with "Show pull request status" on, Review changes of a worktree lists the pull requests of its current branch and of every branch created in it (deleted ones included, the default branch and branches only checked out there excluded), newest first, each with number, title and state; selecting any of them shows its own diff (775) under a base line naming its own head branch
 - **Satisfies**: US1 acceptance scenarios 1, 2, 4; FR-001, FR-002, FR-004, FR-013, FR-014; SC-001, SC-007
-- **Verify**: `scripts/build-lock.sh cargo test -p micold-core --test worktree_branch_set --test pull_request_list`; `scripts/build-lock.sh cargo test -p micold-core --lib worktree_branches`; `scripts/build-lock.sh cargo test -p micold-client --test features_pr_changes --test pr_status_is_read_only_on_named_events`; `scripts/build-lock.sh cargo test -p micold-client pr_list_branch_set`; quickstart §B steps 1, 2, 6
+- **Verify**: `scripts/build-lock.sh cargo test -p micold-core --test worktree_branch_set --test pull_request_list`; `scripts/build-lock.sh cargo test -p micold-core --lib worktree_branches`; `scripts/build-lock.sh cargo test -p micold-client --test features_pr_changes --test pr_status_is_read_only_on_named_events`; `scripts/build-lock.sh cargo test -p micold-client pr_list_branch_set`; quickstart §B steps 1, 2, 6 in the close unit (T014)
 - **Depends on**: —
 - **Tier**: full
 
