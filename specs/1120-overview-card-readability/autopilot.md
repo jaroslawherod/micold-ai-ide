@@ -59,7 +59,14 @@ inequality + visual pass).
 
 ## Handover
 
-None.
+Done: branch rebased on origin/main; tasks.md (T001–T040) and the four milestones written;
+speckit-analyze run and fixed (see Milestones note); tasks review round 1 snapshot recorded, not yet
+reviewed. Next: act on the tasks review round 1 verdict (review-rounds.md); tick
+checklists/requirements.md items the reviewer confirms (4 open: two "no implementation details",
+"no NEEDS CLARIFICATION markers", "testable and unambiguous"); specs-only gate
+(`scripts/check-criteria-observables.sh specs/1120-overview-card-readability/spec.md`); design PR
+(title `#1120: Overview cards: readable layout and content — design: spec, plan and tasks`, body ends
+`Refs #1120`). No PR open yet.
 
 ## Open escalation
 
