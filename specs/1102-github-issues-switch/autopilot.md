@@ -16,7 +16,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
-| #PRNUM | Design | open | … |
+| #1111 | Design | open | … |
 
 ## Milestones
 
@@ -39,6 +39,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | Spec review | 1 | 6baa82109973bc176fffd3524cd5195a1dd0523d:03e1fb3897f4a8725e33951ee5ea1e5f697d2e2e | CHANGES: 3 MAJOR fixed, 2 MINOR (F4 fixed, F5 plan note) |
 | Spec review | 2 | b6b2e210aec70a341e81ec5a5b1a1839924c1347:03e1fb3897f4a8725e33951ee5ea1e5f697d2e2e | CLEAN |
+| Tasks review | 1 | 9ee5e15dc9b0aae22c6d661908c19341be7a4078:72004d40f6ad887da122bbd09c2195ca2a84601f | CLEAN (2 MINOR fixed; analyze MEDIUMs C1,C2,I1 fixed) |
 
 ## Declined review findings
 
@@ -57,7 +58,5 @@ None. <or: the banner as sent, and when>
 ## Follow-ups not done
 
 <Defects found outside this flow's work, scope deliberately cut, etc. Copied into the handoff.>
-
-| Tasks review | 1 | 9ee5e15dc9b0aae22c6d661908c19341be7a4078:72004d40f6ad887da122bbd09c2195ca2a84601f | CLEAN (2 MINOR fixed; analyze MEDIUMs C1,C2,I1 fixed) |
 
 <!-- plan review A round 1 snapshot 9dacc3ca5a9cc8c52890dd052f80d02761ab1bb4:eb157e8d63016f57bb1cc60dffff99c63cf2b1e1: CLEAN, 4 MINORs fixed, prose only -->
