@@ -29,6 +29,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 ## Decisions
 
 - Clarify round 1: FR-002 branch set = current branch + branches created in the worktree; branches only checked out there do not count (agent-resolved from issue #1003 acceptance criteria and the spec's edge case). Records an existing rule, so no further round.
+- Tasks: US1 split (21 tasks) along its scenarios: 1, 2, 4 in M1, scenario 3 (check status) in M2. US3 adds no code (tests pinning behaviour M1 and M3 deliver), so it rides in M3 instead of a milestone with no deliverable. Polish (T037, quickstart results) has no code: close unit.
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
 
