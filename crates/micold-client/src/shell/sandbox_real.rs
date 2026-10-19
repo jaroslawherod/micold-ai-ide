@@ -31,12 +31,9 @@ struct Cleanup {
 
 impl Drop for Cleanup {
     fn drop(&mut self) {
-        let _ = micold_core::process::no_window(std::process::Command::new(self.program).args([
-            "rm",
-            "-f",
-            self.container.as_str(),
-        ]))
-        .output();
+        let mut cmd = std::process::Command::new(self.program);
+        cmd.args(["rm", "-f", self.container.as_str()]);
+        let _ = micold_core::process::no_window(&mut cmd).output();
     }
 }
 
