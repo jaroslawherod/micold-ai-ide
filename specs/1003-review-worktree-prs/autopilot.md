@@ -9,19 +9,20 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1003
 - **Worktree branch**: claude/project-thread-c3olht
 - **Started**: 2026-10-19
-- **Phase**: design-pr
-- **Next step**: orchestrator opens the design PR (title/body in the scratchpad); after merge: milestone M1
+- **Phase**: implement
+- **Next step**: M1 implement, continue from *Handover*
 
 ## Pull requests
 
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
+| #1089 | design | merged | 6fbd754f11c2d0ed387dfb0ae886c0070ac2d573 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T014 | full | Every PR of the worktree's branch set listed (number, title, state), each diff reachable | — | pending |
+| M1 | T001–T014 | full | Every PR of the worktree's branch set listed (number, title, state), each diff reachable | — | in progress |
 | M2 | T015–T021 | full | Check mark on every entry, one mapping shared with the sidebar | — | pending |
 | M3 | T022–T031 | full | Header + previous/next; selection and header hold across refreshes (US2 + US3) | — | pending |
 | M4 | T032–T036 | full | Loading, empty and unavailable lines | — | pending |
@@ -50,7 +51,34 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+M1 unit 1 handed over at 150k (commit "test(1003): M1 core tests, fixtures and Git::reflogs (WIP)").
+
+- **Base**: branch reset to origin/main 6fbd754f by hand (`branch-start.sh` needs `gh`, not signed in
+  here; #1089 merged). Do not run branch-start again: continue on the branch as it is.
+- **Done**: T001 fixtures (`pr_list_branches_{three,reopened,default,fork,tie,empty,unknown_state}.txt`;
+  the five single-branch `pr_list_*.txt` removed, superseded). `Git::reflogs(dir, refs)` in
+  `git.rs` (trait, `GitCli` via `review/git.rs::reflogs` = bounded `read`, `FakeGit::with_reflog(dir,
+  refs, text)`, unscripted call = Err). Tests written, red NOT yet observed/recorded:
+  T002 (`src/worktree_branches.rs` inline tests + stubs, `pub mod worktree_branches` in lib.rs),
+  T004 (`tests/worktree_branch_set.rs`, real git with `GIT_COMMITTER_DATE`-pinned times), T006
+  (`tests/pull_request_list.rs`, rewritten; does not compile yet).
+- **API the T006 tests expect** (pull_request.rs): `list_query(n) -> String`, `list_args(repo,
+  &[String])`, `parse_list(body, branches)`, `read_list_outcome(outcome, branches, now)`,
+  `list_in_chunks(branches, FnMut(&[String]) -> Result<Vec<BranchPullRequest>, ReadingFailure>)`
+  (chunks of `LIST_BRANCHES_PER_REQUEST`=25, empty = no call, merged + sorted created_at desc then
+  number desc; `GhCli::list_branches` uses it like `read_in_chunks`), `BranchPullRequest.head_branch`,
+  `PullRequestSource::list_branches(repo, &[String], now)` replacing `list_branch`,
+  `FakePullRequestSource::list_calls() -> Vec<(String, Vec<String>)>`. Default-branch alias dropped
+  via `defaultBranchRef.name == branches[i]`; a missing alias `p<i>` is `Passing`. M2 adds checks,
+  so the M1 query has `headRefName` but no rollup.
+- **Branch-set rules as tested**: `candidates` = current first, then HEAD log names newest first,
+  deduped; rename X→Y links both names (HEAD on X at creation matches Y).
+- **TDD**: no `tdd/test-list.md` exists (the `tdd.run` hook would stop); follow tasks.md's test-first
+  order and log each red/green in `specs/1003-review-worktree-prs/tdd/cycle-log.md`.
+- **Next**: stubs in pull_request.rs → run core tests, record reds → T003, T005 (`read_branch_set`),
+  T007 (+ github.rs, client `main_tests.rs` BlockingSource, `shell/pr_status.rs` caller) → T008–T014.
+- **Build**: a warm `cargo test --workspace --no-run` was started detached with
+  `CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0` (keep that env; scratchpad `warm.log`).
 
 ## Open escalation
 

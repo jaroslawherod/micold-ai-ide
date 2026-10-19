@@ -1,8 +1,0 @@
-HTTP/2.0 200 OK
-Content-Type: application/json; charset=utf-8
-X-Ratelimit-Limit: 5000
-X-Ratelimit-Remaining: 4990
-X-Ratelimit-Reset: 1790966100
-X-Ratelimit-Resource: graphql
-
-{"data":{"repository":{"pullRequests":{"nodes":[{"number":14,"title":"Add the export","url":"https://github.com/acme/widgets/pull/14","state":"OPEN","isDraft":false,"createdAt":"2026-10-10T09:00:00Z","isCrossRepository":false,"baseRefName":"main","headRefOid":"000000000000000000000000000000000000000e"},{"number":13,"title":"Try a spike","url":"https://github.com/acme/widgets/pull/13","state":"OPEN","isDraft":true,"createdAt":"2026-10-08T09:00:00Z","isCrossRepository":false,"baseRefName":"main","headRefOid":"000000000000000000000000000000000000000d"},{"number":12,"title":"Ship the parser","url":"https://github.com/acme/widgets/pull/12","state":"MERGED","isDraft":false,"createdAt":"2026-10-05T09:00:00Z","isCrossRepository":false,"baseRefName":"main","headRefOid":"000000000000000000000000000000000000000c"},{"number":11,"title":"Abandoned attempt","url":"https://github.com/acme/widgets/pull/11","state":"CLOSED","isDraft":false,"createdAt":"2026-10-01T09:00:00Z","isCrossRepository":false,"baseRefName":"main","headRefOid":"000000000000000000000000000000000000000b"}]}},"rateLimit":{"remaining":4990,"resetAt":"2026-10-12T12:00:00Z"}}}

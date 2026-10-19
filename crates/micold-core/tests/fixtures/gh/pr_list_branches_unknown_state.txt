@@ -1,0 +1,8 @@
+HTTP/2.0 200 OK
+Content-Type: application/json; charset=utf-8
+X-Ratelimit-Limit: 5000
+X-Ratelimit-Remaining: 4990
+X-Ratelimit-Reset: 1790966100
+X-Ratelimit-Resource: graphql
+
+{"data":{"repository":{"defaultBranchRef":{"name":"main"},"p0":{"nodes":[{"number":50,"title":"Odd","url":"https://github.com/acme/widgets/pull/50","state":"QUEUED","isDraft":false,"createdAt":"2026-10-07T09:00:00Z","isCrossRepository":false,"baseRefName":"main","headRefName":"feat/a","headRefOid":"0000000000000000000000000000000000000032"}]}},"rateLimit":{"remaining":4990,"resetAt":"2026-10-12T12:00:00Z"}}}

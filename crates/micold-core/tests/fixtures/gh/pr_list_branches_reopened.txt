@@ -1,0 +1,8 @@
+HTTP/2.0 200 OK
+Content-Type: application/json; charset=utf-8
+X-Ratelimit-Limit: 5000
+X-Ratelimit-Remaining: 4990
+X-Ratelimit-Reset: 1790966100
+X-Ratelimit-Resource: graphql
+
+{"data":{"repository":{"defaultBranchRef":{"name":"main"},"p0":{"nodes":[{"number":32,"title":"Third go","url":"https://github.com/acme/widgets/pull/32","state":"OPEN","isDraft":false,"createdAt":"2026-10-09T09:00:00Z","isCrossRepository":false,"baseRefName":"main","headRefName":"feat/x","headRefOid":"0000000000000000000000000000000000000020"},{"number":31,"title":"Second go","url":"https://github.com/acme/widgets/pull/31","state":"CLOSED","isDraft":false,"createdAt":"2026-10-06T09:00:00Z","isCrossRepository":false,"baseRefName":"main","headRefName":"feat/x","headRefOid":"000000000000000000000000000000000000001f"},{"number":30,"title":"First go","url":"https://github.com/acme/widgets/pull/30","state":"MERGED","isDraft":false,"createdAt":"2026-10-03T09:00:00Z","isCrossRepository":false,"baseRefName":"main","headRefName":"feat/x","headRefOid":"000000000000000000000000000000000000001e"}]}},"rateLimit":{"remaining":4990,"resetAt":"2026-10-12T12:00:00Z"}}}

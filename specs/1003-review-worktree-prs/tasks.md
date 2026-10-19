@@ -19,7 +19,7 @@ description: "Task list for feature 1003: Review changes reaches every pull requ
 
 ## Phase 1: Setup
 
-- [ ] T001 [P] Add gh fixtures `crates/micold-core/tests/fixtures/gh/pr_list_branches_*.txt` (HTTP head + body, as the existing `pr_list_*.txt`) for the multi-alias answer of contracts/pull-request-list.md §2: `pr_list_branches_three.txt` (aliases `p0`–`p2`, one merged, one closed, one open and one draft PR, each with its own `headRefName`, out of `createdAt` order); `pr_list_branches_reopened.txt` (one alias with three PRs of the same `headRefName`: merged, closed, open); `pr_list_branches_default.txt` (one alias whose branch equals `defaultBranchRef.name`, with a PR); `pr_list_branches_fork.txt` (an `isCrossRepository: true` PR beside a same-repo one); `pr_list_branches_tie.txt` (two PRs with equal `createdAt`, numbers 7 and 9); `pr_list_branches_empty.txt` (aliases with empty `nodes`)
+- [X] T001 [P] Add gh fixtures `crates/micold-core/tests/fixtures/gh/pr_list_branches_*.txt` (HTTP head + body, as the existing `pr_list_*.txt`) for the multi-alias answer of contracts/pull-request-list.md §2: `pr_list_branches_three.txt` (aliases `p0`–`p2`, one merged, one closed, one open and one draft PR, each with its own `headRefName`, out of `createdAt` order); `pr_list_branches_reopened.txt` (one alias with three PRs of the same `headRefName`: merged, closed, open); `pr_list_branches_default.txt` (one alias whose branch equals `defaultBranchRef.name`, with a PR); `pr_list_branches_fork.txt` (an `isCrossRepository: true` PR beside a same-repo one); `pr_list_branches_tie.txt` (two PRs with equal `createdAt`, numbers 7 and 9); `pr_list_branches_empty.txt` (aliases with empty `nodes`)
 
 ## Phase 2: Foundational (branch set and multi-branch read, core)
 
