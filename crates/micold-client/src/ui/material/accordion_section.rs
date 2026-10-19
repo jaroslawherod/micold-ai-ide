@@ -16,7 +16,7 @@
 //! Whether it is open is the caller's: this keeps no state, so a form can hold it as view state and
 //! decide, for example, to show a section open while an error stands in it.
 
-use super::{Accordion, Button, ButtonVariant, Ellipsized, Text, TypeRole};
+use super::{Accordion, AccordionGroup, Button, ButtonVariant, Ellipsized, Text, TypeRole};
 use crate::icons::Icon;
 use iced::widget::{column, row, Space};
 use iced::{alignment, Element, Length};
@@ -54,6 +54,19 @@ impl<'a, M: Clone + 'a> AccordionSection<'a, M> {
     /// Show the section open.
     pub fn open(mut self, open: bool) -> Self {
         self.open = open;
+        self
+    }
+
+    /// Place the section in `group` under `key`: it is open when `key` is the group's open key
+    /// (`default` while nothing was pressed), replacing any earlier [`open`](Self::open) (feature
+    /// 1091, FR-001). A section never passed here is unchanged (FR-003).
+    pub fn in_group<K: Copy + Eq>(
+        mut self,
+        group: &AccordionGroup<K>,
+        key: K,
+        default: Option<K>,
+    ) -> Self {
+        self.open = group.is_open(key, default);
         self
     }
 
@@ -161,6 +174,21 @@ mod tests {
             mouse::Cursor::Available(at),
         ));
         out
+    }
+
+    /// FR-001, FR-003: `in_group` takes `open` from the group; without it the flag stands.
+    #[test]
+    fn in_group_sets_open_from_the_group() {
+        let r = roles();
+        let mut group = AccordionGroup::new();
+        let sized = |s: AccordionSection<'_, String>| size_of(s.into(), WINDOW);
+        let open = sized(section(true, r));
+        let closed = sized(section(false, r));
+        assert_eq!(sized(section(false, r).in_group(&group, 1, Some(1))), open);
+        assert_eq!(sized(section(true, r).in_group(&group, 2, Some(1))), closed);
+        group.toggle(2, Some(1));
+        assert_eq!(sized(section(false, r).in_group(&group, 2, Some(1))), open);
+        assert_eq!(sized(section(true, r)), open);
     }
 
     /// The body takes room only while open, in both themes; the header is there either way.

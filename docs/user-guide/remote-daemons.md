@@ -10,7 +10,7 @@ agent and `~/.ssh/config`; it stores no password or key.
 
 1. Open **Settings > Daemons** and choose **Add daemon**.
 2. Name it, and set **Runs in** to **Remote over SSH**.
-3. The form has one section, **Connection**, open when the form opens (a section with an error opens itself); closed, it shows a one-line summary of its settings, and a `*` after its title when the host is empty. In it, choose the host. If `~/.ssh/config` (and the files it includes) names hosts, **Host from your SSH
+3. The form has one section, **Connection**, open when the form opens (a section with an error opens itself; where a form has several sections, only one is open at a time); closed, it shows a one-line summary of its settings, and a `*` after its title when the host is empty. In it, choose the host. If `~/.ssh/config` (and the files it includes) names hosts, **Host from your SSH
    configuration** lists them: pick one and only the name needs entering, because the user, port and
    key come from your SSH configuration. For a host that is not there, type the **Host** (a name or an
    address) and, if you need them, the **User**, **Port** and **Key file**; what you leave blank still
