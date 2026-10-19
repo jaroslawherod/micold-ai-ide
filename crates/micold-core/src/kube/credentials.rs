@@ -106,7 +106,20 @@ impl KubeCredential {
         };
         let one = |key: &str, text: String| BTreeMap::from([(key.to_string(), text)]);
         match self {
-            Self::GitConfig => Ok(one("gitconfig", source(&home.join(".gitconfig"))?)),
+            Self::GitConfig => {
+                let path = home.join(".gitconfig");
+                // The shared copy carries no credential helper, embedded token, extra header or
+                // include (FR-004). A host without `git` cannot be sanitized, so shares nothing.
+                let text = source(&path)?;
+                let sanitized =
+                    crate::scoped_credential::sanitize_gitconfig_text(&text).map_err(|_| {
+                        KubeFailure::CredentialSource {
+                            credential: self.label(),
+                            path: path.clone(),
+                        }
+                    })?;
+                Ok(one("gitconfig", sanitized))
+            }
             Self::SignIn { cli } => {
                 let (_, key) =
                     Self::sign_in_file(*cli).ok_or_else(|| KubeFailure::CredentialSource {
@@ -138,11 +151,16 @@ pub fn every_kind() -> Vec<KubeCredential> {
 /// clean). No allowed credential adds to it.
 pub fn daemon_env() -> BTreeMap<String, String> {
     // Nothing allowed reaches the env since #1002 removed the git credential store and the SSH key
-    // (FR-001): what remains is mounted as files where the tools look for them.
-    BTreeMap::from([
+    // (FR-001): what remains is mounted as files where the tools look for them. Git is told to
+    // ignore every credential helper the shared configuration might still name (FR-004).
+    let mut env = BTreeMap::from([
         ("MICOLD_IDLE_STOP".to_string(), "off".to_string()),
         ("MICOLD_REPOS_ROOT".to_string(), REPOS_ROOT.to_string()),
-    ])
+    ]);
+    env.extend(crate::scoped_credential::git_env(
+        crate::scoped_credential::GITHUB_BASE,
+    ));
+    env
 }
 
 /// A credential a stored `allowed` list may name: one of today's, or one #1002 removed (the git
@@ -218,13 +236,19 @@ mod tests {
     #[test]
     fn secret_data_is_read_from_the_sources() {
         let read = reader(&[
-            ("/h/.gitconfig", "[user]"),
+            (
+                "/h/.gitconfig",
+                "[user]\n\tname = Ada\n[credential]\n\thelper = store\n",
+            ),
             ("/h/.claude/.credentials.json", "{}"),
             ("/a", "{\"auths\":{}}"),
         ]);
         let data = |c: KubeCredential| c.secret_data(Path::new("/h"), &read).unwrap();
         let one = |k: &str, v: &str| BTreeMap::from([(k.to_string(), v.to_string())]);
-        assert_eq!(data(KubeCredential::GitConfig), one("gitconfig", "[user]"));
+        assert_eq!(
+            data(KubeCredential::GitConfig),
+            one("gitconfig", "[user]\n\tname = \"Ada\"\n")
+        );
         assert_eq!(
             data(KubeCredential::SignIn {
                 cli: AiCli::ClaudeCode
@@ -271,13 +295,13 @@ mod tests {
     }
 
     #[test]
-    fn the_daemon_env_carries_no_credential() {
-        assert_eq!(
-            daemon_env(),
-            BTreeMap::from([
-                ("MICOLD_IDLE_STOP".to_string(), "off".to_string()),
-                ("MICOLD_REPOS_ROOT".to_string(), "/data/repos".to_string()),
-            ])
-        );
+    fn the_daemon_env_carries_no_credential_and_resets_the_helpers() {
+        let env = daemon_env();
+        assert_eq!(env["MICOLD_IDLE_STOP"], "off");
+        assert_eq!(env["MICOLD_REPOS_ROOT"], "/data/repos");
+        for (key, value) in crate::scoped_credential::git_env("https://github.com") {
+            assert_eq!(env[&key], value, "{key}");
+        }
+        assert!(!env.keys().any(|k| k.contains("SSH") || k.contains("TOKEN")));
     }
 }

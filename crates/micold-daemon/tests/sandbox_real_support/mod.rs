@@ -582,6 +582,14 @@ fn start_sandbox_on(
         args.push("-e".to_string());
         args.push(format!("{}={value}", micold_core::spawn::IDLE_STOP_ENV));
     }
+    // The git environment `argv::create` passes (#1002, FR-004), from the same function for the
+    // reason above.
+    for (name, value) in
+        micold_core::scoped_credential::git_env(micold_core::scoped_credential::GITHUB_BASE)
+    {
+        args.push("-e".to_string());
+        args.push(format!("{name}={value}"));
+    }
     args.extend(spec.extra.iter().cloned());
     args.push(image.to_string());
     args.extend(command.iter().map(|part| part.to_string()));

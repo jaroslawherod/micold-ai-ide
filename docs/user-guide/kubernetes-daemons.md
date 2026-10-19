@@ -84,7 +84,8 @@ daemon's own.
 **Nothing reaches the pod unless it is ticked.** Each tick becomes a secret in the namespace,
 mounted read-only, and never goes into the image:
 
-- **the git config**, as `~/.gitconfig` on the volume;
+- **the git config**, as `~/.gitconfig` on the volume, as a copy without credential helpers,
+  tokens embedded in URLs, extra HTTP headers, includes, or a custom SSH or askpass command;
 - **the sign-in** of each AI CLI (Claude Code, GitHub Copilot, Pi Coding Agent), at the path that
   CLI reads under its home;
 - **the registry credentials**, with its **Registry credentials file**, as an image-pull secret.

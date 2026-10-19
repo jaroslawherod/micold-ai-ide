@@ -177,6 +177,13 @@ pub fn create(spec: &SandboxSpec, caps: &RuntimeCapabilities) -> Vec<OsString> {
         args.push(format!("{IDLE_STOP_ENV}={value}").into());
     }
 
+    // Git ignores every credential helper the shared configuration may still name (FR-004). The
+    // daemon's sessions inherit these.
+    for (name, value) in crate::scoped_credential::git_env(crate::scoped_credential::GITHUB_BASE) {
+        args.push("-e".into());
+        args.push(format!("{name}={value}").into());
+    }
+
     args.extend(budget_args(spec, caps));
     args.extend(mount_args(&spec.mounts));
 

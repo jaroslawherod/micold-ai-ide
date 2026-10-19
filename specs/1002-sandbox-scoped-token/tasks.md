@@ -135,28 +135,28 @@ environment runs no planted helper.
 
 ### Setup
 
-- [ ] T014 [US1] Create `crates/micold-core/src/scoped_credential/mod.rs` (module docs,
+- [x] T014 [US1] Create `crates/micold-core/src/scoped_credential/mod.rs` (module docs,
   `pub type UnixTime = u64;`, `pub const MAX_LIFETIME_SECS: u64 = 3600;` (FR-009)) and declare it
   in `crates/micold-core/src/lib.rs`.
 
 ### Tests (write first, must fail)
 
-- [ ] T015 [P] [US1] Unit tests in `crates/micold-core/src/scoped_credential/gitconfig.rs` for
+- [x] T015 [P] [US1] Unit tests in `crates/micold-core/src/scoped_credential/gitconfig.rs` for
   `sanitize_gitconfig(entries: &[(String, String)]) -> String` (contracts/git-in-container.md §3):
   drops `credential.*` and `credential.<url>.*`; `url.<base>.insteadOf` / `pushInsteadOf` whose
   `<base>` has userinfo (`@` before the host); `http.extraHeader` and `http.<url>.extraHeader`;
   `include.*`, `includeIf.*`; `core.sshCommand`, `core.askPass`; section and variable matched
   case-insensitively, subsection as written; keeps `user.name`, `user.email`, a userinfo-free
   `insteadOf` and every other key, in order; output re-parses with `git config --file`.
-- [ ] T016 [P] [US1] Unit tests in `crates/micold-core/src/scoped_credential/git_env.rs` for the
+- [x] T016 [P] [US1] Unit tests in `crates/micold-core/src/scoped_credential/git_env.rs` for the
   reset part of `git_env(base: &str) -> BTreeMap<String, String>`: `credential.helper` set to the
   empty value through a `GIT_CONFIG_COUNT` block, `GIT_TERMINAL_PROMPT=0`, no `GIT_SSH_COMMAND`
   and no `SSH_AUTH_SOCK` key.
-- [ ] T017 [P] [US1] Argv/manifest tests: `crates/micold-core/tests/sandbox_argv.rs` asserts every
+- [x] T017 [P] [US1] Argv/manifest tests: `crates/micold-core/tests/sandbox_argv.rs` asserts every
   `git_env` pair is a `-e` arg and the `~/.gitconfig` mount source is the sanitized copy in the
   daemon state dir, not the host file; `crates/micold-core/src/kube/start_tests.rs` asserts
   `daemon_env` contains `git_env` and the git-config secret holds the sanitized text.
-- [ ] T018 [US1] Daemon test `crates/micold-daemon/tests/scoped_git_credential.rs` (FR-004 part;
+- [x] T018 [US1] Daemon test `crates/micold-daemon/tests/scoped_git_credential.rs` (FR-004 part;
   T024 extends it): real `git` with the `git_env` environment, a global config with
   `credential.helper=store` pointing at a planted store, a repository-level
   `credential.https://github.com.helper` script that records it ran, and an `insteadOf` with
@@ -166,17 +166,17 @@ environment runs no planted helper.
 
 ### Implementation
 
-- [ ] T019 [US1] Implement `sanitize_gitconfig` in `crates/micold-core/src/scoped_credential/gitconfig.rs`
+- [x] T019 [US1] Implement `sanitize_gitconfig` in `crates/micold-core/src/scoped_credential/gitconfig.rs`
   and a parser for `git config --list --null` output (T015).
-- [ ] T020 [US1] Implement the reset part of `git_env` in
+- [x] T020 [US1] Implement the reset part of `git_env` in
   `crates/micold-core/src/scoped_credential/git_env.rs`; merge it into the container `-e` list in
   `crates/micold-core/src/sandbox/argv.rs` and into `kube::credentials::daemon_env` (T016, T017).
-- [ ] T021 [US1] `crates/micold-client/src/shell/sandbox.rs` and the Kubernetes git-config secret
+- [x] T021 [US1] `crates/micold-client/src/shell/sandbox.rs` and the Kubernetes git-config secret
   builder (`crates/micold-core/src/kube/credentials.rs`): read `git config --file ~/.gitconfig
   --list --null` on the host, write the sanitized copy to `<daemon state dir>/gitconfig` and mount
   it where `~/.gitconfig` was (container) or put it in the secret (Kubernetes); host without git →
   the item is skipped with the existing "not found" handling (T017, T018).
-- [ ] T022 [P] [US1] User guide `docs/user-guide/sandboxed-daemon.md` and
+- [x] T022 [P] [US1] User guide `docs/user-guide/sandboxed-daemon.md` and
   `docs/user-guide/kubernetes-daemons.md`: *Git configuration* now shares a copy without credential
   helpers, embedded tokens, extra headers or includes.
 

@@ -233,7 +233,9 @@ files in your own home directory.
 
 Nothing of yours is shared unless you say so. Each item is a separate opt-in:
 
-- **Git configuration** — your commit name and email, read-only.
+- **Git configuration** — your commit name and email, read-only. The sandbox gets a copy without
+  credential helpers, tokens embedded in URLs, extra HTTP headers, includes, or a custom SSH or
+  askpass command, and git inside it ignores any helper that is left.
 - **AI CLI sign-in** — each CLI's sign-in file, and nothing else from its directory:
   Claude Code's `~/.claude/.credentials.json`, Codex's `~/.codex/auth.json` and OpenCode's
   `~/.local/share/opencode/auth.json`. A file you do not have is simply not shared. It is the one

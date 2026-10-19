@@ -65,6 +65,7 @@ pub mod required;
 pub mod review;
 pub mod runs;
 pub mod sandbox;
+pub mod scoped_credential;
 pub mod script_path_check;
 pub mod selector;
 pub mod session;

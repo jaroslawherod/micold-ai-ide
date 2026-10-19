@@ -905,7 +905,7 @@ use crate::session::AiCli;
 fn home_files(path: &Path) -> std::io::Result<String> {
     // Compared as paths: on Windows the home is joined with a backslash.
     if path == Path::new("/home/u/.gitconfig") {
-        Ok("[user]".into())
+        Ok("[user]\n\tname = Ada\n[credential]\n\thelper = store\n".into())
     } else if path == Path::new("/home/u/.claude/.credentials.json") {
         Ok("{}".into())
     } else {
@@ -967,7 +967,11 @@ async fn allowed_credentials_become_secrets_mounted_beside_the_access_secret() {
         ObjectKind::Secret,
         &n.secret(&KubeCredential::GitConfig),
     );
-    assert_eq!(data.unwrap()["stringData"]["gitconfig"], "[user]");
+    // The sanitized copy: the host's credential helper is not in it (FR-004).
+    assert_eq!(
+        data.unwrap()["stringData"]["gitconfig"],
+        "[user]\n\tname = \"Ada\"\n"
+    );
 }
 
 #[tokio::test(start_paused = true)]
@@ -1204,7 +1208,8 @@ mod connect {
         let commands = host.commands.lock().unwrap().clone();
         let bridge = commands.last().unwrap().last().unwrap();
         assert!(
-            bridge.starts_with("env MICOLD_IDLE_STOP='off' MICOLD_REPOS_ROOT='/data/repos' "),
+            bridge.contains("MICOLD_IDLE_STOP='off' MICOLD_REPOS_ROOT='/data/repos' ")
+                && bridge.contains("GIT_CONFIG_KEY_0='credential.helper' GIT_CONFIG_VALUE_0='' "),
             "the daemon keeps its clones on the volume: {bridge}"
         );
         assert_eq!(
