@@ -288,11 +288,20 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         id: rust-cache
       # Issue 958: record the cache outcome per run, so the Windows hit rate can be read off the
-      # run summary (docs/development/ci-pipeline.md, "The Windows build cache").
+      # run summary (docs/development/ci-pipeline.md, "The Windows build cache"). The daemon test
+      # step takes either ~440 s or ~670 s, and the extra time is test-profile compilation; the
+      # notice records what the cache restored and which machine ran the job, so the two modes
+      # can be told apart from the run's annotations.
       - name: Report rust-cache hit (Windows)
         if: runner.os == 'Windows'
         shell: bash
-        run: echo "rust-cache cache-hit=${{ steps.rust-cache.outputs.cache-hit }}" | tee -a "$GITHUB_STEP_SUMMARY"
+        run: |
+          deps=$(find target/debug/deps -maxdepth 1 -type f 2>/dev/null | wc -l)
+          size=$(du -sm target 2>/dev/null | cut -f1)
+          cpu=$(powershell -NoProfile -Command '(Get-CimInstance Win32_Processor | Select-Object -First 1).Name' | tr -d '\r')
+          line="rust-cache cache-hit=${{ steps.rust-cache.outputs.cache-hit }} target=${size:-0}MB deps-files=$deps cpu=$cpu cores=$NUMBER_OF_PROCESSORS"
+          echo "$line" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "::notice title=Windows build cache::$line"
       - name: Install iced system dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
