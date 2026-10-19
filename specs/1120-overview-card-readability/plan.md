@@ -56,7 +56,7 @@ guide Overview section
 | Principle | Status | How |
 |---|---|---|
 | I. Test-First | PASS | Every rule is a pure core function written red first in `micold-core` (`overview_text`, `markup`, `PrDisplay::footer`, `HookActivity::apply`). Client: `EvenRow` layout, card geometry at three widths, palette contrast and the type role are red-first in-crate tests. Only the card's composition of already-tested values is glue, checked by geometry tests and quickstart §B. |
-| II. Multi-Session | PASS | The activity line still comes from the location's main session only (`ui/overview.rs::main_session`); a session whose prompt sanitises to nothing shows no line and falls back to no other session (R8). No new session state. |
+| II. Multi-Session | PASS | The activity line still comes from the location's main session only (`micold_core::occupancy::main_session`, called from `ui/overview.rs::card`); a session whose prompt sanitises to nothing shows no line and falls back to no other session (R8). No new session state. |
 | III. Worktree Integration | PASS | No worktree or VCS operation; the title reads the existing issue-title lookup. |
 | IV. Local-First | PASS | No new network call; issue titles come from the existing lookup; prompts stay in memory and are never logged (FR-020). |
 | V. Rust + iced | PASS | iced only; `EvenRow` is an `advanced::Widget`. `Option` returns make "no row" unrepresentable as an empty string. |
@@ -122,7 +122,7 @@ the Overview state if it lists states.
 | FR-017 shared components, roles, showcase | R9, R15 | `showcase_completeness`; quickstart §B |
 | FR-018 rules in core | R1 | `mise run test-core` |
 | FR-019 user guide, layout snapshot | R14, R15 | `layout_snapshot`; docs gate (`check-user-guide-updated.sh`) |
-| FR-020 no logging | `markup`, `overview_text` are pure (no `tracing`) | core unit asserts nothing; review checks no `tracing` call in the new modules |
+| FR-020 no logging | `markup`, `overview_text` are pure (no `tracing`) | mechanical: the quickstart §A grep finds no `tracing`/`log`/`println` call in `markup.rs`, `overview_text.rs`, `hook_activity.rs`; no unit test (absence of logging is not observable from a test) |
 
 ## Delivery order
 

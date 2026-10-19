@@ -198,6 +198,14 @@ fills.
 **Rationale**: SC-001 (10 state-theme pairs, header and body). The check reads `palette`, the function
 the card draws with, as today.
 
+**Alternatives rejected**:
+- Sample rendered pixels from a screenshot: needs a display and a renderer in the test, is flaky
+  under anti-aliasing, and still has to know which colour is text and which is fill.
+- Check the header text only: the body lines are what the user reads most and sit on a different
+  fill, so SC-001's body half would go unchecked.
+- Keep one combined fill per state (today's check): FR-001 splits header and body fills, so a single
+  pair no longer describes the card.
+
 ## R12. Height: a minimum, and every card in a row as tall as the tallest
 
 **Decision**: A new layout-only widget `cdk::EvenRow` (`crates/micold-client/src/ui/cdk/even_row.rs`):
@@ -266,3 +274,9 @@ rewrites *One card per location*, folds *The summary line* into a *Title* paragr
 progress* from *Feature progress*, rewrites *What the agent is doing now* (markup, slash commands,
 one line) and *Pull request counts* (hidden at 0 · 0, single count), and adds row height to
 *Layout* (FR-019).
+
+**Alternatives rejected**:
+- A separate showcase section per state: the even row height (FR-014) only shows when cards of
+  different heights share one row, so separate sections could not show it.
+- Keep *The summary line* section in the guide: the card no longer has a summary line; the title
+  replaces it, so the section would describe something that is not on screen.
