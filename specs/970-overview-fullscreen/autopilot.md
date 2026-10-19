@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-ag6ana
 - **Started**: 2026-10-18
 - **Phase**: implement M2
-- **Next step**: M2 — review A (high) + gate, then review B and visual pass, full gate, push, PR text in scratchpad
+- **Next step**: M2 — see Handover
 
 ## Pull requests
 
@@ -68,7 +68,20 @@ R6) to stay near 10 tasks. M4 is 10 tasks; its serde field is a persistence-form
 
 ## Handover
 
-None.
+M2 implemented and committed (T018–T026 ticked, cycle-log written). Done since: fmt; the scoped gate's
+only failure was `idle_requests_no_frames` (frame requests must go through `Progress`); fixed by replacing
+`ZoomState.started: Instant` with `clock: Progress` (ZOOM_LIMIT = SLIDE + 100 ms, `on_layout_frame` in
+`Grid::update`); data-model.md's `started` mention should now read `clock` (update it). Next:
+1. Commit the working tree (fmt + clock fix, uncommitted at hand-over) as `fix(970): ...`.
+2. Review A (round 1) was started detached on snapshot `ecb6d8c4e7d818f7cd319b4870d4b812095fe700:4ff93b1c3d965bda0ffa49b2acee062c108e0590`: prompt `/tmp/claude-0/-home-user-micold-ai-ide/610acce1-41f7-5bc4-9972-1f899e9527fb/scratchpad/promptA.txt`,
+   output `/tmp/claude-0/-home-user-micold-ai-ide/610acce1-41f7-5bc4-9972-1f899e9527fb/scratchpad/review-A.md` (ends with `REVIEW_EXIT=`; if empty/absent, re-run the same command:
+   `claude -p --agent autopilot-reviewer --permission-mode auto "$(cat promptA.txt)"`). Act on it per
+   review-rounds.md (it saw the pre-clock-fix tree).
+3. Scoped gate again (`scripts/autopilot/scoped-gate.sh`, detached, with CARGO_INCREMENTAL=0
+   CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0), then review B (conformance rubric, sonnet) and the
+   visual pass (zoom pose in showcase; quickstart §B 1, 3, 8), full gate (`scripts/gate.sh`), push
+   (see prompt override: ls-remote then --force-with-lease), PR title/body into the scratchpad.
+Known gap: no separate behavioural red for T021 (compile red only; recorded in cycle-log).
 
 ## Open escalation
 
