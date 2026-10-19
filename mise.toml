@@ -129,8 +129,14 @@ command -v "$runtime" >/dev/null 2>&1 || { echo "test-sandbox: $runtime is not i
 }
 
 {{config_root}}/scripts/build-lock.sh cargo test --release \
-  -p micold-core -p micold-daemon -p micold-client \
-  --features micold-core/sandbox-real-runtime,micold-daemon/sandbox-real-runtime,micold-client/sandbox-real-runtime \
+  -p micold-core -p micold-daemon \
+  --features micold-core/sandbox-real-runtime,micold-daemon/sandbox-real-runtime \
+  sandbox_real_ --no-fail-fast -- --test-threads=1
+
+# The client's test build does not compile in release (its widget tests use iced's `()` renderer,
+# which iced only provides with debug assertions), and its test measures no time: debug profile.
+{{config_root}}/scripts/build-lock.sh cargo test -p micold-client \
+  --features sandbox-real-runtime \
   sandbox_real_ --no-fail-fast -- --test-threads=1
 """
 
