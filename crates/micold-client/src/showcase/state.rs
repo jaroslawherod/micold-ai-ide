@@ -112,13 +112,13 @@ pub enum Message {
     RowsScrolled { offset: u32, viewport: u32 },
 }
 
+/// The grouped sections' default open key (feature 1091).
+pub const GROUP_DEFAULT: Option<usize> = Some(0);
+
 /// The showcase's whole state.
 ///
 /// `Clone` and `Debug`, but not `PartialEq`: it carries the sample [`GridCache`], which is a render
 /// cache rather than a value. Tests compare the fields they care about.
-/// The grouped sections' default open key (feature 1091).
-pub const GROUP_DEFAULT: Option<usize> = Some(0);
-
 #[derive(Debug, Clone)]
 pub struct Showcase {
     /// The scheme every component on the page resolves against (FR-008). Starts light, and is never
