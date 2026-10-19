@@ -29,7 +29,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T014–T022 | full | Sanitized shared git config, helper reset (FR-004) | #1099 | merged |
 | M3 | T023–T029 | full | In-container helper + in-memory per-repo file (FR-006/007/015) | #1107 | merged (5c0ba07d) |
 | M4 | T030–T038 | full | Protocol delivery, Schedule, revocation with FakeSource (FR-008–010, 012) | — (to open) | implemented; reviews A and B done, gate green, pushed |
-| M5 | T039–T049 | full | [source] Pasted-PAT source + client wiring (FR-005, FR-008–010); the GitHub App M5 is abandoned (bundle backups/1002-m5-github-app.bundle) | — | re-planned for the PAT (D7, D19); FR-005, FR-008–FR-011, SC-002–SC-004 |
+| M5 | T039–T049 | full | [source] Pasted-PAT source + client wiring (FR-005, FR-008–010); the GitHub App M5 is abandoned (bundle backups/1002-m5-github-app.bundle) | — | implemented; reviews A and B done, full gate green, pushed |
 | M6 | T050–T055 | full | Status rows (FR-013, SC-005); FR-011's guidance text is in M5, T051/T053 withdrawn | — | planned |
 
 ## Decisions
@@ -81,6 +81,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | PAT rework: Tasks (after speckit-analyze: 0 CRITICAL/HIGH, 9 MEDIUM fixed) | 1 | 666786835aa6017373962abcb43e7ba01b5462b0:03e1fb3897f4a8725e33951ee5ea1e5f697d2e2e | CHANGES (3 MAJOR fixed: M5 Verify cited M6 status steps, docs/daemon.md missing from T048, [P] tasks sharing mod.rs; 2 MINOR fixed) |
 | PAT rework: Tasks | 2 | 666786835aa6017373962abcb43e7ba01b5462b0:03e1fb3897f4a8725e33951ee5ea1e5f697d2e2e | CHANGES (1 MAJOR fixed: M6 Verify cited live steps; 2 MINOR fixed) |
 | PAT rework: Tasks | 3 | 0841d9c1950c9f05c164b07cfd2899b20fc4da8d:03e1fb3897f4a8725e33951ee5ea1e5f697d2e2e | CHANGES (sonnet; 1 MAJOR: the M6 visual pass on fixture states cannot be run, the showcase has no daemon; fixed by moving T055's pass to the close unit with T056 and making M6 Verify the `daemon_sections` tests: a removed claim, prose only, no 4th round (limit 3)) |
+| M5 A (code-review high) | 1 | (not recorded by part 1) | CLEAN (2 MINOR fixed in 069c651a) |
+| M5 B (conformance, sonnet) | 1 | (not recorded by part 1) | CLEAN; Verify green |
 
 ## M4 review notes
 
