@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1091
 - **Worktree branch**: feat/1091_settings-accordions-should-form-a-group-opening
 - **Started**: 2026-10-19
-- **Phase**: clarify
-- **Next step**: plan unit
+- **Phase**: plan
+- **Next step**: tasks unit
 
 ## Pull requests
 
@@ -33,6 +33,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | Spec | 1 | 6c09689ef177f6b42e67ad2577e443830a87b4d1:0b267cf632915083624acd3d8b44e7c4cfe3f66f | CHANGES: 1 MAJOR |
 | Spec | 2 | 0bf2cd470ebf87d48ab4abff4222017bd50d4253:0b267cf632915083624acd3d8b44e7c4cfe3f66f | CLEAN (1 MINOR fixed) |
+| Plan | 1 | ba7c38f22d155fb504ddb33aa8737b70c5a640eb:83ef880756ad3299406803c3e66a8b5984a0018b | CLEAN (3 MINOR fixed, prose only) |
 
 ## Declined review findings
 
