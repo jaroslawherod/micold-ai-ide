@@ -109,6 +109,43 @@ impl PrList {
     }
 }
 
+/// What the Pull requests section draws (feature 1003, spec § Section states).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PrSection<'a> {
+    /// Nothing: the setting is off, or the entry has no branch of its own.
+    Absent,
+    /// The first read is pending.
+    Loading,
+    /// No list was read and none can be: one muted line.
+    Unavailable,
+    /// A list was read and holds no pull request.
+    Empty,
+    /// The list, marked possibly stale once past the threshold.
+    List {
+        /// The pull requests, newest first.
+        prs: &'a [BranchPullRequest],
+        /// The list is older than the stale threshold.
+        stale: bool,
+    },
+}
+
+/// The section's state for `view` at `now` (Unix seconds); `enabled` is the PR status setting.
+pub fn section(view: &OpenView, enabled: bool, now: u64) -> PrSection<'_> {
+    if !enabled {
+        return PrSection::Absent;
+    }
+    match (view.pull_requests.shown(), &view.pull_requests) {
+        (Some((prs, _)), _) if prs.is_empty() => PrSection::Empty,
+        (Some((prs, _)), _) => PrSection::List {
+            prs,
+            stale: view.pull_requests.possibly_stale(now),
+        },
+        (None, PrList::Loading { .. }) => PrSection::Loading,
+        (None, PrList::Unavailable { .. }) => PrSection::Unavailable,
+        (None, _) => PrSection::Absent,
+    }
+}
+
 /// What the view shows the diff of (feature 775, data-model §2): the entry's own changes, or one
 /// pull request's. A selected pull request is an enum arm, so it cannot hold a working-tree list.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -981,13 +1018,15 @@ pub fn update(state: &mut State, msg: Msg) -> Effect {
                 .map(|prs| prs.iter().map(|pr| pr.number).collect());
             view.pull_requests = match result {
                 Ok(prs) => PrList::Ready { prs, read_at },
-                // No GitHub access of any kind: no section, as the sidebar drops its rows.
-                Err(ReadingFailure::Unavailable) => {
-                    view.source = Source::Changes;
-                    PrList::Absent
+                // Every failure kind, no GitHub access included, keeps what was listed (FR-008,
+                // FR-015); with nothing listed the section shows its muted line (FR-011), and a
+                // pull request shown is never outside every list.
+                Err(_) => {
+                    if last.is_none() {
+                        view.source = Source::Changes;
+                    }
+                    PrList::Unavailable { last }
                 }
-                // Passing, or a rate limit the shell holds back: keep what was listed (FR-008).
-                Err(_) => PrList::Unavailable { last },
             };
             let restored = numbers.and_then(|numbers| reconcile_source(state, &numbers, again));
             if again {

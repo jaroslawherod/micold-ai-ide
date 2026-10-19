@@ -4,8 +4,8 @@
 use std::path::PathBuf;
 
 use micold_client::features::changes::{
-    self, adjacent, base_line, check_mark, diff_body, list_body, pr_header, pr_mark, DiffBody,
-    Effect, ListBody, Msg, PrDiffLoad, PrList, Source, State, Step,
+    self, adjacent, base_line, check_mark, diff_body, list_body, pr_header, pr_mark, section,
+    DiffBody, Effect, ListBody, Msg, PrDiffLoad, PrList, PrSection, Source, State, Step,
 };
 use micold_client::ui::PrMark;
 use micold_core::pull_request::{
@@ -225,19 +225,130 @@ fn a_failed_read_keeps_the_last_list_and_the_view_has_no_notice_channel() {
     );
 }
 
+/// Answers the pending read of `opened(true)`'s view with `result`.
+fn answered(
+    state: &mut State,
+    read_at: u64,
+    result: Result<Vec<BranchPullRequest>, ReadingFailure>,
+) {
+    let seq = seq_of(wanted(state, Some("feat/a")));
+    let effect = changes::update(
+        state,
+        Msg::PullRequestsRead {
+            seq,
+            read_at,
+            result,
+        },
+    );
+    assert_eq!(effect, Effect::None, "SC-006: no notice, nothing follows");
+}
+
+fn section_of(state: &State, enabled: bool, now: u64) -> PrSection<'_> {
+    section(state.open.as_ref().expect("open"), enabled, now)
+}
+
+fn failures() -> [ReadingFailure; 3] {
+    [
+        ReadingFailure::Unavailable,
+        ReadingFailure::Passing,
+        ReadingFailure::RateLimited { until: 99 },
+    ]
+}
+
 #[test]
-fn no_github_access_removes_the_section() {
+fn no_github_access_keeps_unavailable_without_a_list_and_raises_nothing() {
+    for failure in failures() {
+        let mut state = opened(true);
+        answered(&mut state, 3, Err(failure));
+        assert_eq!(view_list(&state), &PrList::Unavailable { last: None });
+        assert_eq!(section_of(&state, true, 3), PrSection::Unavailable);
+    }
+}
+
+#[test]
+fn every_failure_kind_keeps_the_last_list_and_the_selection() {
+    for failure in failures() {
+        let mut state = opened(true);
+        listed(
+            &mut state,
+            vec![pr(1, BranchPrState::Open), pr(2, BranchPrState::Open)],
+        );
+        chosen(&mut state, 2);
+        answered(&mut state, 9, Err(failure));
+        assert!(matches!(
+            view_list(&state),
+            PrList::Unavailable { last: Some(_) }
+        ));
+        assert!(matches!(source(&state), Source::PullRequest(p) if p.number == 2));
+        let PrSection::List { prs, stale } = section_of(&state, true, 9) else {
+            panic!("FR-015: the last list stays");
+        };
+        assert_eq!((prs.len(), stale), (2, false));
+    }
+}
+
+#[test]
+fn a_failure_without_a_list_resets_the_source_to_the_working_tree() {
+    for failure in failures() {
+        let mut state = opened(true);
+        listed(&mut state, vec![pr(1, BranchPrState::Open)]);
+        chosen(&mut state, 1);
+        // The list is gone (a reopen), then the first read of the new view fails.
+        reopen(&mut state, worktree());
+        answered(&mut state, 3, Err(failure));
+        assert_eq!(source(&state), &Source::Changes);
+    }
+}
+
+#[test]
+fn the_section_follows_the_states_table() {
+    use micold_core::pull_request::STALE_AFTER_SECS;
     let mut state = opened(true);
+    assert_eq!(
+        section_of(&state, true, 0),
+        PrSection::Absent,
+        "before any ask"
+    );
+    assert_eq!(
+        section_of(&state, false, 0),
+        PrSection::Absent,
+        "setting off"
+    );
     let seq = seq_of(wanted(&mut state, Some("feat/a")));
+    assert_eq!(
+        section_of(&state, true, 0),
+        PrSection::Loading,
+        "first read pending"
+    );
+    assert_eq!(section_of(&state, false, 0), PrSection::Absent);
     changes::update(
         &mut state,
         Msg::PullRequestsRead {
             seq,
-            read_at: 3,
-            result: Err(ReadingFailure::Unavailable),
+            read_at: 1_000,
+            result: Ok(vec![]),
         },
     );
-    assert_eq!(view_list(&state), &PrList::Absent);
+    assert_eq!(section_of(&state, true, 1_000), PrSection::Empty);
+    answered(&mut state, 1_100, Ok(vec![pr(1, BranchPrState::Open)]));
+    assert!(matches!(
+        section_of(&state, true, 1_100),
+        PrSection::List { stale: false, .. }
+    ));
+    answered(&mut state, 1_200, Err(ReadingFailure::Passing));
+    let late = 1_100 + STALE_AFTER_SECS + 1;
+    assert!(matches!(
+        section_of(&state, true, late),
+        PrSection::List { stale: true, .. }
+    ));
+}
+
+#[test]
+fn a_reread_with_a_list_in_hand_never_shows_the_loading_line() {
+    let mut state = opened(true);
+    listed(&mut state, vec![]);
+    wanted(&mut state, Some("feat/a"));
+    assert_eq!(section_of(&state, true, 1), PrSection::Empty);
 }
 
 #[test]

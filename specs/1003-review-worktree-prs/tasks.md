@@ -76,11 +76,11 @@ description: "Task list for feature 1003: Review changes reaches every pull requ
 
 **Goal**: the section shows loading, empty and unavailable lines per the spec's section-states table. **Independent test**: `features_pr_changes.rs`, quickstart §B step 5.
 
-- [ ] T032 [P] [US4] Write failing reducer tests in `crates/micold-client/tests/features_pr_changes.rs`: `section(view, enabled, now)` for every row of the spec's section-states table (setting off and project root `Absent`; first read pending `Loading`; `Unavailable { last: None }` `Unavailable`; an empty read `Empty`; a list `List`; a failed refresh after a list `List { stale }` by `possibly_stale`) (FR-010, FR-011, FR-012, FR-015, SC-005); `PullRequestsRead(Err(Unavailable))` keeps `PrList::Unavailable { last }` (was `Absent`), keeps `view.source` with a last list and resets it to `Source::Changes` without one, and raises no notice (SC-006); the same for `Err(Passing)` and `Err(RateLimited{..})` (every failure kind keeps `last`, data-model §2); amend the 775 tests that expected `Absent` after `Unavailable`
-- [ ] T033 [US4] Implement `PrSection` and `pub fn section` and the `Err(Unavailable)` arm in `crates/micold-client/src/features/changes.rs`, until T032 passes
-- [ ] T034 [US4] `crates/micold-client/src/ui/changes.rs`: draw the section from `section(..)` per contracts/changes-view.md § Section ("Reading pull requests…", muted "Pull requests can't be shown for this worktree", "No pull requests from this worktree yet", the list), with the rows in a scrollable of bounded height (edge case: more PRs than fit)
-- [ ] T035 [US4] User guide: the loading, empty and unavailable lines, and that no GitHub access now shows a muted line instead of no section, in `docs/user-guide/reviewing-changes.md` § Pull requests
-- [ ] T036 [US4] Visual pass (quickstart §B step 5); record evidence in `specs/1003-review-worktree-prs/`
+- [x] T032 [P] [US4] Write failing reducer tests in `crates/micold-client/tests/features_pr_changes.rs`: `section(view, enabled, now)` for every row of the spec's section-states table (setting off and project root `Absent`; first read pending `Loading`; `Unavailable { last: None }` `Unavailable`; an empty read `Empty`; a list `List`; a failed refresh after a list `List { stale }` by `possibly_stale`) (FR-010, FR-011, FR-012, FR-015, SC-005); `PullRequestsRead(Err(Unavailable))` keeps `PrList::Unavailable { last }` (was `Absent`), keeps `view.source` with a last list and resets it to `Source::Changes` without one, and raises no notice (SC-006); the same for `Err(Passing)` and `Err(RateLimited{..})` (every failure kind keeps `last`, data-model §2); amend the 775 tests that expected `Absent` after `Unavailable`
+- [x] T033 [US4] Implement `PrSection` and `pub fn section` and the `Err(Unavailable)` arm in `crates/micold-client/src/features/changes.rs`, until T032 passes
+- [x] T034 [US4] `crates/micold-client/src/ui/changes.rs`: draw the section from `section(..)` per contracts/changes-view.md § Section ("Reading pull requests…", muted "Pull requests can't be shown for this worktree", "No pull requests from this worktree yet", the list), with the rows in a scrollable of bounded height (edge case: more PRs than fit)
+- [x] T035 [US4] User guide: the loading, empty and unavailable lines, and that no GitHub access now shows a muted line instead of no section, in `docs/user-guide/reviewing-changes.md` § Pull requests
+- [ ] T036 [US4] Visual pass (quickstart §B step 5); record evidence in `specs/1003-review-worktree-prs/`. **Moved out of M4 to the close unit, beside T014, T021, T027 and T037**: no `gh` auth and no `xdotool` in the milestone container (`visual-pass.md`)
 
 ## Polish (no milestone)
 
@@ -135,7 +135,7 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 
 ### M3 — Previous/next and a header naming the shown pull request
 
-- **Tasks**: T022–T031 (T027 moved to the close unit)
+- **Tasks**: T022–T031 (T027 moved to the close unit) · **M3 PR**: #1100
 - **Deliverable**: while a pull request is shown, a header names it with its state and checks, previous/next step through the list (disabled at the ends), only the last choice's diff is ever shown, and the selection and header hold across refreshes, including a pull request from a branch created after the view opened
 - **Satisfies**: US2 acceptance scenarios 1–5; US3 acceptance scenarios 1–4; FR-005, FR-006, FR-007, FR-008, FR-009, FR-016; SC-002, SC-003, SC-004
 - **Verify**: `scripts/build-lock.sh cargo test -p micold-client --test features_pr_changes --test icons`; `scripts/build-lock.sh cargo test -p micold-client pr_list_refresh_branch_set`; quickstart §B steps 3, 4 in the close unit (T027)
@@ -144,7 +144,7 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 
 ### M4 — Loading, empty and unavailable lines
 
-- **Tasks**: T032–T036
+- **Tasks**: T032–T036 (T036 moved to the close unit)
 - **Deliverable**: the Pull requests section shows "Reading pull requests…" until the first read, "No pull requests from this worktree yet" for a worktree without any, and the muted "Pull requests can't be shown for this worktree" without GitHub access and no list read, with no notice; a failed refresh after a list keeps the list and the selection
 - **Satisfies**: US4 acceptance scenarios 1–3; FR-010, FR-011, FR-012, FR-015; SC-005, SC-006
 - **Verify**: `scripts/build-lock.sh cargo test -p micold-client --test features_pr_changes`; quickstart §B step 5

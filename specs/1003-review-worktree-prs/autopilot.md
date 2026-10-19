@@ -19,6 +19,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1089 | design | merged | 6fbd754f11c2d0ed387dfb0ae886c0070ac2d573 |
 | #1094 | M1 | merged | 577dc7141bc72365d0084961a184d55fb394d46a |
 | #1097 | M2 | merged | a275545740c99aaf988f4795ff1c626879376da1 |
+| #1100 | M3 | merged | 4465c277c6d671331ed7b6850d8831d36396a744 |
 
 ## Milestones
 
@@ -26,7 +27,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | M1 | T001–T013 | full | Every PR of the worktree's branch set listed (number, title, state), each diff reachable | #1094 | merged |
 | M2 | T015–T020 | full | Check mark on every entry, one mapping shared with the sidebar | #1097 | merged |
-| M3 | T022–T031 | full | Header + previous/next; selection and header hold across refreshes (US2 + US3) | pending PR | gate green, reviews clean |
+| M3 | T022–T031 | full | Header + previous/next; selection and header hold across refreshes (US2 + US3) | #1100 | merged |
 | M4 | T032–T036 | full | Loading, empty and unavailable lines | — | pending |
 
 ## Decisions
