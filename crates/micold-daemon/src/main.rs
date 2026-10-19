@@ -38,6 +38,13 @@ fn main() {
         let rest: Vec<std::ffi::OsString> = args.collect();
         std::process::exit(micold_daemon::remote::main(&rest));
     }
+    // `git-credential <get|store|erase>`: git's credential helper inside a sandbox (feature 1002).
+    // Same reasons as `status-line`: no runtime, log or singleton, and stdout is git's answer.
+    let mut args = std::env::args_os().skip(1);
+    if args.next().as_deref() == Some(std::ffi::OsStr::new("git-credential")) {
+        let rest: Vec<std::ffi::OsString> = args.collect();
+        std::process::exit(micold_daemon::git_credential::main(&rest));
+    }
     // No `announce_running` here: the installer's `AppMutex` prompt asks the user to close the app,
     // and a windowless daemon cannot be closed, so setup would never get past it. Setup stops the
     // daemon itself instead, in `[Code] PrepareToInstall` (feature 030, research R12).

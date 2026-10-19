@@ -991,6 +991,36 @@ async fn nothing_allowed_creates_no_credential_secret_and_reads_no_file() {
     assert!(pod["spec"].get("imagePullSecrets").is_none());
 }
 
+/// FR-006: the pod keeps the scoped git credential in a memory volume, nowhere on a node's disk.
+#[tokio::test(start_paused = true)]
+async fn the_pod_has_a_memory_backed_volume_for_the_git_credential() {
+    let fake = cluster();
+    fake.progress(&names().pod(), vec![running()]);
+    let read = |_: &Path| -> std::io::Result<String> { Err(std::io::ErrorKind::NotFound.into()) };
+    let (outcome, _) =
+        run_reading(&fake, &settings(), &client("c1"), DriftChoice::Ask, &read).await;
+    ready(outcome);
+    let pod = fake.manifest(NS, ObjectKind::Pod, &names().pod()).unwrap();
+    let volume = pod["spec"]["volumes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|v| v["name"] == "git-credential")
+        .expect("a git-credential volume");
+    assert_eq!(
+        volume["emptyDir"],
+        serde_json::json!({ "medium": "Memory", "sizeLimit": "64Ki" })
+    );
+    let mount = pod["spec"]["containers"][0]["volumeMounts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|m| m["name"] == "git-credential")
+        .expect("a git-credential mount");
+    assert_eq!(mount["mountPath"], "/run/micold/git");
+    assert!(mount.get("readOnly").is_none());
+}
+
 #[tokio::test(start_paused = true)]
 async fn a_withdrawn_secret_of_ours_is_deleted_and_one_not_ours_is_left() {
     let n = names();

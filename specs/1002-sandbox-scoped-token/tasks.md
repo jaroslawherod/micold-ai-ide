@@ -195,7 +195,7 @@ rewritten; another repository or host gets nothing.
 
 ### Tests (write first, must fail)
 
-- [ ] T023 [P] [US2] Unit tests in `crates/micold-core/src/scoped_credential/helper.rs`
+- [x] T023 [P] [US2] Unit tests in `crates/micold-core/src/scoped_credential/helper.rs`
   (contracts/git-in-container.md §2, data-model §10): parse a credential request; answer
   `username=x-access-token` / `password=<token>` only for `protocol=https`, `host=<base host>`,
   `path=o/r` or `o/r.git` or `o/r/` with an unexpired file; owner and repo case-insensitive; nothing
@@ -203,13 +203,13 @@ rewritten; another repository or host gets nothing.
   format `expires_at=<unix seconds>` / `token=<token>` round-trips; `GIT_CREDENTIAL_ROOT` is
   `/run/micold/git`. Extend T016's tests for the full block of contracts §1 (`GIT_CONFIG_COUNT=5`,
   helper `!micold-daemon git-credential` for `<base>`, `useHttpPath=true`, both `insteadOf` rules).
-- [ ] T024 [US2] Extend `crates/micold-daemon/tests/scoped_git_credential.rs` (FR-015): a loopback
+- [x] T024 [US2] Extend `crates/micold-daemon/tests/scoped_git_credential.rs` (FR-015): a loopback
   HTTP server running `git http-backend` with basic auth over a bare repo `o/r`; `git_env` with the
   loopback base; a credential file for `o/r` in the test root → clone, commit, push and pull
   succeed; a remote written as `git@<host>:o/r.git`-style is rewritten and succeeds without SSH;
   `git credential fill` returns nothing for `o/other` and for another host; an expired file →
   push fails at once (no prompt). Skip with a reason when `git http-backend` is absent.
-- [ ] T025 [P] [US2] Argv/manifest tests: `crates/micold-core/tests/sandbox_argv.rs` asserts
+- [x] T025 [P] [US2] Argv/manifest tests: `crates/micold-core/tests/sandbox_argv.rs` asserts
   `--tmpfs /run/micold/git:rw,noexec,nosuid,size=64k,mode=0700,uid=<uid>,gid=<gid>` and that
   `/run/micold/git` is no `MountSet` host mount; `crates/micold-core/src/kube/start_tests.rs`
   asserts an `emptyDir { medium: Memory, sizeLimit: 64Ki }` volume mounted at `/run/micold/git`
@@ -217,15 +217,15 @@ rewritten; another repository or host gets nothing.
 
 ### Implementation
 
-- [ ] T026 [US2] Implement `crates/micold-core/src/scoped_credential/helper.rs` and complete
+- [x] T026 [US2] Implement `crates/micold-core/src/scoped_credential/helper.rs` and complete
   `git_env` with the helper, `useHttpPath` and `insteadOf` entries (T023).
-- [ ] T027 [US2] Add `crates/micold-daemon/src/git_credential.rs` and the `git-credential
+- [x] T027 [US2] Add `crates/micold-daemon/src/git_credential.rs` and the `git-credential
   <get|store|erase>` subcommand in `crates/micold-daemon/src/main.rs` beside `status-line` and
   `remote`: `get` answers per `helper.rs`; `store`/`erase` read and discard stdin; always exit 0;
   the root is overridable by a test env var as `repo_clone::ROOT_ENV` is (T024).
-- [ ] T028 [US2] Container `--tmpfs` in `crates/micold-core/src/sandbox/argv.rs` and memory
+- [x] T028 [US2] Container `--tmpfs` in `crates/micold-core/src/sandbox/argv.rs` and memory
   `emptyDir` in `crates/micold-core/src/kube/manifest.rs` (T025).
-- [ ] T029 [P] [US2] Real-runtime check: extend `crates/micold-daemon/tests/sandbox_real_no_user_credentials.rs`
+- [x] T029 [P] [US2] Real-runtime check: extend `crates/micold-daemon/tests/sandbox_real_no_user_credentials.rs`
   to assert `/run/micold/git` is a tmpfs in the container (quickstart Part B).
 
 **Checkpoint**: a credential file in the container is enough for git to push that one repository.

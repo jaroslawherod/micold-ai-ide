@@ -199,6 +199,13 @@ fn container(settings: &KubeSettings, names: &ResourceNames, image: &str) -> Val
                 .push(mount);
         }
     }
+    out["volumeMounts"]
+        .as_array_mut()
+        .expect("volumeMounts is an array")
+        .push(json!({
+            "name": GIT_CREDENTIAL_VOLUME,
+            "mountPath": crate::scoped_credential::helper::GIT_CREDENTIAL_ROOT,
+        }));
     if let Some(r) = resources(&settings.resources) {
         out["resources"] = r;
     }
@@ -216,6 +223,9 @@ pub fn access_reviews() -> [(&'static str, &'static str); 6] {
         ("delete", "pods"),
     ]
 }
+
+/// The volume holding the scoped git credential's files.
+const GIT_CREDENTIAL_VOLUME: &str = "git-credential";
 
 /// The pod that runs `image` for the daemon `names`.
 pub fn pod(settings: &KubeSettings, names: &ResourceNames, image: &str, stamp: &PodStamp) -> Value {
@@ -247,6 +257,14 @@ pub fn pod(settings: &KubeSettings, names: &ResourceNames, image: &str, stamp: &
             spec["imagePullSecrets"] = json!([{ "name": names.pull_secret() }]);
         }
     }
+    // The scoped git credential's directory: memory only, so it never reaches a node's disk (FR-006).
+    spec["volumes"]
+        .as_array_mut()
+        .expect("volumes is an array")
+        .push(json!({
+            "name": GIT_CREDENTIAL_VOLUME,
+            "emptyDir": { "medium": "Memory", "sizeLimit": "64Ki" },
+        }));
     if !settings.node_selector.is_empty() {
         spec["nodeSelector"] = json!(settings.node_selector);
     }
