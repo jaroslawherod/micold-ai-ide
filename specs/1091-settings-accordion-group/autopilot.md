@@ -24,7 +24,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T009 | full | Daemon form sections form a group; error-held sections stay open | #1140 | merged |
-| M2 | T010–T012 | light | Showcase shows grouped and independent sets | PR-M2 | in review |
+| M2 | T010–T012 | light | Showcase shows grouped and independent sets | #1142 | in review |
 
 ## Decisions
 
