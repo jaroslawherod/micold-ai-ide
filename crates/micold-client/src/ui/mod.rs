@@ -10,13 +10,13 @@ pub mod compare;
 pub mod confirm_additional_session;
 pub(crate) mod confirm_agent_request;
 pub mod confirm_daemon_removal;
-pub mod daemon_form_dialog;
 pub(crate) mod confirm_delete;
 pub(crate) mod confirm_dismiss_group;
 pub(crate) mod confirm_forget;
 pub(crate) mod confirm_link_open;
 pub(crate) mod confirm_pick_run;
 pub(crate) mod confirm_session_remove;
+pub mod daemon_form_dialog;
 mod focus;
 /// The install-me screen (feature 028, FR-019): shown instead of everything else when this copy
 /// is running from a mounted image or a translocated path.

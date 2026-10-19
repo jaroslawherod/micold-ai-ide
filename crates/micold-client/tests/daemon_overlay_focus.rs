@@ -120,9 +120,7 @@ fn state() -> (State, [DaemonId; 2]) {
     let mut state = State::default();
     let mut registry = DaemonRegistry::new(Vec::new(), 1);
     let host = registry.add("Host", DaemonRuntime::Host, false).unwrap();
-    let boxed = registry
-        .add("Box", container("box", 7001), false)
-        .unwrap();
+    let boxed = registry.add("Box", container("box", 7001), false).unwrap();
     state.settings.links = DaemonLinks::at_launch(&registry);
     state.settings.daemons = registry;
     state.settings.settings_draft = Some(SettingsDraft {
@@ -150,8 +148,9 @@ fn view(state: &State) -> Element<'_, Message> {
 fn dialog_focusables(state: &State) -> usize {
     let outcome = EnvIncludeOutcome::Disabled;
     let open = micold_client::overlay::registry::open_dialog(state).expect("a dialog is open");
-    let body = open.view().expect("a dialog view")(state, micold_core::theme::ColorScheme::Dark, &outcome)
-        .expect("the dialog draws");
+    let body =
+        open.view().expect("a dialog view")(state, micold_core::theme::ColorScheme::Dark, &outcome)
+            .expect("the dialog draws");
     let count = Mounted::new(body).reached().len();
     count
 }

@@ -257,10 +257,7 @@ pub fn scrolling_dialog<'a>(_s: &'a Showcase, roles: Roles, _i: usize) -> Elemen
         material::ScrollingDialog::new("A scrolling dialog", body, actions, roles)
             .max_height(360.0)
             .into();
-    arrange(
-        vec![posed("tall body", dialog, roles)],
-        Layout::Inline,
-    )
+    arrange(vec![posed("tall body", dialog, roles)], Layout::Inline)
 }
 
 /// `MenuOverlay` — the toolbar's overflow panel, and the project switcher's list, which is the

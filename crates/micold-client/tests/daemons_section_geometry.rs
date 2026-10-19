@@ -971,7 +971,14 @@ fn the_rows_keep_their_status_and_actions_with_the_dialog_open() {
     let before = painted_tall(&state);
     state.update(Message::Daemons(DaemonsMsg::EditOpened(host)));
     let after = painted_tall(&state);
-    for needle in ["Connected", "Unreachable", "Edit", "Remove", "Start", "Stop"] {
+    for needle in [
+        "Connected",
+        "Unreachable",
+        "Edit",
+        "Remove",
+        "Start",
+        "Stop",
+    ] {
         assert_eq!(
             has(&before, needle),
             has(&after, needle),

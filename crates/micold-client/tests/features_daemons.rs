@@ -1267,10 +1267,18 @@ mod drift_behind_the_form {
         dial(&mut w, id);
         send(&mut state, &mut w, Msg::KubeDrift(id, vec!["Image".into()]));
         assert!(state.prompt().is_none(), "no second modal over the form");
-        assert_eq!(state.draft.as_ref().unwrap().name, "Typed", "never applied to the draft");
+        assert_eq!(
+            state.draft.as_ref().unwrap().name,
+            "Typed",
+            "never applied to the draft"
+        );
         send(&mut state, &mut w, Msg::DraftDiscarded);
         assert!(
-            state.prompt().unwrap().text.starts_with("The running pod differs"),
+            state
+                .prompt()
+                .unwrap()
+                .text
+                .starts_with("The running pod differs"),
             "queued until the overlay closed"
         );
     }

@@ -1984,7 +1984,10 @@ mod form_dialog {
                 .any(|o| matches!(o, Outcome::DaemonRegistryChanged(r) if r.get(boxed).is_some_and(|e| e.name.as_str() == "Renamed"))),
             "the shell is told to persist and re-link: {out:?}"
         );
-        assert!(w.links.state(boxed).is_some(), "FR-003: the connection is kept");
+        assert!(
+            w.links.state(boxed).is_some(),
+            "FR-003: the connection is kept"
+        );
     }
 
     /// US1 #3, FR-004: a refusal stores nothing, keeps the dialog open and names the field.
@@ -2038,7 +2041,10 @@ mod form_dialog {
             app.settings.daemons.get(boxed).unwrap().name.as_str(),
             "Renamed"
         );
-        assert_eq!(app.settings.settings_draft, before, "the page's pending edits");
+        assert_eq!(
+            app.settings.settings_draft, before,
+            "the page's pending edits"
+        );
     }
 
     /// FR-014, R6: another window's change to the registry does not replace the open draft.
@@ -2051,7 +2057,14 @@ mod form_dialog {
         send(&mut state, &mut w, Msg::NameEdited("Typed".into()));
         // Another window removes a different daemon, and renames this one.
         w.registry.remove(host);
-        w.registry.edit(boxed, "Elsewhere", super::daemons_fixture::container("box-ctr", 7001), false).unwrap();
+        w.registry
+            .edit(
+                boxed,
+                "Elsewhere",
+                super::daemons_fixture::container("box-ctr", 7001),
+                false,
+            )
+            .unwrap();
         send(&mut state, &mut w, Msg::PidLimitEdited("300".into()));
         assert_eq!(state.draft.as_ref().unwrap().name, "Typed");
     }
@@ -2090,7 +2103,10 @@ mod form_dialog {
         running_edit(&mut w, &mut state);
         assert!(send(&mut state, &mut w, Msg::Saved).is_empty());
         assert!(state.draft.is_some(), "the dialog stays open");
-        assert!(state.form_confirmation().is_some(), "asked inside the dialog");
+        assert!(
+            state.form_confirmation().is_some(),
+            "asked inside the dialog"
+        );
         assert!(
             state.standalone_prompt().is_none(),
             "never a second modal over the form"
