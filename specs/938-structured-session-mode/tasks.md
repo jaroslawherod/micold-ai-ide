@@ -478,7 +478,7 @@ phase sits before US6 because the UI milestone ships last.
 the user guide (FR-022, FR-022a, FR-023).
 
 **Independent Test**: `cargo test -p micold-client --test structured_start_menu --test
-structured_log --test layout_snapshot`, then quickstart §B.
+features_structured_log --test layout_snapshot`, then quickstart §B.
 
 ### Tests for User Story 6 ⚠️
 
@@ -495,7 +495,7 @@ structured_log --test layout_snapshot`, then quickstart §B.
   supported; `start_affordance_offers_a_choice` is true with Claude Code as the only CLI; picking
   the entry sends `SessionCreate { kind: Structured }`; the plain start press and every other
   entry send `Terminal`.
-- [x] T039 [P] [US6] Write failing reducer tests in `crates/micold-client/tests/structured_log.rs`:
+- [x] T039 [P] [US6] Write failing reducer tests in `crates/micold-client/tests/features_structured_log.rs`:
   the first `live: false` message (on first view, or after a `live: true`) replaces the session's
   lines, later `live: false` messages append, `live: true` appends, `omitted > 0` puts the
   omitted line first, and two sessions' logs stay separate.
@@ -553,7 +553,7 @@ structured_log --test layout_snapshot`, then quickstart §B.
 
 No code changes; done by the close unit in the close PR.
 
-- [ ] T048 Run quickstart [Part A](quickstart.md) on `main` and record the results in
+- [x] T048 Run quickstart [Part A](quickstart.md) on `main` and record the results in
   `specs/938-structured-session-mode/quickstart.md`.
 
 ---
@@ -698,7 +698,7 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Deliverable**: the start-session chevron offers "Claude Code (structured)"; the session's row
   is marked and its pane shows a read-only line-per-event log; the user guide describes it.
 - **Satisfies**: US6 acceptance scenarios 1–4; FR-022, FR-022a, FR-023
-- **Verify**: `cargo test -p micold-client --test structured_start_menu --test structured_log
+- **Verify**: `cargo test -p micold-client --test structured_start_menu --test features_structured_log
   --test layout_snapshot`, then quickstart §B (visual-pass evidence in
   `specs/938-structured-session-mode/visual-pass/`)
 - **Depends on**: M3, M4, M5, M6, M7
