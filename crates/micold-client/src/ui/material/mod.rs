@@ -49,6 +49,7 @@ mod ellipsized;
 /// modules structurally cannot see (BUG-003).
 #[cfg(test)]
 mod field_focus;
+mod field_group;
 mod filled_field;
 mod filter_panel;
 mod form_field;
@@ -181,6 +182,7 @@ pub use diff_view::{DiffLayout, DiffView, ROW_HEIGHT as DIFF_ROW_HEIGHT};
 pub use divider::Divider;
 pub use edge_fade::EdgeFade;
 pub use ellipsized::Ellipsized;
+pub use field_group::FieldGroup;
 pub use filter_panel::FilterTrigger;
 pub(crate) use form_field::beneath;
 pub use form_field::{FormField, Layer as FieldLayer};

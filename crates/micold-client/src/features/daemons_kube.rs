@@ -72,6 +72,17 @@ impl AllowedKind {
             .label(),
         }
     }
+
+    /// The noun-only name a closed section's summary lists (feature 890, FR-014).
+    pub fn short_label(self) -> String {
+        match self {
+            Self::GitConfig => "Git config".into(),
+            Self::GitCredentials => "Git credentials".into(),
+            Self::GitSshKey => "SSH key".into(),
+            Self::SignIn(cli) => format!("{} sign-in", cli.provider().display_name()),
+            Self::RegistryPull => "Registry credentials".into(),
+        }
+    }
 }
 
 /// The Kubernetes fields of the form, as typed.

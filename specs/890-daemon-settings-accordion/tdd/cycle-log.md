@@ -78,3 +78,24 @@ daemons_section_geometry --test layout_snapshot`: all passed.
   the container form and needs the Container section opened first (Connection is the default now), and
   `feature_registration_cost` wants `tests/features_<module>.rs` for the new feature module, so
   `tests/daemon_sections.rs` became `tests/features_daemon_sections.rs`.
+
+## M3 — one look and section summaries (T016–T028)
+
+Honest account: the M3 tests and code were written in the same pass; no separate red run was taken
+for T016–T019 and T023 before the code existed. The tests were then checked to bite where cheap, and
+review B measured nothing more.
+
+- **FieldGroup** (T016, T021): label `Label` muted, note `Caption` muted under it, children `SM` apart
+  at one left edge; no note leaves no gap. Green: `cargo test -p micold-client --lib field_group`
+  (3 passed). Showcase pose (T019): `the_field_group_is_listed_with_and_without_a_note` green.
+- **Summaries and marker** (T017, T023): one test per contract row, fallbacks, `·` joining, trimming;
+  `marked` per required field; `AllowedKind::short_label`. Green: `features_daemon_sections` 12 passed.
+- **Geometry** (T018, T020, T024–T026): group labels above their controls at one edge, explanations
+  where the contract puts them, found contexts as a select above *Context* with no per-context button,
+  one field gap and one section pitch across kinds, summaries and the `Connection*` marker painted.
+  Green: `daemons_section_geometry` 19 passed. Three older assertions changed with the design:
+  the per-context button (`staging`) became the select, and the Container defaults summary is
+  `Processes 512`, not `Runtime defaults`, because a new daemon's form is pre-filled.
+- **Review B F1** (BLOCKER): the in-file test `the_container_section_builds_for_both_image_choices` did
+  not compile with the new `draft` parameter, so `--lib` and the gate failed. Fixed (a `Draft` from
+  `begin_add`); the first full gate was red for the same reason.

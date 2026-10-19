@@ -19,13 +19,14 @@ use crate::features::daemons::{
 use crate::features::daemons_kube::{AllowedKind, ContextList};
 use crate::features::settings::DaemonDraft;
 use crate::features::window::FieldId;
+use crate::kube::live::ContextEntry;
 use crate::ui::focus::TrackFocus;
 use crate::ui::material::{
-    Button, Checkbox, HostPicker, KeyValueList, RequiredLegend, Select, StageProgress, Tag,
-    TextField, TolerationList,
+    Button, Checkbox, FieldGroup, HostPicker, KeyValueList, RequiredLegend, Select, StageProgress,
+    Tag, TextField, TolerationList,
 };
 use crate::ui::settings::container_fields::{self, ContainerView, FieldErrors};
-use crate::ui::settings::{caution, group, name_of, note, page, Named};
+use crate::ui::settings::{caution, group, name_of, note, page, section_body, Named, SECTION_GAP};
 use iced::widget::{column, row};
 use iced::{Element, Length};
 use micold_core::daemons::{DaemonId, DaemonState, DaemonView, ATTEMPTS_STOPPED};
@@ -379,7 +380,7 @@ fn form<'a>(
         )
         .label("Runs in"),
     ]
-    .spacing(spacing::SM)
+    .spacing(SECTION_GAP)
     .width(Length::Fill);
     if let Some(message) = error_of(state, "runtime") {
         fields = fields.push(caution(message, roles));
@@ -435,7 +436,7 @@ fn form<'a>(
                 errors,
                 machine.and(facts.missing_cli.clone()),
                 focused,
-                open,
+                state,
                 roles,
             )
         }
@@ -443,8 +444,9 @@ fn form<'a>(
         DraftRuntime::Host => vec![
             container_fields::accordion(
                 Section::Connection,
-                vec![auto_start(draft, focused, roles)],
+                section_body(None, vec![auto_start(draft, focused, roles)], roles),
                 open(Section::Connection),
+                draft,
                 roles,
             ),
             // A host daemon keeps no container profile: the groups stay out rather than take
@@ -452,11 +454,16 @@ fn form<'a>(
             // (FR-014d).
             container_fields::accordion(
                 Section::Sessions,
-                vec![container_fields::survival_note(
-                    PlacementKind::HostProcess,
+                section_body(
+                    None,
+                    vec![container_fields::survival_note(
+                        PlacementKind::HostProcess,
+                        roles,
+                    )],
                     roles,
-                )],
+                ),
                 open(Section::Sessions),
+                draft,
                 roles,
             ),
         ],
@@ -509,8 +516,9 @@ fn form<'a>(
             connection.push(auto_start(draft, focused, roles));
             vec![container_fields::accordion(
                 Section::Connection,
-                connection,
+                section_body(None, connection, roles),
                 open(Section::Connection),
+                draft,
                 roles,
             )]
         }
@@ -555,19 +563,18 @@ fn kube_sections<'a>(
     let open = |section| state.section_open(section);
     let mut connection: Vec<Element<'a, Message>> = Vec::new();
     if let ContextList::Found(list) = &state.contexts {
-        connection.push(note("Contexts in your kubeconfig", roles));
-        for entry in list {
-            let button = if entry.name == kube.context {
-                Button::filled(entry.name.clone(), roles)
-            } else {
-                Button::outlined(entry.name.clone(), roles)
-            };
+        if !list.is_empty() {
+            let chosen = list.iter().find(|c| c.name == kube.context).cloned();
             connection.push(
-                button
-                    .on_press(Message::Daemons(DaemonsMsg::ContextChosen(
-                        entry.name.clone(),
-                    )))
-                    .into(),
+                Select::new(
+                    list.as_slice(),
+                    chosen,
+                    |c: ContextEntry| Message::Daemons(DaemonsMsg::ContextChosen(c.name)),
+                    roles,
+                )
+                .label("Context from your kubeconfig")
+                .placeholder("Choose a context")
+                .into(),
             );
         }
     }
@@ -595,39 +602,35 @@ fn kube_sections<'a>(
     );
     connection.push(auto_start(draft, focused, roles));
 
-    let mut image: Vec<Element<'a, Message>> = vec![
-        TextField::new("", &kube.image, roles)
-            .label("Image")
-            .supporting("Empty uses the default SSH image")
-            .track_focus(FieldId::DaemonKubeImage, focused)
-            .error(error_of(state, "image"))
-            .on_input(|v| Message::Daemons(DaemonsMsg::KubeImageEdited(v)))
-            .into(),
-        note("AI CLIs installed in the pod when it starts", roles),
-    ];
+    let mut image: Vec<Element<'a, Message>> = vec![TextField::new("", &kube.image, roles)
+        .label("Image")
+        .supporting("Empty uses the default SSH image")
+        .track_focus(FieldId::DaemonKubeImage, focused)
+        .error(error_of(state, "image"))
+        .on_input(|v| Message::Daemons(DaemonsMsg::KubeImageEdited(v)))
+        .into()];
+    let mut clis = FieldGroup::new("AI CLIs installed in the pod", roles)
+        .note("Installed when the pod starts.");
     for cli in micold_core::session::AiCli::ALL {
-        image.push(
+        clis = clis.push(
             Checkbox::new(
                 cli.provider().display_name(),
                 kube.providers.contains(&cli),
                 roles,
             )
             .track_focus(FieldId::DaemonKubeProvider(cli), focused)
-            .on_toggle(move |on| Message::Daemons(DaemonsMsg::ProviderToggled(cli, on)))
-            .into(),
+            .on_toggle(move |on| Message::Daemons(DaemonsMsg::ProviderToggled(cli, on))),
         );
     }
+    image.push(clis.into());
 
-    let mut credentials: Vec<Element<'a, Message>> = vec![note(
-        "Nothing reaches the pod unless it is ticked here.",
-        roles,
-    )];
+    let mut allowed = FieldGroup::new("Allowed credentials", roles)
+        .note("Nothing reaches the pod unless it is ticked here.");
     for (place, kind) in AllowedKind::all().into_iter().enumerate() {
-        credentials.push(
+        allowed = allowed.push(
             Checkbox::new(kind.label(), kube.allowed.contains(&kind), roles)
                 .track_focus(FieldId::DaemonKubeAllowed(place as u8), focused)
-                .on_toggle(move |on| Message::Daemons(DaemonsMsg::AllowedToggled(kind, on)))
-                .into(),
+                .on_toggle(move |on| Message::Daemons(DaemonsMsg::AllowedToggled(kind, on))),
         );
         let file = match kind {
             AllowedKind::GitSshKey => Some((
@@ -650,19 +653,19 @@ fn kube_sections<'a>(
             } else {
                 |v| Message::Daemons(DaemonsMsg::PullFileEdited(v))
             };
-            credentials.push(
+            allowed = allowed.push(
                 TextField::new("", value, roles)
                     .label(label)
                     .track_focus(id, focused)
                     .error(error_of(state, name))
-                    .on_input(on_input)
-                    .into(),
+                    .on_input(on_input),
             );
         }
     }
     if let Some(message) = error_of(state, "allowed") {
-        credentials.push(caution(message, roles));
+        allowed = allowed.push(caution(message, roles));
     }
+    let credentials: Vec<Element<'a, Message>> = vec![allowed.into()];
 
     let errors = [
         error_of(state, "cpu_request"),
@@ -676,24 +679,25 @@ fn kube_sections<'a>(
         .map(|(control, error)| container_fields::limit_field(control, error, focused, roles))
         .collect();
 
-    let mut placement: Vec<Element<'a, Message>> = vec![
-        note("Node selector, one key=value per line", roles),
-        KeyValueList::new(kube.node_selector_editor.content(), roles)
-            .on_action(|a| Message::Daemons(DaemonsMsg::NodeSelectorAction(EditorAction(a))))
-            .into(),
-    ];
+    let mut selector = FieldGroup::new("Node selector", roles)
+        .note("One key=value per line")
+        .push(
+            KeyValueList::new(kube.node_selector_editor.content(), roles)
+                .on_action(|a| Message::Daemons(DaemonsMsg::NodeSelectorAction(EditorAction(a)))),
+        );
     if let Some(message) = error_of(state, "node_selector") {
-        placement.push(caution(message, roles));
+        selector = selector.push(caution(message, roles));
     }
-    placement.push(note("Tolerations, one per line", roles));
-    placement.push(
-        TolerationList::new(kube.tolerations_editor.content(), roles)
-            .on_action(|a| Message::Daemons(DaemonsMsg::TolerationsAction(EditorAction(a))))
-            .into(),
-    );
+    let mut tolerations = FieldGroup::new("Tolerations", roles)
+        .note("One per line")
+        .push(
+            TolerationList::new(kube.tolerations_editor.content(), roles)
+                .on_action(|a| Message::Daemons(DaemonsMsg::TolerationsAction(EditorAction(a)))),
+        );
     if let Some(message) = error_of(state, "tolerations") {
-        placement.push(caution(message, roles));
+        tolerations = tolerations.push(caution(message, roles));
     }
+    let mut placement: Vec<Element<'a, Message>> = vec![selector.into(), tolerations.into()];
     placement.push(
         TextField::new("20Gi", &kube.volume_size, roles)
             .label("Volume size")
@@ -725,7 +729,10 @@ fn kube_sections<'a>(
         (Section::Placement, placement),
     ]
     .into_iter()
-    .map(|(section, controls)| container_fields::accordion(section, controls, open(section), roles))
+    .map(|(section, controls)| {
+        let body = section_body(None, controls, roles);
+        container_fields::accordion(section, body, open(section), draft, roles)
+    })
     .collect()
 }
 

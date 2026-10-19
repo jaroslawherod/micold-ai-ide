@@ -86,7 +86,7 @@ Under **Name** and **Runs in**, the settings are grouped in six titled sections:
 section's header, or focus it and press Space or Enter, to open or close it. Closing a section keeps what you
 typed in it and saves it with the form. A section holding a field the form refused, or a required field left empty, opens by itself
 and stays open while the error stands, so an error is never hidden. Which sections are open is not
-saved.
+saved. A closed section shows a one-line summary of its settings under its title, and a `*` after the title when a required field inside it is empty.
 
 A host daemon shows the sections **Connection** and **Sessions**, and an SSH daemon only **Connection**; neither shows the others: they have no container
 here. The Daemons form is the only place these values are edited.

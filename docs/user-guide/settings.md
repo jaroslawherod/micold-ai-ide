@@ -447,7 +447,11 @@ it, the version it reported, a state badge (**Connected**, **Starting**, **Unrea
 **Add daemon** opens a form for a name, what it runs in (container or host), the container name,
 port and image, and whether to connect when the application starts. A form that cannot be saved
 says why beside the field at fault: a blank or repeated name, a port outside 1-65535, a container
-already used by another daemon, a second host daemon.
+already used by another daemon, a second host daemon. The form groups its settings in titled
+sections; a closed section shows a one-line summary of its settings, and a `*` after its title when
+a required field inside it is empty. For a Kubernetes daemon, the contexts found in the kubeconfig
+are chosen from the **Context from your kubeconfig** select above **Context**, which can still be
+typed.
 
 Saving the Settings page does not save this section and cancelling the page does not undo it: a
 daemon you added or removed here is kept at once.

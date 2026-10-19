@@ -442,7 +442,7 @@ fn the_kubernetes_form_and_row_paint_their_fields_without_overflow() {
         "Tolerations",
         "Volume size",
         "Storage class",
-        "staging",
+        "Context from your kubeconfig",
     ] {
         assert!(has(&form, label), "{label}: {form:?}");
     }
@@ -652,4 +652,219 @@ fn a_closed_connection_paints_none_of_its_fields() {
         assert!(!has(&shown, field), "{runtime:?} closed: {shown:?}");
         assert!(has(&shown, "Connection"), "the header stays: {shown:?}");
     }
+}
+
+// ---- Feature 890, M3: one look across the forms (FR-006 to FR-009, FR-014, SC-003). ----
+
+/// What the add form for `runtime` paints with every section open, entrances done, with the
+/// positions: `(content, x, y)`.
+fn open_form(
+    runtime: micold_client::features::daemons::DraftRuntime,
+) -> (State, Vec<(String, f32, f32)>) {
+    use micold_client::features::daemons::Section;
+    let (mut state, _) = with_daemons();
+    state.update(Message::Daemons(DaemonsMsg::AddOpened));
+    state.update(Message::Daemons(DaemonsMsg::RuntimeChosen(runtime)));
+    for section in Section::of(runtime).iter().skip(1) {
+        state.update(Message::Daemons(DaemonsMsg::SectionToggled(*section)));
+    }
+    let mut renderer = lay::renderer();
+    let shown =
+        lay::painted_text_settled_at(view(&state), &mut renderer, iced::Size::new(1280.0, 6000.0))
+            .0
+            .into_iter()
+            .map(|d| (d.content, d.origin.x, d.origin.y))
+            .collect();
+    (state, shown)
+}
+
+fn find<'a>(shown: &'a [(String, f32, f32)], text: &str) -> &'a (String, f32, f32) {
+    // A closed header with an empty required field paints its title with the marker.
+    let marked = format!("{text}*");
+    shown
+        .iter()
+        .find(|(c, ..)| c == text || (text.len() > 3 && *c == marked && !text.ends_with('*')))
+        .unwrap_or_else(|| panic!("{text:?} not painted: {shown:?}"))
+}
+
+/// FR-008, US2 AS3: each group label is painted above its first checkbox or editor, and its
+/// children start at the label's left edge.
+#[test]
+fn each_group_label_sits_above_its_controls_at_their_left_edge() {
+    use micold_client::features::daemons::DraftRuntime::{Container, Kubernetes};
+    let (_, container) = open_form(Container);
+    let (_, kube) = open_form(Kubernetes);
+    for (shown, label, first) in [
+        (&container, "AI tools in this daemon", "Claude Code"),
+        (&container, "Shared with the container", "Git configuration"),
+        (&kube, "AI CLIs installed in the pod", "Claude Code"),
+        (&kube, "Allowed credentials", "the git config"),
+    ] {
+        let (_, lx, ly) = find(shown, label);
+        let (_, fx, fy) = find(shown, first);
+        assert!(fy > ly, "{label}: its controls follow it");
+        assert!(
+            (fx - lx).abs() < 30.0,
+            "{label}: left edge {lx} vs the checkbox row at {fx}"
+        );
+    }
+    for label in ["Node selector", "Tolerations"] {
+        let (_, _, y) = find(&kube, label);
+        let (_, _, note) = find(
+            &kube,
+            if label == "Tolerations" {
+                "One per line"
+            } else {
+                "One key=value per line"
+            },
+        );
+        assert!(note > y, "{label}: its note is under it");
+    }
+}
+
+/// FR-007: the explanations moved under their field, or to a section's first line.
+#[test]
+fn explanations_sit_where_the_contract_puts_them() {
+    use micold_client::features::daemons::DraftRuntime::Container;
+    let (_, shown) = open_form(Container);
+    let y = |t: &str| {
+        shown
+            .iter()
+            .find(|(c, ..)| c.contains(t))
+            .map(|(_, _, y)| *y)
+    };
+    // Section-wide notes open their section, before its first control.
+    assert!(y("The container starts with none").unwrap() < y("Shared with the container").unwrap());
+    assert!(y("What the sandbox may consume").unwrap() < y("Processor limit").unwrap());
+    // The network explanation is the select's own supporting text: under "Network" and above the
+    // no-outbound caution.
+    assert!(y("Names still resolve").unwrap() > y("Network*").or(y("Network")).unwrap());
+    assert!(y("Names still resolve").unwrap() < y("The AI agent reaches its provider").unwrap());
+    // The AI CLI note is the group's, under its label and above its first checkbox.
+    assert!(y("AI tools in this daemon").unwrap() < y("Changes apply at the next start").unwrap());
+    assert!(y("Changes apply at the next start").unwrap() < y("Claude Code").unwrap());
+}
+
+/// FR-009, US2 AS4: found contexts are chosen from a select above *Context*, not a column of
+/// buttons; with none found only the field shows.
+#[test]
+fn found_contexts_are_a_select_above_the_context_field() {
+    use micold_client::features::daemons::DraftRuntime::Kubernetes;
+    use micold_client::kube::live::ContextEntry;
+    let (mut state, none) = open_form(Kubernetes);
+    assert!(!none
+        .iter()
+        .any(|(c, ..)| c == "Context from your kubeconfig"));
+    state.update(Message::Daemons(DaemonsMsg::ContextsListed(Ok(vec![
+        ContextEntry {
+            name: "staging".into(),
+            namespace: None,
+        },
+        ContextEntry {
+            name: "prod".into(),
+            namespace: None,
+        },
+    ]))));
+    let mut renderer = lay::renderer();
+    let shown: Vec<(String, f32, f32)> =
+        lay::painted_text_settled_at(view(&state), &mut renderer, iced::Size::new(1280.0, 6000.0))
+            .0
+            .into_iter()
+            .map(|d| (d.content, d.origin.x, d.origin.y))
+            .collect();
+    let (_, _, select) = find(&shown, "Context from your kubeconfig");
+    let (_, _, field) = find(&shown, "Context*");
+    assert!(select < field, "the select is above the field");
+    assert!(
+        !shown.iter().any(|(c, ..)| c == "staging" || c == "prod"),
+        "no per-context button is painted: {shown:?}"
+    );
+}
+
+/// FR-006, SC-003: the gap between consecutive plain fields is one value in every kind, and the
+/// gap between closed section headers is one value in every kind.
+#[test]
+fn field_and_section_gaps_take_one_value_across_kinds() {
+    use micold_client::features::daemons::{DraftRuntime, Section};
+    let step = |s: &[(String, f32, f32)], a: &str, b: &str| find(s, b).2 - find(s, a).2;
+    let (_, c) = open_form(DraftRuntime::Container);
+    let (_, ssh) = open_form(DraftRuntime::Ssh);
+    let field = step(&ssh, "User", "Port");
+    assert!((step(&ssh, "Port", "Key file") - field).abs() < 0.5);
+    assert!(
+        (step(&c, "Container name*", "Port") - field).abs() < 0.5,
+        "container {c:?}"
+    );
+
+    let header_gaps = |runtime| {
+        let (mut state, _) = with_daemons();
+        state.update(Message::Daemons(DaemonsMsg::AddOpened));
+        state.update(Message::Daemons(DaemonsMsg::RuntimeChosen(runtime)));
+        // Close the open Connection so every header is a closed one.
+        state.update(Message::Daemons(DaemonsMsg::SectionToggled(
+            Section::Connection,
+        )));
+        let shown = painted_tall(&state);
+        let mut renderer = lay::renderer();
+        let at: Vec<(String, f32, f32)> = lay::painted_text_settled_at(
+            view(&state),
+            &mut renderer,
+            iced::Size::new(1280.0, 6000.0),
+        )
+        .0
+        .into_iter()
+        .map(|d| (d.content, d.origin.x, d.origin.y))
+        .collect();
+        let _ = shown;
+        // Past *Runs in*, whose select paints its value ("Container") before its label.
+        let from = at.iter().position(|(c, ..)| c == "Runs in").unwrap();
+        let at = &at[from..];
+        Section::of(runtime)
+            .windows(2)
+            .map(|w| find(at, w[1].title()).2 - find(at, w[0].title()).2)
+            .collect::<Vec<_>>()
+    };
+    let all: Vec<f32> = [
+        DraftRuntime::Container,
+        DraftRuntime::Kubernetes,
+        DraftRuntime::Host,
+    ]
+    .into_iter()
+    .flat_map(header_gaps)
+    .collect();
+    assert!(
+        all.windows(2).all(|w| (w[0] - w[1]).abs() < 0.5),
+        "section pitch: {all:?}"
+    );
+}
+
+/// FR-014, US3 AS1/AS3: closed headers paint their summary, and the title takes `*` for an empty
+/// required field.
+#[test]
+fn closed_headers_paint_their_summary_and_the_required_marker() {
+    use micold_client::features::daemons::DraftRuntime;
+    let (mut state, _) = with_daemons();
+    state.update(Message::Daemons(DaemonsMsg::AddOpened));
+    let shown = painted_tall(&state);
+    for summary in [
+        "Docker · Basic image · ",
+        "Nothing shared",
+        "No outbound connections",
+        "Processes 512",
+        "Stops when signed out or idle",
+    ] {
+        assert!(has(&shown, summary), "{summary:?}: {shown:?}");
+    }
+    // Connection is open (no summary, nothing to mark on the header); Container is closed and
+    // holds nothing required while the image is the basic one.
+    assert!(!shown.iter().any(|c| c == "Container*"));
+    state.update(Message::Daemons(DaemonsMsg::RuntimeChosen(
+        DraftRuntime::Ssh,
+    )));
+    state.update(Message::Daemons(DaemonsMsg::SectionToggled(
+        micold_client::features::daemons::Section::Connection,
+    )));
+    let shown = painted_tall(&state);
+    assert!(shown.iter().any(|c| c == "Connection*"), "{shown:?}");
+    assert!(has(&shown, "Manual start") || has(&shown, "Connects at launch"));
 }
