@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-2cdrmk
 - **Started**: 2026-10-19
 - **Phase**: close
-- **Next step**: the close unit (T055 visual pass and T056 live quickstart Part C with a real PAT; `speckit-converge`, `speckit-tdd-verify`).
+- **Next step**: close PR #1139 (draft): record T055/T056 (live PAT check, how it runs is on jaro's decision card), set the spec's Status, finish the ledger, then merge.
 
 ## Pull requests
 
@@ -22,6 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1107 | M3 | merged | 5c0ba07dfc32194eec443241efee61836931b4cb |
 | #1113 | M5 | merged | 38a9ce97b751560df8c8feaddf1271cbceba0cc2 |
 | #1132 | M6 | merged | 0b267cf632915083624acd3d8b44e7c4cfe3f66f |
+| #1139 | close | draft | — |
 
 ## Milestones
 
