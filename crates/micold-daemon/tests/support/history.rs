@@ -306,3 +306,37 @@ pub fn wait_file(file: &Path) {
         std::thread::sleep(Duration::from_millis(10));
     }
 }
+
+/// A log sink the tests read back.
+#[derive(Clone, Default)]
+pub struct LogBuffer(pub Arc<std::sync::Mutex<Vec<u8>>>);
+
+impl std::io::Write for LogBuffer {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.0.lock().unwrap().extend_from_slice(buf);
+        Ok(buf.len())
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for LogBuffer {
+    type Writer = LogBuffer;
+    fn make_writer(&'a self) -> Self::Writer {
+        self.clone()
+    }
+}
+
+/// Run `f` and return the warnings and errors logged on this thread meanwhile, one per line.
+pub fn logged_warnings<T>(f: impl FnOnce() -> T) -> (T, Vec<String>) {
+    let buffer = LogBuffer::default();
+    let subscriber = tracing_subscriber::fmt()
+        .with_writer(buffer.clone())
+        .with_ansi(false)
+        .with_max_level(tracing::Level::WARN)
+        .finish();
+    let result = tracing::subscriber::with_default(subscriber, f);
+    let text = String::from_utf8(buffer.0.lock().unwrap().clone()).unwrap();
+    (result, text.lines().map(str::to_string).collect())
+}

@@ -439,7 +439,7 @@ phase sits before US6 because the UI milestone ships last.
 - [x] T053 [US7] Make T051 pass in `crates/micold-core/src/terminal_history/store.rs`: `FileKind`,
   `save_events`, `load_events`, both extensions in the deletion, sweep and retry paths, and
   `last_written` keyed by session and kind.
-- [ ] T054 [US7] Write failing tests in `crates/micold-daemon/tests/structured_saved_history.rs`
+- [x] T054 [US7] Write failing tests in `crates/micold-daemon/tests/structured_saved_history.rs`
   (a private history directory and the service setup of `tests/support/history.rs`): saving on, a
   structured session writes events, the daemon stops in order, a new daemon over the same catalog
   and directory restores it: a viewer of the stopped session gets the saved events with their
@@ -459,7 +459,7 @@ phase sits before US6 because the UI milestone ships last.
   none for a session with no new event since its last save (count = `next_seq`; the one-minute
   bound itself is 041's `SaveSchedule`, already tested); a terminal session writes no `.events`
   file and a structured one no `.history` file.
-- [ ] T055 [US7] Make T054 pass: in `crates/micold-daemon/src/state.rs` one call that creates an
+- [x] T055 [US7] Make T054 pass: in `crates/micold-daemon/src/state.rs` one call that creates an
   `event_streams` entry by loading off the state lock and inserting if still absent, used by the
   structured spawn and the view path, with `forget`, `sweep` and the setting change reaching the
   events files and marking stream schedules due; in `crates/micold-daemon/src/structured.rs`
