@@ -9,7 +9,7 @@ pub mod git_env;
 pub mod gitconfig;
 pub mod helper;
 
-pub use git_env::git_env;
+pub use git_env::{git_env, git_env_with_helper};
 pub use gitconfig::{parse_config_list, sanitize_gitconfig, sanitize_gitconfig_text};
 
 /// Seconds since the Unix epoch, as the credential files and the protocol carry them.

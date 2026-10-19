@@ -9,12 +9,18 @@ use std::collections::BTreeMap;
 /// helper is added for `base` alone, with the repository path sent to it, and the SSH forms of
 /// `base`'s remote are rewritten to HTTPS, so the host's own configuration is never touched (FR-007).
 pub fn git_env(base: &str) -> BTreeMap<String, String> {
+    git_env_with_helper(base, "micold-daemon")
+}
+
+/// [`git_env`] with the daemon named by `daemon` (a command word the shell git runs the helper
+/// through expands): a pod's daemon is not on `PATH`, so the client names its build directory.
+pub fn git_env_with_helper(base: &str, daemon: &str) -> BTreeMap<String, String> {
     let base = base.trim_end_matches('/');
     let entries = [
         ("credential.helper".to_string(), String::new()),
         (
             format!("credential.{base}.helper"),
-            "!micold-daemon git-credential".to_string(),
+            format!("!{daemon} git-credential"),
         ),
         (format!("credential.{base}.useHttpPath"), "true".to_string()),
         (
