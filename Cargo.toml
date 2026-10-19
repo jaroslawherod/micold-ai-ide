@@ -21,7 +21,7 @@ rust-version = "1.97"
 # Feature 533 (research R2): the Jira Cloud request, in `micold-client` only (never the daemon or
 # core). rustls on the `ring` backend (no C/NASM toolchain), the OS certificate store, JSON off.
 ureq = { version = "3.4", default-features = false, features = ["rustls", "platform-verifier"] }
-base64 = "0.22"
+base64 = "0.23"
 # Feature 039 (research R4): the Linux desktop notification, `org.freedesktop.Notifications.Notify`
 # over the session bus. Already in `Cargo.lock` (through `mundy`), whose default features are these two,
 # so it adds no crate; the client's blocking call needs `blocking-api`.
