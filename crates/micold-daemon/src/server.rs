@@ -978,38 +978,39 @@ where
                 // Advisory, never an error (protocol.md §6): serve whatever the session's shared
                 // framer can from its retained history, resolved against a per-response palette.
                 // A structured session's AI process has no terminal: refused (feature 938).
-                if refuse_terminal_request(state, id, session, None, RefusedRequest::Scrollback) {
-                } else if let (Some(pty), Some(framer)) =
-                    (state.live_session(session), state.session_framer(session))
-                {
-                    let responses: Vec<DaemonMsg> = {
-                        let fr = framer.lock().expect("framer poisoned");
-                        let oldest_available = fr.oldest_available();
-                        let newest = fr.newest(pty.term());
-                        ranges
-                            .into_iter()
-                            .map(|range| {
-                                // saturating_sub: never let an adversarial reversed/extreme range
-                                // (e.g. start = i64::MIN) overflow the subtraction and panic.
-                                let count =
-                                    range.end.0.saturating_sub(range.start.0).max(0) as usize;
-                                let (lines, styles, hyperlinks, more) =
-                                    fr.scrollback_range(pty.term(), range.start, count);
-                                DaemonMsg::ScrollbackResponse {
-                                    session,
-                                    req,
-                                    oldest_available,
-                                    newest,
-                                    lines,
-                                    styles,
-                                    hyperlinks,
-                                    more,
-                                }
-                            })
-                            .collect()
-                    };
-                    for resp in responses {
-                        state.send(id, resp);
+                if !refuse_terminal_request(state, id, session, None, RefusedRequest::Scrollback) {
+                    if let (Some(pty), Some(framer)) =
+                        (state.live_session(session), state.session_framer(session))
+                    {
+                        let responses: Vec<DaemonMsg> = {
+                            let fr = framer.lock().expect("framer poisoned");
+                            let oldest_available = fr.oldest_available();
+                            let newest = fr.newest(pty.term());
+                            ranges
+                                .into_iter()
+                                .map(|range| {
+                                    // saturating_sub: never let an adversarial reversed/extreme range
+                                    // (e.g. start = i64::MIN) overflow the subtraction and panic.
+                                    let count =
+                                        range.end.0.saturating_sub(range.start.0).max(0) as usize;
+                                    let (lines, styles, hyperlinks, more) =
+                                        fr.scrollback_range(pty.term(), range.start, count);
+                                    DaemonMsg::ScrollbackResponse {
+                                        session,
+                                        req,
+                                        oldest_available,
+                                        newest,
+                                        lines,
+                                        styles,
+                                        hyperlinks,
+                                        more,
+                                    }
+                                })
+                                .collect()
+                        };
+                        for resp in responses {
+                            state.send(id, resp);
+                        }
                     }
                 }
             }
@@ -1228,7 +1229,11 @@ where
                 rows,
                 process,
             } => {
-                if !refuse_terminal_request(state, id, session, process, RefusedRequest::Resize) {
+                // `None` resizes every process (`resize_terminal`): a structured session refuses
+                // for its AI process but its shell instances still follow the pane's size.
+                let refused =
+                    refuse_terminal_request(state, id, session, process, RefusedRequest::Resize);
+                if !refused || process.is_none() {
                     state.resize_terminal(session, process, cols, rows);
                 }
             }
@@ -1274,10 +1279,11 @@ where
             }
             ClientMsg::SessionInterrupt { session } => {
                 // Ctrl-C to the attached process — 0x03 to the PTY, never a real signal (§7).
-                if refuse_terminal_request(state, id, session, None, RefusedRequest::Interrupt) {
-                } else if let Some(pty) = state.live_session(session) {
-                    if let Err(err) = pty.write_input(&[0x03]) {
-                        tracing::warn!(session = %session.0, %err, "interrupt write failed");
+                if !refuse_terminal_request(state, id, session, None, RefusedRequest::Interrupt) {
+                    if let Some(pty) = state.live_session(session) {
+                        if let Err(err) = pty.write_input(&[0x03]) {
+                            tracing::warn!(session = %session.0, %err, "interrupt write failed");
+                        }
                     }
                 }
             }
