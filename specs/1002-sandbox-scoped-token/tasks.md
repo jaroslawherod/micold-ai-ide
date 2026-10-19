@@ -136,8 +136,8 @@ environment runs no planted helper.
 ### Setup
 
 - [ ] T014 [US1] Create `crates/micold-core/src/scoped_credential/mod.rs` (module docs,
-  `pub type UnixTime = u64;`, `pub const MAX_LIFETIME_SECS: u64 = 3600;` (FR-009), submodules
-  `git_env`, `gitconfig`) and declare it in `crates/micold-core/src/lib.rs`.
+  `pub type UnixTime = u64;`, `pub const MAX_LIFETIME_SECS: u64 = 3600;` (FR-009)) and declare it
+  in `crates/micold-core/src/lib.rs`.
 
 ### Tests (write first, must fail)
 
@@ -250,7 +250,9 @@ grant → file written `0600`; revoke → file gone; a grant outside the daemon'
   `ScopedCredential::accept(asked, response, now)` refuses repositories other than exactly
   `[repo]`, permissions beyond the grant, an expiry missing or later than `now + MAX_LIFETIME_SECS` →
   `NoCredentialReason::SourceRefused("wider than asked")` (FR-009); `message()` text of every
-  variant of data-model §6 except `AppNotInstalled` (T044 adds it), including `GitTooOld { version }`; `CredentialTarget` →
+  variant of data-model §6 except `AppNotInstalled` (T044 adds it), including `GitTooOld { version }`;
+  `SourceNotSetUp`'s text comes from one `const SOURCE_SETUP_HINT` whose M4 wording is source-neutral
+  ("No credential source is set up. Set one up in Settings to push from sandboxes."); `CredentialTarget` →
   `GithubRepo` via `GithubRepo::from_remote_url`: `None` → `NoRemote`, non-GitHub → `NotGithub { host }`.
 - [ ] T031 [P] [US3] Unit tests in `crates/micold-core/src/scoped_credential/schedule.rs` for every
   row of data-model §8: new repos due now; vanished repos revoked and dropped; a project's repo
@@ -280,7 +282,7 @@ grant → file written `0600`; revoke → file gone; a grant outside the daemon'
 
 - [ ] T034 [US2] `crates/micold-core/src/scoped_credential/mod.rs`: `Grant`, `SecretToken`,
   `ScopedCredential::accept`, `CredentialSource` trait (`issue`, `revoke`), `NoCredentialReason`
-  (without `AppNotInstalled`) with `message()`, `CredentialStatus`, `CredentialTarget`; and
+  (without `AppNotInstalled`) with `message()` (`SourceNotSetUp` through `SOURCE_SETUP_HINT`), `CredentialStatus`, `CredentialTarget`; and
   `scoped_credential/fake.rs` with `FakeSource`, compiled for tests the way `kube/fake.rs` is (T030).
 - [ ] T035 [US3] `crates/micold-core/src/scoped_credential/schedule.rs`: the `Schedule` state
   machine; a target set reported with `git_too_old` maps every target to
@@ -326,7 +328,8 @@ steps 1, 2, 4–6, 10 and 11 against a real App.
   `SourceRefused("App ID or key rejected")`, token `403`/`422` → `SourceRefused(<message>)`,
   timeout/DNS/TLS/`5xx` → `SourceUnreachable(<short>)`; a `404` on the token step drops the cached
   installation id and retries once; a wider response is revoked and gives
-  `SourceRefused("wider than asked")`; `AppNotInstalled.message()` per data-model §6.
+  `SourceRefused("wider than asked")`; `AppNotInstalled.message()` and `SourceNotSetUp.message()`
+  per data-model §6 (the GitHub App wording).
 - [ ] T041 [P] [US2] [source] Tests for `paths::secrets_dir()` in `crates/micold-core/src/paths.rs`:
   sibling of `data_dir()` named `micold-ai-ide-secrets` on the Linux, macOS and Windows layouts
   (research R5); and for `GithubAppSettings` in `crates/micold-core/src/settings.rs`:
@@ -345,7 +348,8 @@ steps 1, 2, 4–6, 10 and 11 against a real App.
 
 - [ ] T044 [US2] [source] `crates/micold-core/src/scoped_credential/github_app.rs`: PEM, JWT,
   request building, response parsing, status mapping, installation-id cache logic;
-  `NoCredentialReason::AppNotInstalled` in `scoped_credential/mod.rs` (T040).
+  `NoCredentialReason::AppNotInstalled` and the GitHub App wording of `SOURCE_SETUP_HINT` in
+  `scoped_credential/mod.rs` (T040).
 - [ ] T045 [US2] [source] `paths::secrets_dir()` and `GithubAppSettings` (T041).
 - [ ] T046 [US2] [source] `crates/micold-client/src/shell/scoped_credential.rs`: `GithubAppSource`
   implementing `CredentialSource` over `ureq` as `shell/jira_http.rs` does; key copied owner-only
@@ -452,7 +456,7 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
   store, an SSH key or a personal token, whatever their saved settings say; old settings load, are
   dropped on save, and the settings view shows a one-time notice.
 - **Satisfies**: US1 acceptance scenarios 1–4; FR-001, FR-002, FR-003, FR-014
-- **Verify**: `cargo test -p micold-core --all-targets --features kube-fake sandbox kube daemons_migration` (T002–T006), `cargo test -p micold-client --lib features::daemons` (T007); quickstart Part C step 9 (visual pass)
+- **Verify**: `cargo test -p micold-core --all-targets --features kube-fake sandbox kube daemons_migration` (T002–T006), `cargo test -p micold-client --lib features::daemons` (T007); `mise run image && mise run test-sandbox` (T012, quickstart Part B); quickstart Part C step 9 (visual pass)
 - **Depends on**: —
 - **Tier**: full
 
@@ -473,7 +477,7 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
   in the in-memory `/run/micold/git`; push and pull over HTTPS succeed with it, SSH-form remotes are
   rewritten, other repositories and hosts get nothing.
 - **Satisfies**: US2 acceptance scenarios 1, 2, 4 at the git level; FR-006, FR-007, FR-015
-- **Verify**: `cargo test -p micold-daemon --test scoped_git_credential`, `cargo test -p micold-core --lib scoped_credential::helper kube::start_tests` and `cargo test -p micold-core --test sandbox_argv`
+- **Verify**: `cargo test -p micold-daemon --test scoped_git_credential`, `cargo test -p micold-core --lib scoped_credential::helper kube::start_tests`, `cargo test -p micold-core --test sandbox_argv` and `mise run image && mise run test-sandbox` (T029)
 - **Depends on**: M2
 - **Tier**: full
 

@@ -64,7 +64,7 @@ Resolved on the client: `GithubRepo::from_remote_url(push_url)`; `None` → `NoR
 
 | Variant | Message (`message()`), remedy included |
 |---|---|
-| `SourceNotSetUp` | "No GitHub App is set up. Set one up in Settings › GitHub App to push from sandboxes." |
+| `SourceNotSetUp` | `SOURCE_SETUP_HINT`: "No GitHub App is set up. Set one up in Settings › GitHub App to push from sandboxes." (source-neutral until the **[source]** milestone sets this wording) |
 | `AppNotInstalled` | "The GitHub App is not installed on owner/repo. Install it on that repository's account." |
 | `SourceRefused(String)` | "GitHub refused a credential for owner/repo: <reason>. Check the App's permissions." |
 | `SourceUnreachable(String)` | "GitHub could not be reached: <reason>. Retrying." |
@@ -73,7 +73,8 @@ Resolved on the client: `GithubRepo::from_remote_url(push_url)`; `None` → `NoR
 | `GitTooOld { version }` | "Git <version> in the container is older than 2.31, so it cannot use scoped credentials. Use an image with a newer git." |
 | `RenewalFailed(Box<NoCredentialReason>)` | "Renewing the credential failed: <inner>. Pushes fail until it succeeds." |
 
-`AppNotInstalled` is the one variant specific to the GitHub App source (research R3).
+`AppNotInstalled` is the one variant specific to the GitHub App source (research R3);
+`SourceNotSetUp`'s wording is the one text specific to it.
 
 ## 7. `CredentialStatus` — per daemon project
 
