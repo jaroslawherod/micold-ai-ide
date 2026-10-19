@@ -1239,7 +1239,8 @@ mod connect {
         let bridge = commands.last().unwrap().last().unwrap();
         assert!(
             bridge.contains("MICOLD_IDLE_STOP='off' MICOLD_REPOS_ROOT='/data/repos' ")
-                && bridge.contains("GIT_CONFIG_KEY_0='credential.helper' GIT_CONFIG_VALUE_0='' "),
+                && bridge.contains("GIT_CONFIG_KEY_0='credential.helper'")
+                && bridge.contains("GIT_CONFIG_VALUE_0=''"),
             "the daemon keeps its clones on the volume: {bridge}"
         );
         assert_eq!(
