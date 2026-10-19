@@ -849,6 +849,17 @@ pub struct DaemonView {
     pub replacing: bool,
     /// For a Kubernetes daemon stopped because its pod is gone: why (feature 686, FR-011).
     pub stopped_reason: Option<String>,
+    /// One line per project of a sandboxed daemon about its git credential (#1002, FR-013).
+    pub credential_lines: Vec<CredentialLine>,
+}
+
+/// A line of a daemon's row about one project's git credential (#1002, FR-013, FR-008).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CredentialLine {
+    /// The sentence, naming the project and, when there is no credential, what to do.
+    pub text: String,
+    /// It needs the user: no credential, or one expiring within a day.
+    pub warning: bool,
 }
 
 /// What a running released-image container's row says (FR-017).

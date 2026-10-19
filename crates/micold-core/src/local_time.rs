@@ -132,6 +132,14 @@ impl LocalTime {
     }
 }
 
+/// `secs` as a UTC calendar date, `2026-11-20`.
+pub fn utc_date(secs: u64) -> String {
+    rfc3339_utc(i64::try_from(secs).unwrap_or(i64::MAX))
+        .chars()
+        .take(10)
+        .collect()
+}
+
 /// `secs` in UTC as RFC 3339 to the second with a `Z`: `2026-10-02T12:31:00Z`.
 pub fn rfc3339_utc(secs: i64) -> String {
     let t = LocalTime::at(secs, UtcOffset::UTC);

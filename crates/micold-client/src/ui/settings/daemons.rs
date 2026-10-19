@@ -253,6 +253,14 @@ fn daemon_row<'a>(
     for warning in &view.install_warnings {
         body = body.push(caution(warning.clone(), roles));
     }
+    // The git credential of each project of a sandboxed daemon (#1002, FR-013).
+    for line in &view.credential_lines {
+        body = body.push(if line.warning {
+            caution(line.text.clone(), roles)
+        } else {
+            note(line.text.clone(), roles)
+        });
+    }
     if let Some(sentence) = &view.notice {
         body = body.push(note(sentence.clone(), roles));
         if view.notice_dismissable {

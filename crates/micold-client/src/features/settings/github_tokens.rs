@@ -10,7 +10,7 @@
 //! `Debug` redacts, so no state, message or log line shows it.
 
 use micold_core::github::GithubRepo;
-use micold_core::local_time::rfc3339_utc;
+use micold_core::local_time::utc_date;
 use micold_core::scoped_credential::{pat, UnixTime, EXPIRY_WARNING_SECS};
 
 use super::TokenInput;
@@ -27,8 +27,7 @@ pub struct PatRow {
 impl PatRow {
     /// The expiry as a UTC date, `2026-11-20`.
     pub fn expiry_date(&self) -> String {
-        let secs = i64::try_from(self.expires_at).unwrap_or(i64::MAX);
-        rfc3339_utc(secs).chars().take(10).collect()
+        utc_date(self.expires_at)
     }
 
     /// The row's text: the repository and when its token expires. Never the token.

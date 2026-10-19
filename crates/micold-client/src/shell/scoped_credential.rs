@@ -13,9 +13,12 @@
 //! reordered.
 
 use std::collections::BTreeMap;
-use std::path::Path;
-use std::sync::{mpsc, Arc};
+use std::path::PathBuf;
+use std::sync::{mpsc, Arc, Mutex, OnceLock};
 use std::time::Duration;
+
+use iced::futures::channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
+use iced::futures::stream::{self, BoxStream, StreamExt};
 
 use micold_core::daemons::DaemonId;
 use micold_core::github::GithubRepo;
@@ -25,7 +28,7 @@ use micold_core::scoped_credential::pat_store::{PatStore, StoredPat};
 use micold_core::scoped_credential::schedule::{RenewPolicy, Schedule};
 use micold_core::scoped_credential::{
     CredentialSource, CredentialStatus, CredentialTarget, Grant, NoCredentialReason,
-    ScopedCredential, SecretToken, UnixTime,
+    ScopedCredential, SecretToken, UnixTime, EXPIRY_WARNING_SECS,
 };
 
 /// The whole request's budget: connect, send and read.
@@ -177,11 +180,25 @@ struct Entry {
     send: Sink,
 }
 
+/// Each project's credential status, by the daemon's path for it.
+pub type Statuses = BTreeMap<PathBuf, CredentialStatus>;
+
+/// Where a daemon's changed statuses go, with the time they hold at: the window (FR-013).
+pub type Publish = Arc<dyn Fn(DaemonId, Statuses, UnixTime) + Send + Sync>;
+
+/// The longest the worker sleeps before it reads the wall clock again. A sleep is measured on a
+/// clock that stops while the machine is suspended, so a wake due during a suspend (the expiry
+/// warning, the expiry) is late by at most this much after it resumes.
+const MAX_SLEEP: Duration = Duration::from_secs(5 * 60);
+
 /// Every connected sandboxed daemon's [`Schedule`], and the source they issue through.
 pub struct Manager {
     source: Arc<dyn CredentialSource>,
     log: Log,
     daemons: BTreeMap<DaemonId, Entry>,
+    /// What [`Manager::changed_statuses`] last reported, per daemon, with which of them were
+    /// within [`EXPIRY_WARNING_SECS`] of their expiry.
+    reported: BTreeMap<DaemonId, (Statuses, Vec<bool>)>,
 }
 
 impl Manager {
@@ -191,7 +208,36 @@ impl Manager {
             source,
             log,
             daemons: BTreeMap::new(),
+            reported: BTreeMap::new(),
         }
+    }
+
+    /// The daemons whose statuses at `now` differ from what this last reported, with their new
+    /// statuses; a held credential coming within [`EXPIRY_WARNING_SECS`] of its expiry counts as a
+    /// change (FR-008), and a daemon whose schedule was dropped (disconnected, stopped) reports an
+    /// empty map once, so the window clears its lines (FR-013).
+    pub fn changed_statuses(&mut self, now: UnixTime) -> Vec<(DaemonId, Statuses)> {
+        let mut changed: Vec<(DaemonId, Statuses)> = Vec::new();
+        self.reported.retain(|id, _| {
+            let kept = self.daemons.contains_key(id);
+            if !kept {
+                changed.push((*id, Statuses::new()));
+            }
+            kept
+        });
+        for (id, entry) in &self.daemons {
+            let statuses = entry.schedule.statuses(now);
+            let warned = statuses
+                .values()
+                .map(|s| s.expires_within(now, EXPIRY_WARNING_SECS))
+                .collect();
+            let current = (statuses, warned);
+            if self.reported.get(id) != Some(&current) {
+                changed.push((*id, current.0.clone()));
+                self.reported.insert(*id, current);
+            }
+        }
+        changed
     }
 
     /// `daemon` reported `targets` (the whole list), after an `Attach` or a change. Creates its
@@ -258,11 +304,25 @@ impl Manager {
         }
     }
 
-    /// When [`Manager::run_due`] next has something to do, across every daemon.
+    /// When [`Manager::run_due`] next has something to do, or a held credential comes within
+    /// [`EXPIRY_WARNING_SECS`] of its expiry so its status is reported again, across every daemon.
     pub fn next_wake(&self, now: UnixTime) -> Option<UnixTime> {
+        let warnings = self.daemons.values().flat_map(|e| {
+            e.schedule
+                .statuses(now)
+                .into_values()
+                .filter_map(|status| match status {
+                    CredentialStatus::Held { expires_at, .. } => {
+                        Some(expires_at.saturating_sub(EXPIRY_WARNING_SECS))
+                    }
+                    _ => None,
+                })
+                .filter(move |warn_at| *warn_at > now)
+        });
         self.daemons
             .values()
             .filter_map(|e| e.schedule.next_wake(now))
+            .chain(warnings)
             .min()
     }
 
@@ -284,11 +344,11 @@ impl Manager {
     }
 
     /// The status of `project` on `daemon`, when the daemon has reported.
-    #[allow(dead_code)] // Used by the status UI (M6).
+    #[cfg(test)]
     pub fn status(
         &self,
         daemon: DaemonId,
-        project: &Path,
+        project: &std::path::Path,
         now: UnixTime,
     ) -> Option<CredentialStatus> {
         self.daemons
@@ -307,18 +367,21 @@ pub struct GitCredentials {
 }
 
 impl GitCredentials {
-    /// Start the worker over the device's pasted tokens.
+    /// Start the worker over the device's pasted tokens, reporting statuses to the window.
     pub fn start() -> Self {
         let log: Log = Arc::new(crate::log_line);
-        Self::start_with(Arc::new(PatSource::on_device()), log)
+        let publish: Publish = Arc::new(|daemon, statuses, now| {
+            let _ = status_channel().0.unbounded_send((daemon, statuses, now));
+        });
+        Self::start_with(Arc::new(PatSource::on_device()), log, publish)
     }
 
     /// Start the worker over `source`.
-    pub fn start_with(source: Arc<dyn CredentialSource>, log: Log) -> Self {
+    pub fn start_with(source: Arc<dyn CredentialSource>, log: Log, publish: Publish) -> Self {
         let (tx, rx) = mpsc::channel::<Command>();
         std::thread::Builder::new()
             .name("scoped-credentials".into())
-            .spawn(move || worker(rx, Manager::new(source, log)))
+            .spawn(move || worker(rx, Manager::new(source, log), publish))
             .ok();
         Self { tx }
     }
@@ -362,11 +425,13 @@ impl GitCredentials {
     }
 }
 
-fn worker(rx: mpsc::Receiver<Command>, mut manager: Manager) {
+fn worker(rx: mpsc::Receiver<Command>, mut manager: Manager, publish: Publish) {
     loop {
         let now = micold_core::unix_time::unix_secs();
         let received = match manager.next_wake(now) {
-            Some(wake) => rx.recv_timeout(Duration::from_secs(wake.saturating_sub(now).max(1))),
+            Some(wake) => {
+                rx.recv_timeout(Duration::from_secs(wake.saturating_sub(now).max(1)).min(MAX_SLEEP))
+            }
             None => rx.recv().map_err(|_| mpsc::RecvTimeoutError::Disconnected),
         };
         match received {
@@ -374,7 +439,46 @@ fn worker(rx: mpsc::Receiver<Command>, mut manager: Manager) {
             Err(mpsc::RecvTimeoutError::Timeout) => {}
             Err(mpsc::RecvTimeoutError::Disconnected) => return,
         }
-        manager.run_due(micold_core::unix_time::unix_secs());
+        let now = micold_core::unix_time::unix_secs();
+        manager.run_due(now);
+        for (daemon, statuses) in manager.changed_statuses(now) {
+            publish(daemon, statuses, now);
+        }
+    }
+}
+
+/// One report: the daemon, its statuses, and the time they hold at.
+pub type StatusReport = (DaemonId, Statuses, UnixTime);
+type StatusChannel = (
+    UnboundedSender<StatusReport>,
+    Mutex<Option<UnboundedReceiver<StatusReport>>>,
+);
+
+/// The process's one channel of credential statuses: the worker sends, [`statuses`] receives.
+fn status_channel() -> &'static StatusChannel {
+    static CHANNEL: OnceLock<StatusChannel> = OnceLock::new();
+    CHANNEL.get_or_init(|| {
+        let (sent, received) = unbounded();
+        (sent, Mutex::new(Some(received)))
+    })
+}
+
+/// The credential statuses the worker reports, as the window receives them (FR-013). Nothing
+/// arrives, and nothing wakes the window, until a status changes.
+pub fn statuses() -> iced::Subscription<StatusReport> {
+    iced::Subscription::run(received_statuses)
+}
+
+/// The receiving end, handed out once: the subscription lives as long as the window.
+fn received_statuses() -> BoxStream<'static, StatusReport> {
+    let taken = status_channel()
+        .1
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .take();
+    match taken {
+        Some(received) => received.boxed(),
+        None => stream::pending().boxed(),
     }
 }
 

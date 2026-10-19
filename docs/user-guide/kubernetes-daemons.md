@@ -104,6 +104,11 @@ SSH key (an SSH remote is rewritten to HTTPS inside the pod). The application ne
 token: you paste a new one before it expires, and a token that leaks from the pod stays valid until
 it expires or you delete it on GitHub.
 
+While the pod is connected, its row in **Settings → Daemons** has one line per project saying
+whether it holds a git credential and when that expires, with a warning from 24 hours before the
+expiry, or why it has none and what to do; the lines and their remedies are listed in [The git
+credential lines](sandboxed-daemon.md#the-git-credential-lines).
+
 ## The form
 
 | Field | Meaning |
