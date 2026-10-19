@@ -132,7 +132,7 @@ form is not forked.
 
 | Layer | Covers |
 |---|---|
-| Client reducer/registry tests (`tests/features_daemons.rs`, `tests/overlay_registry.rs`, `tests/popover_displacement.rs`, `tests/surface_registration_cost.rs`) | US1-US5 logic: edit/add open and save/cancel, validation keeps it open, confirmation in-form and Escape = No, drift prompt queued while open, details open/close, stale-daemon save, draft survives `DaemonRegistryChanged`, page-save independence (FR-007, SC-004), registry lists the two new surfaces (existing counts 20 -> 22) |
+| Client reducer/registry tests (`tests/daemons_feature.rs`, `tests/overlay_registry.rs`, `tests/popover_displacement.rs`, `tests/surface_registration_cost.rs`) | US1-US5 logic: edit/add open and save/cancel, validation keeps it open, confirmation in-form and Escape = No, drift prompt queued while open, details open/close, stale-daemon save, draft survives `DaemonRegistryChanged`, page-save independence (FR-007, SC-004), registry lists the two new surfaces (existing counts 20 +1 in M1, +1 in M3) |
 | Geometry gates (`tests/daemons_section_geometry.rs` + a new dialog case) | no inline form or Details block in the page (SC-006); Save daemon and Cancel inside the window at the smallest supported size (SC-005); `ScrollingDialog` pins actions |
 | Widget tests (`ui/material` test support) | `ScrollingDialog` scrolls its body, keeps actions, honours width |
 | Client reducer tests (FR-009 part) | `Opener` set on open and taken on close; the focus move itself is §B |
