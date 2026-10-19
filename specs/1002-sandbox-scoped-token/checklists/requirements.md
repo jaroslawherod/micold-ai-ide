@@ -31,8 +31,8 @@
 
 ## Notes
 
-- One marker remains (FR-005: credential source — GitHub App installation token, user-pasted
-  fine-grained PAT, or both). Left for the clarify unit; FR-009 depends on its answer.
+- No marker remains. FR-005's credential source was decided by jaro (D7): a user-pasted
+  fine-grained PAT per repository; FR-008–FR-011 follow from it.
 - Git, HTTPS, SSH-form remotes and credential helpers are named because the issue's acceptance
   criteria name them; they are the user-visible contract, not a design choice. FR-006/FR-007 are
   stated as outcomes (spec review round 1, F3).

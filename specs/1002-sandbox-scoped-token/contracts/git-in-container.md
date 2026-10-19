@@ -54,4 +54,4 @@ the git-config secret (Kubernetes), replacing the verbatim copy.
 
 In the container argv / pod manifest, environment, mounts, secrets and files: the host's
 `SSH_AUTH_SOCK` path, any `~/.ssh/*` path or content, `~/.git-credentials` path or content,
-`GH_TOKEN` / `GITHUB_TOKEN` values, `gh`'s `hosts.yml`, and the App private key or its path.
+`GH_TOKEN` / `GITHUB_TOKEN` values, `gh`'s `hosts.yml`, and a stored PAT or its path (`secrets_dir()`).

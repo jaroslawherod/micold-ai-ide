@@ -1,9 +1,9 @@
 ---
 
-description: "Task list for #1002: scoped, short-lived git credential for sandboxed daemons"
+description: "Task list for #1002: scoped, expiring git credential for sandboxed daemons"
 ---
 
-# Tasks: Scoped, short-lived git credential for sandboxed daemons
+# Tasks: Scoped, expiring git credential for sandboxed daemons
 
 **Input**: Design documents from `specs/1002-sandbox-scoped-token/` (plan.md, spec.md, research.md,
 data-model.md, contracts/, quickstart.md)
@@ -13,13 +13,18 @@ must fail first.
 
 **Documentation**: Each milestone updates the user guide it changes (Constitution VII).
 
-**Provisional source**: tasks marked **[source]** implement the GitHub App credential source (ledger
-D7). They are all in milestone M5. A switch of source replaces M5; a source whose credentials may
-live longer than 1 h would also rework FR-009 and `MAX_LIFETIME_SECS` (M4), as plan Risks says.
+**Source (ledger D7, answered by jaro: pasted fine-grained PAT)**: tasks marked **[source]**
+implement the pasted-PAT credential source. They are all in milestone M5, which also reworks the
+1-hour/renewal assumptions M4 built (`MAX_LIFETIME_SECS`, the daemon's grant check, `Schedule`),
+because a PAT lives as long as the user chose (D19). The GitHub App M5 that an earlier run built was
+abandoned; its commits are in `/mnt/project-files/backups/1002-m5-github-app.bundle`
+(`git fetch <bundle>`), and tasks below name what to reuse from it as "reuse from bundle commit
+<sha>". Nothing of the App's JWT, PEM, `ring` or `base64` is reused.
 
 **Conventions**: `UnixTime` below means `u64` Unix seconds (`micold_core::unix_time::unix_secs`);
 T014 adds `pub type UnixTime = u64;` in `scoped_credential/mod.rs`. Each task that creates a
-`scoped_credential/*.rs` file also declares it in `scoped_credential/mod.rs`. Secrets follow
+`scoped_credential/*.rs` file also declares it in `scoped_credential/mod.rs` (in M5, T039 declares
+`pat` and `pat_store` for T040/T041). Secrets follow
 `micold_core::jira::ApiToken`: redacted `Debug`, one `expose()`.
 
 ## Format: `[ID] [P?] [Story] Description`
@@ -250,7 +255,7 @@ grant → file written `0600`; revoke → file gone; a grant outside the daemon'
   `ScopedCredential::accept(asked, response, now)` refuses repositories other than exactly
   `[repo]`, permissions beyond the grant, an expiry missing or later than `now + MAX_LIFETIME_SECS` →
   `NoCredentialReason::SourceRefused("wider than asked")` (FR-009); `message()` text of every
-  variant of data-model §6 except `AppNotInstalled` (T044 adds it), including `GitTooOld { version }`;
+  variant of data-model §6 except `PatExpired` (M5 adds it), including `GitTooOld { version }`;
   `SourceNotSetUp`'s text comes from one `const SOURCE_SETUP_HINT` whose M4 wording is source-neutral
   ("No credential source is set up. Set one up in Settings to push from sandboxes."); `CredentialTarget` →
   `GithubRepo` via `GithubRepo::from_remote_url`: `None` → `NoRemote`, non-GitHub → `NotGithub { host }`.
@@ -303,104 +308,135 @@ grant → file written `0600`; revoke → file gone; a grant outside the daemon'
 
 ---
 
-## Phase 7: User Story 2 — the GitHub App source **[source]**
+## Phase 7: User Story 2 — the pasted-PAT source **[source]** and the M4 rework
 
-**Goal**: the user sets up their own GitHub App once; the client mints 1-hour single-repository
-installation tokens on the device, renews and revokes them, and sandboxes push (FR-005, SC-002).
+**Goal**: the user pastes a fine-grained PAT per repository in Settings; the client checks it,
+delivers it to the sandboxes serving that repository, never renews it, warns 24 h before its expiry,
+withdraws it at expiry, delivers a replacement in place, and never revokes it on GitHub (FR-005,
+FR-008–FR-011, SC-002, SC-004).
 
-**Independent Test**: core `github_app` tests with recorded requests/responses; quickstart Part C
-steps 1, 2, 4–6, 10 and 11 against a real App.
-
-### Setup
-
-- [ ] T039 [source] Add `ring = "0.17"` to the root `[workspace.dependencies]` in `Cargo.toml` and
-  `ring`, `base64` (workspace) to `crates/micold-core/Cargo.toml`; `Cargo.lock` gains no new crate
-  (research R4).
+**Independent Test**: core `pat`, `pat_store`, `schedule` and `mod` tests with fixtures; client
+reducer and wiring tests with a fake transport; quickstart Part C steps 1–8, 10–12 with a real PAT in the close unit (T056).
 
 ### Tests (write first, must fail)
 
-- [ ] T040 [P] [US2] [source] Unit tests in `crates/micold-core/src/scoped_credential/github_app.rs`
-  (contracts/github-app-source.md): PEM PKCS#1 and PKCS#8 RSA parse, garbage refused; JWT header
-  `{"alg":"RS256","typ":"JWT"}`, claims `iat = now-60`, `exp = now+540`, `iss = "<app id>"`,
-  base64url without padding, signature verifies with the key's public half via `ring`; token
-  request body `{"repositories":["r"],"permissions":{…}}` per `Grant`; request headers of §2;
-  response parsing; status → reason: installation `404` → `AppNotInstalled`, `401` →
-  `SourceRefused("App ID or key rejected")`, token `403`/`422` → `SourceRefused(<message>)`,
-  timeout/DNS/TLS/`5xx` → `SourceUnreachable(<short>)`; a `404` on the token step drops the cached
-  installation id and retries once; a wider response is revoked and gives
-  `SourceRefused("wider than asked")`; `AppNotInstalled.message()` and `SourceNotSetUp.message()`
-  per data-model §6 (the GitHub App wording).
-- [ ] T041 [P] [US2] [source] Tests for `paths::secrets_dir()` in `crates/micold-core/src/paths.rs`:
-  sibling of `data_dir()` named `micold-ai-ide-secrets` on the Linux, macOS and Windows layouts
-  (research R5); and for `GithubAppSettings` in `crates/micold-core/src/settings.rs`:
-  `settings.github_app` with `app_id: u64` "> 0", `#[serde(default)]`, absent → targets read
-  `SourceNotSetUp`.
+- [ ] T039 [P] [US2] [source] M4 rework tests in `crates/micold-core/src/scoped_credential/mod.rs` and
+  `schedule.rs` (this task also owns the `mod pat; mod pat_store;` declarations in `mod.rs` that T040
+  and T041's files need, with empty module files to hold their tests): `MINTED_LIFETIME_SECS` (3600, used by `accept` and `FakeSource`) is split from
+  `MAX_LIFETIME_SECS` (366 days, the sanity cap, data-model §2); `ScopedCredential::pasted(repo,
+  token, expires_at, now)` refuses an expiry not in the future or beyond the cap + `CLOCK_SKEW_SECS`
+  and accepts one 300 days out (FR-009); `Schedule::new(grant, RenewPolicy::AtExpiry)`: a held
+  credential is due at `expires_at`, never at `expires_at − 10 min`, and re-issuing the same token
+  does not loop (no due time ≤ now after a success); at expiry the status is `PatExpired`;
+  `refresh(repo)` makes a held or failed repository due now; a failed issue under `AtExpiry` other than
+  `SourceUnreachable` carries `withdraw` (data-model §8), `SourceUnreachable` while held does not; `Renew` rows of data-model §8 still
+  pass unchanged; `CredentialStatus::expires_within(now, 86_400)` is true only for a `Held` within 24 h
+  (FR-008); `message()` of `PatExpired`, and the new wording of `SourceNotSetUp` / `SourceRefused`
+  (data-model §6). And in `crates/micold-daemon/tests/git_credential_grant.rs`: a grant expiring
+  300 days out is accepted, one past 366 days + skew or already expired is refused.
+- [ ] T040 [P] [US2] [source] Unit tests in `crates/micold-core/src/scoped_credential/pat.rs`
+  (contracts/pat-source.md §2–§3): shape check (`github_pat_…` accepted; `ghp_`, `gho_`, empty,
+  whitespace-padded refused — padding trimmed once at paste); probe response parsing (`permissions.push`
+  true/false/missing; the `github-authentication-token-expiration` header absent → "no expiry", past →
+  `PatExpired`, a `2026-11-20 00:00:00 UTC` value parsed to unix seconds); reach listing (another private
+  repository → refused naming it; only the target → accepted; empty list → accepted); HTTP status →
+  reason: `401` → refused ("rejected"), `403`/`404` → "does not reach", timeout/DNS/TLS/`5xx` →
+  `SourceUnreachable(<short>)`, with `REACH_CHECK` off the reach step is skipped and the settings text says reach cannot be verified (FR-009), `403` with `x-ratelimit-remaining: 0` → `SourceUnreachable("rate limited")`, `403` with `x-github-sso` → refused with the SSO remedy; stored-file format round trip (`expires_at=` / `token=`); a token
+  never appears in `Debug`, in any `message()` or in the request log line the module builds.
+- [ ] T041 [P] [US2] [source] Tests for `paths::secrets_dir()` in `crates/micold-core/src/paths.rs`
+  (sibling of `data_dir()` named `micold-ai-ide-secrets` on the Linux, macOS and Windows layouts,
+  neither under nor above `data_dir()`, research R5 — reuse from bundle commit f8a1cdc0), and for
+  `PatStore` in `crates/micold-core/src/scoped_credential/pat_store.rs` over a temp root: `put` writes
+  `github-pat/<owner>/<repo>` owner-only (mode `0600` on Unix), replaces an existing PAT, `get`,
+  `remove` (idempotent), `list`; a path-traversal repository name cannot leave the root.
 - [ ] T042 [P] [US2] [source] Client reducer tests in `crates/micold-client/src/features/settings.rs`
-  for the *GitHub App* section: App ID accepts only a positive integer; a key that fails to parse is
-  shown at the field and nothing is stored; *Remove* clears the settings and asks the wiring to
-  revoke running daemons' tokens.
+  for the *GitHub access tokens* section: a row per stored repository with its expiry date; from 24 h
+  before expiry the row shows the warning; *Add* accepts `owner/name` or a github.com URL, refuses
+  anything else at the field; a PAT the check refuses is shown with its reason at the form and
+  nothing is stored; the token field's value is cleared after a save and is never in the row text or
+  in `Debug` of the state; *Replace* and *Remove* ask the wiring to `refresh` the repository; the help
+  text names *Contents: Read and write* and *Metadata: Read*, a short expiry, and that the sandbox can
+  use everything the token can, that the client cannot narrow it, that a leaked token stays valid until
+  it expires or is deleted on GitHub and that *Remove* does not delete it there (FR-011), and, when
+  the reach check is off, that the client cannot verify which other repositories the token reaches (FR-009).
 - [ ] T043 [P] [US2] [source] Client wiring tests in `crates/micold-client/src/shell/scoped_credential.rs`
-  (`#[cfg(test)]`, `FakeSource` behind the seam): targets reported → issue → `GitCredentialGrant`
-  sent; schedule due → re-issue and re-send; daemon stop/delete → revoke all and drop copies;
-  disconnect drops the schedule; reconnect re-grants without a daemon restart (US3-4).
+  (`#[cfg(test)]`, a fake HTTP transport and a temp `PatStore` behind the seam): targets reported with
+  a stored PAT → checks → `GitCredentialGrant` sent with that PAT only for its repository; no stored
+  PAT → `SourceNotSetUp`; replace → `refresh` → the new token is granted without a daemon restart
+  (US2-5); remove → `GitCredentialRevoke` sent; a PAT removed while the daemon was disconnected: on reconnect
+  a `GitCredentialRevoke` is sent for it (FR-010); expiry → `PatExpired` status and revoke sent (US3-4);
+  stop/delete → revoke sent, copies dropped, **no request to GitHub** (FR-010); `SourceUnreachable`
+  while held keeps the held PAT; disconnect drops the schedule and reconnect re-grants; no log line
+  produced during any of these contains the token.
 
 ### Implementation
 
-- [ ] T044 [US2] [source] `crates/micold-core/src/scoped_credential/github_app.rs`: PEM, JWT,
-  request building, response parsing, status mapping, installation-id cache logic;
-  `NoCredentialReason::AppNotInstalled` and the GitHub App wording of `SOURCE_SETUP_HINT` in
-  `scoped_credential/mod.rs` (T040).
-- [ ] T045 [US2] [source] `paths::secrets_dir()` and `GithubAppSettings` (T041).
-- [ ] T046 [US2] [source] `crates/micold-client/src/shell/scoped_credential.rs`: `GithubAppSource`
-  implementing `CredentialSource` over `ureq` as `shell/jira_http.rs` does; key copied owner-only
-  to `secrets_dir()/github-app/private-key.pem` (reuse `micold_core::owner_only`); per-daemon
-  `Schedule` on the subscription clock while connected; minting off the UI thread; grants and
-  revokes on the daemon's connection; revoke on daemon stop/delete (T043).
-- [ ] T047 [US2] [source] *GitHub App* settings section in `crates/micold-client/src/features/settings.rs`
-  from existing settings components (text field, file-picker row, buttons; no new widget), with the
-  help text of contracts/github-app-source.md §1 (T042).
-- [ ] T048 [P] [US2] [source] User guide: `docs/user-guide/settings.md` (*GitHub App* section:
-  registering, permissions, installing, entering ID and key, removing) and
-  `docs/user-guide/sandboxed-daemon.md`, `docs/user-guide/kubernetes-daemons.md` (pushes use a
-  1-hour per-repository token; renewal needs the client running; SSH remotes go over HTTPS).
-- [ ] T049 [US2] [source] Run the `visual-pass` skill on the *GitHub App* section (quickstart Part C
-  step 2) and save the evidence in `specs/1002-sandbox-scoped-token/visual-pass/`.
+- [ ] T044 [US2] [source] The M4 rework in `crates/micold-core/src/scoped_credential/{mod.rs,
+  schedule.rs,fake.rs}` and `crates/micold-daemon/src/git_credential.rs`: `MINTED_LIFETIME_SECS`,
+  `MAX_LIFETIME_SECS` = 366 days, `ScopedCredential::pasted`, `RenewPolicy`, `Schedule::refresh`,
+  `CredentialStatus::expires_within`, `NoCredentialReason::PatExpired` and the new texts; `withdraw`, the daemon's
+  grant check uses the shared cap, and the docs of `Grant::permissions` and `CredentialSource::revoke`
+  no longer say "installation token" / "within an hour"; likewise every other 1-hour / installation-token
+  / renewal doc comment in `mod.rs` (lines ~31, 40, 184) and `helper.rs` (line ~16) (T039).
+- [ ] T045 [US2] [source] `crates/micold-core/src/scoped_credential/pat.rs`, `pat_store.rs` (declared
+  by T039 in `scoped_credential/mod.rs`) and `paths::secrets_dir()` — reuse `secrets_dir()` from
+  bundle commit f8a1cdc0 (T040, T041). No new dependency.
+- [ ] T046 [US2] [source] `crates/micold-client/src/shell/scoped_credential.rs`: `PatSource`
+  implementing `CredentialSource` over `ureq` as `shell/jira_http.rs` does (`issue` = stored PAT →
+  checks → `pasted`; `revoke` does nothing), the per-daemon `Schedule` (`AtExpiry`) on the subscription
+  clock while connected, checks off the UI thread, grants and revokes on the daemon's connection,
+  revoke on daemon stop/delete — reuse the wiring structure from bundle commit 026081c3
+  (`shell/scoped_credential.rs`, `daemon_sync.rs`, `daemons.rs`, `startup.rs`, `main.rs` hook-ups, with
+  the App parts removed) and review-A fixes of bundle commit 3b68bf1a (no revoke on a lost connection,
+  no gap on a source change, stale clock) (T043).
+- [ ] T047 [US2] [source] *GitHub access tokens* settings section in
+  `crates/micold-client/src/features/settings.rs` and its view, from existing settings components (text
+  field, masked field if the Jira token one exists, buttons; no new widget), with the help text of
+  contracts/pat-source.md §1 — reuse the section scaffold from bundle commit 026081c3
+  (`ui/settings/github.rs`, `features/window.rs`, layout snapshot and `covered_states` updates) (T042).
+- [ ] T048 [P] [US2] [source] User guide: `docs/user-guide/settings.md` (*GitHub access tokens*:
+  creating the fine-grained PAT with its permissions and a short expiry, pasting, replacing, the 24 h
+  warning, removing, that removing does not delete it on GitHub) and
+  `docs/daemon.md` (the grant/revoke section: the PAT source is never renewed or revoked on GitHub,
+  the copy is withdrawn at expiry, on removal and on daemon stop, a grant may live up to 366 days;
+  it still says 1-hour renewal at lines ~431–439) and
+  `docs/user-guide/sandboxed-daemon.md`, `kubernetes-daemons.md` (pushes use the pasted
+  per-repository token over HTTPS, SSH remotes rewritten, no renewal, a leaked token stays valid until
+  it expires) — reuse the page structure from bundle commit 026081c3.
+- [ ] T049 [US2] [source] Run the `visual-pass` skill on the *GitHub access tokens* section (quickstart
+  Part C steps 2, 12; the form needs no real PAT) and save the evidence in `specs/1002-sandbox-scoped-token/visual-pass/`.
 
-**Checkpoint**: with a GitHub App set up, sandboxes push and pull their own repository.
+**Checkpoint**: with a PAT pasted for a repository, sandboxes push and pull it; nothing renews it.
 
 ---
 
-## Phase 8: User Story 3 and FR-011 — status rows and per-daemon extra permissions
+## Phase 8: User Story 3 and FR-013 — status rows
 
-**Goal**: each daemon's status says, per project, whether it holds a credential and when it renews,
-or why it has none and what to do (FR-013, SC-005); each daemon can turn on *pull requests* and
-*issues* for its credentials (FR-011).
+**Goal**: each daemon's status says, per project, whether it holds a credential and when it expires
+(with the 24 h warning), or why it has none and what to do (FR-013, SC-005). FR-011 has no per-daemon
+toggle under D7: its guidance text is in M5 (T042, T047) (ledger D19).
 
-**Independent Test**: client reducer tests; quickstart Part C steps 3, 7, 8 and 12.
+**Independent Test**: client reducer tests in `daemon_sections` (the rows' text for held, within 24 h, expired and none); the rows as seen with a real daemon and PAT are quickstart Part C steps 4, 8, 10, run live in T056.
 
 ### Tests (write first, must fail)
 
 - [ ] T050 [P] [US3] Client reducer tests in `crates/micold-client/src/features/daemon_sections.rs`:
-  a status row per `(DaemonId, project)`: *Git credential for owner/repo, renews at HH:MM* while
-  held, *No git credential: <NoCredentialReason::message()>* otherwise; it clears when a credential
-  is obtained (FR-013).
-- [ ] T051 [P] [US2] Tests for `git_grant`: `SandboxProfile::git_grant` and
-  `KubeSettings::git_grant` default to `Grant::default()` (`#[serde(default)]`) and round-trip, in
-  `crates/micold-core/src/sandbox/mod.rs` and `kube/settings.rs`; client reducer tests in
-  `features/daemons.rs` / `features/daemons_kube.rs`: two toggles, off by default, each with help
-  text saying what it allows; the wiring issues with that daemon's grant.
+  a status row per `(DaemonId, project)`: *Git credential for owner/repo, expires on <date>* while held,
+  with *— paste a new token in Settings* once `expires_within(now, 24 h)`; *No git credential:
+  <NoCredentialReason::message()>* otherwise; it clears when a credential is delivered (FR-013).
+- [-] T051 Withdrawn (D19): the per-daemon `git_grant` setting and its toggles do not exist under
+  the PAT source (a PAT cannot be narrowed by the client).
 
 ### Implementation
 
 - [ ] T052 [US3] Status rows in `crates/micold-client/src/features/daemon_sections.rs` and the
   project's daemon status line, fed by the `CredentialStatus` the wiring holds (T050).
-- [ ] T053 [US2] `git_grant` fields and the two toggles with their help text, using the existing
-  toggle row; the wiring in `shell/scoped_credential.rs` passes the daemon's grant to `issue` (T051).
+- [-] T053 Withdrawn (D19), with T051.
 - [ ] T054 [P] [US3] User guide `docs/user-guide/sandboxed-daemon.md` and
-  `docs/user-guide/kubernetes-daemons.md`: the statuses and their remedies; the two extra
-  permissions.
-- [ ] T055 [US3] Run the `visual-pass` skill on the status rows and toggles (quickstart Part C
-  steps 3, 12) and save the evidence in `specs/1002-sandbox-scoped-token/visual-pass/`.
+  `docs/user-guide/kubernetes-daemons.md`: the statuses and their remedies, including the expiry
+  warning and *expired*.
+- [ ] T055 [US3] Close unit, with T056: run the `visual-pass` skill on the status rows against the real client, a real daemon and the PAT of quickstart Part C steps 4, 8, 10 (the status rows are reachable only with a connected daemon; the showcase has no daemon) and
+  save the evidence in `specs/1002-sandbox-scoped-token/visual-pass/`.
 
 **Checkpoint**: all three user stories hold.
 
@@ -408,7 +444,7 @@ or why it has none and what to do (FR-013, SC-005); each daemon can turn on *pul
 
 ## Phase 9: Polish
 
-- [ ] T056 Run quickstart Part C against a real GitHub App and record the results in
+- [ ] T056 Run quickstart Part C against a real fine-grained PAT and record the results in
   `specs/1002-sandbox-scoped-token/quickstart.md` (close unit; needs a GitHub account).
 
 ---
@@ -420,14 +456,14 @@ or why it has none and what to do (FR-013, SC-005); each daemon can turn on *pul
 - Within a phase, tests before implementation; implementation tasks follow the test task named in
   their parentheses.
 - Phase 5 needs T014/T020 (`scoped_credential` module, `git_env`); Phase 6 needs T027 (file store);
-  Phase 7 needs T034–T036 (seam, schedule, messages); Phase 8 needs T046 (wiring).
+  Phase 7 needs T034–T037 (seam, schedule, messages, daemon grant check); Phase 8 needs T046 (wiring).
 
 ### Parallel opportunities
 
 - M1: T002–T007 in parallel; T008 and T009 in parallel; T013 beside any.
 - M2: T015–T017 in parallel; T019 and T020 in parallel.
 - M4: T030–T032 in parallel; T034–T036 in parallel after their tests.
-- M5: T040–T043 in parallel.
+- M5: T039–T043 in parallel; T048 beside any.
 
 ## Parallel Example: User Story 1
 
@@ -440,10 +476,8 @@ Task: "Legacy-settings tests in crates/micold-core/src/sandbox/mod.rs and kube/s
 ## Implementation Strategy
 
 US1 first (M1, M2): it is the security guarantee and holds without any source. Then the
-source-agnostic git side (M3) and delivery (M4), exercised with `FakeSource`. The provisional
-GitHub App source is one milestone (M5); status and extra permissions follow (M6). If D7 changes,
-M5 changes (plus the notice/status wording behind its constants, and FR-009's cap if the new
-source's credentials outlive 1 h).
+source-agnostic git side (M3) and delivery (M4), exercised with `FakeSource`. The pasted-PAT source
+(D7) with the M4 lifetime/renewal rework is one milestone (M5); status rows follow (M6).
 
 ## Milestones
 
@@ -492,24 +526,27 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Depends on**: M3
 - **Tier**: full
 
-### M5 — GitHub App credential source [source]
+### M5 — Pasted-PAT credential source [source]
 
 - **Tasks**: T039–T049
-- **Deliverable**: the user sets up their GitHub App in Settings; sandboxes then push and pull their
-  own repository with a 1-hour single-repository token the client mints, renews and revokes.
-- **Satisfies**: US2 acceptance scenarios 1, 2, 5; FR-005, SC-002, SC-003, SC-004
-- **Verify**: `cargo test -p micold-core --lib scoped_credential::github_app paths settings`, `cargo test -p micold-client --lib scoped_credential features::settings`; quickstart Part C steps 1, 2, 4–6, 10, 11
+- **Deliverable**: the user pastes a fine-grained PAT per repository in Settings (checked: fine-grained,
+  has an expiry, pushes to that repository, reaches no other private one); sandboxes then push and
+  pull their own repository with it, a replacement is delivered without a restart, it is warned about
+  24 h before expiry and withdrawn at expiry, and the client never renews or revokes it on GitHub;
+  the 1-hour assumptions of M4 are reworked for it.
+- **Satisfies**: US2 acceptance scenarios 1, 2, 3, 5; US3 acceptance scenario 4 (core and wiring); FR-005, FR-008, FR-009, FR-010, FR-011, SC-002, SC-003, SC-004
+- **Verify**: `cargo test -p micold-core --lib scoped_credential paths`, `cargo test -p micold-daemon --test git_credential_grant`, `cargo test -p micold-client --lib scoped_credential features::settings`; quickstart Part C steps 2 and 12 as the visual pass (T049; no real GitHub PAT needed to see the form); the live steps 1, 3–8, 10, 11 are the close unit's T056
 - **Depends on**: M4
 - **Tier**: full
 
-### M6 — Credential status and extra permissions
+### M6 — Credential status
 
-- **Tasks**: T050–T055
+- **Tasks**: T050–T055 (T051 and T053 withdrawn, D19)
 - **Deliverable**: each daemon's status says per project whether it holds a credential and when it
-  renews, or why not and what to do; per daemon, *pull requests* and *issues* can be turned on.
-- **Satisfies**: US3 acceptance scenarios 1–4; US2 acceptance scenario 3; FR-011, FR-013, SC-005
-- **Verify**: `cargo test -p micold-client --lib daemon_sections features::daemons`, `cargo test -p micold-core --lib sandbox kube::settings`; quickstart Part C steps 3, 7, 8, 12
+  expires (warning within 24 h), or why not and what to do.
+- **Satisfies**: US3 acceptance scenarios 1–3 and the status half of 4 (M5 does the withdrawal); FR-013, SC-005
+- **Verify**: `cargo test -p micold-client --lib daemon_sections`; the live steps 4, 8, 10 (and the visual pass T055) need a real daemon and PAT and are the close unit's T056
 - **Depends on**: M5
 - **Tier**: full
 
-T056 (quickstart Part C results) changes no code and is left to the close unit.
+T056 (quickstart Part C results, with a real PAT) changes no code and is left to the close unit.
