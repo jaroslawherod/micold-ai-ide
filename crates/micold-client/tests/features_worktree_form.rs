@@ -248,6 +248,7 @@ mod github_issues_switch {
     use micold_client::features::worktree_form::{BranchSource, Msg, WorktreeForm};
     use micold_core::git::GitRemote;
     use micold_core::jira::{connection_key, IssueProvider, JiraConnection};
+    use micold_core::naming::ConventionalType;
 
     fn project() -> PathBuf {
         PathBuf::from("/work/acme")
@@ -322,6 +323,16 @@ mod github_issues_switch {
         assert_ne!(form(&state).source, BranchSource::Issue);
         state.update(Message::WorktreeForm(Msg::NameChanged("fix-it".into())));
         assert_eq!(form(&state).name, "fix-it", "a name can still be typed");
+        // Creating still works: a valid, issue-free submission names the worktree from the form.
+        state.worktree_form.form.as_mut().unwrap().type_ = Some(ConventionalType::Fix);
+        state.update(Message::WorktreeForm(Msg::Submitted));
+        let form = form(&state);
+        assert!(form.error.is_none(), "the submission is accepted");
+        assert!(form.ticket.is_empty(), "no issue is attached");
+        assert!(form.can_press());
+        let names = form.preview().expect("the form names a worktree");
+        assert_eq!(names.branch, "fix/fix-it");
+        assert_eq!(names.dir_name, "fix-fix-it");
     }
 
     /// US2 AS2: on (the default) the form is the form of before.

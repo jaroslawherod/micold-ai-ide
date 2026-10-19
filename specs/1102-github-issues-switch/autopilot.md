@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1102
 - **Worktree branch**: feat/1102_allow-the-github-issues-integration-to-be-disabled
 - **Started**: 2026-10-19
-- **Phase**: M3 PR open
-- **Next step**: orchestrator merges M3 PR; then close
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -19,15 +19,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1111 | Design | merged | 33cd837f45cc6412d3aa888a4cb6d2f221b969ef |
 | #1112 | M1 | merged | 4fd3e6e4ce9c7a58ebea3d3cfa88113d9aa1aa75 |
 | #1114 | M2 | merged | 8ca8d75141adfc72ea5ed1f678d46885bcfaa35f |
-| #1133 | M3 | open | |
+| #1133 | M3 | merged | d81c4683494a4e37ded61c878265c7e67cad45c8 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T016 | full | Switch, wire and form gate: off hides GitHub issues in newly opened forms | #1112 | in review |
-| M2 | T017–T021 | full | Open forms follow the switch live | #1114 | in review |
-| M3 | T022–T025 | full | MCP create_worktree refuses github_issue while off | #1133 | in review |
+| M1 | T001–T016 | full | Switch, wire and form gate: off hides GitHub issues in newly opened forms | #1112 | merged |
+| M2 | T017–T021 | full | Open forms follow the switch live | #1114 | merged |
+| M3 | T022–T025 | full | MCP create_worktree refuses github_issue while off | #1133 | merged |
 
 ## Decisions
 
@@ -48,6 +48,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Review B (M2) | 1 | 8121ae5e0baec97411dd9a6a8e52c326205da2a0:4b9b4517273e3b247db11ce22655bbd934b0e9ce | CLEAN (2 MINOR test-depth, accepted) |
 | Code review A (M3) | 1 | 98686e2e35d1ce1bedec8d99a88c02f6544c862e:0933096c966a48b46b9198e33a51a8e43ee056b8 | declined 6 (MINOR/taste) |
 | Review B (M3) | 1 | same | CLEAN |
+| Close review | 1 | 69c00b6f57a731cf72875ca7b4b748710cdb12e0:d81c4683494a4e37ded61c878265c7e67cad45c8 | CHANGES: 2 MAJOR, 2 MINOR (task wording T026/T028/T029); fixed, prose only |
 | Tasks review | 1 | 9ee5e15dc9b0aae22c6d661908c19341be7a4078:72004d40f6ad887da122bbd09c2195ca2a84601f | CLEAN (2 MINOR fixed; analyze MEDIUMs C1,C2,I1 fixed) |
 
 ## Declined review findings
@@ -73,6 +74,9 @@ None. <or: the banner as sent, and when>
 
 ## Follow-ups not done
 
-<Defects found outside this flow's work, scope deliberately cut, etc. Copied into the handoff.>
+- tdd/verification.md findings 6, 7 (LOW test depth: settings_sections.rs source-text assertion; start_issue_* starters not called in T012 test) deferred (T031).
+- tdd finding 2: no tdd/test-list.md or cycle log; process gap, not rebuilt.
+- A failed settings save is not retried on the next save while connected (service told on first save; no user-visible harm). Comment fixed; behaviour unchanged.
+- Quickstart Part B ran on headless sway; the issue list itself not driven (no gh login).
 
 <!-- plan review A round 1 snapshot 9dacc3ca5a9cc8c52890dd052f80d02761ab1bb4:eb157e8d63016f57bb1cc60dffff99c63cf2b1e1: CLEAN, 4 MINORs fixed, prose only -->

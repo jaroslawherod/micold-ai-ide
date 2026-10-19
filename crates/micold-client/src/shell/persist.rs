@@ -686,7 +686,7 @@ pub(crate) fn save_and_prepare_check(
         app.core.settings.jira_enabled = enabled;
     }
     // Feature 1102: the same for the GitHub issues switch. Not rolled back when the write fails
-    // (it stays in force for the session) and, the baseline not moving, the next save retries it.
+    // (it stays in force for the session); the service is told on that first save either way.
     if let Some(enabled) = changed_value(
         &settings.github_issues_enabled,
         baseline.as_ref().map(|b| &b.github_issues_enabled),

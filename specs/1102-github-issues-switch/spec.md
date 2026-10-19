@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-19
 
-**Status**: Draft
+**Status**: Closed 2026-10-19 — shipped in PRs #1112, #1114, #1133
 
 **Input**: Issue #1102: "The Jira integration has an on/off switch (`jira_enabled`), but the GitHub issues integration has none: it is always on. A project that tracks its work only in Jira, or does not want GitHub issues offered at all, still gets GitHub issues in the New worktree form and pays for the GitHub calls that load them. A setting, like `jira_enabled`, that turns the GitHub issues integration off. When it is off, GitHub issues are not loaded or offered as an issue source, and no GitHub issue requests are made."
 
@@ -74,7 +74,7 @@ The switch is saved with the other settings, reaches every open window and every
 ### Functional Requirements
 
 - **FR-001**: The app MUST have a persisted setting that turns the GitHub issues integration on or off, on by default.
-- **FR-002**: While it is off, the app MUST make no GitHub issue request: no issue list load, no issue search, no issue details load.
+- **FR-002**: While it is off, the app MUST make no GitHub issue request: no issue list load, no issue search, no issue details load, and no read of GitHub issue titles for the overview's worktree rows.
 - **FR-003**: While it is off, the New worktree form MUST NOT offer GitHub as an issue source, and MUST NOT show the GitHub / Jira choice.
 - **FR-004**: While it is off, Jira, when on and connected, MUST remain usable as the sole issue source, and a worktree without an issue MUST remain creatable.
 - **FR-005**: Turning the switch off MUST, in every open window, drop the GitHub issue list, discard a GitHub load in flight and clear a picked GitHub issue; turning it on MUST offer GitHub issues again without a restart.

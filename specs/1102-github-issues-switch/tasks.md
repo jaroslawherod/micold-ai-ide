@@ -92,3 +92,14 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Verify**: `cargo test -p micold-daemon --test mcp_create_worktree` and `mise run gate`
 - **Depends on**: M1
 - **Tier**: full
+
+## Phase 5: TDD remediation
+
+**Verdict FAIL (tdd/verification.md) on first run; T026 and T027 cleared at close.** Cycle-log evidence (finding 2) cannot be reconstructed after the fact and is recorded as a process gap.
+
+- [x] T026 [US1] Finding 1 (HIGH): test that with the switch off `on_overview_opened` starts no GitHub title read and records none as unavailable, and `on_title_remotes` settles the asked titles as unavailable without locating gh; on, titles still load. Place beside the `shell/issues` tests in `crates/micold-client/src/main_tests.rs` (`shell/issues.rs:696`, `:758`). Proof: delete the gate at either line and `scripts/build-lock.sh cargo test -p micold-client --lib` fails
+- [x] T027 [US1] Finding 8 (HIGH-linked): name the overview issue-title gating in spec.md FR-002 and plan.md so T026 traces to a requirement. Proof: `grep -n "title" specs/1102-github-issues-switch/spec.md`
+- [x] T028 [US3] Finding 3: test a failed settings save keeps `github_issues_enabled` in force, still tells the service on that save, and the reopened page shows it off (`main_tests.rs`, `a_failed_settings_save_keeps_github_issues_in_force_and_still_tells_the_service`). A later save does not re-send it while connected (recorded in autopilot.md Follow-ups). Proof: `scripts/build-lock.sh cargo test -p micold-client --bins github_issues`
+- [x] T029 [US1] Finding 4: assert the PR status request still goes out with the switch off (`main_tests.rs`, `pr_status_still_reads_with_the_github_issues_switch_off`), and that the MCP refusal makes zero `details` calls as well as zero lookups (`crates/micold-daemon/tests/mcp_create_worktree.rs`). Proof: `scripts/build-lock.sh cargo test -p micold-daemon --test mcp_create_worktree`
+- [x] T030 [US1] Finding 5: strengthen `off_with_jira_off_has_no_source_but_creating_still_works` to assert the form builds a creation request without an issue (`crates/micold-client/tests/features_worktree_form.rs`). Proof: `scripts/build-lock.sh cargo test -p micold-client --test features_worktree_form`
+- [x] T031 (deferred, LOW: not done; see autopilot.md Follow-ups) Findings 6, 7 (LOW): replace the source-text assertions in `crates/micold-client/tests/settings_sections.rs:881` with a render check if a renderer fixture exists, and call the `start_issue_*` starters in `main_tests.rs:7140`. Proof: `mise run test`
