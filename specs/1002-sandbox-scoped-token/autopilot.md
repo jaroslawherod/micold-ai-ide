@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-2cdrmk
 - **Started**: 2026-10-19
 - **Phase**: milestones
-- **Next step**: M1: review A round 2 (sonnet) on the F1–F8 fix commit, review B, full gate `scripts/gate.sh`, push, PR text.
+- **Next step**: M1: orchestrator opens the M1 PR (title/body in the unit's scratchpad), waits on CI and merges; then M2.
 
 ## Pull requests
 
@@ -22,7 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T013 | full | No user git identity in a sandbox (FR-001–003, FR-014) | — | in progress |
+| M1 | T001–T013 | full | No user git identity in a sandbox (FR-001–003, FR-014) | — (to open) | gate green at 17370db2, pushed |
 | M2 | T014–T022 | full | Sanitized shared git config, helper reset (FR-004) | — | planned |
 | M3 | T023–T029 | full | In-container helper + in-memory per-repo file (FR-006/007/015) | — | planned |
 | M4 | T030–T038 | full | Protocol delivery, Schedule, revocation with FakeSource (FR-008–010, 012) | — | planned |
@@ -59,10 +59,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Plan | 1 | c9fa31d9664b54c8a2795dccf16d38b1abf14079:6d822ec17c37bcde07f294ff2509e6682eda33e8 | CLEAN (4 MINOR, fixed, prose only) |
 | Tasks | 1 | b6f5094100888a88679ecc6fe8c89bc1dc627695:3bbb1d8d627753e4926daa27fa7e7c7c12d3df48 | CHANGES (1 MAJOR: SourceNotSetUp App wording in M4, fixed via SOURCE_SETUP_HINT; 2 MINOR fixed) |
 | Tasks | 2 | b248659e6d8d9fd04545078d5e6bf2c4668c4bb7:402875090f6540516eb724bb15368a2067a33956 | CLEAN (sonnet) |
-| M1 A (code-review high) | 1 | e42b32340533c275d5ebd756929ac2e0dd7212c6:71e9883368ab4624e997e3c39e96939f9bc60f76 | CHANGES (2 MAJOR open: F1, F2; 6 MINOR, see Handover) |
+| M1 A (code-review high) | 1 | e42b32340533c275d5ebd756929ac2e0dd7212c6:71e9883368ab4624e997e3c39e96939f9bc60f76 | CHANGES (2 MAJOR F1, F2 fixed (D17); 6 MINOR F3–F8 fixed) |
+| M1 A (sonnet) | 2 | 833375deedd427f1a1c0dfa38313f7936923038e:17370db2c46b156d528932658e24a5ca2fa58b7e | CLEAN |
+| M1 B (conformance, sonnet) | 1 | 833375deedd427f1a1c0dfa38313f7936923038e:17370db2c46b156d528932658e24a5ca2fa58b7e | CHANGES (F1 MAJOR declined, see below; F2 MINOR: Verify covered by the full gate's `cargo test --workspace`; F3 MINOR: D17 stated in the PR body) |
 
 ## Declined review findings
 
+- M1 B F1 [MAJOR] no `tdd/cycle-log.md` red evidence for T002–T005, T008, T009 (Constitution I): declined — already decided in D16 (tests kept as written, each asserts the removed item's absence), and the PR body discloses that those tests came after the code. Re-deriving red runs would mean reverting the removal against tests that no longer compile on the old code.
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
 
