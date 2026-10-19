@@ -48,7 +48,7 @@ behaviour of the section unchanged (FR-009); ungrouped sets unchanged (FR-003, S
 
 | Principle | Status | Note |
 |---|---|---|
-| I. Test-First | PASS | The group's rules (exclusivity, close-on-reopen, default) are decision logic in render-free `AccordionGroup`, test-first in its unit tests; the error-held rule and form reset in `features/daemons.rs`, test-first from `tests/daemons_feature.rs`; showcase state test-first in `showcase/state.rs`. View glue (`in_group`, the showcase render, `container_fields.rs`) is covered by geometry tests and quickstart §B. |
+| I. Test-First | PASS | The group's rules (exclusivity, close-on-reopen, default) are decision logic in render-free `AccordionGroup`, test-first in its unit tests; the error-held rule and form reset in `features/daemons.rs`, test-first from `tests/daemons_feature.rs`; showcase state test-first in `tests/showcase_state.rs`. View glue (`in_group`, the showcase render, `container_fields.rs`) is covered by geometry tests and quickstart §B. |
 | II. Multi-Session | PASS | View state only, in the daemons `State`, cleared when the form closes; no session state touched (spec Edge Cases). |
 | III. Worktree Integration | PASS | No worktree or VCS behaviour touched. |
 | IV. Local-First Storage | PASS | Nothing stored or sent. |
@@ -97,7 +97,7 @@ crates/micold-client/src/ui/material/accordion_section.rs   (in_group)
 crates/micold-client/src/ui/material/mod.rs                 (mod + pub use)
 crates/micold-client/src/features/daemons.rs                (group in State)
 crates/micold-client/src/showcase/{state.rs,catalogue.rs,sections/surfaces.rs}
-crates/micold-client/tests/{daemons_feature.rs,daemons_section_geometry.rs,showcase_completeness.rs}
+crates/micold-client/tests/{daemons_feature.rs,daemons_section_geometry.rs,showcase_state.rs,showcase_completeness.rs}
 docs/user-guide/{sandboxed-daemon,kubernetes-daemons,remote-daemons}.md
 ```
 
