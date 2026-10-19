@@ -272,8 +272,8 @@ the cards of a row share one height.
   `/speckit-autopilot #1117` reads "Running autopilot on #1117"). The same sentence applies to every
   slash command, Claude's built-in commands (`/clear`, `/compact`, `/model`, …) included: none is
   hidden or worded differently.
-- **FR-013**: When nothing readable remains after FR-011 and FR-012 (empty, only whitespace, or still
-  holding a tag), the card MUST show no activity line, and MUST NOT show markup.
+- **FR-013**: When nothing readable remains after FR-011 and FR-012 (empty, only whitespace, or only
+  tags), the card MUST show no activity line, and MUST NOT show markup.
 - **FR-014**: The card's height MUST be a minimum (no shorter than feature 813's card), not a fixed
   height: a card grows to fit its rows, and every card in a grid row MUST be as tall as the row's
   tallest card. This replaces feature 1024 FR-006 (one common height for every card in the grid).

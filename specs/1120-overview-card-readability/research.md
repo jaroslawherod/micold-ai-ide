@@ -104,8 +104,10 @@ tooltip.
    including the next `>`, provided no `<` comes first. `a < b`, `x<3` and an unterminated `<b`
    are not tags and stay as written.
 2. Collapse every run of whitespace (newlines included) to one space and trim.
-3. Return `None` when the result is empty, or still contains a tag (removal can join `<` and a
-   following `a>` into a new one, as in `<<b>a>`) (FR-013).
+3. Repeat step 1 until no tag is left: removal can join `<` and a following `a>` into a new tag,
+   as in `<<b>a>` (which becomes empty) or `Vec<Vec<u8>>` (which reads `Vec`). Return `None` when
+   the result is empty (FR-013). (Amended in M2 review: returning `None` whenever a tag was left
+   hid the whole line of a Rust prompt such as `Vec<Vec<u8>>`.)
 
 `overview_text::activity_text(text) -> Option<String>` applies `readable`, then, when the result
 starts with `/` followed by a command name (ASCII letters, digits, `-`, `_`, `:`, `.`) and then
@@ -132,8 +134,10 @@ from a command's arguments.
 the prompt's first non-empty line. It applies `markup::readable` to the whole prompt and then clips
 to `MAX_TEXT_CHARS` (200); a prompt with nothing readable sets `prompt` to `None`, so an earlier
 prompt does not linger as the line (spec Edge Cases, several sessions). The card applies
-`activity_text` again at render time, which is idempotent on sanitised text and also covers todo
-items and any value from an older service.
+`activity_text` again at render time, which is idempotent on sanitised text and also covers any
+value from an older service. Todo content and `activeForm` are sanitised and clipped the same way
+when the `TodoWrite` list is parsed; a todo with nothing readable is skipped like an empty one, so
+it never hides the prompt (amended in M2 review).
 
 **Rationale**: Today `<agent-message from="x">` on its own first line is the whole stored prompt, so
 the card could only show markup or nothing, never *Continue M2* (US3.1 with a multi-line wrapper),

@@ -15,7 +15,8 @@ the next `>`.
 | `line one` + newline + `  line two` | `Some("line one line two")` |
 | `a < b` / `x<3` / `if a<b` | unchanged |
 | `<agent-message from="x"></agent-message>` / `   ` / `` | `None` |
-| `<<b>a>` (a tag remains after removal) | `None` |
+| `<<b>a>` (removal forms a tag; removal repeats until none is left) | `None` |
+| `Change the field to Vec<Vec<u8>>` (removal repeats: `<u8>`, then `<Vec>`) | `Some("Change the field to Vec")` |
 | `a<b and c>d` (`<b and c>` is a tag by the rule above) | `Some("ad")` |
 
 ## C2. `overview_text::activity_text(text: &str) -> Option<String>`
@@ -110,3 +111,7 @@ tooltip: b }`.
 | same again | unchanged | `false` |
 | only markup, after a readable one | `None` | `true` |
 | 300 readable characters | first 200 characters | `true` |
+
+On `PostToolUse` of `TodoWrite`, each todo's content and `activeForm` are sanitised by C1 and then
+clipped to 200 characters; a todo whose content has nothing readable is skipped, so a markup-only
+in-progress todo never hides the prompt.
