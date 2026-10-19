@@ -256,7 +256,7 @@ mod base64_lite {
             for i in 0..=chunk.len() {
                 out.push(T[(n >> (18 - 6 * i) & 63) as usize] as char);
             }
-            out.extend(std::iter::repeat('=').take(3 - chunk.len()));
+            out.extend(std::iter::repeat_n('=', 3 - chunk.len()));
         }
         out
     }

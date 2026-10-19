@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-2cdrmk
 - **Started**: 2026-10-19
 - **Phase**: milestones
-- **Next step**: M2: orchestrator opens the M2 PR (pr-m2-title.txt / pr-m2-body.md in the unit's scratchpad), waits on CI and merges; then M3.
+- **Next step**: M3: orchestrator opens the M3 PR (pr-m3-title.txt / pr-m3-body.md in the unit's scratchpad), waits on CI and merges; then M4.
 
 ## Pull requests
 
@@ -18,14 +18,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1090 | design (spec, plan, tasks) | merged | 04b29291209b144376228864f40d0f46ac87d103 |
 | #1096 | M1 | merged | 07ad3c1f936358fd25ecf021e7009459c9ca2458 |
+| #1099 | M2 | merged | abb25cf8907de6acef23805b2334f679f0060af7 |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T013 | full | No user git identity in a sandbox (FR-001–003, FR-014) | — (to open) | gate green at 17370db2, pushed |
-| M2 | T014–T022 | full | Sanitized shared git config, helper reset (FR-004) | — (to open) | gate green, pushed |
-| M3 | T023–T029 | full | In-container helper + in-memory per-repo file (FR-006/007/015) | — | planned |
+| M2 | T014–T022 | full | Sanitized shared git config, helper reset (FR-004) | #1099 | merged |
+| M3 | T023–T029 | full | In-container helper + in-memory per-repo file (FR-006/007/015) | — (to open) | implemented, gate running |
 | M4 | T030–T038 | full | Protocol delivery, Schedule, revocation with FakeSource (FR-008–010, 012) | — | planned |
 | M5 | T039–T049 | full | [source] GitHub App source + client wiring (FR-005) | — | planned |
 | M6 | T050–T055 | full | Status rows + PR/issues toggles (FR-011, FR-013) | — | planned |
@@ -67,6 +68,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 red-CI fix D18 (sonnet) | 1 | 045a4f1811c6371aa92bff326aa70e42bbdbbf38:8e97a4027dbbf4c58e3fd6b7c40a4ecc5f8d5971 | CLEAN |
 | M2 A (code-review high) | 1 | 0c7576a111f7bca073769e7193c66f5d11d9aac6:07ad3c1f936358fd25ecf021e7009459c9ca2458 | CHANGES (F1 MAJOR fixed: value-with-userinfo and smtp/imap keys dropped, contract §3 updated; F2 MINOR kube tests need git, as CI has it; F3 MINOR git>=2.31 noted) |
 | M2 B (conformance, sonnet) | 1 | 70552b50588c4b06e4e005f3105dcb4274fe43dc:07ad3c1f936358fd25ecf021e7009459c9ca2458 | CLEAN (2 MINOR left: proxyAuthMethod drop is harmless; client test skips without git) |
+| M3 B (conformance + correctness, sonnet; one reviewer for A and B) | 1 | f62bba4f347d8a6361d83cac442b621f119d2a6f:79e2d3e0e3335139d58a5d999979f26b0472e0b0 | running |
 
 ## Declined review findings
 
