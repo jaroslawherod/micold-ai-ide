@@ -178,7 +178,13 @@ mod remote_identity_tests {
             }
         }
         let _cleanup = Cleanup;
-        std::fs::create_dir_all("micold-remote:/987654/srv").unwrap();
+        // Windows forbids ':' in a directory name, so the local twin cannot exist there and the
+        // identity cannot be resolved against it either.
+        let twin = std::fs::create_dir_all("micold-remote:/987654/srv");
+        #[cfg(not(windows))]
+        twin.unwrap();
+        #[cfg(windows)]
+        let _ = twin;
         let id = Path::new("micold-remote://987654/srv");
         assert_eq!(canonicalize_best_effort(id), id);
     }
