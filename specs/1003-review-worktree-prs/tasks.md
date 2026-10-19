@@ -61,7 +61,7 @@ description: "Task list for feature 1003: Review changes reaches every pull requ
 - [ ] T024 [P] [US2] Add `Icon::ChevronLeft` and `Icon::ChevronRight` glyphs in `crates/micold-client/src/icons.rs`, covered by the existing every-glyph checks in `crates/micold-client/tests/icons.rs` (extend their list first, so they fail)
 - [ ] T025 [US2] `crates/micold-client/src/ui/changes.rs`: header above the diff while a PR is shown: `PullRequestIndicator` (state + checks), `#number title`, the base line, and previous/next `IconButton`s, each disabled when `adjacent(..)` is `None` (contracts/changes-view.md § Header)
 - [ ] T026 [US2] User guide: the header and previous/next in `docs/user-guide/reviewing-changes.md` § Pull requests
-- [ ] T027 [US2] Visual pass (quickstart §B step 3); record evidence in `specs/1003-review-worktree-prs/`
+- [ ] T027 [US2] Visual pass (quickstart §B steps 3, 4); record evidence in `specs/1003-review-worktree-prs/`
 
 ## Phase 5: User Story 3 - Selection holds and the list stays current (P2)
 

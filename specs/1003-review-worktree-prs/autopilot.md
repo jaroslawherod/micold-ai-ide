@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1003
 - **Worktree branch**: claude/project-thread-c3olht
 - **Started**: 2026-10-19
-- **Phase**: tasks
-- **Next step**: tasks unit: speckit-analyze, tasks review
+- **Phase**: design-pr
+- **Next step**: orchestrator opens the design PR (title/body in the scratchpad); after merge: milestone M1
 
 ## Pull requests
 
@@ -41,6 +41,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | Spec | 2 | fddeb540b934ab3d57ea2fc9d3a6deb18973bed2:a47882ccc0f123e0a991ca87f46e40c20c50dc73 | CLEAN (2 MINOR, fixed prose only) |
 | Plan | 1 | c266bc56ee3e8390242f9f9ac5837d2be0fac6a9:074c8404d1ad2213236588c1fda9287d199b7d25 | CHANGES: 1 MAJOR (F1 DWIM remote-branch copy counted as created; fixed: R2 rule 3 drops a same-name remote copy, narrower than suggested so `switch -c x origin/main` still counts), 1 MINOR (F2 source on Err(Unavailable); fixed) |
 | Plan | 2 | 10adbf465724a6cc47c51564250b6a409eeadb77:78604c31bcfb0b9e25d7865a5e0193932fee29a6 | CLEAN (1 MINOR wrap, fixed prose only) |
+| Tasks | 1 | 2e2d92e5e664b0fd615696e35713ac0ca7c21346:190120bc88951f940720a69dafb552a7213128ef | CLEAN (1 MINOR: T027 visual pass covers §B step 4; fixed prose only) |
 
 ## Declined review findings
 
