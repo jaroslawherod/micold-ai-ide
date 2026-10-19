@@ -157,8 +157,15 @@ pub fn daemon_env() -> BTreeMap<String, String> {
         ("MICOLD_IDLE_STOP".to_string(), "off".to_string()),
         ("MICOLD_REPOS_ROOT".to_string(), REPOS_ROOT.to_string()),
     ]);
-    env.extend(crate::scoped_credential::git_env(
+    // The pod's daemon is not on `PATH`: name it by the build directory the client installs it in
+    // (quoted so the shell git runs the helper through expands `$HOME`).
+    let daemon = format!(
+        "\"{}/micold-daemon\"",
+        crate::ssh::argv::remote_dir(&crate::ssh::argv::current_build_id())
+    );
+    env.extend(crate::scoped_credential::git_env_with_helper(
         crate::scoped_credential::GITHUB_BASE,
+        &daemon,
     ));
     env
 }
@@ -300,6 +307,16 @@ mod tests {
         assert_eq!(env["MICOLD_IDLE_STOP"], "off");
         assert_eq!(env["MICOLD_REPOS_ROOT"], "/data/repos");
         for (key, value) in crate::scoped_credential::git_env("https://github.com") {
+            if key == "GIT_CONFIG_VALUE_1" {
+                // The pod's daemon is named by its build directory, not found on PATH.
+                assert!(
+                    env[&key].starts_with("!\"$HOME/.micold/remote/")
+                        && env[&key].ends_with("/micold-daemon\" git-credential"),
+                    "{key}: {}",
+                    env[&key]
+                );
+                continue;
+            }
             assert_eq!(env[&key], value, "{key}");
         }
         assert!(!env.keys().any(|k| k.contains("SSH") || k.contains("TOKEN")));

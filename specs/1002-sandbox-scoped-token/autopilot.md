@@ -68,6 +68,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 red-CI fix D18 (sonnet) | 1 | 045a4f1811c6371aa92bff326aa70e42bbdbbf38:8e97a4027dbbf4c58e3fd6b7c40a4ecc5f8d5971 | CLEAN |
 | M2 A (code-review high) | 1 | 0c7576a111f7bca073769e7193c66f5d11d9aac6:07ad3c1f936358fd25ecf021e7009459c9ca2458 | CHANGES (F1 MAJOR fixed: value-with-userinfo and smtp/imap keys dropped, contract §3 updated; F2 MINOR kube tests need git, as CI has it; F3 MINOR git>=2.31 noted) |
 | M2 B (conformance, sonnet) | 1 | 70552b50588c4b06e4e005f3105dcb4274fe43dc:07ad3c1f936358fd25ecf021e7009459c9ca2458 | CLEAN (2 MINOR left: proxyAuthMethod drop is harmless; client test skips without git) |
+| M3 A (code-review high) | 1 | c75e6c9544fffc82c433e36f5fe2f5bbbfc143ae:7b33318943986e21f128454d80907d89e9890a85 | CHANGES (F1 MAJOR fixed: kube pod's daemon is not on PATH, so kube daemon_env names it by its build dir via git_env_with_helper; F2–F7 MINOR declined, below) |
+| M3 A (sonnet) | 2 | fb5dee54b57bf5ff0f8af7c3389b5cad4ecf069d:7b33318943986e21f128454d80907d89e9890a85 | CLEAN (3 MINOR: no start-level test of the helper path, no direct git_env_with_helper test, a daemon already running keeps its old env) |
 | M3 B (conformance + correctness, sonnet; one reviewer for A and B) | 1 | f62bba4f347d8a6361d83cac442b621f119d2a6f:79e2d3e0e3335139d58a5d999979f26b0472e0b0 | CLEAN (2 MINOR: no tdd/cycle-log.md; sandbox_argv run collided with a build, green in the gate). Review A as the `code-review` skill not run separately |
 
 ## Declined review findings
@@ -75,6 +77,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 - M1 B F1 [MAJOR] no `tdd/cycle-log.md` red evidence for T002–T005, T008, T009 (Constitution I): declined — already decided in D16 (tests kept as written, each asserts the removed item's absence), and the PR body discloses that those tests came after the code. Re-deriving red runs would mean reverting the removal against tests that no longer compile on the old code.
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| M3 | A | F2 [MINOR] insteadOf hardcodes github.com | base is always GITHUB_BASE (contract git-in-container.md §1) |
+| M3 | A | F3/F4 [MINOR] pod drift stamp lacks the git volume; emptyDir mode | pods are rebuilt on a new image/spec stamp; one uid in the pod, so the daemon is the only reader; follow-up |
+| M3 | A | F5 [MINOR] no expiry margin | the Schedule (M4) renews 10 min before expiry |
+| M3 | A | F6/F7 [MINOR] test comment, main.rs dispatch | taste |
 
 ## Handover
 
