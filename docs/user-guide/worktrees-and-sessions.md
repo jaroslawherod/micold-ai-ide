@@ -532,7 +532,9 @@ taken. The issue's labels choose the **Type** (see below); you can change it bef
 
 With **Offer GitHub issues when creating worktrees** unchecked in [Settings →
 GitHub](settings.md#github-issues), the form never shows **GitHub issue** and the app makes no GitHub
-issue request when you open it; the Overview does not look up issue titles on GitHub either.
+issue request when you open it; the Overview does not look up issue titles on GitHub either. A form
+that is already open follows the switch at once: turning it off drops the GitHub list and any pick,
+turning it on offers GitHub issues again, with no restart.
 
 **What you need.** The app reads issues through the GitHub CLI, `gh`, so install it from
 [cli.github.com](https://cli.github.com) and sign in once with `gh auth login` in a terminal. The app

@@ -692,6 +692,7 @@ pub(crate) fn save_and_prepare_check(
         baseline.as_ref().map(|b| &b.github_issues_enabled),
     ) {
         app.core.settings.github_issues_enabled = enabled;
+        crate::shell::issues::sync_github_issues_availability(app);
     }
     // Feature 490: in force here at once, as the fields above are; the service's echo agrees.
     app.core.plan_usage.settings(

@@ -352,6 +352,18 @@ pub fn sync_jira_availability(app: &mut App) {
         .update(Message::WorktreeForm(FormMsg::JiraSettingsChanged(jira)));
 }
 
+/// The GitHub issues switch in force changed (feature 1102, FR-005): tell the open form, which
+/// drops a GitHub list and discards a load in flight when it went off, and offers GitHub again
+/// when it went on.
+pub fn sync_github_issues_availability(app: &mut App) {
+    if app.core.worktree_form.form.is_none() {
+        return;
+    }
+    let enabled = app.core.settings.github_issues_enabled;
+    app.core
+        .update(Message::WorktreeForm(FormMsg::GithubIssuesChanged(enabled)));
+}
+
 /// Why a Jira request asked nothing: no token file on this host (plan risks, multi-daemon).
 const NO_TOKEN: &str = "no API token is stored on this computer for this project: enter your token in Settings > Jira.";
 
