@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-c3olht
 - **Started**: 2026-10-19
 - **Phase**: tasks
-- **Next step**: tasks unit
+- **Next step**: tasks unit: speckit-analyze, tasks review
 
 ## Pull requests
 
@@ -21,6 +21,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
+| M1 | T001–T014 | full | Every PR of the worktree's branch set listed (number, title, state), each diff reachable | — | pending |
+| M2 | T015–T021 | full | Check mark on every entry, one mapping shared with the sidebar | — | pending |
+| M3 | T022–T031 | full | Header + previous/next; selection and header hold across refreshes (US2 + US3) | — | pending |
+| M4 | T032–T036 | full | Loading, empty and unavailable lines | — | pending |
 
 ## Decisions
 
