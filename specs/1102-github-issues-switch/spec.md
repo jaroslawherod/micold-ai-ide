@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-19
 
-**Status**: Closed 2026-10-19 — shipped in PRs #1112, #1114, #1133
+**Status**: Closed 2026-10-19 — shipped in PRs #1112, #1114, #1133, #1138
 
 **Input**: Issue #1102: "The Jira integration has an on/off switch (`jira_enabled`), but the GitHub issues integration has none: it is always on. A project that tracks its work only in Jira, or does not want GitHub issues offered at all, still gets GitHub issues in the New worktree form and pays for the GitHub calls that load them. A setting, like `jira_enabled`, that turns the GitHub issues integration off. When it is off, GitHub issues are not loaded or offered as an issue source, and no GitHub issue requests are made."
 
