@@ -12,3 +12,12 @@
 
 Activity markup (M2), the header band (M4) and the other §B rows are checked in later milestones.
 Screenshots: `visual-pass/b6-*.png`.
+
+## M2 (quickstart §B6, M2 part), 2026-10-19, light scheme, showcase Overview card entry (12 poses)
+
+| Check | Result |
+|---|---|
+| Activity line without markup | PASS: the "with activity" card reads `Continue M2 · 2/5`; its input is an orchestrator `<agent-message>` wrapping "Continue M2" (showcase `surfaces.rs`) |
+| No `<`, tag or attribute on any card | PASS (12 cards) |
+
+Screenshots: `visual-pass/b6-m2-*.png`.
