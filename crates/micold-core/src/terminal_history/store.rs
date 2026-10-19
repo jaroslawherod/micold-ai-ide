@@ -10,6 +10,9 @@ use super::format::CHECKSUM_BYTES;
 use super::{decode, encode, DamageReason, HistorySnapshot, MAX_FILE_BYTES};
 use crate::owner_only;
 use crate::session::SessionId;
+use crate::structured::{
+    decode_events, encode_events, SequencedEvent, StructuredEvent, MAX_EVENTS_FILE_BYTES,
+};
 
 /// What a session's saved history turned out to be (data-model §3).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -19,6 +22,46 @@ pub enum LoadOutcome {
     History(HistorySnapshot),
     /// A file is there and cannot be shown.
     Damaged(DamageReason),
+}
+
+/// What a structured session's saved event history turned out to be (feature 938, research R14).
+#[derive(Debug, Clone, PartialEq)]
+pub enum EventsLoad {
+    /// No event history is saved for the session.
+    None,
+    /// The events it retained, oldest first, after `omitted` evicted ones.
+    Events {
+        omitted: u64,
+        events: Vec<StructuredEvent>,
+    },
+    /// A file is there and cannot be shown.
+    Damaged(DamageReason),
+}
+
+/// The two kinds of file a session can have saved: its terminal history and, for a structured
+/// session, its event history.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+enum FileKind {
+    Terminal,
+    Events,
+}
+
+impl FileKind {
+    const ALL: [FileKind; 2] = [FileKind::Terminal, FileKind::Events];
+
+    fn extension(self) -> &'static str {
+        match self {
+            FileKind::Terminal => "history",
+            FileKind::Events => "events",
+        }
+    }
+
+    fn read_cap(self) -> u64 {
+        match self {
+            FileKind::Terminal => MAX_FILE_BYTES,
+            FileKind::Events => MAX_EVENTS_FILE_BYTES,
+        }
+    }
 }
 
 /// What a save did.
@@ -79,8 +122,8 @@ struct State {
     /// The directory could not be listed when files were to be deleted: nothing is loaded and the
     /// deletion is tried again as a whole (FR-033).
     unlisted: bool,
-    /// The checksum of the file last written for each session by this store.
-    last_written: HashMap<SessionId, [u8; CHECKSUM_BYTES]>,
+    /// The checksum of the file last written for each session and kind by this store.
+    last_written: HashMap<(SessionId, FileKind), [u8; CHECKSUM_BYTES]>,
     /// Sessions that were removed. A save for one writes nothing, also when it began before the
     /// removal, and its file is never loaded (FR-023). Ids are never reused.
     forgotten: HashSet<SessionId>,
@@ -167,11 +210,13 @@ impl HistoryStore {
         let mut failures = Vec::new();
         for id in ids {
             state.forgotten.insert(*id);
-            state.last_written.remove(id);
-            let name = file_name(*id);
-            for name in [format!(".{name}.tmp"), name] {
-                let path = self.dir.join(&name);
-                failures.extend(Self::remove_tracked(state, &path, &name, Some(*id), true));
+            for kind in FileKind::ALL {
+                state.last_written.remove(&(*id, kind));
+                let name = file_name(*id, kind);
+                for name in [format!(".{name}.tmp"), name] {
+                    let path = self.dir.join(&name);
+                    failures.extend(Self::remove_tracked(state, &path, &name, Some(*id), true));
+                }
             }
         }
         failures
@@ -198,7 +243,9 @@ impl HistoryStore {
         };
         for entry in entries.flatten() {
             let name = entry.file_name().to_string_lossy().into_owned();
-            let kept = name.ends_with(".history")
+            let kept = FileKind::ALL
+                .iter()
+                .any(|kind| name.ends_with(&format!(".{}", kind.extension())))
                 && !name.starts_with('.')
                 && session_of(&name).is_some_and(|id| keep.contains(&id));
             if kept || entry.file_type().is_ok_and(|kind| kind.is_dir()) {
@@ -287,10 +334,30 @@ impl HistoryStore {
     /// file (contracts/saved-history-file.md §3). Blocks on the disk: call it off the async
     /// runtime.
     pub fn save(&self, id: SessionId, snapshot: &HistorySnapshot) -> io::Result<SaveOutcome> {
+        self.save_with(id, FileKind::Terminal, || encode(snapshot))
+    }
+
+    /// Write a structured session's event history, which evicted `omitted` events and retains
+    /// `events`, as `<id>.events`, by the rules of [`Self::save`] (research R14).
+    pub fn save_events(
+        &self,
+        id: SessionId,
+        omitted: u64,
+        events: &[SequencedEvent],
+    ) -> io::Result<SaveOutcome> {
+        self.save_with(id, FileKind::Events, || encode_events(omitted, events))
+    }
+
+    fn save_with(
+        &self,
+        id: SessionId,
+        kind: FileKind,
+        encode: impl FnOnce() -> Vec<u8>,
+    ) -> io::Result<SaveOutcome> {
         if !self.lock().enabled {
             return Ok(SaveOutcome::Skipped(SkipReason::Disabled));
         }
-        let bytes = encode(snapshot);
+        let bytes = encode();
         let checksum = checksum_of(&bytes);
         let mut state = self.lock();
         // Checked again under the lock a deletion holds: a save that raced the setting being
@@ -301,34 +368,23 @@ impl HistoryStore {
         if state.forgotten.contains(&id) {
             return Ok(SaveOutcome::Skipped(SkipReason::Forgotten));
         }
-        if state.last_written.get(&id) == Some(&checksum) {
+        if state.last_written.get(&(id, kind)) == Some(&checksum) {
             return Ok(SaveOutcome::Unchanged);
         }
         if !self.create_dir && !self.dir.is_dir() {
             return Ok(SaveOutcome::Skipped(SkipReason::NoDirectory));
         }
-        owner_only::write(&self.dir, &file_name(id), &bytes)?;
-        state.undeleted.remove(&file_name(id));
-        state.last_written.insert(id, checksum);
+        let name = file_name(id, kind);
+        owner_only::write(&self.dir, &name, &bytes)?;
+        state.undeleted.remove(&name);
+        state.last_written.insert((id, kind), checksum);
         Ok(SaveOutcome::Saved)
     }
 
     /// The saved history of `id`: the whole of it, none, or why it cannot be shown. Never part of
     /// a file.
     pub fn load(&self, id: SessionId) -> LoadOutcome {
-        let read = {
-            let state = self.lock();
-            // A history that was to be deleted never comes back (story 2 scenario 7).
-            if !state.enabled
-                || state.unlisted
-                || state.forgotten.contains(&id)
-                || state.undeleted.contains(&file_name(id))
-            {
-                return LoadOutcome::None;
-            }
-            read_capped(&self.dir.join(file_name(id)))
-        };
-        match read {
+        match self.read(id, FileKind::Terminal) {
             Ok(Some(bytes)) => match decode(&bytes) {
                 Ok(snapshot) => LoadOutcome::History(snapshot),
                 Err(reason) => LoadOutcome::Damaged(reason),
@@ -338,6 +394,34 @@ impl HistoryStore {
         }
     }
 
+    /// The saved event history of `id`: the whole of it, none, or why it cannot be shown. Never
+    /// part of a file (FR-021c).
+    pub fn load_events(&self, id: SessionId) -> EventsLoad {
+        match self.read(id, FileKind::Events) {
+            Ok(Some(bytes)) => match decode_events(&bytes) {
+                Ok((omitted, events)) => EventsLoad::Events { omitted, events },
+                Err(reason) => EventsLoad::Damaged(reason),
+            },
+            Ok(None) => EventsLoad::None,
+            Err(reason) => EventsLoad::Damaged(reason),
+        }
+    }
+
+    /// The bytes of `id`'s file of `kind`; `None` when saving is off, the file was to be deleted,
+    /// the session was removed or there is no file.
+    fn read(&self, id: SessionId, kind: FileKind) -> Result<Option<Vec<u8>>, DamageReason> {
+        let state = self.lock();
+        // A history that was to be deleted never comes back (story 2 scenario 7).
+        if !state.enabled
+            || state.unlisted
+            || state.forgotten.contains(&id)
+            || state.undeleted.contains(&file_name(id, kind))
+        {
+            return Ok(None);
+        }
+        read_capped(&self.dir.join(file_name(id, kind)), kind.read_cap())
+    }
+
     /// The state, also after a thread panicked while holding it: it is plain data that is whole
     /// between any two statements.
     fn lock(&self) -> MutexGuard<'_, State> {
@@ -345,21 +429,28 @@ impl HistoryStore {
     }
 }
 
-/// `<session uuid>.history`, the uuid hyphenated and lower-case as the catalog writes it.
-fn file_name(id: SessionId) -> String {
-    format!("{}.history", id.0.as_hyphenated())
+/// `<session uuid>.history` or `.events`, the uuid hyphenated and lower-case as the catalog
+/// writes it.
+fn file_name(id: SessionId, kind: FileKind) -> String {
+    format!("{}.{}", id.0.as_hyphenated(), kind.extension())
 }
 
-/// Whether `name` is a saved file or the temporary file a save writes through.
+/// Whether `name` is a saved file of either kind or the temporary file a save writes through.
 fn is_history_file(name: &str) -> bool {
-    name.ends_with(".history") || (name.starts_with('.') && name.ends_with(".history.tmp"))
+    FileKind::ALL.iter().any(|kind| {
+        let extension = kind.extension();
+        name.ends_with(&format!(".{extension}"))
+            || (name.starts_with('.') && name.ends_with(&format!(".{extension}.tmp")))
+    })
 }
 
 /// The session a saved file's name says it belongs to.
 fn session_of(name: &str) -> Option<SessionId> {
     let stem = name.strip_prefix('.').unwrap_or(name);
     let stem = stem.strip_suffix(".tmp").unwrap_or(stem);
-    let stem = stem.strip_suffix(".history")?;
+    let stem = stem
+        .strip_suffix(".history")
+        .or_else(|| stem.strip_suffix(".events"))?;
     uuid::Uuid::parse_str(stem).ok().map(SessionId)
 }
 
@@ -371,21 +462,21 @@ fn checksum_of(file: &[u8]) -> [u8; CHECKSUM_BYTES] {
 }
 
 /// The bytes of the file at `path`, `None` when there is no such file. Checks 1 and 2 of the
-/// contract's §4: a file that does not open or read is `Unreadable`, and one longer than
-/// [`MAX_FILE_BYTES`] is `TooLarge` without its content being read.
-fn read_capped(path: &Path) -> Result<Option<Vec<u8>>, DamageReason> {
+/// contract's §4: a file that does not open or read is `Unreadable`, and one longer than `cap` is
+/// `TooLarge` without its content being read.
+fn read_capped(path: &Path, cap: u64) -> Result<Option<Vec<u8>>, DamageReason> {
     let unreadable = |error: io::Error| DamageReason::Unreadable(error.kind());
     let file = match File::open(path) {
         Ok(file) => file,
         Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
         Err(error) => return Err(unreadable(error)),
     };
-    if file.metadata().map_err(unreadable)?.len() > MAX_FILE_BYTES {
+    if file.metadata().map_err(unreadable)?.len() > cap {
         return Err(DamageReason::TooLarge);
     }
     // The length is that of a moment ago: a file that grew since is still not read past the cap.
     let mut bytes = Vec::new();
-    file.take(MAX_FILE_BYTES + 1)
+    file.take(cap + 1)
         .read_to_end(&mut bytes)
         .map_err(unreadable)?;
     Ok(Some(bytes))
