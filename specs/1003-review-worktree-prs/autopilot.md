@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-c3olht
 - **Started**: 2026-10-19
 - **Phase**: plan
-- **Next step**: plan unit (clarify CLEAN: 1 round, 1 question agent-resolved)
+- **Next step**: plan unit, continuing a handover: plan review round 1
 
 ## Pull requests
 
@@ -42,7 +42,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-None.
+Plan unit (context over 150k). Done: `speckit-plan` ran; plan.md, research.md, data-model.md, contracts/pull-request-list.md, contracts/changes-view.md and quickstart.md written and committed (no plan review yet). No PR (design PR comes later). Previous PR: none; branch rebased on origin/main by branch-start.sh. Next: plan review round 1 (tasks/review.md with rubrics/plan.md, round-1 model), act on it (tasks/review-rounds.md), then set Next step to `tasks unit` and return DONE. Key decisions to let the reviewer test: branch set derived from the worktree's HEAD reflog + branch reflogs read with local git (research R1/R2, deleted-branch records count as created), multi-branch GraphQL in chunks of 25 (R3), checks shown on every state (R4), `Err(Unavailable)` keeps the last list (R5). Open findings: none.
 
 ## Open escalation
 
