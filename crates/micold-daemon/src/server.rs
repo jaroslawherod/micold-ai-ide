@@ -2681,7 +2681,10 @@ fn sync_terminal_streams(
         }
         // One with no stream in this run yet but a saved event history is restored from it first,
         // off the runtime's threads (research R14). One that never ran has nothing to show.
-        if t.process == SessionProcess::Primary && state.has_saved_events(t.session) {
+        if t.process == SessionProcess::Primary
+            && state.session_kind(t.session) == Some(micold_core::session::SessionKind::Structured)
+            && state.has_saved_events(t.session)
+        {
             let (state, session, tx) = (Arc::clone(state), t.session, tx.clone());
             let handle = tokio::spawn(async move {
                 let loading = Arc::clone(&state);

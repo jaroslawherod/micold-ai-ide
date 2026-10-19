@@ -4546,7 +4546,8 @@ impl DaemonState {
 
     /// `id`'s event stream, made when this daemon run has none yet: restored from the saved event
     /// history when there is one, else empty when `create` (the structured spawn), else `None`
-    /// (a viewer of a session that never ran). The one call the spawn and the view path share, so
+    /// (a viewer of a session that never ran); `None` also when the session was removed or archived
+    /// meanwhile, whatever `create` says. The one call the spawn and the view path share, so
     /// two first users agree on one stream (research R14). The file is read **off the state lock**
     /// and the result inserted only if still absent. **Blocking**.
     ///
@@ -4566,6 +4567,7 @@ impl DaemonState {
             inner.event_bounds
         };
         let mut restored_at = None;
+        let mut damaged = false;
         let loaded = match self.history_store.get().map(|store| store.load_events(id)) {
             Some(EventsLoad::Events { omitted, events }) => {
                 let stream = crate::structured::EventStream::restored(omitted, events, bounds);
@@ -4578,10 +4580,7 @@ impl DaemonState {
                     %reason,
                     "the saved event history could not be read; starting without it"
                 );
-                self.saver
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .events_started_damaged(id);
+                damaged = true;
                 Some(crate::structured::EventStream::with_bounds(bounds))
             }
             Some(EventsLoad::None) | None => {
@@ -4602,6 +4601,13 @@ impl DaemonState {
         let stream = match inner.event_streams.entry(id) {
             std::collections::hash_map::Entry::Occupied(entry) => Arc::clone(entry.get()),
             std::collections::hash_map::Entry::Vacant(entry) => {
+                if damaged {
+                    // The next save replaces the file (FR-021c).
+                    self.saver
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        .events_started_damaged(id);
+                }
                 if let Some(count) = restored_at {
                     // The file already holds it all: saved again only after a new event.
                     self.saver

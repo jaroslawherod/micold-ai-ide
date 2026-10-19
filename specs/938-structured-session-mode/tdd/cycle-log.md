@@ -227,3 +227,7 @@ Append only. Newest last.
   `ok. 10 passed`, 3 of 3 runs. The damaged case is checked through the structured spawn (the log
   capture is per thread) and the view of a stopped session separately.
 - refactor: none beyond sharing `logged_warnings` in `support/history.rs`.
+- review A round 2 (MINORs fixed): `HistoryStore::has_events` is one `stat` with no store lock, and the
+  view path asks it only for a structured session; a damaged load is recorded for the schedule only
+  when the stream is inserted. New `no_stream_is_made_for_a_removed_session` (test-after: the guard
+  came with review A round 1's fix); `ok. 12 passed` in `structured_saved_history`.
