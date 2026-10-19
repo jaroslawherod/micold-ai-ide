@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1003
 - **Worktree branch**: claude/project-thread-c3olht
 - **Started**: 2026-10-19
-- **Phase**: clarify
-- **Next step**: clarify unit (one [NEEDS CLARIFICATION] in FR-002)
+- **Phase**: plan
+- **Next step**: plan unit (clarify CLEAN: 1 round, 1 question agent-resolved)
 
 ## Pull requests
 
@@ -24,6 +24,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Decisions
 
+- Clarify round 1: FR-002 branch set = current branch + branches created in the worktree; branches only checked out there do not count (agent-resolved from issue #1003 acceptance criteria and the spec's edge case). Records an existing rule, so no further round.
 | # | Phase | Question | Answer | By | Evidence |
 |---|---|---|---|---|---|
 

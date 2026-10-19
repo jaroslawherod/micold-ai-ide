@@ -18,6 +18,12 @@ Feature 775 added a **Pull requests** section to the Review changes view (the Ch
 
 This feature closes those gaps. It keeps everything 775 shipped that this spec does not change (read-only, GitHub data, per-entry selection, no error notice when PR information is unavailable). One 775 behaviour changes on purpose: with no GitHub access the section is no longer absent but shows one muted line (FR-011), so the user can tell it apart from "no pull requests".
 
+## Clarifications
+
+### Session 2026-10-19
+
+- Q: Should branches merely checked out in the worktree (created elsewhere) count toward its pull requests, or only branches created in it? → A: Only branches created in the worktree, plus its current branch; a branch only checked out there does not count. _(agent-resolved: issue #1003 acceptance criteria "PRs whose head branch(es) were created in the worktree"; spec.md#Edge Cases, default/other branch it did not create)_
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - See every pull request the worktree produced (Priority: P1)
@@ -120,7 +126,7 @@ A worktree with no pull requests shows a short line saying so, so "none yet" is 
 ### Functional Requirements
 
 - **FR-001**: Review changes MUST list the pull requests whose head branch is any branch of the worktree's branch set (FR-002), in the worktree's project repository, of every state: open, draft, merged and closed.
-- **FR-002**: A worktree's branch set MUST be its current branch plus every branch that was created in that worktree, known from the worktree's own record so it survives app and daemon restarts without new stored app state. The repository's default branch is never part of the set. [NEEDS CLARIFICATION: should branches merely checked out in the worktree (created elsewhere) also count, or only branches created in it?]
+- **FR-002**: A worktree's branch set MUST be its current branch plus every branch that was created in that worktree, known from the worktree's own record so it survives app and daemon restarts without new stored app state. A branch only checked out in the worktree but created elsewhere (another worktree, the remote, the main checkout) is not part of the set unless it is the current branch. The repository's default branch is never part of the set.
 - **FR-003**: Each entry MUST show the pull request's number, title, state and check status. Check status is one of passing, failing, pending or none, computed and marked the same way as the sidebar's PR checks.
 - **FR-004**: Entries MUST be ordered newest first by creation time, across all branches of the set; equal times put the higher number first.
 - **FR-005**: Pressing an entry MUST select it and show that pull request's base...head diff from GitHub's data, in the view's existing file list, layouts and per-file display (775 FR-004).
