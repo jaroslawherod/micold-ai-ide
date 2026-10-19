@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1120
 - **Worktree branch**: claude/project-thread-7041o6
 - **Started**: 2026-10-19
-- **Phase**: implement M2
-- **Next step**: M2 implement (T012–T020), then gate, reviews, PR
+- **Phase**: verify M2
+- **Next step**: M2 review A (code-review high), review B (conformance, sonnet) and visual pass dispatched by the orchestrator; then fixes, full gate, PR
 
 ## Pull requests
 
@@ -57,7 +57,10 @@ inequality + visual pass).
 | M1 review B | 1 | 60d84141b9749fbe478ec83d7417912026602853:79beca3120025c93ca35a5afce3057b1bc99cd41 | CLEAN (sonnet). Verify: core lib 1177 pass, client overview_card 31 pass |
 | M1 review A | 2 | b84fc13b161e9db574b4cb10cf8aaa0fd4a8c3da:7bedf881e7dbecf6edac2fba83a352f27d5f15d8 | CLEAN (sonnet): all four fixes hold. MINOR spec.md:14 summary wording: fixed, prose only |
 | M1 visual pass | 1 | 60d84141…:79beca31… | PASS §B6 M1 part (`visual-pass.md`); `Feature · ` before the sessions line is T010's interim footer until M4 moves the type word to the header |
-
+| M2 review A | 1 | 4a0f489eaa18bed6412195bd51512c5d9f8f3226:1751ce27ce85ca46c61ef2b4dae2994d350bac63 | pending (orchestrator dispatches) |
+| M2 review B | 1 | 4a0f489eaa18bed6412195bd51512c5d9f8f3226:1751ce27ce85ca46c61ef2b4dae2994d350bac63 | pending (orchestrator dispatches) |
+| M2 visual pass | 1 | 4a0f489eaa18bed6412195bd51512c5d9f8f3226:1751ce27ce85ca46c61ef2b4dae2994d350bac63 | pending (orchestrator dispatches) |
+M2 full gate (`scripts/gate.sh`) green at 1751ce27; its scoped gate's one red was the same root-only settings test.
 M1 full gate (`scripts/gate.sh`) green at 79beca31 (the scoped gate's one red was the root-only settings test that `scripts/gate.sh` runs unprivileged).
 
 ## Declined review findings
