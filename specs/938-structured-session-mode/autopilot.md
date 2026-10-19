@@ -85,6 +85,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M6 review A (code-review high) | 1 | 0ad26a1db386ecc3b9daf44ff41c705785387658:f7da76abb46db0eda52a1df692dac5b491e8552f | 7 findings: 1 MAJOR fixed (resize with no process dropped the shells' size), 2 MINOR fixed, 4 declined |
 | M6 review B (conformance, sonnet) | 1 | 0ad26a1db386ecc3b9daf44ff41c705785387658:f7da76abb46db0eda52a1df692dac5b491e8552f | CHANGES: 1 MAJOR (no cycle-log entry; fixed), 2 MINOR fixed |
 | M6 review A (code-review high, sonnet) | 2 | b480bc7d5293b1a1ab13b1adb3bc08e3e17fe1e0:bca89db402cd6b67058a8a23a550fe616acf75d7 | 1 MAJOR fixed (a process-less resize was refused and applied; now not refused), 1 MINOR fixed (SessionResize doc), 3 MINOR declined; fix verified by test, no round 3 |
+| M7 review A (code-review high) | 1 | 1f22e8f07fbc422f09a973efac33dd9d5ffb049a:768105c2827677d4dc7fe93d49a6096d35646df4 | 8 findings, none BLOCKER/MAJOR: fixed 5 (stream made for a session removed during the load; stop-save blocked on the gate with saving off; restored stream re-saved at once; viewer task could end just before the stream was made; event failures shared the terminal's warning key) plus the duplicated NoDirectory note and schedule bookkeeping; 2 declined |
+| M7 review B (conformance) | 1 | 1f22e8f07fbc422f09a973efac33dd9d5ffb049a:768105c2827677d4dc7fe93d49a6096d35646df4 | CHANGES: 1 MAJOR (no red for T049/T050; fixed by showing 11 of 37 failing against stubs, cycle-log), 1 MINOR declined |
 
 ## Declined review findings
 
@@ -126,6 +128,9 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M6 | A 5 | scrollback and interrupt carry no process field | wire.md addresses them to the attached process; adding a field is a wire change outside T033–T036
 | M6 | A 7 | `refuses_terminal_request` duplicates target resolution | it needs the kind under the same lock as the attached process; reusing `session_kind` plus `attached_process` would take two locks
 | M6 | A2 4-6 | served test checks no refusal not the ^C target; new test lacks a no-shell case and repeats setup; nested `if !refuse(..)` | the contract is the reply; setup is the file's existing pattern (three cases); edition 2021 has no let-chains
+| M7 | A 3 | the snapshot clones the whole history under the history lock and encoding copies it again | R14 specifies a snapshot under the history lock then encoding off the lock; at most once per 30 s and only after a new event; a borrowed-view encoder is a later optimisation |
+| M7 | A 8 | the store mutex is held across the file read | 041's own design: a save and a read of one file never interleave (module doc); the terminal `load` does the same |
+| M7 | B 2 | scenario 8 (removal racing a save) has no daemon-level test | the daemon's save goes through `HistoryStore::save_events`, whose forgotten check under the lock is tested in `terminal_history_store`; the daemon test covers the save after removal |
 
 ## Handover
 

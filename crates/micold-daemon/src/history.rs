@@ -464,11 +464,9 @@ impl Saver {
             .retain(|id, _| streams.iter().any(|(live, _)| live == id));
         let mut due = Vec::new();
         for &(id, count) in streams {
-            let schedule = self
-                .event_schedules
-                .entry(id)
-                .or_insert_with(|| SaveSchedule::new(0));
-            if self.events_start_due.remove(&id) {
+            let start_due = self.events_start_due.remove(&id);
+            let schedule = self.event_schedule(id);
+            if start_due {
                 schedule.mark_due();
             }
             if schedule.due(now, count) {
@@ -494,20 +492,27 @@ impl Saver {
 
     /// `id`'s event history was saved at `now` as of `count`.
     pub fn events_saved(&mut self, id: SessionId, now: Instant, count: u64) {
+        self.event_schedule(id).saved(now, count);
+    }
+
+    /// `id`'s event stream was restored from a file holding all of it as of `count`: nothing to
+    /// save until a new event comes.
+    pub fn events_restored(&mut self, id: SessionId, count: u64) {
+        self.events_saved(id, Instant::now(), count);
+    }
+
+    fn event_schedule(&mut self, id: SessionId) -> &mut SaveSchedule {
         self.event_schedules
             .entry(id)
             .or_insert_with(|| SaveSchedule::new(0))
-            .saved(now, count);
     }
 
     /// A save of `id`'s event history failed at `now` for `reason`: due again later. Returns
     /// whether this is the first time the reason is seen for the session.
     pub fn events_failed(&mut self, id: SessionId, now: Instant, reason: &str) -> bool {
-        self.event_schedules
-            .entry(id)
-            .or_insert_with(|| SaveSchedule::new(0))
-            .failed(now);
-        self.logged.insert((id, reason.to_string()))
+        self.event_schedule(id).failed(now);
+        // Apart from a terminal's failure of the same reason: each is its own warning.
+        self.logged.insert((id, format!("events: {reason}")))
     }
 
     /// The deletion of a file of `id` failed for `reason`. Returns whether this is the first time

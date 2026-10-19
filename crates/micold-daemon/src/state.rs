@@ -4532,9 +4532,9 @@ impl DaemonState {
         spec: &LaunchSpec,
         extra: &[OsString],
     ) -> io::Result<Proc> {
-        let stream = self
-            .event_stream_loading(id, true)
-            .expect("a stream is created when asked to");
+        let stream = self.event_stream_loading(id, true).ok_or_else(|| {
+            io::Error::other("the session was removed before its event stream was made")
+        })?;
         StructuredSession::spawn(id, spec, extra, move |event| stream.push(event))
             .map(|child| Proc::Structured(Arc::new(child)))
     }
@@ -4565,10 +4565,13 @@ impl DaemonState {
             }
             inner.event_bounds
         };
+        let mut restored_at = None;
         let loaded = match self.history_store.get().map(|store| store.load_events(id)) {
-            Some(EventsLoad::Events { omitted, events }) => Some(
-                crate::structured::EventStream::restored(omitted, events, bounds),
-            ),
+            Some(EventsLoad::Events { omitted, events }) => {
+                let stream = crate::structured::EventStream::restored(omitted, events, bounds);
+                restored_at = Some(stream.next_seq());
+                Some(stream)
+            }
             Some(EventsLoad::Damaged(reason)) => {
                 tracing::warn!(
                     session = %id.0,
@@ -4586,12 +4589,37 @@ impl DaemonState {
             }
         }?;
         let mut inner = self.lock();
-        Some(Arc::clone(
-            inner
-                .event_streams
-                .entry(id)
-                .or_insert_with(|| Arc::new(loaded)),
-        ))
+        // A session removed while its file was read has no stream made for it: nothing would drop
+        // it again.
+        let kept = inner
+            .catalog
+            .workspace()
+            .find_session(id)
+            .is_some_and(|(_, session)| !session.archived);
+        if !kept {
+            return None;
+        }
+        let stream = match inner.event_streams.entry(id) {
+            std::collections::hash_map::Entry::Occupied(entry) => Arc::clone(entry.get()),
+            std::collections::hash_map::Entry::Vacant(entry) => {
+                if let Some(count) = restored_at {
+                    // The file already holds it all: saved again only after a new event.
+                    self.saver
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        .events_restored(id, count);
+                }
+                Arc::clone(entry.insert(Arc::new(loaded)))
+            }
+        };
+        Some(stream)
+    }
+
+    /// Whether `id` has a saved event history that a viewer would load (research R14).
+    pub fn has_saved_events(&self, id: SessionId) -> bool {
+        self.history_store
+            .get()
+            .is_some_and(|store| store.has_events(id))
     }
 
     /// The sessions that have an event stream in this daemon run.
@@ -4623,6 +4651,13 @@ impl DaemonState {
 
     /// [`Self::save_events_final`] under the session's gate, so a periodic save never lands after it.
     pub(crate) fn save_events_gated(&self, id: SessionId) {
+        if !self
+            .history_store
+            .get()
+            .is_some_and(|store| store.enabled())
+        {
+            return;
+        }
         let _gate = self.hold_gate(id);
         self.save_events_final(id);
     }
@@ -4635,15 +4670,10 @@ impl DaemonState {
         stream: &crate::structured::EventStream,
         now: Instant,
     ) {
-        use micold_core::terminal_history::{SaveOutcome, SkipReason};
         // Counted with the snapshot: an event pushed meanwhile is saved again later.
         let (omitted, events, count) = stream.saved_snapshot();
         let result = store.save_events(id, omitted, &events);
-        if matches!(result, Ok(SaveOutcome::Skipped(SkipReason::NoDirectory)))
-            && history::first_missing_directory(&self.history_directory_warned)
-        {
-            history::warn_directory_missing();
-        }
+        self.note_missing_directory(&result);
         let mut saver = self
             .saver
             .lock()
@@ -5547,14 +5577,22 @@ impl DaemonState {
         id: SessionId,
         snapshot: &micold_core::terminal_history::HistorySnapshot,
     ) -> std::io::Result<micold_core::terminal_history::SaveOutcome> {
-        use micold_core::terminal_history::{SaveOutcome, SkipReason};
         let outcome = store.save(id, snapshot);
+        self.note_missing_directory(&outcome);
+        outcome
+    }
+
+    /// The one warning for a save the store skipped for want of its directory (research R15).
+    fn note_missing_directory(
+        &self,
+        outcome: &std::io::Result<micold_core::terminal_history::SaveOutcome>,
+    ) {
+        use micold_core::terminal_history::{SaveOutcome, SkipReason};
         if matches!(outcome, Ok(SaveOutcome::Skipped(SkipReason::NoDirectory)))
             && history::first_missing_directory(&self.history_directory_warned)
         {
             history::warn_directory_missing();
         }
-        outcome
     }
 
     /// Write `id`'s history to its file. **Blocking**, and never under the state lock. A save
