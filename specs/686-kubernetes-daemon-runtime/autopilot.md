@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-xelisc
 - **Started**: 2026-10-17
 - **Phase**: implement
-- **Next step**: M9 pushed, gate green (scripts/gate.sh); PR files in the scratchpad (pr-title/pr-body-686-M9); orchestrator opens the PR, reads the kube-cluster job log and sends fixes. Then close.
+- **Next step**: M9 merged (#1047, real-cluster job green). Pin the basic image published from 6d1a4fbc (this PR), then the close unit: T097 visual pass, T098 converge, then close #686.
 
 ## Pull requests
 
@@ -28,6 +28,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1015 | M6 | merged | 9639f49ae112f0c73155642adb9dc4a1dfa34bf6 |
 | #1025 | M7 | merged | d6d74c272bd4bcc76d081ec171e2e63a00c448f1 |
 | #1028 | M8 | merged | cc09ae12641f04b1e7986941ca4ee152539e4d7b |
+| #1047 | M9 | merged | 6d1a4fbc733a9af12d53a079873bc566f85bac48 |
 
 ## Milestones
 
@@ -44,7 +45,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M6 | T138, T139, T141, T142, T033, T140 | full | (#806) AI CLI install, drift prompt, Add entry, user guide 🎯 MVP | — | merged (#1015) |
 | M7 | T047–T055, T100 | full | (#806) Clone + worktrees in the pod (RepoClone) | — | merged (#1025) |
 | M8 | T057, T058, T060, T061, T062, T101 | full | (#806) Reconnect; pod gone → stopped with reason | #1028 | merged |
-| M9 | T088–T096, T105 | full | (#806) kube_real_* suite, `mise run test-kube`, CI job kube-cluster | — | implemented, gate green, PR pending |
+| M9 | T088–T096, T105 | full | (#806) kube_real_* suite, `mise run test-kube`, CI job kube-cluster | #1047 | merged |
 Cut notes (revision 2): tasks.md "Revision 2 task map" lists kept/changed/removed T001–T105; new tasks T106–T143 (T137 unused; T143 is M1a's persistence test rework). Order: everything independent of #806 first (M1a–M4b, all `docs-not-needed`: Kubernetes cannot be added before M6), then the #806-blocked milestones (M5–M9). US1 split along the #806 boundary: connect (M5) before CLI install + Add entry (M6), so the Add entry appears only when US1.1 works (no half-wired UI). User-guide tasks T046/T071/T078/T087 folded into T033 (M6), since the guide page appears with the Add entry. Polish T097–T098: close unit.
 stash@{0} survivors (all used by M1a–M2, stash dropped 2026-10-18; backed up in /mnt/project-files/backups/686-m1-wip.bundle): keep `kubeconfig.rs` (T020/T026), `lifecycle.rs` (T079/T081), `manifest.rs` (T019, after the SSH image/env/port 2222/access-secret mount changes), `start_tests.rs` (T021, drop the `Image` phase and the volume-size refusal; `Tunnel` = identification line), `Quantity::{to_k8s, parse_k8s}`, `ResourceNames::all_secrets`, `ObjectKind::noun`, `KubeFailure::StopTimeout` + `From<ApiFailure>`, `FakeCluster::hold_on_delete`. Discard `StartPlan::for_image`. Design revision part 4: plan fixed by tasks unit — data-model StartPlan and contract §3 item 1 say `Tunnel` reads the identification line from one `Cluster::port_forward` stream; the client relay is first used in M5.
 
@@ -181,6 +182,15 @@ None. (The anchor-timing flake seen in earlier gate runs did not recur; gate8 gr
 - Not covered by the real suite, flagged for the orchestrator: T092's "remote needing the allowed git credential clones" and "withdrawal deletes the secret" (need an authenticated git server and allowed-credential fixtures; the unit tests A10–A12 over `FakeCluster` cover them) and the SC-002 600 s run (set `MICOLD_KUBE_AWAY_SECS=600`).
 - Not runnable here (no docker/kind/kubectl): the suite compiles (`cargo test -p micold-client --features kube-real-runtime --no-run`) and each test prints `SKIP <name>: <reason>` and passes. CI's `kube-cluster` log is the first real run; expect fixes (image/npm config, RBAC verbs, step names in the timing).
 - M9 review A F1 (dash `read -t`), F2 (namespaces rule needs a ClusterRole), F3 (pkill pattern): fixed. Review B F3: fixed (T088 text, harness comment). Review B F1 MAJOR (T092 credential withdrawal / authenticated clone): declined as a cut, not a miss: T092's text now marks both as deferred; the orchestrator should decide whether a follow-up task is wanted. F2 MINOR (one daemon build asserted): noted, not asserted.
+
+## M9 CI fixes 2–6 (the first real runs)
+
+- Fix 2: the access secret's host key data key is `host_ed25519_key`, the file sshd_config names (pinned by a test); a failed start waits up to 2 min until what it rolled back is gone.
+- Fix 3: the image's `micold` entry is uid 10001; in a local sandbox the entrypoint now replaces it with the host uid's (sshd resolved `micold` to 10001 and closed the connection).
+- Fix 4: the pod login was `dev`, a name the image does not have; now `POD_SSH_USER = "micold"` (pinned to the Containerfile).
+- Fix 5: `STATE_DIR` was the sandbox's `/var/lib/micold-ai-ide` on the pod's read-only root; now the daemon's data dir under the login's home, `/data/home/.local/share/micold-ai-ide` (pinned to `POD_HOME` and `paths::APP_ID`).
+- Fix 6: `pod_target` used only the idle-stop env, not `kube::credentials::daemon_env` (no `MICOLD_REPOS_ROOT`, no git credential settings); concurrent copies shared `<dir>/.part` (now `.part.$$`); the unreachable-source test expected a warning where US6.5/FR-012 require a failure naming the CLI.
+- Green on 703099f; merged as 6d1a4fbc. `BASIC_IMAGE` pinned in the follow-up PR.
 
 ## M9 CI fix 1
 
