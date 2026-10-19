@@ -154,7 +154,7 @@ pub fn wrap_value(value: &mut Value, daemon: DaemonId) {
         Value::Array(items) => items.iter_mut().for_each(|v| wrap_value(v, daemon)),
         Value::Object(map) => {
             for (key, v) in map.iter_mut() {
-                if PATH_KEYS.contains(&key.as_str()) && key != "cwd" {
+                if PATH_KEYS.contains(&key.as_str()) {
                     wrap_path(v, daemon);
                 } else {
                     wrap_value(v, daemon);
@@ -318,5 +318,16 @@ mod tests {
         assert_eq!(v["lines"][0], "/etc/passwd");
         assert_eq!(v["path"], "src/a.rs", "a relative path stays relative");
         assert_eq!(v["project"], "micold-remote://1/srv/r");
+    }
+
+    /// A shell's working directory (`cwd`) is a host path like the others in `PATH_KEYS`: it must
+    /// come back as an identity of its daemon, or the client keys it as a local path.
+    #[test]
+    fn every_path_field_is_wrapped_including_a_working_directory() {
+        for key in PATH_KEYS {
+            let mut v = serde_json::json!({ *key: "/srv/r" });
+            wrap_value(&mut v, DaemonId(1));
+            assert_eq!(v[*key], "micold-remote://1/srv/r", "{key}");
+        }
     }
 }
