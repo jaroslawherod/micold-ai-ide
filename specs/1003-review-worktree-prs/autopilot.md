@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1003
 - **Worktree branch**: claude/project-thread-c3olht
 - **Started**: 2026-10-19
-- **Phase**: implement
-- **Next step**: orchestrator opens the M4 PR, CI, merge; then close unit (T014, T021, T027, T036, T037)
+- **Phase**: close
+- **Next step**: close unit: visual pass (T014, T021, T027, T036), T037, tdd-verify, close PR
 
 ## Pull requests
 
@@ -20,6 +20,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1094 | M1 | merged | 577dc7141bc72365d0084961a184d55fb394d46a |
 | #1097 | M2 | merged | a275545740c99aaf988f4795ff1c626879376da1 |
 | #1100 | M3 | merged | 4465c277c6d671331ed7b6850d8831d36396a744 |
+| #1103 | M4 | merged | c226a7d3743c8683134bc0db928ed00be8ef9960 |
 
 ## Milestones
 
@@ -28,7 +29,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 | T001–T013 | full | Every PR of the worktree's branch set listed (number, title, state), each diff reachable | #1094 | merged |
 | M2 | T015–T020 | full | Check mark on every entry, one mapping shared with the sidebar | #1097 | merged |
 | M3 | T022–T031 | full | Header + previous/next; selection and header hold across refreshes (US2 + US3) | #1100 | merged |
-| M4 | T032–T036 (T036 moved to close) | full | Loading, empty and unavailable lines | pending PR | gate green, reviews clean |
+| M4 | T032–T036 (T036 moved to close) | full | Loading, empty and unavailable lines | #1103 | merged |
 
 ## Decisions
 

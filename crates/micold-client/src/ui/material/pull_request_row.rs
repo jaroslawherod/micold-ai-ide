@@ -144,11 +144,23 @@ mod tests {
                 None => row,
             })
         };
-        let bare = size_of(row(None));
+        let room = Size::new(400.0, 100.0);
+        let laid = |checks| super::super::test_support::laid_out(row(checks), room);
+        let bare = laid(None);
         for mark in [CheckMark::Pending, CheckMark::Passing, CheckMark::Failing] {
-            let with = size_of(row(Some(mark)));
-            assert_eq!(with.height, HEIGHT, "{mark:?}");
-            assert_eq!(with.width, bare.width, "the row fills its width");
+            let with = laid(Some(mark));
+            assert_eq!(with.size().height, HEIGHT, "{mark:?}");
+            assert_eq!(
+                with.size().width,
+                bare.size().width,
+                "the row fills its width"
+            );
+            // The mark widens the indicator, so the pieces after it sit further right.
+            assert_ne!(
+                super::super::test_support::leaves(&with),
+                super::super::test_support::leaves(&bare),
+                "{mark:?} is drawn"
+            );
         }
     }
 }

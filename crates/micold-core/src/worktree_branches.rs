@@ -340,19 +340,34 @@ mod tests {
 
     #[test]
     fn copies_remote_matches_only_a_same_name_remote_source() {
-        assert!(copies_remote(
-            "branch: Created from refs/remotes/origin/feat",
-            "feat"
-        ));
-        assert!(copies_remote("branch: Created from origin/feat", "feat"));
-        assert!(copies_remote(
-            "branch: Created from origin/feat/x",
-            "feat/x"
-        ));
-        assert!(!copies_remote("branch: Created from origin/main", "feat"));
-        assert!(!copies_remote(CREATED_HERE, "feat"));
-        assert!(!copies_remote("branch: Created from main", "main"));
-        assert!(!copies_remote("commit: origin/feat", "feat"));
+        assert!(
+            copies_remote("branch: Created from refs/remotes/origin/feat", "feat"),
+            "the full remote ref of the same name"
+        );
+        assert!(
+            copies_remote("branch: Created from origin/feat", "feat"),
+            "the short remote name of the same name"
+        );
+        assert!(
+            copies_remote("branch: Created from origin/feat/x", "feat/x"),
+            "a branch name with a slash"
+        );
+        assert!(
+            !copies_remote("branch: Created from origin/main", "feat"),
+            "a remote branch of another name"
+        );
+        assert!(
+            !copies_remote(CREATED_HERE, "feat"),
+            "a branch created from HEAD"
+        );
+        assert!(
+            !copies_remote("branch: Created from main", "main"),
+            "a local source is not a remote"
+        );
+        assert!(
+            !copies_remote("commit: origin/feat", "feat"),
+            "only a branch creation counts"
+        );
     }
 
     #[test]

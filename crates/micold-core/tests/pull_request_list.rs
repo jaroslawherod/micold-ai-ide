@@ -165,6 +165,27 @@ fn a_failed_run_is_classified_like_the_status_read() {
     );
 }
 
+/// The query's braces, parentheses and brackets close in order: its shape holds together, which a
+/// substring search cannot tell.
+fn assert_balanced(query: &str) {
+    let mut open = Vec::new();
+    for c in query.chars() {
+        match c {
+            '{' | '(' | '[' => open.push(c),
+            '}' | ')' | ']' => {
+                let want = match c {
+                    '}' => '{',
+                    ')' => '(',
+                    _ => '[',
+                };
+                assert_eq!(open.pop(), Some(want), "unbalanced {c} in {query}");
+            }
+            _ => {}
+        }
+    }
+    assert!(open.is_empty(), "unclosed {open:?} in {query}");
+}
+
 #[test]
 fn the_query_has_one_alias_per_branch_and_names_no_branch() {
     let query = list_query(3);
@@ -178,6 +199,8 @@ fn the_query_has_one_alias_per_branch_and_names_no_branch() {
         );
     }
     assert!(!query.contains("$b3"), "exactly n variables");
+    assert_eq!(query.matches("pullRequests(").count(), 3, "one alias each");
+    assert_balanced(&query);
     assert!(query.contains("defaultBranchRef { name }"));
     assert!(
         query.contains("headRefName"),
@@ -296,6 +319,13 @@ fn the_query_asks_the_last_commits_check_counts_like_the_sidebar() {
     ] {
         assert!(query.contains(field), "asks {field}");
     }
+    assert_eq!(
+        query.matches("statusCheckRollup").count(),
+        1,
+        "the rollup is asked once per alias"
+    );
+    assert_balanced(&query);
+    assert_balanced(&list_query(25));
 }
 
 #[test]

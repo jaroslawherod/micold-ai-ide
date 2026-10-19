@@ -589,6 +589,11 @@ fn a_pull_request_that_leaves_the_list_returns_the_view_to_the_working_tree() {
         },
     );
     assert_eq!(source(&state), &Source::Changes);
+    assert_eq!(
+        pr_header(state.open.as_ref().expect("open")),
+        None,
+        "the header goes with the pull request"
+    );
     assert!(state.remembered.is_empty(), "forgotten, not restored later");
 }
 
@@ -885,11 +890,17 @@ fn adjacent_follows_list_order_and_stops_at_the_ends() {
 
 // SC-003, US2 scenario 3.
 #[test]
-fn stepping_selects_the_adjacent_pull_request_and_stops_at_the_ends() {
+fn stepping_has_nothing_to_step_on_the_working_tree() {
     let mut state = opened(true);
     three(&mut state);
     let effect = changes::update(&mut state, Msg::PullRequestStepped(Step::Next));
     assert_eq!(effect, Effect::None, "the working tree has nothing to step");
+}
+
+#[test]
+fn stepping_selects_the_adjacent_pull_request_and_stops_at_the_ends() {
+    let mut state = opened(true);
+    three(&mut state);
     chosen(&mut state, 2);
     let seq = diff_seq(
         changes::update(&mut state, Msg::PullRequestStepped(Step::Next)),
@@ -943,7 +954,7 @@ fn the_header_names_the_shown_pull_request_with_state_and_checks() {
     let header = pr_header(state.open.as_ref().expect("open")).expect("header");
     assert_eq!((header.number, header.title.as_str()), (2, "title 2"));
     assert_eq!(header.mark, PrMark::Merged);
-    assert_eq!(header.check, check_mark(CheckStatus::Failing));
+    assert_eq!(header.check, Some(micold_client::ui::CheckMark::Failing));
     assert_eq!(header.base, "Pull request #2: main ... feat/a");
 
     changes::update(&mut state, Msg::SourceChosen(None));
@@ -1064,28 +1075,6 @@ fn a_refresh_changing_the_selected_ones_state_updates_the_header_without_a_read(
     assert_eq!(effect, Effect::None);
     let header = pr_header(state.open.as_ref().expect("open")).expect("header");
     assert_eq!(header.mark, PrMark::Merged);
-    assert_eq!(header.check, check_mark(CheckStatus::Passing));
+    assert_eq!(header.check, Some(micold_client::ui::CheckMark::Passing));
     assert_eq!(shown_paths(&state), ["a.rs", "b.rs"]);
-}
-
-// US3 scenario 4: the selected one leaving the list returns to the working tree.
-#[test]
-fn the_selected_pull_request_leaving_the_list_removes_the_header() {
-    let mut state = opened(true);
-    listed(
-        &mut state,
-        vec![pr(2, BranchPrState::Open), pr(1, BranchPrState::Open)],
-    );
-    chosen(&mut state, 2);
-    let seq = seq_of(wanted(&mut state, Some("feat/a")));
-    changes::update(
-        &mut state,
-        Msg::PullRequestsRead {
-            seq,
-            read_at: 2,
-            result: Ok(vec![pr(1, BranchPrState::Open)]),
-        },
-    );
-    assert_eq!(pr_header(state.open.as_ref().expect("open")), None);
-    assert_eq!(source(&state), &Source::Changes);
 }
