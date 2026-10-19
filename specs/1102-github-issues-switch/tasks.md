@@ -49,10 +49,10 @@ description: "Task list for the GitHub issues switch (#1102)"
 
 **Goal**: an agent cannot make a GitHub issue request through the MCP tool while the switch is off.
 
-- [ ] T022 [P] [US1] Test: `crates/micold-daemon/tests/mcp_create_worktree.rs`: with the switch off, `github_issue` fails `invalid_input` with the contract text (M1), zero `remote_list`/`issue_lookup`/837 detail calls on the fake, no worktree; without `github_issue` unchanged; switch on unchanged. `crates/micold-core/tests/mcp_tools_catalog.rs` pin moves with T024
-- [ ] T023 [US1] `resolve_naming` returns the error first for `github_issue: Some(_)` while `state.github_issues_enabled()` is false, in `crates/micold-daemon/src/mcp/tools.rs`
-- [ ] T024 [US1] Tool description sentence "Fails while GitHub issues are turned off in Settings." in `crates/micold-core/src/mcp/tools.rs` and the pin in `crates/micold-core/tests/mcp_tools_catalog.rs`
-- [ ] T025 [US1] Document the refusal in the MCP section of `docs/daemon.md` and `docs/user-guide/settings.md`
+- [x] T022 [P] [US1] Test: `crates/micold-daemon/tests/mcp_create_worktree.rs`: with the switch off, `github_issue` fails `invalid_input` with the contract text (M1), zero `remote_list`/`issue_lookup`/837 detail calls on the fake, no worktree; without `github_issue` unchanged; switch on unchanged. `crates/micold-core/tests/mcp_tools_catalog.rs` pin moves with T024
+- [x] T023 [US1] `resolve_naming` returns the error first for `github_issue: Some(_)` while `state.github_issues_enabled()` is false, in `crates/micold-daemon/src/mcp/tools.rs`
+- [x] T024 [US1] Tool description sentence "Fails while GitHub issues are turned off in Settings." in `crates/micold-core/src/mcp/tools.rs` and the pin in `crates/micold-core/tests/mcp_tools_catalog.rs`
+- [x] T025 [US1] Document the refusal in the MCP section of `docs/daemon.md` and `docs/user-guide/settings.md`
 
 ## Dependencies and order
 

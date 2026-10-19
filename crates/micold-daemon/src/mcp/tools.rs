@@ -886,6 +886,13 @@ async fn resolve_naming(
         return Ok((explicit, None));
     };
     let number = *number;
+    // 1102 FR-010: refused before the remote is read or any request is made.
+    if !state.github_issues_enabled() {
+        return Err(OpError::invalid_input(
+            "GitHub issues are turned off in Settings (GitHub). Give a branch, or type, ticket \
+             and name instead.",
+        ));
+    }
 
     let repo = repo.to_path_buf();
     let github = blocking(move || {

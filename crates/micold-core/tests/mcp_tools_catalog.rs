@@ -308,7 +308,7 @@ fn create_worktree_publishes_the_issue_object() {
         what it blocks, its parent and sub-issues, labels, assignees, milestone, project fields and \
         linked pull requests (only the kinds it has; a kind that cannot be read is listed under \
         not_readable; details_error when none could be read). Being blocked is reported, never \
-        enforced.";
+        enforced. Fails while GitHub issues are turned off in Settings.";
     assert!(
         description.contains(published),
         "the description must carry the published text: {description}"

@@ -94,6 +94,9 @@ ignoring case. A `type`, `ticket` or `name` you pass replaces the one from the i
 maps to a type and you pass no `type`, the call is refused with "Select a type". The lookup uses
 your existing GitHub sign-in (the `gh` command) and sends only the repository and the issue number;
 it happens only when `github_issue` is passed, so every other call works offline and signed out.
+While **Offer GitHub issues when creating worktrees** is off in Settings (GitHub), a call with
+`github_issue` is refused with `invalid_input`, naming the switch and pointing to `branch`, or `type`,
+`ticket` and `name`; it makes no GitHub request and creates nothing. Calls without it are unchanged.
 It is refused, and nothing is created, with the same explanation the form gives, when the issue is
 closed, is a pull request or does not exist, the project has no GitHub remote, `gh` is not
 installed or not signed in, the sign-in cannot see the repository, GitHub cannot be reached or its
