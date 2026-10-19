@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #970
 - **Worktree branch**: claude/project-thread-ag6ana
 - **Started**: 2026-10-18
-- **Phase**: implement M2
-- **Next step**: M2 — F1 fixed; scoped gate + review A round 2 running
+- **Phase**: M2 verified, full gate next
+- **Next step**: M2 push and PR
 
 ## Pull requests
 
@@ -59,6 +59,10 @@ R6) to stay near 10 tasks. M4 is 10 tasks; its serde field is a persistence-form
 | M1 review A (code-review high) | 2 | ed7739855c19f2a74e84e6499240565858f777fc:89c9bc412a899e37005bfa718a1d0324bdda0745 | CLEAN (9 findings, none BLOCKER/MAJOR on triage: dialogs/switcher are modal and not grid-anchored, ResizeHandle has no touch drag, key repeat shared with the Overview chord; not fixed) |
 | M1 review B (conformance, sonnet) | 1 | ed7739855c19f2a74e84e6499240565858f777fc:89c9bc412a899e37005bfa718a1d0324bdda0745 | CLEAN (1 MINOR: card-menu guard recorded in data-model + user guide, prose only) |
 | M1 visual pass | 1 | — | FAIL → fixed: Tab reached a retracting drawer (operate now gated on `retracted`); Escape dead over the Overview (pre-existing: `dismiss_topmost` asked only the registry); showcase drawer section blank (pre-existing, follow-up) |
+| M2 review A (code-review high) | 1 | ecb6d8c4e7d818f7cd319b4870d4b812095fe700:4ff93b1c3d965bda0ffa49b2acee062c108e0590 | CHANGES: 1 MAJOR fixed (`cursor_for_state` mixed absolute and grid-relative coordinates; test with a nonzero grid origin and a split card added) |
+| M2 review A (code-review high, sonnet) | 2 | e915063c705611ab260afb599fb42f45c0593e1b:c4f236d890ae55fc6ea27212f0565a008c8ccd4e | CLEAN |
+| M2 review B (conformance, sonnet) | 1 | e915063c705611ab260afb599fb42f45c0593e1b:c4f236d890ae55fc6ea27212f0565a008c8ccd4e | CHANGES: 1 MAJOR (no behavioural red for T021) fixed by a mutation run recorded in the cycle-log (no re-review: record only); 1 MINOR (test count) fixed |
+| M2 visual pass | 1 | — | PASS (zoom 3→4 columns, rest layouts, showcase pose; split-card mid-frames not observed, covered by `ribbon` unit tests) |
 
 ## Declined review findings
 
@@ -68,20 +72,7 @@ R6) to stay near 10 tasks. M4 is 10 tasks; its serde field is a persistence-form
 
 ## Handover
 
-M2 implemented and committed (T018–T026 ticked, cycle-log written). Done since: fmt; the scoped gate's
-only failure was `idle_requests_no_frames` (frame requests must go through `Progress`); fixed by replacing
-`ZoomState.started: Instant` with `clock: Progress` (ZOOM_LIMIT = SLIDE + 100 ms, `on_layout_frame` in
-`Grid::update`); data-model.md's `started` mention should now read `clock` (update it). Next:
-1. Commit the working tree (fmt + clock fix, uncommitted at hand-over) as `fix(970): ...`.
-2. Review A (round 1) FINISHED with VERDICT CHANGES: one MAJOR, F1 in `cursor_for_state` (mixes absolute `position`/`node_at` with grid-relative `piece.origin`; add a test with a nonzero grid origin and a split card); full text in the output file below, fix it, then round 2 (sonnet, fix diff). It was started detached on snapshot `ecb6d8c4e7d818f7cd319b4870d4b812095fe700:4ff93b1c3d965bda0ffa49b2acee062c108e0590`: prompt `/tmp/claude-0/-home-user-micold-ai-ide/610acce1-41f7-5bc4-9972-1f899e9527fb/scratchpad/promptA.txt`,
-   output `/tmp/claude-0/-home-user-micold-ai-ide/610acce1-41f7-5bc4-9972-1f899e9527fb/scratchpad/review-A.md` (ends with `REVIEW_EXIT=`; if empty/absent, re-run the same command:
-   `claude -p --agent autopilot-reviewer --permission-mode auto "$(cat promptA.txt)"`). Act on it per
-   review-rounds.md (it saw the pre-clock-fix tree).
-3. Scoped gate again (`scripts/autopilot/scoped-gate.sh`, detached, with CARGO_INCREMENTAL=0
-   CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0), then review B (conformance rubric, sonnet) and the
-   visual pass (zoom pose in showcase; quickstart §B 1, 3, 8), full gate (`scripts/gate.sh`), push
-   (see prompt override: ls-remote then --force-with-lease), PR title/body into the scratchpad.
-Known gap: no separate behavioural red for T021 (compile red only; recorded in cycle-log).
+None.
 
 ## Open escalation
 
