@@ -436,6 +436,7 @@ fn the_kubernetes_form_and_row_paint_their_fields_without_overflow() {
     for section in [Section::Image, Section::Resources, Section::Placement] {
         state.update(Message::Daemons(DaemonsMsg::SectionToggled(section)));
         form.extend(painted_tall(&state));
+        assert_no_text_overflows(&state, "the Kubernetes form, one section open");
     }
     for label in [
         "Namespace",
