@@ -222,6 +222,12 @@ impl Schedule {
             Err(reason) => {
                 let attempts = state.failure.as_ref().map_or(0, |(_, n)| *n);
                 state.due_at = now + backoff_secs(attempts);
+                if self.policy == RenewPolicy::AtExpiry {
+                    // The withdraw at the expiry never waits on a retry's backoff.
+                    if let Some(c) = state.held.as_ref().filter(|c| c.expires_at() > now) {
+                        state.due_at = state.due_at.min(c.expires_at());
+                    }
+                }
                 state.failure = Some((reason.clone(), attempts + 1));
                 if self.policy == RenewPolicy::AtExpiry {
                     let expired = state.held.as_ref().is_some_and(|c| c.expires_at() <= now);
@@ -718,6 +724,17 @@ mod tests {
                 !matches!(reason, NoCredentialReason::SourceUnreachable(_))
             );
         }
+    }
+
+    #[test]
+    fn an_unreachable_retry_never_postpones_the_withdraw_past_the_expiry() {
+        let (mut s, f) = pat_schedule();
+        s.run(&f, T0);
+        let late = T0 + HOUR - 30;
+        f.fail_next(NoCredentialReason::SourceUnreachable("offline".into()));
+        s.refresh(&repo("a"), late);
+        s.run(&f, late);
+        assert_eq!(s.due(T0 + HOUR), vec![repo("a")]);
     }
 
     #[test]

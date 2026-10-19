@@ -192,6 +192,14 @@ pub fn parse_reach(reply: &Reply, repo: &GithubRepo) -> Result<(), NoCredentialR
     if reply.status == 401 {
         return Err(status_reason(reply, repo));
     }
+    // A listing GitHub is too busy or limited to give is retried (paste refused, a held token
+    // kept), not passed.
+    let limited = reply.status == 403 && reply.header("x-ratelimit-remaining") == Some("0");
+    if reply.status == 429 || reply.status >= 500 || limited {
+        return Err(NoCredentialReason::SourceUnreachable(
+            "GitHub is busy".to_string(),
+        ));
+    }
     if reply.status != 200 {
         return Ok(());
     }
@@ -390,8 +398,18 @@ mod tests {
             parse_reach(&reply(401, &[], ""), &repo()),
             Err(refused("GitHub rejected the token (expired or revoked)"))
         );
-        // A listing GitHub will not give says nothing about the token.
+        // A listing GitHub will not give says nothing about the token; a busy one is retried.
         assert_eq!(parse_reach(&reply(403, &[], ""), &repo()), Ok(()));
+        for busy in [
+            reply(429, &[], ""),
+            reply(503, &[], ""),
+            reply(403, &[("x-ratelimit-remaining", "0")], ""),
+        ] {
+            assert!(matches!(
+                parse_reach(&busy, &repo()),
+                Err(NoCredentialReason::SourceUnreachable(_))
+            ));
+        }
     }
 
     /// Answers each request in order and records the URLs asked.

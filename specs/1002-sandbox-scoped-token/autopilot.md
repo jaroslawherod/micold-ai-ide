@@ -86,6 +86,11 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 Review A (high) round 1: CHANGES, F1–F7 fixed (validating GithubRepo Deserialize, unique temp names, lower-cased schedule keys, grant token/expiry validation, req u64::MAX sentinel, revoke of superseded token, git_too_old in change detection); F8 (cache git version) declined as MINOR. Review B (sonnet): CLEAN.
 
+## M5 review notes
+
+- Review A (code-review high, fresh reviewer) CLEAN, 2 MINOR fixed: reach listing 429/5xx/rate-limit now `SourceUnreachable` (was fail-open); AtExpiry retry backoff clamped to the held PAT's expiry. Review B (conformance, sonnet) CLEAN; Verify green (85 core, 8 daemon, 7 client). Visual pass PASS (visual-pass/m5-github-tokens.md).
+- Deviation: wiring uses a worker thread sleeping to `next_wake`, not the subscription clock; Add/Replace/Remove state lives in `settings::State.github_tokens` (not the settings document).
+
 ## Declined review findings
 
 - M4 A+B F3 [MINOR]: announce_git_targets ordering race — the caller (M5 wiring) does not exist yet; revisit there.

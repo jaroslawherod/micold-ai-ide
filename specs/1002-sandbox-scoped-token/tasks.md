@@ -403,7 +403,7 @@ reducer and wiring tests with a fake transport; quickstart Part C steps 1–8, 1
   `docs/user-guide/sandboxed-daemon.md`, `kubernetes-daemons.md` (pushes use the pasted
   per-repository token over HTTPS, SSH remotes rewritten, no renewal, a leaked token stays valid until
   it expires) — reuse the page structure from bundle commit 026081c3.
-- [ ] T049 [US2] [source] Run the `visual-pass` skill on the *GitHub access tokens* section (quickstart
+- [x] T049 [US2] [source] Run the `visual-pass` skill on the *GitHub access tokens* section (quickstart
   Part C steps 2, 12; the form needs no real PAT) and save the evidence in `specs/1002-sandbox-scoped-token/visual-pass/`.
 
 **Checkpoint**: with a PAT pasted for a repository, sandboxes push and pull it; nothing renews it.
