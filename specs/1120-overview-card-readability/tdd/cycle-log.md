@@ -17,3 +17,14 @@ list, and each row names the task pair it covers. Append only.
 
 - Red: `the_title_tooltip_holds_the_full_title_and_the_display_name` and the trim case of `the_title_is_the_issue_title_else_the_branch_else_the_display_name` — `error[E0425]: cannot find function title_tooltip`.
 - Green: `overview_text::title_tooltip`, `card_title` trims; `cargo test -p micold-core --lib overview_text`: 9 passed.
+
+## M2 (US3: activity line without markup)
+
+| Task | Behaviour | Red evidence | Green |
+|---|---|---|---|
+| T012, T015 | `markup::readable` (C1) | stub `None`; `cargo test -p micold-core --lib -- markup overview_text hook_activity`: 11 FAILED, e.g. `a_wrapper_tag_is_removed_and_its_words_kept left: None right: Some("Continue M2")`, `a_less_than_sign_that_starts_no_tag_stays left: None right: Some("a < b")`; `nothing_readable_is_none` and `a_tag_left_after_removal_is_none` pass on the stub by design (their answer is `None`) | markup 7 passed |
+| T013, T016 | `activity_text` (C2), `activity_line` sanitised (C3) | same run, stub returns its input: `a_slash_command_reads_as_a_sentence left: Some("/speckit-autopilot #1117") right: Some("Running autopilot on #1117")`; `the_activity_line_shows_no_markup` showed the raw `<agent-message …>` line | `overview_text` green; client guard `the_activity_line_never_falls_back_to_another_sessions_prompt` green before and after (a guard, as T013 says) |
+| T014, T017 | `HookActivity::apply` sanitises then clips (C10) | same run: `prompt_is_its_readable_words_on_one_line left: Some("<agent-message from=\"x\">") right: Some("Continue M2")`; `a_markup_only_prompt_clears_the_prompt left: Some("<agent-message …>") right: None`; `prompt_is_clipped_after_sanitising` kept the opening tag | `cargo test -p micold-core --lib`: 1189 passed; daemon `hooks_receiver` 15, `mcp_read_tools` 17 passed |
+| T018 | showcase sample card's activity is an `<agent-message>` wrapper | structural | client `overview` lib 49, `tests/overview` 44 passed |
+| T019 | user guide *What the agent is doing now* | docs | — |
+| T020 | FR-020 grep over `markup`, `overview_text`, `hook_activity` | — | no match |
