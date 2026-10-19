@@ -49,8 +49,8 @@ guide and layout snapshot updated." Labels: enhancement, flow:feature. Builds on
 
 - Q: Is FR-012's one generic sentence right for every slash command, or should built-in commands
   (`/clear`, `/compact`, `/model`) read differently or be hidden? → A: One generic sentence for
-  every slash command, built-ins included; none is hidden or reworded. _(orchestrator default,
-  the recommended option; user decision card open)_
+  every slash command, built-ins included; none is hidden or reworded. _(orchestrator default, the
+  recommended option; confirmed by the user 2026-10-19)_
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -252,8 +252,8 @@ the cards of a row share one height.
 - **FR-007**: A card with a branch MUST show the short branch on its own line, unless the title
   already is the branch: `type/number` when the branch is `<type>/<number>`, or `<type>/<number>` or
   `<type>-<number>` followed by `_` or `-` and a slug (so `fix/1115-foo` and `fix/1115_foo` both
-  read `fix/1115`), with a conventional type (feature 813's location
-  type list) and a decimal number, else the branch unchanged; the line's tooltip MUST show the full
+  read `fix/1115`), with a conventional branch type (the type list feature
+  813 derives the location type from) and a decimal number, else the branch unchanged; the line's tooltip MUST show the full
   branch name.
 - **FR-008**: The card MUST show one sessions line: "No sessions" for none; "*n* session" or "*n*
   sessions" (singular for exactly 1); followed by " · *k* running" when *k* > 0 sessions run.
@@ -280,7 +280,7 @@ the cards of a row share one height.
   widths of 280, 380 and 480 px, nor at any other width the grid produces; text that does not fit
   MUST end in an ellipsis with the full text in a tooltip.
 - **FR-016**: Card states, card order, activation, keyboard focus, the context menu (feature 972),
-  the ripple (feature 971) and the attention badge MUST be unchanged; the target outline, focus ring
+  the ripple (feature 971) and the Overview entry's attention badge (feature 813) MUST be unchanged; the target outline, focus ring
   and ripple MUST cover the whole card including the header row.
 - **FR-017**: The card MUST be built from the shared UI components with every colour from the theme's
   roles (Principle VIII), and the component showcase MUST show the card in each of the five states
@@ -290,8 +290,8 @@ the cards of a row share one height.
   (Principle I).
 - **FR-019**: The user guide's Overview section MUST describe the new card layout (header row,
   title rule, short branch, sessions line, which rows are hidden when empty, and how the activity
-  line reads prompts and slash commands), and the recorded layout snapshot of the Overview card MUST
-  be updated to the new layout (Principle VII).
+  line reads prompts and slash commands), and the recorded layout snapshot MUST
+  gain an Overview state showing the card in the new layout (Principle VII).
 - **FR-020**: Prompts, todo items and issue titles MUST stay on this machine (feature 813 FR-020);
   sanitising MUST NOT log them.
 
