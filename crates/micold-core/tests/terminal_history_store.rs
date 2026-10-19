@@ -801,3 +801,215 @@ fn sweep_of_a_directory_that_is_not_there_does_nothing() {
     let root = tempfile::tempdir().unwrap();
     assert!(store_in(root.path()).sweep(&ids(&[])).is_empty());
 }
+
+// ---- The events file kind (feature 938, M7; research R14): `<uuid>.events` beside `.history`.
+
+mod events_kind {
+    use super::*;
+    use micold_core::structured::{encode_events, parse_line, SequencedEvent, StructuredEvent};
+    use micold_core::terminal_history::EventsLoad;
+
+    const EVENTS_FILE: &str = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d.events";
+    const OTHER_EVENTS_FILE: &str = "ffff2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d.events";
+
+    fn history(texts: &[&str]) -> Vec<SequencedEvent> {
+        texts
+            .iter()
+            .enumerate()
+            .map(|(i, text)| SequencedEvent {
+                seq: 4 + i as u64,
+                event: StructuredEvent::Unreadable {
+                    text: (*text).to_owned(),
+                },
+            })
+            .collect()
+    }
+
+    fn parsed(events: &[SequencedEvent]) -> Vec<StructuredEvent> {
+        events.iter().map(|e| parse_line_of(&e.event)).collect()
+    }
+
+    fn parse_line_of(event: &StructuredEvent) -> StructuredEvent {
+        match event {
+            StructuredEvent::Unreadable { text } => parse_line(text),
+            other => other.clone(),
+        }
+    }
+
+    #[test]
+    fn saved_events_load_from_the_events_file_named_after_the_session() {
+        let root = tempfile::tempdir().unwrap();
+        let store = store_in(root.path());
+        let saved = history(&["a", "b"]);
+        assert_eq!(
+            store.save_events(session(), 4, &saved).unwrap(),
+            SaveOutcome::Saved
+        );
+        assert_eq!(entries(store.dir()), [store.dir().join(EVENTS_FILE)]);
+        assert_eq!(
+            std::fs::read(store.dir().join(EVENTS_FILE)).unwrap(),
+            encode_events(4, &saved)
+        );
+        assert_eq!(
+            store.load_events(session()),
+            EventsLoad::Events {
+                omitted: 4,
+                events: parsed(&saved)
+            }
+        );
+        assert_eq!(store.load(session()), LoadOutcome::None);
+    }
+
+    #[test]
+    fn the_same_bytes_again_are_unchanged() {
+        let root = tempfile::tempdir().unwrap();
+        let store = store_in(root.path());
+        let saved = history(&["a"]);
+        store.save_events(session(), 4, &saved).unwrap();
+        assert_eq!(
+            store.save_events(session(), 4, &saved).unwrap(),
+            SaveOutcome::Unchanged
+        );
+        assert_eq!(
+            store
+                .save_events(session(), 4, &history(&["a", "b"]))
+                .unwrap(),
+            SaveOutcome::Saved
+        );
+    }
+
+    #[test]
+    fn a_history_and_an_events_save_do_not_mark_each_other_unchanged() {
+        let root = tempfile::tempdir().unwrap();
+        let store = store_in(root.path());
+        store.save_events(session(), 0, &[]).unwrap();
+        assert_eq!(
+            store.save(session(), &snapshot(&["x"])).unwrap(),
+            SaveOutcome::Saved
+        );
+        assert_eq!(
+            store.save(session(), &snapshot(&["x"])).unwrap(),
+            SaveOutcome::Unchanged
+        );
+        assert_eq!(
+            store.save_events(session(), 0, &[]).unwrap(),
+            SaveOutcome::Unchanged
+        );
+        assert_eq!(entries(store.dir()).len(), 2);
+    }
+
+    #[test]
+    fn a_save_is_skipped_when_off_forgotten_or_with_no_directory() {
+        let root = tempfile::tempdir().unwrap();
+        let store = store_in(root.path()).with_enabled(false);
+        assert_eq!(
+            store.save_events(session(), 0, &[]).unwrap(),
+            SaveOutcome::Skipped(SkipReason::Disabled)
+        );
+        let store = store_in(root.path());
+        store.forget(&[session()]);
+        assert_eq!(
+            store.save_events(session(), 0, &[]).unwrap(),
+            SaveOutcome::Skipped(SkipReason::Forgotten)
+        );
+        let absent = HistoryStore::new(root.path().join("absent"), false);
+        assert_eq!(
+            absent.save_events(session(), 0, &[]).unwrap(),
+            SaveOutcome::Skipped(SkipReason::NoDirectory)
+        );
+    }
+
+    #[test]
+    fn a_load_is_none_when_off_forgotten_or_with_no_file() {
+        let root = tempfile::tempdir().unwrap();
+        let store = store_in(root.path());
+        assert_eq!(store.load_events(session()), EventsLoad::None);
+        store.save_events(session(), 0, &history(&["a"])).unwrap();
+        store.set_enabled(false);
+        store.set_enabled(true);
+        assert_eq!(store.load_events(session()), EventsLoad::None, "deleted");
+        store.save_events(other_session(), 0, &[]).unwrap();
+        store.forget(&[other_session()]);
+        assert_eq!(store.load_events(other_session()), EventsLoad::None);
+    }
+
+    #[test]
+    fn a_damaged_file_loads_as_damaged_with_its_reason() {
+        let root = tempfile::tempdir().unwrap();
+        let store = store_in(root.path());
+        store.save_events(session(), 0, &history(&["a"])).unwrap();
+        let path = store.dir().join(EVENTS_FILE);
+        let mut bytes = std::fs::read(&path).unwrap();
+        let end = bytes.len() - 1;
+        bytes[end] ^= 1;
+        std::fs::write(&path, &bytes).unwrap();
+        assert_eq!(
+            store.load_events(session()),
+            EventsLoad::Damaged(DamageReason::Checksum)
+        );
+        std::fs::write(&path, encode(&snapshot(&["x"]))).unwrap();
+        assert_eq!(
+            store.load_events(session()),
+            EventsLoad::Damaged(DamageReason::NotAHistory)
+        );
+        assert_eq!(
+            store
+                .save_events(session(), 0, &history(&["a", "b"]))
+                .unwrap(),
+            SaveOutcome::Saved,
+            "the next save replaces it"
+        );
+    }
+
+    #[test]
+    fn turning_saving_off_and_purge_delete_events_and_their_temporary_files() {
+        let root = tempfile::tempdir().unwrap();
+        let store = store_in(root.path());
+        store.save_events(session(), 0, &history(&["a"])).unwrap();
+        store.save(other_session(), &snapshot(&["x"])).unwrap();
+        std::fs::write(store.dir().join(format!(".{EVENTS_FILE}.tmp")), b"x").unwrap();
+        assert!(store.set_enabled(false).is_empty());
+        assert!(entries(store.dir()).is_empty());
+        store.set_enabled(true);
+        store.save_events(session(), 0, &history(&["a"])).unwrap();
+        std::fs::write(store.dir().join(format!(".{EVENTS_FILE}.tmp")), b"x").unwrap();
+        assert!(store.purge().is_empty());
+        assert!(entries(store.dir()).is_empty());
+    }
+
+    #[test]
+    fn forget_deletes_both_kinds_of_the_session_and_no_other() {
+        let root = tempfile::tempdir().unwrap();
+        let store = store_in(root.path());
+        store.save_events(session(), 0, &history(&["a"])).unwrap();
+        store.save(session(), &snapshot(&["x"])).unwrap();
+        std::fs::write(store.dir().join(format!(".{EVENTS_FILE}.tmp")), b"x").unwrap();
+        store
+            .save_events(other_session(), 0, &history(&["a"]))
+            .unwrap();
+        assert!(store.forget(&[session()]).is_empty());
+        assert_eq!(entries(store.dir()), [store.dir().join(OTHER_EVENTS_FILE)]);
+    }
+
+    #[test]
+    fn sweep_keeps_the_events_of_kept_sessions_and_deletes_the_rest() {
+        let root = tempfile::tempdir().unwrap();
+        let store = store_in(root.path());
+        store.save_events(session(), 0, &history(&["a"])).unwrap();
+        store
+            .save_events(other_session(), 0, &history(&["a"]))
+            .unwrap();
+        std::fs::write(store.dir().join(format!(".{EVENTS_FILE}.tmp")), b"x").unwrap();
+        assert!(store.sweep(&ids(&[session()])).is_empty());
+        assert_eq!(entries(store.dir()), [store.dir().join(EVENTS_FILE)]);
+    }
+
+    #[test]
+    fn a_save_for_a_forgotten_session_after_a_racing_forget_leaves_no_events_file() {
+        let root = tempfile::tempdir().unwrap();
+        let store = store_in(root.path());
+        store.forget(&[session()]);
+        store.save_events(session(), 0, &history(&["a"])).unwrap();
+        assert!(!store.dir().join(EVENTS_FILE).exists());
+    }
+}

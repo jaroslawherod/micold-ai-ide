@@ -424,7 +424,7 @@ phase sits before US6 because the UI milestone ships last.
 - [x] T050 [P] [US7] Write failing unit tests in `crates/micold-core/src/structured/history.rs`:
   `EventHistory::restored(omitted, events)` numbers the events from `omitted`, the next append gets
   `omitted + len`, and lower bounds evict further and add to `omitted`.
-- [ ] T051 [P] [US7] Write failing tests in `crates/micold-core/tests/terminal_history_store.rs` for
+- [x] T051 [P] [US7] Write failing tests in `crates/micold-core/tests/terminal_history_store.rs` for
   the events file kind: `save_events`/`load_events` round trip; `Unchanged` on the same bytes;
   `Skipped` when off, forgotten or with no directory and `create_dir` false; `load_events` is
   `None` when off, forgotten or undeleted; `set_enabled(false)` and `purge` delete `.events` and
@@ -436,7 +436,7 @@ phase sits before US6 because the UI milestone ships last.
   `crates/micold-core/src/structured/history.rs`, and the shared `frame`/`unframe` split out of
   `crates/micold-core/src/terminal_history/format.rs` with the terminal format's bytes and its
   pinned fixture test unchanged (`FORMAT_VERSION` stays 1).
-- [ ] T053 [US7] Make T051 pass in `crates/micold-core/src/terminal_history/store.rs`: `FileKind`,
+- [x] T053 [US7] Make T051 pass in `crates/micold-core/src/terminal_history/store.rs`: `FileKind`,
   `save_events`, `load_events`, both extensions in the deletion, sweep and retry paths, and
   `last_written` keyed by session and kind.
 - [ ] T054 [US7] Write failing tests in `crates/micold-daemon/tests/structured_saved_history.rs`
