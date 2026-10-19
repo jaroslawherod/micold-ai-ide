@@ -62,7 +62,7 @@ pub fn view<'a>(state: &State, scheme: ColorScheme) -> Element<'a, Message> {
         .on_scroll(Message::Overview(Msg::GridScrolled))
         .zoom(Zoom {
             full_screen: state.overview.full_screen(),
-            freed: freed_width(state),
+            freed: crate::ui::freed_width(state),
         });
     let pane = container(column![header(state, r), grid].spacing(spacing::SM))
         .padding(spacing::LG)
@@ -74,16 +74,6 @@ pub fn view<'a>(state: &State, scheme: ColorScheme) -> Element<'a, Message> {
     ContextArea::new(pane)
         .on_secondary_press(|_| Message::Overview(Msg::CardMenuDismissed))
         .into()
-}
-
-/// The width full screen gives the grid (feature 970, research R5): the sidebar drawer's, with its
-/// resize handle when expanded, or its collapsed strip.
-fn freed_width(state: &State) -> f32 {
-    if state.sidebar.hidden {
-        crate::ui::sidebar::STRIP_WIDTH
-    } else {
-        f32::from(state.sidebar_width_px()) + crate::ui::material::RESIZE_HANDLE_WIDTH
-    }
 }
 
 /// Whether `location`'s card is the target of the open card menu (FR-006). Identity, not a grid

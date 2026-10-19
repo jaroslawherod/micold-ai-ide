@@ -1399,3 +1399,13 @@ pub fn focus_move_message(event: iced::keyboard::Event) -> Option<Message> {
 
 #[cfg(test)]
 mod app_chord_tests;
+
+/// The width full screen gives the grid (feature 970, research R5): the sidebar drawer's, with its
+/// resize handle when expanded, or its collapsed strip.
+pub(crate) fn freed_width(state: &State) -> f32 {
+    if state.sidebar.hidden {
+        crate::ui::sidebar::STRIP_WIDTH
+    } else {
+        f32::from(state.sidebar_width_px()) + crate::ui::material::RESIZE_HANDLE_WIDTH
+    }
+}
