@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-cl0lw3
 - **Started**: 2026-10-18
 - **Phase**: M7
-- **Next step**: M7 gate, reviews, PR
+- **Next step**: M7 PR to open (reviews done, gate on rebased head); then M8
 
 ## Pull requests
 
@@ -35,7 +35,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M4 | T029–T030 | full | resume | #1072 | merged |
 | M5 | T031–T032 | full | late and multiple viewers | #1076 | merged |
 | M6 | T033–T036 | full | terminal-only requests refused | #1080 | merged |
-| M7 | T049–T055 | full | event history saved under Save terminal history, restored after a daemon restart | — | code done, gate and reviews next |
+| M7 | T049–T055 | full | event history saved under Save terminal history, restored after a daemon restart | — | to open | reviews done, gate running |
 | M8 | T037–T047, T056 | full | chevron entry, row marker, log pane, user guide, setting note | — | planned |
 
 ## Decisions
@@ -87,6 +87,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M6 review A (code-review high, sonnet) | 2 | b480bc7d5293b1a1ab13b1adb3bc08e3e17fe1e0:bca89db402cd6b67058a8a23a550fe616acf75d7 | 1 MAJOR fixed (a process-less resize was refused and applied; now not refused), 1 MINOR fixed (SessionResize doc), 3 MINOR declined; fix verified by test, no round 3 |
 | M7 review A (code-review high) | 1 | 1f22e8f07fbc422f09a973efac33dd9d5ffb049a:768105c2827677d4dc7fe93d49a6096d35646df4 | 8 findings, none BLOCKER/MAJOR: fixed 5 (stream made for a session removed during the load; stop-save blocked on the gate with saving off; restored stream re-saved at once; viewer task could end just before the stream was made; event failures shared the terminal's warning key) plus the duplicated NoDirectory note and schedule bookkeeping; 2 declined |
 | M7 review B (conformance) | 1 | 1f22e8f07fbc422f09a973efac33dd9d5ffb049a:768105c2827677d4dc7fe93d49a6096d35646df4 | CHANGES: 1 MAJOR (no red for T049/T050; fixed by showing 11 of 37 failing against stubs, cycle-log), 1 MINOR declined |
+| M7 review A (code-review high, sonnet) | 2 | cd63101c4d6a93126b38cbaf204719bb1578adc8:a9a7ff41fd018ba604366dca2e6c38850e427008 | no BLOCKER/MAJOR; 8 MINOR: fixed 5 (has_events one stat, kind guard restored, damage recorded on insert, doc, test for a removed session), 3 declined; no round 3 |
+| M7 review B (conformance, sonnet) | 2 | cd63101c4d6a93126b38cbaf204719bb1578adc8:a9a7ff41fd018ba604366dca2e6c38850e427008 | CLEAN; 1 MINOR (tests for the fix-round guards) fixed for the removed-session guard, rest declined |
 
 ## Declined review findings
 
@@ -131,6 +133,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M7 | A 3 | the snapshot clones the whole history under the history lock and encoding copies it again | R14 specifies a snapshot under the history lock then encoding off the lock; at most once per 30 s and only after a new event; a borrowed-view encoder is a later optimisation |
 | M7 | A 8 | the store mutex is held across the file read | 041's own design: a save and a read of one file never interleave (module doc); the terminal `load` does the same |
 | M7 | B 2 | scenario 8 (removal racing a save) has no daemon-level test | the daemon's save goes through `HistoryStore::save_events`, whose forgotten check under the lock is tested in `terminal_history_store`; the daemon test covers the save after removal |
+| M7 | A2 | stale-snapshot prune of a seeded schedule; the store-mutex stat; free-form dedupe keys; a re-spawned load for an id archived mid-sync | one redundant write at worst; has_events no longer locks; keys follow the existing "deletion:" convention; the re-spawn ends with the next catalog change |
+| M7 | B2 | tests for the stop-save with saving off and the events failure key | both are one-line guards with no behaviour a user sees; the removed-session guard has a test |
 
 ## Handover
 
