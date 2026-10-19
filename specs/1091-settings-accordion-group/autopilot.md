@@ -17,12 +17,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1135 | Design | merged | f3c827a5f8ce6947d331a5bb9aadddc4f8b552e7 |
+| #1140 | M1 | open | |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T009 | full | Daemon form sections form a group; error-held sections stay open | | pending |
+| M1 | T001–T009 | full | Daemon form sections form a group; error-held sections stay open | #1140 | in review |
 | M2 | T010–T012 | light | Showcase shows grouped and independent sets | | pending |
 
 ## Decisions
