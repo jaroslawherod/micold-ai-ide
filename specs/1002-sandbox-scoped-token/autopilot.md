@@ -9,7 +9,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1002
 - **Worktree branch**: claude/project-thread-2cdrmk
 - **Started**: 2026-10-19
-- **Phase**: spec
+- **Phase**: clarify
 - **Next step**: clarify unit: resolve FR-005's [NEEDS CLARIFICATION] (credential source)
 
 ## Pull requests
