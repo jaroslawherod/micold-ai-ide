@@ -161,7 +161,7 @@ rootless `sshd` and are off by default (`mise run test-ssh`).
 
 ## Phase 10: TDD remediation (close unit, test strength only, no behaviour)
 
-- [ ] T089 Record in `tdd/verification.md` that finding 2 and the FR-019 second-sentence gap were closed by M9 (T085-T087)
+- [x] T089 Record in `tdd/verification.md` that finding 2 and the FR-019 second-sentence gap were closed by M9 (T085-T087)
 - [x] T090 Add rows to `tdd/test-list.md` for M2, M3, M4, M6, M7, M8, M9 (id, behaviour, traces to, task, where), so every ticked task has a list item (finding 3)
 - [x] T091 Apply the M2/M3 mutants of `tdd/cycle-log.md` ("wrap_path skips cwd", "canonicalize_best_effort touches the local filesystem", "add_repository ignores a non-connected daemon", "Backoff never caps", "GiveUp leaves should_dial true", "an SSH drop after established is not retried"); add a test for each survivor (finding 4)
 - [x] T092 Apply the M5 mutants ("parse_g takes the first of repeated keys", "duplicate check compares the alias", "watchdog ignores ConnectTimeout"); add a test for each survivor (finding 4)

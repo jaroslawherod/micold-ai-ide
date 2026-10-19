@@ -2,8 +2,8 @@
 feature: 489-ssh-remote-daemon
 verdict: PASS_WITH_ADMITTED_HISTORY
 standard: .specify/extensions/tdd/templates/tdd-test-quality-rubric.md # rubric graded against
-verified_at: 47dff0df8
-behaviors: 15 # rows on tdd/test-list.md (M1 and M5 only); M2-M4 and M6-M8 have no rows
+verified_at: 47622f726
+behaviors: 15 # M1 and M5 rows from the original audit; rows for M2-M4 and M6-M9 added by T090 (I30-I80, O4-O8)
 proven: 0
 likely: 0
 test_after: 15
@@ -11,9 +11,9 @@ no_test: 0
 high_smells: 0 # none found in the files read; see "What was not audited"
 criteria_total: 27 # FR-001..FR-021 and SC-001..SC-006
 criteria_covered: 27 # a named test exists for each; assertions read only for the files listed under Traceability
-mutation_score: unmeasured # no mutation tool; 7 deliberate mutants on core files, 6 killed, 1 survived
-mutants_survived: 1
-suite: "micold-core --all-targets: 2948 passed, 0 failed (workspace suite and ssh_real_* not run)"
+mutation_score: "9 deliberate mutants in the close pass (T091-T092): 4 killed at once, 5 survivors each killed by a new test"
+mutants_survived: 0
+suite: "micold-core and micold-client lib tests green after remediation; mise run test-ssh (ssh_real_*) green; full gate in the close PR"
 ---
 
 # TDD Verification: Run the session daemon on a remote host over SSH
