@@ -137,3 +137,21 @@ the fact: removing `note_lost_sessions` from `on_connected`'s path (test calls i
 now fails `an_explicit_reconnect_after_giving_up_starts_again` (the mutant of verification.md
 finding 2 is killed). Known limit: a lost session keeps its last lifecycle in other views; only the
 worktree row says `lost to daemon`.
+
+## T091-T093 mutant results
+
+Each mutant applied by hand to the finished code, the owning crate's lib and integration tests run, then restored.
+
+| Mutant | Result | Test |
+|--------|--------|------|
+| wrap_path skips `cwd` (dropped from `PATH_KEYS`) | survivor: the old test iterated `PATH_KEYS` itself | `remote_path::tests::every_path_field_is_wrapped_including_a_working_directory` now spells the keys out |
+| canonicalize_best_effort touches the local filesystem for a remote identity | survivor | new `project::remote_identity_tests::a_remote_identity_is_not_resolved_on_the_local_filesystem` |
+| add_repository ignores a non-connected daemon | killed | `daemons_feature::the_repository_step_refuses_what_it_cannot_ask_and_names_a_connected_daemons_path` |
+| Backoff never caps | killed | `ssh::reconnect::tests::delays_double_from_one_second_and_stop_at_fifteen` |
+| GiveUp leaves should_dial true | killed | `daemon_reconnect::giving_up_is_unreachable_and_stops_the_attempts` |
+| an SSH drop after established is not retried | survivor | new `daemon::tests::an_ssh_attempt_failing_after_a_connection_is_retried_not_ended` |
+| parse_g takes the first of repeated keys | survivor | new `config_hosts::tests::parse_g_takes_the_last_of_repeated_keys` |
+| duplicate check compares the alias | killed | `daemons_ssh_duplicates::two_aliases_of_one_machine_are_refused_when_ssh_resolves_them_alike` |
+| watchdog ignores ConnectTimeout | survivor | new `daemon::tests::the_connect_watchdog_uses_the_users_connect_timeout` |
+
+T093: the dead `_subscription` in `shell/daemons.rs` now asserts one actor spec per tracked daemon.

@@ -2106,6 +2106,95 @@ mod tests {
         assert!(none.contains("ssh"), "{none}");
     }
 
+    /// FR-008: an SSH daemon whose link was up and went down is retried (reported as a failed
+    /// connect, the actor goes on); one that never connected is reported once and the actor ends.
+    /// Driven through the real dial with no `ssh` installed, so the attempt fails at once.
+    #[tokio::test]
+    async fn an_ssh_attempt_failing_after_a_connection_is_retried_not_ended() {
+        let (registry, id) = ssh_registry();
+        let mut states = DaemonStates::default();
+        states.insert(id, DaemonState::Starting);
+        let spec = actor_specs(
+            &registry,
+            &states,
+            std::path::Path::new("/nonexistent"),
+            None,
+        )
+        .remove(0);
+        assert!(matches!(spec.dial, Dial::Ssh { .. }));
+        for (established, ended, sent) in
+            [(true, false, "ConnectFailed"), (false, true, "StartFailed")]
+        {
+            let (mut tx, mut rx) = mpsc::channel(8);
+            let mut life = LinkLife {
+                established,
+                ..LinkLife::default()
+            };
+            let end = super::connect_and_pump(id, &spec, None, &mut tx, &mut life).await;
+            assert_eq!(
+                matches!(end, PumpEnd::Ended),
+                ended,
+                "established={established}"
+            );
+            let reported = format!("{:?}", rx.try_recv().expect("the failure is reported"));
+            assert!(
+                reported.contains(sent),
+                "established={established}: {reported}"
+            );
+        }
+    }
+
+    /// An `ssh -G` that answers with the user's configuration.
+    struct ConfiguredSsh(&'static str);
+
+    impl SshRunner for ConfiguredSsh {
+        fn run(
+            &self,
+            _: SshCommand,
+            _: Vec<u8>,
+            _: Option<std::time::Duration>,
+            _: Option<micold_core::ssh::ProvisionProgress>,
+        ) -> iced::futures::future::BoxFuture<'_, std::io::Result<SshOutput>> {
+            let stdout = self.0.as_bytes().to_vec();
+            Box::pin(async move {
+                Ok(SshOutput {
+                    status: Some(0),
+                    stdout,
+                    stderr: String::new(),
+                    timed_out: false,
+                })
+            })
+        }
+
+        fn open(&self, _: SshCommand) -> std::io::Result<SshStdio> {
+            Err(std::io::ErrorKind::NotFound.into())
+        }
+    }
+
+    impl Artefacts for ConfiguredSsh {
+        fn own(&self) -> std::io::Result<Vec<u8>> {
+            Ok(Vec::new())
+        }
+        fn bundled(&self, _: &str, _: &str) -> Option<Vec<u8>> {
+            None
+        }
+    }
+
+    /// FR-009: the connect watchdog is the user's `ConnectTimeout` when their configuration sets
+    /// one, and the default when it does not (or `ssh -G` cannot be asked).
+    #[tokio::test]
+    async fn the_connect_watchdog_uses_the_users_connect_timeout() {
+        let target = SshTarget::new("build-box", None, None, None).unwrap();
+        let set =
+            super::ssh_options(&ConfiguredSsh("hostname box\nconnecttimeout 7\n"), &target).await;
+        assert_eq!(set.timeout_secs, 7);
+        let unset = super::ssh_options(&ConfiguredSsh("hostname box\n"), &target).await;
+        assert_eq!(
+            unset.timeout_secs,
+            micold_core::ssh::argv::DEFAULT_CONNECT_TIMEOUT_SECS
+        );
+    }
+
     /// S-6 against the real retry rather than a copy of it: an unattended bring-up after a failed
     /// one must not arrive on the next connection tick, or the whole budget is spent in the seconds
     /// it takes the reconnect loop to come round a few times. The first may go at once — the

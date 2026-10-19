@@ -510,7 +510,21 @@ mod tests {
         let links = micold_client::links::DaemonLinks::at_launch(&registry);
         assert_eq!(links.state(local), Some(&DaemonState::Starting));
         assert_eq!(links.state(remote), Some(&DaemonState::Starting));
-        let _subscription = micold_client::daemon::connections(
+        let specs = micold_client::daemon::actor_specs(
+            &registry,
+            links.states(),
+            Path::new("/nonexistent"),
+            None,
+        );
+        let mut ids: Vec<_> = specs.iter().map(|s| s.key.id).collect();
+        ids.sort();
+        assert_eq!(
+            ids,
+            [local, remote],
+            "each tracked daemon has its own actor"
+        );
+        // Building the subscription needs no runtime: it only holds the specs.
+        let _ = micold_client::daemon::connections(
             &registry,
             links.states(),
             Path::new("/nonexistent"),
