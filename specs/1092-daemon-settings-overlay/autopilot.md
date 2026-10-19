@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1092
 - **Worktree branch**: feat/1092_daemon-settings-should-open-in-an-overlay-with-its
 - **Started**: 2026-10-19
-- **Phase**: spec
-- **Next step**: clarify unit: no [NEEDS CLARIFICATION] markers remain; confirm and move to plan
+- **Phase**: clarify
+- **Next step**: plan unit (clarify CLEAN: no markers, no questions)
 
 ## Pull requests
 
