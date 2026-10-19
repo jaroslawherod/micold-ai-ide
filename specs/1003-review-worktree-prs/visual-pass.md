@@ -38,13 +38,15 @@ through Settings, GitHub (step 1). Evidence crops are in `visual-pass/`.
 
 | Task | Step | Result | Evidence |
 |---|---|---|---|
-| T014 | 1, 2, 6 | **Pass.** "Review changes" on Wt1 lists #43, #42, #41, newest first, each with its state glyph (open, closed, merged). Wt2 lists none of Wt1's pull requests. | `step2-list.png`, `step5-empty-and-step6-other-worktree.png` |
+| T014 | 1, 2, 6 | **Pass.** "Review changes" on Wt1 lists #43, #42, #41, newest first, each with its state glyph (open, closed, merged). Wt2 lists none of Wt1's pull requests (weak by itself: the stand-in has no entry for branch `d`; step 6's filtering rests on `pr_list_branch_set_two_worktrees_each_ask_only_their_own` in `main_tests.rs`). | `step2-list.png`, `step5-empty-and-step6-other-worktree.png` |
 | T021 | 2 | **Pass.** Check mark on every entry: pending clock (#43), red cross (#42), tick (#41); glyphs are distinct and beside the state glyph without overlap. | `step2-list.png` |
 | T027 | 3, 4 | **Pass.** Pressing #42 shows its header (state, check, `#42 Rework widget B`, base line) and its files; previous/next walk #41 → #42 → #43; previous is greyed on the first entry and next on the last; "Working tree" returns to the working-tree changes. A fourth pull request added to the stand-in appeared on top after a worktree-list refresh while #42 stayed shown. | `step3-*.png`, `step4-before.png`, `step4-after.png` |
 | T036 | 5 | **Pass.** A worktree without pull requests shows "No pull requests from this worktree yet". With `gh` signed out (stand-in exits 4, "gh auth login"), a freshly opened view shows the muted "Pull requests can't be shown for this worktree", no notice. | `step5-empty-and-step6-other-worktree.png`, `step5-unavailable-signed-out.png` |
 
-Not seen: the "Reading pull requests…" line (it lasts one stand-in call, well under the shot
-interval); it is pinned by the `PRS_LOADING` tests in `features_pr_changes.rs`. A failed diff read
+Not seen: the "Reading pull requests…" line. It lasts one stand-in call, well under the shot
+interval. The view-model tests pin `PrSection::Loading`, but no test or pass shows the drawn text
+(`PRS_LOADING`): **that one US4 line is unverified at the display.** The empty and unavailable lines
+are verified by the crops. A failed diff read
 first showed "The pull request's diff could not be read; select it again to retry" while the
 stand-in lacked the diff call (a mistake in the stand-in, then fixed): that line drew correctly with
 the header and previous/next still usable (FR-016).

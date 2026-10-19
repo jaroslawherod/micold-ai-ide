@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-19
 
-**Status**: Draft
+**Status**: Closed 2026-10-19 — shipped in PRs #1089, #1094, #1097, #1100, #1103 and the close PR
 
 **Input**: User description: "Review changes: allow navigating between all PRs of the worktree (only the first PR's diff is reachable) (issue #1003). A worktree can produce several PRs, but review changes only shows the diff of the first PR. The other PRs are out of reach: there is no way to switch to them. Related: #775 (closed). Expected: Review changes lists every PR created from the worktree (open, merged and closed) and lets the user navigate between them, showing the selected PR's diff, status and checks. Acceptance criteria: Review changes shows all PRs whose head branch(es) were created in the worktree, with title, number, state and check status. The user can switch between PRs (list, tabs or prev/next) and the diff view shows the selected PR's diff, not always the first. The selection persists while the review view stays open and the list updates when a new PR is created from the worktree. A worktree with no PRs shows a clear empty state. Test covers a worktree with multiple PRs: selecting the second and third shows their own diffs."
 

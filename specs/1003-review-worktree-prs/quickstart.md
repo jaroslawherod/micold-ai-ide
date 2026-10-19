@@ -25,3 +25,9 @@ pull requests from several branches)
 5. A worktree with no PRs: "No pull requests from this worktree yet". Sign out of `gh`: the muted
    "Pull requests can't be shown for this worktree", no notice.
 6. Another worktree of the project: none of the first worktree's PRs listed.
+
+## Results (close unit, 2026-10-19)
+
+**Part A:** `scripts/gate.sh` exited 0 at `f2af8054` (fmt, clippy core and workspace, `cargo test --workspace` with 583 `test result: ok` lines, no failure, then the script tests). Key suites: `features_pr_changes` 42 passed, `pull_request_list` 17, `worktree_branch_set` 7, `icons` 5. 12 deliberate mutants run, 12 killed (`tdd/verification.md`).
+
+**Part B:** steps 1–6 passed at a display on 2026-10-19 against a **stand-in `gh`** (no real GitHub here); evidence and the caveats are in `visual-pass.md` and `visual-pass/`. One gap: the drawn "Reading pull requests…" line was not seen. The page heading and the diff header repeat the base line (cosmetic, specified, left).
