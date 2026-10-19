@@ -58,11 +58,10 @@ finds this file by its **Worktree branch** line. Keep it true.
 | A M3 (reviewer, high) | 1 | 2ee9c1a3bcdb9da9850575f23b9d18c2653e62de:5863754859bf82cc31ac35619300da5320477909 | CHANGES: F1 MAJOR declined (see below), F2 MINOR not fixed |
 | B M3 (conformance, sonnet) | 1 | 2ee9c1a3bcdb9da9850575f23b9d18c2653e62de:5863754859bf82cc31ac35619300da5320477909 | CHANGES: F1 MAJOR (visual pass B10–B13, B18 not yet recorded) fixed by the M3 visual pass; F2 MAJOR (red evidence) fixed by mutation runs recorded in the cycle log; F3 MINOR declined |
 | Visual pass M3 | 1 | — | B10, B11, B13, B18 PASS; B12 FAIL (focus lost when the deleted card outlived its dialog) fixed with `focus_landed` in `card_focus_return`, re-run PASS; ripple not capturable under software rendering |
-
 | Converge (sonnet worker) | close | — | CLEAN: no unbuilt behaviour |
 | tdd-verify | close | — | FAIL (5 HIGH): findings 1–4 fixed with tests (mutants M1, M2 and the focus_landed clear now fail a test), 5 accepted (history), 6–8 taste, 9 fixed |
 | Visual pass close | 1 | — | B2 (mark), B6, B17 PASS; Inc hover not capturable (the card draws none); §C recorded, human pass pending |
-| A close (diff review) | 1 | SNAP | RESULT |
+| A close (diff review, sonnet) | 1 | 646e66961f581edcdd1d18b461f274b0b7ee3907:12619e44a0d43a21c8005da584e9190f3c565599 | CLEAN: 2 MINOR (table blank lines) fixed, prose only |
 
 ## Declined review findings
 
