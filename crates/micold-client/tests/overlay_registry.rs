@@ -605,9 +605,26 @@ fn the_keyboard_subscription_names_no_surface() {
                 && !m.starts_with("Message::Overview(crate::features::overview::Msg::Toggled")
                 && !m.starts_with("Message::Navigation(")
                 && !m.starts_with("Message::QuickSwitch(")
-                && !m.starts_with("Message::Overview(msg)")
+                // `card_menu_key`'s one return, `Some(Message::Overview(msg))`; the `Msg::` names it
+                // may carry are pinned below.
+                && *m != "Message::Overview(msg))"
         })
         .collect();
+    let card_menu_msgs: Vec<&str> = body
+        .match_indices("Msg::CardMenu")
+        .map(|(at, _)| {
+            body[at + "Msg::".len()..]
+                .split(|c: char| !c.is_alphanumeric())
+                .next()
+                .unwrap_or_default()
+        })
+        .collect();
+    assert!(
+        card_menu_msgs
+            .iter()
+            .all(|m| matches!(*m, "CardMenuMoved" | "CardMenuActivated")),
+        "the keyboard text may name only the card menu's Moved and Activated: {card_menu_msgs:?}"
+    );
     assert!(
         named.is_empty(),
         "`ui::subscription` names per-surface messages again: {named:?} — it is supposed to \

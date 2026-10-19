@@ -258,10 +258,10 @@ the second entry runs for that card.
 
 ## Phase 6: Polish & Cross-Cutting (close unit; no code)
 
-- [ ] T029 Run quickstart.md §B (B1–B19) with the `visual-pass` skill and record the evidence in
-  specs/972-overview-card-context-menu/visual-pass/ (steps a milestone already recorded are cited,
+- [x] T029 Run quickstart.md §B (B1–B19) with the `visual-pass` skill and record the evidence in
+  specs/972-overview-card-context-menu/visual-pass.md and visual/ (steps a milestone already recorded are cited,
   not re-run)
-- [ ] T030 Record quickstart.md §C: the CI jobs that cover macOS and Windows, and the human pass
+- [x] T030 Record quickstart.md §C: the CI jobs that cover macOS and Windows, and the human pass
   (B1 with Ctrl+click, B6, B10) still to run on real desktops
 
 ---
