@@ -16,6 +16,7 @@ the next `>`.
 | `a < b` / `x<3` / `if a<b` | unchanged |
 | `<agent-message from="x"></agent-message>` / `   ` / `` | `None` |
 | `<<b>a>` (a tag remains after removal) | `None` |
+| `a<b and c>d` (`<b and c>` is a tag by the rule above) | `Some("ad")` |
 
 ## C2. `overview_text::activity_text(text: &str) -> Option<String>`
 
@@ -30,6 +31,8 @@ whitespace or the end; `speckit-` removed from its front; `-` → space.
 | `/speckit-autopilot <agent-message from="o">#1117</agent-message>` | `Running autopilot on #1117` |
 | `/home/user/x` | `/home/user/x` (not a command) |
 | `/` alone | `/` |
+| `/speckit-` (nothing left after the prefix: the prefix is kept) | `Running speckit` |
+| `/etc` (a one-segment path reads as a command, accepted) | `Running etc` |
 | `Writing tests` | `Writing tests` |
 | only markup | `None` |
 
