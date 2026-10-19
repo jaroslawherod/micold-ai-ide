@@ -40,7 +40,7 @@ description: "Task list for feature 1003: Review changes reaches every pull requ
 - [X] T011 [US1] Implement in `crates/micold-client/src/features/changes.rs`: `Effect::ReadPullRequests { seq, project, entry, current }`, `request_pull_requests` reading for every worktree entry while enabled (also with `current: None`), `base_line` from `head_branch`, and the `Effect::ReadPullRequests` match in `crates/micold-client/src/shell/changes.rs` takes the new fields (passing `current` as the single branch, or no read when `None`, until T012), so the client builds after this task; until T009 passes
 - [X] T012 [US1] Wire the read until T010 passes: `crates/micold-client/src/shell/changes.rs` passes `entry` and `current` and exposes `local` to `crates/micold-client/src/shell/pr_status.rs`, whose `on_list_remotes` runs `worktree_branches::read_branch_set` with the shared local `Git` on the list read's blocking thread, then `list_branches` (still the one place that calls `(tooling.pull_requests)(gh)`); no local git gives `[current]`
 - [X] T013 [US1] User guide: in `docs/user-guide/reviewing-changes.md` § Pull requests, which pull requests are listed (every branch created in the worktree plus its current branch, never the default branch, merged-and-deleted branches included, branches only checked out there excluded)
-- [ ] T014 [US1] Visual pass (quickstart §B steps 1, 2, 6, without the check marks) via the `visual-pass` skill; record evidence in `specs/1003-review-worktree-prs/`. **Moved out of M1 to the close unit, beside T037**: it needs `gh` signed in to a GitHub repository, which M1's unit did not have (`visual-pass.md`)
+- [x] T014 [US1] Visual pass (quickstart §B steps 1, 2, 6, without the check marks) via the `visual-pass` skill; record evidence in `specs/1003-review-worktree-prs/`. **Moved out of M1 to the close unit, beside T037**: it needs `gh` signed in to a GitHub repository, which M1's unit did not have (`visual-pass.md`)
 
 ### Check status on every entry (US1 scenario 3; milestone M2)
 
@@ -50,7 +50,7 @@ description: "Task list for feature 1003: Review changes reaches every pull requ
 - [x] T018 [US1] Implement `check_mark` in `crates/micold-client/src/features/changes.rs` and make `indicator_marks` in `crates/micold-client/src/ui/sidebar.rs` use it (one mapping); implement `PullRequestRow::checks` passing the mark to its `PullRequestIndicator`; in `crates/micold-client/src/showcase/sections/review.rs` show a row with each check mark; until T017 passes
 - [x] T019 [US1] `crates/micold-client/src/ui/changes.rs`: each pull request row draws its check mark with `.checks(..)` (US1 scenario 3)
 - [x] T020 [US1] User guide: the check mark on every entry (merged and closed included, same marks as the sidebar) in `docs/user-guide/reviewing-changes.md` § Pull requests
-- [ ] T021 [US1] Visual pass (quickstart §B step 2, the check marks); record evidence in `specs/1003-review-worktree-prs/`. **Moved out of M2 to the close unit, beside T014 and T037**: no `gh` auth and no `xdotool` in the milestone container (`visual-pass.md`)
+- [x] T021 [US1] Visual pass (quickstart §B step 2, the check marks); record evidence in `specs/1003-review-worktree-prs/`. **Moved out of M2 to the close unit, beside T014 and T037**: no `gh` auth and no `xdotool` in the milestone container (`visual-pass.md`)
 
 ## Phase 4: User Story 2 - Switch between the pull requests and review each one's diff (P1)
 
@@ -61,7 +61,7 @@ description: "Task list for feature 1003: Review changes reaches every pull requ
 - [x] T024 [P] [US2] Add `Icon::ChevronLeft` and `Icon::ChevronRight` glyphs in `crates/micold-client/src/icons.rs`, covered by the existing every-glyph checks in `crates/micold-client/tests/icons.rs` (extend their list first, so they fail)
 - [x] T025 [US2] `crates/micold-client/src/ui/changes.rs`: header above the diff while a PR is shown: `PullRequestIndicator` (state + checks), `#number title`, the base line, and previous/next `IconButton`s, each disabled when `adjacent(..)` is `None` (contracts/changes-view.md § Header)
 - [x] T026 [US2] User guide: the header and previous/next in `docs/user-guide/reviewing-changes.md` § Pull requests
-- [ ] T027 [US2] Visual pass (quickstart §B steps 3, 4); record evidence in `specs/1003-review-worktree-prs/`. **Moved out of M3 to the close unit, beside T014, T021 and T037**: no `gh` auth and no `xdotool` in the milestone container (`visual-pass.md`)
+- [x] T027 [US2] Visual pass (quickstart §B steps 3, 4); record evidence in `specs/1003-review-worktree-prs/`. **Moved out of M3 to the close unit, beside T014, T021 and T037**: no `gh` auth and no `xdotool` in the milestone container (`visual-pass.md`)
 
 ## Phase 5: User Story 3 - Selection holds and the list stays current (P2)
 
@@ -80,13 +80,13 @@ description: "Task list for feature 1003: Review changes reaches every pull requ
 - [x] T033 [US4] Implement `PrSection` and `pub fn section` and the `Err(Unavailable)` arm in `crates/micold-client/src/features/changes.rs`, until T032 passes
 - [x] T034 [US4] `crates/micold-client/src/ui/changes.rs`: draw the section from `section(..)` per contracts/changes-view.md § Section ("Reading pull requests…", muted "Pull requests can't be shown for this worktree", "No pull requests from this worktree yet", the list), with the rows in a scrollable of bounded height (edge case: more PRs than fit)
 - [x] T035 [US4] User guide: the loading, empty and unavailable lines, and that no GitHub access now shows a muted line instead of no section, in `docs/user-guide/reviewing-changes.md` § Pull requests
-- [ ] T036 [US4] Visual pass (quickstart §B step 5); record evidence in `specs/1003-review-worktree-prs/`. **Moved out of M4 to the close unit, beside T014, T021, T027 and T037**: no `gh` auth and no `xdotool` in the milestone container (`visual-pass.md`)
+- [x] T036 [US4] Visual pass (quickstart §B step 5); record evidence in `specs/1003-review-worktree-prs/`. **Moved out of M4 to the close unit, beside T014, T021, T027 and T037**: no `gh` auth and no `xdotool` in the milestone container (`visual-pass.md`)
 
 ## Polish (no milestone)
 
 No code changes remain after T036: recording quickstart Part A and Part B results in `quickstart.md` and ticking tasks is the close unit's work, in the close PR.
 
-- [ ] T037 (with T014, moved here from M1) Record the quickstart Part A and Part B results in `specs/1003-review-worktree-prs/quickstart.md`
+- [x] T037 (with T014, moved here from M1) Record the quickstart Part A and Part B results in `specs/1003-review-worktree-prs/quickstart.md`
 
 ## Dependencies & Execution Order
 
@@ -144,9 +144,22 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 
 ### M4 — Loading, empty and unavailable lines
 
-- **Tasks**: T032–T036 (T036 moved to the close unit)
+- **Tasks**: T032–T036 (T036 moved to the close unit) · **M4 PR**: #1103
 - **Deliverable**: the Pull requests section shows "Reading pull requests…" until the first read, "No pull requests from this worktree yet" for a worktree without any, and the muted "Pull requests can't be shown for this worktree" without GitHub access and no list read, with no notice; a failed refresh after a list keeps the list and the selection
 - **Satisfies**: US4 acceptance scenarios 1–3; FR-010, FR-011, FR-012, FR-015; SC-005, SC-006
 - **Verify**: `scripts/build-lock.sh cargo test -p micold-client --test features_pr_changes`; quickstart §B step 5
 - **Depends on**: M3 (it rewrites the section drawing M2 and M3 extend)
 - **Tier**: full
+
+## Phase 7: TDD remediation
+
+Source: `tdd/verification.md` at `c226a7d3`, verdict **FAIL**. The feature is not done until T038-T040 are cleared (findings 1-3, all HIGH).
+
+- [x] T038 [US1] Finding 1: make `a_check_mark_keeps_the_row_height_and_is_drawn` (`crates/micold-client/src/ui/material/pull_request_row.rs:138`) fail when the mark is not drawn (compare the row with and without `.checks(..)`, or assert on the indicator), then show it red against a no-op `.checks()` before restoring. Done when `scripts/build-lock.sh cargo test -p micold-client --lib -- pull_request_row` is green and the no-op run is recorded red in `tdd/cycle-log.md`
+- [x] T039 [US2] Finding 2: pin what the view draws, or record the passes that stand in for it. Either add view-level tests for the `PRS_EMPTY`/`PRS_UNAVAILABLE`/`PRS_LOADING` lines (`ui/changes.rs:48-52`), the header contents, the check mark on every row, and previous/next disabled where `adjacent(..)` is `None` (`ui/changes.rs:441`), in the pattern of `support::layout`; or run the `visual-pass` skill for T014, T021, T027, T036 and record results under T037 in `quickstart.md`. Done when `scripts/build-lock.sh cargo test -p micold-client --test features_pr_changes` is green and each of the five criteria in finding 2 names a test or a recorded pass — done: the five criteria are covered by the recorded visual pass (`visual-pass.md`, close unit, T014/T021/T027/T036) plus the view-model tests
+- [x] T040 [US1] Finding 3: re-establish red for T015, T017, T022, T024 after the fact. For each, break the implementation in a throwaway worktree (for example `check_mark` returning `None`, `adjacent` returning `None`, `Icon::ChevronLeft` mapped to another glyph, `reduce_checks` dropped from `parse_list`), run the named test, paste the failing output into `tdd/cycle-log.md`, restore. Done when each of the four has a red line in `cycle-log.md` and `scripts/build-lock.sh cargo test -p micold-client --test features_pr_changes --test icons` and `-p micold-core --test pull_request_list` are green
+- [x] T041 Finding 4: add `specs/1003-review-worktree-prs/tdd/test-list.md` (behavior ids, `traces`, states) from tasks.md T002-T037, or state in the cycle log that tasks.md is the list and keep it current. Done when `/speckit.tdd.verify` no longer reports a missing list — done: tasks.md is the test list (stated in `tdd/cycle-log.md`)
+- [ ] T042 Finding 5: record a full green gate at the close commit. Free disk first (`mise run sweep`), then `mise run gate`. Done when it exits 0 and the counts go in `quickstart.md` Part A
+- [x] T043 Test strength unmeasured: with 15 GB or more free, run the eight deliberate mutants listed in `tdd/verification.md` "Mutation results" (or `cargo mutants` scoped to `worktree_branches.rs`, `pull_request.rs`, `features/changes.rs`, `pull_request_row.rs` if installed), restore each and rerun green. Done when every survivor is triaged in a refreshed `verification.md`
+- [x] T044 Finding 6: merge `the_selected_pull_request_leaving_the_list_removes_the_header` (`tests/features_pr_changes.rs:1073`) into `a_pull_request_that_leaves_the_list_returns_the_view_to_the_working_tree` (`:575`). Done when `scripts/build-lock.sh cargo test -p micold-client --test features_pr_changes` is green with one test fewer
+- [x] T045 Findings 7-12 (MED/LOW): make the query tests assert shape not substrings (`pull_request_list.rs:169-187,290`), drop the direct field write (`features_pr_changes.rs:298`), compare `header.check` with a literal mark (`:946,1067`), label the asserts at `worktree_branches.rs:342`, split `:888` of `features_pr_changes.rs`, share one `git_at` (`worktree_branch_set.rs:21`, `main_tests.rs:10550`), and decide whether `pull_request_list.rs:262` should test the fake. Done when `mise run test-core` and the client test above are green — done for the items worth doing; not done, with reasons: direct field write at `features_pr_changes.rs` (state unreachable through `update`), shared `git_at` (two crates, would need a cross-crate helper), `pull_request_list.rs` fake test (client tests depend on the fake)
