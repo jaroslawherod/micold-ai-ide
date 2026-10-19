@@ -103,7 +103,11 @@ fn a_branch_reopened_under_the_same_name_lists_all_its_pull_requests() {
 #[test]
 fn the_default_branchs_pull_requests_are_dropped() {
     let list = read("pr_list_branches_default.txt", &["main", "feat/d"]).expect("readable");
-    assert_eq!(numbers(&list), [41], "main is never part of the set (FR-002)");
+    assert_eq!(
+        numbers(&list),
+        [41],
+        "main is never part of the set (FR-002)"
+    );
 }
 
 #[test]
@@ -129,7 +133,10 @@ fn branches_without_pull_requests_give_an_empty_list() {
 #[test]
 fn an_answer_missing_an_asked_branch_is_passing_not_a_short_list() {
     assert_eq!(
-        read("pr_list_branches_empty.txt", &["feat/a", "feat/b", "feat/c"]),
+        read(
+            "pr_list_branches_empty.txt",
+            &["feat/a", "feat/b", "feat/c"]
+        ),
         Err(ReadingFailure::Passing),
         "no branch is silently dropped (FR-013)"
     );
@@ -170,7 +177,10 @@ fn the_query_has_one_alias_per_branch_and_names_no_branch() {
     }
     assert!(!query.contains("$b3"), "exactly n variables");
     assert!(query.contains("defaultBranchRef { name }"));
-    assert!(query.contains("headRefName"), "each pull request's own branch");
+    assert!(
+        query.contains("headRefName"),
+        "each pull request's own branch"
+    );
     assert!(query.contains("rateLimit { remaining resetAt }"));
 }
 

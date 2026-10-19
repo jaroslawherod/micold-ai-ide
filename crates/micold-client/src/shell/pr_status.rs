@@ -405,7 +405,7 @@ pub fn on_list_remotes(
                 let Some(gh) = (tooling.locate_gh)(env_include_path(&snapshot.vars)) else {
                     return Err(ReadingFailure::Unavailable);
                 };
-                (tooling.pull_requests)(gh).list_branch(&repo, &branch, now())
+                (tooling.pull_requests)(gh).list_branches(&repo, &[branch], now())
             })
             .await
         },

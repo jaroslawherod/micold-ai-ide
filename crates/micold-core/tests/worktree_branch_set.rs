@@ -51,7 +51,11 @@ fn three_branches(tmp: &TempDir) -> (std::path::PathBuf, std::path::PathBuf) {
     let repo = tmp.path().join("repo");
     init_repo(&repo);
     let wt = tmp.path().join("wt");
-    git_at(&repo, 2_000, &["worktree", "add", "-q", "-b", "A", wt.to_str().unwrap()]);
+    git_at(
+        &repo,
+        2_000,
+        &["worktree", "add", "-q", "-b", "A", wt.to_str().unwrap()],
+    );
     git_at(&wt, 2_100, &["commit", "-q", "--allow-empty", "-m", "on A"]);
     git_at(&wt, 3_000, &["switch", "-q", "-c", "B"]);
     git_at(&wt, 3_100, &["commit", "-q", "--allow-empty", "-m", "on B"]);
@@ -90,10 +94,19 @@ fn switching_to_a_remote_only_branch_is_excluded() {
     let clone = tmp.path().join("clone");
     git(
         tmp.path(),
-        &["clone", "-q", origin.to_str().unwrap(), clone.to_str().unwrap()],
+        &[
+            "clone",
+            "-q",
+            origin.to_str().unwrap(),
+            clone.to_str().unwrap(),
+        ],
     );
     let wt = tmp.path().join("wt");
-    git_at(&clone, 2_000, &["worktree", "add", "-q", "-b", "W", wt.to_str().unwrap()]);
+    git_at(
+        &clone,
+        2_000,
+        &["worktree", "add", "-q", "-b", "W", wt.to_str().unwrap()],
+    );
     git_at(&wt, 3_000, &["switch", "-q", "remote-only"]);
     git_at(&wt, 4_000, &["switch", "-q", "W"]);
     assert_eq!(
@@ -108,7 +121,11 @@ fn two_worktrees_of_one_repository_get_disjoint_sets() {
     let tmp = TempDir::new().unwrap();
     let (repo, wt) = three_branches(&tmp);
     let other = tmp.path().join("other");
-    git_at(&repo, 8_000, &["worktree", "add", "-q", "-b", "D", other.to_str().unwrap()]);
+    git_at(
+        &repo,
+        8_000,
+        &["worktree", "add", "-q", "-b", "D", other.to_str().unwrap()],
+    );
     git_at(&other, 9_000, &["switch", "-q", "-c", "E"]);
     assert_eq!(set_of(&other, "E"), names(&["D", "E"]));
     assert_eq!(set_of(&wt, "C"), names(&["A", "B", "C"]));

@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-c3olht
 - **Started**: 2026-10-19
 - **Phase**: implement
-- **Next step**: M1 implement, continue from *Handover*
+- **Next step**: M1 implement T011, continue from *Handover*
 
 ## Pull requests
 
@@ -51,34 +51,25 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 ## Handover
 
-M1 unit 1 handed over at 150k (commit "test(1003): M1 core tests, fixtures and Git::reflogs (WIP)").
-
-- **Base**: branch reset to origin/main 6fbd754f by hand (`branch-start.sh` needs `gh`, not signed in
-  here; #1089 merged). Do not run branch-start again: continue on the branch as it is.
-- **Done**: T001 fixtures (`pr_list_branches_{three,reopened,default,fork,tie,empty,unknown_state}.txt`;
-  the five single-branch `pr_list_*.txt` removed, superseded). `Git::reflogs(dir, refs)` in
-  `git.rs` (trait, `GitCli` via `review/git.rs::reflogs` = bounded `read`, `FakeGit::with_reflog(dir,
-  refs, text)`, unscripted call = Err). Tests written, red NOT yet observed/recorded:
-  T002 (`src/worktree_branches.rs` inline tests + stubs, `pub mod worktree_branches` in lib.rs),
-  T004 (`tests/worktree_branch_set.rs`, real git with `GIT_COMMITTER_DATE`-pinned times), T006
-  (`tests/pull_request_list.rs`, rewritten; does not compile yet).
-- **API the T006 tests expect** (pull_request.rs): `list_query(n) -> String`, `list_args(repo,
-  &[String])`, `parse_list(body, branches)`, `read_list_outcome(outcome, branches, now)`,
-  `list_in_chunks(branches, FnMut(&[String]) -> Result<Vec<BranchPullRequest>, ReadingFailure>)`
-  (chunks of `LIST_BRANCHES_PER_REQUEST`=25, empty = no call, merged + sorted created_at desc then
-  number desc; `GhCli::list_branches` uses it like `read_in_chunks`), `BranchPullRequest.head_branch`,
-  `PullRequestSource::list_branches(repo, &[String], now)` replacing `list_branch`,
-  `FakePullRequestSource::list_calls() -> Vec<(String, Vec<String>)>`. Default-branch alias dropped
-  via `defaultBranchRef.name == branches[i]`; a missing alias `p<i>` is `Passing`. M2 adds checks,
-  so the M1 query has `headRefName` but no rollup.
-- **Branch-set rules as tested**: `candidates` = current first, then HEAD log names newest first,
-  deduped; rename X→Y links both names (HEAD on X at creation matches Y).
-- **TDD**: no `tdd/test-list.md` exists (the `tdd.run` hook would stop); follow tasks.md's test-first
-  order and log each red/green in `specs/1003-review-worktree-prs/tdd/cycle-log.md`.
-- **Next**: stubs in pull_request.rs → run core tests, record reds → T003, T005 (`read_branch_set`),
-  T007 (+ github.rs, client `main_tests.rs` BlockingSource, `shell/pr_status.rs` caller) → T008–T014.
-- **Build**: a warm `cargo test --workspace --no-run` was started detached with
-  `CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0` (keep that env; scratchpad `warm.log`).
+M1 unit 2 handed over at 140k (commit "feat(1003): branch set and multi-branch list (M1 WIP)").
+- **Base**: branch on 6fbd754f (origin/main has moved on: rebase onto it before the gate, no
+  `branch-start.sh`: needs `gh`). Unpushed.
+- **Done**: T001–T009 ticked. `worktree_branches` implemented (T003, T005 `read_branch_set`);
+  `pull_request.rs` multi-branch list (`list_query(n)`, `list_args(repo,&[String])`, `parse_list(body,
+  branches)`, `read_list_outcome(o, branches, now)`, `list_in_chunks`, `LIST_BRANCHES_PER_REQUEST`,
+  `head_branch`, trait `list_branches`; shared `graphql_args`), `GhCli::list_branches`; client caller
+  `.list_branches(&repo, &[branch], now())`, `BlockingSource`, guard test, never_stored test amended.
+  T009 tests written in `features_pr_changes.rs` (detached HEAD reads with `current: None`, project
+  root `Default` gives no read, `base_line` names `head_branch`); red observed (E0026). Cycle log:
+  `tdd/cycle-log.md`. main_tests `list_calls` comparisons now `vec![...]` (not yet compiled).
+- **Next**: T011 (`Effect::ReadPullRequests { seq, project, entry, current }`, `request_pull_requests`
+  reads for every `Worktree` entry incl. `current: None`, `Default` stays `Absent`; `base_line` from
+  `listed.head_branch`; `shell/changes.rs` run() match passes fields), then T010 shell tests
+  `pr_list_branch_set_*` in main_tests.rs (rig: `app_over` at ~9271, `ask_list` ~10470; local git is
+  `app.caps.shared_git()`, `local()` in shell/changes.rs:279), T012 (`list_requested` gets entry +
+  current, runs `worktree_branches::read_branch_set` with shared git on the blocking thread; NOT_LOCAL
+  → `[current]`), T013 user guide, T014 visual pass; then verify.md (review A high, B, full gate).
+- **Build**: keep `CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0` (scratchpad `env.sh`).
 
 ## Open escalation
 
