@@ -560,3 +560,25 @@ fn the_git_config_mount_is_the_sanitized_copy_not_the_host_file() {
         assert!(!volume.0.ends_with(".gitconfig"), "{volume:?}");
     }
 }
+
+/// FR-006: the scoped git credential's directory is a small tmpfs owned by the container's uid,
+/// and no host path is mounted there.
+#[test]
+fn the_git_credential_directory_is_a_memory_tmpfs_and_no_host_mount() {
+    let spec = spec_for(false);
+    let args: Vec<String> = argv::create(&spec, &caps())
+        .iter()
+        .map(|a| a.to_string_lossy().into_owned())
+        .collect();
+    let at = args.iter().position(|a| a == "--tmpfs").expect("--tmpfs");
+    assert_eq!(
+        args[at + 1],
+        "/run/micold/git:rw,noexec,nosuid,size=64k,mode=0700,uid=1000,gid=1000"
+    );
+    assert!(
+        !args
+            .iter()
+            .any(|a| a.contains(":/run/micold/git:") || a.ends_with(":/run/micold/git")),
+        "a host path is mounted at /run/micold/git: {args:?}"
+    );
+}

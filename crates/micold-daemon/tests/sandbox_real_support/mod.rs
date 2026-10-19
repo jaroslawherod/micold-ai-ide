@@ -500,6 +500,8 @@ fn start_sandbox_on(
         micold_core::sandbox::parse::GIT_IDENTITY_LABEL,
         micold_core::sandbox::parse::GIT_IDENTITY_NONE
     );
+    // The credential directory `argv::create` backs with memory (#1002, FR-006).
+    let git_credential_tmpfs = micold_core::sandbox::argv::git_credential_tmpfs(uid, gid);
     let home_env = format!("HOME={}", spec.home);
     let micold_home_env = format!("MICOLD_HOME={}", spec.home);
     let image_env = format!("MICOLD_IMAGE_REFERENCE={image}");
@@ -536,6 +538,8 @@ fn start_sandbox_on(
         spec.network,
         "-p",
         &publish,
+        "--tmpfs",
+        &git_credential_tmpfs,
         "-e",
         &home_env,
         // The entrypoint adds the passwd entry sshd needs, with this as the home (the sessions'

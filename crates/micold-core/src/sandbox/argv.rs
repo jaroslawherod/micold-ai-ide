@@ -185,10 +185,22 @@ pub fn create(spec: &SandboxSpec, caps: &RuntimeCapabilities) -> Vec<OsString> {
     }
 
     args.extend(budget_args(spec, caps));
+    // The scoped git credential lives here and nowhere else (FR-006): memory only, no host mount,
+    // owned by the uid the daemon runs as and closed to every other.
+    args.push("--tmpfs".into());
+    args.push(git_credential_tmpfs(spec.uid, spec.gid).into());
     args.extend(mount_args(&spec.mounts));
 
     args.push(spec.profile.image.reference().into());
     args
+}
+
+/// The `--tmpfs` value for the credential directory: `<path>:<options>`, small, never executable.
+pub fn git_credential_tmpfs(uid: u32, gid: u32) -> String {
+    format!(
+        "{}:rw,noexec,nosuid,size=64k,mode=0700,uid={uid},gid={gid}",
+        crate::scoped_credential::helper::GIT_CREDENTIAL_ROOT
+    )
 }
 
 /// The limit flags, omitting every limit this runtime cannot enforce (obligation C-2).

@@ -127,6 +127,13 @@ fn sandbox_real_no_user_credentials_reach_the_container() {
         assert!(!env.contains(marker), "env carries {marker}");
     }
 
+    // FR-006: the scoped credential's directory is memory, a tmpfs that is no host mount.
+    let mounts = in_container("grep ' /run/micold/git ' /proc/self/mounts");
+    assert!(
+        mounts.starts_with("tmpfs /run/micold/git tmpfs "),
+        "/run/micold/git is not a tmpfs: {mounts:?}"
+    );
+
     let pattern = MARKERS.join("\\|");
     let skip = "--exclude-dir=proc --exclude-dir=sys --exclude-dir=dev";
     for root in ["/", "\"$HOME\""] {

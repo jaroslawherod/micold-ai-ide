@@ -7,6 +7,7 @@
 
 pub mod git_env;
 pub mod gitconfig;
+pub mod helper;
 
 pub use git_env::git_env;
 pub use gitconfig::{parse_config_list, sanitize_gitconfig, sanitize_gitconfig_text};
