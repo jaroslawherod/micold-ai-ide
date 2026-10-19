@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #938
 - **Worktree branch**: claude/project-thread-cl0lw3
 - **Started**: 2026-10-18
-- **Phase**: M8
-- **Next step**: M8 implement T037–T047, T056 (tests first)
+- **Phase**: close
+- **Next step**: close: tdd-verify, converge, T048 quickstart, review, gate
 
 ## Pull requests
 
@@ -25,6 +25,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1076 | M5 late and multiple viewers | merged (rebase) | 73e57588cecef1a680173b80ba4922d404028571 |
 | #1080 | M6 terminal-only requests refused | merged (rebase) | 32dc336005547824faa2f20ac2122cc455cd9734 |
 | #1086 | M7 event history saved/restored | merged (rebase) | 31a742c9f9a99a0431a486fbb66a4aa2573c203f |
+| #1087 | M8 chevron entry, row marker, log pane, user guide, setting note | merged (rebase) | a47882ccc0f123e0a991ca87f46e40c20c50dc73 |
 
 ## Milestones
 
@@ -37,7 +38,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M5 | T031–T032 | full | late and multiple viewers | #1076 | merged |
 | M6 | T033–T036 | full | terminal-only requests refused | #1080 | merged |
 | M7 | T049–T055 | full | event history saved under Save terminal history, restored after a daemon restart | #1086 | merged |
-| M8 | T037–T047, T056 | full | chevron entry, row marker, log pane, user guide, setting note | — | in progress |
+| M8 | T037–T047, T056 | full | chevron entry, row marker, log pane, user guide, setting note | — | #1087 | merged |
 
 ## Decisions
 
@@ -159,3 +160,5 @@ None.
 - Windows (after M2): `std::process::Command` in `structured.rs` does not resolve `claude.cmd` on
   `PATH` via `PATHEXT` as the PTY spawn's `CommandBuilder` does; a structured start on Windows
   needs the same resolution.
+- Flaky daemon test (tdd-verify finding 6): `structured_session::messages_are_refused_while_blank_mid_turn_stopped_or_to_a_terminal` failed about 2 of 16 runs under load at `support/conn.rs:197` (a request unanswered for 20 s); cause not found.
+- FR-023's user-guide text (`docs/user-guide/`) has no automated check; the Settings note does.

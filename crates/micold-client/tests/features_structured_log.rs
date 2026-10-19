@@ -4,7 +4,9 @@
 
 use micold_client::features::structured_log::State;
 use micold_core::session::SessionId;
-use micold_core::structured::{omitted_line, SequencedEvent, StructuredEvent};
+use micold_core::structured::{
+    log_line, omitted_line, SequencedEvent, StructuredEvent, MAX_EVENTS,
+};
 
 fn event(seq: u64, text: &str) -> SequencedEvent {
     SequencedEvent {
@@ -22,8 +24,11 @@ fn the_first_history_message_fills_the_log() {
     let (mut state, s) = (State::default(), SessionId::new());
     state.apply(s, 0, &[event(0, "a"), event(1, "b")], false);
     let rows = rows(&state, s);
-    assert_eq!(rows.len(), 2);
-    assert!(rows[0].contains('a') && rows[1].contains('b'));
+    assert_eq!(
+        rows,
+        [log_line(&event(0, "a")), log_line(&event(1, "b"))],
+        "the history's events fill the log, in order"
+    );
 }
 
 #[test]
@@ -105,4 +110,38 @@ fn forgetting_a_session_drops_its_log() {
     state.apply(s, 0, &[event(0, "a")], false);
     state.forget(s);
     assert_eq!(rows(&state, s).len(), 0);
+}
+
+#[test]
+fn the_log_stays_bounded_and_says_how_many_events_it_dropped() {
+    let (mut state, s) = (State::default(), SessionId::new());
+    let extra = 3_u64;
+    let events: Vec<_> = (0..MAX_EVENTS as u64 + extra)
+        .map(|seq| event(seq, &seq.to_string()))
+        .collect();
+    state.apply(s, 0, &events, false);
+    let rows = rows(&state, s);
+    assert_eq!(
+        rows.len(),
+        MAX_EVENTS + 1,
+        "the cap plus the omitted marker"
+    );
+    assert_eq!(
+        rows[0],
+        omitted_line(extra),
+        "the marker comes first and counts the dropped"
+    );
+    assert_eq!(
+        rows[1],
+        log_line(&event(extra, &extra.to_string())),
+        "the oldest events are the ones dropped"
+    );
+    assert_eq!(
+        rows.last().unwrap(),
+        &log_line(&event(
+            MAX_EVENTS as u64 + extra - 1,
+            &(MAX_EVENTS as u64 + extra - 1).to_string()
+        )),
+        "the newest event is kept"
+    );
 }
