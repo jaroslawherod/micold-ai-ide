@@ -47,6 +47,18 @@ pub struct Renewal {
     pub repo: GithubRepo,
     /// The credential to send the daemon, or why there is none.
     pub result: Result<ScopedCredential, NoCredentialReason>,
+    /// The token this one replaces. Revoke it with [`Renewal::revoke_superseded`] only once the new
+    /// one is delivered, so the sandbox holds a valid token throughout (SC-004).
+    superseded: Option<ScopedCredential>,
+}
+
+impl Renewal {
+    /// Revoke the replaced token, best effort (FR-010). Call it after the new grant is sent.
+    pub fn revoke_superseded(&mut self, source: &dyn CredentialSource) {
+        if let Some(old) = self.superseded.take() {
+            let _ = source.revoke(&old);
+        }
+    }
 }
 
 impl Schedule {
@@ -144,11 +156,11 @@ impl Schedule {
             .map(|repo| {
                 let result = source.issue(&repo, self.grant);
                 let superseded = self.record(&repo, &result, now);
-                // The token a renewal replaces is revoked too, best effort (FR-010).
-                if let Some(old) = superseded {
-                    let _ = source.revoke(&old);
+                Renewal {
+                    repo,
+                    result,
+                    superseded,
                 }
-                Renewal { repo, result }
             })
             .collect()
     }
@@ -514,12 +526,14 @@ mod tests {
     }
 
     #[test]
-    fn a_renewal_revokes_the_token_it_replaces() {
+    fn a_renewal_revokes_the_token_it_replaces_only_when_told_to() {
         let (mut s, f) = started(&one());
         s.run(&f, T0);
         let due = T0 + HOUR - 10 * MIN;
         f.set_now(due);
-        s.run(&f, due);
+        let mut renewals = s.run(&f, due);
+        assert_eq!(f.revoked(), vec![]);
+        renewals[0].revoke_superseded(&f);
         assert_eq!(f.revoked(), vec![repo("a")]);
     }
 

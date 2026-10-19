@@ -16,7 +16,7 @@ use micold_core::protocol::messages::CredentialTarget;
 use micold_core::scoped_credential::helper::{
     answer, parse_request, render_credential_file, GIT_CREDENTIAL_ROOT,
 };
-use micold_core::scoped_credential::{SecretToken, UnixTime, GITHUB_BASE, MAX_LIFETIME_SECS};
+use micold_core::scoped_credential::{SecretToken, UnixTime, CLOCK_SKEW_SECS, GITHUB_BASE, MAX_LIFETIME_SECS};
 
 /// Test override of the credential root, as `repo_clone::ROOT_ENV` is for the clone root.
 pub const ROOT_ENV: &str = "MICOLD_GIT_CREDENTIAL_ROOT";
@@ -29,10 +29,6 @@ fn env_or(name: &str, default: &str) -> String {
         .filter(|v| !v.is_empty())
         .unwrap_or_else(|| default.to_string())
 }
-
-/// How far ahead of this daemon's clock a credential's expiry may be beyond the hour: the host
-/// issued it by its own clock.
-const CLOCK_SKEW_SECS: u64 = 300;
 
 /// Where this daemon keeps credential files, or `None` when it is not sandboxed (#1002): the test
 /// override [`ROOT_ENV`], else the default root in a container or when the runtime mounted an
