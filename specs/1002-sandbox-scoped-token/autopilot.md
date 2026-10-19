@@ -87,6 +87,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M5 B (conformance, sonnet) | 1 | (not recorded by part 1) | CLEAN; Verify green |
 
 | M6 A (code-review high) | 1 | (pre-fix HEAD 96367608) | CHANGES (MAJOR: the 24 h warning never redrew at its threshold — the worker now wakes at expiry − 24 h and reports it, and views use the report's time; MAJOR: a lost report advanced `reported` — `unreported` resends; MINOR fixed: same-named project folders show their paths, `credentials` dropped on Remove/forget and for unknown ids, `utc_date` moved to `micold_core::local_time`, reducer tests added; declined: see *Declined review findings*) |
+| M6 A2 + B (code-review medium with the conformance checks, one fork: no Agent tool in this session) | 2 | 26808f9b | CHANGES (MAJOR fixed: the resend-on-failed-send path could never help and is gone (same take-once channel as `desktop_notify`); MAJOR fixed: the worker sleeps at most 5 min, so a suspend delays the warning or the expiry by 5 min at most; MAJOR: T052's sidebar line, D20, put to jaro on a decision card, M6 goes on with the recommended *Settings only*; MINOR fixed: reducer test for None → Held, linear folder count; declined: warning wording follows contracts/pat-source.md and M5, not T050's sketch; `next_wake` rebuilding status maps, cheap at this size) |
 
 ## M4 review notes
 

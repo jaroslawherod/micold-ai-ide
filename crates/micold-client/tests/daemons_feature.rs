@@ -1741,6 +1741,39 @@ mod credential_lines {
     }
 
     #[test]
+    fn a_delivered_credential_replaces_the_line_that_said_there_was_none() {
+        let mut w = World::new();
+        let mut state = State::default();
+        let id = w.boxed;
+        send(
+            &mut state,
+            &mut w,
+            Msg::CredentialStatuses(id, none(NoCredentialReason::SourceNotSetUp), AT),
+        );
+        let repo =
+            micold_core::github::GithubRepo::from_remote_url("https://github.com/o/app").unwrap();
+        let held = BTreeMap::from([(
+            PathBuf::from("/work/app"),
+            CredentialStatus::Held {
+                repo,
+                expires_at: AT + 30 * 86_400,
+            },
+        )]);
+        send(&mut state, &mut w, Msg::CredentialStatuses(id, held, AT));
+        let row = daemons::views(&state, &w.model())
+            .rows
+            .into_iter()
+            .find(|r| r.id == id)
+            .unwrap();
+        assert_eq!(row.credential_lines.len(), 1);
+        assert_eq!(
+            row.credential_lines[0].text,
+            "app: Git credential for o/app, expires on 2026-11-18"
+        );
+        assert!(!row.credential_lines[0].warning);
+    }
+
+    #[test]
     fn a_report_for_a_daemon_that_is_not_configured_is_dropped() {
         let mut w = World::new();
         let mut state = State::default();

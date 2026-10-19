@@ -359,16 +359,15 @@ pub fn credential_lines(
     now: UnixTime,
 ) -> Vec<CredentialLine> {
     let folder = |p: &PathBuf| p.file_name().map(|n| n.to_string_lossy().into_owned());
+    let mut folders: BTreeMap<Option<String>, usize> = BTreeMap::new();
+    for project in statuses.keys() {
+        *folders.entry(folder(project)).or_default() += 1;
+    }
     statuses
         .iter()
         .filter_map(|(project, status)| {
-            let shared = statuses
-                .keys()
-                .filter(|other| folder(other) == folder(project))
-                .count()
-                > 1;
             let name = match folder(project) {
-                Some(name) if !shared => name,
+                Some(name) if folders.get(&Some(name.clone())) == Some(&1) => name,
                 _ => project.display().to_string(),
             };
             let (text, warning) = match status {

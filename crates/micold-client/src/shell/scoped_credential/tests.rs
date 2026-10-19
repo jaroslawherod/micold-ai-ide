@@ -540,16 +540,3 @@ fn a_held_token_is_reported_again_when_it_comes_within_a_day_of_its_expiry() {
     );
     assert_eq!(rig.manager.next_wake(rig.now()), Some(T0 + 30 * DAY));
 }
-
-#[test]
-fn statuses_the_window_did_not_get_are_reported_again() {
-    let mut rig = Rig::new();
-    let (send, _log) = sink();
-    rig.manager
-        .targets(DaemonId(1), send, vec![target("/pa", "a")], None, rig.now());
-    rig.run();
-    let now = rig.now();
-    assert_eq!(rig.manager.changed_statuses(now).len(), 1);
-    rig.manager.unreported(DaemonId(1));
-    assert_eq!(rig.manager.changed_statuses(now).len(), 1);
-}

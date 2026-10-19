@@ -184,8 +184,12 @@ struct Entry {
 pub type Statuses = BTreeMap<PathBuf, CredentialStatus>;
 
 /// Where a daemon's changed statuses go, with the time they hold at: the window (FR-013).
-/// `false` when it could not be delivered, so it is sent again.
-pub type Publish = Arc<dyn Fn(DaemonId, Statuses, UnixTime) -> bool + Send + Sync>;
+pub type Publish = Arc<dyn Fn(DaemonId, Statuses, UnixTime) + Send + Sync>;
+
+/// The longest the worker sleeps before it reads the wall clock again. A sleep is measured on a
+/// clock that stops while the machine is suspended, so a wake due during a suspend (the expiry
+/// warning, the expiry) is late by at most this much after it resumes.
+const MAX_SLEEP: Duration = Duration::from_secs(5 * 60);
 
 /// Every connected sandboxed daemon's [`Schedule`], and the source they issue through.
 pub struct Manager {
@@ -234,11 +238,6 @@ impl Manager {
             }
         }
         changed
-    }
-
-    /// `daemon`'s statuses did not reach the window: report them again next time.
-    pub fn unreported(&mut self, daemon: DaemonId) {
-        self.reported.remove(&daemon);
     }
 
     /// `daemon` reported `targets` (the whole list), after an `Attach` or a change. Creates its
@@ -372,10 +371,7 @@ impl GitCredentials {
     pub fn start() -> Self {
         let log: Log = Arc::new(crate::log_line);
         let publish: Publish = Arc::new(|daemon, statuses, now| {
-            status_channel()
-                .0
-                .unbounded_send((daemon, statuses, now))
-                .is_ok()
+            let _ = status_channel().0.unbounded_send((daemon, statuses, now));
         });
         Self::start_with(Arc::new(PatSource::on_device()), log, publish)
     }
@@ -433,7 +429,9 @@ fn worker(rx: mpsc::Receiver<Command>, mut manager: Manager, publish: Publish) {
     loop {
         let now = micold_core::unix_time::unix_secs();
         let received = match manager.next_wake(now) {
-            Some(wake) => rx.recv_timeout(Duration::from_secs(wake.saturating_sub(now).max(1))),
+            Some(wake) => {
+                rx.recv_timeout(Duration::from_secs(wake.saturating_sub(now).max(1)).min(MAX_SLEEP))
+            }
             None => rx.recv().map_err(|_| mpsc::RecvTimeoutError::Disconnected),
         };
         match received {
@@ -444,9 +442,7 @@ fn worker(rx: mpsc::Receiver<Command>, mut manager: Manager, publish: Publish) {
         let now = micold_core::unix_time::unix_secs();
         manager.run_due(now);
         for (daemon, statuses) in manager.changed_statuses(now) {
-            if !publish(daemon, statuses, now) {
-                manager.unreported(daemon);
-            }
+            publish(daemon, statuses, now);
         }
     }
 }
