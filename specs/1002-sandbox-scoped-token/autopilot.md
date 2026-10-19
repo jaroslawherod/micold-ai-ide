@@ -63,6 +63,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M1 A (code-review high) | 1 | e42b32340533c275d5ebd756929ac2e0dd7212c6:71e9883368ab4624e997e3c39e96939f9bc60f76 | CHANGES (2 MAJOR F1, F2 fixed (D17); 6 MINOR F3–F8 fixed) |
 | M1 A (sonnet) | 2 | 833375deedd427f1a1c0dfa38313f7936923038e:17370db2c46b156d528932658e24a5ca2fa58b7e | CLEAN |
 | M1 B (conformance, sonnet) | 1 | 833375deedd427f1a1c0dfa38313f7936923038e:17370db2c46b156d528932658e24a5ca2fa58b7e | CHANGES (F1 MAJOR declined, see below; F2 MINOR: Verify covered by the full gate's `cargo test --workspace`; F3 MINOR: D17 stated in the PR body) |
+| M1 red-CI fix D18 (sonnet) | 1 | 045a4f1811c6371aa92bff326aa70e42bbdbbf38:8e97a4027dbbf4c58e3fd6b7c40a4ecc5f8d5971 | CLEAN |
 
 ## Declined review findings
 
