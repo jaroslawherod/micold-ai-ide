@@ -1899,12 +1899,12 @@ fn reduce(state: &mut State, model: &mut Model<'_>, msg: Msg) -> Vec<Outcome> {
             state.form_error = None;
         }
         Msg::SectionToggled(section) => {
-            if !state.held_open(section) {
-                let first = state
-                    .draft
-                    .as_ref()
-                    .and_then(|d| Section::of(d.runtime).first().copied());
-                state.sections.toggle(section, first);
+            // A press for a section the open form lacks (a stale message) changes nothing.
+            let kind = state.draft.as_ref().map(|d| Section::of(d.runtime));
+            if let Some(kind) = kind.filter(|k| k.contains(&section)) {
+                if !state.held_open(section) {
+                    state.sections.toggle(section, kind.first().copied());
+                }
             }
         }
         Msg::NameEdited(v) => edit(state, &|d| d.name = v.clone()),

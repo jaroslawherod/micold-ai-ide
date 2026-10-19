@@ -9,7 +9,9 @@ credential, and needs neither `kubectl`, a registry nor a local container runtim
 1. Open **Settings > Daemons** and choose **Add daemon**.
 2. Name it, and set **Runs in** to **Kubernetes**.
 3. The form groups the rest in sections: **Connection** (open first), **Image**, **Credentials**,
-   **Resources** and **Placement and storage**; only one section is open at a time, so opening one closes the other, and a section with an error opens itself and stays open. A closed
+   **Resources** and **Placement and storage**; only one section is
+   open at a time, so opening one closes the one that was open, and a section with an error opens
+   itself and stays open. A closed
    section shows a one-line summary of its settings, and a `*` after its title when a required field
    inside it is empty. In **Connection**, choose the **Context** from the **Context from your
    kubeconfig** select above the **Context** field (it appears when the kubeconfig lists contexts;
