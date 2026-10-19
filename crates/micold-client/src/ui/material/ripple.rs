@@ -99,27 +99,45 @@ fn shape_bands(bounds: Rectangle, radius: f32) -> Vec<Rectangle> {
     let bands = BANDS_PER_CORNER * 2 + BANDS_PER_CORNER.max(1);
     let step = bounds.height / bands as f32;
     let mut out: Vec<Rectangle> = Vec::with_capacity(bands);
-    for i in 0..bands {
-        let top = bounds.y + i as f32 * step;
-        let bottom = if i + 1 == bands {
-            bounds.y + bounds.height
+    // Every edge sits on a whole logical pixel. A layer's scissor is truncated to integer pixels
+    // per rectangle (`x`, `y`, `width` and `height` separately), so a band edge at a fraction leaves
+    // a one-pixel un-tinted stripe against its neighbour (or a doubled one): the horizontal
+    // streaks of BUG 1119. Whole-pixel edges abut exactly.
+    let edge = |i: usize| {
+        if i == bands {
+            (bounds.y + bounds.height).round()
         } else {
-            top + step
-        };
+            (bounds.y + i as f32 * step).round()
+        }
+    };
+    for i in 0..bands {
+        let (top, bottom) = (edge(i), edge(i + 1));
+        if bottom <= top {
+            continue;
+        }
         // The widest inset over the band's whole span, so no part of it leaves the shape. The
         // extremes are at the ends: the inset is monotone within each corner and flat between them.
         let inset = inset_at(top).max(inset_at(bottom));
-        let width = bounds.width - inset * 2.0;
+        // Inward only where the curve is crossed; the straight sides keep the row's own edges.
+        let (left, right) = if inset > 0.0 {
+            (
+                (bounds.x + inset).ceil(),
+                (bounds.x + bounds.width - inset).floor(),
+            )
+        } else {
+            (bounds.x.round(), (bounds.x + bounds.width).round())
+        };
+        let width = right - left;
         if width <= 0.0 {
             continue;
         }
-        // Merge with the previous band when the inset matches, so the straight middle is one rect.
+        // Merge with the previous band when the span matches, so the straight middle is one rect.
         match out.last_mut() {
-            Some(prev) if (prev.width - width).abs() < f32::EPSILON => {
+            Some(prev) if prev.x == left && prev.width == width => {
                 prev.height = bottom - prev.y;
             }
             _ => out.push(Rectangle {
-                x: bounds.x + inset,
+                x: left,
                 y: top,
                 width,
                 height: bottom - top,
@@ -580,6 +598,29 @@ mod tests {
                          is the overhang that made the ripple read as a rectangle on a pill"
                     );
                 }
+            }
+        }
+    }
+
+    /// BUG 1119: a layer's scissor is truncated to whole pixels, so every band edge must already be
+    /// one, or neighbouring bands leave one-pixel stripes across the row mid-animation.
+    #[test]
+    fn band_edges_sit_on_whole_pixels_for_a_fractional_row() {
+        let row = Rectangle {
+            x: 10.4,
+            y: 20.3,
+            width: 399.7,
+            height: 44.6,
+        };
+        for radius in [FULL, 12.0] {
+            let bands = shape_bands(row, radius);
+            for b in &bands {
+                for v in [b.x, b.y, b.width, b.height] {
+                    assert_eq!(v, v.round(), "band {b:?} has a fractional edge");
+                }
+            }
+            for pair in bands.windows(2) {
+                assert_eq!(pair[0].y + pair[0].height, pair[1].y, "gap or overlap");
             }
         }
     }
