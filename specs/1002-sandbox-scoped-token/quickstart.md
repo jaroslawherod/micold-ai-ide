@@ -30,8 +30,8 @@ container's `/`, `$HOME` and `env` find none of them, and that `/run/micold/git`
    failure (US2-2).
 6. `cat /run/micold/git/you/scratch` → token; `curl -s -H "Authorization: Bearer <token>"
    https://api.github.com/repos/you/scratch/hooks` → `403` (no admin permission, SC-003).
-7. Uninstall the App from `you/scratch`, restart the daemon → it starts; status *The GitHub App is
-   not installed on you/scratch…*; `git push` fails at once (US3-2).
+7. Uninstall the App from `you/scratch`, restart the daemon → it starts; status *No git credential: The GitHub
+   App is not installed on you/scratch…*; `git push` fails at once (US3-2).
 8. Remove the GitHub App settings → status *No GitHub App is set up…* (US3-1).
 9. Open the settings of a daemon saved before this change with *SSH agent* ticked → the item is
    gone and the one-time notice is shown; reopen → notice gone (US1-3).
@@ -40,3 +40,8 @@ container's `/`, `$HOME` and `env` find none of them, and that `/run/micold/git`
     reconnect the status shows a fresh expiry and a push succeeds, with no daemon restart (US3-4,
     research R8).
 11. Repeat 3–4 with a Kubernetes daemon (kind cluster).
+12. Give the App *Pull requests: Read and write*, and on the daemon turn on *Pull requests*: the
+    toggle's help text says what it allows; after the next renewal (or a reconnect) a
+    `curl -X POST …/repos/you/scratch/pulls` with the token is accepted. Turn it off: after the
+    next renewal the same request gets `403`. With the toggle on but the App lacking the
+    permission, the status shows *No git credential: GitHub refused a credential…* (FR-011).

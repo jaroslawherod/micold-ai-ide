@@ -266,7 +266,7 @@ and the reason; story 1's inspection still finds none of the user's items.
   user's device; per user, set up once in the application's settings.
 - **Credential status (per daemon project)**: *has credential (expires at …)*, or *none* with a reason
   from: source not set up, App not installed on the repository, source refused, source unreachable,
-  remote not on GitHub, renewal failed.
+  remote not on GitHub, the container's git too old for scoped credentials, renewal failed.
 
 ## Success Criteria *(mandatory)*
 

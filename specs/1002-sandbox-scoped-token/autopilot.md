@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-2cdrmk
 - **Started**: 2026-10-19
 - **Phase**: tasks
-- **Next step**: tasks unit (source-specific work is marked [source] in plan.md and grouped in milestone M3; if jaro picks B or C on D7, rework FR-005/008/009/010, SC-002/004 and M3 only)
+- **Next step**: tasks unit: speckit-analyze, tasks review, checklists, design PR (if jaro picks B or C on D7, rework FR-005/008/009/010, SC-002/004 and milestone M5 only)
 
 ## Pull requests
 
@@ -21,6 +21,12 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
+| M1 | T001–T013 | full | No user git identity in a sandbox (FR-001–003, FR-014) | — | planned |
+| M2 | T014–T022 | full | Sanitized shared git config, helper reset (FR-004) | — | planned |
+| M3 | T023–T029 | full | In-container helper + in-memory per-repo file (FR-006/007/015) | — | planned |
+| M4 | T030–T038 | full | Protocol delivery, Schedule, revocation with FakeSource (FR-008–010, 012) | — | planned |
+| M5 | T039–T049 | full | [source] GitHub App source + client wiring (FR-005) | — | planned |
+| M6 | T050–T055 | full | Status rows + PR/issues toggles (FR-011, FR-013) | — | planned |
 
 ## Decisions
 
@@ -36,6 +42,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | D9 | plan | Where does the App private key live on the device? | Sibling of data_dir (`micold-ai-ide-secrets/`), owner-only; data_dir is mounted whole into the legacy default sandbox | agent-resolved | research.md R5 |
 | D10 | plan | Who renews while no client is connected? | Nobody: tokens lapse within 1 h, pushes fail closed, next connect re-grants (US3-4) | agent-resolved | research.md R8 |
 | D6 | clarify | May a project-hosted service mint credentials? | No; client mints/holds on the device | agent-resolved | constitution.md#IV, #Technology constraints |
+| D11 | tasks | Milestone cut vs plan's 3 | 6 milestones: plan's M1 split by FR (US1 removal / FR-004 sanitizer), plan's M2 split into git side (M3) and delivery (M4); the [source] GitHub App is confined to **M5** (was "M3" in the plan); M6 = status + FR-011 toggles. M1 (13 tasks) not split: the enum removal forces the client items to change in the same compile, and the `#[serde(skip)]` removal flag means the notice cannot lag the removal. M5 (11 tasks) not split: App settings without the wiring would be half-wired UI | agent-resolved | tasks.md#Milestones; milestones.md rules 3, 6 |
+| D12 | tasks | speckit-analyze (14 findings, 2 HIGH) | All fixed: Verify/Satisfies aligned with quickstart steps; fixture placed in `sandbox/hostile_host.rs`; kept items enabled in FR-014 tests; old container git becomes `NoCredentialReason::GitTooOld` via `GitCredentialTargets.git_too_old` (plan Risks, contracts/protocol.md, data-model §6, spec Key entity updated — plan fix); `MAX_LIFETIME_SECS` const; two-renewal test; quickstart step 12 for FR-011; notice visual pass moved to M1 | agent-resolved | tasks.md, plan.md#Risks |
 
 ## Review rounds
 

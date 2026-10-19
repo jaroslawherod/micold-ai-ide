@@ -7,7 +7,8 @@ daemon answers `GitCredentialGrant` with `RefusedRequest` and never sends target
 ## DaemonMsg::GitCredentialTargets
 
 ```text
-GitCredentialTargets { targets: Vec<CredentialTarget> }   // CredentialTarget { project, push_url: Option<String> }
+GitCredentialTargets { targets: Vec<CredentialTarget>, git_too_old: Option<String> }
+// CredentialTarget { project, push_url: Option<String> }
 ```
 
 - Sent by a sandboxed daemon after a successful `Attach`, and again whenever a project is added,
@@ -15,6 +16,9 @@ GitCredentialTargets { targets: Vec<CredentialTarget> }   // CredentialTarget { 
 - `push_url` is `git remote get-url --push origin` in the project root, verbatim; `None` when there
   is no `origin` or the project is not a repository.
 - The whole list every time: the client diffs.
+- `git_too_old` is the container's `git --version` when it is older than 2.31 (no
+  `GIT_CONFIG_COUNT`, so the helper reset would not apply); the client then issues nothing and
+  every target's status is `NoCredentialReason::GitTooOld`, and the daemon refuses every grant.
 
 ## ClientMsg::GitCredentialGrant
 

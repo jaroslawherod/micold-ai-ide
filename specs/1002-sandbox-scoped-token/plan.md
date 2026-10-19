@@ -155,6 +155,8 @@ client (device)                                    sandbox (container / pod)
 | M2 | Seam, `Schedule`, helper subcommand, tmpfs/emptyDir, protocol messages, daemon store, FR-015 test, `FakeSource` | pushes work with any source; no real source wired |
 | M3 | **[source]** GitHub App source, settings section, client wiring, status, grant toggles, docs | completes US2/US3 |
 
+Superseded by tasks.md, which cuts these finer (six milestones, ledger D11): the sanitized gitconfig and `git_env` move to M2, and the **[source]** work is milestone M5.
+
 ## Project Structure
 
 ### Documentation (this feature)
@@ -206,10 +208,11 @@ docs/user-guide/{sandboxed-daemon.md, kubernetes-daemons.md, settings.md}, docs/
 - **Renewal needs the client** (research R8): a daemon left running without its client loses push
   after ≤ 1 h. This is the fail-closed behaviour US3-4 describes, documented, not hidden.
 - **Container git older than 2.31** (no `GIT_CONFIG_COUNT`) in a user-chosen image: the helper reset
-  would not apply. The basic image's git is newer; a custom image with an older git gets a status
-  warning from the daemon's start-up check (`git --version`), and no credential is delivered to it.
+  would not apply. The basic image's git is newer; a custom image with an older git gets a
+  status (`NoCredentialReason::GitTooOld`) from the daemon's start-up check (`git --version`, sent
+  as `GitCredentialTargets.git_too_old`), and no credential is delivered to it.
 - **D7 reversal**: B (pasted PAT) replaces the **[source]** parts and reworks FR-005/008/009/010 —
-  the M3 milestone only, if M1/M2 have merged.
+  the **[source]** milestone (tasks.md M5) only, if the earlier ones have merged.
 
 ## Complexity Tracking
 
