@@ -11,7 +11,7 @@ use std::path::PathBuf;
 
 use micold_core::protocol::messages::ReviewEditOp;
 use micold_core::pull_request::{
-    BranchPrState, BranchPullRequest, DiffReadFailure, ReadingFailure,
+    BranchPrState, BranchPullRequest, CheckStatus, DiffReadFailure, ReadingFailure,
 };
 use micold_core::review::anchor::{self, locate, Located};
 use micold_core::review::base::{Base, BaseUnavailable, ReviewScope, Toggles};
@@ -165,6 +165,18 @@ pub fn pr_mark(state: BranchPrState) -> crate::ui::material::PrMark {
         BranchPrState::Draft => PrMark::Draft,
         BranchPrState::Merged => PrMark::Merged,
         BranchPrState::Closed => PrMark::Closed,
+    }
+}
+
+/// The one mapping from a check status to the mark the sidebar and the list share (feature 1003,
+/// FR-003); `None` is no check at all, so no mark.
+pub fn check_mark(status: CheckStatus) -> Option<crate::ui::material::CheckMark> {
+    use crate::ui::material::CheckMark;
+    match status {
+        CheckStatus::None => None,
+        CheckStatus::Pending => Some(CheckMark::Pending),
+        CheckStatus::Passing => Some(CheckMark::Passing),
+        CheckStatus::Failing => Some(CheckMark::Failing),
     }
 }
 

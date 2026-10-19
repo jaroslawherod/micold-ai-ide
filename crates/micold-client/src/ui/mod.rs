@@ -48,11 +48,11 @@ pub use material::chip_label;
 pub use material::menu_panel_size;
 pub use material::ripple_pulse;
 pub use material::target_offset_delta;
-pub use material::PrMark;
 /// The issue list following its highlight (feature 038, FR-007): the task the shell chains, the
 /// operation under it for `tests/picker_highlight_into_view.rs` to drive, and the `Id` that test
 /// finds the highlighted row by. Named individually; `material` stays `pub(crate)`.
 pub use material::PICKER_HIGHLIGHT;
+pub use material::{CheckMark, PrMark};
 pub use picker_scroll::{into_view as picker_into_view, picker_highlight_into_view};
 /// The bring-up indicator, and the wording it shows. Named individually — like the ripple
 /// below — because `tests/sandbox_progress.rs` checks both halves and the module itself has

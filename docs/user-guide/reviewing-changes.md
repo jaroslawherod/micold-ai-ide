@@ -36,11 +36,13 @@ While the list is read, the view says **Reading changes…**. With nothing to li
 With **Show pull request status on worktrees** checked in [Settings →
 GitHub](settings.md#show-pull-request-status-on-worktrees), the list is preceded by a **Pull
 requests** section: every pull request this worktree produced, open, draft, merged and closed,
-newest first across all of them. Each row has the pull request's state mark, its `#number` and its
-title. The marks are the ones the
+newest first across all of them. Each row has the pull request's state mark, its check mark, its
+`#number` and its title. The marks are the ones the
 sidebar uses (see [Pull request status](worktrees-and-sessions.md#pull-request-status)): open,
 draft, merged and closed each have their own shape, so a merged pull request is never mistaken for
-a closed one.
+a closed one. The check mark shows the result of the pull request's last commit: passing, failing
+or still running. A pull request with no checks has no check mark. Merged and closed pull requests
+show theirs too.
 
 A worktree's pull requests are those of its current branch and of every branch created in it,
 including branches that were merged and deleted since, and a branch name that had several pull

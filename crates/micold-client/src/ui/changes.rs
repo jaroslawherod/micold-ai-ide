@@ -314,13 +314,16 @@ fn pull_request_section<'a>(view: &'a OpenView, r: Roles) -> Option<Element<'a, 
         section = section.push(Text::new(POSSIBLY_STALE, TypeRole::Caption, r).muted());
     }
     for pr in prs {
-        let row = PullRequestRow::<Message>::new(
+        let mut row = PullRequestRow::<Message>::new(
             pr.number,
             pr.title.as_str(),
             crate::features::changes::pr_mark(pr.state),
             &r,
         )
         .selected(false);
+        if let Some(mark) = crate::features::changes::check_mark(pr.checks) {
+            row = row.checks(mark);
+        }
         section = section.push(choice(
             Element::from(row),
             shown == Some(pr.number),
