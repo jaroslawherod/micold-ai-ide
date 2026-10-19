@@ -492,7 +492,11 @@ pub fn classify(kind: RuntimeKind, out: &CommandOutput) -> RuntimeError {
             detail: first_line(&out.stderr),
         };
     }
-    if has("pull access denied") || has("manifest unknown") || has("repository does not exist") {
+    if has("pull access denied")
+        || has("manifest unknown")
+        || has("repository does not exist")
+        || has("image not known")
+    {
         return RuntimeError::ImageNotFound {
             reference: String::new(),
         };
