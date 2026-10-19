@@ -50,15 +50,15 @@ fn the_kubernetes_add_form_fits_one_window_height() {
         &micold_client::features::sandbox::Sandbox::default(),
     );
     let drawn = lay::painted_text_settled_at(element, &mut renderer, TALL).0;
+    // The page behind carries its own Cancel; the dialog's sits on the row of its *Save daemon*.
+    let save = drawn
+        .iter()
+        .find(|d| d.content == "Save daemon")
+        .expect("Save daemon is painted");
     let cancel = drawn
         .iter()
-        .find(|d| d.content == "Cancel")
-        .unwrap_or_else(|| {
-            panic!(
-                "Cancel is painted — {:?}",
-                drawn.iter().map(|d| &d.content).collect::<Vec<_>>()
-            )
-        });
+        .find(|d| d.content == "Cancel" && (d.origin.y - save.origin.y).abs() < 1.0)
+        .expect("the dialog's Cancel is painted on the Save daemon row");
     // The title is the largest "Add daemon" text; the page's own button carries the same words.
     let title = drawn
         .iter()

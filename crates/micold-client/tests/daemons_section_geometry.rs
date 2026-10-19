@@ -162,7 +162,7 @@ fn the_add_form_shows_a_refusal_beside_its_field() {
     )));
     state.update(Message::Daemons(DaemonsMsg::PortEdited("7003".into())));
     state.update(Message::Daemons(DaemonsMsg::Saved));
-    let painted = painted(&state);
+    let painted = painted_tall(&state);
     assert!(
         has(&painted, "Another daemon is already named Idle"),
         "{painted:?}"
@@ -598,8 +598,8 @@ fn every_kind_paints_name_runs_in_its_sections_in_order_and_the_actions() {
         let (state, shown) = add_form(runtime);
         let form_start = shown
             .iter()
-            .position(|c| c == "Add a daemon")
-            .expect("the form is painted");
+            .rposition(|c| c == "Add daemon")
+            .expect("the dialog is painted");
         let runs_in = form_start
             + shown[form_start..]
                 .iter()
@@ -907,4 +907,76 @@ fn closed_headers_paint_their_summary_and_the_required_marker() {
         has(&shown, "Connects at launch"),
         "the closed SSH summary: {shown:?}"
     );
+}
+
+// ---- Feature 1092, T007: the form lives in a dialog, not on the page. ----
+
+/// What is painted with the form dialog open for `id`, at `window`, entrances done.
+fn dialog_painted_at(state: &mut State, window: iced::Size) -> Vec<lay::Overflow> {
+    state.window.window_size = (window.width as u16, window.height as u16);
+    let mut renderer = lay::renderer();
+    lay::painted_text_settled_at(view(state), &mut renderer, window).0
+}
+
+/// SC-006: with a draft open, the daemon form's fields are painted once, in the dialog, and the
+/// dialog's own Save daemon is what saves — the Settings page behind it carries none of them.
+#[test]
+fn an_open_draft_paints_the_form_in_the_dialog_and_not_on_the_page() {
+    let (mut state, [host, ..]) = with_daemons();
+    let closed = painted_tall(&state);
+    assert!(!has(&closed, "Save daemon"), "{closed:?}");
+    assert!(!has(&closed, "Runs in"), "{closed:?}");
+    state.update(Message::Daemons(DaemonsMsg::EditOpened(host)));
+    let open = painted_tall(&state);
+    for once in ["Runs in", "Save daemon"] {
+        assert_eq!(
+            open.iter().filter(|c| c.as_str() == once).count(),
+            1,
+            "{once:?} in {open:?}"
+        );
+    }
+}
+
+/// SC-005: at the smallest supported window the dialog's Save daemon and Cancel are still inside
+/// it, however long the form is (the body scrolls, the actions stay).
+#[test]
+fn the_dialog_actions_stay_inside_the_smallest_window() {
+    use micold_client::app::MIN_WINDOW_SIZE;
+    let (mut state, [_, boxed, _]) = with_daemons();
+    state.update(Message::Daemons(DaemonsMsg::EditOpened(boxed)));
+    let drawn = dialog_painted_at(&mut state, MIN_WINDOW_SIZE);
+    let save = drawn
+        .iter()
+        .find(|d| d.content == "Save daemon")
+        .expect("Save daemon is painted");
+    let cancel = drawn
+        .iter()
+        .find(|d| d.content == "Cancel" && (d.origin.y - save.origin.y).abs() < 1.0)
+        .expect("the dialog's Cancel is painted beside Save daemon");
+    for action in [save, cancel] {
+        assert!(
+            action.origin.y + action.natural_height <= MIN_WINDOW_SIZE.height
+                && action.origin.x + action.natural_width <= MIN_WINDOW_SIZE.width,
+            "{:?} at {:?} is outside {MIN_WINDOW_SIZE:?}",
+            action.content,
+            action.origin
+        );
+    }
+}
+
+/// FR-013: opening the form leaves the rows' status and actions as they were.
+#[test]
+fn the_rows_keep_their_status_and_actions_with_the_dialog_open() {
+    let (mut state, [host, ..]) = with_daemons();
+    let before = painted_tall(&state);
+    state.update(Message::Daemons(DaemonsMsg::EditOpened(host)));
+    let after = painted_tall(&state);
+    for needle in ["Connected", "Unreachable", "Edit", "Remove", "Start", "Stop"] {
+        assert_eq!(
+            has(&before, needle),
+            has(&after, needle),
+            "{needle:?} changed when the dialog opened: {after:?}"
+        );
+    }
+    assert!(has(&after, "Remove"), "{after:?}");
 }
