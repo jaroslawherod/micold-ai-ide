@@ -129,7 +129,7 @@ Each milestone merges to `main` on its own, through one PR (speckit-autopilot).
 - **Tasks**: T015–T020 (T021 moved to the close unit)
 - **Deliverable**: every listed pull request, merged and closed included, shows its last commit's check mark (passing, failing, pending, or none) with the same marks the sidebar uses, from one shared mapping
 - **Satisfies**: US1 acceptance scenario 3; FR-003
-- **Verify**: `scripts/build-lock.sh cargo test -p micold-core --test pull_request_list`; `scripts/build-lock.sh cargo test -p micold-client --lib -- check_mark pull_request_row`; quickstart §B step 2 (check marks) in the close unit (T021)
+- **Verify**: `scripts/build-lock.sh cargo test -p micold-core --test pull_request_list`; `scripts/build-lock.sh cargo test -p micold-client --lib -- pull_request_row`; `scripts/build-lock.sh cargo test -p micold-client --test features_pr_changes`; quickstart §B step 2 (check marks) in the close unit (T021)
 - **Depends on**: M1
 - **Tier**: full
 
