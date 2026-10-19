@@ -393,6 +393,7 @@ fn boot() -> (App, Task<Message>) {
     core.settings.links = micold_client::links::DaemonLinks::at_launch(&core.settings.daemons);
     (
         App {
+            git_credentials: crate::shell::scoped_credential::GitCredentials::start(),
             core,
             reported_scheme: None,
             caps,

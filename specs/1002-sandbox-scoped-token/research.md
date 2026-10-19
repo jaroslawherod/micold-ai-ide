@@ -1,4 +1,4 @@
-# Research: Scoped, short-lived git credential for sandboxed daemons (#1002)
+# Research: Scoped, expiring git credential for sandboxed daemons (#1002)
 
 Each entry: **Decision**, **Rationale**, **Alternatives considered**. Code references are to the tree
 at the start of the plan unit.
@@ -29,34 +29,37 @@ git secret.
 
 **Alternatives considered**: keeping the variants behind a hidden flag — rejected by FR-002 and D5.
 
-## R2. Credential source: GitHub App installation tokens (provisional, ledger D7)
+## R2. Credential source: pasted fine-grained PAT, one per repository (ledger D7, option B, jaro)
 
-**Decision**: The client mints GitHub App installation tokens on the user's device:
+**Decision**: The user creates, on GitHub, a **fine-grained personal access token for one repository**
+(only that repository selected; *Contents: read and write*, *Metadata: read*; an expiry of at
+least GitHub's 1-day minimum) and pastes it into Settings. The client keeps it on the device (R5)
+and delivers it, unchanged, to the sandboxes serving that repository. Checks (contracts/pat-source.md
+§2): fine-grained shape (`github_pat_`), a `GET /repos/{o}/{r}` probe showing push access and the
+`github-authentication-token-expiration` header (a PAT with no expiry is refused), and, if the live
+API allows, that no other private repository is reachable. The PAT is never narrowed or minted by
+the client; it has no automatic renewal. The client warns 24 h before expiry, withdraws it at expiry,
+and delivers a replacement in place (R8).
 
-1. Sign an app JWT (RS256; `iat = now − 60 s`, `exp = now + 9 min`, `iss = <App ID>`) with the App's
-   private key.
-2. `GET https://api.github.com/repos/{owner}/{repo}/installation` with the JWT → installation id.
-   `404` → *App not installed on the repository*.
-3. `POST https://api.github.com/app/installations/{id}/access_tokens` with the JWT and body
-   `{"repositories":["<repo>"],"permissions":{"contents":"write","metadata":"read"[,"pull_requests":"write"][,"issues":"write"]}}`
-   → `{"token","expires_at","permissions","repositories"}`. GitHub fixes the lifetime at 1 hour
-   (FR-009). The response's `permissions` and `repositories` are checked against what was asked;
-   a wider answer is refused (fail closed) rather than delivered.
-4. Revoke: `DELETE https://api.github.com/installation/token` authenticated with the token itself
-   (FR-010).
+**Rationale**: jaro's choice (D7, 2026-10-19). It needs no registered App, no private key and no
+signing; the user's own per-repository token is the scoped credential. Local-first (constitution IV):
+the request goes from the device to GitHub only.
 
-Every request sends `Accept: application/vnd.github+json` and `X-GitHub-Api-Version: 2022-11-28`.
+**Consequences, accepted**: lifetime is the user's choice (≥ 1 day), not 1 hour; the client cannot
+limit permissions or repository reach beyond what it can observe, so a mistakenly broad PAT is
+broad inside the sandbox; a PAT leaked from a sandbox is valid until it expires or is deleted on
+GitHub, and the client never revokes it (it is the user's, possibly shared by several daemons).
+The settings text says all of this (FR-011).
 
-**Rationale**: The only GitHub mechanism that gives a per-repository, per-permission, self-expiring
-token without a server and without the user's own identity. No project-hosted service is involved
-(D6, constitution IV): the request goes from the user's device to GitHub only when a sandboxed
-daemon with a GitHub remote runs, which is the user's explicit setup (they registered the App).
+**Open point, confirmed live in the close unit (T056; M5 builds on fixtures)**: whether `GET /user/repos?visibility=private` lists only the token's
+repositories, and whether the expiry header is on `GET /repos/{o}/{r}`; each step has a fallback
+(drop the reach check and say so; read the expiry from `GET /user`'s header) in the contract.
 
-**Alternatives considered**: (B) a pasted fine-grained PAT — cannot be limited per repository by
-us, expires only when the user set it to, and the user's own identity is the principal; kept
-reachable by the seam of R3. (C) OAuth device flow user-to-server tokens — act as the user across
-every repository the App can reach, refresh tokens are long-lived secrets. (D) A published project
-App with a hosted key — refused by D6.
+**Alternatives considered**: (A) a user-registered GitHub App minting 1-hour single-repository
+installation tokens — rejected by jaro; it was built and abandoned (bundle backup
+`/mnt/project-files/backups/1002-m5-github-app.bundle`). (C) OAuth device flow user-to-server
+tokens — act as the user across every repository the App can reach, refresh tokens are long-lived
+secrets. (D) A published project App with a hosted key — refused by D6.
 
 ## R3. The seam: one trait in core, one implementation per source
 
@@ -70,25 +73,26 @@ trait CredentialSource: Send + Sync {
 }
 ```
 
-The GitHub App source lives in two halves: pure request/response/JWT code in
-`micold-core/src/scoped_credential/github_app.rs` (testable with fixtures), and the HTTP transport in
-`micold-client/src/shell/scoped_credential.rs` (`ureq`, as `jira_http.rs` does). The source's
-settings (App ID, key file) are one settings section with its own stored record
-(`GithubAppSettings`), read only by the source constructor.
+The pasted-PAT source lives in two halves: pure check logic in
+`micold-core/src/scoped_credential/pat.rs` (shape check, response/header parsing, status → reason,
+the stored-file format; testable with fixtures), and the HTTP transport and `PatSource` in
+`micold-client/src/shell/scoped_credential.rs` (`ureq`, as `jira_http.rs` does). The stored PATs
+(`secrets_dir()/github-pat/…`) are read only by the source.
 
-Switching to a pasted PAT would replace: the `GithubAppSource` implementation, its settings section
-and stored record, and `NoCredentialReason::AppNotInstalled`. The renewal schedule, delivery to the
-daemon, the in-container helper, git environment, status and the removal of the old items do not
-change. `ScopedCredential::expires_at` stays mandatory (FR-009), so a PAT source would supply the
-PAT's own expiry; relaxing that is part of the spec rework D7 already names (FR-005/008/009/010).
+The seam keeps its M4 signature. The PAT source ignores `Grant` (a PAT carries its own
+permissions, FR-011), `revoke` does nothing (FR-010), and it builds credentials with
+`ScopedCredential::pasted` (data-model §2) instead of `accept`. Two M4 pieces are reworked in M5
+because the 1-hour/renewal assumption was theirs: `MAX_LIFETIME_SECS` (the daemon's and `accept`'s
+sanity cap, `daemon git_credential.rs`) and `Schedule`'s renewal rule (R8).
 
-**Rationale**: user input for this unit; keeps D7's reversal a contained change.
+**Rationale**: the seam kept the D7 switch contained, as intended.
 
 **Alternatives considered**: an enum of sources matched throughout — spreads the choice.
 
-## R4. JWT signing without a new crypto dependency
+## R4. (Superseded by D7) JWT signing
 
-**Decision**: Sign with `ring` 0.17 (`RsaKeyPair::from_der` for the PKCS#1 `BEGIN RSA PRIVATE KEY`
+No signing is needed for a pasted PAT; no `ring` or `base64` dependency is added. Kept for the
+record of the App design that was rejected: sign with `ring` 0.17 (`RsaKeyPair::from_der` for the PKCS#1 `BEGIN RSA PRIVATE KEY`
 PEM that GitHub issues, `RsaKeyPair::from_pkcs8` for a `BEGIN PRIVATE KEY` PEM;
 `RSA_PKCS1_SHA256`), PEM and base64url via the `base64` crate already in the workspace. `ring` is
 already in `Cargo.lock` through `kube`/`rustls`; it becomes a direct workspace dependency of
@@ -100,11 +104,12 @@ Tracking).
 **Alternatives considered**: `jsonwebtoken` (pulls its own crypto backend and `simple_asn1`), `rsa`
 (RustCrypto; had the Marvin timing advisory RUSTSEC-2023-0071, still open for signing).
 
-## R5. Where the App's private key lives on the device
+## R5. Where the pasted PATs live on the device
 
-**Decision**: `<data_dir>`'s **sibling** directory `micold-ai-ide-secrets/github-app/`, written with
-`owner_only::write` (`0600` / protected DACL): the private key as `private-key.pem`, the App ID in the
-settings record. A core function `paths::secrets_dir()` returns it, and a core test asserts it is
+**Decision**: `<data_dir>`'s **sibling** directory `micold-ai-ide-secrets/github-pat/<owner>/<repo>`,
+written with `owner_only::write` (`0600` / protected DACL): the PAT and its expiry (contracts/pat-source.md §3).
+No OS keychain crate is in the workspace; adding one is a dependency and a per-platform surface this
+issue does not need, so the existing owner-only file mechanism is used (rejected alternative: keychain). A new core function `paths::secrets_dir()` (it does not exist on main) returns it, and a core test asserts it is
 neither under nor an ancestor of `data_dir()` on every platform's `directories` layout.
 
 **Rationale**: the legacy default container daemon mounts the whole `data_dir()` as its state
@@ -134,7 +139,7 @@ a bind-mounted path (FR-006). `MountSet` stays the only list of host mounts; a `
 mount, and an assertion in the FR-014 test checks `/run/micold/git` is not a host path.
 
 **Rationale**: works the same for both runtimes and every host OS (the container is Linux in all
-cases, constitution VI); renewal is a re-send of the message with no restart (FR-008).
+cases, constitution VI); a replacement is a re-send of the message with no restart (FR-008).
 
 **Alternatives considered**: `docker exec`/`kubectl exec` to write the file — a second channel per
 runtime; environment variables — fixed at creation, cannot renew; the helper asking the daemon over
@@ -179,26 +184,29 @@ keeps; a sanitizer alone — a repository-level helper in a project's own `.git/
 
 ## R8. Renewal, revocation and the client's role (FR-008, FR-010, US3-4)
 
-**Decision**: A pure schedule in core (`scoped_credential::schedule`) per daemon: for each project
-target it holds `Held { repo, expires_at }` or `None { reason }`, and answers `due(now)` — the
-repositories to renew at `expires_at − 10 min` (margin ≥ 5 min, FR-008), and the retry time after a
-failure (1 min, doubling to 10 min). The client runs it on the iced subscription clock while
-connected to the daemon; minting runs off the UI thread as the Jira calls do.
+**Decision**: The M4 pure schedule (`scoped_credential::schedule`) per daemon keeps its shape
+(`Held { repo, expires_at }` or `None { reason }`, `due(now)`, retry with backoff) and gains a
+`RenewPolicy` argument: `Renew` (renew at `expires_at − 10 min`; `FakeSource`, tests) and
+`AtExpiry` (the pasted PAT: nothing is renewed; a held PAT is re-checked only at `expires_at`,
+which yields `PatExpired` and a revoke to the daemon). `Schedule::refresh(repo)` makes a repository
+due now (a replaced or removed PAT in Settings). `CredentialStatus::expires_within(now, 24 h)`
+drives the warning (FR-008). The client runs it on the iced subscription clock while connected;
+checks run off the UI thread as the Jira calls do.
 
-Renewal needs the client: the App key stays on the device (FR-005), so a daemon whose client is not
-connected cannot get a renewed token. Its tokens expire within the hour and pushes then fail for want
-of credentials — US3 scenario 4's behaviour — and the next connection re-grants with no restart.
-The quickstart and user guide say so.
+A daemon whose client is not connected keeps the PAT it holds, with nothing to withdraw it until the
+client reconnects (it is the user's long-lived token, no longer 1 hour like a minted one); the
+container's file is on a tmpfs and dies with the container. On the next connect, every repository
+whose check fails for a reason other than `SourceUnreachable` (PAT removed, expired, refused)
+gets an idempotent `GitCredentialRevoke`, so a PAT removed while disconnected does not stay in the
+container (FR-010; data-model §8). On *stop* or *delete* the client sends the revoke (file
+removal), drops its copy and does not call GitHub (FR-010).
 
-On *stop* or *delete* of a daemon the client revokes every token it granted that daemon
-(best effort) and drops its copies; the container's tmpfs dies with the container. Tokens are never
-written to disk on the host.
+**Rationale**: GitHub has no API to renew or extend a PAT; the user is the only renewer, so the
+client's job is to warn, withdraw and accept the replacement without a restart.
 
-**Rationale**: FR-005 puts the key on the device and D6 forbids a server, so the client is the only
-possible minter; failing closed between connections is what US3 asks for.
-
-**Alternatives considered**: giving the daemon the key — refused by FR-005; longer-lived tokens —
-impossible (GitHub fixes 1 h) and refused by FR-009.
+**Alternatives considered**: reusing `Renew` and re-issuing the same token every 10 minutes —
+pointless network, and a hot loop at expiry; revoking the PAT on stop — it is the user's, shared by
+daemons, and GitHub offers no revoke-by-token call for this.
 
 ## R9. Which repository a project pushes to
 
@@ -221,7 +229,7 @@ request per project on every connect.
 pattern `SandboxProfile` already uses (`RawProfile`), dropping them and setting a `#[serde(skip)]`
 flag the owner turns into a stored `MigrationNotice::RemovedGitCredentials`
 (`micold-core/src/daemons.rs`), exactly as `moved_off_released` becomes `MovedOffReleasedImage`.
-The notice text names what was removed, why, and the GitHub App credential that replaces it; it is
+The notice text names what was removed, why, and the pasted per-repository token that replaces it; it is
 dismissed once per daemon.
 
 **Rationale**: reuses the feature 806 migration path and its once-per-daemon notice.
@@ -230,13 +238,14 @@ dismissed once per daemon.
 
 **Decision**: Per daemon project, a `CredentialStatus` the client holds and shows in the daemon's
 status rows (`features/daemon_sections.rs`) and as a line in the project's daemon status: *Git
-credential for owner/repo, renews at HH:MM*, or *No git credential: <reason> — <what to do>*. The
+credential for owner/repo, expires on <date>*, or *No git credential: <reason> — <what to do>*. The
 reasons and their remedy texts are one table in core (`NoCredentialReason::message`), tested.
 
 ## R12. Testing strategy
 
-- Pure core (`mise run test-core`): JWT and PEM, request bodies, response parsing and narrowing
-  check, error classification (401/403/404/422/5xx/network → reasons), schedule, git env block,
+- Pure core (`mise run test-core`): PAT shape, probe/header parsing, expiry and reach checks, error
+  classification (401/403/404/5xx/network → reasons), stored-file format, schedule (`AtExpiry`,
+  `refresh`, the 24 h warning), git env block,
   gitconfig sanitizer, helper request/response, legacy settings migration, status texts.
 - Container FR-014: `micold-core/tests/sandbox_credentials.rs` and `sandbox_argv.rs` build the full
   argv with a host layout holding a key, an agent socket, a credential store and `GH_TOKEN`, and
@@ -250,5 +259,6 @@ reasons and their remedy texts are one table in core (`NoCredentialReason::messa
   with basic auth. The env builder takes the credential base URL as a parameter
   (`https://github.com` in production, the loopback URL in the test), so the test proves push and
   pull authenticate with the helper's token, that an SSH-form remote is rewritten, and that `git credential fill` returns nothing for another repository
-  or host. The repository/permission limit is proven on the request the source sends (fixture) and
-  by the response narrowing check; a live GitHub check is the quickstart's manual part.
+  or host. The repository limit is proven by delivery of the PAT stored for that repository only (and the
+  paste-time checks on fixtures); permissions and reach are the PAT's, checked live in the
+  quickstart's manual part.

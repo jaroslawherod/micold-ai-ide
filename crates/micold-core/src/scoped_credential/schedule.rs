@@ -1,5 +1,7 @@
-//! The renewal state machine of one sandboxed daemon's credentials (#1002, FR-008–FR-010, FR-012,
-//! data-model §8, research R8).
+//! The state machine of one sandboxed daemon's credentials (#1002, FR-008–FR-010, FR-012,
+//! data-model §8, research R8): renewed ahead of expiry ([`RenewPolicy::Renew`]) or, for a pasted
+//! token that cannot be renewed, re-checked once at its expiry and then withdrawn
+//! ([`RenewPolicy::AtExpiry`]).
 //!
 //! State is kept per repository, so two projects on one repository share one credential and two
 //! repositories get two. [`Schedule::due`] and [`Schedule::next_wake`] are pure; the methods that
@@ -21,6 +23,16 @@ fn backoff_secs(attempt: u32) -> u64 {
     MINUTES[(attempt as usize).min(MINUTES.len() - 1)] * 60
 }
 
+/// What the schedule does as a held credential nears its expiry.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RenewPolicy {
+    /// Issue a new one [`RENEW_MARGIN_SECS`] before the expiry (a source that mints credentials).
+    Renew,
+    /// Nothing renews it (a pasted token, FR-008): at the expiry it is checked once more and then
+    /// withdrawn.
+    AtExpiry,
+}
+
 /// What one repository is up to.
 #[derive(Debug)]
 struct RepoState {
@@ -35,6 +47,7 @@ struct RepoState {
 #[derive(Debug)]
 pub struct Schedule {
     grant: Grant,
+    policy: RenewPolicy,
     /// Each project's repository, or why it has none.
     targets: BTreeMap<PathBuf, Result<GithubRepo, NoCredentialReason>>,
     repos: BTreeMap<GithubRepo, RepoState>,
@@ -50,6 +63,10 @@ pub struct Renewal {
     /// The token this one replaces. Revoke it with [`Renewal::revoke_superseded`] only once the new
     /// one is delivered, so the sandbox holds a valid token throughout (SC-004).
     superseded: Option<ScopedCredential>,
+    /// The issue failed in a way that leaves nothing valid to hold (removed, expired, refused, or
+    /// held past its expiry): the wiring sends an idempotent revoke so the container keeps no copy
+    /// (FR-010). Never set under [`RenewPolicy::Renew`].
+    pub withdraw: bool,
 }
 
 impl Renewal {
@@ -62,10 +79,11 @@ impl Renewal {
 }
 
 impl Schedule {
-    /// An empty schedule issuing credentials with `grant`.
-    pub fn new(grant: Grant) -> Self {
+    /// An empty schedule issuing credentials with `grant` under `policy`.
+    pub fn new(grant: Grant, policy: RenewPolicy) -> Self {
         Self {
             grant,
+            policy,
             targets: BTreeMap::new(),
             repos: BTreeMap::new(),
         }
@@ -123,6 +141,14 @@ impl Schedule {
         gone
     }
 
+    /// The pasted token of `repo` was replaced or removed: check it again at `now`. Ignored for a
+    /// repository no project uses.
+    pub fn refresh(&mut self, repo: &GithubRepo, now: UnixTime) {
+        if let Some(state) = self.repos.get_mut(&repo.lowercased()) {
+            state.due_at = now;
+        }
+    }
+
     /// The repositories whose issue is due at `now`.
     pub fn due(&self, now: UnixTime) -> Vec<GithubRepo> {
         self.repos
@@ -132,8 +158,8 @@ impl Schedule {
             .collect()
     }
 
-    /// The next time something needs doing: an issue falling due, or a held credential that has
-    /// failed to renew expiring (its status changes then).
+    /// The next time something needs doing: an issue falling due, or a held credential that is
+    /// not renewed (or has failed to renew) expiring (its status changes then).
     pub fn next_wake(&self, now: UnixTime) -> Option<UnixTime> {
         self.repos
             .values()
@@ -141,7 +167,10 @@ impl Schedule {
                 let expiry = s
                     .held
                     .as_ref()
-                    .filter(|c| s.failure.is_some() && c.expires_at() > now)
+                    .filter(|c| {
+                        (s.failure.is_some() || self.policy == RenewPolicy::AtExpiry)
+                            && c.expires_at() > now
+                    })
                     .map(ScopedCredential::expires_at);
                 [Some(s.due_at), expiry]
             })
@@ -155,11 +184,12 @@ impl Schedule {
             .into_iter()
             .map(|repo| {
                 let result = source.issue(&repo, self.grant);
-                let superseded = self.record(&repo, &result, now);
+                let (superseded, withdraw) = self.record(&repo, &result, now);
                 Renewal {
                     repo,
                     result,
                     superseded,
+                    withdraw,
                 }
             })
             .collect()
@@ -170,27 +200,49 @@ impl Schedule {
         repo: &GithubRepo,
         result: &Result<ScopedCredential, NoCredentialReason>,
         now: UnixTime,
-    ) -> Option<ScopedCredential> {
-        let state = self.repos.get_mut(repo)?;
+    ) -> (Option<ScopedCredential>, bool) {
+        let Some(state) = self.repos.get_mut(repo) else {
+            return (None, false);
+        };
         match result {
             Ok(credential) => {
                 let (issued, expires) = (credential.issued_at(), credential.expires_at());
-                // A credential shorter than the margin is renewed halfway, never in a hot loop.
-                state.due_at = if expires > issued + RENEW_MARGIN_SECS {
-                    expires - RENEW_MARGIN_SECS
-                } else {
-                    issued + (expires - issued) / 2 + 1
+                state.due_at = match self.policy {
+                    // Nothing renews it: re-check at the expiry (always after `issued`).
+                    RenewPolicy::AtExpiry => expires,
+                    // A credential shorter than the margin is renewed halfway, never in a hot loop.
+                    RenewPolicy::Renew if expires > issued + RENEW_MARGIN_SECS => {
+                        expires - RENEW_MARGIN_SECS
+                    }
+                    RenewPolicy::Renew => issued + (expires - issued) / 2 + 1,
                 };
                 state.failure = None;
-                return state.held.replace(credential.clone());
+                return (state.held.replace(credential.clone()), false);
             }
             Err(reason) => {
                 let attempts = state.failure.as_ref().map_or(0, |(_, n)| *n);
                 state.due_at = now + backoff_secs(attempts);
+                if self.policy == RenewPolicy::AtExpiry {
+                    // The withdraw at the expiry never waits on a retry's backoff.
+                    if let Some(c) = state.held.as_ref().filter(|c| c.expires_at() > now) {
+                        state.due_at = state.due_at.min(c.expires_at());
+                    }
+                }
                 state.failure = Some((reason.clone(), attempts + 1));
+                if self.policy == RenewPolicy::AtExpiry {
+                    let expired = state.held.as_ref().is_some_and(|c| c.expires_at() <= now);
+                    let unreachable = matches!(reason, NoCredentialReason::SourceUnreachable(_));
+                    if expired || !unreachable {
+                        state.held = None;
+                        if expired && unreachable {
+                            state.failure = Some((NoCredentialReason::PatExpired, attempts + 1));
+                        }
+                        return (None, true);
+                    }
+                }
             }
         }
-        None
+        (None, false)
     }
 
     /// The status of `project` at `now`.
@@ -204,6 +256,9 @@ impl Schedule {
             return CredentialStatus::Pending;
         };
         match (&state.held, &state.failure) {
+            (Some(c), _) if c.expires_at() <= now && self.policy == RenewPolicy::AtExpiry => {
+                CredentialStatus::None(NoCredentialReason::PatExpired)
+            }
             (Some(c), _) if c.expires_at() > now => CredentialStatus::Held {
                 repo: repo.clone(),
                 expires_at: c.expires_at(),
@@ -258,7 +313,10 @@ mod tests {
     }
 
     fn started(targets: &[CredentialTarget]) -> (Schedule, FakeSource) {
-        let (mut s, f) = (Schedule::new(Grant::default()), FakeSource::new());
+        let (mut s, f) = (
+            Schedule::new(Grant::default(), RenewPolicy::Renew),
+            FakeSource::new(),
+        );
         f.set_now(T0);
         s.set_targets(targets, None, &f, T0);
         (s, f)
@@ -492,7 +550,10 @@ mod tests {
 
     #[test]
     fn a_git_that_is_too_old_issues_nothing() {
-        let (mut s, f) = (Schedule::new(Grant::default()), FakeSource::new());
+        let (mut s, f) = (
+            Schedule::new(Grant::default(), RenewPolicy::Renew),
+            FakeSource::new(),
+        );
         s.set_targets(&one(), Some("2.30.0"), &f, T0);
         assert!(s.run(&f, T0).is_empty() && f.issued().is_empty());
         assert_eq!(
@@ -540,10 +601,13 @@ mod tests {
     #[test]
     fn the_grant_reaches_the_source() {
         let (mut s, f) = (
-            Schedule::new(Grant {
-                pull_requests: true,
-                issues: false,
-            }),
+            Schedule::new(
+                Grant {
+                    pull_requests: true,
+                    issues: false,
+                },
+                RenewPolicy::Renew,
+            ),
             FakeSource::new(),
         );
         f.set_now(T0);
@@ -556,6 +620,128 @@ mod tests {
                 issues: false
             }
         );
+    }
+
+    fn pat_schedule() -> (Schedule, FakeSource) {
+        let (mut s, f) = (
+            Schedule::new(Grant::default(), RenewPolicy::AtExpiry),
+            FakeSource::new(),
+        );
+        f.set_now(T0);
+        s.set_targets(&one(), None, &f, T0);
+        (s, f)
+    }
+
+    #[test]
+    fn a_held_pat_is_due_at_its_expiry_and_never_before() {
+        let (mut s, f) = pat_schedule();
+        let r = s.run(&f, T0);
+        assert!(!r[0].withdraw);
+        assert_eq!(s.due(T0 + HOUR - 10 * MIN), vec![]);
+        assert_eq!(s.next_wake(T0), Some(T0 + HOUR));
+        assert_eq!(s.due(T0 + HOUR), vec![repo("a")]);
+    }
+
+    #[test]
+    fn issuing_the_same_pat_again_does_not_loop() {
+        let (mut s, f) = pat_schedule();
+        s.run(&f, T0);
+        f.set_now(T0 + 5);
+        s.refresh(&repo("a"), T0 + 5);
+        s.run(&f, T0 + 5);
+        assert!(s.due(T0 + 5).is_empty());
+        assert!(s.next_wake(T0 + 5).unwrap() > T0 + 5);
+    }
+
+    #[test]
+    fn at_expiry_the_status_is_pat_expired_and_the_pat_is_withdrawn() {
+        let (mut s, f) = pat_schedule();
+        s.run(&f, T0);
+        let expiry = T0 + HOUR;
+        assert!(matches!(
+            s.status("/p".as_ref(), expiry - 1),
+            CredentialStatus::Held { .. }
+        ));
+        assert_eq!(
+            s.status("/p".as_ref(), expiry),
+            CredentialStatus::None(NoCredentialReason::PatExpired)
+        );
+        // GitHub unreachable at the expiry: withdrawn all the same.
+        f.fail_next(NoCredentialReason::SourceUnreachable("offline".into()));
+        let r = s.run(&f, expiry);
+        assert!(r[0].withdraw);
+        assert_eq!(
+            s.status("/p".as_ref(), expiry),
+            CredentialStatus::None(NoCredentialReason::PatExpired)
+        );
+    }
+
+    #[test]
+    fn refresh_makes_a_held_or_failed_repository_due_now() {
+        let (mut s, f) = pat_schedule();
+        s.run(&f, T0);
+        s.refresh(&repo("a"), T0 + 10);
+        assert_eq!(s.due(T0 + 10), vec![repo("a")]);
+        f.fail_next(NoCredentialReason::SourceNotSetUp);
+        s.run(&f, T0 + 10);
+        assert_eq!(s.due(T0 + 11), vec![]);
+        s.refresh(&repo("A"), T0 + 11);
+        assert_eq!(s.due(T0 + 11), vec![repo("a")]);
+        s.refresh(&repo("other"), T0 + 11);
+    }
+
+    #[test]
+    fn a_failed_issue_withdraws_unless_github_is_only_unreachable() {
+        for (reason, withdraws) in [
+            (NoCredentialReason::SourceNotSetUp, true),
+            (NoCredentialReason::PatExpired, true),
+            (NoCredentialReason::SourceRefused("no".into()), true),
+            (
+                NoCredentialReason::SourceUnreachable("offline".into()),
+                false,
+            ),
+        ] {
+            // Held, then the check fails.
+            let (mut s, f) = pat_schedule();
+            s.run(&f, T0);
+            f.fail_next(reason.clone());
+            s.refresh(&repo("a"), T0 + 1);
+            let r = s.run(&f, T0 + 1);
+            assert_eq!(r[0].withdraw, withdraws, "{reason:?} while held");
+            assert_eq!(
+                matches!(
+                    s.status("/p".as_ref(), T0 + 2),
+                    CredentialStatus::Held { .. }
+                ),
+                !withdraws
+            );
+            // Never held: the first failure on reconnect also withdraws, except unreachable.
+            let (mut s, f) = pat_schedule();
+            f.fail_next(reason.clone());
+            let r = s.run(&f, T0);
+            assert_eq!(
+                r[0].withdraw,
+                !matches!(reason, NoCredentialReason::SourceUnreachable(_))
+            );
+        }
+    }
+
+    #[test]
+    fn an_unreachable_retry_never_postpones_the_withdraw_past_the_expiry() {
+        let (mut s, f) = pat_schedule();
+        s.run(&f, T0);
+        let late = T0 + HOUR - 30;
+        f.fail_next(NoCredentialReason::SourceUnreachable("offline".into()));
+        s.refresh(&repo("a"), late);
+        s.run(&f, late);
+        assert_eq!(s.due(T0 + HOUR), vec![repo("a")]);
+    }
+
+    #[test]
+    fn the_renew_policy_never_withdraws() {
+        let (mut s, f) = started(&one());
+        f.fail_next(NoCredentialReason::SourceRefused("no".into()));
+        assert!(!s.run(&f, T0)[0].withdraw);
     }
 
     #[test]

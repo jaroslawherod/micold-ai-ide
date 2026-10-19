@@ -2851,3 +2851,199 @@ fn the_save_terminal_history_note_names_structured_sessions_events() {
     assert!(note.contains("events"), "{note}");
     assert!(note.contains("deletes"), "{note}");
 }
+
+/// The *GitHub access tokens* section (#1002, contracts/pat-source.md §3). Every token is fake.
+mod github_access_tokens {
+    use micold_client::app::State;
+    use micold_client::features::settings::github_tokens::{help, parse_repo};
+    use micold_client::features::settings::{update, Msg, TokenInput};
+    use micold_core::github::GithubRepo;
+
+    const FAKE: &str = "github_pat_FAKE_0123456789";
+    const T0: u64 = 1_800_000_000;
+    const DAY: u64 = 86_400;
+
+    fn repo(text: &str) -> GithubRepo {
+        parse_repo(text).expect("a repository")
+    }
+
+    fn typed(state: &mut State, repository: &str, token: &str) {
+        update(state, Msg::GithubPatRepoChanged(repository.into()));
+        update(
+            state,
+            Msg::GithubPatTokenChanged(TokenInput::new(token.into())),
+        );
+    }
+
+    #[test]
+    fn a_row_per_stored_repository_with_its_expiry_date() {
+        let mut state = State::default();
+        update(
+            &mut state,
+            Msg::GithubPatsLoaded(vec![
+                (repo("o/b"), T0 + 90 * DAY),
+                (repo("o/a"), T0 + 60 * DAY),
+            ]),
+        );
+        let rows = &state.settings.github_tokens.rows;
+        assert_eq!(rows.len(), 2);
+        assert!(
+            rows[0].label().starts_with("o/a - expires on 2027-"),
+            "{}",
+            rows[0].label()
+        );
+        assert!(!format!("{rows:?}").contains(FAKE));
+    }
+
+    #[test]
+    fn from_a_day_before_the_expiry_the_row_warns_and_before_that_it_does_not() {
+        let mut state = State::default();
+        update(
+            &mut state,
+            Msg::GithubPatsLoaded(vec![(repo("o/a"), T0 + 2 * DAY)]),
+        );
+        let row = &state.settings.github_tokens.rows[0];
+        assert_eq!(row.warning(T0), None);
+        let warning = row.warning(T0 + DAY + 1).expect("a warning");
+        assert_eq!(
+            warning,
+            format!(
+                "Git credential for o/a expires on {}: paste a new token in Settings",
+                row.expiry_date()
+            )
+        );
+        assert!(row
+            .warning(T0 + 3 * DAY)
+            .expect("expired")
+            .contains("expired on"));
+    }
+
+    #[test]
+    fn add_accepts_owner_name_or_a_github_url_and_refuses_anything_else_at_the_field() {
+        for ok in [
+            "o/r",
+            "https://github.com/o/r",
+            "https://github.com/o/r.git",
+        ] {
+            let mut state = State::default();
+            typed(&mut state, ok, FAKE);
+            update(&mut state, Msg::GithubPatAddRequested);
+            let tokens = &mut state.settings.github_tokens;
+            assert_eq!(tokens.error, None, "{ok}");
+            assert_eq!(tokens.take_request().expect("raised").repo, repo("o/r"));
+        }
+        for bad in [
+            "",
+            "o",
+            "https://gitlab.com/o/r",
+            "o/r/x",
+            "git@github.com:o/r",
+        ] {
+            let mut state = State::default();
+            typed(&mut state, bad, FAKE);
+            update(&mut state, Msg::GithubPatAddRequested);
+            let tokens = &mut state.settings.github_tokens;
+            assert!(tokens.error.is_some(), "{bad:?}");
+            assert!(tokens.take_request().is_none(), "{bad:?}");
+        }
+    }
+
+    #[test]
+    fn a_token_that_is_not_fine_grained_is_refused_before_any_check() {
+        let mut state = State::default();
+        typed(&mut state, "o/r", "ghp_classic");
+        update(&mut state, Msg::GithubPatAddRequested);
+        assert!(state.settings.github_tokens.error.is_some());
+        assert!(state.settings.github_tokens.take_request().is_none());
+    }
+
+    #[test]
+    fn a_refused_check_is_shown_at_the_form_and_stores_nothing() {
+        let mut state = State::default();
+        typed(&mut state, "o/r", FAKE);
+        update(&mut state, Msg::GithubPatAddRequested);
+        update(
+            &mut state,
+            Msg::GithubPatChecked {
+                repo: repo("o/r"),
+                result: Err("GitHub refused the token: the token cannot push to o/r.".into()),
+            },
+        );
+        let tokens = &mut state.settings.github_tokens;
+        assert!(tokens.error.as_deref().unwrap().contains("cannot push"));
+        assert!(tokens.rows.is_empty() && !tokens.checking);
+        assert!(tokens.take_refresh().is_empty());
+    }
+
+    #[test]
+    fn a_save_clears_the_token_field_and_asks_the_wiring_to_refresh() {
+        let mut state = State::default();
+        update(
+            &mut state,
+            Msg::GithubPatsLoaded(vec![(repo("o/r"), T0 + DAY)]),
+        );
+        update(&mut state, Msg::GithubPatReplaceRequested(repo("o/r")));
+        assert_eq!(state.settings.github_tokens.repo, "o/r");
+        typed(&mut state, "o/r", FAKE);
+        update(&mut state, Msg::GithubPatAddRequested);
+        update(
+            &mut state,
+            Msg::GithubPatChecked {
+                repo: repo("o/r"),
+                result: Ok(T0 + 30 * DAY),
+            },
+        );
+        let tokens = &mut state.settings.github_tokens;
+        assert_eq!(tokens.token.as_str(), "");
+        assert_eq!(tokens.rows.len(), 1);
+        assert_eq!(tokens.rows[0].expires_at, T0 + 30 * DAY);
+        assert_eq!(tokens.take_refresh(), vec![repo("o/r")]);
+        assert!(tokens.take_refresh().is_empty());
+    }
+
+    #[test]
+    fn remove_drops_the_row_and_asks_the_wiring_to_refresh() {
+        let mut state = State::default();
+        update(
+            &mut state,
+            Msg::GithubPatsLoaded(vec![(repo("o/r"), T0 + DAY)]),
+        );
+        update(&mut state, Msg::GithubPatRemoveRequested(repo("o/r")));
+        let tokens = &mut state.settings.github_tokens;
+        assert!(tokens.rows.is_empty());
+        assert_eq!(tokens.take_refresh(), vec![repo("o/r")]);
+    }
+
+    #[test]
+    fn the_token_is_never_in_the_state_debug() {
+        let mut state = State::default();
+        typed(&mut state, "o/r", FAKE);
+        update(&mut state, Msg::GithubPatAddRequested);
+        assert!(!format!("{:?}", state.settings.github_tokens).contains(FAKE));
+        assert!(!format!(
+            "{:?}",
+            Msg::GithubPatTokenChanged(TokenInput::new(FAKE.into()))
+        )
+        .contains(FAKE));
+    }
+
+    #[test]
+    fn the_help_names_the_permissions_and_the_risks() {
+        let text = help(true).join(" ");
+        for needle in [
+            "Contents: Read and write",
+            "Metadata: Read",
+            "short expiry",
+            "everything the token can",
+            "cannot narrow",
+            "until it expires or you delete it on GitHub",
+            "does not delete it on GitHub",
+        ] {
+            assert!(text.contains(needle), "{needle}");
+        }
+        assert!(!text.contains("other repositories"));
+        assert!(help(false)
+            .join(" ")
+            .contains("cannot verify which other repositories"));
+    }
+}

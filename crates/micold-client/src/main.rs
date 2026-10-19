@@ -51,6 +51,9 @@ use std::time::Instant;
 /// The binary's application state: the pure core plus gui-only runtime handles.
 struct App {
     core: State,
+    /// The scoped git credential manager: one check schedule per connected sandboxed daemon, run on
+    /// its own worker thread (#1002, `shell::scoped_credential`).
+    git_credentials: crate::shell::scoped_credential::GitCredentials,
     /// The colour scheme last reported to the daemon on this connection (`006` FR-003a, BUG-007),
     /// or `None` when none has been sent on it yet.
     reported_scheme: Option<micold_core::theme::ColorScheme>,

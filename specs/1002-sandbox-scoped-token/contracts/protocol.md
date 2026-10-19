@@ -27,7 +27,7 @@ GitCredentialGrant { repo: GithubRepo, token: SecretToken, expires_at: UnixTime 
 ```
 
 - The daemon writes `/run/micold/git/<owner>/<repo>` atomically (`0600`), replacing any previous
-  file (renewal). No reply on success; a write failure is reported with the existing
+  file (a replacement). No reply on success; a write failure is reported with the existing
   `DaemonMsg::Error`-style failure naming the repository, never the token.
 - The daemon never logs the token; `SecretToken`'s `Debug` is redacted, and the wire-level debug
   log (`LogSink`) prints the message with the token redacted.

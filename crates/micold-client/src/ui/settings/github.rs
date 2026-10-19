@@ -8,15 +8,16 @@
 //! (FR-019), the same save-together rule every other section follows.
 
 use crate::app::Message;
+use crate::features::settings::github_tokens::{self, GithubTokens};
 use crate::features::settings::Msg as SettingsMsg;
-use crate::features::settings::{SettingsDraft, SettingsSection};
+use crate::features::settings::{SettingsDraft, SettingsSection, TokenInput};
 use crate::features::window::FieldId;
 use crate::icons::Icon;
 use crate::ui::focus::TrackFocus;
 use crate::ui::material::{
     Button, Checkbox, IconButton, RequiredLegend, Select, TextField, Tooltip,
 };
-use crate::ui::settings::{field_note, note, page};
+use crate::ui::settings::{caution, field_note, note, page};
 use iced::widget::{column, row};
 use iced::{Alignment, Element, Length};
 use micold_core::naming::ConventionalType;
@@ -31,6 +32,7 @@ pub const SETTINGS: &[(&str, &str)] = &[
     ("pr_status_enabled", "PrStatusToggled"),
     ("github_issues_enabled", "GithubIssuesToggled"),
     ("issue_label_types", "IssueMappingLabelChanged"),
+    ("github_access_tokens", "GithubPatTokenChanged"),
 ];
 
 /// The page's intro. A constant so `tests/features_settings.rs` can check what it says.
@@ -41,6 +43,7 @@ pub const GITHUB_ISSUES_INTRO: &str = "Pull request status on worktree rows. Whe
 /// The GitHub page.
 pub fn view<'a>(
     draft: &'a SettingsDraft,
+    tokens: &'a GithubTokens,
     focused: Option<FieldId>,
     roles: Roles,
 ) -> Element<'a, Message> {
@@ -162,5 +165,81 @@ pub fn view<'a>(
         .into(),
     );
 
+    controls.extend(access_tokens(tokens, focused, roles));
+
     page("GitHub", GITHUB_ISSUES_INTRO, controls, roles)
+}
+
+/// The heading of the pasted-token part of the page.
+pub const TOKENS_HEADING: &str = "GitHub access tokens";
+
+/// What the tokens are for (#1002).
+pub const TOKENS_INTRO: &str = "A fine-grained token lets sandboxed sessions push to one repository. Paste one per repository. It is kept on this device only.";
+
+/// The *GitHub access tokens* part (#1002, contracts/pat-source.md §3): a row per stored token with
+/// its expiry, and the form that adds or replaces one. The token field is masked and cleared after a
+/// save; no row ever shows a token.
+fn access_tokens<'a>(
+    tokens: &'a GithubTokens,
+    focused: Option<FieldId>,
+    roles: Roles,
+) -> Vec<Element<'a, Message>> {
+    let now = micold_core::unix_time::unix_secs();
+    let mut controls: Vec<Element<'a, Message>> =
+        vec![note(TOKENS_HEADING, roles), note(TOKENS_INTRO, roles)];
+    for stored in &tokens.rows {
+        controls.push(note(stored.label(), roles));
+        if let Some(warning) = stored.warning(now) {
+            controls.push(caution(warning, roles));
+        }
+        controls.push(
+            row![
+                Button::text("Replace", roles).on_press(Message::Settings(
+                    SettingsMsg::GithubPatReplaceRequested(stored.repo.clone())
+                )),
+                Button::text("Remove", roles).on_press(Message::Settings(
+                    SettingsMsg::GithubPatRemoveRequested(stored.repo.clone())
+                )),
+            ]
+            .spacing(spacing::XS)
+            .into(),
+        );
+    }
+    for line in github_tokens::help(micold_core::scoped_credential::pat::REACH_CHECK) {
+        controls.push(note(line, roles));
+    }
+    controls.push(
+        TextField::new("", &tokens.repo, roles)
+            .label("Repository")
+            .supporting("owner/name or a github.com URL")
+            .track_focus(FieldId::SettingsGithubPatRepo, focused)
+            .on_input(|v| Message::Settings(SettingsMsg::GithubPatRepoChanged(v)))
+            .on_submit(Message::Settings(SettingsMsg::GithubPatAddRequested))
+            .into(),
+    );
+    controls.push(
+        TextField::new("", tokens.token.as_str(), roles)
+            .label("Token")
+            .secure(true)
+            .error(tokens.error.clone())
+            .track_focus(FieldId::SettingsGithubPatToken, focused)
+            .on_input(|v| Message::Settings(SettingsMsg::GithubPatTokenChanged(TokenInput::new(v))))
+            .on_submit(Message::Settings(SettingsMsg::GithubPatAddRequested))
+            .into(),
+    );
+    controls.push(
+        Button::filled(
+            if tokens.checking {
+                "Checking..."
+            } else {
+                "Add"
+            },
+            roles,
+        )
+        .on_press_maybe(
+            (!tokens.checking).then_some(Message::Settings(SettingsMsg::GithubPatAddRequested)),
+        )
+        .into(),
+    );
+    controls
 }

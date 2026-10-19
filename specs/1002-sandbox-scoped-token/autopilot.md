@@ -10,7 +10,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Worktree branch**: claude/project-thread-2cdrmk
 - **Started**: 2026-10-19
 - **Phase**: milestones
-- **Next step**: the orchestrator opens the M4 PR (pr-m4-title.txt / pr-m4-body.md in the unit's scratchpad), waits on CI and merges; then M5.
+- **Next step**: milestone unit M5 (pasted-PAT source), from the reworked spec, plan and tasks (D7, D19). The abandoned GitHub App M5 is in the bundle /mnt/project-files/backups/1002-m5-github-app.bundle and the stash `m5-app-wip`; tasks T044–T047 name what to reuse.
 
 ## Pull requests
 
@@ -29,8 +29,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M2 | T014–T022 | full | Sanitized shared git config, helper reset (FR-004) | #1099 | merged |
 | M3 | T023–T029 | full | In-container helper + in-memory per-repo file (FR-006/007/015) | #1107 | merged (5c0ba07d) |
 | M4 | T030–T038 | full | Protocol delivery, Schedule, revocation with FakeSource (FR-008–010, 012) | — (to open) | implemented; reviews A and B done, gate green, pushed |
-| M5 | T039–T049 | full | [source] GitHub App source + client wiring (FR-005) | — | planned |
-| M6 | T050–T055 | full | Status rows + PR/issues toggles (FR-011, FR-013) | — | planned |
+| M5 | T039–T049 | full | [source] Pasted-PAT source + client wiring (FR-005, FR-008–010); the GitHub App M5 is abandoned (bundle backups/1002-m5-github-app.bundle) | — | implemented; reviews A and B done, full gate green, pushed |
+| M6 | T050–T055 | full | Status rows (FR-013, SC-005); FR-011's guidance text is in M5, T051/T053 withdrawn | — | planned |
 
 ## Decisions
 
@@ -38,15 +38,16 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|---|---|
 | D1 | spec | Which runtimes are in scope? | Container and Kubernetes daemons; remote SSH (user's own machine) out | agent-resolved | spec.md#Context |
 | D2 | spec | Non-GitHub remotes? | No git credentials in a sandbox; old opt-ins not kept for them (least privilege) | agent-resolved | spec.md#Assumptions |
-| D3 | spec | Default permissions? | contents rw + metadata r; PRs and issues per-daemon opt-ins, off by default | agent-resolved | spec.md FR-011 |
+| D3 | spec | Default permissions? | contents rw + metadata r; PRs and issues per-daemon opt-ins, off by default | agent-resolved | spec.md FR-011  Superseded in part by D7/D19 (pasted PAT: no App key, no 1 h renewal, no per-daemon toggles; M5/M6 content changed). |
 | D4 | spec | One credential per daemon or per repo? | Per repository | agent-resolved | spec.md#Assumptions |
 | D5 | clarify | Keep old opt-ins for non-GitHub remotes? | No; no credentials, status says host unsupported (confirms D2) | agent-resolved | issue #1002 body ("rather than falling back") |
-| D7 | clarify | Where does the scoped credential come from (FR-005)? | (A) user-registered GitHub App; client holds ID + key on device, mints 1 h single-repo installation tokens | provisional, pending jaro's answer on the decision card | spec.md#Clarifications; constitution.md#IV |
-| D8 | clarify | Round 2 | No critical ambiguities; App key storage and setup UX deferred to plan | agent-resolved | spec.md |
-| D9 | plan | Where does the App private key live on the device? | Sibling of data_dir (`micold-ai-ide-secrets/`), owner-only; data_dir is mounted whole into the legacy default sandbox | agent-resolved | research.md R5 |
-| D10 | plan | Who renews while no client is connected? | Nobody: tokens lapse within 1 h, pushes fail closed, next connect re-grants (US3-4) | agent-resolved | research.md R8 |
+| D7 | clarify | Where does the scoped credential come from (FR-005)? | (B) **Pasted PAT**: the user creates a fine-grained PAT per repository by hand and pastes it into Settings; GitHub's shortest expiry is 1 day; no automatic renewal. The GitHub App option (A) is rejected | jaro (decision card, 2026-10-19T16:07Z) | spec.md#Clarifications; constitution.md#IV |
+| D8 | clarify | Round 2 | No critical ambiguities; App key storage and setup UX deferred to plan | agent-resolved | spec.md  Superseded in part by D7/D19 (pasted PAT: no App key, no 1 h renewal, no per-daemon toggles; M5/M6 content changed). |
+| D9 | plan | Where does the App private key live on the device? | Sibling of data_dir (`micold-ai-ide-secrets/`), owner-only; data_dir is mounted whole into the legacy default sandbox | agent-resolved | research.md R5  Superseded in part by D7/D19 (pasted PAT: no App key, no 1 h renewal, no per-daemon toggles; M5/M6 content changed). |
+| D10 | plan | Who renews while no client is connected? | Nobody: tokens lapse within 1 h, pushes fail closed, next connect re-grants (US3-4) | agent-resolved | research.md R8  Superseded in part by D7/D19 (pasted PAT: no App key, no 1 h renewal, no per-daemon toggles; M5/M6 content changed). |
+| D19 | spec rework | What the PAT source changes in FR-008..011 and M4 | FR-008: no renewal; warn at ≤ 24 h, withdraw at expiry, replacement delivered in place. FR-009: the 1 h cap is dropped; the client accepts only a fine-grained PAT with a known future expiry that GitHub grants push on the repo (and, where the API shows it, reaches no other repo); lifetime is the user's choice. FR-010: discard copies, never revoke the user's PAT. FR-011: no per-daemon toggles (a PAT cannot be narrowed): guidance text instead. M4 follow-up (new tasks in M5): `accept`'s 1 h cap and `MAX_LIFETIME_SECS` become per-source, and `Schedule` stops renewing/revoking for the PAT source (warn, withdraw at expiry). M6's toggles (T051, T053) become guidance text | agent-resolved (follows from D7) | spec.md FR-008–011; tasks.md M5, M6 |
 | D6 | clarify | May a project-hosted service mint credentials? | No; client mints/holds on the device | agent-resolved | constitution.md#IV, #Technology constraints |
-| D11 | tasks | Milestone cut vs plan's 3 | 6 milestones: plan's M1 split by FR (US1 removal / FR-004 sanitizer), plan's M2 split into git side (M3) and delivery (M4); the [source] GitHub App is confined to **M5** (was "M3" in the plan); M6 = status + FR-011 toggles. M1 (13 tasks) not split: the enum removal forces the client items to change in the same compile, and the `#[serde(skip)]` removal flag means the notice cannot lag the removal. M5 (11 tasks) not split: App settings without the wiring would be half-wired UI | agent-resolved | tasks.md#Milestones; milestones.md rules 3, 6 |
+| D11 | tasks | Milestone cut vs plan's 3 | 6 milestones: plan's M1 split by FR (US1 removal / FR-004 sanitizer), plan's M2 split into git side (M3) and delivery (M4); the [source] GitHub App is confined to **M5** (was "M3" in the plan); M6 = status + FR-011 toggles. M1 (13 tasks) not split: the enum removal forces the client items to change in the same compile, and the `#[serde(skip)]` removal flag means the notice cannot lag the removal. M5 (11 tasks) not split: App settings without the wiring would be half-wired UI | agent-resolved | tasks.md#Milestones; milestones.md rules 3, 6  Superseded in part by D7/D19 (pasted PAT: no App key, no 1 h renewal, no per-daemon toggles; M5/M6 content changed). |
 | D12 | tasks | speckit-analyze (14 findings, 2 HIGH) | All fixed: Verify/Satisfies aligned with quickstart steps; fixture placed in `sandbox/hostile_host.rs`; kept items enabled in FR-014 tests; old container git becomes `NoCredentialReason::GitTooOld` via `GitCredentialTargets.git_too_old` (plan Risks, contracts/protocol.md, data-model §6, spec Key entity updated — plan fix); `MAX_LIFETIME_SECS` const; two-renewal test; quickstart step 12 for FR-011; notice visual pass moved to M1 | agent-resolved | tasks.md, plan.md#Risks |
 | D13 | M1 | No `tdd/test-list.md` (design skipped `speckit-tdd-plan`); the mandatory `tdd.run` hook needs one | Drive M1 test-first by hand in tasks.md's order (T001–T007 tests before T008–T011): write each test, run it and record its red line in this ledger's *Review rounds*-adjacent note or the commit message, then implement. No test list is created for one milestone | agent-resolved | precedent: specs/9xx ledgers "test tasks are ordered first by hand" |
 | D14 | M1 | Where the `RemovedGitCredentials` notice is stored, given `ContainerSettings.migration` is one `Option` already used by `MovedOffReleasedImage` (cleared on a basic-image start, which would also wipe ours) and `KubeSettings` has no notice field | On `DaemonEntry`: new `#[serde(default, skip_serializing_if = "Option::is_none")] notice: Option<MigrationNotice>`, DaemonEntry read through a `RawDaemonEntry` (`#[serde(from)]`) whose `From` takes `SandboxProfile::take_removed_git_credentials()` / `KubeSettings::take_removed_git_credentials()` and sets it; `migrated_entry` does the same for the legacy `daemon` block. `DaemonRegistry::dismiss_notice(id)`; client row shows it beside the image notice with a dismiss message. 11 `DaemonEntry {` literals gain `notice: None` | agent-resolved | daemons.rs:46-85, features/daemons.rs:588-593 |
@@ -73,10 +74,24 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M3 A (sonnet) | 2 | fb5dee54b57bf5ff0f8af7c3389b5cad4ecf069d:7b33318943986e21f128454d80907d89e9890a85 | CLEAN (3 MINOR: no start-level test of the helper path, no direct git_env_with_helper test, a daemon already running keeps its old env) |
 | M3 B (conformance + correctness, sonnet; one reviewer for A and B) | 1 | f62bba4f347d8a6361d83cac442b621f119d2a6f:79e2d3e0e3335139d58a5d999979f26b0472e0b0 | CLEAN (2 MINOR: no tdd/cycle-log.md; sandbox_argv run collided with a build, green in the gate). Review A as the `code-review` skill not run separately |
 | M4 A+B (sonnet, one reviewer, conformance + code-review high) | 2 | 6e7d225a1c67b191916f3701b61708f112f66edf:15904e76d07ecff2f2045c7acfdadcddbcc0bef5 | CHANGES (F1 MAJOR fixed: `Schedule::run` no longer revokes a superseded token, `Renewal::revoke_superseded` does, after delivery (SC-004); F2 MAJOR fixed: core `CLOCK_SKEW_SECS` shared by `accept` and the daemon; F3 MINOR declined; F4 Verify not run by the reviewer, covered by the full gate) |
+| PAT rework: Spec | 1 | 99e778617792b9359807a328889b1c4f5de652fa:03e1fb3897f4a8725e33951ee5ea1e5f697d2e2e | CHANGES (F1 MAJOR fixed: Assumptions still described per-daemon toggles; 3 MINOR fixed: SC-003 public reads, FR-009 opening sentence, git-too-old in FR-012) |
+| PAT rework: Spec | 2 | 3c3a91e137ad5f196f3bb3cfe51420b0e0c6ba44:03e1fb3897f4a8725e33951ee5ea1e5f697d2e2e | CLEAN (sonnet; 1 MINOR fixed, prose only: 1-day PAT is inside the warning window from paste) |
+| PAT rework: Plan/research/data-model/contract/quickstart | 1 | 3c3a91e137ad5f196f3bb3cfe51420b0e0c6ba44:03e1fb3897f4a8725e33951ee5ea1e5f697d2e2e | CHANGES (4 MAJOR fixed: 1 h row in data-model §2, secrets_dir/PatStore not marked new, PatRefused variant missing, PAT removed while disconnected stayed in the container (withdraw-on-failure); 3 MINOR fixed) |
+| PAT rework: Plan etc. | 2 | 666786835aa6017373962abcb43e7ba01b5462b0:03e1fb3897f4a8725e33951ee5ea1e5f697d2e2e | CLEAN (sonnet; 2 MINOR fixed: D10 marked superseded, helper.rs doc listed) |
+| PAT rework: Tasks (after speckit-analyze: 0 CRITICAL/HIGH, 9 MEDIUM fixed) | 1 | 666786835aa6017373962abcb43e7ba01b5462b0:03e1fb3897f4a8725e33951ee5ea1e5f697d2e2e | CHANGES (3 MAJOR fixed: M5 Verify cited M6 status steps, docs/daemon.md missing from T048, [P] tasks sharing mod.rs; 2 MINOR fixed) |
+| PAT rework: Tasks | 2 | 666786835aa6017373962abcb43e7ba01b5462b0:03e1fb3897f4a8725e33951ee5ea1e5f697d2e2e | CHANGES (1 MAJOR fixed: M6 Verify cited live steps; 2 MINOR fixed) |
+| PAT rework: Tasks | 3 | 0841d9c1950c9f05c164b07cfd2899b20fc4da8d:03e1fb3897f4a8725e33951ee5ea1e5f697d2e2e | CHANGES (sonnet; 1 MAJOR: the M6 visual pass on fixture states cannot be run, the showcase has no daemon; fixed by moving T055's pass to the close unit with T056 and making M6 Verify the `daemon_sections` tests: a removed claim, prose only, no 4th round (limit 3)) |
+| M5 A (code-review high) | 1 | (not recorded by part 1) | CLEAN (2 MINOR fixed in 069c651a) |
+| M5 B (conformance, sonnet) | 1 | (not recorded by part 1) | CLEAN; Verify green |
 
 ## M4 review notes
 
 Review A (high) round 1: CHANGES, F1–F7 fixed (validating GithubRepo Deserialize, unique temp names, lower-cased schedule keys, grant token/expiry validation, req u64::MAX sentinel, revoke of superseded token, git_too_old in change detection); F8 (cache git version) declined as MINOR. Review B (sonnet): CLEAN.
+
+## M5 review notes
+
+- Review A (code-review high, fresh reviewer) CLEAN, 2 MINOR fixed: reach listing 429/5xx/rate-limit now `SourceUnreachable` (was fail-open); AtExpiry retry backoff clamped to the held PAT's expiry. Review B (conformance, sonnet) CLEAN; Verify green (85 core, 8 daemon, 7 client). Visual pass PASS (visual-pass/m5-github-tokens.md).
+- Deviation: wiring uses a worker thread sleeping to `next_wake`, not the subscription clock; Add/Replace/Remove state lives in `settings::State.github_tokens` (not the settings document).
 
 ## Declined review findings
 
@@ -96,7 +111,7 @@ None.
 
 ## Open escalation
 
-None in this unit. D7 awaits jaro's answer on the orchestrator's decision card.
+None. D7 answered by jaro (option B, pasted PAT).
 
 ## Follow-ups not done
 

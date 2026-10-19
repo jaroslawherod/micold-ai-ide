@@ -6,7 +6,7 @@ use std::sync::Mutex;
 
 use super::{
     CredentialSource, Grant, NoCredentialReason, ScopedCredential, SecretToken, SourceResponse,
-    UnixTime, MAX_LIFETIME_SECS,
+    UnixTime, MINTED_LIFETIME_SECS,
 };
 use crate::github::GithubRepo;
 
@@ -21,7 +21,7 @@ struct Inner {
     revoked: Vec<GithubRepo>,
 }
 
-/// Issues `fake-token-<n>` credentials that live [`MAX_LIFETIME_SECS`] from the source's clock,
+/// Issues `fake-token-<n>` credentials that live [`MINTED_LIFETIME_SECS`] from the source's clock,
 /// which a test moves with [`FakeSource::set_now`]; failures are scripted one at a time.
 pub struct FakeSource {
     inner: Mutex<Inner>,
@@ -31,7 +31,7 @@ impl Default for FakeSource {
     fn default() -> Self {
         Self {
             inner: Mutex::new(Inner {
-                lifetime: MAX_LIFETIME_SECS,
+                lifetime: MINTED_LIFETIME_SECS,
                 ..Inner::default()
             }),
         }

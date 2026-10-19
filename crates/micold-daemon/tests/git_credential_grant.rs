@@ -20,7 +20,7 @@ use futures_util::{SinkExt, StreamExt};
 use micold_core::github::GithubRepo;
 use micold_core::protocol::codec::Frame;
 use micold_core::protocol::messages::{ClientMsg, CredentialTarget, DaemonMsg, ErrorKind};
-use micold_core::scoped_credential::SecretToken;
+use micold_core::scoped_credential::{SecretToken, CLOCK_SKEW_SECS, MAX_LIFETIME_SECS};
 use micold_daemon::catalog::Catalog;
 use micold_daemon::state::DaemonState;
 
@@ -424,7 +424,7 @@ async fn a_malformed_token_or_a_stale_expiry_is_refused_and_a_path_is_not_a_repo
         ("a\nexpires_at=9", soon()),
         ("", soon()),
         ("tok", 5),
-        ("tok", soon() + 7200),
+        ("tok", soon() + MAX_LIFETIME_SECS + CLOCK_SKEW_SECS + 60),
     ] {
         send(
             &mut client,
@@ -441,4 +441,35 @@ async fn a_malformed_token_or_a_stale_expiry_is_refused_and_a_path_is_not_a_repo
     // A peer cannot name a path: the repository does not even decode.
     let bad = serde_json::json!({"GitCredentialRevoke": {"repo": {"owner": "..", "name": "x"}}});
     assert!(serde_json::from_value::<ClientMsg>(bad).is_err());
+}
+
+#[tokio::test]
+async fn a_grant_expiring_in_300_days_is_accepted() {
+    let _one = ONE_AT_A_TIME.lock().await;
+    let dir = tempfile::tempdir().unwrap();
+    let creds = dir.path().join("creds");
+    let _env = root_env(&creds);
+    let a = project(dir.path(), "a", Some("https://github.com/o/r"));
+    let state = state_with(&[&a]);
+    let mut client = connect_and_attach(&state, &a).await;
+    let _ = targets(&mut client).await;
+    let expires_at = soon() + 300 * 86_400;
+    send(
+        &mut client,
+        ClientMsg::GitCredentialGrant {
+            repo: repo("https://github.com/o/r"),
+            token: SecretToken::new("fake-pat"),
+            expires_at,
+        },
+    )
+    .await;
+    let file = creds.join("o").join("r");
+    let expected = format!("expires_at={expires_at}\ntoken=fake-pat\n");
+    for _ in 0..200 {
+        if std::fs::read_to_string(&file).is_ok_and(|t| t == expected) {
+            return;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    panic!("{} never held the 300-day grant", file.display());
 }

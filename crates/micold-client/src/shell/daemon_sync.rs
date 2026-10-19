@@ -445,6 +445,9 @@ pub fn on_grid_frame(
 }
 
 pub fn on_disconnected(app: &mut App, daemon: DaemonId) -> Task<Message> {
+    // The daemon keeps its credential files; the schedule is rebuilt when it announces its
+    // targets again on the next connection (#1002).
+    app.git_credentials.disconnected(daemon);
     crate::log_line("attach: disconnected");
     // Only this daemon's link is dropped: the others keep their outbox, state and pending ops
     // (feature 491, FR-007). `Lost` is folded here; a daemon that never connected was folded by
@@ -1087,6 +1090,19 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
     // that continues an interaction the user started, so one arm can hand work back.
     let mut follow_up = Task::none();
     match event {
+        DaemonMsg::GitCredentialTargets {
+            targets,
+            git_too_old,
+        } => {
+            if let Some(outbox) = app.outbox_for(daemon) {
+                app.git_credentials.targets(
+                    daemon,
+                    std::sync::Arc::new(move |msg| outbox.send(msg)),
+                    targets,
+                    git_too_old,
+                );
+            }
+        }
         DaemonMsg::CatalogChanged { catalog } => {
             reconcile_catalog(&mut app.core, daemon, &catalog, true);
             // The worktree list may have gained a row (created, discovered, included, or valid

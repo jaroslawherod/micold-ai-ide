@@ -144,6 +144,11 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
         })
         .collect();
     for id in gone {
+        // A stop, removal or edit deletes its copies; a lost connection (reconnecting, unreachable,
+        // version mismatch) does not: the daemon keeps its files (#1002).
+        if is_user_stopped(app.core.settings.links.state(id)) {
+            app.git_credentials.stopped(id);
+        }
         let _ = crate::shell::daemon_sync::on_disconnected(app, id);
     }
     // A project first bound to a connected daemon is registered there before a session starts.
@@ -254,6 +259,15 @@ fn daemon_key(context: &str, namespace: &str, name: &str) -> String {
     micold_core::kube::names::DaemonKey::of(context, namespace, name)
         .as_str()
         .to_string()
+}
+
+/// Whether a daemon in `state` was stopped or removed by the user (no link at all, or `Stopped`),
+/// as opposed to having lost its connection.
+fn is_user_stopped(state: Option<&micold_core::daemons::DaemonState>) -> bool {
+    matches!(
+        state,
+        None | Some(micold_core::daemons::DaemonState::Stopped)
+    )
 }
 
 /// The directory holding every Kubernetes daemon's key directory.

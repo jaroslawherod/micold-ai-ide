@@ -97,8 +97,12 @@ The **git credentials** and **SSH key** items were removed: they handed the pod 
 identity. A daemon that had them ticked keeps working without them; its entry in the daemon list
 shows a one-time notice, with a **Dismiss** button, and the old secrets (`<name>-git-credentials`
 and `<name>-git-ssh`) are deleted on the next start or remove. A pod that had either item is
-recreated on the next start, without asking to keep it. Until the scoped credential is set
-up, the pod cannot push.
+recreated on the next start, without asking to keep it. Until you paste a GitHub token for the
+project's repository (see [GitHub access tokens](settings.md#github-access-tokens)), the pod cannot
+push. Once you have, the pod pushes and pulls with that one-repository token over HTTPS, with no
+SSH key (an SSH remote is rewritten to HTTPS inside the pod). The application never renews the
+token: you paste a new one before it expires, and a token that leaks from the pod stays valid until
+it expires or you delete it on GitHub.
 
 ## The form
 
