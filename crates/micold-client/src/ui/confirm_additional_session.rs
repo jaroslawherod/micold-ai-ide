@@ -71,10 +71,18 @@ pub fn dialog<'a>(
         let text = state.session_start_block_text(id)?;
         return Some(blocked_modal(&text, scheme));
     }
+    let (place, existing) = target_text(state)?;
+    Some(modal(&place, existing.as_deref(), scheme))
+}
+
+/// The place and the main session's label the dialog for `additional_target` names; `None` when
+/// no target is open. The label is `None` while this window's catalog does not know the occupant.
+/// Split out of [`dialog`] so a test can read what the dialog says without rendering it.
+pub fn target_text(state: &State) -> Option<(String, Option<String>)> {
     let location = state.session.additional_target.as_ref()?;
     let existing = micold_core::occupancy::main_session(state.active_sessions(), location)
         .and_then(|main| state.workspace.find_session(main))
-        .map(|(_, session)| session.label.display());
+        .map(|(_, session)| session.label.display().to_owned());
     let place = match location {
         SessionLocation::Default => "The project root".to_string(),
         SessionLocation::Worktree(dir) => {
@@ -84,5 +92,5 @@ pub fn dialog<'a>(
             )
         }
     };
-    Some(modal(&place, existing, scheme))
+    Some((place, existing))
 }

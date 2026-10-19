@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #802
 - **Worktree branch**: feat/802_make-one-session-per-worktree-a-soft-limit-confirm
 - **Started**: 2026-10-18
-- **Phase**: milestone M2
-- **Next step**: wait for M2 PR CI and merge, then close
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -18,13 +18,15 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | #1031 | Design | merged | 03e676bfe979097b0f524af2259b71f56059408d |
 | #1048 | M1 | merged | 1927ab5ca699385e2ffd01710e262f31be1011af |
+| #1055 | M2 | merged | 56fcb2e5059aa670491a1d58036d4776b216bbe6 |
+| PR_CLOSE | Close | open | |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
 | M1 | T001–T010 | full | Person start on an occupied location asks to confirm | #1048 | merged |
-| M2 | T011–T014 | light | Agent rule documented in tool descriptions and guide | #1055 | open |
+| M2 | T011–T014 | light | Agent rule documented in tool descriptions and guide | #1055 | merged |
 
 ## Decisions
 
@@ -38,6 +40,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | Tasks | 1 | 471eeafeb7ec5564f4a5f78ffedb530b70558563:5c04aae81ae8fdebe67666ab2815c46dd9d39475 | CLEAN (analyze MEDIUMs fixed first; spec gained 2 edge cases) |
 | Plan | 1 | 4e8358f18d72867574a948bd7aa91fab461bf1c0:81b665a7eb821c4ee43acafbca13247dc284ad2e | CHANGES: 2 MAJOR (F1 stale dialog text, F2 automatic start origin) fixed in plan/research/data-model/contracts; MINORs F3-F5 fixed; prose-only plan changes, no round 2 |
+| Close | 1 | 07962a1237a7c6663d5862a9379d639c5569c68a:7313f5c055b13868c6c30b7c241f8d57aa5c3800 | CLEAN (3 MINOR prose fixes, no round 2) |
 | Code B M2 | 1 | 9684b1fbf5b02a913e51a9d84197b0932613657a:1927ab5ca699385e2ffd01710e262f31be1011af | CLEAN (light tier: single conformance review, no separate review A) |
 | Code B M1 | 1 | 55678ee3a850a990aec7eb5a59c7288b89cb81a5:155043e438a3e9c8712d12d5498171e842989d40 | CLEAN |
 | Code A M1 | 1 | daeb028058883f37750a2bed804c6bd6ba5ab39a:046bf60ba73da5ef82989b82b70e0ea6b57a9ad4 | code-review high: fixed F1 (project stored in PendingOp, refusal reopens only for the same project), reducer-from-shell rule (AdditionalOpened message); rest declined/MINOR |

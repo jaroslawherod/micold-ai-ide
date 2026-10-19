@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-18
 
-**Status**: Draft
+**Status**: Closed 2026-10-19 — shipped in PRs #1031, #1048, #1055 and the close PR
 
 **Input**: User description: "Implement GitHub issue #802: Make one session per worktree a soft limit: confirm before creating a parallel session. Feature 776 hard-refuses creating a second session in a worktree that already has one, which blocks the legitimate case of the user wanting another session in the same worktree working in parallel. Make it a soft limit: when the worktree already has a session and the user creates another, tell them there is already a session and ask them to confirm; on confirmation the new session is created and works in parallel. Declining leaves the existing session untouched and creates nothing. Decide and document whether an agent-initiated create (no human present) needs the confirmation."
 
