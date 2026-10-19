@@ -5,8 +5,9 @@
 //! The cards share the width equally, so a wider grid makes wider cards, and the grid scrolls
 //! vertically.
 
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
+use crate::ui::cdk::motion::Progress;
 use crate::ui::material::navigation_drawer::SLIDE;
 use crate::ui::material::{OverviewCard, Scrollable};
 use iced::advanced::layout::{self, Layout};
@@ -164,8 +165,9 @@ struct ZoomState {
     full_screen_seen: bool,
     /// The widths a zoom runs between: the width before the flip, and that width ± `freed`.
     ends: Option<(f32, f32)>,
-    /// When the last flip happened.
-    started: Instant,
+    /// Runs from 0 at a flip to 1 when the slide and 100 ms are over: the zoom's time limit, and
+    /// the one thing that asks for frames while it runs (through `Progress`, FR-025).
+    clock: Progress,
     /// The width of the last layout, which a flip takes as its start.
     last_width: Option<f32>,
     /// What the last layout drew.
@@ -177,7 +179,7 @@ impl ZoomState {
         Self {
             full_screen_seen: full_screen,
             ends: None,
-            started: Instant::now(),
+            clock: Progress::new(1.0),
             last_width: None,
             pieces: Vec::new(),
         }
@@ -185,10 +187,10 @@ impl ZoomState {
 
     /// Takes the next layout's `width`: starts a zoom on a flip, keeps it on a reversal, and ends
     /// it when the width reaches the end it heads for, leaves the range, or the slide is over.
-    fn advance(&mut self, zoom: Zoom, width: f32, now: Instant) -> Option<(f32, f32)> {
+    fn advance(&mut self, zoom: Zoom, width: f32) -> Option<(f32, f32)> {
         if zoom.full_screen != self.full_screen_seen {
             self.full_screen_seen = zoom.full_screen;
-            self.started = now;
+            self.clock.restart_at(0.0);
             if self.ends.is_none() && zoom.freed >= 1.0 {
                 if let Some(before) = self.last_width {
                     let after = if zoom.full_screen {
@@ -206,7 +208,7 @@ impl ZoomState {
             if (width - heading).abs() <= END_REACHED
                 || width < low - END_REACHED
                 || width > high + END_REACHED
-                || now.saturating_duration_since(self.started) >= SLIDE + Duration::from_millis(100)
+                || self.clock.value() >= 1.0
             {
                 self.ends = None;
             }
@@ -215,6 +217,9 @@ impl ZoomState {
         self.ends
     }
 }
+
+/// How long a zoom may last: the sidebar's slide, and a little more.
+const ZOOM_LIMIT: Duration = SLIDE.saturating_add(Duration::from_millis(100));
 
 /// How close to an end width counts as there.
 const END_REACHED: f32 = 0.5;
@@ -320,10 +325,14 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for Grid<'_, M> {
         limits: &layout::Limits,
     ) -> layout::Node {
         let width = limits.max().width;
-        let width = if width.is_finite() { width } else { self.min_width };
+        let width = if width.is_finite() {
+            width
+        } else {
+            self.min_width
+        };
         let (min, gap, max) = (self.min_width, self.spacing, self.max_columns);
         let state = tree.state.downcast_mut::<ZoomState>();
-        let card_width = match state.advance(self.zoom, width, Instant::now()) {
+        let card_width = match state.advance(self.zoom, width) {
             Some((start, end)) => {
                 let f = zoom_fraction(start, end, width);
                 let at_start = rest_width(start, min, gap, max);
@@ -348,7 +357,9 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for Grid<'_, M> {
         );
         let mut nodes = Vec::with_capacity(self.cards.len() + 2);
         for (i, (card, card_tree)) in self.cards.iter_mut().zip(&mut tree.children).enumerate() {
-            let node = card.as_widget_mut().layout(card_tree, renderer, &card_limits);
+            let node = card
+                .as_widget_mut()
+                .layout(card_tree, renderer, &card_limits);
             let at = primary[i].map_or(Point::ORIGIN, |p| pieces[p].origin);
             nodes.push(node.move_to(at));
         }
@@ -391,9 +402,11 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for Grid<'_, M> {
         let zooming = tree.state.downcast_ref::<ZoomState>().ends.is_some();
         // The widths move with the sidebar and the zoom ends on a layout, so ask for both while it
         // runs; nothing is asked for at rest.
-        if zooming && matches!(event, Event::Window(iced::window::Event::RedrawRequested(_))) {
-            shell.request_redraw();
-            shell.invalidate_layout();
+        if zooming {
+            tree.state
+                .downcast_mut::<ZoomState>()
+                .clock
+                .on_layout_frame(event, 1.0, ZOOM_LIMIT, shell);
         }
         let origin = layout.position();
         let (state_tree, children) = (&tree.state, &mut tree.children);
@@ -433,9 +446,15 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for Grid<'_, M> {
             .zip(layout.children())
             .enumerate()
             .map(|(i, ((card, card_tree), card_layout))| {
-                let local = Grid::<M>::cursor_for_state(state, origin, i, card_layout.position(), cursor);
-                card.as_widget()
-                    .mouse_interaction(card_tree, card_layout, local, viewport, renderer)
+                let local =
+                    Grid::<M>::cursor_for_state(state, origin, i, card_layout.position(), cursor);
+                card.as_widget().mouse_interaction(
+                    card_tree,
+                    card_layout,
+                    local,
+                    viewport,
+                    renderer,
+                )
             })
             .max()
             .unwrap_or_default()
@@ -468,7 +487,9 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for Grid<'_, M> {
             };
             let whole = (clip.width - bounds.width).abs() < MIN_PIECE;
             let draw_card = |renderer: &mut iced::Renderer| {
-                let local = if state.ends.is_none() || cursor.position().is_some_and(|p| clip.contains(p)) {
+                let local = if state.ends.is_none()
+                    || cursor.position().is_some_and(|p| clip.contains(p))
+                {
                     cursor
                 } else {
                     mouse::Cursor::Unavailable
@@ -517,7 +538,14 @@ impl<M> Widget<M, iced::Theme, iced::Renderer> for Grid<'_, M> {
         viewport: &Rectangle,
         translation: Vector,
     ) -> Option<overlay::Element<'b, M, iced::Theme, iced::Renderer>> {
-        overlay::from_children(&mut self.cards, tree, layout, renderer, viewport, translation)
+        overlay::from_children(
+            &mut self.cards,
+            tree,
+            layout,
+            renderer,
+            viewport,
+            translation,
+        )
     }
 }
 
@@ -915,7 +943,10 @@ mod tests {
                         assert!(a.rect.x >= -EPS && a.rect.x + a.rect.width <= width + EPS);
                         for b in &pieces[i + 1..] {
                             assert!(
-                                a.card == b.card || !crate::ui::material::test_support::overlap(&a.rect, &b.rect),
+                                a.card == b.card
+                                    || !crate::ui::material::test_support::overlap(
+                                        &a.rect, &b.rect
+                                    ),
                                 "{start}→{end} f {f}: {a:?} overlaps {b:?}"
                             );
                         }
@@ -937,7 +968,12 @@ mod tests {
         }
 
         /// Lays `cards` out `width` wide with `zoom`, as the next frame of the same widget.
-        fn lay(&mut self, cards: Vec<OverviewCard<'static, ()>>, zoom: Zoom, width: f32) -> layout::Node {
+        fn lay(
+            &mut self,
+            cards: Vec<OverviewCard<'static, ()>>,
+            zoom: Zoom,
+            width: f32,
+        ) -> layout::Node {
             let mut element: Element<'static, ()> = Element::new(
                 CardGrid::new(cards, roles())
                     .min_width(MIN_WIDTH)
@@ -975,11 +1011,17 @@ mod tests {
     }
 
     fn full(freed: f32) -> Zoom {
-        Zoom { full_screen: true, freed }
+        Zoom {
+            full_screen: true,
+            freed,
+        }
     }
 
     fn normal(freed: f32) -> Zoom {
-        Zoom { full_screen: false, freed }
+        Zoom {
+            full_screen: false,
+            freed,
+        }
     }
 
     /// A rig that has laid 7 cards out normally at 1150 px and then flipped to full screen at
@@ -1028,8 +1070,7 @@ mod tests {
         assert_eq!(rig.state().ends, None, "a resize past the start");
 
         let mut rig = midway();
-        rig.state().started = std::time::Instant::now()
-            - (super::super::navigation_drawer::SLIDE + std::time::Duration::from_millis(100));
+        rig.state().clock.restart_at(1.0);
         rig.lay(cards(7), full(300.0), 1300.0);
         assert_eq!(rig.state().ends, None, "the slide and 100 ms are over");
         assert_same(&rig.pieces(), &ribbon(7, rest(1300.0), GAP, 1300.0, H));
@@ -1052,16 +1093,19 @@ mod tests {
     #[test]
     fn a_card_count_change_mid_zoom_keeps_the_zoom() {
         let mut rig = midway();
-        let started = rig.state().started;
+        let clock = rig.state().clock.value();
         let changed: Vec<OverviewCard<'static, ()>> = cards(9);
         rig.lay(changed, full(300.0), 1320.0);
         assert_eq!(rig.state().ends, Some((1150.0, 1450.0)));
-        assert_eq!(rig.state().started, started);
+        assert_eq!(rig.state().clock.value(), clock);
         let pieces = rig.pieces();
         assert_same(&pieces, &ribbon_at(9, 1150.0, 1450.0, 170.0 / 300.0));
         for (i, a) in pieces.iter().enumerate() {
             for b in &pieces[i + 1..] {
-                assert!(a.card == b.card || !crate::ui::material::test_support::overlap(&a.rect, &b.rect));
+                assert!(
+                    a.card == b.card
+                        || !crate::ui::material::test_support::overlap(&a.rect, &b.rect)
+                );
             }
         }
     }
@@ -1074,13 +1118,22 @@ mod tests {
         let span = |width: f32, zoom: Zoom| {
             let mut rig = Rig::new();
             rig.lay(cards(30), zoom, width);
-            let row: Vec<Piece> = rig.pieces().into_iter().filter(|p| p.rect.y < 1.0).collect();
-            row.iter().map(|p| p.rect.x + p.rect.width).fold(0.0, f32::max)
+            let row: Vec<Piece> = rig
+                .pieces()
+                .into_iter()
+                .filter(|p| p.rect.y < 1.0)
+                .collect();
+            row.iter()
+                .map(|p| p.rect.x + p.rect.width)
+                .fold(0.0, f32::max)
         };
         let window = 1400.0 - 48.0;
         let normal_row = span(window - freed, normal(freed));
         let full_row = span(window, full(freed));
         assert!(near(full_row, window), "{full_row} != {window}");
-        assert!(full_row >= normal_row + freed - EPS, "{full_row} vs {normal_row}");
+        assert!(
+            full_row >= normal_row + freed - EPS,
+            "{full_row} vs {normal_row}"
+        );
     }
 }
