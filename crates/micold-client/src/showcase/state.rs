@@ -97,6 +97,8 @@ pub enum Message {
     SectionShown(usize),
     /// A header of the grouped `AccordionSection`s was pressed (feature 1091, FR-008).
     GroupSectionToggled(usize),
+    /// A header of the independent `AccordionSection`s was pressed (feature 1091, FR-008).
+    IndependentSectionToggled(usize),
     /// The section rail was collapsed to its icons, or opened back up (feature 027, FR-026d).
     ///
     /// Live for the same reason the destination is: a rail that shows one width is showing half the
@@ -114,6 +116,9 @@ pub enum Message {
 ///
 /// `Clone` and `Debug`, but not `PartialEq`: it carries the sample [`GridCache`], which is a render
 /// cache rather than a value. Tests compare the fields they care about.
+/// The grouped sections' default open key (feature 1091).
+pub const GROUP_DEFAULT: Option<usize> = Some(0);
+
 #[derive(Debug, Clone)]
 pub struct Showcase {
     /// The scheme every component on the page resolves against (FR-008). Starts light, and is never
@@ -175,6 +180,8 @@ pub struct Showcase {
     rows_scroll: (u32, u32),
     /// Which of the grouped `AccordionSection`s is open (feature 1091, FR-008); the first at rest.
     group: crate::ui::material::AccordionGroup<usize>,
+    /// Each independent `AccordionSection`'s own open flag (feature 1091, FR-008, FR-003).
+    independent: [bool; 2],
 }
 
 impl Showcase {
@@ -197,6 +204,7 @@ impl Showcase {
             section_shown: 0,
             rows_scroll: (0, 0),
             group: crate::ui::material::AccordionGroup::new(),
+            independent: [false, true],
             section_rail_collapsed: false,
             typeahead_query: String::new(),
             // The list opens on a pose, not on a blank: the first row carries the chosen marker and
@@ -256,9 +264,19 @@ impl Showcase {
         self.rows_scroll
     }
 
-    /// Whether grouped section `key` is open; section 0 is open until another is pressed.
+    /// The grouped sections' state; section [`GROUP_DEFAULT`] is open until another is pressed.
+    pub fn group(&self) -> &crate::ui::material::AccordionGroup<usize> {
+        &self.group
+    }
+
+    /// Whether grouped section `key` is open.
     pub fn group_open(&self, key: usize) -> bool {
-        self.group.is_open(key, Some(0))
+        self.group.is_open(key, GROUP_DEFAULT)
+    }
+
+    /// Whether independent section `key` is open.
+    pub fn independent_open(&self, key: usize) -> bool {
+        self.independent.get(key).copied().unwrap_or(false)
     }
 
     /// The section rail's current destination.
@@ -412,7 +430,12 @@ impl Showcase {
             // `open` flag would be a second answer to a question the widget has already answered.
             Message::SelectChosen(choice) => self.select_choice = Some(choice),
             Message::SectionShown(index) => self.section_shown = index,
-            Message::GroupSectionToggled(key) => self.group.toggle(key, Some(0)),
+            Message::GroupSectionToggled(key) => self.group.toggle(key, GROUP_DEFAULT),
+            Message::IndependentSectionToggled(key) => {
+                if let Some(open) = self.independent.get_mut(key) {
+                    *open = !*open;
+                }
+            }
             Message::RowsScrolled { offset, viewport } => self.rows_scroll = (offset, viewport),
             // Collapsing does not disturb the destination — that is the point of it, and the
             // showcase would hide the claim if it reset the marker here.

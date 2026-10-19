@@ -15,7 +15,7 @@ use crate::icons::Icon;
 use crate::showcase::catalogue::Layout;
 use crate::showcase::gallery::{arrange, posed};
 use crate::showcase::samples;
-use crate::showcase::state::{Message, Showcase};
+use crate::showcase::state::{Message, Showcase, GROUP_DEFAULT};
 use crate::ui::material::{self, SurfaceKind, TypeRole};
 
 /// Every surface kind, including the two that carry a payload — one representative payload each,
@@ -275,7 +275,8 @@ pub fn accordion_section<'a>(
                 column(["Network", "Storage", "Tools"].into_iter().enumerate().map(
                     |(key, title)| {
                         material::AccordionSection::new(title, body(roles), roles)
-                            .open(showcase.group_open(key))
+                            .in_group(showcase.group(), key, GROUP_DEFAULT)
+                            .summary("Docker · Basic image")
                             .on_toggle(Message::GroupSectionToggled(key))
                             .into()
                     },
@@ -284,12 +285,11 @@ pub fn accordion_section<'a>(
             ),
             posed(
                 "independent sections",
-                column([
-                    section(showcase.shown(index))
-                        .on_toggle(Message::Reversed(index))
-                        .into(),
-                    section(true).into(),
-                ]),
+                column([0, 1].map(|key| {
+                    section(showcase.independent_open(key))
+                        .on_toggle(Message::IndependentSectionToggled(key))
+                        .into()
+                })),
                 roles,
             ),
         ],

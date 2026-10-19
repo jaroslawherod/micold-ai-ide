@@ -141,9 +141,19 @@ fn grouped_sections_are_exclusive_and_leave_the_independent_set_alone() {
         !s.group_open(0) && !s.group_open(1),
         "pressing the open one closes it"
     );
-    for i in 0..ENTRIES {
-        assert!(s.shown(i), "entry {i}: the independent set is untouched");
-    }
+    assert!(!s.independent_open(0) && s.independent_open(1));
+    s.update(Message::IndependentSectionToggled(0));
+    assert!(
+        s.independent_open(0),
+        "an independent section toggles itself"
+    );
+    assert!(s.independent_open(1), "and leaves its neighbour alone");
+    assert!(
+        !s.group_open(0) && !s.group_open(1),
+        "and leaves the group alone"
+    );
+    s.update(Message::GroupSectionToggled(2));
+    assert!(s.independent_open(0) && s.independent_open(1));
 }
 
 // ---------------------------------------------------------------------------------------------
