@@ -37,7 +37,7 @@ open and shows the new project's cards.
 Each card shows:
 
 - the location's **type**, as an icon and a word (the word leads the footer line, and is also the icon's tooltip);
-- its **title**, which says what the location is for (see [Title](#title)); hover it for the location's folder name;
+- its **title**, which says what the location is for (see [Title](#title)); hover it for the full title and the location's name;
 - below it, the **branch** in short: a conventional branch such as `fix/1115_container-daemon-fails-to-start` reads `fix/1115` (and `feat-813_worktree-overview` reads `feat/813`), any other branch reads as it is. Hover it for the full branch name. A card whose title already is the branch does not repeat it;
 - its **sessions line**: *No sessions*, *1 session*, *3 sessions*, followed by how many run when some do (*1 session · 1 running*);
 - its **state**, as an icon and a word. Hover for the reason;
@@ -49,7 +49,7 @@ A row with nothing to say is not shown.
 
 ### Title
 
-For a worktree named after a GitHub issue number (such as `feat-813_worktree-overview`) the title is the **issue's title**, once the app has it. Otherwise it is the **branch**, or the location's folder name when there is no branch: Default's title is *Default*. The folder name always shows when you hover the title.
+For a worktree named after a GitHub issue number (such as `feat-813_worktree-overview`) the title is the **issue's title**, once the app has it. Otherwise it is the **branch**, or the location's name when there is no branch: Default's title is *Default*. Hovering the title shows the full title, which may be cut short on the card, and the location's name.
 
 Titles come from the issues the New-worktree form already loaded, or from one read of each issue when the Overview opens, when the project is on GitHub and `gh` is available. A Jira ticket, an offline machine, a closed issue or a missing `gh` leave the branch as the title. Each title is read once while the app runs, and is never written to a log.
 

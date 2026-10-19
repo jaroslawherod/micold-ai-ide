@@ -49,6 +49,10 @@ whitespace or the end; `speckit-` removed from its front; `-` → space.
 | `None` | `Some("fix/1115_container")` | `fix-1115_container` | `fix/1115_container` |
 | `None` | `None` | `Default` | `Default` |
 | `Some("   ")` | `Some("main")` | `d` | `main` (a blank title counts as unknown) |
+| `Some("  Fix the gate ")` | `Some("main")` | `d` | `Fix the gate` (trimmed) |
+
+`overview_text::title_tooltip(title, display_name)`: `"<title>\n<display name>"`, or the display
+name alone when `title == display_name` (FR-006, FR-015: an ellipsized title is readable in full).
 
 ## C5. `overview_text::short_branch(branch: &str) -> Option<String>`
 

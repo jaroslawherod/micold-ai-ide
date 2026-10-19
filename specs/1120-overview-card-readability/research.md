@@ -29,7 +29,7 @@ entity and leaves the card widget pure glue (constitution, Principle I exception
 issue title, else the branch, else the display name. The client passes
 `Some(title)` only for `TitleLookup::Known`. `features::overview::summary` is removed. The separate
 summary line goes: the title now says what the summary said (US2). The title's tooltip is the
-display name (FR-006). The project root's title is its display name *Default*, because the card
+full title then the display name, or the display name alone when it is the title (FR-006, FR-015). The project root's title is its display name *Default*, because the card
 model carries no branch for the root today (`ui/overview.rs` passes `None`) and the spec puts new
 data sources out of scope; the header's type word says *Project root* instead of the old summary.
 
