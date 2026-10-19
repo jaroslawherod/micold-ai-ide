@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1003
 - **Worktree branch**: claude/project-thread-c3olht
 - **Started**: 2026-10-19
-- **Phase**: close
-- **Next step**: close unit: visual pass (T014, T021, T027, T036), T037, tdd-verify, close PR
+- **Phase**: done
+- **Next step**: handoff
 
 ## Pull requests
 
@@ -21,6 +21,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | #1097 | M2 | merged | a275545740c99aaf988f4795ff1c626879376da1 |
 | #1100 | M3 | merged | 4465c277c6d671331ed7b6850d8831d36396a744 |
 | #1103 | M4 | merged | c226a7d3743c8683134bc0db928ed00be8ef9960 |
+| close | close | PR to be opened by the orchestrator | — |
 
 ## Milestones
 
@@ -56,6 +57,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 | M4 A (reviewer, correctness) | 1 | b17b5e81aa73c6fb0c16d72738976a31324f1807:16b99b417fb3eba22f7efaf0276edeb860acedbb | CHANGES: F1 MAJOR test could not fail (fixed: sets Loading{last:None} directly); F2, F3 MINOR fixed. Not re-reviewed: test-only/prose fixes, verified by me and the gate |
 | M4 B (conformance) | 1 | b17b5e81aa73c6fb0c16d72738976a31324f1807:16b99b417fb3eba22f7efaf0276edeb860acedbb | CLEAN (F1 cycle-log rows added, F2 rewrapped; Verify 42 passed) |
 
+| Close diff review | 1 | 331805acaee0a16cdb9d5cfeacb55b9a3999480a:f2af8054b284b4ca02507de66a36d6b5ecb9463e | CHANGES: F1 MAJOR PRS_LOADING claim untrue (fixed: doc says unverified), F2 MAJOR step 5 crops cut off (fixed: re-cropped taller from the same frames), F3, F4 MINOR fixed prose only. Docs and evidence only after the snapshot; code unchanged, gate green on it |
 | Review A M3 | 1 | ec71d534c306adcf2388fe4d387e1397656064eb:6bd123d0cfa3586894e2ba9d6b14873228e1056c | CLEAN (3 MINOR: base line drawn twice, PROVENANCE rows, closure naming; not fixed, left to visual pass T027) |
 | Review B M3 | 1 | ec71d534c306adcf2388fe4d387e1397656064eb:6bd123d0cfa3586894e2ba9d6b14873228e1056c | CLEAN |
 
@@ -79,3 +81,5 @@ None.
 - T021 (M2 visual pass, quickstart §B step 2 check marks) moved to the close unit beside T014 and T037: same reason.
 - T014 (M1 visual pass, quickstart §B steps 1, 2, 6) moved to the close unit beside T037: no `gh` auth and no `xdotool` in M1's container (`visual-pass.md`).
 
+
+- Close: visual pass ran (Xvfb + xdotool via apt, stand-in gh); the drawn loading line is unverified; base line shown twice in heading and header, specified, left.

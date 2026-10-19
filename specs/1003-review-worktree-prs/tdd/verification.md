@@ -19,7 +19,7 @@ suite: full workspace NOT completed (ENOSPC); targeted runs 150 passed, 0 failed
 
 # TDD Verification: Review changes reaches every pull request of the worktree (#1003)
 
-**Verdict: FAIL.** Four behaviors have no recorded red and no history that orders test before code (T015, T017, T022, T024), one test claims to prove a drawn check mark and cannot fail if the mark is not drawn (`pull_request_row.rs:138`), and the drawn header, previous/next, and section lines have no test while the visual pass that the plan substitutes for one (T014, T021, T027, T036, T037) has not been done.
+**Verdict at audit time: FAIL (current verdict: PASS WITH NOTES, see the addendum at the end).** Four behaviors have no recorded red and no history that orders test before code (T015, T017, T022, T024), one test claims to prove a drawn check mark and cannot fail if the mark is not drawn (`pull_request_row.rs:138`), and the drawn header, previous/next, and section lines have no test while the visual pass that the plan substitutes for one (T014, T021, T027, T036, T037) has not been done.
 
 Audit scope and independence: audited from cold context by a session that did not write these tests. No subagent smell pass; I read every file named below myself. By the rubric's own table the missing `tdd/test-list.md` makes the verdict `BLOCKED`; I audited anyway against `tasks.md` (the cycle log's header names it as the list) and `spec.md`, and the verdict is `FAIL` on the evidence found.
 
@@ -88,7 +88,7 @@ Positives worth keeping: the branch-set unit tests (boundary pairs at `MATCH_WIN
 
 ## Mutation results
 
-Not measured. The profile has `mutation: null` (no `cargo-mutants`), and the instruction was to skip mutation testing when disk is short: free space fell to 0, was reclaimed to under 1 GB, against a 15 GB floor. Deliberate mutants were not attempted either, because each needs a test rebuild the disk could not safely hold, and a mutant must never be left unrestored. Test strength was unmeasured at audit time; see the two sections at the end (12 deliberate mutants run afterwards, 0 survivors).
+At audit time not measured (since run: 12 of 12 mutants killed, see the sections below). The profile has `mutation: null` (no `cargo-mutants`), and the instruction was to skip mutation testing when disk is short: free space fell to 0, was reclaimed to under 1 GB, against a 15 GB floor. Deliberate mutants were not attempted either, because each needs a test rebuild the disk could not safely hold, and a mutant must never be left unrestored. Test strength was unmeasured at audit time; see the two sections at the end (12 deliberate mutants run afterwards, 0 survivors).
 
 Mutants to try first once disk allows (not run): `worktree_branches.rs:181` `<=` to `<`; `pull_request.rs:819` 25 to 26; `pull_request.rs:889-893` tie-break `b.number.cmp(&a.number)` to ascending; `pull_request.rs:926` fork filter removed; `pull_request.rs:922` default-branch skip removed; `features/changes.rs:230-236` `Previous`/`Next` swapped; `features/changes.rs:132-146` `Unavailable` to `Absent`; `pull_request_row.rs:75-77` `checks` ignored (expected to survive, finding 1).
 
