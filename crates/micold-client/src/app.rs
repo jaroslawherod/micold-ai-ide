@@ -335,6 +335,9 @@ pub struct State {
     /// The Claude plan's usage the service pushed (feature 490) -- see
     /// [`crate::features::plan_usage::State`].
     pub plan_usage: crate::features::plan_usage::State,
+    /// The structured sessions' read-only logs (feature 938) -- see
+    /// [`crate::features::structured_log::State`].
+    pub structured_log: crate::features::structured_log::State,
     /// What the Changes view holds (feature 482) -- see [`crate::features::changes::State`].
     pub changes: crate::features::changes::State,
     /// What Run in parallel holds (feature 483) -- see [`crate::features::runs::State`].

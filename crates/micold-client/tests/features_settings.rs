@@ -2780,3 +2780,13 @@ mod save_required {
         assert_eq!(draft.required, Default::default());
     }
 }
+
+/// Feature 938, FR-023: the note under **Save terminal history** says it covers structured
+/// sessions' events too, and that turning it off deletes them.
+#[test]
+fn the_save_terminal_history_note_names_structured_sessions_events() {
+    let note = micold_client::features::settings::SAVE_TERMINAL_HISTORY_NOTE;
+    assert!(note.contains("structured sessions"), "{note}");
+    assert!(note.contains("events"), "{note}");
+    assert!(note.contains("deletes"), "{note}");
+}

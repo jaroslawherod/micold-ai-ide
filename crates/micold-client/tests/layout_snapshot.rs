@@ -153,6 +153,12 @@ mod issue_rows_show_all_text;
 #[path = "gates/notification_kind_rows_sit_under_the_switch.rs"]
 mod notification_kind_rows_sit_under_the_switch;
 
+// --- The structured-row-marker gate (938, T040) --------------------------------------------------
+
+// Beside `context_menu_anchor`, whose worktree fixture it reuses; it builds its own states.
+#[path = "gates/structured_row_marker_fits.rs"]
+mod structured_row_marker_fits;
+
 // --- T014 — the fixture matches -----------------------------------------------------------------
 
 /// The gate itself (FR-003).

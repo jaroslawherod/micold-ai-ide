@@ -56,7 +56,7 @@ pub fn view<'a>(
     .on_toggle(|v| Message::Settings(SettingsMsg::SaveTerminalHistoryToggled(v)));
     let save_history = field_note(
         save_history,
-        Some("Terminal output is written to this computer's disk while this is on. Turning it off deletes the saved history."),
+        Some(crate::features::settings::SAVE_TERMINAL_HISTORY_NOTE),
         roles,
     );
 

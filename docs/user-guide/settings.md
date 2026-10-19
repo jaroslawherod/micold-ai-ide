@@ -71,8 +71,11 @@ background service or the computer restarts (see [Worktrees & sessions → Earli
 stop and start](./worktrees-and-sessions.md#earlier-output-after-a-stop-and-start)).
 
 - **Default**: on.
-- Turning it **off** deletes every saved history at once, without asking, and nothing is written
-  until you turn it back on. It takes effect when you press **Save**.
+- It also keeps the event history of [structured
+  sessions](./worktrees-and-sessions.md#structured-sessions) on disk, so their log is still there
+  after the background service restarts.
+- Turning it **off** deletes every saved history, and every structured session's saved events, at
+  once, without asking, and nothing is written until you turn it back on. It takes effect when you press **Save**.
 - With it off, a stop and start still shows the earlier output in the terminal; only a restart of
   the background service or the computer loses it.
 - If a file cannot be deleted at that moment, the service retries until it succeeds.

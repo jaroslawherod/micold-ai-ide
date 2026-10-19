@@ -89,6 +89,8 @@ pub enum PendingOp {
         location: SessionLocation,
         /// The CLI the person chose, kept for the confirmation (feature 802, FR-001).
         provider: micold_core::session::AiCli,
+        /// The kind asked for, kept for the confirmation (feature 938, FR-022).
+        kind: micold_core::session::SessionKind,
         /// The create carried the user's confirmation, so a refusal of it is a plain error.
         additional: bool,
         /// The start-up auto-start: its refusal stays a notice (feature 802, FR-004).
@@ -1146,6 +1148,16 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
                 app.core.plan_usage.received(reading);
             }
         }
+        // Feature 938 (FR-022a): a structured session's events become lines of its read-only log.
+        DaemonMsg::StructuredEvents {
+            session,
+            omitted,
+            events,
+            live,
+        } => app
+            .core
+            .structured_log
+            .apply(session, omitted, &events, live),
         DaemonMsg::SettingsChanged { settings } => {
             let pr_status_enabled = settings.pr_status_enabled;
             if let Some(job) = on_settings_changed(app, settings) {
@@ -1763,6 +1775,7 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
                     project,
                     location,
                     provider,
+                    kind: session_kind,
                     additional,
                     automatic,
                 }) => {
@@ -1779,6 +1792,7 @@ pub fn on_daemon_event(app: &mut App, daemon: DaemonId, event: DaemonMsg) -> Tas
                             .update(Message::Session(SessionMsg::AdditionalOpened {
                                 location,
                                 provider: Some(provider),
+                                kind: session_kind,
                             }));
                     } else {
                         app.core.notify_error(message);
@@ -2569,6 +2583,7 @@ pub fn on_session_start_requested(
     app: &mut App,
     location: SessionLocation,
     provider: micold_core::session::AiCli,
+    kind: micold_core::session::SessionKind,
     automatic: bool,
 ) -> Task<Message> {
     // Chosen from the override list, or pressed directly — either way the list is done.
@@ -2580,6 +2595,7 @@ pub fn on_session_start_requested(
             .update(Message::Session(SessionMsg::AdditionalOpened {
                 location,
                 provider: Some(provider),
+                kind,
             }));
         return Task::none();
     }
@@ -2599,6 +2615,7 @@ pub fn on_session_start_requested(
             project: project.clone(),
             location,
             provider,
+            kind,
             additional: false,
             automatic,
         };
@@ -2607,7 +2624,7 @@ pub fn on_session_start_requested(
             project,
             worktree_dir,
             provider,
-            kind: Default::default(),
+            kind,
             allow_additional_session: false,
         });
     }
@@ -2621,6 +2638,7 @@ fn additional_session_request(
     project: PathBuf,
     location: &SessionLocation,
     provider: micold_core::session::AiCli,
+    kind: micold_core::session::SessionKind,
 ) -> ClientMsg {
     let worktree_dir = match location {
         SessionLocation::Worktree(dir) => dir.clone(),
@@ -2631,7 +2649,7 @@ fn additional_session_request(
         project,
         worktree_dir,
         provider,
-        kind: Default::default(),
+        kind,
         allow_additional_session: true,
     }
 }
@@ -2650,6 +2668,7 @@ pub fn on_additional_session_confirmed(app: &mut App) -> Task<Message> {
             },
         );
     }
+    let kind = app.core.session.additional_kind;
     if let (Some((location, provider)), Some(project)) = (
         app.core.additional_request(),
         app.core.workspace.active.clone(),
@@ -2658,11 +2677,12 @@ pub fn on_additional_session_confirmed(app: &mut App) -> Task<Message> {
             project: project.clone(),
             location: location.clone(),
             provider,
+            kind,
             additional: true,
             automatic: false,
         };
         send_op(app, op, move |req| {
-            additional_session_request(req, project, &location, provider)
+            additional_session_request(req, project, &location, provider, kind)
         });
     }
     app.core
@@ -3685,6 +3705,7 @@ pub(crate) mod tests {
             PathBuf::from("/p"),
             &location,
             micold_core::session::AiCli::ClaudeCode,
+            micold_core::session::SessionKind::Terminal,
         );
         assert!(matches!(
             msg,

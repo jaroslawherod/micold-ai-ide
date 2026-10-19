@@ -458,33 +458,37 @@ pub fn pane<'a>(
     // The colour-rendering terminal body fills the whole main area (feature 006). Falls back to
     // an empty state if the runtime is not yet available (e.g. the session is still starting).
     let several = area.filter(|a| a.layout.len() > 1);
-    let body: Element<'a, Message> = if let Some(area) = several {
-        // Feature 484: several panes tile the area; each measures itself, so no outer reporter.
-        crate::ui::panes::view(
-            state,
-            area,
-            selection,
-            display_offset,
-            scheme,
-            &link_context,
-        )
-    } else {
-        match grid {
-            Some(grid) => TerminalPane::new(grid, TermPalette::from_scheme(scheme))
-                .selection(selection)
-                .display_offset(display_offset)
-                .focused(state.terminal_focused())
-                .session(active)
-                .link_context(link_context)
-                .into(),
-            None => container(
-                Text::new(empty_terminal_message(state, active), TypeRole::Caption, r).muted(),
+    let body: Element<'a, Message> =
+        if session_kind(state, active) == micold_core::session::SessionKind::Structured {
+            // A structured session draws no terminal and takes no input (feature 938, FR-022a).
+            structured_log_body(state, active, r)
+        } else if let Some(area) = several {
+            // Feature 484: several panes tile the area; each measures itself, so no outer reporter.
+            crate::ui::panes::view(
+                state,
+                area,
+                selection,
+                display_offset,
+                scheme,
+                &link_context,
             )
-            .center_x(Length::Fill)
-            .center_y(Length::Fill)
-            .into(),
-        }
-    };
+        } else {
+            match grid {
+                Some(grid) => TerminalPane::new(grid, TermPalette::from_scheme(scheme))
+                    .selection(selection)
+                    .display_offset(display_offset)
+                    .focused(state.terminal_focused())
+                    .session(active)
+                    .link_context(link_context)
+                    .into(),
+                None => container(
+                    Text::new(empty_terminal_message(state, active), TypeRole::Caption, r).muted(),
+                )
+                .center_x(Length::Fill)
+                .center_y(Length::Fill)
+                .into(),
+            }
+        };
     // Measured whether the pane, the placeholder, or nothing at all is inside it (see above).
     let body: Element<'a, Message> = if several.is_some() {
         body
@@ -756,6 +760,38 @@ fn session_provider(state: &State, id: SessionId) -> AiCli {
         .iter()
         .find(|s| s.id == id)
         .map(|s| s.provider)
+        .unwrap_or_default()
+}
+
+/// A structured session's pane until #939 (feature 938, FR-022a): one plain line per event, in
+/// order, read-only. Shared `Text` in a `Scrollable`; no input box, no keystroke routing.
+fn structured_log_body<'a>(
+    state: &'a State,
+    id: SessionId,
+    r: tokens::Roles,
+) -> Element<'a, Message> {
+    let mut lines = column![].spacing(spacing::XS).width(Length::Fill);
+    let mut any = false;
+    for line in state.structured_log.rows(id) {
+        any = true;
+        lines = lines.push(Text::new(line, TypeRole::Body, r));
+    }
+    if !any {
+        lines = lines.push(Text::new("No events yet.", TypeRole::Caption, r).muted());
+    }
+    material::Scrollable::new(container(lines).padding(spacing::MD).width(Length::Fill), r)
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .into()
+}
+
+/// How session `id` runs its CLI; a terminal session when the projection does not list it.
+fn session_kind(state: &State, id: SessionId) -> micold_core::session::SessionKind {
+    state
+        .active_sessions()
+        .iter()
+        .find(|s| s.id == id)
+        .map(|s| s.kind)
         .unwrap_or_default()
 }
 
@@ -1363,7 +1399,10 @@ fn pinned_ai_tab<'a>(state: &'a State, id: SessionId, r: tokens::Roles) -> Eleme
             // rather than a number named here (`tests/material_boundary.rs`).
             material::IconLabel::new(
                 Icon::AiCli,
-                session_provider(state, id).provider().command(),
+                crate::features::session::command_caption(
+                    session_provider(state, id),
+                    session_kind(state, id),
+                ),
                 TypeRole::Label,
                 r,
             )
