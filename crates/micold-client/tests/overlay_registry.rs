@@ -880,7 +880,10 @@ mod daemon_form {
         assert_eq!(id_of(&state), None);
         state.update(Message::Daemons(DaemonsMsg::AddOpened));
         assert_eq!(id_of(&state), Some("daemon_form"));
-        assert_eq!(registry::open_dialog(&state).unwrap().layer(), Layer::Dialog);
+        assert_eq!(
+            registry::open_dialog(&state).unwrap().layer(),
+            Layer::Dialog
+        );
         assert!(registry::open_dialog(&state).unwrap().view().is_some());
         state.update(Message::Daemons(DaemonsMsg::DraftDiscarded));
         assert_eq!(id_of(&state), None);
@@ -909,7 +912,9 @@ mod daemon_form {
         state.update(Message::Daemons(DaemonsMsg::RuntimeChosen(
             micold_client::features::daemons::DraftRuntime::Container,
         )));
-        state.update(Message::Daemons(DaemonsMsg::ContainerNameEdited("c".into())));
+        state.update(Message::Daemons(DaemonsMsg::ContainerNameEdited(
+            "c".into(),
+        )));
         state.update(Message::Daemons(DaemonsMsg::Saved));
         state
     }

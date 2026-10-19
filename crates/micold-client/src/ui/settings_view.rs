@@ -101,9 +101,7 @@ pub fn view<'a>(
             focused,
             r,
         ),
-        SettingsSection::Daemons => {
-            daemons::view(daemons.0, daemons.1, focused, r)
-        }
+        SettingsSection::Daemons => daemons::view(daemons.0, daemons.1, focused, r),
         SettingsSection::GithubIssues => github::view(draft, github_tokens, focused, r),
         SettingsSection::Jira => jira::view(draft, focused, r),
     };

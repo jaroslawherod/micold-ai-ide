@@ -378,21 +378,21 @@ pub(crate) fn form<'a>(
         .width(Length::Fill)
         .extend(legend)
         .push(
-        TextField::new("", &draft.name, roles)
-            .label("Name")
-            .required(marker(FieldId::DaemonName))
-            .track_focus(FieldId::DaemonName, focused)
-            .error(error_of(state, "name"))
-            .on_input(|v| Message::Daemons(DaemonsMsg::NameEdited(v))),
+            TextField::new("", &draft.name, roles)
+                .label("Name")
+                .required(marker(FieldId::DaemonName))
+                .track_focus(FieldId::DaemonName, focused)
+                .error(error_of(state, "name"))
+                .on_input(|v| Message::Daemons(DaemonsMsg::NameEdited(v))),
         )
         .push(
-        Select::new(
-            offered(draft),
-            Some(Named(draft.runtime, name_of(RUNTIMES, draft.runtime))),
-            |chosen: Named<DraftRuntime>| Message::Daemons(DaemonsMsg::RuntimeChosen(chosen.0)),
-            roles,
-        )
-        .label("Runs in"),
+            Select::new(
+                offered(draft),
+                Some(Named(draft.runtime, name_of(RUNTIMES, draft.runtime))),
+                |chosen: Named<DraftRuntime>| Message::Daemons(DaemonsMsg::RuntimeChosen(chosen.0)),
+                roles,
+            )
+            .label("Runs in"),
         );
     if let Some(message) = error_of(state, "runtime") {
         fields = fields.push(caution(message, roles));
