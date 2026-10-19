@@ -117,6 +117,10 @@ pub struct ContainerFacts {
     /// Destinations are enough: every host source is derived from its destination and the state
     /// directory, so a matching destination names the same host path.
     pub mount_destinations: Vec<String>,
+    /// The container carries [`GIT_IDENTITY_LABEL`]`=`[`GIT_IDENTITY_NONE`]: it was created after
+    /// #1002 withdrew the user's git identity from sandboxes. A container without it may mount the
+    /// user's SSH agent or git credential store, wherever they were at its creation.
+    pub git_identity_free: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -155,11 +159,22 @@ struct ConfigDoc {
 /// The label the image carries its build fingerprint in.
 pub const FINGERPRINT_LABEL: &str = "io.micold.fingerprint";
 
+/// The label every sandbox created since #1002 carries, with the value [`GIT_IDENTITY_NONE`].
+pub const GIT_IDENTITY_LABEL: &str = "io.micold.git-identity";
+
+/// The value of [`GIT_IDENTITY_LABEL`]: the container holds none of the user's git identity.
+pub const GIT_IDENTITY_NONE: &str = "none";
+
 /// Parse a container inspection.
 pub fn container(stdout: &str) -> Result<ContainerFacts, RuntimeError> {
     // `docker inspect` returns an array even for one target; accept both shapes rather than making
     // every caller remember which.
     let doc: ContainerDoc = one_of(stdout, "container")?;
+    let labels = doc
+        .config
+        .as_ref()
+        .and_then(|c| c.labels.clone())
+        .unwrap_or_default();
     Ok(ContainerFacts {
         id: doc.id.unwrap_or_default(),
         running: doc.state.and_then(|s| s.running).unwrap_or(false),
@@ -168,10 +183,9 @@ pub fn container(stdout: &str) -> Result<ContainerFacts, RuntimeError> {
             .as_ref()
             .and_then(|c| c.image.clone())
             .unwrap_or_default(),
-        fingerprint: doc
-            .config
-            .and_then(|c| c.labels)
-            .and_then(|l| l.get(FINGERPRINT_LABEL).cloned()),
+        fingerprint: labels.get(FINGERPRINT_LABEL).cloned(),
+        git_identity_free: labels.get(GIT_IDENTITY_LABEL).map(String::as_str)
+            == Some(GIT_IDENTITY_NONE),
         // A document with no `Mounts` at all reads as a container that shares nothing, which is the
         // safe direction: feature 031 then translates no sandboxed path through it (C16c).
         mount_destinations: doc
@@ -375,5 +389,22 @@ mod tests {
         // makes a local build refusable rather than silently accepted (research R8).
         let doc = r#"{"Id":"sha256:x","RepoTags":["micold-daemon:dev"],"Config":{"Labels":{}}}"#;
         assert_eq!(image(doc).unwrap().fingerprint, None);
+    }
+
+    #[test]
+    fn only_a_container_labelled_free_of_git_identity_reads_as_free() {
+        let doc = |labels: &str| {
+            format!(
+                r#"{{"Id":"c","State":{{"Running":true}},"Config":{{"Image":"i","Labels":{labels}}}}}"#
+            )
+        };
+        let labelled = doc(r#"{"io.micold.git-identity":"none"}"#);
+        assert!(container(&labelled).unwrap().git_identity_free);
+        assert!(!container(&doc("{}")).unwrap().git_identity_free);
+        assert!(
+            !container(&doc(r#"{"io.micold.git-identity":"user"}"#))
+                .unwrap()
+                .git_identity_free
+        );
     }
 }

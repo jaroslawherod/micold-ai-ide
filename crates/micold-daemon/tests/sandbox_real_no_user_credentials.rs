@@ -18,40 +18,25 @@ mod sandbox_real_support;
 
 use micold_core::sandbox::{CredentialLayout, MountSet, SandboxProfile, SecretMount};
 use sandbox_real_support::{cli_out, seed, start_sandbox, SandboxSpec};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 const CONTAINER: &str = "micold-no-credentials-probe";
 const NETWORK: &str = "micold-no-credentials-probe-net";
 /// Not 7727, and not a neighbour's: a developer's own sandbox must not be disturbed.
 const PORT: u16 = 17741;
 
-// The same host `micold_core::sandbox::hostile_host` builds; that module is not compiled for this
-// crate's tests, so the markers and files are repeated here.
-const SSH_KEY: &str = "HOSTILE-SSH-PRIVATE-KEY-7c1e";
-const CREDENTIAL_STORE: &str = "HOSTILE-GIT-CREDENTIAL-STORE-3b9d";
-const GH_HOSTS: &str = "HOSTILE-GH-HOSTS-OAUTH-TOKEN-51fa";
-const GH_TOKEN: &str = "HOSTILE-GH-TOKEN-ENV-e04c";
-const GITHUB_TOKEN: &str = "HOSTILE-GITHUB-TOKEN-ENV-92d6";
-const MARKERS: [&str; 5] = [SSH_KEY, CREDENTIAL_STORE, GH_HOSTS, GH_TOKEN, GITHUB_TOKEN];
+use micold_core::sandbox::hostile_host::{
+    HostileHost, CREDENTIAL_STORE_MARKER, GH_HOSTS_MARKER, GH_TOKEN_MARKER, GITHUB_TOKEN_MARKER,
+    SSH_KEY_MARKER,
+};
 
-/// A home holding the user's identity, and the agent socket path beside it.
-fn hostile_home(root: &Path) -> (PathBuf, PathBuf) {
-    let home = root.join("home").join("u");
-    let ssh = home.join(".ssh");
-    let gh = home.join(".config").join("gh");
-    std::fs::create_dir_all(&ssh).unwrap();
-    std::fs::create_dir_all(&gh).unwrap();
-    std::fs::write(ssh.join("id_ed25519"), SSH_KEY).unwrap();
-    std::fs::write(
-        home.join(".git-credentials"),
-        format!("https://u:{CREDENTIAL_STORE}@github.com\n"),
-    )
-    .unwrap();
-    std::fs::write(gh.join("hosts.yml"), format!("oauth_token: {GH_HOSTS}\n")).unwrap();
-    std::fs::write(home.join(".gitconfig"), "[user]\n\tname = U\n").unwrap();
-    std::fs::create_dir_all(root.join("agent")).unwrap();
-    (home, root.join("agent").join("ssh-agent.sock"))
-}
+const MARKERS: [&str; 5] = [
+    SSH_KEY_MARKER,
+    CREDENTIAL_STORE_MARKER,
+    GH_HOSTS_MARKER,
+    GH_TOKEN_MARKER,
+    GITHUB_TOKEN_MARKER,
+];
 
 /// Run `script` in the container, returning stdout whatever its exit status.
 fn in_container(script: &str) -> String {
@@ -65,15 +50,12 @@ fn sandbox_real_no_user_credentials_reach_the_container() {
     let project = dir.path().join("project");
     std::fs::create_dir_all(&project).unwrap();
     seed(&data, &project, "no-credentials");
-    let (home, agent) = hostile_home(dir.path());
+    let host = HostileHost::create(dir.path()).unwrap();
+    let (home, agent) = (host.home.clone(), host.agent_socket.clone());
 
     // The host's environment as the client would see it. The harness creates the container itself
     // and passes no `-e` of these, which is the claim: the daemon never forwards them (FR-001).
-    let _host_env = [
-        ("SSH_AUTH_SOCK", agent.display().to_string()),
-        ("GH_TOKEN", GH_TOKEN.to_string()),
-        ("GITHUB_TOKEN", GITHUB_TOKEN.to_string()),
-    ];
+    let _host_env = host.env();
 
     // A profile saved before #1002, naming the removed shares.
     let profile: SandboxProfile = serde_json::from_str(

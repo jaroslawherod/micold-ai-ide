@@ -95,7 +95,8 @@ not exist`). Unticking one deletes its secret on the next start.
 The **git credentials** and **SSH key** items were removed: they handed the pod your whole git
 identity. A daemon that had them ticked keeps working without them; its entry in the daemon list
 shows a one-time notice, with a **Dismiss** button, and the old secrets (`<name>-git-credentials`
-and `<name>-git-ssh`) are deleted on the next start or remove. Until the scoped credential is set
+and `<name>-git-ssh`) are deleted on the next start or remove. A pod that had either item is
+recreated on the next start, without asking to keep it. Until the scoped credential is set
 up, the pod cannot push.
 
 ## The form

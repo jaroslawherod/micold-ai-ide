@@ -216,6 +216,10 @@ fn the_removed_git_credentials_notice_says_what_went_why_and_what_replaces_it() 
     }
     assert!(text.contains("whole git identity"), "says why: {text}");
     assert!(
+        text.contains("ending any session"),
+        "says an old sandbox is replaced: {text}"
+    );
+    assert!(
         text.contains(SCOPED_CREDENTIAL),
         "names the replacement: {text}"
     );

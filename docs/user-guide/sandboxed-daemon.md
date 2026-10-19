@@ -245,6 +245,8 @@ removed: they handed the sandbox everything your key and credential store can do
 repository. `SSH_AUTH_SOCK`, `GH_TOKEN` and `GITHUB_TOKEN` are not passed in either. A daemon whose
 saved settings named either item keeps working without it, and its entry in the daemon list shows a
 one-time notice saying so, with a **Dismiss** button; the next save drops the old names for good.
+A sandbox container made before this change is replaced on its next start, even a running one,
+which ends any session still running in it: it may still mount your agent or credential store.
 
 **Until the scoped credential is set up, a sandbox cannot push.** A session that tries to push to a
 remote fails for want of credentials, and the application says so rather than leaving you with an

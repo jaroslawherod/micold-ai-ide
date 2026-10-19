@@ -78,6 +78,19 @@ pub fn drift(on_pod: &str, now: &PodStamp) -> Vec<&'static str> {
         .collect()
 }
 
+/// The pod's stamp allows a credential kind #1002 removed (the git credential store, an SSH key),
+/// by the `kind` tags those variants serialized as: the pod mounts the user's key and sets
+/// `GIT_SSH_COMMAND`, so it is recreated whatever the user chose about drift (FR-001).
+pub fn holds_retired_credential(on_pod: &str) -> bool {
+    const RETIRED_KINDS: [&str; 2] = ["git_credentials", "git_ssh_key"];
+    let on_pod: Value = serde_json::from_str(on_pod).unwrap_or(Value::Null);
+    on_pod["allowed"].as_array().is_some_and(|allowed| {
+        allowed
+            .iter()
+            .any(|c| RETIRED_KINDS.contains(&c["kind"].as_str().unwrap_or_default()))
+    })
+}
+
 /// The metadata every object carries: `name`, our labels and the daemon-name annotation.
 fn metadata(names: &ResourceNames, name: String, extra: &[(&str, &str)]) -> Value {
     let mut annotations = BTreeMap::from([(DAEMON_NAME_ANNOTATION, names.daemon_name())]);
@@ -341,6 +354,24 @@ mod tests {
                 )
             })
             .collect()
+    }
+
+    #[test]
+    fn only_a_stamp_allowing_a_retired_kind_holds_a_retired_credential() {
+        let stamp = |allowed: &str| format!(r#"{{"image":"i","allowed":{allowed}}}"#);
+        assert!(holds_retired_credential(&stamp(
+            r#"[{"kind":"git_config"},{"kind":"git_ssh_key","key":"/home/u/.ssh/id_ed25519"}]"#
+        )));
+        assert!(holds_retired_credential(&stamp(
+            r#"[{"kind":"git_credentials"}]"#
+        )));
+        assert!(!holds_retired_credential(&stamp(
+            r#"[{"kind":"git_config"}]"#
+        )));
+        assert!(!holds_retired_credential(&stamp("[]")));
+        assert!(!holds_retired_credential(""));
+        let now = PodStamp::of(&settings(), IMAGE);
+        assert!(!holds_retired_credential(now.as_str()));
     }
 
     #[test]

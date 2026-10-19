@@ -62,6 +62,8 @@ libc = { workspace = true }
 windows-sys = { workspace = true }
 
 [dev-dependencies]
+# `sandbox_real_no_user_credentials.rs` builds its host with `sandbox::hostile_host` (#1002).
+micold-core = { workspace = true, features = ["kube-fake"] }
 tempfile = { workspace = true }
 # `mcp_confirmations.rs` runs the 60 s confirmation wait on tokio's paused clock.
 tokio = { workspace = true, features = ["test-util"] }

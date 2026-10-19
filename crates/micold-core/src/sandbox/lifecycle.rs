@@ -207,6 +207,10 @@ pub enum StaleReason {
     /// Mounts where a sandbox made before #1002 shared the user's SSH agent or git credential
     /// store (FR-001): adopting it would leave the user's whole git identity inside.
     RetiredCredentialMount { destination: String },
+    /// Lacks the [`GIT_IDENTITY_LABEL`](super::parse::GIT_IDENTITY_LABEL) every sandbox created
+    /// since #1002 carries: it may mount the user's SSH agent or git credential store from wherever
+    /// they were at its creation, which no path known today can rule out (FR-001, decision D17).
+    MadeBeforeCredentialRemoval,
 }
 
 impl StaleReason {
@@ -219,6 +223,9 @@ impl StaleReason {
             StaleReason::RetiredCredentialMount { destination } => format!(
                 "the existing sandbox mounts `{destination}`, a git credential no sandbox may hold"
             ),
+            StaleReason::MadeBeforeCredentialRemoval => "the existing sandbox was made before git \
+                credentials were withdrawn from sandboxes, and may still hold them"
+                .to_string(),
         }
     }
 }
@@ -233,6 +240,12 @@ impl StaleReason {
 /// agent or git credential store. A container mounting one is replaced whatever else holds, even
 /// running and even of a released image: attaching to it would keep the user's whole git identity
 /// inside the sandbox (FR-001).
+///
+/// Before that, least privilege (decision D17): a container without the label every sandbox
+/// created since #1002 carries is replaced too. An agent socket's path is per login, so the one
+/// such a container mounted need not be among `retired` today; attaching to it could keep the
+/// user's agent inside. Replacing a running one ends its sessions, once, which the
+/// `RemovedGitCredentials` notice tells the user.
 pub fn adopt(
     existing: Option<&ContainerFacts>,
     expected_image: &str,
@@ -242,6 +255,13 @@ pub fn adopt(
         return Adoption::Create;
     };
     let id = ContainerId(facts.id.clone());
+
+    if !facts.git_identity_free {
+        return Adoption::Replace {
+            id,
+            reason: StaleReason::MadeBeforeCredentialRemoval,
+        };
+    }
 
     if let Some(destination) = facts.mount_destinations.iter().find(|d| {
         retired
@@ -1064,6 +1084,7 @@ mod mounted_tests {
             image: image.to_string(),
             fingerprint: None,
             mount_destinations: DESTINATIONS.map(str::to_string).to_vec(),
+            git_identity_free: true,
         }
     }
 
@@ -1253,6 +1274,7 @@ mod adoption_tests {
             image: image.to_string(),
             fingerprint: fingerprint.map(str::to_string),
             mount_destinations: Vec::new(),
+            git_identity_free: true,
         }
     }
 
@@ -1370,6 +1392,33 @@ mod adoption_tests {
         ours.mount_destinations = vec!["/home/u/project".into()];
         assert_eq!(
             adopt(Some(&ours), "micold-daemon:0.27.0", &retired),
+            Adoption::Attach(ContainerId("9f2b".into()))
+        );
+    }
+
+    #[test]
+    fn a_container_without_the_git_identity_label_is_replaced_even_running_or_legacy() {
+        let replaced = Adoption::Replace {
+            id: ContainerId("9f2b".into()),
+            reason: StaleReason::MadeBeforeCredentialRemoval,
+        };
+        let mut ours = facts("micold-daemon:0.27.0", Some("abc"), true);
+        ours.git_identity_free = false;
+        assert_eq!(adopt(Some(&ours), "micold-daemon:0.27.0", &[]), replaced);
+        let mut legacy = facts(
+            "ghcr.io/jaroslawherod/micold-daemon:0.30.0",
+            Some("abc"),
+            true,
+        );
+        legacy.git_identity_free = false;
+        assert_eq!(
+            adopt(Some(&legacy), crate::sandbox::basic_image::BASIC_IMAGE, &[]),
+            replaced
+        );
+        // Labelled, the same container is attached as before.
+        ours.git_identity_free = true;
+        assert_eq!(
+            adopt(Some(&ours), "micold-daemon:0.27.0", &[]),
             Adoption::Attach(ContainerId("9f2b".into()))
         );
     }
