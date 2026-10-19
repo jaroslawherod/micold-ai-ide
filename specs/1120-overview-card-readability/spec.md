@@ -116,7 +116,8 @@ pull requests, and check each card's title, branch, sessions line and which rows
    2 running"; with 2 sessions and none running it reads "2 sessions"; with no sessions it reads "No
    sessions".
 6. **Given** a worktree with no phase and no task ratio, **When** its card is shown, **Then** no
-   progress row is shown (no "No task progress" and no empty bar).
+   progress row is shown (no "No task progress" and no empty bar). The "No task progress" empty
+   state of feature 813 FR-017 is removed on purpose (FR-009).
 7. **Given** a card with a branch whose open and merged pull request counts are both 0, **When** it
    is shown, **Then** no pull request row is shown; with 1 open and 0 merged it reads "1 open"; with
    0 open and 2 merged it reads "2 merged"; with both non-zero it reads "1 open · 2 merged"; when
@@ -207,8 +208,15 @@ the cards of a row share one height.
 - **Slash command with markup in its arguments**: the markup is removed before the sentence is
   formed.
 - **Text that merely contains `<` or `>`** (for example `a < b`): not markup; shown as written.
+- **Several sessions in one location** (Principle II): the activity line comes from the location's
+  main session only, as feature 813 FR-018 and the main-session rule define (the session marked
+  main, else the most recently active). When that session's text sanitises to nothing, the line is
+  hidden; it does not fall back to another session's prompt. One location's prompt never appears on
+  another location's card.
 - **Both themes and every state**: the header tint, the neutral body and all text meet 4.5:1 in
-  light and dark (Principle VI applies equally on Linux, macOS and Windows).
+  light and dark.
+- **Platforms and display scale** (Principle VI): no overlap and equal row heights hold on Linux,
+  macOS and Windows with each platform's default UI font, at display scale 1.0 and 2.0.
 - **Pane narrower than one minimum-width card** (under 280 px): one card per row as feature 1024
   defines; text ellipsizes, nothing overlaps.
 
@@ -218,12 +226,13 @@ the cards of a row share one height.
 
 - **FR-001**: Each card MUST have a header row across its full width, filled with its card state's
   container colour (Needs action: error, Needs attention: warning, Working: primary, Done: success,
-  Idle: the de-emphasised surface), showing the state icon and word at its start and the location
+  Idle: the de-emphasised surface variant), showing the state icon and word at its start and the location
   type's icon and word at its end.
 - **FR-002**: The body below the header row MUST use one neutral surface colour, the same in every
   card state; the whole-card state fill is removed.
 - **FR-003**: Text and icons in the header row MUST use the matching on-container role of the state's
-  colour; body text MUST use the on-surface roles. Every text colour on the card MUST have a contrast
+  colour (Idle, which has no container pair, uses the on-surface-variant role on its surface
+  variant); body text MUST use the on-surface roles. Every text colour on the card MUST have a contrast
   of at least 4.5:1 against its background in every card state in both the light and the dark theme.
 - **FR-004**: The card's title MUST be drawn at 17 px, body lines at 14 px, and no text on the card
   (labels, captions, counts) smaller than 12 px.
@@ -232,15 +241,16 @@ the cards of a row share one height.
 - **FR-006**: The card's title MUST be the linked issue's title when the app knows it, else the
   branch, else the display name; its tooltip MUST show the location's display name.
 - **FR-007**: A card with a branch MUST show the short branch on its own line, unless the title
-  already is the branch: `type/number` when the branch is `<type>/<number>_<slug>`,
-  `<type>-<number>_<slug>` or `<type>/<number>` with a conventional type (feature 813's location
+  already is the branch: `type/number` when the branch is `<type>/<number>`, or `<type>/<number>` or
+  `<type>-<number>` followed by `_` or `-` and a slug (so `fix/1115-foo` and `fix/1115_foo` both
+  read `fix/1115`), with a conventional type (feature 813's location
   type list) and a decimal number, else the branch unchanged; the line's tooltip MUST show the full
   branch name.
 - **FR-008**: The card MUST show one sessions line: "No sessions" for none; "*n* session" or "*n*
   sessions" (singular for exactly 1); followed by " · *k* running" when *k* > 0 sessions run.
 - **FR-009**: The card MUST NOT show a progress row when the location has neither a phase nor a task
   ratio; it MUST NOT draw a progress bar without a ratio. Otherwise the progress row is as feature 813
-  FR-016 defines.
+  FR-016 defines. This replaces feature 813 FR-017's explicit empty state.
 - **FR-010**: The card MUST NOT show a pull request row when both counts are 0; when one count is 0
   it MUST show only the other ("1 open", "2 merged"); the unknown mark with its tooltip stays.
 - **FR-011**: The activity line MUST remove every angle-bracket tag (such as `<agent-message
