@@ -17,12 +17,13 @@ finds this file by its **Worktree branch** line. Keep it true.
 | PR | Purpose | Status | Merge SHA |
 |---|---|---|---|
 | #1111 | Design | merged | 33cd837f45cc6412d3aa888a4cb6d2f221b969ef |
+| #1112 | M1 | open | |
 
 ## Milestones
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T016 | full | Switch, wire and form gate: off hides GitHub issues in newly opened forms | #PR | in review |
+| M1 | T001–T016 | full | Switch, wire and form gate: off hides GitHub issues in newly opened forms | #1112 | in review |
 | M2 | T017–T021 | full | Open forms follow the switch live | #… | pending |
 | M3 | T022–T025 | full | MCP create_worktree refuses github_issue while off | #… | pending |
 
