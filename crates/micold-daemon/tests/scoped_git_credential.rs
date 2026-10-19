@@ -302,8 +302,9 @@ impl World {
     }
 }
 
-fn world(token: &'static str) -> Option<World> {
-    let backend = git_http_backend()?;
+fn world(token: &'static str) -> World {
+    let backend = git_http_backend()
+        .expect("`git http-backend` is in `git --exec-path` (some distributions package it apart)");
     let dir = tempfile::tempdir().unwrap();
     let projects = dir.path().join("projects");
     let bare = projects.join("o").join("r.git");
@@ -321,14 +322,14 @@ fn world(token: &'static str) -> Option<World> {
     let work = dir.path().join("work");
     fs::create_dir_all(&home).unwrap();
     fs::create_dir_all(&work).unwrap();
-    Some(World {
+    World {
         base: format!("http://127.0.0.1:{port}"),
         _dir: dir,
         home,
         creds,
         work,
         port,
-    })
+    }
 }
 
 fn credential_file(world: &World, expires_at: u64, token: &str) {
@@ -358,7 +359,7 @@ fn ok(out: &std::process::Output, what: &str) {
 #[test]
 fn push_and_pull_succeed_with_the_scoped_credential_and_ssh_remotes_are_rewritten() {
     assert!(git_available(), "`git` is not on PATH");
-    let w = world("scoped-secret").expect("`git http-backend` is installed with git");
+    let w = world("scoped-secret");
     credential_file(&w, far_future(), "scoped-secret");
     let url = format!("{}/o/r.git", w.base);
     let mine = w.work.join("mine");
@@ -404,7 +405,7 @@ fn push_and_pull_succeed_with_the_scoped_credential_and_ssh_remotes_are_rewritte
 #[test]
 fn nothing_is_offered_for_another_repository_or_host() {
     assert!(git_available(), "`git` is not on PATH");
-    let w = world("scoped-secret").expect("`git http-backend` is installed with git");
+    let w = world("scoped-secret");
     credential_file(&w, far_future(), "scoped-secret");
     let fill = |host: &str, path: &str| {
         let mut child = w
@@ -432,7 +433,7 @@ fn nothing_is_offered_for_another_repository_or_host() {
 #[test]
 fn an_expired_credential_makes_push_fail_at_once_without_a_prompt() {
     assert!(git_available(), "`git` is not on PATH");
-    let w = world("scoped-secret").expect("`git http-backend` is installed with git");
+    let w = world("scoped-secret");
     credential_file(&w, far_future(), "scoped-secret");
     let url = format!("{}/o/r.git", w.base);
     let mine = w.work.join("mine");

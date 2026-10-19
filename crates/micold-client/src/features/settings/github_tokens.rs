@@ -255,6 +255,8 @@ mod tests {
         assert_eq!(row.warning(row.expires_at - EXPIRY_WARNING_SECS - 1), None);
         let warned = row.warning(row.expires_at - EXPIRY_WARNING_SECS).unwrap();
         assert!(warned.contains(" expires on "), "{warned}");
+        let last = row.warning(row.expires_at - 1).unwrap();
+        assert!(last.contains(" expires on "), "{last}");
         let expired = row.warning(row.expires_at).unwrap();
         assert!(expired.contains(" expired on "), "{expired}");
     }

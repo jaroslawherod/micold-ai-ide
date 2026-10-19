@@ -263,12 +263,13 @@ reasons and their remedy texts are one table in core (`NoCredentialReason::messa
   paste-time checks on fixtures); permissions and reach are the PAT's, checked live in the
   quickstart's manual part.
 
-## R13. Why the minted-token path stays (close unit, verification finding 5)
+## R13. The minted-token path (close unit, verification finding 5)
 
-`ScopedCredential::accept`, `RenewPolicy::Renew` and `MINTED_LIFETIME_SECS` are not used by the
-pasted-PAT source, which issues through `ScopedCredential::pasted` under `RenewPolicy::AtExpiry`.
-They stay because `FakeSource` (M4) issues through `accept`: it is the test double that drives the
-`Schedule` tests, the daemon's grant/revoke protocol tests and the client's worker tests. Deleting
-the path means rewriting that suite against a PAT-shaped fake, which changes no behaviour a user
-sees. `Renew` is never constructed in production (`Manager::targets` uses `AtExpiry`), so FR-008's
-"never renew" holds; the tests that pin `Renew` pin the fake's contract, not the product's.
+`ScopedCredential::accept`, `RenewPolicy::Renew`, `MINTED_LIFETIME_SECS` and the `Grant` extras
+(pull requests, issues) are dead in production: the pasted-PAT source issues through
+`ScopedCredential::pasted`, and `Manager::targets` builds every `Schedule` with
+`RenewPolicy::AtExpiry`, so FR-008's "never renew" holds. Their only user is `FakeSource` (M4),
+which issues through `accept` and drives the core `Schedule` tests in `scoped_credential/schedule.rs`
+(the daemon and client tests have their own fakes). Removing them means rewriting those tests
+against a PAT-shaped fake. That changes no behaviour, so the close unit leaves it as a follow-up
+(ledger, *Follow-ups not done*) rather than widen the close PR.

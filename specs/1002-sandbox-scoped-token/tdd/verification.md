@@ -2,7 +2,7 @@
 feature: 1002-sandbox-scoped-token
 verdict: FAIL
 standard: .specify/extensions/tdd/templates/tdd-test-quality-rubric.md # resolved: no override or preset exists
-verified_at: 8b2d4b38 # short SHA audited (main; M1-M6 merged)
+verified_at: 8b2d4b38 # branch commit on main 0b267cf6 (M1-M6 merged) plus the ledger
 behaviors: 24 # test-bearing tasks of tasks.md; there is no tdd/test-list.md
 proven: 0
 likely: 0
@@ -18,6 +18,12 @@ suite: 8407 passed, 6 failed, 13 ignored, 965s cold build included (the 6 failur
 ---
 
 # TDD Verification: Sandbox scoped token (#1002)
+
+> **Close-unit remediation (after this audit; not a re-audit).** The three surviving mutants are
+> now killed: the `..` guard (T057), the expiry at `now` (T059) and the 24 h warning boundary (T060)
+> each have a test shown to fail on the mutant and pass on the code. T062, T064 and most of T065 are
+> done. T058's missing red evidence is accepted as decision D21. T061 and T063 are follow-ups
+> (research R13, ledger). The verdict and counts below are the audit's, as it found the code.
 
 **Verdict: FAIL.** No behavior has any test-first evidence (no test list, no cycle log, no recorded red; the ledger admits tests came after code for T002-T005, T008, T009), and a deliberate mutant that deletes the `..` guard of the in-container credential helper survives the tests of a `DONE` behavior.
 

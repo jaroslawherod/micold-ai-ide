@@ -427,8 +427,8 @@ fn an_adopted_containers_credential_mounts_are_not_projects() {
     );
 }
 
-/// #1002 (FR-001, spec edge case "personal token in the host environment", T003): the start-up
-/// takes no host environment. The one host variable the client reads, `SSH_AUTH_SOCK`, reaches it
+/// #1002 (FR-001, spec edge case "personal token in the host environment", T003): `argv::create`
+/// is a function of the spec alone; it reads no environment. The one host variable the client reads, `SSH_AUTH_SOCK`, reaches it
 /// only through `CredentialLayout::conventional` (`HostFacts::gather`), so the layout here names a
 /// socket as a real host would. The argv names each variable it sets, so every one is checked
 /// against the short list a container may get: a pass-through of `GH_TOKEN` or any other host
@@ -483,12 +483,7 @@ fn no_personal_token_or_agent_socket_reaches_the_container_environment() {
         );
     }
     let all = args.join(" ");
-    for leaked in [
-        "GH_TOKEN",
-        "GITHUB_TOKEN",
-        "SSH_AUTH_SOCK",
-        "/tmp/ssh-host",
-    ] {
+    for leaked in ["GH_TOKEN", "GITHUB_TOKEN", "SSH_AUTH_SOCK", "/tmp/ssh-host"] {
         assert!(
             !all.contains(leaked),
             "{leaked} reaches the container: {all}"

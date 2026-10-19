@@ -2613,7 +2613,6 @@ dependencies = [
  "futures-util",
  "interprocess",
  "libc",
- "micold-core",
  "postcard",
  "serde",
  "serde_json",

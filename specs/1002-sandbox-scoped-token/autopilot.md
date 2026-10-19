@@ -128,4 +128,6 @@ None. D7 answered by jaro (option B, pasted PAT).
 
 ## Follow-ups not done
 
+- Delete the dead minted-token path (`ScopedCredential::accept`, `RenewPolicy::Renew`, `MINTED_LIFETIME_SECS`, the `Grant` extras) and move the core `Schedule` tests onto a PAT-shaped fake (research R13, tasks T061).
+- Run the FR-014 container start-up test under `cargo test -p micold-core` too: it needs `kube-fake`, so today only `cargo test --workspace` runs it (as CI does). A self dev-dependency would turn the feature on for the core-only clippy step as well, which is the one check of core with it off (tasks T063).
 - Jira API tokens live under `data_dir()/jira`, which the legacy default container daemon mounts whole as its state dir: readable inside that sandbox. Out of #1002's scope (not a git credential); worth its own issue.

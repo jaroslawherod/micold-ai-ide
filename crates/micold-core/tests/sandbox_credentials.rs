@@ -698,7 +698,9 @@ fn a_container_start_up_carries_no_user_git_credential_whatever_the_saved_settin
         start_up.push_str(&format!("\n{}", dir.display()));
     }
     assert_eq!(host.leaks(&start_up), Vec::<String>::new(), "{start_up}");
-    // And every file the mounts expose: none holds a credential's content.
+    // And every file the mounts expose that exists before start-up: none holds a credential's
+    // content. The state dir and the sanitized git configuration are written at start-up, not by
+    // this fixture; the sanitizer has its own tests (FR-004, `sanitize_gitconfig_text`).
     for path in spec.mounts.host_paths() {
         for file in files_under(path) {
             let text = std::fs::read(&file)
