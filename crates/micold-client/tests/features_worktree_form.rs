@@ -332,7 +332,7 @@ mod github_issues_switch {
         assert!(form.github_repo().is_some());
         assert!(form.offers_issue_provider_choice());
         assert!(form.issue_source_ready());
-        assert_eq!(State::default().settings.github_issues_enabled, true);
+        assert!(State::default().settings.github_issues_enabled);
         assert!(!WorktreeForm::default().github_issues_off);
     }
 }

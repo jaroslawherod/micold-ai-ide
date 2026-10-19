@@ -188,6 +188,7 @@ fn other_writers_preserve_the_mapping() {
             "env_include_script_path",
             "env_include_timeout_secs",
             "folded_origins",
+            "github_issues_enabled",
             "issue_label_types",
             "jira_connections",
             "jira_enabled",

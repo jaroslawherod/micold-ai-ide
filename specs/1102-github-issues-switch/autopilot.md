@@ -9,8 +9,8 @@ finds this file by its **Worktree branch** line. Keep it true.
 - **Issue**: #1102
 - **Worktree branch**: feat/1102_allow-the-github-issues-integration-to-be-disabled
 - **Started**: 2026-10-19
-- **Phase**: implement M1 (T001-T015 done, T016 docs open)
-- **Next step**: finish M1: T016 docs, scoped gate + review A, review B, full gate, PR
+- **Phase**: M1 PR open
+- **Next step**: orchestrator merges M1 PR; then M2
 
 ## Pull requests
 
@@ -22,7 +22,7 @@ finds this file by its **Worktree branch** line. Keep it true.
 
 | ID | Tasks | Tier | Deliverable | PR | Status |
 |---|---|---|---|---|---|
-| M1 | T001–T016 | full | Switch, wire and form gate: off hides GitHub issues in newly opened forms | #… | pending |
+| M1 | T001–T016 | full | Switch, wire and form gate: off hides GitHub issues in newly opened forms | #PR | in review |
 | M2 | T017–T021 | full | Open forms follow the switch live | #… | pending |
 | M3 | T022–T025 | full | MCP create_worktree refuses github_issue while off | #… | pending |
 
@@ -39,17 +39,21 @@ finds this file by its **Worktree branch** line. Keep it true.
 |---|---|---|---|
 | Spec review | 1 | 6baa82109973bc176fffd3524cd5195a1dd0523d:03e1fb3897f4a8725e33951ee5ea1e5f697d2e2e | CHANGES: 3 MAJOR fixed, 2 MINOR (F4 fixed, F5 plan note) |
 | Spec review | 2 | b6b2e210aec70a341e81ec5a5b1a1839924c1347:03e1fb3897f4a8725e33951ee5ea1e5f697d2e2e | CLEAN |
+| Code review A (M1) | 1 | e7f8a8e905e614e4914ef8dce0298614dc853ccb:fcb574c5d59f23a83383a065e30ec84754ffc3a7 | fixed 3 (provider resolved at open, titles gated before request, doc comment); declined 4 |
+| Review B (M1) | 1 | same | CLEAN |
 | Tasks review | 1 | 9ee5e15dc9b0aae22c6d661908c19341be7a4078:72004d40f6ad887da122bbd09c2195ca2a84601f | CLEAN (2 MINOR fixed; analyze MEDIUMs C1,C2,I1 fixed) |
 
 ## Declined review findings
 
 | Milestone | Review | Finding | Why declined |
 |---|---|---|---|
+| M1 | A | MCP create_worktree still reads issue; open forms do not follow switch live | M3 and M2 scope |
+| M1 | A | Optimistic core.settings on save, no rollback | Same pattern as Jira; daemon push reconciles |
+| M1 | A | Hand Default on settings State | Intentional; documented deviation |
 
 ## Handover
 
-Done (uncommitted work committed as WIP): T001-T015 ticked. Core setting, wire (PROTOCOL_VERSION 56), daemon catalog/state/server, client settings draft/persist/daemon_sync/startup, form gate, Settings checkbox, tests for all. Deviations: `WorktreeForm.github_issues_off` (inverted, so derived `Default` keeps GitHub on); `features::settings::State` got a hand `Default` with `github_issues_enabled: true`; the Overview issue-title lookup (`shell/issues.rs::on_title_remotes`) is also gated on the switch (it is a GitHub issue read; record in PR body).
-Next: T016 (docs/user-guide/settings.md, docs/user-guide/worktrees-and-sessions.md, docs/daemon.md settings list); `mise run gate` is not yet run (only targeted tests green: core, features_settings, settings_sections, features_worktree_form, main_tests github_issues/issue_source); then scoped gate with review A (code-review high) in its shadow, review B (conformance, sonnet, once), full gate, PR `feat(1102): ... (#1102)`. M1 PR body needs the title-gating note. Review rounds so far: none.
+None.
 
 ## Open escalation
 
