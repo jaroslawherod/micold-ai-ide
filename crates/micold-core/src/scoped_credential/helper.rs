@@ -13,7 +13,7 @@ use super::UnixTime;
 /// (FR-006).
 pub const GIT_CREDENTIAL_ROOT: &str = "/run/micold/git";
 
-/// The username git sends with an installation token.
+/// The username git sends with the token.
 pub const CREDENTIAL_USERNAME: &str = "x-access-token";
 
 /// The fields of git's credential-helper request this helper looks at.

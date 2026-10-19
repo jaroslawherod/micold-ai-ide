@@ -7,13 +7,17 @@
 //!
 //! The other part (FR-008–FR-010, FR-012) is what hands the sandbox a credential scoped to one
 //! repository: [`ScopedCredential`] (only [`ScopedCredential::accept`] makes one), the
-//! [`CredentialSource`] seam, [`NoCredentialReason`] and the pure renewal [`schedule::Schedule`].
+//! [`CredentialSource`] seam, [`NoCredentialReason`] and the pure [`schedule::Schedule`]. The one
+//! real source is a fine-grained PAT the user pastes ([`pat`], [`pat_store`]): it is checked, never
+//! renewed, and withdrawn at its expiry.
 
 #[cfg(any(test, feature = "kube-fake"))]
 pub mod fake;
 pub mod git_env;
 pub mod gitconfig;
 pub mod helper;
+pub mod pat;
+pub mod pat_store;
 pub mod schedule;
 
 pub use git_env::{git_env, git_env_with_helper};
@@ -28,22 +32,28 @@ use crate::github::GithubRepo;
 /// Seconds since the Unix epoch, as the credential files and the protocol carry them.
 pub type UnixTime = u64;
 
-/// The longest a scoped credential may live (FR-009): the hour GitHub gives an installation token.
-pub const MAX_LIFETIME_SECS: u64 = 3600;
+/// The longest a credential a source mints itself may live ([`ScopedCredential::accept`]).
+pub const MINTED_LIFETIME_SECS: u64 = 3600;
 
-/// How far past [`MAX_LIFETIME_SECS`] an expiry may lie: the source issued it by its own clock.
+/// The sanity cap on a pasted PAT's expiry (FR-009, data-model §2): 366 days, since GitHub's
+/// longest fine-grained expiry is a year. FR-009 requires a known expiry, not a short one. The
+/// daemon's grant check shares this constant.
+pub const MAX_LIFETIME_SECS: u64 = 366 * 24 * 3600;
+
+/// How far past a lifetime limit an expiry may lie: the source issued it by its own clock.
 pub const CLOCK_SKEW_SECS: u64 = 300;
 
 /// The forge the scoped credential is for, as git names it in `credential.<base>.*`.
 pub const GITHUB_BASE: &str = "https://github.com";
 
-/// How long before it expires a credential is renewed (FR-008: at least 5 minutes).
+/// How long before it expires a minted credential is renewed ([`schedule::RenewPolicy::Renew`]).
 pub const RENEW_MARGIN_SECS: u64 = 600;
 
-/// The one place the wording of "no credential source is set up" lives, so the milestone that adds
-/// the GitHub App source changes one constant (data-model §6).
-pub const SOURCE_SETUP_HINT: &str =
-    "No credential source is set up. Set one up in Settings to push from sandboxes.";
+/// How long before its expiry a held credential is warned about (FR-008): 24 hours.
+pub const EXPIRY_WARNING_SECS: u64 = 86_400;
+
+/// The wording of "no token is stored for this repository" (data-model §6).
+pub const SOURCE_SETUP_HINT: &str = "No GitHub token is stored for this repository. Paste a fine-grained token for it in Settings › GitHub access tokens to push from sandboxes.";
 
 /// A token that never prints: its `Debug` is redacted and [`SecretToken::expose`] is the one way
 /// to read it, used only where a request or a file is written.
@@ -80,7 +90,7 @@ pub struct Grant {
 }
 
 impl Grant {
-    /// The permissions body of an installation-token request, sorted by name.
+    /// The permissions a credential may carry, sorted by name.
     pub fn permissions(&self) -> Vec<(&'static str, &'static str)> {
         let mut permissions = vec![("contents", "write"), ("metadata", "read")];
         if self.issues {
@@ -119,8 +129,10 @@ pub struct SourceResponse {
 /// Why a project has no scoped credential (data-model §6, FR-012).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NoCredentialReason {
-    /// No credential source is set up.
+    /// No token is stored for the repository.
     SourceNotSetUp,
+    /// The stored token has expired.
+    PatExpired,
     /// The source refused, or answered with more than was asked.
     SourceRefused(String),
     /// The source could not be reached.
@@ -137,7 +149,7 @@ pub enum NoCredentialReason {
         /// `git --version`'s version.
         version: String,
     },
-    /// A renewal failed and the held credential has expired.
+    /// A renewal failed and the held credential has expired (only a source that renews).
     RenewalFailed(Box<NoCredentialReason>),
 }
 
@@ -146,8 +158,11 @@ impl NoCredentialReason {
     pub fn message(&self) -> String {
         match self {
             Self::SourceNotSetUp => SOURCE_SETUP_HINT.to_string(),
+            Self::PatExpired => "The GitHub token for this repository expired. Paste a new one in \
+                 Settings › GitHub access tokens."
+                .to_string(),
             Self::SourceRefused(reason) => {
-                format!("GitHub refused a credential: {reason}. Check the App's permissions.")
+                format!("GitHub refused the token: {reason}. Paste a corrected one in Settings.")
             }
             Self::SourceUnreachable(reason) => {
                 format!("GitHub could not be reached: {reason}. Retrying.")
@@ -181,7 +196,7 @@ pub struct ScopedCredential {
 impl ScopedCredential {
     /// Judge `response` to a request for `repo` with `grant` at `now`: it must reach exactly
     /// `[repo]`, carry no permission beyond `grant`, and expire after `now` and no later than
-    /// `now + MAX_LIFETIME_SECS` (FR-009). Anything else is refused.
+    /// `now + MINTED_LIFETIME_SECS` (FR-009). Anything else is refused.
     pub fn accept(
         repo: &GithubRepo,
         grant: Grant,
@@ -208,7 +223,8 @@ impl ScopedCredential {
         }
         match response.expires_at {
             Some(expires_at)
-                if expires_at > now && expires_at <= now + MAX_LIFETIME_SECS + CLOCK_SKEW_SECS =>
+                if expires_at > now
+                    && expires_at <= now + MINTED_LIFETIME_SECS + CLOCK_SKEW_SECS =>
             {
                 Ok(Self {
                     repo: repo.clone(),
@@ -220,6 +236,32 @@ impl ScopedCredential {
             }
             _ => Err(wider()),
         }
+    }
+
+    /// A credential from a token the user pasted, with the expiry GitHub reported for it: refused
+    /// when that is not after `now` (`PatExpired`) or lies beyond [`MAX_LIFETIME_SECS`] plus the
+    /// clock skew (FR-009).
+    pub fn pasted(
+        repo: &GithubRepo,
+        token: SecretToken,
+        expires_at: UnixTime,
+        now: UnixTime,
+    ) -> Result<Self, NoCredentialReason> {
+        if expires_at <= now {
+            return Err(NoCredentialReason::PatExpired);
+        }
+        if expires_at > now + MAX_LIFETIME_SECS + CLOCK_SKEW_SECS {
+            return Err(NoCredentialReason::SourceRefused(
+                "the token's expiry is more than a year away".to_string(),
+            ));
+        }
+        Ok(Self {
+            repo: repo.clone(),
+            token,
+            grant: Grant::default(),
+            expires_at,
+            issued_at: now,
+        })
     }
 
     /// The one repository it reaches.
@@ -257,7 +299,8 @@ pub trait CredentialSource: Send + Sync {
         grant: Grant,
     ) -> Result<ScopedCredential, NoCredentialReason>;
 
-    /// Revoke an issued credential. Best effort: a failure leaves it to expire within an hour.
+    /// Revoke an issued credential, best effort. The pasted-token source does nothing: the token is
+    /// the user's and is never revoked on GitHub (FR-010).
     fn revoke(&self, credential: &ScopedCredential) -> Result<(), NoCredentialReason>;
 }
 
@@ -275,6 +318,13 @@ pub enum CredentialStatus {
     },
     /// None, and why.
     None(NoCredentialReason),
+}
+
+impl CredentialStatus {
+    /// Whether this is a held credential with `within_secs` or less to live at `now` (FR-008).
+    pub fn expires_within(&self, now: UnixTime, within_secs: u64) -> bool {
+        matches!(self, Self::Held { expires_at, .. } if *expires_at <= now + within_secs)
+    }
 }
 
 pub use crate::protocol::messages::CredentialTarget;
@@ -433,7 +483,7 @@ mod tests {
 
     #[test]
     fn an_expiry_within_the_clock_skew_is_accepted() {
-        let r = response(Some(NOW + MAX_LIFETIME_SECS + CLOCK_SKEW_SECS));
+        let r = response(Some(NOW + MINTED_LIFETIME_SECS + CLOCK_SKEW_SECS));
         assert!(ScopedCredential::accept(&repo(), Grant::default(), r, NOW).is_ok());
     }
 
@@ -441,7 +491,7 @@ mod tests {
     fn a_missing_late_or_past_expiry_is_refused() {
         for expires_at in [
             None,
-            Some(NOW + MAX_LIFETIME_SECS + CLOCK_SKEW_SECS + 1),
+            Some(NOW + MINTED_LIFETIME_SECS + CLOCK_SKEW_SECS + 1),
             Some(NOW),
         ] {
             assert!(refused(ScopedCredential::accept(
@@ -454,7 +504,7 @@ mod tests {
         assert!(ScopedCredential::accept(
             &repo(),
             Grant::default(),
-            response(Some(NOW + MAX_LIFETIME_SECS)),
+            response(Some(NOW + MINTED_LIFETIME_SECS)),
             NOW
         )
         .is_ok());
@@ -466,7 +516,11 @@ mod tests {
             (NoCredentialReason::SourceNotSetUp, SOURCE_SETUP_HINT.to_string()),
             (
                 NoCredentialReason::SourceRefused("nope".into()),
-                "GitHub refused a credential: nope. Check the App's permissions.".into(),
+                "GitHub refused the token: nope. Paste a corrected one in Settings.".into(),
+            ),
+            (
+                NoCredentialReason::PatExpired,
+                "The GitHub token for this repository expired. Paste a new one in Settings › GitHub access tokens.".into(),
             ),
             (
                 NoCredentialReason::SourceUnreachable("offline".into()),
@@ -492,11 +546,52 @@ mod tests {
     }
 
     #[test]
-    fn the_source_setup_hint_is_source_neutral() {
+    fn the_source_setup_hint_asks_for_a_token() {
         assert_eq!(
             SOURCE_SETUP_HINT,
-            "No credential source is set up. Set one up in Settings to push from sandboxes."
+            "No GitHub token is stored for this repository. Paste a fine-grained token for it in Settings › GitHub access tokens to push from sandboxes."
         );
+    }
+
+    #[test]
+    fn the_minted_and_the_pasted_lifetimes_are_split() {
+        assert_eq!(MINTED_LIFETIME_SECS, 3600);
+        assert_eq!(MAX_LIFETIME_SECS, 366 * 86_400);
+    }
+
+    #[test]
+    fn a_pasted_credential_needs_a_future_expiry_within_the_cap() {
+        let paste = |expires_at| {
+            ScopedCredential::pasted(&repo(), SecretToken::new("github_pat_x"), expires_at, NOW)
+        };
+        let c = paste(NOW + 300 * 86_400).unwrap();
+        assert_eq!((c.expires_at(), c.issued_at()), (NOW + 300 * 86_400, NOW));
+        assert_eq!(c.grant(), Grant::default());
+        assert!(paste(NOW + MAX_LIFETIME_SECS + CLOCK_SKEW_SECS).is_ok());
+        assert!(matches!(
+            paste(NOW + MAX_LIFETIME_SECS + CLOCK_SKEW_SECS + 1),
+            Err(NoCredentialReason::SourceRefused(_))
+        ));
+        for past in [NOW, NOW - 1, 0] {
+            assert!(matches!(paste(past), Err(NoCredentialReason::PatExpired)));
+        }
+    }
+
+    #[test]
+    fn only_a_held_credential_close_to_expiry_warns() {
+        let held = |expires_at| CredentialStatus::Held {
+            repo: repo(),
+            expires_at,
+        };
+        let day = EXPIRY_WARNING_SECS;
+        assert!(held(NOW + day).expires_within(NOW, day));
+        assert!(!held(NOW + day + 1).expires_within(NOW, day));
+        for other in [
+            CredentialStatus::Pending,
+            CredentialStatus::None(NoCredentialReason::PatExpired),
+        ] {
+            assert!(!other.expires_within(NOW, day));
+        }
     }
 
     #[test]
