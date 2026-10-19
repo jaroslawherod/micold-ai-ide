@@ -222,8 +222,12 @@ fn the_container_form_paints_six_titles_with_only_connection_open() {
     )));
     let shown = painted_tall(&state);
     assert!(has(&shown, "Names still resolve either way"), "{shown:?}");
-    assert_eq!(count(Icon::MoveUp, &shown), 2);
-    assert_no_text_overflows(&state, "container form with two sections open");
+    assert_eq!(
+        count(Icon::MoveUp, &shown),
+        1,
+        "opening one closes the other"
+    );
+    assert_no_text_overflows(&state, "container form with Network open");
 }
 
 #[test]
@@ -427,10 +431,12 @@ fn the_kubernetes_form_and_row_paint_their_fields_without_overflow() {
     }
     state.update(Message::Daemons(DaemonsMsg::Saved));
     use micold_client::features::daemons::Section;
+    // One section is open at a time (feature 1091), so each is laid out in its own measurement.
+    let mut form = painted_tall(&state);
     for section in [Section::Image, Section::Resources, Section::Placement] {
         state.update(Message::Daemons(DaemonsMsg::SectionToggled(section)));
+        form.extend(painted_tall(&state));
     }
-    let form = painted_tall(&state);
     for label in [
         "Namespace",
         "Image",
@@ -451,6 +457,9 @@ fn the_kubernetes_form_and_row_paint_their_fields_without_overflow() {
         "{form:?}"
     );
     assert_no_text_overflows(&state, "the Kubernetes form with refused files");
+    state.update(Message::Daemons(DaemonsMsg::SectionToggled(
+        Section::Connection,
+    )));
 
     state.update(Message::Daemons(DaemonsMsg::ContextsListed(Err(
         "no kubeconfig found; looked in /home/someone/.kube/config".into(),
@@ -655,26 +664,53 @@ fn a_closed_connection_paints_none_of_its_fields() {
 
 // ---- Feature 890, M3: one look across the forms (FR-006 to FR-009, FR-014, SC-003). ----
 
-/// What the add form for `runtime` paints with every section open, entrances done, with the
-/// positions: `(content, x, y)`.
+/// The text the add form for `runtime` paints at 1280 x 6000, entrances done, with positions.
+fn laid_out(state: &State) -> Vec<(String, f32, f32)> {
+    let mut renderer = lay::renderer();
+    lay::painted_text_settled_at(view(state), &mut renderer, iced::Size::new(1280.0, 6000.0))
+        .0
+        .into_iter()
+        .map(|d| (d.content, d.origin.x, d.origin.y))
+        .collect()
+}
+
+/// The add form for `runtime`, fresh: the kind's first section open.
+fn fresh_form(runtime: micold_client::features::daemons::DraftRuntime) -> State {
+    let (mut state, _) = with_daemons();
+    state.update(Message::Daemons(DaemonsMsg::AddOpened));
+    state.update(Message::Daemons(DaemonsMsg::RuntimeChosen(runtime)));
+    state
+}
+
+/// What the add form for `runtime` paints with every section laid out open, with the positions:
+/// `(content, x, y)`. Only one section is open at a time (feature 1091, FR-009), so each section is
+/// measured open on its own: the form is its all-closed layout plus, for each section, what that
+/// section adds when it opens. A position is comparable with another from the same section only.
 fn open_form(
     runtime: micold_client::features::daemons::DraftRuntime,
 ) -> (State, Vec<(String, f32, f32)>) {
     use micold_client::features::daemons::Section;
-    let (mut state, _) = with_daemons();
-    state.update(Message::Daemons(DaemonsMsg::AddOpened));
-    state.update(Message::Daemons(DaemonsMsg::RuntimeChosen(runtime)));
-    for section in Section::of(runtime).iter().skip(1) {
+    use std::collections::HashMap;
+    let sections = Section::of(runtime);
+    let mut state = fresh_form(runtime);
+    state.update(Message::Daemons(DaemonsMsg::SectionToggled(sections[0])));
+    let mut stitched = laid_out(&state);
+    let mut closed: HashMap<String, usize> = HashMap::new();
+    for (content, ..) in &stitched {
+        *closed.entry(content.clone()).or_default() += 1;
+    }
+    for section in sections {
+        state.update(Message::Daemons(DaemonsMsg::SectionToggled(*section)));
+        let mut left = closed.clone();
+        for entry in laid_out(&state) {
+            match left.get_mut(&entry.0).filter(|n| **n > 0) {
+                Some(n) => *n -= 1,
+                None => stitched.push(entry),
+            }
+        }
         state.update(Message::Daemons(DaemonsMsg::SectionToggled(*section)));
     }
-    let mut renderer = lay::renderer();
-    let shown =
-        lay::painted_text_settled_at(view(&state), &mut renderer, iced::Size::new(1280.0, 6000.0))
-            .0
-            .into_iter()
-            .map(|d| (d.content, d.origin.x, d.origin.y))
-            .collect();
-    (state, shown)
+    (fresh_form(runtime), stitched)
 }
 
 fn find<'a>(shown: &'a [(String, f32, f32)], text: &str) -> &'a (String, f32, f32) {
@@ -726,10 +762,11 @@ fn each_group_label_sits_above_its_controls_at_their_left_edge() {
 fn explanations_sit_where_the_contract_puts_them() {
     use micold_client::features::daemons::DraftRuntime::Container;
     let (_, shown) = open_form(Container);
+    // The last match: a closed header's summary may mention a body's words; the body comes after.
     let y = |t: &str| {
         shown
             .iter()
-            .find(|(c, ..)| c.contains(t))
+            .rfind(|(c, ..)| c.contains(t))
             .map(|(_, _, y)| *y)
     };
     // Section-wide notes open their section, before its first control.

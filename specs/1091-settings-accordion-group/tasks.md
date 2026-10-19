@@ -14,10 +14,10 @@ Paths are under `crates/micold-client/` unless they start with `docs/` or `specs
 
 **Purpose**: the render-free group and the section's opt-in hook.
 
-- [ ] T001 [P] Write failing unit tests in `src/ui/material/accordion_group.rs` (new file, `#[cfg(test)]` only at first): default key open when nothing pressed, open replaces, pressing the open key closes to none, reopen after close, `reset()` returns to the default, two groups independent (FR-001, FR-002, FR-003)
-- [ ] T002 [P] Write failing unit test in `src/ui/material/accordion_section.rs`: `in_group(&group, key, default)` sets `open` from the group; a section never passed to `in_group` is unchanged (FR-001, FR-003)
-- [ ] T003 Implement `AccordionGroup<K: Copy + Eq>` with the `Default | Closed | Open(K)` choice (`new`, `reset`, `open_key(default: Option<K>)`, `is_open(key, default: Option<K>)`, `toggle(key, default: Option<K>)`) in `src/ui/material/accordion_group.rs`; add `mod` and `pub use` in `src/ui/material/mod.rs` (data-model.md)
-- [ ] T004 Implement `AccordionSection::in_group` in `src/ui/material/accordion_section.rs`
+- [x] T001 [P] Write failing unit tests in `src/ui/material/accordion_group.rs` (new file, `#[cfg(test)]` only at first): default key open when nothing pressed, open replaces, pressing the open key closes to none, reopen after close, `reset()` returns to the default, two groups independent (FR-001, FR-002, FR-003)
+- [x] T002 [P] Write failing unit test in `src/ui/material/accordion_section.rs`: `in_group(&group, key, default)` sets `open` from the group; a section never passed to `in_group` is unchanged (FR-001, FR-003)
+- [x] T003 Implement `AccordionGroup<K: Copy + Eq>` with the `Default | Closed | Open(K)` choice (`new`, `reset`, `open_key(default: Option<K>)`, `is_open(key, default: Option<K>)`, `toggle(key, default: Option<K>)`) in `src/ui/material/accordion_group.rs`; add `mod` and `pub use` in `src/ui/material/mod.rs` (data-model.md)
+- [x] T004 Implement `AccordionSection::in_group` in `src/ui/material/accordion_section.rs`
 
 **Checkpoint**: `cargo test -p micold-client accordion` passes.
 
@@ -31,14 +31,14 @@ US3's rule (FR-006) is the same `State` change as US1's, so the two ship togethe
 
 ### Tests (write first, must fail)
 
-- [ ] T005 [P] [US1] Reducer tests in `tests/daemons_feature.rs`: for every kind (`Section::of`), opening B closes A, pressing the open section leaves none, opening from none opens only it, a form opening and a `RuntimeChosen` kind change leave exactly the first section open, two forms in turn do not leak, a rapid sequence of presses ends as the same presses one by one, no draft leaves no section open, the draft is unchanged after toggles (extend `sections_open_by_toggle_and_by_error_without_touching_the_draft`) (FR-002, FR-004, FR-005, FR-007)
-- [ ] T006 [US3] Reducer tests in `tests/daemons_feature.rs`: a held (error) section stays open when another opens, a press on it changes nothing, several held sections stay open together, and when the error is fixed the held section closes and only the user's section stays open; with the group still at its default, an error in a non-first section opens beside the first and closing it leaves the first (FR-006, SC-004)
+- [x] T005 [P] [US1] Reducer tests in `tests/daemons_feature.rs`: for every kind (`Section::of`), opening B closes A, pressing the open section leaves none, opening from none opens only it, a form opening and a `RuntimeChosen` kind change leave exactly the first section open, two forms in turn do not leak, a rapid sequence of presses ends as the same presses one by one, no draft leaves no section open, the draft is unchanged after toggles (extend `sections_open_by_toggle_and_by_error_without_touching_the_draft`) (FR-002, FR-004, FR-005, FR-007)
+- [x] T006 [US3] Reducer tests in `tests/daemons_feature.rs`: a held (error) section stays open when another opens, a press on it changes nothing, several held sections stay open together, and when the error is fixed the held section closes and only the user's section stays open; with the group still at its default, an error in a non-first section opens beside the first and closing it leaves the first (FR-006, SC-004)
 
 ### Implementation
 
-- [ ] T007 [US1] In `src/features/daemons.rs` replace `flipped_sections: BTreeSet<Section>` with `sections: AccordionGroup<Section>`; `section_open(s)` = `sections.is_open(s, first) || held_open(s)`; `Msg::SectionToggled` ignores a held section, else `sections.toggle(s, first)`; convert all four existing `flipped_sections.clear()` sites (three form openings, the `RuntimeChosen` arm) to `sections.reset()` (FR-004, FR-006, FR-007)
-- [ ] T008 [US1] Update `tests/daemons_section_geometry.rs`: its `open_form` helper, which opens every section after the first, becomes one measurement per section so each is still laid out open; confirm `src/features/container_fields.rs` and `src/ui/settings/daemons.rs` need no change beyond `state.section_open(section)` (FR-009)
-- [ ] T009 [P] [US1] Add a sentence that one section is open at a time to `docs/user-guide/sandboxed-daemon.md`, `docs/user-guide/kubernetes-daemons.md` and `docs/user-guide/remote-daemons.md`
+- [x] T007 [US1] In `src/features/daemons.rs` replace `flipped_sections: BTreeSet<Section>` with `sections: AccordionGroup<Section>`; `section_open(s)` = `sections.is_open(s, first) || held_open(s)`; `Msg::SectionToggled` ignores a held section, else `sections.toggle(s, first)`; convert all four existing `flipped_sections.clear()` sites (three form openings, the `RuntimeChosen` arm) to `sections.reset()` (FR-004, FR-006, FR-007)
+- [x] T008 [US1] Update `tests/daemons_section_geometry.rs`: its `open_form` helper, which opens every section after the first, becomes one measurement per section so each is still laid out open; confirm `src/features/container_fields.rs` and `src/ui/settings/daemons.rs` need no change beyond `state.section_open(section)` (FR-009)
+- [x] T009 [P] [US1] Add a sentence that one section is open at a time to `docs/user-guide/sandboxed-daemon.md`, `docs/user-guide/kubernetes-daemons.md` and `docs/user-guide/remote-daemons.md`
 
 **Checkpoint**: `mise run gate` green; quickstart Part B steps 2, 3 and 5 hold.
 

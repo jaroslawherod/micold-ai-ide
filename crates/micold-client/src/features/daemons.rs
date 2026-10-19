@@ -40,6 +40,7 @@ use crate::kube::live::ContextEntry;
 use crate::links::{route, DaemonLinks, Route};
 use crate::overlay::registry::Registered;
 use crate::overlay::SurfaceId;
+use crate::ui::material::AccordionGroup;
 
 /// What the reducer acts on: the registry, the connection of each daemon, the bindings and what
 /// runs where. Borrowed from the app's settings and workspace for the length of one step.
@@ -352,9 +353,10 @@ pub struct State {
     pub draft: Option<Draft>,
     /// The sentence beside the form field the last refused save was about.
     pub form_error: Option<FormError>,
-    /// The sections the user has flipped from how the form opens them (Container open, the rest
-    /// closed). View state: never persisted, forgotten when the form closes (FR-015).
-    flipped_sections: BTreeSet<Section>,
+    /// Which section of the form the user opened: the kind's first until a header is pressed. All
+    /// sections of one form are one group (feature 1091, FR-004). View state: never persisted,
+    /// forgotten when the form closes (FR-015).
+    sections: AccordionGroup<Section>,
     /// The daemons whose details (errors and log tail) are open.
     pub details_shown: BTreeSet<DaemonId>,
     /// The location the `Bind to daemon...` picker is open for.
@@ -412,10 +414,8 @@ impl State {
         let Some(draft) = &self.draft else {
             return false;
         };
-        let runtime = draft.runtime;
-        let first = Section::of(runtime).first() == Some(&section);
-        let by_user = first != self.flipped_sections.contains(&section);
-        by_user || self.held_open(section)
+        let first = Section::of(draft.runtime).first().copied();
+        self.sections.is_open(section, first) || self.held_open(section)
     }
 
     /// Whether an error or a missing required field holds `section` open (FR-004): a click does
@@ -777,7 +777,7 @@ pub fn begin_add(state: &mut State) {
         ..SandboxProfile::default()
     };
     let texts = ProfileTexts::of(&profile);
-    state.flipped_sections.clear();
+    state.sections.reset();
     state.draft = Some(Draft {
         editing: None,
         name: String::new(),
@@ -859,7 +859,7 @@ pub fn begin_edit<'s>(state: &'s mut State, model: &Model<'_>, id: DaemonId) -> 
         DaemonRuntime::Kubernetes(k) => KubeDraft::of(k),
         _ => KubeDraft::new(&state.default_providers),
     };
-    state.flipped_sections.clear();
+    state.sections.reset();
     state.draft = Some(Draft {
         editing: Some(id),
         kube,
@@ -887,7 +887,7 @@ pub fn begin_edit<'s>(state: &'s mut State, model: &Model<'_>, id: DaemonId) -> 
 
 /// Close the form without saving.
 pub fn discard_draft(state: &mut State) {
-    state.flipped_sections.clear();
+    state.sections.reset();
     state.draft = None;
 }
 
@@ -1899,8 +1899,12 @@ fn reduce(state: &mut State, model: &mut Model<'_>, msg: Msg) -> Vec<Outcome> {
             state.form_error = None;
         }
         Msg::SectionToggled(section) => {
-            if !state.held_open(section) && !state.flipped_sections.remove(&section) {
-                state.flipped_sections.insert(section);
+            if !state.held_open(section) {
+                let first = state
+                    .draft
+                    .as_ref()
+                    .and_then(|d| Section::of(d.runtime).first().copied());
+                state.sections.toggle(section, first);
             }
         }
         Msg::NameEdited(v) => edit(state, &|d| d.name = v.clone()),
@@ -1908,7 +1912,7 @@ fn reduce(state: &mut State, model: &mut Model<'_>, msg: Msg) -> Vec<Outcome> {
             let changed = state.draft.as_ref().is_some_and(|d| d.runtime != v);
             edit(state, &|d| d.runtime = v);
             if changed {
-                state.flipped_sections.clear();
+                state.sections.reset();
             }
             if v == DraftRuntime::Kubernetes {
                 return vec![Outcome::KubeContextsRequested];

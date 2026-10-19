@@ -668,10 +668,10 @@ fn sections_open_by_toggle_and_by_error_without_touching_the_draft() {
         send(state, w, daemons::Msg::SectionToggled(s));
     };
     toggle(&mut state, &mut w, Section::Network);
-    assert_eq!(open(&state), vec![true, false, false, true, false, false]);
-    toggle(&mut state, &mut w, Section::Connection);
     assert_eq!(open(&state), vec![false, false, false, true, false, false]);
-    toggle(&mut state, &mut w, Section::Network);
+    toggle(&mut state, &mut w, Section::Connection);
+    assert_eq!(open(&state), vec![true, false, false, false, false, false]);
+    toggle(&mut state, &mut w, Section::Connection);
     assert_eq!(open(&state), vec![false; 6]);
     assert_eq!(state.draft, draft, "toggling must not edit the draft");
     assert_eq!(w.registry, saved, "toggling must not touch saved settings");
@@ -1787,5 +1787,158 @@ mod credential_lines {
             .rows
             .iter()
             .all(|r| r.credential_lines.is_empty()));
+    }
+}
+
+/// The sections of `runtime` that are shown open.
+fn open_sections(state: &State, runtime: DraftRuntime) -> Vec<daemons::Section> {
+    daemons::Section::of(runtime)
+        .iter()
+        .copied()
+        .filter(|s| state.section_open(*s))
+        .collect()
+}
+
+/// FR-002, FR-004, FR-005, FR-007, SC-001, SC-002: in every kind the sections are one group.
+#[test]
+fn the_sections_of_every_kind_form_one_group() {
+    use daemons::Section;
+    let mut w = World::new();
+    let mut state = State::default();
+    for runtime in [
+        DraftRuntime::Container,
+        DraftRuntime::Kubernetes,
+        DraftRuntime::Ssh,
+        DraftRuntime::Host,
+    ] {
+        daemons::begin_add(&mut state);
+        send(&mut state, &mut w, daemons::Msg::RuntimeChosen(runtime));
+        let all = Section::of(runtime);
+        let first = all[0];
+        assert_eq!(open_sections(&state, runtime), vec![first], "{runtime:?}");
+        let draft = state.draft.clone();
+        for b in all.iter().copied().skip(1) {
+            send(&mut state, &mut w, daemons::Msg::SectionToggled(b));
+            assert_eq!(open_sections(&state, runtime), vec![b], "{runtime:?} {b:?}");
+            send(&mut state, &mut w, daemons::Msg::SectionToggled(b));
+            assert!(
+                open_sections(&state, runtime).is_empty(),
+                "{runtime:?} {b:?}"
+            );
+            send(&mut state, &mut w, daemons::Msg::SectionToggled(b));
+            assert_eq!(open_sections(&state, runtime), vec![b]);
+        }
+        assert_eq!(state.draft, draft, "toggles do not edit the draft");
+        // A rapid sequence ends as the same presses one by one.
+        let mut other = state.clone();
+        for s in all.iter().rev() {
+            send(&mut state, &mut w, daemons::Msg::SectionToggled(*s));
+            send(&mut other, &mut w, daemons::Msg::SectionToggled(*s));
+        }
+        assert_eq!(
+            open_sections(&state, runtime),
+            open_sections(&other, runtime)
+        );
+        assert!(open_sections(&state, runtime).len() <= 1);
+        // A kind change and a new form leave exactly the first section open.
+        send(
+            &mut state,
+            &mut w,
+            daemons::Msg::RuntimeChosen(DraftRuntime::Host),
+        );
+        send(&mut state, &mut w, daemons::Msg::RuntimeChosen(runtime));
+        assert_eq!(open_sections(&state, runtime), vec![first], "{runtime:?}");
+        send(
+            &mut state,
+            &mut w,
+            daemons::Msg::SectionToggled(all[all.len() - 1]),
+        );
+        daemons::begin_add(&mut state);
+        send(&mut state, &mut w, daemons::Msg::RuntimeChosen(runtime));
+        assert_eq!(open_sections(&state, runtime), vec![first], "no leak");
+    }
+    let empty = State::default();
+    assert!(open_sections(&empty, DraftRuntime::Container).is_empty());
+}
+
+/// FR-006, SC-004: a section an error holds open stays open beside the user's section.
+#[test]
+fn an_error_held_section_stays_open_beside_the_group() {
+    use daemons::{FormError, Section};
+    let mut w = World::new();
+    let mut state = State::default();
+    daemons::begin_add(&mut state);
+    send(
+        &mut state,
+        &mut w,
+        daemons::Msg::RuntimeChosen(DraftRuntime::Kubernetes),
+    );
+    let rt = DraftRuntime::Kubernetes;
+    // Opening another section leaves the held one open; a press on it changes nothing.
+    state.form_error = Some(FormError {
+        field: "cpu_limit",
+        message: "refused".into(),
+    });
+    send(
+        &mut state,
+        &mut w,
+        daemons::Msg::SectionToggled(Section::Placement),
+    );
+    assert_eq!(
+        open_sections(&state, rt),
+        vec![Section::Resources, Section::Placement]
+            .into_iter()
+            .filter(|s| Section::of(rt).contains(s))
+            .collect::<Vec<_>>()
+    );
+    send(
+        &mut state,
+        &mut w,
+        daemons::Msg::SectionToggled(Section::Resources),
+    );
+    assert!(state.section_open(Section::Resources));
+    // Fixing the error closes the held section; only the user's stays open.
+    state.form_error = None;
+    assert_eq!(open_sections(&state, rt), vec![Section::Placement]);
+    // At its default, an error elsewhere opens beside the first; closing it leaves the first.
+    daemons::begin_add(&mut state);
+    send(&mut state, &mut w, daemons::Msg::RuntimeChosen(rt));
+    let first = Section::of(rt)[0];
+    state.form_error = Some(FormError {
+        field: "cpu_limit",
+        message: "refused".into(),
+    });
+    assert_eq!(open_sections(&state, rt).len(), 2);
+    state.form_error = None;
+    assert_eq!(open_sections(&state, rt), vec![first]);
+}
+
+/// FR-006: several held sections stay open together.
+#[test]
+fn several_held_sections_stay_open_together() {
+    use daemons::Section;
+    let mut w = World::new();
+    let mut state = State::default();
+    daemons::begin_add(&mut state);
+    send(
+        &mut state,
+        &mut w,
+        daemons::Msg::RuntimeChosen(DraftRuntime::Kubernetes),
+    );
+    send(
+        &mut state,
+        &mut w,
+        daemons::Msg::SectionToggled(Section::Connection),
+    );
+    send(&mut state, &mut w, daemons::Msg::Saved);
+    let held: Vec<_> = open_sections(&state, DraftRuntime::Kubernetes);
+    assert!(!held.is_empty());
+    send(
+        &mut state,
+        &mut w,
+        daemons::Msg::SectionToggled(Section::Placement),
+    );
+    for s in held {
+        assert!(state.section_open(s), "{s:?} stays open");
     }
 }

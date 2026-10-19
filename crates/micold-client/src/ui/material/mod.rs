@@ -9,6 +9,7 @@
 //! [`Roles`]: micold_core::tokens::Roles
 
 mod accordion;
+mod accordion_group;
 mod accordion_section;
 mod activity_badge;
 /// Whether a component lays out at the size its anatomy entry states, or grows into whatever room
@@ -171,6 +172,7 @@ mod usage_indicator;
 mod virtual_rows;
 
 pub use accordion::Accordion;
+pub use accordion_group::AccordionGroup;
 pub use accordion_section::AccordionSection;
 pub use activity_badge::{ActivityBadge, BadgeEmphasis};
 pub use animation::{expand, fade, scale, scrim, HoverReveal, ViewFade};
