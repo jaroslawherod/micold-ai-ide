@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-18
 
-**Status**: Closed 2026-10-19 — shipped in PRs #1044, #1056, #1064, #1072, #1076, #1080, #1086, #1087 (design #1035, #1070; close PR to follow)
+**Status**: Closed 2026-10-19 — shipped in PRs #1044, #1056, #1064, #1072, #1076, #1080, #1086, #1087 (design #1035, #1070) and the close PR
 
 **Input**: GitHub issue #938 "Structured session mode: run claude with stream-json next to the PTY
 mode". "Part of the structured-session (stream-json) UI epic. Keeps the PTY/TUI session mode as the

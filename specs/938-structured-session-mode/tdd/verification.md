@@ -133,9 +133,10 @@ The test list's `traces` column resolved for U1-U14: every named file and test e
 
 The verdict above is the audit as run; the close unit acted on it:
 
-- 1 fixed: the row-marker gate no longer returns green on no change. At the narrowest width the
-  caption is clipped and moves no geometry (restoring the old `!changed.is_empty()` assert fails),
-  so the gate then asserts the structured and terminal captions differ.
+- 1 kept, reasoned: restoring the old `!changed.is_empty()` assert fails, because at the narrowest
+  sidebar the longer caption is clipped and moves no geometry. The gate stays conditional; it proves
+  "the marker never overflows its row", and the marker's text is pinned by `command_caption`'s test
+  and the tab source guards.
 - 2 and 4 fixed: `the_first_history_message_fills_the_log` compares whole rows;
   `the_log_stays_bounded_and_says_how_many_events_it_dropped` pins the client log bound.
 - 3 fixed: `test-list.md` gains U15–U23 with honest states. 12 fixed: the M8 verify command names
