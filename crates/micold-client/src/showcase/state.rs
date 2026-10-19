@@ -95,6 +95,8 @@ pub enum Message {
     /// posing the *idea* of a navigation rail rather than being one, and "which row is current"
     /// is the only thing it has to say.
     SectionShown(usize),
+    /// A header of the grouped `AccordionSection`s was pressed (feature 1091, FR-008).
+    GroupSectionToggled(usize),
     /// The section rail was collapsed to its icons, or opened back up (feature 027, FR-026d).
     ///
     /// Live for the same reason the destination is: a rail that shows one width is showing half the
@@ -171,6 +173,8 @@ pub struct Showcase {
     /// The long-list example's scroll offset and viewport height, as `VirtualRows` last reported
     /// them. Zero at rest: the top of the list, viewport not yet measured (FR-022).
     rows_scroll: (u32, u32),
+    /// Which of the grouped `AccordionSection`s is open (feature 1091, FR-008); the first at rest.
+    group: crate::ui::material::AccordionGroup<usize>,
 }
 
 impl Showcase {
@@ -192,6 +196,7 @@ impl Showcase {
             select_choice: None,
             section_shown: 0,
             rows_scroll: (0, 0),
+            group: crate::ui::material::AccordionGroup::new(),
             section_rail_collapsed: false,
             typeahead_query: String::new(),
             // The list opens on a pose, not on a blank: the first row carries the chosen marker and
@@ -249,6 +254,11 @@ impl Showcase {
     /// The long-list example's scroll offset and viewport height.
     pub fn rows_scroll(&self) -> (u32, u32) {
         self.rows_scroll
+    }
+
+    /// Whether grouped section `key` is open; section 0 is open until another is pressed.
+    pub fn group_open(&self, key: usize) -> bool {
+        self.group.is_open(key, Some(0))
     }
 
     /// The section rail's current destination.
@@ -402,6 +412,7 @@ impl Showcase {
             // `open` flag would be a second answer to a question the widget has already answered.
             Message::SelectChosen(choice) => self.select_choice = Some(choice),
             Message::SectionShown(index) => self.section_shown = index,
+            Message::GroupSectionToggled(key) => self.group.toggle(key, Some(0)),
             Message::RowsScrolled { offset, viewport } => self.rows_scroll = (offset, viewport),
             // Collapsing does not disturb the destination — that is the point of it, and the
             // showcase would hide the claim if it reset the marker here.

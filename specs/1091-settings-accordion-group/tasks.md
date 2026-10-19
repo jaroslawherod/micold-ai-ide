@@ -48,9 +48,9 @@ US3's rule (FR-006) is the same `State` change as US1's, so the two ship togethe
 
 **Independent Test**: in the showcase, opening a section in the group closes the other; sections of the independent set open and close on their own.
 
-- [ ] T010 [US2] Failing reducer test in `tests/showcase_state.rs`: `Message::GroupSectionToggled(i)` is exclusive on the group and leaves the independent set's toggles untouched (FR-001, FR-003, FR-008)
-- [ ] T011 [US2] Add `group: AccordionGroup<usize>` and `Message::GroupSectionToggled(usize)` (calls `group.toggle(i, None)`) in `src/showcase/state.rs`
-- [ ] T012 [US2] Render the grouped set and the independent set in `src/showcase/sections/surfaces.rs` (`accordion_section`), and add the poses "a group: opening one closes the others" and "independent sections" in `src/showcase/catalogue.rs`; `tests/showcase_completeness.rs` and `tests/showcase_captions.rs` stay green and fail until the poses exist (FR-008)
+- [x] T010 [US2] Failing reducer test in `tests/showcase_state.rs`: `Message::GroupSectionToggled(i)` is exclusive on the group and leaves the independent set's toggles untouched (FR-001, FR-003, FR-008)
+- [x] T011 [US2] Add `group: AccordionGroup<usize>` and `Message::GroupSectionToggled(usize)` (calls `group.toggle(i, None)`) in `src/showcase/state.rs`
+- [x] T012 [US2] Render the grouped set and the independent set in `src/showcase/sections/surfaces.rs` (`accordion_section`), and add the poses "a group: opening one closes the others" and "independent sections" in `src/showcase/catalogue.rs`; `tests/showcase_completeness.rs` and `tests/showcase_captions.rs` stay green and fail until the poses exist (FR-008)
 
 **Checkpoint**: `mise run gate` green; quickstart Part B step 1 holds.
 
